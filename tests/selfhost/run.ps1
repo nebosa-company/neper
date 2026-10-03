@@ -3327,6 +3327,11 @@ $gfxChartBin2dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $gfxChartBin2dWritten -ne 'executable written') { throw 'gfx_chart_bin2d emission failed' }
 $gfxChartBin2dOutput = & $gfxChartBin2dPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartBin2dOutput -ne 'gfx chart bin2d ok') { throw "the e.gfx.chart bin2d answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDensity2dPath = Join-Path $testBuild 'gfx-chart-density2d-selfhost.exe'
+$gfxChartDensity2dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_density2d\src\main.e') $repo 'x64' 'windows' $gfxChartDensity2dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDensity2dWritten -ne 'executable written') { throw 'gfx_chart_density2d emission failed' }
+$gfxChartDensity2dOutput = & $gfxChartDensity2dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDensity2dOutput -ne 'gfx chart density2d ok') { throw "the e.gfx.chart density2d answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

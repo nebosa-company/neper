@@ -1439,6 +1439,40 @@ fn kde(values: []const f64, bandwidth: f64, points: []const f64, out: []f64) -> 
     ret ok
 }
 
+// Product-Gaussian density on a caller-owned row-major (y, x) grid.
+// The two bandwidths are explicit; callers choose domain and grid spacing.
+fn kde2d(x: []const f64, y: []const f64, bandwidth_x: f64, bandwidth_y: f64, grid_x: []const f64, grid_y: []const f64, out: []f64) -> err {
+    if x.len == 0usize || x.len != y.len || grid_x.len == 0usize || grid_y.len == 0usize || !(bandwidth_x > 0.0f64) || !(bandwidth_y > 0.0f64) { ret Invalid }
+    if grid_x.len > out.len / grid_y.len { ret TooSmall }
+    let scale = 1.0f64 / (f64(x.len) * 6.283185307179586f64 * bandwidth_x * bandwidth_y)
+    if !(scale > 0.0f64) || scale != scale || scale - scale != 0.0f64 { ret Invalid }
+    var i = 0usize
+    while i < x.len {
+        if x[i] != x[i] || x[i] - x[i] != 0.0f64 || y[i] != y[i] || y[i] - y[i] != 0.0f64 { ret Invalid }
+        i += 1usize
+    }
+    var row = 0usize
+    while row < grid_y.len {
+        if grid_y[row] != grid_y[row] || grid_y[row] - grid_y[row] != 0.0f64 { ret Invalid }
+        var column = 0usize
+        while column < grid_x.len {
+            if grid_x[column] != grid_x[column] || grid_x[column] - grid_x[column] != 0.0f64 { ret Invalid }
+            var sum = 0.0f64
+            i = 0usize
+            while i < x.len {
+                let dx = (grid_x[column] - x[i]) / bandwidth_x
+                let dy = (grid_y[row] - y[i]) / bandwidth_y
+                sum += math.exp[f64](0.0f64 - 0.5f64 * (dx * dx + dy * dy))
+                i += 1usize
+            }
+            out[row * grid_x.len + column] = sum * scale
+            column += 1usize
+        }
+        row += 1usize
+    }
+    ret ok
+}
+
 // The bootstrap percentile interval of `statistic` at `confidence` (0 < c < 1)
 // over `rounds` resamples drawn with `r`. `sample` holds `values.len` floats and
 // `stats` `rounds` floats; `stats` is left sorted.

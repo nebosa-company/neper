@@ -48,6 +48,8 @@ class ChartPreviewBacklogTests(unittest.TestCase):
         self.assertNotIn("hexbin", planned)
         self.assertIn("bin2d", rendered)
         self.assertNotIn("bin2d", planned)
+        self.assertIn("density2d", rendered)
+        self.assertNotIn("density2d", planned)
 
         page = PAGE.read_text(encoding="utf-8")
         match = re.search(r"Rendered previews \((\d+)/(\d+)\)", page)

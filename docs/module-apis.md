@@ -3232,6 +3232,7 @@ fn correlation_spearman(x: []const f64, y: []const f64, scratch: []f64, order: [
 fn correlation_kendall(x: []const f64, y: []const f64) -> (f64, bool)
 fn kde_bandwidth(values: []const f64, rule: Bandwidth) -> (f64, bool)
 fn kde(values: []const f64, bandwidth: f64, points: []const f64, out: []f64) -> err
+fn kde2d(x: []const f64, y: []const f64, bandwidth_x: f64, bandwidth_y: f64, grid_x: []const f64, grid_y: []const f64, out: []f64) -> err
 fn bootstrap[Ctx: type](r: *rand.Pcg64, values: []const f64, ctx: *Ctx, statistic: fn(*Ctx, []const f64) -> f64, rounds: usize, confidence: f64, sample: []f64, stats: []f64) -> (Interval, err)
 fn jackknife[Ctx: type](values: []const f64, ctx: *Ctx, statistic: fn(*Ctx, []const f64) -> f64, scratch: []f64) -> (Jackknife, err)
 fn interval_wilson(successes: u64, trials: u64, confidence: f64) -> (Interval, err)

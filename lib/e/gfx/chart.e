@@ -97,6 +97,7 @@ type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []con
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
 type Bin2dLayout = struct { matrix: MatrixLayout, counts: []u64, max_count: u64, total_count: u64 }
+type Density2dLayout = struct { contours: []Layout, grid: []f64, cutoffs: []f64, peak: f64 }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -6597,6 +6598,55 @@ fn contour(values: []const f64, columns: usize, rows: usize, levels: []const f64
         l += 1usize
     }
     ret (layers[..levels.len], ok)
+}
+
+// Evaluate a normalized product-Gaussian KDE at regular domain coordinates,
+// then contour at increasing fractions of the observed grid peak. The caller
+// owns grid axes, density values, cutoffs and marching-squares storage.
+fn density2d(x: []const f64, y: []const f64, x_min: f64, x_max: f64, y_min: f64, y_max: f64, bounds: geometry.Rect, bandwidth_x: f64, bandwidth_y: f64, fractions: []const f64, grid_x: []f64, grid_y: []f64, values: []f64, cutoffs: []f64, segments: []Segment, layers: []Layout) -> (Density2dLayout, err) {
+    if x.len == 0usize || fractions.len == 0usize { ret (zero, Empty) }
+    if x.len != y.len || !finite64(x_min) || !finite64(x_max) || !finite64(y_min) || !finite64(y_max) || x_max <= x_min || y_max <= y_min || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !(bandwidth_x > 0.0f64) || !(bandwidth_y > 0.0f64) || !finite64(bandwidth_x) || !finite64(bandwidth_y) || grid_x.len < 2usize || grid_y.len < 2usize { ret (zero, Invalid) }
+    if grid_x.len > values.len / grid_y.len || cutoffs.len < fractions.len || layers.len < fractions.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < x.len {
+        if !finite64(x[i]) || !finite64(y[i]) || x[i] < x_min || x[i] > x_max || y[i] < y_min || y[i] > y_max { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < fractions.len {
+        if !finite64(fractions[i]) || !(fractions[i] > 0.0f64 && fractions[i] < 1.0f64) || (i > 0usize && fractions[i] <= fractions[i - 1usize]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < grid_x.len {
+        grid_x[i] = x_min + (x_max - x_min) * f64(i) / f64(grid_x.len - 1usize)
+        i += 1usize
+    }
+    i = 0usize
+    while i < grid_y.len {
+        grid_y[i] = y_max - (y_max - y_min) * f64(i) / f64(grid_y.len - 1usize)
+        i += 1usize
+    }
+    let needed = grid_x.len * grid_y.len
+    let kde_error = stat.kde2d(x, y, bandwidth_x, bandwidth_y, grid_x, grid_y, values[..needed])
+    if kde_error != ok { ret (zero, Invalid) }
+    var peak = 0.0f64
+    i = 0usize
+    while i < needed {
+        if !finite64(values[i]) || values[i] < 0.0f64 { ret (zero, Invalid) }
+        if values[i] > peak { peak = values[i] }
+        i += 1usize
+    }
+    if !(peak > 0.0f64) { ret (zero, Invalid) }
+    i = 0usize
+    while i < fractions.len {
+        cutoffs[i] = peak * fractions[i]
+        if !(cutoffs[i] > 0.0f64) || (i > 0usize && cutoffs[i] <= cutoffs[i - 1usize]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    let (lines, contour_error) = contour(values[..needed], grid_x.len, grid_y.len, cutoffs[..fractions.len], bounds, segments, layers)
+    if contour_error != ok { ret (zero, contour_error) }
+    ret (Density2dLayout { contours: lines, grid: values[..needed], cutoffs: cutoffs[..fractions.len], peak: peak }, ok)
 }
 
 fn contour_clip(vertices: []const ContourVertex, cutoff: f64, above: bool, out: []ContourVertex) -> (usize, err) {

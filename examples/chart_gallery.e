@@ -2202,6 +2202,83 @@ fn render_bin2d_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_density2d_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/density2d.png"
+    let plot = geometry.rect(54.0, 46.0, 252.0, 160.0)
+    var x32: [72]f32 = zero
+    var y32: [72]f32 = zero
+    try two_cluster_sample(x32[..], y32[..])
+    var x: [72]f64 = zero
+    var y: [72]f64 = zero
+    var i = 0usize
+    while i < x.len {
+        x[i] = f64(x32[i])
+        y[i] = f64(y32[i])
+        i += 1usize
+    }
+    let fractions = [4]f64{ 0.14f64, 0.30f64, 0.50f64, 0.72f64 }
+    var grid_x: [25]f64 = zero
+    var grid_y: [17]f64 = zero
+    var values: [425]f64 = zero
+    var cutoffs: [4]f64 = zero
+    var segments: [4096]chart.Segment = zero
+    var layers: [4]chart.Layout = zero
+    let (map, map_error) = chart.density2d(x[..], y[..], 0.0f64, 10.0f64, 0.0f64, 10.0f64, plot, 0.7f64, 0.7f64, fractions[..], grid_x[..], grid_y[..], values[..], cutoffs[..], segments[..], layers[..])
+    if map_error != ok || map.contours.len != 4usize || map.grid.len != 425usize || map.peak <= 0.0f64 { ret chart.Invalid }
+    let colors = [4]paint.Color{
+        paint.rgba(0.62, 0.76, 0.91, 1.0), paint.rgba(0.34, 0.61, 0.84, 1.0),
+        paint.rgba(0.12, 0.45, 0.76, 1.0), paint.rgba(0.03, 0.25, 0.58, 1.0),
+    }
+    let pale = paint.rgba(0.97, 0.98, 1.0, 1.0)
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let labels = [8]chart.Label{
+        chart.Label { text: "2D density / two clusters", anchor: chart.Coord { x: 180.0, y: 24.0 }, align: .Center },
+        chart.Label { text: "0", anchor: chart.Coord { x: 54.0, y: 220.0 }, align: .Center },
+        chart.Label { text: "5", anchor: chart.Coord { x: 180.0, y: 220.0 }, align: .Center },
+        chart.Label { text: "10", anchor: chart.Coord { x: 306.0, y: 220.0 }, align: .Center },
+        chart.Label { text: "0", anchor: chart.Coord { x: 42.0, y: 207.0 }, align: .Right },
+        chart.Label { text: "5", anchor: chart.Coord { x: 42.0, y: 129.0 }, align: .Right },
+        chart.Label { text: "10", anchor: chart.Coord { x: 42.0, y: 52.0 }, align: .Right },
+        chart.Label { text: "Gaussian KDE / contours at 14–72% of peak", anchor: chart.Coord { x: 180.0, y: 235.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 20u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 512usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    i = 0usize
+    while i < map.contours.len {
+        try chart_scene.append(a, &builder, &map.contours[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..7usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[7usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    i = 0usize
+    while i < map.contours.len {
+        try chart_svg.append(&writer, &map.contours[i], colors[i])
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[1usize..7usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[7usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -6167,6 +6244,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_probability_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_hexbin_preview(a, queue, output_target, canvas, &renderer)
     try render_bin2d_preview(a, queue, output_target, canvas, &renderer)
+    try render_density2d_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

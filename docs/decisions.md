@@ -34317,3 +34317,14 @@ adapters supply colour without chart-specific rendering branches. Windows
 and Linux fixtures check count conservation, corners, midpoint policy,
 geometry and refusal paths. The gallery adds a paired PNG/SVG preview.
 Automatic bin sizing, weights and continuous density remain follow-on work.
+
+## D1921 — 2D KDE contours share the statistical kernel and contour layout
+
+`e.algo.stat.kde2d` evaluates a normalized product-Gaussian density on
+caller-owned x/y axes. `chart.density2d` validates explicit domains and
+bandwidths, builds a row-major density grid, and reuses marching squares at
+increasing fractions of the sampled peak. These levels describe relative
+height, not enclosed probability mass. The gallery adds a paired PNG/SVG
+preview; Windows and Linux fixtures pin the Gaussian reference value,
+contour geometry, adapters and refusal paths. Automatic bandwidth selection,
+weighted samples and probability-mass levels remain follow-on work.
