@@ -33296,3 +33296,17 @@ and SVG output. The ellipse is a data contour, not a confidence region for
 the mean. `gfx_chart_overlays` checks numeric references, refusals and adapters
 on Windows and Linux; the gallery adds two paired previews. Confidence and
 prediction bands remain later statistical work.
+
+## D1827 — Distinguish OLS mean confidence from prediction intervals
+
+`chart.regression_interval` reuses the bivariate OLS accumulator and the
+existing filled Band and Line marks. Residual variance uses n-2 degrees of
+freedom; pointwise mean intervals include leverage 1/n+(x-mean_x)^2/Sxx,
+while prediction intervals add one for a new observation. The caller supplies
+the two-sided Student-t critical value for the chosen confidence level and
+owns ribbon resolution/storage. Both layers share limits that also contain the
+observations, so scatter, band and fit align without new renderer primitives.
+Singular/short samples, invalid critical values and inadequate storage are
+refused. `gfx_chart_overlays` checks numerical references and scene/SVG paths
+on Windows and Linux; the gallery adds two PNG/SVG pairs. Simultaneous bands,
+automatic quantiles and non-linear smoothers remain separate work.

@@ -560,6 +560,64 @@ fn regression_line(x: []const f32, y: []const f32, bounds: geometry.Rect, segmen
     ret (marks, marks_error)
 }
 
+// OLS mean-confidence or new-observation prediction ribbon. `critical` is
+// the caller's two-sided Student-t quantile with count-2 degrees of freedom.
+// Both layers share a domain that includes the observations and ribbon.
+fn regression_interval(x: []const f32, y: []const f32, bounds: geometry.Rect, critical: f32, prediction: bool, outline: []Coord, fit: []Segment) -> (Layout, Layout, err) {
+    if !valid_bounds(bounds) || !finite(critical) || critical <= 0.0 { ret (zero, zero, Invalid) }
+    if outline.len < 4usize || outline.len % 2usize != 0usize || fit.len == 0usize { ret (zero, zero, TooLarge) }
+    let (data, data_error) = paired_stats(x, y)
+    if data_error != ok { ret (zero, zero, data_error) }
+    let s = data.summary
+    if s.count < 3u64 || s.m2_x <= 0.0f64 || data.x_min == data.x_max { ret (zero, zero, Invalid) }
+    let slope = s.cov / s.m2_x
+    let intercept = s.mean_y - slope * s.mean_x
+    let residual = s.m2_y - slope * s.cov
+    if !finite64(slope) || !finite64(intercept) || !finite64(residual) || residual < -0.0000000001f64 * (1.0f64 + s.m2_y) { ret (zero, zero, Invalid) }
+    var nonnegative = residual
+    if nonnegative < 0.0f64 { nonnegative = 0.0f64 }
+    let sigma = math.sqrt[f64](nonnegative / f64(s.count - 2u64))
+    let base = 1.0f64 / f64(s.count)
+    var ymin = data.y_min
+    var ymax = data.y_max
+    let samples = outline.len / 2usize
+    var i = 0usize
+    while i < samples {
+        let value_x = f64(data.x_min) + (f64(data.x_max) - f64(data.x_min)) * f64(i) / f64(samples - 1usize)
+        let offset = value_x - s.mean_x
+        var leverage = base + offset * offset / s.m2_x
+        if prediction { leverage += 1.0f64 }
+        let estimate = slope * value_x + intercept
+        let half_width = f64(critical) * sigma * math.sqrt[f64](leverage)
+        let lower = f32(estimate - half_width)
+        let upper = f32(estimate + half_width)
+        let position = f32(value_x)
+        if !finite(lower) || !finite(upper) || !finite(position) { ret (zero, zero, Invalid) }
+        outline[i] = Coord { x: position, y: upper }
+        outline[2usize * samples - 1usize - i] = Coord { x: position, y: lower }
+        if lower < ymin { ymin = lower }
+        if upper > ymax { ymax = upper }
+        i += 1usize
+    }
+    if ymin == ymax {
+        ymin -= 0.5
+        ymax += 0.5
+    }
+    if !finite(ymin) || !finite(ymax) { ret (zero, zero, Invalid) }
+    i = 0usize
+    while i < outline.len {
+        outline[i] = Coord { x: mapped(outline[i].x, data.x_min, data.x_max, bounds.x, bounds.width), y: bounds.y + bounds.height - mapped(outline[i].y, ymin, ymax, 0.0, bounds.height) }
+        i += 1usize
+    }
+    let first = f32(slope * f64(data.x_min) + intercept)
+    let last = f32(slope * f64(data.x_max) + intercept)
+    if !finite(first) || !finite(last) { ret (zero, zero, Invalid) }
+    fit[0usize] = Segment { from: Coord { x: bounds.x, y: bounds.y + bounds.height - mapped(first, ymin, ymax, 0.0, bounds.height) }, to: Coord { x: bounds.x + bounds.width, y: bounds.y + bounds.height - mapped(last, ymin, ymax, 0.0, bounds.height) } }
+    let ribbon = Layout { kind: .Band, coords: outline, segments: zero, bars: zero, x_min: data.x_min, x_max: data.x_max, y_min: ymin, y_max: ymax }
+    let line = Layout { kind: .Line, coords: zero, segments: fit[..1usize], bars: zero, x_min: data.x_min, x_max: data.x_max, y_min: ymin, y_max: ymax }
+    ret (ribbon, line, ok)
+}
+
 // Covariance contour at a caller-selected Mahalanobis radius. A 95% contour
 // for bivariate normal data uses radius sqrt(chi-square(2, .95)) ~= 2.4477.
 fn covariance_ellipse(x: []const f32, y: []const f32, bounds: geometry.Rect, radius: f32, segments: []Segment) -> (Layout, err) {

@@ -48,12 +48,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if tilted_error != ok || tilted.segments[0usize].from.y >= 50.0 { ret chart.Invalid }
     let (ellipse_again, ellipse_again_error) = chart.covariance_ellipse(ellipse_x[..], ellipse_y[..], bounds, 1.0, ellipse_segments[..])
     if ellipse_again_error != ok { ret ellipse_again_error }
-    let (made, builder_error) = scene.builder(a, 4usize)
+    let noisy_y = [4]f32{ 1.0, 2.0, 4.0, 4.0 }
+    var ribbon_points: [16]chart.Coord = zero
+    var interval_line: [1]chart.Segment = zero
+    let (confidence, mean_line, confidence_error) = chart.regression_interval(x[..], noisy_y[..], bounds, 2.0, false, ribbon_points[..], interval_line[..])
+    if confidence_error != ok || confidence.kind != .Band || mean_line.kind != .Line || !near(confidence.y_min, 0.11) || !near(confidence.y_max, 5.39) || !near(mean_line.segments[0usize].from.y, 81.25) || !near(mean_line.segments[0usize].to.y, 18.75) { ret chart.Invalid }
+    let confidence_upper_y = confidence.coords[0usize].y
+    let (prediction, prediction_line, prediction_error) = chart.regression_interval(x[..], noisy_y[..], bounds, 2.0, true, ribbon_points[..], interval_line[..])
+    if prediction_error != ok || !near(prediction.y_min, -0.443) || !near(prediction.y_max, 5.943) || !near(prediction_line.segments[0usize].from.x, 0.0) || prediction.coords[0usize].y >= confidence_upper_y { ret chart.Invalid }
+    let (_, _, singular_interval_error) = chart.regression_interval(singular_x[..], singular_y[..], bounds, 2.0, false, ribbon_points[..], interval_line[..])
+    if singular_interval_error != chart.Invalid { ret chart.Invalid }
+    let (_, _, small_interval_error) = chart.regression_interval(x[..2usize], noisy_y[..2usize], bounds, 2.0, false, ribbon_points[..], interval_line[..])
+    if small_interval_error != chart.Invalid { ret chart.Invalid }
+    let (_, _, critical_error) = chart.regression_interval(x[..], noisy_y[..], bounds, 0.0, false, ribbon_points[..], interval_line[..])
+    if critical_error != chart.Invalid { ret chart.Invalid }
+    let (_, _, storage_error) = chart.regression_interval(x[..], noisy_y[..], bounds, 2.0, false, ribbon_points[..3usize], interval_line[..])
+    if storage_error != chart.TooLarge { ret chart.Invalid }
+    let (made, builder_error) = scene.builder(a, 6usize)
     if builder_error != ok { ret builder_error }
     var builder = made
     try chart_scene.append(a, &builder, &fit, paint.Brush { Solid: paint.rgba(0.9, 0.4, 0.1, 1.0) })
     try chart_scene.append(a, &builder, &ellipse_again, paint.Brush { Solid: paint.rgba(0.1, 0.3, 0.8, 1.0) })
-    if scene.builder_count(&builder) != 2usize { ret chart.Invalid }
+    try chart_scene.append(a, &builder, &prediction, paint.Brush { Solid: paint.rgba(0.7, 0.8, 0.9, 1.0) })
+    try chart_scene.append(a, &builder, &prediction_line, paint.Brush { Solid: paint.rgba(0.9, 0.4, 0.1, 1.0) })
+    if scene.builder_count(&builder) != 4usize { ret chart.Invalid }
     let (state, unused, writer_error) = io.memory_writer(a, 0usize)
     if writer_error != ok { ret writer_error }
     var held = state
@@ -61,6 +79,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try chart_svg.begin(&writer, 100.0, 100.0, "Overlays", "Regression and covariance ellipse")
     try chart_svg.append(&writer, &fit, paint.rgba(0.9, 0.4, 0.1, 1.0))
     try chart_svg.append(&writer, &ellipse_again, paint.rgba(0.1, 0.3, 0.8, 1.0))
+    try chart_svg.append(&writer, &prediction, paint.rgba(0.7, 0.8, 0.9, 1.0))
+    try chart_svg.append(&writer, &prediction_line, paint.rgba(0.9, 0.4, 0.1, 1.0))
     try chart_svg.finish(&writer)
     let svg = io.memory_bytes(&held)
     if !str.contains(svg, "<path") || !str.contains(svg, "</svg>") { ret chart.Invalid }
