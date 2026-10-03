@@ -864,6 +864,7 @@
     "gfx_chart_qq",
     "gfx_chart_ridgeline",
     "gfx_chart_scale",
+    "gfx_chart_sunburst",
     "gfx_chart_svg",
     "gfx_chart_treemap",
     "gfx_core",
@@ -985,6 +986,7 @@
     "gfx_chart_qq",
     "gfx_chart_ridgeline",
     "gfx_chart_scale",
+    "gfx_chart_sunburst",
     "gfx_chart_svg",
     "gfx_chart_treemap"
    ]
@@ -1013,6 +1015,7 @@
     "gfx_chart_qq",
     "gfx_chart_ridgeline",
     "gfx_chart_scale",
+    "gfx_chart_sunburst",
     "gfx_chart_treemap"
    ]
   },
@@ -1034,6 +1037,7 @@
     "gfx_chart_overlays",
     "gfx_chart_polar",
     "gfx_chart_ridgeline",
+    "gfx_chart_sunburst",
     "gfx_chart_svg",
     "gfx_chart_treemap"
    ]
@@ -1126,6 +1130,7 @@
     "gfx_chart_qq",
     "gfx_chart_ridgeline",
     "gfx_chart_scale",
+    "gfx_chart_sunburst",
     "gfx_chart_svg",
     "gfx_chart_treemap",
     "gfx_core",
@@ -1222,6 +1227,7 @@
     "gfx_chart_qq",
     "gfx_chart_ridgeline",
     "gfx_chart_scale",
+    "gfx_chart_sunburst",
     "gfx_chart_treemap",
     "gfx_scene",
     "gfx_scene_plan",

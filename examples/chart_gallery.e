@@ -576,6 +576,64 @@ fn render_treemap(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canv
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_sunburst(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, names: []const str, path: str) -> err {
+    if layers.len != 8usize || names.len != 5usize { ret chart.Invalid }
+    let colors = [8]paint.Color{
+        paint.rgba(0.35, 0.41, 0.51, 1.0), paint.rgba(0.11, 0.35, 0.69, 1.0), paint.rgba(0.16, 0.53, 0.38, 1.0),
+        paint.rgba(0.08, 0.39, 0.79, 1.0), paint.rgba(0.34, 0.35, 0.74, 1.0), paint.rgba(0.11, 0.56, 0.70, 1.0),
+        paint.rgba(0.10, 0.62, 0.44, 1.0), paint.rgba(0.73, 0.40, 0.13, 1.0),
+    }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    var legend: [5]chart.LegendItem = zero
+    let (entries, legend_error) = chart.legend_items(names, chart.Coord { x: 232.0, y: 58.0 }, 10.0, 29.0, legend[..])
+    if legend_error != ok { ret legend_error }
+    var labels: [7]chart.Label = zero
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    i = 0usize
+    while i < entries.len {
+        try fill(&builder, entries[i].swatch, paint.Brush { Solid: colors[i + 3usize] })
+        labels[i] = entries[i].label
+        i += 1usize
+    }
+    labels[5usize] = chart.Label { text: "All", anchor: chart.Coord { x: 120.0, y: 131.0 }, align: .Center }
+    labels[6usize] = chart.Label { text: "Hierarchical sunburst", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    try chart_scene.append_labels(a, &builder, labels[..6usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[6usize..], font, 13.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.append(&writer, &layers[i], colors[i])
+        i += 1usize
+    }
+    i = 0usize
+    while i < entries.len {
+        try chart_svg.rect(&writer, entries[i].swatch, colors[i + 3usize], false)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..6usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[6usize..], dark, 13.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_matrix(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, marks: *const chart.MatrixLayout, path: str) -> err {
     let (made, builder_error) = scene.builder(a, marks.cells.len + 1usize)
     if builder_error != ok { ret builder_error }
@@ -861,6 +919,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (tree_layers, tree_error) = chart.treemap(tree_parents[..], tree_weights[..], geometry.rect(24.0, 38.0, 312.0, 176.0), tree_totals[..], tree_rects[..], tree_storage[..])
     if tree_error != ok { ret tree_error }
     try render_treemap(a, queue, output_target, canvas, &renderer, tree_layers, tree_rects[..], tree_names[..], "docs/chart-previews/treemap.png")
+    let sun_parents = [8]usize{ 0usize, 0usize, 0usize, 1usize, 1usize, 1usize, 2usize, 2usize }
+    let sun_weights = [8]f32{ 0.0, 0.0, 0.0, 30.0, 20.0, 10.0, 25.0, 15.0 }
+    let sun_names = [5]str{ "Cloud 30", "Apps 20", "Data 10", "Supply 25", "Field 15" }
+    var sun_totals: [8]f64 = zero
+    var sun_depths: [8]usize = zero
+    var sun_arcs: [8]chart.SunburstArc = zero
+    var sun_points: [1600]chart.Coord = zero
+    var sun_storage: [8]chart.Layout = zero
+    let (sun_layers, sun_error) = chart.sunburst(sun_parents[..], sun_weights[..], geometry.rect(25.0, 33.0, 190.0, 190.0), 0.23, sun_totals[..], sun_depths[..], sun_arcs[..], sun_points[..], sun_storage[..])
+    if sun_error != ok { ret sun_error }
+    try render_sunburst(a, queue, output_target, canvas, &renderer, sun_layers, sun_names[..], "docs/chart-previews/sunburst.png")
     let funnel_values = [5]f32{ 100.0, 74.0, 52.0, 31.0, 18.0 }
     let funnel_names = [5]str{ "Visits 100", "Leads 74", "Qualified 52", "Trials 31", "Won 18" }
     var funnel_points: [20]chart.Coord = zero

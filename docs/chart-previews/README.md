@@ -7,7 +7,7 @@ density, ridgeline, Q-Q, violin, heatmap, correlation matrix, faceted heatmap, s
 facet scales, log scatter, symmetric-log line, labeled line, labeled log scatter
 and labeled symmetric-log line PNGs, plus the bubble, OLS fit, covariance data
 ellipse, mean-confidence and prediction overlays, and categorical bar+line
-combo, candlestick, OHLC bars and a hierarchical treemap are rendered by Neper's CPU scene and PNG encoder. All 50 have an SVG
+combo, candlestick, OHLC bars, a hierarchical treemap and a sunburst are rendered by Neper's CPU scene and PNG encoder. All 51 have an SVG
 companion streamed from the same layout with title and
 description metadata. Grouped and stacked bars include category labels and a
 two-series legend in both formats. The labeled preview uses the repository's Montserrat

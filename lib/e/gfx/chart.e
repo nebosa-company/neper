@@ -21,6 +21,7 @@ type Label = struct { text: str, anchor: Coord, align: LabelAlign }
 type LegendItem = struct { swatch: geometry.Rect, label: Label }
 type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
+type SunburstArc = struct { start: f64, end: f64, next: f64 }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
@@ -1075,15 +1076,16 @@ fn waffle(values: []const f32, bounds: geometry.Rect, columns: usize, rows: usiz
     ret (layers[..values.len], ok)
 }
 
-// Parent indices precede children; root 0 names itself. Only leaves carry
-// weights. Every node gets a rectangle, while only leaves get a Bar layer.
-fn treemap(parents: []const usize, weights: []const f32, bounds: geometry.Rect, totals: []f64, rects: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
-    if parents.len == 0usize { ret (zero, Empty) }
-    if parents.len != weights.len || parents[0usize] != 0usize || !valid_bounds(bounds) { ret (zero, Invalid) }
-    if totals.len < parents.len || rects.len < parents.len || layers.len < parents.len { ret (zero, TooLarge) }
+// Parent indices precede children; root 0 names itself and only leaves carry
+// weights. Reused by rectangular and radial hierarchy layouts.
+fn hierarchy_totals(parents: []const usize, weights: []const f32, totals: []f64) -> err {
+    if parents.len == 0usize { ret Empty }
+    if parents.len != weights.len || parents[0usize] != 0usize { ret Invalid }
+    if totals.len < parents.len { ret TooLarge }
     var i = 0usize
     while i < parents.len {
-        if (i > 0usize && parents[i] >= i) || !finite(weights[i]) || weights[i] < 0.0 { ret (zero, Invalid) }
+        if (i > 0usize && parents[i] >= i) || !finite(weights[i]) || weights[i] < 0.0 { ret Invalid }
+        if i > 0usize && weights[parents[i]] != 0.0 { ret Invalid }
         totals[i] = f64(weights[i])
         i += 1usize
     }
@@ -1091,11 +1093,20 @@ fn treemap(parents: []const usize, weights: []const f32, bounds: geometry.Rect, 
     while i > 1usize {
         i -= 1usize
         totals[parents[i]] += totals[i]
-        if !finite64(totals[parents[i]]) { ret (zero, Invalid) }
+        if !finite64(totals[parents[i]]) { ret Invalid }
     }
-    if !(totals[0usize] > 0.0f64) { ret (zero, Invalid) }
+    if !(totals[0usize] > 0.0f64) { ret Invalid }
+    ret ok
+}
+
+// Every node gets a rectangle, while only leaves get a Bar layer.
+fn treemap(parents: []const usize, weights: []const f32, bounds: geometry.Rect, totals: []f64, rects: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
+    if !valid_bounds(bounds) { ret (zero, Invalid) }
+    let total_error = hierarchy_totals(parents, weights, totals)
+    if total_error != ok { ret (zero, total_error) }
+    if rects.len < parents.len || layers.len < parents.len { ret (zero, TooLarge) }
     rects[0usize] = bounds
-    i = 0usize
+    var i = 0usize
     while i < parents.len {
         var children = 0usize
         var j = 1usize
@@ -1104,7 +1115,6 @@ fn treemap(parents: []const usize, weights: []const f32, bounds: geometry.Rect, 
             j += 1usize
         }
         if children > 0usize {
-            if weights[i] != 0.0 { ret (zero, Invalid) }
             let parent = rects[i]
             let across = parent.width >= parent.height
             var cumulative = 0.0f64
@@ -1140,6 +1150,88 @@ fn treemap(parents: []const usize, weights: []const f32, bounds: geometry.Rect, 
             layers[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
         } else {
             layers[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: rects[i..i + 1usize], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        }
+        i += 1usize
+    }
+    ret (layers[..parents.len], ok)
+}
+
+// Root occupies the innermost ring, each generation the next. A leaf extends
+// through any remaining rings; zero-total nodes return empty Bar layers.
+fn sunburst(parents: []const usize, weights: []const f32, bounds: geometry.Rect, hole: f32, totals: []f64, depths: []usize, arcs: []SunburstArc, points: []Coord, layers: []Layout) -> ([]Layout, err) {
+    if !valid_bounds(bounds) || !finite(hole) || hole < 0.0 || hole >= 1.0 { ret (zero, Invalid) }
+    let total_error = hierarchy_totals(parents, weights, totals)
+    if total_error != ok { ret (zero, total_error) }
+    if depths.len < parents.len || arcs.len < parents.len || layers.len < parents.len { ret (zero, TooLarge) }
+    let turn = 6.283185307179586f64
+    let top = -1.5707963267948966f64
+    depths[0usize] = 0usize
+    arcs[0usize] = SunburstArc { start: top, end: top + turn, next: top }
+    var max_depth = 0usize
+    var i = 1usize
+    while i < parents.len {
+        let parent = parents[i]
+        depths[i] = depths[parent] + 1usize
+        if depths[i] > max_depth { max_depth = depths[i] }
+        let start = arcs[parent].next
+        var end = start
+        if totals[parent] > 0.0f64 { end += (arcs[parent].end - arcs[parent].start) * totals[i] / totals[parent] }
+        if !finite64(end) { ret (zero, Invalid) }
+        arcs[parent].next = end
+        arcs[i] = SunburstArc { start: start, end: end, next: start }
+        i += 1usize
+    }
+    var radius = bounds.width * 0.5
+    if bounds.height < bounds.width { radius = bounds.height * 0.5 }
+    let inner = radius * hole
+    let ring_width = (radius - inner) / f32(max_depth + 1usize)
+    let cx = bounds.x + bounds.width * 0.5
+    let cy = bounds.y + bounds.height * 0.5
+    if !finite(radius) || !finite(inner) || !finite(ring_width) || ring_width <= 0.0 || !finite(cx) || !finite(cy) { ret (zero, Invalid) }
+    var needed = 0usize
+    i = 0usize
+    while i < parents.len {
+        if totals[i] > 0.0f64 {
+            let steps = 2usize + usize((arcs[i].end - arcs[i].start) / turn * 96.0f64)
+            let count = 2usize * (steps + 1usize)
+            if needed > points.len || count > points.len - needed { ret (zero, TooLarge) }
+            needed += count
+        }
+        i += 1usize
+    }
+    var used = 0usize
+    i = 0usize
+    while i < parents.len {
+        if totals[i] == 0.0f64 {
+            layers[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        } else {
+            let fraction_of_turn = (arcs[i].end - arcs[i].start) / turn
+            let steps = 2usize + usize(fraction_of_turn * 96.0f64)
+            let low = inner + f32(depths[i]) * ring_width
+            var high = low + ring_width
+            if weights[i] > 0.0 { high = radius }
+            let first = used
+            var j = 0usize
+            while j <= steps {
+                let angle = arcs[i].start + (arcs[i].end - arcs[i].start) * f64(j) / f64(steps)
+                let x = cx + high * f32(math.cos[f64](angle))
+                let y = cy + high * f32(math.sin[f64](angle))
+                if !finite(x) || !finite(y) { ret (zero, Invalid) }
+                points[used] = Coord { x: x, y: y }
+                used += 1usize
+                j += 1usize
+            }
+            j = 0usize
+            while j <= steps {
+                let angle = arcs[i].end - (arcs[i].end - arcs[i].start) * f64(j) / f64(steps)
+                let x = cx + low * f32(math.cos[f64](angle))
+                let y = cy + low * f32(math.sin[f64](angle))
+                if !finite(x) || !finite(y) { ret (zero, Invalid) }
+                points[used] = Coord { x: x, y: y }
+                used += 1usize
+                j += 1usize
+            }
+            layers[i] = Layout { kind: .Area, coords: points[first..used], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
         }
         i += 1usize
     }

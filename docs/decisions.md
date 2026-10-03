@@ -33361,3 +33361,16 @@ labels stay with the caller. The simple sibling scan is quadratic and may
 yield skinny rectangles; squarified packing is an explicit upgrade path.
 `gfx_chart_treemap` checks hierarchy, proportions, invalid data/storage and
 scene/SVG output on both hosts. The gallery adds a labeled PNG/SVG pair.
+
+## D1832 — Share hierarchy validation between treemap and sunburst
+
+`hierarchy_totals` validates parent-before-child indices, finite nonnegative
+leaf weights, empty/mismatched input, and subtree totals once for both layouts.
+`chart.sunburst` assigns ordered sibling arcs from those totals, then tessellates
+one concentric Area sector per positive node. A leaf may fill remaining rings;
+zero-total nodes return empty Bar layers so callers can append every result
+through existing scene/SVG adapters. The center-hole ratio and all scratch
+arrays belong to the caller. `gfx_chart_sunburst` checks angular shares, ring
+depths, invalid input/capacity and both adapters on Windows and Linux; the
+gallery adds one labeled PNG/SVG pair. Adaptive tessellation, curved labels
+and interactive drilldown remain planned.
