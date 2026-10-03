@@ -630,6 +630,77 @@ fn render_calendar_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_gantt_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/gantt.png"
+    let plot = geometry.rect(89.0, 52.0, 225.0, 143.0)
+    let tasks = [4]chart.GanttTask{
+        chart.GanttTask { row: 0usize, start: 0.0f64, end: 3.0f64, complete: 1.0 },
+        chart.GanttTask { row: 1usize, start: 2.0f64, end: 5.0f64, complete: 1.0 },
+        chart.GanttTask { row: 2usize, start: 4.0f64, end: 10.0f64, complete: 0.55 },
+        chart.GanttTask { row: 3usize, start: 9.0f64, end: 12.0f64, complete: 0.1 },
+    }
+    let names = [4]str{ "Plan", "Design", "Build", "Launch" }
+    let ticks = [4]str{ "0", "4", "8", "12" }
+    let pale = paint.rgba(0.95, 0.96, 0.98, 1.0)
+    let remaining = paint.rgba(0.69, 0.82, 0.95, 1.0)
+    let complete = paint.rgba(0.07, 0.38, 0.76, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let grid = paint.rgba(0.84, 0.88, 0.93, 1.0)
+    var spans: [4]geometry.Rect = zero
+    var progress: [4]geometry.Rect = zero
+    let (whole, done, layout_error) = chart.gantt(tasks[..], 4usize, 0.0f64, 12.0f64, plot, 7.0, spans[..], progress[..])
+    if layout_error != ok { ret layout_error }
+    var x_ticks: [4]chart.Tick = zero
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    let (_, tick_error) = chart.ticks(linear, 0.0, 12.0, x_ticks[..])
+    if tick_error != ok { ret tick_error }
+    var labels: [9]chart.Label = zero
+    var i = 0usize
+    while i < 4usize {
+        labels[i] = chart.Label { text: names[i], anchor: chart.Coord { x: 79.0, y: spans[i].y + spans[i].height * 0.5 + 3.0 }, align: .Right }
+        labels[4usize + i] = chart.Label { text: ticks[i], anchor: chart.Coord { x: plot.x + plot.width * f32(i) / 3.0, y: 217.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[8usize] = chart.Label { text: "Gantt schedule / completion", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    i = 0usize
+    while i < 4usize {
+        try fill(&builder, geometry.rect(plot.x, plot.y + f32(i) * 37.5, plot.width, 30.5), paint.Brush { Solid: pale })
+        i += 1usize
+    }
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], x_ticks[..0usize], paint.Brush { Solid: grid }, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &whole, paint.Brush { Solid: remaining })
+    try chart_scene.append(a, &builder, &done, paint.Brush { Solid: complete })
+    try chart_scene.append_labels(a, &builder, labels[..8usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[8usize..], font, 13.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < 4usize {
+        try chart_svg.rect(&writer, geometry.rect(plot.x, plot.y + f32(i) * 37.5, plot.width, 30.5), pale, false)
+        i += 1usize
+    }
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], x_ticks[..0usize], grid, dark)
+    try chart_svg.append(&writer, &whole, remaining)
+    try chart_svg.append(&writer, &done, complete)
+    try chart_svg.append_labels(&writer, labels[..8usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[8usize..], dark, 13.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_event_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/event_timeline.png"
     let plot = geometry.rect(62.0, 52.0, 246.0, 144.0)
@@ -4212,6 +4283,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_state_timeline(a, queue, output_target, canvas, &renderer, history_layers, timeline_state_ids[..], timeline_rows[..], history_states[..], history_colors[..], "Status history", "docs/chart-previews/status_history.png")
     try render_sparklines(a, queue, output_target, canvas, &renderer)
     try render_calendar_preview(a, queue, output_target, canvas, &renderer)
+    try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)
     try render_cell_bars_preview(a, queue, output_target, canvas, &renderer)
     try render_forest_preview(a, queue, output_target, canvas, &renderer)

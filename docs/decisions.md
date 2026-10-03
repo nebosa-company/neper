@@ -34009,3 +34009,14 @@ Focused fixtures check numeric references, irregular x positions, alignment,
 flat data, refusals and scene/SVG adapters on Windows and Linux; the gallery
 adds two PNG/SVG pairs. References: R PerformanceAnalytics `Return.calculate`
 and `roll::roll_sd` documentation.
+
+## D1892 — Gantt progress composes two Bar layers on a shared time axis
+
+`gantt` accepts caller-owned tasks with f64 start/end times, categorical rows
+and completion fractions. It maps each duration to a pale Bar and its completed
+portion to an aligned second Bar. The engine validates the explicit time
+domain, row bounds, interval ordering, fractions and caller storage; it does
+not silently infer dependencies or a project calendar. `gfx_chart_gantt`
+checks geometry, refusals and scene/SVG adapters on Windows and Linux. The
+gallery adds a PNG/SVG pair; milestones, dependency links and critical-path
+calculation remain separate planned capabilities.

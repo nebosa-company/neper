@@ -29,6 +29,7 @@ type SankeyNode = struct { incoming: f64, outgoing: f64, in_used: f64, out_used:
 type TargetStatus = struct { delta: f32, achieved: bool }
 type CloudWord = struct { label: Label, size: f32, box: geometry.Rect }
 type StateSpan = struct { row: usize, start: f64, end: f64, state: usize }
+type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
@@ -1941,6 +1942,38 @@ fn word_cloud(words: []const str, weights: []const f32, unit_widths: []const f32
         used += 1usize
     }
     ret (marks[..active], ok)
+}
+
+// Task durations and completion fractions share a numeric time domain and
+// categorical rows. Both layers reuse ordinary Bar scene/SVG adapters.
+fn gantt(tasks: []const GanttTask, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, row_gap: f32, spans: []geometry.Rect, completed: []geometry.Rect) -> (Layout, Layout, err) {
+    if tasks.len == 0usize { ret (zero, zero, Empty) }
+    if rows == 0usize || !finite64(domain_start) || !finite64(domain_end) || domain_end <= domain_start || !valid_bounds(bounds) || !finite(row_gap) || row_gap < 0.0 { ret (zero, zero, Invalid) }
+    let x_min = f32(domain_start)
+    let x_max = f32(domain_end)
+    let y_max = f32(rows)
+    if !finite(x_min) || !finite(x_max) || x_max <= x_min || !finite(y_max) { ret (zero, zero, Invalid) }
+    if spans.len < tasks.len || completed.len < tasks.len { ret (zero, zero, TooLarge) }
+    let total_gap = row_gap * f32(rows - 1usize)
+    if !finite(total_gap) || total_gap >= bounds.height { ret (zero, zero, Invalid) }
+    let lane_height = (bounds.height - total_gap) / f32(rows)
+    let bar_height = lane_height * 0.64
+    if !finite(lane_height) || !finite(bar_height) || bar_height <= 0.0 { ret (zero, zero, Invalid) }
+    var i = 0usize
+    while i < tasks.len {
+        let task = tasks[i]
+        if task.row >= rows || !finite64(task.start) || !finite64(task.end) || task.start < domain_start || task.end > domain_end || task.end <= task.start || !finite(task.complete) || task.complete < 0.0 || task.complete > 1.0 { ret (zero, zero, Invalid) }
+        let left = bounds.x + bounds.width * f32((task.start - domain_start) / (domain_end - domain_start))
+        let right = bounds.x + bounds.width * f32((task.end - domain_start) / (domain_end - domain_start))
+        let top = bounds.y + f32(task.row) * (lane_height + row_gap) + (lane_height - bar_height) * 0.5
+        if !finite(left) || !finite(right) || !finite(top) || right <= left { ret (zero, zero, Invalid) }
+        spans[i] = geometry.rect(left, top, right - left, bar_height)
+        completed[i] = geometry.rect(left, top, (right - left) * task.complete, bar_height)
+        i += 1usize
+    }
+    let whole = Layout { kind: .Bar, coords: zero, segments: zero, bars: spans[..tasks.len], x_min: x_min, x_max: x_max, y_min: 0.0, y_max: y_max }
+    let done = Layout { kind: .Bar, coords: zero, segments: zero, bars: completed[..tasks.len], x_min: x_min, x_max: x_max, y_min: 0.0, y_max: y_max }
+    ret (whole, done, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.

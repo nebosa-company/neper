@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and forty-two PNG plus one hundred and forty-two SVG previews from Neper. Individuals, moving-range,
+one hundred and forty-three PNG plus one hundred and forty-three SVG previews from Neper. Basic Gantt scheduling is also delivered. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -413,6 +413,12 @@ times and short storage. The same layout supports an operational state timeline
 and a status-history preview with separate caller-owned legends; the focused
 fixture checks geometry and scene/SVG adapters on Windows and Linux. Date/time
 tick formatting, timezone semantics and event annotations remain planned.
+`gantt` maps task start/end times and completion fractions into two caller-owned
+Bar layers over one explicit time domain and categorical rows. Tasks may arrive
+in any order; invalid intervals, out-of-domain times, invalid completion and
+short storage are refused. `gfx_chart_gantt` checks geometry, progress values,
+refusals and scene/SVG output on Windows and Linux. Dependencies, critical-path
+calculation, calendar scheduling and milestone styling remain planned.
 `sparkline` assigns evenly spaced x positions to dense numeric samples and
 reuses Line layout without guides; the gallery composes four in-cell rows.
 `calendar_heatmap` accepts sorted day offsets, a Monday-first weekday and a
@@ -491,6 +497,9 @@ histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, step
 confidence bands, dumbbells, ECDF,
 box, boxen, density, ridgeline, Q-Q, P-P, violin, heatmap, correlation matrix, mosaic, association, fourfold, parallel coordinates, scatterplot matrix, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, categorical bar+line combo, candlestick, OHLC, basic price-volume, returns/rolling volatility, basic waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, radar, area-scaled rose/wind, ternary composition, waffle, mekko/marimekko, two-set area-proportional Euler, nominal three-set Venn, basic word cloud, treemap, sunburst, icicle, basic circle packing, basic Sankey, basic alluvial, basic chord, centered streamgraph, basic horizon plot, seasonal subseries, forecast fan chart, additive decomposition plot, ACF/PACF correlogram, empirical variogram, vector/quiver plot, streamlines, phase-space portrait, recurrence plot, basic drawdown chart, cohort retention triangle, contour isolines, filled contour bands, basic rank-over-time ribbons, basic stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars, calendar heatmap, basic forest plot, Bland–Altman agreement, ROC, precision–recall, cumulative gain, cumulative lift, calibration, confusion matrix, partial ROC area, Youden index and decision curve are delivered; every other entry
 remains planned.
+
+Basic Gantt task spans and completion layers are delivered; milestones and
+dependency links remain planned.
 
 ### General-purpose statistical and business charts
 
@@ -655,7 +664,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and forty-two vector previews, automatic numeric tick text and
+   adapter with one hundred and forty-three vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

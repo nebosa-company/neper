@@ -15934,6 +15934,7 @@ type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: [
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
+type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
 error Invalid
 error Empty
 error TooLarge
@@ -15973,6 +15974,7 @@ fn recurrence(values: []const f32, lag: usize, radius: f32, bounds: geometry.Rec
 fn drawdown(x: []const f32, prices: []const f32, bounds: geometry.Rect, losses: []f32, points: []Coord) -> (Layout, err)
 fn price_volume(x: []const f32, prices: []const f32, volumes: []const f32, bounds: geometry.Rect, gap: f32, price_segments: []Segment, volume_bars: []geometry.Rect) -> (Layout, Layout, err)
 fn returns_volatility(x: []const f32, prices: []const f32, window: usize, bounds: geometry.Rect, gap: f32, returns: []f32, volatility: []f32, return_segments: []Segment, volatility_segments: []Segment) -> (Layout, Layout, err)
+fn gantt(tasks: []const GanttTask, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, row_gap: f32, spans: []geometry.Rect, completed: []geometry.Rect) -> (Layout, Layout, err)
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err)
 fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err)
 fn frequency_polygon(values: []const f32, bounds: geometry.Rect, counts: []u64, bins: []geometry.Rect, segments: []Segment) -> (Layout, err)

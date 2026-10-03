@@ -2824,6 +2824,11 @@ gfx_chart_returns_volatility_written=$($test_build/neper-self emit-executable "$
 chmod +x "$test_build/gfx-chart-returns-volatility-selfhost"
 gfx_chart_returns_volatility_output=$("$test_build/gfx-chart-returns-volatility-selfhost")
 [ "$gfx_chart_returns_volatility_output" = 'gfx chart returns volatility ok' ]
+gfx_chart_gantt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_gantt/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-gantt-selfhost")
+[ "$gfx_chart_gantt_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-gantt-selfhost"
+gfx_chart_gantt_output=$("$test_build/gfx-chart-gantt-selfhost")
+[ "$gfx_chart_gantt_output" = 'gfx chart gantt ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

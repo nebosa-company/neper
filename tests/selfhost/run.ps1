@@ -3202,6 +3202,11 @@ $gfxChartReturnsVolatilityWritten = & $compiler emit-executable (Join-Path $PSSc
 if ($LASTEXITCODE -ne 0 -or $gfxChartReturnsVolatilityWritten -ne 'executable written') { throw 'gfx_chart_returns_volatility emission failed' }
 $gfxChartReturnsVolatilityOutput = & $gfxChartReturnsVolatilityPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartReturnsVolatilityOutput -ne 'gfx chart returns volatility ok') { throw "the e.gfx.chart simple returns and rolling SD answered wrongly: exit $LASTEXITCODE" }
+$gfxChartGanttPath = Join-Path $testBuild 'gfx-chart-gantt-selfhost.exe'
+$gfxChartGanttWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_gantt\src\main.e') $repo 'x64' 'windows' $gfxChartGanttPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGanttWritten -ne 'executable written') { throw 'gfx_chart_gantt emission failed' }
+$gfxChartGanttOutput = & $gfxChartGanttPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGanttOutput -ne 'gfx chart gantt ok') { throw "the e.gfx.chart Gantt durations and completion answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'
