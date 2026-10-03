@@ -347,6 +347,65 @@ fn render_bar_layers(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, c
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_mekko(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, names: []const str, path: str) -> err {
+    if layers.len != 3usize || categories.len != 4usize || names.len != layers.len || layers[0usize].bars.len != categories.len { ret chart.Invalid }
+    let colors = [3]paint.Color{
+        paint.rgba(0.08, 0.37, 0.75, 1.0), paint.rgba(0.92, 0.42, 0.13, 1.0), paint.rgba(0.16, 0.58, 0.43, 1.0),
+    }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    var legend: [3]chart.LegendItem = zero
+    let (entries, legend_error) = chart.legend_items(names, chart.Coord { x: 268.0, y: 63.0 }, 10.0, 31.0, legend[..])
+    if legend_error != ok { ret legend_error }
+    var labels: [8]chart.Label = zero
+    var i = 0usize
+    while i < categories.len {
+        let bar = layers[0usize].bars[i]
+        labels[i] = chart.Label { text: categories[i], anchor: chart.Coord { x: bar.x + bar.width * 0.5, y: 209.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[4usize] = chart.Label { text: "100%", anchor: chart.Coord { x: 31.0, y: 48.0 }, align: .Right }
+    labels[5usize] = chart.Label { text: "50%", anchor: chart.Coord { x: 31.0, y: 122.0 }, align: .Right }
+    labels[6usize] = chart.Label { text: "0%", anchor: chart.Coord { x: 31.0, y: 195.0 }, align: .Right }
+    labels[7usize] = chart.Label { text: "Marimekko shares", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var legend_labels: [3]chart.Label = zero
+    i = 0usize
+    while i < layers.len {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        try fill(&builder, entries[i].swatch, paint.Brush { Solid: colors[i] })
+        legend_labels[i] = entries[i].label
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..7usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[7usize..], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, legend_labels[..], font, 9.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < layers.len {
+        try chart_svg.append(&writer, &layers[i], colors[i])
+        try chart_svg.rect(&writer, entries[i].swatch, colors[i], false)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..7usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[7usize..], dark, 13.0)
+    try chart_svg.append_labels(&writer, legend_labels[..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_population_pyramid(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, bars: []geometry.Rect, ages: []const str, path: str) -> err {
     if layers.len != 2usize || ages.len != 6usize || bars.len != ages.len * 2usize { ret chart.Invalid }
     let colors = [2]paint.Color{ paint.rgba(0.08, 0.37, 0.72, 1.0), paint.rgba(0.89, 0.39, 0.16, 1.0) }
@@ -1099,6 +1158,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (normalized, normalized_error) = chart.stacked_bars(grouped_values[..], 4usize, 2usize, bar_bounds, true, series_bars[..], series_layers[..])
     if normalized_error != ok { ret normalized_error }
     try render_bar_layers(a, queue, output_target, canvas, &renderer, normalized, category_names[..], series_names[..], "Share by category", "docs/chart-previews/stacked_100.png")
+    let mekko_values = [12]f32{ 20.0, 10.0, 20.0, 5.0, 15.0, 10.0, 25.0, 20.0, 25.0, 10.0, 15.0, 25.0 }
+    let mekko_series = [3]str{ "Core", "Growth", "Services" }
+    var mekko_totals: [4]f64 = zero
+    var mekko_bars: [12]geometry.Rect = zero
+    var mekko_storage: [3]chart.Layout = zero
+    let (mekko_layers, mekko_error) = chart.mekko(mekko_values[..], 4usize, 3usize, geometry.rect(44.0, 45.0, 210.0, 148.0), mekko_totals[..], mekko_bars[..], mekko_storage[..])
+    if mekko_error != ok { ret mekko_error }
+    try render_mekko(a, queue, output_target, canvas, &renderer, mekko_layers, category_names[..], mekko_series[..], "docs/chart-previews/mekko.png")
     let pyramid_left = [6]f32{ 55.0, 70.0, 83.0, 72.0, 50.0, 31.0 }
     let pyramid_right = [6]f32{ 52.0, 68.0, 78.0, 75.0, 57.0, 40.0 }
     let pyramid_ages = [6]str{ "0-9", "10-19", "20-29", "30-39", "40-49", "50+" }

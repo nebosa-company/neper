@@ -33456,3 +33456,15 @@ polygons and outer rings reuse Area in both scene and SVG. Geometry, storage,
 invalid input and adapter output are checked by `gfx_chart_chord` on Windows
 and Linux; the gallery adds one PNG/SVG pair. Adaptive tessellation,
 direction arrows and interactive highlighting remain later work.
+
+## D1840 — Make mekko cell area the encoded quantity
+
+`chart.mekko` borrows category-major nonnegative values and computes each
+column's width from its share of the grand total, then stacks series at
+within-column shares. Thus every cell's area fraction equals its value's
+fraction of the total. Empty categories retain zero width; an all-zero
+table returns `Empty`. Caller-owned series-major Bar layers reuse the scene
+and SVG adapters, with labels and palette owned by the caller.
+`gfx_chart_mekko` checks numeric area references, malformed inputs, zero
+categories, capacity and adapters on Windows and Linux; the gallery adds
+one PNG/SVG pair. Pixel gaps are omitted because they would distort area.

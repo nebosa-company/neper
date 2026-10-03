@@ -1996,6 +1996,62 @@ fn stacked_bars(values: []const f32, categories: usize, series: usize, bounds: g
     ret (bar_layers(categories, series, bars, layers, low, high), ok)
 }
 
+// Variable-width columns make each cell area proportional to its value.
+// Input is category-major; output is series-major for caller-selected colours.
+fn mekko(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect, totals: []f64, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
+    if categories == 0usize || series == 0usize { ret (zero, Empty) }
+    if !bar_grid_ok(values, categories, series, bounds) { ret (zero, Invalid) }
+    if totals.len < categories || bars.len < values.len || layers.len < series { ret (zero, TooLarge) }
+    var grand = 0.0f64
+    var category = 0usize
+    while category < categories {
+        var total = 0.0f64
+        var column = 0usize
+        while column < series {
+            let value = values[category * series + column]
+            if !finite(value) || value < 0.0 { ret (zero, Invalid) }
+            total += f64(value)
+            column += 1usize
+        }
+        if !finite(f32(total)) { ret (zero, Invalid) }
+        totals[category] = total
+        grand += total
+        category += 1usize
+    }
+    if !finite(f32(grand)) { ret (zero, Invalid) }
+    if grand <= 0.0f64 { ret (zero, Empty) }
+    var cumulative = 0.0f64
+    category = 0usize
+    while category < categories {
+        let left = bounds.x + bounds.width * f32(cumulative / grand)
+        cumulative += totals[category]
+        let right = bounds.x + bounds.width * f32(cumulative / grand)
+        var stacked = 0.0f64
+        var column = 0usize
+        while column < series {
+            let value = f64(values[category * series + column])
+            var top = bounds.y + bounds.height
+            var bottom = top
+            if totals[category] > 0.0f64 {
+                bottom = bounds.y + bounds.height * (1.0 - f32(stacked / totals[category]))
+                stacked += value
+                top = bounds.y + bounds.height * (1.0 - f32(stacked / totals[category]))
+            }
+            if !finite(left) || !finite(right) || !finite(top) || !finite(bottom) || (totals[category] > 0.0f64 && right <= left) || (value > 0.0f64 && bottom <= top) { ret (zero, Invalid) }
+            bars[column * categories + category] = geometry.rect(left, top, right - left, bottom - top)
+            column += 1usize
+        }
+        category += 1usize
+    }
+    let made = bar_layers(categories, series, bars, layers, 0.0, 1.0)
+    var i = 0usize
+    while i < made.len {
+        layers[i].x_max = 1.0
+        i += 1usize
+    }
+    ret (made, ok)
+}
+
 // Two nonnegative age series diverge from a shared central label gutter.
 // Input rows run from youngest (bottom) to oldest (top).
 fn population_pyramid(left: []const f32, right: []const f32, bounds: geometry.Rect, gutter: f32, row_gap: f32, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err) {
