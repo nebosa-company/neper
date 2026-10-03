@@ -13,6 +13,7 @@ use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 use e.text.shape
+use e.text.layout as text_layout
 
 const WIDTH: u32 = 360u32
 const HEIGHT: u32 = 240u32
@@ -980,6 +981,44 @@ fn render_circle_sets(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, 
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_word_cloud(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, font: shape.Font, marks: []chart.CloudWord, path: str) -> err {
+    let colors = [5]paint.Color{
+        paint.rgba(0.08, 0.39, 0.76, 1.0), paint.rgba(0.87, 0.36, 0.17, 1.0),
+        paint.rgba(0.10, 0.56, 0.42, 1.0), paint.rgba(0.49, 0.36, 0.70, 1.0),
+        paint.rgba(0.72, 0.47, 0.12, 1.0),
+    }
+    let title = [1]chart.Label{ chart.Label { text: "Weighted word cloud", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center } }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var i = 0usize
+    while i < marks.len {
+        let label = [1]chart.Label{ marks[i].label }
+        try chart_scene.append_labels(a, &builder, label[..], font, marks[i].size, paint.Brush { Solid: colors[i % colors.len] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, title[..], font, 13.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < marks.len {
+        let label = [1]chart.Label{ marks[i].label }
+        try chart_svg.append_labels(&writer, label[..], colors[i % colors.len], marks[i].size)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, title[..], dark, 13.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_chord(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, names: []const str, path: str) -> err {
     if layers.len != 14usize || names.len != 4usize { ret chart.Invalid }
     let ribbons = [4]paint.Color{
@@ -1467,6 +1506,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let venn_names = [3]str{ "A", "B", "C" }
     let venn_regions = [7]str{ "A", "B", "C", "AB", "AC", "BC", "ABC" }
     try render_circle_sets(a, queue, output_target, canvas, &renderer, venn_layers, venn_names[..], venn_regions[..], venn_anchors[..], "Three-set Venn", "docs/chart-previews/venn3.png")
+    let cloud_words = [12]str{ "Neper", "Charts", "Graphics", "Data", "Layers", "Scales", "SVG", "Statistics", "Labels", "Facets", "the", "Export" }
+    let cloud_weights = [12]f32{ 50.0, 36.0, 25.0, 20.0, 18.0, 15.0, 12.0, 11.0, 10.0, 9.0, 100.0, 8.0 }
+    let cloud_excluded = [1]str{ "the" }
+    let (cloud_bytes, cloud_font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if cloud_font_error != ok { ret cloud_font_error }
+    let cloud_font = shape.Font { id: 17u32, data: cloud_bytes, face_index: 0u32 }
+    let cloud_fonts = [1]text_layout.FontChoice{ text_layout.FontChoice { font: cloud_font, size: 16.0 } }
+    let cloud_style = text_layout.Style { fonts: cloud_fonts[..], language: "", line_height: 0.0 }
+    let cloud_options = text_layout.Options { width: 0.0, max_lines: 1u32, align: .Start, wrap: .None, ellipsis: "", notdef: true }
+    var cloud_widths: [12]f32 = zero
+    var cloud_heights: [12]f32 = zero
+    var cloud_baseline = 0.0f32
+    var cloud_index = 0usize
+    while cloud_index < cloud_words.len {
+        let (measured, measure_error) = text_layout.layout(a, cloud_words[cloud_index], cloud_style, cloud_options)
+        if measure_error != ok { ret measure_error }
+        if measured.lines.len != 1usize { ret chart.Invalid }
+        cloud_widths[cloud_index] = measured.bounds.width / 16.0
+        cloud_heights[cloud_index] = measured.bounds.height / 16.0
+        cloud_baseline = measured.lines[0usize].baseline / 16.0
+        cloud_index += 1usize
+    }
+    var cloud_order: [12]usize = zero
+    var cloud_storage: [12]chart.CloudWord = zero
+    let (cloud_marks, cloud_error) = chart.word_cloud(cloud_words[..], cloud_weights[..], cloud_widths[..], cloud_heights[..], cloud_baseline, cloud_excluded[..], geometry.rect(20.0, 42.0, 320.0, 180.0), 9.0, 32.0, 5.0, cloud_order[..], cloud_storage[..])
+    if cloud_error != ok { ret cloud_error }
+    try render_word_cloud(a, queue, output_target, canvas, &renderer, cloud_font, cloud_marks, "docs/chart-previews/word_cloud.png")
     let chord_values = [16]f32{ 0.0, 8.0, 5.0, 3.0, 4.0, 0.0, 6.0, 5.0, 7.0, 3.0, 0.0, 4.0, 2.0, 6.0, 5.0, 0.0 }
     let chord_names = [4]str{ "Design", "Build", "Sales", "Support" }
     var chord_totals: [4]f64 = zero

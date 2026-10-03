@@ -10,6 +10,7 @@ use e.math
 use e.math.special
 use e.mem
 use e.str
+use e.text.layout as text_layout
 
 type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
@@ -24,6 +25,7 @@ type Cell = struct { rect: geometry.Rect, value: f32 }
 type SunburstArc = struct { start: f64, end: f64, next: f64 }
 type SankeyNode = struct { incoming: f64, outgoing: f64, in_used: f64, out_used: f64 }
 type TargetStatus = struct { delta: f32, achieved: bool }
+type CloudWord = struct { label: Label, size: f32, box: geometry.Rect }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
@@ -1178,6 +1180,90 @@ fn gauge(value: f32, target_value: f32, maximum: f32, bounds: geometry.Rect, hol
     target_line[0usize] = Segment { from: start, to: end }
     layers[2usize] = Layout { kind: .Rug, coords: zero, segments: target_line[..1usize], bars: zero, x_min: 0.0, x_max: maximum, y_min: 0.0, y_max: 1.0 }
     ret (layers[..3usize], ok)
+}
+
+// Text metrics are font-size-normalized widths and heights measured by the
+// caller. Larger weights get larger type; exact excluded tokens are omitted.
+// ponytail: deterministic spiral placement scans prior boxes; use a spatial index
+// and a better packing search when clouds of hundreds of tokens are needed.
+fn word_cloud(words: []const str, weights: []const f32, unit_widths: []const f32, unit_heights: []const f32, baseline_unit: f32, excluded: []const str, bounds: geometry.Rect, min_size: f32, max_size: f32, gap: f32, order: []usize, marks: []CloudWord) -> ([]CloudWord, err) {
+    if words.len == 0usize { ret (zero, Empty) }
+    if weights.len != words.len || unit_widths.len != words.len || unit_heights.len != words.len || !valid_bounds(bounds) || !finite(baseline_unit) || baseline_unit <= 0.0 || !finite(min_size) || !finite(max_size) || min_size <= 0.0 || max_size < min_size || !finite(gap) || gap < 0.0 { ret (zero, Invalid) }
+    if order.len < words.len || marks.len < words.len { ret (zero, TooLarge) }
+    var active = 0usize
+    var maximum = 0.0f32
+    var i = 0usize
+    while i < words.len {
+        if words[i].len == 0usize || !text_layout.valid_utf8(words[i]) || !finite(weights[i]) || weights[i] < 0.0 || !finite(unit_widths[i]) || unit_widths[i] <= 0.0 || !finite(unit_heights[i]) || unit_heights[i] <= 0.0 { ret (zero, Invalid) }
+        var prior = 0usize
+        while prior < i {
+            if str.eq(words[prior], words[i]) { ret (zero, Invalid) }
+            prior += 1usize
+        }
+        var skip = weights[i] == 0.0
+        var j = 0usize
+        while j < excluded.len {
+            if str.eq(words[i], excluded[j]) { skip = true }
+            j += 1usize
+        }
+        if !skip {
+            order[active] = i
+            active += 1usize
+            if weights[i] > maximum { maximum = weights[i] }
+        }
+        i += 1usize
+    }
+    if active == 0usize { ret (zero, Empty) }
+    i = 1usize
+    while i < active {
+        let selected = order[i]
+        var j = i
+        while j > 0usize && weights[order[j - 1usize]] < weights[selected] {
+            order[j] = order[j - 1usize]
+            j -= 1usize
+        }
+        order[j] = selected
+        i += 1usize
+    }
+    let center_x = f64(bounds.x) + f64(bounds.width) * 0.5f64
+    let center_y = f64(bounds.y) + f64(bounds.height) * 0.5f64
+    var used = 0usize
+    while used < active {
+        let index = order[used]
+        var size = max_size * f32(math.sqrt[f64](f64(weights[index]) / f64(maximum)))
+        if size < min_size { size = min_size }
+        let width = unit_widths[index] * size
+        let height = unit_heights[index] * size
+        if !finite(size) || !finite(width) || !finite(height) || width <= 0.0 || height <= 0.0 || width > bounds.width || height > bounds.height { ret (zero, TooLarge) }
+        var placed = false
+        var attempt = 0usize
+        while attempt < 4096usize && !placed {
+            let angle = f64(attempt) * 2.399963229728653f64
+            let radius = 3.0f64 * math.sqrt[f64](f64(attempt))
+            let x = f32(center_x + radius * math.cos[f64](angle) - f64(width) * 0.5f64)
+            let y = f32(center_y + radius * math.sin[f64](angle) - f64(height) * 0.5f64)
+            if finite(x) && finite(y) && x >= bounds.x && y >= bounds.y && x + width <= bounds.x + bounds.width && y + height <= bounds.y + bounds.height {
+                var free = true
+                var prior = 0usize
+                while prior < used {
+                    let box = marks[prior].box
+                    if x < box.x + box.width + gap && x + width + gap > box.x && y < box.y + box.height + gap && y + height + gap > box.y { free = false }
+                    prior += 1usize
+                }
+                if free {
+                    let box = geometry.rect(x, y, width, height)
+                    let anchor = Coord { x: x, y: y + baseline_unit * size }
+                    if !finite(anchor.y) { ret (zero, Invalid) }
+                    marks[used] = CloudWord { label: Label { text: words[index], anchor: anchor, align: .Left }, size: size, box: box }
+                    placed = true
+                }
+            }
+            attempt += 1usize
+        }
+        if !placed { ret (zero, TooLarge) }
+        used += 1usize
+    }
+    ret (marks[..active], ok)
 }
 
 fn chord_point(center: Coord, radius: f64, angle: f64) -> Coord {

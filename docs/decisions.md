@@ -33502,3 +33502,16 @@ checks geometric endpoints, zero/full values, invalid bounds and capacities,
 both target directions and scene/SVG output on Windows and Linux. The gallery
 adds two PNG/SVG pairs. Dynamic labels, threshold bands and widget binding
 remain future work; the existing UI gauge is a separate control surface.
+
+## D1844 — Keep word-cloud packing font-metric driven and renderer-neutral
+
+`chart.word_cloud` accepts pre-tokenized unique words, nonnegative weights,
+size-normalized font metrics and exact exclusions. It maps weight to type
+size with a legibility floor, then searches deterministic spiral positions
+against previously placed rectangles and refuses an unfit cloud. The caller
+measures one font and paints each returned label at its selected size through
+the existing scene/SVG text adapters. `gfx_chart_word_cloud` checks order,
+exclusions, collisions, bounds, refusals and both adapters on Windows and
+Linux; the gallery adds one PNG/SVG pair. The quadratic collision scan and
+finite spiral search suit small clouds. Tokenization, case normalization,
+font embedding and scalable packing remain later work.

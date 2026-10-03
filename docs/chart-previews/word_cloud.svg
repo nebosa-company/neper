@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>word_cloud</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<text x="128.3520050048828" y="143.4720001220703" font-family="sans-serif" font-size="32" text-anchor="start" fill="rgb(20,99,194)" fill-opacity="1">Neper</text>
+<text x="133.11415100097656" y="183.8352813720703" font-family="sans-serif" font-size="27.15290069580078" text-anchor="start" fill="rgb(222,92,43)" fill-opacity="1">Charts</text>
+<text x="128.259765625" y="99.87467956542969" font-family="sans-serif" font-size="22.627416610717773" text-anchor="start" fill="rgb(26,143,107)" fill-opacity="1">Graphics</text>
+<text x="150.8759765625" y="66.41819763183594" font-family="sans-serif" font-size="20.238576889038086" text-anchor="start" fill="rgb(125,92,179)" fill-opacity="1">Data</text>
+<text x="149.79147338867188" y="216.06446838378906" font-family="sans-serif" font-size="19.200000762939453" text-anchor="start" fill="rgb(184,120,31)" fill-opacity="1">Layers</text>
+<text x="237.470458984375" y="136.83184814453125" font-family="sans-serif" font-size="17.527122497558594" text-anchor="start" fill="rgb(20,99,194)" fill-opacity="1">Scales</text>
+<text x="88.03630828857422" y="141.06961059570312" font-family="sans-serif" font-size="15.67673397064209" text-anchor="start" fill="rgb(222,92,43)" fill-opacity="1">SVG</text>
+<text x="48.56941223144531" y="115.35486602783203" font-family="sans-serif" font-size="15.009330749511719" text-anchor="start" fill="rgb(26,143,107)" fill-opacity="1">Statistics</text>
+<text x="236.65887451171875" y="160.71624755859375" font-family="sans-serif" font-size="14.310834884643555" text-anchor="start" fill="rgb(125,92,179)" fill-opacity="1">Labels</text>
+<text x="80.33605194091797" y="174.4084014892578" font-family="sans-serif" font-size="13.57645034790039" text-anchor="start" fill="rgb(184,120,31)" fill-opacity="1">Facets</text>
+<text x="208.9998016357422" y="66.71453094482422" font-family="sans-serif" font-size="12.800000190734863" text-anchor="start" fill="rgb(20,99,194)" fill-opacity="1">Export</text>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Weighted word cloud</text>
+</svg>
