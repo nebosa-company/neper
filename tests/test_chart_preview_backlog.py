@@ -36,6 +36,8 @@ class ChartPreviewBacklogTests(unittest.TestCase):
         self.assertNotIn("entity_relationship", planned)
         self.assertIn("branching_process_map", rendered)
         self.assertNotIn("branching_process_map", planned)
+        self.assertIn("stem_and_leaf", rendered)
+        self.assertNotIn("stem_and_leaf", planned)
 
         page = PAGE.read_text(encoding="utf-8")
         match = re.search(r"Rendered previews \((\d+)/(\d+)\)", page)

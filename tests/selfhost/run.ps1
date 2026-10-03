@@ -3297,6 +3297,11 @@ $gfxChartBranchingProcessWritten = & $compiler emit-executable (Join-Path $PSScr
 if ($LASTEXITCODE -ne 0 -or $gfxChartBranchingProcessWritten -ne 'executable written') { throw 'gfx_chart_branching_process emission failed' }
 $gfxChartBranchingProcessOutput = & $gfxChartBranchingProcessPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartBranchingProcessOutput -ne 'gfx chart branching process ok') { throw "the e.gfx.chart branching process answered wrongly: exit $LASTEXITCODE" }
+$gfxChartStemLeafPath = Join-Path $testBuild 'gfx-chart-stem-and-leaf-selfhost.exe'
+$gfxChartStemLeafWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_stem_and_leaf\src\main.e') $repo 'x64' 'windows' $gfxChartStemLeafPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartStemLeafWritten -ne 'executable written') { throw 'gfx_chart_stem_and_leaf emission failed' }
+$gfxChartStemLeafOutput = & $gfxChartStemLeafPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartStemLeafOutput -ne 'gfx chart stem and leaf ok') { throw "the e.gfx.chart stem and leaf answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

@@ -1827,6 +1827,93 @@ fn render_branching_process_preview(a: *mem.Arena, q: *gpu.Queue, output_target:
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_stem_and_leaf_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/stem_and_leaf.png"
+    let values = [26]f64{ 12.0f64, 15.0f64, 18.0f64, 18.0f64, 21.0f64, 22.0f64, 24.0f64, 27.0f64, 30.0f64, 33.0f64, 35.0f64, 36.0f64, 38.0f64, 41.0f64, 43.0f64, 45.0f64, 48.0f64, 52.0f64, 54.0f64, 56.0f64, 59.0f64, 61.0f64, 65.0f64, 67.0f64, 72.0f64, 75.0f64 }
+    let plot = geometry.rect(44.0, 64.0, 272.0, 140.0)
+    var rows: [7]chart.StemLeafRow = zero
+    var leaves: [26]u8 = zero
+    let (tree, tree_error) = chart.stem_and_leaf(values[..], 1.0f64, plot, rows[..], leaves[..])
+    if tree_error != ok { ret tree_error }
+    if tree.rows.len != 7usize || tree.leaves.len != values.len || tree.rows[2usize].count != 5usize { ret chart.Invalid }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let pale = paint.rgba(0.92, 0.96, 0.99, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var divider: [1]chart.Segment = zero
+    divider[0usize] = tree.divider
+    let rule = chart.Layout { kind: .Rug, coords: zero, segments: divider[..], bars: zero, x_min: plot.x, x_max: plot.x + plot.width, y_min: plot.y, y_max: plot.y + plot.height }
+    var labels: [48]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Stem-and-leaf distribution", anchor: chart.Coord { x: 180.0, y: 25.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "STEM", anchor: chart.Coord { x: 88.0, y: 52.0 }, align: .Right }
+    labels[2usize] = chart.Label { text: "LEAVES", anchor: chart.Coord { x: 121.0, y: 52.0 }, align: .Left }
+    labels[3usize] = chart.Label { text: "N", anchor: chart.Coord { x: 306.0, y: 52.0 }, align: .Right }
+    var label_used = 4usize
+    let digits = "0123456789"
+    var row = 0usize
+    while row < tree.rows.len {
+        let (stem_made, stem_error) = str.builder(a, 24usize)
+        if stem_error != ok { ret stem_error }
+        var stem_text = stem_made
+        try str.push_i64(&stem_text, tree.rows[row].stem)
+        labels[label_used] = chart.Label { text: str.done(&stem_text), anchor: chart.Coord { x: tree.divider.from.x - 11.0, y: tree.rows[row].baseline }, align: .Right }
+        label_used += 1usize
+        let (count_made, count_error) = str.builder(a, 16usize)
+        if count_error != ok { ret count_error }
+        var count_text = count_made
+        try str.push_usize(&count_text, tree.rows[row].count)
+        labels[label_used] = chart.Label { text: str.done(&count_text), anchor: chart.Coord { x: 306.0, y: tree.rows[row].baseline }, align: .Right }
+        label_used += 1usize
+        var leaf = 0usize
+        while leaf < tree.rows[row].count {
+            let digit = usize(tree.leaves[tree.rows[row].first + leaf])
+            labels[label_used] = chart.Label { text: digits[digit..digit + 1usize], anchor: chart.Coord { x: tree.leaf_start + tree.leaf_step * f32(leaf), y: tree.rows[row].baseline }, align: .Left }
+            label_used += 1usize
+            leaf += 1usize
+        }
+        row += 1usize
+    }
+    labels[label_used] = chart.Label { text: "Key: 2 | 4 = 24 units", anchor: chart.Coord { x: 180.0, y: 225.0 }, align: .Center }
+    label_used += 1usize
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 192usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    row = 0usize
+    while row < tree.rows.len {
+        if row % 2usize == 0usize { try fill(&builder, geometry.rect(plot.x, plot.y + 20.0 * f32(row), plot.width, 20.0), paint.Brush { Solid: pale }) }
+        row += 1usize
+    }
+    try chart_scene.append(a, &builder, &rule, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..4usize], font, 9.0, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[4usize..label_used - 1usize], font, 11.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[label_used - 1usize..label_used], font, 9.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    row = 0usize
+    while row < tree.rows.len {
+        if row % 2usize == 0usize { try chart_svg.rect(&writer, geometry.rect(plot.x, plot.y + 20.0 * f32(row), plot.width, 20.0), pale, false) }
+        row += 1usize
+    }
+    try chart_svg.append(&writer, &rule, blue)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[1usize..4usize], blue, 9.0)
+    try chart_svg.append_labels(&writer, labels[4usize..label_used - 1usize], dark, 11.0)
+    try chart_svg.append_labels(&writer, labels[label_used - 1usize..label_used], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -5778,6 +5865,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_sequence_diagram_preview(a, queue, output_target, canvas, &renderer)
     try render_entity_relationship_preview(a, queue, output_target, canvas, &renderer)
     try render_branching_process_preview(a, queue, output_target, canvas, &renderer)
+    try render_stem_and_leaf_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

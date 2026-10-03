@@ -34247,3 +34247,16 @@ The Windows fixture checks numeric split/merge references, multiple sinks,
 cycles, malformed fractions, capacities and scene/SVG. Its Linux runner is
 registered pending WSL recovery. Rework loops, calendars, distributions and
 crossing minimization remain follow-on work.
+
+## D1915 — Stem-and-leaf rows preserve duplicates and signed reconstruction
+
+`stem_and_leaf` rounds sorted observations to an explicit leaf unit, groups
+them by floor-divided signed stems, and returns row baselines plus every leaf
+digit in caller-owned storage. The key reconstructs a rounded value as
+`(10 * stem + leaf) * leaf_unit`, including negative stems; repeated values
+remain separate leaves. The PNG and SVG adapters render the same row data and
+divider. Windows and Linux fixtures check negative and decimal values,
+duplicates, geometry, capacity and malformed inputs. Focused Linux checks
+also now pass for the previously pending ER and branching-process fixtures.
+Automatic leaf-unit selection, split stems and label collision handling remain
+follow-on work.

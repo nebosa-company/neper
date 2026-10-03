@@ -81,6 +81,8 @@ type BranchRoute = struct { from: usize, to: usize, fraction: f64 }
 type BranchWork = struct { indegree: []usize, head: []usize, next: []usize, order: []usize, stage: []usize, stage_counts: []usize, stage_used: []usize, flow: []f64, branch_sum: []f64 }
 type BranchSummary = struct { output_fraction: f64, expected_processing_time: f64, stages: usize, sinks: usize }
 type BranchLayout = struct { nodes: Layout, connectors: Layout, summary: BranchSummary }
+type StemLeafRow = struct { stem: i64, first: usize, count: usize, baseline: f32 }
+type StemLeafLayout = struct { rows: []StemLeafRow, leaves: []u8, divider: Segment, leaf_start: f32, leaf_step: f32, leaf_unit: f64 }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -5638,6 +5640,59 @@ fn dot_plot(values: []const f32, bounds: geometry.Rect, spacing: f32, counts: []
         bin += 1usize
     }
     ret (Layout { kind: .DotPlot, coords: coords[..used], segments: zero, bars: zero, x_min: hist.x_min, x_max: hist.x_max, y_min: 0.0, y_max: 1.0 }, ok)
+}
+
+// A textual distribution view. Values are rounded to the requested leaf unit;
+// floor-based stems keep negative values ordered and the key unambiguous:
+// stem * 10 * leaf_unit + leaf * leaf_unit reconstructs each rounded value.
+// Row descriptors and leaf digits borrow caller-owned storage.
+fn stem_and_leaf(sorted: []const f64, leaf_unit: f64, bounds: geometry.Rect, rows: []StemLeafRow, leaves: []u8) -> (StemLeafLayout, err) {
+    if sorted.len == 0usize { ret (zero, Empty) }
+    if !finite64(leaf_unit) || leaf_unit <= 0.0f64 || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if leaves.len < sorted.len { ret (zero, TooLarge) }
+    var row_count = 0usize
+    var max_leaves = 0usize
+    var current_count = 0usize
+    var previous_stem = 0i64
+    var i = 0usize
+    while i < sorted.len {
+        let scaled = sorted[i] / leaf_unit
+        if !finite64(sorted[i]) || !finite64(scaled) || scaled < -1000000000000.0f64 || scaled > 1000000000000.0f64 || (i > 0usize && sorted[i] < sorted[i - 1usize]) { ret (zero, Invalid) }
+        let rounded = i64(math.round[f64](scaled))
+        let stem = i64(math.floor[f64](f64(rounded) / 10.0f64))
+        if i == 0usize || stem != previous_stem {
+            if current_count > max_leaves { max_leaves = current_count }
+            current_count = 0usize
+            row_count += 1usize
+            previous_stem = stem
+        }
+        current_count += 1usize
+        i += 1usize
+    }
+    if current_count > max_leaves { max_leaves = current_count }
+    if rows.len < row_count || bounds.height / f32(row_count) < 18.0 || bounds.width < 76.0 + 18.0 * f32(max_leaves) { ret (zero, TooLarge) }
+    let row_height = bounds.height / f32(row_count)
+    var used = 0usize
+    i = 0usize
+    while i < sorted.len {
+        let rounded = i64(math.round[f64](sorted[i] / leaf_unit))
+        let stem = i64(math.floor[f64](f64(rounded) / 10.0f64))
+        let leaf = u8(rounded - stem * 10i64)
+        if i == 0usize || stem != rows[used - 1usize].stem {
+            rows[used] = StemLeafRow { stem: stem, first: i, count: 0usize, baseline: bounds.y + (f32(used) + 0.5) * row_height + 3.5 }
+            used += 1usize
+        }
+        rows[used - 1usize].count += 1usize
+        leaves[i] = leaf
+        i += 1usize
+    }
+    let divider_x = bounds.x + 57.0
+    ret (StemLeafLayout {
+        rows: rows[..used], leaves: leaves[..sorted.len],
+        divider: Segment { from: Coord { x: divider_x, y: bounds.y }, to: Coord { x: divider_x, y: bounds.y + bounds.height } },
+        leaf_start: divider_x + 19.0, leaf_step: 18.0,
+        leaf_unit: leaf_unit,
+    }, ok)
 }
 
 // Empirical CDF of an ascending sample. Each observation raises the step by

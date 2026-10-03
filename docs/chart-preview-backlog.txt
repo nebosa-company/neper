@@ -3,7 +3,6 @@
 # This is a finite delivery backlog, not a claim to enumerate every possible chart.
 
 # Cartesian and distribution variants
-stem_and_leaf
 range_interval
 probability_plot
 spine_plot
