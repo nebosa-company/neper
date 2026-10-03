@@ -96,6 +96,7 @@ type TimelineEvent = struct { time: f64, row: usize }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
+type Bin2dLayout = struct { matrix: MatrixLayout, counts: []u64, max_count: u64, total_count: u64 }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -6339,6 +6340,53 @@ fn cell_rect(bounds: geometry.Rect, column: usize, row: usize, columns: usize, r
     let y0 = bounds.y + bounds.height * f32(row) / f32(rows)
     let y1 = bounds.y + bounds.height * f32(row + 1usize) / f32(rows)
     ret geometry.rect(x0, y0, x1 - x0, y1 - y0)
+}
+
+// Fixed rectangular binning in row-major screen order (top row first).
+// Data-domain maxima belong to the final column/row; every valid observation
+// contributes exactly one count. The matrix reuses heatmap scene/SVG adapters.
+fn bin2d(x: []const f32, y: []const f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, bounds: geometry.Rect, columns: usize, rows: usize, counts: []u64, cells: []Cell) -> (Bin2dLayout, err) {
+    if x.len == 0usize { ret (zero, Empty) }
+    if x.len != y.len || !finite(x_min) || !finite(x_max) || !finite(y_min) || !finite(y_max) || x_max <= x_min || y_max <= y_min || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || columns == 0usize || rows == 0usize { ret (zero, Invalid) }
+    if columns > counts.len / rows || columns > cells.len / rows { ret (zero, TooLarge) }
+    if bounds.width < f32(columns) || bounds.height < f32(rows) { ret (zero, TooLarge) }
+    let needed = columns * rows
+    var i = 0usize
+    while i < needed {
+        counts[i] = 0u64
+        i += 1usize
+    }
+    i = 0usize
+    while i < x.len {
+        if !finite(x[i]) || !finite(y[i]) || x[i] < x_min || x[i] > x_max || y[i] < y_min || y[i] > y_max { ret (zero, Invalid) }
+        var column = columns - 1usize
+        if x[i] < x_max {
+            let x_share = (f64(x[i]) - f64(x_min)) / (f64(x_max) - f64(x_min))
+            column = usize(math.floor[f64](x_share * f64(columns)))
+            if column >= columns { column = columns - 1usize }
+        }
+        var row = rows - 1usize
+        if y[i] > y_min {
+            let y_share = (f64(y_max) - f64(y[i])) / (f64(y_max) - f64(y_min))
+            row = usize(math.floor[f64](y_share * f64(rows)))
+            if row >= rows { row = rows - 1usize }
+        }
+        counts[row * columns + column] += 1u64
+        i += 1usize
+    }
+    var max_count = 0u64
+    i = 0usize
+    while i < needed {
+        if counts[i] > max_count { max_count = counts[i] }
+        let rect = cell_rect(bounds, i % columns, i / columns, columns, rows)
+        if rect.width <= 0.0 || rect.height <= 0.0 { ret (zero, TooLarge) }
+        cells[i] = Cell { rect: rect, value: f32(counts[i]) }
+        i += 1usize
+    }
+    ret (Bin2dLayout {
+        matrix: MatrixLayout { kind: .Heatmap, cells: cells[..needed], columns: columns, rows: rows, value_min: 0.0, value_max: f32(max_count) },
+        counts: counts[..needed], max_count: max_count, total_count: u64(x.len),
+    }, ok)
 }
 
 // Row-major values become caller-owned tiles; the renderer owns palette choice.

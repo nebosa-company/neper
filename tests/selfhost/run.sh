@@ -2944,6 +2944,11 @@ gfx_chart_hexbin_written=$($test_build/neper-self emit-executable "$repo/tests/s
 chmod +x "$test_build/gfx-chart-hexbin-selfhost"
 gfx_chart_hexbin_output=$("$test_build/gfx-chart-hexbin-selfhost")
 [ "$gfx_chart_hexbin_output" = 'gfx chart hexbin ok' ]
+gfx_chart_bin2d_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_bin2d/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-bin2d-selfhost")
+[ "$gfx_chart_bin2d_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-bin2d-selfhost"
+gfx_chart_bin2d_output=$("$test_build/gfx-chart-bin2d-selfhost")
+[ "$gfx_chart_bin2d_output" = 'gfx chart bin2d ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

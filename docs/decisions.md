@@ -34306,3 +34306,14 @@ the existing scene and SVG adapters; colour remains an application choice.
 Windows and Linux fixtures cover count conservation, corner assignment,
 geometry, adapters and malformed/capacity inputs. The gallery adds a PNG/SVG
 pair. Adaptive bins and weighted counts remain planned.
+
+## D1920 — Rectangular 2D bins reuse the matrix renderer
+
+`bin2d` counts bounded x/y observations into a caller-sized rectangular grid.
+It uses row-major screen order and includes both domain maxima in the last
+column and row, so no point is dropped at an edge. Exact caller-owned `u64`
+counts accompany heatmap-compatible cells; the existing scene and SVG matrix
+adapters supply colour without chart-specific rendering branches. Windows
+and Linux fixtures check count conservation, corners, midpoint policy,
+geometry and refusal paths. The gallery adds a paired PNG/SVG preview.
+Automatic bin sizing, weights and continuous density remain follow-on work.

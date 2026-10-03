@@ -2068,11 +2068,8 @@ fn render_probability_plot_preview(a: *mem.Arena, q: *gpu.Queue, output_target: 
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
-fn render_hexbin_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
-    let path = "docs/chart-previews/hexbin.png"
-    let plot = geometry.rect(54.0, 46.0, 252.0, 160.0)
-    var x: [72]f32 = zero
-    var y: [72]f32 = zero
+fn two_cluster_sample(x: []f32, y: []f32) -> err {
+    if x.len != 72usize || y.len != 72usize { ret chart.Invalid }
     var i = 0usize
     while i < x.len {
         var cx = 3.1f64
@@ -2088,6 +2085,16 @@ fn render_hexbin_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targe
         y[i] = f32(cy + radius * math.sin[f64](angle))
         i += 1usize
     }
+    ret ok
+}
+
+fn render_hexbin_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/hexbin.png"
+    let plot = geometry.rect(54.0, 46.0, 252.0, 160.0)
+    var x: [72]f32 = zero
+    var y: [72]f32 = zero
+    try two_cluster_sample(x[..], y[..])
+    var i = 0usize
     var cells: [54]chart.HexCell = zero
     var vertices: [324]chart.Coord = zero
     var layers: [54]chart.Layout = zero
@@ -2135,6 +2142,57 @@ fn render_hexbin_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targe
         try chart_svg.append(&writer, &map.hexes[i], shade)
         i += 1usize
     }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[1usize..7usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[7usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_bin2d_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/bin2d.png"
+    let plot = geometry.rect(54.0, 46.0, 252.0, 160.0)
+    var x: [72]f32 = zero
+    var y: [72]f32 = zero
+    try two_cluster_sample(x[..], y[..])
+    var counts: [96]u64 = zero
+    var cells: [96]chart.Cell = zero
+    let (map, map_error) = chart.bin2d(x[..], y[..], 0.0, 10.0, 0.0, 10.0, plot, 12usize, 8usize, counts[..], cells[..])
+    if map_error != ok || map.counts.len != 96usize || map.matrix.cells.len != 96usize || map.total_count != 72u64 || map.max_count == 0u64 { ret chart.Invalid }
+    let pale = paint.rgba(0.93, 0.96, 0.99, 1.0)
+    let blue = paint.rgba(0.04, 0.33, 0.72, 1.0)
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let labels = [8]chart.Label{
+        chart.Label { text: "2D bins / two clusters", anchor: chart.Coord { x: 180.0, y: 24.0 }, align: .Center },
+        chart.Label { text: "0", anchor: chart.Coord { x: 54.0, y: 220.0 }, align: .Center },
+        chart.Label { text: "5", anchor: chart.Coord { x: 180.0, y: 220.0 }, align: .Center },
+        chart.Label { text: "10", anchor: chart.Coord { x: 306.0, y: 220.0 }, align: .Center },
+        chart.Label { text: "0", anchor: chart.Coord { x: 42.0, y: 207.0 }, align: .Right },
+        chart.Label { text: "5", anchor: chart.Coord { x: 42.0, y: 129.0 }, align: .Right },
+        chart.Label { text: "10", anchor: chart.Coord { x: 42.0, y: 52.0 }, align: .Right },
+        chart.Label { text: "Colour = observations per rectangle", anchor: chart.Coord { x: 180.0, y: 235.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 19u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append_matrix(&builder, &map.matrix, pale, pale, blue)
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..7usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[7usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_matrix(&writer, &map.matrix, pale, pale, blue)
     try chart_svg.append_labels(&writer, labels[..1usize], dark, 14.0)
     try chart_svg.append_labels(&writer, labels[1usize..7usize], dark, 8.0)
     try chart_svg.append_labels(&writer, labels[7usize..], dark, 8.0)
@@ -6108,6 +6166,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_range_interval_preview(a, queue, output_target, canvas, &renderer)
     try render_probability_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_hexbin_preview(a, queue, output_target, canvas, &renderer)
+    try render_bin2d_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

@@ -3,7 +3,6 @@
 # This is a finite delivery backlog, not a claim to enumerate every possible chart.
 
 # Cartesian and distribution variants
-bin2d
 density2d
 raincloud
 half_violin

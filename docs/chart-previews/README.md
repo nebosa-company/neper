@@ -14,6 +14,8 @@ two-series legend in both formats. The labeled preview uses the repository's Mon
 TrueType font for scene rendering; SVG viewers use their sans-serif fallback.
 The hexbin preview assigns two synthetic clusters to a pointy-top hexagonal
 lattice; colour intensity represents the observation count in each cell.
+The 2D-bin preview uses the same two clusters on a rectangular grid, with
+each tile coloured by its observation count.
 Both formats come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:
 

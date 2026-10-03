@@ -3322,6 +3322,11 @@ $gfxChartHexbinWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $gfxChartHexbinWritten -ne 'executable written') { throw 'gfx_chart_hexbin emission failed' }
 $gfxChartHexbinOutput = & $gfxChartHexbinPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartHexbinOutput -ne 'gfx chart hexbin ok') { throw "the e.gfx.chart hexbin answered wrongly: exit $LASTEXITCODE" }
+$gfxChartBin2dPath = Join-Path $testBuild 'gfx-chart-bin2d-selfhost.exe'
+$gfxChartBin2dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_bin2d\src\main.e') $repo 'x64' 'windows' $gfxChartBin2dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBin2dWritten -ne 'executable written') { throw 'gfx_chart_bin2d emission failed' }
+$gfxChartBin2dOutput = & $gfxChartBin2dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBin2dOutput -ne 'gfx chart bin2d ok') { throw "the e.gfx.chart bin2d answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'
