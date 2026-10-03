@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and five PNG plus one hundred and five SVG previews from Neper. Individuals, moving-range,
+one hundred and six PNG plus one hundred and six SVG previews from Neper. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -140,7 +140,10 @@ standard deviations with the c4 bias correction for three-sigma mean and S
 limits. `cusum_control` computes upper/lower tabular sums and decision signals;
 `ewma_control` computes recursive weighted means with startup-adjusted limits.
 `gfx_chart_weighted_control` checks numeric references and refusal paths on
-Windows and Linux. Phase separation remains planned.
+Windows and Linux. `imr_phase_control` estimates separate Individuals limits
+for each phase of at least two observations, excludes cross-boundary moving
+ranges, and emits per-point limits. The gallery shows a visible phase split;
+subgroup and attribute phase estimation remain planned.
 `e.algo.stat.attribute_control` computes pooled binomial p/np and Poisson c/u
 three-sigma values and limits in caller storage. Variable subgroup sizes
 change p/u limits per observation; np requires equal size and c equal unit
@@ -165,7 +168,9 @@ remain planned.
 per-observation centers and sigmas, marking the point that completes each
 pattern. `gfx_chart_run_rules` checks every test, strict boundary behavior,
 varying sigma and refusal paths on Windows and Linux. The PNG/SVG preview
-uses PointLine, Rug and highlighted Scatter marks. Phase resets, automatic
+uses PointLine, Rug and highlighted Scatter marks. `control_run_rules_phased`
+resets all eight test windows at each boundary; `gfx_chart_phases` checks
+reset and malformed-boundary behavior on Windows and Linux. Automatic
 chart-specific test selection and false-alarm calibration remain planned.
 Binary classification diagnostics share `e.algo.stat.binary_curve`: a caller-owned
 descending score order, with tied scores advanced as one threshold. The same
@@ -522,7 +527,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and five vector previews, automatic numeric tick text and
+   adapter with one hundred and six vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

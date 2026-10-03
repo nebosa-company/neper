@@ -3195,6 +3195,7 @@ fn regression_intercept(s: *const Regression) -> (f64, bool)
 fn regression_diagnostics(x: []const f64, y: []const f64, out: []RegressionDiagnostic) -> err
 fn survival_curve(times: []const f64, event: []const bool, out: []SurvivalPoint) -> ([]SurvivalPoint, err)
 fn imr_limits(values: []const f64, moving: []f64) -> (ControlLimits, ControlLimits, err)
+fn imr_phase_control(values: []const f64, starts: []const bool, moving: []f64, out: []AttributeControlPoint) -> err
 fn xbar_r_limits(values: []const f64, subgroup: usize, means: []f64, ranges: []f64) -> (ControlLimits, ControlLimits, err)
 fn attribute_control(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, out: []AttributeControlPoint) -> err
 fn laney_control(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, out: []AttributeControlPoint) -> (f64, err)
@@ -3202,6 +3203,7 @@ fn geometric_gap_percentile(probability: f64, fraction: f64) -> (f64, bool)
 fn g_control_limits(gaps: []const usize) -> (ControlLimits, err)
 fn t_exponential_control_limits(intervals: []const f64) -> (ControlLimits, err)
 fn control_run_rules(values: []const f64, centers: []const f64, sigmas: []const f64, out: []ControlSignal) -> err
+fn control_run_rules_phased(values: []const f64, centers: []const f64, sigmas: []const f64, starts: []const bool, out: []ControlSignal) -> err
 fn xbar_s_limits(values: []const f64, subgroup: usize, means: []f64, deviations: []f64) -> (ControlLimits, ControlLimits, err)
 fn cusum_control(values: []const f64, center: f64, reference: f64, decision: f64, out: []CusumPoint) -> err
 fn ewma_control(values: []const f64, center: f64, sigma: f64, lambda: f64, width: f64, out: []AttributeControlPoint) -> err

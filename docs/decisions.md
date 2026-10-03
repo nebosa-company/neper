@@ -33702,3 +33702,17 @@ Rug and Scatter passes render a signal preview, bringing the gallery to 105
 pairs. Phase resets and automatic chart-specific test sets remain planned.
 References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/supporting-topics/basics/using-tests-for-special-causes/
 and https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/contchar.htm.
+
+## D1861 — Phase Individuals limits and stop run tests at phase boundaries
+
+Treat each explicit phase as a separate Individuals baseline, requiring at least
+two observations per phase. Reuse `imr_limits` within each phase and set the
+cross-boundary moving-range slot to zero (not a measured range); expose the
+per-observation center and limits for renderers. Keep the original eight-rule
+API as a single-phase wrapper and reset streaks and windows in the phased
+entry point so no rule inherits evidence from an earlier process phase.
+The focused `gfx_chart_phases` fixture checks limits, excluded ranges,
+boundary resets and invalid phase declarations on Windows and Linux. A
+dedicated preview uses disconnected phase limit segments and a boundary rule.
+Subgroup/attribute phase estimators and chart-specific test selection remain
+planned. Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/supporting-topics/options/add-stages-to-show-how-a-process-changed/

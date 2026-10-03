@@ -1022,6 +1022,50 @@ fn render_run_rules_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     ret render_diagnostic_preview_extra(a, q, output_target, canvas, renderer, &series, &reference, &highlight, "SPC run signals", "Run fraction", "Z score", "docs/chart-previews/run_rules_control.png")
 }
 
+fn render_phase_control_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let values = [10]f64{ 10.0, 11.0, 9.0, 10.0, 10.0, 20.0, 21.0, 19.0, 20.0, 20.0 }
+    let starts = [10]bool{ true, false, false, false, false, true, false, false, false, false }
+    var moving: [9]f64 = zero
+    var limits: [10]stat.AttributeControlPoint = zero
+    try stat.imr_phase_control(values[..], starts[..], moving[..], limits[..])
+    let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
+    let x_limits = [2]f32{ 0.0, 1.0 }
+    let y_limits = [2]f32{ 6.0, 24.0 }
+    var x: [10]f32 = zero
+    var y: [10]f32 = zero
+    var i = 0usize
+    while i < 10usize {
+        x[i] = f32(i) / 9.0
+        y[i] = f32(values[i])
+        i += 1usize
+    }
+    var spec = chart.spec(.PointLine, plot, x[..], y[..])
+    var coords: [10]chart.Coord = zero
+    var segments: [9]chart.Segment = zero
+    let (marks, marks_error) = chart.layout_with_limits(&spec, coords[..], segments[..], zero, x_limits[..], y_limits[..])
+    if marks_error != ok { ret marks_error }
+    var rules: [7]chart.Segment = zero
+    let phase_indices = [2]usize{ 0usize, 5usize }
+    var phase = 0usize
+    while phase < 2usize {
+        let point = limits[phase_indices[phase]]
+        let levels = [3]f32{ f32(point.lower), f32(point.center), f32(point.upper) }
+        i = 0usize
+        while i < 3usize {
+            let pixel_y = plot.y + plot.height * (y_limits[1usize] - levels[i]) / (y_limits[1usize] - y_limits[0usize])
+            let left = plot.x + plot.width * f32(phase_indices[phase]) / 9.0
+            let right = left + plot.width * 4.0 / 9.0
+            rules[phase * 3usize + i] = chart.Segment { from: chart.Coord { x: left, y: pixel_y }, to: chart.Coord { x: right, y: pixel_y } }
+            i += 1usize
+        }
+        phase += 1usize
+    }
+    let boundary_x = plot.x + plot.width * 4.5 / 9.0
+    rules[6usize] = chart.Segment { from: chart.Coord { x: boundary_x, y: plot.y }, to: chart.Coord { x: boundary_x, y: plot.y + plot.height } }
+    let reference = chart.Layout { kind: .Rug, coords: zero, segments: rules[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 6.0, y_max: 24.0 }
+    ret render_diagnostic_preview(a, q, output_target, canvas, renderer, &marks, &reference, "Phased Individuals", "Run fraction", "Value", "docs/chart-previews/phase_control.png")
+}
+
 fn render_control_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let observations = [10]f64{ 49.6, 47.6, 49.9, 51.3, 47.8, 51.2, 52.6, 52.4, 53.6, 52.1 }
     var moving: [9]f64 = zero
@@ -2731,6 +2775,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_survival_previews(a, queue, output_target, canvas, &renderer)
     try render_control_previews(a, queue, output_target, canvas, &renderer)
     try render_run_rules_preview(a, queue, output_target, canvas, &renderer)
+    try render_phase_control_preview(a, queue, output_target, canvas, &renderer)
     try render_weighted_control_previews(a, queue, output_target, canvas, &renderer)
     try render_attribute_previews(a, queue, output_target, canvas, &renderer)
     try render_laney_previews(a, queue, output_target, canvas, &renderer)

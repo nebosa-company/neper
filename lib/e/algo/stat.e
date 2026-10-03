@@ -431,6 +431,38 @@ fn imr_limits(values: []const f64, moving: []f64) -> (ControlLimits, ControlLimi
     ret (individuals, mr, ok)
 }
 
+// Each true entry starts a phase; moving ranges never span a phase boundary.
+fn imr_phase_control(values: []const f64, starts: []const bool, moving: []f64, out: []AttributeControlPoint) -> err {
+    if values.len < 2usize || starts.len != values.len || !starts[0usize] { ret Invalid }
+    if moving.len < values.len - 1usize || out.len < values.len { ret TooSmall }
+    var begin = 0usize
+    var i = 0usize
+    while i < values.len {
+        if values[i] - values[i] != 0.0f64 { ret Invalid }
+        if i > 0usize && starts[i] {
+            if i - begin < 2usize { ret Invalid }
+            begin = i
+        }
+        i += 1usize
+    }
+    if values.len - begin < 2usize { ret Invalid }
+    begin = 0usize
+    while begin < values.len {
+        var end = begin + 1usize
+        while end < values.len && !starts[end] { end += 1usize }
+        let (limits, _, limit_error) = imr_limits(values[begin..end], moving[begin..end - 1usize])
+        if limit_error != ok { ret limit_error }
+        i = begin
+        while i < end {
+            out[i] = AttributeControlPoint { value: values[i], center: limits.center, lower: limits.lower, upper: limits.upper }
+            i += 1usize
+        }
+        if end < values.len { moving[end - 1usize] = 0.0f64 }
+        begin = end
+    }
+    ret ok
+}
+
 // Subgroup-major values. Standard A2/D3/D4 factors cover sizes 2..10.
 fn xbar_r_limits(values: []const f64, subgroup: usize, means: []f64, ranges: []f64) -> (ControlLimits, ControlLimits, err) {
     if subgroup < 2usize || subgroup > 10usize || values.len < subgroup * 2usize || values.len % subgroup != 0usize { ret (zero, zero, Invalid) }
@@ -624,8 +656,9 @@ fn t_exponential_control_limits(intervals: []const f64) -> (ControlLimits, err) 
 }
 
 // Tests 1–8 mark the point that completes a special-cause pattern.
-fn control_run_rules(values: []const f64, centers: []const f64, sigmas: []const f64, out: []ControlSignal) -> err {
+fn control_run_rules_phased(values: []const f64, centers: []const f64, sigmas: []const f64, starts: []const bool, out: []ControlSignal) -> err {
     if values.len == 0usize || centers.len != values.len || sigmas.len != values.len { ret Invalid }
+    if starts.len != 0usize && (starts.len != values.len || !starts[0usize]) { ret Invalid }
     if out.len < values.len { ret TooSmall }
     var i = 0usize
     while i < values.len {
@@ -639,15 +672,24 @@ fn control_run_rules(values: []const f64, centers: []const f64, sigmas: []const 
     var rising = 1usize
     var falling = 1usize
     var alternating = 1usize
+    var phase_begin = 0usize
     i = 0usize
     while i < values.len {
+        if i > 0usize && starts.len > 0usize && starts[i] {
+            phase_begin = i
+            above = 0usize
+            below = 0usize
+            rising = 1usize
+            falling = 1usize
+            alternating = 1usize
+        }
         let z = (values[i] - centers[i]) / sigmas[i]
         if z > 0.0f64 { above += 1usize } else { above = 0usize }
         if z < 0.0f64 { below += 1usize } else { below = 0usize }
-        if i > 0usize {
+        if i > phase_begin {
             if values[i] > values[i - 1usize] { rising += 1usize } else { rising = 1usize }
             if values[i] < values[i - 1usize] { falling += 1usize } else { falling = 1usize }
-            if values[i] == values[i - 1usize] { alternating = 1usize } else if i == 1usize { alternating = 2usize } else if (values[i] > values[i - 1usize] && values[i - 1usize] < values[i - 2usize]) || (values[i] < values[i - 1usize] && values[i - 1usize] > values[i - 2usize]) {
+            if values[i] == values[i - 1usize] { alternating = 1usize } else if i == phase_begin + 1usize { alternating = 2usize } else if (values[i] > values[i - 1usize] && values[i - 1usize] < values[i - 2usize]) || (values[i] < values[i - 1usize] && values[i - 1usize] > values[i - 2usize]) {
                 alternating += 1usize
             } else {
                 alternating = 2usize
@@ -658,7 +700,7 @@ fn control_run_rules(values: []const f64, centers: []const f64, sigmas: []const 
         signal.same_side9 = above >= 9usize || below >= 9usize
         signal.trend6 = rising >= 6usize || falling >= 6usize
         signal.alternating14 = alternating >= 14usize
-        if i >= 2usize {
+        if i - phase_begin >= 2usize {
             var high2 = 0usize
             var low2 = 0usize
             var j = i - 2usize
@@ -670,7 +712,7 @@ fn control_run_rules(values: []const f64, centers: []const f64, sigmas: []const 
             }
             signal.two_of_three2 = high2 >= 2usize || low2 >= 2usize
         }
-        if i >= 4usize {
+        if i - phase_begin >= 4usize {
             var high1 = 0usize
             var low1 = 0usize
             var j = i - 4usize
@@ -682,7 +724,7 @@ fn control_run_rules(values: []const f64, centers: []const f64, sigmas: []const 
             }
             signal.four_of_five1 = high1 >= 4usize || low1 >= 4usize
         }
-        if i >= 14usize {
+        if i - phase_begin >= 14usize {
             signal.within1_15 = true
             var j = i - 14usize
             while j <= i {
@@ -691,7 +733,7 @@ fn control_run_rules(values: []const f64, centers: []const f64, sigmas: []const 
                 j += 1usize
             }
         }
-        if i >= 7usize {
+        if i - phase_begin >= 7usize {
             signal.outside1_8 = true
             var j = i - 7usize
             while j <= i {
@@ -704,6 +746,10 @@ fn control_run_rules(values: []const f64, centers: []const f64, sigmas: []const 
         i += 1usize
     }
     ret ok
+}
+
+fn control_run_rules(values: []const f64, centers: []const f64, sigmas: []const f64, out: []ControlSignal) -> err {
+    ret control_run_rules_phased(values, centers, sigmas, zero, out)
 }
 
 // Subgroup-major X-bar/S limits use sample SD and the gamma-derived c4 factor.
