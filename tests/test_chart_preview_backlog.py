@@ -61,6 +61,10 @@ class ChartPreviewBacklogTests(unittest.TestCase):
         self.assertNotIn("raincloud", planned)
         self.assertIn("slopegraph", rendered)
         self.assertNotIn("slopegraph", planned)
+        self.assertIn("connected_scatter", rendered)
+        self.assertNotIn("connected_scatter", planned)
+        self.assertIn("marginal_histogram", rendered)
+        self.assertNotIn("marginal_histogram", planned)
 
         page = PAGE.read_text(encoding="utf-8")
         match = re.search(r"Rendered previews \((\d+)/(\d+)\)", page)

@@ -34350,3 +34350,14 @@ joining them into a misleading polyline. The gallery labels both ends of all
 five sample series. Windows and Linux fixtures check exact geometry, scene/SVG
 output, constant-domain expansion and invalid/capacity refusals. Automatic
 endpoint-label collision handling remains planned.
+
+## D1924 — Reuse ordered paths and exact bins for paired scatter views
+
+`connected_scatter` is a named wrapper around ordered `PointLine` geometry:
+it does not sort x values, so the line can reverse direction and its points
+retain observation identity. `marginal_histogram` composes a scatter panel with
+the existing equal-width x histogram and a rotated y histogram. The marginal
+domains match the scatter domain, including constant-data expansion; bins and
+counts stay caller-owned. Two Windows/Linux fixtures cover order, exact counts,
+alignment, scene/SVG adapters and refusals. Two PNG/SVG previews join the
+gallery. Sequence labels and automatic layout remain gallery concerns.

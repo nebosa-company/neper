@@ -99,6 +99,7 @@ type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: us
 type Bin2dLayout = struct { matrix: MatrixLayout, counts: []u64, max_count: u64, total_count: u64 }
 type Density2dLayout = struct { contours: []Layout, grid: []f64, cutoffs: []f64, peak: f64 }
 type RaincloudLayout = struct { cloud: Layout, drops: Layout, summary: Layout }
+type MarginalHistogramLayout = struct { scatter: Layout, top: Layout, right: Layout }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -376,6 +377,15 @@ fn legend_items(names: []const str, origin: Coord, swatch: f32, row_height: f32,
 // use a top-left origin; the returned domain remains in data coordinates.
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err) {
     let (marks, marks_error) = layout_with_limits(s, coords, segments, bars, s.x[..0usize], s.y[..0usize])
+    ret (marks, marks_error)
+}
+
+// Observation order, rather than sorted x order, defines the connecting path.
+fn connected_scatter(x: []const f32, y: []const f32, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err) {
+    if x.len == 0usize { ret (zero, Empty) }
+    if x.len < 2usize || x.len != y.len { ret (zero, Invalid) }
+    let series = spec(.PointLine, bounds, x, y)
+    let (marks, marks_error) = layout(&series, points, segments, zero)
     ret (marks, marks_error)
 }
 
@@ -5652,6 +5662,37 @@ fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []
         i += 1usize
     }
     ret (Layout { kind: .Histogram, coords: zero, segments: zero, bars: bars, x_min: xmin, x_max: xmax, y_min: 0.0, y_max: f32(tallest) }, ok)
+}
+
+// A scatter panel with x frequency above and y frequency to its right.
+// Both marginal domains use the exact same constant-data expansion as scatter.
+fn marginal_histogram(x: []const f32, y: []const f32, bounds: geometry.Rect, top_height: f32, right_width: f32, gap: f32, points: []Coord, x_counts: []u64, x_bars: []geometry.Rect, y_counts: []u64, y_bars: []geometry.Rect) -> (MarginalHistogramLayout, err) {
+    if x.len == 0usize { ret (zero, Empty) }
+    if x.len != y.len || !valid_bounds(bounds) || !finite(top_height) || !finite(right_width) || !finite(gap) || top_height <= 0.0 || right_width <= 0.0 || gap < 0.0 { ret (zero, Invalid) }
+    if points.len < x.len { ret (zero, TooLarge) }
+    if x_counts.len == 0usize || y_counts.len == 0usize || x_counts.len != x_bars.len || y_counts.len != y_bars.len { ret (zero, Invalid) }
+    let top_bounds = geometry.rect(bounds.x, bounds.y - gap - top_height, bounds.width, top_height)
+    let right_x = bounds.x + bounds.width + gap
+    if !finite(top_bounds.y) || !finite(right_x) { ret (zero, Invalid) }
+    let series = spec(.Scatter, bounds, x, y)
+    let (scatter_marks, scatter_error) = layout(&series, points, zero, zero)
+    if scatter_error != ok { ret (zero, scatter_error) }
+    let (top_marks, top_error) = histogram(x, top_bounds, x_counts, x_bars)
+    if top_error != ok { ret (zero, top_error) }
+    let virtual_bounds = geometry.rect(0.0, 0.0, bounds.height, right_width)
+    let (right_raw, right_error) = histogram(y, virtual_bounds, y_counts, y_bars)
+    if right_error != ok { ret (zero, right_error) }
+    let slot = bounds.height / f32(y_counts.len)
+    var i = 0usize
+    while i < y_counts.len {
+        let width = right_width - y_bars[i].y
+        let y_top = bounds.y + bounds.height - f32(i + 1usize) * slot
+        if !finite(width) || !finite(y_top) { ret (zero, Invalid) }
+        y_bars[i] = geometry.rect(right_x, y_top, width, slot)
+        i += 1usize
+    }
+    let right_marks = Layout { kind: .Histogram, coords: zero, segments: zero, bars: y_bars, x_min: 0.0, x_max: right_raw.y_max, y_min: right_raw.x_min, y_max: right_raw.x_max }
+    ret (MarginalHistogramLayout { scatter: scatter_marks, top: top_marks, right: right_marks }, ok)
 }
 
 // Connect each histogram bin center, closing at zero at the outer bin edges.

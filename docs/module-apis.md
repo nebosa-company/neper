@@ -15938,6 +15938,7 @@ type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, 
 type Bin2dLayout = struct { matrix: MatrixLayout, counts: []u64, max_count: u64, total_count: u64 }
 type Density2dLayout = struct { contours: []Layout, grid: []f64, cutoffs: []f64, peak: f64 }
 type RaincloudLayout = struct { cloud: Layout, drops: Layout, summary: Layout }
+type MarginalHistogramLayout = struct { scatter: Layout, top: Layout, right: Layout }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
@@ -15961,6 +15962,7 @@ fn guide_labels(bounds: geometry.Rect, x_ticks: []const Tick, x_text: []const st
 fn category_ticks(count: usize, out: []Tick) -> ([]Tick, err)
 fn legend_items(names: []const str, origin: Coord, swatch: f32, row_height: f32, out: []LegendItem) -> ([]LegendItem, err)
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err)
+fn connected_scatter(x: []const f32, y: []const f32, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)
@@ -15999,6 +16001,7 @@ fn event_timeline(events: []const TimelineEvent, rows: usize, domain_start: f64,
 fn milestone_roadmap(events: []const TimelineEvent, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, size: f32, centers: []Coord, stems: []Segment, diamonds: []Coord, layers: []Layout) -> ([]Layout, err)
 fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err)
 fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err)
+fn marginal_histogram(x: []const f32, y: []const f32, bounds: geometry.Rect, top_height: f32, right_width: f32, gap: f32, points: []Coord, x_counts: []u64, x_bars: []geometry.Rect, y_counts: []u64, y_bars: []geometry.Rect) -> (MarginalHistogramLayout, err)
 fn frequency_polygon(values: []const f32, bounds: geometry.Rect, counts: []u64, bins: []geometry.Rect, segments: []Segment) -> (Layout, err)
 fn rug(values: []const f32, bounds: geometry.Rect, height: f32, segments: []Segment) -> (Layout, err)
 fn strip(values: []const f32, bounds: geometry.Rect, spread: f32, coords: []Coord) -> (Layout, err)

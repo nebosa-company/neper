@@ -3347,6 +3347,16 @@ $gfxChartSlopegraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $gfxChartSlopegraphWritten -ne 'executable written') { throw 'gfx_chart_slopegraph emission failed' }
 $gfxChartSlopegraphOutput = & $gfxChartSlopegraphPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSlopegraphOutput -ne 'gfx chart slopegraph ok') { throw "the e.gfx.chart slopegraph answered wrongly: exit $LASTEXITCODE" }
+$gfxChartConnectedScatterPath = Join-Path $testBuild 'gfx-chart-connected-scatter-selfhost.exe'
+$gfxChartConnectedScatterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_connected_scatter\src\main.e') $repo 'x64' 'windows' $gfxChartConnectedScatterPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartConnectedScatterWritten -ne 'executable written') { throw 'gfx_chart_connected_scatter emission failed' }
+$gfxChartConnectedScatterOutput = & $gfxChartConnectedScatterPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartConnectedScatterOutput -ne 'gfx chart connected scatter ok') { throw "the e.gfx.chart connected scatter answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMarginalHistogramPath = Join-Path $testBuild 'gfx-chart-marginal-histogram-selfhost.exe'
+$gfxChartMarginalHistogramWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_marginal_histogram\src\main.e') $repo 'x64' 'windows' $gfxChartMarginalHistogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMarginalHistogramWritten -ne 'executable written') { throw 'gfx_chart_marginal_histogram emission failed' }
+$gfxChartMarginalHistogramOutput = & $gfxChartMarginalHistogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMarginalHistogramOutput -ne 'gfx chart marginal histogram ok') { throw "the e.gfx.chart marginal histogram answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

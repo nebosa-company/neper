@@ -3,8 +3,6 @@
 # This is a finite delivery backlog, not a claim to enumerate every possible chart.
 
 # Cartesian and distribution variants
-connected_scatter
-marginal_histogram
 
 # Statistical, quality, medical and scientific diagrams
 dose_response

@@ -2969,6 +2969,16 @@ gfx_chart_slopegraph_written=$($test_build/neper-self emit-executable "$repo/tes
 chmod +x "$test_build/gfx-chart-slopegraph-selfhost"
 gfx_chart_slopegraph_output=$("$test_build/gfx-chart-slopegraph-selfhost")
 [ "$gfx_chart_slopegraph_output" = 'gfx chart slopegraph ok' ]
+gfx_chart_connected_scatter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_connected_scatter/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-connected-scatter-selfhost")
+[ "$gfx_chart_connected_scatter_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-connected-scatter-selfhost"
+gfx_chart_connected_scatter_output=$("$test_build/gfx-chart-connected-scatter-selfhost")
+[ "$gfx_chart_connected_scatter_output" = 'gfx chart connected scatter ok' ]
+gfx_chart_marginal_histogram_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_marginal_histogram/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-marginal-histogram-selfhost")
+[ "$gfx_chart_marginal_histogram_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-marginal-histogram-selfhost"
+gfx_chart_marginal_histogram_output=$("$test_build/gfx-chart-marginal-histogram-selfhost")
+[ "$gfx_chart_marginal_histogram_output" = 'gfx chart marginal histogram ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

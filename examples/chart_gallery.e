@@ -2425,6 +2425,110 @@ fn render_slopegraph_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.T
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_connected_scatter_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/connected_scatter.png"
+    let plot = geometry.rect(55.0, 48.0, 250.0, 152.0)
+    let x = [8]f32{ 0.0, 1.0, 2.0, 2.8, 2.2, 1.3, 0.7, 1.7 }
+    let y = [8]f32{ 0.0, 0.8, 0.4, 1.8, 2.7, 2.4, 1.5, 1.1 }
+    let steps = [8]str{ "1", "2", "3", "4", "5", "6", "7", "8" }
+    var points: [8]chart.Coord = zero
+    var lines: [7]chart.Segment = zero
+    let (marks, marks_error) = chart.connected_scatter(x[..], y[..], plot, points[..], lines[..])
+    if marks_error != ok || marks.segments.len != 7usize { ret chart.Invalid }
+    var labels: [10]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Connected scatter / ordered path", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Numbers show observation order", anchor: chart.Coord { x: 180.0, y: 232.0 }, align: .Center }
+    var i = 0usize
+    while i < steps.len {
+        labels[i + 2usize] = chart.Label { text: steps[i], anchor: chart.Coord { x: points[i].x + 6.0, y: points[i].y - 6.0 }, align: .Left }
+        i += 1usize
+    }
+    let pale = paint.rgba(0.97, 0.98, 1.0, 1.0)
+    let blue = paint.rgba(0.10, 0.43, 0.78, 1.0)
+    let dark = paint.rgba(0.18, 0.24, 0.32, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 24u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append(&writer, &marks, blue)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_marginal_histogram_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/marginal_histogram.png"
+    let plot = geometry.rect(66.0, 83.0, 188.0, 113.0)
+    let x = [12]f32{ 0.3, 0.8, 1.1, 1.3, 1.7, 2.0, 2.2, 2.6, 2.8, 3.1, 3.3, 3.8 }
+    let y = [12]f32{ 1.2, 1.8, 1.4, 2.2, 2.4, 1.7, 3.1, 2.6, 3.4, 2.9, 3.7, 3.2 }
+    var points: [12]chart.Coord = zero
+    var x_counts: [7]u64 = zero
+    var y_counts: [6]u64 = zero
+    var x_bars: [7]geometry.Rect = zero
+    var y_bars: [6]geometry.Rect = zero
+    let (map, map_error) = chart.marginal_histogram(x[..], y[..], plot, 32.0, 48.0, 5.0, points[..], x_counts[..], x_bars[..], y_counts[..], y_bars[..])
+    if map_error != ok || map.top.bars.len != 7usize || map.right.bars.len != 6usize { ret chart.Invalid }
+    let pale = paint.rgba(0.97, 0.98, 1.0, 1.0)
+    let blue = paint.rgba(0.10, 0.43, 0.78, 1.0)
+    let orange = paint.rgba(0.87, 0.38, 0.17, 1.0)
+    let dark = paint.rgba(0.18, 0.24, 0.32, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let labels = [4]chart.Label{
+        chart.Label { text: "Marginal histograms / joint + each axis", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center },
+        chart.Label { text: "X frequency", anchor: chart.Coord { x: 160.0, y: 43.0 }, align: .Center },
+        chart.Label { text: "Y frequency", anchor: chart.Coord { x: 278.0, y: 216.0 }, align: .Center },
+        chart.Label { text: "Shared x/y domains; exact bin counts", anchor: chart.Coord { x: 180.0, y: 234.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 25u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &map.top, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.right, paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &map.scatter, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 11.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append(&writer, &map.top, blue)
+    try chart_svg.append(&writer, &map.right, orange)
+    try chart_svg.append(&writer, &map.scatter, dark)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 11.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -6394,6 +6498,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_one_sided_distribution_preview(a, queue, output_target, canvas, &renderer, false)
     try render_one_sided_distribution_preview(a, queue, output_target, canvas, &renderer, true)
     try render_slopegraph_preview(a, queue, output_target, canvas, &renderer)
+    try render_connected_scatter_preview(a, queue, output_target, canvas, &renderer)
+    try render_marginal_histogram_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)
