@@ -869,6 +869,64 @@ fn band(x: []const f32, lower: []const f32, upper: []const f32, bounds: geometry
     ret (Layout { kind: .Band, coords: outline[..2usize * x.len], segments: zero, bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
 }
 
+// Band-major outer-to-inner forecast intervals share one domain and a median Line.
+fn fan(x: []const f32, median: []const f32, lower: []const f32, upper: []const f32, bands: usize, bounds: geometry.Rect, outlines: []Coord, median_segments: []Segment, layers: []Layout) -> ([]Layout, Layout, err) {
+    if x.len < 2usize { ret (zero, zero, Empty) }
+    if bands == 0usize { ret (zero, zero, Invalid) }
+    if median.len != x.len || lower.len != upper.len || lower.len / x.len != bands || lower.len % x.len != 0usize || !valid_bounds(bounds) { ret (zero, zero, Invalid) }
+    if outlines.len / x.len / 2usize < bands || median_segments.len < x.len - 1usize || layers.len < bands { ret (zero, zero, TooLarge) }
+    var ymin = f64(lower[0usize])
+    var ymax = f64(upper[0usize])
+    var i = 0usize
+    while i < x.len {
+        if !finite(x[i]) || !finite(median[i]) || (i > 0usize && x[i] <= x[i - 1usize]) { ret (zero, zero, Invalid) }
+        var band_index = 0usize
+        while band_index < bands {
+            let at = band_index * x.len + i
+            let lo = lower[at]
+            let hi = upper[at]
+            if !finite(lo) || !finite(hi) || lo > median[i] || median[i] > hi { ret (zero, zero, Invalid) }
+            if band_index > 0usize && (lo < lower[at - x.len] || hi > upper[at - x.len]) { ret (zero, zero, Invalid) }
+            band_index += 1usize
+        }
+        if f64(lower[i]) < ymin { ymin = f64(lower[i]) }
+        if f64(upper[i]) > ymax { ymax = f64(upper[i]) }
+        i += 1usize
+    }
+    let raw_min = f32(ymin)
+    let raw_max = f32(ymax)
+    if ymin == ymax {
+        ymin -= 1.0f64
+        ymax += 1.0f64
+    }
+    let x_span = f64(x[x.len - 1usize]) - f64(x[0usize])
+    var band_index = 0usize
+    while band_index < bands {
+        let first = band_index * 2usize * x.len
+        i = 0usize
+        while i < x.len {
+            let px = f32(f64(bounds.x) + f64(bounds.width) * (f64(x[i]) - f64(x[0usize])) / x_span)
+            let top = f32(f64(bounds.y) + f64(bounds.height) * (1.0f64 - (f64(upper[band_index * x.len + i]) - ymin) / (ymax - ymin)))
+            let bottom = f32(f64(bounds.y) + f64(bounds.height) * (1.0f64 - (f64(lower[band_index * x.len + i]) - ymin) / (ymax - ymin)))
+            if !finite(px) || !finite(top) || !finite(bottom) { ret (zero, zero, Invalid) }
+            outlines[first + i] = Coord { x: px, y: top }
+            outlines[first + 2usize * x.len - 1usize - i] = Coord { x: px, y: bottom }
+            i += 1usize
+        }
+        layers[band_index] = Layout { kind: .Band, coords: outlines[first..first + 2usize * x.len], segments: zero, bars: zero, x_min: x[0usize], x_max: x[x.len - 1usize], y_min: raw_min, y_max: raw_max }
+        band_index += 1usize
+    }
+    i = 0usize
+    while i + 1usize < x.len {
+        let left = Coord { x: f32(f64(bounds.x) + f64(bounds.width) * (f64(x[i]) - f64(x[0usize])) / x_span), y: f32(f64(bounds.y) + f64(bounds.height) * (1.0f64 - (f64(median[i]) - ymin) / (ymax - ymin))) }
+        let right = Coord { x: f32(f64(bounds.x) + f64(bounds.width) * (f64(x[i + 1usize]) - f64(x[0usize])) / x_span), y: f32(f64(bounds.y) + f64(bounds.height) * (1.0f64 - (f64(median[i + 1usize]) - ymin) / (ymax - ymin))) }
+        if !finite(left.x) || !finite(left.y) || !finite(right.x) || !finite(right.y) { ret (zero, zero, Invalid) }
+        median_segments[i] = Segment { from: left, to: right }
+        i += 1usize
+    }
+    ret (layers[..bands], Layout { kind: .Line, coords: zero, segments: median_segments[..x.len - 1usize], bars: zero, x_min: x[0usize], x_max: x[x.len - 1usize], y_min: raw_min, y_max: raw_max }, ok)
+}
+
 // Centered stacked areas share one y scale and one caller-owned polygon per series.
 // Values are sample-major: every x position carries all series in input order.
 // ponytail: silhouette centering is stable; add wiggle offsets if trend-heavy data needs them.

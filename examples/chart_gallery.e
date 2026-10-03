@@ -2010,6 +2010,94 @@ fn render_seasonal_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_fan_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let x = [8]f32{ 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0 }
+    let median = [8]f32{ 52.0, 54.0, 57.0, 59.0, 62.0, 65.0, 66.0, 68.0 }
+    let lower = [24]f32{ 48.0, 47.0, 46.0, 44.0, 42.0, 40.0, 38.0, 36.0, 49.0, 50.0, 50.0, 51.0, 52.0, 53.0, 54.0, 55.0, 50.0, 52.0, 54.0, 56.0, 58.0, 60.0, 61.0, 63.0 }
+    let upper = [24]f32{ 56.0, 61.0, 66.0, 72.0, 78.0, 83.0, 88.0, 93.0, 55.0, 58.0, 62.0, 66.0, 70.0, 74.0, 77.0, 81.0, 54.0, 56.0, 59.0, 62.0, 65.0, 68.0, 70.0, 73.0 }
+    let bounds = geometry.rect(43.0, 47.0, 274.0, 141.0)
+    var outlines: [48]chart.Coord = zero
+    var median_segments: [7]chart.Segment = zero
+    var storage: [3]chart.Layout = zero
+    let (bands, middle, layout_error) = chart.fan(x[..], median[..], lower[..], upper[..], 3usize, bounds, outlines[..], median_segments[..], storage[..])
+    if layout_error != ok { ret layout_error }
+    let shades = [3]paint.Color{ paint.rgba(0.78, 0.87, 0.97, 1.0), paint.rgba(0.51, 0.72, 0.93, 1.0), paint.rgba(0.23, 0.53, 0.83, 1.0) }
+    let navy = paint.rgba(0.05, 0.23, 0.54, 1.0)
+    let rule = paint.rgba(0.90, 0.92, 0.95, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let legend_names = [4]str{ "95%", "80%", "50%", "Median" }
+    var labels: [8]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Forecast fan • nested intervals", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Now", anchor: chart.Coord { x: 43.0, y: 205.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "+4", anchor: chart.Coord { x: 199.6, y: 205.0 }, align: .Center }
+    labels[3usize] = chart.Label { text: "+7", anchor: chart.Coord { x: 317.0, y: 205.0 }, align: .Center }
+    var swatches: [4]geometry.Rect = zero
+    var i = 0usize
+    while i < 4usize {
+        swatches[i] = geometry.rect(44.0 + f32(i) * 73.0, 219.0, 13.0, 5.0)
+        labels[i + 4usize] = chart.Label { text: legend_names[i], anchor: chart.Coord { x: 76.0 + f32(i) * 73.0, y: 226.0 }, align: .Center }
+        i += 1usize
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 25u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    i = 1usize
+    while i < 4usize {
+        try fill(&builder, geometry.rect(bounds.x, bounds.y + f32(i) * bounds.height / 4.0, bounds.width, 1.0), paint.Brush { Solid: rule })
+        i += 1usize
+    }
+    i = 0usize
+    while i < bands.len {
+        try chart_scene.append(a, &builder, &bands[i], paint.Brush { Solid: shades[i] })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &middle, paint.Brush { Solid: navy })
+    i = 0usize
+    while i < 4usize {
+        var color = navy
+        if i < 3usize { color = shades[i] }
+        try fill(&builder, swatches[i], paint.Brush { Solid: color })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 9.0, paint.Brush { Solid: dark })
+    let path = "docs/chart-previews/fan_forecast.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 1usize
+    while i < 4usize {
+        try chart_svg.rect(&writer, geometry.rect(bounds.x, bounds.y + f32(i) * bounds.height / 4.0, bounds.width, 1.0), rule, false)
+        i += 1usize
+    }
+    i = 0usize
+    while i < bands.len {
+        try chart_svg.append(&writer, &bands[i], shades[i])
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &middle, navy)
+    i = 0usize
+    while i < 4usize {
+        var color = navy
+        if i < 3usize { color = shades[i] }
+        try chart_svg.rect(&writer, swatches[i], color, false)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_population_pyramid(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, bars: []geometry.Rect, ages: []const str, path: str) -> err {
     if layers.len != 2usize || ages.len != 6usize || bars.len != ages.len * 2usize { ret chart.Invalid }
     let colors = [2]paint.Color{ paint.rgba(0.08, 0.37, 0.72, 1.0), paint.rgba(0.89, 0.39, 0.16, 1.0) }
@@ -3036,6 +3124,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_fourfold_preview(a, queue, output_target, canvas, &renderer)
     try render_horizon_preview(a, queue, output_target, canvas, &renderer)
     try render_seasonal_preview(a, queue, output_target, canvas, &renderer)
+    try render_fan_preview(a, queue, output_target, canvas, &renderer)
     let pyramid_left = [6]f32{ 55.0, 70.0, 83.0, 72.0, 50.0, 31.0 }
     let pyramid_right = [6]f32{ 52.0, 68.0, 78.0, 75.0, 57.0, 40.0 }
     let pyramid_ages = [6]str{ "0-9", "10-19", "20-29", "30-39", "40-49", "50+" }

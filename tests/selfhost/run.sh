@@ -2744,6 +2744,11 @@ gfx_chart_seasonal_written=$($test_build/neper-self emit-executable "$repo/tests
 chmod +x "$test_build/gfx-chart-seasonal-selfhost"
 gfx_chart_seasonal_output=$("$test_build/gfx-chart-seasonal-selfhost")
 [ "$gfx_chart_seasonal_output" = 'gfx chart seasonal ok' ]
+gfx_chart_fan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_fan/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-fan-selfhost")
+[ "$gfx_chart_fan_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-fan-selfhost"
+gfx_chart_fan_output=$("$test_build/gfx-chart-fan-selfhost")
+[ "$gfx_chart_fan_output" = 'gfx chart fan ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

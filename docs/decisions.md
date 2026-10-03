@@ -33860,3 +33860,15 @@ partial cycles, flat data and scene/SVG output on Windows and Linux; the gallery
 adds a PNG/SVG pair. Explicit phase labels/times, missing-value gaps and
 alternative reference statistics remain planned. Reference: R `stats::monthplot`
 and forecast `ggsubseriesplot` documentation.
+
+## D1875 — Fan intervals share one scale and retain quantile nesting
+
+`fan` takes caller-computed, band-major outer-to-inner forecast intervals and
+a median curve. It validates each interval encloses the median and each inner
+interval stays within its outer neighbour, then maps every Band polygon and
+the Line median to the same x/y domain. This avoids independently autoscaling
+each ribbon through `band`. `gfx_chart_fan` checks irregular x positions,
+nesting, flat distributions, capacity refusals and scene/SVG output on Windows
+and Linux; the gallery adds a PNG/SVG pair. Simulation-to-quantile conversion,
+probability labels, observed-history anchoring and automated forecasting
+remain planned. Reference: CRAN fanplot `fan` and fabletools forecast-plot docs.
