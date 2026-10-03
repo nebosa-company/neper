@@ -8,8 +8,8 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-ninety-one PNG plus ninety-one SVG previews from Neper. Individuals, moving-range,
-X-bar and subgroup-range control charts are delivered. Kaplan–Meier
+ninety-five PNG plus ninety-five SVG previews from Neper. Individuals, moving-range,
+X-bar, subgroup-range and p/np/c/u attribute control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
 L061 remains partial
@@ -136,7 +136,15 @@ ranges and A2/D3/D4 limits for equal subgroups of size 2–10. Both reuse
 PointLine and Rug marks for observations and upper/center/lower rules.
 `gfx_chart_control` checks NIST numeric references, invalid/capacity paths and
 scene/SVG output on Windows and Linux. Phase separation, run rules, Xbar-S,
-attribute, CUSUM and EWMA charts remain planned.
+CUSUM and EWMA charts remain planned.
+`e.algo.stat.attribute_control` computes pooled binomial p/np and Poisson c/u
+three-sigma values and limits in caller storage. Variable subgroup sizes
+change p/u limits per observation; np requires equal size and c equal unit
+area. P limits clamp to [0,1], np to [0,n], and all lower limits to zero.
+PointLine and Rug marks draw observed values and three control-limit traces.
+`gfx_chart_attribute_control` checks reference values, malformed sizes, bounds
+and scene/SVG output on Windows and Linux. Laney overdispersion variants,
+run rules and phase-specific baseline estimates remain planned.
 Binary classification diagnostics share `e.algo.stat.binary_curve`: a caller-owned
 descending score order, with tied scores advanced as one threshold. The same
 cumulative true/false-positive counts yield ROC, precision–recall, cumulative
@@ -492,7 +500,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with ninety-one vector previews, automatic numeric tick text and
+   adapter with ninety-five vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow
@@ -500,7 +508,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 5. **Specialized calculators (partial):** tied-score binary threshold sweeps,
    ROC AUC, average precision, calibration bins and confusion counts, plus
    Bland–Altman limits and censor-aware survival/hazard steps are delivered in
-   `e.algo.stat`; I-MR/Xbar-R limits are also delivered. Survival intervals/comparisons,
+   `e.algo.stat`; I-MR/Xbar-R and p/np/c/u limits are also delivered. Survival intervals/comparisons,
    further SPC, capability, pooled forest/funnel estimators,
    contour/surface and other domain diagrams remain in their owning modules.
 6. **Interaction and acceleration:** hit regions, selection, zoom/pan, animation,

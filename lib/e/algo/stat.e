@@ -25,6 +25,8 @@ type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y
 type RegressionDiagnostic = struct { fitted: f64, residual: f64, leverage: f64, standardized: f64, cook: f64 }
 type SurvivalPoint = struct { time: f64, survival: f64, cumulative_hazard: f64, at_risk: usize, events: usize, censored: usize }
 type ControlLimits = struct { center: f64, lower: f64, upper: f64 }
+type AttributeControlKind = enum u8 { P, Np, C, U }
+type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
 type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
 type BinaryPoint = struct { tp: usize, fp: usize }
 type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
@@ -466,6 +468,54 @@ fn xbar_r_limits(values: []const f64, subgroup: usize, means: []f64, ranges: []f
     let range_limits = ControlLimits { center: range_stats.mean, lower: d3[factor] * range_stats.mean, upper: d4[factor] * range_stats.mean }
     if mean_limits.lower - mean_limits.lower != 0.0f64 || mean_limits.upper - mean_limits.upper != 0.0f64 || range_limits.upper - range_limits.upper != 0.0f64 { ret (zero, zero, Invalid) }
     ret (mean_limits, range_limits, ok)
+}
+
+// Three-sigma binomial (P/Np) or Poisson (C/U) limits. Sizes are inspected
+// units/opportunities; Np requires equal sizes and C requires unit size one.
+fn attribute_control(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, out: []AttributeControlPoint) -> err {
+    if counts.len < 2usize || sizes.len != counts.len { ret Invalid }
+    if out.len < counts.len { ret TooSmall }
+    var total_count = 0.0f64
+    var total_size = 0.0f64
+    var i = 0usize
+    while i < counts.len {
+        if sizes[i] == 0usize || (kind == .C && sizes[i] != 1usize) || (kind == .Np && sizes[i] != sizes[0usize]) || ((kind == .P || kind == .Np) && counts[i] > sizes[i]) { ret Invalid }
+        total_count += f64(counts[i])
+        total_size += f64(sizes[i])
+        i += 1usize
+    }
+    let rate = total_count / total_size
+    if rate - rate != 0.0f64 { ret Invalid }
+    i = 0usize
+    while i < counts.len {
+        let n = f64(sizes[i])
+        var value = f64(counts[i])
+        var center = rate
+        var sigma = 0.0f64
+        var ceiling = 0.0f64
+        if kind == .P {
+            value /= n
+            sigma = math.sqrt[f64](rate * (1.0f64 - rate) / n)
+            ceiling = 1.0f64
+        } else if kind == .Np {
+            center *= n
+            sigma = math.sqrt[f64](center * (1.0f64 - rate))
+            ceiling = n
+        } else if kind == .C {
+            sigma = math.sqrt[f64](rate)
+        } else {
+            value /= n
+            sigma = math.sqrt[f64](rate / n)
+        }
+        var lower = center - 3.0f64 * sigma
+        var upper = center + 3.0f64 * sigma
+        if lower < 0.0f64 { lower = 0.0f64 }
+        if ceiling > 0.0f64 && upper > ceiling { upper = ceiling }
+        if value - value != 0.0f64 || upper - upper != 0.0f64 { ret Invalid }
+        out[i] = AttributeControlPoint { value: value, center: center, lower: lower, upper: upper }
+        i += 1usize
+    }
+    ret ok
 }
 
 fn correlation(s: *const Regression) -> (f64, bool) {

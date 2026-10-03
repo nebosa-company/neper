@@ -983,6 +983,77 @@ fn render_control_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret render_control_preview(a, q, output_target, canvas, renderer, ranges[..], range, "Range chart", "Range", "docs/chart-previews/range_control.png")
 }
 
+fn render_attribute_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, samples: []const stat.AttributeControlPoint, title: str, y_label: str, path: str) -> err {
+    if samples.len < 2usize || samples.len > 10usize { ret chart.Invalid }
+    let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
+    var x: [10]f32 = zero
+    var y: [10]f32 = zero
+    var low = f32(samples[0usize].lower)
+    var high = f32(samples[0usize].upper)
+    var i = 0usize
+    while i < samples.len {
+        x[i] = f32(i) / f32(samples.len - 1usize)
+        y[i] = f32(samples[i].value)
+        if y[i] < low { low = y[i] }
+        if f32(samples[i].lower) < low { low = f32(samples[i].lower) }
+        if y[i] > high { high = y[i] }
+        if f32(samples[i].upper) > high { high = f32(samples[i].upper) }
+        i += 1usize
+    }
+    var padding = (high - low) * 0.08
+    if padding == 0.0 { padding = 1.0 }
+    low -= padding
+    high += padding
+    let x_limits = [2]f32{ 0.0, 1.0 }
+    let y_limits = [2]f32{ low, high }
+    var spec = chart.spec(.PointLine, plot, x[..samples.len], y[..samples.len])
+    var points: [10]chart.Coord = zero
+    var segments: [9]chart.Segment = zero
+    let (marks, marks_error) = chart.layout_with_limits(&spec, points[..], segments[..], zero, x_limits[..], y_limits[..])
+    if marks_error != ok { ret marks_error }
+    var rules: [27]chart.Segment = zero
+    i = 0usize
+    while i + 1usize < samples.len {
+        let from = [3]f32{ f32(samples[i].lower), f32(samples[i].center), f32(samples[i].upper) }
+        let to = [3]f32{ f32(samples[i + 1usize].lower), f32(samples[i + 1usize].center), f32(samples[i + 1usize].upper) }
+        var j = 0usize
+        while j < 3usize {
+            rules[i * 3usize + j] = chart.Segment {
+                from: chart.Coord { x: plot.x + x[i] * plot.width, y: plot.y + plot.height * (high - from[j]) / (high - low) },
+                to: chart.Coord { x: plot.x + x[i + 1usize] * plot.width, y: plot.y + plot.height * (high - to[j]) / (high - low) },
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let reference = chart.Layout { kind: .Rug, coords: zero, segments: rules[..(samples.len - 1usize) * 3usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: low, y_max: high }
+    ret render_diagnostic_preview(a, q, output_target, canvas, renderer, &marks, &reference, title, "Run fraction", y_label, path)
+}
+
+fn render_attribute_previews(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let counts = [8]usize{ 2usize, 5usize, 3usize, 8usize, 4usize, 7usize, 1usize, 6usize }
+    let counts_c = [8]usize{ 3usize, 1usize, 6usize, 4usize, 8usize, 2usize, 7usize, 5usize }
+    let sizes_p = [8]usize{ 50usize, 100usize, 50usize, 100usize, 80usize, 100usize, 50usize, 70usize }
+    let sizes_np = [8]usize{ 100usize, 100usize, 100usize, 100usize, 100usize, 100usize, 100usize, 100usize }
+    let sizes_c = [8]usize{ 1usize, 1usize, 1usize, 1usize, 1usize, 1usize, 1usize, 1usize }
+    let sizes_u = [8]usize{ 5usize, 9usize, 6usize, 8usize, 10usize, 7usize, 5usize, 12usize }
+    let kinds = [4]stat.AttributeControlKind{ .P, .Np, .C, .U }
+    let sizes = [4][]const usize{ sizes_p[..], sizes_np[..], sizes_c[..], sizes_u[..] }
+    let titles = [4]str{ "P chart", "Np chart", "C chart", "U chart" }
+    let labels = [4]str{ "Fraction", "Defectives", "Defects", "Rate" }
+    let paths = [4]str{ "docs/chart-previews/p_control.png", "docs/chart-previews/np_control.png", "docs/chart-previews/c_control.png", "docs/chart-previews/u_control.png" }
+    var samples: [8]stat.AttributeControlPoint = zero
+    var i = 0usize
+    while i < 4usize {
+        var selected = counts[..]
+        if kinds[i] == .C { selected = counts_c[..] }
+        try stat.attribute_control(kinds[i], selected, sizes[i], samples[..])
+        try render_attribute_preview(a, q, output_target, canvas, renderer, samples[..], titles[i], labels[i], paths[i])
+        i += 1usize
+    }
+    ret ok
+}
+
 fn render_roc_extension_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, data: *const stat.BinaryCurve, partial: bool, path: str) -> err {
     let plot = geometry.rect(56.0, 43.0, 252.0, 150.0)
     var x: [17]f32 = zero
@@ -2548,6 +2619,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_agreement_preview(a, queue, output_target, canvas, &renderer)
     try render_survival_previews(a, queue, output_target, canvas, &renderer)
     try render_control_previews(a, queue, output_target, canvas, &renderer)
+    try render_attribute_previews(a, queue, output_target, canvas, &renderer)
     let diagnostic_scores = [16]f64{ 0.98f64, 0.93f64, 0.89f64, 0.84f64, 0.78f64, 0.72f64, 0.68f64, 0.62f64, 0.56f64, 0.50f64, 0.44f64, 0.38f64, 0.32f64, 0.26f64, 0.18f64, 0.08f64 }
     let diagnostic_positive = [16]bool{ true, true, false, true, true, false, true, false, true, false, true, false, false, true, false, false }
     var diagnostic_order: [16]usize = zero

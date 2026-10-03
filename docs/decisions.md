@@ -33628,3 +33628,17 @@ The numeric fixture checks NIST's Individuals example and subgroup-factor
 values on Windows and Linux. Phase-specific limits and run rules are deferred.
 References: https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc322.htm
 and https://itl.nist.gov/div898/handbook/pmc/section3/pmc321.htm.
+
+## D1856 — Let subgroup size shape attribute-control limits
+
+`e.algo.stat.attribute_control` keeps the four conventional three-sigma
+attribute charts together: pooled binomial p/np and Poisson c/u. P and u
+limits are calculated for each actual subgroup size; np requires equal sizes
+and c one inspection unit per point. Probability/count lower bounds are
+clamped to their valid domains. PointLine plus Rug traces render observations
+and limits without a painter branch. Reference numbers and invalid-size tests
+pass on Windows and Linux, alongside four PNG/SVG previews. Historical
+baselines, Laney overdispersion and run rules remain planned.
+References: https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc332.htm,
+https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc331.htm and
+https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/u-chart/perform-the-analysis/u-chart-options/modify-the-control-limits/.
