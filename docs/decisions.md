@@ -34190,3 +34190,14 @@ Windows and Linux fixtures check merges, splits, disconnected nodes, cycles,
 invalid endpoints, capacities and scene/SVG adapters. The gallery adds a
 PNG/SVG pair. Crossing reduction, edge-port selection and editing are future
 work, not implied by this static layout.
+
+## D1910 — Flowcharts keep control-flow geometry separate from DAG ranking
+
+`flowchart` takes caller-placed nodes and explicit opposing exit/entry ports,
+rather than forcing decision loops through the acyclic dependency layout.
+Terminal chamfers and decision diamonds are Area polygons; processes are Bar
+rectangles. Each edge is a five-segment orthogonal Rug arrow. Overlapping boxes,
+invalid ports and inward/backward routes refuse. Windows and Linux fixtures
+cover a decision loop, geometry, adapters and refusals. Automatic layout,
+collision-free routing and
+mixed-axis ports remain separate work.

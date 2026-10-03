@@ -1375,6 +1375,96 @@ fn render_dependency_graph_preview(a: *mem.Arena, q: *gpu.Queue, output_target: 
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_flowchart_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/flowchart.png"
+    let plot = geometry.rect(12.0, 42.0, 336.0, 185.0)
+    let nodes = [6]chart.FlowNode{
+        chart.FlowNode { kind: .Terminal, center: chart.Coord { x: 180.0, y: 58.0 } },
+        chart.FlowNode { kind: .Process, center: chart.Coord { x: 180.0, y: 105.0 } },
+        chart.FlowNode { kind: .Decision, center: chart.Coord { x: 180.0, y: 160.0 } },
+        chart.FlowNode { kind: .Process, center: chart.Coord { x: 292.0, y: 160.0 } },
+        chart.FlowNode { kind: .Process, center: chart.Coord { x: 62.0, y: 105.0 } },
+        chart.FlowNode { kind: .Terminal, center: chart.Coord { x: 292.0, y: 207.0 } },
+    }
+    let links = [6]chart.FlowLink{
+        chart.FlowLink { from: 0usize, to: 1usize, exit: .Bottom, entry: .Top },
+        chart.FlowLink { from: 1usize, to: 2usize, exit: .Bottom, entry: .Top },
+        chart.FlowLink { from: 2usize, to: 3usize, exit: .Right, entry: .Left },
+        chart.FlowLink { from: 3usize, to: 5usize, exit: .Bottom, entry: .Top },
+        chart.FlowLink { from: 2usize, to: 4usize, exit: .Left, entry: .Right },
+        chart.FlowLink { from: 4usize, to: 1usize, exit: .Right, entry: .Left },
+    }
+    let names = [6]str{ "Start", "Review", "OK?", "Approve", "Revise", "End" }
+    var boxes: [6]geometry.Rect = zero
+    var outlines: [48]chart.Coord = zero
+    var shapes: [6]chart.Layout = zero
+    var arrows: [30]chart.Segment = zero
+    let (flow, layout_error) = chart.flowchart(nodes[..], links[..], plot, 72.0, 32.0, boxes[..], outlines[..], shapes[..], arrows[..])
+    if layout_error != ok || flow.nodes.len != 6usize || flow.connectors.segments.len != 30usize { ret chart.Invalid }
+    let blue = paint.rgba(0.16, 0.43, 0.76, 1.0)
+    let teal = paint.rgba(0.14, 0.52, 0.45, 1.0)
+    let amber = paint.rgba(0.78, 0.43, 0.10, 1.0)
+    let navy = paint.rgba(0.16, 0.30, 0.54, 1.0)
+    let gray = paint.rgba(0.54, 0.62, 0.71, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var labels: [10]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Flowchart / decision loop", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Explicit ports allow feedback", anchor: chart.Coord { x: 180.0, y: 239.0 }, align: .Center }
+    var i = 0usize
+    while i < boxes.len {
+        labels[i + 2usize] = chart.Label { text: names[i], anchor: chart.Coord { x: boxes[i].x + boxes[i].width * 0.5, y: boxes[i].y + boxes[i].height * 0.5 + 3.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[8usize] = chart.Label { text: "Yes", anchor: chart.Coord { x: 238.0, y: 150.0 }, align: .Center }
+    labels[9usize] = chart.Label { text: "No", anchor: chart.Coord { x: 121.0, y: 150.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 90usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &flow.connectors, paint.Brush { Solid: gray })
+    i = 0usize
+    while i < flow.nodes.len {
+        var color = blue
+        if i == 0usize || i == 5usize { color = navy }
+        if i == 2usize { color = amber }
+        if i == 4usize { color = teal }
+        try chart_scene.append(a, &builder, &flow.nodes[i], paint.Brush { Solid: color })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..8usize], font, 9.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[8usize..], font, 9.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &flow.connectors, gray)
+    i = 0usize
+    while i < flow.nodes.len {
+        var color = blue
+        if i == 0usize || i == 5usize { color = navy }
+        if i == 2usize { color = amber }
+        if i == 4usize { color = teal }
+        try chart_svg.append(&writer, &flow.nodes[i], color)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, labels[2usize..8usize], white, 9.0)
+    try chart_svg.append_labels(&writer, labels[8usize..], dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -5321,6 +5411,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_org_chart_preview(a, queue, output_target, canvas, &renderer)
     try render_dependency_graph_preview(a, queue, output_target, canvas, &renderer)
+    try render_flowchart_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

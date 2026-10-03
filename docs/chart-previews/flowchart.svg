@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>flowchart</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<line x1="180" y1="74" x2="180" y2="81.5" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="81.5" x2="180" y2="81.5" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="81.5" x2="180" y2="89" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="177.375" y1="85.25" x2="180" y2="89" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="182.625" y1="85.25" x2="180" y2="89" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="121" x2="180" y2="132.5" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="132.5" x2="180" y2="132.5" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="132.5" x2="180" y2="144" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="175.97500610351562" y1="138.25" x2="180" y2="144" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="184.02499389648438" y1="138.25" x2="180" y2="144" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="216" y1="160" x2="236" y2="160" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="160" x2="236" y2="160" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="160" x2="256" y2="160" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="250" y1="155.8000030517578" x2="256" y2="160" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="250" y1="164.1999969482422" x2="256" y2="160" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="292" y1="176" x2="292" y2="183.5" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="292" y1="183.5" x2="292" y2="183.5" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="292" y1="183.5" x2="292" y2="191" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="289.375" y1="187.25" x2="292" y2="191" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="294.625" y1="187.25" x2="292" y2="191" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="144" y1="160" x2="121" y2="160" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="121" y1="160" x2="121" y2="105" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="121" y1="105" x2="98" y2="105" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="104" y1="100.80000305175781" x2="98" y2="105" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="104" y1="109.19999694824219" x2="98" y2="105" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="98" y1="105" x2="121" y2="105" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="121" y1="105" x2="121" y2="105" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="121" y1="105" x2="144" y2="105" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="138" y1="100.80000305175781" x2="144" y2="105" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="138" y1="109.19999694824219" x2="144" y2="105" stroke="rgb(138,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<path d="M154.24000549316406 42 L205.75999450683594 42 L216 52.23999786376953 L216 63.76000213623047 L205.75999450683594 74 L154.24000549316406 74 L144 63.76000213623047 L144 52.23999786376953 Z" fill="rgb(41,77,138)" fill-opacity="1"/>
+<rect x="144" y="89" width="72" height="32" fill="rgb(41,110,194)" fill-opacity="1"/>
+<path d="M180 144 L216 160 L180 176 L144 160 Z" fill="rgb(199,110,26)" fill-opacity="1"/>
+<rect x="256" y="144" width="72" height="32" fill="rgb(41,110,194)" fill-opacity="1"/>
+<rect x="26" y="89" width="72" height="32" fill="rgb(36,133,115)" fill-opacity="1"/>
+<path d="M266.239990234375 191 L317.760009765625 191 L328 201.24000549316406 L328 212.75999450683594 L317.760009765625 223 L266.239990234375 223 L256 212.75999450683594 L256 201.24000549316406 Z" fill="rgb(41,77,138)" fill-opacity="1"/>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Flowchart / decision loop</text>
+<text x="180" y="239" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Explicit ports allow feedback</text>
+<text x="180" y="61" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Start</text>
+<text x="180" y="108" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Review</text>
+<text x="180" y="163" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">OK?</text>
+<text x="292" y="163" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Approve</text>
+<text x="62" y="108" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Revise</text>
+<text x="292" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">End</text>
+<text x="238" y="150" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Yes</text>
+<text x="121" y="150" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">No</text>
+</svg>

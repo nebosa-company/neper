@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and fifty-seven PNG plus one hundred and fifty-seven SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map, a SIPOC overview, an expected-value decision tree, a rooted org chart and a layered dependency graph are also delivered. Individuals, moving-range,
+one hundred and fifty-eight PNG plus one hundred and fifty-eight SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map, a SIPOC overview, an expected-value decision tree, a rooted org chart, a layered dependency graph and an explicitly placed flowchart are also delivered. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -591,6 +591,12 @@ pass, spaces peers within ranks and emits caller-owned boxes and directional
 orthogonal connectors. Crossing reduction, port selection and graph editing
 remain planned.
 
+The flowchart accepts explicitly placed terminal, process and decision nodes
+plus opposing entry/exit ports. It emits chamfered terminal and diamond
+polygons, process rectangles and orthogonal arrows; cycles are allowed so
+feedback paths can be shown. Automatic placement, crossing avoidance and
+mixed-axis port routing remain planned.
+
 ### General-purpose statistical and business charts
 
 | Family | Charts |
@@ -754,7 +760,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and fifty-seven vector previews, automatic numeric tick text and
+   adapter with one hundred and fifty-eight vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

@@ -58,6 +58,11 @@ type OrgLayout = struct { nodes: Layout, connectors: Layout, levels: usize, leav
 type DependencyLink = struct { from: usize, to: usize }
 type DependencyWork = struct { indegree: []usize, head: []usize, next: []usize, order: []usize, stage: []usize, stage_counts: []usize, stage_used: []usize }
 type DependencyLayout = struct { nodes: Layout, connectors: Layout, stages: usize, sources: usize }
+type FlowKind = enum u8 { Terminal, Process, Decision }
+type FlowPort = enum u8 { Top, Right, Bottom, Left }
+type FlowNode = struct { kind: FlowKind, center: Coord }
+type FlowLink = struct { from: usize, to: usize, exit: FlowPort, entry: FlowPort }
+type FlowLayout = struct { nodes: []Layout, connectors: Layout }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -2944,6 +2949,102 @@ fn dependency_graph(node_count: usize, links: []const DependencyLink, bounds: ge
     let nodes = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[..node_count], x_min: 0.0, x_max: f32(stages), y_min: 0.0, y_max: 1.0 }
     let connectors = Layout { kind: .Rug, coords: zero, segments: arrows[..links.len * 5usize], bars: zero, x_min: 0.0, x_max: f32(stages), y_min: 0.0, y_max: 1.0 }
     ret (DependencyLayout { nodes: nodes, connectors: connectors, stages: stages, sources: sources }, ok)
+}
+
+fn flow_port(box: geometry.Rect, port: FlowPort) -> Coord {
+    if port == .Top { ret Coord { x: box.x + box.width * 0.5, y: box.y } }
+    if port == .Right { ret Coord { x: box.x + box.width, y: box.y + box.height * 0.5 } }
+    if port == .Bottom { ret Coord { x: box.x + box.width * 0.5, y: box.y + box.height } }
+    ret Coord { x: box.x, y: box.y + box.height * 0.5 }
+}
+
+// Explicit node centers allow return loops. Links use opposing ports and must
+// travel outward from their exit before entering the next shape.
+fn flowchart(nodes: []const FlowNode, links: []const FlowLink, bounds: geometry.Rect, node_width: f32, node_height: f32, boxes: []geometry.Rect, outlines: []Coord, shapes: []Layout, arrows: []Segment) -> (FlowLayout, err) {
+    if nodes.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite(node_width) || !finite(node_height) || node_width < 20.0 || node_height < 18.0 { ret (zero, Invalid) }
+    if boxes.len < nodes.len || outlines.len / 8usize < nodes.len || shapes.len < nodes.len || arrows.len / 5usize < links.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < nodes.len {
+        let center = nodes[i].center
+        if !finite(center.x) || !finite(center.y) { ret (zero, Invalid) }
+        let x = center.x - node_width * 0.5
+        let y = center.y - node_height * 0.5
+        if !finite(x) || !finite(y) || x < bounds.x || y < bounds.y || x + node_width > bounds.x + bounds.width || y + node_height > bounds.y + bounds.height { ret (zero, Invalid) }
+        boxes[i] = geometry.rect(x, y, node_width, node_height)
+        var earlier = 0usize
+        while earlier < i {
+            let other = boxes[earlier]
+            if x < other.x + other.width && x + node_width > other.x && y < other.y + other.height && y + node_height > other.y { ret (zero, Invalid) }
+            earlier += 1usize
+        }
+        let first = i * 8usize
+        if nodes[i].kind == .Process {
+            shapes[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: boxes[i..i + 1usize], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        } else if nodes[i].kind == .Decision {
+            outlines[first] = Coord { x: center.x, y: y }
+            outlines[first + 1usize] = Coord { x: x + node_width, y: center.y }
+            outlines[first + 2usize] = Coord { x: center.x, y: y + node_height }
+            outlines[first + 3usize] = Coord { x: x, y: center.y }
+            shapes[i] = Layout { kind: .Area, coords: outlines[first..first + 4usize], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        } else {
+            let inset = node_height * 0.32
+            outlines[first] = Coord { x: x + inset, y: y }
+            outlines[first + 1usize] = Coord { x: x + node_width - inset, y: y }
+            outlines[first + 2usize] = Coord { x: x + node_width, y: y + inset }
+            outlines[first + 3usize] = Coord { x: x + node_width, y: y + node_height - inset }
+            outlines[first + 4usize] = Coord { x: x + node_width - inset, y: y + node_height }
+            outlines[first + 5usize] = Coord { x: x + inset, y: y + node_height }
+            outlines[first + 6usize] = Coord { x: x, y: y + node_height - inset }
+            outlines[first + 7usize] = Coord { x: x, y: y + inset }
+            shapes[i] = Layout { kind: .Area, coords: outlines[first..first + 8usize], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < links.len {
+        let link = links[i]
+        if link.from >= nodes.len || link.to >= nodes.len || link.from == link.to { ret (zero, Invalid) }
+        let start = flow_port(boxes[link.from], link.exit)
+        let tip = flow_port(boxes[link.to], link.entry)
+        let vertical = (link.exit == .Top && link.entry == .Bottom) || (link.exit == .Bottom && link.entry == .Top)
+        let horizontal = (link.exit == .Left && link.entry == .Right) || (link.exit == .Right && link.entry == .Left)
+        if !vertical && !horizontal { ret (zero, Invalid) }
+        let first = i * 5usize
+        var head = 6.0f32
+        if vertical {
+            let gap = tip.y - start.y
+            if (link.exit == .Bottom && gap <= 2.0) || (link.exit == .Top && gap >= -2.0) { ret (zero, Invalid) }
+            var distance = gap
+            if distance < 0.0 { distance = -distance }
+            if head > distance * 0.25 { head = distance * 0.25 }
+            let mid = start.y + gap * 0.5
+            arrows[first] = Segment { from: start, to: Coord { x: start.x, y: mid } }
+            arrows[first + 1usize] = Segment { from: Coord { x: start.x, y: mid }, to: Coord { x: tip.x, y: mid } }
+            arrows[first + 2usize] = Segment { from: Coord { x: tip.x, y: mid }, to: tip }
+            var offset = head
+            if link.entry == .Top { offset = -head }
+            arrows[first + 3usize] = Segment { from: Coord { x: tip.x - head * 0.7, y: tip.y + offset }, to: tip }
+            arrows[first + 4usize] = Segment { from: Coord { x: tip.x + head * 0.7, y: tip.y + offset }, to: tip }
+        } else {
+            let gap = tip.x - start.x
+            if (link.exit == .Right && gap <= 2.0) || (link.exit == .Left && gap >= -2.0) { ret (zero, Invalid) }
+            var distance = gap
+            if distance < 0.0 { distance = -distance }
+            if head > distance * 0.25 { head = distance * 0.25 }
+            let mid = start.x + gap * 0.5
+            arrows[first] = Segment { from: start, to: Coord { x: mid, y: start.y } }
+            arrows[first + 1usize] = Segment { from: Coord { x: mid, y: start.y }, to: Coord { x: mid, y: tip.y } }
+            arrows[first + 2usize] = Segment { from: Coord { x: mid, y: tip.y }, to: tip }
+            var offset = head
+            if link.entry == .Left { offset = -head }
+            arrows[first + 3usize] = Segment { from: Coord { x: tip.x + offset, y: tip.y - head * 0.7 }, to: tip }
+            arrows[first + 4usize] = Segment { from: Coord { x: tip.x + offset, y: tip.y + head * 0.7 }, to: tip }
+        }
+        i += 1usize
+    }
+    let connectors = Layout { kind: .Rug, coords: zero, segments: arrows[..links.len * 5usize], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
+    ret (FlowLayout { nodes: shapes[..nodes.len], connectors: connectors }, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.
