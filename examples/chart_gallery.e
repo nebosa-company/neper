@@ -3346,7 +3346,7 @@ fn render_confusion_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
-fn render_mekko(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, names: []const str, path: str) -> err {
+fn render_mekko(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, categories: []const str, names: []const str, title: str, path: str) -> err {
     if layers.len != 3usize || categories.len != 4usize || names.len != layers.len || layers[0usize].bars.len != categories.len { ret chart.Invalid }
     let colors = [3]paint.Color{
         paint.rgba(0.08, 0.37, 0.75, 1.0), paint.rgba(0.92, 0.42, 0.13, 1.0), paint.rgba(0.16, 0.58, 0.43, 1.0),
@@ -3365,7 +3365,7 @@ fn render_mekko(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas
     labels[4usize] = chart.Label { text: "100%", anchor: chart.Coord { x: 31.0, y: 48.0 }, align: .Right }
     labels[5usize] = chart.Label { text: "50%", anchor: chart.Coord { x: 31.0, y: 122.0 }, align: .Right }
     labels[6usize] = chart.Label { text: "0%", anchor: chart.Coord { x: 31.0, y: 195.0 }, align: .Right }
-    labels[7usize] = chart.Label { text: "Marimekko shares", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[7usize] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
     let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
     if font_error != ok { ret font_error }
     let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
@@ -5693,7 +5693,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var mekko_storage: [3]chart.Layout = zero
     let (mekko_layers, mekko_error) = chart.mekko(mekko_values[..], 4usize, 3usize, geometry.rect(44.0, 45.0, 210.0, 148.0), mekko_totals[..], mekko_bars[..], mekko_storage[..])
     if mekko_error != ok { ret mekko_error }
-    try render_mekko(a, queue, output_target, canvas, &renderer, mekko_layers, category_names[..], mekko_series[..], "docs/chart-previews/mekko.png")
+    try render_mekko(a, queue, output_target, canvas, &renderer, mekko_layers, category_names[..], mekko_series[..], "Marimekko shares", "docs/chart-previews/mekko.png")
+    let spine_counts = [12]f64{ 24.0f64, 12.0f64, 4.0f64, 6.0f64, 16.0f64, 8.0f64, 9.0f64, 6.0f64, 15.0f64, 4.0f64, 8.0f64, 8.0f64 }
+    let spine_names = [3]str{ "Pass", "Hold", "Fail" }
+    let spine_groups = [4]str{ "A", "B", "C", "D" }
+    var spine_totals: [4]f64 = zero
+    var spine_bars: [12]geometry.Rect = zero
+    var spine_layers: [3]chart.Layout = zero
+    let (spine, spine_error) = chart.spine_plot(spine_counts[..], 4usize, geometry.rect(44.0, 45.0, 210.0, 148.0), 2.0, spine_totals[..], spine_bars[..], spine_layers[..])
+    if spine_error != ok || spine.grand_total != 120.0f64 || spine.column_totals[0usize] != 40.0f64 { ret chart.Invalid }
+    try render_mekko(a, queue, output_target, canvas, &renderer, spine.categories, spine_groups[..], spine_names[..], "Spine / outcome mix", "docs/chart-previews/spine_plot.png")
     try render_mosaic_preview(a, queue, output_target, canvas, &renderer)
     try render_association_preview(a, queue, output_target, canvas, &renderer)
     try render_fourfold_preview(a, queue, output_target, canvas, &renderer)

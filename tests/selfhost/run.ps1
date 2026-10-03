@@ -3312,6 +3312,11 @@ $gfxChartProbabilityPlotWritten = & $compiler emit-executable (Join-Path $PSScri
 if ($LASTEXITCODE -ne 0 -or $gfxChartProbabilityPlotWritten -ne 'executable written') { throw 'gfx_chart_probability_plot emission failed' }
 $gfxChartProbabilityPlotOutput = & $gfxChartProbabilityPlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartProbabilityPlotOutput -ne 'gfx chart probability plot ok') { throw "the e.gfx.chart probability plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
+$gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }
+$gfxChartSpinePlotOutput = & $gfxChartSpinePlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotOutput -ne 'gfx chart spine plot ok') { throw "the e.gfx.chart spine plot answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

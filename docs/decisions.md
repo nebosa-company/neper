@@ -34283,3 +34283,15 @@ independent adapter styling. Windows and Linux fixtures check ties, normal
 symmetry, exponential nonlinear spacing, reference clipping, storage and
 invalid inputs; the gallery adds a labeled PNG/SVG pair. Automatic fitting,
 confidence envelopes and other families remain follow-on work.
+
+## D1918 — Spine plots color outcomes without changing count-proportional area
+
+`spine_plot` accepts a nonnegative column-major contingency table, makes
+column widths proportional to marginals and stacks conditional outcome
+fractions within each column. It returns caller-owned category-major Bar
+layers and column/grand totals. At zero gutter, cell area is exactly its
+count divided by the grand total; optional gutters improve visual separation.
+Unlike `mosaic`, category color is stable rather than Pearson-residual based.
+Windows and Linux fixtures check exact geometry, zero cells, refusals and
+scene/SVG output. The gallery adds a PNG/SVG pair with outcome legend. Empty
+columns are refused; automatic zero-column omission remains follow-on work.

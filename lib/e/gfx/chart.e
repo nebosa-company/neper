@@ -87,6 +87,7 @@ type RangeInterval = struct { row: usize, lower: f64, upper: f64 }
 type RangeIntervalLayout = struct { ranges: Layout, caps: Layout }
 type ProbabilityFamily = enum u8 { Normal, Exponential }
 type ProbabilityLayout = struct { observations: Layout, reference: Layout, probability_ticks: []Tick }
+type SpineLayout = struct { categories: []Layout, column_totals: []f64, grand_total: f64 }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -4751,6 +4752,67 @@ fn mekko(values: []const f32, categories: usize, series: usize, bounds: geometry
         i += 1usize
     }
     ret (made, ok)
+}
+
+// Contingency-table spine: each column width follows its marginal count and
+// each vertical stack follows the conditional outcome mix. Output rectangles
+// are category-major so each Bar layer can take an independent category colour.
+// With zero gutter, every cell area is exactly count / grand total.
+fn spine_plot(counts: []const f64, columns: usize, bounds: geometry.Rect, gutter: f32, column_totals: []f64, bars: []geometry.Rect, layers: []Layout) -> (SpineLayout, err) {
+    if counts.len == 0usize { ret (zero, Empty) }
+    if columns == 0usize || counts.len % columns != 0usize || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite(gutter) || gutter < 0.0 { ret (zero, Invalid) }
+    let categories = counts.len / columns
+    if column_totals.len < columns || bars.len < counts.len || layers.len < categories { ret (zero, TooLarge) }
+    var grand = 0.0f64
+    var column = 0usize
+    while column < columns {
+        var total = 0.0f64
+        var category = 0usize
+        while category < categories {
+            let value = counts[column * categories + category]
+            if !finite64(value) || value < 0.0f64 { ret (zero, Invalid) }
+            total += value
+            category += 1usize
+        }
+        if !finite64(total) || total <= 0.0f64 { ret (zero, Invalid) }
+        column_totals[column] = total
+        grand += total
+        column += 1usize
+    }
+    if !finite64(grand) || grand <= 0.0f64 { ret (zero, Invalid) }
+    var cumulative = 0.0f64
+    column = 0usize
+    while column < columns {
+        let left = bounds.x + bounds.width * f32(cumulative / grand)
+        cumulative += column_totals[column]
+        let right = bounds.x + bounds.width * f32(cumulative / grand)
+        let width = right - left - gutter
+        if !finite(left) || !finite(right) || width <= 0.0 { ret (zero, TooLarge) }
+        var stacked = 0.0f64
+        var category = 0usize
+        while category < categories {
+            let value = counts[column * categories + category]
+            let bottom = bounds.y + bounds.height * f32(1.0f64 - stacked / column_totals[column])
+            stacked += value
+            let top = bounds.y + bounds.height * f32(1.0f64 - stacked / column_totals[column])
+            if !finite(top) || !finite(bottom) { ret (zero, Invalid) }
+            bars[category * columns + column] = geometry.rect(0.0, 0.0, 0.0, 0.0)
+            if value > 0.0f64 {
+                let height = bottom - top - gutter
+                if height <= 0.0 { ret (zero, TooLarge) }
+                bars[category * columns + column] = geometry.rect(left + gutter * 0.5, top + gutter * 0.5, width, height)
+            }
+            category += 1usize
+        }
+        column += 1usize
+    }
+    var category = 0usize
+    while category < categories {
+        let first = category * columns
+        layers[category] = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[first..first + columns], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        category += 1usize
+    }
+    ret (SpineLayout { categories: layers[..categories], column_totals: column_totals[..columns], grand_total: grand }, ok)
 }
 
 // Contingency-table mosaic: tile area follows count, colour follows Pearson
