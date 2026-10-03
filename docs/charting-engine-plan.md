@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-one hundred and fifty-nine PNG plus one hundred and fifty-nine SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map, a SIPOC overview, an expected-value decision tree, a rooted org chart, a layered dependency graph, an explicitly placed flowchart and an event-labeled state machine are also delivered. Individuals, moving-range,
+one hundred and sixty PNG plus one hundred and sixty SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map, a SIPOC overview, an expected-value decision tree, a rooted org chart, a layered dependency graph, an explicitly placed flowchart, an event-labeled state machine and an ordered sequence diagram are also delivered. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -604,6 +604,12 @@ rings and a self-loop; `state_machine_step` advances on a matching event and
 otherwise leaves state unchanged. Hierarchical and concurrent states,
 automatic placement and event-label collision handling remain planned.
 
+The sequence diagram accepts participants, ordered call/return/async messages
+and explicit activation intervals. It emits participant headers, dashed
+lifelines, activation bars, self-call loops, dashed returns, arrows and message
+labels as caller-owned layouts. Automatic call-stack activation inference,
+fragments, destruction markers and long-label collision handling remain planned.
+
 ### General-purpose statistical and business charts
 
 | Family | Charts |
@@ -767,7 +773,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with one hundred and fifty-nine vector previews, automatic numeric tick text and
+   adapter with one hundred and sixty vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

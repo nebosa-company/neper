@@ -2904,6 +2904,11 @@ gfx_chart_state_machine_written=$($test_build/neper-self emit-executable "$repo/
 chmod +x "$test_build/gfx-chart-state-machine-selfhost"
 gfx_chart_state_machine_output=$("$test_build/gfx-chart-state-machine-selfhost")
 [ "$gfx_chart_state_machine_output" = 'gfx chart state machine ok' ]
+gfx_chart_sequence_diagram_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sequence_diagram/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sequence-diagram-selfhost")
+[ "$gfx_chart_sequence_diagram_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-sequence-diagram-selfhost"
+gfx_chart_sequence_diagram_output=$("$test_build/gfx-chart-sequence-diagram-selfhost")
+[ "$gfx_chart_sequence_diagram_output" = 'gfx chart sequence diagram ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")

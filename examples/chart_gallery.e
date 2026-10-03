@@ -1560,6 +1560,98 @@ fn render_state_machine_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gp
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_sequence_diagram_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/sequence_diagram.png"
+    let plot = geometry.rect(16.0, 48.0, 328.0, 171.0)
+    let participants = [3]str{ "Client", "API", "DB" }
+    let messages = [6]chart.SequenceMessage{
+        chart.SequenceMessage { from: 0usize, to: 1usize, kind: .Call, text: "request" },
+        chart.SequenceMessage { from: 1usize, to: 1usize, kind: .Call, text: "auth" },
+        chart.SequenceMessage { from: 1usize, to: 2usize, kind: .Call, text: "lookup" },
+        chart.SequenceMessage { from: 2usize, to: 1usize, kind: .Return, text: "row" },
+        chart.SequenceMessage { from: 1usize, to: 0usize, kind: .Return, text: "200 OK" },
+        chart.SequenceMessage { from: 0usize, to: 1usize, kind: .Async, text: "refresh" },
+    }
+    let activations = [2]chart.SequenceActivation{
+        chart.SequenceActivation { participant: 1usize, first: 0usize, last: 4usize },
+        chart.SequenceActivation { participant: 2usize, first: 2usize, last: 3usize },
+    }
+    var headers: [3]geometry.Rect = zero
+    var lifelines: [30]chart.Segment = zero
+    var active: [2]geometry.Rect = zero
+    var strokes: [48]chart.Segment = zero
+    var layers: [6]chart.Layout = zero
+    var labels: [6]chart.Label = zero
+    let (sequence, layout_error) = chart.sequence_diagram(participants[..], messages[..], activations[..], plot, headers[..], lifelines[..], active[..], strokes[..], layers[..], labels[..])
+    if layout_error != ok || sequence.messages.len != 6usize || sequence.lifelines.segments.len != 30usize { ret chart.Invalid }
+    let blue = paint.rgba(0.16, 0.43, 0.76, 1.0)
+    let teal = paint.rgba(0.13, 0.53, 0.46, 1.0)
+    let navy = paint.rgba(0.16, 0.30, 0.54, 1.0)
+    let pale = paint.rgba(0.77, 0.87, 0.97, 1.0)
+    let gray = paint.rgba(0.70, 0.75, 0.82, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var titles: [5]chart.Label = zero
+    titles[0usize] = chart.Label { text: "Sequence diagram / messages", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    titles[1usize] = chart.Label { text: "Calls, return dashes, async follow-up", anchor: chart.Coord { x: 180.0, y: 238.0 }, align: .Center }
+    var i = 0usize
+    while i < participants.len {
+        titles[i + 2usize] = chart.Label { text: participants[i], anchor: chart.Coord { x: headers[i].x + headers[i].width * 0.5, y: headers[i].y + 15.0 }, align: .Center }
+        i += 1usize
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &sequence.lifelines, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &sequence.activations, paint.Brush { Solid: pale })
+    i = 0usize
+    while i < sequence.messages.len {
+        var color = blue
+        if messages[i].kind == .Return { color = gray }
+        if messages[i].kind == .Async { color = teal }
+        try chart_scene.append(a, &builder, &sequence.messages[i], paint.Brush { Solid: color })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &sequence.headers, paint.Brush { Solid: blue })
+    try fill(&builder, headers[0usize], paint.Brush { Solid: navy })
+    try fill(&builder, headers[2usize], paint.Brush { Solid: teal })
+    try chart_scene.append_labels(a, &builder, titles[..1usize], font, 14.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, titles[1usize..2usize], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, titles[2usize..], font, 9.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, sequence.labels, font, 9.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &sequence.lifelines, gray)
+    try chart_svg.append(&writer, &sequence.activations, pale)
+    i = 0usize
+    while i < sequence.messages.len {
+        var color = blue
+        if messages[i].kind == .Return { color = gray }
+        if messages[i].kind == .Async { color = teal }
+        try chart_svg.append(&writer, &sequence.messages[i], color)
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &sequence.headers, blue)
+    try chart_svg.rect(&writer, headers[0usize], navy, false)
+    try chart_svg.rect(&writer, headers[2usize], teal, false)
+    try chart_svg.append_labels(&writer, titles[..1usize], dark, 14.0)
+    try chart_svg.append_labels(&writer, titles[1usize..2usize], dark, 9.0)
+    try chart_svg.append_labels(&writer, titles[2usize..], white, 9.0)
+    try chart_svg.append_labels(&writer, sequence.labels, dark, 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_kanban_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/kanban.png"
     let plot = geometry.rect(18.0, 46.0, 324.0, 176.0)
@@ -5508,6 +5600,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_dependency_graph_preview(a, queue, output_target, canvas, &renderer)
     try render_flowchart_preview(a, queue, output_target, canvas, &renderer)
     try render_state_machine_preview(a, queue, output_target, canvas, &renderer)
+    try render_sequence_diagram_preview(a, queue, output_target, canvas, &renderer)
     try render_gantt_preview(a, queue, output_target, canvas, &renderer)
     try render_milestone_roadmap_preview(a, queue, output_target, canvas, &renderer)
     try render_event_preview(a, queue, output_target, canvas, &renderer)

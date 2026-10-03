@@ -3282,6 +3282,11 @@ $gfxChartStateMachineWritten = & $compiler emit-executable (Join-Path $PSScriptR
 if ($LASTEXITCODE -ne 0 -or $gfxChartStateMachineWritten -ne 'executable written') { throw 'gfx_chart_state_machine emission failed' }
 $gfxChartStateMachineOutput = & $gfxChartStateMachinePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartStateMachineOutput -ne 'gfx chart state machine ok') { throw "the e.gfx.chart state machine answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSequenceDiagramPath = Join-Path $testBuild 'gfx-chart-sequence-diagram-selfhost.exe'
+$gfxChartSequenceDiagramWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sequence_diagram\src\main.e') $repo 'x64' 'windows' $gfxChartSequenceDiagramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSequenceDiagramWritten -ne 'executable written') { throw 'gfx_chart_sequence_diagram emission failed' }
+$gfxChartSequenceDiagramOutput = & $gfxChartSequenceDiagramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSequenceDiagramOutput -ne 'gfx chart sequence diagram ok') { throw "the e.gfx.chart sequence diagram answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'

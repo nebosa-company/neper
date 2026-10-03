@@ -30,6 +30,8 @@ class ChartPreviewBacklogTests(unittest.TestCase):
         self.assertNotIn("flowchart", planned)
         self.assertIn("state_machine", rendered)
         self.assertNotIn("state_machine", planned)
+        self.assertIn("sequence_diagram", rendered)
+        self.assertNotIn("sequence_diagram", planned)
 
         page = PAGE.read_text(encoding="utf-8")
         match = re.search(r"Rendered previews \((\d+)/(\d+)\)", page)

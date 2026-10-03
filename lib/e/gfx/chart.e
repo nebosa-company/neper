@@ -66,6 +66,10 @@ type FlowLayout = struct { nodes: []Layout, connectors: Layout }
 type MachineState = struct { center: Coord, initial: bool, final: bool }
 type MachineTransition = struct { from: usize, to: usize, event: usize }
 type MachineLayout = struct { states: []Layout, transitions: Layout, initial_marker: Layout, final_rings: Layout, event_labels: []Label }
+type SequenceKind = enum u8 { Call, Return, Async }
+type SequenceMessage = struct { from: usize, to: usize, kind: SequenceKind, text: str }
+type SequenceActivation = struct { participant: usize, first: usize, last: usize }
+type SequenceLayout = struct { headers: Layout, lifelines: Layout, activations: Layout, messages: []Layout, labels: []Label }
 type RiskPoint = struct { likelihood: usize, impact: usize }
 type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
@@ -3182,6 +3186,99 @@ fn state_machine(states: []const MachineState, transitions: []const MachineTrans
     let initial_route = Layout { kind: .Rug, coords: zero, segments: start_segments[..3usize], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
     let finals = Layout { kind: .Rug, coords: zero, segments: ring_segments[..rings_used], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
     ret (MachineLayout { states: shapes[..states.len], transitions: routes, initial_marker: initial_route, final_rings: finals, event_labels: event_labels[..transitions.len] }, ok)
+}
+
+// Ordered message rows stay independent of graph topology. Participants own
+// header/lifeline slots; calls, returns and async arrows are separate layers.
+fn sequence_diagram(participants: []const str, messages: []const SequenceMessage, activations: []const SequenceActivation, bounds: geometry.Rect, header_boxes: []geometry.Rect, lifeline_segments: []Segment, activation_boxes: []geometry.Rect, message_segments: []Segment, message_layers: []Layout, message_labels: []Label) -> (SequenceLayout, err) {
+    if participants.len == 0usize || messages.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if header_boxes.len < participants.len || lifeline_segments.len / 10usize < participants.len || activation_boxes.len < activations.len || message_segments.len / 8usize < messages.len || message_layers.len < messages.len || message_labels.len < messages.len { ret (zero, TooLarge) }
+    let cell_width = bounds.width / f32(participants.len)
+    let row_height = (bounds.height - 38.0) / f32(messages.len)
+    var header_width = cell_width * 0.74
+    if header_width > 92.0 { header_width = 92.0 }
+    if !finite(cell_width) || !finite(row_height) || !finite(header_width) || header_width < 38.0 || row_height < 20.0 { ret (zero, TooLarge) }
+    let lifeline_top = bounds.y + 28.0
+    let lifeline_bottom = bounds.y + bounds.height
+    let dash = (lifeline_bottom - lifeline_top) / 19.0
+    if !finite(dash) || dash <= 0.0 { ret (zero, Invalid) }
+    var i = 0usize
+    while i < participants.len {
+        let center = bounds.x + (f32(i) + 0.5) * cell_width
+        let x = center - header_width * 0.5
+        if !finite(x) || !finite(center) { ret (zero, Invalid) }
+        header_boxes[i] = geometry.rect(x, bounds.y, header_width, 24.0)
+        var part = 0usize
+        while part < 10usize {
+            let from_y = lifeline_top + f32(part * 2usize) * dash
+            var to_y = from_y + dash
+            if to_y > lifeline_bottom { to_y = lifeline_bottom }
+            lifeline_segments[i * 10usize + part] = Segment { from: Coord { x: center, y: from_y }, to: Coord { x: center, y: to_y } }
+            part += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < activations.len {
+        let activation = activations[i]
+        if activation.participant >= participants.len || activation.first > activation.last || activation.last >= messages.len { ret (zero, Invalid) }
+        let center = bounds.x + (f32(activation.participant) + 0.5) * cell_width
+        let top = bounds.y + 38.0 + (f32(activation.first) + 0.5) * row_height - 9.0
+        let bottom = bounds.y + 38.0 + (f32(activation.last) + 0.5) * row_height + 9.0
+        if !finite(top) || !finite(bottom) || top < lifeline_top || bottom > lifeline_bottom { ret (zero, Invalid) }
+        activation_boxes[i] = geometry.rect(center - 4.0, top, 8.0, bottom - top)
+        i += 1usize
+    }
+    var used = 0usize
+    i = 0usize
+    while i < messages.len {
+        let message = messages[i]
+        if message.from >= participants.len || message.to >= participants.len { ret (zero, Invalid) }
+        let y = bounds.y + 38.0 + (f32(i) + 0.5) * row_height
+        let x0 = bounds.x + (f32(message.from) + 0.5) * cell_width
+        let x1 = bounds.x + (f32(message.to) + 0.5) * cell_width
+        let first = used
+        if message.from == message.to {
+            if message.kind == .Return || x0 + 26.0 > bounds.x + bounds.width || y - 7.0 < lifeline_top || y + 7.0 > lifeline_bottom { ret (zero, Invalid) }
+            let right = x0 + 25.0
+            message_segments[used] = Segment { from: Coord { x: x0, y: y - 7.0 }, to: Coord { x: right, y: y - 7.0 } }
+            message_segments[used + 1usize] = Segment { from: Coord { x: right, y: y - 7.0 }, to: Coord { x: right, y: y + 7.0 } }
+            let tip = Coord { x: x0, y: y + 7.0 }
+            message_segments[used + 2usize] = Segment { from: Coord { x: right, y: y + 7.0 }, to: tip }
+            message_segments[used + 3usize] = Segment { from: Coord { x: x0 + 6.0, y: tip.y - 4.0 }, to: tip }
+            message_segments[used + 4usize] = Segment { from: Coord { x: x0 + 6.0, y: tip.y + 4.0 }, to: tip }
+            used += 5usize
+            message_labels[i] = Label { text: message.text, anchor: Coord { x: x0 + 27.0, y: y - 9.0 }, align: .Left }
+        } else {
+            var direction = 1.0f32
+            if x1 < x0 { direction = -1.0 }
+            let tip = Coord { x: x1, y: y }
+            if message.kind == .Return {
+                var dash_index = 0usize
+                while dash_index < 4usize {
+                    let start_fraction = f32(dash_index * 2usize) / 8.0
+                    let end_fraction = f32(dash_index * 2usize + 1usize) / 8.0
+                    message_segments[used] = Segment { from: Coord { x: x0 + (x1 - x0) * start_fraction, y: y }, to: Coord { x: x0 + (x1 - x0) * end_fraction, y: y } }
+                    used += 1usize
+                    dash_index += 1usize
+                }
+            } else {
+                message_segments[used] = Segment { from: Coord { x: x0, y: y }, to: tip }
+                used += 1usize
+            }
+            message_segments[used] = Segment { from: Coord { x: x1 - direction * 7.0, y: y - 4.0 }, to: tip }
+            message_segments[used + 1usize] = Segment { from: Coord { x: x1 - direction * 7.0, y: y + 4.0 }, to: tip }
+            used += 2usize
+            message_labels[i] = Label { text: message.text, anchor: Coord { x: (x0 + x1) * 0.5, y: y - 7.0 }, align: .Center }
+        }
+        message_layers[i] = Layout { kind: .Rug, coords: zero, segments: message_segments[first..used], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
+        i += 1usize
+    }
+    let headers = Layout { kind: .Bar, coords: zero, segments: zero, bars: header_boxes[..participants.len], x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
+    let lifelines = Layout { kind: .Rug, coords: zero, segments: lifeline_segments[..participants.len * 10usize], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
+    let active = Layout { kind: .Bar, coords: zero, segments: zero, bars: activation_boxes[..activations.len], x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
+    ret (SequenceLayout { headers: headers, lifelines: lifelines, activations: active, messages: message_layers[..messages.len], labels: message_labels[..messages.len] }, ok)
 }
 
 // Ordered half-open spans map to categorical rows. Uncovered time remains blank.

@@ -34212,3 +34212,14 @@ event labels, a start arrow and final-state inner rings. Self-loops use a routed
 arch. Windows and Linux fixtures check event behavior, visual geometry,
 adapters and refusals; the gallery adds a PNG/SVG pair. Hierarchical/concurrent
 states and automatic placement remain future work.
+
+## D1912 — Sequence diagrams preserve message order and explicit activations
+
+`sequence_diagram` assigns one row per ordered message, independent of a graph
+topology. Participants get headers and dashed lifelines; caller-provided spans
+become activation bars. Call and async arrows, dashed returns, and self-call
+loops remain separate message layouts for adapter styling, with caller-owned
+text anchors. Windows and Linux fixtures check rows, direction, self-calls,
+returns, invalid endpoints/spans, capacity and scene/SVG output. The gallery
+adds a PNG/SVG pair. Call-stack inference, fragments and destruction markers
+remain follow-on work.
