@@ -4,7 +4,7 @@ This is the first performance-language result required by
 [`general-purpose-verification.md`](general-purpose-verification.md). It is a
 comparison, not a claim that every backend is equally optimised.
 
-The source revision is `5d482bdaed27445e96349c1a22ee4e2cfd8fcf3e` and the raw,
+The source revision is `54923ebd2dedce88221951411dd23be57fe33ecd` and the raw,
 reproducible record is
 [`benchmarks/gp/results/linux-wsl.json`](../benchmarks/gp/results/linux-wsl.json).
 The host was WSL2 Linux 6.18 on a 12th Gen Intel Core i5-12500H. Toolchains were

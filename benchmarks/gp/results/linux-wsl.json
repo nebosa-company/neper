@@ -24,7 +24,7 @@
   "go": "go version go1.27.1 linux/amd64",
   "neper": "/mnt/d/repos/neper/build/windows/gp-neper-linux"
  },
- "revision": "5d482bdaed27445e96349c1a22ee4e2cfd8fcf3e",
+ "revision": "54923ebd2dedce88221951411dd23be57fe33ecd",
  "cells": [
   {
    "workload": "gp09",

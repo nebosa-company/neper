@@ -9,7 +9,7 @@
  "runs": 3,
  "arena": "14g",
  "jobs": 8,
- "revision": "013ec7150ccef1a0a8778b6e39d57aa132ec6ffa",
+ "revision": "32e0eacdff596cfe0aff0b4c5cda20aa79ff1846",
  "cells": [
   {
    "workload": "compiler",
