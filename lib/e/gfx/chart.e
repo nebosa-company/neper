@@ -31,6 +31,8 @@ type LabelAlign = enum u8 { Left, Center, Right }
 type Label = struct { text: str, anchor: Coord, align: LabelAlign }
 type LegendItem = struct { swatch: geometry.Rect, label: Label }
 type WrappedLegend = struct { items: []LegendItem, rows: usize }
+type LabelPlacement = struct { label: Label, box: geometry.Rect, placed: bool, slot: u8 }
+type PointLabels = struct { labels: []LabelPlacement, placed: usize }
 type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
 type ContourVertex = struct { point: Coord, value: f64 }
@@ -953,6 +955,65 @@ fn wrapped_legend_items(names: []const str, text_widths: []const f32, bounds: ge
         i += 1usize
     }
     ret (WrappedLegend { items: out[..names.len], rows: row + 1usize }, ok)
+}
+
+fn boxes_overlap(a: geometry.Rect, b: geometry.Rect) -> bool {
+    ret a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+}
+
+// Point labels without collisions: each label, in the caller's priority order,
+// takes the first of eight candidate boxes around its point (Imhof's order:
+// upper-right, upper-left, lower-right, lower-left, right, left, above, below)
+// that stays inside `bounds`, overlaps no label placed before it and keeps
+// `clearance` from every other point (`offset` spaces it from its own). A label with no free slot is returned with
+// `placed` false rather than drawn over the data. `widths` are measured text
+// widths; `baseline` is the distance from a box's top to the text baseline.
+// ponytail: greedy, O(n^2) per label; simulated annealing or a conflict graph
+// places more labels in dense clusters if that ever matters.
+fn place_point_labels(points: []const Coord, texts: []const str, widths: []const f32, height: f32, baseline: f32, bounds: geometry.Rect, offset: f32, clearance: f32, out: []LabelPlacement) -> (PointLabels, err) {
+    if points.len == 0usize { ret (zero, Empty) }
+    if texts.len != points.len || widths.len != points.len || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if !finite(height) || height <= 0.0 || !finite(baseline) || baseline < 0.0 || baseline > height || !finite(offset) || offset < 0.0 || !finite(clearance) || clearance < 0.0 { ret (zero, Invalid) }
+    if out.len < points.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < points.len {
+        if !finite(points[i].x) || !finite(points[i].y) || !finite(widths[i]) || widths[i] <= 0.0 || texts[i].len == 0usize || !text_layout.valid_utf8(texts[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    var placed_count = 0usize
+    i = 0usize
+    while i < points.len {
+        let p = points[i]
+        let w = widths[i]
+        let xs = [8]f32{ p.x + offset, p.x - offset - w, p.x + offset, p.x - offset - w, p.x + offset, p.x - offset - w, p.x - w / 2.0, p.x - w / 2.0 }
+        let ys = [8]f32{ p.y - offset - height, p.y - offset - height, p.y + offset, p.y + offset, p.y - height / 2.0, p.y - height / 2.0, p.y - offset - height, p.y + offset }
+        out[i] = LabelPlacement { label: Label { text: texts[i], anchor: p, align: .Left }, box: zero, placed: false, slot: 0u8 }
+        var slot = 0usize
+        while slot < 8usize {
+            let box = geometry.rect(xs[slot], ys[slot], w, height)
+            var free = box.x >= bounds.x && box.y >= bounds.y && box.x + box.width <= bounds.x + bounds.width && box.y + box.height <= bounds.y + bounds.height
+            var j = 0usize
+            while free && j < i {
+                if out[j].placed && boxes_overlap(box, out[j].box) { free = false }
+                j += 1usize
+            }
+            let padded = geometry.rect(box.x - clearance, box.y - clearance, box.width + 2.0 * clearance, box.height + 2.0 * clearance)
+            j = 0usize
+            while free && j < points.len {
+                if j != i && points[j].x > padded.x && points[j].x < padded.x + padded.width && points[j].y > padded.y && points[j].y < padded.y + padded.height { free = false }
+                j += 1usize
+            }
+            if free {
+                out[i] = LabelPlacement { label: Label { text: texts[i], anchor: Coord { x: box.x, y: box.y + baseline }, align: .Left }, box: box, placed: true, slot: u8(slot) }
+                placed_count += 1usize
+                slot = 8usize
+            } else {
+                slot += 1usize
+            }
+        }
+        i += 1usize
+    }
+    ret (PointLabels { labels: out[..points.len], placed: placed_count }, ok)
 }
 
 // Produces marks in screen coordinates. Y is inverted because graphics bounds

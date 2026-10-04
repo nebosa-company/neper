@@ -2274,6 +2274,98 @@ fn render_color_vision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_label_placement_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/label_placement.png"
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let dark = paint.rgba(0.16, 0.20, 0.28, 1.0)
+    let blue = paint.rgba(0.0, 0.45, 0.70, 1.0)
+    let muted = paint.rgba(0.62, 0.67, 0.74, 1.0)
+    let panel = paint.rgba(0.95, 0.96, 0.98, 1.0)
+    // Ordered by population, so the larger city keeps its label in a cluster.
+    let names = [25]str{ "London", "Berlin", "Madrid", "Rome", "Paris", "Vienna", "Hamburg", "Warsaw", "Barcelona", "Milan", "Prague", "Stockholm", "Cologne", "Amsterdam", "Oslo", "Copenhagen", "Dublin", "Frankfurt", "Rotterdam", "Lisbon", "Antwerp", "Zurich", "Brussels", "Geneva", "Luxembourg" }
+    let lon = [25]f32{ -0.13, 13.40, -3.70, 12.50, 2.35, 16.37, 9.99, 21.01, 2.17, 9.19, 14.42, 18.07, 6.96, 4.90, 10.75, 12.57, -6.26, 8.68, 4.48, -9.14, 4.40, 8.54, 4.35, 6.14, 6.13 }
+    let lat = [25]f32{ 51.51, 52.52, 40.42, 41.90, 48.86, 48.21, 53.55, 52.23, 41.39, 45.46, 50.08, 59.33, 50.94, 52.37, 59.91, 55.68, 53.35, 50.11, 51.92, 38.72, 51.22, 47.37, 50.85, 46.20, 49.61 }
+    let plot = geometry.rect(24.0, 44.0, 312.0, 166.0)
+    let x_limits = [2]f32{ -11.0, 24.0 }
+    let y_limits = [2]f32{ 37.0, 61.0 }
+    var coord_storage: [25]chart.Coord = zero
+    let spec = chart.spec(.Scatter, plot, lon[..], lat[..])
+    let (cities, cities_error) = chart.layout_with_limits(&spec, coord_storage[..], zero, zero, x_limits[..], y_limits[..])
+    if cities_error != ok { ret cities_error }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let fonts = [1]text_layout.FontChoice{ text_layout.FontChoice { font: font, size: 7.0 } }
+    let style = text_layout.Style { fonts: fonts[..], language: "", line_height: 0.0 }
+    let options = text_layout.Options { width: 0.0, max_lines: 1u32, align: .Start, wrap: .None, ellipsis: "", notdef: true }
+    var widths: [25]f32 = zero
+    var i = 0usize
+    while i < names.len {
+        let (measured, measure_error) = text_layout.layout(a, names[i], style, options)
+        if measure_error != ok { ret measure_error }
+        widths[i] = measured.bounds.width
+        i += 1usize
+    }
+    var placements: [25]chart.LabelPlacement = zero
+    let (placed, placed_error) = chart.place_point_labels(cities.coords, names[..], widths[..], 8.0, 6.5, plot, 2.5, 2.0, placements[..])
+    if placed_error != ok { ret placed_error }
+    var shown: [25]chart.Label = zero
+    var hidden_points: [25]chart.Coord = zero
+    var shown_count = 0usize
+    var hidden_count = 0usize
+    i = 0usize
+    while i < placed.labels.len {
+        if placed.labels[i].placed {
+            shown[shown_count] = placed.labels[i].label
+            shown_count += 1usize
+        } else {
+            hidden_points[hidden_count] = cities.coords[i]
+            hidden_count += 1usize
+        }
+        i += 1usize
+    }
+    var hidden = cities
+    hidden.coords = hidden_points[..hidden_count]
+    let (made_note, note_error) = str.builder(a, 96usize)
+    if note_error != ok { ret note_error }
+    var note = made_note
+    try str.push_usize(&note, shown_count)
+    try str.push(&note, " of 25 labels placed; grey cities would collide, so they stay unlabelled")
+    let heading = [2]chart.Label{
+        chart.Label { text: "Label placement without collisions", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center },
+        chart.Label { text: "Largest cities claim the eight slots around their point first", anchor: chart.Coord { x: 180.0, y: 33.0 }, align: .Center },
+    }
+    let footer = [1]chart.Label{ chart.Label { text: str.done(&note), anchor: chart.Coord { x: 180.0, y: 226.0 }, align: .Center } }
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: panel })
+    try chart_scene.append(a, &builder, &cities, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &hidden, paint.Brush { Solid: muted })
+    try chart_scene.append_labels(a, &builder, shown[..shown_count], font, 7.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, heading[..1usize], font, 11.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, heading[1usize..], font, 7.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, footer[..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, panel, false)
+    try chart_svg.append(&writer, &cities, blue)
+    try chart_svg.append(&writer, &hidden, muted)
+    try chart_svg.append_labels(&writer, shown[..shown_count], dark, 7.0)
+    try chart_svg.append_labels(&writer, heading[..1usize], dark, 11.0)
+    try chart_svg.append_labels(&writer, heading[1usize..], dark, 7.0)
+    try chart_svg.append_labels(&writer, footer[..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_legend_collision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/legend_collision.png"
     let names = [4]str{ "Control baseline", "Treatment alpha extended", "Treatment beta extended", "Follow-up cohort" }
@@ -11060,6 +11152,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_accessible_palette_preview(a, queue, output_target, canvas, &renderer)
     try render_gradient_font_preview(a, queue, output_target, canvas, &renderer)
     try render_color_vision_preview(a, queue, output_target, canvas, &renderer)
+    try render_label_placement_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)

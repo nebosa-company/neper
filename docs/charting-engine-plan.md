@@ -1090,6 +1090,16 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 ## How Neper can beat the reference tools
 
+`place_point_labels` places point labels greedily in the caller's priority
+order over Imhof's eight candidate positions, keeping each inside the plot,
+clear of earlier labels and away from other points; a label with no free slot
+is reported unplaced instead of overprinting data. The `label_placement`
+PNG/SVG pair labels 21 of 25 cities and greys out the four that collide.
+`gfx_chart_label_placement` checks slot choice, edge flipping, neighbour
+blocking, a 40-point cluster against a Python replica and refusals on Windows
+and Linux. Leader lines and optimising placement (annealing, conflict graphs)
+remain open.
+
 `simulate_color_vision` applies the Vienot-Brettel-Mollon dichromat model
 (protan, deutan, tritan) with a linear-RGB severity blend; `color_lab` and
 `ciede2000` measure colour differences; `palette_separation` reports the

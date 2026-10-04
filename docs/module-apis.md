@@ -16195,6 +16195,8 @@ type Coord = struct { x: f32, y: f32 }
 type LabelAlign = enum u8 { Left, Center, Right }
 type Label = struct { text: str, anchor: Coord, align: LabelAlign }
 type LegendItem = struct { swatch: geometry.Rect, label: Label }
+type LabelPlacement = struct { label: Label, box: geometry.Rect, placed: bool, slot: u8 }
+type PointLabels = struct { labels: []LabelPlacement, placed: usize }
 type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
@@ -16314,6 +16316,8 @@ fn format_date_ticks(ticks: []const DateTick, out: []str, storage: []u8) -> ([]s
 fn discrete_axis_bars(keys: []const str, values: []const f64, levels: []const str, domain_max: f64, bounds: geometry.Rect, sums: []f64, bars: []geometry.Rect, ticks_out: []Tick) -> (Layout, err)
 fn category_facet_scatter(keys: []const str, x: []const f32, y: []const f32, levels: []const str, bounds: geometry.Rect, columns: usize, gap: f32, strip_height: f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, panels: []geometry.Rect, points: []Coord, marks: []Layout, strips: []Label, counts: []usize) -> (CategoryFacetLayout, err)
 fn wrapped_legend_items(names: []const str, text_widths: []const f32, bounds: geometry.Rect, swatch: f32, gap: f32, row_height: f32, out: []LegendItem) -> (WrappedLegend, err)
+fn boxes_overlap(a: geometry.Rect, b: geometry.Rect) -> bool
+fn place_point_labels(points: []const Coord, texts: []const str, widths: []const f32, height: f32, baseline: f32, bounds: geometry.Rect, offset: f32, clearance: f32, out: []LabelPlacement) -> (PointLabels, err)
 fn masked_scatter(x: []const f32, y: []const f32, x_present: []const bool, y_present: []const bool, bounds: geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32, points: []Coord, row_ids: []usize) -> (MaskedScatterLayout, err)
 type SelectionHit = struct { mark_index: usize, source_row: usize, distance_squared: f64 }
 fn hit_scatter(marks: *const Layout, row_ids: []const usize, pointer: Coord, radius: f32) -> (SelectionHit, bool, err)

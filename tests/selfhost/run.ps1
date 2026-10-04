@@ -3413,6 +3413,11 @@ $gfxChartColorVisionWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChartColorVisionWritten -ne 'executable written') { throw 'gfx_chart_color_vision emission failed' }
 $gfxChartColorVisionOutput = & $gfxChartColorVisionPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartColorVisionOutput -ne 'gfx chart color vision ok') { throw "the e.gfx.chart colour-vision simulation answered wrongly: exit $LASTEXITCODE" }
+$gfxChartLabelPlacementPath = Join-Path $testBuild 'gfx-chart-label-placement-selfhost.exe'
+$gfxChartLabelPlacementWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_label_placement\src\main.e') $repo 'x64' 'windows' $gfxChartLabelPlacementPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLabelPlacementWritten -ne 'executable written') { throw 'gfx_chart_label_placement emission failed' }
+$gfxChartLabelPlacementOutput = & $gfxChartLabelPlacementPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLabelPlacementOutput -ne 'gfx chart label placement ok') { throw "the e.gfx.chart label placement answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

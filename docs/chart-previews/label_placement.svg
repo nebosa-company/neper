@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>label_placement</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="24" y="44" width="312" height="166" fill="rgb(242,245,250)" fill-opacity="1"/>
+<rect x="117.89828491210938" y="106.63917541503906" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="238.50856018066406" y="99.65332794189453" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="86.07428741455078" y="183.3450164794922" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="230.4857177734375" y="173.1083221435547" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="140.00570678710938" y="124.96832275390625" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="264.9840087890625" y="129.46417236328125" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="208.11085510253906" y="92.5291748046875" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="306.3462829589844" y="101.65917205810547" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="138.40113830566406" y="176.63583374023438" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="200.97943115234375" y="148.48501586914062" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="247.60113525390625" y="116.52998352050781" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="280.1382751464844" y="52.550819396972656" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="181.1005859375" y="110.58168029785156" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="162.7371368408203" y="100.69084167480469" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="214.88571166992188" y="48.53916549682617" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="231.10971069335938" y="77.79666137695312" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="63.25370788574219" y="93.91251373291016" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="196.4331512451172" y="116.32249450683594" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="158.99314880371094" y="103.8033447265625" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="37.58056640625" y="195.10333251953125" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="158.27999877929688" y="108.6449966430664" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="195.18515014648438" y="135.274169921875" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="157.83428955078125" y="111.20417022705078" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="173.79086303710938" y="143.36666870117188" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="173.70172119140625" y="119.78083038330078" width="6" height="6" fill="rgb(0,115,179)" fill-opacity="1"/>
+<rect x="162.7371368408203" y="100.69084167480469" width="6" height="6" fill="rgb(158,171,189)" fill-opacity="1"/>
+<rect x="158.99314880371094" y="103.8033447265625" width="6" height="6" fill="rgb(158,171,189)" fill-opacity="1"/>
+<rect x="157.83428955078125" y="111.20417022705078" width="6" height="6" fill="rgb(158,171,189)" fill-opacity="1"/>
+<rect x="173.70172119140625" y="119.78083038330078" width="6" height="6" fill="rgb(158,171,189)" fill-opacity="1"/>
+<text x="123.39828491210938" y="105.63917541503906" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">London</text>
+<text x="244.00856018066406" y="98.65332794189453" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Berlin</text>
+<text x="91.57428741455078" y="182.3450164794922" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Madrid</text>
+<text x="235.9857177734375" y="172.1083221435547" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Rome</text>
+<text x="145.50570678710938" y="123.96832275390625" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Paris</text>
+<text x="270.4840087890625" y="128.46417236328125" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Vienna</text>
+<text x="173.56185913085938" y="91.5291748046875" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Hamburg</text>
+<text x="276.5992736816406" y="100.65917205810547" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Warsaw</text>
+<text x="143.90113830566406" y="175.63583374023438" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Barcelona</text>
+<text x="206.47943115234375" y="147.48501586914062" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Milan</text>
+<text x="253.10113525390625" y="115.52998352050781" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Prague</text>
+<text x="285.6382751464844" y="51.550819396972656" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Stockholm</text>
+<text x="186.6005859375" y="109.58168029785156" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Cologne</text>
+<text x="220.38571166992188" y="60.53916549682617" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Oslo</text>
+<text x="236.60971069335938" y="76.79666137695312" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Copenhagen</text>
+<text x="68.75370788574219" y="92.91251373291016" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Dublin</text>
+<text x="201.9331512451172" y="128.32249450683594" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Frankfurt</text>
+<text x="43.08056640625" y="194.10333251953125" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Lisbon</text>
+<text x="126.31399536132812" y="114.1449966430664" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Antwerp</text>
+<text x="171.74514770507812" y="134.274169921875" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Zurich</text>
+<text x="146.47286987304688" y="142.36666870117188" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)" fill-opacity="1">Geneva</text>
+<text x="180" y="20" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(41,51,71)" fill-opacity="1">Label placement without collisions</text>
+<text x="180" y="33" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(41,51,71)" fill-opacity="1">Largest cities claim the eight slots around their point first</text>
+<text x="180" y="226" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(41,51,71)" fill-opacity="1">21 of 25 labels placed; grey cities would collide, so they stay unlabelled</text>
+</svg>

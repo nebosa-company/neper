@@ -178,6 +178,12 @@ tritanopia. Each row outlines its closest pair and prints their CIEDE2000
 difference: about 10 for typical vision but 1.2 for deuteranopia, where blue
 and purple nearly coincide. That is why the palette's previews label series
 directly instead of relying on colour.
+The label-placement preview plots 25 European cities by longitude and
+latitude. Labels are placed largest city first, each in the first of eight
+positions around its point that stays in the panel and clears every placed
+label and every other point. 21 fit; Amsterdam, Rotterdam, Brussels and
+Luxembourg sit inside the Benelux cluster, so their points are drawn grey and
+left unlabelled rather than overprinted.
 
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:

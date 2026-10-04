@@ -35118,3 +35118,18 @@ palette tools use. Measuring D2101's palette this way shows ~10 for typical
 vision but 1.2 for deuteranopes (blue against purple): six colours at 4.5:1 on
 white leave little room on the blue-yellow axis, so the palette keeps its
 contrast guarantee and charts keep labelling series directly.
+
+## D2104 — Point labels are placed greedily and dropped rather than overprinted
+
+`place_point_labels` takes points in the caller's priority order (for example
+by population or value) and gives each label the first of Imhof's eight
+candidate positions — upper-right, upper-left, lower-right, lower-left, right,
+left, above, below — whose box stays inside the plot, overlaps no label
+already placed and keeps a clearance from every other point. A label with no
+free position is returned unplaced, and the caller decides whether to mute its
+point, list it elsewhere or draw a leader. Greedy placement is deterministic,
+needs no scratch beyond the caller's output and is O(n^2) per label; annealing
+or conflict-graph optimisation would place more labels in dense clusters and
+remains follow-on work, as do leader lines. Text widths are measured by the
+caller, as `wrapped_legend_items` already does, so the geometry stays
+renderer-neutral.
