@@ -5,9 +5,15 @@
 // streaming states, GARCH(1,1) likelihood, fitting (Nelder-Mead over the
 // three parameters) and variance forecasts, and the Hawkes self-exciting
 // process (intensity, log likelihood, simulation by thinning).
+//
+// Multivariate and structural coverage: VAR(p) estimation by equation-wise
+// ordinary least squares with multi-step forecasts, the VAR(p) companion
+// state-space form for `e.math.filter`'s Kalman, and the local-level and
+// local-linear-trend structural models run through that same Kalman.
 
 use e.algo.rand
 use e.math
+use e.math.filter
 use e.math.opt
 
 type Cusum = struct { centre: f64, drift: f64, threshold: f64, high: f64, low: f64 }
@@ -396,6 +402,302 @@ fn hawkes(mu: f64, alpha: f64, beta: f64, events: []const f64, out: []f64) -> er
         if i > 0usize { excitation = math.exp[f64](0.0f64 - beta * (events[i] - events[i - 1usize])) * (excitation + alpha) }
         out[i] = mu + excitation
         i += 1usize
+    }
+    ret ok
+}
+
+// Solve the normal equations `a x = b` for symmetric `a` (`n x n`) by
+// Gauss-Jordan elimination with partial pivoting over `work`
+// (`work.len >= n * (n + 1)`); a pivot under `n` ulps of the largest diagonal
+// (never below `1e-300`) is `Invalid`.
+fn solve_normal(a: []const f64, b: []const f64, x: []f64, n: usize, work: []f64) -> err {
+    if n == 0usize { ret Invalid }
+    if a.len < n * n || b.len < n || x.len < n || work.len < n * (n + 1usize) { ret TooSmall }
+    var cap = 0.0f64
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            work[i * (n + 1usize) + j] = a[i * n + j]
+            j += 1usize
+        }
+        work[i * (n + 1usize) + n] = b[i]
+        var diag = a[i * n + i]
+        if diag < 0.0f64 { diag = 0.0f64 - diag }
+        if diag > cap { cap = diag }
+        i += 1usize
+    }
+    var floor = f64(n) * 2.5e-16f64 * cap
+    if floor < 1.0e-300f64 { floor = 1.0e-300f64 }
+    var col = 0usize
+    while col < n {
+        var pivot = col
+        var best = work[col * (n + 1usize) + col]
+        if best < 0.0f64 { best = 0.0f64 - best }
+        var r = col + 1usize
+        while r < n {
+            var contender = work[r * (n + 1usize) + col]
+            if contender < 0.0f64 { contender = 0.0f64 - contender }
+            if contender > best {
+                pivot = r
+                best = contender
+            }
+            r += 1usize
+        }
+        if best < floor { ret Invalid }
+        if pivot != col {
+            var j = col
+            while j < n + 1usize {
+                let held = work[col * (n + 1usize) + j]
+                work[col * (n + 1usize) + j] = work[pivot * (n + 1usize) + j]
+                work[pivot * (n + 1usize) + j] = held
+                j += 1usize
+            }
+        }
+        let scale = 1.0f64 / work[col * (n + 1usize) + col]
+        var j = col
+        while j < n + 1usize {
+            work[col * (n + 1usize) + j] = work[col * (n + 1usize) + j] * scale
+            j += 1usize
+        }
+        r = 0usize
+        while r < n {
+            if r != col {
+                let factor = work[r * (n + 1usize) + col]
+                if factor != 0.0f64 {
+                    j = col
+                    while j < n + 1usize {
+                        work[r * (n + 1usize) + j] -= factor * work[col * (n + 1usize) + j]
+                        j += 1usize
+                    }
+                }
+            }
+            r += 1usize
+        }
+        col += 1usize
+    }
+    i = 0usize
+    while i < n {
+        x[i] = work[i * (n + 1usize) + n]
+        i += 1usize
+    }
+    ret ok
+}
+
+// Fit a VAR(p) over `n` rows of `k` variables (`series` row-major, `n * k`):
+// `y(t) = intercept + A1 y(t-1) + ... + Ap y(t-p)`, equation by equation by
+// ordinary least squares. `coefs` receives the `p` stacked `k x k` lag blocks
+// (`coefs[(lag * k + i) * k + j]` drives variable `i` from variable `j`) and
+// `intercept` the `k` constants; `scratch.len >= 2 * m * (m + 1)` with
+// `m = 1 + p * k`. Needs at least `m` identified observations past the lags.
+fn var_fit(series: []const f64, n: usize, k: usize, p: usize, coefs: []f64, intercept: []f64, scratch: []f64) -> err {
+    if k == 0usize || p == 0usize || n == 0usize { ret Invalid }
+    if series.len < n * k { ret Invalid }
+    if n <= p { ret Invalid }
+    let obs = n - p
+    let m = 1usize + p * k
+    if obs < m { ret Invalid }
+    if coefs.len < p * k * k || intercept.len < k { ret TooSmall }
+    if scratch.len < 2usize * m * (m + 1usize) { ret TooSmall }
+    var xtx = scratch[..m * m]
+    var xty = scratch[m * m..m * m + m]
+    var work = scratch[m * m + m..2usize * m * (m + 1usize)]
+    var eq = 0usize
+    while eq < k {
+        var a = 0usize
+        while a < m * m {
+            xtx[a] = 0.0f64
+            a += 1usize
+        }
+        a = 0usize
+        while a < m {
+            xty[a] = 0.0f64
+            a += 1usize
+        }
+        var t = p
+        while t < n {
+            var u = 0usize
+            while u < m {
+                var ru = 1.0f64
+                if u > 0usize {
+                    let uu = u - 1usize
+                    ru = series[(t - 1usize - uu / k) * k + uu % k]
+                }
+                var v = 0usize
+                while v < m {
+                    var rv = 1.0f64
+                    if v > 0usize {
+                        let vv = v - 1usize
+                        rv = series[(t - 1usize - vv / k) * k + vv % k]
+                    }
+                    xtx[u * m + v] += ru * rv
+                    v += 1usize
+                }
+                xty[u] += ru * series[t * k + eq]
+                u += 1usize
+            }
+            t += 1usize
+        }
+        let fit_error = solve_normal(xtx, xty, xty, m, work)
+        if fit_error != ok { ret fit_error }
+        intercept[eq] = xty[0usize]
+        var lag = 0usize
+        while lag < p {
+            var j = 0usize
+            while j < k {
+                coefs[(lag * k + eq) * k + j] = xty[1usize + lag * k + j]
+                j += 1usize
+            }
+            lag += 1usize
+        }
+        eq += 1usize
+    }
+    ret ok
+}
+
+// Forecast `horizon` rows from the last `p` rows in `history` (oldest first,
+// `history.len >= p * k`) under fitted `coefs`/`intercept`, feeding each step
+// back in; `out` receives the `horizon` rows (`out.len >= horizon * k`).
+fn var_forecast(coefs: []const f64, intercept: []const f64, k: usize, p: usize, history: []const f64, horizon: usize, out: []f64) -> err {
+    if k == 0usize || p == 0usize { ret Invalid }
+    if coefs.len < p * k * k || intercept.len < k { ret TooSmall }
+    if history.len < p * k { ret Invalid }
+    if out.len < horizon * k { ret TooSmall }
+    var s = 0usize
+    while s < horizon {
+        var i = 0usize
+        while i < k {
+            var total = intercept[i]
+            var lag = 0usize
+            while lag < p {
+                var j = 0usize
+                while j < k {
+                    var prior = 0.0f64
+                    if s > lag {
+                        prior = out[(s - 1usize - lag) * k + j]
+                    } else {
+                        prior = history[(p - 1usize - lag + s) * k + j]
+                    }
+                    total += coefs[(lag * k + i) * k + j] * prior
+                    j += 1usize
+                }
+                lag += 1usize
+            }
+            out[s * k + i] = total
+            i += 1usize
+        }
+        s += 1usize
+    }
+    ret ok
+}
+
+// The VAR(p) companion state-space form for `e.math.filter`'s Kalman: `f` is
+// the `(k * p) x (k * p)` transition (top rows the lag blocks, an identity
+// shifting the rest down) and `h` the `k x (k * p)` observation picking the
+// first block; `f.len >= (k * p)^2`, `h.len >= k^2 * p`.
+fn var_companion(coefs: []const f64, k: usize, p: usize, f: []f64, h: []f64) -> err {
+    if k == 0usize || p == 0usize { ret Invalid }
+    if coefs.len < p * k * k { ret TooSmall }
+    let dim = k * p
+    if f.len < dim * dim || h.len < k * dim { ret TooSmall }
+    var i = 0usize
+    while i < dim * dim {
+        f[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k * dim {
+        h[i] = 0.0f64
+        i += 1usize
+    }
+    var r = 0usize
+    while r < k {
+        var c = 0usize
+        while c < dim {
+            f[r * dim + c] = coefs[((c / k) * k + r) * k + c % k]
+            c += 1usize
+        }
+        r += 1usize
+    }
+    r = k
+    while r < dim {
+        f[r * dim + r - k] = 1.0f64
+        r += 1usize
+    }
+    var q = 0usize
+    while q < k {
+        h[q * dim + q] = 1.0f64
+        q += 1usize
+    }
+    ret ok
+}
+
+// The local-level structural model (`level(t) = level(t - 1) + eta`,
+// `y(t) = level(t) + eps`) run through `e.math.filter`'s Kalman:
+// `filtered[t]` is the posterior level after `observations[t]`;
+// `scratch.len >= 18`. A singular update step is `Invalid`.
+fn level_filter(observations: []const f64, level_var: f64, obs_var: f64, initial: f64, initial_var: f64, filtered: []f64, scratch: []f64) -> err {
+    let n = observations.len
+    if n == 0usize { ret Invalid }
+    if level_var < 0.0f64 || obs_var <= 0.0f64 || initial_var < 0.0f64 { ret Invalid }
+    if filtered.len < n || scratch.len < 18usize { ret TooSmall }
+    scratch[0usize] = 1.0f64
+    scratch[1usize] = level_var
+    scratch[2usize] = 1.0f64
+    scratch[3usize] = obs_var
+    scratch[4usize] = initial
+    scratch[5usize] = initial_var
+    var t = 0usize
+    while t < n {
+        scratch[6usize] = observations[t]
+        let predict_error = filter.kalman_predict(scratch[4usize..5usize], scratch[5usize..6usize], scratch[..1usize], scratch[1usize..2usize], 1usize, scratch[7usize..10usize])
+        if predict_error != ok { ret predict_error }
+        let update_error = filter.kalman_update(scratch[4usize..5usize], scratch[5usize..6usize], scratch[2usize..3usize], scratch[3usize..4usize], scratch[6usize..7usize], 1usize, 1usize, scratch[7usize..18usize])
+        if update_error == filter.Singular { ret Invalid }
+        if update_error != ok { ret update_error }
+        filtered[t] = scratch[4usize]
+        t += 1usize
+    }
+    ret ok
+}
+
+// The local-linear-trend structural model (`level` plus `slope`, observed
+// with noise) run through `e.math.filter`'s Kalman: `level_out[t]` and
+// `trend_out[t]` are the posteriors after `observations[t]`;
+// `scratch.len >= 41`. A singular update step is `Invalid`.
+fn trend_filter(observations: []const f64, level_var: f64, slope_var: f64, obs_var: f64, initial_level: f64, initial_slope: f64, initial_var: f64, level_out: []f64, trend_out: []f64, scratch: []f64) -> err {
+    let n = observations.len
+    if n == 0usize { ret Invalid }
+    if level_var < 0.0f64 || slope_var < 0.0f64 || obs_var <= 0.0f64 || initial_var < 0.0f64 { ret Invalid }
+    if level_out.len < n || trend_out.len < n || scratch.len < 41usize { ret TooSmall }
+    scratch[0usize] = 1.0f64
+    scratch[1usize] = 1.0f64
+    scratch[2usize] = 0.0f64
+    scratch[3usize] = 1.0f64
+    scratch[4usize] = level_var
+    scratch[5usize] = 0.0f64
+    scratch[6usize] = 0.0f64
+    scratch[7usize] = slope_var
+    scratch[8usize] = 1.0f64
+    scratch[9usize] = 0.0f64
+    scratch[10usize] = obs_var
+    scratch[11usize] = initial_level
+    scratch[12usize] = initial_slope
+    scratch[13usize] = initial_var
+    scratch[14usize] = 0.0f64
+    scratch[15usize] = 0.0f64
+    scratch[16usize] = initial_var
+    var t = 0usize
+    while t < n {
+        scratch[17usize] = observations[t]
+        let predict_error = filter.kalman_predict(scratch[11usize..13usize], scratch[13usize..17usize], scratch[..4usize], scratch[4usize..8usize], 2usize, scratch[18usize..28usize])
+        if predict_error != ok { ret predict_error }
+        let update_error = filter.kalman_update(scratch[11usize..13usize], scratch[13usize..17usize], scratch[8usize..10usize], scratch[10usize..11usize], scratch[17usize..18usize], 2usize, 1usize, scratch[18usize..41usize])
+        if update_error == filter.Singular { ret Invalid }
+        if update_error != ok { ret update_error }
+        level_out[t] = scratch[11usize]
+        trend_out[t] = scratch[12usize]
+        t += 1usize
     }
     ret ok
 }

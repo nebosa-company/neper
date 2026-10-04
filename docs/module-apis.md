@@ -2324,6 +2324,12 @@ fn hawkes_log_likelihood(mu: f64, alpha: f64, beta: f64, events: []const f64, ho
 fn hawkes_simulate(mu: f64, alpha: f64, beta: f64, horizon: f64, r: *rand.Pcg64, out: []f64) -> (usize, err)
 fn garch(omega: f64, alpha: f64, beta: f64, returns: []const f64, out: []f64) -> err
 fn hawkes(mu: f64, alpha: f64, beta: f64, events: []const f64, out: []f64) -> err
+fn solve_normal(a: []const f64, b: []const f64, x: []f64, n: usize, work: []f64) -> err
+fn var_fit(series: []const f64, n: usize, k: usize, p: usize, coefs: []f64, intercept: []f64, scratch: []f64) -> err
+fn var_forecast(coefs: []const f64, intercept: []const f64, k: usize, p: usize, history: []const f64, horizon: usize, out: []f64) -> err
+fn var_companion(coefs: []const f64, k: usize, p: usize, f: []f64, h: []f64) -> err
+fn level_filter(observations: []const f64, level_var: f64, obs_var: f64, initial: f64, initial_var: f64, filtered: []f64, scratch: []f64) -> err
+fn trend_filter(observations: []const f64, level_var: f64, slope_var: f64, obs_var: f64, initial_level: f64, initial_slope: f64, initial_var: f64, level_out: []f64, trend_out: []f64, scratch: []f64) -> err
 ```
 
 `holt_winters` (additive triple smoothing with forecasts), `loess` and `stl` (a LOESS
@@ -2331,6 +2337,10 @@ trend, phase-mean season, two passes), the streaming detectors `Cusum`, `PageHin
 and `Adwin` (a ring of recent values cut by the Hoeffding bound), GARCH(1,1)
 (`garch_log_likelihood`, `garch_fit` by Nelder-Mead, `garch_forecast`) and the Hawkes
 process (`hawkes_intensity`, `hawkes_log_likelihood`, `hawkes_simulate` by thinning).
+VAR(p) (`var_fit` by equation-wise least squares over `solve_normal`, `var_forecast`
+by recursion) with its companion state-space form (`var_companion`) for
+`e.math.filter`'s Kalman, plus the local-level and local-linear-trend structural
+models (`level_filter`, `trend_filter`) run through that same Kalman.
 
 ### `e.algo.egraph`
 
@@ -14404,6 +14414,48 @@ deterministic Miller-Rabin test. Tables are caller storage: `sieve` needs
 `flags.len > limit`, `sieve_segmented` `flags.len > high - low` and `scratch.len > sqrt(high)`,
 `factor_trial` fifteen slots for any 64-bit value, `discrete_log_bsgs` `2 * ceil(sqrt(bound))`
 words. `crt` takes pairwise coprime moduli whose product fits a `u64`.
+
+### `e.math.pkpd`
+
+```neper
+type Peak = struct { value: f64, time: f64 }
+type Nca = struct { auc: f64, auc_inf: f64, aumc: f64, mrt: f64, cmax: f64, tmax: f64, lambda_z: f64, half_life: f64 }
+type Fit = struct { value: f64, iterations: u32, converged: bool }
+type Data = struct { x: []const f64, y: []const f64 }
+error TooFew
+error Invalid
+
+fn auc_linear(times: []const f64, values: []const f64) -> f64
+fn auc_log_linear(times: []const f64, values: []const f64) -> f64
+fn aumc_linear(times: []const f64, values: []const f64) -> f64
+fn peak(times: []const f64, values: []const f64) -> Peak
+fn terminal_rate(times: []const f64, values: []const f64, first: usize) -> (f64, err)
+fn half_life(lambda_z: f64) -> f64
+fn nca(times: []const f64, values: []const f64, first: usize, out: *Nca) -> err
+fn emax(e0: f64, e_max: f64, ec50: f64, c: f64) -> f64
+fn hill(e0: f64, e_max: f64, ec50: f64, h: f64, c: f64) -> f64
+fn mm_rate(v_max: f64, k_m: f64, s: f64) -> f64
+fn emax_hill_sse(data: *Data, parameters: []const f64) -> f64
+fn emax_hill(data: *Data, parameters: []f64, scale: f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (Fit, err)
+fn michaelis_menten_sse(data: *Data, parameters: []const f64) -> f64
+fn michaelis_menten(data: *Data, parameters: []f64, scale: f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (Fit, err)
+```
+
+Non-compartmental analysis and two saturating dose-response fits. The areas
+are the linear and the linear-up/log-down trapezoids (`auc_linear`,
+`auc_log_linear`) and the first-moment area (`aumc_linear`); `peak` answers the
+largest concentration and the first time it is reached. `terminal_rate` fits
+`ln` concentration on time over the window from `first` to the last sample
+(strictly positive and ordered there) and `half_life` inverts it; `nca` fills a
+whole `Nca` record (`auc` the linear trapezoid) and extrapolates the last
+interval to infinity. The models
+are `emax` (`E0 + Emax C / (EC50 + C)`), `hill` (the same with `C^h` and
+`EC50^h`) and `mm_rate` (`Vmax S / (Km + S)`); the fits `emax_hill` and
+`michaelis_menten` minimise `emax_hill_sse` and `michaelis_menten_sse` over
+`e.math.opt`'s Nelder-Mead, taking `[E0, Emax, EC50, h]` (or `[Vmax, Km]`) as
+an initial guess in place and leaving the fitted values there. A window with
+fewer than two samples is `TooFew`; a non-positive terminal sample, an
+unordered window or a parameter slice of the wrong length is `Invalid`.
 
 ### `e.math.root`
 
