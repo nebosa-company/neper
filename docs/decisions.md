@@ -34580,3 +34580,17 @@ depth-buffered mesh; occlusion, interactive rotation and calibrated PSD remain
 planned.
 
 References: https://www.mathworks.com/help/signal/ref/pspectrum.html ; https://download.ni.com/support/manuals/372879c.pdf
+
+## D1939 — Bode plots share log frequency and keep magnitude and phase separate
+
+`chart.bode` accepts strictly increasing positive frequencies and borrowed
+complex response components. It derives magnitude in dB with a caller-selected
+positive amplitude floor, unwraps phase across the ±180° branch cut and emits
+independent line layouts in two panels with a shared log-frequency axis.
+Caller-owned buffers retain the numeric magnitude and phase values for guides,
+labels or interaction. The Windows/Linux fixture checks a first-order low-pass
+reference, decade geometry, phase unwrapping, zero gain, adapters and refusal
+paths. This is a sampled-response plot, not a transfer-function solver; gain/
+phase margins, model fitting and MIMO panel grids remain planned.
+
+References: https://www.mathworks.com/help/control/ref/dynamicsystem.bode.html ; https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.bode.html

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>bode</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="45" y="48" width="270" height="56.79999923706055" fill="rgb(250,252,255)" fill-opacity="1"/>
+<rect x="45" y="124.68000030517578" width="270" height="56.79999923706055" fill="rgb(250,252,255)" fill-opacity="1"/>
+<line x1="45" y1="48" x2="45" y2="104.80000305175781" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="104.80000305175781" x2="45" y2="109.80000305175781" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="135" y1="48" x2="135" y2="104.80000305175781" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="135" y1="104.80000305175781" x2="135" y2="109.80000305175781" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="225" y1="48" x2="225" y2="104.80000305175781" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="225" y1="104.80000305175781" x2="225" y2="109.80000305175781" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="315" y1="48" x2="315" y2="104.80000305175781" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="315" y1="104.80000305175781" x2="315" y2="109.80000305175781" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="104.80000305175781" x2="315" y2="104.80000305175781" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="104.80000305175781" x2="45" y2="104.80000305175781" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="76.4000015258789" x2="315" y2="76.4000015258789" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="76.4000015258789" x2="45" y2="76.4000015258789" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="48" x2="315" y2="48" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="48" x2="45" y2="48" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="48" x2="45" y2="104.80000305175781" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="104.80000305175781" x2="315" y2="104.80000305175781" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="124.68000030517578" x2="45" y2="181.47999572753906" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="181.47999572753906" x2="45" y2="186.47999572753906" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="135" y1="124.68000030517578" x2="135" y2="181.47999572753906" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="135" y1="181.47999572753906" x2="135" y2="186.47999572753906" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="225" y1="124.68000030517578" x2="225" y2="181.47999572753906" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="225" y1="181.47999572753906" x2="225" y2="186.47999572753906" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="315" y1="124.68000030517578" x2="315" y2="181.47999572753906" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="315" y1="181.47999572753906" x2="315" y2="186.47999572753906" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="181.47999572753906" x2="315" y2="181.47999572753906" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="181.47999572753906" x2="45" y2="181.47999572753906" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="153.0800018310547" x2="315" y2="153.0800018310547" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="153.0800018310547" x2="45" y2="153.0800018310547" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="124.68000030517578" x2="315" y2="124.68000030517578" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="124.68000030517578" x2="45" y2="124.68000030517578" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="124.68000030517578" x2="45" y2="181.47999572753906" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="181.47999572753906" x2="315" y2="181.47999572753906" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<path d="M45 48 L49.5 48.00032043457031 L54 48.0007209777832 L58.5 48.001224517822266 L63 48.001861572265625 L67.5 48.00265884399414 L72 48.00366973876953 L76.5 48.00493621826172 L81 48.00653076171875 L85.5 48.008541107177734 L90 48.011070251464844 L94.5 48.01425552368164 L99 48.01826095581055 L103.5 48.02330017089844 L108 48.02964782714844 L112.5 48.037628173828125 L117 48.04766845703125 L121.5 48.060298919677734 L126 48.07617950439453 L130.5 48.09614562988281 L135 48.12123489379883 L139.5 48.15274429321289 L144 48.19230270385742 L148.5 48.241920471191406 L153 48.30410385131836 L157.5 48.38194274902344 L162 48.479244232177734 L166.5 48.600650787353516 L171 48.75181579589844 L175.5 48.93951416015625 L180 49.17181396484375 L184.5 49.458160400390625 L189 49.80942916870117 L193.5 50.237857818603516 L198 50.7568359375 L202.5 51.38053894042969 L207 52.123294830322266 L211.5 52.99882507324219 L216 54.01926040649414 L220.5 55.194190979003906 L225 56.5297737121582 L229.5 58.02812957763672 L234 59.687137603759766 L238.5 61.500640869140625 L243 63.459049224853516 L247.5 65.55023193359375 L252 67.76046752929688 L256.5 70.07542419433594 L261 72.4809341430664 L265.5 74.96360778808594 L270 77.51119995117188 L274.5 80.11283874511719 L279 82.75907897949219 L283.5 85.44184875488281 L288 88.15437316894531 L292.5 90.89102172851562 L297 93.6471176147461 L301.5 96.41886901855469 L306 99.20318603515625 L310.5 101.99757385253906 L315 104.80000305175781" fill="none" stroke="rgb(20,99,189)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<path d="M45 124.68000030517578 L49.5 124.72743225097656 L54 124.7806396484375 L58.5 124.84034729003906 L63 124.90733337402344 L67.5 124.98249053955078 L72 125.06681060791016 L76.5 125.16140747070312 L81 125.26753997802734 L85.5 125.38660430908203 L90 125.52017211914062 L94.5 125.66999816894531 L99 125.83805847167969 L103.5 126.02655792236328 L108 126.23796081542969 L112.5 126.47502136230469 L117 126.74081420898438 L121.5 127.03876495361328 L126 127.3726806640625 L130.5 127.74679565429688 L135 128.16580200195312 L139.5 128.6348419189453 L144 129.1596221923828 L148.5 129.7462921142578 L153 130.40158081054688 L157.5 131.13265991210938 L162 131.94712829589844 L166.5 132.85292053222656 L171 133.85806274414062 L175.5 134.97047424316406 L180 136.19752502441406 L184.5 137.54563903808594 L189 139.01963806152344 L193.5 140.62197875976562 L198 142.35205078125 L202.5 144.2052459716797 L207 146.17239379882812 L211.5 148.2392120361328 L216 150.38638305664062 L220.5 152.59005737304688 L225 154.82290649414062 L229.5 157.0557403564453 L234 159.25941467285156 L238.5 161.40658569335938 L243 163.47340393066406 L247.5 165.4405517578125 L252 167.2937469482422 L256.5 169.02381896972656 L261 170.62615966796875 L265.5 172.10015869140625 L270 173.44827270507812 L274.5 174.67532348632812 L279 175.7877197265625 L283.5 176.79287719726562 L288 177.69866943359375 L292.5 178.51315307617188 L297 179.24423217773438 L301.5 179.89950561523438 L306 180.48617553710938 L310.5 181.01095581054688 L315 181.47999572753906" fill="none" stroke="rgb(232,87,41)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<text x="180" y="18" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Bode / first-order low-pass</text>
+<text x="180" y="33" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Corner 10 rad/s / sampled complex response</text>
+<text x="36" y="107.80000305175781" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">-20</text>
+<text x="36" y="79.4000015258789" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">-10</text>
+<text x="36" y="51" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">0</text>
+<text x="36" y="184.47999572753906" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">-84</text>
+<text x="36" y="156.0800018310547" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">-42</text>
+<text x="36" y="127.68000030517578" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">0</text>
+<text x="45" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">0.1</text>
+<text x="135" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">1</text>
+<text x="225" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">10</text>
+<text x="315" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">100</text>
+<text x="180" y="227" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Blue: magnitude dB    Orange: unwrapped phase deg</text>
+</svg>

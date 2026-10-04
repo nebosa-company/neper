@@ -105,6 +105,8 @@ type CubePlotLayout = struct { vertices: Layout, frame: Layout, means: []f64, co
 type SpectrogramLayout = struct { matrix: MatrixLayout, time_start: f64, time_end: f64, frequency_max: f64 }
 type WaterfallSpectrumStorage = struct { points: []Coord, segments: []Segment, traces: []Layout, frame_indices: []usize }
 type WaterfallSpectrumLayout = struct { traces: []Layout, frame_indices: []usize, value_min: f32, value_max: f32 }
+type BodeStorage = struct { magnitude_points: []Coord, magnitude_segments: []Segment, phase_points: []Coord, phase_segments: []Segment, magnitude_db: []f64, phase_degrees: []f64 }
+type BodeLayout = struct { magnitude: Layout, phase: Layout, magnitude_bounds: geometry.Rect, phase_bounds: geometry.Rect, magnitude_db: []f64, phase_degrees: []f64, frequency_min: f64, frequency_max: f64 }
 type SpineLayout = struct { categories: []Layout, column_totals: []f64, grand_total: f64 }
 type HexCell = struct { center: Coord, count: u64 }
 type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
@@ -7240,6 +7242,88 @@ fn waterfall_spectrum(spectrum: *const SpectrogramLayout, frame_step: usize, bou
         trace += 1usize
     }
     ret (WaterfallSpectrumLayout { traces: storage.traces[..trace_count], frame_indices: storage.frame_indices[..trace_count], value_min: lo, value_max: hi }, ok)
+}
+
+// Bode geometry for sampled complex frequency response. Frequencies must be
+// strictly increasing and positive; phase is unwrapped across ±180 degrees.
+fn bode(frequency: []const f64, real: []const f64, imag: []const f64, magnitude_floor: f64, bounds: geometry.Rect, storage: *BodeStorage) -> (BodeLayout, err) {
+    if frequency.len < 2usize || frequency.len != real.len || frequency.len != imag.len || !finite64(magnitude_floor) || magnitude_floor <= 0.0f64 || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    let n = frequency.len
+    if storage.magnitude_points.len < n || storage.magnitude_segments.len < n - 1usize || storage.phase_points.len < n || storage.phase_segments.len < n - 1usize || storage.magnitude_db.len < n || storage.phase_degrees.len < n { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < n {
+        if !finite64(frequency[i]) || frequency[i] <= 0.0f64 || !finite64(real[i]) || !finite64(imag[i]) { ret (zero, Invalid) }
+        if i > 0usize && frequency[i] <= frequency[i - 1usize] { ret (zero, Invalid) }
+        i += 1usize
+    }
+    let log_lo = math.log10[f64](frequency[0usize])
+    let log_hi = math.log10[f64](frequency[n - 1usize])
+    if !finite64(log_lo) || !finite64(log_hi) || !finite64(log_hi - log_lo) || log_hi <= log_lo { ret (zero, Invalid) }
+    var mag_lo = 0.0f64
+    var mag_hi = 0.0f64
+    var phase_lo = 0.0f64
+    var phase_hi = 0.0f64
+    var previous_raw = 0.0f64
+    var offset = 0.0f64
+    i = 0usize
+    while i < n {
+        let ar = math.abs[f64](real[i])
+        let ai = math.abs[f64](imag[i])
+        let big = math.max[f64](ar, ai)
+        var amplitude = 0.0f64
+        if big > 0.0f64 {
+            let small = math.min[f64](ar, ai)
+            let ratio = small / big
+            amplitude = big * math.sqrt[f64](1.0f64 + ratio * ratio)
+        }
+        if !finite64(amplitude) { ret (zero, Invalid) }
+        let magnitude = 20.0f64 * math.log10[f64](math.max[f64](amplitude, magnitude_floor))
+        let raw_phase = math.atan2[f64](imag[i], real[i]) * 57.29577951308232f64
+        if i > 0usize {
+            let delta = raw_phase - previous_raw
+            if delta > 180.0f64 { offset -= 360.0f64 }
+            if delta < -180.0f64 { offset += 360.0f64 }
+        }
+        let phase = raw_phase + offset
+        if !finite64(magnitude) || !finite64(phase) { ret (zero, Invalid) }
+        storage.magnitude_db[i] = magnitude
+        storage.phase_degrees[i] = phase
+        if i == 0usize || magnitude < mag_lo { mag_lo = magnitude }
+        if i == 0usize || magnitude > mag_hi { mag_hi = magnitude }
+        if i == 0usize || phase < phase_lo { phase_lo = phase }
+        if i == 0usize || phase > phase_hi { phase_hi = phase }
+        previous_raw = raw_phase
+        i += 1usize
+    }
+    if mag_lo == mag_hi {
+        mag_lo -= 1.0f64
+        mag_hi += 1.0f64
+    }
+    if phase_lo == phase_hi {
+        phase_lo -= 1.0f64
+        phase_hi += 1.0f64
+    }
+    if !finite64(mag_hi - mag_lo) || !finite64(phase_hi - phase_lo) || !finite(f32(mag_lo)) || !finite(f32(mag_hi)) || !finite(f32(phase_lo)) || !finite(f32(phase_hi)) { ret (zero, Invalid) }
+    let magnitude_bounds = geometry.rect(bounds.x, bounds.y, bounds.width, bounds.height * 0.40)
+    let phase_bounds = geometry.rect(bounds.x, bounds.y + bounds.height * 0.54, bounds.width, bounds.height * 0.40)
+    i = 0usize
+    while i < n {
+        let log_position = (math.log10[f64](frequency[i]) - log_lo) / (log_hi - log_lo)
+        let x = bounds.x + bounds.width * f32(log_position)
+        let mag_point = Coord { x: x, y: magnitude_bounds.y + magnitude_bounds.height * f32((mag_hi - storage.magnitude_db[i]) / (mag_hi - mag_lo)) }
+        let phase_point = Coord { x: x, y: phase_bounds.y + phase_bounds.height * f32((phase_hi - storage.phase_degrees[i]) / (phase_hi - phase_lo)) }
+        if !finite(mag_point.x) || !finite(mag_point.y) || !finite(phase_point.x) || !finite(phase_point.y) { ret (zero, Invalid) }
+        storage.magnitude_points[i] = mag_point
+        storage.phase_points[i] = phase_point
+        if i > 0usize {
+            storage.magnitude_segments[i - 1usize] = Segment { from: storage.magnitude_points[i - 1usize], to: mag_point }
+            storage.phase_segments[i - 1usize] = Segment { from: storage.phase_points[i - 1usize], to: phase_point }
+        }
+        i += 1usize
+    }
+    let magnitude = Layout { kind: .Line, coords: storage.magnitude_points[..n], segments: storage.magnitude_segments[..n - 1usize], bars: zero, x_min: f32(log_lo), x_max: f32(log_hi), y_min: f32(mag_lo), y_max: f32(mag_hi) }
+    let phase = Layout { kind: .Line, coords: storage.phase_points[..n], segments: storage.phase_segments[..n - 1usize], bars: zero, x_min: f32(log_lo), x_max: f32(log_hi), y_min: f32(phase_lo), y_max: f32(phase_hi) }
+    ret (BodeLayout { magnitude: magnitude, phase: phase, magnitude_bounds: magnitude_bounds, phase_bounds: phase_bounds, magnitude_db: storage.magnitude_db[..n], phase_degrees: storage.phase_degrees[..n], frequency_min: frequency[0usize], frequency_max: frequency[n - 1usize] }, ok)
 }
 
 // Two-parameter Weibull probability paper. `total_count` includes units

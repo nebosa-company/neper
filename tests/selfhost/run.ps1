@@ -3357,6 +3357,11 @@ $gfxChartWaterfallSpectrumWritten = & $compiler emit-executable (Join-Path $PSSc
 if ($LASTEXITCODE -ne 0 -or $gfxChartWaterfallSpectrumWritten -ne 'executable written') { throw 'gfx_chart_waterfall_spectrum emission failed' }
 $gfxChartWaterfallSpectrumOutput = & $gfxChartWaterfallSpectrumPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartWaterfallSpectrumOutput -ne 'gfx chart waterfall spectrum ok') { throw "the e.gfx.chart waterfall spectrum answered wrongly: exit $LASTEXITCODE" }
+$gfxChartBodePath = Join-Path $testBuild 'gfx-chart-bode-selfhost.exe'
+$gfxChartBodeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_bode\src\main.e') $repo 'x64' 'windows' $gfxChartBodePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBodeWritten -ne 'executable written') { throw 'gfx_chart_bode emission failed' }
+$gfxChartBodeOutput = & $gfxChartBodePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBodeOutput -ne 'gfx chart bode ok') { throw "the e.gfx.chart Bode plot answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
 $gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }

@@ -2775,6 +2775,98 @@ fn render_waterfall_spectrum_preview(a: *mem.Arena, q: *gpu.Queue, output_target
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_bode_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/bode.png"
+    let bounds = geometry.rect(45.0, 48.0, 270.0, 142.0)
+    var frequency: [61]f64 = zero
+    var real: [61]f64 = zero
+    var imag: [61]f64 = zero
+    var i = 0usize
+    while i < frequency.len {
+        let exponent = -1.0f64 + 3.0f64 * f64(i) / 60.0f64
+        let omega = math.pow[f64](10.0f64, exponent)
+        let ratio = omega / 10.0f64
+        let denominator = 1.0f64 + ratio * ratio
+        frequency[i] = omega
+        real[i] = 1.0f64 / denominator
+        imag[i] = -ratio / denominator
+        i += 1usize
+    }
+    var magnitude_points: [61]chart.Coord = zero
+    var magnitude_segments: [60]chart.Segment = zero
+    var phase_points: [61]chart.Coord = zero
+    var phase_segments: [60]chart.Segment = zero
+    var magnitude_db: [61]f64 = zero
+    var phase_degrees: [61]f64 = zero
+    var storage = chart.BodeStorage { magnitude_points: magnitude_points[..], magnitude_segments: magnitude_segments[..], phase_points: phase_points[..], phase_segments: phase_segments[..], magnitude_db: magnitude_db[..], phase_degrees: phase_degrees[..] }
+    let (map, map_error) = chart.bode(frequency[..], real[..], imag[..], 0.000001f64, bounds, &storage)
+    if map_error != ok { ret map_error }
+    let x_ticks = [4]chart.Tick{
+        chart.Tick { value: 0.1, fraction: 0.0 }, chart.Tick { value: 1.0, fraction: 0.33333334 },
+        chart.Tick { value: 10.0, fraction: 0.6666667 }, chart.Tick { value: 100.0, fraction: 1.0 },
+    }
+    let y_ticks = [3]chart.Tick{ chart.Tick { value: 0.0, fraction: 0.0 }, chart.Tick { value: 0.5, fraction: 0.5 }, chart.Tick { value: 1.0, fraction: 1.0 } }
+    let magnitude_text = [3]str{ "-20", "-10", "0" }
+    let phase_text = [3]str{ "-84", "-42", "0" }
+    let frequency_text = [4]str{ "0.1", "1", "10", "100" }
+    var labels: [13]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Bode / first-order low-pass", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Corner 10 rad/s / sampled complex response", anchor: chart.Coord { x: 180.0, y: 33.0 }, align: .Center }
+    i = 0usize
+    while i < magnitude_text.len {
+        labels[2usize + i] = chart.Label { text: magnitude_text[i], anchor: chart.Coord { x: 36.0, y: map.magnitude_bounds.y + map.magnitude_bounds.height * (1.0 - y_ticks[i].fraction) + 3.0 }, align: .Right }
+        labels[5usize + i] = chart.Label { text: phase_text[i], anchor: chart.Coord { x: 36.0, y: map.phase_bounds.y + map.phase_bounds.height * (1.0 - y_ticks[i].fraction) + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    i = 0usize
+    while i < frequency_text.len {
+        labels[8usize + i] = chart.Label { text: frequency_text[i], anchor: chart.Coord { x: bounds.x + bounds.width * x_ticks[i].fraction, y: 202.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[12usize] = chart.Label { text: "Blue: magnitude dB    Orange: unwrapped phase deg", anchor: chart.Coord { x: 180.0, y: 227.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let orange = paint.rgba(0.91, 0.34, 0.16, 1.0)
+    let grid = paint.rgba(0.87, 0.91, 0.95, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 32u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, map.magnitude_bounds, paint.Brush { Solid: pale })
+    try fill(&builder, map.phase_bounds, paint.Brush { Solid: pale })
+    try chart_scene.append_guides(&builder, map.magnitude_bounds, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: dark })
+    try chart_scene.append_guides(&builder, map.phase_bounds, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &map.magnitude, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.phase, paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..12usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[12usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, map.magnitude_bounds, pale, false)
+    try chart_svg.rect(&writer, map.phase_bounds, pale, false)
+    try chart_svg.append_guides(&writer, map.magnitude_bounds, x_ticks[..], y_ticks[..], grid, dark)
+    try chart_svg.append_guides(&writer, map.phase_bounds, x_ticks[..], y_ticks[..], grid, dark)
+    try chart_svg.append(&writer, &map.magnitude, blue)
+    try chart_svg.append(&writer, &map.phase, orange)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..12usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[12usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn two_cluster_sample(x: []f32, y: []f32) -> err {
     if x.len != 72usize || y.len != 72usize { ret chart.Invalid }
     var i = 0usize
@@ -7650,6 +7742,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_cube_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_spectrogram_preview(a, queue, output_target, canvas, &renderer)
     try render_waterfall_spectrum_preview(a, queue, output_target, canvas, &renderer)
+    try render_bode_preview(a, queue, output_target, canvas, &renderer)
     try render_hexbin_preview(a, queue, output_target, canvas, &renderer)
     try render_bin2d_preview(a, queue, output_target, canvas, &renderer)
     try render_density2d_preview(a, queue, output_target, canvas, &renderer)

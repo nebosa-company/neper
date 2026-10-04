@@ -16010,6 +16010,9 @@ fn spectrogram(re: []const f64, im: []const f64, frames: usize, fft_size: usize,
 type WaterfallSpectrumStorage = struct { points: []Coord, segments: []Segment, traces: []Layout, frame_indices: []usize }
 type WaterfallSpectrumLayout = struct { traces: []Layout, frame_indices: []usize, value_min: f32, value_max: f32 }
 fn waterfall_spectrum(spectrum: *const SpectrogramLayout, frame_step: usize, bounds: geometry.Rect, storage: *WaterfallSpectrumStorage) -> (WaterfallSpectrumLayout, err)
+type BodeStorage = struct { magnitude_points: []Coord, magnitude_segments: []Segment, phase_points: []Coord, phase_segments: []Segment, magnitude_db: []f64, phase_degrees: []f64 }
+type BodeLayout = struct { magnitude: Layout, phase: Layout, magnitude_bounds: geometry.Rect, phase_bounds: geometry.Rect, magnitude_db: []f64, phase_degrees: []f64, frequency_min: f64, frequency_max: f64 }
+fn bode(frequency: []const f64, real: []const f64, imag: []const f64, magnitude_floor: f64, bounds: geometry.Rect, storage: *BodeStorage) -> (BodeLayout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)
