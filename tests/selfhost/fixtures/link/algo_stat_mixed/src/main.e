@@ -135,6 +135,131 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, short_work) = mixed.lmm_slopes(yy, xx, zz, 200usize, 2usize, 2usize, counts[..], 40usize, beta[..], beta_cov[..], variances[..], blups[..], short_scratch[..])
     if short_work != mixed.TooSmall { os.exit(3i32) }
 
+    // 4: a binomial GLMM with beta = [-0.5, 1] and G = [[0.5, 0.1], [0.1,
+    // 0.3]] recovers its fixed effects from sixty subjects by four visits.
+    // PQL is documented to bias binary variance components on so few visits
+    // per subject, so the covariance asserts positivity and finiteness only;
+    // the Poisson panel below pins full recovery.
+    var r2 = rand.pcg64(97u64, 13u64)
+    let (by, by_error) = mem.alloc[f64](a, 240usize)
+    if by_error != ok { ret by_error }
+    let (bx, bx_error) = mem.alloc[f64](a, 480usize)
+    if bx_error != ok { ret bx_error }
+    let (bz, bz_error) = mem.alloc[f64](a, 480usize)
+    if bz_error != ok { ret bz_error }
+    var bcounts: [60]usize = zero
+    var h = 0usize
+    while h < 60usize {
+        bcounts[h] = 4usize
+        var z0 = 0.0f64
+        var z1 = 0.0f64
+        var drew = false
+        while !drew {
+            var u = 2.0f64 * rand.pcg64_f64(&r2) - 1.0f64
+            var v = 2.0f64 * rand.pcg64_f64(&r2) - 1.0f64
+            let s2 = u * u + v * v
+            if s2 < 1.0f64 && s2 > 0.0f64 {
+                let scale = math.sqrt[f64](0.0f64 - 2.0f64 * math.log[f64](s2) / s2)
+                z0 = u * scale
+                z1 = v * scale
+                drew = true
+            }
+        }
+        let w0 = z0 * 0.7071067811865476f64
+        let w1 = 0.1414213562373095f64 * z0 + 0.5291502622129182f64 * z1
+        var t = 0usize
+        while t < 4usize {
+            bx[(h * 4usize + t) * 2usize] = 1.0f64
+            bx[(h * 4usize + t) * 2usize + 1usize] = f64(t)
+            bz[(h * 4usize + t) * 2usize] = 1.0f64
+            bz[(h * 4usize + t) * 2usize + 1usize] = f64(t)
+            let eta = 0.0f64 - 0.5f64 + 1.0f64 * f64(t) + w0 + w1 * f64(t)
+            let prob = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta))
+            if rand.pcg64_f64(&r2) < prob {
+                by[h * 4usize + t] = 1.0f64
+            } else {
+                by[h * 4usize + t] = 0.0f64
+            }
+            t += 1usize
+        }
+        h += 1usize
+    }
+    var bbeta: [2]f64 = zero
+    var bbeta_cov: [4]f64 = zero
+    var bvariances: [4]f64 = zero
+    var bblups: [120]f64 = zero
+    var bscratch: [1024]f64 = zero
+    let (brounds, bfit_error) = mixed.glmm_pql(by, bx, bz, 240usize, 2usize, 2usize, bcounts[..], 60usize, .Binomial, bbeta[..], bbeta_cov[..], bvariances[..], bblups[..], 0.0001f64, 100u32, bscratch[..])
+    if bfit_error != ok || brounds == 0u32 { os.exit(4i32) }
+    if !near(bbeta[0usize], 0.0f64 - 0.5f64, 0.5f64) || !near(bbeta[1usize], 1.0f64, 0.5f64) { os.exit(4i32) }
+    if bvariances[0usize] <= 0.05f64 || bvariances[0usize] >= 3.0f64 { os.exit(4i32) }
+    if !near(bvariances[2usize], 0.3f64, 0.7f64) { os.exit(4i32) }
+    if bvariances[3usize] <= 0.3f64 || bvariances[3usize] >= 2.0f64 { os.exit(4i32) }
+
+    // 5: a Poisson GLMM with beta = [3, 0.1] and G = [[0.4, 0.05], [0.05,
+    // 0.2]] recovers fully at informative counts; the dispersion rides loose
+    // since the working response inflates it.
+    h = 0usize
+    while h < 60usize {
+        var z0 = 0.0f64
+        var z1 = 0.0f64
+        var drew = false
+        while !drew {
+            var u = 2.0f64 * rand.pcg64_f64(&r2) - 1.0f64
+            var v = 2.0f64 * rand.pcg64_f64(&r2) - 1.0f64
+            let s2 = u * u + v * v
+            if s2 < 1.0f64 && s2 > 0.0f64 {
+                let scale = math.sqrt[f64](0.0f64 - 2.0f64 * math.log[f64](s2) / s2)
+                z0 = u * scale
+                z1 = v * scale
+                drew = true
+            }
+        }
+        let w0 = z0 * 0.6324555320336759f64
+        let w1 = 0.0790569415042095f64 * z0 + 0.440170f64 * z1
+        var t = 0usize
+        while t < 4usize {
+            let eta = 3.0f64 + 0.1f64 * f64(t) + w0 + w1 * f64(t)
+            let mu = math.exp[f64](eta)
+            let limit = math.exp[f64](0.0f64 - mu)
+            var draw = 0.0f64
+            var mass = 1.0f64
+            while mass > limit {
+                mass *= rand.pcg64_f64(&r2)
+                draw += 1.0f64
+            }
+            by[h * 4usize + t] = draw - 1.0f64
+            t += 1usize
+        }
+        h += 1usize
+    }
+    var pbeta: [2]f64 = zero
+    var pbeta_cov: [4]f64 = zero
+    var pvariances: [4]f64 = zero
+    var pblups: [120]f64 = zero
+    var pscratch: [1024]f64 = zero
+    let (prounds, pfit_error) = mixed.glmm_pql(by, bx, bz, 240usize, 2usize, 2usize, bcounts[..], 60usize, .Poisson, pbeta[..], pbeta_cov[..], pvariances[..], pblups[..], 0.0001f64, 100u32, pscratch[..])
+    if pfit_error != ok || prounds == 0u32 { os.exit(5i32) }
+    if !near(pbeta[0usize], 3.0f64, 0.25f64) || !near(pbeta[1usize], 0.1f64, 0.2f64) { os.exit(5i32) }
+    if !near(pvariances[0usize], 0.4f64, 0.3f64) || !near(pvariances[1usize], 0.05f64, 0.15f64) { os.exit(5i32) }
+    if !near(pvariances[2usize], 0.2f64, 0.15f64) { os.exit(5i32) }
+    if pvariances[3usize] <= 0.5f64 || pvariances[3usize] >= 3.5f64 { os.exit(5i32) }
+
+    // 6: the GLMM refusals -- a non-binary response, a negative count, no
+    // outer rounds and short scratch.
+    by[0usize] = 2.0f64
+    let (_, not_binary) = mixed.glmm_pql(by, bx, bz, 240usize, 2usize, 2usize, bcounts[..], 60usize, .Binomial, bbeta[..], bbeta_cov[..], bvariances[..], bblups[..], 0.0001f64, 100u32, bscratch[..])
+    if not_binary != mixed.Invalid { os.exit(6i32) }
+    by[0usize] = 0.0f64 - 1.0f64
+    let (_, neg_count) = mixed.glmm_pql(by, bx, bz, 240usize, 2usize, 2usize, bcounts[..], 60usize, .Poisson, pbeta[..], pbeta_cov[..], pvariances[..], pblups[..], 0.0001f64, 100u32, pscratch[..])
+    if neg_count != mixed.Invalid { os.exit(6i32) }
+    by[0usize] = 1.0f64
+    let (_, no_rounds) = mixed.glmm_pql(by, bx, bz, 240usize, 2usize, 2usize, bcounts[..], 60usize, .Binomial, bbeta[..], bbeta_cov[..], bvariances[..], bblups[..], 0.0001f64, 0u32, bscratch[..])
+    if no_rounds != mixed.Invalid { os.exit(6i32) }
+    var tiny_work: [8]f64 = zero
+    let (_, tiny_error) = mixed.glmm_pql(by, bx, bz, 240usize, 2usize, 2usize, bcounts[..], 60usize, .Binomial, bbeta[..], bbeta_cov[..], bvariances[..], bblups[..], 0.0001f64, 100u32, tiny_work[..])
+    if tiny_error != mixed.TooSmall { os.exit(6i32) }
+
     try io.print("algo stat mixed ok\n")
     ret ok
 }

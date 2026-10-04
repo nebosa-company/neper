@@ -3100,11 +3100,15 @@ fn mmrm_un(y: []const f64, x: []const f64, n: usize, p: usize, counts: []const u
 fn ri_fit_given(ctx: *RiCtx, tau2: f64, sig2: f64) -> (f64, err)
 fn ri_objective(ctx: *RiCtx, theta: []const f64) -> f64
 fn lmm_intercept(y: []const f64, x: []const f64, n: usize, d: usize, counts: []const usize, groups: usize, beta: []f64, beta_cov: []f64, variances: []f64, blups: []f64, scratch: []f64) -> (u32, err)
-type RsCtx = struct { y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize, q: usize, counts: []const usize, groups: usize, xvx: []f64, xvy: []f64, gbuf: []f64, vbuf: []f64, rbuf: []f64, tbuf: []f64 }
+type RsCtx = struct { y: []const f64, x: []const f64, z: []const f64, w: []const f64, n: usize, d: usize, q: usize, counts: []const usize, groups: usize, xvx: []f64, xvy: []f64, gbuf: []f64, vbuf: []f64, rbuf: []f64, tbuf: []f64 }
 fn rs_unpack(theta: []const f64, q: usize, g: []f64) -> err
+fn rs_build_v(ctx: *RsCtx, sig2: f64, off: usize, m: usize) -> err
 fn rs_fit_given(ctx: *RsCtx, theta: []const f64, sig2: f64) -> (f64, err)
 fn rs_objective(ctx: *RsCtx, theta: []const f64) -> f64
+fn rs_blups(ctx: *RsCtx, beta: []const f64, sig2: f64, blups: []f64) -> err
 fn lmm_slopes(y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize, q: usize, counts: []const usize, groups: usize, beta: []f64, beta_cov: []f64, variances: []f64, blups: []f64, scratch: []f64) -> (u32, err)
+type Family = enum u8 { Binomial, Poisson }
+fn glmm_pql(y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize, q: usize, counts: []const usize, groups: usize, family: Family, beta: []f64, beta_cov: []f64, variances: []f64, blups: []f64, tolerance: f64, max_outer: u32, scratch: []f64) -> (u32, err)
 ```
 
 Longitudinal Gaussian models over subject-grouped rows (a missed visit is an
@@ -3114,11 +3118,15 @@ correlations (closed-form block inverses) and the robust sandwich;
 GLS at the optimum); `lmm_intercept` for the random-intercept model by REML
 with BLUPs; `lmm_slopes` for random slopes and intercepts over a caller-built
 `z` design by REML (log-Cholesky Nelder-Mead over `rs_objective`, GLS through
-`rs_fit_given`) with per-subject BLUPs; `wald_p` and `mixed_contrast` for
-inference. Scratch: `gee`
+`rs_fit_given`, BLUPs through `rs_blups`) with per-subject BLUPs; `glmm_pql`
+for binomial (logit) and Poisson (log) responses by penalized
+quasi-likelihood outer rounds over the same machinery; `wald_p` and
+`mixed_contrast` for inference. Scratch: `gee`
 `4d² + d + n + 2·mmax`, `mmrm_un` `(m+1)² + 5m + 2v² + p² + p + 2v` with
 `m = v(v+1)/2`, `lmm_intercept` `19 + 2d² + d`, `lmm_slopes`
-`(r+2)² + 5(r+1) + 2d² + d + q² + q + maxm² + maxm` with `r = q(q+1)/2`.
+`(r+2)² + 5(r+1) + 2d² + d + q² + q + maxm² + maxm` with `r = q(q+1)/2`,
+`glmm_pql` the same plus `2n + (r+1)` for the working response, weights and
+starting values.
 
 ### `e.algo.stat.survival_trial`
 
@@ -16192,6 +16200,9 @@ fn discrete_axis_bars(keys: []const str, values: []const f64, levels: []const st
 fn category_facet_scatter(keys: []const str, x: []const f32, y: []const f32, levels: []const str, bounds: geometry.Rect, columns: usize, gap: f32, strip_height: f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, panels: []geometry.Rect, points: []Coord, marks: []Layout, strips: []Label, counts: []usize) -> (CategoryFacetLayout, err)
 fn wrapped_legend_items(names: []const str, text_widths: []const f32, bounds: geometry.Rect, swatch: f32, gap: f32, row_height: f32, out: []LegendItem) -> (WrappedLegend, err)
 fn masked_scatter(x: []const f32, y: []const f32, x_present: []const bool, y_present: []const bool, bounds: geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32, points: []Coord, row_ids: []usize) -> (MaskedScatterLayout, err)
+type SelectionHit = struct { mark_index: usize, source_row: usize, distance_squared: f64 }
+fn hit_scatter(marks: *const Layout, row_ids: []const usize, pointer: Coord, radius: f32) -> (SelectionHit, bool, err)
+fn selected_point_outline(marks: *const Layout, mark_index: usize, padding: f32, storage: []geometry.Rect) -> (Layout, err)
 fn cross_tab_report(row_ids: []const usize, column_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, work: *CrossTabStorage) -> (CrossTabLayout, err)
 fn matrix_report(row_ids: []const usize, column_ids: []const usize, values: []const f64, present: []const bool, group_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, bar_scope: ReportBarScope, work: *MatrixReportStorage) -> (MatrixReportLayout, err)
 fn fishbone(effect: str, categories: []const str, causes: []const FishboneCause, bounds: geometry.Rect, spine: []Segment, ribs: []Segment, branches: []Segment, head_box: []geometry.Rect, labels: []Label) -> (FishboneLayout, err)
@@ -16349,6 +16360,7 @@ fn begin_clip(w: *io.Writer, bounds: geometry.Rect, id: str) -> err
 fn end_clip(w: *io.Writer) -> err
 fn begin(w: *io.Writer, width: f32, height: f32, title: str, description: str) -> err
 fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err
+fn append_selectable_scatter(w: *io.Writer, marks: *const chart.Layout, row_ids: []const usize, descriptions: []const str, ink: paint.Color, selected_ink: paint.Color, id_prefix: str) -> err
 fn append_map_region(w: *io.Writer, region: *const chart.MapRegionLayout, ink: paint.Color) -> err
 fn append_report_cells(w: *io.Writer, cells: []const chart.ReportCell, fills: []const paint.Color, bar_ink: paint.Color) -> err
 fn append_filled_contour(w: *io.Writer, layers: []const chart.Layout, band_ids: []const usize, colors: []const paint.Color) -> err
