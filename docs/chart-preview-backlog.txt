@@ -5,7 +5,6 @@
 # Cartesian and distribution variants
 
 # Statistical, quality, medical and scientific diagrams
-hotelling_t2
 generalized_variance
 mewma
 capability_normal

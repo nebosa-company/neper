@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>hotelling_t2</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="46" y="53" width="268" height="133" fill="rgb(250,252,255)" fill-opacity="1"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="46" y2="191" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="53" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="186" x2="314" y2="191" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="186" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="142.81817626953125" x2="314" y2="142.81817626953125" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="142.81817626953125" x2="46" y2="142.81817626953125" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="99.63636779785156" x2="314" y2="99.63636779785156" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="99.63636779785156" x2="46" y2="99.63636779785156" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="56.45454025268555" x2="314" y2="56.45454025268555" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="56.45454025268555" x2="46" y2="56.45454025268555" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="103.7078857421875" x2="314" y2="103.7078857421875" stroke="rgb(209,48,56)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<path d="M62.75 186 L96.25 178.44317626953125 L129.75 155.77273559570312 L163.25 178.44317626953125 L196.75 178.44317626953125 L230.25 186 L263.75 65.09091186523438 L297.25 170.8863525390625" fill="none" stroke="rgb(20,99,189)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<rect x="59.75" y="183" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="93.25" y="175.44317626953125" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="126.75" y="152.77273559570312" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="160.25" y="175.44317626953125" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="193.75" y="175.44317626953125" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="227.25" y="183" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="260.75" y="62.090911865234375" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="294.25" y="167.8863525390625" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="260.75" y="62.090911865234375" width="6" height="6" fill="rgb(209,48,56)" fill-opacity="1"/>
+<text x="180" y="18" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Hotelling T2 / correlated process</text>
+<text x="180" y="34" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Phase II individuals / 8 historical references</text>
+<text x="37" y="189" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">0</text>
+<text x="37" y="145.81817626953125" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">10</text>
+<text x="37" y="102.63636779785156" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">20</text>
+<text x="37" y="59.45454025268555" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">30</text>
+<text x="62.75" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">1</text>
+<text x="163.25" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">4</text>
+<text x="297.25" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">8</text>
+<text x="321" y="106.7078857421875" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(43,59,82)" fill-opacity="1">UCL</text>
+<text x="180" y="227" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Red: T2 beyond Phase II limit / alpha = 0.05</text>
+</svg>

@@ -3009,6 +3009,11 @@ gfx_chart_anom_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/gfx-chart-anom-selfhost"
 gfx_chart_anom_output=$("$test_build/gfx-chart-anom-selfhost")
 [ "$gfx_chart_anom_output" = 'gfx chart anom ok' ]
+gfx_chart_hotelling_t2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_hotelling_t2/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-hotelling-t2-selfhost")
+[ "$gfx_chart_hotelling_t2_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-hotelling-t2-selfhost"
+gfx_chart_hotelling_t2_output=$("$test_build/gfx-chart-hotelling-t2-selfhost")
+[ "$gfx_chart_hotelling_t2_output" = 'gfx chart hotelling t2 ok' ]
 gfx_chart_spine_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_spine_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-spine-plot-selfhost")
 [ "$gfx_chart_spine_plot_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-spine-plot-selfhost"

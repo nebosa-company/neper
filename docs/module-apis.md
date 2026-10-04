@@ -16002,6 +16002,9 @@ fn main_effects(values: []const f64, factor_ids: []const usize, factor_levels: [
 type AnomStorage = struct { points: []Coord, signals: []Coord, upper: []Segment, lower: []Segment, center: []Segment, means: []f64, counts: []usize, upper_limits: []f64, lower_limits: []f64 }
 type AnomLayout = struct { groups: Layout, signals: Layout, upper: Layout, lower: Layout, center: Layout, means: []f64, counts: []usize, upper_limits: []f64, lower_limits: []f64, grand_mean: f64, pooled_sd: f64, critical: f64 }
 fn anom(values: []const f64, group_ids: []const usize, groups: usize, critical: f64, bounds: geometry.Rect, storage: *AnomStorage) -> (AnomLayout, err)
+type HotellingStorage = struct { means: []f64, covariance: []f64, factor: []f64, residual: []f64, scores: []f64, points: []Coord, segments: []Segment, signals: []Coord, upper: []Segment }
+type HotellingLayout = struct { trace: Layout, signals: Layout, upper: Layout, means: []f64, covariance: []f64, scores: []f64, upper_limit: f64, historical_count: usize, phase_two: bool }
+fn hotelling_t2_individuals(values: []const f64, columns: usize, historical: []const f64, alpha: f64, bounds: geometry.Rect, storage: *HotellingStorage) -> (HotellingLayout, err)
 type InteractionStorage = struct { points: []Coord, lines: []Segment, means: []f64, counts: []usize, series: []Layout }
 type InteractionLayout = struct { series: []Layout, means: []f64, counts: []usize }
 fn interaction_plot(values: []const f64, x_ids: []const usize, series_ids: []const usize, x_levels: usize, series_levels: usize, bounds: geometry.Rect, storage: *InteractionStorage) -> (InteractionLayout, err)

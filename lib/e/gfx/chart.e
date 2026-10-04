@@ -9,6 +9,7 @@ use e.algo.sort
 use e.gfx.geometry
 use e.math
 use e.math.special
+use e.math.filter as filter
 use e.mem
 use e.str
 use e.text.layout as text_layout
@@ -101,6 +102,8 @@ type MainEffectsStorage = struct { points: []Coord, lines: []Segment, references
 type MainEffectsLayout = struct { levels: Layout, connections: Layout, reference: Layout, means: []f64, counts: []usize, grand_mean: f64 }
 type AnomStorage = struct { points: []Coord, signals: []Coord, upper: []Segment, lower: []Segment, center: []Segment, means: []f64, counts: []usize, upper_limits: []f64, lower_limits: []f64 }
 type AnomLayout = struct { groups: Layout, signals: Layout, upper: Layout, lower: Layout, center: Layout, means: []f64, counts: []usize, upper_limits: []f64, lower_limits: []f64, grand_mean: f64, pooled_sd: f64, critical: f64 }
+type HotellingStorage = struct { means: []f64, covariance: []f64, factor: []f64, residual: []f64, scores: []f64, points: []Coord, segments: []Segment, signals: []Coord, upper: []Segment }
+type HotellingLayout = struct { trace: Layout, signals: Layout, upper: Layout, means: []f64, covariance: []f64, scores: []f64, upper_limit: f64, historical_count: usize, phase_two: bool }
 type InteractionStorage = struct { points: []Coord, lines: []Segment, means: []f64, counts: []usize, series: []Layout }
 type InteractionLayout = struct { series: []Layout, means: []f64, counts: []usize }
 type CubePlotStorage = struct { vertices: []Coord, edges: []Segment, means: []f64, counts: []usize }
@@ -7141,6 +7144,115 @@ fn anom(values: []const f64, group_ids: []const usize, groups: usize, critical: 
     let ldl = Layout { kind: .Rug, coords: zero, segments: storage.lower[..groups], bars: zero, x_min: 0.0, x_max: f32(groups), y_min: f32(lo), y_max: f32(hi) }
     let mid = Layout { kind: .Rug, coords: zero, segments: storage.center[..1usize], bars: zero, x_min: 0.0, x_max: f32(groups), y_min: f32(lo), y_max: f32(hi) }
     ret (AnomLayout { groups: points, signals: flags, upper: udl, lower: ldl, center: mid, means: storage.means[..groups], counts: storage.counts[..groups], upper_limits: storage.upper_limits[..groups], lower_limits: storage.lower_limits[..groups], grand_mean: grand_mean, pooled_sd: pooled_sd, critical: critical }, ok)
+}
+
+// Individual-observation Hotelling T-squared chart. Empty historical data
+// gives Phase I (baseline and monitored rows coincide); nonempty historical
+// data gives Phase II. The reference mean/covariance are estimated only from
+// baseline rows, and the phase-specific upper limit uses the beta/F result.
+// There is no lower control limit for this first monitoring surface.
+fn hotelling_t2_individuals(values: []const f64, columns: usize, historical: []const f64, alpha: f64, bounds: geometry.Rect, storage: *HotellingStorage) -> (HotellingLayout, err) {
+    if columns < 2usize || values.len == 0usize || values.len % columns != 0usize || historical.len % columns != 0usize || !finite64(alpha) || alpha <= 0.0f64 || alpha >= 1.0f64 || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    var baseline = values
+    let phase_two = historical.len != 0usize
+    if phase_two { baseline = historical }
+    let monitored = values.len / columns
+    let m = baseline.len / columns
+    if m <= columns + 1usize { ret (zero, Invalid) }
+    if storage.means.len < columns || storage.covariance.len < columns * columns || storage.factor.len < columns * columns || storage.residual.len < columns || storage.scores.len < monitored || storage.points.len < monitored || storage.segments.len < monitored - 1usize || storage.signals.len < monitored || storage.upper.len < 1usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < baseline.len {
+        if !finite64(baseline[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < values.len {
+        if !finite64(values[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    var j = 0usize
+    while j < columns {
+        let origin = baseline[j]
+        var total = 0.0f64
+        i = 0usize
+        while i < m {
+            total += baseline[i * columns + j] - origin
+            i += 1usize
+        }
+        storage.means[j] = origin + total / f64(m)
+        if !finite64(storage.means[j]) { ret (zero, Invalid) }
+        j += 1usize
+    }
+    if stat.covariance_matrix(baseline, columns, storage.covariance[..columns * columns]) != ok { ret (zero, Invalid) }
+    i = 0usize
+    while i < columns * columns {
+        if !finite64(storage.covariance[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    if filter.cholesky(storage.covariance[..columns * columns], columns, storage.factor[..columns * columns]) != ok { ret (zero, Invalid) }
+    let p = f64(columns)
+    let size = f64(m)
+    var upper_limit = 0.0f64
+    if phase_two {
+        let beta = stat.beta_quantile(1.0f64 - alpha / 2.0f64, p / 2.0f64, (size - p) / 2.0f64)
+        if beta >= 1.0f64 { ret (zero, Invalid) }
+        upper_limit = ((size + 1.0f64) * (size - 1.0f64) / size) * beta / (1.0f64 - beta)
+    } else {
+        let beta = stat.beta_quantile(1.0f64 - alpha / 2.0f64, p / 2.0f64, (size - p - 1.0f64) / 2.0f64)
+        upper_limit = ((size - 1.0f64) * (size - 1.0f64) / size) * beta
+    }
+    if !finite64(upper_limit) || upper_limit <= 0.0f64 { ret (zero, Invalid) }
+    var highest = upper_limit
+    var flags = 0usize
+    i = 0usize
+    while i < monitored {
+        j = 0usize
+        while j < columns {
+            storage.residual[j] = values[i * columns + j] - storage.means[j]
+            if !finite64(storage.residual[j]) { ret (zero, Invalid) }
+            j += 1usize
+        }
+        var score = 0.0f64
+        j = 0usize
+        while j < columns {
+            var component = storage.residual[j]
+            var k = 0usize
+            while k < j {
+                component -= storage.factor[j * columns + k] * storage.residual[k]
+                k += 1usize
+            }
+            component /= storage.factor[j * columns + j]
+            storage.residual[j] = component
+            score += component * component
+            j += 1usize
+        }
+        if !finite64(score) || score < 0.0f64 { ret (zero, Invalid) }
+        storage.scores[i] = score
+        highest = math.max[f64](highest, score)
+        i += 1usize
+    }
+    let top = highest * 1.1f64
+    if !finite64(top) || !finite(f32(top)) { ret (zero, Invalid) }
+    i = 0usize
+    while i < monitored {
+        let x = bounds.x + bounds.width * (f32(i) + 0.5) / f32(monitored)
+        let y = bounds.y + bounds.height * f32(1.0f64 - storage.scores[i] / top)
+        if !finite(x) || !finite(y) { ret (zero, Invalid) }
+        let point = Coord { x: x, y: y }
+        storage.points[i] = point
+        if i > 0usize { storage.segments[i - 1usize] = Segment { from: storage.points[i - 1usize], to: point } }
+        if storage.scores[i] > upper_limit {
+            storage.signals[flags] = point
+            flags += 1usize
+        }
+        i += 1usize
+    }
+    let upper_y = bounds.y + bounds.height * f32(1.0f64 - upper_limit / top)
+    storage.upper[0usize] = Segment { from: Coord { x: bounds.x, y: upper_y }, to: Coord { x: bounds.x + bounds.width, y: upper_y } }
+    let trace = Layout { kind: .PointLine, coords: storage.points[..monitored], segments: storage.segments[..monitored - 1usize], bars: zero, x_min: 0.0, x_max: f32(monitored), y_min: 0.0, y_max: f32(top) }
+    let signals = Layout { kind: .Scatter, coords: storage.signals[..flags], segments: zero, bars: zero, x_min: 0.0, x_max: f32(monitored), y_min: 0.0, y_max: f32(top) }
+    let upper = Layout { kind: .Rug, coords: zero, segments: storage.upper[..1usize], bars: zero, x_min: 0.0, x_max: f32(monitored), y_min: 0.0, y_max: f32(top) }
+    ret (HotellingLayout { trace: trace, signals: signals, upper: upper, means: storage.means[..columns], covariance: storage.covariance[..columns * columns], scores: storage.scores[..monitored], upper_limit: upper_limit, historical_count: m, phase_two: phase_two }, ok)
 }
 
 // Two-factor raw-means interaction plot. Cell order is series-major, then

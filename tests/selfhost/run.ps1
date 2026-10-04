@@ -3387,6 +3387,11 @@ $gfxChartAnomWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $gfxChartAnomWritten -ne 'executable written') { throw 'gfx_chart_anom emission failed' }
 $gfxChartAnomOutput = & $gfxChartAnomPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartAnomOutput -ne 'gfx chart anom ok') { throw "the e.gfx.chart ANOM answered wrongly: exit $LASTEXITCODE" }
+$gfxChartHotellingT2Path = Join-Path $testBuild 'gfx-chart-hotelling-t2-selfhost.exe'
+$gfxChartHotellingT2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_hotelling_t2\src\main.e') $repo 'x64' 'windows' $gfxChartHotellingT2Path
+if ($LASTEXITCODE -ne 0 -or $gfxChartHotellingT2Written -ne 'executable written') { throw 'gfx_chart_hotelling_t2 emission failed' }
+$gfxChartHotellingT2Output = & $gfxChartHotellingT2Path
+if ($LASTEXITCODE -ne 0 -or $gfxChartHotellingT2Output -ne 'gfx chart hotelling t2 ok') { throw "the e.gfx.chart Hotelling T2 answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
 $gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }

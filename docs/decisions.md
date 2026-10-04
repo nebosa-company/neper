@@ -34674,3 +34674,20 @@ gallery adds an ANOM PNG/SVG pair. Exact Nelson critical tables or numerical
 calibration, two-way ANOM and nonnormal binomial/Poisson ANOM remain planned.
 
 Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/anova/how-to/analysis-of-means/methods-and-formulas/one-way-designs-with-normal-data/
+
+## D1945 — Individual Hotelling T² charts distinguish Phase I and Phase II limits
+
+`hotelling_t2_individuals` accepts row-major multivariate observations and
+optional historical rows. With no historical rows, it estimates a Phase I
+reference from the plotted data and uses the beta upper limit. With historical
+rows, it estimates the mean and sample covariance only from those rows, then
+uses the Phase II F upper limit. A Cholesky solve computes each covariance-
+adjusted squared distance without materializing an inverse. The API returns
+numeric scores, mean/covariance, upper limit and signal points; scene/SVG
+adapters render the shared `PointLine`, `Scatter` and `Rug` layers. The fixture
+checks correlated covariance, both phase limits, singular covariance,
+adapters and refusal paths on Windows and Linux. The gallery adds the PNG/SVG
+pair. Subgroup T², historical point exclusion after assignable-cause review,
+and a lower Phase I limit remain planned.
+
+References: https://itl.nist.gov/div898/software/dataplot/refman1/auxillar/hotell.htm ; https://www.itl.nist.gov/div898/handbook/pmc/section5/pmc5434.htm

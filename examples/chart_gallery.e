@@ -2557,6 +2557,83 @@ fn render_anom_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target,
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_hotelling_t2_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/hotelling_t2.png"
+    let plot = geometry.rect(46.0, 53.0, 268.0, 133.0)
+    let historical = [16]f64{ 1.0f64, 1.0f64, -1.0f64, -1.0f64, 0.0f64, 1.0f64, 0.0f64, -1.0f64, 1.0f64, 1.0f64, -1.0f64, -1.0f64, 0.0f64, 1.0f64, 0.0f64, -1.0f64 }
+    let monitored = [16]f64{ 0.0f64, 0.0f64, 1.0f64, 1.0f64, 0.0f64, 2.0f64, 1.0f64, 1.0f64, 0.0f64, -1.0f64, 0.0f64, 0.0f64, 4.0f64, 4.0f64, 1.0f64, 0.0f64 }
+    var means: [2]f64 = zero
+    var covariance: [4]f64 = zero
+    var factor: [4]f64 = zero
+    var residual: [2]f64 = zero
+    var scores: [8]f64 = zero
+    var points: [8]chart.Coord = zero
+    var segments: [7]chart.Segment = zero
+    var signals: [8]chart.Coord = zero
+    var upper: [1]chart.Segment = zero
+    var storage = chart.HotellingStorage { means: means[..], covariance: covariance[..], factor: factor[..], residual: residual[..], scores: scores[..], points: points[..], segments: segments[..], signals: signals[..], upper: upper[..] }
+    let (map, map_error) = chart.hotelling_t2_individuals(monitored[..], 2usize, historical[..], 0.05f64, plot, &storage)
+    if map_error != ok { ret map_error }
+    let x_ticks = [2]chart.Tick{ chart.Tick { value: 0.0, fraction: 0.0 }, chart.Tick { value: 8.0, fraction: 1.0 } }
+    let tick_values = [4]f32{ 0.0, 10.0, 20.0, 30.0 }
+    let tick_text = [4]str{ "0", "10", "20", "30" }
+    var y_ticks: [4]chart.Tick = zero
+    var labels: [11]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Hotelling T2 / correlated process", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Phase II individuals / 8 historical references", anchor: chart.Coord { x: 180.0, y: 34.0 }, align: .Center }
+    var i = 0usize
+    while i < tick_values.len {
+        let fraction = tick_values[i] / map.trace.y_max
+        y_ticks[i] = chart.Tick { value: tick_values[i], fraction: fraction }
+        labels[2usize + i] = chart.Label { text: tick_text[i], anchor: chart.Coord { x: 37.0, y: plot.y + plot.height * (1.0 - fraction) + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    labels[6usize] = chart.Label { text: "1", anchor: chart.Coord { x: points[0usize].x, y: 202.0 }, align: .Center }
+    labels[7usize] = chart.Label { text: "4", anchor: chart.Coord { x: points[3usize].x, y: 202.0 }, align: .Center }
+    labels[8usize] = chart.Label { text: "8", anchor: chart.Coord { x: points[7usize].x, y: 202.0 }, align: .Center }
+    labels[9usize] = chart.Label { text: "UCL", anchor: chart.Coord { x: 321.0, y: upper[0usize].from.y + 3.0 }, align: .Left }
+    labels[10usize] = chart.Label { text: "Red: T2 beyond Phase II limit / alpha = 0.05", anchor: chart.Coord { x: 180.0, y: 227.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let red = paint.rgba(0.82, 0.19, 0.22, 1.0)
+    let grid = paint.rgba(0.87, 0.91, 0.95, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 32u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &map.upper, paint.Brush { Solid: red })
+    try chart_scene.append(a, &builder, &map.trace, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.signals, paint.Brush { Solid: red })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..10usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[10usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid, dark)
+    try chart_svg.append(&writer, &map.upper, red)
+    try chart_svg.append(&writer, &map.trace, blue)
+    try chart_svg.append(&writer, &map.signals, red)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..10usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[10usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_interaction_plot_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/interaction_plot.png"
     let plot = geometry.rect(45.0, 54.0, 270.0, 136.0)
@@ -8214,6 +8291,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_multi_vari_preview(a, queue, output_target, canvas, &renderer)
     try render_main_effects_preview(a, queue, output_target, canvas, &renderer)
     try render_anom_preview(a, queue, output_target, canvas, &renderer)
+    try render_hotelling_t2_preview(a, queue, output_target, canvas, &renderer)
     try render_interaction_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_cube_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_spectrogram_preview(a, queue, output_target, canvas, &renderer)
