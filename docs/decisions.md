@@ -35086,3 +35086,19 @@ unrounded floats; no threshold margin is needed. One of black and white always
 reaches at least 4.58:1, so every opaque background has a solution. A palette
 cannot make color the only cue: previews label series directly.
 Color-vision-deficiency simulation and automatic marker shapes remain open.
+
+## D2102 — SVG charts take the scene's brushes and can carry their face
+
+`chart.svg.append_brush` accepts the same `paint.Brush` as the scene adapter.
+A gradient is written once as a user-space `linearGradient` or
+`radialGradient` under a caller-unique id and every mark of the layer refers to
+it, so a gradient spans the layer as it does in the rasterizer rather than
+restarting per mark. Stops, pad spread and straight channel interpolation
+follow `scene.brush_at`; a zero-length linear gradient is refused because SVG
+paints it with the last stop and the rasterizer with the first. Solid colours
+keep the existing byte-identical output. `embed_font` writes a whole TrueType
+or OpenType file as a base64 data URL inside a `@font-face` rule, streamed in
+765-byte chunks so no buffer scales with the font; `append_labels_in` names
+the family with a sans-serif fallback. Embedding the whole file is the simple
+first step: Montserrat makes a ~600 KB SVG, and glyph subsetting is follow-on
+work.

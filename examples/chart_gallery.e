@@ -2097,6 +2097,75 @@ fn render_accessible_palette_preview(a: *mem.Arena, q: *gpu.Queue, output_target
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_gradient_font_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/gradient_font.png"
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let dark = paint.rgba(0.16, 0.20, 0.28, 1.0)
+    let axis = paint.rgba(0.56, 0.62, 0.70, 1.0)
+    let plot = geometry.rect(36.0, 44.0, 296.0, 150.0)
+    let x = [6]f32{ 0.0, 1.0, 2.0, 3.0, 4.0, 5.0 }
+    let revenue = [6]f32{ 4.2, 5.1, 6.4, 5.8, 7.6, 8.9 }
+    let margin = [6]f32{ 2.0, 2.6, 3.9, 3.1, 4.8, 6.2 }
+    let limits = [2]f32{ 0.0, 10.0 }
+    var bar_storage: [6]geometry.Rect = zero
+    var line_storage: [5]chart.Segment = zero
+    var point_storage: [6]chart.Coord = zero
+    let bar_spec = chart.spec(.Bar, plot, x[..], revenue[..])
+    let (bars, bars_error) = chart.layout_with_limits(&bar_spec, zero, zero, bar_storage[..], zero, limits[..])
+    if bars_error != ok { ret bars_error }
+    let line_spec = chart.spec(.PointLine, plot, x[..], margin[..])
+    let x_limits = [2]f32{ bars.x_min, bars.x_max }
+    let (trend, trend_error) = chart.layout_with_limits(&line_spec, point_storage[..], line_storage[..], zero, x_limits[..], limits[..])
+    if trend_error != ok { ret trend_error }
+    let column_stops = [2]paint.Stop{ paint.Stop { offset: 0.0, color: paint.rgba(0.05, 0.27, 0.55, 1.0) }, paint.Stop { offset: 1.0, color: paint.rgba(0.45, 0.72, 0.95, 1.0) } }
+    let trend_stops = [3]paint.Stop{ paint.Stop { offset: 0.0, color: paint.rgba(0.95, 0.60, 0.10, 1.0) }, paint.Stop { offset: 0.5, color: paint.rgba(0.90, 0.35, 0.15, 1.0) }, paint.Stop { offset: 1.0, color: paint.rgba(0.70, 0.10, 0.25, 1.0) } }
+    let columns = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: 0.0, y: plot.y + plot.height }, end: geometry.Point { x: 0.0, y: plot.y }, stops: column_stops[..] } }
+    let trend_brush = paint.Brush { Linear: paint.LinearGradient { start: geometry.Point { x: plot.x, y: 0.0 }, end: geometry.Point { x: plot.x + plot.width, y: 0.0 }, stops: trend_stops[..] } }
+    let names = [6]str{ "Q1", "Q2", "Q3", "Q4", "Q5", "Q6" }
+    var categories: [6]chart.Label = zero
+    var i = 0usize
+    while i < bars.bars.len {
+        let bar = bars.bars[i]
+        categories[i] = chart.Label { text: names[i], anchor: chart.Coord { x: bar.x + bar.width / 2.0, y: plot.y + plot.height + 14.0 }, align: .Center }
+        i += 1usize
+    }
+    let heading = [2]chart.Label{
+        chart.Label { text: "Gradient fills, embedded face", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center },
+        chart.Label { text: "Columns fade upward; the margin line runs amber to crimson", anchor: chart.Coord { x: 180.0, y: 35.0 }, align: .Center },
+    }
+    let axis_rect = geometry.rect(plot.x, plot.y + plot.height, plot.width, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &bars, columns)
+    try chart_scene.append(a, &builder, &trend, trend_brush)
+    try fill(&builder, axis_rect, paint.Brush { Solid: axis })
+    try chart_scene.append_labels(a, &builder, categories[..], font, 9.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, heading[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, heading[1usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.embed_font(&writer, "Montserrat", font_bytes)
+    try chart_svg.append_brush(&writer, &bars, columns, "columns")
+    try chart_svg.append_brush(&writer, &trend, trend_brush, "trend")
+    try chart_svg.rect(&writer, axis_rect, axis, false)
+    try chart_svg.append_labels_in(&writer, categories[..], dark, 9.0, "Montserrat")
+    try chart_svg.append_labels_in(&writer, heading[..1usize], dark, 12.0, "Montserrat")
+    try chart_svg.append_labels_in(&writer, heading[1usize..], dark, 7.0, "Montserrat")
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_legend_collision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/legend_collision.png"
     let names = [4]str{ "Control baseline", "Treatment alpha extended", "Treatment beta extended", "Follow-up cohort" }
@@ -10881,6 +10950,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_shared_guide_facets_preview(a, queue, output_target, canvas, &renderer)
     try render_interactive_selection_preview(a, queue, output_target, canvas, &renderer)
     try render_accessible_palette_preview(a, queue, output_target, canvas, &renderer)
+    try render_gradient_font_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)

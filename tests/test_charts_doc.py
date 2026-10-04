@@ -104,6 +104,20 @@ class ChartGuideTests(unittest.TestCase):
         for color in labels[6:]:
             self.assertGreaterEqual(contrast(color, "28,33,43"), 4.5)
 
+    def test_gradient_font_embeds_the_raster_face(self):
+        import base64
+        svg = (DOCS / "chart-previews" / "gradient_font.svg").read_text(encoding="utf-8")
+        payload = re.search(r'font-family:"Montserrat";src:url\(data:font/ttf;base64,([A-Za-z0-9+/=]+)\)', svg)
+        face = DOCS / "video" / "neper-capabilities" / "fonts" / "Montserrat-ExtraBold.ttf"
+        self.assertEqual(base64.b64decode(payload.group(1), validate=True), face.read_bytes())
+        root = ET.fromstring(svg)
+        ns = "{http://www.w3.org/2000/svg}"
+        ids = {g.get("id") for g in root.iter(f"{ns}linearGradient")}
+        self.assertEqual(ids, {"columns", "trend"})
+        self.assertEqual(svg.count('fill="url(#columns)"'), 6)
+        self.assertIn('stroke="url(#trend)"', svg)
+        self.assertNotIn("font-family=\"sans-serif\"", svg)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,5 @@
 // Streaming SVG adapter for the renderer-neutral chart layouts.
+use e.bytes
 use e.fmt.xml
 use e.gfx.chart
 use e.gfx.geometry
@@ -9,6 +10,10 @@ use e.str
 use e.text.layout as text_layout
 
 error Invalid
+
+// A fill or stroke: a solid colour, or a gradient that `gradient` defined
+// earlier in the document under this id.
+type Ink = union enum u8 { Solid: paint.Color, Url: str }
 
 fn number(w: *io.Writer, value: f32) -> err {
     if !chart.finite(value) { ret Invalid }
@@ -144,22 +149,166 @@ fn append_report_cells(w: *io.Writer, cells: []const chart.ReportCell, fills: []
     ret ok
 }
 
-fn color(w: *io.Writer, ink: paint.Color, stroke: bool) -> err {
-    if !paint.color_ok(ink) { ret Invalid }
+fn rgb(w: *io.Writer, ink: paint.Color) -> err {
     // Match scene.channel_byte until the raster backend changes its output transfer.
-    if stroke { try io.write_all(w, " stroke=\"rgb(") } else { try io.write_all(w, " fill=\"rgb(") }
+    try io.write_all(w, "rgb(")
     try number(w, f32(u32(ink.red * 255.0 + 0.5)))
     try io.write_all(w, ",")
     try number(w, f32(u32(ink.green * 255.0 + 0.5)))
     try io.write_all(w, ",")
     try number(w, f32(u32(ink.blue * 255.0 + 0.5)))
-    try io.write_all(w, ")\"")
+    ret io.write_all(w, ")")
+}
+
+fn color(w: *io.Writer, ink: paint.Color, stroke: bool) -> err {
+    if !paint.color_ok(ink) { ret Invalid }
+    if stroke { try io.write_all(w, " stroke=\"") } else { try io.write_all(w, " fill=\"") }
+    try rgb(w, ink)
+    try io.write_all(w, "\"")
     if stroke { try io.write_all(w, " stroke-opacity=\"") } else { try io.write_all(w, " fill-opacity=\"") }
     try number(w, ink.alpha)
     ret io.write_all(w, "\"")
 }
 
+fn ink_ok(ink: Ink) -> bool {
+    switch ink {
+    case .Solid as solid:
+        ret paint.color_ok(solid)
+    case .Url as id:
+        ret clip_id_ok(id)
+    }
+    ret false
+}
+
+fn ink_attr(w: *io.Writer, ink: Ink, stroke: bool) -> err {
+    switch ink {
+    case .Solid as solid:
+        ret color(w, solid, stroke)
+    case .Url as id:
+        if !clip_id_ok(id) { ret Invalid }
+        if stroke { try io.write_all(w, " stroke=\"url(#") } else { try io.write_all(w, " fill=\"url(#") }
+        try io.write_all(w, id)
+        ret io.write_all(w, ")\"")
+    }
+    ret Invalid
+}
+
+fn stops(w: *io.Writer, list: []const paint.Stop) -> err {
+    var i = 0usize
+    while i < list.len {
+        try io.write_all(w, "<stop offset=\"")
+        try number(w, list[i].offset)
+        try io.write_all(w, "\" stop-color=\"")
+        try rgb(w, list[i].color)
+        try io.write_all(w, "\" stop-opacity=\"")
+        try number(w, list[i].color.alpha)
+        try io.write_all(w, "\"/>")
+        i += 1usize
+    }
+    ret ok
+}
+
+// Defines a linear or radial gradient under a caller-unique id, in the brush's
+// user space and padded past its ends, the way scene.brush_at samples it. A
+// zero-length linear gradient is refused: the rasterizer paints it with the
+// first stop, SVG with the last.
+fn gradient(w: *io.Writer, id: str, brush: paint.Brush) -> err {
+    if !clip_id_ok(id) || paint.validate(&brush) != ok { ret Invalid }
+    switch brush {
+    case .Solid as solid:
+        ret Invalid
+    case .Linear as linear:
+        let finite_ends = chart.finite(linear.start.x) && chart.finite(linear.start.y) && chart.finite(linear.end.x) && chart.finite(linear.end.y)
+        if !finite_ends || (linear.start.x == linear.end.x && linear.start.y == linear.end.y) { ret Invalid }
+        try io.write_all(w, "<defs><linearGradient id=\"")
+        try io.write_all(w, id)
+        try io.write_all(w, "\" gradientUnits=\"userSpaceOnUse\" x1=\"")
+        try number(w, linear.start.x)
+        try io.write_all(w, "\" y1=\"")
+        try number(w, linear.start.y)
+        try io.write_all(w, "\" x2=\"")
+        try number(w, linear.end.x)
+        try io.write_all(w, "\" y2=\"")
+        try number(w, linear.end.y)
+        try io.write_all(w, "\">")
+        try stops(w, linear.stops)
+        ret io.write_all(w, "</linearGradient></defs>\n")
+    case .Radial as radial:
+        if !chart.finite(radial.center.x) || !chart.finite(radial.center.y) || !chart.finite(radial.radius) { ret Invalid }
+        try io.write_all(w, "<defs><radialGradient id=\"")
+        try io.write_all(w, id)
+        try io.write_all(w, "\" gradientUnits=\"userSpaceOnUse\" cx=\"")
+        try number(w, radial.center.x)
+        try io.write_all(w, "\" cy=\"")
+        try number(w, radial.center.y)
+        try io.write_all(w, "\" r=\"")
+        try number(w, radial.radius)
+        try io.write_all(w, "\">")
+        try stops(w, radial.stops)
+        ret io.write_all(w, "</radialGradient></defs>\n")
+    }
+    ret Invalid
+}
+
+// The SVG side of chart_scene.append with any brush: a gradient is defined
+// once under `id` and every mark refers to it; a solid brush ignores `id`.
+fn append_brush(w: *io.Writer, marks: *const chart.Layout, brush: paint.Brush, id: str) -> err {
+    switch brush {
+    case .Solid as solid:
+        ret append(w, marks, solid)
+    case .Linear as linear:
+        try gradient(w, id, brush)
+    case .Radial as radial:
+        try gradient(w, id, brush)
+    }
+    ret append_ink(w, marks, Ink { Url: id })
+}
+
+fn family_ok(family: str) -> bool {
+    if family.len == 0usize || family.len > 64usize { ret false }
+    var i = 0usize
+    while i < family.len {
+        let c = family[i]
+        let letter = (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8)
+        if !letter && !(c >= 48u8 && c <= 57u8) && c != 32u8 && c != 45u8 && c != 95u8 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// Embeds a TrueType or OpenType font as a data URL, so labels written with
+// append_labels_in render in the face the scene adapter registered rather
+// than whatever sans-serif the viewer has. The whole file is embedded.
+fn embed_font(w: *io.Writer, family: str, font: []const u8) -> err {
+    if !family_ok(family) || font.len < 12usize { ret Invalid }
+    let truetype = (font[0usize] == 0u8 && font[1usize] == 1u8 && font[2usize] == 0u8 && font[3usize] == 0u8) || str.starts_with(font[..4usize], "true")
+    let opentype = str.starts_with(font[..4usize], "OTTO")
+    if !truetype && !opentype { ret Invalid }
+    try io.write_all(w, "<defs><style>@font-face{font-family:\"")
+    try io.write_all(w, family)
+    if opentype { try io.write_all(w, "\";src:url(data:font/otf;base64,") } else { try io.write_all(w, "\";src:url(data:font/ttf;base64,") }
+    var encoder = bytes.base64_encoder(.Standard, true)
+    var chunk: [1024]u8 = zero
+    var pos = 0usize
+    while pos < font.len {
+        var end = pos + 765usize
+        if end > font.len { end = font.len }
+        let (written, encode_error) = bytes.base64_encoder_update(&encoder, chunk[..], font[pos..end])
+        if encode_error != ok { ret encode_error }
+        try io.write_all(w, chunk[..written])
+        pos = end
+    }
+    let (tail, tail_error) = bytes.base64_encoder_finish(&encoder, chunk[..])
+    if tail_error != ok { ret tail_error }
+    try io.write_all(w, chunk[..tail])
+    ret io.write_all(w, ")}</style></defs>\n")
+}
+
 fn rect(w: *io.Writer, r: geometry.Rect, ink: paint.Color, outline: bool) -> err {
+    ret rect_ink(w, r, Ink { Solid: ink }, outline)
+}
+
+fn rect_ink(w: *io.Writer, r: geometry.Rect, ink: Ink, outline: bool) -> err {
     if !chart.finite(r.x) || !chart.finite(r.y) || !chart.finite(r.width) || !chart.finite(r.height) || r.width <= 0.0 || r.height <= 0.0 { ret Invalid }
     try io.write_all(w, "<rect x=\"")
     try number(w, r.x)
@@ -172,15 +321,19 @@ fn rect(w: *io.Writer, r: geometry.Rect, ink: paint.Color, outline: bool) -> err
     try io.write_all(w, "\"")
     if outline {
         try io.write_all(w, " fill=\"none\"")
-        try color(w, ink, true)
+        try ink_attr(w, ink, true)
         try io.write_all(w, " stroke-width=\"2\"")
     } else {
-        try color(w, ink, false)
+        try ink_attr(w, ink, false)
     }
     ret io.write_all(w, "/>\n")
 }
 
 fn rule(w: *io.Writer, from: chart.Coord, to: chart.Coord, ink: paint.Color, width: f32) -> err {
+    ret rule_ink(w, from, to, Ink { Solid: ink }, width)
+}
+
+fn rule_ink(w: *io.Writer, from: chart.Coord, to: chart.Coord, ink: Ink, width: f32) -> err {
     try io.write_all(w, "<line x1=\"")
     try number(w, from.x)
     try io.write_all(w, "\" y1=\"")
@@ -190,7 +343,7 @@ fn rule(w: *io.Writer, from: chart.Coord, to: chart.Coord, ink: paint.Color, wid
     try io.write_all(w, "\" y2=\"")
     try number(w, to.y)
     try io.write_all(w, "\"")
-    try color(w, ink, true)
+    try ink_attr(w, ink, true)
     try io.write_all(w, " stroke-width=\"")
     try number(w, width)
     ret io.write_all(w, "\" stroke-linecap=\"round\"/>\n")
@@ -201,6 +354,10 @@ fn line(w: *io.Writer, from: chart.Coord, to: chart.Coord, ink: paint.Color) -> 
 }
 
 fn path(w: *io.Writer, points: []const chart.Coord, ink: paint.Color, filled: bool) -> err {
+    ret path_ink(w, points, Ink { Solid: ink }, filled)
+}
+
+fn path_ink(w: *io.Writer, points: []const chart.Coord, ink: Ink, filled: bool) -> err {
     if points.len == 0usize { ret ok }
     try io.write_all(w, "<path d=\"M")
     var i = 0usize
@@ -212,13 +369,17 @@ fn path(w: *io.Writer, points: []const chart.Coord, ink: paint.Color, filled: bo
         i += 1usize
     }
     if filled { try io.write_all(w, " Z\"") } else { try io.write_all(w, "\" fill=\"none\"") }
-    try color(w, ink, !filled)
+    try ink_attr(w, ink, !filled)
     if !filled { try io.write_all(w, " stroke-width=\"2\" stroke-linejoin=\"round\"") }
     ret io.write_all(w, "/>\n")
 }
 
 fn dot(w: *io.Writer, p: chart.Coord, ink: paint.Color) -> err {
     ret rect(w, geometry.rect(p.x - 3.0, p.y - 3.0, 6.0, 6.0), ink, false)
+}
+
+fn dot_ink(w: *io.Writer, p: chart.Coord, ink: Ink) -> err {
+    ret rect_ink(w, geometry.rect(p.x - 3.0, p.y - 3.0, 6.0, 6.0), ink, false)
 }
 
 // Standalone SVGs can select points by click or keyboard focus without script.
@@ -269,18 +430,23 @@ fn append_selectable_scatter(w: *io.Writer, marks: *const chart.Layout, row_ids:
 
 fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
     if !paint.color_ok(ink) { ret Invalid }
+    ret append_ink(w, marks, Ink { Solid: ink })
+}
+
+fn append_ink(w: *io.Writer, marks: *const chart.Layout, ink: Ink) -> err {
+    if !ink_ok(ink) { ret Invalid }
     if marks.kind == .PointLine {
         var line_marks = *marks
         line_marks.kind = .Line
-        try append(w, &line_marks, ink)
+        try append_ink(w, &line_marks, ink)
         var points = *marks
         points.kind = .Scatter
-        ret append(w, &points, ink)
+        ret append_ink(w, &points, ink)
     }
     if marks.kind == .Scatter || marks.kind == .Strip || marks.kind == .Beeswarm || marks.kind == .DotPlot {
         var i = 0usize
         while i < marks.coords.len {
-            try dot(w, marks.coords[i], ink)
+            try dot_ink(w, marks.coords[i], ink)
             i += 1usize
         }
     } else if marks.kind == .Line || marks.kind == .Step || marks.kind == .Ecdf || marks.kind == .Density || marks.kind == .FrequencyPolygon {
@@ -298,25 +464,25 @@ fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
             i += 1usize
         }
         try io.write_all(w, "\" fill=\"none\"")
-        try color(w, ink, true)
+        try ink_attr(w, ink, true)
         try io.write_all(w, " stroke-width=\"2\" stroke-linejoin=\"round\"/>\n")
     } else if marks.kind == .Area || marks.kind == .Violin || marks.kind == .Band {
         if marks.coords.len < 4usize { ret Invalid }
-        try path(w, marks.coords, ink, true)
+        try path_ink(w, marks.coords, ink, true)
     } else if marks.kind == .Box || marks.kind == .Lollipop || marks.kind == .ErrorBar || marks.kind == .Qq || marks.kind == .Pp || marks.kind == .Dumbbell || marks.kind == .SlopeGraph || marks.kind == .Rug {
         var i = 0usize
         while i < marks.bars.len {
-            if marks.bars[i].width > 0.0 && marks.bars[i].height > 0.0 { try rect(w, marks.bars[i], ink, true) }
+            if marks.bars[i].width > 0.0 && marks.bars[i].height > 0.0 { try rect_ink(w, marks.bars[i], ink, true) }
             i += 1usize
         }
         i = 0usize
         while i < marks.segments.len {
-            try line(w, marks.segments[i].from, marks.segments[i].to, ink)
+            try rule_ink(w, marks.segments[i].from, marks.segments[i].to, ink, 2.0)
             i += 1usize
         }
         i = 0usize
         while i < marks.coords.len {
-            try dot(w, marks.coords[i], ink)
+            try dot_ink(w, marks.coords[i], ink)
             i += 1usize
         }
     } else if marks.kind == .Bubble {
@@ -331,7 +497,7 @@ fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
                 try io.write_all(w, "\" r=\"")
                 try number(w, box.width * 0.5)
                 try io.write_all(w, "\"")
-                try color(w, ink, false)
+                try ink_attr(w, ink, false)
                 try io.write_all(w, "/>\n")
             }
             i += 1usize
@@ -339,13 +505,13 @@ fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {
     } else if marks.kind == .Bar || marks.kind == .Histogram || marks.kind == .Waterfall {
         var i = 0usize
         while i < marks.bars.len {
-            if marks.bars[i].width > 0.0 && marks.bars[i].height > 0.0 { try rect(w, marks.bars[i], ink, false) }
+            if marks.bars[i].width > 0.0 && marks.bars[i].height > 0.0 { try rect_ink(w, marks.bars[i], ink, false) }
             i += 1usize
         }
         if marks.kind == .Waterfall {
             i = 0usize
             while i < marks.segments.len {
-                try line(w, marks.segments[i].from, marks.segments[i].to, ink)
+                try rule_ink(w, marks.segments[i].from, marks.segments[i].to, ink, 2.0)
                 i += 1usize
             }
         }
@@ -447,7 +613,13 @@ fn append_guides(w: *io.Writer, bounds: geometry.Rect, x_ticks: []const chart.Ti
 }
 
 fn append_labels(w: *io.Writer, labels: []const chart.Label, ink: paint.Color, size: f32) -> err {
-    if !paint.color_ok(ink) || !chart.finite(size) || size <= 0.0 { ret Invalid }
+    ret append_labels_in(w, labels, ink, size, "")
+}
+
+// Labels in a family from embed_font, falling back to sans-serif; an empty
+// family writes plain sans-serif.
+fn append_labels_in(w: *io.Writer, labels: []const chart.Label, ink: paint.Color, size: f32, family: str) -> err {
+    if !paint.color_ok(ink) || !chart.finite(size) || size <= 0.0 || (family.len > 0usize && !family_ok(family)) { ret Invalid }
     var i = 0usize
     while i < labels.len {
         let label = labels[i]
@@ -456,7 +628,13 @@ fn append_labels(w: *io.Writer, labels: []const chart.Label, ink: paint.Color, s
         try number(w, label.anchor.x)
         try io.write_all(w, "\" y=\"")
         try number(w, label.anchor.y)
-        try io.write_all(w, "\" font-family=\"sans-serif\" font-size=\"")
+        try io.write_all(w, "\" font-family=\"")
+        if family.len > 0usize {
+            try io.write_all(w, "'")
+            try io.write_all(w, family)
+            try io.write_all(w, "', ")
+        }
+        try io.write_all(w, "sans-serif\" font-size=\"")
         try number(w, size)
         try io.write_all(w, "\" text-anchor=\"")
         if label.align == .Center {

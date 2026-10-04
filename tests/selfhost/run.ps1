@@ -3403,6 +3403,11 @@ $gfxChartAccessiblePaletteWritten = & $compiler emit-executable (Join-Path $PSSc
 if ($LASTEXITCODE -ne 0 -or $gfxChartAccessiblePaletteWritten -ne 'executable written') { throw 'gfx_chart_accessible_palette emission failed' }
 $gfxChartAccessiblePaletteOutput = & $gfxChartAccessiblePalettePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartAccessiblePaletteOutput -ne 'gfx chart accessible palette ok') { throw "the e.gfx.chart accessible palette answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSvgPaintPath = Join-Path $testBuild 'gfx-chart-svg-paint-selfhost.exe'
+$gfxChartSvgPaintWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_svg_paint\src\main.e') $repo 'x64' 'windows' $gfxChartSvgPaintPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSvgPaintWritten -ne 'executable written') { throw 'gfx_chart_svg_paint emission failed' }
+$gfxChartSvgPaintOutput = & $gfxChartSvgPaintPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSvgPaintOutput -ne 'gfx chart svg paint ok') { throw "the e.gfx.chart SVG paint answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

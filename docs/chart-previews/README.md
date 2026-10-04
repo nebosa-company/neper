@@ -167,6 +167,11 @@ The accessible-palette preview draws six labelled series with
 reach 4.5:1 keep their hue unchanged; the rest move toward black or white only
 far enough to pass on the bytes the PNG and SVG actually contain. Direct labels
 carry series identity, so color is never the only cue.
+The gradient-font preview fills columns with a vertical linear gradient and
+strokes the margin line with a three-stop horizontal one, using the same
+`paint.Brush` values for the PNG and the SVG. The SVG embeds Montserrat as a
+data URL, so its labels render in the face the PNG used (it is ~600 KB
+because the whole font is embedded; subsetting is not implemented yet).
 
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:

@@ -1090,6 +1090,18 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 ## How Neper can beat the reference tools
 
+`chart.svg.append_brush` gives the SVG adapter the brush parity the scene
+adapter already had: `gradient` writes a linear or radial gradient in user
+space with the rasterizer's pad and stop interpolation, and every mark of the
+layer refers to it. A zero-length linear gradient is refused because SVG and
+the rasterizer disagree on its colour. `embed_font` writes a TrueType or
+OpenType file as a base64 data URL, and `append_labels_in` names that family
+with a sans-serif fallback. The `gradient_font` PNG/SVG pair shares brushes and
+the Montserrat face; a browser loads the embedded font. `gfx_chart_svg_paint`
+checks gradient markup, references, solid fallback, base64 round trip across
+encoder chunks, scene parity and refusals on Windows and Linux. Font subsetting
+remains open.
+
 `accessible_palette` returns six qualitative series colors for an opaque
 background, each at least 4.5:1 (WCAG text contrast) against it.
 `rendered_contrast_ratio` measures the bytes the scene/PNG and SVG adapters

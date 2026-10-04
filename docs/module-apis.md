@@ -16481,5 +16481,9 @@ fn append_filled_contour(w: *io.Writer, layers: []const chart.Layout, band_ids: 
 fn append_matrix(w: *io.Writer, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err
 fn append_guides(w: *io.Writer, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Color, axis: paint.Color) -> err
 fn append_labels(w: *io.Writer, labels: []const chart.Label, ink: paint.Color, size: f32) -> err
+fn gradient(w: *io.Writer, id: str, brush: paint.Brush) -> err
+fn append_brush(w: *io.Writer, marks: *const chart.Layout, brush: paint.Brush, id: str) -> err
+fn embed_font(w: *io.Writer, family: str, font: []const u8) -> err
+fn append_labels_in(w: *io.Writer, labels: []const chart.Label, ink: paint.Color, size: f32, family: str) -> err
 fn finish(w: *io.Writer) -> err
 ```
