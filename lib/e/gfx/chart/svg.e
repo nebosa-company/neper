@@ -21,6 +21,16 @@ fn number(w: *io.Writer, value: f32) -> err {
     ret io.write_all(w, str.done(&built))
 }
 
+fn unsigned(w: *io.Writer, value: usize) -> err {
+    var scratch: [64]u8 = zero
+    var arena = mem.arena_from(scratch[..])
+    let (made, builder_error) = str.builder(&arena, 32usize)
+    if builder_error != ok { ret builder_error }
+    var built = made
+    try str.push_usize(&built, value)
+    ret io.write_all(w, str.done(&built))
+}
+
 fn text_ok(value: str) -> bool {
     var i = 0usize
     while i < value.len {
@@ -209,6 +219,52 @@ fn path(w: *io.Writer, points: []const chart.Coord, ink: paint.Color, filled: bo
 
 fn dot(w: *io.Writer, p: chart.Coord, ink: paint.Color) -> err {
     ret rect(w, geometry.rect(p.x - 3.0, p.y - 3.0, 6.0, 6.0), ink, false)
+}
+
+// Standalone SVGs can select points by click or keyboard focus without script.
+// Fragment targets are mark indices; data-row-id retains original source rows.
+fn append_selectable_scatter(w: *io.Writer, marks: *const chart.Layout, row_ids: []const usize, descriptions: []const str, ink: paint.Color, selected_ink: paint.Color, id_prefix: str) -> err {
+    if marks.kind != .Scatter || (row_ids.len != 0usize && row_ids.len != marks.coords.len) || descriptions.len != marks.coords.len || !paint.color_ok(ink) || !paint.color_ok(selected_ink) || !clip_id_ok(id_prefix) { ret Invalid }
+    var i = 0usize
+    while i < marks.coords.len {
+        let point = marks.coords[i]
+        if !chart.finite(point.x - 12.0) || !chart.finite(point.x + 12.0) || !chart.finite(point.y - 12.0) || !chart.finite(point.y + 12.0) || !text_ok(descriptions[i]) || !text_layout.valid_utf8(descriptions[i]) { ret Invalid }
+        i += 1usize
+    }
+    try io.write_all(w, "<style>a:target .np-selection-halo,a:focus .np-selection-halo{visibility:visible}</style>\n")
+    i = 0usize
+    while i < marks.coords.len {
+        let point = marks.coords[i]
+        try io.write_all(w, "<a id=\"")
+        try io.write_all(w, id_prefix)
+        try io.write_all(w, "-")
+        try unsigned(w, i)
+        try io.write_all(w, "\" href=\"#")
+        try io.write_all(w, id_prefix)
+        try io.write_all(w, "-")
+        try unsigned(w, i)
+        try io.write_all(w, "\" tabindex=\"0\" data-row-id=\"")
+        var source_row = i
+        if row_ids.len > 0usize { source_row = row_ids[i] }
+        try unsigned(w, source_row)
+        try io.write_all(w, "\"><title>")
+        try xml.write_escaped(w, descriptions[i], false)
+        try io.write_all(w, "</title><rect x=\"")
+        try number(w, point.x - 12.0)
+        try io.write_all(w, "\" y=\"")
+        try number(w, point.y - 12.0)
+        try io.write_all(w, "\" width=\"24\" height=\"24\" fill=\"transparent\"/>")
+        try dot(w, point, ink)
+        try io.write_all(w, "<rect class=\"np-selection-halo\" x=\"")
+        try number(w, point.x - 8.0)
+        try io.write_all(w, "\" y=\"")
+        try number(w, point.y - 8.0)
+        try io.write_all(w, "\" width=\"16\" height=\"16\" fill=\"none\"")
+        try color(w, selected_ink, true)
+        try io.write_all(w, " stroke-width=\"2\" visibility=\"hidden\"/></a>\n")
+        i += 1usize
+    }
+    ret ok
 }
 
 fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err {

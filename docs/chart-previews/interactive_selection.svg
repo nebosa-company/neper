@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>interactive_selection</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="43" y="55" width="284" height="133" fill="rgb(245,247,252)" fill-opacity="1"/>
+<line x1="43" y1="55" x2="43" y2="188" stroke="rgb(217,227,237)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="188" x2="43" y2="193" stroke="rgb(110,125,148)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="185" y1="55" x2="185" y2="188" stroke="rgb(217,227,237)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="185" y1="188" x2="185" y2="193" stroke="rgb(110,125,148)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="327" y1="55" x2="327" y2="188" stroke="rgb(217,227,237)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="327" y1="188" x2="327" y2="193" stroke="rgb(110,125,148)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="188" x2="327" y2="188" stroke="rgb(217,227,237)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="38" y1="188" x2="43" y2="188" stroke="rgb(110,125,148)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="121.5" x2="327" y2="121.5" stroke="rgb(217,227,237)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="38" y1="121.5" x2="43" y2="121.5" stroke="rgb(110,125,148)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="55" x2="327" y2="55" stroke="rgb(217,227,237)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="38" y1="55" x2="43" y2="55" stroke="rgb(110,125,148)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="55" x2="43" y2="188" stroke="rgb(110,125,148)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="188" x2="327" y2="188" stroke="rgb(110,125,148)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<style>a:target .np-selection-halo,a:focus .np-selection-halo{visibility:visible}</style>
+<a id="point-0" href="#point-0" tabindex="0" data-row-id="0"><title>Source row 1, x 0.8, y 1.5</title><rect x="53.720001220703125" y="156.0500030517578" width="24" height="24" fill="transparent"/><rect x="62.720001220703125" y="165.0500030517578" width="6" height="6" fill="rgb(31,112,199)" fill-opacity="1"/>
+<rect class="np-selection-halo" x="57.720001220703125" y="160.0500030517578" width="16" height="16" fill="none" stroke="rgb(227,77,33)" stroke-opacity="1" stroke-width="2" visibility="hidden"/></a>
+<a id="point-1" href="#point-1" tabindex="0" data-row-id="1"><title>Source row 2, x 2.0, y 3.2</title><rect x="87.80000305175781" y="133.44000244140625" width="24" height="24" fill="transparent"/><rect x="96.80000305175781" y="142.44000244140625" width="6" height="6" fill="rgb(31,112,199)" fill-opacity="1"/>
+<rect class="np-selection-halo" x="91.80000305175781" y="137.44000244140625" width="16" height="16" fill="none" stroke="rgb(227,77,33)" stroke-opacity="1" stroke-width="2" visibility="hidden"/></a>
+<a id="point-2" href="#point-2" tabindex="0" data-row-id="3"><title>Source row 4, x 3.5, y 5.3</title><rect x="130.39999389648438" y="105.50999450683594" width="24" height="24" fill="transparent"/><rect x="139.39999389648438" y="114.50999450683594" width="6" height="6" fill="rgb(31,112,199)" fill-opacity="1"/>
+<rect class="np-selection-halo" x="134.39999389648438" y="109.50999450683594" width="16" height="16" fill="none" stroke="rgb(227,77,33)" stroke-opacity="1" stroke-width="2" visibility="hidden"/></a>
+<a id="point-3" href="#point-3" tabindex="0" data-row-id="4"><title>Source row 5, x 5.0, y 5.0</title><rect x="173" y="109.5" width="24" height="24" fill="transparent"/><rect x="182" y="118.5" width="6" height="6" fill="rgb(31,112,199)" fill-opacity="1"/>
+<rect class="np-selection-halo" x="177" y="113.5" width="16" height="16" fill="none" stroke="rgb(227,77,33)" stroke-opacity="1" stroke-width="2" visibility="hidden"/></a>
+<a id="point-4" href="#point-4" tabindex="0" data-row-id="6"><title>Source row 7, x 7.4, y 7.8</title><rect x="241.16000366210938" y="72.25999450683594" width="24" height="24" fill="transparent"/><rect x="250.16000366210938" y="81.25999450683594" width="6" height="6" fill="rgb(31,112,199)" fill-opacity="1"/>
+<rect class="np-selection-halo" x="245.16000366210938" y="76.25999450683594" width="16" height="16" fill="none" stroke="rgb(227,77,33)" stroke-opacity="1" stroke-width="2" visibility="hidden"/></a>
+<a id="point-5" href="#point-5" tabindex="0" data-row-id="7"><title>Source row 8, x 8.5, y 6.7</title><rect x="272.4000244140625" y="86.89000701904297" width="24" height="24" fill="transparent"/><rect x="281.4000244140625" y="95.89000701904297" width="6" height="6" fill="rgb(31,112,199)" fill-opacity="1"/>
+<rect class="np-selection-halo" x="276.4000244140625" y="90.89000701904297" width="16" height="16" fill="none" stroke="rgb(227,77,33)" stroke-opacity="1" stroke-width="2" visibility="hidden"/></a>
+<a id="point-6" href="#point-6" tabindex="0" data-row-id="8"><title>Source row 9, x 9.3, y 9.2</title><rect x="295.1199951171875" y="53.64000701904297" width="24" height="24" fill="transparent"/><rect x="304.1199951171875" y="62.64000701904297" width="6" height="6" fill="rgb(31,112,199)" fill-opacity="1"/>
+<rect class="np-selection-halo" x="299.1199951171875" y="57.64000701904297" width="16" height="16" fill="none" stroke="rgb(227,77,33)" stroke-opacity="1" stroke-width="2" visibility="hidden"/></a>
+<text x="180" y="22" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Interactive selection / stable row IDs</text>
+<text x="180" y="40" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Click or focus a point in the SVG companion</text>
+<text x="180" y="209" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(227,77,33)" fill-opacity="1">Select any source row via its point link</text>
+<text x="180" y="227" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Click or keyboard focus reveals the orange outline</text>
+</svg>

@@ -176,6 +176,7 @@ type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []con
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type CategoryFacetLayout = struct { panels: []geometry.Rect, marks: []Layout, strips: []Label, counts: []usize }
 type MaskedScatterLayout = struct { marks: Layout, row_ids: []usize, omitted: usize }
+type SelectionHit = struct { mark_index: usize, source_row: usize, distance_squared: f64 }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
 type Bin2dLayout = struct { matrix: MatrixLayout, counts: []u64, max_count: u64, total_count: u64 }
 type Density2dLayout = struct { contours: []Layout, grid: []f64, cutoffs: []f64, peak: f64 }
@@ -795,6 +796,45 @@ fn masked_scatter(x: []const f32, y: []const f32, x_present: []const bool, y_pre
     }
     let marks = Layout { kind: .Scatter, coords: points[..used], segments: zero, bars: zero, x_min: x_min, x_max: x_max, y_min: y_min, y_max: y_max }
     ret (MaskedScatterLayout { marks: marks, row_ids: row_ids[..used], omitted: n - used }, ok)
+}
+
+// Pick the nearest rendered scatter mark within a screen-space radius.
+// Optional row IDs preserve identity after missing-data compaction; equal-
+// distance ties choose the earlier displayed mark deterministically.
+fn hit_scatter(marks: *const Layout, row_ids: []const usize, pointer: Coord, radius: f32) -> (SelectionHit, bool, err) {
+    if marks.kind != .Scatter || (row_ids.len != 0usize && row_ids.len != marks.coords.len) || !finite(pointer.x) || !finite(pointer.y) || !finite(radius) || radius < 0.0 { ret (zero, false, Invalid) }
+    let limit = f64(radius) * f64(radius)
+    var found = false
+    var best: SelectionHit = zero
+    var i = 0usize
+    while i < marks.coords.len {
+        let point = marks.coords[i]
+        if !finite(point.x) || !finite(point.y) { ret (zero, false, Invalid) }
+        let dx = f64(pointer.x) - f64(point.x)
+        let dy = f64(pointer.y) - f64(point.y)
+        let distance_squared = dx * dx + dy * dy
+        if distance_squared <= limit && (!found || distance_squared < best.distance_squared) {
+            var source_row = i
+            if row_ids.len > 0usize { source_row = row_ids[i] }
+            best = SelectionHit { mark_index: i, source_row: source_row, distance_squared: distance_squared }
+            found = true
+        }
+        i += 1usize
+    }
+    ret (best, found, ok)
+}
+
+// A Box layout makes the same selected-point outline usable by scene and SVG.
+fn selected_point_outline(marks: *const Layout, mark_index: usize, padding: f32, storage: []geometry.Rect) -> (Layout, err) {
+    if marks.kind != .Scatter || mark_index >= marks.coords.len || !finite(padding) || padding < 0.0 { ret (zero, Invalid) }
+    if storage.len < 1usize { ret (zero, TooLarge) }
+    let point = marks.coords[mark_index]
+    let half_side = 3.0 + padding
+    let side = half_side * 2.0
+    if !finite(point.x) || !finite(point.y) || !finite(side) || !finite(point.x - half_side) || !finite(point.y - half_side) || !finite(point.x + half_side) || !finite(point.y + half_side) { ret (zero, Invalid) }
+    storage[0usize] = geometry.rect(point.x - half_side, point.y - half_side, side, side)
+    let outline = Layout { kind: .Box, coords: zero, segments: zero, bars: storage[..1usize], x_min: marks.x_min, x_max: marks.x_max, y_min: marks.y_min, y_max: marks.y_max }
+    ret (outline, ok)
 }
 
 // Tenor is measured in years and yield in the caller's consistent rate unit

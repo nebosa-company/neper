@@ -1090,6 +1090,15 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 ## How Neper can beat the reference tools
 
+`hit_scatter` resolves a screen-space pointer to the nearest scatter mark and
+preserves original source-row identity after missing-data compaction;
+`selected_point_outline` returns a reusable Box layout for both renderers.
+The `interactive_selection` PNG captures a real hit-test result, while the
+standalone SVG exposes focusable fragment links and CSS selection outlines
+without script. `gfx_chart_selection` checks hit distances, ties, row IDs,
+scene/SVG output and refusals on Windows and Linux. Widget event binding,
+cross-filter state and zoom-aware hit regions remain open L062 work.
+
 `shared_facet_guide_labels` reuses tick text placement for complete aligned
 facet grids, emitting x labels only below the final row and y labels only at
 the first column. All panels retain shared domains and their own grid strokes.

@@ -11,5 +11,4 @@
 # Operations, finance and network diagrams
 
 # Additional ggplot-style compositions and engine acceptance previews
-interactive_selection
 accessible_palette

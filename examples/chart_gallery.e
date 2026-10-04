@@ -1904,6 +1904,95 @@ fn render_shared_guide_facets_preview(a: *mem.Arena, q: *gpu.Queue, output_targe
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_interactive_selection_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/interactive_selection.png"
+    let plot = geometry.rect(43.0, 55.0, 284.0, 133.0)
+    let x = [9]f32{ 0.8, 2.0, 999.0, 3.5, 5.0, 6.2, 7.4, 8.5, 9.3 }
+    let y = [9]f32{ 1.5, 3.2, 4.0, 5.3, 5.0, 999.0, 7.8, 6.7, 9.2 }
+    let x_present = [9]bool{ true, true, false, true, true, true, true, true, true }
+    let y_present = [9]bool{ true, true, true, true, true, false, true, true, true }
+    var points: [7]chart.Coord = zero
+    var row_ids: [7]usize = zero
+    let (scatter, scatter_error) = chart.masked_scatter(x[..], y[..], x_present[..], y_present[..], plot, 0.0, 10.0, 0.0, 10.0, points[..], row_ids[..])
+    if scatter_error != ok || scatter.marks.coords.len != 7usize || scatter.omitted != 2usize { ret chart.Invalid }
+    let picked_point = scatter.marks.coords[5usize]
+    let (hit, found, hit_error) = chart.hit_scatter(&scatter.marks, scatter.row_ids, chart.Coord { x: picked_point.x + 3.0, y: picked_point.y - 2.0 }, 8.0)
+    if hit_error != ok || !found || hit.mark_index != 5usize || hit.source_row != 7usize { ret chart.Invalid }
+    var outline_storage: [1]geometry.Rect = zero
+    let (outline, outline_error) = chart.selected_point_outline(&scatter.marks, hit.mark_index, 5.0, outline_storage[..])
+    if outline_error != ok { ret outline_error }
+    let (made_status, status_error) = str.builder(a, 0usize)
+    if status_error != ok { ret status_error }
+    var status = made_status
+    try str.push(&status, "Selected source row ")
+    try str.push_usize(&status, hit.source_row + 1usize)
+    try str.push(&status, " / 7 complete, 2 omitted")
+    let selected_text = str.done(&status)
+    let heading = [2]chart.Label{
+        chart.Label { text: "Interactive selection / stable row IDs", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center },
+        chart.Label { text: "Click or focus a point in the SVG companion", anchor: chart.Coord { x: 180.0, y: 40.0 }, align: .Center },
+    }
+    let footer = [2]chart.Label{
+        chart.Label { text: selected_text, anchor: chart.Coord { x: 180.0, y: 209.0 }, align: .Center },
+        chart.Label { text: "PNG captures one pointer pick; SVG points remain selectable", anchor: chart.Coord { x: 180.0, y: 227.0 }, align: .Center },
+    }
+    let svg_footer = [2]chart.Label{
+        chart.Label { text: "Select any source row via its point link", anchor: chart.Coord { x: 180.0, y: 209.0 }, align: .Center },
+        chart.Label { text: "Click or keyboard focus reveals the orange outline", anchor: chart.Coord { x: 180.0, y: 227.0 }, align: .Center },
+    }
+    let descriptions = [7]str{
+        "Source row 1, x 0.8, y 1.5", "Source row 2, x 2.0, y 3.2",
+        "Source row 4, x 3.5, y 5.3", "Source row 5, x 5.0, y 5.0",
+        "Source row 7, x 7.4, y 7.8", "Source row 8, x 8.5, y 6.7",
+        "Source row 9, x 9.3, y 9.2",
+    }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let panel = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    let grid = paint.rgba(0.85, 0.89, 0.93, 1.0)
+    let axis = paint.rgba(0.43, 0.49, 0.58, 1.0)
+    let blue = paint.rgba(0.12, 0.44, 0.78, 1.0)
+    let orange = paint.rgba(0.89, 0.30, 0.13, 1.0)
+    let dark = paint.rgba(0.18, 0.24, 0.32, 1.0)
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    var x_ticks: [3]chart.Tick = zero
+    var y_ticks: [3]chart.Tick = zero
+    let (_, x_error) = chart.ticks(linear, 0.0, 10.0, x_ticks[..])
+    let (_, y_error) = chart.ticks(linear, 0.0, 10.0, y_ticks[..])
+    if x_error != ok || y_error != ok { ret chart.Invalid }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 100usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: panel })
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: axis })
+    try chart_scene.append(a, &builder, &scatter.marks, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &outline, paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, heading[..1usize], font, 11.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, heading[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, footer[..1usize], font, 8.0, paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, footer[1usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, panel, false)
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid, axis)
+    try chart_svg.append_selectable_scatter(&writer, &scatter.marks, scatter.row_ids, descriptions[..], blue, orange, "point")
+    try chart_svg.append_labels(&writer, heading[..1usize], dark, 11.0)
+    try chart_svg.append_labels(&writer, heading[1usize..], dark, 8.0)
+    try chart_svg.append_labels(&writer, svg_footer[..1usize], orange, 8.0)
+    try chart_svg.append_labels(&writer, svg_footer[1usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_legend_collision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/legend_collision.png"
     let names = [4]str{ "Control baseline", "Treatment alpha extended", "Treatment beta extended", "Follow-up cohort" }
@@ -10686,6 +10775,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_clipped_annotation_preview(a, queue, output_target, canvas, &renderer)
     try render_plot_grid_preview(a, queue, output_target, canvas, &renderer)
     try render_shared_guide_facets_preview(a, queue, output_target, canvas, &renderer)
+    try render_interactive_selection_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)

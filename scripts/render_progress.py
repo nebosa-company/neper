@@ -319,11 +319,12 @@ if not CHARTS_ONLY:
 gallery_cards = '\n'.join(
     '<figure class="chart"><a href="chart-previews/{png}">'
     '<img src="chart-previews/{png}" alt="{title}" width="360" height="240" loading="lazy" decoding="async"></a>'
-    '<figcaption><span>{title}</span><a href="chart-previews/{svg}">SVG</a></figcaption>'
+    '<figcaption><span>{title}</span><a href="chart-previews/{svg}">{vector_label}</a></figcaption>'
     '</figure>'.format(
         title=html.escape(path.stem.replace('_', ' ').title(), quote=True),
         png=html.escape(path.name, quote=True),
-        svg=html.escape(path.with_suffix('.svg').name, quote=True))
+        svg=html.escape(path.with_suffix('.svg').name, quote=True),
+        vector_label='Select in SVG' if path.stem == 'interactive_selection' else 'SVG')
     for path in preview_paths
 )
 charts_html = '''<!doctype html>
@@ -348,7 +349,7 @@ figcaption{display:flex;justify-content:space-between;gap:1rem;align-items:basel
 <main>
 <nav><a href="progress.html">Readiness</a> · <a href="charts.md">Charting-engine details</a></nav>
 <h1>Rendered chart previews ({rendered}/{total})</h1>
-<p>Click a preview to open its PNG, or choose SVG for the vector version.</p>
+<p>Click a preview to open its PNG, or choose SVG for the vector version. The interactive-selection SVG supports click and keyboard focus.</p>
 <div class="gallery">
 {cards}
 </div>

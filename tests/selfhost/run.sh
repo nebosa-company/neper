@@ -2974,6 +2974,11 @@ gfx_chart_shared_guides_written=$($test_build/neper-self emit-executable "$repo/
 chmod +x "$test_build/gfx-chart-shared-guides-selfhost"
 gfx_chart_shared_guides_output=$("$test_build/gfx-chart-shared-guides-selfhost" "$repo/docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf")
 [ "$gfx_chart_shared_guides_output" = 'gfx chart shared guides ok' ]
+gfx_chart_selection_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_selection/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-selection-selfhost")
+[ "$gfx_chart_selection_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-selection-selfhost"
+gfx_chart_selection_output=$("$test_build/gfx-chart-selection-selfhost")
+[ "$gfx_chart_selection_output" = 'gfx chart selection ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"

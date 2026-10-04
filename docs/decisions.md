@@ -35061,3 +35061,14 @@ below the last row and y tick text only beside the first column. Grid lines
 and tick strokes remain per-panel, so every panel can be read against the same
 domain without repeated interior labels. Incomplete or misaligned grids are
 refused; free-scale guides and a common legend require separate policies.
+
+## D1978 — Scatter selection preserves source rows and SVG focus targets
+
+`hit_scatter` chooses the nearest rendered point within an explicit pixel
+radius, breaking equal-distance ties by displayed order. Optional row IDs map
+compacted marks back to their original data rows; `selected_point_outline`
+returns an ordinary Box mark for renderer parity. Standalone SVG output wraps
+each point in a focusable fragment link whose target is the mark index and whose
+`data-row-id` retains source identity. CSS `:target` and `:focus` expose a
+selection outline without script. The PNG is a selected-state snapshot; widget
+events, cross-filter state and zoom-aware interaction are still L062 work.

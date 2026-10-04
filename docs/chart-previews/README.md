@@ -156,6 +156,12 @@ this is multi-plot composition, not shared-scale faceting.
 The shared-guide facet preview uses one x/y domain across four panels, with
 ticks and grids in every panel but text labels only along the bottom and left
 outer edges. Interior duplicate tick labels are intentionally omitted.
+The interactive-selection PNG captures a nearest-point pick from a masked
+scatter, including its original source row ID and an orange selection outline.
+Its SVG companion contains focusable point links: click or keyboard-focus a
+point to reveal its outline, with accessible titles and stable row IDs. This
+is a standalone SVG interaction; binding pointer events in a Neper widget and
+cross-chart filtering remain planned.
 
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:
