@@ -1090,6 +1090,14 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 ## How Neper can beat the reference tools
 
+`shared_facet_guide_labels` reuses tick text placement for complete aligned
+facet grids, emitting x labels only below the final row and y labels only at
+the first column. All panels retain shared domains and their own grid strokes.
+The `shared_guide_facets` PNG/SVG pair demonstrates a four-panel composition;
+`gfx_chart_shared_guides` checks geometry, deduplication, adapters and refusal
+paths on Windows and Linux. Free-scale guide semantics and shared legends
+remain separate work.
+
 `plot_grid` arranges independent plot rectangles using caller-owned column and
 row weights and explicit horizontal/vertical gaps. Each cell can host a
 different chart kind and domain; the gallery composes line, bar, scatter and

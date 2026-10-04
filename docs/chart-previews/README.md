@@ -153,6 +153,9 @@ while title and footer text remain outside the clip.
 The weighted plot-grid preview places independent line, bar, scatter and area
 plots in unequal-width cells. Each plot retains its own scale and mark kind;
 this is multi-plot composition, not shared-scale faceting.
+The shared-guide facet preview uses one x/y domain across four panels, with
+ticks and grids in every panel but text labels only along the bottom and left
+outer edges. Interior duplicate tick labels are intentionally omitted.
 
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:

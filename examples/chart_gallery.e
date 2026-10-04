@@ -1807,6 +1807,103 @@ fn render_plot_grid_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_shared_guide_facets_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/shared_guide_facets.png"
+    var panels: [4]geometry.Rect = zero
+    let (placed, panel_error) = chart.facet_grid(geometry.rect(40.0, 50.0, 278.0, 134.0), 2usize, 4usize, 22.0, panels[..])
+    if panel_error != ok { ret panel_error }
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    var x_ticks: [3]chart.Tick = zero
+    var y_ticks: [3]chart.Tick = zero
+    let (_, x_error) = chart.ticks(linear, 0.0, 10.0, x_ticks[..])
+    let (_, y_error) = chart.ticks(linear, 0.0, 10.0, y_ticks[..])
+    if x_error != ok || y_error != ok { ret chart.Invalid }
+    let tick_text = [3]str{ "0", "5", "10" }
+    var labels: [12]chart.Label = zero
+    let (outer, label_error) = chart.shared_facet_guide_labels(placed, 2usize, x_ticks[..], tick_text[..], y_ticks[..], tick_text[..], 8.0, labels[..])
+    if label_error != ok { ret label_error }
+    let strip_names = [4]str{ "North", "South", "East", "West" }
+    var strips: [4]chart.Label = zero
+    var i = 0usize
+    while i < placed.len {
+        strips[i] = chart.Label { text: strip_names[i], anchor: chart.Coord { x: placed[i].x + placed[i].width * 0.5, y: placed[i].y - 7.0 }, align: .Center }
+        i += 1usize
+    }
+    let heading = [1]chart.Label{ chart.Label { text: "Shared guides / four facets", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center } }
+    let footer = [1]chart.Label{ chart.Label { text: "x labels on bottom / y labels on left", anchor: chart.Coord { x: 180.0, y: 227.0 }, align: .Center } }
+    let x = [3]f32{ 1.0, 5.0, 9.0 }
+    let north = [3]f32{ 2.0, 6.0, 8.0 }
+    let south = [3]f32{ 7.0, 4.0, 6.0 }
+    let east = [3]f32{ 3.0, 8.0, 5.0 }
+    let west = [3]f32{ 5.0, 2.0, 9.0 }
+    let limits = [2]f32{ 0.0, 10.0 }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let panel = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    let grid = paint.rgba(0.86, 0.89, 0.93, 1.0)
+    let axis = paint.rgba(0.42, 0.48, 0.57, 1.0)
+    let ink = paint.rgba(0.12, 0.44, 0.78, 1.0)
+    let dark = paint.rgba(0.18, 0.24, 0.32, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 160usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    i = 0usize
+    while i < placed.len {
+        try fill(&builder, placed[i], paint.Brush { Solid: panel })
+        try chart_scene.append_guides(&builder, placed[i], x_ticks[..], y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: axis })
+        var yy: []const f32 = north[..]
+        if i == 1usize { yy = south[..] }
+        if i == 2usize { yy = east[..] }
+        if i == 3usize { yy = west[..] }
+        var points: [3]chart.Coord = zero
+        var lines: [2]chart.Segment = zero
+        var bars: [1]geometry.Rect = zero
+        let spec = chart.spec(.PointLine, placed[i], x[..], yy)
+        let (marks, marks_error) = chart.layout_with_limits(&spec, points[..], lines[..], bars[..0usize], limits[..], limits[..])
+        if marks_error != ok { ret marks_error }
+        try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: ink })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, outer, font, 8.0, paint.Brush { Solid: axis })
+    try chart_scene.append_labels(a, &builder, strips[..], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, heading[..], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, footer[..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < placed.len {
+        try chart_svg.rect(&writer, placed[i], panel, false)
+        try chart_svg.append_guides(&writer, placed[i], x_ticks[..], y_ticks[..], grid, axis)
+        var yy: []const f32 = north[..]
+        if i == 1usize { yy = south[..] }
+        if i == 2usize { yy = east[..] }
+        if i == 3usize { yy = west[..] }
+        var points: [3]chart.Coord = zero
+        var lines: [2]chart.Segment = zero
+        var bars: [1]geometry.Rect = zero
+        let spec = chart.spec(.PointLine, placed[i], x[..], yy)
+        let (marks, marks_error) = chart.layout_with_limits(&spec, points[..], lines[..], bars[..0usize], limits[..], limits[..])
+        if marks_error != ok { ret marks_error }
+        try chart_svg.append(&writer, &marks, ink)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, outer, axis, 8.0)
+    try chart_svg.append_labels(&writer, strips[..], dark, 8.0)
+    try chart_svg.append_labels(&writer, heading[..], dark, 12.0)
+    try chart_svg.append_labels(&writer, footer[..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_legend_collision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/legend_collision.png"
     let names = [4]str{ "Control baseline", "Treatment alpha extended", "Treatment beta extended", "Follow-up cohort" }
@@ -10588,6 +10685,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_missing_data_scatter_preview(a, queue, output_target, canvas, &renderer)
     try render_clipped_annotation_preview(a, queue, output_target, canvas, &renderer)
     try render_plot_grid_preview(a, queue, output_target, canvas, &renderer)
+    try render_shared_guide_facets_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)

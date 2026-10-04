@@ -2964,6 +2964,11 @@ gfx_chart_plot_grid_written=$($test_build/neper-self emit-executable "$repo/test
 chmod +x "$test_build/gfx-chart-plot-grid-selfhost"
 gfx_chart_plot_grid_output=$("$test_build/gfx-chart-plot-grid-selfhost")
 [ "$gfx_chart_plot_grid_output" = 'gfx chart plot grid ok' ]
+gfx_chart_shared_guides_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_shared_guides/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-shared-guides-selfhost")
+[ "$gfx_chart_shared_guides_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-shared-guides-selfhost"
+gfx_chart_shared_guides_output=$("$test_build/gfx-chart-shared-guides-selfhost" "$repo/docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf")
+[ "$gfx_chart_shared_guides_output" = 'gfx chart shared guides ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"

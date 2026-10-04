@@ -3346,6 +3346,11 @@ $gfxChartPlotGridWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $gfxChartPlotGridWritten -ne 'executable written') { throw 'gfx_chart_plot_grid emission failed' }
 $gfxChartPlotGridOutput = & $gfxChartPlotGridPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartPlotGridOutput -ne 'gfx chart plot grid ok') { throw "the e.gfx.chart plot grid answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSharedGuidesPath = Join-Path $testBuild 'gfx-chart-shared-guides-selfhost.exe'
+$gfxChartSharedGuidesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_shared_guides\src\main.e') $repo 'x64' 'windows' $gfxChartSharedGuidesPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSharedGuidesWritten -ne 'executable written') { throw 'gfx_chart_shared_guides emission failed' }
+$gfxChartSharedGuidesOutput = & $gfxChartSharedGuidesPath (Join-Path $repo 'docs\video\neper-capabilities\fonts\Montserrat-ExtraBold.ttf')
+if ($LASTEXITCODE -ne 0 -or $gfxChartSharedGuidesOutput -ne 'gfx chart shared guides ok') { throw "the e.gfx.chart shared facet guides answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

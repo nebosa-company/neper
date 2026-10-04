@@ -35052,3 +35052,12 @@ multi-plot composition from `facet_grid` and keeps panel contents in the
 existing scene/SVG adapters. Zero or non-finite weights, exhausted space and
 insufficient caller storage are refused. Shared guides, cell spanning and
 automatic margin allocation remain follow-on composition work.
+
+## D1977 — Shared facet guides label only exterior panel edges
+
+`shared_facet_guide_labels` accepts a complete, aligned row-major panel grid
+and one shared x/y tick set. It reuses `guide_labels` to place x tick text only
+below the last row and y tick text only beside the first column. Grid lines
+and tick strokes remain per-panel, so every panel can be read against the same
+domain without repeated interior labels. Incomplete or misaligned grids are
+refused; free-scale guides and a common legend require separate policies.

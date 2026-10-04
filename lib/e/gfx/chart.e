@@ -10697,6 +10697,49 @@ fn plot_grid(bounds: geometry.Rect, column_weights: []const f32, row_weights: []
     ret (panels[..column_weights.len * row_weights.len], ok)
 }
 
+// Shared-scale facet ticks are drawn in every panel, but their text belongs
+// only on the exterior: x labels beneath the last row, y labels at the first
+// column. Panels must form a complete, aligned row-major rectangle.
+fn shared_facet_guide_labels(panels: []const geometry.Rect, columns: usize, x_ticks: []const Tick, x_text: []const str, y_ticks: []const Tick, y_text: []const str, size: f32, out: []Label) -> ([]Label, err) {
+    if panels.len == 0usize || columns == 0usize || panels.len % columns != 0usize || x_ticks.len != x_text.len || y_ticks.len != y_text.len || !finite(size) || size <= 0.0 { ret (zero, Invalid) }
+    let rows = panels.len / columns
+    var i = 0usize
+    while i < panels.len {
+        let panel = panels[i]
+        if !valid_bounds(panel) || !finite(panel.x + panel.width) || !finite(panel.y + panel.height) { ret (zero, Invalid) }
+        if i % columns > 0usize {
+            let before = panels[i - 1usize]
+            if panel.x < before.x + before.width || panel.y != before.y || panel.height != before.height { ret (zero, Invalid) }
+        }
+        if i >= columns {
+            let above = panels[i - columns]
+            if panel.y < above.y + above.height || panel.x != above.x || panel.width != above.width { ret (zero, Invalid) }
+        }
+        i += 1usize
+    }
+    if x_ticks.len > 0usize && out.len / x_ticks.len < columns { ret (zero, TooLarge) }
+    let x_count = columns * x_ticks.len
+    if y_ticks.len > 0usize && (out.len - x_count) / y_ticks.len < rows { ret (zero, TooLarge) }
+    var used = 0usize
+    var column = 0usize
+    while column < columns {
+        let panel = panels[(rows - 1usize) * columns + column]
+        let (labels, label_error) = guide_labels(panel, x_ticks, x_text, y_ticks[..0usize], y_text[..0usize], size, out[used..])
+        if label_error != ok { ret (zero, label_error) }
+        used += labels.len
+        column += 1usize
+    }
+    var row = 0usize
+    while row < rows {
+        let panel = panels[row * columns]
+        let (labels, label_error) = guide_labels(panel, x_ticks[..0usize], x_text[..0usize], y_ticks, y_text, size, out[used..])
+        if label_error != ok { ret (zero, label_error) }
+        used += labels.len
+        row += 1usize
+    }
+    ret (out[..used], ok)
+}
+
 // One category key selects one panel. Levels fix row-major panel order and
 // reserve empty panels; all Scatter marks share the caller's x/y domains.
 fn category_facet_scatter(keys: []const str, x: []const f32, y: []const f32, levels: []const str, bounds: geometry.Rect, columns: usize, gap: f32, strip_height: f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, panels: []geometry.Rect, points: []Coord, marks: []Layout, strips: []Label, counts: []usize) -> (CategoryFacetLayout, err) {
