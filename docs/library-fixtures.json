@@ -2487,6 +2487,7 @@
    "fixtures": [
     "channel_semantics",
     "channel_threads",
+    "os_exit_threads",
     "runtime_gaps",
     "sync_dataguard",
     "sync_guard",

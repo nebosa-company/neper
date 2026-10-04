@@ -531,6 +531,12 @@ $osThreadWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $osThreadWritten -ne 'executable written') { throw 'os thread emission failed' }
 & $osThreadPath
 if ($LASTEXITCODE -ne 0) { throw 'a thread did not run, join, or detach correctly' }
+# Returning from main ends the program while a detached thread is still blocked (D2113).
+$exitThreadsPath = Join-Path $testBuild 'os-exit-threads-selfhost.exe'
+$exitThreadsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_exit_threads\src\main.e') $repo 'x64' 'windows' $exitThreadsPath
+if ($LASTEXITCODE -ne 0 -or $exitThreadsWritten -ne 'executable written') { throw 'os exit threads emission failed' }
+$exitThreadsOutput = & $exitThreadsPath
+if ($LASTEXITCODE -ne 0 -or $exitThreadsOutput -ne 'main returns with a thread still blocked') { throw 'returning from main did not end a program with a blocked thread' }
 # `e.meta`'s scalar reflection. Section 9 keeps all of it at compile time, so each
 # call is a constant by the time lowering sees it and the binary carries no type
 # information at all.

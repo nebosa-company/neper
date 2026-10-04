@@ -569,6 +569,14 @@ thread_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$thread_written" = 'executable written' ]
 chmod +x "$test_build/os-thread-selfhost"
 "$test_build/os-thread-selfhost"
+# Returning from main ends the program while a detached thread is still blocked
+# (D2113): the startup stub leaves by exit_group. The timeout turns a regression into a
+# failure instead of a hung suite.
+exit_threads_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_exit_threads/src/main.e" "$repo" x64 linux "$test_build/os-exit-threads-selfhost")
+[ "$exit_threads_written" = 'executable written' ]
+chmod +x "$test_build/os-exit-threads-selfhost"
+exit_threads_output=$(timeout -s KILL 20 "$test_build/os-exit-threads-selfhost")
+[ "$exit_threads_output" = 'main returns with a thread still blocked' ]
 # `e.meta`'s scalar reflection. Section 9 keeps all of it at compile time, so each
 # call is a constant by the time lowering sees it and the binary carries no type
 # information at all.

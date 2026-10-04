@@ -35238,3 +35238,16 @@ merging same-colour markers into one path is not done, because rect markers
 keep per-point structure that fixtures and selection rely on. A general
 optimizer for third-party SVG (svgo-style) is a separate tool and not needed
 for Neper's own output.
+
+## D2113 — Linux programs end with exit_group when main returns
+
+The ELF startup stub called `exit` (syscall 60) after main returned and after a
+startup failure. That ends only the calling thread, so any program whose
+libraries had started threads stayed alive with them: the Linux suite hung on
+`gpu-cpu-selfhost`, which printed its answer and then waited forever beside
+Mesa's Vulkan driver threads. The stub now calls `exit_group` (231) at both
+sites, as `os.exit` already did since D246. The two remaining syscall-60 sites
+in the runtime are deliberate: a thread trampoline ends one thread, and a failed
+`execve` child is single-threaded. `link/os_exit_threads` blocks a detached
+thread on a held mutex and returns from main; it ran until killed before the fix
+and exits at once after it, and the Linux runner runs it under `timeout`.
