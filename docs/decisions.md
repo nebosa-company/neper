@@ -34729,3 +34729,18 @@ adapters and refusals. The gallery adds a PNG/SVG pair. In-library ARL limit
 calibration, per-variable lambdas and subgroup means remain planned.
 
 References: https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc343.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/multivariate-charts/multivariate-ewma-chart/methods-and-formulas/methods-and-formulas/
+
+## D1948 — Focused normal capability distinguishes empirical and fitted tails
+
+`normal_capability` reuses the individuals capability estimator for mean,
+moving-range within sigma, sample overall sigma and Cp/Cpk/Pp/Ppk. It plots
+sample counts with within and overall normal fits scaled to expected counts
+per histogram bin, plus LSL, mean and USL guides. Observed PPM counts only
+measurements strictly outside specifications; fitted PPM uses the matching
+normal tail probabilities separately for within and overall sigma. The report
+does not infer process stability or normality from these curves. The
+Windows/Linux fixture checks numeric indices, observed tails, scene/SVG
+adapters, invalid specifications and flat data. The gallery adds a PNG/SVG
+pair. Nonnormal, attribute and batch capability remain planned.
+
+Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-analysis/normal-capability-analysis/interpret-the-results/all-statistics-and-graphs/graphs/

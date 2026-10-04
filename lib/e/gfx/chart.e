@@ -161,6 +161,14 @@ type CapabilitySixpackLayout = struct {
     probability: Layout, intervals: Layout, guides: Layout,
     summary: stat.NormalCapability,
 }
+type NormalCapabilityStorage = struct {
+    moving: []f64, counts: []u64, bars: []geometry.Rect,
+    within_curve: []Segment, overall_curve: []Segment, guides: []Segment,
+}
+type NormalCapabilityLayout = struct {
+    histogram: Layout, within_curve: Layout, overall_curve: Layout, guides: Layout,
+    summary: stat.NormalCapability, performance: stat.CapabilityPerformance,
+}
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -796,6 +804,89 @@ fn capability_sixpack(values: []const f64, sorted: []const f64, lsl: f64, usl: f
     }
     let guides = Layout { kind: .Rug, coords: zero, segments: work.guides[..11usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
     ret (CapabilitySixpackLayout { individuals: individuals, moving_range: moving_range, recent: recent, histogram: hist_layout, within_curve: within_curve, overall_curve: overall_curve, probability: probability, intervals: intervals, guides: guides, summary: summary }, ok)
+}
+
+// Focused individuals normal-capability distribution. Curves are expected
+// counts per bin, not probability densities; guides are LSL, mean and USL.
+fn normal_capability(values: []const f64, lsl: f64, usl: f64, bounds: geometry.Rect, work: *NormalCapabilityStorage) -> (NormalCapabilityLayout, err) {
+    if values.len < 5usize || !valid_bounds(bounds) || work.moving.len < values.len - 1usize || work.counts.len < 2usize || work.bars.len != work.counts.len || work.within_curve.len < 63usize || work.overall_curve.len < 63usize || work.guides.len < 3usize { ret (zero, TooLarge) }
+    let (summary, summary_error) = stat.normal_capability_individuals(values, lsl, usl, work.moving)
+    if summary_error != ok { ret (zero, Invalid) }
+    let (performance, performance_error) = stat.normal_capability_performance(values, lsl, usl, summary)
+    if performance_error != ok { ret (zero, Invalid) }
+    var data_lo = values[0usize]
+    var data_hi = values[0usize]
+    var i = 1usize
+    while i < values.len {
+        if values[i] < data_lo { data_lo = values[i] }
+        if values[i] > data_hi { data_hi = values[i] }
+        i += 1usize
+    }
+    let sigma = math.max[f64](summary.within_sigma, summary.overall_sigma)
+    let lo = math.min[f64](lsl, math.min[f64](data_lo, summary.mean - 3.5f64 * sigma))
+    let hi = math.max[f64](usl, math.max[f64](data_hi, summary.mean + 3.5f64 * sigma))
+    if !finite(f32(lo)) || !finite(f32(hi)) || !(hi > lo) { ret (zero, Invalid) }
+    let bins = work.counts.len
+    i = 0usize
+    while i < bins {
+        work.counts[i] = 0u64
+        i += 1usize
+    }
+    i = 0usize
+    while i < values.len {
+        var bin = usize((values[i] - lo) / (hi - lo) * f64(bins))
+        if bin >= bins { bin = bins - 1usize }
+        work.counts[bin] += 1u64
+        i += 1usize
+    }
+    let bin_width = (hi - lo) / f64(bins)
+    let pi = 3.14159265358979323846f64
+    var peak = f64(values.len) * bin_width / (math.min[f64](summary.within_sigma, summary.overall_sigma) * math.sqrt[f64](2.0f64 * pi))
+    i = 0usize
+    while i < bins {
+        if f64(work.counts[i]) > peak { peak = f64(work.counts[i]) }
+        i += 1usize
+    }
+    peak *= 1.1f64
+    if !finite(f32(peak)) || !(peak > 0.0f64) { ret (zero, Invalid) }
+    i = 0usize
+    while i < bins {
+        let h = bounds.height * f32(f64(work.counts[i]) / peak)
+        work.bars[i] = geometry.rect(bounds.x + bounds.width * f32(i) / f32(bins), bounds.y + bounds.height - h, bounds.width / f32(bins), h)
+        i += 1usize
+    }
+    let hist_layout = Layout { kind: .Histogram, coords: zero, segments: zero, bars: work.bars[..bins], x_min: f32(lo), x_max: f32(hi), y_min: 0.0, y_max: f32(peak) }
+    var prev_within: Coord = zero
+    var prev_overall: Coord = zero
+    i = 0usize
+    while i < 64usize {
+        let x = lo + (hi - lo) * f64(i) / 63.0f64
+        let within_z = (x - summary.mean) / summary.within_sigma
+        let overall_z = (x - summary.mean) / summary.overall_sigma
+        let within_y = f64(values.len) * bin_width * math.exp[f64](-0.5f64 * within_z * within_z) / (summary.within_sigma * math.sqrt[f64](2.0f64 * pi))
+        let overall_y = f64(values.len) * bin_width * math.exp[f64](-0.5f64 * overall_z * overall_z) / (summary.overall_sigma * math.sqrt[f64](2.0f64 * pi))
+        let sx = bounds.x + bounds.width * f32(i) / 63.0
+        let within_point = Coord { x: sx, y: bounds.y + bounds.height * (1.0 - f32(within_y / peak)) }
+        let overall_point = Coord { x: sx, y: bounds.y + bounds.height * (1.0 - f32(overall_y / peak)) }
+        if i > 0usize {
+            work.within_curve[i - 1usize] = Segment { from: prev_within, to: within_point }
+            work.overall_curve[i - 1usize] = Segment { from: prev_overall, to: overall_point }
+        }
+        prev_within = within_point
+        prev_overall = overall_point
+        i += 1usize
+    }
+    let within_curve = Layout { kind: .Line, coords: zero, segments: work.within_curve[..63usize], bars: zero, x_min: f32(lo), x_max: f32(hi), y_min: 0.0, y_max: f32(peak) }
+    let overall_curve = Layout { kind: .Line, coords: zero, segments: work.overall_curve[..63usize], bars: zero, x_min: f32(lo), x_max: f32(hi), y_min: 0.0, y_max: f32(peak) }
+    let levels = [3]f64{ lsl, summary.mean, usl }
+    i = 0usize
+    while i < 3usize {
+        let x = bounds.x + bounds.width * f32((levels[i] - lo) / (hi - lo))
+        work.guides[i] = Segment { from: Coord { x: x, y: bounds.y }, to: Coord { x: x, y: bounds.y + bounds.height } }
+        i += 1usize
+    }
+    let guides = Layout { kind: .Rug, coords: zero, segments: work.guides[..3usize], bars: zero, x_min: f32(lo), x_max: f32(hi), y_min: 0.0, y_max: f32(peak) }
+    ret (NormalCapabilityLayout { histogram: hist_layout, within_curve: within_curve, overall_curve: overall_curve, guides: guides, summary: summary, performance: performance }, ok)
 }
 
 // A sparkline is an evenly spaced Line with no guide contract.

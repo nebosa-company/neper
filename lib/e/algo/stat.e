@@ -30,6 +30,11 @@ type NormalCapability = struct {
     cp: f64, cpk: f64, pp: f64, ppk: f64,
     individuals: ControlLimits, moving_range: ControlLimits,
 }
+type CapabilityPerformance = struct {
+    observed_below_ppm: f64, observed_above_ppm: f64,
+    within_below_ppm: f64, within_above_ppm: f64,
+    overall_below_ppm: f64, overall_above_ppm: f64,
+}
 type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
@@ -523,6 +528,30 @@ fn normal_capability_individuals(values: []const f64, lsl: f64, usl: f64, moving
     let ppk = closest / (3.0f64 * overall)
     if cp - cp != 0.0f64 || cpk - cpk != 0.0f64 || pp - pp != 0.0f64 || ppk - ppk != 0.0f64 { ret (zero, Invalid) }
     ret (NormalCapability { mean: observations.mean, within_sigma: within, overall_sigma: overall, cp: cp, cpk: cpk, pp: pp, ppk: ppk, individuals: individuals, moving_range: ranges }, ok)
+}
+
+// Observed tails count actual measurements; expected tails assume a normal
+// distribution with the within or overall sigma of the capability summary.
+fn normal_capability_performance(values: []const f64, lsl: f64, usl: f64, summary: NormalCapability) -> (CapabilityPerformance, err) {
+    if values.len == 0usize || lsl - lsl != 0.0f64 || usl - usl != 0.0f64 || !(usl > lsl) || summary.mean - summary.mean != 0.0f64 || summary.within_sigma - summary.within_sigma != 0.0f64 || summary.overall_sigma - summary.overall_sigma != 0.0f64 || !(summary.within_sigma > 0.0f64) || !(summary.overall_sigma > 0.0f64) { ret (zero, Invalid) }
+    var below = 0usize
+    var above = 0usize
+    var i = 0usize
+    while i < values.len {
+        if values[i] - values[i] != 0.0f64 { ret (zero, Invalid) }
+        if values[i] < lsl { below += 1usize }
+        if values[i] > usl { above += 1usize }
+        i += 1usize
+    }
+    let million = 1000000.0f64
+    let result = CapabilityPerformance {
+        observed_below_ppm: million * f64(below) / f64(values.len), observed_above_ppm: million * f64(above) / f64(values.len),
+        within_below_ppm: million * special.normal_cdf((lsl - summary.mean) / summary.within_sigma),
+        within_above_ppm: million * special.normal_cdf((summary.mean - usl) / summary.within_sigma),
+        overall_below_ppm: million * special.normal_cdf((lsl - summary.mean) / summary.overall_sigma),
+        overall_above_ppm: million * special.normal_cdf((summary.mean - usl) / summary.overall_sigma),
+    }
+    ret (result, ok)
 }
 
 // Each true entry starts a phase; moving ranges never span a phase boundary.
