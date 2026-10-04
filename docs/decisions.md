@@ -34848,3 +34848,11 @@ winding for scene/SVG parity. `chart.proportional_symbol_map` shares the
 projection and encodes nonnegative values by circle area. Synthetic gallery
 geometry avoids implying real administrative boundaries; Windows/Linux
 fixtures cover projection, joins, holes, symbol ratios and refusal paths.
+
+## D1960 — Render chart gallery thumbnails as inline SVG
+
+Embed the generated SVG markup directly in each `docs/charts.html` card. The
+gallery remains self-contained, but no longer relies on `data:image/svg+xml`
+support for thumbnails or on `file:` subresource loading. Keep the PNG and SVG
+links for opening the original files. Size the inline SVG through its viewBox
+and the card CSS; regenerate with `python scripts/render_progress.py --charts-only`.

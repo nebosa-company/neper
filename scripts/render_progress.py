@@ -7,7 +7,7 @@ Usage:  python scripts/render_progress.py [--charts-only]
 Compiler, tooling and library scores come from the active queue plus the
 completed ledger; module and UI/host scores come from their inventories.
 """
-import base64, json, re, subprocess, datetime, html, sys
+import json, re, subprocess, datetime, html, sys
 from pathlib import Path
 
 from check_widget_plan import validate as validate_widget_plan
@@ -318,14 +318,13 @@ if not CHARTS_ONLY:
     Path('docs/charts.md').write_text(chart_guide, encoding='utf-8', newline='\n')
 gallery_cards = '\n'.join(
     '<figure class="chart"><a href="chart-previews/{png}">'
-    '<img src="data:image/svg+xml;base64,{thumbnail}" alt="{title}" '
-    'width="360" height="240" loading="lazy" decoding="async"></a>'
+    '{thumbnail}</a>'
     '<figcaption><span>{title}</span><a href="chart-previews/{svg}">SVG</a></figcaption>'
     '</figure>'.format(
         title=html.escape(path.stem.replace('_', ' ').title(), quote=True),
         png=html.escape(path.name, quote=True),
         svg=html.escape(path.with_suffix('.svg').name, quote=True),
-        thumbnail=base64.b64encode(path.with_suffix('.svg').read_bytes()).decode('ascii'))
+        thumbnail=path.with_suffix('.svg').read_text(encoding='utf-8').strip())
     for path in preview_paths
 )
 charts_html = '''<!doctype html>
@@ -341,7 +340,7 @@ main{max-width:88rem;margin:auto;padding:2rem 1.25rem 4rem}
 h1{margin:.5rem 0}p{margin:.5rem 0 1.5rem}a{color:#245aa8}
 .gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:1rem}
 .chart{margin:0;min-width:0;padding:.75rem;background:#fff;border:1px solid #dbe1ea;border-radius:.6rem}
-.chart>a{display:block}.chart img{display:block;width:100%;height:auto}
+.chart>a{display:block}.chart svg{display:block;width:100%;height:auto}
 figcaption{display:flex;justify-content:space-between;gap:1rem;align-items:baseline;padding:.6rem .2rem .1rem;font-weight:600}
 @media(prefers-color-scheme:dark){body{background:#0f1319;color:#e8edf4}.chart{background:#171d26;border-color:#354051}a{color:#9dc0ff}}
 </style>
