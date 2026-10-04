@@ -14,11 +14,13 @@ use e.fmt.png
 use e.gfx.chart
 use e.gfx.chart.scene as chart_scene
 use e.gfx.chart.svg as chart_svg
+use e.gfx.chart.locale as chart_locale
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 use e.text.shape
 use e.text.layout as text_layout
+use e.text.locale as text_locale
 use e.time as calendar_time
 
 const WIDTH: u32 = 360u32
@@ -2360,6 +2362,114 @@ fn render_label_placement_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *
     try chart_svg.append_labels(&writer, heading[..1usize], dark, 11.0)
     try chart_svg.append_labels(&writer, heading[1usize..], dark, 7.0)
     try chart_svg.append_labels(&writer, footer[..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_locale_axes_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/locale_axes.png"
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let dark = paint.rgba(0.16, 0.20, 0.28, 1.0)
+    let blue = paint.rgba(0.11, 0.42, 0.77, 1.0)
+    let grid = paint.rgba(0.84, 0.87, 0.92, 1.0)
+    let panel = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    let (db, db_error) = text_locale.builtin(a)
+    if db_error != ok { ret db_error }
+    let tags = [4]str{ "en-US", "de", "es", "it" }
+    let titles = [4]str{ "English (US)", "Deutsch", "Español", "Italiano" }
+    var dates: [12]calendar_time.Date = zero
+    let values = [12]f64{ 4200.0f64, 5100.0f64, 6400.0f64, 5800.0f64, 7600.0f64, 8900.0f64, 9400.0f64, 8700.0f64, 10200.0f64, 11400.0f64, 12100.0f64, 11800.0f64 }
+    var m = 0usize
+    while m < 12usize {
+        dates[m] = calendar_time.Date { year: 2024i32, month: u8(m + 1usize), day: 1u8 }
+        m += 1usize
+    }
+    var date_storage: [4]chart.DateTick = zero
+    let (months, months_error) = chart.date_ticks(dates[0usize], dates[11usize], 3usize, date_storage[..])
+    if months_error != ok { ret months_error }
+    let y_ticks = [6]chart.Tick{ chart.Tick { value: 0.0, fraction: 0.0 }, chart.Tick { value: 2500.0, fraction: 0.2 }, chart.Tick { value: 5000.0, fraction: 0.4 }, chart.Tick { value: 7500.0, fraction: 0.6 }, chart.Tick { value: 10000.0, fraction: 0.8 }, chart.Tick { value: 12500.0, fraction: 1.0 } }
+    let columns = [2]f32{ 1.0, 1.0 }
+    let rows = [2]f32{ 1.0, 1.0 }
+    var cells: [4]geometry.Rect = zero
+    let (placed, grid_error) = chart.plot_grid(geometry.rect(8.0, 40.0, 344.0, 194.0), columns[..], rows[..], 10.0, 8.0, cells[..])
+    if grid_error != ok { ret grid_error }
+    var series: [4]chart.Layout = zero
+    var point_storage: [48]chart.Coord = zero
+    var segment_storage: [44]chart.Segment = zero
+    var plots: [4]geometry.Rect = zero
+    var labels: [44]chart.Label = zero
+    var label_count = 0usize
+    var p = 0usize
+    while p < 4usize {
+        let (place, place_error) = text_locale.locale(&db, tags[p])
+        if place_error != ok { ret place_error }
+        let cell = placed[p]
+        let plot = geometry.rect(cell.x + 40.0, cell.y + 16.0, cell.width - 50.0, cell.height - 30.0)
+        plots[p] = plot
+        let (line, line_error) = chart.date_axis_line(dates[..], values[..], dates[0usize], dates[11usize], 0.0f64, 12500.0f64, plot, point_storage[p * 12usize..p * 12usize + 12usize], segment_storage[p * 11usize..p * 11usize + 11usize])
+        if line_error != ok { ret line_error }
+        series[p] = line
+        var y_text: [6]str = zero
+        let (numbers, numbers_error) = chart_locale.format_ticks_in(a, place, y_ticks[..], y_text[..])
+        if numbers_error != ok { ret numbers_error }
+        var x_text: [4]str = zero
+        let (month_names, names_error) = chart_locale.format_date_ticks_in(a, place, months, "MMM", x_text[..])
+        if names_error != ok { ret names_error }
+        labels[label_count] = chart.Label { text: titles[p], anchor: chart.Coord { x: cell.x + 4.0, y: cell.y + 9.0 }, align: .Left }
+        label_count += 1usize
+        var i = 0usize
+        while i < numbers.len {
+            labels[label_count] = chart.Label { text: numbers[i], anchor: chart.Coord { x: plot.x - 4.0, y: plot.y + plot.height * (1.0 - y_ticks[i].fraction) + 2.5 }, align: .Right }
+            label_count += 1usize
+            i += 1usize
+        }
+        i = 0usize
+        while i < month_names.len {
+            labels[label_count] = chart.Label { text: month_names[i], anchor: chart.Coord { x: plot.x + plot.width * months[i].fraction, y: plot.y + plot.height + 9.0 }, align: .Center }
+            label_count += 1usize
+            i += 1usize
+        }
+        p += 1usize
+    }
+    let heading = [2]chart.Label{
+        chart.Label { text: "One series, four locales", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center },
+        chart.Label { text: "Separators, grouping (Spanish leaves 2500 alone) and month names", anchor: chart.Coord { x: 180.0, y: 31.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 160usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    p = 0usize
+    while p < 4usize {
+        try fill(&builder, plots[p], paint.Brush { Solid: panel })
+        try chart_scene.append_guides(&builder, plots[p], zero, y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: grid })
+        try chart_scene.append(a, &builder, &series[p], paint.Brush { Solid: blue })
+        p += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..label_count], font, 6.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, heading[..1usize], font, 11.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, heading[1usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    p = 0usize
+    while p < 4usize {
+        try chart_svg.rect(&writer, plots[p], panel, false)
+        try chart_svg.append_guides(&writer, plots[p], zero, y_ticks[..], grid, grid)
+        try chart_svg.append(&writer, &series[p], blue)
+        p += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..label_count], dark, 6.0)
+    try chart_svg.append_labels(&writer, heading[..1usize], dark, 11.0)
+    try chart_svg.append_labels(&writer, heading[1usize..], dark, 7.0)
     try chart_svg.finish(&writer)
     let (svg_path, path_error) = vector_path(a, path)
     if path_error != ok { ret path_error }
@@ -11153,6 +11263,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_gradient_font_preview(a, queue, output_target, canvas, &renderer)
     try render_color_vision_preview(a, queue, output_target, canvas, &renderer)
     try render_label_placement_preview(a, queue, output_target, canvas, &renderer)
+    try render_locale_axes_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)

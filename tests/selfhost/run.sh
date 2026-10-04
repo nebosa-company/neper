@@ -3029,6 +3029,11 @@ gfx_chart_label_placement_written=$($test_build/neper-self emit-executable "$rep
 chmod +x "$test_build/gfx-chart-label-placement-selfhost"
 gfx_chart_label_placement_output=$("$test_build/gfx-chart-label-placement-selfhost")
 [ "$gfx_chart_label_placement_output" = 'gfx chart label placement ok' ]
+gfx_chart_locale_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_locale/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-locale-selfhost")
+[ "$gfx_chart_locale_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-locale-selfhost"
+gfx_chart_locale_output=$("$test_build/gfx-chart-locale-selfhost")
+[ "$gfx_chart_locale_output" = 'gfx chart locale ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"

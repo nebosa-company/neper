@@ -4584,6 +4584,7 @@ fn format_f64(a: *mem.Arena, selected_locale: Locale, value: f64, options: Numbe
 fn parse_f64(selected_locale: Locale, value: str) -> (f64, err)
 fn format_currency(a: *mem.Arena, selected_locale: Locale, value: decimal.Decimal, options: CurrencyOptions) -> (str, err)
 fn format_date(a: *mem.Arena, selected_locale: Locale, value: calendar.DateTime, style: DateStyle) -> (str, err)
+fn format_pattern(a: *mem.Arena, selected_locale: Locale, pattern: str, value: calendar.DateTime) -> (str, err)
 fn compare(selected_locale: Locale, a: str, b: str) -> i32
 fn lower(a: *mem.Arena, selected_locale: Locale, value: str) -> (str, err)
 fn upper(a: *mem.Arena, selected_locale: Locale, value: str) -> (str, err)
@@ -16312,7 +16313,7 @@ fn monte_carlo_distribution(samples: []const f64, domain_min: f64, domain_max: f
 fn aggregate_decomposition_tree(parents: []const usize, weights: []const f32, bounds: geometry.Rect, totals: []f64, depths: []usize, spans: []geometry.Rect, cards: []geometry.Rect, value_bars: []geometry.Rect, connectors: []Segment) -> (AggregateTreeLayout, err)
 fn date_axis_line(dates: []const time.Date, values: []const f64, start: time.Date, end: time.Date, y_min: f64, y_max: f64, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
 fn date_ticks(start: time.Date, end: time.Date, month_stride: usize, out: []DateTick) -> ([]DateTick, err)
-fn format_date_ticks(ticks: []const DateTick, out: []str, storage: []u8) -> ([]str, err)
+fn format_date_ticks(ticks_in: []const DateTick, out: []str, storage: []u8) -> ([]str, err)
 fn discrete_axis_bars(keys: []const str, values: []const f64, levels: []const str, domain_max: f64, bounds: geometry.Rect, sums: []f64, bars: []geometry.Rect, ticks_out: []Tick) -> (Layout, err)
 fn category_facet_scatter(keys: []const str, x: []const f32, y: []const f32, levels: []const str, bounds: geometry.Rect, columns: usize, gap: f32, strip_height: f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, panels: []geometry.Rect, points: []Coord, marks: []Layout, strips: []Label, counts: []usize) -> (CategoryFacetLayout, err)
 fn wrapped_legend_items(names: []const str, text_widths: []const f32, bounds: geometry.Rect, swatch: f32, gap: f32, row_height: f32, out: []LegendItem) -> (WrappedLegend, err)
@@ -16497,4 +16498,14 @@ fn append_brush(w: *io.Writer, marks: *const chart.Layout, brush: paint.Brush, i
 fn embed_font(w: *io.Writer, family: str, font: []const u8) -> err
 fn append_labels_in(w: *io.Writer, labels: []const chart.Label, ink: paint.Color, size: f32, family: str) -> err
 fn finish(w: *io.Writer) -> err
+```
+
+### `e.gfx.chart.locale`
+
+```neper
+error Invalid
+error TooLarge
+fn tick_decimals(values: []const chart.Tick) -> (u8, err)
+fn format_ticks_in(a: *mem.Arena, place: locale.Locale, values: []const chart.Tick, out: []str) -> ([]str, err)
+fn format_date_ticks_in(a: *mem.Arena, place: locale.Locale, ticks: []const chart.DateTick, pattern: str, out: []str) -> ([]str, err)
 ```

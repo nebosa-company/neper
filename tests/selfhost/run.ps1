@@ -3418,6 +3418,11 @@ $gfxChartLabelPlacementWritten = & $compiler emit-executable (Join-Path $PSScrip
 if ($LASTEXITCODE -ne 0 -or $gfxChartLabelPlacementWritten -ne 'executable written') { throw 'gfx_chart_label_placement emission failed' }
 $gfxChartLabelPlacementOutput = & $gfxChartLabelPlacementPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartLabelPlacementOutput -ne 'gfx chart label placement ok') { throw "the e.gfx.chart label placement answered wrongly: exit $LASTEXITCODE" }
+$gfxChartLocalePath = Join-Path $testBuild 'gfx-chart-locale-selfhost.exe'
+$gfxChartLocaleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_locale\src\main.e') $repo 'x64' 'windows' $gfxChartLocalePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLocaleWritten -ne 'executable written') { throw 'gfx_chart_locale emission failed' }
+$gfxChartLocaleOutput = & $gfxChartLocalePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLocaleOutput -ne 'gfx chart locale ok') { throw "the e.gfx.chart.locale tick text answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

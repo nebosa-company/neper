@@ -184,6 +184,13 @@ positions around its point that stays in the panel and clears every placed
 label and every other point. 21 fit; Amsterdam, Rotterdam, Brussels and
 Luxembourg sit inside the Benelux cluster, so their points are drawn grey and
 left unlabelled rather than overprinted.
+The locale-axes preview draws one 2024 revenue series four times with
+`e.gfx.chart.locale` tick text: US English groups with commas, German and
+Italian with full stops, and Spanish leaves four-digit numbers ungrouped
+(CLDR minimum grouping 2) while writing 10.000; month ticks use each locale's
+abbreviations. French, whose grouping separator is a narrow no-break space
+(U+202F), is checked by the fixture but left out of the picture because
+Montserrat has no glyph for that character.
 
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:

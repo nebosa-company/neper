@@ -35133,3 +35133,18 @@ or conflict-graph optimisation would place more labels in dense clusters and
 remains follow-on work, as do leader lines. Text widths are measured by the
 caller, as `wrapped_legend_items` already does, so the geometry stays
 renderer-neutral.
+
+## D2105 — Locale-aware chart tick text lives in its own module
+
+`e.gfx.chart` is a layer-2 pure-domain module and `e.text.locale` sits at
+layer 6, so locale formatting goes in a new layer-6 `e.gfx.chart.locale`
+beside the scene and SVG adapters instead of widening the core. It allocates
+strings from the caller's arena, as `e.text.locale` does, while the core's
+`format_ticks` keeps writing into caller storage. `format_ticks_in` gives one
+axis a shared precision — the fewest decimals (up to six) that write every
+tick exactly — so a 0.25 step reads 0,00 0,25 0,50 rather than mixing 0 and
+0,5, and it inherits CLDR minimum grouping (Spanish 2500 but 10.000).
+`format_date_ticks_in` takes an LDML pattern through `locale.format_pattern`,
+a new public wrapper over the pattern writer the four date styles already
+used. Text a face cannot draw is not substituted: French grouping uses U+202F,
+which Montserrat lacks, so font fallback stays a renderer concern.

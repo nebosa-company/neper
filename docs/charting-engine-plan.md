@@ -1090,6 +1090,17 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 ## How Neper can beat the reference tools
 
+`e.gfx.chart.locale` writes tick text through `e.text.locale`:
+`format_ticks_in` picks one shared precision per axis (`tick_decimals`) and
+applies the locale's decimal and grouping separators, including CLDR minimum
+grouping; `format_date_ticks_in` writes date ticks through an LDML pattern in
+the locale's month and day names, using the new `locale.format_pattern`. It
+is a separate layer-6 module so `e.gfx.chart` stays free of locale data. The
+`locale_axes` PNG/SVG pair shows en-US, German, Spanish and Italian axes;
+`gfx_chart_locale` checks en/de/fr/es/ja numbers and dates, precision,
+negative zero and refusals on Windows and Linux. Font fallback for
+separators a face lacks (French U+202F in Montserrat) remains open.
+
 `place_point_labels` places point labels greedily in the caller's priority
 order over Imhof's eight candidate positions, keeping each inside the plot,
 clear of earlier labels and away from other points; a label with no free slot
