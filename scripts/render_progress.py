@@ -197,8 +197,8 @@ kpi = '\n'.join([
     meter('Library', L, '%.2f of %d capabilities' % (l_sum, l_n)),
 ])
 
-# Keep the full chart catalogue in its maintained Markdown source. The readiness
-# page embeds that source and shows the unfinished queue in serial pickup order.
+# Keep the chart catalogue in its maintained Markdown source. The readiness
+# page links to a generated chart guide and shows the unfinished queue.
 chart_plan = Path('docs/charting-engine-plan.md').read_text(encoding='utf-8')
 queue_items = json.loads(WORK_QUEUE.read_text(encoding='utf-8'))['items']
 chart_item = next((item for item in queue_items if item['id'] == 'L061'), None)
@@ -211,13 +211,12 @@ if chart_item is None:
                 break
 if chart_item is None:
     raise SystemExit('L061 missing from work queue and completion ledger')
-roadmap = []
-for number, title in re.findall(r'^([1-9])\. \*\*(.+?):\*\*', chart_plan, re.M):
-    roadmap.append(f'<li>{html.escape(title)} <span class="sub">(phase {number})</span></li>')
 backlog = '\n'.join(
     '<tr><td><code>{id}</code></td><td>{title}</td><td>{score:.0%}</td><td>{evidence}</td></tr>'.format(
         id=html.escape(item['id']), title=html.escape(item['title']),
-        score=float(item['score']), evidence=html.escape(item['evidence']))
+        score=float(item['score']), evidence=html.escape(
+            'See docs/charts.md for the engine, delivery evidence and previews.'
+            if item['id'] == 'L061' else item['evidence']))
     for item in queue_items
 )
 preview_paths = sorted(Path('docs/chart-previews').glob('*.png'))
@@ -231,33 +230,44 @@ if any(not path.with_suffix('.svg').exists() for path in preview_paths):
 if {path.stem for path in preview_paths} & set(preview_backlog):
     raise SystemExit('a rendered chart remains in the preview backlog')
 chart_total = len(preview_paths) + len(preview_backlog)
-previews = ''.join(
-    '<figure><img src="chart-previews/{name}" alt="Neper {title} chart preview" '
-    'width="360" height="240"><figcaption>{title}{vector}</figcaption></figure>'.format(
-        name=html.escape(path.name), title=html.escape(path.stem.title()),
-        vector=(' <a href="chart-previews/{name}">SVG</a>'.format(
-            name=html.escape(path.with_suffix('.svg').name))
-            if path.with_suffix('.svg').exists() else ''))
+preview_notes = Path('docs/chart-previews/README.md').read_text(encoding='utf-8')
+gallery_rows = '\n'.join(
+    '| {title} | ![{title}](chart-previews/{png}) | [SVG](chart-previews/{svg}) |'.format(
+        title=path.stem.replace('_', ' ').title(), png=path.name,
+        svg=path.with_suffix('.svg').name)
     for path in preview_paths
 )
+chart_guide = (
+    '# Neper charts and diagrams\n\n'
+    'Neper builds renderer-neutral chart layouts from borrowed data and caller-owned '
+    'output storage. The same marks feed its CPU scene/PNG and SVG adapters. '
+    'This guide collects the produced charts, their preview notes, and the '
+    'charting-engine design and catalogue. Readiness scores remain in '
+    '[progress.html](progress.html).\n\n'
+    '## Rendered previews ({rendered}/{total})\n\n'
+    'The total includes rendered PNG/SVG pairs and the '
+    '[planned gallery targets](chart-preview-backlog.txt).\n\n'
+    '| Chart | PNG preview | Vector |\n|---|---|---|\n{gallery}\n\n'
+    '## Charting-engine delivery evidence\n\n{evidence}\n\n'
+    '## Preview descriptions\n\n{notes}\n\n'
+    '{plan}\n'
+).format(rendered=len(preview_paths), total=chart_total, gallery=gallery_rows,
+         evidence=chart_item['evidence'],
+         notes=preview_notes.removeprefix('# Chart previews\n').strip(),
+         plan=re.sub(r'^(#+) ', lambda match: '#' + match.group(1) + ' ', chart_plan, flags=re.M).strip())
+Path('docs/charts.md').write_text(chart_guide, encoding='utf-8', newline='\n')
 chart_section = (
-    '<section class="tools" aria-label="Charting engine plan">'
+    '<section class="tools" aria-label="Charting engine readiness">'
     '<h2>Charting engine</h2>'
-    '<p>Chart capability <code>L061</code>: {score:.0%} complete. {evidence}</p>'
-    '<h3>Delivery roadmap</h3><ol>{roadmap}</ol>'
-    '<h3>Rendered previews ({preview_count}/{chart_total})</h3><div class="previews">{previews}</div>'
-    '<p class="sub">The denominator is the rendered PNG/SVG pairs plus the '
-    '<a href="chart-preview-backlog.txt">planned gallery targets</a>, not an engine-readiness score.</p>'
-    '<details><summary>Full chart plan and chart/diagram catalogue</summary>'
-    '<pre class="plan">{plan}</pre></details></section>'
+    '<p>Chart capability <code>L061</code>: {score:.0%} complete. '
+    'Rendered previews ({preview_count}/{chart_total}). '
+    '<a href="charts.md">Charting-engine description and produced charts</a>.</p></section>'
     '<section class="tools" aria-label="Unfinished work queue">'
     '<h2>Backlog</h2><p>{count} unfinished capabilities in pickup order.</p>'
     '<details><summary>Show the full backlog</summary><div class="table-scroll">'
     '<table><thead><tr><th>ID</th><th>Capability</th><th>Progress</th><th>Evidence and remaining work</th></tr></thead>'
     '<tbody>{backlog}</tbody></table></div></details></section>'
-).format(score=float(chart_item['score']), evidence=html.escape(chart_item['evidence']),
-         roadmap=''.join(roadmap), preview_count=len(preview_paths), chart_total=chart_total, previews=previews,
-         plan=html.escape(chart_plan),
+).format(score=float(chart_item['score']), preview_count=len(preview_paths), chart_total=chart_total,
          count=len(queue_items), backlog=backlog)
 
 page_html = """<!doctype html>
@@ -281,9 +291,8 @@ footer{color:var(--muted);font-size:.8rem;margin-top:2rem;padding-top:1rem;borde
 .tools table{width:100%;border-collapse:collapse;font-size:.85rem}.tools td{padding:.45rem .6rem;border-top:1px solid var(--rule);vertical-align:top}
 .tools td:first-child{width:45%;overflow-wrap:anywhere}.tools code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.8rem}
 .tools th{text-align:left;padding:.45rem .6rem}.tools details{margin:1rem 0}.tools summary{cursor:pointer;font-weight:600}
-.tools ol{padding-left:1.5rem}.tools li{margin:.3rem 0}.plan{white-space:pre-wrap;overflow-wrap:anywhere;font: .82rem/1.55 ui-monospace,"Cascadia Mono",Consolas,monospace}
+.tools ol{padding-left:1.5rem}.tools li{margin:.3rem 0}
 .table-scroll{overflow-x:auto}.table-scroll table{min-width:48rem}.table-scroll td:first-child{width:auto}.table-scroll td{overflow-wrap:anywhere}
-.previews{display:grid;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr));gap:1rem}.previews figure{margin:0;border:1px solid var(--rule);border-radius:.75rem;overflow:hidden}.previews img{display:block;width:100%;height:auto}.previews figcaption{padding:.5rem .75rem;font-weight:600}
 @media(max-width:40rem){.tools td{display:block;width:auto}.tools td:first-child{width:auto;border-top:1px solid var(--rule);padding-bottom:0}.tools td+td{border-top:0}}
 </style>
 </head>
@@ -317,7 +326,7 @@ __CHART_SECTION__
 </table>
 <h3>Regenerate documents</h3>
 <table>
-<tr><td><code>python scripts/render_progress.py</code></td><td>This page, from the work queue, the completion ledger, the module and widget plans and the committed source.</td></tr>
+<tr><td><code>python scripts/render_progress.py</code></td><td>This readiness page and <code>docs/charts.md</code>, from the work queue, chart plan, preview inventory, completion ledger, module and widget plans and committed source.</td></tr>
 <tr><td><code>python scripts/render_tasks.py</code></td><td>One task file per unfinished feature under <code>docs/tasks</code>.</td></tr>
 <tr><td><code>python scripts/render_card.py [--check]</code></td><td>The LLM language card from the grammar and the diagnostic registry.</td></tr>
 <tr><td><code>python scripts/render_ux_theme.py [--check]</code></td><td>The UI theme block in <code>lib/e/ui/style.e</code> from <code>docs/ux/tokens.json</code>.</td></tr>

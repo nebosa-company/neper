@@ -34744,3 +34744,14 @@ adapters, invalid specifications and flat data. The gallery adds a PNG/SVG
 pair. Nonnormal, attribute and batch capability remain planned.
 
 Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-analysis/normal-capability-analysis/interpret-the-results/all-statistics-and-graphs/graphs/
+
+## D1949 — Separate chart documentation from readiness reporting
+
+`docs/progress.html` remains the sole generated readiness page: it keeps the
+L061 score and rendered/total preview count but links to `docs/charts.md`
+instead of embedding the delivery evidence, gallery and full chart plan.
+`scripts/render_progress.py` also generates `docs/charts.md` from the maintained
+chart plan, preview notes, committed PNG/SVG pairs and planned preview slugs.
+The chart guide holds descriptions and every produced preview; it links back
+to the readiness page for scores. This keeps the chart catalogue readable and
+prevents its preview inventory from drifting away from the generated count.

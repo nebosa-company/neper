@@ -1,4 +1,4 @@
-"""Keep the gallery counter in the same unit on both sides of the ratio."""
+"""Keep the chart guide's gallery counter in the same unit on both sides."""
 
 from pathlib import Path
 import re
@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 PREVIEWS = ROOT / "docs" / "chart-previews"
 BACKLOG = ROOT / "docs" / "chart-preview-backlog.txt"
-PAGE = ROOT / "docs" / "progress.html"
+PAGE = ROOT / "docs" / "charts.md"
 
 
 class ChartPreviewBacklogTests(unittest.TestCase):
