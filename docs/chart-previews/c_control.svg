@@ -1,40 +1,40 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>c_control</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="56" y="43" width="252" height="150" fill="rgb(245,247,252)" fill-opacity="1"/>
-<line x1="56" y1="182.65516662597656" x2="92" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="56" y1="129.09307861328125" x2="92" y2="129.09307861328125" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="56" y1="53.344825744628906" x2="92" y2="53.344825744628906" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="92" y1="182.65516662597656" x2="128" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="92" y1="129.09307861328125" x2="128" y2="129.09307861328125" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="92" y1="53.344825744628906" x2="128" y2="53.344825744628906" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="128" y1="182.65516662597656" x2="164" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="128" y1="129.09307861328125" x2="164" y2="129.09307861328125" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="128" y1="53.344825744628906" x2="164" y2="53.344825744628906" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="164" y1="182.65516662597656" x2="200" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="164" y1="129.09307861328125" x2="200" y2="129.09307861328125" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="164" y1="53.344825744628906" x2="200" y2="53.344825744628906" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="200" y1="182.65516662597656" x2="236" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="200" y1="129.09307861328125" x2="236" y2="129.09307861328125" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="200" y1="53.344825744628906" x2="236" y2="53.344825744628906" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="236" y1="182.65516662597656" x2="272" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="236" y1="129.09307861328125" x2="272" y2="129.09307861328125" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="236" y1="53.344825744628906" x2="272" y2="53.344825744628906" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="272" y1="182.65516662597656" x2="308" y2="182.65516662597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="272" y1="129.09307861328125" x2="308" y2="129.09307861328125" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="272" y1="53.344825744628906" x2="308" y2="53.344825744628906" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<path d="M56 146.94711303710938 L92 170.7524871826172 L128 111.23904418945312 L164 135.04441833496094 L200 87.43366241455078 L236 158.84979248046875 L272 99.33634948730469 L308 123.14173126220703" fill="none" stroke="rgb(20,102,194)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="53" y="143.94711303710938" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="89" y="167.7524871826172" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="125" y="108.23904418945312" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="161" y="132.04441833496094" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="197" y="84.43366241455078" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="233" y="155.84979248046875" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="269" y="96.33634948730469" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="305" y="120.14173126220703" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0</text>
-<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0.5</text>
-<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">1</text>
-<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">C chart</text>
-<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Run fraction</text>
-<text x="56" y="38" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Defects</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="56" y="43" width="252" height="150" fill="rgb(245,247,252)"/>
+<line x1="56" y1="182.66" x2="92" y2="182.66" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="129.09" x2="92" y2="129.09" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="53.34" x2="92" y2="53.34" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="92" y1="182.66" x2="128" y2="182.66" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="92" y1="129.09" x2="128" y2="129.09" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="92" y1="53.34" x2="128" y2="53.34" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="182.66" x2="164" y2="182.66" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="129.09" x2="164" y2="129.09" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="53.34" x2="164" y2="53.34" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="164" y1="182.66" x2="200" y2="182.66" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="164" y1="129.09" x2="200" y2="129.09" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="164" y1="53.34" x2="200" y2="53.34" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="200" y1="182.66" x2="236" y2="182.66" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="200" y1="129.09" x2="236" y2="129.09" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="200" y1="53.34" x2="236" y2="53.34" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="182.66" x2="272" y2="182.66" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="129.09" x2="272" y2="129.09" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="53.34" x2="272" y2="53.34" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="272" y1="182.66" x2="308" y2="182.66" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="272" y1="129.09" x2="308" y2="129.09" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="272" y1="53.34" x2="308" y2="53.34" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<path d="M56 146.95 L92 170.75 L128 111.24 L164 135.04 L200 87.43 L236 158.85 L272 99.34 L308 123.14" fill="none" stroke="rgb(20,102,194)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="53" y="143.95" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="89" y="167.75" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="125" y="108.24" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="161" y="132.04" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="197" y="84.43" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="233" y="155.85" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="269" y="96.34" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="305" y="120.14" width="6" height="6" fill="rgb(20,102,194)"/>
+<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">0</text>
+<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">0.5</text>
+<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">1</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)">C chart</text>
+<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Run fraction</text>
+<text x="56" y="38" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">Defects</text>
 </svg>

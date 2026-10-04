@@ -1,27 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>football_field</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="114" y="48" width="220" height="136" fill="rgb(245,247,252)" fill-opacity="1"/>
-<rect x="154" y="55.650001525878906" width="90" height="18.700000762939453" fill="rgb(26,102,194)" fill-opacity="1"/>
-<rect x="214" y="89.6500015258789" width="100" height="18.700000762939453" fill="rgb(232,130,48)" fill-opacity="1"/>
-<rect x="184" y="123.6500015258789" width="120" height="18.700000762939453" fill="rgb(31,150,125)" fill-opacity="1"/>
-<rect x="134" y="157.64999389648438" width="70" height="18.700000762939453" fill="rgb(122,99,179)" fill-opacity="1"/>
-<line x1="154" y1="51.400001525878906" x2="154" y2="78.5999984741211" stroke="rgb(51,64,84)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="244" y1="51.400001525878906" x2="244" y2="78.5999984741211" stroke="rgb(51,64,84)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="214" y1="85.4000015258789" x2="214" y2="112.5999984741211" stroke="rgb(51,64,84)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="314" y1="85.4000015258789" x2="314" y2="112.5999984741211" stroke="rgb(51,64,84)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="184" y1="119.4000015258789" x2="184" y2="146.60000610351562" stroke="rgb(51,64,84)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="304" y1="119.4000015258789" x2="304" y2="146.60000610351562" stroke="rgb(51,64,84)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="134" y1="153.39999389648438" x2="134" y2="180.60000610351562" stroke="rgb(51,64,84)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="204" y1="153.39999389648438" x2="204" y2="180.60000610351562" stroke="rgb(51,64,84)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="214" y1="48" x2="214" y2="184" stroke="rgb(207,61,64)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<text x="180" y="22" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Valuation football field</text>
-<text x="180" y="39" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Illustrative implied price / share</text>
-<text x="108" y="69" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Trading comps</text>
-<text x="108" y="103" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Deal precedents</text>
-<text x="108" y="137" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">DCF</text>
-<text x="108" y="171" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">52-week range</text>
-<text x="114" y="200" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">$50</text>
-<text x="214" y="200" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">$100 ref</text>
-<text x="334" y="200" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">$160</text>
-<text x="180" y="225" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Ranges share one equity / per-share basis</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="114" y="48" width="220" height="136" fill="rgb(245,247,252)"/>
+<rect x="154" y="55.65" width="90" height="18.7" fill="rgb(26,102,194)"/>
+<rect x="214" y="89.65" width="100" height="18.7" fill="rgb(232,130,48)"/>
+<rect x="184" y="123.65" width="120" height="18.7" fill="rgb(31,150,125)"/>
+<rect x="134" y="157.65" width="70" height="18.7" fill="rgb(122,99,179)"/>
+<line x1="154" y1="51.4" x2="154" y2="78.6" stroke="rgb(51,64,84)" stroke-width="2" stroke-linecap="round"/>
+<line x1="244" y1="51.4" x2="244" y2="78.6" stroke="rgb(51,64,84)" stroke-width="2" stroke-linecap="round"/>
+<line x1="214" y1="85.4" x2="214" y2="112.6" stroke="rgb(51,64,84)" stroke-width="2" stroke-linecap="round"/>
+<line x1="314" y1="85.4" x2="314" y2="112.6" stroke="rgb(51,64,84)" stroke-width="2" stroke-linecap="round"/>
+<line x1="184" y1="119.4" x2="184" y2="146.6" stroke="rgb(51,64,84)" stroke-width="2" stroke-linecap="round"/>
+<line x1="304" y1="119.4" x2="304" y2="146.6" stroke="rgb(51,64,84)" stroke-width="2" stroke-linecap="round"/>
+<line x1="134" y1="153.4" x2="134" y2="180.6" stroke="rgb(51,64,84)" stroke-width="2" stroke-linecap="round"/>
+<line x1="204" y1="153.4" x2="204" y2="180.6" stroke="rgb(51,64,84)" stroke-width="2" stroke-linecap="round"/>
+<line x1="214" y1="48" x2="214" y2="184" stroke="rgb(207,61,64)" stroke-width="2" stroke-linecap="round"/>
+<text x="180" y="22" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Valuation football field</text>
+<text x="180" y="39" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Illustrative implied price / share</text>
+<text x="108" y="69" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">Trading comps</text>
+<text x="108" y="103" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">Deal precedents</text>
+<text x="108" y="137" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">DCF</text>
+<text x="108" y="171" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">52-week range</text>
+<text x="114" y="200" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">$50</text>
+<text x="214" y="200" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">$100 ref</text>
+<text x="334" y="200" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">$160</text>
+<text x="180" y="225" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Ranges share one equity / per-share basis</text>
 </svg>

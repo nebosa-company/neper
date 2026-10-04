@@ -1,49 +1,49 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>dependency_graph</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="80.55000305175781" y1="87.75" x2="95" y2="87.75" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="95" y1="87.75" x2="95" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="95" y1="128.5" x2="109.44999694824219" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="104.24800109863281" y1="124.85859680175781" x2="109.44999694824219" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="104.24800109863281" y1="132.1414031982422" x2="109.44999694824219" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="80.55000305175781" y1="169.25" x2="95" y2="169.25" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="95" y1="169.25" x2="95" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="95" y1="128.5" x2="109.44999694824219" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="104.24800109863281" y1="124.85859680175781" x2="109.44999694824219" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="104.24800109863281" y1="132.1414031982422" x2="109.44999694824219" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="165.5500030517578" y1="128.5" x2="180" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="128.5" x2="180" y2="87.75" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="87.75" x2="194.4499969482422" y2="87.75" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="189.2480010986328" y1="84.10859680175781" x2="194.4499969482422" y2="87.75" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="189.2480010986328" y1="91.39140319824219" x2="194.4499969482422" y2="87.75" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="165.5500030517578" y1="128.5" x2="180" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="128.5" x2="180" y2="169.25" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="169.25" x2="194.4499969482422" y2="169.25" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="189.2480010986328" y1="165.6085968017578" x2="194.4499969482422" y2="169.25" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="189.2480010986328" y1="172.8914031982422" x2="194.4499969482422" y2="169.25" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="250.5500030517578" y1="87.75" x2="265" y2="87.75" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="265" y1="87.75" x2="265" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="265" y1="128.5" x2="279.45001220703125" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="274.2480163574219" y1="124.85859680175781" x2="279.45001220703125" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="274.2480163574219" y1="132.1414031982422" x2="279.45001220703125" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="250.5500030517578" y1="169.25" x2="265" y2="169.25" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="265" y1="169.25" x2="265" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="265" y1="128.5" x2="279.45001220703125" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="274.2480163574219" y1="124.85859680175781" x2="279.45001220703125" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="274.2480163574219" y1="132.1414031982422" x2="279.45001220703125" y2="128.5" stroke="rgb(140,158,181)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<rect x="24.44999885559082" y="72.75" width="56.10000228881836" height="30" fill="rgb(41,110,194)" fill-opacity="1"/>
-<rect x="24.44999885559082" y="154.25" width="56.10000228881836" height="30" fill="rgb(41,110,194)" fill-opacity="1"/>
-<rect x="109.44999694824219" y="113.5" width="56.10000228881836" height="30" fill="rgb(41,110,194)" fill-opacity="1"/>
-<rect x="194.4499969482422" y="72.75" width="56.10000228881836" height="30" fill="rgb(41,110,194)" fill-opacity="1"/>
-<rect x="194.4499969482422" y="154.25" width="56.10000228881836" height="30" fill="rgb(41,110,194)" fill-opacity="1"/>
-<rect x="279.45001220703125" y="113.5" width="56.10000228881836" height="30" fill="rgb(41,110,194)" fill-opacity="1"/>
-<rect x="109.44999694824219" y="113.5" width="56.10000228881836" height="30" fill="rgb(33,135,117)" fill-opacity="1"/>
-<rect x="279.45001220703125" y="113.5" width="56.10000228881836" height="30" fill="rgb(41,77,138)" fill-opacity="1"/>
-<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Dependency graph / DAG</text>
-<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Two starts, a merge and a split</text>
-<text x="52.5" y="90.75" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Plan</text>
-<text x="52.5" y="172.25" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Data</text>
-<text x="137.5" y="131.5" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Build</text>
-<text x="222.5" y="90.75" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Test</text>
-<text x="222.5" y="172.25" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Docs</text>
-<text x="307.5" y="131.5" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Ship</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="80.55" y1="87.75" x2="95" y2="87.75" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="95" y1="87.75" x2="95" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="95" y1="128.5" x2="109.45" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="104.25" y1="124.86" x2="109.45" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="104.25" y1="132.14" x2="109.45" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="80.55" y1="169.25" x2="95" y2="169.25" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="95" y1="169.25" x2="95" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="95" y1="128.5" x2="109.45" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="104.25" y1="124.86" x2="109.45" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="104.25" y1="132.14" x2="109.45" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="165.55" y1="128.5" x2="180" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="128.5" x2="180" y2="87.75" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="87.75" x2="194.45" y2="87.75" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="189.25" y1="84.11" x2="194.45" y2="87.75" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="189.25" y1="91.39" x2="194.45" y2="87.75" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="165.55" y1="128.5" x2="180" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="128.5" x2="180" y2="169.25" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="169.25" x2="194.45" y2="169.25" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="189.25" y1="165.61" x2="194.45" y2="169.25" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="189.25" y1="172.89" x2="194.45" y2="169.25" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="250.55" y1="87.75" x2="265" y2="87.75" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="265" y1="87.75" x2="265" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="265" y1="128.5" x2="279.45" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="274.25" y1="124.86" x2="279.45" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="274.25" y1="132.14" x2="279.45" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="250.55" y1="169.25" x2="265" y2="169.25" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="265" y1="169.25" x2="265" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="265" y1="128.5" x2="279.45" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="274.25" y1="124.86" x2="279.45" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<line x1="274.25" y1="132.14" x2="279.45" y2="128.5" stroke="rgb(140,158,181)" stroke-width="2" stroke-linecap="round"/>
+<rect x="24.45" y="72.75" width="56.1" height="30" fill="rgb(41,110,194)"/>
+<rect x="24.45" y="154.25" width="56.1" height="30" fill="rgb(41,110,194)"/>
+<rect x="109.45" y="113.5" width="56.1" height="30" fill="rgb(41,110,194)"/>
+<rect x="194.45" y="72.75" width="56.1" height="30" fill="rgb(41,110,194)"/>
+<rect x="194.45" y="154.25" width="56.1" height="30" fill="rgb(41,110,194)"/>
+<rect x="279.45" y="113.5" width="56.1" height="30" fill="rgb(41,110,194)"/>
+<rect x="109.45" y="113.5" width="56.1" height="30" fill="rgb(33,135,117)"/>
+<rect x="279.45" y="113.5" width="56.1" height="30" fill="rgb(41,77,138)"/>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)">Dependency graph / DAG</text>
+<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Two starts, a merge and a split</text>
+<text x="52.5" y="90.75" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)">Plan</text>
+<text x="52.5" y="172.25" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)">Data</text>
+<text x="137.5" y="131.5" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)">Build</text>
+<text x="222.5" y="90.75" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)">Test</text>
+<text x="222.5" y="172.25" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)">Docs</text>
+<text x="307.5" y="131.5" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)">Ship</text>
 </svg>

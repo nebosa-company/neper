@@ -1,23 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>legend_collision</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="37" y="56" width="286" height="96" fill="rgb(242,247,252)" fill-opacity="1"/>
-<rect x="19" y="163" width="322" height="52" fill="rgb(242,247,252)" fill-opacity="1"/>
-<line x1="37" y1="76" x2="323" y2="76" stroke="rgb(214,224,235)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="37" y1="106" x2="323" y2="106" stroke="rgb(214,224,235)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="37" y1="136" x2="323" y2="136" stroke="rgb(214,224,235)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<path d="M48 123 L136 116 L224 106 L312 96" fill="none" stroke="rgb(33,107,194)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="19" y="169" width="10" height="10" fill="rgb(33,107,194)" fill-opacity="1"/>
-<path d="M48 139 L136 125 L224 99 L312 74" fill="none" stroke="rgb(31,145,122)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="113.59200286865234" y="169" width="10" height="10" fill="rgb(31,145,122)" fill-opacity="1"/>
-<path d="M48 144 L136 132 L224 114 L312 87" fill="none" stroke="rgb(217,110,48)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="19" y="191" width="10" height="10" fill="rgb(217,110,48)" fill-opacity="1"/>
-<path d="M48 128 L136 119 L224 105 L312 101" fill="none" stroke="rgb(140,97,186)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="153.0880126953125" y="191" width="10" height="10" fill="rgb(140,97,186)" fill-opacity="1"/>
-<text x="34" y="179" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Control baseline</text>
-<text x="128.59201049804688" y="179" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Treatment alpha extended</text>
-<text x="34" y="201" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Treatment beta extended</text>
-<text x="168.0880126953125" y="201" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Follow-up cohort</text>
-<text x="180" y="22" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Wrapped legend / no collisions</text>
-<text x="180" y="40" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Measured labels wrap within a fixed legend band</text>
-<text x="180" y="234" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Swatch and label stay together on each row</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="37" y="56" width="286" height="96" fill="rgb(242,247,252)"/>
+<rect x="19" y="163" width="322" height="52" fill="rgb(242,247,252)"/>
+<line x1="37" y1="76" x2="323" y2="76" stroke="rgb(214,224,235)" stroke-width="2" stroke-linecap="round"/>
+<line x1="37" y1="106" x2="323" y2="106" stroke="rgb(214,224,235)" stroke-width="2" stroke-linecap="round"/>
+<line x1="37" y1="136" x2="323" y2="136" stroke="rgb(214,224,235)" stroke-width="2" stroke-linecap="round"/>
+<path d="M48 123 L136 116 L224 106 L312 96" fill="none" stroke="rgb(33,107,194)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="19" y="169" width="10" height="10" fill="rgb(33,107,194)"/>
+<path d="M48 139 L136 125 L224 99 L312 74" fill="none" stroke="rgb(31,145,122)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="113.59" y="169" width="10" height="10" fill="rgb(31,145,122)"/>
+<path d="M48 144 L136 132 L224 114 L312 87" fill="none" stroke="rgb(217,110,48)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="19" y="191" width="10" height="10" fill="rgb(217,110,48)"/>
+<path d="M48 128 L136 119 L224 105 L312 101" fill="none" stroke="rgb(140,97,186)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="153.09" y="191" width="10" height="10" fill="rgb(140,97,186)"/>
+<text x="34" y="179" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(51,64,84)">Control baseline</text>
+<text x="128.59" y="179" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(51,64,84)">Treatment alpha extended</text>
+<text x="34" y="201" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(51,64,84)">Treatment beta extended</text>
+<text x="168.09" y="201" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(51,64,84)">Follow-up cohort</text>
+<text x="180" y="22" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Wrapped legend / no collisions</text>
+<text x="180" y="40" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Measured labels wrap within a fixed legend band</text>
+<text x="180" y="234" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Swatch and label stay together on each row</text>
 </svg>

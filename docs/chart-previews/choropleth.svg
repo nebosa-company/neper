@@ -1,53 +1,53 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>choropleth</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="30" y="49" width="300" height="142" fill="rgb(245,250,255)" fill-opacity="1"/>
-<path d="M67.5 70.30000305175781 L142.5 63.20000076293945 L127.5 127.0999984741211 L45 120 Z M70.5 108.63999938964844 L85.5 108.63999938964844 L85.5 95.86000061035156 L70.5 95.86000061035156 Z" fill-rule="nonzero" fill="rgb(201,224,245)" fill-opacity="1"/>
-<path d="M142.5 63.20000076293945 L210 67.45999908447266 L217.5 117.15999603271484 L127.5 127.0999984741211 Z" fill-rule="nonzero" fill="rgb(94,163,217)" fill-opacity="1"/>
-<path d="M210 67.45999908447266 L292.5 77.4000015258789 L315 112.89999389648438 L217.5 117.15999603271484 Z" fill-rule="nonzero" fill="rgb(20,87,161)" fill-opacity="1"/>
-<path d="M45 120 L127.5 127.0999984741211 L135 176.79998779296875 L60 162.60000610351562 Z" fill-rule="nonzero" fill="rgb(201,224,245)" fill-opacity="1"/>
-<path d="M127.5 127.0999984741211 L217.5 117.15999603271484 L210 169.70001220703125 L135 176.79998779296875 Z" fill-rule="nonzero" fill="rgb(51,128,191)" fill-opacity="1"/>
-<path d="M217.5 117.15999603271484 L315 112.89999389648438 L300 155.5 L210 169.70001220703125 Z" fill-rule="nonzero" fill="rgb(184,194,204)" fill-opacity="1"/>
-<line x1="45" y1="120" x2="127.5" y2="127.0999984741211" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="127.5" y1="127.0999984741211" x2="142.5" y2="63.20000076293945" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="142.5" y1="63.20000076293945" x2="67.5" y2="70.30000305175781" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="67.5" y1="70.30000305175781" x2="45" y2="120" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="70.5" y1="108.63999938964844" x2="85.5" y2="108.63999938964844" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="85.5" y1="108.63999938964844" x2="85.5" y2="95.86000061035156" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="85.5" y1="95.86000061035156" x2="70.5" y2="95.86000061035156" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="70.5" y1="95.86000061035156" x2="70.5" y2="108.63999938964844" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="127.5" y1="127.0999984741211" x2="217.5" y2="117.15999603271484" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="217.5" y1="117.15999603271484" x2="210" y2="67.45999908447266" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="210" y1="67.45999908447266" x2="142.5" y2="63.20000076293945" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="142.5" y1="63.20000076293945" x2="127.5" y2="127.0999984741211" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="217.5" y1="117.15999603271484" x2="315" y2="112.89999389648438" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="315" y1="112.89999389648438" x2="292.5" y2="77.4000015258789" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="292.5" y1="77.4000015258789" x2="210" y2="67.45999908447266" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="210" y1="67.45999908447266" x2="217.5" y2="117.15999603271484" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="60" y1="162.60000610351562" x2="135" y2="176.79998779296875" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="135" y1="176.79998779296875" x2="127.5" y2="127.0999984741211" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="127.5" y1="127.0999984741211" x2="45" y2="120" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="45" y1="120" x2="60" y2="162.60000610351562" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="135" y1="176.79998779296875" x2="210" y2="169.70001220703125" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="210" y1="169.70001220703125" x2="217.5" y2="117.15999603271484" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="217.5" y1="117.15999603271484" x2="127.5" y2="127.0999984741211" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="127.5" y1="127.0999984741211" x2="135" y2="176.79998779296875" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="210" y1="169.70001220703125" x2="300" y2="155.5" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="300" y1="155.5" x2="315" y2="112.89999389648438" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="315" y1="112.89999389648438" x2="217.5" y2="117.15999603271484" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="217.5" y1="117.15999603271484" x2="210" y2="169.70001220703125" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<text x="95" y="91" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">A</text>
-<text x="175" y="88" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">B</text>
-<text x="258" y="92" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">C</text>
-<text x="92" y="153" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">D</text>
-<text x="175" y="152" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">E</text>
-<text x="260" y="152" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">F</text>
-<rect x="78" y="209" width="40" height="9" fill="rgb(201,224,245)" fill-opacity="1"/>
-<rect x="118" y="209" width="40" height="9" fill="rgb(150,196,232)" fill-opacity="1"/>
-<rect x="158" y="209" width="40" height="9" fill="rgb(94,163,217)" fill-opacity="1"/>
-<rect x="198" y="209" width="40" height="9" fill="rgb(51,128,191)" fill-opacity="1"/>
-<rect x="238" y="209" width="40" height="9" fill="rgb(20,87,161)" fill-opacity="1"/>
-<text x="180" y="19" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Choropleth / district rate</text>
-<text x="180" y="38" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Rate per 1,000 / gray district has no data</text>
-<text x="52" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Low</text>
-<text x="306" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">High</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="30" y="49" width="300" height="142" fill="rgb(245,250,255)"/>
+<path d="M67.5 70.3 L142.5 63.2 L127.5 127.1 L45 120 Z M70.5 108.64 L85.5 108.64 L85.5 95.86 L70.5 95.86 Z" fill-rule="nonzero" fill="rgb(201,224,245)"/>
+<path d="M142.5 63.2 L210 67.46 L217.5 117.16 L127.5 127.1 Z" fill-rule="nonzero" fill="rgb(94,163,217)"/>
+<path d="M210 67.46 L292.5 77.4 L315 112.9 L217.5 117.16 Z" fill-rule="nonzero" fill="rgb(20,87,161)"/>
+<path d="M45 120 L127.5 127.1 L135 176.8 L60 162.6 Z" fill-rule="nonzero" fill="rgb(201,224,245)"/>
+<path d="M127.5 127.1 L217.5 117.16 L210 169.7 L135 176.8 Z" fill-rule="nonzero" fill="rgb(51,128,191)"/>
+<path d="M217.5 117.16 L315 112.9 L300 155.5 L210 169.7 Z" fill-rule="nonzero" fill="rgb(184,194,204)"/>
+<line x1="45" y1="120" x2="127.5" y2="127.1" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.5" y1="127.1" x2="142.5" y2="63.2" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="142.5" y1="63.2" x2="67.5" y2="70.3" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="67.5" y1="70.3" x2="45" y2="120" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.5" y1="108.64" x2="85.5" y2="108.64" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="85.5" y1="108.64" x2="85.5" y2="95.86" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="85.5" y1="95.86" x2="70.5" y2="95.86" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.5" y1="95.86" x2="70.5" y2="108.64" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.5" y1="127.1" x2="217.5" y2="117.16" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="217.5" y1="117.16" x2="210" y2="67.46" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="67.46" x2="142.5" y2="63.2" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="142.5" y1="63.2" x2="127.5" y2="127.1" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="217.5" y1="117.16" x2="315" y2="112.9" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="315" y1="112.9" x2="292.5" y2="77.4" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="292.5" y1="77.4" x2="210" y2="67.46" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="67.46" x2="217.5" y2="117.16" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="60" y1="162.6" x2="135" y2="176.8" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="135" y1="176.8" x2="127.5" y2="127.1" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.5" y1="127.1" x2="45" y2="120" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="45" y1="120" x2="60" y2="162.6" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="135" y1="176.8" x2="210" y2="169.7" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="169.7" x2="217.5" y2="117.16" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="217.5" y1="117.16" x2="127.5" y2="127.1" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.5" y1="127.1" x2="135" y2="176.8" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="169.7" x2="300" y2="155.5" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="300" y1="155.5" x2="315" y2="112.9" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="315" y1="112.9" x2="217.5" y2="117.16" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="217.5" y1="117.16" x2="210" y2="169.7" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<text x="95" y="91" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(41,56,79)">A</text>
+<text x="175" y="88" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(41,56,79)">B</text>
+<text x="258" y="92" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(41,56,79)">C</text>
+<text x="92" y="153" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(41,56,79)">D</text>
+<text x="175" y="152" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(41,56,79)">E</text>
+<text x="260" y="152" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(41,56,79)">F</text>
+<rect x="78" y="209" width="40" height="9" fill="rgb(201,224,245)"/>
+<rect x="118" y="209" width="40" height="9" fill="rgb(150,196,232)"/>
+<rect x="158" y="209" width="40" height="9" fill="rgb(94,163,217)"/>
+<rect x="198" y="209" width="40" height="9" fill="rgb(51,128,191)"/>
+<rect x="238" y="209" width="40" height="9" fill="rgb(20,87,161)"/>
+<text x="180" y="19" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(41,56,79)">Choropleth / district rate</text>
+<text x="180" y="38" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Rate per 1,000 / gray district has no data</text>
+<text x="52" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Low</text>
+<text x="306" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">High</text>
 </svg>

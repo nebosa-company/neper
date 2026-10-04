@@ -1,24 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>monte_carlo_histogram</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="49" y="49" width="282" height="140" fill="rgb(245,247,252)" fill-opacity="1"/>
-<rect x="84.25" y="163.5454559326172" width="17.625" height="25.454545974731445" fill="rgb(26,102,194)" fill-opacity="1"/>
-<rect x="101.875" y="157.18182373046875" width="17.625" height="31.81818199157715" fill="rgb(26,102,194)" fill-opacity="1"/>
-<rect x="119.5" y="119" width="17.625" height="70" fill="rgb(26,102,194)" fill-opacity="1"/>
-<rect x="137.125" y="109.45454406738281" width="17.625" height="79.54545593261719" fill="rgb(26,102,194)" fill-opacity="1"/>
-<rect x="154.75" y="99.90908813476562" width="17.625" height="89.09091186523438" fill="rgb(26,102,194)" fill-opacity="1"/>
-<rect x="172.375" y="96.7272720336914" width="17.625" height="92.2727279663086" fill="rgb(26,102,194)" fill-opacity="1"/>
-<rect x="190" y="49" width="17.625" height="140" fill="rgb(26,102,194)" fill-opacity="1"/>
-<rect x="207.625" y="77.63636016845703" width="17.625" height="111.36363983154297" fill="rgb(26,102,194)" fill-opacity="1"/>
-<rect x="225.25" y="128.5454559326172" width="17.625" height="60.45454406738281" fill="rgb(26,102,194)" fill-opacity="1"/>
-<rect x="242.875" y="115.81818389892578" width="17.625" height="73.18181610107422" fill="rgb(26,102,194)" fill-opacity="1"/>
-<rect x="260.5" y="166.72726440429688" width="17.625" height="22.272727966308594" fill="rgb(26,102,194)" fill-opacity="1"/>
-<rect x="278.125" y="173.09091186523438" width="17.625" height="15.909090995788574" fill="rgb(26,102,194)" fill-opacity="1"/>
-<rect x="295.75" y="185.81817626953125" width="17.625" height="3.1818182468414307" fill="rgb(26,102,194)" fill-opacity="1"/>
-<line x1="190" y1="49" x2="190" y2="189" stroke="rgb(212,69,64)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<text x="180" y="22" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Monte Carlo / outcome histogram</text>
-<text x="180" y="39" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">256 seeded trials / three-uniform toy model</text>
-<text x="49" y="204" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">40</text>
-<text x="190" y="204" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">70</text>
-<text x="331" y="204" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">100</text>
-<text x="180" y="225" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">P(outcome &lt;= 70) = 0.48</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="49" y="49" width="282" height="140" fill="rgb(245,247,252)"/>
+<rect x="84.25" y="163.55" width="17.62" height="25.45" fill="rgb(26,102,194)"/>
+<rect x="101.88" y="157.18" width="17.62" height="31.82" fill="rgb(26,102,194)"/>
+<rect x="119.5" y="119" width="17.62" height="70" fill="rgb(26,102,194)"/>
+<rect x="137.12" y="109.45" width="17.62" height="79.55" fill="rgb(26,102,194)"/>
+<rect x="154.75" y="99.91" width="17.62" height="89.09" fill="rgb(26,102,194)"/>
+<rect x="172.38" y="96.73" width="17.62" height="92.27" fill="rgb(26,102,194)"/>
+<rect x="190" y="49" width="17.62" height="140" fill="rgb(26,102,194)"/>
+<rect x="207.62" y="77.64" width="17.62" height="111.36" fill="rgb(26,102,194)"/>
+<rect x="225.25" y="128.55" width="17.62" height="60.45" fill="rgb(26,102,194)"/>
+<rect x="242.88" y="115.82" width="17.62" height="73.18" fill="rgb(26,102,194)"/>
+<rect x="260.5" y="166.73" width="17.62" height="22.27" fill="rgb(26,102,194)"/>
+<rect x="278.12" y="173.09" width="17.62" height="15.91" fill="rgb(26,102,194)"/>
+<rect x="295.75" y="185.82" width="17.62" height="3.18" fill="rgb(26,102,194)"/>
+<line x1="190" y1="49" x2="190" y2="189" stroke="rgb(212,69,64)" stroke-width="2" stroke-linecap="round"/>
+<text x="180" y="22" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(51,64,84)">Monte Carlo / outcome histogram</text>
+<text x="180" y="39" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">256 seeded trials / three-uniform toy model</text>
+<text x="49" y="204" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">40</text>
+<text x="190" y="204" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">70</text>
+<text x="331" y="204" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">100</text>
+<text x="180" y="225" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">P(outcome &lt;= 70) = 0.48</text>
 </svg>

@@ -1,22 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>ecdf</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="139.33334350585938" y1="30" x2="139.33334350585938" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="139.33334350585938" y1="204" x2="139.33334350585938" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="234.6666717529297" y1="30" x2="234.6666717529297" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="234.6666717529297" y1="204" x2="234.6666717529297" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<path d="M44 204 L44 193.125 L82.13333129882812 193.125 L82.13333129882812 182.25 L82.13333129882812 182.25 L82.13333129882812 171.375 L101.19999694824219 171.375 L101.19999694824219 160.5 L120.26667022705078 160.5 L120.26667022705078 149.625 L139.33334350585938 149.625 L139.33334350585938 138.75 L158.39999389648438 138.75 L158.39999389648438 127.875 L158.39999389648438 127.875 L158.39999389648438 117 L158.39999389648438 117 L158.39999389648438 106.125 L196.53334045410156 106.125 L196.53334045410156 95.25 L215.60000610351562 95.25 L215.60000610351562 84.375 L234.6666717529297 84.375 L234.6666717529297 73.5 L234.6666717529297 73.5 L234.6666717529297 62.625 L272.79998779296875 62.625 L272.79998779296875 51.75 L310.933349609375 51.75 L310.933349609375 40.875 L330 40.875 L330 30" fill="none" stroke="rgb(18,89,194)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="30" x2="139.33" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="204" x2="139.33" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="30" x2="234.67" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="204" x2="234.67" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<path d="M44 204 L44 193.12 L82.13 193.12 L82.13 182.25 L82.13 182.25 L82.13 171.38 L101.2 171.38 L101.2 160.5 L120.27 160.5 L120.27 149.62 L139.33 149.62 L139.33 138.75 L158.4 138.75 L158.4 127.88 L158.4 127.88 L158.4 117 L158.4 117 L158.4 106.12 L196.53 106.12 L196.53 95.25 L215.6 95.25 L215.6 84.38 L234.67 84.38 L234.67 73.5 L234.67 73.5 L234.67 62.62 L272.8 62.62 L272.8 51.75 L310.93 51.75 L310.93 40.88 L330 40.88 L330 30" fill="none" stroke="rgb(18,89,194)" stroke-width="2" stroke-linejoin="round"/>
 </svg>

@@ -1,29 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>histogram</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="139.33334350585938" y1="30" x2="139.33334350585938" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="139.33334350585938" y1="204" x2="139.33334350585938" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="234.6666717529297" y1="30" x2="234.6666717529297" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="234.6666717529297" y1="204" x2="234.6666717529297" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<rect x="44" y="146" width="35.75" height="58" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="79.75" y="30" width="35.75" height="174" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="115.5" y="88" width="35.75" height="116" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="151.25" y="30" width="35.75" height="174" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="187" y="88" width="35.75" height="116" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="222.75" y="88" width="35.75" height="116" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="258.5" y="146" width="35.75" height="58" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="294.25" y="88" width="35.75" height="116" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="30" x2="139.33" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="204" x2="139.33" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="30" x2="234.67" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="204" x2="234.67" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<rect x="44" y="146" width="35.75" height="58" fill="rgb(18,89,194)"/>
+<rect x="79.75" y="30" width="35.75" height="174" fill="rgb(18,89,194)"/>
+<rect x="115.5" y="88" width="35.75" height="116" fill="rgb(18,89,194)"/>
+<rect x="151.25" y="30" width="35.75" height="174" fill="rgb(18,89,194)"/>
+<rect x="187" y="88" width="35.75" height="116" fill="rgb(18,89,194)"/>
+<rect x="222.75" y="88" width="35.75" height="116" fill="rgb(18,89,194)"/>
+<rect x="258.5" y="146" width="35.75" height="58" fill="rgb(18,89,194)"/>
+<rect x="294.25" y="88" width="35.75" height="116" fill="rgb(18,89,194)"/>
 </svg>

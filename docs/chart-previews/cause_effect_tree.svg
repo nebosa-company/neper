@@ -1,51 +1,51 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>cause_effect_tree</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="276.8999938964844" y1="129" x2="265" y2="129" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="265" y1="129" x2="265" y2="76.19999694824219" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="265" y1="76.19999694824219" x2="253.09999084472656" y2="76.19999694824219" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="276.8999938964844" y1="129" x2="265" y2="129" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="265" y1="129" x2="265" y2="146.60000610351562" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="265" y1="146.60000610351562" x2="253.09999084472656" y2="146.60000610351562" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="276.8999938964844" y1="129" x2="265" y2="129" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="265" y1="129" x2="265" y2="199.40000915527344" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="265" y1="199.40000915527344" x2="253.09999084472656" y2="199.40000915527344" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="191.89999389648438" y1="76.19999694824219" x2="180" y2="76.19999694824219" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="76.19999694824219" x2="180" y2="58.599998474121094" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="58.599998474121094" x2="168.10000610351562" y2="58.599998474121094" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="191.89999389648438" y1="76.19999694824219" x2="180" y2="76.19999694824219" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="76.19999694824219" x2="180" y2="93.80000305175781" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="93.80000305175781" x2="168.10000610351562" y2="93.80000305175781" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="191.89999389648438" y1="146.60000610351562" x2="180" y2="146.60000610351562" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="146.60000610351562" x2="180" y2="129" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="129" x2="168.10000610351562" y2="129" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="191.89999389648438" y1="146.60000610351562" x2="180" y2="146.60000610351562" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="146.60000610351562" x2="180" y2="164.20001220703125" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="164.20001220703125" x2="168.10000610351562" y2="164.20001220703125" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="191.89999389648438" y1="199.40000915527344" x2="180" y2="199.40000915527344" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="199.40000915527344" x2="180" y2="199.40000915527344" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="199.40000915527344" x2="168.10000610351562" y2="199.40000915527344" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="106.9000015258789" y1="58.599998474121094" x2="95" y2="58.599998474121094" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="95" y1="58.599998474121094" x2="95" y2="58.599998474121094" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="95" y1="58.599998474121094" x2="83.0999984741211" y2="58.599998474121094" stroke="rgb(173,191,209)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<rect x="106.9000015258789" y="48.03999710083008" width="61.20000076293945" height="21.1200008392334" fill="rgb(212,230,247)" fill-opacity="1"/>
-<rect x="106.9000015258789" y="83.24000549316406" width="61.20000076293945" height="21.1200008392334" fill="rgb(212,230,247)" fill-opacity="1"/>
-<rect x="106.9000015258789" y="118.44000244140625" width="61.20000076293945" height="21.1200008392334" fill="rgb(212,230,247)" fill-opacity="1"/>
-<rect x="106.9000015258789" y="153.6400146484375" width="61.20000076293945" height="21.1200008392334" fill="rgb(212,230,247)" fill-opacity="1"/>
-<rect x="106.9000015258789" y="188.8400115966797" width="61.20000076293945" height="21.1200008392334" fill="rgb(212,230,247)" fill-opacity="1"/>
-<rect x="21.899999618530273" y="48.03999710083008" width="61.20000076293945" height="21.1200008392334" fill="rgb(212,230,247)" fill-opacity="1"/>
-<rect x="191.89999389648438" y="65.63999938964844" width="61.20000076293945" height="21.1200008392334" fill="rgb(28,110,199)" fill-opacity="1"/>
-<rect x="191.89999389648438" y="136.04000854492188" width="61.20000076293945" height="21.1200008392334" fill="rgb(28,110,199)" fill-opacity="1"/>
-<rect x="191.89999389648438" y="188.8400115966797" width="61.20000076293945" height="21.1200008392334" fill="rgb(28,110,199)" fill-opacity="1"/>
-<rect x="276.8999938964844" y="118.44000244140625" width="61.20000076293945" height="21.1200008392334" fill="rgb(224,94,46)" fill-opacity="1"/>
-<text x="180" y="20" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Cause-effect tree / late delivery</text>
-<text x="307.5" y="132" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Delays</text>
-<text x="222.5" y="79.19999694824219" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Supply</text>
-<text x="222.5" y="149.60000610351562" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Process</text>
-<text x="222.5" y="202.40000915527344" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Planning</text>
-<text x="137.5" y="61.599998474121094" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Stockout</text>
-<text x="137.5" y="96.80000305175781" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Transit</text>
-<text x="137.5" y="132" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Rework</text>
-<text x="137.5" y="167.20001220703125" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Breakdown</text>
-<text x="137.5" y="202.40000915527344" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Forecast</text>
-<text x="52.5" y="61.599998474121094" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Vendor</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="276.9" y1="129" x2="265" y2="129" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="265" y1="129" x2="265" y2="76.2" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="265" y1="76.2" x2="253.1" y2="76.2" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="276.9" y1="129" x2="265" y2="129" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="265" y1="129" x2="265" y2="146.6" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="265" y1="146.6" x2="253.1" y2="146.6" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="276.9" y1="129" x2="265" y2="129" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="265" y1="129" x2="265" y2="199.4" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="265" y1="199.4" x2="253.1" y2="199.4" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="191.9" y1="76.2" x2="180" y2="76.2" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="76.2" x2="180" y2="58.6" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="58.6" x2="168.1" y2="58.6" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="191.9" y1="76.2" x2="180" y2="76.2" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="76.2" x2="180" y2="93.8" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="93.8" x2="168.1" y2="93.8" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="191.9" y1="146.6" x2="180" y2="146.6" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="146.6" x2="180" y2="129" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="129" x2="168.1" y2="129" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="191.9" y1="146.6" x2="180" y2="146.6" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="146.6" x2="180" y2="164.2" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="164.2" x2="168.1" y2="164.2" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="191.9" y1="199.4" x2="180" y2="199.4" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="199.4" x2="180" y2="199.4" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="199.4" x2="168.1" y2="199.4" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="106.9" y1="58.6" x2="95" y2="58.6" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="95" y1="58.6" x2="95" y2="58.6" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="95" y1="58.6" x2="83.1" y2="58.6" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<rect x="106.9" y="48.04" width="61.2" height="21.12" fill="rgb(212,230,247)"/>
+<rect x="106.9" y="83.24" width="61.2" height="21.12" fill="rgb(212,230,247)"/>
+<rect x="106.9" y="118.44" width="61.2" height="21.12" fill="rgb(212,230,247)"/>
+<rect x="106.9" y="153.64" width="61.2" height="21.12" fill="rgb(212,230,247)"/>
+<rect x="106.9" y="188.84" width="61.2" height="21.12" fill="rgb(212,230,247)"/>
+<rect x="21.9" y="48.04" width="61.2" height="21.12" fill="rgb(212,230,247)"/>
+<rect x="191.9" y="65.64" width="61.2" height="21.12" fill="rgb(28,110,199)"/>
+<rect x="191.9" y="136.04" width="61.2" height="21.12" fill="rgb(28,110,199)"/>
+<rect x="191.9" y="188.84" width="61.2" height="21.12" fill="rgb(28,110,199)"/>
+<rect x="276.9" y="118.44" width="61.2" height="21.12" fill="rgb(224,94,46)"/>
+<text x="180" y="20" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(46,61,82)">Cause-effect tree / late delivery</text>
+<text x="307.5" y="132" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Delays</text>
+<text x="222.5" y="79.2" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Supply</text>
+<text x="222.5" y="149.6" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Process</text>
+<text x="222.5" y="202.4" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Planning</text>
+<text x="137.5" y="61.6" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">Stockout</text>
+<text x="137.5" y="96.8" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">Transit</text>
+<text x="137.5" y="132" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">Rework</text>
+<text x="137.5" y="167.2" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">Breakdown</text>
+<text x="137.5" y="202.4" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">Forecast</text>
+<text x="52.5" y="61.6" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">Vendor</text>
 </svg>

@@ -1,36 +1,36 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>radar</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="180" y1="130" x2="180" y2="50" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="130" x2="249.2820281982422" y2="90" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="130" x2="249.2820281982422" y2="170" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="130" x2="180" y2="210" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="130" x2="110.71796417236328" y2="170" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="130" x2="110.71796417236328" y2="90" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="90" x2="214.64102172851562" y2="110" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="214.64102172851562" y1="110" x2="214.64102172851562" y2="150" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="214.64102172851562" y1="150" x2="180" y2="170" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="170" x2="145.35897827148438" y2="150" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="145.35897827148438" y1="150" x2="145.35897827148438" y2="110" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="145.35897827148438" y1="110" x2="180" y2="90" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="50" x2="249.2820281982422" y2="90" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="249.2820281982422" y1="90" x2="249.2820281982422" y2="170" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="249.2820281982422" y1="170" x2="180" y2="210" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="180" y1="210" x2="110.71796417236328" y2="170" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="110.71796417236328" y1="170" x2="110.71796417236328" y2="90" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="110.71796417236328" y1="90" x2="180" y2="50" stroke="rgb(189,201,217)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<path d="M180 66 L229.883056640625 101.19999694824219 L222.95486450195312 154.8000030517578 L180 200.39999389648438 L139.81642150878906 153.1999969482422 L126.65283203125 99.19999694824219 L180 66 Z" fill="rgb(20,99,196)" fill-opacity="0.4399999976158142"/>
-<path d="M180 79.5999984741211 L241.6610107421875 94.4000015258789 L232.6543426513672 160.39999389648438 L180 184.39999389648438 L122.49591064453125 163.1999969482422 L135.6595001220703 104.4000015258789 L180 79.5999984741211 Z" fill="rgb(237,107,33)" fill-opacity="0.4000000059604645"/>
-<path d="M180 66 L229.883056640625 101.19999694824219 L222.95486450195312 154.8000030517578 L180 200.39999389648438 L139.81642150878906 153.1999969482422 L126.65283203125 99.19999694824219 L180 66" fill="none" stroke="rgb(20,99,196)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<path d="M180 79.5999984741211 L241.6610107421875 94.4000015258789 L232.6543426513672 160.39999389648438 L180 184.39999389648438 L122.49591064453125 163.1999969482422 L135.6595001220703 104.4000015258789 L180 79.5999984741211" fill="none" stroke="rgb(237,107,33)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="87" y="229" width="12" height="5" fill="rgb(20,99,196)" fill-opacity="1"/>
-<rect x="227" y="229" width="12" height="5" fill="rgb(237,107,33)" fill-opacity="1"/>
-<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Radar comparison</text>
-<text x="180" y="45" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Speed</text>
-<text x="258" y="93" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Power</text>
-<text x="258" y="173" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Quality</text>
-<text x="180" y="221" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Reach</text>
-<text x="102" y="173" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Growth</text>
-<text x="102" y="93" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Value</text>
-<text x="104" y="235" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">A</text>
-<text x="244" y="235" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">B</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="180" y1="130" x2="180" y2="50" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="130" x2="249.28" y2="90" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="130" x2="249.28" y2="170" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="130" x2="180" y2="210" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="130" x2="110.72" y2="170" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="130" x2="110.72" y2="90" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="90" x2="214.64" y2="110" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="214.64" y1="110" x2="214.64" y2="150" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="214.64" y1="150" x2="180" y2="170" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="170" x2="145.36" y2="150" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="145.36" y1="150" x2="145.36" y2="110" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="145.36" y1="110" x2="180" y2="90" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="50" x2="249.28" y2="90" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="249.28" y1="90" x2="249.28" y2="170" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="249.28" y1="170" x2="180" y2="210" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="210" x2="110.72" y2="170" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="110.72" y1="170" x2="110.72" y2="90" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<line x1="110.72" y1="90" x2="180" y2="50" stroke="rgb(189,201,217)" stroke-width="2" stroke-linecap="round"/>
+<path d="M180 66 L229.88 101.2 L222.95 154.8 L180 200.4 L139.82 153.2 L126.65 99.2 L180 66 Z" fill="rgb(20,99,196)" fill-opacity="0.44"/>
+<path d="M180 79.6 L241.66 94.4 L232.65 160.4 L180 184.4 L122.5 163.2 L135.66 104.4 L180 79.6 Z" fill="rgb(237,107,33)" fill-opacity="0.4"/>
+<path d="M180 66 L229.88 101.2 L222.95 154.8 L180 200.4 L139.82 153.2 L126.65 99.2 L180 66" fill="none" stroke="rgb(20,99,196)" stroke-width="2" stroke-linejoin="round"/>
+<path d="M180 79.6 L241.66 94.4 L232.65 160.4 L180 184.4 L122.5 163.2 L135.66 104.4 L180 79.6" fill="none" stroke="rgb(237,107,33)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="87" y="229" width="12" height="5" fill="rgb(20,99,196)"/>
+<rect x="227" y="229" width="12" height="5" fill="rgb(237,107,33)"/>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Radar comparison</text>
+<text x="180" y="45" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Speed</text>
+<text x="258" y="93" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">Power</text>
+<text x="258" y="173" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">Quality</text>
+<text x="180" y="221" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Reach</text>
+<text x="102" y="173" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)">Growth</text>
+<text x="102" y="93" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)">Value</text>
+<text x="104" y="235" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">A</text>
+<text x="244" y="235" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">B</text>
 </svg>

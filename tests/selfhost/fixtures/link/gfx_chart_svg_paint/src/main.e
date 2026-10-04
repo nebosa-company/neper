@@ -67,6 +67,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if count(output, " fill=\"url(#fade)\"") != 3usize || count(output, " fill=\"url(#glow)\"") != 1usize || count(output, " stroke=\"url(#stroke-fade)\"") != 1usize { ret chart.Invalid }
     if count(output, "fill=\"rgb(255,0,0)\"") != 3usize || str.contains(output, "ignored") { ret chart.Invalid }
     if !str.contains(output, "font-family=\"'Test Face', sans-serif\"") || !str.contains(output, "font-family=\"sans-serif\"") || !str.contains(output, ">a&lt;b</text>") { ret chart.Invalid }
+    // Numbers carry 0.01 px (ties to even: 0.125 is 0.12), negative zero is 0,
+    // and opacity 1 is left to the SVG default (D2111).
+    let (compact_state, compact_unused, compact_error) = io.memory_writer(a, 0usize)
+    if compact_error != ok { ret compact_error }
+    var compact_held = compact_state
+    var compact = io.writer(mem.cast[*void](&compact_held), io.memory_write)
+    try chart_svg.rect(&compact, geometry.rect(81.857147, -0.004, 6.0, 6.0), paint.rgba(1.0, 0.0, 0.0, 0.5), false)
+    try chart_svg.rect(&compact, geometry.rect(0.125, 2.0, 6.0, 6.0), paint.rgba(1.0, 0.0, 0.0, 1.0), false)
+    let compact_text = io.memory_bytes(&compact_held)
+    if !str.contains(compact_text, "<rect x=\"81.86\" y=\"0\" width=\"6\" height=\"6\" fill=\"rgb(255,0,0)\" fill-opacity=\"0.5\"/>") || !str.contains(compact_text, "<rect x=\"0.12\" y=\"2\" width=\"6\" height=\"6\" fill=\"rgb(255,0,0)\"/>") || str.contains(output, "fill-opacity=\"1\"") || str.contains(output, "stroke-opacity=\"1\"") { ret chart.Invalid }
     // The embedded payload decodes back to the font bytes.
     let prefix = "@font-face{font-family:\"Test Face\";src:url(data:font/ttf;base64,"
     let (start, found) = str.find(output, prefix)

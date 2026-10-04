@@ -1,31 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>category_facet</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="14" y="49" width="161.5" height="76" fill="rgb(242,247,252)" fill-opacity="1"/>
-<rect x="14" y="49" width="161.5" height="18" fill="rgb(38,102,179)" fill-opacity="1"/>
-<rect x="31.150001525878906" y="101.0999984741211" width="6" height="6" fill="rgb(26,140,128)" fill-opacity="1"/>
-<rect x="69.02499389648438" y="95.80000305175781" width="6" height="6" fill="rgb(26,140,128)" fill-opacity="1"/>
-<rect x="114.4749984741211" y="79.9000015258789" width="6" height="6" fill="rgb(26,140,128)" fill-opacity="1"/>
-<rect x="152.34999084472656" y="71.94999694824219" width="6" height="6" fill="rgb(26,140,128)" fill-opacity="1"/>
-<rect x="184.5" y="49" width="161.5" height="76" fill="rgb(242,247,252)" fill-opacity="1"/>
-<rect x="184.5" y="49" width="161.5" height="18" fill="rgb(38,102,179)" fill-opacity="1"/>
-<rect x="201.64999389648438" y="74.5999984741211" width="6" height="6" fill="rgb(26,140,128)" fill-opacity="1"/>
-<rect x="239.52499389648438" y="82.55000305175781" width="6" height="6" fill="rgb(26,140,128)" fill-opacity="1"/>
-<rect x="284.9750061035156" y="93.1500015258789" width="6" height="6" fill="rgb(26,140,128)" fill-opacity="1"/>
-<rect x="322.8499755859375" y="103.75" width="6" height="6" fill="rgb(26,140,128)" fill-opacity="1"/>
-<rect x="14" y="134" width="161.5" height="76" fill="rgb(242,247,252)" fill-opacity="1"/>
-<rect x="14" y="134" width="161.5" height="18" fill="rgb(38,102,179)" fill-opacity="1"/>
-<rect x="31.150001525878906" y="191.39999389648438" width="6" height="6" fill="rgb(26,140,128)" fill-opacity="1"/>
-<rect x="69.02499389648438" y="180.8000030517578" width="6" height="6" fill="rgb(26,140,128)" fill-opacity="1"/>
-<rect x="114.4749984741211" y="170.1999969482422" width="6" height="6" fill="rgb(26,140,128)" fill-opacity="1"/>
-<rect x="152.34999084472656" y="154.3000030517578" width="6" height="6" fill="rgb(26,140,128)" fill-opacity="1"/>
-<rect x="184.5" y="134" width="161.5" height="76" fill="rgb(242,247,252)" fill-opacity="1"/>
-<rect x="184.5" y="134" width="161.5" height="18" fill="rgb(38,102,179)" fill-opacity="1"/>
-<text x="94.75" y="61.599998474121094" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">North</text>
-<text x="265.25" y="61.599998474121094" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">South</text>
-<text x="94.75" y="146.60000610351562" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">East</text>
-<text x="265.25" y="146.60000610351562" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">West</text>
-<text x="180" y="22" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Category facets / shared scales</text>
-<text x="180" y="39" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Explicit panel order; West has no observations</text>
-<text x="265.25" y="186" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(122,138,156)" fill-opacity="1">No observations</text>
-<text x="180" y="234" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Every panel uses x = 0..10 and y = 0..10</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="14" y="49" width="161.5" height="76" fill="rgb(242,247,252)"/>
+<rect x="14" y="49" width="161.5" height="18" fill="rgb(38,102,179)"/>
+<rect x="31.15" y="101.1" width="6" height="6" fill="rgb(26,140,128)"/>
+<rect x="69.02" y="95.8" width="6" height="6" fill="rgb(26,140,128)"/>
+<rect x="114.47" y="79.9" width="6" height="6" fill="rgb(26,140,128)"/>
+<rect x="152.35" y="71.95" width="6" height="6" fill="rgb(26,140,128)"/>
+<rect x="184.5" y="49" width="161.5" height="76" fill="rgb(242,247,252)"/>
+<rect x="184.5" y="49" width="161.5" height="18" fill="rgb(38,102,179)"/>
+<rect x="201.65" y="74.6" width="6" height="6" fill="rgb(26,140,128)"/>
+<rect x="239.52" y="82.55" width="6" height="6" fill="rgb(26,140,128)"/>
+<rect x="284.98" y="93.15" width="6" height="6" fill="rgb(26,140,128)"/>
+<rect x="322.85" y="103.75" width="6" height="6" fill="rgb(26,140,128)"/>
+<rect x="14" y="134" width="161.5" height="76" fill="rgb(242,247,252)"/>
+<rect x="14" y="134" width="161.5" height="18" fill="rgb(38,102,179)"/>
+<rect x="31.15" y="191.4" width="6" height="6" fill="rgb(26,140,128)"/>
+<rect x="69.02" y="180.8" width="6" height="6" fill="rgb(26,140,128)"/>
+<rect x="114.47" y="170.2" width="6" height="6" fill="rgb(26,140,128)"/>
+<rect x="152.35" y="154.3" width="6" height="6" fill="rgb(26,140,128)"/>
+<rect x="184.5" y="134" width="161.5" height="76" fill="rgb(242,247,252)"/>
+<rect x="184.5" y="134" width="161.5" height="18" fill="rgb(38,102,179)"/>
+<text x="94.75" y="61.6" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)">North</text>
+<text x="265.25" y="61.6" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)">South</text>
+<text x="94.75" y="146.6" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)">East</text>
+<text x="265.25" y="146.6" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)">West</text>
+<text x="180" y="22" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Category facets / shared scales</text>
+<text x="180" y="39" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Explicit panel order; West has no observations</text>
+<text x="265.25" y="186" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(122,138,156)">No observations</text>
+<text x="180" y="234" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Every panel uses x = 0..10 and y = 0..10</text>
 </svg>

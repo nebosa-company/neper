@@ -1,38 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>phased_u_control</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="56" y="43" width="252" height="150" fill="rgb(245,247,252)" fill-opacity="1"/>
-<line x1="56" y1="182.65518188476562" x2="92" y2="182.65518188476562" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="56" y1="162.9329833984375" x2="92" y2="162.9329833984375" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="56" y1="118.65679931640625" x2="92" y2="129.93145751953125" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="92" y1="182.65518188476562" x2="128" y2="182.65518188476562" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="92" y1="162.9329833984375" x2="128" y2="162.9329833984375" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="92" y1="129.93145751953125" x2="128" y2="122.51454162597656" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="128" y1="182.65518188476562" x2="164" y2="182.65518188476562" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="128" y1="162.9329833984375" x2="164" y2="162.9329833984375" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="128" y1="122.51454162597656" x2="164" y2="127.9295883178711" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="182" y1="43" x2="182" y2="193" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="200" y1="179.8213653564453" x2="236" y2="182.65518188476562" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="200" y1="127.43305969238281" x2="236" y2="127.43305969238281" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="200" y1="75.04476928710938" x2="236" y2="64.81706237792969" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="236" y1="182.65518188476562" x2="272" y2="182.65518188476562" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="236" y1="127.43305969238281" x2="272" y2="127.43305969238281" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="236" y1="64.81706237792969" x2="272" y2="53.344825744628906" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="272" y1="182.65518188476562" x2="308" y2="175.25682067871094" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="272" y1="127.43305969238281" x2="308" y2="127.43305969238281" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="272" y1="53.344825744628906" x2="308" y2="79.60930633544922" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<path d="M56 160.5663299560547 L92 164.247802734375 L128 173.4514923095703 L164 155.0441131591797 L200 138.47747802734375 L236 111.65531158447266 L272 105.34420776367188 L308 136.63674926757812" fill="none" stroke="rgb(20,102,194)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="53" y="157.5663299560547" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="89" y="161.247802734375" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="125" y="170.4514923095703" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="161" y="152.0441131591797" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="197" y="135.47747802734375" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="233" y="108.65531158447266" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="269" y="102.34420776367188" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="305" y="133.63674926757812" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0</text>
-<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0.5</text>
-<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">1</text>
-<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Phased U chart</text>
-<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Run fraction</text>
-<text x="56" y="38" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Rate</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="56" y="43" width="252" height="150" fill="rgb(245,247,252)"/>
+<line x1="56" y1="182.66" x2="92" y2="182.66" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="162.93" x2="92" y2="162.93" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="118.66" x2="92" y2="129.93" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="92" y1="182.66" x2="128" y2="182.66" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="92" y1="162.93" x2="128" y2="162.93" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="92" y1="129.93" x2="128" y2="122.51" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="182.66" x2="164" y2="182.66" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="162.93" x2="164" y2="162.93" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="122.51" x2="164" y2="127.93" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="182" y1="43" x2="182" y2="193" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="200" y1="179.82" x2="236" y2="182.66" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="200" y1="127.43" x2="236" y2="127.43" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="200" y1="75.04" x2="236" y2="64.82" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="182.66" x2="272" y2="182.66" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="127.43" x2="272" y2="127.43" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="236" y1="64.82" x2="272" y2="53.34" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="272" y1="182.66" x2="308" y2="175.26" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="272" y1="127.43" x2="308" y2="127.43" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="272" y1="53.34" x2="308" y2="79.61" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<path d="M56 160.57 L92 164.25 L128 173.45 L164 155.04 L200 138.48 L236 111.66 L272 105.34 L308 136.64" fill="none" stroke="rgb(20,102,194)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="53" y="157.57" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="89" y="161.25" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="125" y="170.45" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="161" y="152.04" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="197" y="135.48" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="233" y="108.66" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="269" y="102.34" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="305" y="133.64" width="6" height="6" fill="rgb(20,102,194)"/>
+<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">0</text>
+<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">0.5</text>
+<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">1</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)">Phased U chart</text>
+<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Run fraction</text>
+<text x="56" y="38" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">Rate</text>
 </svg>

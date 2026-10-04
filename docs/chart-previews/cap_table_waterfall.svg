@@ -1,37 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>cap_table_waterfall</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="22" y="49" width="189.60000610351562" height="20" fill="rgb(26,99,191)" fill-opacity="1"/>
-<rect x="211.60000610351562" y="49" width="63.20000076293945" height="20" fill="rgb(26,145,128)" fill-opacity="1"/>
-<rect x="274.8000183105469" y="49" width="63.199981689453125" height="20" fill="rgb(110,92,176)" fill-opacity="1"/>
-<rect x="22" y="89" width="126.4000015258789" height="20" fill="rgb(26,99,191)" fill-opacity="1"/>
-<rect x="148.39999389648438" y="89" width="42.13333511352539" height="20" fill="rgb(26,145,128)" fill-opacity="1"/>
-<rect x="190.5333251953125" y="89" width="42.13333511352539" height="20" fill="rgb(110,92,176)" fill-opacity="1"/>
-<rect x="232.66665649414062" y="89" width="42.13333511352539" height="20" fill="rgb(232,135,38)" fill-opacity="1"/>
-<rect x="274.79998779296875" y="89" width="63.20001220703125" height="20" fill="rgb(212,69,64)" fill-opacity="1"/>
-<line x1="92.22000122070312" y1="134" x2="113.77999877929688" y2="134" stroke="rgb(143,163,186)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="169.22000122070312" y1="144.5" x2="190.77999877929688" y2="144.5" stroke="rgb(143,163,186)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="246.22000122070312" y1="155" x2="267.7799987792969" y2="155" stroke="rgb(143,163,186)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<rect x="36.779998779296875" y="134" width="55.44000244140625" height="63" fill="rgb(26,99,191)" fill-opacity="1"/>
-<rect x="113.77999877929688" y="134" width="55.44000244140625" height="10.5" fill="rgb(232,135,38)" fill-opacity="1"/>
-<rect x="190.77999877929688" y="144.5" width="55.44000244140625" height="10.5" fill="rgb(212,69,64)" fill-opacity="1"/>
-<rect x="267.7799987792969" y="155" width="55.44000244140625" height="42" fill="rgb(26,99,191)" fill-opacity="1"/>
-<text x="180" y="22" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Cap table / issuance waterfall</text>
-<text x="22" y="44" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Before / 10m shares</text>
-<text x="22" y="84" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">After / 15m shares</text>
-<text x="180" y="127" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Existing holders: 100% to 67%</text>
-<text x="116.80000305175781" y="62" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">60%</text>
-<text x="243.20001220703125" y="62" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">20%</text>
-<text x="306.4000244140625" y="62" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">20%</text>
-<text x="85.19999694824219" y="102" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">40%</text>
-<text x="169.46665954589844" y="102" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">13%</text>
-<text x="211.59999084472656" y="102" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">13%</text>
-<text x="253.7333221435547" y="102" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">13%</text>
-<text x="306.3999938964844" y="102" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">20%</text>
-<text x="64.5" y="209" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Start</text>
-<text x="141.5" y="209" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Pool</text>
-<text x="218.5" y="209" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Round</text>
-<text x="295.5" y="209" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Retained</text>
-<text x="76" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Founders 40%</text>
-<text x="204" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Seed 13% / team 13% / pool 13%</text>
-<text x="316" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">New 20%</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="22" y="49" width="189.6" height="20" fill="rgb(26,99,191)"/>
+<rect x="211.6" y="49" width="63.2" height="20" fill="rgb(26,145,128)"/>
+<rect x="274.8" y="49" width="63.2" height="20" fill="rgb(110,92,176)"/>
+<rect x="22" y="89" width="126.4" height="20" fill="rgb(26,99,191)"/>
+<rect x="148.4" y="89" width="42.13" height="20" fill="rgb(26,145,128)"/>
+<rect x="190.53" y="89" width="42.13" height="20" fill="rgb(110,92,176)"/>
+<rect x="232.67" y="89" width="42.13" height="20" fill="rgb(232,135,38)"/>
+<rect x="274.8" y="89" width="63.2" height="20" fill="rgb(212,69,64)"/>
+<line x1="92.22" y1="134" x2="113.78" y2="134" stroke="rgb(143,163,186)" stroke-width="2" stroke-linecap="round"/>
+<line x1="169.22" y1="144.5" x2="190.78" y2="144.5" stroke="rgb(143,163,186)" stroke-width="2" stroke-linecap="round"/>
+<line x1="246.22" y1="155" x2="267.78" y2="155" stroke="rgb(143,163,186)" stroke-width="2" stroke-linecap="round"/>
+<rect x="36.78" y="134" width="55.44" height="63" fill="rgb(26,99,191)"/>
+<rect x="113.78" y="134" width="55.44" height="10.5" fill="rgb(232,135,38)"/>
+<rect x="190.78" y="144.5" width="55.44" height="10.5" fill="rgb(212,69,64)"/>
+<rect x="267.78" y="155" width="55.44" height="42" fill="rgb(26,99,191)"/>
+<text x="180" y="22" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Cap table / issuance waterfall</text>
+<text x="22" y="44" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(51,64,84)">Before / 10m shares</text>
+<text x="22" y="84" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(51,64,84)">After / 15m shares</text>
+<text x="180" y="127" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Existing holders: 100% to 67%</text>
+<text x="116.8" y="62" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">60%</text>
+<text x="243.2" y="62" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">20%</text>
+<text x="306.4" y="62" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">20%</text>
+<text x="85.2" y="102" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">40%</text>
+<text x="169.47" y="102" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">13%</text>
+<text x="211.6" y="102" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">13%</text>
+<text x="253.73" y="102" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">13%</text>
+<text x="306.4" y="102" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">20%</text>
+<text x="64.5" y="209" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Start</text>
+<text x="141.5" y="209" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Pool</text>
+<text x="218.5" y="209" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Round</text>
+<text x="295.5" y="209" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Retained</text>
+<text x="76" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Founders 40%</text>
+<text x="204" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Seed 13% / team 13% / pool 13%</text>
+<text x="316" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">New 20%</text>
 </svg>

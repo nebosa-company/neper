@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>returns_volatility</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="53" y="43" width="270" height="79.5" fill="rgb(247,250,252)" fill-opacity="1"/>
-<rect x="53" y="132.5" width="270" height="79.5" fill="rgb(247,250,252)" fill-opacity="1"/>
-<path d="M77.54545593261719 55.91575241088867 L102.09091186523438 117.3379135131836 L126.63636779785156 52.327266693115234 L151.18182373046875 116.53379821777344 L175.72727966308594 49.370697021484375 L200.27273559570312 107.29256439208984 L224.81817626953125 56.42768478393555 L249.3636474609375 122.5 L273.9090881347656 44.51205825805664 L298.4545593261719 117.6193618774414 L323 43" fill="none" stroke="rgb(20,99,194)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<path d="M126.63636779785156 145.5 L151.18182373046875 144.11354064941406 L175.72727966308594 142.93431091308594 L200.27273559570312 145.75247192382812 L224.81817626953125 154.49073791503906 L249.3636474609375 149.02944946289062 L273.9090881347656 135.54718017578125 L298.4545593261719 132.5 L323 134.38157653808594" fill="none" stroke="rgb(18,140,110)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(77,92,115)" fill-opacity="1">Returns and rolling volatility</text>
-<text x="53" y="40" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(77,92,115)" fill-opacity="1">Simple return</text>
-<text x="53" y="129.5" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(77,92,115)" fill-opacity="1">Rolling SD (3)</text>
-<text x="180" y="237" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(77,92,115)" fill-opacity="1">Observation</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="53" y="43" width="270" height="79.5" fill="rgb(247,250,252)"/>
+<rect x="53" y="132.5" width="270" height="79.5" fill="rgb(247,250,252)"/>
+<path d="M77.55 55.92 L102.09 117.34 L126.64 52.33 L151.18 116.53 L175.73 49.37 L200.27 107.29 L224.82 56.43 L249.36 122.5 L273.91 44.51 L298.45 117.62 L323 43" fill="none" stroke="rgb(20,99,194)" stroke-width="2" stroke-linejoin="round"/>
+<path d="M126.64 145.5 L151.18 144.11 L175.73 142.93 L200.27 145.75 L224.82 154.49 L249.36 149.03 L273.91 135.55 L298.45 132.5 L323 134.38" fill="none" stroke="rgb(18,140,110)" stroke-width="2" stroke-linejoin="round"/>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(77,92,115)">Returns and rolling volatility</text>
+<text x="53" y="40" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(77,92,115)">Simple return</text>
+<text x="53" y="129.5" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(77,92,115)">Rolling SD (3)</text>
+<text x="180" y="237" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(77,92,115)">Observation</text>
 </svg>

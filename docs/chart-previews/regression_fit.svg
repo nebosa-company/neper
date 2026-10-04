@@ -1,30 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>regression_fit</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="139.33334350585938" y1="30" x2="139.33334350585938" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="139.33334350585938" y1="204" x2="139.33334350585938" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="234.6666717529297" y1="30" x2="234.6666717529297" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="234.6666717529297" y1="204" x2="234.6666717529297" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<rect x="41" y="201" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="81.85714721679688" y="114" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="122.71428680419922" y="143" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="163.57142639160156" y="56.000003814697266" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="204.42857360839844" y="114" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="245.2857208251953" y="85" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="286.1428527832031" y="172" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="327" y="27" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<path d="M44 160.5 L330 73.5" fill="none" stroke="rgb(240,107,31)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="30" x2="139.33" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="204" x2="139.33" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="30" x2="234.67" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="204" x2="234.67" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<rect x="41" y="201" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="81.86" y="114" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="122.71" y="143" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="163.57" y="56" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="204.43" y="114" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="245.29" y="85" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="286.14" y="172" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="327" y="27" width="6" height="6" fill="rgb(18,89,194)"/>
+<path d="M44 160.5 L330 73.5" fill="none" stroke="rgb(240,107,31)" stroke-width="2" stroke-linejoin="round"/>
 </svg>

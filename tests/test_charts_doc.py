@@ -95,7 +95,7 @@ class ChartGuideTests(unittest.TestCase):
             return (hi + 0.05) / (lo + 0.05)
 
         svg = (DOCS / "chart-previews" / "accessible_palette.svg").read_text(encoding="utf-8")
-        labels = re.findall(r'fill="rgb\(([0-9,]+)\)" fill-opacity="1">S[1-6]<', svg)
+        labels = re.findall(r'fill="rgb\(([0-9,]+)\)">S[1-6]<', svg)
         self.assertEqual(len(labels), 12)
         self.assertEqual(len(set(labels[:6])), 6)
         self.assertEqual(len(set(labels[6:])), 6)

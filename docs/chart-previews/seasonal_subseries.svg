@@ -1,22 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>seasonal_subseries</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="44" y="49" width="68" height="139" fill="rgb(242,247,252)" fill-opacity="1"/>
-<rect x="112" y="49" width="1" height="139" fill="rgb(201,209,222)" fill-opacity="1"/>
-<rect x="180" y="49" width="68" height="139" fill="rgb(242,247,252)" fill-opacity="1"/>
-<rect x="180" y="49" width="1" height="139" fill="rgb(201,209,222)" fill-opacity="1"/>
-<rect x="248" y="49" width="1" height="139" fill="rgb(201,209,222)" fill-opacity="1"/>
-<line x1="50.79999923706055" y1="174.10000610351562" x2="105.19999694824219" y2="174.10000610351562" stroke="rgb(224,87,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="118.80000305175781" y1="127.76667022705078" x2="173.1999969482422" y2="127.76667022705078" stroke="rgb(224,87,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="186.8000030517578" y1="72.16666412353516" x2="241.1999969482422" y2="72.16666412353516" stroke="rgb(224,87,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="254.8000030517578" y1="146.3000030517578" x2="309.20001220703125" y2="146.3000030517578" stroke="rgb(224,87,33)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<path d="M50.79999923706055 188 L68.93333435058594 178.73333740234375 L87.06666564941406 169.46665954589844 L105.19999694824219 160.1999969482422" fill="none" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<path d="M118.80000305175781 150.93333435058594 L136.93333435058594 141.6666717529297 L155.06666564941406 113.86666870117188 L173.1999969482422 104.5999984741211" fill="none" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<path d="M186.8000030517578 95.33333587646484 L204.93333435058594 76.80000305175781 L223.06666564941406 67.53333282470703 L241.1999969482422 49" fill="none" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<path d="M254.8000030517578 160.1999969482422 L272.9333190917969 150.93333435058594 L291.0666809082031 141.6666717529297 L309.20001220703125 132.39999389648438" fill="none" stroke="rgb(15,89,184)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Seasonal subseries • quarters</text>
-<text x="78" y="205" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Q1</text>
-<text x="146" y="205" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Q2</text>
-<text x="214" y="205" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Q3</text>
-<text x="282" y="205" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Q4</text>
-<text x="180" y="228" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Blue: year sequence     Orange: quarter mean</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="44" y="49" width="68" height="139" fill="rgb(242,247,252)"/>
+<rect x="112" y="49" width="1" height="139" fill="rgb(201,209,222)"/>
+<rect x="180" y="49" width="68" height="139" fill="rgb(242,247,252)"/>
+<rect x="180" y="49" width="1" height="139" fill="rgb(201,209,222)"/>
+<rect x="248" y="49" width="1" height="139" fill="rgb(201,209,222)"/>
+<line x1="50.8" y1="174.1" x2="105.2" y2="174.1" stroke="rgb(224,87,33)" stroke-width="2" stroke-linecap="round"/>
+<line x1="118.8" y1="127.77" x2="173.2" y2="127.77" stroke="rgb(224,87,33)" stroke-width="2" stroke-linecap="round"/>
+<line x1="186.8" y1="72.17" x2="241.2" y2="72.17" stroke="rgb(224,87,33)" stroke-width="2" stroke-linecap="round"/>
+<line x1="254.8" y1="146.3" x2="309.2" y2="146.3" stroke="rgb(224,87,33)" stroke-width="2" stroke-linecap="round"/>
+<path d="M50.8 188 L68.93 178.73 L87.07 169.47 L105.2 160.2" fill="none" stroke="rgb(15,89,184)" stroke-width="2" stroke-linejoin="round"/>
+<path d="M118.8 150.93 L136.93 141.67 L155.07 113.87 L173.2 104.6" fill="none" stroke="rgb(15,89,184)" stroke-width="2" stroke-linejoin="round"/>
+<path d="M186.8 95.33 L204.93 76.8 L223.07 67.53 L241.2 49" fill="none" stroke="rgb(15,89,184)" stroke-width="2" stroke-linejoin="round"/>
+<path d="M254.8 160.2 L272.93 150.93 L291.07 141.67 L309.2 132.4" fill="none" stroke="rgb(15,89,184)" stroke-width="2" stroke-linejoin="round"/>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Seasonal subseries • quarters</text>
+<text x="78" y="205" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Q1</text>
+<text x="146" y="205" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Q2</text>
+<text x="214" y="205" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Q3</text>
+<text x="282" y="205" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Q4</text>
+<text x="180" y="228" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Blue: year sequence     Orange: quarter mean</text>
 </svg>

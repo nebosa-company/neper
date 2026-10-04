@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>drawdown</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="49" y="43" width="272" height="160" fill="rgb(250,247,247)" fill-opacity="1"/>
-<rect x="49" y="202" width="272" height="1" fill="rgb(217,224,235)" fill-opacity="1"/>
-<path d="M49 43 L79.22222137451172 43 L109.44444274902344 160.33334350585938 L139.6666717529297 96.33334350585938 L169.88888549804688 203 L200.11111450195312 43 L230.33334350585938 111.5714340209961 L260.5555419921875 43 L290.77777099609375 128.33334350585938 L321 43 L321 43 L290.77777099609375 43 L260.5555419921875 43 L230.33334350585938 43 L200.11111450195312 43 L169.88888549804688 43 L139.6666717529297 43 L109.44444274902344 43 L79.22222137451172 43 L49 43 Z" fill="rgb(224,66,79)" fill-opacity="0.3400000035762787"/>
-<path d="M49 43 L79.22222137451172 43 L109.44444274902344 160.33334350585938 L139.6666717529297 96.33334350585938 L169.88888549804688 203 L200.11111450195312 43 L230.33334350585938 111.5714340209961 L260.5555419921875 43 L290.77777099609375 128.33334350585938 L321 43" fill="none" stroke="rgb(189,41,59)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<text x="180" y="22" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(77,92,115)" fill-opacity="1">Drawdown from running peak</text>
-<text x="42" y="46" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(77,92,115)" fill-opacity="1">0%</text>
-<text x="42" y="201" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(77,92,115)" fill-opacity="1">-25%</text>
-<text x="180" y="234" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(77,92,115)" fill-opacity="1">Observation</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="49" y="43" width="272" height="160" fill="rgb(250,247,247)"/>
+<rect x="49" y="202" width="272" height="1" fill="rgb(217,224,235)"/>
+<path d="M49 43 L79.22 43 L109.44 160.33 L139.67 96.33 L169.89 203 L200.11 43 L230.33 111.57 L260.56 43 L290.78 128.33 L321 43 L321 43 L290.78 43 L260.56 43 L230.33 43 L200.11 43 L169.89 43 L139.67 43 L109.44 43 L79.22 43 L49 43 Z" fill="rgb(224,66,79)" fill-opacity="0.34"/>
+<path d="M49 43 L79.22 43 L109.44 160.33 L139.67 96.33 L169.89 203 L200.11 43 L230.33 111.57 L260.56 43 L290.78 128.33 L321 43" fill="none" stroke="rgb(189,41,59)" stroke-width="2" stroke-linejoin="round"/>
+<text x="180" y="22" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(77,92,115)">Drawdown from running peak</text>
+<text x="42" y="46" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(77,92,115)">0%</text>
+<text x="42" y="201" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(77,92,115)">-25%</text>
+<text x="180" y="234" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(77,92,115)">Observation</text>
 </svg>

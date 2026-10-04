@@ -1,33 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>run_rules_control</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="56" y="43" width="252" height="150" fill="rgb(245,247,252)" fill-opacity="1"/>
-<line x1="56" y1="182.7260284423828" x2="308" y2="182.7260284423828" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="56" y1="121.08219146728516" x2="308" y2="121.08219146728516" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="56" y1="59.4383544921875" x2="308" y2="59.4383544921875" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<path d="M56 112.8630142211914 L72.80000305175781 108.75342559814453 L89.60000610351562 106.69862365722656 L106.4000015258789 104.64382934570312 L123.20000457763672 100.53424072265625 L140 108.75342559814453 L156.8000030517578 102.58903503417969 L173.60000610351562 98.47945404052734 L190.40000915527344 96.4246597290039 L207.20001220703125 94.36986541748047 L224 125.19178009033203 L240.8000030517578 51.219173431396484 L257.6000061035156 116.97259521484375 L274.4000244140625 129.30136108398438 L291.20001220703125 114.91780853271484 L308 119.02738952636719" fill="none" stroke="rgb(20,102,194)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="53" y="109.8630142211914" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="69.80000305175781" y="105.75342559814453" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="86.60000610351562" y="103.69862365722656" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="103.4000015258789" y="101.64382934570312" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="120.20000457763672" y="97.53424072265625" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="137" y="105.75342559814453" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="153.8000030517578" y="99.58903503417969" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="170.60000610351562" y="95.47945404052734" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="187.40000915527344" y="93.4246597290039" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="204.20001220703125" y="91.36986541748047" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="221" y="122.19178009033203" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="237.8000030517578" y="48.219173431396484" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="254.60000610351562" y="113.97259521484375" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="271.4000244140625" y="126.30136108398438" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="288.20001220703125" y="111.91780853271484" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="305" y="116.02738952636719" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="187.40000915527344" y="93.4246597290039" width="6" height="6" fill="rgb(224,61,54)" fill-opacity="1"/>
-<rect x="204.20001220703125" y="91.36986541748047" width="6" height="6" fill="rgb(224,61,54)" fill-opacity="1"/>
-<rect x="237.8000030517578" y="48.219173431396484" width="6" height="6" fill="rgb(224,61,54)" fill-opacity="1"/>
-<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0</text>
-<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0.5</text>
-<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">1</text>
-<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">SPC run signals</text>
-<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Run fraction</text>
-<text x="56" y="38" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Z score</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="56" y="43" width="252" height="150" fill="rgb(245,247,252)"/>
+<line x1="56" y1="182.73" x2="308" y2="182.73" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="121.08" x2="308" y2="121.08" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="56" y1="59.44" x2="308" y2="59.44" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<path d="M56 112.86 L72.8 108.75 L89.6 106.7 L106.4 104.64 L123.2 100.53 L140 108.75 L156.8 102.59 L173.6 98.48 L190.4 96.42 L207.2 94.37 L224 125.19 L240.8 51.22 L257.6 116.97 L274.4 129.3 L291.2 114.92 L308 119.03" fill="none" stroke="rgb(20,102,194)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="53" y="109.86" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="69.8" y="105.75" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="86.6" y="103.7" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="103.4" y="101.64" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="120.2" y="97.53" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="137" y="105.75" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="153.8" y="99.59" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="170.6" y="95.48" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="187.4" y="93.42" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="204.2" y="91.37" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="221" y="122.19" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="237.8" y="48.22" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="254.6" y="113.97" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="271.4" y="126.3" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="288.2" y="111.92" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="305" y="116.03" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="187.4" y="93.42" width="6" height="6" fill="rgb(224,61,54)"/>
+<rect x="204.2" y="91.37" width="6" height="6" fill="rgb(224,61,54)"/>
+<rect x="237.8" y="48.22" width="6" height="6" fill="rgb(224,61,54)"/>
+<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">0</text>
+<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">0.5</text>
+<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">1</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)">SPC run signals</text>
+<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Run fraction</text>
+<text x="56" y="38" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">Z score</text>
 </svg>

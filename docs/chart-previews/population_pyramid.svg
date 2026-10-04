@@ -1,24 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>population_pyramid</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="65.54216766357422" y="190" width="89.45783233642578" height="22" fill="rgb(20,94,184)" fill-opacity="1"/>
-<rect x="41.14457702636719" y="164" width="113.85542297363281" height="22" fill="rgb(20,94,184)" fill-opacity="1"/>
-<rect x="20" y="138" width="135" height="22" fill="rgb(20,94,184)" fill-opacity="1"/>
-<rect x="37.891563415527344" y="112" width="117.10843658447266" height="22" fill="rgb(20,94,184)" fill-opacity="1"/>
-<rect x="73.67469787597656" y="86" width="81.32530212402344" height="22" fill="rgb(20,94,184)" fill-opacity="1"/>
-<rect x="104.57831573486328" y="60" width="50.42168426513672" height="22" fill="rgb(20,94,184)" fill-opacity="1"/>
-<rect x="205" y="190" width="84.57831573486328" height="22" fill="rgb(227,99,41)" fill-opacity="1"/>
-<rect x="205" y="164" width="110.60240936279297" height="22" fill="rgb(227,99,41)" fill-opacity="1"/>
-<rect x="205" y="138" width="126.86746978759766" height="22" fill="rgb(227,99,41)" fill-opacity="1"/>
-<rect x="205" y="112" width="121.98795318603516" height="22" fill="rgb(227,99,41)" fill-opacity="1"/>
-<rect x="205" y="86" width="92.71084594726562" height="22" fill="rgb(227,99,41)" fill-opacity="1"/>
-<rect x="205" y="60" width="65.06024169921875" height="22" fill="rgb(227,99,41)" fill-opacity="1"/>
-<text x="180" y="204" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0-9</text>
-<text x="180" y="178" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">10-19</text>
-<text x="180" y="152" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">20-29</text>
-<text x="180" y="126" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">30-39</text>
-<text x="180" y="100" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">40-49</text>
-<text x="180" y="74" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">50+</text>
-<text x="88" y="45" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Group A</text>
-<text x="272" y="45" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Group B</text>
-<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Population pyramid</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="65.54" y="190" width="89.46" height="22" fill="rgb(20,94,184)"/>
+<rect x="41.14" y="164" width="113.86" height="22" fill="rgb(20,94,184)"/>
+<rect x="20" y="138" width="135" height="22" fill="rgb(20,94,184)"/>
+<rect x="37.89" y="112" width="117.11" height="22" fill="rgb(20,94,184)"/>
+<rect x="73.67" y="86" width="81.33" height="22" fill="rgb(20,94,184)"/>
+<rect x="104.58" y="60" width="50.42" height="22" fill="rgb(20,94,184)"/>
+<rect x="205" y="190" width="84.58" height="22" fill="rgb(227,99,41)"/>
+<rect x="205" y="164" width="110.6" height="22" fill="rgb(227,99,41)"/>
+<rect x="205" y="138" width="126.87" height="22" fill="rgb(227,99,41)"/>
+<rect x="205" y="112" width="121.99" height="22" fill="rgb(227,99,41)"/>
+<rect x="205" y="86" width="92.71" height="22" fill="rgb(227,99,41)"/>
+<rect x="205" y="60" width="65.06" height="22" fill="rgb(227,99,41)"/>
+<text x="180" y="204" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">0-9</text>
+<text x="180" y="178" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">10-19</text>
+<text x="180" y="152" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">20-29</text>
+<text x="180" y="126" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">30-39</text>
+<text x="180" y="100" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">40-49</text>
+<text x="180" y="74" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">50+</text>
+<text x="88" y="45" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">Group A</text>
+<text x="272" y="45" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">Group B</text>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Population pyramid</text>
 </svg>

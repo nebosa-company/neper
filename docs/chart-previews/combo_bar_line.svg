@@ -1,58 +1,58 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>combo_bar_line</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="72.5999984741211" y1="36" x2="72.5999984741211" y2="194" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="72.5999984741211" y1="194" x2="72.5999984741211" y2="199" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="121.80000305175781" y1="36" x2="121.80000305175781" y2="194" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="121.80000305175781" y1="194" x2="121.80000305175781" y2="199" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="171" y1="36" x2="171" y2="194" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="171" y1="194" x2="171" y2="199" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="220.1999969482422" y1="36" x2="220.1999969482422" y2="194" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="220.1999969482422" y1="194" x2="220.1999969482422" y2="199" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="269.3999938964844" y1="36" x2="269.3999938964844" y2="194" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="269.3999938964844" y1="194" x2="269.3999938964844" y2="199" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="194" x2="294" y2="194" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="194" x2="48" y2="194" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="154.5" x2="294" y2="154.5" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="154.5" x2="48" y2="154.5" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="115" x2="294" y2="115" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="115" x2="48" y2="115" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="75.5" x2="294" y2="75.5" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="75.5" x2="48" y2="75.5" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="36" x2="294" y2="36" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="36" x2="48" y2="36" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="36" x2="48" y2="194" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="194" x2="294" y2="194" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<rect x="294" y="36" width="1" height="158" fill="rgb(82,97,122)" fill-opacity="1"/>
-<rect x="294" y="194" width="5" height="1" fill="rgb(82,97,122)" fill-opacity="1"/>
-<rect x="294" y="154.5" width="5" height="1" fill="rgb(82,97,122)" fill-opacity="1"/>
-<rect x="294" y="115" width="5" height="1" fill="rgb(82,97,122)" fill-opacity="1"/>
-<rect x="294" y="75.5" width="5" height="1" fill="rgb(82,97,122)" fill-opacity="1"/>
-<rect x="294" y="36" width="5" height="1" fill="rgb(82,97,122)" fill-opacity="1"/>
-<rect x="52.91999816894531" y="107.81817626953125" width="39.36000061035156" height="86.18182373046875" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="102.12000274658203" y="86.2727279663086" width="39.36000061035156" height="107.7272720336914" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="151.32000732421875" y="115" width="39.36000061035156" height="79" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="200.51998901367188" y="64.7272720336914" width="39.36000061035156" height="129.27273559570312" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="249.72000122070312" y="36" width="39.36000061035156" height="158" fill="rgb(18,89,194)" fill-opacity="1"/>
-<path d="M72.5999984741211 194 L121.80000305175781 162.39999389648438 L171 170.3000030517578 L220.1999969482422 99.19999694824219 L269.3999938964844 36" fill="none" stroke="rgb(240,107,31)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="69.5999984741211" y="191" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="118.80000305175781" y="159.39999389648438" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="168" y="167.3000030517578" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="217.1999969482422" y="96.19999694824219" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="266.3999938964844" y="33" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
-<text x="72.5999984741211" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">North</text>
-<text x="121.80000305175781" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">South</text>
-<text x="171" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">East</text>
-<text x="220.1999969482422" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">West</text>
-<text x="269.3999938964844" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">Central</text>
-<text x="39" y="197.14999389648438" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">0</text>
-<text x="39" y="157.64999389648438" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">5.5</text>
-<text x="39" y="118.1500015258789" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">11</text>
-<text x="39" y="78.6500015258789" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">16.5</text>
-<text x="39" y="39.150001525878906" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">22</text>
-<text x="303" y="197" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">110</text>
-<text x="303" y="157.5" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">135</text>
-<text x="303" y="118" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">160</text>
-<text x="303" y="78.5" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">185</text>
-<text x="303" y="39" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">210</text>
-<text x="180" y="22" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">Volume and index (secondary axis)</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="72.6" y1="36" x2="72.6" y2="194" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="72.6" y1="194" x2="72.6" y2="199" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="121.8" y1="36" x2="121.8" y2="194" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="121.8" y1="194" x2="121.8" y2="199" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="171" y1="36" x2="171" y2="194" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="171" y1="194" x2="171" y2="199" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="220.2" y1="36" x2="220.2" y2="194" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="220.2" y1="194" x2="220.2" y2="199" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="269.4" y1="36" x2="269.4" y2="194" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="269.4" y1="194" x2="269.4" y2="199" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="194" x2="294" y2="194" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="194" x2="48" y2="194" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="154.5" x2="294" y2="154.5" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="154.5" x2="48" y2="154.5" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="115" x2="294" y2="115" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="115" x2="48" y2="115" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="75.5" x2="294" y2="75.5" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="75.5" x2="48" y2="75.5" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="36" x2="294" y2="36" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="36" x2="48" y2="36" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="36" x2="48" y2="194" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="194" x2="294" y2="194" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<rect x="294" y="36" width="1" height="158" fill="rgb(82,97,122)"/>
+<rect x="294" y="194" width="5" height="1" fill="rgb(82,97,122)"/>
+<rect x="294" y="154.5" width="5" height="1" fill="rgb(82,97,122)"/>
+<rect x="294" y="115" width="5" height="1" fill="rgb(82,97,122)"/>
+<rect x="294" y="75.5" width="5" height="1" fill="rgb(82,97,122)"/>
+<rect x="294" y="36" width="5" height="1" fill="rgb(82,97,122)"/>
+<rect x="52.92" y="107.82" width="39.36" height="86.18" fill="rgb(18,89,194)"/>
+<rect x="102.12" y="86.27" width="39.36" height="107.73" fill="rgb(18,89,194)"/>
+<rect x="151.32" y="115" width="39.36" height="79" fill="rgb(18,89,194)"/>
+<rect x="200.52" y="64.73" width="39.36" height="129.27" fill="rgb(18,89,194)"/>
+<rect x="249.72" y="36" width="39.36" height="158" fill="rgb(18,89,194)"/>
+<path d="M72.6 194 L121.8 162.4 L171 170.3 L220.2 99.2 L269.4 36" fill="none" stroke="rgb(240,107,31)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="69.6" y="191" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="118.8" y="159.4" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="168" y="167.3" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="217.2" y="96.2" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="266.4" y="33" width="6" height="6" fill="rgb(240,107,31)"/>
+<text x="72.6" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">North</text>
+<text x="121.8" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">South</text>
+<text x="171" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">East</text>
+<text x="220.2" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">West</text>
+<text x="269.4" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">Central</text>
+<text x="39" y="197.15" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">0</text>
+<text x="39" y="157.65" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">5.5</text>
+<text x="39" y="118.15" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">11</text>
+<text x="39" y="78.65" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">16.5</text>
+<text x="39" y="39.15" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">22</text>
+<text x="303" y="197" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">110</text>
+<text x="303" y="157.5" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">135</text>
+<text x="303" y="118" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">160</text>
+<text x="303" y="78.5" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">185</text>
+<text x="303" y="39" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">210</text>
+<text x="180" y="22" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(82,97,122)">Volume and index (secondary axis)</text>
 </svg>

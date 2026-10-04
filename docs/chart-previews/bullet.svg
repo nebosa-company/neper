@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>bullet</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="44" y1="86" x2="44" y2="152" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="152" x2="44" y2="157" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="187" y1="86" x2="187" y2="152" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="187" y1="152" x2="187" y2="157" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="330" y1="86" x2="330" y2="152" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="330" y1="152" x2="330" y2="157" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="86" x2="44" y2="152" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="152" x2="330" y2="152" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<rect x="44" y="86" width="286" height="66" fill="rgb(224,232,242)" fill-opacity="1"/>
-<rect x="44" y="86" width="200.1999969482422" height="66" fill="rgb(186,199,219)" fill-opacity="1"/>
-<rect x="44" y="86" width="114.4000015258789" height="66" fill="rgb(148,166,194)" fill-opacity="1"/>
-<rect x="44" y="107.44999694824219" width="177.32000732421875" height="23.100000381469727" fill="rgb(18,89,194)" fill-opacity="1"/>
-<line x1="272.79998779296875" y1="86" x2="272.79998779296875" y2="152" stroke="rgb(242,89,26)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="44" y1="86" x2="44" y2="152" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="152" x2="44" y2="157" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="187" y1="86" x2="187" y2="152" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="187" y1="152" x2="187" y2="157" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="86" x2="330" y2="152" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="152" x2="330" y2="157" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="86" x2="44" y2="152" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="152" x2="330" y2="152" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<rect x="44" y="86" width="286" height="66" fill="rgb(224,232,242)"/>
+<rect x="44" y="86" width="200.2" height="66" fill="rgb(186,199,219)"/>
+<rect x="44" y="86" width="114.4" height="66" fill="rgb(148,166,194)"/>
+<rect x="44" y="107.45" width="177.32" height="23.1" fill="rgb(18,89,194)"/>
+<line x1="272.8" y1="86" x2="272.8" y2="152" stroke="rgb(242,89,26)" stroke-width="2" stroke-linecap="round"/>
 </svg>

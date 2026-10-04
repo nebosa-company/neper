@@ -1,40 +1,40 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>pdf_export</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="48" y1="200" x2="334" y2="200" stroke="rgb(214,222,235)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="200" x2="48" y2="200" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="150" x2="334" y2="150" stroke="rgb(214,222,235)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="150" x2="48" y2="150" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="100" x2="334" y2="100" stroke="rgb(214,222,235)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="100" x2="48" y2="100" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="50" x2="334" y2="50" stroke="rgb(214,222,235)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="50" x2="48" y2="50" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="50" x2="48" y2="200" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="200" x2="334" y2="200" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<rect x="52.76667022705078" y="122.5" width="38.13333511352539" height="77.5" fill="rgb(0,114,178)" fill-opacity="1"/>
-<rect x="100.43333435058594" y="110" width="38.13333511352539" height="90" fill="rgb(0,114,178)" fill-opacity="1"/>
-<rect x="148.09999084472656" y="90" width="38.13333511352539" height="110" fill="rgb(0,114,178)" fill-opacity="1"/>
-<rect x="195.76666259765625" y="100" width="38.13333511352539" height="100" fill="rgb(0,114,178)" fill-opacity="1"/>
-<rect x="243.43333435058594" y="70" width="38.13333511352539" height="130" fill="rgb(0,114,178)" fill-opacity="1"/>
-<rect x="291.1000061035156" y="52.499996185302734" width="38.13333511352539" height="147.5" fill="rgb(0,114,178)" fill-opacity="1"/>
-<path d="M71.83333587646484 170 L119.5 162.5 L167.16665649414062 147.5 L214.8333282470703 157.5 L262.5 135 L310.16668701171875 122.5" fill="none" stroke="rgb(195,86,0)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="68.83333587646484" y="167" width="6" height="6" fill="rgb(195,86,0)" fill-opacity="1"/>
-<rect x="116.5" y="159.5" width="6" height="6" fill="rgb(195,86,0)" fill-opacity="1"/>
-<rect x="164.16665649414062" y="144.5" width="6" height="6" fill="rgb(195,86,0)" fill-opacity="1"/>
-<rect x="211.8333282470703" y="154.5" width="6" height="6" fill="rgb(195,86,0)" fill-opacity="1"/>
-<rect x="259.5" y="132" width="6" height="6" fill="rgb(195,86,0)" fill-opacity="1"/>
-<rect x="307.16668701171875" y="119.5" width="6" height="6" fill="rgb(195,86,0)" fill-opacity="1"/>
-<text x="180" y="22" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(41,51,71)" fill-opacity="1">Revenue and margin, €m</text>
-<text x="180" y="36" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(41,51,71)" fill-opacity="1">Bars: revenue · line: margin – one layout, PNG/SVG/PDF</text>
-<text x="71.83333587646484" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,51,71)" fill-opacity="1">Q1</text>
-<text x="119.5" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,51,71)" fill-opacity="1">Q2</text>
-<text x="167.16665649414062" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,51,71)" fill-opacity="1">Q3</text>
-<text x="214.8333282470703" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,51,71)" fill-opacity="1">Q4</text>
-<text x="262.5" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,51,71)" fill-opacity="1">Q5</text>
-<text x="310.16668701171875" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,51,71)" fill-opacity="1">Q6</text>
-<text x="40" y="203" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(41,51,71)" fill-opacity="1">0</text>
-<text x="40" y="153" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(41,51,71)" fill-opacity="1">20</text>
-<text x="40" y="103" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(41,51,71)" fill-opacity="1">40</text>
-<text x="40" y="53" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(41,51,71)" fill-opacity="1">60</text>
-<text x="300" y="228" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(0,114,178)" fill-opacity="1">Revenue</text>
-<text x="340" y="228" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(195,86,0)" fill-opacity="1">Margin</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="48" y1="200" x2="334" y2="200" stroke="rgb(214,222,235)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="200" x2="48" y2="200" stroke="rgb(143,158,179)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="150" x2="334" y2="150" stroke="rgb(214,222,235)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="150" x2="48" y2="150" stroke="rgb(143,158,179)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="100" x2="334" y2="100" stroke="rgb(214,222,235)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="100" x2="48" y2="100" stroke="rgb(143,158,179)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="50" x2="334" y2="50" stroke="rgb(214,222,235)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="50" x2="48" y2="50" stroke="rgb(143,158,179)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="50" x2="48" y2="200" stroke="rgb(143,158,179)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="200" x2="334" y2="200" stroke="rgb(143,158,179)" stroke-width="1" stroke-linecap="round"/>
+<rect x="52.77" y="122.5" width="38.13" height="77.5" fill="rgb(0,114,178)"/>
+<rect x="100.43" y="110" width="38.13" height="90" fill="rgb(0,114,178)"/>
+<rect x="148.1" y="90" width="38.13" height="110" fill="rgb(0,114,178)"/>
+<rect x="195.77" y="100" width="38.13" height="100" fill="rgb(0,114,178)"/>
+<rect x="243.43" y="70" width="38.13" height="130" fill="rgb(0,114,178)"/>
+<rect x="291.1" y="52.5" width="38.13" height="147.5" fill="rgb(0,114,178)"/>
+<path d="M71.83 170 L119.5 162.5 L167.17 147.5 L214.83 157.5 L262.5 135 L310.17 122.5" fill="none" stroke="rgb(195,86,0)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="68.83" y="167" width="6" height="6" fill="rgb(195,86,0)"/>
+<rect x="116.5" y="159.5" width="6" height="6" fill="rgb(195,86,0)"/>
+<rect x="164.17" y="144.5" width="6" height="6" fill="rgb(195,86,0)"/>
+<rect x="211.83" y="154.5" width="6" height="6" fill="rgb(195,86,0)"/>
+<rect x="259.5" y="132" width="6" height="6" fill="rgb(195,86,0)"/>
+<rect x="307.17" y="119.5" width="6" height="6" fill="rgb(195,86,0)"/>
+<text x="180" y="22" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(41,51,71)">Revenue and margin, €m</text>
+<text x="180" y="36" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(41,51,71)">Bars: revenue · line: margin – one layout, PNG/SVG/PDF</text>
+<text x="71.83" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,51,71)">Q1</text>
+<text x="119.5" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,51,71)">Q2</text>
+<text x="167.17" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,51,71)">Q3</text>
+<text x="214.83" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,51,71)">Q4</text>
+<text x="262.5" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,51,71)">Q5</text>
+<text x="310.17" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,51,71)">Q6</text>
+<text x="40" y="203" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(41,51,71)">0</text>
+<text x="40" y="153" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(41,51,71)">20</text>
+<text x="40" y="103" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(41,51,71)">40</text>
+<text x="40" y="53" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(41,51,71)">60</text>
+<text x="300" y="228" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(0,114,178)">Revenue</text>
+<text x="340" y="228" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(195,86,0)">Margin</text>
 </svg>

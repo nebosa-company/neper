@@ -1,18 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>clipped_annotation</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="45" y="58" width="270" height="130" fill="rgb(245,247,252)" fill-opacity="1"/>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="45" y="58" width="270" height="130" fill="rgb(245,247,252)"/>
 <defs><clipPath id="plot-window"><rect x="45" y="58" width="270" height="130"/></clipPath></defs><g clip-path="url(#plot-window)">
-<path d="M45 188 L99 155.5 L153 171.75 L207 123 L261 145.75 L315 58" fill="none" stroke="rgb(33,110,199)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="42" y="185" width="6" height="6" fill="rgb(33,110,199)" fill-opacity="1"/>
-<rect x="96" y="152.5" width="6" height="6" fill="rgb(33,110,199)" fill-opacity="1"/>
-<rect x="150" y="168.75" width="6" height="6" fill="rgb(33,110,199)" fill-opacity="1"/>
-<rect x="204" y="120" width="6" height="6" fill="rgb(33,110,199)" fill-opacity="1"/>
-<rect x="258" y="142.75" width="6" height="6" fill="rgb(33,110,199)" fill-opacity="1"/>
-<rect x="312" y="55" width="6" height="6" fill="rgb(33,110,199)" fill-opacity="1"/>
-<line x1="294" y1="93" x2="294" y2="124" stroke="rgb(212,64,56)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<text x="267" y="91" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(212,64,56)" fill-opacity="1">Peak exceeds upper limit</text>
+<path d="M45 188 L99 155.5 L153 171.75 L207 123 L261 145.75 L315 58" fill="none" stroke="rgb(33,110,199)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="42" y="185" width="6" height="6" fill="rgb(33,110,199)"/>
+<rect x="96" y="152.5" width="6" height="6" fill="rgb(33,110,199)"/>
+<rect x="150" y="168.75" width="6" height="6" fill="rgb(33,110,199)"/>
+<rect x="204" y="120" width="6" height="6" fill="rgb(33,110,199)"/>
+<rect x="258" y="142.75" width="6" height="6" fill="rgb(33,110,199)"/>
+<rect x="312" y="55" width="6" height="6" fill="rgb(33,110,199)"/>
+<line x1="294" y1="93" x2="294" y2="124" stroke="rgb(212,64,56)" stroke-width="2" stroke-linecap="round"/>
+<text x="267" y="91" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(212,64,56)">Peak exceeds upper limit</text>
 </g>
-<text x="180" y="23" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Annotations clipped to the plot</text>
-<text x="180" y="41" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Panel bounds crop marks and annotation text</text>
-<text x="180" y="224" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">The title and axis labels remain outside the clip</text>
+<text x="180" y="23" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(51,64,84)">Annotations clipped to the plot</text>
+<text x="180" y="41" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Panel bounds crop marks and annotation text</text>
+<text x="180" y="224" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">The title and axis labels remain outside the clip</text>
 </svg>

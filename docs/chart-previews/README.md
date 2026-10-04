@@ -204,9 +204,11 @@ Rasterized by an independent PDF renderer, its marks match the PNG; only the
 typeface differs, because the PDF uses the built-in Helvetica rather than
 embedding Montserrat.
 The matplotlib benchmark preview draws the medians from
-`benchmarks/charts/results/windows.json`: per chart, Neper writes SVG in 2.62
-ms against matplotlib's 16.02 ms, while matplotlib writes PNG slightly faster
-(17.68 against 20.28 ms), because Neper's PNG time is mostly the encoder.
+`benchmarks/charts/results/windows.json`: per chart, Neper writes SVG in 2.50
+ms against matplotlib's 15.63 ms, while matplotlib writes PNG faster (16.51
+against 20.02 ms), because Neper's PNG time is mostly the encoder.
+Every SVG companion writes coordinates to 0.01 px and omits default opacity
+(D2111); the PNGs are unaffected.
 
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:

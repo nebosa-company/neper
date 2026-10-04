@@ -5,6 +5,7 @@ use e.gfx.chart
 use e.gfx.geometry
 use e.gfx.paint
 use e.io
+use e.math
 use e.mem
 use e.str
 use e.text.layout as text_layout
@@ -15,14 +16,21 @@ error Invalid
 // earlier in the document under this id.
 type Ink = union enum u8 { Solid: paint.Color, Url: str }
 
+// Numbers to 0.01 px (D2111): a hundredth of a pixel is below what any display
+// shows, and full f32 digits made coordinates like 81.85714721679688 most of
+// the file. Negative zero is written as 0.
+// ponytail: fixed precision because the writer keeps no per-document state; a
+// precision argument belongs here if anyone zooms an SVG past 100x.
 fn number(w: *io.Writer, value: f32) -> err {
     if !chart.finite(value) { ret Invalid }
+    var rounded = math.round[f64](f64(value) * 100.0f64) / 100.0f64
+    if rounded == 0.0f64 { rounded = 0.0f64 }
     var scratch: [64]u8 = zero
     var arena = mem.arena_from(scratch[..])
     let (made, builder_error) = str.builder(&arena, 40usize)
     if builder_error != ok { ret builder_error }
     var built = made
-    try str.push_f64(&built, f64(value))
+    try str.push_f64(&built, rounded)
     ret io.write_all(w, str.done(&built))
 }
 
@@ -165,6 +173,8 @@ fn color(w: *io.Writer, ink: paint.Color, stroke: bool) -> err {
     if stroke { try io.write_all(w, " stroke=\"") } else { try io.write_all(w, " fill=\"") }
     try rgb(w, ink)
     try io.write_all(w, "\"")
+    // Opacity 1 is the SVG default, so only translucent ink names it.
+    if ink.alpha == 1.0 { ret ok }
     if stroke { try io.write_all(w, " stroke-opacity=\"") } else { try io.write_all(w, " fill-opacity=\"") }
     try number(w, ink.alpha)
     ret io.write_all(w, "\"")

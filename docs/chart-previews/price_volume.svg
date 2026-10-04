@@ -1,20 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>price_volume</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="53" y="43" width="270" height="104.94000244140625" fill="rgb(247,250,252)" fill-opacity="1"/>
-<rect x="53" y="157.94000244140625" width="270" height="54.060001373291016" fill="rgb(247,250,252)" fill-opacity="1"/>
-<path d="M63.38461685180664 147.94000244140625 L84.15384674072266 131.79537963867188 L104.92308044433594 143.90383911132812 L146.4615478515625 111.61461639404297 L167.23077392578125 115.65077209472656 L208.76922607421875 87.39768981933594 L229.5384521484375 103.54231262207031 L250.3076934814453 67.2169189453125 L291.84613037109375 75.28923034667969 L312.6153869628906 43" fill="none" stroke="rgb(20,99,194)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="56.115386962890625" y="197.9844512939453" width="14.538460731506348" height="14.015548706054688" fill="rgb(18,140,110)" fill-opacity="1"/>
-<rect x="76.88461303710938" y="191.977783203125" width="14.538460731506348" height="20.022216796875" fill="rgb(18,140,110)" fill-opacity="1"/>
-<rect x="97.65384674072266" y="195.18133544921875" width="14.538460731506348" height="16.81866455078125" fill="rgb(18,140,110)" fill-opacity="1"/>
-<rect x="139.19232177734375" y="183.96888732910156" width="14.538460731506348" height="28.031112670898438" fill="rgb(18,140,110)" fill-opacity="1"/>
-<rect x="159.9615478515625" y="192.37823486328125" width="14.538460731506348" height="19.62176513671875" fill="rgb(18,140,110)" fill-opacity="1"/>
-<rect x="201.5" y="173.95777893066406" width="14.538460731506348" height="38.04222106933594" fill="rgb(18,140,110)" fill-opacity="1"/>
-<rect x="222.26922607421875" y="179.96444702148438" width="14.538460731506348" height="32.035552978515625" fill="rgb(18,140,110)" fill-opacity="1"/>
-<rect x="243.03846740722656" y="163.94667053222656" width="14.538460731506348" height="48.05332946777344" fill="rgb(18,140,110)" fill-opacity="1"/>
-<rect x="284.576904296875" y="181.9666748046875" width="14.538460731506348" height="30.0333251953125" fill="rgb(18,140,110)" fill-opacity="1"/>
-<rect x="305.3461608886719" y="157.94000244140625" width="14.538460731506348" height="54.05999755859375" fill="rgb(18,140,110)" fill-opacity="1"/>
-<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(77,92,115)" fill-opacity="1">Price and volume</text>
-<text x="53" y="40" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(77,92,115)" fill-opacity="1">Close</text>
-<text x="53" y="154.94000244140625" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(77,92,115)" fill-opacity="1">Volume</text>
-<text x="180" y="237" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(77,92,115)" fill-opacity="1">Observation</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="53" y="43" width="270" height="104.94" fill="rgb(247,250,252)"/>
+<rect x="53" y="157.94" width="270" height="54.06" fill="rgb(247,250,252)"/>
+<path d="M63.38 147.94 L84.15 131.8 L104.92 143.9 L146.46 111.61 L167.23 115.65 L208.77 87.4 L229.54 103.54 L250.31 67.22 L291.85 75.29 L312.62 43" fill="none" stroke="rgb(20,99,194)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="56.12" y="197.98" width="14.54" height="14.02" fill="rgb(18,140,110)"/>
+<rect x="76.88" y="191.98" width="14.54" height="20.02" fill="rgb(18,140,110)"/>
+<rect x="97.65" y="195.18" width="14.54" height="16.82" fill="rgb(18,140,110)"/>
+<rect x="139.19" y="183.97" width="14.54" height="28.03" fill="rgb(18,140,110)"/>
+<rect x="159.96" y="192.38" width="14.54" height="19.62" fill="rgb(18,140,110)"/>
+<rect x="201.5" y="173.96" width="14.54" height="38.04" fill="rgb(18,140,110)"/>
+<rect x="222.27" y="179.96" width="14.54" height="32.04" fill="rgb(18,140,110)"/>
+<rect x="243.04" y="163.95" width="14.54" height="48.05" fill="rgb(18,140,110)"/>
+<rect x="284.58" y="181.97" width="14.54" height="30.03" fill="rgb(18,140,110)"/>
+<rect x="305.35" y="157.94" width="14.54" height="54.06" fill="rgb(18,140,110)"/>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(77,92,115)">Price and volume</text>
+<text x="53" y="40" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(77,92,115)">Close</text>
+<text x="53" y="154.94" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(77,92,115)">Volume</text>
+<text x="180" y="237" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(77,92,115)">Observation</text>
 </svg>

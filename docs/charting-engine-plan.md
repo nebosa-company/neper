@@ -1090,14 +1090,21 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 ## How Neper can beat the reference tools
 
+The SVG adapter writes numbers to 0.01 px and leaves opacity 1 to the SVG
+default (D2111). Across the 235 previews that makes the SVG companions 33%
+smaller (excluding the one that embeds a 610 KB font) and 14% smaller
+gzipped; rasterized before and after by an independent renderer, no chart
+changes by more than anti-aliasing along edges.
+
 `benchmarks/charts` measures it against matplotlib with one workload (a
 1,000-point line, 200 markers, grid, ticks and title at 360x240, 200 charts
-per pass). Nine-run medians on Windows: SVG 2.62 ms per chart against
-matplotlib's 16.02 (6.1x faster); PNG 20.28 against 17.68 (matplotlib 1.15x
-faster). Layout alone is 0.16 ms and rasterization 2.0 ms, so Neper's PNG cost
-is the PNG encoder's deflate, the next performance target. ggplot2, base R and
-lattice are not measured because no R installation is available; the
-`benchmark_matplotlib` preview draws the results.
+per pass). Nine-run medians on Windows: SVG 2.50 ms per chart against
+matplotlib's 15.63 (6.2x faster) and 30.2 KB against 44.4 KB; PNG 20.02
+against 16.51 (matplotlib 1.21x faster). Layout alone is 0.15 ms and
+rasterization 2.0 ms, so Neper's PNG cost is the PNG encoder's deflate,
+queued as L163. ggplot2, base R and lattice are not measured because no R
+installation is available (L162); the `benchmark_matplotlib` preview draws
+the results.
 
 `e.gfx.chart.pdf` writes one PDF 1.4 page per document: the same mark kinds,
 shapes and widths as the SVG adapter, in points with the y axis flipped to

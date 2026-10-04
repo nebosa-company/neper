@@ -2165,6 +2165,7 @@
     "e.gfx.geometry",
     "e.gfx.paint",
     "e.io",
+    "e.math",
     "e.mem",
     "e.str"
    ],

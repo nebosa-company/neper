@@ -1,39 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>interaction_plot</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="45" y="54" width="270" height="136" fill="rgb(250,252,255)" fill-opacity="1"/>
-<line x1="45" y1="54" x2="45" y2="190" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="45" y1="190" x2="45" y2="195" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="315" y1="54" x2="315" y2="190" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="315" y1="190" x2="315" y2="195" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="45" y1="190" x2="315" y2="190" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="40" y1="190" x2="45" y2="190" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="45" y1="156" x2="315" y2="156" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="40" y1="156" x2="45" y2="156" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="45" y1="122" x2="315" y2="122" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="40" y1="122" x2="45" y2="122" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="45" y1="88" x2="315" y2="88" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="40" y1="88" x2="45" y2="88" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="45" y1="54" x2="315" y2="54" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="40" y1="54" x2="45" y2="54" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="45" y1="54" x2="45" y2="190" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="45" y1="190" x2="315" y2="190" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<path d="M90 173 L180 139 L270 71" fill="none" stroke="rgb(20,99,189)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="87" y="170" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
-<rect x="177" y="136" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
-<rect x="267" y="68" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
-<path d="M90 54 L180 88 L270 156" fill="none" stroke="rgb(232,87,41)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="87" y="51" width="6" height="6" fill="rgb(232,87,41)" fill-opacity="1"/>
-<rect x="177" y="85" width="6" height="6" fill="rgb(232,87,41)" fill-opacity="1"/>
-<rect x="267" y="153" width="6" height="6" fill="rgb(232,87,41)" fill-opacity="1"/>
-<text x="180" y="18" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Interaction / setting by method</text>
-<text x="180" y="34" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Nonparallel lines indicate differing level responses</text>
-<text x="36" y="193" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">2</text>
-<text x="36" y="159" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">4</text>
-<text x="36" y="125" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">6</text>
-<text x="36" y="91" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">8</text>
-<text x="36" y="57" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">10</text>
-<text x="90" y="204" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Low</text>
-<text x="180" y="204" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Medium</text>
-<text x="270" y="204" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">High</text>
-<text x="180" y="227" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Blue: Method A    Orange: Method B</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="45" y="54" width="270" height="136" fill="rgb(250,252,255)"/>
+<line x1="45" y1="54" x2="45" y2="190" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="190" x2="45" y2="195" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="315" y1="54" x2="315" y2="190" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="315" y1="190" x2="315" y2="195" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="190" x2="315" y2="190" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="190" x2="45" y2="190" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="156" x2="315" y2="156" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="156" x2="45" y2="156" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="122" x2="315" y2="122" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="122" x2="45" y2="122" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="88" x2="315" y2="88" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="88" x2="45" y2="88" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="54" x2="315" y2="54" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="54" x2="45" y2="54" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="54" x2="45" y2="190" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="190" x2="315" y2="190" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<path d="M90 173 L180 139 L270 71" fill="none" stroke="rgb(20,99,189)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="87" y="170" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="177" y="136" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="267" y="68" width="6" height="6" fill="rgb(20,99,189)"/>
+<path d="M90 54 L180 88 L270 156" fill="none" stroke="rgb(232,87,41)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="87" y="51" width="6" height="6" fill="rgb(232,87,41)"/>
+<rect x="177" y="85" width="6" height="6" fill="rgb(232,87,41)"/>
+<rect x="267" y="153" width="6" height="6" fill="rgb(232,87,41)"/>
+<text x="180" y="18" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">Interaction / setting by method</text>
+<text x="180" y="34" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Nonparallel lines indicate differing level responses</text>
+<text x="36" y="193" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">2</text>
+<text x="36" y="159" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">4</text>
+<text x="36" y="125" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">6</text>
+<text x="36" y="91" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">8</text>
+<text x="36" y="57" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">10</text>
+<text x="90" y="204" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Low</text>
+<text x="180" y="204" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Medium</text>
+<text x="270" y="204" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">High</text>
+<text x="180" y="227" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Blue: Method A    Orange: Method B</text>
 </svg>

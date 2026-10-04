@@ -1,30 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>association</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="60" y1="71.16666412353516" x2="280" y2="71.16666412353516" stroke="rgb(176,186,204)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="60" y1="119.5" x2="280" y2="119.5" stroke="rgb(176,186,204)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="60" y1="167.8333282470703" x2="280" y2="167.8333282470703" stroke="rgb(176,186,204)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<rect x="62.143470764160156" y="52.05774688720703" width="49.29987335205078" height="19.108919143676758" fill="rgb(31,104,194)" fill-opacity="1"/>
-<rect x="115.73029327392578" y="71.16666412353516" width="49.29987335205078" height="10.865856170654297" fill="rgb(223,145,152)" fill-opacity="1"/>
-<rect x="169.76951599121094" y="71.16666412353516" width="59.70511245727539" height="3.0938570499420166" fill="rgb(238,216,218)" fill-opacity="1"/>
-<rect x="233.9876708984375" y="71.16666412353516" width="44.09514617919922" height="5.026922702789307" fill="rgb(235,199,202)" fill-opacity="1"/>
-<rect x="61.856300354003906" y="119.5" width="42.694942474365234" height="7.679512977600098" fill="rgb(229,174,179)" fill-opacity="1"/>
-<rect x="108.26384735107422" y="99.49000549316406" width="42.694942474365234" height="20.009998321533203" fill="rgb(20,97,191)" fill-opacity="1"/>
-<rect x="155.0631866455078" y="119.5" width="51.70614242553711" height="3.3938546180725098" fill="rgb(238,214,216)" fill-opacity="1"/>
-<rect x="210.67774963378906" y="119.5" width="38.18751907348633" height="9.190601348876953" fill="rgb(226,160,166)" fill-opacity="1"/>
-<rect x="62.05221939086914" y="167.8333282470703" width="47.20103454589844" height="13.012234687805176" fill="rgb(218,125,134)" fill-opacity="1"/>
-<rect x="113.3576889038086" y="167.8333282470703" width="47.20103454589844" height="6.75070858001709" fill="rgb(231,183,187)" fill-opacity="1"/>
-<rect x="165.09629821777344" y="161.53204345703125" width="57.163291931152344" height="6.301285266876221" fill="rgb(174,198,228)" fill-opacity="1"/>
-<rect x="226.5805206298828" y="154.26966857910156" width="42.21788787841797" height="13.563661575317383" fill="rgb(93,145,209)" fill-opacity="1"/>
-<rect x="295" y="60" width="12" height="12" fill="rgb(204,61,74)" fill-opacity="1"/>
-<rect x="295" y="106" width="12" height="12" fill="rgb(20,97,191)" fill-opacity="1"/>
-<text x="51" y="74.16666412353516" font-family="sans-serif" font-size="10" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">R1</text>
-<text x="51" y="122.5" font-family="sans-serif" font-size="10" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">R2</text>
-<text x="51" y="170.8333282470703" font-family="sans-serif" font-size="10" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">R3</text>
-<text x="86.79341125488281" y="211" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">A</text>
-<text x="140.38021850585938" y="211" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">B</text>
-<text x="199.6220703125" y="211" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">C</text>
-<text x="256.0352478027344" y="211" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">D</text>
-<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Association • residuals</text>
-<text x="301" y="83" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Deficit</text>
-<text x="301" y="129" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Surplus</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="60" y1="71.17" x2="280" y2="71.17" stroke="rgb(176,186,204)" stroke-width="2" stroke-linecap="round"/>
+<line x1="60" y1="119.5" x2="280" y2="119.5" stroke="rgb(176,186,204)" stroke-width="2" stroke-linecap="round"/>
+<line x1="60" y1="167.83" x2="280" y2="167.83" stroke="rgb(176,186,204)" stroke-width="2" stroke-linecap="round"/>
+<rect x="62.14" y="52.06" width="49.3" height="19.11" fill="rgb(31,104,194)"/>
+<rect x="115.73" y="71.17" width="49.3" height="10.87" fill="rgb(223,145,152)"/>
+<rect x="169.77" y="71.17" width="59.71" height="3.09" fill="rgb(238,216,218)"/>
+<rect x="233.99" y="71.17" width="44.1" height="5.03" fill="rgb(235,199,202)"/>
+<rect x="61.86" y="119.5" width="42.69" height="7.68" fill="rgb(229,174,179)"/>
+<rect x="108.26" y="99.49" width="42.69" height="20.01" fill="rgb(20,97,191)"/>
+<rect x="155.06" y="119.5" width="51.71" height="3.39" fill="rgb(238,214,216)"/>
+<rect x="210.68" y="119.5" width="38.19" height="9.19" fill="rgb(226,160,166)"/>
+<rect x="62.05" y="167.83" width="47.2" height="13.01" fill="rgb(218,125,134)"/>
+<rect x="113.36" y="167.83" width="47.2" height="6.75" fill="rgb(231,183,187)"/>
+<rect x="165.1" y="161.53" width="57.16" height="6.3" fill="rgb(174,198,228)"/>
+<rect x="226.58" y="154.27" width="42.22" height="13.56" fill="rgb(93,145,209)"/>
+<rect x="295" y="60" width="12" height="12" fill="rgb(204,61,74)"/>
+<rect x="295" y="106" width="12" height="12" fill="rgb(20,97,191)"/>
+<text x="51" y="74.17" font-family="sans-serif" font-size="10" text-anchor="end" fill="rgb(51,64,84)">R1</text>
+<text x="51" y="122.5" font-family="sans-serif" font-size="10" text-anchor="end" fill="rgb(51,64,84)">R2</text>
+<text x="51" y="170.83" font-family="sans-serif" font-size="10" text-anchor="end" fill="rgb(51,64,84)">R3</text>
+<text x="86.79" y="211" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">A</text>
+<text x="140.38" y="211" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">B</text>
+<text x="199.62" y="211" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">C</text>
+<text x="256.04" y="211" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">D</text>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Association • residuals</text>
+<text x="301" y="83" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Deficit</text>
+<text x="301" y="129" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Surplus</text>
 </svg>

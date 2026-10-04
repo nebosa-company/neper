@@ -35210,3 +35210,31 @@ end of the work queue instead of holding L061 open. Refinements listed in the
 closing evidence (leader lines, SVG font subsetting, PDF font embedding and
 compression, multi-layer widget views, Machado tables, a faster PNG deflate)
 are follow-on work for L062 and later items, not part of standard charts.
+
+## D2110 — Queue faster PNG encoding as L163
+
+The chart benchmark puts Neper's whole PNG gap to matplotlib in the encoder:
+on the same 360x240 raster, `e.fmt.png` at `.Balanced` takes about 18 ms
+for 14,004 B while zlib level 6 over the same filter-0 rows takes 1.74 ms for
+11,283 B. `e.algo.deflate` writes fixed Huffman codes only (about 1.6 KB of
+the difference), has no lazy matching and restarts its hash chain per 32 KiB
+block (about 1.1 KB more), and `e.fmt.png` computes CRC-32 bit by bit. Adaptive
+row filters, the usual suspect, would make this chart larger. L163 asks for
+dynamic Huffman blocks, lazy matching across blocks and a table CRC, measured
+against zlib on the same rows; it sits after L162 at the end of the queue.
+
+## D2111 — SVG charts write numbers to 0.01 px and omit default opacity
+
+The SVG adapter rounds every number it writes to 0.01 (ties to even), writes
+negative zero as 0, and leaves `fill-opacity`/`stroke-opacity` out when the
+ink is opaque, since 1 is the SVG default. Full f32 digits such as
+81.85714721679688 were most of each file: across the previews the companions
+shrink by 33% (14% gzipped), and the benchmark chart drops from 61,962 B to
+30,224 B, below matplotlib's 44,387 B. A hundredth of a pixel is below any
+display's resolution; rasterizing every preview before and after with an
+independent renderer moves no chart by more than anti-aliasing along edges.
+The precision is fixed because the writer keeps no per-document state;
+merging same-colour markers into one path is not done, because rect markers
+keep per-point structure that fixtures and selection rely on. A general
+optimizer for third-party SVG (svgo-style) is a separate tool and not needed
+for Neper's own output.

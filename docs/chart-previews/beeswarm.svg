@@ -1,33 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>beeswarm</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="139.33334350585938" y1="30" x2="139.33334350585938" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="139.33334350585938" y1="204" x2="139.33334350585938" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="234.6666717529297" y1="30" x2="234.6666717529297" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="234.6666717529297" y1="204" x2="234.6666717529297" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<rect x="41" y="114" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="41" y="126" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="41" y="102" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="136.33334350585938" y="114" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="136.33334350585938" y="126" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="136.33334350585938" y="102" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="136.33334350585938" y="138" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="136.33334350585938" y="90" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="136.33334350585938" y="150" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="231.6666717529297" y="114" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="231.6666717529297" y="126" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="231.6666717529297" y="102" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="231.6666717529297" y="138" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="231.6666717529297" y="90" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="231.6666717529297" y="150" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="231.6666717529297" y="78" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="231.6666717529297" y="162" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="327" y="114" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="327" y="126" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="327" y="102" width="6" height="6" fill="rgb(18,89,194)" fill-opacity="1"/>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="30" x2="139.33" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="204" x2="139.33" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="30" x2="234.67" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="204" x2="234.67" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<rect x="41" y="114" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="41" y="126" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="41" y="102" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="136.33" y="114" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="136.33" y="126" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="136.33" y="102" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="136.33" y="138" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="136.33" y="90" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="136.33" y="150" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="231.67" y="114" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="231.67" y="126" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="231.67" y="102" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="231.67" y="138" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="231.67" y="90" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="231.67" y="150" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="231.67" y="78" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="231.67" y="162" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="327" y="114" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="327" y="126" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="327" y="102" width="6" height="6" fill="rgb(18,89,194)"/>
 </svg>

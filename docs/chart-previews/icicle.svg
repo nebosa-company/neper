@@ -1,31 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>icicle</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="24" y="38" width="312" height="58.66666793823242" fill="rgb(51,64,89)" fill-opacity="1"/>
-<rect x="24" y="96.66667175292969" width="195" height="58.66667175292969" fill="rgb(23,89,171)" fill-opacity="1"/>
-<rect x="219" y="96.66667175292969" width="117" height="58.66667175292969" fill="rgb(28,122,110)" fill-opacity="1"/>
-<rect x="24" y="155.33334350585938" width="93.5999984741211" height="58.666656494140625" fill="rgb(18,112,191)" fill-opacity="1"/>
-<rect x="117.5999984741211" y="155.33334350585938" width="57.20000457763672" height="58.666656494140625" fill="rgb(79,94,179)" fill-opacity="1"/>
-<rect x="174.8000030517578" y="155.33334350585938" width="44.19999694824219" height="58.666656494140625" fill="rgb(20,140,171)" fill-opacity="1"/>
-<rect x="219" y="155.33334350585938" width="52" height="58.666656494140625" fill="rgb(26,145,99)" fill-opacity="1"/>
-<rect x="271" y="155.33334350585938" width="39" height="58.666656494140625" fill="rgb(102,145,43)" fill-opacity="1"/>
-<rect x="310" y="155.33334350585938" width="26" height="58.666656494140625" fill="rgb(173,99,31)" fill-opacity="1"/>
-<rect x="24" y="38" width="312" height="58.66666793823242" fill="none" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2"/>
-<rect x="24" y="96.66667175292969" width="195" height="58.66667175292969" fill="none" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2"/>
-<rect x="219" y="96.66667175292969" width="117" height="58.66667175292969" fill="none" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2"/>
-<rect x="24" y="155.33334350585938" width="93.5999984741211" height="58.666656494140625" fill="none" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2"/>
-<rect x="117.5999984741211" y="155.33334350585938" width="57.20000457763672" height="58.666656494140625" fill="none" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2"/>
-<rect x="174.8000030517578" y="155.33334350585938" width="44.19999694824219" height="58.666656494140625" fill="none" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2"/>
-<rect x="219" y="155.33334350585938" width="52" height="58.666656494140625" fill="none" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2"/>
-<rect x="271" y="155.33334350585938" width="39" height="58.666656494140625" fill="none" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2"/>
-<rect x="310" y="155.33334350585938" width="26" height="58.666656494140625" fill="none" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2"/>
-<text x="180" y="70.33333587646484" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">All</text>
-<text x="121.5" y="129" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Digital</text>
-<text x="277.5" y="129" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Operations</text>
-<text x="70.80000305175781" y="187.6666717529297" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Cloud</text>
-<text x="146.1999969482422" y="187.6666717529297" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Apps</text>
-<text x="196.89999389648438" y="187.6666717529297" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Data</text>
-<text x="245" y="187.6666717529297" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Supply</text>
-<text x="290.5" y="187.6666717529297" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Field</text>
-<text x="323" y="187.6666717529297" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">IT</text>
-<text x="180" y="24" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Hierarchical icicle</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="24" y="38" width="312" height="58.67" fill="rgb(51,64,89)"/>
+<rect x="24" y="96.67" width="195" height="58.67" fill="rgb(23,89,171)"/>
+<rect x="219" y="96.67" width="117" height="58.67" fill="rgb(28,122,110)"/>
+<rect x="24" y="155.33" width="93.6" height="58.67" fill="rgb(18,112,191)"/>
+<rect x="117.6" y="155.33" width="57.2" height="58.67" fill="rgb(79,94,179)"/>
+<rect x="174.8" y="155.33" width="44.2" height="58.67" fill="rgb(20,140,171)"/>
+<rect x="219" y="155.33" width="52" height="58.67" fill="rgb(26,145,99)"/>
+<rect x="271" y="155.33" width="39" height="58.67" fill="rgb(102,145,43)"/>
+<rect x="310" y="155.33" width="26" height="58.67" fill="rgb(173,99,31)"/>
+<rect x="24" y="38" width="312" height="58.67" fill="none" stroke="rgb(255,255,255)" stroke-width="2"/>
+<rect x="24" y="96.67" width="195" height="58.67" fill="none" stroke="rgb(255,255,255)" stroke-width="2"/>
+<rect x="219" y="96.67" width="117" height="58.67" fill="none" stroke="rgb(255,255,255)" stroke-width="2"/>
+<rect x="24" y="155.33" width="93.6" height="58.67" fill="none" stroke="rgb(255,255,255)" stroke-width="2"/>
+<rect x="117.6" y="155.33" width="57.2" height="58.67" fill="none" stroke="rgb(255,255,255)" stroke-width="2"/>
+<rect x="174.8" y="155.33" width="44.2" height="58.67" fill="none" stroke="rgb(255,255,255)" stroke-width="2"/>
+<rect x="219" y="155.33" width="52" height="58.67" fill="none" stroke="rgb(255,255,255)" stroke-width="2"/>
+<rect x="271" y="155.33" width="39" height="58.67" fill="none" stroke="rgb(255,255,255)" stroke-width="2"/>
+<rect x="310" y="155.33" width="26" height="58.67" fill="none" stroke="rgb(255,255,255)" stroke-width="2"/>
+<text x="180" y="70.33" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)">All</text>
+<text x="121.5" y="129" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)">Digital</text>
+<text x="277.5" y="129" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)">Operations</text>
+<text x="70.8" y="187.67" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)">Cloud</text>
+<text x="146.2" y="187.67" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)">Apps</text>
+<text x="196.9" y="187.67" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)">Data</text>
+<text x="245" y="187.67" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)">Supply</text>
+<text x="290.5" y="187.67" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)">Field</text>
+<text x="323" y="187.67" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(255,255,255)">IT</text>
+<text x="180" y="24" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Hierarchical icicle</text>
 </svg>

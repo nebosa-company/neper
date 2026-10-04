@@ -1,33 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>marginal_histogram</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="66" y="83" width="188" height="113" fill="rgb(247,250,255)" fill-opacity="1"/>
-<rect x="66" y="67.33333587646484" width="26.85714340209961" height="10.666666984558105" fill="rgb(26,110,199)" fill-opacity="1"/>
-<rect x="92.85714721679688" y="46" width="26.85714340209961" height="32" fill="rgb(26,110,199)" fill-opacity="1"/>
-<rect x="119.71428680419922" y="67.33333587646484" width="26.85714340209961" height="10.666666984558105" fill="rgb(26,110,199)" fill-opacity="1"/>
-<rect x="146.57142639160156" y="56.666664123535156" width="26.85714340209961" height="21.33333396911621" fill="rgb(26,110,199)" fill-opacity="1"/>
-<rect x="173.42857360839844" y="56.666664123535156" width="26.85714340209961" height="21.33333396911621" fill="rgb(26,110,199)" fill-opacity="1"/>
-<rect x="200.2857208251953" y="56.666664123535156" width="26.85714340209961" height="21.33333396911621" fill="rgb(26,110,199)" fill-opacity="1"/>
-<rect x="227.14285278320312" y="67.33333587646484" width="26.85714340209961" height="10.666666984558105" fill="rgb(26,110,199)" fill-opacity="1"/>
-<rect x="259" y="177.1666717529297" width="32" height="18.83333396911621" fill="rgb(222,97,43)" fill-opacity="1"/>
-<rect x="259" y="158.3333282470703" width="32" height="18.83333396911621" fill="rgb(222,97,43)" fill-opacity="1"/>
-<rect x="259" y="139.5" width="32" height="18.83333396911621" fill="rgb(222,97,43)" fill-opacity="1"/>
-<rect x="259" y="120.66666412353516" width="16" height="18.83333396911621" fill="rgb(222,97,43)" fill-opacity="1"/>
-<rect x="259" y="101.83332824707031" width="48" height="18.83333396911621" fill="rgb(222,97,43)" fill-opacity="1"/>
-<rect x="259" y="83" width="32" height="18.83333396911621" fill="rgb(222,97,43)" fill-opacity="1"/>
-<rect x="63" y="193" width="6" height="6" fill="rgb(46,61,82)" fill-opacity="1"/>
-<rect x="89.85714721679688" y="165.8800048828125" width="6" height="6" fill="rgb(46,61,82)" fill-opacity="1"/>
-<rect x="105.97142791748047" y="183.95999145507812" width="6" height="6" fill="rgb(46,61,82)" fill-opacity="1"/>
-<rect x="116.71427917480469" y="147.8000030517578" width="6" height="6" fill="rgb(46,61,82)" fill-opacity="1"/>
-<rect x="138.20001220703125" y="138.75999450683594" width="6" height="6" fill="rgb(46,61,82)" fill-opacity="1"/>
-<rect x="154.3142852783203" y="170.39999389648438" width="6" height="6" fill="rgb(46,61,82)" fill-opacity="1"/>
-<rect x="165.05714416503906" y="107.12001037597656" width="6" height="6" fill="rgb(46,61,82)" fill-opacity="1"/>
-<rect x="186.5428466796875" y="129.72000122070312" width="6" height="6" fill="rgb(46,61,82)" fill-opacity="1"/>
-<rect x="197.2857208251953" y="93.55999755859375" width="6" height="6" fill="rgb(46,61,82)" fill-opacity="1"/>
-<rect x="213.40000915527344" y="116.16000366210938" width="6" height="6" fill="rgb(46,61,82)" fill-opacity="1"/>
-<rect x="224.14285278320312" y="80" width="6" height="6" fill="rgb(46,61,82)" fill-opacity="1"/>
-<rect x="251" y="102.5999984741211" width="6" height="6" fill="rgb(46,61,82)" fill-opacity="1"/>
-<text x="180" y="22" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Marginal histograms / joint + each axis</text>
-<text x="160" y="43" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">X frequency</text>
-<text x="278" y="216" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Y frequency</text>
-<text x="180" y="234" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Shared x/y domains; exact bin counts</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="66" y="83" width="188" height="113" fill="rgb(247,250,255)"/>
+<rect x="66" y="67.33" width="26.86" height="10.67" fill="rgb(26,110,199)"/>
+<rect x="92.86" y="46" width="26.86" height="32" fill="rgb(26,110,199)"/>
+<rect x="119.71" y="67.33" width="26.86" height="10.67" fill="rgb(26,110,199)"/>
+<rect x="146.57" y="56.67" width="26.86" height="21.33" fill="rgb(26,110,199)"/>
+<rect x="173.43" y="56.67" width="26.86" height="21.33" fill="rgb(26,110,199)"/>
+<rect x="200.29" y="56.67" width="26.86" height="21.33" fill="rgb(26,110,199)"/>
+<rect x="227.14" y="67.33" width="26.86" height="10.67" fill="rgb(26,110,199)"/>
+<rect x="259" y="177.17" width="32" height="18.83" fill="rgb(222,97,43)"/>
+<rect x="259" y="158.33" width="32" height="18.83" fill="rgb(222,97,43)"/>
+<rect x="259" y="139.5" width="32" height="18.83" fill="rgb(222,97,43)"/>
+<rect x="259" y="120.67" width="16" height="18.83" fill="rgb(222,97,43)"/>
+<rect x="259" y="101.83" width="48" height="18.83" fill="rgb(222,97,43)"/>
+<rect x="259" y="83" width="32" height="18.83" fill="rgb(222,97,43)"/>
+<rect x="63" y="193" width="6" height="6" fill="rgb(46,61,82)"/>
+<rect x="89.86" y="165.88" width="6" height="6" fill="rgb(46,61,82)"/>
+<rect x="105.97" y="183.96" width="6" height="6" fill="rgb(46,61,82)"/>
+<rect x="116.71" y="147.8" width="6" height="6" fill="rgb(46,61,82)"/>
+<rect x="138.2" y="138.76" width="6" height="6" fill="rgb(46,61,82)"/>
+<rect x="154.31" y="170.4" width="6" height="6" fill="rgb(46,61,82)"/>
+<rect x="165.06" y="107.12" width="6" height="6" fill="rgb(46,61,82)"/>
+<rect x="186.54" y="129.72" width="6" height="6" fill="rgb(46,61,82)"/>
+<rect x="197.29" y="93.56" width="6" height="6" fill="rgb(46,61,82)"/>
+<rect x="213.4" y="116.16" width="6" height="6" fill="rgb(46,61,82)"/>
+<rect x="224.14" y="80" width="6" height="6" fill="rgb(46,61,82)"/>
+<rect x="251" y="102.6" width="6" height="6" fill="rgb(46,61,82)"/>
+<text x="180" y="22" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(46,61,82)">Marginal histograms / joint + each axis</text>
+<text x="160" y="43" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">X frequency</text>
+<text x="278" y="216" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">Y frequency</text>
+<text x="180" y="234" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">Shared x/y domains; exact bin counts</text>
 </svg>

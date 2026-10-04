@@ -882,6 +882,17 @@
       "model": "sonnet",
       "thinking": "medium",
       "evidence": "Backlog from L061 (D2109). benchmarks/charts measures Neper against matplotlib only; ggplot2, base R graphics and lattice need an R installation, which the benchmark host does not have and which needs the user's approval to download. Add an R script beside mpl_bench.py with the same LCG data, 360x240 output, SVG text kept as text and PNG at a comparable compression level, run nine-run medians through run.py, and add the rows to benchmarks/charts/README.md and the charts field-guide post."
+    },
+    {
+      "id": "L163",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 261,
+      "title": "Fast, small PNG encoding: dynamic Huffman, lazy matching and table CRC",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Backlog from the chart benchmark (D2108, D2110). On the same 360x240 chart raster, e.fmt.png at .Balanced takes about 18 ms and writes 14,004 B, while zlib level 6 with the same filter-0 rows takes 1.74 ms for 11,283 B; rasterizing takes 2.0 ms, so the encoder is the whole PNG gap to matplotlib. e.algo.deflate writes fixed-Huffman blocks only (zlib restricted to fixed Huffman gives 12,903 B, so dynamic trees are worth about 1.6 KB here), has no lazy matching and restarts its 16-deep hash chain at every 32 KiB block (about 1.1 KB more), and e.fmt.png computes CRC-32 bit by bit. Done when: e.algo.deflate writes dynamic-Huffman blocks with lazy matching and a window that spans blocks, round-tripping through its own decoder and Python's zlib on a corpus; e.fmt.png uses a table-driven CRC; the chart benchmark's PNG pass is at least as fast as matplotlib's with files no larger than zlib level 6 on the same rows; both suites pass. Adaptive per-row filters are optional: Pillow's heuristic made this chart larger."
     }
   ]
 }

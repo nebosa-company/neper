@@ -26,27 +26,30 @@ pass and writes `results/<host>.json`.
 ## Results
 
 Windows 11, Intel Core i5-12500H, Python 3.12.10, matplotlib 3.9.4; nine-run
-medians, 2026-10-04 (`results/windows.json`):
+medians, 2026-10-05 (`results/windows.json`), after the SVG writer moved to
+0.01 px precision (D2111):
 
 | per chart | Neper | matplotlib | |
 |---|---:|---:|---|
-| SVG | 2.62 ms | 16.02 ms | Neper 6.1x faster |
-| PNG | 20.28 ms | 17.68 ms | matplotlib 1.15x faster |
-| layout only | 0.16 ms | – | |
-| rasterize only | 2.00 ms | – | |
-| SVG size | 61,962 B | 44,387 B | |
-| PNG size | 14,004 B | 11,217 B | |
-| whole process, both passes | 5.0 s | 7.6 s | includes 0.55 s matplotlib import |
+| SVG | 2.50 ms | 15.63 ms | Neper 6.2x faster |
+| PNG | 20.02 ms | 16.51 ms | matplotlib 1.21x faster |
+| layout only | 0.15 ms | – | |
+| rasterize only | 1.99 ms | – | |
+| SVG size | 30,224 B | 44,387 B | Neper 32% smaller |
+| PNG size | 14,004 B | 11,217 B | matplotlib 20% smaller |
+| whole process, both passes | 5.0 s | 7.2 s | includes 0.53 s matplotlib import |
 
 What the numbers say:
 
 - SVG output is where Neper's design pays: layout from borrowed columns into
   caller-owned storage and a streaming writer, with no figure object model.
+  Before D2111 Neper wrote full-precision coordinates and its SVG was 61,962 B,
+  larger than matplotlib's; at 0.01 px it is 32% smaller.
 - Neper's PNG time is almost all encoding: rasterizing takes 2.0 ms of the
-  20.3 ms, so `e.algo.deflate` at `.Balanced`, not the renderer, is the next
-  thing to make faster. Neper's PNGs are also 25% larger.
-- Neper's SVG is larger because it writes every line point and coordinate
-  at full float precision; matplotlib rounds.
+  20.0 ms, so `e.algo.deflate` at `.Balanced`, not the renderer, is the thing
+  to make faster (queued as L163). On the same raster, zlib level 6 takes
+  1.74 ms and writes 11,283 B; Neper's deflate writes fixed Huffman codes
+  only, has no lazy matching and computes the PNG CRC bit by bit.
 
 ## Caveats
 

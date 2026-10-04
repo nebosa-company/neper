@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>calibration</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="56" y="43" width="252" height="150" fill="rgb(245,247,252)" fill-opacity="1"/>
-<line x1="56" y1="193" x2="308" y2="43" stroke="rgb(163,176,194)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<path d="M88.75999450683594 193 L136.63999938964844 143 L182 93 L232.39999389648438 118 L285.32000732421875 80.5" fill="none" stroke="rgb(20,102,194)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="85.75999450683594" y="190" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="133.63999938964844" y="140" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="179" y="90" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="229.39999389648438" y="115" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<rect x="282.32000732421875" y="77.5" width="6" height="6" fill="rgb(20,102,194)" fill-opacity="1"/>
-<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0</text>
-<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0.5</text>
-<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">1</text>
-<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Calibration</text>
-<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Mean predicted probability</text>
-<text x="56" y="38" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)" fill-opacity="1">Observed</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="56" y="43" width="252" height="150" fill="rgb(245,247,252)"/>
+<line x1="56" y1="193" x2="308" y2="43" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<path d="M88.76 193 L136.64 143 L182 93 L232.4 118 L285.32 80.5" fill="none" stroke="rgb(20,102,194)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="85.76" y="190" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="133.64" y="140" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="179" y="90" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="229.4" y="115" width="6" height="6" fill="rgb(20,102,194)"/>
+<rect x="282.32" y="77.5" width="6" height="6" fill="rgb(20,102,194)"/>
+<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">0</text>
+<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">0.5</text>
+<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">1</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)">Calibration</text>
+<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Mean predicted probability</text>
+<text x="56" y="38" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">Observed</text>
 </svg>

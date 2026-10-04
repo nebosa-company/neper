@@ -1,58 +1,58 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>pareto</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="72.5999984741211" y1="36" x2="72.5999984741211" y2="194" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="72.5999984741211" y1="194" x2="72.5999984741211" y2="199" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="121.80000305175781" y1="36" x2="121.80000305175781" y2="194" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="121.80000305175781" y1="194" x2="121.80000305175781" y2="199" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="171" y1="36" x2="171" y2="194" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="171" y1="194" x2="171" y2="199" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="220.1999969482422" y1="36" x2="220.1999969482422" y2="194" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="220.1999969482422" y1="194" x2="220.1999969482422" y2="199" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="269.3999938964844" y1="36" x2="269.3999938964844" y2="194" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="269.3999938964844" y1="194" x2="269.3999938964844" y2="199" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="194" x2="294" y2="194" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="194" x2="48" y2="194" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="154.5" x2="294" y2="154.5" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="154.5" x2="48" y2="154.5" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="115" x2="294" y2="115" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="115" x2="48" y2="115" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="75.5" x2="294" y2="75.5" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="75.5" x2="48" y2="75.5" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="36" x2="294" y2="36" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="36" x2="48" y2="36" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="36" x2="48" y2="194" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="194" x2="294" y2="194" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<rect x="294" y="36" width="1" height="158" fill="rgb(82,97,122)" fill-opacity="1"/>
-<rect x="294" y="194" width="5" height="1" fill="rgb(82,97,122)" fill-opacity="1"/>
-<rect x="294" y="154.5" width="5" height="1" fill="rgb(82,97,122)" fill-opacity="1"/>
-<rect x="294" y="115" width="5" height="1" fill="rgb(82,97,122)" fill-opacity="1"/>
-<rect x="294" y="75.5" width="5" height="1" fill="rgb(82,97,122)" fill-opacity="1"/>
-<rect x="294" y="36" width="5" height="1" fill="rgb(82,97,122)" fill-opacity="1"/>
-<rect x="52.91999816894531" y="36" width="39.36000061035156" height="158" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="102.1199951171875" y="75.5" width="39.36000061035156" height="118.5" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="151.3199920654297" y="95.25" width="39.36000061035156" height="98.75" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="200.52000427246094" y="134.75" width="39.36000061035156" height="59.25" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="249.72000122070312" y="154.5" width="39.36000061035156" height="39.5" fill="rgb(18,89,194)" fill-opacity="1"/>
-<path d="M72.5999984741211 141.3333282470703 L121.79999542236328 101.83333587646484 L171 68.91666412353516 L220.20001220703125 49.166664123535156 L269.3999938964844 36" fill="none" stroke="rgb(240,107,31)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
-<rect x="69.5999984741211" y="138.3333282470703" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="118.79999542236328" y="98.83333587646484" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="168" y="65.91666412353516" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="217.20001220703125" y="46.166664123535156" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="266.3999938964844" y="33" width="6" height="6" fill="rgb(240,107,31)" fill-opacity="1"/>
-<text x="72.5999984741211" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">South</text>
-<text x="121.80000305175781" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">Central</text>
-<text x="171" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">East</text>
-<text x="220.1999969482422" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">North</text>
-<text x="269.3999938964844" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">West</text>
-<text x="39" y="197.14999389648438" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">0</text>
-<text x="39" y="157.64999389648438" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">2</text>
-<text x="39" y="118.1500015258789" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">4</text>
-<text x="39" y="78.6500015258789" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">6</text>
-<text x="39" y="39.150001525878906" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">8</text>
-<text x="303" y="197" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">0%</text>
-<text x="303" y="157.5" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">25%</text>
-<text x="303" y="118" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">50%</text>
-<text x="303" y="78.5" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">75%</text>
-<text x="303" y="39" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">100%</text>
-<text x="180" y="22" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">Pareto frequency and cumulative share</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="72.6" y1="36" x2="72.6" y2="194" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="72.6" y1="194" x2="72.6" y2="199" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="121.8" y1="36" x2="121.8" y2="194" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="121.8" y1="194" x2="121.8" y2="199" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="171" y1="36" x2="171" y2="194" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="171" y1="194" x2="171" y2="199" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="220.2" y1="36" x2="220.2" y2="194" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="220.2" y1="194" x2="220.2" y2="199" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="269.4" y1="36" x2="269.4" y2="194" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="269.4" y1="194" x2="269.4" y2="199" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="194" x2="294" y2="194" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="194" x2="48" y2="194" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="154.5" x2="294" y2="154.5" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="154.5" x2="48" y2="154.5" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="115" x2="294" y2="115" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="115" x2="48" y2="115" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="75.5" x2="294" y2="75.5" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="75.5" x2="48" y2="75.5" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="36" x2="294" y2="36" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="36" x2="48" y2="36" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="36" x2="48" y2="194" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="194" x2="294" y2="194" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<rect x="294" y="36" width="1" height="158" fill="rgb(82,97,122)"/>
+<rect x="294" y="194" width="5" height="1" fill="rgb(82,97,122)"/>
+<rect x="294" y="154.5" width="5" height="1" fill="rgb(82,97,122)"/>
+<rect x="294" y="115" width="5" height="1" fill="rgb(82,97,122)"/>
+<rect x="294" y="75.5" width="5" height="1" fill="rgb(82,97,122)"/>
+<rect x="294" y="36" width="5" height="1" fill="rgb(82,97,122)"/>
+<rect x="52.92" y="36" width="39.36" height="158" fill="rgb(18,89,194)"/>
+<rect x="102.12" y="75.5" width="39.36" height="118.5" fill="rgb(18,89,194)"/>
+<rect x="151.32" y="95.25" width="39.36" height="98.75" fill="rgb(18,89,194)"/>
+<rect x="200.52" y="134.75" width="39.36" height="59.25" fill="rgb(18,89,194)"/>
+<rect x="249.72" y="154.5" width="39.36" height="39.5" fill="rgb(18,89,194)"/>
+<path d="M72.6 141.33 L121.8 101.83 L171 68.92 L220.2 49.17 L269.4 36" fill="none" stroke="rgb(240,107,31)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="69.6" y="138.33" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="118.8" y="98.83" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="168" y="65.92" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="217.2" y="46.17" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="266.4" y="33" width="6" height="6" fill="rgb(240,107,31)"/>
+<text x="72.6" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">South</text>
+<text x="121.8" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">Central</text>
+<text x="171" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">East</text>
+<text x="220.2" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">North</text>
+<text x="269.4" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">West</text>
+<text x="39" y="197.15" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">0</text>
+<text x="39" y="157.65" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">2</text>
+<text x="39" y="118.15" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">4</text>
+<text x="39" y="78.65" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">6</text>
+<text x="39" y="39.15" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">8</text>
+<text x="303" y="197" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">0%</text>
+<text x="303" y="157.5" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">25%</text>
+<text x="303" y="118" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">50%</text>
+<text x="303" y="78.5" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">75%</text>
+<text x="303" y="39" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">100%</text>
+<text x="180" y="22" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(82,97,122)">Pareto frequency and cumulative share</text>
 </svg>

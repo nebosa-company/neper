@@ -2689,8 +2689,8 @@ fn render_benchmark_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     let dark = paint.rgba(0.16, 0.20, 0.28, 1.0)
     let axis = paint.rgba(0.56, 0.62, 0.70, 1.0)
     let colors = [2]paint.Color{ paint.rgba(0.0, 114.0 / 255.0, 178.0 / 255.0, 1.0), paint.rgba(195.0 / 255.0, 86.0 / 255.0, 0.0, 1.0) }
-    let values = [4]f32{ 2.62, 16.02, 20.28, 17.68 }
-    let shown = [4]str{ "2.62", "16.02", "20.28", "17.68" }
+    let values = [4]f32{ 2.50, 15.63, 20.02, 16.51 }
+    let shown = [4]str{ "2.50", "15.63", "20.02", "16.51" }
     let plot = geometry.rect(30.0, 52.0, 300.0, 136.0)
     var bar_storage: [4]geometry.Rect = zero
     var layer_storage: [2]chart.Layout = zero
@@ -2709,7 +2709,7 @@ fn render_benchmark_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     labels[7usize] = chart.Label { text: "PNG", anchor: chart.Coord { x: plot.x + plot.width * 0.75, y: plot.y + plot.height + 14.0 }, align: .Center }
     labels[8usize] = chart.Label { text: "Neper", anchor: chart.Coord { x: 52.0, y: 64.0 }, align: .Left }
     labels[9usize] = chart.Label { text: "matplotlib", anchor: chart.Coord { x: 52.0, y: 78.0 }, align: .Left }
-    labels[10usize] = chart.Label { text: "Windows, 9-run medians; Neper PNG = 2.0 ms raster + 18.3 ms PNG encode", anchor: chart.Coord { x: 180.0, y: 226.0 }, align: .Center }
+    labels[10usize] = chart.Label { text: "Windows, 9-run medians; Neper PNG = 2.0 ms raster + 18.0 ms PNG encode", anchor: chart.Coord { x: 180.0, y: 226.0 }, align: .Center }
     let swatches = [2]geometry.Rect{ geometry.rect(38.0, 59.0, 10.0, 4.0), geometry.rect(38.0, 73.0, 10.0, 4.0) }
     let baseline = geometry.rect(plot.x, plot.y + plot.height, plot.width, 1.0)
     let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)

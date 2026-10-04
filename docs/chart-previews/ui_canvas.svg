@@ -1,20 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>ui_canvas</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="12" y="56" width="336" height="168" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="28" y1="208" x2="332" y2="208" stroke="rgb(204,214,227)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="23" y1="208" x2="28" y2="208" stroke="rgb(204,214,227)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="28" y1="112.22534942626953" x2="332" y2="112.22534942626953" stroke="rgb(204,214,227)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="23" y1="112.22534942626953" x2="28" y2="112.22534942626953" stroke="rgb(204,214,227)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="28" y1="72" x2="28" y2="208" stroke="rgb(204,214,227)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="28" y1="208" x2="332" y2="208" stroke="rgb(204,214,227)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<rect x="31.799999237060547" y="148.61972045898438" width="30.399999618530273" height="59.380279541015625" fill="rgb(102,79,163)" fill-opacity="1"/>
-<rect x="69.80000305175781" y="139.04226684570312" width="30.399999618530273" height="68.95773315429688" fill="rgb(102,79,163)" fill-opacity="1"/>
-<rect x="107.80000305175781" y="123.71830749511719" width="30.399999618530273" height="84.28169250488281" fill="rgb(102,79,163)" fill-opacity="1"/>
-<rect x="145.8000030517578" y="131.38027954101562" width="30.399999618530273" height="76.61972045898438" fill="rgb(102,79,163)" fill-opacity="1"/>
-<rect x="183.8000030517578" y="108.39437103271484" width="30.399999618530273" height="99.60562896728516" fill="rgb(102,79,163)" fill-opacity="1"/>
-<rect x="221.8000030517578" y="94.98590850830078" width="30.399999618530273" height="113.01409149169922" fill="rgb(102,79,163)" fill-opacity="1"/>
-<rect x="259.79998779296875" y="87.32393646240234" width="30.399999618530273" height="120.67606353759766" fill="rgb(102,79,163)" fill-opacity="1"/>
-<rect x="297.79998779296875" y="72" width="30.399999618530273" height="136" fill="rgb(102,79,163)" fill-opacity="1"/>
-<text x="12" y="26" font-family="sans-serif" font-size="12" text-anchor="start" fill="rgb(26,27,32)" fill-opacity="1">Revenue by quarter, in an e.ui canvas</text>
-<text x="12" y="42" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(67,70,83)" fill-opacity="1">Bars laid out when the canvas paints, at its size</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="12" y="56" width="336" height="168" fill="rgb(255,255,255)"/>
+<line x1="28" y1="208" x2="332" y2="208" stroke="rgb(204,214,227)" stroke-width="1" stroke-linecap="round"/>
+<line x1="23" y1="208" x2="28" y2="208" stroke="rgb(204,214,227)" stroke-width="1" stroke-linecap="round"/>
+<line x1="28" y1="112.23" x2="332" y2="112.23" stroke="rgb(204,214,227)" stroke-width="1" stroke-linecap="round"/>
+<line x1="23" y1="112.23" x2="28" y2="112.23" stroke="rgb(204,214,227)" stroke-width="1" stroke-linecap="round"/>
+<line x1="28" y1="72" x2="28" y2="208" stroke="rgb(204,214,227)" stroke-width="1" stroke-linecap="round"/>
+<line x1="28" y1="208" x2="332" y2="208" stroke="rgb(204,214,227)" stroke-width="1" stroke-linecap="round"/>
+<rect x="31.8" y="148.62" width="30.4" height="59.38" fill="rgb(102,79,163)"/>
+<rect x="69.8" y="139.04" width="30.4" height="68.96" fill="rgb(102,79,163)"/>
+<rect x="107.8" y="123.72" width="30.4" height="84.28" fill="rgb(102,79,163)"/>
+<rect x="145.8" y="131.38" width="30.4" height="76.62" fill="rgb(102,79,163)"/>
+<rect x="183.8" y="108.39" width="30.4" height="99.61" fill="rgb(102,79,163)"/>
+<rect x="221.8" y="94.99" width="30.4" height="113.01" fill="rgb(102,79,163)"/>
+<rect x="259.8" y="87.32" width="30.4" height="120.68" fill="rgb(102,79,163)"/>
+<rect x="297.8" y="72" width="30.4" height="136" fill="rgb(102,79,163)"/>
+<text x="12" y="26" font-family="sans-serif" font-size="12" text-anchor="start" fill="rgb(26,27,32)">Revenue by quarter, in an e.ui canvas</text>
+<text x="12" y="42" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(67,70,83)">Bars laid out when the canvas paints, at its size</text>
 </svg>

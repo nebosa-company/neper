@@ -1,65 +1,65 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>sipoc</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="13" y="49" width="62" height="171" fill="rgb(237,242,250)" fill-opacity="1"/>
-<rect x="81" y="49" width="62" height="171" fill="rgb(237,242,250)" fill-opacity="1"/>
-<rect x="149" y="49" width="62" height="171" fill="rgb(237,242,250)" fill-opacity="1"/>
-<rect x="217" y="49" width="62" height="171" fill="rgb(237,242,250)" fill-opacity="1"/>
-<rect x="285" y="49" width="62" height="171" fill="rgb(237,242,250)" fill-opacity="1"/>
-<rect x="13" y="49" width="62" height="26" fill="rgb(48,120,196)" fill-opacity="1"/>
-<rect x="81" y="49" width="62" height="26" fill="rgb(61,140,184)" fill-opacity="1"/>
-<rect x="149" y="49" width="62" height="26" fill="rgb(38,133,117)" fill-opacity="1"/>
-<rect x="217" y="49" width="62" height="26" fill="rgb(166,97,179)" fill-opacity="1"/>
-<rect x="285" y="49" width="62" height="26" fill="rgb(199,110,56)" fill-opacity="1"/>
-<line x1="75" y1="62" x2="81" y2="62" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="79.19999694824219" y1="60.7400016784668" x2="81" y2="62" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="79.19999694824219" y1="63.2599983215332" x2="81" y2="62" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="143" y1="62" x2="149" y2="62" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="147.1999969482422" y1="60.7400016784668" x2="149" y2="62" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="147.1999969482422" y1="63.2599983215332" x2="149" y2="62" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="211" y1="62" x2="217" y2="62" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="215.1999969482422" y1="60.7400016784668" x2="217" y2="62" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="215.1999969482422" y1="63.2599983215332" x2="217" y2="62" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="279" y1="62" x2="285" y2="62" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="283.20001220703125" y1="60.7400016784668" x2="285" y2="62" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<line x1="283.20001220703125" y1="63.2599983215332" x2="285" y2="62" stroke="rgb(143,158,179)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
-<rect x="17" y="79" width="54" height="43" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="17" y="126" width="54" height="43" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="85" y="79" width="54" height="43" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="85" y="126" width="54" height="43" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="153" y="79" width="54" height="43" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="153" y="126" width="54" height="43" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="153" y="173" width="54" height="43" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="221" y="79" width="54" height="43" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="221" y="126" width="54" height="43" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="289" y="79" width="54" height="43" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="289" y="126" width="54" height="43" fill="rgb(255,255,255)" fill-opacity="1"/>
-<rect x="17" y="79" width="3" height="43" fill="rgb(48,120,196)" fill-opacity="1"/>
-<rect x="17" y="126" width="3" height="43" fill="rgb(48,120,196)" fill-opacity="1"/>
-<rect x="85" y="79" width="3" height="43" fill="rgb(61,140,184)" fill-opacity="1"/>
-<rect x="85" y="126" width="3" height="43" fill="rgb(61,140,184)" fill-opacity="1"/>
-<rect x="153" y="79" width="3" height="43" fill="rgb(38,133,117)" fill-opacity="1"/>
-<rect x="153" y="126" width="3" height="43" fill="rgb(38,133,117)" fill-opacity="1"/>
-<rect x="153" y="173" width="3" height="43" fill="rgb(38,133,117)" fill-opacity="1"/>
-<rect x="221" y="79" width="3" height="43" fill="rgb(166,97,179)" fill-opacity="1"/>
-<rect x="221" y="126" width="3" height="43" fill="rgb(166,97,179)" fill-opacity="1"/>
-<rect x="289" y="79" width="3" height="43" fill="rgb(199,110,56)" fill-opacity="1"/>
-<rect x="289" y="126" width="3" height="43" fill="rgb(199,110,56)" fill-opacity="1"/>
-<text x="44" y="65" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Suppliers</text>
-<text x="112" y="65" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Inputs</text>
-<text x="180" y="65" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Process</text>
-<text x="248" y="65" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Outputs</text>
-<text x="316" y="65" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)" fill-opacity="1">Customers</text>
-<text x="44" y="103.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Design</text>
-<text x="44" y="150.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Vendor</text>
-<text x="112" y="103.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Brief</text>
-<text x="112" y="150.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Assets</text>
-<text x="180" y="103.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Plan</text>
-<text x="180" y="150.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Build</text>
-<text x="180" y="197.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Check</text>
-<text x="248" y="103.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Release</text>
-<text x="248" y="150.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Report</text>
-<text x="316" y="103.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Client</text>
-<text x="316" y="150.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Support</text>
-<text x="180" y="24" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">SIPOC process overview</text>
-<text x="180" y="234" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Suppliers to customers / one process boundary</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="13" y="49" width="62" height="171" fill="rgb(237,242,250)"/>
+<rect x="81" y="49" width="62" height="171" fill="rgb(237,242,250)"/>
+<rect x="149" y="49" width="62" height="171" fill="rgb(237,242,250)"/>
+<rect x="217" y="49" width="62" height="171" fill="rgb(237,242,250)"/>
+<rect x="285" y="49" width="62" height="171" fill="rgb(237,242,250)"/>
+<rect x="13" y="49" width="62" height="26" fill="rgb(48,120,196)"/>
+<rect x="81" y="49" width="62" height="26" fill="rgb(61,140,184)"/>
+<rect x="149" y="49" width="62" height="26" fill="rgb(38,133,117)"/>
+<rect x="217" y="49" width="62" height="26" fill="rgb(166,97,179)"/>
+<rect x="285" y="49" width="62" height="26" fill="rgb(199,110,56)"/>
+<line x1="75" y1="62" x2="81" y2="62" stroke="rgb(143,158,179)" stroke-width="2" stroke-linecap="round"/>
+<line x1="79.2" y1="60.74" x2="81" y2="62" stroke="rgb(143,158,179)" stroke-width="2" stroke-linecap="round"/>
+<line x1="79.2" y1="63.26" x2="81" y2="62" stroke="rgb(143,158,179)" stroke-width="2" stroke-linecap="round"/>
+<line x1="143" y1="62" x2="149" y2="62" stroke="rgb(143,158,179)" stroke-width="2" stroke-linecap="round"/>
+<line x1="147.2" y1="60.74" x2="149" y2="62" stroke="rgb(143,158,179)" stroke-width="2" stroke-linecap="round"/>
+<line x1="147.2" y1="63.26" x2="149" y2="62" stroke="rgb(143,158,179)" stroke-width="2" stroke-linecap="round"/>
+<line x1="211" y1="62" x2="217" y2="62" stroke="rgb(143,158,179)" stroke-width="2" stroke-linecap="round"/>
+<line x1="215.2" y1="60.74" x2="217" y2="62" stroke="rgb(143,158,179)" stroke-width="2" stroke-linecap="round"/>
+<line x1="215.2" y1="63.26" x2="217" y2="62" stroke="rgb(143,158,179)" stroke-width="2" stroke-linecap="round"/>
+<line x1="279" y1="62" x2="285" y2="62" stroke="rgb(143,158,179)" stroke-width="2" stroke-linecap="round"/>
+<line x1="283.2" y1="60.74" x2="285" y2="62" stroke="rgb(143,158,179)" stroke-width="2" stroke-linecap="round"/>
+<line x1="283.2" y1="63.26" x2="285" y2="62" stroke="rgb(143,158,179)" stroke-width="2" stroke-linecap="round"/>
+<rect x="17" y="79" width="54" height="43" fill="rgb(255,255,255)"/>
+<rect x="17" y="126" width="54" height="43" fill="rgb(255,255,255)"/>
+<rect x="85" y="79" width="54" height="43" fill="rgb(255,255,255)"/>
+<rect x="85" y="126" width="54" height="43" fill="rgb(255,255,255)"/>
+<rect x="153" y="79" width="54" height="43" fill="rgb(255,255,255)"/>
+<rect x="153" y="126" width="54" height="43" fill="rgb(255,255,255)"/>
+<rect x="153" y="173" width="54" height="43" fill="rgb(255,255,255)"/>
+<rect x="221" y="79" width="54" height="43" fill="rgb(255,255,255)"/>
+<rect x="221" y="126" width="54" height="43" fill="rgb(255,255,255)"/>
+<rect x="289" y="79" width="54" height="43" fill="rgb(255,255,255)"/>
+<rect x="289" y="126" width="54" height="43" fill="rgb(255,255,255)"/>
+<rect x="17" y="79" width="3" height="43" fill="rgb(48,120,196)"/>
+<rect x="17" y="126" width="3" height="43" fill="rgb(48,120,196)"/>
+<rect x="85" y="79" width="3" height="43" fill="rgb(61,140,184)"/>
+<rect x="85" y="126" width="3" height="43" fill="rgb(61,140,184)"/>
+<rect x="153" y="79" width="3" height="43" fill="rgb(38,133,117)"/>
+<rect x="153" y="126" width="3" height="43" fill="rgb(38,133,117)"/>
+<rect x="153" y="173" width="3" height="43" fill="rgb(38,133,117)"/>
+<rect x="221" y="79" width="3" height="43" fill="rgb(166,97,179)"/>
+<rect x="221" y="126" width="3" height="43" fill="rgb(166,97,179)"/>
+<rect x="289" y="79" width="3" height="43" fill="rgb(199,110,56)"/>
+<rect x="289" y="126" width="3" height="43" fill="rgb(199,110,56)"/>
+<text x="44" y="65" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Suppliers</text>
+<text x="112" y="65" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Inputs</text>
+<text x="180" y="65" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Process</text>
+<text x="248" y="65" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Outputs</text>
+<text x="316" y="65" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Customers</text>
+<text x="44" y="103.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Design</text>
+<text x="44" y="150.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Vendor</text>
+<text x="112" y="103.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Brief</text>
+<text x="112" y="150.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Assets</text>
+<text x="180" y="103.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Plan</text>
+<text x="180" y="150.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Build</text>
+<text x="180" y="197.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Check</text>
+<text x="248" y="103.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Release</text>
+<text x="248" y="150.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Report</text>
+<text x="316" y="103.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Client</text>
+<text x="316" y="150.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Support</text>
+<text x="180" y="24" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)">SIPOC process overview</text>
+<text x="180" y="234" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Suppliers to customers / one process boundary</text>
 </svg>

@@ -1,42 +1,42 @@
 <svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>grouped_bar</title><desc>Neper chart rendered from caller-owned geometry</desc>
-<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
-<line x1="76.5" y1="42" x2="76.5" y2="182" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="76.5" y1="182" x2="76.5" y2="187" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="133.5" y1="42" x2="133.5" y2="182" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="133.5" y1="182" x2="133.5" y2="187" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="190.5" y1="42" x2="190.5" y2="182" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="190.5" y1="182" x2="190.5" y2="187" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="247.5" y1="42" x2="247.5" y2="182" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="247.5" y1="182" x2="247.5" y2="187" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="182" x2="276" y2="182" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="182" x2="48" y2="182" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="135.3333282470703" x2="276" y2="135.3333282470703" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="135.3333282470703" x2="48" y2="135.3333282470703" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="88.66666412353516" x2="276" y2="88.66666412353516" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="88.66666412353516" x2="48" y2="88.66666412353516" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="42" x2="276" y2="42" stroke="rgb(224,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="43" y1="42" x2="48" y2="42" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="42" x2="48" y2="182" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<line x1="48" y1="182" x2="276" y2="182" stroke="rgb(82,97,122)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
-<rect x="53.70000076293945" y="112" width="22.80000114440918" height="70" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="110.69999694824219" y="65.33333587646484" width="22.80000114440918" height="116.66666412353516" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="167.6999969482422" y="135.3333282470703" width="22.80000114440918" height="46.66667175292969" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="224.6999969482422" y="88.66666412353516" width="22.80000114440918" height="93.33333587646484" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="284" y="64" width="10" height="10" fill="rgb(18,89,194)" fill-opacity="1"/>
-<rect x="76.5" y="135.3333282470703" width="22.80000114440918" height="46.66667175292969" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="133.5" y="88.66666412353516" width="22.80000114440918" height="93.33333587646484" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="190.5" y="42" width="22.80000114440918" height="140" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="247.5" y="112" width="22.80000114440918" height="70" fill="rgb(240,107,31)" fill-opacity="1"/>
-<rect x="284" y="87" width="10" height="10" fill="rgb(240,107,31)" fill-opacity="1"/>
-<text x="76.5" y="197" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">North</text>
-<text x="133.5" y="197" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">South</text>
-<text x="190.5" y="197" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">East</text>
-<text x="247.5" y="197" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">West</text>
-<text x="39" y="185.14999389648438" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">0</text>
-<text x="39" y="138.4833221435547" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">2</text>
-<text x="39" y="91.81666564941406" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">4</text>
-<text x="39" y="45.150001525878906" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)" fill-opacity="1">6</text>
-<text x="180" y="24" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(82,97,122)" fill-opacity="1">Grouped comparison</text>
-<text x="300" y="74" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">Alpha</text>
-<text x="300" y="97" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)" fill-opacity="1">Beta</text>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="76.5" y1="42" x2="76.5" y2="182" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="76.5" y1="182" x2="76.5" y2="187" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="133.5" y1="42" x2="133.5" y2="182" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="133.5" y1="182" x2="133.5" y2="187" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="190.5" y1="42" x2="190.5" y2="182" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="190.5" y1="182" x2="190.5" y2="187" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="247.5" y1="42" x2="247.5" y2="182" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="247.5" y1="182" x2="247.5" y2="187" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="182" x2="276" y2="182" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="182" x2="48" y2="182" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="135.33" x2="276" y2="135.33" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="135.33" x2="48" y2="135.33" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="88.67" x2="276" y2="88.67" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="88.67" x2="48" y2="88.67" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="42" x2="276" y2="42" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="43" y1="42" x2="48" y2="42" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="42" x2="48" y2="182" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="48" y1="182" x2="276" y2="182" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<rect x="53.7" y="112" width="22.8" height="70" fill="rgb(18,89,194)"/>
+<rect x="110.7" y="65.33" width="22.8" height="116.67" fill="rgb(18,89,194)"/>
+<rect x="167.7" y="135.33" width="22.8" height="46.67" fill="rgb(18,89,194)"/>
+<rect x="224.7" y="88.67" width="22.8" height="93.33" fill="rgb(18,89,194)"/>
+<rect x="284" y="64" width="10" height="10" fill="rgb(18,89,194)"/>
+<rect x="76.5" y="135.33" width="22.8" height="46.67" fill="rgb(240,107,31)"/>
+<rect x="133.5" y="88.67" width="22.8" height="93.33" fill="rgb(240,107,31)"/>
+<rect x="190.5" y="42" width="22.8" height="140" fill="rgb(240,107,31)"/>
+<rect x="247.5" y="112" width="22.8" height="70" fill="rgb(240,107,31)"/>
+<rect x="284" y="87" width="10" height="10" fill="rgb(240,107,31)"/>
+<text x="76.5" y="197" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">North</text>
+<text x="133.5" y="197" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">South</text>
+<text x="190.5" y="197" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">East</text>
+<text x="247.5" y="197" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">West</text>
+<text x="39" y="185.15" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">0</text>
+<text x="39" y="138.48" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">2</text>
+<text x="39" y="91.82" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">4</text>
+<text x="39" y="45.15" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">6</text>
+<text x="180" y="24" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(82,97,122)">Grouped comparison</text>
+<text x="300" y="74" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">Alpha</text>
+<text x="300" y="97" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">Beta</text>
 </svg>
