@@ -2944,6 +2944,11 @@ gfx_chart_oc_curve_written=$($test_build/neper-self emit-executable "$repo/tests
 chmod +x "$test_build/gfx-chart-oc-curve-selfhost"
 gfx_chart_oc_curve_output=$("$test_build/gfx-chart-oc-curve-selfhost")
 [ "$gfx_chart_oc_curve_output" = 'gfx chart OC curve ok' ]
+gfx_chart_gage_rr_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_gage_rr/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-gage-rr-selfhost")
+[ "$gfx_chart_gage_rr_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-gage-rr-selfhost"
+gfx_chart_gage_rr_output=$("$test_build/gfx-chart-gage-rr-selfhost")
+[ "$gfx_chart_gage_rr_output" = 'gfx chart gage rr ok' ]
 gfx_chart_spine_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_spine_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-spine-plot-selfhost")
 [ "$gfx_chart_spine_plot_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-spine-plot-selfhost"

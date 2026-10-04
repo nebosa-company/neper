@@ -34476,3 +34476,19 @@ The chart is descriptive, not an optimizer for n/c or a claim that one plan
 meets specified producer and consumer risks.
 
 References: https://www.itl.nist.gov/div898/handbook/pmc/section2/pmc243.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/acceptance-sampling/how-to/attributes-acceptance-sampling/before-you-start/data-considerations/
+
+## D1932 — Derive Gage R&R bars from a balanced crossed random-effects study
+
+`stat.gage_rr_crossed` accepts part-major, operator-major repeated readings
+and computes two-factor sums of squares, tests part-by-operator interaction,
+then either retains its variance component or pools it into repeatability.
+All components are nonnegative method-of-moments estimates; the caller supplies
+the interaction significance threshold. `gage_rr_variance_components` also
+accepts a mean-square table, which lets the fixture reproduce Minitab's
+published 10-part/3-operator/3-trial reduced-model components. The gallery
+plots four sources as paired %variance-contribution and %study-variation bars
+through the existing bar adapters. This covers balanced crossed studies, not
+nested or unbalanced designs, confidence intervals, tolerance ratios, distinct
+categories, or the whole multi-panel Minitab report.
+
+References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/methods-and-formulas/method-of-analysis/ ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/before-you-start/example/

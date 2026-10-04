@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>gage_rr</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="52" y="48" width="276" height="128" fill="rgb(250,252,255)" fill-opacity="1"/>
+<line x1="52" y1="48" x2="52" y2="176" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="176" x2="52" y2="181" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="328" y1="48" x2="328" y2="176" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="328" y1="176" x2="328" y2="181" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="176" x2="328" y2="176" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="176" x2="52" y2="176" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="144" x2="328" y2="144" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="144" x2="52" y2="144" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="112" x2="328" y2="112" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="112" x2="52" y2="112" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="80" x2="328" y2="80" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="80" x2="52" y2="80" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="48" x2="328" y2="48" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="48" x2="52" y2="48" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="48" x2="52" y2="176" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="176" x2="328" y2="176" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<rect x="59.90363311767578" y="166.06475830078125" width="25.090909957885742" height="9.93524169921875" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="128.9036407470703" y="171.65643310546875" width="25.090909957885742" height="4.343562126159668" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="197.9036407470703" y="170.4083251953125" width="25.090909957885742" height="5.591679573059082" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="266.90362548828125" y="57.93524169921875" width="25.090909957885742" height="118.06475830078125" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="88.00545501708984" y="140.3389434814453" width="25.090909957885742" height="35.66105651855469" fill="rgb(232,87,41)" fill-opacity="1"/>
+<rect x="157.0054473876953" y="152.42086791992188" width="25.090909957885742" height="23.579139709472656" fill="rgb(232,87,41)" fill-opacity="1"/>
+<rect x="226.0054473876953" y="149.2467803955078" width="25.090909957885742" height="26.753223419189453" fill="rgb(232,87,41)" fill-opacity="1"/>
+<rect x="295.0054626464844" y="53.06794738769531" width="25.090909957885742" height="122.93205261230469" fill="rgb(232,87,41)" fill-opacity="1"/>
+<rect x="112" y="202" width="10" height="8" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="220" y="202" width="10" height="8" fill="rgb(232,87,41)" fill-opacity="1"/>
+<text x="180" y="18" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Gage R&amp;R components</text>
+<text x="180" y="32" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Crossed ANOVA / 10 parts, 3 operators, 3 trials</text>
+<text x="43" y="179" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">0%</text>
+<text x="43" y="147" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">25%</text>
+<text x="43" y="115" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">50%</text>
+<text x="43" y="83" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">75%</text>
+<text x="43" y="51" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">100%</text>
+<text x="86.5" y="190" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Gage</text>
+<text x="155.5" y="190" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Repeat</text>
+<text x="224.5" y="190" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Reprod</text>
+<text x="293.5" y="190" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Part</text>
+<text x="135" y="210" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(43,59,82)" fill-opacity="1">Variance %</text>
+<text x="243" y="210" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(43,59,82)" fill-opacity="1">Study variation %</text>
+<text x="180" y="232" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Source of variation / percent of total</text>
+</svg>

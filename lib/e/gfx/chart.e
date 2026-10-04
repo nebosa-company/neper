@@ -93,6 +93,7 @@ type RangeInterval = struct { row: usize, lower: f64, upper: f64 }
 type RangeIntervalLayout = struct { ranges: Layout, caps: Layout }
 type ProbabilityFamily = enum u8 { Normal, Exponential }
 type ProbabilityLayout = struct { observations: Layout, reference: Layout, probability_ticks: []Tick }
+type GageRrLayout = struct { contribution: Layout, study_variation: Layout, percentages: []f32 }
 type SpineLayout = struct { categories: []Layout, column_totals: []f64, grand_total: f64 }
 type HexCell = struct { center: Coord, count: u64 }
 type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
@@ -6822,6 +6823,35 @@ fn oc_curve(sample_size: usize, acceptance_number: usize, max_fraction: f64, bou
         i += 1usize
     }
     ret (Layout { kind: .PointLine, coords: points, segments: segments[..points.len - 1usize], bars: zero, x_min: 0.0, x_max: f32(max_fraction), y_min: 0.0, y_max: 1.0 }, ok)
+}
+
+// Four crossed-study components in Minitab order: total gage, repeatability,
+// reproducibility, part-to-part. Each category has % variance contribution
+// and % study variation (standard deviation relative to total) bars.
+fn gage_rr_components(components: *const stat.GageRrComponents, bounds: geometry.Rect, bars: []geometry.Rect, percentages: []f32) -> (GageRrLayout, err) {
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite64(components.total) || components.total <= 0.0f64 || !finite64(components.gage) || !finite64(components.repeatability) || !finite64(components.operator) || !finite64(components.interaction) || !finite64(components.part) || components.gage < 0.0f64 || components.repeatability < 0.0f64 || components.operator < 0.0f64 || components.interaction < 0.0f64 || components.part < 0.0f64 { ret (zero, Invalid) }
+    if bars.len < 8usize || percentages.len < 8usize { ret (zero, TooLarge) }
+    let values = [4]f64{ components.gage, components.repeatability, components.operator + components.interaction, components.part }
+    let bar_width = bounds.width / 11.0
+    let gap = bar_width * 0.12
+    var i = 0usize
+    while i < 4usize {
+        let ratio = values[i] / components.total
+        if !finite64(ratio) || ratio < 0.0f64 || ratio > 1.0f64 { ret (zero, Invalid) }
+        let contribution = f32(100.0f64 * ratio)
+        let study = f32(100.0f64 * math.sqrt[f64](ratio))
+        let center = bounds.x + bounds.width * (f32(i) + 0.5) / 4.0
+        let left_x = center - bar_width - gap * 0.5
+        let right_x = center + gap * 0.5
+        percentages[i] = contribution
+        percentages[4usize + i] = study
+        bars[i] = geometry.rect(left_x, bounds.y + bounds.height * (1.0 - contribution / 100.0), bar_width, bounds.height * contribution / 100.0)
+        bars[4usize + i] = geometry.rect(right_x, bounds.y + bounds.height * (1.0 - study / 100.0), bar_width, bounds.height * study / 100.0)
+        i += 1usize
+    }
+    let contribution_layout = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[..4usize], x_min: 0.0, x_max: 4.0, y_min: 0.0, y_max: 100.0 }
+    let study_layout = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[4usize..8usize], x_min: 0.0, x_max: 4.0, y_min: 0.0, y_max: 100.0 }
+    ret (GageRrLayout { contribution: contribution_layout, study_variation: study_layout, percentages: percentages[..8usize] }, ok)
 }
 
 // Two-parameter Weibull probability paper. `total_count` includes units

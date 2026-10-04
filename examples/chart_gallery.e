@@ -2215,6 +2215,87 @@ fn render_oc_curve_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_gage_rr_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/gage_rr.png"
+    let plot = geometry.rect(52.0, 48.0, 276.0, 128.0)
+    let means = stat.GageRrMeanSquares { part: 9.81799f64, operator: 1.58363f64, interaction: 0.01994f64, repeatability: 0.03997f64 }
+    let (components, component_error) = stat.gage_rr_variance_components(10usize, 3usize, 3usize, &means, false)
+    if component_error != ok { ret component_error }
+    var bars: [8]geometry.Rect = zero
+    var percentages: [8]f32 = zero
+    let (map, map_error) = chart.gage_rr_components(&components, plot, bars[..], percentages[..])
+    if map_error != ok { ret map_error }
+    let x_ticks = [2]chart.Tick{ chart.Tick { value: 0.0, fraction: 0.0 }, chart.Tick { value: 4.0, fraction: 1.0 } }
+    let y_ticks = [5]chart.Tick{
+        chart.Tick { value: 0.0, fraction: 0.0 },
+        chart.Tick { value: 25.0, fraction: 0.25 },
+        chart.Tick { value: 50.0, fraction: 0.5 },
+        chart.Tick { value: 75.0, fraction: 0.75 },
+        chart.Tick { value: 100.0, fraction: 1.0 },
+    }
+    let y_text = [5]str{ "0%", "25%", "50%", "75%", "100%" }
+    let category_text = [4]str{ "Gage", "Repeat", "Reprod", "Part" }
+    var labels: [14]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Gage R&R components", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Crossed ANOVA / 10 parts, 3 operators, 3 trials", anchor: chart.Coord { x: 180.0, y: 32.0 }, align: .Center }
+    var i = 0usize
+    while i < y_text.len {
+        labels[2usize + i] = chart.Label { text: y_text[i], anchor: chart.Coord { x: 43.0, y: plot.y + plot.height * (1.0 - y_ticks[i].fraction) + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    i = 0usize
+    while i < category_text.len {
+        labels[7usize + i] = chart.Label { text: category_text[i], anchor: chart.Coord { x: plot.x + plot.width * (f32(i) + 0.5) / 4.0, y: 190.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[11usize] = chart.Label { text: "Variance %", anchor: chart.Coord { x: 135.0, y: 210.0 }, align: .Left }
+    labels[12usize] = chart.Label { text: "Study variation %", anchor: chart.Coord { x: 243.0, y: 210.0 }, align: .Left }
+    labels[13usize] = chart.Label { text: "Source of variation / percent of total", anchor: chart.Coord { x: 180.0, y: 232.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let orange = paint.rgba(0.91, 0.34, 0.16, 1.0)
+    let grid = paint.rgba(0.87, 0.91, 0.95, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let blue_key = geometry.rect(112.0, 202.0, 10.0, 8.0)
+    let orange_key = geometry.rect(220.0, 202.0, 10.0, 8.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 32u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &map.contribution, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.study_variation, paint.Brush { Solid: orange })
+    try fill(&builder, blue_key, paint.Brush { Solid: blue })
+    try fill(&builder, orange_key, paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..13usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[13usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid, dark)
+    try chart_svg.append(&writer, &map.contribution, blue)
+    try chart_svg.append(&writer, &map.study_variation, orange)
+    try chart_svg.rect(&writer, blue_key, blue, false)
+    try chart_svg.rect(&writer, orange_key, orange, false)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..13usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[13usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn two_cluster_sample(x: []f32, y: []f32) -> err {
     if x.len != 72usize || y.len != 72usize { ret chart.Invalid }
     var i = 0usize
@@ -7083,6 +7164,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_probability_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_weibull_probability_preview(a, queue, output_target, canvas, &renderer)
     try render_oc_curve_preview(a, queue, output_target, canvas, &renderer)
+    try render_gage_rr_preview(a, queue, output_target, canvas, &renderer)
     try render_hexbin_preview(a, queue, output_target, canvas, &renderer)
     try render_bin2d_preview(a, queue, output_target, canvas, &renderer)
     try render_density2d_preview(a, queue, output_target, canvas, &renderer)

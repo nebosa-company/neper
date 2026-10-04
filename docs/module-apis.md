@@ -3243,6 +3243,13 @@ fn interval_wilson(successes: u64, trials: u64, confidence: f64) -> (Interval, e
 fn beta_quantile(p: f64, a: f64, b: f64) -> f64
 fn interval_clopper_pearson(successes: u64, trials: u64, confidence: f64) -> (Interval, err)
 fn binomial_acceptance_probability(sample_size: usize, acceptance_number: usize, defective_fraction: f64) -> (f64, err)
+type GageRrMeanSquares = struct { part: f64, operator: f64, interaction: f64, repeatability: f64 }
+type GageRrComponents = struct { repeatability: f64, operator: f64, interaction: f64, part: f64, gage: f64, total: f64 }
+type GageRrWork = struct { part_means: []f64, operator_means: []f64, cell_means: []f64 }
+type GageRrSummary = struct { mean_squares: GageRrMeanSquares, components: GageRrComponents, interaction_p: f64, interaction_included: bool }
+fn gage_finite(value: f64) -> bool
+fn gage_rr_variance_components(parts: usize, operators: usize, repeats: usize, means: *const GageRrMeanSquares, include_interaction: bool) -> (GageRrComponents, err)
+fn gage_rr_crossed(values: []const f64, parts: usize, operators: usize, repeats: usize, alpha: f64, work: *GageRrWork) -> (GageRrSummary, err)
 fn value_at_risk(sorted: []const f64, level: f64) -> (f64, bool)
 fn expected_shortfall(sorted: []const f64, level: f64) -> (f64, bool)
 fn fit_moments(values: []const f64, distribution: Distribution) -> (Fit, err)
@@ -15984,6 +15991,8 @@ fn fishbone(effect: str, categories: []const str, causes: []const FishboneCause,
 fn cause_effect_tree(nodes: []const CauseTreeNode, bounds: geometry.Rect, work: *CauseTreeWork, boxes: []geometry.Rect, connectors: []Segment, labels: []Label) -> (CauseTreeLayout, err)
 fn weibull_probability_plot(sorted_failures: []const f64, total_count: usize, shape: f64, scale: f64, domain_min: f64, domain_max: f64, bounds: geometry.Rect, points: []Coord, reference: []Segment, tick_storage: []Tick) -> (ProbabilityLayout, err)
 fn oc_curve(sample_size: usize, acceptance_number: usize, max_fraction: f64, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
+type GageRrLayout = struct { contribution: Layout, study_variation: Layout, percentages: []f32 }
+fn gage_rr_components(components: *const stat.GageRrComponents, bounds: geometry.Rect, bars: []geometry.Rect, percentages: []f32) -> (GageRrLayout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)

@@ -3322,6 +3322,11 @@ $gfxChartOcCurveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $gfxChartOcCurveWritten -ne 'executable written') { throw 'gfx_chart_oc_curve emission failed' }
 $gfxChartOcCurveOutput = & $gfxChartOcCurvePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartOcCurveOutput -ne 'gfx chart OC curve ok') { throw "the e.gfx.chart OC curve answered wrongly: exit $LASTEXITCODE" }
+$gfxChartGageRrPath = Join-Path $testBuild 'gfx-chart-gage-rr-selfhost.exe'
+$gfxChartGageRrWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_gage_rr\src\main.e') $repo 'x64' 'windows' $gfxChartGageRrPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGageRrWritten -ne 'executable written') { throw 'gfx_chart_gage_rr emission failed' }
+$gfxChartGageRrOutput = & $gfxChartGageRrPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGageRrOutput -ne 'gfx chart gage rr ok') { throw "the e.gfx.chart Gage R&R answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
 $gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }

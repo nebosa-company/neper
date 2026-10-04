@@ -1819,3 +1819,139 @@ fn fit_mle(values: []const f64, distribution: Distribution) -> (Fit, err) {
     }
     ret (fit, ok)
 }
+
+// Balanced crossed random-effects Gage R&R: every operator measures every
+// part the same number of times. Variance components are nonnegative method-
+// of-moments estimates; a nonsignificant interaction is pooled into error.
+type GageRrMeanSquares = struct { part: f64, operator: f64, interaction: f64, repeatability: f64 }
+type GageRrComponents = struct { repeatability: f64, operator: f64, interaction: f64, part: f64, gage: f64, total: f64 }
+type GageRrWork = struct { part_means: []f64, operator_means: []f64, cell_means: []f64 }
+type GageRrSummary = struct { mean_squares: GageRrMeanSquares, components: GageRrComponents, interaction_p: f64, interaction_included: bool }
+
+fn gage_finite(value: f64) -> bool {
+    ret value == value && value - value == 0.0f64
+}
+
+fn gage_rr_variance_components(parts: usize, operators: usize, repeats: usize, means: *const GageRrMeanSquares, include_interaction: bool) -> (GageRrComponents, err) {
+    if parts < 2usize || operators < 2usize || repeats < 2usize || !gage_finite(means.part) || !gage_finite(means.operator) || !gage_finite(means.interaction) || !gage_finite(means.repeatability) || means.part < 0.0f64 || means.operator < 0.0f64 || means.interaction < 0.0f64 || means.repeatability < 0.0f64 { ret (zero, Invalid) }
+    var components = GageRrComponents { repeatability: means.repeatability, operator: 0.0f64, interaction: 0.0f64, part: 0.0f64, gage: 0.0f64, total: 0.0f64 }
+    if include_interaction {
+        components.operator = math.max[f64]((means.operator - means.interaction) / (f64(parts) * f64(repeats)), 0.0f64)
+        components.interaction = math.max[f64]((means.interaction - means.repeatability) / f64(repeats), 0.0f64)
+        components.part = math.max[f64]((means.part - means.interaction) / (f64(operators) * f64(repeats)), 0.0f64)
+    } else {
+        components.operator = math.max[f64]((means.operator - means.repeatability) / (f64(parts) * f64(repeats)), 0.0f64)
+        components.part = math.max[f64]((means.part - means.repeatability) / (f64(operators) * f64(repeats)), 0.0f64)
+    }
+    components.gage = components.repeatability + components.operator + components.interaction
+    components.total = components.gage + components.part
+    if !gage_finite(components.gage) || !gage_finite(components.total) { ret (zero, Invalid) }
+    ret (components, ok)
+}
+
+// `values` are part-major, then operator-major, then replicate-major.
+// Work slices hold centered cell, part and operator sums, then their means.
+fn gage_rr_crossed(values: []const f64, parts: usize, operators: usize, repeats: usize, alpha: f64, work: *GageRrWork) -> (GageRrSummary, err) {
+    if parts < 2usize || operators < 2usize || repeats < 2usize || values.len == 0usize || !(alpha > 0.0f64 && alpha < 1.0f64) { ret (zero, Invalid) }
+    if parts > values.len / operators { ret (zero, Invalid) }
+    let cells = parts * operators
+    if repeats > values.len / cells || cells * repeats != values.len { ret (zero, Invalid) }
+    if work.part_means.len < parts || work.operator_means.len < operators || work.cell_means.len < cells { ret (zero, TooSmall) }
+    let baseline = values[0usize]
+    if !gage_finite(baseline) { ret (zero, Invalid) }
+    var p = 0usize
+    while p < parts {
+        work.part_means[p] = 0.0f64
+        p += 1usize
+    }
+    var o = 0usize
+    while o < operators {
+        work.operator_means[o] = 0.0f64
+        o += 1usize
+    }
+    var grand_sum = 0.0f64
+    p = 0usize
+    while p < parts {
+        o = 0usize
+        while o < operators {
+            let cell = p * operators + o
+            var cell_sum = 0.0f64
+            var r = 0usize
+            while r < repeats {
+                let value = values[cell * repeats + r] - baseline
+                if !gage_finite(value) { ret (zero, Invalid) }
+                cell_sum += value
+                r += 1usize
+            }
+            if !gage_finite(cell_sum) { ret (zero, Invalid) }
+            work.cell_means[cell] = cell_sum / f64(repeats)
+            work.part_means[p] += cell_sum
+            work.operator_means[o] += cell_sum
+            grand_sum += cell_sum
+            o += 1usize
+        }
+        p += 1usize
+    }
+    let grand = grand_sum / f64(values.len)
+    if !gage_finite(grand) { ret (zero, Invalid) }
+    p = 0usize
+    while p < parts {
+        work.part_means[p] = work.part_means[p] / (f64(operators) * f64(repeats))
+        p += 1usize
+    }
+    o = 0usize
+    while o < operators {
+        work.operator_means[o] = work.operator_means[o] / (f64(parts) * f64(repeats))
+        o += 1usize
+    }
+    var ss_part = 0.0f64
+    var ss_operator = 0.0f64
+    var ss_interaction = 0.0f64
+    var ss_repeatability = 0.0f64
+    p = 0usize
+    while p < parts {
+        let part_delta = work.part_means[p] - grand
+        ss_part += part_delta * part_delta
+        o = 0usize
+        while o < operators {
+            let cell = p * operators + o
+            let interaction_delta = work.cell_means[cell] - work.part_means[p] - work.operator_means[o] + grand
+            ss_interaction += interaction_delta * interaction_delta
+            var r = 0usize
+            while r < repeats {
+                let residual = values[cell * repeats + r] - baseline - work.cell_means[cell]
+                ss_repeatability += residual * residual
+                r += 1usize
+            }
+            o += 1usize
+        }
+        p += 1usize
+    }
+    o = 0usize
+    while o < operators {
+        let operator_delta = work.operator_means[o] - grand
+        ss_operator += operator_delta * operator_delta
+        o += 1usize
+    }
+    ss_part *= f64(operators) * f64(repeats)
+    ss_operator *= f64(parts) * f64(repeats)
+    ss_interaction *= f64(repeats)
+    let df_interaction = f64(parts - 1usize) * f64(operators - 1usize)
+    let df_repeatability = f64(cells) * f64(repeats - 1usize)
+    let ms_interaction = ss_interaction / df_interaction
+    let ms_repeatability = ss_repeatability / df_repeatability
+    if !gage_finite(ss_part) || !gage_finite(ss_operator) || !gage_finite(ms_interaction) || !gage_finite(ms_repeatability) { ret (zero, Invalid) }
+    var interaction_p = 1.0f64
+    if ms_repeatability == 0.0f64 {
+        if ms_interaction > 0.0f64 { interaction_p = 0.0f64 }
+    } else {
+        interaction_p = 1.0f64 - special.f_cdf(ms_interaction / ms_repeatability, df_interaction, df_repeatability)
+    }
+    if !(interaction_p >= 0.0f64 && interaction_p <= 1.0f64) { ret (zero, Invalid) }
+    let include_interaction = interaction_p < alpha
+    var means = GageRrMeanSquares { part: ss_part / f64(parts - 1usize), operator: ss_operator / f64(operators - 1usize), interaction: ms_interaction, repeatability: ms_repeatability }
+    if !include_interaction { means.repeatability = (ss_interaction + ss_repeatability) / (df_interaction + df_repeatability) }
+    let (components, components_error) = gage_rr_variance_components(parts, operators, repeats, &means, include_interaction)
+    if components_error != ok { ret (zero, components_error) }
+    ret (GageRrSummary { mean_squares: means, components: components, interaction_p: interaction_p, interaction_included: include_interaction }, ok)
+}
