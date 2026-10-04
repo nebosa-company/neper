@@ -1393,6 +1393,12 @@ $algoStatHyperWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $algoStatHyperWritten -ne 'executable written') { throw 'algo_stat_hyper emission failed' }
 & $algoStatHyperPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_stat_hyper check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.survival` (L005): Nelson-Aalen, competing-risk incidence, RMST and weighted log-ranks with refusals.
+$algoStatSurvivalPath = Join-Path $testBuild 'algo-stat-survival-selfhost.exe'
+$algoStatSurvivalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_survival\src\main.e') $repo 'x64' 'windows' $algoStatSurvivalPath
+if ($LASTEXITCODE -ne 0 -or $algoStatSurvivalWritten -ne 'executable written') { throw 'algo_stat_survival emission failed' }
+& $algoStatSurvivalPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_survival check failed: exit $LASTEXITCODE" }
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 $algoGraphFlowPath = Join-Path $testBuild 'algo-graph-flow-selfhost.exe'
 $algoGraphFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_flow\src\main.e') $repo 'x64' 'windows' $algoGraphFlowPath

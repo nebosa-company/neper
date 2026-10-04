@@ -169,6 +169,7 @@
     "e.algo.stat.test",
     "e.algo.stat.mixed",
     "e.algo.stat.survival_trial",
+    "e.algo.stat.survival",
     "e.algo.stat.causal",
     "e.algo.stat.safety",
     "e.algo.graph.flow",
@@ -3603,6 +3604,18 @@
   },
   {
    "name": "e.algo.stat.survival_trial",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.special"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.stat.survival",
    "layer": 2,
    "surface": "source",
    "milestone": null,

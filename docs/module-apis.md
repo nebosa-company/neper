@@ -3166,6 +3166,30 @@ designs by exact exhaustive search (`simon_optimal` smallest expectation,
 finding by golden section, and `farrington_manning` non-inferiority with
 `fm_mle` constrained estimates.
 
+### `e.algo.stat.survival`
+
+```neper
+type Result = struct { statistic: f64, p_value: f64 }
+type Weight = enum u8 { LogRank, Breslow, TaroneWare, PetoPeto, FlemingHarrington }
+type Rmst = struct { mean: f64, se: f64 }
+error TooSmall
+error Invalid
+
+fn nelson_aalen(times: []const f64, events: []const u8, n: usize, out_times: []f64, out_hazard: []f64, out_variance: []f64, out_risk: []usize, order: []usize) -> (usize, err)
+fn cumulative_incidence(times: []const f64, causes: []const u8, n: usize, cause: u8, out_times: []f64, out_cif: []f64, order: []usize) -> (usize, err)
+fn rmst(times: []const f64, events: []const u8, n: usize, tau: f64, order: []usize) -> (Rmst, err)
+fn wlw_sweep(ta: []const f64, ea: []const u8, na: usize, tb: []const f64, eb: []const u8, nb: usize, weight: Weight, rho: f64, gamma: f64) -> (Result, err)
+fn weighted_log_rank(ta: []const f64, ea: []const u8, na: usize, tb: []const f64, eb: []const u8, nb: usize, weight: Weight) -> (Result, err)
+fn fleming_harrington(ta: []const f64, ea: []const u8, na: usize, tb: []const f64, eb: []const u8, nb: usize, rho: f64, gamma: f64) -> (Result, err)
+```
+
+Nonparametric survival estimators over right-censored times: the Nelson-Aalen
+cumulative hazard with Aalen variance, the Aalen-Johansen cumulative
+incidence for competing risks, restricted mean survival with Greenwood
+standard error, and weighted log-rank tests (Breslow, Tarone-Ware, Peto-Peto,
+Fleming-Harrington) sharing one sweep, with the plain weight equal to
+Mantel-Cox.
+
 ### `e.algo.stat.causal`
 
 ```neper

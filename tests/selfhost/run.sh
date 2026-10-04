@@ -1293,6 +1293,11 @@ algo_stat_hyper_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$algo_stat_hyper_written" = 'executable written' ]
 chmod +x "$test_build/algo-stat-hyper-selfhost"
 "$test_build/algo-stat-hyper-selfhost"
+# `e.algo.stat.survival` (L005): Nelson-Aalen, competing-risk incidence, RMST and weighted log-ranks with refusals.
+algo_stat_survival_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_survival/src/main.e" "$repo" x64 linux "$test_build/algo-stat-survival-selfhost")
+[ "$algo_stat_survival_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-survival-selfhost"
+"$test_build/algo-stat-survival-selfhost"
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 algo_graph_flow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_flow/src/main.e" "$repo" x64 linux "$test_build/algo-graph-flow-selfhost")
 [ "$algo_graph_flow_written" = 'executable written' ]
