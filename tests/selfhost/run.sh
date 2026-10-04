@@ -2974,6 +2974,11 @@ gfx_chart_spectrogram_written=$($test_build/neper-self emit-executable "$repo/te
 chmod +x "$test_build/gfx-chart-spectrogram-selfhost"
 gfx_chart_spectrogram_output=$("$test_build/gfx-chart-spectrogram-selfhost")
 [ "$gfx_chart_spectrogram_output" = 'gfx chart spectrogram ok' ]
+gfx_chart_waterfall_spectrum_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_waterfall_spectrum/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-waterfall-spectrum-selfhost")
+[ "$gfx_chart_waterfall_spectrum_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-waterfall-spectrum-selfhost"
+gfx_chart_waterfall_spectrum_output=$("$test_build/gfx-chart-waterfall-spectrum-selfhost")
+[ "$gfx_chart_waterfall_spectrum_output" = 'gfx chart waterfall spectrum ok' ]
 gfx_chart_spine_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_spine_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-spine-plot-selfhost")
 [ "$gfx_chart_spine_plot_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-spine-plot-selfhost"

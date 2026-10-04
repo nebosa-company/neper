@@ -2690,6 +2690,91 @@ fn render_spectrogram_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_waterfall_spectrum_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/waterfall_spectrum.png"
+    let plot = geometry.rect(30.0, 47.0, 300.0, 154.0)
+    var samples: [512]f64 = zero
+    var phase = 0.0f64
+    var i = 0usize
+    while i < samples.len {
+        let time = f64(i) / 256.0f64
+        let frequency = 24.0f64 + 38.0f64 * time
+        phase += 6.283185307179586f64 * frequency / 256.0f64
+        samples[i] = math.sin[f64](phase) + 0.35f64 * math.sin[f64](6.283185307179586f64 * 12.0f64 * time)
+        i += 1usize
+    }
+    var win: [64]f64 = zero
+    try dsp.window(.Hann, 64usize, win[..])
+    var re: [1856]f64 = zero
+    var im: [1856]f64 = zero
+    let (frames, transform_error) = dsp.stft(samples[..], 64usize, 16usize, win[..], re[..], im[..])
+    if transform_error != ok { ret transform_error }
+    var cells: [957]chart.Cell = zero
+    let (spectrum, spectrum_error) = chart.spectrogram(re[..], im[..], frames, 64usize, 16usize, 256.0f64, 0.000001f64, plot, cells[..])
+    if spectrum_error != ok { ret spectrum_error }
+    var points: [264]chart.Coord = zero
+    var segments: [256]chart.Segment = zero
+    var traces: [8]chart.Layout = zero
+    var frame_indices: [8]usize = zero
+    var storage = chart.WaterfallSpectrumStorage { points: points[..], segments: segments[..], traces: traces[..], frame_indices: frame_indices[..] }
+    let (map, map_error) = chart.waterfall_spectrum(&spectrum, 4usize, plot, &storage)
+    if map_error != ok { ret map_error }
+    var axes = [2]chart.Segment{
+        chart.Segment { from: chart.Coord { x: 57.0, y: 182.52 }, to: chart.Coord { x: 261.0, y: 182.52 } },
+        chart.Segment { from: chart.Coord { x: 57.0, y: 182.52 }, to: chart.Coord { x: 111.0, y: 124.0 } },
+    }
+    let guides = chart.Layout { kind: .Rug, coords: zero, segments: axes[..], bars: zero, x_min: 0.0, x_max: 128.0, y_min: map.value_min, y_max: map.value_max }
+    var labels: [6]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Waterfall spectrum / rising tone", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Frequency traces sampled across time", anchor: chart.Coord { x: 180.0, y: 34.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "0", anchor: chart.Coord { x: 57.0, y: 205.0 }, align: .Center }
+    labels[3usize] = chart.Label { text: "64", anchor: chart.Coord { x: 159.0, y: 205.0 }, align: .Center }
+    labels[4usize] = chart.Label { text: "128 Hz", anchor: chart.Coord { x: 261.0, y: 205.0 }, align: .Center }
+    labels[5usize] = chart.Label { text: "Blue: early    Orange: later    Height: power dB", anchor: chart.Coord { x: 180.0, y: 229.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let orange = paint.rgba(0.91, 0.34, 0.16, 1.0)
+    let gray = paint.rgba(0.58, 0.65, 0.73, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 32u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &guides, paint.Brush { Solid: gray })
+    i = 0usize
+    while i < map.traces.len {
+        let color = paint.mix(blue, orange, f32(i) / f32(map.traces.len - 1usize))
+        try chart_scene.append(a, &builder, &map.traces[i], paint.Brush { Solid: color })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..5usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[5usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &guides, gray)
+    i = 0usize
+    while i < map.traces.len {
+        let color = paint.mix(blue, orange, f32(i) / f32(map.traces.len - 1usize))
+        try chart_svg.append(&writer, &map.traces[i], color)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..5usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[5usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn two_cluster_sample(x: []f32, y: []f32) -> err {
     if x.len != 72usize || y.len != 72usize { ret chart.Invalid }
     var i = 0usize
@@ -7564,6 +7649,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_interaction_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_cube_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_spectrogram_preview(a, queue, output_target, canvas, &renderer)
+    try render_waterfall_spectrum_preview(a, queue, output_target, canvas, &renderer)
     try render_hexbin_preview(a, queue, output_target, canvas, &renderer)
     try render_bin2d_preview(a, queue, output_target, canvas, &renderer)
     try render_density2d_preview(a, queue, output_target, canvas, &renderer)

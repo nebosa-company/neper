@@ -103,6 +103,8 @@ type InteractionLayout = struct { series: []Layout, means: []f64, counts: []usiz
 type CubePlotStorage = struct { vertices: []Coord, edges: []Segment, means: []f64, counts: []usize }
 type CubePlotLayout = struct { vertices: Layout, frame: Layout, means: []f64, counts: []usize }
 type SpectrogramLayout = struct { matrix: MatrixLayout, time_start: f64, time_end: f64, frequency_max: f64 }
+type WaterfallSpectrumStorage = struct { points: []Coord, segments: []Segment, traces: []Layout, frame_indices: []usize }
+type WaterfallSpectrumLayout = struct { traces: []Layout, frame_indices: []usize, value_min: f32, value_max: f32 }
 type SpineLayout = struct { categories: []Layout, column_totals: []f64, grand_total: f64 }
 type HexCell = struct { center: Coord, count: u64 }
 type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
@@ -7190,6 +7192,54 @@ fn spectrogram(re: []const f64, im: []const f64, frames: usize, fft_size: usize,
     }
     let matrix = MatrixLayout { kind: .Heatmap, cells: cells[..frames * rows], columns: frames, rows: rows, value_min: lo, value_max: hi }
     ret (SpectrogramLayout { matrix: matrix, time_start: time_start, time_end: time_end, frequency_max: frequency_max }, ok)
+}
+
+// Oblique frequency traces sampled from an existing one-sided spectrogram.
+// The matrix remains in screen row order (high frequency first), while each
+// returned trace runs from low to high frequency without joining time slices.
+fn waterfall_spectrum(spectrum: *const SpectrogramLayout, frame_step: usize, bounds: geometry.Rect, storage: *WaterfallSpectrumStorage) -> (WaterfallSpectrumLayout, err) {
+    let matrix = spectrum.matrix
+    let frames = matrix.columns
+    let bins = matrix.rows
+    if matrix.kind != .Heatmap || frames < 2usize || bins < 2usize || frame_step == 0usize || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if frames > matrix.cells.len / bins || matrix.cells.len != frames * bins { ret (zero, Invalid) }
+    let trace_count = (frames - 1usize) / frame_step + 1usize
+    if trace_count < 2usize { ret (zero, Invalid) }
+    if trace_count > storage.points.len / bins || trace_count > storage.segments.len / (bins - 1usize) || storage.traces.len < trace_count || storage.frame_indices.len < trace_count { ret (zero, TooLarge) }
+    var lo = matrix.cells[0usize].value
+    var hi = lo
+    var i = 0usize
+    while i < matrix.cells.len {
+        let value = matrix.cells[i].value
+        if !finite(value) { ret (zero, Invalid) }
+        if value < lo { lo = value }
+        if value > hi { hi = value }
+        i += 1usize
+    }
+    if !finite(hi - lo) { ret (zero, Invalid) }
+    var trace = 0usize
+    while trace < trace_count {
+        let frame = trace * frame_step
+        let depth = f32(trace) / f32(trace_count - 1usize)
+        let left = bounds.x + bounds.width * (0.09 + 0.18 * depth)
+        let base = bounds.y + bounds.height * (0.88 - 0.38 * depth)
+        var bin = 0usize
+        while bin < bins {
+            let value = matrix.cells[(bins - 1usize - bin) * frames + frame].value
+            var amplitude = 0.0f32
+            if hi > lo { amplitude = (value - lo) / (hi - lo) }
+            let point = Coord { x: left + bounds.width * 0.68 * f32(bin) / f32(bins - 1usize), y: base - bounds.height * 0.32 * amplitude }
+            if !finite(point.x) || !finite(point.y) { ret (zero, Invalid) }
+            let index = trace * bins + bin
+            storage.points[index] = point
+            if bin > 0usize { storage.segments[trace * (bins - 1usize) + bin - 1usize] = Segment { from: storage.points[index - 1usize], to: point } }
+            bin += 1usize
+        }
+        storage.frame_indices[trace] = frame
+        storage.traces[trace] = Layout { kind: .Line, coords: storage.points[trace * bins..(trace + 1usize) * bins], segments: storage.segments[trace * (bins - 1usize)..(trace + 1usize) * (bins - 1usize)], bars: zero, x_min: 0.0, x_max: f32(bins - 1usize), y_min: lo, y_max: hi }
+        trace += 1usize
+    }
+    ret (WaterfallSpectrumLayout { traces: storage.traces[..trace_count], frame_indices: storage.frame_indices[..trace_count], value_min: lo, value_max: hi }, ok)
 }
 
 // Two-parameter Weibull probability paper. `total_count` includes units

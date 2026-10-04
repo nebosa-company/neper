@@ -16007,6 +16007,9 @@ type CubePlotLayout = struct { vertices: Layout, frame: Layout, means: []f64, co
 fn cube_plot(values: []const f64, factor_ids: []const usize, bounds: geometry.Rect, storage: *CubePlotStorage) -> (CubePlotLayout, err)
 type SpectrogramLayout = struct { matrix: MatrixLayout, time_start: f64, time_end: f64, frequency_max: f64 }
 fn spectrogram(re: []const f64, im: []const f64, frames: usize, fft_size: usize, hop: usize, sample_rate: f64, floor_power: f64, bounds: geometry.Rect, cells: []Cell) -> (SpectrogramLayout, err)
+type WaterfallSpectrumStorage = struct { points: []Coord, segments: []Segment, traces: []Layout, frame_indices: []usize }
+type WaterfallSpectrumLayout = struct { traces: []Layout, frame_indices: []usize, value_min: f32, value_max: f32 }
+fn waterfall_spectrum(spectrum: *const SpectrogramLayout, frame_step: usize, bounds: geometry.Rect, storage: *WaterfallSpectrumStorage) -> (WaterfallSpectrumLayout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)

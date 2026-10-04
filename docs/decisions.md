@@ -34565,3 +34565,18 @@ window-energy correction, logarithmic frequency, streaming updates and color
 legend controls remain planned.
 
 References: https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.ShortTimeFFT.spectrogram.html ; https://www.mathworks.com/help/signal/ref/spectrogram.html
+
+## D1938 — Reproject spectrogram power as independent waterfall traces
+
+`chart.waterfall_spectrum` borrows a one-sided `SpectrogramLayout` and samples
+its time columns at a caller-chosen frame step. Each selected frame becomes a
+separate connected frequency trace in an oblique projection, with retained
+source-frame indices for labels or interaction. It shares the spectrogram's
+decibel range; no FFT or PSD conversion is duplicated. The focused
+Windows/Linux fixture checks frequency order, frame sampling, geometry,
+scene/SVG output, flat values and refusals. The gallery colors eight traces
+from early blue to later orange. This is a 2-D projected view, not a 3-D
+depth-buffered mesh; occlusion, interactive rotation and calibrated PSD remain
+planned.
+
+References: https://www.mathworks.com/help/signal/ref/pspectrum.html ; https://download.ni.com/support/manuals/372879c.pdf
