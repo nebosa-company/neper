@@ -35007,3 +35007,14 @@ fail explicitly. The Windows/Linux fixture checks grouping, coordinates,
 empty panels and scene/SVG adapters; the gallery renders a PNG/SVG pair.
 Generic geom faceting, free-scale strip guides and collision handling remain
 follow-on work.
+
+## D1973 — Wrapped legends use caller-measured text widths
+
+`chart.wrapped_legend_items` receives label widths measured in the caller's
+font and size, then keeps each swatch and label together while wrapping rows
+inside an explicit rectangle. Items wider than that rectangle, excess rows,
+invalid measurements and short caller storage are refused rather than clipped
+or allowed to collide. The gallery measures the actual font, draws four
+series and renders the same bounded legend in PNG and SVG; a Windows/Linux
+fixture checks placement and refusal paths. Automatic margin allocation and
+legend-to-plot placement remain separate composition work.

@@ -960,6 +960,12 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    Windows/Linux fixture checks grouping, empty panels, coordinates, SVG
    escaping, scene output and refusal paths; the gallery adds a PNG/SVG pair.
    Generalized geom facets and free-scale category panels remain planned.
+   `wrapped_legend_items` accepts caller-measured label widths and wraps whole
+   swatch/label pairs into bounded rows. It refuses an item wider than the
+   legend region or too many rows for its height, avoiding silent text
+   collisions. The Windows/Linux fixture checks placement, capacity and
+   scene/SVG output; the gallery adds a measured-font PNG/SVG preview.
+   Automatic plot-versus-legend placement and layout-aware margins remain.
    Bullet charts now compose qualitative bands, an actual bar and a target
    rule from existing layers; `gfx_chart_composition` checks geometry,
    refusals and both adapters on Windows and Linux.

@@ -1563,6 +1563,116 @@ fn render_monte_carlo_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_legend_collision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/legend_collision.png"
+    let names = [4]str{ "Control baseline", "Treatment alpha extended", "Treatment beta extended", "Follow-up cohort" }
+    let colors = [4]paint.Color{
+        paint.rgba(0.13, 0.42, 0.76, 1.0),
+        paint.rgba(0.12, 0.57, 0.48, 1.0),
+        paint.rgba(0.85, 0.43, 0.19, 1.0),
+        paint.rgba(0.55, 0.38, 0.73, 1.0),
+    }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let pale = paint.rgba(0.95, 0.97, 0.99, 1.0)
+    let grid = paint.rgba(0.84, 0.88, 0.92, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let fonts = [1]text_layout.FontChoice{ text_layout.FontChoice { font: font, size: 8.0 } }
+    let style = text_layout.Style { fonts: fonts[..], language: "", line_height: 0.0 }
+    let options = text_layout.Options { width: 0.0, max_lines: 1u32, align: .Start, wrap: .None, ellipsis: "", notdef: true }
+    var widths: [4]f32 = zero
+    var i = 0usize
+    while i < names.len {
+        let (measured, measure_error) = text_layout.layout(a, names[i], style, options)
+        if measure_error != ok { ret measure_error }
+        widths[i] = measured.bounds.width
+        i += 1usize
+    }
+    let legend_bounds = geometry.rect(19.0, 163.0, 322.0, 52.0)
+    var items: [4]chart.LegendItem = zero
+    let (legend, legend_error) = chart.wrapped_legend_items(names[..], widths[..], legend_bounds, 10.0, 10.0, 22.0, items[..])
+    if legend_error != ok || legend.rows != 2usize { ret chart.Invalid }
+    var legend_labels: [4]chart.Label = zero
+    i = 0usize
+    while i < items.len {
+        legend_labels[i] = items[i].label
+        i += 1usize
+    }
+    let plot = geometry.rect(37.0, 56.0, 286.0, 96.0)
+    let x = [4]f32{ 48.0, 136.0, 224.0, 312.0 }
+    let ys = [16]f32{
+        123.0, 116.0, 106.0, 96.0,
+        139.0, 125.0, 99.0, 74.0,
+        144.0, 132.0, 114.0, 87.0,
+        128.0, 119.0, 105.0, 101.0,
+    }
+    var lines: [12]chart.Segment = zero
+    var layers: [4]chart.Layout = zero
+    i = 0usize
+    while i < 4usize {
+        var j = 0usize
+        while j < 3usize {
+            lines[i * 3usize + j] = chart.Segment { from: chart.Coord { x: x[j], y: ys[i * 4usize + j] }, to: chart.Coord { x: x[j + 1usize], y: ys[i * 4usize + j + 1usize] } }
+            j += 1usize
+        }
+        layers[i] = chart.Layout { kind: .Line, coords: zero, segments: lines[i * 3usize..i * 3usize + 3usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    var grid_segments: [3]chart.Segment = zero
+    i = 0usize
+    while i < 3usize {
+        let y = plot.y + 20.0 + f32(i) * 30.0
+        grid_segments[i] = chart.Segment { from: chart.Coord { x: plot.x, y: y }, to: chart.Coord { x: plot.x + plot.width, y: y } }
+        i += 1usize
+    }
+    let guide = chart.Layout { kind: .Rug, coords: zero, segments: grid_segments[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let labels = [3]chart.Label{
+        chart.Label { text: "Wrapped legend / no collisions", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center },
+        chart.Label { text: "Measured labels wrap within a fixed legend band", anchor: chart.Coord { x: 180.0, y: 40.0 }, align: .Center },
+        chart.Label { text: "Swatch and label stay together on each row", anchor: chart.Coord { x: 180.0, y: 234.0 }, align: .Center },
+    }
+    let (made, builder_error) = scene.builder(a, 100usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try fill(&builder, legend_bounds, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &guide, paint.Brush { Solid: grid })
+    i = 0usize
+    while i < 4usize {
+        try chart_scene.append(a, &builder, &layers[i], paint.Brush { Solid: colors[i] })
+        try fill(&builder, legend.items[i].swatch, paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, legend_labels[..], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.rect(&writer, legend_bounds, pale, false)
+    try chart_svg.append(&writer, &guide, grid)
+    i = 0usize
+    while i < 4usize {
+        try chart_svg.append(&writer, &layers[i], colors[i])
+        try chart_svg.rect(&writer, legend.items[i].swatch, colors[i], false)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, legend_labels[..], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_category_facet_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/category_facet.png"
     let keys = [12]str{ "North", "South", "East", "North", "South", "East", "North", "South", "East", "North", "South", "East" }
@@ -10230,6 +10340,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_date_axis_line_preview(a, queue, output_target, canvas, &renderer)
     try render_discrete_axis_bar_preview(a, queue, output_target, canvas, &renderer)
     try render_category_facet_preview(a, queue, output_target, canvas, &renderer)
+    try render_legend_collision_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)

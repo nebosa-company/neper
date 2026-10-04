@@ -3302,6 +3302,11 @@ $gfxChartCategoryFacetWritten = & $compiler emit-executable (Join-Path $PSScript
 if ($LASTEXITCODE -ne 0 -or $gfxChartCategoryFacetWritten -ne 'executable written') { throw 'gfx_chart_category_facet emission failed' }
 $gfxChartCategoryFacetOutput = & $gfxChartCategoryFacetPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartCategoryFacetOutput -ne 'gfx chart category facet ok') { throw "the e.gfx.chart category facet answered wrongly: exit $LASTEXITCODE" }
+$gfxChartLegendWrapPath = Join-Path $testBuild 'gfx-chart-legend-wrap-selfhost.exe'
+$gfxChartLegendWrapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_legend_wrap\src\main.e') $repo 'x64' 'windows' $gfxChartLegendWrapPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLegendWrapWritten -ne 'executable written') { throw 'gfx_chart_legend_wrap emission failed' }
+$gfxChartLegendWrapOutput = & $gfxChartLegendWrapPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLegendWrapOutput -ne 'gfx chart legend wrap ok') { throw "the e.gfx.chart wrapped legend answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

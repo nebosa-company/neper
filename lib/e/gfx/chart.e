@@ -26,6 +26,7 @@ type Coord = struct { x: f32, y: f32 }
 type LabelAlign = enum u8 { Left, Center, Right }
 type Label = struct { text: str, anchor: Coord, align: LabelAlign }
 type LegendItem = struct { swatch: geometry.Rect, label: Label }
+type WrappedLegend = struct { items: []LegendItem, rows: usize }
 type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
 type ContourVertex = struct { point: Coord, value: f64 }
@@ -714,6 +715,35 @@ fn legend_items(names: []const str, origin: Coord, swatch: f32, row_height: f32,
         i += 1usize
     }
     ret (out[..names.len], ok)
+}
+
+// Text widths are measured by the caller's chosen font/size. Wrapping only
+// happens between complete items, so swatches and labels cannot split.
+fn wrapped_legend_items(names: []const str, text_widths: []const f32, bounds: geometry.Rect, swatch: f32, gap: f32, row_height: f32, out: []LegendItem) -> (WrappedLegend, err) {
+    if names.len == 0usize { ret (zero, Empty) }
+    if names.len != text_widths.len || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite(swatch) || !finite(gap) || !finite(row_height) || swatch <= 0.0 || gap < 0.0 || row_height < swatch { ret (zero, Invalid) }
+    if out.len < names.len { ret (zero, TooLarge) }
+    var row = 0usize
+    var cursor = bounds.x
+    var i = 0usize
+    while i < names.len {
+        let width = text_widths[i]
+        if !finite(width) || width <= 0.0 { ret (zero, Invalid) }
+        let item_width = swatch + 5.0 + width
+        if !finite(item_width) || item_width > bounds.width { ret (zero, TooLarge) }
+        if cursor > bounds.x && cursor + item_width > bounds.x + bounds.width {
+            row += 1usize
+            cursor = bounds.x
+        }
+        if f32(row + 1usize) * row_height > bounds.height { ret (zero, TooLarge) }
+        let y = bounds.y + f32(row) * row_height + (row_height - swatch) * 0.5
+        let label = Label { text: names[i], anchor: Coord { x: cursor + swatch + 5.0, y: y + swatch }, align: .Left }
+        if !valid_label(&label) || !finite(cursor + item_width) || !finite(y + swatch) { ret (zero, Invalid) }
+        out[i] = LegendItem { swatch: geometry.rect(cursor, y, swatch, swatch), label: label }
+        cursor += item_width + gap
+        i += 1usize
+    }
+    ret (WrappedLegend { items: out[..names.len], rows: row + 1usize }, ok)
 }
 
 // Produces marks in screen coordinates. Y is inverted because graphics bounds
