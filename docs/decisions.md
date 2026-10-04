@@ -34871,3 +34871,17 @@ and bars, while labels stay a caller-owned composition concern. Windows/Linux
 fixtures cover arithmetic, geometry, nulls, scale ratios and refusal paths;
 paired gallery previews show both reports. Pagination and print drivers remain
 outside this first chart slice.
+
+## D1962 — Treat a future-state value stream as an explicit target plan
+
+`chart.future_value_stream_map` compares independently validated current and
+target streams rather than relabeling the current map. Available time divided
+by customer demand supplies takt; the target marks one caller-selected
+pacemaker, typed push/FIFO/pull links, and stages whose processing time exceeds
+takt. Its signed lead-time, process-cycle-efficiency and rolled-yield changes
+may be negative; the chart does not silently enforce improvement. Both states
+retain proportional time ladders and caller-owned geometry, and existing
+scene/SVG adapters paint the control cues. This is a design comparison rather
+than an operational simulator; inventory, transport, branching and capacity
+balancing remain separate planned work. The Windows/Linux fixture tests
+arithmetic, placement and refusal paths; the gallery adds a paired preview.

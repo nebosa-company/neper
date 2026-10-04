@@ -1031,6 +1031,113 @@ fn render_value_stream_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_future_state_vsm_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/future_state_vsm.png"
+    let current_steps = [3]chart.ValueStreamStep{
+        chart.ValueStreamStep { process_time: 2.0f64, value_added_time: 1.0f64, wait_before: 0.0f64, good_fraction: 0.98f64 },
+        chart.ValueStreamStep { process_time: 5.0f64, value_added_time: 4.0f64, wait_before: 4.0f64, good_fraction: 0.95f64 },
+        chart.ValueStreamStep { process_time: 3.0f64, value_added_time: 2.0f64, wait_before: 2.0f64, good_fraction: 0.99f64 },
+    }
+    let future_steps = [3]chart.ValueStreamStep{
+        chart.ValueStreamStep { process_time: 2.0f64, value_added_time: 1.5f64, wait_before: 0.0f64, good_fraction: 0.99f64 },
+        chart.ValueStreamStep { process_time: 4.2f64, value_added_time: 3.5f64, wait_before: 1.0f64, good_fraction: 0.98f64 },
+        chart.ValueStreamStep { process_time: 2.5f64, value_added_time: 2.0f64, wait_before: 0.5f64, good_fraction: 0.995f64 },
+    }
+    let links = [2]chart.ValueStreamFlow{ .Pull, .Fifo }
+    var current_boxes: [3]geometry.Rect = zero
+    var current_arrows: [6]chart.Segment = zero
+    var current_process: [3]geometry.Rect = zero
+    var current_wait: [3]geometry.Rect = zero
+    var future_boxes: [3]geometry.Rect = zero
+    var future_arrows: [6]chart.Segment = zero
+    var future_process: [3]geometry.Rect = zero
+    var future_wait: [3]geometry.Rect = zero
+    var fifo: [2]geometry.Rect = zero
+    var pull: [2]geometry.Rect = zero
+    var over: [3]geometry.Rect = zero
+    var pace: [1]geometry.Rect = zero
+    var work = chart.FutureValueStreamWork {
+        current: chart.ValueStreamWork { boxes: current_boxes[..], arrows: current_arrows[..], process_bars: current_process[..], wait_bars: current_wait[..] },
+        future: chart.ValueStreamWork { boxes: future_boxes[..], arrows: future_arrows[..], process_bars: future_process[..], wait_bars: future_wait[..] },
+        fifo_cues: fifo[..], pull_cues: pull[..], over_takt: over[..], pacemaker: pace[..],
+    }
+    let (map, map_error) = chart.future_value_stream_map(current_steps[..], future_steps[..], links[..], 8.0f64, 2.0f64, 1usize, geometry.rect(18.0, 38.0, 324.0, 80.0), geometry.rect(18.0, 130.0, 324.0, 80.0), &work)
+    if map_error != ok || map.fifo.bars.len != 1usize || map.pull.bars.len != 1usize || map.over_takt.bars.len != 1usize { ret chart.Invalid }
+    let blue = paint.rgba(0.12, 0.42, 0.76, 1.0)
+    let current_blue = paint.rgba(0.38, 0.52, 0.68, 1.0)
+    let orange = paint.rgba(0.94, 0.54, 0.13, 1.0)
+    let gray = paint.rgba(0.56, 0.64, 0.73, 1.0)
+    let green = paint.rgba(0.12, 0.58, 0.42, 1.0)
+    let red = paint.rgba(0.82, 0.25, 0.26, 1.0)
+    let purple = paint.rgba(0.49, 0.36, 0.72, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    var labels: [12]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Future-state value stream", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "CURRENT", anchor: chart.Coord { x: 18.0, y: 36.0 }, align: .Left }
+    labels[2usize] = chart.Label { text: "TARGET", anchor: chart.Coord { x: 18.0, y: 128.0 }, align: .Left }
+    labels[3usize] = chart.Label { text: "16h lead / 44% PCE", anchor: chart.Coord { x: 310.0, y: 36.0 }, align: .Right }
+    labels[4usize] = chart.Label { text: "10.2h lead / 69% PCE", anchor: chart.Coord { x: 342.0, y: 128.0 }, align: .Right }
+    let current_names = [3]str{ "Intake 2h", "Build 5h", "Review 3h" }
+    let future_names = [3]str{ "Intake 2h", "Build 4.2h", "Review 2.5h" }
+    var i = 0usize
+    while i < 3usize {
+        labels[5usize + i] = chart.Label { text: current_names[i], anchor: chart.Coord { x: current_boxes[i].x + current_boxes[i].width * 0.5f32, y: current_boxes[i].y + current_boxes[i].height * 0.5f32 + 3.0f32 }, align: .Center }
+        labels[8usize + i] = chart.Label { text: future_names[i], anchor: chart.Coord { x: future_boxes[i].x + future_boxes[i].width * 0.5f32, y: future_boxes[i].y + future_boxes[i].height * 0.5f32 + 3.0f32 }, align: .Center }
+        i += 1usize
+    }
+    labels[11usize] = chart.Label { text: "Takt 4h/unit    Green pull / amber FIFO    Red = over takt", anchor: chart.Coord { x: 180.0, y: 227.0 }, align: .Center }
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &map.current.connectors, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &map.current.nodes, paint.Brush { Solid: current_blue })
+    try chart_scene.append(a, &builder, &map.current.waiting, paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &map.current.process, paint.Brush { Solid: current_blue })
+    try chart_scene.append(a, &builder, &map.future.connectors, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &map.future.nodes, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.future.waiting, paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &map.future.process, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.pull, paint.Brush { Solid: green })
+    try chart_scene.append(a, &builder, &map.fifo, paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &map.over_takt, paint.Brush { Solid: red })
+    try chart_scene.append(a, &builder, &map.pacemaker, paint.Brush { Solid: purple })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0f32, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..5usize], font, 8.0f32, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[5usize..11usize], font, 8.0f32, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[11usize..], font, 8.0f32, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &map.current.connectors, gray)
+    try chart_svg.append(&writer, &map.current.nodes, current_blue)
+    try chart_svg.append(&writer, &map.current.waiting, orange)
+    try chart_svg.append(&writer, &map.current.process, current_blue)
+    try chart_svg.append(&writer, &map.future.connectors, gray)
+    try chart_svg.append(&writer, &map.future.nodes, blue)
+    try chart_svg.append(&writer, &map.future.waiting, orange)
+    try chart_svg.append(&writer, &map.future.process, blue)
+    try chart_svg.append(&writer, &map.pull, green)
+    try chart_svg.append(&writer, &map.fifo, orange)
+    try chart_svg.append(&writer, &map.over_takt, red)
+    try chart_svg.append(&writer, &map.pacemaker, purple)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0f32)
+    try chart_svg.append_labels(&writer, labels[1usize..5usize], dark, 8.0f32)
+    try chart_svg.append_labels(&writer, labels[5usize..11usize], white, 8.0f32)
+    try chart_svg.append_labels(&writer, labels[11usize..], dark, 8.0f32)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_sipoc_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/sipoc.png"
     let plot = geometry.rect(13.0, 49.0, 334.0, 171.0)
@@ -9402,6 +9509,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_kanban_preview(a, queue, output_target, canvas, &renderer)
     try render_pert_cpm_preview(a, queue, output_target, canvas, &renderer)
     try render_value_stream_preview(a, queue, output_target, canvas, &renderer)
+    try render_future_state_vsm_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_org_chart_preview(a, queue, output_target, canvas, &renderer)

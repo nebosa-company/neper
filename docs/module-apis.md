@@ -16020,6 +16020,13 @@ type CapabilitySixpackLayout = struct { individuals: Layout, moving_range: Layou
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
+type ValueStreamStep = struct { process_time: f64, value_added_time: f64, wait_before: f64, good_fraction: f64 }
+type ValueStreamSummary = struct { process_time: f64, value_added_time: f64, wait_time: f64, lead_time: f64, process_cycle_efficiency: f64, rolled_yield: f64 }
+type ValueStreamLayout = struct { nodes: Layout, connectors: Layout, process: Layout, waiting: Layout, summary: ValueStreamSummary }
+type ValueStreamFlow = enum u8 { Push, Fifo, Pull }
+type ValueStreamWork = struct { boxes: []geometry.Rect, arrows: []Segment, process_bars: []geometry.Rect, wait_bars: []geometry.Rect }
+type FutureValueStreamWork = struct { current: ValueStreamWork, future: ValueStreamWork, fifo_cues: []geometry.Rect, pull_cues: []geometry.Rect, over_takt: []geometry.Rect, pacemaker: []geometry.Rect }
+type FutureValueStreamLayout = struct { current: ValueStreamLayout, future: ValueStreamLayout, fifo: Layout, pull: Layout, over_takt: Layout, pacemaker: Layout, takt_time: f64, lead_reduction: f64, pce_gain: f64, yield_gain: f64 }
 type ResourceSpan = struct { start: f64, end: f64, units: f64 }
 type SwimlaneStep = struct { lane: usize, stage: usize }
 type SwimlaneLink = struct { from: usize, to: usize }
@@ -16053,6 +16060,8 @@ fn gage_run(values: []const f64, parts: usize, operators: usize, repeats: usize,
 fn map_point(lon: f64, lat: f64, window: geo.MapWindow, bounds: geometry.Rect) -> (Coord, err)
 fn choropleth(regions: []const MapRegion, rings: []const MapRing, vertices: []const MapVertex, metrics: []const MapMetric, window: geo.MapWindow, bounds: geometry.Rect, work: *ChoroplethStorage) -> (ChoroplethLayout, err)
 fn proportional_symbol_map(sites: []const MapSite, window: geo.MapWindow, bounds: geometry.Rect, max_radius: f32, bars: []geometry.Rect) -> (ProportionalMapLayout, err)
+fn value_stream_map(steps: []const ValueStreamStep, bounds: geometry.Rect, boxes: []geometry.Rect, arrows: []Segment, process_bars: []geometry.Rect, wait_bars: []geometry.Rect) -> (ValueStreamLayout, err)
+fn future_value_stream_map(current_steps: []const ValueStreamStep, future_steps: []const ValueStreamStep, links: []const ValueStreamFlow, available_time: f64, customer_demand: f64, pacemaker: usize, current_bounds: geometry.Rect, future_bounds: geometry.Rect, work: *FutureValueStreamWork) -> (FutureValueStreamLayout, err)
 fn cross_tab_report(row_ids: []const usize, column_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, work: *CrossTabStorage) -> (CrossTabLayout, err)
 fn matrix_report(row_ids: []const usize, column_ids: []const usize, values: []const f64, present: []const bool, group_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, bar_scope: ReportBarScope, work: *MatrixReportStorage) -> (MatrixReportLayout, err)
 fn fishbone(effect: str, categories: []const str, causes: []const FishboneCause, bounds: geometry.Rect, spine: []Segment, ribs: []Segment, branches: []Segment, head_box: []geometry.Rect, labels: []Label) -> (FishboneLayout, err)

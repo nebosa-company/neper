@@ -46,6 +46,18 @@ type CpmWork = struct { indegree: []usize, head: []usize, next: []usize, order: 
 type ValueStreamStep = struct { process_time: f64, value_added_time: f64, wait_before: f64, good_fraction: f64 }
 type ValueStreamSummary = struct { process_time: f64, value_added_time: f64, wait_time: f64, lead_time: f64, process_cycle_efficiency: f64, rolled_yield: f64 }
 type ValueStreamLayout = struct { nodes: Layout, connectors: Layout, process: Layout, waiting: Layout, summary: ValueStreamSummary }
+type ValueStreamFlow = enum u8 { Push, Fifo, Pull }
+type ValueStreamWork = struct { boxes: []geometry.Rect, arrows: []Segment, process_bars: []geometry.Rect, wait_bars: []geometry.Rect }
+type FutureValueStreamWork = struct {
+    current: ValueStreamWork, future: ValueStreamWork,
+    fifo_cues: []geometry.Rect, pull_cues: []geometry.Rect,
+    over_takt: []geometry.Rect, pacemaker: []geometry.Rect,
+}
+type FutureValueStreamLayout = struct {
+    current: ValueStreamLayout, future: ValueStreamLayout,
+    fifo: Layout, pull: Layout, over_takt: Layout, pacemaker: Layout,
+    takt_time: f64, lead_reduction: f64, pce_gain: f64, yield_gain: f64,
+}
 type SipocEntry = struct { column: usize }
 type SipocLayout = struct { bands: Layout, headers: Layout, cards: Layout, connectors: Layout, max_rows: usize }
 type DecisionKind = enum u8 { Choice, Chance, Outcome }
@@ -3993,6 +4005,59 @@ fn value_stream_map(steps: []const ValueStreamStep, bounds: geometry.Rect, boxes
     let waiting = Layout { kind: .Bar, coords: zero, segments: zero, bars: wait_bars[..wait_count], x_min: 0.0, x_max: domain_max, y_min: 0.0, y_max: 1.0 }
     let summary = ValueStreamSummary { process_time: process_time, value_added_time: value_added_time, wait_time: wait_time, lead_time: lead_time, process_cycle_efficiency: value_added_time / lead_time, rolled_yield: rolled_yield }
     ret (ValueStreamLayout { nodes: nodes, connectors: connectors, process: process, waiting: waiting, summary: summary }, ok)
+}
+
+// Side-by-side current/target plans keep their own time ladders. The target
+// adds demand-derived takt, a single pacemaker, and explicit flow-control cues.
+fn future_value_stream_map(current_steps: []const ValueStreamStep, future_steps: []const ValueStreamStep, links: []const ValueStreamFlow, available_time: f64, customer_demand: f64, pacemaker: usize, current_bounds: geometry.Rect, future_bounds: geometry.Rect, work: *FutureValueStreamWork) -> (FutureValueStreamLayout, err) {
+    if current_steps.len == 0usize || future_steps.len == 0usize { ret (zero, Empty) }
+    if links.len != future_steps.len - 1usize || pacemaker >= future_steps.len || !finite64(available_time) || !finite64(customer_demand) || available_time <= 0.0f64 || customer_demand <= 0.0f64 { ret (zero, Invalid) }
+    let takt = available_time / customer_demand
+    if !finite64(takt) || takt <= 0.0f64 { ret (zero, Invalid) }
+    if work.fifo_cues.len < links.len || work.pull_cues.len < links.len || work.over_takt.len < future_steps.len || work.pacemaker.len < 1usize { ret (zero, TooLarge) }
+    let (current, current_error) = value_stream_map(current_steps, current_bounds, work.current.boxes, work.current.arrows, work.current.process_bars, work.current.wait_bars)
+    if current_error != ok { ret (zero, current_error) }
+    let (future, future_error) = value_stream_map(future_steps, future_bounds, work.future.boxes, work.future.arrows, work.future.process_bars, work.future.wait_bars)
+    if future_error != ok { ret (zero, future_error) }
+    var fifo_count = 0usize
+    var pull_count = 0usize
+    var i = 0usize
+    while i < links.len {
+        let segment = future.connectors.segments[i * 3usize]
+        let center = (segment.from.x + segment.to.x) * 0.5f32
+        let y = segment.from.y
+        if links[i] == .Fifo {
+            work.fifo_cues[fifo_count] = geometry.rect(center - 3.0f32, y - 3.0f32, 6.0f32, 6.0f32)
+            fifo_count += 1usize
+        } else if links[i] == .Pull {
+            work.pull_cues[pull_count] = geometry.rect(center - 3.0f32, y - 3.0f32, 6.0f32, 6.0f32)
+            pull_count += 1usize
+        }
+        i += 1usize
+    }
+    var over_count = 0usize
+    i = 0usize
+    while i < future_steps.len {
+        if future_steps[i].process_time > takt {
+            let box = future.nodes.bars[i]
+            work.over_takt[over_count] = geometry.rect(box.x, box.y + box.height - 3.0f32, box.width, 3.0f32)
+            over_count += 1usize
+        }
+        i += 1usize
+    }
+    let pacemaker_box = future.nodes.bars[pacemaker]
+    work.pacemaker[0usize] = geometry.rect(pacemaker_box.x, pacemaker_box.y - 5.0f32, pacemaker_box.width, 3.0f32)
+    let domain = 1.0f32
+    let fifo = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.fifo_cues[..fifo_count], x_min: 0.0, x_max: domain, y_min: 0.0, y_max: domain }
+    let pull = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.pull_cues[..pull_count], x_min: 0.0, x_max: domain, y_min: 0.0, y_max: domain }
+    let over_takt = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.over_takt[..over_count], x_min: 0.0, x_max: domain, y_min: 0.0, y_max: domain }
+    let pacemaker_marks = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.pacemaker[..1usize], x_min: 0.0, x_max: domain, y_min: 0.0, y_max: domain }
+    ret (FutureValueStreamLayout {
+        current: current, future: future, fifo: fifo, pull: pull, over_takt: over_takt, pacemaker: pacemaker_marks,
+        takt_time: takt, lead_reduction: current.summary.lead_time - future.summary.lead_time,
+        pce_gain: future.summary.process_cycle_efficiency - current.summary.process_cycle_efficiency,
+        yield_gain: future.summary.rolled_yield - current.summary.rolled_yield,
+    }, ok)
 }
 
 // Fixed SIPOC order: supplier, input, process, output, customer. Entries keep

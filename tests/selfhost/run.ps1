@@ -3252,6 +3252,11 @@ $gfxChartValueStreamWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChartValueStreamWritten -ne 'executable written') { throw 'gfx_chart_value_stream emission failed' }
 $gfxChartValueStreamOutput = & $gfxChartValueStreamPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartValueStreamOutput -ne 'gfx chart value stream ok') { throw "the e.gfx.chart value-stream map answered wrongly: exit $LASTEXITCODE" }
+$gfxChartFutureVsmPath = Join-Path $testBuild 'gfx-chart-future-vsm-selfhost.exe'
+$gfxChartFutureVsmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_future_vsm\src\main.e') $repo 'x64' 'windows' $gfxChartFutureVsmPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFutureVsmWritten -ne 'executable written') { throw 'gfx_chart_future_vsm emission failed' }
+$gfxChartFutureVsmOutput = & $gfxChartFutureVsmPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFutureVsmOutput -ne 'gfx chart future vsm ok') { throw "the e.gfx.chart future-state value stream answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

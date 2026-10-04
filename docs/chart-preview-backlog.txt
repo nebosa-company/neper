@@ -9,7 +9,6 @@
 # Geographic and reporting
 
 # Operations, finance and network diagrams
-future_state_vsm
 cap_table_waterfall
 tornado
 football_field

@@ -2874,6 +2874,11 @@ gfx_chart_value_stream_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-value-stream-selfhost"
 gfx_chart_value_stream_output=$("$test_build/gfx-chart-value-stream-selfhost")
 [ "$gfx_chart_value_stream_output" = 'gfx chart value stream ok' ]
+gfx_chart_future_vsm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_future_vsm/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-future-vsm-selfhost")
+[ "$gfx_chart_future_vsm_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-future-vsm-selfhost"
+gfx_chart_future_vsm_output=$("$test_build/gfx-chart-future-vsm-selfhost")
+[ "$gfx_chart_future_vsm_output" = 'gfx chart future vsm ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"
