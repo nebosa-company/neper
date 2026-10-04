@@ -75,6 +75,7 @@ type CapTableLayout = struct {
 }
 type TornadoCase = struct { low_result: f64, high_result: f64 }
 type TornadoLayout = struct { low: Layout, high: Layout, baseline: Layout, order: []usize, minimum: f64, maximum: f64 }
+type MonteCarloLayout = struct { histogram: Layout, cdf: Layout, histogram_threshold: Layout, cdf_threshold: Layout, sorted: []f64, counts: []u64, at_or_below: u64, probability: f64 }
 type SipocEntry = struct { column: usize }
 type SipocLayout = struct { bands: Layout, headers: Layout, cards: Layout, connectors: Layout, max_rows: usize }
 type DecisionKind = enum u8 { Choice, Chance, Outcome }
@@ -7635,6 +7636,93 @@ fn ecdf(sorted: []const f32, bounds: geometry.Rect, segments: []Segment) -> (Lay
         i += 1usize
     }
     ret (Layout { kind: .Ecdf, coords: zero, segments: segments[..count], bars: zero, x_min: xmin, x_max: xmax, y_min: 0.0, y_max: 1.0 }, ok)
+}
+
+// Monte Carlo analysis consumes caller-produced model outcomes; the chart
+// never chooses an input distribution or runs a model. Exact sample counts,
+// empirical CDF steps and P(outcome <= threshold) share one explicit domain.
+fn monte_carlo_compare(unused: *u8, left: f64, right: f64) -> i32 {
+    if left < right { ret -1i32 }
+    if left > right { ret 1i32 }
+    ret 0i32
+}
+
+fn monte_carlo_distribution(samples: []const f64, domain_min: f64, domain_max: f64, threshold: f64, histogram_bounds: geometry.Rect, cdf_bounds: geometry.Rect, sorted: []f64, counts: []u64, bars: []geometry.Rect, cdf_segments: []Segment, threshold_rules: []Segment) -> (MonteCarloLayout, err) {
+    let n = samples.len
+    if n == 0usize { ret (zero, Empty) }
+    let span = domain_max - domain_min
+    if !finite64(domain_min) || !finite64(domain_max) || !finite64(span) || span <= 0.0f64 || !finite64(threshold) || threshold < domain_min || threshold > domain_max || !valid_bounds(histogram_bounds) || !valid_bounds(cdf_bounds) || !finite(histogram_bounds.x + histogram_bounds.width) || !finite(histogram_bounds.y + histogram_bounds.height) || !finite(cdf_bounds.x + cdf_bounds.width) || !finite(cdf_bounds.y + cdf_bounds.height) { ret (zero, Invalid) }
+    let x_min = f32(domain_min)
+    let x_max = f32(domain_max)
+    if !finite(x_min) || !finite(x_max) || x_max <= x_min || counts.len == 0usize || counts.len != bars.len { ret (zero, Invalid) }
+    if sorted.len < n || cdf_segments.len < n || cdf_segments.len - n < n - 1usize || threshold_rules.len < 2usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < n {
+        if !finite64(samples[i]) || samples[i] < domain_min || samples[i] > domain_max { ret (zero, Invalid) }
+        sorted[i] = samples[i]
+        i += 1usize
+    }
+    var comparison_context = 0u8
+    sort.in_place_by[f64, u8](sorted[..n], &comparison_context, monte_carlo_compare)
+    i = 0usize
+    while i < counts.len {
+        counts[i] = 0u64
+        i += 1usize
+    }
+    var at_or_below = 0u64
+    i = 0usize
+    while i < n {
+        let value = samples[i]
+        var bin = counts.len - 1usize
+        if value < domain_max {
+            bin = usize((value - domain_min) / span * f64(counts.len))
+            if bin >= counts.len { bin = counts.len - 1usize }
+        }
+        counts[bin] += 1u64
+        if value <= threshold { at_or_below += 1u64 }
+        i += 1usize
+    }
+    var peak = 0u64
+    i = 0usize
+    while i < counts.len {
+        if counts[i] > peak { peak = counts[i] }
+        i += 1usize
+    }
+    let slot = histogram_bounds.width / f32(counts.len)
+    if !finite(slot) || slot <= 0.0f32 || !finite(f32(peak)) { ret (zero, Invalid) }
+    i = 0usize
+    while i < counts.len {
+        let height = histogram_bounds.height * f32(counts[i]) / f32(peak)
+        bars[i] = geometry.rect(histogram_bounds.x + f32(i) * slot, histogram_bounds.y + histogram_bounds.height - height, slot, height)
+        i += 1usize
+    }
+    var used = 0usize
+    i = 0usize
+    while i < n {
+        let x = cdf_bounds.x + cdf_bounds.width * f32((sorted[i] - domain_min) / span)
+        let previous_y = cdf_bounds.y + cdf_bounds.height * (1.0f32 - f32(i) / f32(n))
+        let next_y = cdf_bounds.y + cdf_bounds.height * (1.0f32 - f32(i + 1usize) / f32(n))
+        if !finite(x) || !finite(previous_y) || !finite(next_y) { ret (zero, Invalid) }
+        if i > 0usize {
+            let old_x = cdf_bounds.x + cdf_bounds.width * f32((sorted[i - 1usize] - domain_min) / span)
+            cdf_segments[used] = Segment { from: Coord { x: old_x, y: previous_y }, to: Coord { x: x, y: previous_y } }
+            used += 1usize
+        }
+        cdf_segments[used] = Segment { from: Coord { x: x, y: previous_y }, to: Coord { x: x, y: next_y } }
+        used += 1usize
+        i += 1usize
+    }
+    let threshold_fraction = f32((threshold - domain_min) / span)
+    let histogram_x = histogram_bounds.x + histogram_bounds.width * threshold_fraction
+    let cdf_x = cdf_bounds.x + cdf_bounds.width * threshold_fraction
+    if !finite(histogram_x) || !finite(cdf_x) { ret (zero, Invalid) }
+    threshold_rules[0usize] = Segment { from: Coord { x: histogram_x, y: histogram_bounds.y }, to: Coord { x: histogram_x, y: histogram_bounds.y + histogram_bounds.height } }
+    threshold_rules[1usize] = Segment { from: Coord { x: cdf_x, y: cdf_bounds.y }, to: Coord { x: cdf_x, y: cdf_bounds.y + cdf_bounds.height } }
+    let histogram_marks = Layout { kind: .Histogram, coords: zero, segments: zero, bars: bars[..counts.len], x_min: x_min, x_max: x_max, y_min: 0.0f32, y_max: f32(peak) }
+    let cdf_marks = Layout { kind: .Ecdf, coords: zero, segments: cdf_segments[..used], bars: zero, x_min: x_min, x_max: x_max, y_min: 0.0f32, y_max: 1.0f32 }
+    let histogram_rule = Layout { kind: .Rug, coords: zero, segments: threshold_rules[..1usize], bars: zero, x_min: x_min, x_max: x_max, y_min: 0.0f32, y_max: f32(peak) }
+    let cdf_rule = Layout { kind: .Rug, coords: zero, segments: threshold_rules[1usize..2usize], bars: zero, x_min: x_min, x_max: x_max, y_min: 0.0f32, y_max: 1.0f32 }
+    ret (MonteCarloLayout { histogram: histogram_marks, cdf: cdf_marks, histogram_threshold: histogram_rule, cdf_threshold: cdf_rule, sorted: sorted[..n], counts: counts, at_or_below: at_or_below, probability: f64(at_or_below) / f64(n) }, ok)
 }
 
 fn box_y(value: f64, lo: f64, hi: f64, bounds: geometry.Rect) -> f32 {

@@ -34942,3 +34942,18 @@ spacing, an inverted segment, negative yields, scene/SVG output and refusals.
 The gallery's two curves are synthetic. The maturity-versus-par-yield framing
 follows the U.S. Treasury's description of its daily par yield curve:
 https://home.treasury.gov/policy-issues/financing-the-government/interest-rate-statistics/.
+
+## D1968 — Monte Carlo previews summarise caller-owned trial outcomes
+
+`chart.monte_carlo_distribution` accepts finished, equal-weight model outcomes
+and a shared domain, rather than hiding a sampler or choosing a distribution.
+It copies and sorts them into caller scratch, counts left-closed/right-open
+histogram bins (last bin includes the maximum), draws an exact empirical CDF,
+and reports the observed fraction at or below an explicit threshold. Both
+layouts use the same samples and threshold, so their summaries cannot drift.
+The Windows/Linux fixture checks counts, sorted ties, CDF steps, threshold
+arithmetic, scene/SVG adapters and refusals. The gallery uses a fixed-seed
+PCG toy model for reproducible paired PNG/SVG previews; it does not assert
+forecast uncertainty or model calibration. EPA guidance discusses presenting
+Monte Carlo output as histogram and CDF:
+https://nepis.epa.gov/Exe/ZyPURL.cgi?Dockey=30004ZGL.TXT.

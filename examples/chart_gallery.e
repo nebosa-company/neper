@@ -2,6 +2,7 @@
 // From the repository root, run this executable to refresh docs/chart-previews/*.png.
 use e.algo.stat
 use e.algo.geo
+use e.algo.rand
 use e.dsp
 use e.fs
 use e.gpu
@@ -1473,6 +1474,88 @@ fn render_yield_curve_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     try chart_svg.append(&writer, &current_curve, blue)
     try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0f32)
     try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0f32)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_monte_carlo_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, cumulative: bool) -> err {
+    var path = "docs/chart-previews/monte_carlo_histogram.png"
+    if cumulative { path = "docs/chart-previews/monte_carlo_cdf.png" }
+    var generator = rand.pcg64(712u64, 3u64)
+    var outcomes: [256]f64 = zero
+    var i = 0usize
+    while i < outcomes.len {
+        let first = rand.pcg64_f64(&generator)
+        let second = rand.pcg64_f64(&generator)
+        let third = rand.pcg64_f64(&generator)
+        outcomes[i] = 40.0f64 + 60.0f64 * (first + second + third) / 3.0f64
+        i += 1usize
+    }
+    var sorted: [256]f64 = zero
+    var counts: [16]u64 = zero
+    var bars: [16]geometry.Rect = zero
+    var cdf_segments: [511]chart.Segment = zero
+    var threshold_rules: [2]chart.Segment = zero
+    let plot = geometry.rect(49.0, 49.0, 282.0, 140.0)
+    let (distribution, distribution_error) = chart.monte_carlo_distribution(outcomes[..], 40.0f64, 100.0f64, 70.0f64, plot, plot, sorted[..], counts[..], bars[..], cdf_segments[..], threshold_rules[..])
+    if distribution_error != ok || distribution.cdf.segments.len != 511usize { ret chart.Invalid }
+    var marks = distribution.histogram
+    var rule = distribution.histogram_threshold
+    var ink = paint.rgba(0.10, 0.40, 0.76, 1.0)
+    if cumulative {
+        marks = distribution.cdf
+        rule = distribution.cdf_threshold
+        ink = paint.rgba(0.11, 0.57, 0.49, 1.0)
+    }
+    let red = paint.rgba(0.83, 0.27, 0.25, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let panel = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made_text, text_error) = str.builder(a, 0usize)
+    if text_error != ok { ret text_error }
+    var probability_text = made_text
+    try str.push(&probability_text, "P(outcome <= 70) = ")
+    try str.push_f64_fixed(&probability_text, distribution.probability, 2u8)
+    let probability_label = str.done(&probability_text)
+    var labels: [9]chart.Label = zero
+    var title = "Monte Carlo / outcome histogram"
+    if cumulative { title = "Monte Carlo / empirical CDF" }
+    labels[0usize] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "256 seeded trials / three-uniform toy model", anchor: chart.Coord { x: 180.0, y: 39.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "40", anchor: chart.Coord { x: 49.0, y: 204.0 }, align: .Center }
+    labels[3usize] = chart.Label { text: "70", anchor: chart.Coord { x: 190.0, y: 204.0 }, align: .Center }
+    labels[4usize] = chart.Label { text: "100", anchor: chart.Coord { x: 331.0, y: 204.0 }, align: .Center }
+    labels[5usize] = chart.Label { text: probability_label, anchor: chart.Coord { x: 180.0, y: 225.0 }, align: .Center }
+    labels[6usize] = chart.Label { text: "1.0", anchor: chart.Coord { x: 44.0, y: 54.0 }, align: .Right }
+    labels[7usize] = chart.Label { text: "0.5", anchor: chart.Coord { x: 44.0, y: 124.0 }, align: .Right }
+    labels[8usize] = chart.Label { text: "0", anchor: chart.Coord { x: 44.0, y: 193.0 }, align: .Right }
+    let (made, builder_error) = scene.builder(a, 1024usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: panel })
+    try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: ink })
+    try chart_scene.append(a, &builder, &rule, paint.Brush { Solid: red })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0f32, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..6usize], font, 8.0f32, paint.Brush { Solid: dark })
+    if cumulative { try chart_scene.append_labels(a, &builder, labels[6usize..], font, 8.0f32, paint.Brush { Solid: dark }) }
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, panel, false)
+    try chart_svg.append(&writer, &marks, ink)
+    try chart_svg.append(&writer, &rule, red)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0f32)
+    try chart_svg.append_labels(&writer, labels[1usize..6usize], dark, 8.0f32)
+    if cumulative { try chart_svg.append_labels(&writer, labels[6usize..], dark, 8.0f32) }
     try chart_svg.finish(&writer)
     let (svg_path, path_error) = vector_path(a, path)
     if path_error != ok { ret path_error }
@@ -9855,6 +9938,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_tornado_preview(a, queue, output_target, canvas, &renderer)
     try render_football_field_preview(a, queue, output_target, canvas, &renderer)
     try render_yield_curve_preview(a, queue, output_target, canvas, &renderer)
+    try render_monte_carlo_preview(a, queue, output_target, canvas, &renderer, false)
+    try render_monte_carlo_preview(a, queue, output_target, canvas, &renderer, true)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_org_chart_preview(a, queue, output_target, canvas, &renderer)

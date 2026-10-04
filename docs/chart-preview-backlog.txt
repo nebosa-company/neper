@@ -9,8 +9,6 @@
 # Geographic and reporting
 
 # Operations, finance and network diagrams
-monte_carlo_histogram
-monte_carlo_cdf
 aggregate_decomposition_tree
 
 # Additional ggplot-style compositions and engine acceptance previews

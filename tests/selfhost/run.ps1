@@ -3277,6 +3277,11 @@ $gfxChartYieldCurveWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $gfxChartYieldCurveWritten -ne 'executable written') { throw 'gfx_chart_yield_curve emission failed' }
 $gfxChartYieldCurveOutput = & $gfxChartYieldCurvePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartYieldCurveOutput -ne 'gfx chart yield curve ok') { throw "the e.gfx.chart yield curve answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMonteCarloPath = Join-Path $testBuild 'gfx-chart-monte-carlo-selfhost.exe'
+$gfxChartMonteCarloWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_monte_carlo\src\main.e') $repo 'x64' 'windows' $gfxChartMonteCarloPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMonteCarloWritten -ne 'executable written') { throw 'gfx_chart_monte_carlo emission failed' }
+$gfxChartMonteCarloOutput = & $gfxChartMonteCarloPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMonteCarloOutput -ne 'gfx chart monte carlo ok') { throw "the e.gfx.chart Monte Carlo distribution answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }
