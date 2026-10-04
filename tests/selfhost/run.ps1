@@ -3257,6 +3257,16 @@ $gfxChartFutureVsmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $gfxChartFutureVsmWritten -ne 'executable written') { throw 'gfx_chart_future_vsm emission failed' }
 $gfxChartFutureVsmOutput = & $gfxChartFutureVsmPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartFutureVsmOutput -ne 'gfx chart future vsm ok') { throw "the e.gfx.chart future-state value stream answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCapTablePath = Join-Path $testBuild 'gfx-chart-cap-table-selfhost.exe'
+$gfxChartCapTableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_cap_table\src\main.e') $repo 'x64' 'windows' $gfxChartCapTablePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapTableWritten -ne 'executable written') { throw 'gfx_chart_cap_table emission failed' }
+$gfxChartCapTableOutput = & $gfxChartCapTablePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapTableOutput -ne 'gfx chart cap table ok') { throw "the e.gfx.chart cap-table waterfall answered wrongly: exit $LASTEXITCODE" }
+$gfxChartTornadoPath = Join-Path $testBuild 'gfx-chart-tornado-selfhost.exe'
+$gfxChartTornadoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_tornado\src\main.e') $repo 'x64' 'windows' $gfxChartTornadoPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartTornadoWritten -ne 'executable written') { throw 'gfx_chart_tornado emission failed' }
+$gfxChartTornadoOutput = & $gfxChartTornadoPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartTornadoOutput -ne 'gfx chart tornado ok') { throw "the e.gfx.chart tornado sensitivity answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

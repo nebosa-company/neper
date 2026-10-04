@@ -1138,6 +1138,199 @@ fn render_future_state_vsm_preview(a: *mem.Arena, q: *gpu.Queue, output_target: 
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_cap_table_waterfall_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/cap_table_waterfall.png"
+    let shares = [3]u64{ 6000000u64, 2000000u64, 2000000u64 }
+    var before_bars: [3]geometry.Rect = zero
+    var after_bars: [5]geometry.Rect = zero
+    var before_layers: [3]chart.Layout = zero
+    var after_layers: [5]chart.Layout = zero
+    var before_fractions: [3]f64 = zero
+    var after_fractions: [3]f64 = zero
+    var bridge_bars: [4]geometry.Rect = zero
+    var bridge_links: [3]chart.Segment = zero
+    var work = chart.CapTableWork {
+        before_bars: before_bars[..], after_bars: after_bars[..], before_layers: before_layers[..], after_layers: after_layers[..],
+        before_fractions: before_fractions[..], after_fractions: after_fractions[..], bridge_bars: bridge_bars[..], bridge_links: bridge_links[..],
+    }
+    let (cap, cap_error) = chart.cap_table_waterfall(shares[..], 2000000u64, 3000000u64, geometry.rect(22.0, 49.0, 316.0, 20.0), geometry.rect(22.0, 89.0, 316.0, 20.0), geometry.rect(26.0, 134.0, 308.0, 63.0), &work)
+    if cap_error != ok || cap.summary.before_shares != 10000000u64 || cap.summary.after_shares != 15000000u64 || cap.after.len != 5usize { ret chart.Invalid }
+    let colors = [5]paint.Color{
+        paint.rgba(0.10, 0.39, 0.75, 1.0), paint.rgba(0.10, 0.57, 0.50, 1.0), paint.rgba(0.43, 0.36, 0.69, 1.0),
+        paint.rgba(0.91, 0.53, 0.15, 1.0), paint.rgba(0.83, 0.27, 0.25, 1.0),
+    }
+    let gray = paint.rgba(0.56, 0.64, 0.73, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    var labels: [19]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Cap table / issuance waterfall", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Before / 10m shares", anchor: chart.Coord { x: 22.0, y: 44.0 }, align: .Left }
+    labels[2usize] = chart.Label { text: "After / 15m shares", anchor: chart.Coord { x: 22.0, y: 84.0 }, align: .Left }
+    labels[3usize] = chart.Label { text: "Existing holders: 100% to 67%", anchor: chart.Coord { x: 180.0, y: 127.0 }, align: .Center }
+    let before_text = [3]str{ "60%", "20%", "20%" }
+    let after_text = [5]str{ "40%", "13%", "13%", "13%", "20%" }
+    var i = 0usize
+    while i < 3usize {
+        let bar = cap.before[i].bars[0usize]
+        labels[4usize + i] = chart.Label { text: before_text[i], anchor: chart.Coord { x: bar.x + bar.width * 0.5f32, y: bar.y + bar.height * 0.5f32 + 3.0f32 }, align: .Center }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 5usize {
+        let bar = cap.after[i].bars[0usize]
+        labels[7usize + i] = chart.Label { text: after_text[i], anchor: chart.Coord { x: bar.x + bar.width * 0.5f32, y: bar.y + bar.height * 0.5f32 + 3.0f32 }, align: .Center }
+        i += 1usize
+    }
+    let bridge_text = [4]str{ "Start", "Pool", "Round", "Retained" }
+    i = 0usize
+    while i < 4usize {
+        let bar = cap.bridge.bars[i]
+        labels[12usize + i] = chart.Label { text: bridge_text[i], anchor: chart.Coord { x: bar.x + bar.width * 0.5f32, y: 209.0f32 }, align: .Center }
+        i += 1usize
+    }
+    labels[16usize] = chart.Label { text: "Founders 40%", anchor: chart.Coord { x: 76.0, y: 226.0 }, align: .Center }
+    labels[17usize] = chart.Label { text: "Seed 13% / team 13% / pool 13%", anchor: chart.Coord { x: 204.0, y: 226.0 }, align: .Center }
+    labels[18usize] = chart.Label { text: "New 20%", anchor: chart.Coord { x: 316.0, y: 226.0 }, align: .Center }
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    i = 0usize
+    while i < cap.before.len {
+        try chart_scene.append(a, &builder, &cap.before[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    i = 0usize
+    while i < cap.after.len {
+        try chart_scene.append(a, &builder, &cap.after[i], paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    var bridge_links_only = cap.bridge
+    bridge_links_only.bars = cap.bridge.bars[..0usize]
+    try chart_scene.append(a, &builder, &bridge_links_only, paint.Brush { Solid: gray })
+    i = 0usize
+    while i < cap.bridge.bars.len {
+        var bridge_part = cap.bridge
+        bridge_part.bars = cap.bridge.bars[i..i + 1usize]
+        bridge_part.segments = cap.bridge.segments[..0usize]
+        var ink = colors[0usize]
+        if i == 1usize { ink = colors[3usize] }
+        if i == 2usize { ink = colors[4usize] }
+        try chart_scene.append(a, &builder, &bridge_part, paint.Brush { Solid: ink })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0f32, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..4usize], font, 8.0f32, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[4usize..12usize], font, 8.0f32, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[12usize..], font, 8.0f32, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < cap.before.len {
+        try chart_svg.append(&writer, &cap.before[i], colors[i])
+        i += 1usize
+    }
+    i = 0usize
+    while i < cap.after.len {
+        try chart_svg.append(&writer, &cap.after[i], colors[i])
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &bridge_links_only, gray)
+    i = 0usize
+    while i < cap.bridge.bars.len {
+        var bridge_part = cap.bridge
+        bridge_part.bars = cap.bridge.bars[i..i + 1usize]
+        bridge_part.segments = cap.bridge.segments[..0usize]
+        var ink = colors[0usize]
+        if i == 1usize { ink = colors[3usize] }
+        if i == 2usize { ink = colors[4usize] }
+        try chart_svg.append(&writer, &bridge_part, ink)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0f32)
+    try chart_svg.append_labels(&writer, labels[1usize..4usize], dark, 8.0f32)
+    try chart_svg.append_labels(&writer, labels[4usize..12usize], white, 8.0f32)
+    try chart_svg.append_labels(&writer, labels[12usize..], dark, 8.0f32)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_tornado_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/tornado.png"
+    let cases = [5]chart.TornadoCase{
+        chart.TornadoCase { low_result: 88.0f64, high_result: 120.0f64 },
+        chart.TornadoCase { low_result: 55.0f64, high_result: 145.0f64 },
+        chart.TornadoCase { low_result: 80.0f64, high_result: 130.0f64 },
+        chart.TornadoCase { low_result: 110.0f64, high_result: 90.0f64 },
+        chart.TornadoCase { low_result: 90.0f64, high_result: 110.0f64 },
+    }
+    let names = [5]str{ "Demand", "Unit price", "Input cost", "Tax rate", "Retention" }
+    var order: [5]usize = zero
+    var low_bars: [5]geometry.Rect = zero
+    var high_bars: [5]geometry.Rect = zero
+    var baseline_line: [1]chart.Segment = zero
+    let (tornado, tornado_error) = chart.tornado_sensitivity(cases[..], 100.0f64, geometry.rect(113.0, 49.0, 222.0, 135.0), order[..], low_bars[..], high_bars[..], baseline_line[..])
+    if tornado_error != ok || tornado.order[0usize] != 1usize { ret chart.Invalid }
+    let blue = paint.rgba(0.09, 0.40, 0.75, 1.0)
+    let orange = paint.rgba(0.92, 0.50, 0.19, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let gray = paint.rgba(0.52, 0.59, 0.69, 1.0)
+    let panel = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    var labels: [13]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Tornado / one-at-a-time sensitivity", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Model output by input assumption", anchor: chart.Coord { x: 180.0, y: 39.0 }, align: .Center }
+    var i = 0usize
+    while i < 5usize {
+        labels[2usize + i] = chart.Label { text: names[tornado.order[i]], anchor: chart.Coord { x: 106.0, y: 66.0f32 + f32(i) * 27.0f32 }, align: .Right }
+        i += 1usize
+    }
+    labels[7usize] = chart.Label { text: "55", anchor: chart.Coord { x: 113.0, y: 199.0 }, align: .Center }
+    labels[8usize] = chart.Label { text: "100 baseline", anchor: chart.Coord { x: 224.0, y: 199.0 }, align: .Center }
+    labels[9usize] = chart.Label { text: "145", anchor: chart.Coord { x: 335.0, y: 199.0 }, align: .Center }
+    labels[10usize] = chart.Label { text: "Blue: low input", anchor: chart.Coord { x: 93.0, y: 218.0 }, align: .Center }
+    labels[11usize] = chart.Label { text: "Orange: high input", anchor: chart.Coord { x: 259.0, y: 218.0 }, align: .Center }
+    labels[12usize] = chart.Label { text: "Sorted by absolute output swing; scenarios stay distinct", anchor: chart.Coord { x: 180.0, y: 233.0 }, align: .Center }
+    let (made, builder_error) = scene.builder(a, 80usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, geometry.rect(112.0, 48.0, 224.0, 137.0), paint.Brush { Solid: panel })
+    try chart_scene.append(a, &builder, &tornado.low, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &tornado.high, paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &tornado.baseline, paint.Brush { Solid: gray })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0f32, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0f32, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, geometry.rect(112.0, 48.0, 224.0, 137.0), panel, false)
+    try chart_svg.append(&writer, &tornado.low, blue)
+    try chart_svg.append(&writer, &tornado.high, orange)
+    try chart_svg.append(&writer, &tornado.baseline, gray)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0f32)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0f32)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_sipoc_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/sipoc.png"
     let plot = geometry.rect(13.0, 49.0, 334.0, 171.0)
@@ -9510,6 +9703,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_pert_cpm_preview(a, queue, output_target, canvas, &renderer)
     try render_value_stream_preview(a, queue, output_target, canvas, &renderer)
     try render_future_state_vsm_preview(a, queue, output_target, canvas, &renderer)
+    try render_cap_table_waterfall_preview(a, queue, output_target, canvas, &renderer)
+    try render_tornado_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_org_chart_preview(a, queue, output_target, canvas, &renderer)

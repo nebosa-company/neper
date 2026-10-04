@@ -34885,3 +34885,32 @@ scene/SVG adapters paint the control cues. This is a design comparison rather
 than an operational simulator; inventory, transport, branching and capacity
 balancing remain separate planned work. The Windows/Linux fixture tests
 arithmetic, placement and refusal paths; the gallery adds a paired preview.
+
+## D1964 — Separate exact cap-table share counts from percentage geometry
+
+`chart.cap_table_waterfall` accepts existing holder shares on one common basis,
+an optional pool top-up and an optional investor issuance. It overflow-checks
+the `u64` totals before computing before/after ownership percentages, and
+reuses the generic waterfall for the incumbent-retention bridge: 100%, after
+pool, after financing. Caller-owned layers keep existing holders in input
+order and append nonzero pool and investor segments. It refuses zero-share
+holders, no issuance, unrepresentable visible segments and short storage.
+It does not infer SAFE/note conversion, option exercise, liquidation preference,
+voting power, valuation or per-holder new grants. The Windows/Linux fixture
+checks fractions, geometry, omitted events and refusals; the gallery adds a
+paired PNG/SVG preview. The share-issuance and dilution framing follows
+Carta's pro-forma cap-table guidance: https://carta.com/learn/startups/fundraising/pro-forma-cap-table/.
+
+## D1965 — Keep tornado assumption identity across response reversal
+
+`chart.tornado_sensitivity` treats each input as two supplied one-at-a-time
+model outputs, not as a distribution. It sorts by the absolute output swing,
+stably retaining source order on ties, but emits distinct low-input and
+high-input Bar layers so colour continues to identify the tested assumption
+even when the response reverses. All rows share the baseline and numeric
+output domain. Non-finite values, collapsed domains, unrepresentable f32
+endpoints and short caller storage are refused. The Windows/Linux fixture
+checks order, reverse direction, geometry, scene/SVG and refusal paths; the
+gallery renders a paired PNG/SVG example. Oracle's tornado-chart guide uses
+largest swing first and notes reversed bars for inverse relationships:
+https://docs.oracle.com/cd/E52437_01/en/crystal_ball_users_guide/ch09s03s01.html.

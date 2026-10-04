@@ -2879,6 +2879,16 @@ gfx_chart_future_vsm_written=$($test_build/neper-self emit-executable "$repo/tes
 chmod +x "$test_build/gfx-chart-future-vsm-selfhost"
 gfx_chart_future_vsm_output=$("$test_build/gfx-chart-future-vsm-selfhost")
 [ "$gfx_chart_future_vsm_output" = 'gfx chart future vsm ok' ]
+gfx_chart_cap_table_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_cap_table/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-cap-table-selfhost")
+[ "$gfx_chart_cap_table_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-cap-table-selfhost"
+gfx_chart_cap_table_output=$("$test_build/gfx-chart-cap-table-selfhost")
+[ "$gfx_chart_cap_table_output" = 'gfx chart cap table ok' ]
+gfx_chart_tornado_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_tornado/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-tornado-selfhost")
+[ "$gfx_chart_tornado_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-tornado-selfhost"
+gfx_chart_tornado_output=$("$test_build/gfx-chart-tornado-selfhost")
+[ "$gfx_chart_tornado_output" = 'gfx chart tornado ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"

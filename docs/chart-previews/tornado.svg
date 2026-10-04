@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>tornado</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="112" y="48" width="224" height="137" fill="rgb(245,247,252)" fill-opacity="1"/>
+<rect x="113" y="53.59000015258789" width="111" height="7.829999923706055" fill="rgb(23,102,191)" fill-opacity="1"/>
+<rect x="174.6666717529297" y="80.58999633789062" width="49.33332824707031" height="7.829999923706055" fill="rgb(23,102,191)" fill-opacity="1"/>
+<rect x="194.39999389648438" y="107.58999633789062" width="29.600006103515625" height="7.829999923706055" fill="rgb(23,102,191)" fill-opacity="1"/>
+<rect x="224" y="134.58999633789062" width="24.666671752929688" height="7.829999923706055" fill="rgb(23,102,191)" fill-opacity="1"/>
+<rect x="199.33334350585938" y="161.58999633789062" width="24.666656494140625" height="7.829999923706055" fill="rgb(23,102,191)" fill-opacity="1"/>
+<rect x="224" y="63.58000183105469" width="111" height="7.829999923706055" fill="rgb(235,128,48)" fill-opacity="1"/>
+<rect x="224" y="90.58000183105469" width="74" height="7.829999923706055" fill="rgb(235,128,48)" fill-opacity="1"/>
+<rect x="224" y="117.58000183105469" width="49.33331298828125" height="7.829999923706055" fill="rgb(235,128,48)" fill-opacity="1"/>
+<rect x="199.33334350585938" y="144.5800018310547" width="24.666656494140625" height="7.829999923706055" fill="rgb(235,128,48)" fill-opacity="1"/>
+<rect x="224" y="171.5800018310547" width="24.666671752929688" height="7.829999923706055" fill="rgb(235,128,48)" fill-opacity="1"/>
+<line x1="224" y1="49" x2="224" y2="184" stroke="rgb(133,150,176)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<text x="180" y="22" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Tornado / one-at-a-time sensitivity</text>
+<text x="180" y="39" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Model output by input assumption</text>
+<text x="106" y="66" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Unit price</text>
+<text x="106" y="93" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Input cost</text>
+<text x="106" y="120" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Demand</text>
+<text x="106" y="147" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Tax rate</text>
+<text x="106" y="174" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">Retention</text>
+<text x="113" y="199" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">55</text>
+<text x="224" y="199" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">100 baseline</text>
+<text x="335" y="199" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">145</text>
+<text x="93" y="218" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Blue: low input</text>
+<text x="259" y="218" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Orange: high input</text>
+<text x="180" y="233" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Sorted by absolute output swing; scenarios stay distinct</text>
+</svg>

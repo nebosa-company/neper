@@ -9,8 +9,6 @@
 # Geographic and reporting
 
 # Operations, finance and network diagrams
-cap_table_waterfall
-tornado
 football_field
 yield_curve
 monte_carlo_histogram

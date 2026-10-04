@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-two hundred and eleven PNG plus two hundred and eleven SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map, a future-state value-stream comparison, a SIPOC overview, an expected-value decision tree, a rooted org chart, a layered dependency graph, an explicitly placed flowchart, an event-labeled state machine, an ordered sequence diagram, an entity-relationship diagram, a branching process map, a fishbone/Ishikawa diagram, a cause-effect tree, a Weibull probability plot, a binomial OC curve, a crossed Gage R&R component chart, a two-factor multi-vari chart, a raw-data main-effects chart, a two-factor interaction plot, a three-factor cube plot, a one-sided spectrogram, a waterfall spectrum, a Bode plot, a Nyquist plot, a 3-D scatter plot, a 3-D histogram, a 3-D density surface, a 3-D wireframe, a one-way ANOM chart, an individual Hotelling T-squared chart, a generalized-variance chart, a MEWMA chart, a focused normal-capability chart, a fitted lognormal-capability chart, a binomial attribute-capability chart, a balanced batch-capability chart, a gage bias/linearity chart, an attribute-agreement chart, a crossed gage-run chart, a choropleth, a proportional-symbol map, a cross-tab report and a grouped matrix report are also delivered. Individuals, moving-range,
+two hundred and thirteen PNG plus two hundred and thirteen SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map, a future-state value-stream comparison, a cap-table issuance waterfall, a tornado sensitivity chart, a SIPOC overview, an expected-value decision tree, a rooted org chart, a layered dependency graph, an explicitly placed flowchart, an event-labeled state machine, an ordered sequence diagram, an entity-relationship diagram, a branching process map, a fishbone/Ishikawa diagram, a cause-effect tree, a Weibull probability plot, a binomial OC curve, a crossed Gage R&R component chart, a two-factor multi-vari chart, a raw-data main-effects chart, a two-factor interaction plot, a three-factor cube plot, a one-sided spectrogram, a waterfall spectrum, a Bode plot, a Nyquist plot, a 3-D scatter plot, a 3-D histogram, a 3-D density surface, a 3-D wireframe, a one-way ANOM chart, an individual Hotelling T-squared chart, a generalized-variance chart, a MEWMA chart, a focused normal-capability chart, a fitted lognormal-capability chart, a binomial attribute-capability chart, a balanced batch-capability chart, a gage bias/linearity chart, an attribute-agreement chart, a crossed gage-run chart, a choropleth, a proportional-symbol map, a cross-tab report and a grouped matrix report are also delivered. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -896,6 +896,20 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    A basic waterfall/bridge layout now accepts an opening total and signed
    changes, adds the closing total and level connectors, and reuses the bar
    scene/SVG paths. Per-step semantic colouring and category labels remain.
+   `cap_table_waterfall` takes exact same-basis existing holder share counts,
+   an option-pool top-up and a new-investor issuance. It yields before/after
+   ownership segments and a signed retained-ownership bridge, with percentages
+   derived only after overflow-checked share totals. The Windows/Linux fixture
+   covers fractions, geometry, omitted events, overflow and storage refusals;
+   the gallery adds a PNG/SVG pair. SAFE/note conversion, preferences, voting
+   classes and valuation are not inferred by this first share-count model.
+   `tornado_sensitivity` accepts paired one-at-a-time model outcomes around a
+   common baseline, stably orders cases by absolute output swing, and retains
+   separate low-input and high-input bar layers even when response direction
+   reverses. The Windows/Linux fixture checks sorting ties, geometry,
+   scene/SVG adapters and refusal paths; the gallery adds a PNG/SVG pair.
+   Input distributions, joint interactions and probabilistic uncertainty are
+   outside this deterministic scenario layout.
    Bullet charts now compose qualitative bands, an actual bar and a target
    rule from existing layers; `gfx_chart_composition` checks geometry,
    refusals and both adapters on Windows and Linux.

@@ -58,6 +58,23 @@ type FutureValueStreamLayout = struct {
     fifo: Layout, pull: Layout, over_takt: Layout, pacemaker: Layout,
     takt_time: f64, lead_reduction: f64, pce_gain: f64, yield_gain: f64,
 }
+type CapTableSummary = struct {
+    before_shares: u64, after_shares: u64, pool_added: u64, investor_added: u64,
+    incumbent_fraction: f64, pool_fraction: f64, investor_fraction: f64,
+}
+type CapTableWork = struct {
+    before_bars: []geometry.Rect, after_bars: []geometry.Rect,
+    before_layers: []Layout, after_layers: []Layout,
+    before_fractions: []f64, after_fractions: []f64,
+    bridge_bars: []geometry.Rect, bridge_links: []Segment,
+}
+type CapTableLayout = struct {
+    before: []Layout, after: []Layout, bridge: Layout,
+    before_fractions: []f64, after_fractions: []f64,
+    pool_present: bool, investor_present: bool, summary: CapTableSummary,
+}
+type TornadoCase = struct { low_result: f64, high_result: f64 }
+type TornadoLayout = struct { low: Layout, high: Layout, baseline: Layout, order: []usize, minimum: f64, maximum: f64 }
 type SipocEntry = struct { column: usize }
 type SipocLayout = struct { bands: Layout, headers: Layout, cards: Layout, connectors: Layout, max_rows: usize }
 type DecisionKind = enum u8 { Choice, Chance, Outcome }
@@ -2708,6 +2725,156 @@ fn waterfall(values: []const f32, bounds: geometry.Rect, bars: []geometry.Rect, 
         i += 1usize
     }
     ret (Layout { kind: .Waterfall, coords: zero, segments: connectors[..values.len], bars: bars[..count], x_min: 0.0, x_max: f32(count), y_min: ymin, y_max: ymax }, ok)
+}
+
+// A one-basis, share-count cap table: existing holders, then optional pool
+// top-up and new-investor issuance. The bridge tracks retained incumbent
+// ownership from 100% through pool and financing dilution.
+fn cap_table_waterfall(existing_shares: []const u64, pool_added: u64, investor_added: u64, before_bounds: geometry.Rect, after_bounds: geometry.Rect, bridge_bounds: geometry.Rect, work: *CapTableWork) -> (CapTableLayout, err) {
+    let n = existing_shares.len
+    if n == 0usize { ret (zero, Empty) }
+    if pool_added == 0u64 && investor_added == 0u64 { ret (zero, Invalid) }
+    if !valid_bounds(before_bounds) || !valid_bounds(after_bounds) || !valid_bounds(bridge_bounds) || !finite(before_bounds.x + before_bounds.width) || !finite(after_bounds.x + after_bounds.width) || !finite(bridge_bounds.x + bridge_bounds.width) || !finite(bridge_bounds.y + bridge_bounds.height) { ret (zero, Invalid) }
+    if work.before_bars.len < n || work.after_bars.len < n + 2usize || work.before_layers.len < n || work.after_layers.len < n + 2usize || work.before_fractions.len < n || work.after_fractions.len < n || work.bridge_bars.len < 4usize || work.bridge_links.len < 3usize { ret (zero, TooLarge) }
+    var before_total = 0u64
+    var i = 0usize
+    while i < n {
+        if existing_shares[i] == 0u64 || existing_shares[i] > 18446744073709551615u64 - before_total { ret (zero, Invalid) }
+        before_total += existing_shares[i]
+        i += 1usize
+    }
+    if pool_added > 18446744073709551615u64 - before_total { ret (zero, Invalid) }
+    let with_pool = before_total + pool_added
+    if investor_added > 18446744073709551615u64 - with_pool { ret (zero, Invalid) }
+    let after_total = with_pool + investor_added
+    let after_pool_fraction = f64(before_total) / f64(with_pool)
+    let after_fraction = f64(before_total) / f64(after_total)
+    if !finite64(after_pool_fraction) || !finite64(after_fraction) || after_fraction <= 0.0f64 { ret (zero, Invalid) }
+    var before_x = before_bounds.x
+    var after_x = after_bounds.x
+    i = 0usize
+    while i < n {
+        let before_fraction = f64(existing_shares[i]) / f64(before_total)
+        let holder_after_fraction = f64(existing_shares[i]) / f64(after_total)
+        var before_width = before_bounds.width * f32(before_fraction)
+        if i == n - 1usize { before_width = before_bounds.x + before_bounds.width - before_x }
+        let after_width = after_bounds.width * f32(holder_after_fraction)
+        if !finite(before_width) || !finite(after_width) || before_width <= 0.0f32 || after_width <= 0.0f32 { ret (zero, TooLarge) }
+        work.before_fractions[i] = before_fraction
+        work.after_fractions[i] = holder_after_fraction
+        work.before_bars[i] = geometry.rect(before_x, before_bounds.y, before_width, before_bounds.height)
+        work.after_bars[i] = geometry.rect(after_x, after_bounds.y, after_width, after_bounds.height)
+        work.before_layers[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.before_bars[i..i + 1usize], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        work.after_layers[i] = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.after_bars[i..i + 1usize], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        before_x += before_width
+        after_x += after_width
+        i += 1usize
+    }
+    var after_count = n
+    if pool_added > 0u64 {
+        let width = after_bounds.width * f32(f64(pool_added) / f64(after_total))
+        if !finite(width) || width <= 0.0f32 { ret (zero, TooLarge) }
+        work.after_bars[after_count] = geometry.rect(after_x, after_bounds.y, width, after_bounds.height)
+        work.after_layers[after_count] = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.after_bars[after_count..after_count + 1usize], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        after_x += width
+        after_count += 1usize
+    }
+    if investor_added > 0u64 {
+        let width = after_bounds.x + after_bounds.width - after_x
+        if !finite(width) || width <= 0.0f32 { ret (zero, TooLarge) }
+        work.after_bars[after_count] = geometry.rect(after_x, after_bounds.y, width, after_bounds.height)
+        work.after_layers[after_count] = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.after_bars[after_count..after_count + 1usize], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        after_count += 1usize
+    } else {
+        let last = after_count - 1usize
+        work.after_bars[last].width = after_bounds.x + after_bounds.width - work.after_bars[last].x
+    }
+    let bridge_values = [3]f32{ 1.0f32, f32(after_pool_fraction - 1.0f64), f32(after_fraction - after_pool_fraction) }
+    let (bridge, bridge_error) = waterfall(bridge_values[..], bridge_bounds, work.bridge_bars, work.bridge_links)
+    if bridge_error != ok { ret (zero, bridge_error) }
+    ret (CapTableLayout {
+        before: work.before_layers[..n], after: work.after_layers[..after_count], bridge: bridge,
+        before_fractions: work.before_fractions[..n], after_fractions: work.after_fractions[..n],
+        pool_present: pool_added > 0u64, investor_present: investor_added > 0u64,
+        summary: CapTableSummary {
+            before_shares: before_total, after_shares: after_total, pool_added: pool_added, investor_added: investor_added,
+            incumbent_fraction: after_fraction, pool_fraction: f64(pool_added) / f64(after_total), investor_fraction: f64(investor_added) / f64(after_total),
+        },
+    }, ok)
+}
+
+// Each case is a one-at-a-time input perturbation with two modeled outputs.
+// Descending output swing is stable on ties; the two scenario bars remain
+// distinct even when low input produces the higher modeled result.
+fn tornado_sensitivity(cases: []const TornadoCase, baseline: f64, bounds: geometry.Rect, order: []usize, low_bars: []geometry.Rect, high_bars: []geometry.Rect, baseline_line: []Segment) -> (TornadoLayout, err) {
+    let n = cases.len
+    if n == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite64(baseline) { ret (zero, Invalid) }
+    if order.len < n || low_bars.len < n || high_bars.len < n || baseline_line.len < 1usize { ret (zero, TooLarge) }
+    var minimum = baseline
+    var maximum = baseline
+    var i = 0usize
+    while i < n {
+        let item = cases[i]
+        if !finite64(item.low_result) || !finite64(item.high_result) { ret (zero, Invalid) }
+        if item.low_result < minimum { minimum = item.low_result }
+        if item.high_result < minimum { minimum = item.high_result }
+        if item.low_result > maximum { maximum = item.low_result }
+        if item.high_result > maximum { maximum = item.high_result }
+        order[i] = i
+        i += 1usize
+    }
+    let span = maximum - minimum
+    if !finite64(span) || span <= 0.0f64 || !finite(f32(minimum)) || !finite(f32(maximum)) || f32(minimum) == f32(maximum) { ret (zero, Invalid) }
+    // ponytail: insertion sort is quadratic; very wide sensitivity sets need caller-scratch mergesort.
+    i = 1usize
+    while i < n {
+        let selected = order[i]
+        var j = i
+        var selected_swing = cases[selected].high_result - cases[selected].low_result
+        if selected_swing < 0.0f64 { selected_swing = 0.0f64 - selected_swing }
+        while j > 0usize {
+            var previous_swing = cases[order[j - 1usize]].high_result - cases[order[j - 1usize]].low_result
+            if previous_swing < 0.0f64 { previous_swing = 0.0f64 - previous_swing }
+            if previous_swing >= selected_swing { break }
+            order[j] = order[j - 1usize]
+            j -= 1usize
+        }
+        order[j] = selected
+        i += 1usize
+    }
+    let row_height = bounds.height / f32(n)
+    if !finite(row_height) || row_height <= 0.0f32 { ret (zero, Invalid) }
+    let base_x = bounds.x + bounds.width * f32((baseline - minimum) / span)
+    if !finite(base_x) { ret (zero, Invalid) }
+    i = 0usize
+    while i < n {
+        let item = cases[order[i]]
+        let low_x = bounds.x + bounds.width * f32((item.low_result - minimum) / span)
+        let high_x = bounds.x + bounds.width * f32((item.high_result - minimum) / span)
+        if !finite(low_x) || !finite(high_x) { ret (zero, Invalid) }
+        var low_left = base_x
+        var low_width = low_x - base_x
+        if low_width < 0.0f32 {
+            low_left = low_x
+            low_width = 0.0f32 - low_width
+        }
+        var high_left = base_x
+        var high_width = high_x - base_x
+        if high_width < 0.0f32 {
+            high_left = high_x
+            high_width = 0.0f32 - high_width
+        }
+        let y = bounds.y + f32(i) * row_height
+        low_bars[i] = geometry.rect(low_left, y + row_height * 0.17f32, low_width, row_height * 0.29f32)
+        high_bars[i] = geometry.rect(high_left, y + row_height * 0.54f32, high_width, row_height * 0.29f32)
+        i += 1usize
+    }
+    baseline_line[0usize] = Segment { from: Coord { x: base_x, y: bounds.y }, to: Coord { x: base_x, y: bounds.y + bounds.height } }
+    let low = Layout { kind: .Bar, coords: zero, segments: zero, bars: low_bars[..n], x_min: f32(minimum), x_max: f32(maximum), y_min: 0.0f32, y_max: f32(n) }
+    let high = Layout { kind: .Bar, coords: zero, segments: zero, bars: high_bars[..n], x_min: f32(minimum), x_max: f32(maximum), y_min: 0.0f32, y_max: f32(n) }
+    let guide = Layout { kind: .Rug, coords: zero, segments: baseline_line[..1usize], bars: zero, x_min: f32(minimum), x_max: f32(maximum), y_min: 0.0f32, y_max: f32(n) }
+    ret (TornadoLayout { low: low, high: high, baseline: guide, order: order[..n], minimum: minimum, maximum: maximum }, ok)
 }
 
 // Qualitative ranges paint widest to narrowest, then actual and target.
