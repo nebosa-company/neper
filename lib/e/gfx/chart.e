@@ -809,7 +809,8 @@ fn capability_sixpack(values: []const f64, sorted: []const f64, lsl: f64, usl: f
 // Focused individuals normal-capability distribution. Curves are expected
 // counts per bin, not probability densities; guides are LSL, mean and USL.
 fn normal_capability(values: []const f64, lsl: f64, usl: f64, bounds: geometry.Rect, work: *NormalCapabilityStorage) -> (NormalCapabilityLayout, err) {
-    if values.len < 5usize || !valid_bounds(bounds) || work.moving.len < values.len - 1usize || work.counts.len < 2usize || work.bars.len != work.counts.len || work.within_curve.len < 63usize || work.overall_curve.len < 63usize || work.guides.len < 3usize { ret (zero, TooLarge) }
+    if values.len < 5usize || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if work.moving.len < values.len - 1usize || work.counts.len < 2usize || work.bars.len != work.counts.len || work.within_curve.len < 63usize || work.overall_curve.len < 63usize || work.guides.len < 3usize { ret (zero, TooLarge) }
     let (summary, summary_error) = stat.normal_capability_individuals(values, lsl, usl, work.moving)
     if summary_error != ok { ret (zero, Invalid) }
     let (performance, performance_error) = stat.normal_capability_performance(values, lsl, usl, summary)

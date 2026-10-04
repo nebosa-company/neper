@@ -60,6 +60,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if bad_specs != chart.Invalid || short_error != chart.TooLarge || flat_error != chart.Invalid { ret chart.Invalid }
     let (perf, perf_error) = stat.normal_capability_performance(values[..], 9.5f64, 10.5f64, report.summary)
     if perf_error != ok || !close(perf.observed_below_ppm, 250000.0f64) || !close(perf.observed_above_ppm, 250000.0f64) { ret chart.Invalid }
+    if perf.overall_below_ppm < 254165.7f64 || perf.overall_below_ppm > 254165.9f64 || perf.within_below_ppm < 286377.0f64 || perf.within_below_ppm > 286377.2f64 { ret chart.Invalid }
+    let (_, bad_bounds) = chart.normal_capability(values[..], 8.5f64, 11.5f64, geometry.rect(0.0, 0.0, 0.0, 100.0), &work)
+    if bad_bounds != chart.Invalid { ret chart.Invalid }
     try io.print("gfx chart capability normal ok\n")
     ret ok
 }
