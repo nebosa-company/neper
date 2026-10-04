@@ -35,6 +35,12 @@ type CapabilityPerformance = struct {
     within_below_ppm: f64, within_above_ppm: f64,
     overall_below_ppm: f64, overall_above_ppm: f64,
 }
+type LognormalCapability = struct {
+    log_mean: f64, log_sigma: f64, median: f64,
+    pp: f64, ppl: f64, ppu: f64, ppk: f64,
+    observed_below_ppm: f64, observed_above_ppm: f64,
+    expected_below_ppm: f64, expected_above_ppm: f64,
+}
 type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
@@ -552,6 +558,43 @@ fn normal_capability_performance(values: []const f64, lsl: f64, usl: f64, summar
         overall_above_ppm: million * special.normal_cdf((summary.mean - usl) / summary.overall_sigma),
     }
     ret (result, ok)
+}
+
+// Two-parameter lognormal MLE on the log scale (overall variation only).
+// Pp/Ppk use the Z-score convention, not ISO percentile-spread indices.
+fn lognormal_capability(values: []const f64, lsl: f64, usl: f64) -> (LognormalCapability, err) {
+    if values.len < 5usize || lsl - lsl != 0.0f64 || usl - usl != 0.0f64 || !(lsl > 0.0f64) || !(usl > lsl) { ret (zero, Invalid) }
+    var logs = moments()
+    var below = 0usize
+    var above = 0usize
+    var i = 0usize
+    while i < values.len {
+        let x = values[i]
+        if x - x != 0.0f64 || !(x > 0.0f64) { ret (zero, Invalid) }
+        moments_add(&logs, math.log[f64](x))
+        if x < lsl { below += 1usize }
+        if x > usl { above += 1usize }
+        i += 1usize
+    }
+    let sigma = math.sqrt[f64](logs.m2 / f64(values.len))
+    if !(sigma > 0.0f64) || sigma - sigma != 0.0f64 { ret (zero, Invalid) }
+    let median = math.exp[f64](logs.mean)
+    let z_lower = (math.log[f64](lsl) - logs.mean) / sigma
+    let z_upper = (math.log[f64](usl) - logs.mean) / sigma
+    let ppl = (0.0f64 - z_lower) / 3.0f64
+    let ppu = z_upper / 3.0f64
+    let pp = (z_upper - z_lower) / 6.0f64
+    let ppk = math.min[f64](ppl, ppu)
+    if median - median != 0.0f64 || z_lower - z_lower != 0.0f64 || z_upper - z_upper != 0.0f64 || pp - pp != 0.0f64 || ppk - ppk != 0.0f64 { ret (zero, Invalid) }
+    let million = 1000000.0f64
+    ret (LognormalCapability {
+        log_mean: logs.mean, log_sigma: sigma, median: median,
+        pp: pp, ppl: ppl, ppu: ppu, ppk: ppk,
+        observed_below_ppm: million * f64(below) / f64(values.len),
+        observed_above_ppm: million * f64(above) / f64(values.len),
+        expected_below_ppm: million * special.normal_cdf(z_lower),
+        expected_above_ppm: million * special.normal_cdf(0.0f64 - z_upper),
+    }, ok)
 }
 
 // Each true entry starts a phase; moving ranges never span a phase boundary.

@@ -169,6 +169,12 @@ type NormalCapabilityLayout = struct {
     histogram: Layout, within_curve: Layout, overall_curve: Layout, guides: Layout,
     summary: stat.NormalCapability, performance: stat.CapabilityPerformance,
 }
+type LognormalCapabilityStorage = struct {
+    counts: []u64, bars: []geometry.Rect, fit_curve: []Segment, guides: []Segment,
+}
+type LognormalCapabilityLayout = struct {
+    histogram: Layout, fit_curve: Layout, guides: Layout, summary: stat.LognormalCapability,
+}
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -888,6 +894,84 @@ fn normal_capability(values: []const f64, lsl: f64, usl: f64, bounds: geometry.R
     }
     let guides = Layout { kind: .Rug, coords: zero, segments: work.guides[..3usize], bars: zero, x_min: f32(lo), x_max: f32(hi), y_min: 0.0, y_max: f32(peak) }
     ret (NormalCapabilityLayout { histogram: hist_layout, within_curve: within_curve, overall_curve: overall_curve, guides: guides, summary: summary, performance: performance }, ok)
+}
+
+// Overall two-parameter lognormal capability: histogram counts, fitted
+// expected counts per bin, and LSL/median/USL guides in one numeric panel.
+fn lognormal_capability(values: []const f64, lsl: f64, usl: f64, bounds: geometry.Rect, work: *LognormalCapabilityStorage) -> (LognormalCapabilityLayout, err) {
+    if !valid_bounds(bounds) { ret (zero, Invalid) }
+    if work.counts.len < 2usize || work.bars.len != work.counts.len || work.fit_curve.len < 63usize || work.guides.len < 3usize { ret (zero, TooLarge) }
+    let (summary, summary_error) = stat.lognormal_capability(values, lsl, usl)
+    if summary_error != ok { ret (zero, Invalid) }
+    var data_lo = values[0usize]
+    var data_hi = values[0usize]
+    var i = 1usize
+    while i < values.len {
+        if values[i] < data_lo { data_lo = values[i] }
+        if values[i] > data_hi { data_hi = values[i] }
+        i += 1usize
+    }
+    var lo = math.min[f64](lsl, data_lo)
+    var hi = math.max[f64](usl, data_hi)
+    let tail_lo = math.exp[f64](summary.log_mean - 2.8f64 * summary.log_sigma)
+    let tail_hi = math.exp[f64](summary.log_mean + 2.8f64 * summary.log_sigma)
+    if finite64(tail_lo) && tail_lo < lo { lo = tail_lo }
+    if finite64(tail_hi) && tail_hi > hi { hi = tail_hi }
+    if !finite(f32(lo)) || !finite(f32(hi)) || !(hi > lo) || !(lo > 0.0f64) { ret (zero, Invalid) }
+    let bins = work.counts.len
+    i = 0usize
+    while i < bins {
+        work.counts[i] = 0u64
+        i += 1usize
+    }
+    i = 0usize
+    while i < values.len {
+        var bin = usize((values[i] - lo) / (hi - lo) * f64(bins))
+        if bin >= bins { bin = bins - 1usize }
+        work.counts[bin] += 1u64
+        i += 1usize
+    }
+    let bin_width = (hi - lo) / f64(bins)
+    let pi = 3.14159265358979323846f64
+    let mode = math.exp[f64](summary.log_mean - summary.log_sigma * summary.log_sigma)
+    let peak_x = math.max[f64](lo, math.min[f64](hi, mode))
+    let peak_z = (math.log[f64](peak_x) - summary.log_mean) / summary.log_sigma
+    var peak = f64(values.len) * bin_width * math.exp[f64](-0.5f64 * peak_z * peak_z) / (peak_x * summary.log_sigma * math.sqrt[f64](2.0f64 * pi))
+    i = 0usize
+    while i < bins {
+        if f64(work.counts[i]) > peak { peak = f64(work.counts[i]) }
+        i += 1usize
+    }
+    peak *= 1.1f64
+    if !finite(f32(peak)) || !(peak > 0.0f64) { ret (zero, Invalid) }
+    i = 0usize
+    while i < bins {
+        let h = bounds.height * f32(f64(work.counts[i]) / peak)
+        work.bars[i] = geometry.rect(bounds.x + bounds.width * f32(i) / f32(bins), bounds.y + bounds.height - h, bounds.width / f32(bins), h)
+        i += 1usize
+    }
+    let hist_layout = Layout { kind: .Histogram, coords: zero, segments: zero, bars: work.bars[..bins], x_min: f32(lo), x_max: f32(hi), y_min: 0.0, y_max: f32(peak) }
+    var previous: Coord = zero
+    i = 0usize
+    while i < 64usize {
+        let x = lo + (hi - lo) * f64(i) / 63.0f64
+        let z = (math.log[f64](x) - summary.log_mean) / summary.log_sigma
+        let expected = f64(values.len) * bin_width * math.exp[f64](-0.5f64 * z * z) / (x * summary.log_sigma * math.sqrt[f64](2.0f64 * pi))
+        let point = Coord { x: bounds.x + bounds.width * f32(i) / 63.0, y: bounds.y + bounds.height * (1.0 - f32(expected / peak)) }
+        if i > 0usize { work.fit_curve[i - 1usize] = Segment { from: previous, to: point } }
+        previous = point
+        i += 1usize
+    }
+    let fitted = Layout { kind: .Line, coords: zero, segments: work.fit_curve[..63usize], bars: zero, x_min: f32(lo), x_max: f32(hi), y_min: 0.0, y_max: f32(peak) }
+    let levels = [3]f64{ lsl, summary.median, usl }
+    i = 0usize
+    while i < 3usize {
+        let x = bounds.x + bounds.width * f32((levels[i] - lo) / (hi - lo))
+        work.guides[i] = Segment { from: Coord { x: x, y: bounds.y }, to: Coord { x: x, y: bounds.y + bounds.height } }
+        i += 1usize
+    }
+    let guide_layout = Layout { kind: .Rug, coords: zero, segments: work.guides[..3usize], bars: zero, x_min: f32(lo), x_max: f32(hi), y_min: 0.0, y_max: f32(peak) }
+    ret (LognormalCapabilityLayout { histogram: hist_layout, fit_curve: fitted, guides: guide_layout, summary: summary }, ok)
 }
 
 // A sparkline is an evenly spaced Line with no guide contract.

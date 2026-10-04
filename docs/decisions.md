@@ -34755,3 +34755,19 @@ chart plan, preview notes, committed PNG/SVG pairs and planned preview slugs.
 The chart guide holds descriptions and every produced preview; it links back
 to the readiness page for scores. This keeps the chart catalogue readable and
 prevents its preview inventory from drifting away from the generated count.
+
+## D1950 — Nonnormal capability starts with a labeled lognormal MLE
+
+`stat.lognormal_capability` estimates the two-parameter lognormal model from
+positive individuals by MLE on the log scale. It reports overall Pp, PPL, PPU
+and Ppk using the Z-score method; this is not the ISO percentile-spread method.
+Observed out-of-spec PPM counts strict sample tails, while expected PPM uses
+the fitted lognormal CDF. `chart.lognormal_capability` overlays a fitted curve
+scaled to expected histogram counts per bin and marks LSL, median and USL.
+The API refuses nonpositive data/specifications and degenerate log variance.
+Its fixture uses an exact geometric sample for fit, index and tail references
+on Windows and Linux, plus scene/SVG and refusal checks. The gallery adds one
+PNG/SVG pair. Weibull and other distributions, fit diagnostics, subgroup
+models and confidence intervals remain separate work.
+
+References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-analysis/nonnormal-capability-analysis/methods-and-formulas/overall-capability/ ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-analysis/nonnormal-capability-analysis-for-multiple-variables/methods-and-formulas/expected-overall-performance/
