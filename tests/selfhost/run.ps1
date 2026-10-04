@@ -3341,6 +3341,11 @@ $gfxChartClippedAnnotationWritten = & $compiler emit-executable (Join-Path $PSSc
 if ($LASTEXITCODE -ne 0 -or $gfxChartClippedAnnotationWritten -ne 'executable written') { throw 'gfx_chart_clipped_annotation emission failed' }
 $gfxChartClippedAnnotationOutput = & $gfxChartClippedAnnotationPath (Join-Path $repo 'docs\video\neper-capabilities\fonts\Montserrat-ExtraBold.ttf')
 if ($LASTEXITCODE -ne 0 -or $gfxChartClippedAnnotationOutput -ne 'gfx chart clipped annotation ok') { throw "the e.gfx.chart clipped annotation answered wrongly: exit $LASTEXITCODE" }
+$gfxChartPlotGridPath = Join-Path $testBuild 'gfx-chart-plot-grid-selfhost.exe'
+$gfxChartPlotGridWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_plot_grid\src\main.e') $repo 'x64' 'windows' $gfxChartPlotGridPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPlotGridWritten -ne 'executable written') { throw 'gfx_chart_plot_grid emission failed' }
+$gfxChartPlotGridOutput = & $gfxChartPlotGridPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPlotGridOutput -ne 'gfx chart plot grid ok') { throw "the e.gfx.chart plot grid answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

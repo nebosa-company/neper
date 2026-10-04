@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>plot_grid</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<text x="180" y="25" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">Weighted plot grid / independent scales</text>
+<rect x="18" y="40" width="174.4444580078125" height="87" fill="rgb(240,245,250)" fill-opacity="1"/>
+<rect x="31" y="65" width="148.4444580078125" height="53" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="31" y="118" width="148.4444580078125" height="1" fill="rgb(143,158,179)" fill-opacity="1"/>
+<path d="M31 118 L80.48149108886719 78.25 L129.96298217773438 104.75 L179.4444580078125 65" fill="none" stroke="rgb(31,107,194)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<text x="105.22222900390625" y="57" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">A  Line</text>
+<rect x="202.4444580078125" y="40" width="139.5555419921875" height="87" fill="rgb(240,245,250)" fill-opacity="1"/>
+<rect x="215.4444580078125" y="65" width="113.5555419921875" height="53" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="215.4444580078125" y="118" width="113.5555419921875" height="1" fill="rgb(143,158,179)" fill-opacity="1"/>
+<rect x="218.28334045410156" y="96.80000305175781" width="22.711109161376953" height="21.199996948242188" fill="rgb(38,161,128)" fill-opacity="1"/>
+<rect x="246.67221069335938" y="86.19999694824219" width="22.711109161376953" height="31.800003051757812" fill="rgb(38,161,128)" fill-opacity="1"/>
+<rect x="275.0611267089844" y="65" width="22.711109161376953" height="53" fill="rgb(38,161,128)" fill-opacity="1"/>
+<rect x="303.4499816894531" y="75.5999984741211" width="22.711109161376953" height="42.400001525878906" fill="rgb(38,161,128)" fill-opacity="1"/>
+<text x="272.22222900390625" y="57" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">B  Bars</text>
+<rect x="18" y="137" width="174.4444580078125" height="87" fill="rgb(240,245,250)" fill-opacity="1"/>
+<rect x="31" y="162" width="148.4444580078125" height="53" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="31" y="215" width="148.4444580078125" height="1" fill="rgb(143,158,179)" fill-opacity="1"/>
+<rect x="28" y="212" width="6" height="6" fill="rgb(204,92,61)" fill-opacity="1"/>
+<rect x="77.48149108886719" y="180.1999969482422" width="6" height="6" fill="rgb(204,92,61)" fill-opacity="1"/>
+<rect x="126.96298217773438" y="201.39999389648438" width="6" height="6" fill="rgb(204,92,61)" fill-opacity="1"/>
+<rect x="176.4444580078125" y="159" width="6" height="6" fill="rgb(204,92,61)" fill-opacity="1"/>
+<text x="105.22222900390625" y="154" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">C  Points</text>
+<rect x="202.4444580078125" y="137" width="139.5555419921875" height="87" fill="rgb(240,245,250)" fill-opacity="1"/>
+<rect x="215.4444580078125" y="162" width="113.5555419921875" height="53" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="215.4444580078125" y="215" width="113.5555419921875" height="1" fill="rgb(143,158,179)" fill-opacity="1"/>
+<path d="M215.4444580078125 215 L253.2963104248047 188.5 L291.1481628417969 162 L329 175.25 L329 215 L291.1481628417969 215 L253.2963104248047 215 L215.4444580078125 215 Z" fill="rgb(128,97,199)" fill-opacity="1"/>
+<text x="272.22222900390625" y="154" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(46,61,82)" fill-opacity="1">D  Area</text>
+</svg>

@@ -16314,6 +16314,7 @@ fn correlation_matrix(observations: []const f64, columns: usize, bounds: geometr
 fn parallel_coordinates(observations: []const f64, columns: usize, bounds: geometry.Rect, minimums: []f64, maximums: []f64, lines: []Segment, axes: []Segment) -> (Layout, Layout, err)
 fn scatterplot_matrix(observations: []const f64, columns: usize, bounds: geometry.Rect, gap: f32, minimums: []f64, maximums: []f64, panels: []geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err)
 fn facet_grid(bounds: geometry.Rect, columns: usize, count: usize, gap: f32, panels: []geometry.Rect) -> ([]geometry.Rect, err)
+fn plot_grid(bounds: geometry.Rect, column_weights: []const f32, row_weights: []const f32, gap_x: f32, gap_y: f32, panels: []geometry.Rect) -> ([]geometry.Rect, err)
 ```
 
 ### `e.gfx.chart.scene`

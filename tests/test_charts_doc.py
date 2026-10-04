@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import subprocess
 import unittest
+import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -56,6 +57,8 @@ class ChartGuideTests(unittest.TestCase):
             self.assertEqual(path.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
             self.assertIn(f'href="chart-previews/{path.stem}.svg"', page)
             self.assertTrue(path.with_suffix(".svg").is_file())
+            svg = ET.parse(path.with_suffix(".svg"))
+            self.assertEqual(svg.getroot().tag, "{http://www.w3.org/2000/svg}svg")
         self.assertNotIn("data:image/png;base64,", page)
         self.assertLess(len(page), 100_000)
         self.assertIn('href="charts.html"', (DOCS / "progress.html").read_text(encoding="utf-8"))

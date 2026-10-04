@@ -1696,6 +1696,117 @@ fn render_clipped_annotation_preview(a: *mem.Arena, q: *gpu.Queue, output_target
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_plot_grid_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/plot_grid.png"
+    let columns = [2]f32{ 1.25, 1.0 }
+    let rows = [2]f32{ 1.0, 1.0 }
+    var panels: [4]geometry.Rect = zero
+    let (placed, placement_error) = chart.plot_grid(geometry.rect(18.0, 40.0, 324.0, 184.0), columns[..], rows[..], 10.0, 10.0, panels[..])
+    if placement_error != ok { ret placement_error }
+    let kinds = [4]chart.Kind{ .Line, .Bar, .Scatter, .Area }
+    let names = [4]str{ "A  Line", "B  Bars", "C  Points", "D  Area" }
+    let colors = [4]paint.Color{
+        paint.rgba(0.12, 0.42, 0.76, 1.0), paint.rgba(0.15, 0.63, 0.50, 1.0),
+        paint.rgba(0.80, 0.36, 0.24, 1.0), paint.rgba(0.50, 0.38, 0.78, 1.0),
+    }
+    let line_x = [4]f32{ 0.0, 1.0, 2.0, 3.0 }
+    let line_y = [4]f32{ 2.0, 5.0, 3.0, 6.0 }
+    let bar_x = [4]f32{ 1.0, 2.0, 3.0, 4.0 }
+    let bar_y = [4]f32{ 2.0, 3.0, 5.0, 4.0 }
+    let scatter_x = [4]f32{ 10.0, 20.0, 30.0, 40.0 }
+    let scatter_y = [4]f32{ 2.0, 5.0, 3.0, 7.0 }
+    let area_x = [4]f32{ 0.0, 1.0, 2.0, 3.0 }
+    let area_y = [4]f32{ 0.0, 2.0, 4.0, 3.0 }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let panel_fill = paint.rgba(0.94, 0.96, 0.98, 1.0)
+    let axis = paint.rgba(0.56, 0.62, 0.70, 1.0)
+    let dark = paint.rgba(0.18, 0.24, 0.32, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    let heading = [1]chart.Label{ chart.Label { text: "Weighted plot grid / independent scales", anchor: chart.Coord { x: 180.0, y: 25.0 }, align: .Center } }
+    try chart_scene.append_labels(a, &builder, heading[..], font, 11.0, paint.Brush { Solid: dark })
+    var i = 0usize
+    while i < placed.len {
+        let cell = placed[i]
+        let plot = geometry.rect(cell.x + 13.0, cell.y + 25.0, cell.width - 26.0, cell.height - 34.0)
+        try fill(&builder, cell, paint.Brush { Solid: panel_fill })
+        try fill(&builder, plot, paint.Brush { Solid: white })
+        try fill(&builder, geometry.rect(plot.x, plot.y + plot.height, plot.width, 1.0), paint.Brush { Solid: axis })
+        var xx: []const f32 = line_x[..]
+        var yy: []const f32 = line_y[..]
+        if i == 1usize {
+            xx = bar_x[..]
+            yy = bar_y[..]
+        }
+        if i == 2usize {
+            xx = scatter_x[..]
+            yy = scatter_y[..]
+        }
+        if i == 3usize {
+            xx = area_x[..]
+            yy = area_y[..]
+        }
+        var point_storage: [8]chart.Coord = zero
+        var line_storage: [4]chart.Segment = zero
+        var bar_storage: [4]geometry.Rect = zero
+        let spec = chart.spec(kinds[i], plot, xx, yy)
+        let (marks, marks_error) = chart.layout(&spec, point_storage[..], line_storage[..], bar_storage[..])
+        if marks_error != ok { ret marks_error }
+        try chart_scene.append(a, &builder, &marks, paint.Brush { Solid: colors[i] })
+        let title = [1]chart.Label{ chart.Label { text: names[i], anchor: chart.Coord { x: cell.x + cell.width / 2.0, y: cell.y + 17.0 }, align: .Center } }
+        try chart_scene.append_labels(a, &builder, title[..], font, 9.0, paint.Brush { Solid: dark })
+        i += 1usize
+    }
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_labels(&writer, heading[..], dark, 11.0)
+    i = 0usize
+    while i < placed.len {
+        let cell = placed[i]
+        let plot = geometry.rect(cell.x + 13.0, cell.y + 25.0, cell.width - 26.0, cell.height - 34.0)
+        try chart_svg.rect(&writer, cell, panel_fill, false)
+        try chart_svg.rect(&writer, plot, white, false)
+        try chart_svg.rect(&writer, geometry.rect(plot.x, plot.y + plot.height, plot.width, 1.0), axis, false)
+        var xx: []const f32 = line_x[..]
+        var yy: []const f32 = line_y[..]
+        if i == 1usize {
+            xx = bar_x[..]
+            yy = bar_y[..]
+        }
+        if i == 2usize {
+            xx = scatter_x[..]
+            yy = scatter_y[..]
+        }
+        if i == 3usize {
+            xx = area_x[..]
+            yy = area_y[..]
+        }
+        var point_storage: [8]chart.Coord = zero
+        var line_storage: [4]chart.Segment = zero
+        var bar_storage: [4]geometry.Rect = zero
+        let spec = chart.spec(kinds[i], plot, xx, yy)
+        let (marks, marks_error) = chart.layout(&spec, point_storage[..], line_storage[..], bar_storage[..])
+        if marks_error != ok { ret marks_error }
+        try chart_svg.append(&writer, &marks, colors[i])
+        let title = [1]chart.Label{ chart.Label { text: names[i], anchor: chart.Coord { x: cell.x + cell.width / 2.0, y: cell.y + 17.0 }, align: .Center } }
+        try chart_svg.append_labels(&writer, title[..], dark, 9.0)
+        i += 1usize
+    }
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_legend_collision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/legend_collision.png"
     let names = [4]str{ "Control baseline", "Treatment alpha extended", "Treatment beta extended", "Follow-up cohort" }
@@ -10476,6 +10587,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_legend_collision_preview(a, queue, output_target, canvas, &renderer)
     try render_missing_data_scatter_preview(a, queue, output_target, canvas, &renderer)
     try render_clipped_annotation_preview(a, queue, output_target, canvas, &renderer)
+    try render_plot_grid_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)

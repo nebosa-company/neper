@@ -10632,6 +10632,71 @@ fn facet_grid(bounds: geometry.Rect, columns: usize, count: usize, gap: f32, pan
     ret (panels[..count], ok)
 }
 
+// Arrange independent plots in a weighted, row-major grid. Unlike facets,
+// each returned rectangle may host a different mark kind and data domain.
+// Caller owns the output and reserves any per-plot title/axis margins.
+fn plot_grid(bounds: geometry.Rect, column_weights: []const f32, row_weights: []const f32, gap_x: f32, gap_y: f32, panels: []geometry.Rect) -> ([]geometry.Rect, err) {
+    if column_weights.len == 0usize || row_weights.len == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite(gap_x) || !finite(gap_y) || gap_x < 0.0 || gap_y < 0.0 { ret (zero, Invalid) }
+    if panels.len / column_weights.len < row_weights.len { ret (zero, TooLarge) }
+    let horizontal_gaps = gap_x * f32(column_weights.len - 1usize)
+    let vertical_gaps = gap_y * f32(row_weights.len - 1usize)
+    let available_width = bounds.width - horizontal_gaps
+    let available_height = bounds.height - vertical_gaps
+    if !finite(available_width) || !finite(available_height) || available_width <= 0.0 || available_height <= 0.0 { ret (zero, Invalid) }
+    var total_width = 0.0f64
+    var total_height = 0.0f64
+    var column = 0usize
+    while column < column_weights.len {
+        let weight = column_weights[column]
+        if !finite(weight) || weight <= 0.0 { ret (zero, Invalid) }
+        total_width += f64(weight)
+        column += 1usize
+    }
+    var row = 0usize
+    while row < row_weights.len {
+        let weight = row_weights[row]
+        if !finite(weight) || weight <= 0.0 { ret (zero, Invalid) }
+        total_height += f64(weight)
+        row += 1usize
+    }
+    if !finite64(total_width) || !finite64(total_height) { ret (zero, Invalid) }
+    column = 0usize
+    while column < column_weights.len {
+        let width = available_width * f32(f64(column_weights[column]) / total_width)
+        if !finite(width) || width <= 0.0 { ret (zero, Invalid) }
+        column += 1usize
+    }
+    row = 0usize
+    while row < row_weights.len {
+        let height = available_height * f32(f64(row_weights[row]) / total_height)
+        if !finite(height) || height <= 0.0 { ret (zero, Invalid) }
+        row += 1usize
+    }
+    let right = bounds.x + bounds.width
+    let bottom = bounds.y + bounds.height
+    var y = bounds.y
+    row = 0usize
+    while row < row_weights.len {
+        var height = available_height * f32(f64(row_weights[row]) / total_height)
+        if row + 1usize == row_weights.len { height = bottom - y }
+        if !finite(height) || height <= 0.0 { ret (zero, Invalid) }
+        var x = bounds.x
+        column = 0usize
+        while column < column_weights.len {
+            var width = available_width * f32(f64(column_weights[column]) / total_width)
+            if column + 1usize == column_weights.len { width = right - x }
+            if !finite(width) || width <= 0.0 { ret (zero, Invalid) }
+            panels[row * column_weights.len + column] = geometry.rect(x, y, width, height)
+            x += width + gap_x
+            column += 1usize
+        }
+        y += height + gap_y
+        row += 1usize
+    }
+    ret (panels[..column_weights.len * row_weights.len], ok)
+}
+
 // One category key selects one panel. Levels fix row-major panel order and
 // reserve empty panels; all Scatter marks share the caller's x/y domains.
 fn category_facet_scatter(keys: []const str, x: []const f32, y: []const f32, levels: []const str, bounds: geometry.Rect, columns: usize, gap: f32, strip_height: f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, panels: []geometry.Rect, points: []Coord, marks: []Layout, strips: []Label, counts: []usize) -> (CategoryFacetLayout, err) {

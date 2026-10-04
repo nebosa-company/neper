@@ -35041,3 +35041,14 @@ list, and the caller leaves room for Restore. Titles, axes and legends emitted
 after the scope are not clipped. This composes with existing layers instead of
 adding an annotation-specific mark type; arbitrary path clips and automatic
 annotation placement remain future work.
+
+## D1976 — Weighted plot grids compose independent chart specifications
+
+`chart.plot_grid` returns row-major rectangles from positive caller-supplied
+column and row weights and separate nonnegative gaps. It does not impose one
+data domain, mark type, guide, colour or title across cells: callers render
+independent chart specifications into those rectangles. This distinguishes
+multi-plot composition from `facet_grid` and keeps panel contents in the
+existing scene/SVG adapters. Zero or non-finite weights, exhausted space and
+insufficient caller storage are refused. Shared guides, cell spanning and
+automatic margin allocation remain follow-on composition work.

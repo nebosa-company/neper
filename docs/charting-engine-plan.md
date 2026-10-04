@@ -1090,6 +1090,13 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 ## How Neper can beat the reference tools
 
+`plot_grid` arranges independent plot rectangles using caller-owned column and
+row weights and explicit horizontal/vertical gaps. Each cell can host a
+different chart kind and domain; the gallery composes line, bar, scatter and
+area plots into a PNG/SVG pair. `gfx_chart_plot_grid` checks weighted geometry,
+backend output, invalid weights/gaps and short storage on Windows and Linux.
+Shared guides, spanning cells and automatic title/axis margins remain open.
+
 The `clipped_annotation` preview exercises reusable rectangular clip scopes in
 the CPU scene and SVG adapters. Each backend clips marks and text inside a
 panel while leaving later labels unaffected. `gfx_chart_clipped_annotation`

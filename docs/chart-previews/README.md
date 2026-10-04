@@ -150,6 +150,9 @@ reproducible examples, not a calibrated forecast or confidence interval.
 The clipped annotation preview demonstrates a shared rectangular plot clip in
 the CPU scene and SVG adapters: a red note and line are cut at the panel edge,
 while title and footer text remain outside the clip.
+The weighted plot-grid preview places independent line, bar, scatter and area
+plots in unequal-width cells. Each plot retains its own scale and mark kind;
+this is multi-plot composition, not shared-scale faceting.
 
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:

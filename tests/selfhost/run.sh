@@ -2959,6 +2959,11 @@ gfx_chart_clipped_annotation_written=$($test_build/neper-self emit-executable "$
 chmod +x "$test_build/gfx-chart-clipped-annotation-selfhost"
 gfx_chart_clipped_annotation_output=$("$test_build/gfx-chart-clipped-annotation-selfhost" "$repo/docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf")
 [ "$gfx_chart_clipped_annotation_output" = 'gfx chart clipped annotation ok' ]
+gfx_chart_plot_grid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_plot_grid/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-plot-grid-selfhost")
+[ "$gfx_chart_plot_grid_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-plot-grid-selfhost"
+gfx_chart_plot_grid_output=$("$test_build/gfx-chart-plot-grid-selfhost")
+[ "$gfx_chart_plot_grid_output" = 'gfx chart plot grid ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"
