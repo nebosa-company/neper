@@ -34609,3 +34609,19 @@ frequency data omit the Nyquist contour arcs and cannot certify stability or
 encirclement counts; model evaluation, pole handling and MIMO remain planned.
 
 References: https://www.mathworks.com/help/control/ref/nyquistplot.html ; https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.lti.freqresp.html
+
+## D1941 — Share a perspective camera for three-dimensional chart families
+
+`chart.scatter3d` normalizes three borrowed numeric columns into a unit cube,
+projects them with azimuth/elevation and a finite perspective distance, and
+fits the projected cube into a caller panel with one uniform pixel scale.
+Caller-owned point/depth/order buffers support deterministic O(n log n)
+far-to-near bubble painting; marker diameter varies with perspective. Twelve
+projected cube edges are a separate `Rug` layer. The Windows/Linux fixture
+checks extents, camera projection, sorting, frame geometry, flat data, both
+rendering adapters and refusal paths. The gallery shows a projected helix.
+This painter order handles independent opaque markers but is not a general
+depth buffer for intersecting surfaces; interactive rotation, per-point
+colour/size mapping, calibrated axis ticks and hidden-edge removal remain.
+
+Reference: https://matplotlib.org/stable/api/_as_gen/mpl_toolkits.mplot3d.axes3d.Axes3D.scatter.html

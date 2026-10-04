@@ -16016,6 +16016,14 @@ fn bode(frequency: []const f64, real: []const f64, imag: []const f64, magnitude_
 type NyquistStorage = struct { positive_points: []Coord, positive_segments: []Segment, negative_points: []Coord, negative_segments: []Segment, critical_point: []Coord }
 type NyquistLayout = struct { positive: Layout, negative: Layout, critical: Layout, frequency_min: f64, frequency_max: f64 }
 fn nyquist(frequency: []const f64, real: []const f64, imag: []const f64, bounds: geometry.Rect, storage: *NyquistStorage) -> (NyquistLayout, err)
+type Camera3d = struct { azimuth_degrees: f64, elevation_degrees: f64, distance: f64 }
+type Projection3d = struct { sin_azimuth: f64, cos_azimuth: f64, sin_elevation: f64, cos_elevation: f64, distance: f64 }
+type Scatter3dStorage = struct { points: []Coord, depths: []f64, order: []usize, bubbles: []geometry.Rect, corners: []Coord, edges: []Segment }
+type Scatter3dLayout = struct { marks: Layout, frame: Layout, points: []Coord, depths: []f64, order: []usize, corners: []Coord, x_min: f64, x_max: f64, y_min: f64, y_max: f64, z_min: f64, z_max: f64 }
+type Scatter3dOrder = struct { depths: []f64 }
+fn project3d(camera: *const Projection3d, x: f64, y: f64, z: f64) -> (Coord, f64, err)
+fn scatter3d_depth_compare(key: *Scatter3dOrder, left: usize, right: usize) -> i32
+fn scatter3d(x: []const f64, y: []const f64, z: []const f64, camera: Camera3d, bounds: geometry.Rect, storage: *Scatter3dStorage) -> (Scatter3dLayout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)

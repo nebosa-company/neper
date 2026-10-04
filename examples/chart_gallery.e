@@ -2955,6 +2955,73 @@ fn render_nyquist_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targ
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_scatter3d_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/scatter3d.png"
+    let bounds = geometry.rect(45.0, 48.0, 270.0, 150.0)
+    var x: [73]f64 = zero
+    var y: [73]f64 = zero
+    var z: [73]f64 = zero
+    var i = 0usize
+    while i < x.len {
+        let t = 12.566370614359172f64 * f64(i) / 72.0f64
+        x[i] = math.cos[f64](t)
+        y[i] = math.sin[f64](t)
+        z[i] = -1.0f64 + 2.0f64 * f64(i) / 72.0f64
+        i += 1usize
+    }
+    var points: [73]chart.Coord = zero
+    var depths: [73]f64 = zero
+    var order: [73]usize = zero
+    var bubbles: [73]geometry.Rect = zero
+    var corners: [8]chart.Coord = zero
+    var edges: [12]chart.Segment = zero
+    var storage = chart.Scatter3dStorage { points: points[..], depths: depths[..], order: order[..], bubbles: bubbles[..], corners: corners[..], edges: edges[..] }
+    let camera = chart.Camera3d { azimuth_degrees: 42.0f64, elevation_degrees: 27.0f64, distance: 4.5f64 }
+    let (map, map_error) = chart.scatter3d(x[..], y[..], z[..], camera, bounds, &storage)
+    if map_error != ok { ret map_error }
+    var labels: [6]chart.Label = zero
+    labels[0usize] = chart.Label { text: "3-D scatter / projected helix", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Camera: azimuth 42 deg / elevation 27 deg", anchor: chart.Coord { x: 180.0, y: 33.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "x", anchor: chart.Coord { x: map.corners[1usize].x + 6.0, y: map.corners[1usize].y + 5.0 }, align: .Left }
+    labels[3usize] = chart.Label { text: "y", anchor: chart.Coord { x: map.corners[2usize].x - 6.0, y: map.corners[2usize].y + 5.0 }, align: .Right }
+    labels[4usize] = chart.Label { text: "z", anchor: chart.Coord { x: map.corners[4usize].x - 6.0, y: map.corners[4usize].y - 5.0 }, align: .Right }
+    labels[5usize] = chart.Label { text: "Perspective size + far-to-near marker order", anchor: chart.Coord { x: 180.0, y: 227.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let gray = paint.rgba(0.68, 0.75, 0.82, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 32u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, bounds, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &map.frame, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &map.marks, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..5usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[5usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, bounds, pale, false)
+    try chart_svg.append(&writer, &map.frame, gray)
+    try chart_svg.append(&writer, &map.marks, blue)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..5usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[5usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn two_cluster_sample(x: []f32, y: []f32) -> err {
     if x.len != 72usize || y.len != 72usize { ret chart.Invalid }
     var i = 0usize
@@ -7832,6 +7899,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_waterfall_spectrum_preview(a, queue, output_target, canvas, &renderer)
     try render_bode_preview(a, queue, output_target, canvas, &renderer)
     try render_nyquist_preview(a, queue, output_target, canvas, &renderer)
+    try render_scatter3d_preview(a, queue, output_target, canvas, &renderer)
     try render_hexbin_preview(a, queue, output_target, canvas, &renderer)
     try render_bin2d_preview(a, queue, output_target, canvas, &renderer)
     try render_density2d_preview(a, queue, output_target, canvas, &renderer)

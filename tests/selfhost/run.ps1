@@ -3367,6 +3367,11 @@ $gfxChartNyquistWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $gfxChartNyquistWritten -ne 'executable written') { throw 'gfx_chart_nyquist emission failed' }
 $gfxChartNyquistOutput = & $gfxChartNyquistPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartNyquistOutput -ne 'gfx chart nyquist ok') { throw "the e.gfx.chart Nyquist plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartScatter3dPath = Join-Path $testBuild 'gfx-chart-scatter3d-selfhost.exe'
+$gfxChartScatter3dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_scatter3d\src\main.e') $repo 'x64' 'windows' $gfxChartScatter3dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartScatter3dWritten -ne 'executable written') { throw 'gfx_chart_scatter3d emission failed' }
+$gfxChartScatter3dOutput = & $gfxChartScatter3dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartScatter3dOutput -ne 'gfx chart scatter3d ok') { throw "the e.gfx.chart 3-D scatter answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
 $gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }

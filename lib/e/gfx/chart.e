@@ -5,6 +5,7 @@
 // bounds rectangle, and caller-owned output. More chart families compose on it.
 
 use e.algo.stat
+use e.algo.sort
 use e.gfx.geometry
 use e.math
 use e.math.special
@@ -109,6 +110,11 @@ type BodeStorage = struct { magnitude_points: []Coord, magnitude_segments: []Seg
 type BodeLayout = struct { magnitude: Layout, phase: Layout, magnitude_bounds: geometry.Rect, phase_bounds: geometry.Rect, magnitude_db: []f64, phase_degrees: []f64, frequency_min: f64, frequency_max: f64 }
 type NyquistStorage = struct { positive_points: []Coord, positive_segments: []Segment, negative_points: []Coord, negative_segments: []Segment, critical_point: []Coord }
 type NyquistLayout = struct { positive: Layout, negative: Layout, critical: Layout, frequency_min: f64, frequency_max: f64 }
+type Camera3d = struct { azimuth_degrees: f64, elevation_degrees: f64, distance: f64 }
+type Projection3d = struct { sin_azimuth: f64, cos_azimuth: f64, sin_elevation: f64, cos_elevation: f64, distance: f64 }
+type Scatter3dStorage = struct { points: []Coord, depths: []f64, order: []usize, bubbles: []geometry.Rect, corners: []Coord, edges: []Segment }
+type Scatter3dLayout = struct { marks: Layout, frame: Layout, points: []Coord, depths: []f64, order: []usize, corners: []Coord, x_min: f64, x_max: f64, y_min: f64, y_max: f64, z_min: f64, z_max: f64 }
+type Scatter3dOrder = struct { depths: []f64 }
 type SpineLayout = struct { categories: []Layout, column_totals: []f64, grand_total: f64 }
 type HexCell = struct { center: Coord, count: u64 }
 type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
@@ -7379,6 +7385,141 @@ fn nyquist(frequency: []const f64, real: []const f64, imag: []const f64, bounds:
     let negative = Layout { kind: .Line, coords: storage.negative_points[..n], segments: storage.negative_segments[..n - 1usize], bars: zero, x_min: f32(x_min), x_max: f32(x_max), y_min: f32(y_min), y_max: f32(y_max) }
     let marker = Layout { kind: .Scatter, coords: storage.critical_point[..1usize], segments: zero, bars: zero, x_min: f32(x_min), x_max: f32(x_max), y_min: f32(y_min), y_max: f32(y_max) }
     ret (NyquistLayout { positive: positive, negative: negative, critical: marker, frequency_min: frequency[0usize], frequency_max: frequency[n - 1usize] }, ok)
+}
+
+// Unit-cube camera coordinates; positive depth is nearer the viewer.
+fn project3d(camera: *const Projection3d, x: f64, y: f64, z: f64) -> (Coord, f64, err) {
+    let right = -camera.sin_azimuth * x + camera.cos_azimuth * y
+    let up = -camera.sin_elevation * camera.cos_azimuth * x - camera.sin_elevation * camera.sin_azimuth * y + camera.cos_elevation * z
+    let depth = camera.cos_elevation * camera.cos_azimuth * x + camera.cos_elevation * camera.sin_azimuth * y + camera.sin_elevation * z
+    let denominator = camera.distance - depth
+    if !finite64(denominator) || denominator <= 0.0f64 { ret (zero, 0.0f64, Invalid) }
+    let factor = camera.distance / denominator
+    let point = Coord { x: f32(right * factor), y: f32(up * factor) }
+    if !finite(point.x) || !finite(point.y) || !finite64(depth) { ret (zero, 0.0f64, Invalid) }
+    ret (point, depth, ok)
+}
+
+fn scatter3d_depth_compare(key: *Scatter3dOrder, left: usize, right: usize) -> i32 {
+    if key.depths[left] < key.depths[right] { ret -1i32 }
+    if key.depths[left] > key.depths[right] { ret 1i32 }
+    if left < right { ret -1i32 }
+    if left > right { ret 1i32 }
+    ret 0i32
+}
+
+// Perspective projection with a depth-sorted bubble layer. Markers are drawn
+// far-to-near; the twelve cube edges are a separate background layer.
+fn scatter3d(x: []const f64, y: []const f64, z: []const f64, camera: Camera3d, bounds: geometry.Rect, storage: *Scatter3dStorage) -> (Scatter3dLayout, err) {
+    if x.len == 0usize || x.len != y.len || x.len != z.len || !finite64(camera.azimuth_degrees) || !finite64(camera.elevation_degrees) || !finite64(camera.distance) || camera.azimuth_degrees < -360.0f64 || camera.azimuth_degrees > 360.0f64 || camera.elevation_degrees < -90.0f64 || camera.elevation_degrees > 90.0f64 || camera.distance < 3.0f64 || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    let n = x.len
+    if storage.points.len < n || storage.depths.len < n || storage.order.len < n || storage.bubbles.len < n || storage.corners.len < 8usize || storage.edges.len < 12usize { ret (zero, TooLarge) }
+    var x_lo = x[0usize]
+    var x_hi = x_lo
+    var y_lo = y[0usize]
+    var y_hi = y_lo
+    var z_lo = z[0usize]
+    var z_hi = z_lo
+    var i = 0usize
+    while i < n {
+        if !finite64(x[i]) || !finite64(y[i]) || !finite64(z[i]) { ret (zero, Invalid) }
+        x_lo = math.min[f64](x_lo, x[i])
+        x_hi = math.max[f64](x_hi, x[i])
+        y_lo = math.min[f64](y_lo, y[i])
+        y_hi = math.max[f64](y_hi, y[i])
+        z_lo = math.min[f64](z_lo, z[i])
+        z_hi = math.max[f64](z_hi, z[i])
+        i += 1usize
+    }
+    let x_span = x_hi - x_lo
+    let y_span = y_hi - y_lo
+    let z_span = z_hi - z_lo
+    if !finite64(x_span) || !finite64(y_span) || !finite64(z_span) || !finite(f32(x_lo)) || !finite(f32(x_hi)) || !finite(f32(y_lo)) || !finite(f32(y_hi)) || !finite(f32(z_lo)) || !finite(f32(z_hi)) { ret (zero, Invalid) }
+    let azimuth = camera.azimuth_degrees * 0.017453292519943295f64
+    let elevation = camera.elevation_degrees * 0.017453292519943295f64
+    let view = Projection3d { sin_azimuth: math.sin[f64](azimuth), cos_azimuth: math.cos[f64](azimuth), sin_elevation: math.sin[f64](elevation), cos_elevation: math.cos[f64](elevation), distance: camera.distance }
+    var u_lo = 0.0f64
+    var u_hi = 0.0f64
+    var v_lo = 0.0f64
+    var v_hi = 0.0f64
+    i = 0usize
+    while i < 8usize {
+        var nx = -1.0f64
+        var ny = -1.0f64
+        var nz = -1.0f64
+        if i % 2usize != 0usize { nx = 1.0f64 }
+        if (i / 2usize) % 2usize != 0usize { ny = 1.0f64 }
+        if i >= 4usize { nz = 1.0f64 }
+        let (raw, unused, projection_error) = project3d(&view, nx, ny, nz)
+        if projection_error != ok { ret (zero, projection_error) }
+        storage.corners[i] = raw
+        if i == 0usize || f64(raw.x) < u_lo { u_lo = f64(raw.x) }
+        if i == 0usize || f64(raw.x) > u_hi { u_hi = f64(raw.x) }
+        if i == 0usize || f64(raw.y) < v_lo { v_lo = f64(raw.y) }
+        if i == 0usize || f64(raw.y) > v_hi { v_hi = f64(raw.y) }
+        i += 1usize
+    }
+    let scale = math.min[f64](f64(bounds.width) / (1.12f64 * (u_hi - u_lo)), f64(bounds.height) / (1.12f64 * (v_hi - v_lo)))
+    if !finite64(scale) || scale <= 0.0f64 { ret (zero, Invalid) }
+    let center_u = u_lo + (u_hi - u_lo) * 0.5f64
+    let center_v = v_lo + (v_hi - v_lo) * 0.5f64
+    let center_x = f64(bounds.x) + f64(bounds.width) * 0.5f64
+    let center_y = f64(bounds.y) + f64(bounds.height) * 0.5f64
+    i = 0usize
+    while i < 8usize {
+        let point = Coord { x: f32(center_x + (f64(storage.corners[i].x) - center_u) * scale), y: f32(center_y - (f64(storage.corners[i].y) - center_v) * scale) }
+        if !finite(point.x) || !finite(point.y) { ret (zero, Invalid) }
+        storage.corners[i] = point
+        i += 1usize
+    }
+    i = 0usize
+    var edge = 0usize
+    while i < 8usize {
+        if i % 2usize == 0usize {
+            storage.edges[edge] = Segment { from: storage.corners[i], to: storage.corners[i + 1usize] }
+            edge += 1usize
+        }
+        if (i / 2usize) % 2usize == 0usize {
+            storage.edges[edge] = Segment { from: storage.corners[i], to: storage.corners[i + 2usize] }
+            edge += 1usize
+        }
+        if i < 4usize {
+            storage.edges[edge] = Segment { from: storage.corners[i], to: storage.corners[i + 4usize] }
+            edge += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var nx = 0.0f64
+        var ny = 0.0f64
+        var nz = 0.0f64
+        if x_span > 0.0f64 { nx = 2.0f64 * ((x[i] - x_lo) / x_span) - 1.0f64 }
+        if y_span > 0.0f64 { ny = 2.0f64 * ((y[i] - y_lo) / y_span) - 1.0f64 }
+        if z_span > 0.0f64 { nz = 2.0f64 * ((z[i] - z_lo) / z_span) - 1.0f64 }
+        let (raw, depth, projection_error) = project3d(&view, nx, ny, nz)
+        if projection_error != ok { ret (zero, projection_error) }
+        let point = Coord { x: f32(center_x + (f64(raw.x) - center_u) * scale), y: f32(center_y - (f64(raw.y) - center_v) * scale) }
+        if !finite(point.x) || !finite(point.y) { ret (zero, Invalid) }
+        storage.points[i] = point
+        storage.depths[i] = depth
+        storage.order[i] = i
+        i += 1usize
+    }
+    var key = Scatter3dOrder { depths: storage.depths[..n] }
+    sort.in_place_by[usize, Scatter3dOrder](storage.order[..n], &key, scatter3d_depth_compare)
+    i = 0usize
+    while i < n {
+        let source = storage.order[i]
+        let diameter = f32(6.0f64 * view.distance / (view.distance - storage.depths[source]))
+        let point = storage.points[source]
+        if !finite(diameter) || diameter <= 0.0 { ret (zero, Invalid) }
+        storage.bubbles[i] = geometry.rect(point.x - diameter * 0.5, point.y - diameter * 0.5, diameter, diameter)
+        i += 1usize
+    }
+    let marks = Layout { kind: .Bubble, coords: storage.points[..n], segments: zero, bars: storage.bubbles[..n], x_min: f32(x_lo), x_max: f32(x_hi), y_min: f32(y_lo), y_max: f32(y_hi) }
+    let frame = Layout { kind: .Rug, coords: zero, segments: storage.edges[..12usize], bars: zero, x_min: f32(x_lo), x_max: f32(x_hi), y_min: f32(y_lo), y_max: f32(y_hi) }
+    ret (Scatter3dLayout { marks: marks, frame: frame, points: storage.points[..n], depths: storage.depths[..n], order: storage.order[..n], corners: storage.corners[..8usize], x_min: x_lo, x_max: x_hi, y_min: y_lo, y_max: y_hi, z_min: z_lo, z_max: z_hi }, ok)
 }
 
 // Two-parameter Weibull probability paper. `total_count` includes units
