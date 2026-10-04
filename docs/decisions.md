@@ -34522,3 +34522,17 @@ evidence of a causal effect; interactions and confounding require separate
 analysis.
 
 Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/anova/supporting-topics/basics/what-is-a-main-effects-plot/
+
+## D1935 — Interaction plots keep factor-level series independent
+
+`chart.interaction_plot` accepts response values and two categorical factor-id
+columns. It computes raw cell means and sample counts, then gives every level
+of the series factor a separate PointLine layout across the x-factor levels.
+The caller can style those series independently while sharing one numeric
+domain. Unequal nonempty cells are supported; empty cells are refused instead
+of silently drawing a zero or bridging a gap. The Windows/Linux fixture checks
+means, counts, crossing geometry, adapter output, flat data and refusals.
+Nonparallel lines are descriptive, not a significance test or a model-adjusted
+interaction estimate.
+
+References: https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/anova/supporting-topics/anova-models/what-is-an-interaction/ ; https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/inteplot.htm

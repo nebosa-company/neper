@@ -15999,6 +15999,9 @@ fn multi_vari(values: []const f64, outer_levels: usize, inner_levels: usize, rep
 type MainEffectsStorage = struct { points: []Coord, lines: []Segment, references: []Segment, means: []f64, counts: []usize }
 type MainEffectsLayout = struct { levels: Layout, connections: Layout, reference: Layout, means: []f64, counts: []usize, grand_mean: f64 }
 fn main_effects(values: []const f64, factor_ids: []const usize, factor_levels: []const usize, bounds: geometry.Rect, storage: *MainEffectsStorage) -> (MainEffectsLayout, err)
+type InteractionStorage = struct { points: []Coord, lines: []Segment, means: []f64, counts: []usize, series: []Layout }
+type InteractionLayout = struct { series: []Layout, means: []f64, counts: []usize }
+fn interaction_plot(values: []const f64, x_ids: []const usize, series_ids: []const usize, x_levels: usize, series_levels: usize, bounds: geometry.Rect, storage: *InteractionStorage) -> (InteractionLayout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)

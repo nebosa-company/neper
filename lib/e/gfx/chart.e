@@ -98,6 +98,8 @@ type MultiVariStorage = struct { raw_points: []Coord, cell_points: []Coord, cell
 type MultiVariLayout = struct { observations: Layout, cells: Layout, within: Layout, groups: Layout, cell_means: []f64, group_means: []f64 }
 type MainEffectsStorage = struct { points: []Coord, lines: []Segment, references: []Segment, means: []f64, counts: []usize }
 type MainEffectsLayout = struct { levels: Layout, connections: Layout, reference: Layout, means: []f64, counts: []usize, grand_mean: f64 }
+type InteractionStorage = struct { points: []Coord, lines: []Segment, means: []f64, counts: []usize, series: []Layout }
+type InteractionLayout = struct { series: []Layout, means: []f64, counts: []usize }
 type SpineLayout = struct { categories: []Layout, column_totals: []f64, grand_total: f64 }
 type HexCell = struct { center: Coord, count: u64 }
 type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
@@ -7022,6 +7024,62 @@ fn main_effects(values: []const f64, factor_ids: []const usize, factor_levels: [
     let joins = Layout { kind: .Rug, coords: zero, segments: storage.lines[..connections], bars: zero, x_min: 0.0, x_max: f32(total_levels), y_min: f32(lo), y_max: f32(hi) }
     let references = Layout { kind: .Rug, coords: zero, segments: storage.references[..factor_levels.len], bars: zero, x_min: 0.0, x_max: f32(total_levels), y_min: f32(lo), y_max: f32(hi) }
     ret (MainEffectsLayout { levels: marks, connections: joins, reference: references, means: storage.means[..total_levels], counts: storage.counts[..total_levels], grand_mean: grand_mean }, ok)
+}
+
+// Two-factor raw-means interaction plot. Cell order is series-major, then
+// x-level. Series remain separate PointLine layers for independent styling.
+fn interaction_plot(values: []const f64, x_ids: []const usize, series_ids: []const usize, x_levels: usize, series_levels: usize, bounds: geometry.Rect, storage: *InteractionStorage) -> (InteractionLayout, err) {
+    if values.len == 0usize || x_levels < 2usize || series_levels < 2usize || x_ids.len != values.len || series_ids.len != values.len || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if x_levels > values.len || series_levels > values.len || series_levels > values.len / x_levels { ret (zero, Invalid) }
+    let cells = x_levels * series_levels
+    if storage.points.len < cells || storage.lines.len < series_levels * (x_levels - 1usize) || storage.means.len < cells || storage.counts.len < cells || storage.series.len < series_levels { ret (zero, TooLarge) }
+    var lo = values[0usize]
+    var hi = values[0usize]
+    var row = 0usize
+    while row < values.len {
+        if !finite64(values[row]) || x_ids[row] >= x_levels || series_ids[row] >= series_levels { ret (zero, Invalid) }
+        if values[row] < lo { lo = values[row] }
+        if values[row] > hi { hi = values[row] }
+        row += 1usize
+    }
+    if lo == hi {
+        let pad = math.max[f64](1.0f64, math.abs[f64](lo) * 0.05f64)
+        lo -= pad
+        hi += pad
+    }
+    if !finite64(lo) || !finite64(hi) || !finite64(hi - lo) || hi <= lo || !finite(f32(lo)) || !finite(f32(hi)) { ret (zero, Invalid) }
+    var cell = 0usize
+    while cell < cells {
+        storage.means[cell] = 0.0f64
+        storage.counts[cell] = 0usize
+        cell += 1usize
+    }
+    row = 0usize
+    while row < values.len {
+        let index = series_ids[row] * x_levels + x_ids[row]
+        storage.means[index] += values[row] - values[0usize]
+        storage.counts[index] += 1usize
+        row += 1usize
+    }
+    var series = 0usize
+    while series < series_levels {
+        var level = 0usize
+        while level < x_levels {
+            let index = series * x_levels + level
+            if storage.counts[index] == 0usize || !finite64(storage.means[index]) { ret (zero, Invalid) }
+            let mean = values[0usize] + storage.means[index] / f64(storage.counts[index])
+            if !finite64(mean) { ret (zero, Invalid) }
+            storage.means[index] = mean
+            let point = Coord { x: bounds.x + bounds.width * (f32(level) + 0.5) / f32(x_levels), y: bounds.y + bounds.height * f32((hi - mean) / (hi - lo)) }
+            if !finite(point.x) || !finite(point.y) { ret (zero, Invalid) }
+            storage.points[index] = point
+            if level > 0usize { storage.lines[series * (x_levels - 1usize) + level - 1usize] = Segment { from: storage.points[index - 1usize], to: point } }
+            level += 1usize
+        }
+        storage.series[series] = Layout { kind: .PointLine, coords: storage.points[series * x_levels..(series + 1usize) * x_levels], segments: storage.lines[series * (x_levels - 1usize)..(series + 1usize) * (x_levels - 1usize)], bars: zero, x_min: 0.0, x_max: f32(x_levels), y_min: f32(lo), y_max: f32(hi) }
+        series += 1usize
+    }
+    ret (InteractionLayout { series: storage.series[..series_levels], means: storage.means[..cells], counts: storage.counts[..cells] }, ok)
 }
 
 // Two-parameter Weibull probability paper. `total_count` includes units
