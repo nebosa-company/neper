@@ -944,6 +944,13 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    Windows/Linux fixture checks leap-year positions, labels, adapters and
    invalid dates/storage; the gallery adds a paired PNG/SVG preview. Day/week
    and locale-sensitive tick policies remain planned.
+   `discrete_axis_bars` uses caller-ordered factor levels rather than source
+   encounter order, sums repeated nonnegative keys and retains missing levels
+   as zero-height labeled slots. It rejects duplicate levels, unknown keys,
+   overflow and sums above the explicit y domain. The Windows/Linux fixture
+   checks aggregation, slots, geometry, adapters and refusal paths; the gallery
+   adds a paired PNG/SVG preview. A reusable discrete scale for every geometry
+   and guide collision policy remain planned.
    Bullet charts now compose qualitative bands, an actual bar and a target
    rule from existing layers; `gfx_chart_composition` checks geometry,
    refusals and both adapters on Windows and Linux.

@@ -34983,3 +34983,15 @@ Windows/Linux fixture covers leap-year spacing, invalid dates, capacities and
 scene/SVG output; the gallery renders the same positions in a PNG/SVG pair.
 Locale-sensitive labels, time zones and automatic date-break selection remain
 separate follow-on work.
+
+## D1971 — Discrete bar axes preserve explicit factor order and empty levels
+
+`chart.discrete_axis_bars` uses a caller-ordered level list as its axis domain.
+Repeated input keys sum into that level, while a level with no observations
+retains a zero-height bar slot and tick. Unknown keys, duplicate levels,
+non-finite or negative values, and aggregates beyond the explicit numeric
+domain fail instead of changing the displayed scale. Outputs remain
+caller-owned `Layout`, totals and ticks for the scene/SVG adapters. The
+Windows/Linux fixture covers aggregation, ordering, empty levels, adapters
+and refusal paths; the gallery renders a paired PNG/SVG preview. This does
+not yet imply a general discrete scale for every chart geometry.

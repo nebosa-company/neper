@@ -16081,6 +16081,7 @@ fn aggregate_decomposition_tree(parents: []const usize, weights: []const f32, bo
 fn date_axis_line(dates: []const time.Date, values: []const f64, start: time.Date, end: time.Date, y_min: f64, y_max: f64, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
 fn date_ticks(start: time.Date, end: time.Date, month_stride: usize, out: []DateTick) -> ([]DateTick, err)
 fn format_date_ticks(ticks: []const DateTick, out: []str, storage: []u8) -> ([]str, err)
+fn discrete_axis_bars(keys: []const str, values: []const f64, levels: []const str, domain_max: f64, bounds: geometry.Rect, sums: []f64, bars: []geometry.Rect, ticks_out: []Tick) -> (Layout, err)
 fn cross_tab_report(row_ids: []const usize, column_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, work: *CrossTabStorage) -> (CrossTabLayout, err)
 fn matrix_report(row_ids: []const usize, column_ids: []const usize, values: []const f64, present: []const bool, group_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, bar_scope: ReportBarScope, work: *MatrixReportStorage) -> (MatrixReportLayout, err)
 fn fishbone(effect: str, categories: []const str, causes: []const FishboneCause, bounds: geometry.Rect, spine: []Segment, ribs: []Segment, branches: []Segment, head_box: []geometry.Rect, labels: []Label) -> (FishboneLayout, err)

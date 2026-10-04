@@ -556,6 +556,58 @@ fn category_ticks(count: usize, out: []Tick) -> ([]Tick, err) {
     ret (out[..count], ok)
 }
 
+// An explicit ordered factor axis. Repeated keys aggregate into their level;
+// absent levels keep a zero-height slot and therefore retain their labels.
+fn discrete_axis_bars(keys: []const str, values: []const f64, levels: []const str, domain_max: f64, bounds: geometry.Rect, sums: []f64, bars: []geometry.Rect, ticks_out: []Tick) -> (Layout, err) {
+    if keys.len == 0usize || levels.len == 0usize { ret (zero, Empty) }
+    if values.len != keys.len || !finite64(domain_max) || domain_max <= 0.0f64 || !valid_bounds(bounds) { ret (zero, Invalid) }
+    let n = levels.len
+    if sums.len < n || bars.len < n || ticks_out.len < n { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < n {
+        if levels[i].len == 0usize { ret (zero, Invalid) }
+        var j = 0usize
+        while j < i {
+            if str.eq(levels[i], levels[j]) { ret (zero, Invalid) }
+            j += 1usize
+        }
+        sums[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < keys.len {
+        if !finite64(values[i]) || values[i] < 0.0f64 { ret (zero, Invalid) }
+        var found = false
+        var j = 0usize
+        while j < n {
+            if str.eq(keys[i], levels[j]) {
+                sums[j] += values[i]
+                if !finite64(sums[j]) || sums[j] > domain_max { ret (zero, Invalid) }
+                found = true
+                break
+            }
+            j += 1usize
+        }
+        if !found { ret (zero, Invalid) }
+        i += 1usize
+    }
+    let (axis_ticks, tick_error) = category_ticks(n, ticks_out)
+    if tick_error != ok { ret (zero, tick_error) }
+    let slot = bounds.width / f32(n)
+    if !finite(slot) || slot <= 0.0 { ret (zero, Invalid) }
+    i = 0usize
+    while i < n {
+        let height = bounds.height * f32(sums[i] / domain_max)
+        let width = slot * 0.68
+        let x = bounds.x + slot * f32(i) + (slot - width) * 0.5
+        let y = bounds.y + bounds.height - height
+        if !finite(x + width) || !finite(y) || !finite(height) { ret (zero, Invalid) }
+        bars[i] = geometry.rect(x, y, width, height)
+        i += 1usize
+    }
+    ret (Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[..n], x_min: 0.0, x_max: f32(n), y_min: 0.0, y_max: f32(domain_max) }, ok)
+}
+
 fn valid_chart_date(date: time.Date) -> bool {
     if date.year < 1i32 || date.year > 9999i32 || date.month < 1u8 || date.month > 12u8 { ret false }
     ret date.day >= 1u8 && i64(date.day) <= time.days_in_month(i64(date.year), i64(date.month))

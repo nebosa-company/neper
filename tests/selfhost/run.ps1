@@ -3292,6 +3292,11 @@ $gfxChartDateAxisWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $gfxChartDateAxisWritten -ne 'executable written') { throw 'gfx_chart_date_axis emission failed' }
 $gfxChartDateAxisOutput = & $gfxChartDateAxisPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartDateAxisOutput -ne 'gfx chart date axis ok') { throw "the e.gfx.chart date axis answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDiscreteAxisPath = Join-Path $testBuild 'gfx-chart-discrete-axis-selfhost.exe'
+$gfxChartDiscreteAxisWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_discrete_axis\src\main.e') $repo 'x64' 'windows' $gfxChartDiscreteAxisPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDiscreteAxisWritten -ne 'executable written') { throw 'gfx_chart_discrete_axis emission failed' }
+$gfxChartDiscreteAxisOutput = & $gfxChartDiscreteAxisPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDiscreteAxisOutput -ne 'gfx chart discrete axis ok') { throw "the e.gfx.chart discrete axis answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }
