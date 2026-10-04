@@ -7,7 +7,7 @@ Usage:  python scripts/render_progress.py [--charts-only]
 Compiler, tooling and library scores come from the active queue plus the
 completed ledger; module and UI/host scores come from their inventories.
 """
-import base64, json, re, subprocess, datetime, html, struct, sys, zlib
+import json, re, subprocess, datetime, html, sys
 from pathlib import Path
 
 from check_widget_plan import validate as validate_widget_plan
@@ -316,51 +316,14 @@ chart_guide = (
          plan=re.sub(r'^(#+) ', lambda match: '#' + match.group(1) + ' ', chart_plan, flags=re.M).strip())
 if not CHARTS_ONLY:
     Path('docs/charts.md').write_text(chart_guide, encoding='utf-8', newline='\n')
-def compact_png(path):
-    """Losslessly recompress the gallery PNGs before embedding them in the page.
-
-    The chart renderer writes uncompressed IDAT streams. Embedding those files
-    unchanged would make the standalone gallery tens of megabytes large.
-    """
-    source = path.read_bytes()
-    if not source.startswith(b'\x89PNG\r\n\x1a\n'):
-        raise SystemExit(f'{path}: invalid PNG signature')
-    chunks = []
-    idat = []
-    offset = 8
-    while offset < len(source):
-        if offset + 12 > len(source):
-            raise SystemExit(f'{path}: truncated PNG chunk')
-        size = struct.unpack_from('>I', source, offset)[0]
-        end = offset + 12 + size
-        if end > len(source):
-            raise SystemExit(f'{path}: truncated PNG data')
-        kind = source[offset + 4:offset + 8]
-        if kind == b'IDAT':
-            idat.append(source[offset + 8:offset + 8 + size])
-            if len(idat) == 1:
-                chunks.append(None)
-        else:
-            chunks.append(source[offset:end])
-        offset = end
-    if not idat or not chunks or not chunks[-1].startswith(b'\x00\x00\x00\x00IEND'):
-        raise SystemExit(f'{path}: missing IDAT or IEND chunk')
-    packed = zlib.compress(zlib.decompress(b''.join(idat)), 6)
-    payload = b'IDAT' + packed
-    replacement = struct.pack('>I', len(packed)) + payload + struct.pack('>I', zlib.crc32(payload))
-    return base64.b64encode(b'\x89PNG\r\n\x1a\n' + b''.join(
-        replacement if chunk is None else chunk for chunk in chunks)).decode('ascii')
-
-
 gallery_cards = '\n'.join(
     '<figure class="chart"><a href="chart-previews/{png}">'
-    '<img src="data:image/png;base64,{thumbnail}" alt="{title}" width="360" height="240" loading="lazy" decoding="async"></a>'
+    '<img src="chart-previews/{png}" alt="{title}" width="360" height="240" loading="lazy" decoding="async"></a>'
     '<figcaption><span>{title}</span><a href="chart-previews/{svg}">SVG</a></figcaption>'
     '</figure>'.format(
         title=html.escape(path.stem.replace('_', ' ').title(), quote=True),
         png=html.escape(path.name, quote=True),
-        svg=html.escape(path.with_suffix('.svg').name, quote=True),
-        thumbnail=compact_png(path))
+        svg=html.escape(path.with_suffix('.svg').name, quote=True))
     for path in preview_paths
 )
 charts_html = '''<!doctype html>
