@@ -3372,6 +3372,11 @@ $gfxChartScatter3dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $gfxChartScatter3dWritten -ne 'executable written') { throw 'gfx_chart_scatter3d emission failed' }
 $gfxChartScatter3dOutput = & $gfxChartScatter3dPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartScatter3dOutput -ne 'gfx chart scatter3d ok') { throw "the e.gfx.chart 3-D scatter answered wrongly: exit $LASTEXITCODE" }
+$gfxChartHistogram3dPath = Join-Path $testBuild 'gfx-chart-histogram3d-selfhost.exe'
+$gfxChartHistogram3dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_histogram3d\src\main.e') $repo 'x64' 'windows' $gfxChartHistogram3dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHistogram3dWritten -ne 'executable written') { throw 'gfx_chart_histogram3d emission failed' }
+$gfxChartHistogram3dOutput = & $gfxChartHistogram3dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHistogram3dOutput -ne 'gfx chart histogram3d ok') { throw "the e.gfx.chart 3-D histogram answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
 $gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }

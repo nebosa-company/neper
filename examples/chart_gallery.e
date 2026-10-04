@@ -3022,6 +3022,99 @@ fn render_scatter3d_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_histogram3d_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/histogram3d.png"
+    let bounds = geometry.rect(45.0, 48.0, 270.0, 150.0)
+    var x: [120]f32 = zero
+    var y: [120]f32 = zero
+    var i = 0usize
+    while i < x.len {
+        let radius = 0.04f64 + 0.55f64 * f64((i * 29usize) % 101usize) / 101.0f64
+        let angle = 6.283185307179586f64 * f64((i * 37usize) % 101usize) / 101.0f64
+        var cx = -0.28f64
+        var cy = -0.2f64
+        if i >= 60usize {
+            cx = 0.34f64
+            cy = 0.28f64
+        }
+        x[i] = f32(cx + radius * math.cos[f64](angle))
+        y[i] = f32(cy + radius * math.sin[f64](angle))
+        i += 1usize
+    }
+    var counts: [25]u64 = zero
+    var cells: [25]chart.Cell = zero
+    var vertices: [300]chart.Coord = zero
+    var faces: [75]chart.Layout = zero
+    var depths: [75]f64 = zero
+    var order: [75]usize = zero
+    var kinds: [75]chart.Histogram3dFace = zero
+    var corners: [8]chart.Coord = zero
+    var edges: [12]chart.Segment = zero
+    var storage = chart.Histogram3dStorage { counts: counts[..], cells: cells[..], vertices: vertices[..], faces: faces[..], depths: depths[..], order: order[..], face_kinds: kinds[..], corners: corners[..], edges: edges[..] }
+    let camera = chart.Camera3d { azimuth_degrees: 46.0f64, elevation_degrees: 32.0f64, distance: 5.0f64 }
+    let (map, map_error) = chart.histogram3d(x[..], y[..], -1.0, 1.0, -1.0, 1.0, 5usize, 5usize, camera, bounds, &storage)
+    if map_error != ok { ret map_error }
+    var labels: [6]chart.Label = zero
+    labels[0usize] = chart.Label { text: "3-D histogram / joint x-y counts", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "5 x 5 bins / 120 observations", anchor: chart.Coord { x: 180.0, y: 33.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "x", anchor: chart.Coord { x: map.corners[1usize].x + 6.0, y: map.corners[1usize].y + 5.0 }, align: .Left }
+    labels[3usize] = chart.Label { text: "y", anchor: chart.Coord { x: map.corners[2usize].x - 6.0, y: map.corners[2usize].y + 5.0 }, align: .Right }
+    labels[4usize] = chart.Label { text: "count", anchor: chart.Coord { x: map.corners[4usize].x - 6.0, y: map.corners[4usize].y - 5.0 }, align: .Right }
+    labels[5usize] = chart.Label { text: "Prism height = observations per x-y bin", anchor: chart.Coord { x: 180.0, y: 227.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let top = paint.rgba(0.43, 0.68, 0.88, 1.0)
+    let x_side = paint.rgba(0.10, 0.36, 0.66, 1.0)
+    let y_side = paint.rgba(0.18, 0.48, 0.75, 1.0)
+    let gray = paint.rgba(0.70, 0.77, 0.83, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 32u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, bounds, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &map.frame, paint.Brush { Solid: gray })
+    i = 0usize
+    while i < map.order.len {
+        let face = map.order[i]
+        var ink = top
+        if map.face_kinds[face] == .XSide { ink = x_side }
+        if map.face_kinds[face] == .YSide { ink = y_side }
+        try chart_scene.append(a, &builder, &map.faces[face], paint.Brush { Solid: ink })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..5usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[5usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, bounds, pale, false)
+    try chart_svg.append(&writer, &map.frame, gray)
+    i = 0usize
+    while i < map.order.len {
+        let face = map.order[i]
+        var ink = top
+        if map.face_kinds[face] == .XSide { ink = x_side }
+        if map.face_kinds[face] == .YSide { ink = y_side }
+        try chart_svg.append(&writer, &map.faces[face], ink)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..5usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[5usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn two_cluster_sample(x: []f32, y: []f32) -> err {
     if x.len != 72usize || y.len != 72usize { ret chart.Invalid }
     var i = 0usize
@@ -7900,6 +7993,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_bode_preview(a, queue, output_target, canvas, &renderer)
     try render_nyquist_preview(a, queue, output_target, canvas, &renderer)
     try render_scatter3d_preview(a, queue, output_target, canvas, &renderer)
+    try render_histogram3d_preview(a, queue, output_target, canvas, &renderer)
     try render_hexbin_preview(a, queue, output_target, canvas, &renderer)
     try render_bin2d_preview(a, queue, output_target, canvas, &renderer)
     try render_density2d_preview(a, queue, output_target, canvas, &renderer)

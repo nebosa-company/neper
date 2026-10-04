@@ -34625,3 +34625,18 @@ depth buffer for intersecting surfaces; interactive rotation, per-point
 colour/size mapping, calibrated axis ticks and hidden-edge removal remain.
 
 Reference: https://matplotlib.org/stable/api/_as_gen/mpl_toolkits.mplot3d.axes3d.Axes3D.scatter.html
+
+## D1942 — Extrude joint x-y bins through the shared 3-D camera
+
+`chart.histogram3d` reuses `bin2d`'s row-major counts and inclusive high-end
+boundary convention. Each nonempty cell becomes a z-axis prism whose height
+is count/max_count; top and the two camera-facing sides become separate
+four-vertex Area layouts. `Viewport3d` now fits a projected unit cube once
+for scatter, histograms and forthcoming surface/wireframe charts. Face layouts
+and their average depths stay caller-owned, with deterministic far-to-near
+sorting; the scene/SVG gallery shades top and side faces separately. The
+Windows/Linux fixture checks counts, face order, reversed camera azimuth,
+adapters and refusals. The first histogram slice requires an above-plane
+camera and uses painter ordering, not exact z-buffered occlusion.
+
+Reference: https://matplotlib.org/stable/gallery/mplot3d/hist3d.html
