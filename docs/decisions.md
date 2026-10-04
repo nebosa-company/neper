@@ -34856,3 +34856,18 @@ gallery remains self-contained, but no longer relies on `data:image/svg+xml`
 support for thumbnails or on `file:` subresource loading. Keep the PNG and SVG
 links for opening the original files. Size the inline SVG through its viewBox
 and the card CSS; regenerate with `python scripts/render_progress.py --charts-only`.
+
+## D1961 — Keep report aggregates distinct from their rendered cells
+
+`stat.cross_tabulate` writes exact `u64` intersection and marginal counts;
+`stat.matrix_aggregate` writes finite sums together with observation counts so
+an observed zero is not confused with missing data. `chart.cross_tab_report`
+and `chart.matrix_report` turn those aggregates into caller-owned cell geometry
+with header, subtotal and grand-total kinds. Matrix row groups must be
+contiguous and numbered from zero; one subtotal follows each group. Data bars
+require nonnegative cell sums and declare row or global normalization rather
+than silently mixing scales. The scene and SVG adapters share the cell palette
+and bars, while labels stay a caller-owned composition concern. Windows/Linux
+fixtures cover arithmetic, geometry, nulls, scale ratios and refusal paths;
+paired gallery previews show both reports. Pagination and print drivers remain
+outside this first chart slice.

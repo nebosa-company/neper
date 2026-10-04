@@ -44,6 +44,30 @@ fn append_map_region(a: *mem.Arena, builder: *scene.Builder, region: *const char
     ret scene.push(builder, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&path), brush: brush } })
 }
 
+// Palette follows ReportCellKind order, then alternating and missing body fills.
+fn append_report_cells(builder: *scene.Builder, cells: []const chart.ReportCell, fills: []const paint.Color, bar_ink: paint.Color) -> err {
+    if fills.len < 10usize || !paint.color_ok(bar_ink) { ret chart.Invalid }
+    var i = 0usize
+    while i < 10usize {
+        if !paint.color_ok(fills[i]) { ret chart.Invalid }
+        i += 1usize
+    }
+    i = 0usize
+    while i < cells.len {
+        let cell = cells[i]
+        var index = chart.report_fill_index(cell.kind)
+        if cell.kind == .Body {
+            if !cell.present { index = 9usize } else if cell.source % 2usize == 1usize { index = 8usize }
+        }
+        try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: cell.rect, brush: paint.Brush { Solid: fills[index] } } })
+        if cell.kind == .Body && cell.present && cell.bar.width > 0.0f32 && cell.bar.height > 0.0f32 {
+            try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: cell.bar, brush: paint.Brush { Solid: bar_ink } } })
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
 fn straight_channel(premultiplied: u32, alpha: u32) -> u8 {
     if alpha == 0u32 { ret 0u8 }
     let value = (premultiplied * 255u32 + alpha / 2u32) / alpha

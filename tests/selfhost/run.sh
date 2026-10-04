@@ -3129,6 +3129,11 @@ gfx_chart_maps_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/gfx-chart-maps-selfhost"
 gfx_chart_maps_output=$("$test_build/gfx-chart-maps-selfhost")
 [ "$gfx_chart_maps_output" = 'gfx chart maps ok' ]
+gfx_chart_reports_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_reports/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-reports-selfhost")
+[ "$gfx_chart_reports_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-reports-selfhost"
+gfx_chart_reports_output=$("$test_build/gfx-chart-reports-selfhost")
+[ "$gfx_chart_reports_output" = 'gfx chart reports ok' ]
 gfx_chart_fishbone_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_fishbone/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-fishbone-selfhost")
 [ "$gfx_chart_fishbone_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-fishbone-selfhost"

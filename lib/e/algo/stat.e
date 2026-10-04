@@ -69,6 +69,8 @@ type GageRunSummary = struct {
     parts: usize, operators: usize, repeats: usize,
     grand_mean: f64, minimum: f64, maximum: f64, max_repeat_range: f64,
 }
+type CrossTabSummary = struct { rows: usize, columns: usize, total: u64 }
+type ReportAggregate = struct { sum: f64, count: usize }
 type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
@@ -2227,6 +2229,88 @@ fn gage_run_summary(values: []const f64, parts: usize, operators: usize, repeats
         grand_mean: grand_mean, minimum: minimum, maximum: maximum,
         max_repeat_range: max_range,
     }, ok)
+}
+
+// Exact categorical counts, row-major cells, and both marginal totals.
+fn cross_tabulate(row_ids: []const usize, column_ids: []const usize, rows: usize, columns: usize, cells: []u64, row_totals: []u64, column_totals: []u64) -> (CrossTabSummary, err) {
+    if rows == 0usize || columns == 0usize || row_ids.len == 0usize || row_ids.len != column_ids.len { ret (zero, Invalid) }
+    if rows > cells.len / columns || row_totals.len < rows || column_totals.len < columns { ret (zero, TooSmall) }
+    var i = 0usize
+    while i < row_ids.len {
+        if row_ids[i] >= rows || column_ids[i] >= columns { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < rows * columns {
+        cells[i] = 0u64
+        i += 1usize
+    }
+    i = 0usize
+    while i < rows {
+        row_totals[i] = 0u64
+        i += 1usize
+    }
+    i = 0usize
+    while i < columns {
+        column_totals[i] = 0u64
+        i += 1usize
+    }
+    i = 0usize
+    while i < row_ids.len {
+        let row = row_ids[i]
+        let column = column_ids[i]
+        cells[row * columns + column] += 1u64
+        row_totals[row] += 1u64
+        column_totals[column] += 1u64
+        i += 1usize
+    }
+    ret (CrossTabSummary { rows: rows, columns: columns, total: u64(row_ids.len) }, ok)
+}
+
+// Numeric matrix aggregation distinguishes an absent cell from an observed zero.
+fn matrix_aggregate(row_ids: []const usize, column_ids: []const usize, values: []const f64, present: []const bool, rows: usize, columns: usize, cells: []ReportAggregate, row_totals: []ReportAggregate, column_totals: []ReportAggregate) -> (ReportAggregate, err) {
+    if rows == 0usize || columns == 0usize || row_ids.len == 0usize || row_ids.len != column_ids.len || row_ids.len != values.len || row_ids.len != present.len { ret (zero, Invalid) }
+    if rows > cells.len / columns || row_totals.len < rows || column_totals.len < columns { ret (zero, TooSmall) }
+    var i = 0usize
+    while i < row_ids.len {
+        if row_ids[i] >= rows || column_ids[i] >= columns || (present[i] && !gage_finite(values[i])) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < rows * columns {
+        cells[i] = ReportAggregate { sum: 0.0f64, count: 0usize }
+        i += 1usize
+    }
+    i = 0usize
+    while i < rows {
+        row_totals[i] = ReportAggregate { sum: 0.0f64, count: 0usize }
+        i += 1usize
+    }
+    i = 0usize
+    while i < columns {
+        column_totals[i] = ReportAggregate { sum: 0.0f64, count: 0usize }
+        i += 1usize
+    }
+    var grand: ReportAggregate = zero
+    i = 0usize
+    while i < row_ids.len {
+        if present[i] {
+            let row = row_ids[i]
+            let column = column_ids[i]
+            let index = row * columns + column
+            cells[index].sum += values[i]
+            cells[index].count += 1usize
+            row_totals[row].sum += values[i]
+            row_totals[row].count += 1usize
+            column_totals[column].sum += values[i]
+            column_totals[column].count += 1usize
+            grand.sum += values[i]
+            grand.count += 1usize
+            if !gage_finite(cells[index].sum) || !gage_finite(row_totals[row].sum) || !gage_finite(column_totals[column].sum) || !gage_finite(grand.sum) { ret (zero, Invalid) }
+        }
+        i += 1usize
+    }
+    ret (grand, ok)
 }
 
 fn gage_rr_variance_components(parts: usize, operators: usize, repeats: usize, means: *const GageRrMeanSquares, include_interaction: bool) -> (GageRrComponents, err) {

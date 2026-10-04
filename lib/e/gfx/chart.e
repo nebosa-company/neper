@@ -236,6 +236,34 @@ type ChoroplethStorage = struct { points: []Coord, rings: []MapProjectedRing, re
 type ChoroplethLayout = struct { regions: []MapRegionLayout, minimum: f64, maximum: f64, has_values: bool }
 type MapSite = struct { key: str, lon: f64, lat: f64, value: f64, present: bool }
 type ProportionalMapLayout = struct { marks: Layout, maximum: f64, present_count: usize }
+type ReportCellKind = enum u8 { Corner, ColumnHeader, RowHeader, Body, RowTotal, ColumnTotal, GroupSubtotal, GrandTotal }
+type ReportBarScope = enum u8 { None, Row, Global }
+type ReportCell = struct {
+    rect: geometry.Rect, bar: geometry.Rect, kind: ReportCellKind,
+    value: f64, present: bool, source: usize,
+}
+type CrossTabStorage = struct { counts: []u64, row_totals: []u64, column_totals: []u64, cells: []ReportCell }
+type CrossTabLayout = struct { cells: []ReportCell, summary: stat.CrossTabSummary, display_rows: usize, display_columns: usize }
+type MatrixReportStorage = struct {
+    aggregates: []stat.ReportAggregate, row_totals: []stat.ReportAggregate,
+    column_totals: []stat.ReportAggregate, group_aggregates: []stat.ReportAggregate,
+    group_totals: []stat.ReportAggregate, cells: []ReportCell,
+}
+type MatrixReportLayout = struct {
+    cells: []ReportCell, grand: stat.ReportAggregate,
+    display_rows: usize, display_columns: usize, group_count: usize,
+}
+
+fn report_fill_index(kind: ReportCellKind) -> usize {
+    if kind == .Corner { ret 0usize }
+    if kind == .ColumnHeader { ret 1usize }
+    if kind == .RowHeader { ret 2usize }
+    if kind == .Body { ret 3usize }
+    if kind == .RowTotal { ret 4usize }
+    if kind == .ColumnTotal { ret 5usize }
+    if kind == .GroupSubtotal { ret 6usize }
+    ret 7usize
+}
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -1456,6 +1484,207 @@ fn proportional_symbol_map(sites: []const MapSite, window: geo.MapWindow, bounds
     }
     let marks = Layout { kind: .Bubble, coords: zero, segments: zero, bars: bars[..sites.len], x_min: 0.0f32, x_max: 1.0f32, y_min: 0.0f32, y_max: 1.0f32 }
     ret (ProportionalMapLayout { marks: marks, maximum: maximum, present_count: present_count }, ok)
+}
+
+fn report_grid_valid(bounds: geometry.Rect, header_width: f32, rows: usize, columns: usize) -> bool {
+    if !valid_bounds(bounds) || rows == 0usize || columns == 0usize || !finite(header_width) || header_width < 20.0f32 || header_width >= bounds.width { ret false }
+    ret (bounds.width - header_width) / f32(columns + 1usize) > 8.0f32 && bounds.height / f32(rows + 2usize) > 10.0f32
+}
+
+fn report_rect(bounds: geometry.Rect, header_width: f32, rows: usize, columns: usize, row: usize, column: usize) -> geometry.Rect {
+    let body_width = (bounds.width - header_width) / f32(columns + 1usize)
+    let row_height = bounds.height / f32(rows + 2usize)
+    var x = bounds.x
+    var width = header_width
+    if column > 0usize {
+        x = bounds.x + header_width + f32(column - 1usize) * body_width
+        width = body_width
+    }
+    ret geometry.rect(x + 0.5f32, bounds.y + f32(row) * row_height + 0.5f32, width - 1.0f32, row_height - 1.0f32)
+}
+
+fn report_cell(bounds: geometry.Rect, header_width: f32, rows: usize, columns: usize, row: usize, column: usize, kind: ReportCellKind, value: f64, present: bool, source: usize) -> ReportCell {
+    ret ReportCell {
+        rect: report_rect(bounds, header_width, rows, columns, row, column),
+        bar: geometry.rect(0.0, 0.0, 0.0, 0.0),
+        kind: kind, value: value, present: present, source: source,
+    }
+}
+
+// One header row/column and one marginal-total row/column around exact counts.
+fn cross_tab_report(row_ids: []const usize, column_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, work: *CrossTabStorage) -> (CrossTabLayout, err) {
+    if !report_grid_valid(bounds, header_width, rows, columns) { ret (zero, Invalid) }
+    let display_rows = rows + 2usize
+    let display_columns = columns + 2usize
+    if display_rows > work.cells.len / display_columns { ret (zero, TooLarge) }
+    let (summary, aggregate_error) = stat.cross_tabulate(row_ids, column_ids, rows, columns, work.counts, work.row_totals, work.column_totals)
+    if aggregate_error != ok { ret (zero, aggregate_error) }
+    var row = 0usize
+    while row < display_rows {
+        var column = 0usize
+        while column < display_columns {
+            var kind = ReportCellKind.Body
+            var value = 0.0f64
+            var source = 0usize
+            if row == 0usize {
+                kind = .ColumnHeader
+                if column == 0usize { kind = .Corner } else { source = column - 1usize }
+            } else if row == display_rows - 1usize {
+                kind = .ColumnTotal
+                if column == display_columns - 1usize {
+                    kind = .GrandTotal
+                    value = f64(summary.total)
+                } else if column > 0usize {
+                    value = f64(work.column_totals[column - 1usize])
+                }
+            } else if column == 0usize {
+                kind = .RowHeader
+                source = row - 1usize
+            } else if column == display_columns - 1usize {
+                kind = .RowTotal
+                value = f64(work.row_totals[row - 1usize])
+                source = row - 1usize
+            } else {
+                value = f64(work.counts[(row - 1usize) * columns + column - 1usize])
+                source = row - 1usize
+            }
+            let numeric = row > 0usize && column > 0usize
+            work.cells[row * display_columns + column] = report_cell(bounds, header_width, rows, columns, row, column, kind, value, numeric, source)
+            column += 1usize
+        }
+        row += 1usize
+    }
+    ret (CrossTabLayout { cells: work.cells[..display_rows * display_columns], summary: summary, display_rows: display_rows, display_columns: display_columns }, ok)
+}
+
+// Leaf rows are contiguous by group; a subtotal row follows each group.
+// Data bars use positive sums and an explicit row/global normalization scope.
+fn matrix_report(row_ids: []const usize, column_ids: []const usize, values: []const f64, present: []const bool, group_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, bar_scope: ReportBarScope, work: *MatrixReportStorage) -> (MatrixReportLayout, err) {
+    if rows == 0usize || group_ids.len != rows || group_ids[0usize] != 0usize || !valid_bounds(bounds) { ret (zero, Invalid) }
+    var group_count = 1usize
+    var row = 1usize
+    while row < rows {
+        if group_ids[row] < group_ids[row - 1usize] || group_ids[row] > group_ids[row - 1usize] + 1usize { ret (zero, Invalid) }
+        if group_ids[row] == group_count { group_count += 1usize }
+        row += 1usize
+    }
+    let display_rows = rows + group_count + 2usize
+    let display_columns = columns + 2usize
+    if !report_grid_valid(bounds, header_width, rows + group_count, columns) { ret (zero, Invalid) }
+    if display_rows > work.cells.len / display_columns || group_count > work.group_totals.len || group_count > work.group_aggregates.len / columns { ret (zero, TooLarge) }
+    let (grand, aggregate_error) = stat.matrix_aggregate(row_ids, column_ids, values, present, rows, columns, work.aggregates, work.row_totals, work.column_totals)
+    if aggregate_error != ok { ret (zero, aggregate_error) }
+    var i = 0usize
+    while i < group_count * columns {
+        work.group_aggregates[i] = stat.ReportAggregate { sum: 0.0f64, count: 0usize }
+        i += 1usize
+    }
+    i = 0usize
+    while i < group_count {
+        work.group_totals[i] = stat.ReportAggregate { sum: 0.0f64, count: 0usize }
+        i += 1usize
+    }
+    var global_max = 0.0f64
+    row = 0usize
+    while row < rows {
+        var column = 0usize
+        while column < columns {
+            let aggregate = work.aggregates[row * columns + column]
+            let group_index = group_ids[row] * columns + column
+            work.group_aggregates[group_index].sum += aggregate.sum
+            work.group_aggregates[group_index].count += aggregate.count
+            if aggregate.count > 0usize {
+                if bar_scope != .None && aggregate.sum < 0.0f64 { ret (zero, Invalid) }
+                if aggregate.sum > global_max { global_max = aggregate.sum }
+            }
+            column += 1usize
+        }
+        work.group_totals[group_ids[row]].sum += work.row_totals[row].sum
+        work.group_totals[group_ids[row]].count += work.row_totals[row].count
+        row += 1usize
+    }
+    i = 0usize
+    while i < group_count * columns {
+        if !finite64(work.group_aggregates[i].sum) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < group_count {
+        if !finite64(work.group_totals[i].sum) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    // Header row.
+    var column = 0usize
+    while column < display_columns {
+        var kind = ReportCellKind.ColumnHeader
+        if column == 0usize { kind = .Corner }
+        work.cells[column] = report_cell(bounds, header_width, rows + group_count, columns, 0usize, column, kind, 0.0f64, false, column)
+        column += 1usize
+    }
+    var display_row = 1usize
+    row = 0usize
+    while row < rows {
+        column = 0usize
+        var row_max = 0.0f64
+        while column < columns {
+            let aggregate = work.aggregates[row * columns + column]
+            if aggregate.count > 0usize && aggregate.sum > row_max { row_max = aggregate.sum }
+            column += 1usize
+        }
+        column = 0usize
+        while column < display_columns {
+            var kind = ReportCellKind.Body
+            var aggregate: stat.ReportAggregate = zero
+            if column == 0usize { kind = .RowHeader }
+            if column == display_columns - 1usize {
+                kind = .RowTotal
+                aggregate = work.row_totals[row]
+            } else if column > 0usize {
+                aggregate = work.aggregates[row * columns + column - 1usize]
+            }
+            let index = display_row * display_columns + column
+            work.cells[index] = report_cell(bounds, header_width, rows + group_count, columns, display_row, column, kind, aggregate.sum, aggregate.count > 0usize, row)
+            if kind == .Body && aggregate.count > 0usize && aggregate.sum > 0.0f64 && bar_scope != .None {
+                var denominator = global_max
+                if bar_scope == .Row { denominator = row_max }
+                if denominator > 0.0f64 {
+                    let cell = work.cells[index].rect
+                    work.cells[index].bar = geometry.rect(cell.x + 3.0f32, cell.y + cell.height * 0.65f32, (cell.width - 6.0f32) * f32(aggregate.sum / denominator), cell.height * 0.22f32)
+                }
+            }
+            column += 1usize
+        }
+        display_row += 1usize
+        if row == rows - 1usize || group_ids[row + 1usize] != group_ids[row] {
+            column = 0usize
+            while column < display_columns {
+                var aggregate: stat.ReportAggregate = zero
+                if column == display_columns - 1usize {
+                    aggregate = work.group_totals[group_ids[row]]
+                } else if column > 0usize {
+                    aggregate = work.group_aggregates[group_ids[row] * columns + column - 1usize]
+                }
+                work.cells[display_row * display_columns + column] = report_cell(bounds, header_width, rows + group_count, columns, display_row, column, .GroupSubtotal, aggregate.sum, aggregate.count > 0usize, group_ids[row])
+                column += 1usize
+            }
+            display_row += 1usize
+        }
+        row += 1usize
+    }
+    column = 0usize
+    while column < display_columns {
+        var kind = ReportCellKind.ColumnTotal
+        var aggregate: stat.ReportAggregate = zero
+        if column == display_columns - 1usize {
+            kind = .GrandTotal
+            aggregate = grand
+        } else if column > 0usize {
+            aggregate = work.column_totals[column - 1usize]
+        }
+        work.cells[display_row * display_columns + column] = report_cell(bounds, header_width, rows + group_count, columns, display_row, column, kind, aggregate.sum, aggregate.count > 0usize, 0usize)
+        column += 1usize
+    }
+    ret (MatrixReportLayout { cells: work.cells[..display_rows * display_columns], grand: grand, display_rows: display_rows, display_columns: display_columns, group_count: group_count }, ok)
 }
 
 // A sparkline is an evenly spaced Line with no guide contract.

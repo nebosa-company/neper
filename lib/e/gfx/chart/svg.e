@@ -78,6 +78,29 @@ fn append_map_region(w: *io.Writer, region: *const chart.MapRegionLayout, ink: p
     ret io.write_all(w, "/>\n")
 }
 
+fn append_report_cells(w: *io.Writer, cells: []const chart.ReportCell, fills: []const paint.Color, bar_ink: paint.Color) -> err {
+    if fills.len < 10usize || !paint.color_ok(bar_ink) { ret Invalid }
+    var i = 0usize
+    while i < 10usize {
+        if !paint.color_ok(fills[i]) { ret Invalid }
+        i += 1usize
+    }
+    i = 0usize
+    while i < cells.len {
+        let cell = cells[i]
+        var index = chart.report_fill_index(cell.kind)
+        if cell.kind == .Body {
+            if !cell.present { index = 9usize } else if cell.source % 2usize == 1usize { index = 8usize }
+        }
+        try rect(w, cell.rect, fills[index], false)
+        if cell.kind == .Body && cell.present && cell.bar.width > 0.0f32 && cell.bar.height > 0.0f32 {
+            try rect(w, cell.bar, bar_ink, false)
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
 fn color(w: *io.Writer, ink: paint.Color, stroke: bool) -> err {
     if !paint.color_ok(ink) { ret Invalid }
     // Match scene.channel_byte until the raster backend changes its output transfer.

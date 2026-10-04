@@ -3507,6 +3507,11 @@ $gfxChartMapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $gfxChartMapsWritten -ne 'executable written') { throw 'gfx_chart_maps emission failed' }
 $gfxChartMapsOutput = & $gfxChartMapsPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartMapsOutput -ne 'gfx chart maps ok') { throw "the e.gfx.chart maps answered wrongly: exit $LASTEXITCODE" }
+$gfxChartReportsPath = Join-Path $testBuild 'gfx-chart-reports-selfhost.exe'
+$gfxChartReportsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_reports\src\main.e') $repo 'x64' 'windows' $gfxChartReportsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartReportsWritten -ne 'executable written') { throw 'gfx_chart_reports emission failed' }
+$gfxChartReportsOutput = & $gfxChartReportsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartReportsOutput -ne 'gfx chart reports ok') { throw "the e.gfx.chart reports answered wrongly: exit $LASTEXITCODE" }
 $gfxChartFishbonePath = Join-Path $testBuild 'gfx-chart-fishbone-selfhost.exe'
 $gfxChartFishboneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_fishbone\src\main.e') $repo 'x64' 'windows' $gfxChartFishbonePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartFishboneWritten -ne 'executable written') { throw 'gfx_chart_fishbone emission failed' }

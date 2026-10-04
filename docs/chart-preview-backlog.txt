@@ -7,8 +7,6 @@
 # Statistical, quality, medical and scientific diagrams
 
 # Geographic and reporting
-cross_tab_report
-matrix_report
 
 # Operations, finance and network diagrams
 future_state_vsm

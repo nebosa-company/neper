@@ -4961,6 +4961,150 @@ fn render_map_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, 
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_report_page(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, path: str, title: str, subtitle: str, footer: str, cells: []const chart.ReportCell, cell_labels: []const chart.Label, font_id: u32) -> err {
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let dark = paint.rgba(0.16, 0.22, 0.31, 1.0)
+    let pale = paint.rgba(0.94, 0.97, 1.0, 1.0)
+    let light = paint.rgba(0.88, 0.93, 0.98, 1.0)
+    let alternate = paint.rgba(0.96, 0.98, 1.0, 1.0)
+    let total = paint.rgba(0.82, 0.89, 0.96, 1.0)
+    let missing = paint.rgba(0.91, 0.93, 0.95, 1.0)
+    let bar = paint.rgba(0.38, 0.68, 0.91, 0.75)
+    let fills = [10]paint.Color{ light, light, pale, white, total, total, total, total, alternate, missing }
+    let headings = [3]chart.Label{
+        chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 19.0 }, align: .Center },
+        chart.Label { text: subtitle, anchor: chart.Coord { x: 180.0, y: 38.0 }, align: .Center },
+        chart.Label { text: footer, anchor: chart.Coord { x: 180.0, y: 229.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: font_id, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 2048usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append_report_cells(&builder, cells, fills[..], bar)
+    try chart_scene.append_labels(a, &builder, headings[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, headings[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, cell_labels, font, 7.5, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_report_cells(&writer, cells, fills[..], bar)
+    try chart_svg.append_labels(&writer, headings[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, headings[1usize..], dark, 8.0)
+    try chart_svg.append_labels(&writer, cell_labels, dark, 7.5)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_cross_tab_report_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let observed = [12]usize{ 6usize, 2usize, 4usize, 3usize, 3usize, 7usize, 2usize, 4usize, 5usize, 3usize, 6usize, 1usize }
+    var row_ids: [46]usize = zero
+    var column_ids: [46]usize = zero
+    var used = 0usize
+    var row = 0usize
+    while row < 3usize {
+        var column = 0usize
+        while column < 4usize {
+            var repeat = 0usize
+            while repeat < observed[row * 4usize + column] {
+                row_ids[used] = row
+                column_ids[used] = column
+                used += 1usize
+                repeat += 1usize
+            }
+            column += 1usize
+        }
+        row += 1usize
+    }
+    if used != row_ids.len { ret chart.Invalid }
+    var counts: [12]u64 = zero
+    var row_totals: [3]u64 = zero
+    var column_totals: [4]u64 = zero
+    var cells: [30]chart.ReportCell = zero
+    var work = chart.CrossTabStorage { counts: counts[..], row_totals: row_totals[..], column_totals: column_totals[..], cells: cells[..] }
+    let (report, report_error) = chart.cross_tab_report(row_ids[..], column_ids[..], 3usize, 4usize, geometry.rect(24.0, 51.0, 312.0, 153.0), 78.0f32, &work)
+    if report_error != ok { ret report_error }
+    let row_names = [3]str{ "North", "South", "East" }
+    let column_names = [4]str{ "Web", "Store", "Partner", "Direct" }
+    var labels: [30]chart.Label = zero
+    var i = 0usize
+    while i < report.cells.len {
+        let grid_row = i / report.display_columns
+        let grid_column = i % report.display_columns
+        var cell_text: str = ""
+        if grid_row == 0usize && grid_column == 0usize {
+            cell_text = "Region"
+        } else if grid_row == 0usize {
+            if grid_column == report.display_columns - 1usize { cell_text = "Total" } else { cell_text = column_names[grid_column - 1usize] }
+        } else if grid_column == 0usize {
+            if grid_row == report.display_rows - 1usize { cell_text = "Total" } else { cell_text = row_names[grid_row - 1usize] }
+        } else {
+            let (made, text_error) = str.builder(a, 20usize)
+            if text_error != ok { ret text_error }
+            var built = made
+            try str.push_usize(&built, usize(report.cells[i].value))
+            cell_text = str.done(&built)
+        }
+        let rect = report.cells[i].rect
+        labels[i] = chart.Label { text: cell_text, anchor: chart.Coord { x: rect.x + rect.width * 0.5f32, y: rect.y + rect.height * 0.61f32 }, align: .Center }
+        i += 1usize
+    }
+    ret render_report_page(a, q, output_target, canvas, renderer, "docs/chart-previews/cross_tab_report.png", "Cross-tab report / channel mix", "Exact event counts with row and column totals", "46 events / three regions / four channels", report.cells, labels[..], 31u32)
+}
+
+fn render_matrix_report_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let row_ids = [12]usize{ 0usize, 0usize, 0usize, 1usize, 1usize, 1usize, 2usize, 2usize, 2usize, 3usize, 3usize, 3usize }
+    let column_ids = [12]usize{ 0usize, 1usize, 2usize, 0usize, 1usize, 2usize, 0usize, 1usize, 2usize, 0usize, 1usize, 2usize }
+    let values = [12]f64{ 18.0f64, 27.5f64, 0.0f64, 12.0f64, 24.0f64, 30.0f64, 9.0f64, 0.0f64, 18.0f64, 20.0f64, 25.0f64, 28.5f64 }
+    let present = [12]bool{ true, true, false, true, true, true, true, true, true, true, true, true }
+    let groups = [4]usize{ 0usize, 0usize, 1usize, 1usize }
+    var aggregates: [12]stat.ReportAggregate = zero
+    var row_totals: [4]stat.ReportAggregate = zero
+    var column_totals: [3]stat.ReportAggregate = zero
+    var group_aggregates: [6]stat.ReportAggregate = zero
+    var group_totals: [2]stat.ReportAggregate = zero
+    var cells: [40]chart.ReportCell = zero
+    var work = chart.MatrixReportStorage {
+        aggregates: aggregates[..], row_totals: row_totals[..], column_totals: column_totals[..],
+        group_aggregates: group_aggregates[..], group_totals: group_totals[..], cells: cells[..],
+    }
+    let (report, report_error) = chart.matrix_report(row_ids[..], column_ids[..], values[..], present[..], groups[..], 4usize, 3usize, geometry.rect(20.0, 51.0, 320.0, 154.0), 93.0f32, .Row, &work)
+    if report_error != ok { ret report_error }
+    let row_names = [8]str{ "Product", "Servers", "Devices", "Hardware sum", "Licenses", "Support", "Software sum", "Grand total" }
+    let column_names = [4]str{ "Q1", "Q2", "Q3", "Total" }
+    var labels: [40]chart.Label = zero
+    var i = 0usize
+    while i < report.cells.len {
+        let grid_row = i / report.display_columns
+        let grid_column = i % report.display_columns
+        var cell_text: str = ""
+        if grid_column == 0usize {
+            cell_text = row_names[grid_row]
+        } else if grid_row == 0usize {
+            cell_text = column_names[grid_column - 1usize]
+        } else if !report.cells[i].present {
+            cell_text = "n/a"
+        } else {
+            let (made, text_error) = str.builder(a, 24usize)
+            if text_error != ok { ret text_error }
+            var built = made
+            try str.push_f64_fixed(&built, report.cells[i].value, 1u8)
+            cell_text = str.done(&built)
+        }
+        let rect = report.cells[i].rect
+        labels[i] = chart.Label { text: cell_text, anchor: chart.Coord { x: rect.x + rect.width * 0.5f32, y: rect.y + rect.height * 0.52f32 }, align: .Center }
+        i += 1usize
+    }
+    ret render_report_page(a, q, output_target, canvas, renderer, "docs/chart-previews/matrix_report.png", "Matrix report / quarterly sales", "Grouped subtotals, missing cells and row-scaled bars", "Blue bar length is normalized within each product row", report.cells, labels[..], 32u32)
+}
+
 fn render_capability_normal_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/capability_normal.png"
     let values = [30]f64{
@@ -9308,6 +9452,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_gage_run_preview(a, queue, output_target, canvas, &renderer)
     try render_map_preview(a, queue, output_target, canvas, &renderer, false)
     try render_map_preview(a, queue, output_target, canvas, &renderer, true)
+    try render_cross_tab_report_preview(a, queue, output_target, canvas, &renderer)
+    try render_matrix_report_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_normal_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_sixpack_preview(a, queue, output_target, canvas, &renderer)
     try render_fishbone_preview(a, queue, output_target, canvas, &renderer)
