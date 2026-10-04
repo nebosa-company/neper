@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>missing_data_scatter</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="47" y="56" width="282" height="133" fill="rgb(245,247,252)" fill-opacity="1"/>
+<line x1="47" y1="56" x2="47" y2="189" stroke="rgb(212,222,235)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="175.18182373046875" y1="56" x2="175.18182373046875" y2="189" stroke="rgb(212,222,235)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="303.3636474609375" y1="56" x2="303.3636474609375" y2="189" stroke="rgb(212,222,235)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="47" y1="56" x2="329" y2="56" stroke="rgb(212,222,235)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="47" y1="122.5" x2="329" y2="122.5" stroke="rgb(212,222,235)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="47" y1="189" x2="329" y2="189" stroke="rgb(212,222,235)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="69.63636779785156" y="159.39999389648438" width="6" height="6" fill="rgb(33,110,199)" fill-opacity="1"/>
+<rect x="95.2727279663086" y="146.10000610351562" width="6" height="6" fill="rgb(33,110,199)" fill-opacity="1"/>
+<rect x="146.5454559326172" y="119.5" width="6" height="6" fill="rgb(33,110,199)" fill-opacity="1"/>
+<rect x="172.18182373046875" y="106.19999694824219" width="6" height="6" fill="rgb(33,110,199)" fill-opacity="1"/>
+<rect x="223.4545440673828" y="99.55000305175781" width="6" height="6" fill="rgb(33,110,199)" fill-opacity="1"/>
+<rect x="249.09091186523438" y="79.5999984741211" width="6" height="6" fill="rgb(33,110,199)" fill-opacity="1"/>
+<rect x="300.3636474609375" y="63.64000701904297" width="6" height="6" fill="rgb(33,110,199)" fill-opacity="1"/>
+<text x="180" y="22" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">Scatter with explicit missing data</text>
+<text x="180" y="40" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">7 complete pairs / 3 rows omitted</text>
+<text x="47" y="206" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">0</text>
+<text x="175.18182373046875" y="206" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">5</text>
+<text x="303.3636474609375" y="206" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)" fill-opacity="1">10</text>
+<text x="40" y="59" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">10</text>
+<text x="40" y="125.5" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">5</text>
+<text x="40" y="192" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)" fill-opacity="1">0</text>
+<text x="180" y="232" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(204,99,51)" fill-opacity="1">Source rows 3, 6, 9 omitted; IDs retained for selection</text>
+</svg>

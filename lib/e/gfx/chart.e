@@ -175,6 +175,7 @@ type TimelineEvent = struct { time: f64, row: usize }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
 type CategoryFacetLayout = struct { panels: []geometry.Rect, marks: []Layout, strips: []Label, counts: []usize }
+type MaskedScatterLayout = struct { marks: Layout, row_ids: []usize, omitted: usize }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
 type Bin2dLayout = struct { matrix: MatrixLayout, counts: []u64, max_count: u64, total_count: u64 }
 type Density2dLayout = struct { contours: []Layout, grid: []f64, cutoffs: []f64, peak: f64 }
@@ -760,6 +761,40 @@ fn connected_scatter(x: []const f32, y: []const f32, bounds: geometry.Rect, poin
     let series = spec(.PointLine, bounds, x, y)
     let (marks, marks_error) = layout(&series, points, segments, zero)
     ret (marks, marks_error)
+}
+
+// Presence is separate from numeric payload: a missing x or y omits the row,
+// while an observed non-finite or out-of-domain value is an error. Row IDs
+// remain aligned with compacted marks for later hit-testing and selection.
+fn masked_scatter(x: []const f32, y: []const f32, x_present: []const bool, y_present: []const bool, bounds: geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32, points: []Coord, row_ids: []usize) -> (MaskedScatterLayout, err) {
+    let n = x.len
+    if n == 0usize { ret (zero, Empty) }
+    if y.len != n || x_present.len != n || y_present.len != n || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) || !finite(x_min) || !finite(x_max) || !finite(y_min) || !finite(y_max) || x_max <= x_min || y_max <= y_min || !finite(x_max - x_min) || !finite(y_max - y_min) { ret (zero, Invalid) }
+    var complete = 0usize
+    var i = 0usize
+    while i < n {
+        if x_present[i] && y_present[i] {
+            if !finite(x[i]) || !finite(y[i]) || x[i] < x_min || x[i] > x_max || y[i] < y_min || y[i] > y_max { ret (zero, Invalid) }
+            complete += 1usize
+        }
+        i += 1usize
+    }
+    if points.len < complete || row_ids.len < complete { ret (zero, TooLarge) }
+    var used = 0usize
+    i = 0usize
+    while i < n {
+        if x_present[i] && y_present[i] {
+            let px = bounds.x + bounds.width * ((x[i] - x_min) / (x_max - x_min))
+            let py = bounds.y + bounds.height * (1.0 - (y[i] - y_min) / (y_max - y_min))
+            if !finite(px) || !finite(py) { ret (zero, Invalid) }
+            points[used] = Coord { x: px, y: py }
+            row_ids[used] = i
+            used += 1usize
+        }
+        i += 1usize
+    }
+    let marks = Layout { kind: .Scatter, coords: points[..used], segments: zero, bars: zero, x_min: x_min, x_max: x_max, y_min: y_min, y_max: y_max }
+    ret (MaskedScatterLayout { marks: marks, row_ids: row_ids[..used], omitted: n - used }, ok)
 }
 
 // Tenor is measured in years and yield in the caller's consistent rate unit

@@ -35018,3 +35018,15 @@ or allowed to collide. The gallery measures the actual font, draws four
 series and renders the same bounded legend in PNG and SVG; a Windows/Linux
 fixture checks placement and refusal paths. Automatic margin allocation and
 legend-to-plot placement remain separate composition work.
+
+## D1974 — Missing scatter cells use explicit presence masks
+
+`chart.masked_scatter` takes separate presence masks for x and y. A row with
+either coordinate absent is omitted without inspecting its payload; a present
+non-finite or out-of-domain coordinate remains an error. Returned scatter
+marks are compacted alongside original source row IDs and an omitted count,
+which preserves selection identity and permits an explicit missingness note.
+An all-missing input yields empty marks rather than a fabricated point. The
+Windows/Linux fixture checks mapping, row IDs, empty output, scene/SVG
+adapters and refusal paths; the gallery renders a PNG/SVG pair. Other geoms
+still need their own missing-data policies.

@@ -966,6 +966,13 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    collisions. The Windows/Linux fixture checks placement, capacity and
    scene/SVG output; the gallery adds a measured-font PNG/SVG preview.
    Automatic plot-versus-legend placement and layout-aware margins remain.
+   `masked_scatter` separates x/y presence bits from numeric payloads: an
+   incomplete pair is omitted, while observed non-finite or out-of-domain
+   values are errors. It compacts complete marks with their original row IDs
+   and reports the omitted count, including an all-missing result. The
+   Windows/Linux fixture checks mapping, row identity, empty marks, adapters
+   and refusals; the gallery adds a PNG/SVG pair that names omitted rows.
+   General missing-data policies for other geoms remain planned.
    Bullet charts now compose qualitative bands, an actual bar and a target
    rule from existing layers; `gfx_chart_composition` checks geometry,
    refusals and both adapters on Windows and Linux.

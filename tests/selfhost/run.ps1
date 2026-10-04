@@ -3307,6 +3307,11 @@ $gfxChartLegendWrapWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $gfxChartLegendWrapWritten -ne 'executable written') { throw 'gfx_chart_legend_wrap emission failed' }
 $gfxChartLegendWrapOutput = & $gfxChartLegendWrapPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartLegendWrapOutput -ne 'gfx chart legend wrap ok') { throw "the e.gfx.chart wrapped legend answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMissingScatterPath = Join-Path $testBuild 'gfx-chart-missing-scatter-selfhost.exe'
+$gfxChartMissingScatterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_missing_scatter\src\main.e') $repo 'x64' 'windows' $gfxChartMissingScatterPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMissingScatterWritten -ne 'executable written') { throw 'gfx_chart_missing_scatter emission failed' }
+$gfxChartMissingScatterOutput = & $gfxChartMissingScatterPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMissingScatterOutput -ne 'gfx chart missing scatter ok') { throw "the e.gfx.chart missing-data scatter answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

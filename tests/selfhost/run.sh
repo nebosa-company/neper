@@ -2929,6 +2929,11 @@ gfx_chart_legend_wrap_written=$($test_build/neper-self emit-executable "$repo/te
 chmod +x "$test_build/gfx-chart-legend-wrap-selfhost"
 gfx_chart_legend_wrap_output=$("$test_build/gfx-chart-legend-wrap-selfhost")
 [ "$gfx_chart_legend_wrap_output" = 'gfx chart legend wrap ok' ]
+gfx_chart_missing_scatter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_missing_scatter/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-missing-scatter-selfhost")
+[ "$gfx_chart_missing_scatter_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-missing-scatter-selfhost"
+gfx_chart_missing_scatter_output=$("$test_build/gfx-chart-missing-scatter-selfhost")
+[ "$gfx_chart_missing_scatter_output" = 'gfx chart missing scatter ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"

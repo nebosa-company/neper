@@ -1563,6 +1563,78 @@ fn render_monte_carlo_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_missing_data_scatter_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/missing_data_scatter.png"
+    let x = [10]f32{ 1.0, 2.0, 999.0, 4.0, 5.0, 6.0, 7.0, 8.0, 999.0, 10.0 }
+    let y = [10]f32{ 2.0, 3.0, 4.0, 5.0, 6.0, 999.0, 6.5, 8.0, 9.0, 9.2 }
+    let x_present = [10]bool{ true, true, false, true, true, true, true, true, false, true }
+    let y_present = [10]bool{ true, true, true, true, true, false, true, true, true, true }
+    let plot = geometry.rect(47.0, 56.0, 282.0, 133.0)
+    var points: [7]chart.Coord = zero
+    var row_ids: [7]usize = zero
+    let (scatter, scatter_error) = chart.masked_scatter(x[..], y[..], x_present[..], y_present[..], plot, 0.0, 11.0, 0.0, 10.0, points[..], row_ids[..])
+    if scatter_error != ok || scatter.omitted != 3usize || scatter.marks.coords.len != 7usize || row_ids[6usize] != 9usize { ret chart.Invalid }
+    var grid_segments: [6]chart.Segment = zero
+    let x_fractions = [3]f32{ 0.0, 5.0 / 11.0, 10.0 / 11.0 }
+    var i = 0usize
+    while i < 3usize {
+        let xx = plot.x + plot.width * x_fractions[i]
+        grid_segments[i] = chart.Segment { from: chart.Coord { x: xx, y: plot.y }, to: chart.Coord { x: xx, y: plot.y + plot.height } }
+        let yy = plot.y + f32(i) * plot.height * 0.5
+        grid_segments[3usize + i] = chart.Segment { from: chart.Coord { x: plot.x, y: yy }, to: chart.Coord { x: plot.x + plot.width, y: yy } }
+        i += 1usize
+    }
+    let guide = chart.Layout { kind: .Rug, coords: zero, segments: grid_segments[..], bars: zero, x_min: 0.0, x_max: 11.0, y_min: 0.0, y_max: 10.0 }
+    let labels = [9]chart.Label{
+        chart.Label { text: "Scatter with explicit missing data", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center },
+        chart.Label { text: "7 complete pairs / 3 rows omitted", anchor: chart.Coord { x: 180.0, y: 40.0 }, align: .Center },
+        chart.Label { text: "0", anchor: chart.Coord { x: plot.x, y: 206.0 }, align: .Center },
+        chart.Label { text: "5", anchor: chart.Coord { x: plot.x + plot.width * 5.0 / 11.0, y: 206.0 }, align: .Center },
+        chart.Label { text: "10", anchor: chart.Coord { x: plot.x + plot.width * 10.0 / 11.0, y: 206.0 }, align: .Center },
+        chart.Label { text: "10", anchor: chart.Coord { x: 40.0, y: plot.y + 3.0 }, align: .Right },
+        chart.Label { text: "5", anchor: chart.Coord { x: 40.0, y: plot.y + plot.height * 0.5 + 3.0 }, align: .Right },
+        chart.Label { text: "0", anchor: chart.Coord { x: 40.0, y: plot.y + plot.height + 3.0 }, align: .Right },
+        chart.Label { text: "Source rows 3, 6, 9 omitted; IDs retained for selection", anchor: chart.Coord { x: 180.0, y: 232.0 }, align: .Center },
+    }
+    let blue = paint.rgba(0.13, 0.43, 0.78, 1.0)
+    let grid = paint.rgba(0.83, 0.87, 0.92, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let orange = paint.rgba(0.80, 0.39, 0.20, 1.0)
+    let panel = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 90usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: panel })
+    try chart_scene.append(a, &builder, &guide, paint.Brush { Solid: grid })
+    try chart_scene.append(a, &builder, &scatter.marks, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..8usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[8usize..], font, 7.0, paint.Brush { Solid: orange })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, panel, false)
+    try chart_svg.append(&writer, &guide, grid)
+    try chart_svg.append(&writer, &scatter.marks, blue)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[2usize..8usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[8usize..], orange, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_legend_collision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/legend_collision.png"
     let names = [4]str{ "Control baseline", "Treatment alpha extended", "Treatment beta extended", "Follow-up cohort" }
@@ -10341,6 +10413,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_discrete_axis_bar_preview(a, queue, output_target, canvas, &renderer)
     try render_category_facet_preview(a, queue, output_target, canvas, &renderer)
     try render_legend_collision_preview(a, queue, output_target, canvas, &renderer)
+    try render_missing_data_scatter_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)
