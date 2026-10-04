@@ -5,7 +5,6 @@
 # Cartesian and distribution variants
 
 # Statistical, quality, medical and scientific diagrams
-attribute_agreement
 gage_run
 
 # Geographic and reporting

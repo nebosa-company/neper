@@ -57,6 +57,14 @@ type GageLinearity = struct {
     intercept: f64, slope: f64, linearity: f64,
     residual_sigma: f64, slope_standard_error: f64, slope_p: f64,
 }
+type AttributeAgreementRate = struct {
+    matched: usize, total: usize, fraction: f64, confidence: Interval,
+}
+type AttributeAgreement = struct {
+    items: usize, appraisers: usize, trials: usize,
+    between_matched: usize, all_vs_standard_matched: usize,
+    pooled_rating_fraction: f64, pooled_rating_kappa: f64, kappa_defined: bool,
+}
 type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
@@ -703,6 +711,99 @@ fn gage_linearity(references: []const f64, measurements: []const f64, repeats: u
         average_bias: regression_state.mean_y, intercept: intercept, slope: slope,
         linearity: slope * (references[references.len - 1usize] - references[0usize]),
         residual_sigma: residual_sigma, slope_standard_error: slope_se, slope_p: slope_p,
+    }, ok)
+}
+
+// Nominal agreement with a known standard. A part counts for an appraiser only
+// if all trials agree; versus-standard additionally requires the reference.
+// Kappa is separately defined over individual ratings versus repeated standard.
+fn attribute_agreement(standard: []const usize, ratings: []const usize, appraisers: usize, trials: usize, categories: usize, confidence: f64, within: []AttributeAgreementRate, versus_standard: []AttributeAgreementRate) -> (AttributeAgreement, err) {
+    if standard.len < 2usize || appraisers < 2usize || trials < 2usize || categories < 2usize || categories > 256usize || !(confidence > 0.0f64 && confidence < 1.0f64) { ret (zero, Invalid) }
+    if ratings.len % trials != 0usize || ratings.len / trials % appraisers != 0usize || ratings.len / trials / appraisers != standard.len { ret (zero, Invalid) }
+    if within.len < appraisers || versus_standard.len < appraisers { ret (zero, TooSmall) }
+    var item = 0usize
+    while item < standard.len {
+        if standard[item] >= categories { ret (zero, Invalid) }
+        item += 1usize
+    }
+    var pooled_matches = 0usize
+    var between_matches = 0usize
+    var all_standard_matches = 0usize
+    var appraiser = 0usize
+    while appraiser < appraisers {
+        var consistent = 0usize
+        var consistent_standard = 0usize
+        item = 0usize
+        while item < standard.len {
+            let start = (appraiser * standard.len + item) * trials
+            let first = ratings[start]
+            var same = true
+            var trial = 0usize
+            while trial < trials {
+                let response = ratings[start + trial]
+                if response >= categories { ret (zero, Invalid) }
+                if response != first { same = false }
+                if response == standard[item] { pooled_matches += 1usize }
+                trial += 1usize
+            }
+            if same {
+                consistent += 1usize
+                if first == standard[item] { consistent_standard += 1usize }
+            }
+            item += 1usize
+        }
+        let (within_ci, within_error) = interval_clopper_pearson(u64(consistent), u64(standard.len), confidence)
+        let (standard_ci, standard_error) = interval_clopper_pearson(u64(consistent_standard), u64(standard.len), confidence)
+        if within_error != ok || standard_error != ok { ret (zero, Invalid) }
+        within[appraiser] = AttributeAgreementRate { matched: consistent, total: standard.len, fraction: f64(consistent) / f64(standard.len), confidence: within_ci }
+        versus_standard[appraiser] = AttributeAgreementRate { matched: consistent_standard, total: standard.len, fraction: f64(consistent_standard) / f64(standard.len), confidence: standard_ci }
+        appraiser += 1usize
+    }
+    item = 0usize
+    while item < standard.len {
+        let first = ratings[item * trials]
+        var all_same = true
+        appraiser = 0usize
+        while appraiser < appraisers {
+            var trial = 0usize
+            while trial < trials {
+                if ratings[(appraiser * standard.len + item) * trials + trial] != first { all_same = false }
+                trial += 1usize
+            }
+            appraiser += 1usize
+        }
+        if all_same {
+            between_matches += 1usize
+            if first == standard[item] { all_standard_matches += 1usize }
+        }
+        item += 1usize
+    }
+    var chance = 0.0f64
+    var category = 0usize
+    while category < categories {
+        var standard_count = 0usize
+        var rating_count = 0usize
+        item = 0usize
+        while item < standard.len {
+            if standard[item] == category { standard_count += 1usize }
+            item += 1usize
+        }
+        var i = 0usize
+        while i < ratings.len {
+            if ratings[i] == category { rating_count += 1usize }
+            i += 1usize
+        }
+        chance += (f64(standard_count) / f64(standard.len)) * (f64(rating_count) / f64(ratings.len))
+        category += 1usize
+    }
+    let pooled_fraction = f64(pooled_matches) / f64(ratings.len)
+    var kappa = 0.0f64
+    let defined = chance < 1.0f64
+    if defined { kappa = (pooled_fraction - chance) / (1.0f64 - chance) }
+    ret (AttributeAgreement {
+        items: standard.len, appraisers: appraisers, trials: trials,
+        between_matched: between_matches, all_vs_standard_matched: all_standard_matches,
+        pooled_rating_fraction: pooled_fraction, pooled_rating_kappa: kappa, kappa_defined: defined,
     }, ok)
 }
 

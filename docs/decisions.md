@@ -34798,3 +34798,17 @@ chart enhancements may precede release-required compiler work by explicit choice
 **Evidence.** The generated `docs/progress.html` follows the queue order and labels
 release requirements independently. Its ordering test checks that chart work is
 a contiguous prefix of the active queue.
+
+## D1956 — Attribute agreement separates item-level repeatability from pooled ratings
+
+For a known nominal standard, an appraiser matches an item within-appraiser only
+when all repeated trials agree; matching the standard additionally requires that
+consistent value to equal the reference. Each appraiser's matched-item fraction
+uses an exact Clopper–Pearson interval. The summary counts all-appraiser
+item-level agreement separately from pooled individual-rating agreement and
+Cohen-style nominal kappa against repeated standard labels. The pooled kappa is
+not Minitab's average of trial-level kappas and must be labeled as such. Refuse
+invalid categories, inconsistent dimensions and undersized caller storage.
+
+The Windows/Linux fixture pins counts, intervals, kappa and a degenerate
+undefined-kappa case; the two-panel gallery preview is PNG/SVG paired.

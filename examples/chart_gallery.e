@@ -4588,6 +4588,107 @@ fn render_gage_bias_linearity_preview(a: *mem.Arena, q: *gpu.Queue, output_targe
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_attribute_agreement_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/attribute_agreement.png"
+    let standard = [10]usize{ 0usize, 1usize, 0usize, 1usize, 1usize, 0usize, 1usize, 0usize, 0usize, 1usize }
+    var ratings: [80]usize = zero
+    var appraiser = 0usize
+    while appraiser < 4usize {
+        var item = 0usize
+        while item < standard.len {
+            var trial = 0usize
+            while trial < 2usize {
+                var response = standard[item]
+                var flip = false
+                if appraiser == 0usize && item == 2usize && trial == 1usize { flip = true }
+                if appraiser == 1usize && (item == 3usize || item == 7usize) { flip = true }
+                if appraiser == 2usize && (item == 1usize || item == 4usize || (item == 8usize && trial == 1usize)) { flip = true }
+                if appraiser == 3usize && (item == 0usize || item == 5usize || (item == 9usize && trial == 1usize)) { flip = true }
+                if flip { response = 1usize - response }
+                ratings[(appraiser * standard.len + item) * 2usize + trial] = response
+                trial += 1usize
+            }
+            item += 1usize
+        }
+        appraiser += 1usize
+    }
+    var within_rates: [4]stat.AttributeAgreementRate = zero
+    var standard_rates: [4]stat.AttributeAgreementRate = zero
+    var within_points: [4]chart.Coord = zero
+    var standard_points: [4]chart.Coord = zero
+    var within_intervals: [4]chart.Segment = zero
+    var standard_intervals: [4]chart.Segment = zero
+    var work = chart.AttributeAgreementStorage {
+        within_rates: within_rates[..], standard_rates: standard_rates[..],
+        within_points: within_points[..], standard_points: standard_points[..],
+        within_intervals: within_intervals[..], standard_intervals: standard_intervals[..],
+    }
+    let panels = [2]geometry.Rect{ geometry.rect(35.0, 50.0, 290.0, 58.0), geometry.rect(35.0, 145.0, 290.0, 58.0) }
+    let (report, report_error) = chart.attribute_agreement(standard[..], ratings[..], 4usize, 2usize, 2usize, 0.95f64, panels[..], &work)
+    if report_error != ok { ret report_error }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let pale = paint.rgba(0.96, 0.98, 1.0, 1.0)
+    let blue = paint.rgba(0.19, 0.49, 0.77, 1.0)
+    let orange = paint.rgba(0.93, 0.44, 0.17, 1.0)
+    let dark = paint.rgba(0.16, 0.22, 0.31, 1.0)
+    let gray = paint.rgba(0.61, 0.68, 0.75, 1.0)
+    let (metrics_made, metrics_error) = str.builder(a, 100usize)
+    if metrics_error != ok { ret metrics_error }
+    var metrics = metrics_made
+    try str.push(&metrics, "Pooled rating kappa ")
+    try str.push_f64_fixed(&metrics, report.summary.pooled_rating_kappa, 2u8)
+    try str.push(&metrics, "   all appraisers agree ")
+    try str.push_usize(&metrics, report.summary.between_matched)
+    try str.push(&metrics, "/10")
+    let labels = [12]chart.Label{
+        chart.Label { text: "Attribute agreement", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center },
+        chart.Label { text: "Within appraiser / exact 95% CI", anchor: chart.Coord { x: 180.0, y: 42.0 }, align: .Center },
+        chart.Label { text: "Consistent and correct versus standard", anchor: chart.Coord { x: 180.0, y: 137.0 }, align: .Center },
+        chart.Label { text: str.done(&metrics), anchor: chart.Coord { x: 180.0, y: 232.0 }, align: .Center },
+        chart.Label { text: "A", anchor: chart.Coord { x: 71.0, y: 120.0 }, align: .Center },
+        chart.Label { text: "B", anchor: chart.Coord { x: 143.0, y: 120.0 }, align: .Center },
+        chart.Label { text: "C", anchor: chart.Coord { x: 216.0, y: 120.0 }, align: .Center },
+        chart.Label { text: "D", anchor: chart.Coord { x: 289.0, y: 120.0 }, align: .Center },
+        chart.Label { text: "A", anchor: chart.Coord { x: 71.0, y: 215.0 }, align: .Center },
+        chart.Label { text: "B", anchor: chart.Coord { x: 143.0, y: 215.0 }, align: .Center },
+        chart.Label { text: "C", anchor: chart.Coord { x: 216.0, y: 215.0 }, align: .Center },
+        chart.Label { text: "D", anchor: chart.Coord { x: 289.0, y: 215.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 29u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 512usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, panels[0usize], paint.Brush { Solid: pale })
+    try fill(&builder, panels[1usize], paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &report.within_intervals, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &report.standard_intervals, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &report.within, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &report.versus_standard, paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, panels[0usize], pale, false)
+    try chart_svg.rect(&writer, panels[1usize], pale, false)
+    try chart_svg.append(&writer, &report.within_intervals, gray)
+    try chart_svg.append(&writer, &report.standard_intervals, gray)
+    try chart_svg.append(&writer, &report.within, blue)
+    try chart_svg.append(&writer, &report.versus_standard, orange)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_capability_normal_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/capability_normal.png"
     let values = [30]f64{
@@ -8931,6 +9032,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_capability_attribute_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_batch_preview(a, queue, output_target, canvas, &renderer)
     try render_gage_bias_linearity_preview(a, queue, output_target, canvas, &renderer)
+    try render_attribute_agreement_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_normal_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_sixpack_preview(a, queue, output_target, canvas, &renderer)
     try render_fishbone_preview(a, queue, output_target, canvas, &renderer)

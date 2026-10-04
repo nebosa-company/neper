@@ -204,6 +204,16 @@ type GageLinearityLayout = struct {
     observations: Layout, means: Layout, fit: Layout, confidence: Layout,
     zero_line: Layout, summary: stat.GageLinearity,
 }
+type AttributeAgreementStorage = struct {
+    within_rates: []stat.AttributeAgreementRate, standard_rates: []stat.AttributeAgreementRate,
+    within_points: []Coord, standard_points: []Coord,
+    within_intervals: []Segment, standard_intervals: []Segment,
+}
+type AttributeAgreementLayout = struct {
+    within: Layout, within_intervals: Layout,
+    versus_standard: Layout, standard_intervals: Layout,
+    summary: stat.AttributeAgreement,
+}
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -1177,6 +1187,38 @@ fn gage_linearity(references: []const f64, measurements: []const f64, repeats: u
     let confidence = Layout { kind: .ErrorBar, coords: zero, segments: work.ci_segments[..q], bars: zero, x_min: f32(x_low), x_max: f32(x_high), y_min: f32(y_low), y_max: f32(y_high) }
     let zero_line = Layout { kind: .Rug, coords: zero, segments: work.zero_guide[..1usize], bars: zero, x_min: f32(x_low), x_max: f32(x_high), y_min: f32(y_low), y_max: f32(y_high) }
     ret (GageLinearityLayout { observations: observations, means: means, fit: fit, confidence: confidence, zero_line: zero_line, summary: summary }, ok)
+}
+
+// Two-pane nominal attribute-agreement plot: consistent trials and consistent
+// correct trials per appraiser, each with exact binomial intervals.
+fn attribute_agreement(standard: []const usize, ratings: []const usize, appraisers: usize, trials: usize, categories: usize, confidence: f64, panels: []const geometry.Rect, work: *AttributeAgreementStorage) -> (AttributeAgreementLayout, err) {
+    if panels.len != 2usize || !valid_bounds(panels[0usize]) || !valid_bounds(panels[1usize]) || appraisers < 2usize { ret (zero, Invalid) }
+    if work.within_rates.len < appraisers || work.standard_rates.len < appraisers || work.within_points.len < appraisers || work.standard_points.len < appraisers || work.within_intervals.len < appraisers || work.standard_intervals.len < appraisers { ret (zero, TooLarge) }
+    let (summary, summary_error) = stat.attribute_agreement(standard, ratings, appraisers, trials, categories, confidence, work.within_rates, work.standard_rates)
+    if summary_error != ok { ret (zero, Invalid) }
+    var i = 0usize
+    while i < appraisers {
+        let w = work.within_rates[i]
+        let s = work.standard_rates[i]
+        let wx = panels[0usize].x + panels[0usize].width * (f32(i) + 0.5f32) / f32(appraisers)
+        let sx = panels[1usize].x + panels[1usize].width * (f32(i) + 0.5f32) / f32(appraisers)
+        work.within_points[i] = Coord { x: wx, y: panels[0usize].y + panels[0usize].height * (1.0f32 - f32(w.fraction)) }
+        work.standard_points[i] = Coord { x: sx, y: panels[1usize].y + panels[1usize].height * (1.0f32 - f32(s.fraction)) }
+        work.within_intervals[i] = Segment {
+            from: Coord { x: wx, y: panels[0usize].y + panels[0usize].height * (1.0f32 - f32(w.confidence.low)) },
+            to: Coord { x: wx, y: panels[0usize].y + panels[0usize].height * (1.0f32 - f32(w.confidence.high)) },
+        }
+        work.standard_intervals[i] = Segment {
+            from: Coord { x: sx, y: panels[1usize].y + panels[1usize].height * (1.0f32 - f32(s.confidence.low)) },
+            to: Coord { x: sx, y: panels[1usize].y + panels[1usize].height * (1.0f32 - f32(s.confidence.high)) },
+        }
+        i += 1usize
+    }
+    let within_marks = Layout { kind: .Scatter, coords: work.within_points[..appraisers], segments: zero, bars: zero, x_min: 1.0f32, x_max: f32(appraisers), y_min: 0.0f32, y_max: 1.0f32 }
+    let within_ci = Layout { kind: .ErrorBar, coords: zero, segments: work.within_intervals[..appraisers], bars: zero, x_min: 1.0f32, x_max: f32(appraisers), y_min: 0.0f32, y_max: 1.0f32 }
+    let standard_marks = Layout { kind: .Scatter, coords: work.standard_points[..appraisers], segments: zero, bars: zero, x_min: 1.0f32, x_max: f32(appraisers), y_min: 0.0f32, y_max: 1.0f32 }
+    let standard_ci = Layout { kind: .ErrorBar, coords: zero, segments: work.standard_intervals[..appraisers], bars: zero, x_min: 1.0f32, x_max: f32(appraisers), y_min: 0.0f32, y_max: 1.0f32 }
+    ret (AttributeAgreementLayout { within: within_marks, within_intervals: within_ci, versus_standard: standard_marks, standard_intervals: standard_ci, summary: summary }, ok)
 }
 
 // A sparkline is an evenly spaced Line with no guide contract.

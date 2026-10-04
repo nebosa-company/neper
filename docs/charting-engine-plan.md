@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-two hundred and three PNG plus two hundred and three SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map, a SIPOC overview, an expected-value decision tree, a rooted org chart, a layered dependency graph, an explicitly placed flowchart, an event-labeled state machine, an ordered sequence diagram, an entity-relationship diagram, a branching process map, a fishbone/Ishikawa diagram, a cause-effect tree, a Weibull probability plot, a binomial OC curve, a crossed Gage R&R component chart, a two-factor multi-vari chart, a raw-data main-effects chart, a two-factor interaction plot, a three-factor cube plot, a one-sided spectrogram, a waterfall spectrum, a Bode plot, a Nyquist plot, a 3-D scatter plot, a 3-D histogram, a 3-D density surface, a 3-D wireframe, a one-way ANOM chart, an individual Hotelling T-squared chart, a generalized-variance chart, a MEWMA chart, a focused normal-capability chart, a fitted lognormal-capability chart, a binomial attribute-capability chart, a balanced batch-capability chart and a gage bias/linearity chart are also delivered. Individuals, moving-range,
+two hundred and five PNG plus two hundred and five SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map, a SIPOC overview, an expected-value decision tree, a rooted org chart, a layered dependency graph, an explicitly placed flowchart, an event-labeled state machine, an ordered sequence diagram, an entity-relationship diagram, a branching process map, a fishbone/Ishikawa diagram, a cause-effect tree, a Weibull probability plot, a binomial OC curve, a crossed Gage R&R component chart, a two-factor multi-vari chart, a raw-data main-effects chart, a two-factor interaction plot, a three-factor cube plot, a one-sided spectrogram, a waterfall spectrum, a Bode plot, a Nyquist plot, a 3-D scatter plot, a 3-D histogram, a 3-D density surface, a 3-D wireframe, a one-way ANOM chart, an individual Hotelling T-squared chart, a generalized-variance chart, a MEWMA chart, a focused normal-capability chart, a fitted lognormal-capability chart, a binomial attribute-capability chart, a balanced batch-capability chart, a gage bias/linearity chart and an attribute-agreement chart are also delivered. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -129,6 +129,18 @@ synthetic bias slope and confidence limits, scene/SVG output and refusals; one
 PNG/SVG pair joins the gallery. Automated critical quantiles, %bias versus
 process variation, stability over time and broader gage diagnostics remain
 planned.
+
+`attribute_agreement` counts an appraiser's item as repeatable only when every
+trial agrees, and as correct versus a known standard only when that consistent
+rating equals the reference. The two-panel chart shows each appraiser's
+within-appraiser and versus-standard fractions with exact Clopper–Pearson
+confidence intervals. The summary separately counts items on which every
+appraiser agrees, items on which all agree with the standard, and pooled
+individual-rating agreement/kappa against the repeated standard; that pooled
+kappa is not a per-trial average. A Windows/Linux fixture checks counts,
+intervals, kappa, scene/SVG adapters and refusals, and the gallery adds one
+PNG/SVG pair. Missing-standard analysis, more than 256 categories and
+per-trial kappa remain follow-ons.
 
 `fishbone` lays out a right-facing effect, alternating category ribs and
 parent-linked causes, including deeper subcauses, as caller-owned segment,
@@ -942,7 +954,7 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    doji marks, invalid envelopes and scene/SVG output on both hosts.
 4. **Rendering adapters (partial):** scene display-list marks, tick/grid/axis
    strokes, a Neper-rendered PNG gallery and a streaming solid-colour SVG
-   adapter with two hundred and four vector previews, automatic numeric tick text and
+   adapter with two hundred and five vector previews, automatic numeric tick text and
    caller-supplied title labels are delivered. The reusable rasterization path
    composes with `e.fmt.png.encode` for PNG export; collision-safe margins,
    PDF serialization and a widget embed remain. Pixel fixtures follow

@@ -3114,6 +3114,11 @@ gfx_chart_gage_bias_linearity_written=$($test_build/neper-self emit-executable "
 chmod +x "$test_build/gfx-chart-gage-bias-linearity-selfhost"
 gfx_chart_gage_bias_linearity_output=$("$test_build/gfx-chart-gage-bias-linearity-selfhost")
 [ "$gfx_chart_gage_bias_linearity_output" = 'gfx chart gage bias linearity ok' ]
+gfx_chart_attribute_agreement_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_attribute_agreement/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-attribute-agreement-selfhost")
+[ "$gfx_chart_attribute_agreement_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-attribute-agreement-selfhost"
+gfx_chart_attribute_agreement_output=$("$test_build/gfx-chart-attribute-agreement-selfhost")
+[ "$gfx_chart_attribute_agreement_output" = 'gfx chart attribute agreement ok' ]
 gfx_chart_fishbone_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_fishbone/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-fishbone-selfhost")
 [ "$gfx_chart_fishbone_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-fishbone-selfhost"

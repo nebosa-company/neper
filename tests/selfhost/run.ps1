@@ -3492,6 +3492,11 @@ $gfxChartGageBiasLinearityWritten = & $compiler emit-executable (Join-Path $PSSc
 if ($LASTEXITCODE -ne 0 -or $gfxChartGageBiasLinearityWritten -ne 'executable written') { throw 'gfx_chart_gage_bias_linearity emission failed' }
 $gfxChartGageBiasLinearityOutput = & $gfxChartGageBiasLinearityPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartGageBiasLinearityOutput -ne 'gfx chart gage bias linearity ok') { throw "the e.gfx.chart gage bias linearity answered wrongly: exit $LASTEXITCODE" }
+$gfxChartAttributeAgreementPath = Join-Path $testBuild 'gfx-chart-attribute-agreement-selfhost.exe'
+$gfxChartAttributeAgreementWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_attribute_agreement\src\main.e') $repo 'x64' 'windows' $gfxChartAttributeAgreementPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAttributeAgreementWritten -ne 'executable written') { throw 'gfx_chart_attribute_agreement emission failed' }
+$gfxChartAttributeAgreementOutput = & $gfxChartAttributeAgreementPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAttributeAgreementOutput -ne 'gfx chart attribute agreement ok') { throw "the e.gfx.chart attribute agreement answered wrongly: exit $LASTEXITCODE" }
 $gfxChartFishbonePath = Join-Path $testBuild 'gfx-chart-fishbone-selfhost.exe'
 $gfxChartFishboneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_fishbone\src\main.e') $repo 'x64' 'windows' $gfxChartFishbonePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartFishboneWritten -ne 'executable written') { throw 'gfx_chart_fishbone emission failed' }
