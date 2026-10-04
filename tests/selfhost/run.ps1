@@ -1375,6 +1375,12 @@ $algoStatTestWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $algoStatTestWritten -ne 'executable written') { throw 'algo_stat_test emission failed' }
 & $algoStatTestPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_stat_test check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.safety` (L016): ROR/PRR with intervals and signal rules, the BCPNN information component and Apriori rules over comedication masks, with refusals.
+$algoStatSafetyPath = Join-Path $testBuild 'algo-stat-safety-selfhost.exe'
+$algoStatSafetyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_safety\src\main.e') $repo 'x64' 'windows' $algoStatSafetyPath
+if ($LASTEXITCODE -ne 0 -or $algoStatSafetyWritten -ne 'executable written') { throw 'algo_stat_safety emission failed' }
+& $algoStatSafetyPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_safety check failed: exit $LASTEXITCODE" }
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 $algoGraphFlowPath = Join-Path $testBuild 'algo-graph-flow-selfhost.exe'
 $algoGraphFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_flow\src\main.e') $repo 'x64' 'windows' $algoGraphFlowPath
@@ -1795,6 +1801,18 @@ $algoTimeseriesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $algoTimeseriesWritten -ne 'executable written') { throw 'algo_timeseries emission failed' }
 & $algoTimeseriesPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_timeseries check failed: exit $LASTEXITCODE" }
+# `e.algo.timeseries` VAR (L059): a VAR(1) fit recovering its coefficients, hand-checked forecasts, the companion form through the Kalman predict, and level/trend filters with refusals.
+$algoTimeseriesVarPath = Join-Path $testBuild 'algo-timeseries-var-selfhost.exe'
+$algoTimeseriesVarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_timeseries_var\src\main.e') $repo 'x64' 'windows' $algoTimeseriesVarPath
+if ($LASTEXITCODE -ne 0 -or $algoTimeseriesVarWritten -ne 'executable written') { throw 'algo_timeseries_var emission failed' }
+& $algoTimeseriesVarPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_timeseries_var check failed: exit $LASTEXITCODE" }
+# `e.algo.timeseries` ARIMA and inventory (L017): differencing, AR(1)/ARMA(1,1) recovery, hand-checked forecasts, EOQ and the newsvendor with refusals.
+$algoTimeseriesArimaPath = Join-Path $testBuild 'algo-timeseries-arima-selfhost.exe'
+$algoTimeseriesArimaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_timeseries_arima\src\main.e') $repo 'x64' 'windows' $algoTimeseriesArimaPath
+if ($LASTEXITCODE -ne 0 -or $algoTimeseriesArimaWritten -ne 'executable written') { throw 'algo_timeseries_arima emission failed' }
+& $algoTimeseriesArimaPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_timeseries_arima check failed: exit $LASTEXITCODE" }
 # `e.algo.exact_cover`: the unique cover of the paper's matrix, an uncoverable one, and a Sudoku solved to its known solution (D850).
 $algoExactCoverPath = Join-Path $testBuild 'algo-exact-cover-selfhost.exe'
 $algoExactCoverWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_exact_cover\src\main.e') $repo 'x64' 'windows' $algoExactCoverPath
@@ -2671,6 +2689,12 @@ $netAuthWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $netAuthWritten -ne 'executable written') { throw 'net_auth emission failed' }
 & $netAuthPath
 if ($LASTEXITCODE -ne 0) { throw "a net_auth check failed: exit $LASTEXITCODE" }
+# `e.math.pkpd`: non-compartmental analysis of an exponential decay -- the linear and linear-up/log-down trapezoid areas, the first-moment area, the peak, the terminal rate and the half-life -- and the Emax/Hill and Michaelis-Menten fits recovering their parameters from clean data, with the too-few, non-positive and wrong-parameter refusals (D1962).
+$mathPkpdPath = Join-Path $testBuild 'math-pkpd-selfhost.exe'
+$mathPkpdWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_pkpd\src\main.e') $repo 'x64' 'windows' $mathPkpdPath
+if ($LASTEXITCODE -ne 0 -or $mathPkpdWritten -ne 'executable written') { throw 'math_pkpd emission failed' }
+& $mathPkpdPath
+if ($LASTEXITCODE -ne 0) { throw "a math_pkpd check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

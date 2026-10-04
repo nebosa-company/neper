@@ -1278,6 +1278,11 @@ algo_stat_test_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$algo_stat_test_written" = 'executable written' ]
 chmod +x "$test_build/algo-stat-test-selfhost"
 "$test_build/algo-stat-test-selfhost"
+# `e.algo.stat.safety` (L016): ROR/PRR with intervals and signal rules, the BCPNN information component and Apriori rules over comedication masks, with refusals.
+algo_stat_safety_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_safety/src/main.e" "$repo" x64 linux "$test_build/algo-stat-safety-selfhost")
+[ "$algo_stat_safety_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-safety-selfhost"
+"$test_build/algo-stat-safety-selfhost"
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 algo_graph_flow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_flow/src/main.e" "$repo" x64 linux "$test_build/algo-graph-flow-selfhost")
 [ "$algo_graph_flow_written" = 'executable written' ]
@@ -1628,6 +1633,16 @@ algo_timeseries_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$algo_timeseries_written" = 'executable written' ]
 chmod +x "$test_build/algo-timeseries-selfhost"
 "$test_build/algo-timeseries-selfhost"
+# `e.algo.timeseries` VAR (L059): a VAR(1) fit recovering its coefficients, hand-checked forecasts, the companion form through the Kalman predict, and level/trend filters with refusals.
+algo_timeseries_var_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_timeseries_var/src/main.e" "$repo" x64 linux "$test_build/algo-timeseries-var-selfhost")
+[ "$algo_timeseries_var_written" = 'executable written' ]
+chmod +x "$test_build/algo-timeseries-var-selfhost"
+"$test_build/algo-timeseries-var-selfhost"
+# `e.algo.timeseries` ARIMA and inventory (L017): differencing, AR(1)/ARMA(1,1) recovery, hand-checked forecasts, EOQ and the newsvendor with refusals.
+algo_timeseries_arima_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_timeseries_arima/src/main.e" "$repo" x64 linux "$test_build/algo-timeseries-arima-selfhost")
+[ "$algo_timeseries_arima_written" = 'executable written' ]
+chmod +x "$test_build/algo-timeseries-arima-selfhost"
+"$test_build/algo-timeseries-arima-selfhost"
 # `e.algo.exact_cover`: the unique cover of the paper's matrix, an uncoverable one, and a Sudoku solved to its known solution (D850).
 algo_exact_cover_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_exact_cover/src/main.e" "$repo" x64 linux "$test_build/algo-exact-cover-selfhost")
 [ "$algo_exact_cover_written" = 'executable written' ]
@@ -2368,6 +2383,11 @@ if command -v krb5kdc >/dev/null 2>&1 || [ -x /usr/sbin/krb5kdc ]; then
 else
     "$test_build/net-auth-selfhost"
 fi
+# `e.math.pkpd`: non-compartmental analysis of an exponential decay -- the linear and linear-up/log-down trapezoid areas, the first-moment area, the peak, the terminal rate and the half-life -- and the Emax/Hill and Michaelis-Menten fits recovering their parameters from clean data, with the too-few, non-positive and wrong-parameter refusals (D1962).
+math_pkpd_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_pkpd/src/main.e" "$repo" x64 linux "$test_build/math-pkpd-selfhost")
+[ "$math_pkpd_written" = 'executable written' ]
+chmod +x "$test_build/math-pkpd-selfhost"
+"$test_build/math-pkpd-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

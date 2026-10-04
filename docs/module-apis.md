@@ -2330,6 +2330,17 @@ fn var_forecast(coefs: []const f64, intercept: []const f64, k: usize, p: usize, 
 fn var_companion(coefs: []const f64, k: usize, p: usize, f: []f64, h: []f64) -> err
 fn level_filter(observations: []const f64, level_var: f64, obs_var: f64, initial: f64, initial_var: f64, filtered: []f64, scratch: []f64) -> err
 fn trend_filter(observations: []const f64, level_var: f64, slope_var: f64, obs_var: f64, initial_level: f64, initial_slope: f64, initial_var: f64, level_out: []f64, trend_out: []f64, scratch: []f64) -> err
+type ArmaFit = struct { series: []const f64, resid: []f64, p: usize, q: usize }
+fn arima_difference(series: []const f64, d: usize, out: []f64) -> (usize, err)
+fn ar_fit(series: []const f64, p: usize, coefs: []f64, intercept: []f64, scratch: []f64) -> err
+fn arma_css(series: []const f64, ar: []const f64, ma: []const f64, intercept: f64, resid: []f64) -> (f64, err)
+fn arma_objective(fit: *ArmaFit, params: []const f64) -> f64
+fn arma_fit(series: []const f64, p: usize, q: usize, params: []f64, scale: f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (f64, err)
+fn arma_forecast(ar: []const f64, ma: []const f64, intercept: f64, past: []const f64, past_resid: []const f64, horizon: usize, out: []f64) -> err
+fn eoq(demand: f64, order_cost: f64, holding_cost: f64) -> (f64, err)
+fn eoq_total(demand: f64, order_cost: f64, holding_cost: f64, quantity: f64) -> (f64, err)
+fn newsvendor_ratio(underage: f64, overage: f64) -> (f64, err)
+fn newsvendor_discrete(demands: []const f64, probs: []const f64, ratio: f64) -> (f64, err)
 ```
 
 `holt_winters` (additive triple smoothing with forecasts), `loess` and `stl` (a LOESS
@@ -2341,6 +2352,9 @@ VAR(p) (`var_fit` by equation-wise least squares over `solve_normal`, `var_forec
 by recursion) with its companion state-space form (`var_companion`) for
 `e.math.filter`'s Kalman, plus the local-level and local-linear-trend structural
 models (`level_filter`, `trend_filter`) run through that same Kalman.
+ARIMA (`arima_difference`, `ar_fit` by least squares, `arma_css` with the
+`arma_fit` Nelder-Mead refinement, `arma_forecast`) and the inventory core
+(`eoq` with `eoq_total`, `newsvendor_ratio` with `newsvendor_discrete`).
 
 ### `e.algo.egraph`
 
@@ -3160,6 +3174,38 @@ sandwich, `doubly_robust` augmentation over caller outcome predictions, and
 Bayesian `mice_impute` chained equations for continuous variables with
 `mice_pool` Rubin's rules behind the generic `mice` driver. Treatments and
 missingness are `u8` flags; scores must stay inside (0, 1).
+
+### `e.algo.stat.safety`
+
+```neper
+type Table = struct { a: u64, b: u64, c: u64, d: u64 }
+type Score = struct { estimate: f64, lower: f64, upper: f64 }
+type Rule = struct { antecedent: u64, consequent: u64, support: usize, confidence: f64, lift: f64 }
+error TooSmall
+error Invalid
+
+fn chi_square_2x2(t: Table) -> (f64, err)
+fn ror(t: Table) -> (Score, err)
+fn prr(t: Table) -> (Score, err)
+fn ror_signal(t: Table) -> (bool, err)
+fn prr_signal(t: Table) -> (bool, err)
+fn ic(t: Table) -> (Score, err)
+fn ic_signal(t: Table) -> (bool, err)
+fn bit_count(mask: u64) -> usize
+fn support_of(masks: []const u64, mask: u64) -> usize
+fn mask_seen(masks: []const u64, count: usize, mask: u64) -> bool
+fn apriori(masks: []const u64, min_support: usize, itemsets: []u64, supports: []usize) -> (usize, err)
+fn apriori_rules(masks: []const u64, min_support: usize, min_confidence: f64, rules: []Rule, scratch_items: []u64, scratch_sups: []usize) -> (usize, err)
+```
+
+Pharmacovigilance signal detection over FAERS-style counts: the reporting odds
+ratio (`ror`) and proportional reporting ratio (`prr`) with Woolf logit
+intervals and their signal rules (lower bound above one; the Evans estimate,
+chi-square and count gates over `chi_square_2x2`), the BCPNN information
+component (`ic`) with its credibility signal, and Apriori frequent-itemset and
+association-rule mining (`apriori`, `apriori_rules` with support, confidence
+and lift) over `u64` comedication masks. Zero cells where a ratio needs them
+are `Invalid`; mining answers into caller storage.
 
 ### `e.algo.stat`
 
