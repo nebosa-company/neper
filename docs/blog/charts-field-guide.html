@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>233 charts, and when to use each — Neper blog</title>
+  <meta name="description" content="A field guide to every chart Neper&#x27;s e.gfx.chart can draw: what question each one answers, when to pick it over its neighbours, and when not to. Every picture below was rendered by Neper.">
+  <link rel="canonical" href="https://neper.dev/blog/charts-field-guide.html">
+  <meta name="theme-color" content="#145db2">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Neper">
+  <meta property="og:title" content="233 charts, and when to use each">
+  <meta property="og:description" content="A field guide to every chart Neper&#x27;s e.gfx.chart can draw: what question each one answers, when to pick it over its neighbours, and when not to. Every picture below was rendered by Neper.">
+  <meta property="og:url" content="https://neper.dev/blog/charts-field-guide.html">
+  <meta property="og:image" content="https://neper.dev/blog/img/charts-field-guide.svg">
+  <meta property="article:published_time" content="2026-10-04">
+  <meta property="article:modified_time" content="2026-10-04">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../ux/components/bundle.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --primary: #145db2; --success: #246b3a; --error: #b42431; --on-primary: #fff; --primary-container: #dae2ff; --on-primary-container: #001b3d;
+      --secondary-container: #d6e3ff; --on-secondary-container: #0b1c31; --tertiary: #944a23;
+      --surface: #f8f9ff; --surface-container-lowest: #fff; --surface-container-low: #f2f3fa;
+      --surface-container: #eceef4; --surface-container-high: #e6e8ef; --surface-container-highest: #e1e2e9;
+      --on-surface: #1a1b20; --on-surface-variant: #434653; --outline: #737784; --outline-variant: #c3c6d5; --focus-ring: #145db2;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-display: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", Roboto, "Noto Sans", Cantarell, system-ui, sans-serif;
+      --font-mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, "Roboto Mono", "JetBrains Mono", "DejaVu Sans Mono", Consolas, monospace;
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px; --space-16: 64px;
+      --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 28px; --radius-full: 9999px;
+      --control-md: 40px; --control-xl: 56px; --divider: 1px; --focus-ring-width: 3px; --focus-ring-offset: 2px;
+      --state-hover: .08; --state-focus: .1; --state-pressed: .1; --duration-short-2: 100ms; --ease-standard: cubic-bezier(.2, 0, 0, 1);
+      --elevation-1: 0 1px 2px #00000022, 0 1px 3px 1px #00000014;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary: #b3c5ff; --success: #8fd79e; --error: #ffb3ad; --on-primary: #003062; --primary-container: #00468b; --on-primary-container: #dae2ff;
+        --secondary-container: #39475f; --on-secondary-container: #d6e3ff; --tertiary: #ffb692;
+        --surface: #121318; --surface-container-lowest: #0c0e14; --surface-container-low: #1a1b20;
+        --surface-container: #1e1f24; --surface-container-high: #292a2f; --surface-container-highest: #33353a;
+        --on-surface: #e1e2e9; --on-surface-variant: #c3c6d5; --outline: #8d909e; --outline-variant: #434653; --focus-ring: #b3c5ff;
+      }
+    }
+    @media (prefers-contrast: more) {
+      :root {
+        --primary: #003b76; --success: #00461d; --error: #7d0018; --primary-container: #dae2ff; --on-primary-container: #000; --secondary-container: #d6e3ff; --on-secondary-container: #000;
+        --surface: #fff; --surface-container-lowest: #fff; --surface-container-low: #f8f9ff;
+        --on-surface: #000; --on-surface-variant: #222531; --outline: #383b47; --outline-variant: #676a77; --focus-ring: #003062;
+      }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root {
+        --primary: #dae2ff; --success: #abf3b9; --error: #ffdad6; --primary-container: #003062; --on-primary-container: #fff; --secondary-container: #223147; --on-secondary-container: #fff;
+        --surface: #000; --surface-container-lowest: #000; --surface-container-low: #121318;
+        --on-surface: #fff; --on-surface-variant: #e4e8f7; --outline: #c3c6d5; --outline-variant: #8d909e; --focus-ring: #dae2ff;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    @media (hover: hover) and (pointer: fine) {
+      body.nu-page, body.nu-page a { cursor: url("../gtm/neper-cursor.svg") 7 5, auto; }
+    }
+    body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
+    a { color: var(--primary); }
+    .wrap { width: min(1040px, calc(100% - 48px)); margin: auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: var(--space-2) 0; border-bottom: 1px solid var(--outline-variant); }
+    .brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
+    .brand img { width: 40px; height: 40px; }
+    .brand span { font: 600 16px/24px var(--font-sans); }
+    .nav-links { display: flex; gap: var(--space-1); color: var(--on-surface-variant); }
+    .nav-links a { padding: 8px 12px; border-radius: var(--radius-full); color: inherit; text-decoration: none; font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    .nav-links a:hover, .nav-links a:focus-visible { color: var(--primary); background: var(--surface-container-high); }
+
+    article { width: min(720px, 100%); margin: auto; padding: var(--space-12) 0 var(--space-16); }
+    .eyebrow { color: var(--primary); font: 600 12px/16px var(--font-sans); letter-spacing: .5px; }
+    h1 { margin: var(--space-3) 0 var(--space-4); font: 400 clamp(34px, 5vw, 45px)/1.15 var(--font-display); letter-spacing: -.25px; }
+    .meta { margin: 0 0 var(--space-8); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .banner { display: block; width: 100%; height: auto; margin: 0 0 var(--space-8); border: 1px solid var(--outline-variant); border-radius: var(--radius-xl); }
+    .lede { font: 400 19px/30px var(--font-sans); }
+    h2 { margin: var(--space-12) 0 var(--space-3); font: 400 28px/36px var(--font-display); }
+    h3 { margin: var(--space-8) 0 var(--space-3); font: 400 22px/28px var(--font-display); }
+    p, ul, ol { margin: 0 0 var(--space-4); }
+    li { margin-bottom: var(--space-2); }
+    strong { font-weight: 600; }
+    code { padding: 1px 5px; border-radius: var(--radius-xs); background: var(--surface-container); font: 400 14px/20px var(--font-mono); }
+    pre { overflow-x: auto; margin: 0 0 var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: var(--surface-container-lowest); font: 400 14px/22px var(--font-mono); }
+    pre code { padding: 0; background: none; }
+    pre .kw { color: var(--primary); }
+    pre .fn { color: var(--primary); font-weight: 600; }
+    pre .str { color: var(--tertiary); }
+    pre .com { color: var(--on-surface-variant); }
+    pre .prompt { color: var(--primary); user-select: none; }
+    figure { margin: var(--space-8) 0; }
+    figure img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-lg); background: #0c0e14; }
+    figcaption { margin-top: var(--space-2); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .table-scroll { overflow-x: auto; margin: 0 0 var(--space-6); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+    table { width: 100%; border-collapse: collapse; font: 400 14px/20px var(--font-sans); font-variant-numeric: tabular-nums; }
+    th, td { padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--outline-variant); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; }
+    thead th { background: var(--surface-container); font-weight: 600; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .rank-1 { color: var(--success); font-weight: 600; }
+    .rank-2 { color: var(--primary); }
+    .rank-last { color: var(--error); }
+    tr.overall td { border-top: 2px solid var(--outline-variant); }
+    .legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin: 0 0 var(--space-4); color: var(--on-surface-variant); font: 400 13px/20px var(--font-sans); }
+    .legend .key { display: inline-flex; align-items: center; gap: var(--space-2); }
+    .legend .key::before { content: ""; width: 12px; height: 12px; border-radius: var(--radius-full); background: currentColor; }
+    .legend .key span { color: var(--on-surface-variant); }
+    .callout { margin: var(--space-8) 0; padding: var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); color: var(--on-primary-container); }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout strong { display: block; margin-bottom: var(--space-2); font: 400 24px/32px var(--font-display); }
+    .try-cta { display: flex; justify-content: center; margin-top: var(--space-12); padding: var(--space-10) var(--space-6); border-radius: var(--radius-xl); background: var(--primary-container); }
+    .try-cta .button { min-width: 280px; min-height: 64px; justify-content: center; padding: 0 var(--space-10); font-size: 20px; text-decoration: none; }
+    footer { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-6) 0; border-top: 1px solid var(--outline-variant); color: var(--on-surface-variant); font-size: 12px; }
+    :focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+    ::selection { background: var(--primary-container); color: var(--on-primary-container); }
+    @media (max-width: 599px) {
+      .wrap { width: calc(100% - 32px); }
+      .nav-links a:not(:last-child) { display: none; }
+      article { padding-top: var(--space-8); }
+      .lede { font-size: 17px; line-height: 28px; }
+      th, td { padding: var(--space-2) var(--space-3); }
+      footer { flex-direction: column; }
+    }
+  
+    .toc { columns: 2; column-gap: var(--space-8); margin: 0 0 var(--space-8); padding: 0; list-style: none; }
+    .toc li { margin: 0 0 var(--space-1); break-inside: avoid; }
+    .chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6) var(--space-5); margin: var(--space-6) 0 var(--space-4); }
+    .chart-card { margin: 0; }
+    .chart-card img { display: block; width: 100%; height: auto; border: 1px solid var(--outline-variant); border-radius: var(--radius-md); background: #fff; }
+    .chart-card h3 { margin: var(--space-3) 0 var(--space-1); font: 600 16px/24px var(--font-sans); }
+    .chart-card p { margin: 0; color: var(--on-surface-variant); font: 400 14px/22px var(--font-sans); }
+    .count { color: var(--on-surface-variant); font: 400 14px/20px var(--font-sans); }
+    @media (max-width: 599px) { .chart-grid { grid-template-columns: 1fr; } .toc { columns: 1; } }
+  </style>
+</head>
+<body class="nu-page">
+  <div class="wrap">
+    <nav aria-label="Primary navigation">
+      <a class="brand" href="../" aria-label="Neper home"><img src="../gtm/logo/neper-icon.svg" alt=""><span>Neper</span></a>
+      <div class="nav-links">
+        <a href="../#llm">llm stack</a>
+        <a href="../#blog">blog</a>
+        <a href="https://github.com/nebosa-company/neper">github ↗</a>
+      </div>
+    </nav>
+
+    <article>
+      <div class="eyebrow">&gt; blog // library</div>
+      <h1>233 charts, and when to use each</h1>
+      <p class="meta">October 4, 2026 · <code>e.gfx.chart</code>, <code>e.gfx.chart.scene</code>, <code>e.gfx.chart.svg</code>, <code>e.gfx.chart.locale</code>, <code>e.gfx.chart.widget</code></p>
+      <img class="banner" src="img/charts-field-guide.svg" width="1200" height="630" alt="233 charts, and when to use each: bars, lines, distributions, control charts, maps and diagrams, all drawn by Neper.">
+      <p class="lede">Neper's chart library now draws 233 kinds of chart, from a bar chart to a Laney u′ control chart, a Kaplan-Meier curve, a Sankey diagram and a Nyquist plot. That is too many to pick from by scrolling. This post is the guide we wanted ourselves: each chart, the question it answers, and when to reach for something else instead.</p>
+      <p>Every picture here was rendered by Neper itself, by <code>examples/chart_gallery.e</code> through the CPU scene renderer and PNG encoder, and each has an SVG twin streamed from the same layout. Behind the gallery, 156 test programs check the geometry, statistics and refusal paths on Windows and on Linux.</p>
+      <h2>How the library is built</h2>
+      <p>A chart in <code>e.gfx.chart</code> is a layout, not a picture. You hand it borrowed columns of numbers and caller-owned storage; it fills that storage with renderer-neutral marks (points, segments, rectangles, polygons, labels) and never allocates on its own. The same marks then go wherever you need them:</p>
+      <ul>
+        <li><code>e.gfx.chart.scene</code> draws them into a scene for the CPU or GPU renderer, and from there into a PNG;</li>
+        <li><code>e.gfx.chart.svg</code> streams them as SVG, with gradients, embedded fonts and accessible titles;</li>
+        <li><code>e.gfx.chart.widget</code> puts them in an <code>e.ui</code> canvas, laid out again at whatever size the window gives it;</li>
+        <li><code>e.gfx.chart.locale</code> writes tick labels in the reader's number and date conventions.</li>
+      </ul>
+      <p>Here is a whole program: six bars, the library's accessible palette, a colour-blindness check of that palette, and an SVG file. We compiled and ran it on Windows and on Linux, and both printed exactly this.</p>
+<pre><code><span class="kw">use</span> e.fs
+<span class="kw">use</span> e.gfx.chart
+<span class="kw">use</span> e.gfx.chart.svg as chart_svg
+<span class="kw">use</span> e.gfx.geometry
+<span class="kw">use</span> e.gfx.paint
+<span class="kw">use</span> e.io
+<span class="kw">use</span> e.mem
+
+<span class="kw">fn</span> <span class="fn">main</span>(a: *mem.Arena, args: []str) -&gt; err {
+    <span class="com">// Borrowed data in, caller-owned marks out: nothing is allocated for the geometry.</span>
+    <span class="kw">let</span> quarter = [6]f32{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 }
+    <span class="kw">let</span> revenue = [6]f32{ 3.1, 3.6, 4.4, 4.0, 5.2, 5.9 }
+    <span class="kw">var</span> bars: [6]geometry.Rect = <span class="kw">zero</span>
+    <span class="kw">let</span> spec = chart.<span class="fn">spec</span>(.Bar, geometry.<span class="fn">rect</span>(40.0, 20.0, 300.0, 180.0), quarter[..], revenue[..])
+    <span class="kw">let</span> marks = <span class="kw">try</span> chart.<span class="fn">layout</span>(&amp;spec, <span class="kw">zero</span>, <span class="kw">zero</span>, bars[..])
+    <span class="kw">let</span> last = marks.bars[5usize]
+    <span class="kw">try</span> io.printf[<span class="str">"{} bars; the last is {} px tall at x = {}\n"</span>](marks.bars.len, last.height, last.x)
+    <span class="com">// Six series colours that clear 4.5:1 on white, and how close the nearest</span>
+    <span class="com">// two come for a viewer with deuteranopia.</span>
+    <span class="kw">var</span> palette_storage: [6]paint.Color = <span class="kw">zero</span>
+    <span class="kw">let</span> palette = <span class="kw">try</span> chart.<span class="fn">accessible_palette</span>(paint.<span class="fn">rgba</span>(1.0, 1.0, 1.0, 1.0), palette_storage[..])
+    <span class="kw">let</span> typical = <span class="kw">try</span> chart.<span class="fn">palette_separation</span>(palette, .Typical, 1.0)
+    <span class="kw">let</span> deutan = <span class="kw">try</span> chart.<span class="fn">palette_separation</span>(palette, .Deutan, 1.0)
+    <span class="kw">try</span> io.printf[<span class="str">"closest pair, typical vision: {} and {}, CIEDE2000 {}\n"</span>](typical.first, typical.second, typical.difference)
+    <span class="kw">try</span> io.printf[<span class="str">"closest pair, deuteranopia:   {} and {}, CIEDE2000 {}\n"</span>](deutan.first, deutan.second, deutan.difference)
+    <span class="com">// The same marks stream to SVG (or to the CPU scene for a PNG).</span>
+    <span class="kw">let</span> (state, unused, writer_error) = io.<span class="fn">memory_writer</span>(a, 0usize)
+    <span class="kw">if</span> writer_error != <span class="kw">ok</span> { <span class="kw">ret</span> writer_error }
+    <span class="kw">var</span> held = state
+    <span class="kw">var</span> writer = io.<span class="fn">writer</span>(mem.cast[*void](&amp;held), io.memory_write)
+    <span class="kw">try</span> chart_svg.<span class="fn">begin</span>(&amp;writer, 360.0, 220.0, <span class="str">"Revenue"</span>, <span class="str">"Quarterly revenue, six quarters"</span>)
+    <span class="kw">try</span> chart_svg.<span class="fn">append</span>(&amp;writer, &amp;marks, palette[0usize])
+    <span class="kw">try</span> chart_svg.<span class="fn">finish</span>(&amp;writer)
+    <span class="kw">let</span> svg = io.<span class="fn">memory_bytes</span>(&amp;held)
+    <span class="kw">try</span> fs.<span class="fn">write_file</span>(a, <span class="str">"revenue.svg"</span>, svg)
+    <span class="kw">try</span> io.printf[<span class="str">"wrote revenue.svg: {} bytes\n"</span>](svg.len)
+    <span class="kw">ret</span> <span class="kw">ok</span>
+}</code></pre>
+<pre><code>6 bars; the last is 180 px tall at x = 295
+closest pair, typical vision: 1 and 5, CIEDE2000 10.082577076760705
+closest pair, deuteranopia:   0 and 3, CIEDE2000 1.219605253081527
+wrote revenue.svg: 836 bytes</code></pre>
+      <p>The last two lines carry a real lesson. The palette keeps every series colour at 4.5:1 contrast against white, and for typical vision its closest pair is still clearly different. For a reader with deuteranopia, though, series 0 (blue) and 3 (purple) are barely distinguishable. Contrast is not colour-blind safety, which is why the previews label series directly instead of relying on a colour legend.</p>
+      <h2>Start from the question</h2>
+      <p>Most bad charts are good charts answering the wrong question. Decide what you want the reader to see, then pick from the matching family:</p>
+      <div class="table-scroll"><table><thead><tr><th>If the question is…</th><th>Start with</th><th>Family</th></tr></thead><tbody>
+        <tr><td>How much, and which is biggest?</td><td>Bar, lollipop, dot</td><td><a href="#amounts">Comparing amounts and ranks</a></td></tr>
+        <tr><td>What is it made of?</td><td>Stacked bar, treemap, waffle</td><td><a href="#parts">Parts of a whole</a></td></tr>
+        <tr><td>How did it change?</td><td>Line, step, area</td><td><a href="#time">Change over time</a></td></tr>
+        <tr><td>What does the data look like?</td><td>Histogram, ECDF, box, violin</td><td><a href="#distributions">Distributions</a></td></tr>
+        <tr><td>Do two things move together?</td><td>Scatter, regression fit, hexbin</td><td><a href="#relationships">Relationships between variables</a></td></tr>
+        <tr><td>Are two categories associated?</td><td>Mosaic, fourfold, cross-tab</td><td><a href="#categorical">Categories, tables and sets</a></td></tr>
+        <tr><td>Is my model any good?</td><td>ROC, calibration, decision curve</td><td><a href="#models">Classifiers and predictive models</a></td></tr>
+        <tr><td>Is my regression trustworthy?</td><td>Residuals, influence</td><td><a href="#diagnostics">Regression diagnostics</a></td></tr>
+        <tr><td>Does the treatment help?</td><td>Kaplan-Meier, forest plot</td><td><a href="#medical">Medicine, survival and agreement</a></td></tr>
+        <tr><td>Is the process stable?</td><td>Control charts</td><td><a href="#spc">Statistical process control</a></td></tr>
+        <tr><td>Can the process meet spec?</td><td>Capability, Gage R&amp;R</td><td><a href="#capability">Capability and measurement systems</a></td></tr>
+        <tr><td>Where should we improve?</td><td>Pareto, fishbone, value stream</td><td><a href="#improvement">Process improvement and experiments</a></td></tr>
+        <tr><td>Are we on schedule?</td><td>Gantt, burnup, earned value</td><td><a href="#projects">Projects and operations</a></td></tr>
+        <tr><td>How is the asset doing?</td><td>Candlestick, drawdown</td><td><a href="#finance">Finance</a></td></tr>
+        <tr><td>Where does it flow?</td><td>Sankey, network diagrams</td><td><a href="#diagrams">Flows, networks and diagrams</a></td></tr>
+        <tr><td>What frequencies are in the signal?</td><td>Spectrogram, Bode</td><td><a href="#signals">Signals, fields and dynamics</a></td></tr>
+        <tr><td>Where is it?</td><td>Choropleth, proportional symbols</td><td><a href="#maps">Maps</a></td></tr>
+      </tbody></table></div>
+      <p>A few rules hold across all of them:</p>
+      <ul>
+        <li><strong>Position beats length, length beats angle, angle beats area and colour.</strong> People compare positions on a common scale most accurately, so bars and dots win for exact comparison and pies, bubbles and colour scales are for rough impressions.</li>
+        <li><strong>Bars start at zero; lines need not.</strong> A bar's length is its value, while a line's slope is its message.</li>
+        <li><strong>Show the data when there is little of it.</strong> With 20 points, plot all 20 (strip, beeswarm, raincloud) rather than a summary that hides them.</li>
+        <li><strong>Label directly.</strong> A label next to the line beats a legend the eye has to travel to, and it keeps working for readers who cannot tell the colours apart.</li>
+        <li><strong>Never use 3-D for decoration.</strong> Perspective distorts every comparison it touches.</li>
+      </ul>
+      <h2>The families</h2>
+      <ul class="toc">
+        <li><a href="#amounts">Comparing amounts and ranks</a> <span class="count">(13)</span></li>
+        <li><a href="#parts">Parts of a whole</a> <span class="count">(13)</span></li>
+        <li><a href="#time">Change over time</a> <span class="count">(16)</span></li>
+        <li><a href="#distributions">Distributions</a> <span class="count">(22)</span></li>
+        <li><a href="#relationships">Relationships between variables</a> <span class="count">(22)</span></li>
+        <li><a href="#categorical">Categories, tables and sets</a> <span class="count">(10)</span></li>
+        <li><a href="#models">Classifiers and predictive models</a> <span class="count">(9)</span></li>
+        <li><a href="#diagnostics">Regression diagnostics</a> <span class="count">(4)</span></li>
+        <li><a href="#medical">Medicine, survival and agreement</a> <span class="count">(6)</span></li>
+        <li><a href="#spc">Statistical process control</a> <span class="count">(33)</span></li>
+        <li><a href="#capability">Capability and measurement systems</a> <span class="count">(10)</span></li>
+        <li><a href="#improvement">Process improvement and experiments</a> <span class="count">(11)</span></li>
+        <li><a href="#projects">Projects and operations</a> <span class="count">(16)</span></li>
+        <li><a href="#finance">Finance</a> <span class="count">(9)</span></li>
+        <li><a href="#diagrams">Flows, networks and diagrams</a> <span class="count">(10)</span></li>
+        <li><a href="#signals">Signals, fields and dynamics</a> <span class="count">(10)</span></li>
+        <li><a href="#maps">Maps</a> <span class="count">(2)</span></li>
+        <li><a href="#threed">3-D</a> <span class="count">(4)</span></li>
+        <li><a href="#engine">Composition, layout and accessibility</a> <span class="count">(13)</span></li>
+      </ul>
+      <h2 id="amounts">Comparing amounts and ranks</h2>
+      <p>Use these when the question is "how much, and which is bigger?" Position along a common baseline is what the eye judges best, so a plain bar or dot beats anything round or three-dimensional for exact comparison. Sort the categories unless their order means something.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="bar"><img src="img/charts/bar.webp" width="360" height="240" loading="lazy" decoding="async" alt="Bar / column rendered by Neper"><h3>Bar / column</h3><p>The default for comparing one number across categories. Bars must start at zero, because their length is the message. With many categories or long names, turn it sideways.</p></figure>
+        <figure class="chart-card" id="grouped_bar"><img src="img/charts/grouped_bar.webp" width="360" height="240" loading="lazy" decoding="async" alt="Grouped bar rendered by Neper"><h3>Grouped bar</h3><p>Two or three series side by side per category, when the comparison inside each group matters most (this year against last, plan against actual). Past four series it turns into a picket fence; switch to small multiples.</p></figure>
+        <figure class="chart-card" id="discrete_axis_bar"><img src="img/charts/discrete_axis_bar.webp" width="360" height="240" loading="lazy" decoding="async" alt="Bars on an ordered category axis rendered by Neper"><h3>Bars on an ordered category axis</h3><p>Categories with a meaningful order of their own (sizes, stages, survey answers), including levels with no data, which keep an empty slot instead of silently disappearing.</p></figure>
+        <figure class="chart-card" id="lollipop"><img src="img/charts/lollipop.webp" width="360" height="240" loading="lazy" decoding="async" alt="Lollipop rendered by Neper"><h3>Lollipop</h3><p>A bar chart with less ink: same use, better when there are many categories or the values are close together and thick bars would dominate the page.</p></figure>
+        <figure class="chart-card" id="dumbbell"><img src="img/charts/dumbbell.webp" width="360" height="240" loading="lazy" decoding="async" alt="Dumbbell rendered by Neper"><h3>Dumbbell</h3><p>Two values per category, such as before and after or men and women, where the gap is the story. Easier to read than paired bars when there are many rows.</p></figure>
+        <figure class="chart-card" id="slopegraph"><img src="img/charts/slopegraph.webp" width="360" height="240" loading="lazy" decoding="async" alt="Slopegraph rendered by Neper"><h3>Slopegraph</h3><p>The same items at exactly two moments. Crossing lines show who overtook whom; the rank change is the point, not the path between the two moments.</p></figure>
+        <figure class="chart-card" id="range_interval"><img src="img/charts/range_interval.webp" width="360" height="240" loading="lazy" decoding="async" alt="Range / interval bars rendered by Neper"><h3>Range / interval bars</h3><p>A low and a high per category, such as daily temperature ranges, price bands or shift windows, when the span matters more than any single value.</p></figure>
+        <figure class="chart-card" id="errorbar"><img src="img/charts/errorbar.webp" width="360" height="240" loading="lazy" decoding="async" alt="Error bars rendered by Neper"><h3>Error bars</h3><p>Point estimates with their uncertainty. Always say what the whiskers mean (standard deviation, standard error or a confidence interval), because readers will guess otherwise.</p></figure>
+        <figure class="chart-card" id="bullet"><img src="img/charts/bullet.webp" width="360" height="240" loading="lazy" decoding="async" alt="Bullet graph rendered by Neper"><h3>Bullet graph</h3><p>One measure against a target and qualitative bands (poor, fair, good) in a small strip. It does a dashboard gauge's job in a tenth of the space.</p></figure>
+        <figure class="chart-card" id="radar"><img src="img/charts/radar.webp" width="360" height="240" loading="lazy" decoding="async" alt="Radar rendered by Neper"><h3>Radar</h3><p>Comparing a few profiles across five to eight dimensions measured on the same scale, such as product scorecards. Shape is easy to see; exact values are not, so keep a table nearby.</p></figure>
+        <figure class="chart-card" id="population_pyramid"><img src="img/charts/population_pyramid.webp" width="360" height="240" loading="lazy" decoding="async" alt="Population pyramid rendered by Neper"><h3>Population pyramid</h3><p>Two mirrored distributions over the same ordered bands, classically age by sex. It works for any two-group comparison over ordered bins.</p></figure>
+        <figure class="chart-card" id="funnel"><img src="img/charts/funnel.webp" width="360" height="240" loading="lazy" decoding="async" alt="Funnel rendered by Neper"><h3>Funnel</h3><p>Counts that shrink through ordered stages (visits, leads, trials, wins). Label each stage with its value or conversion rate, because tapering widths are hard to compare.</p></figure>
+        <figure class="chart-card" id="ribbon_rank"><img src="img/charts/ribbon_rank.webp" width="360" height="240" loading="lazy" decoding="async" alt="Rank over time (ribbons) rendered by Neper"><h3>Rank over time (ribbons)</h3><p>Who led, and when: the position of each competitor across periods. Use it when rank matters more than the gaps between competitors.</p></figure>
+      </div>
+      <h2 id="parts">Parts of a whole</h2>
+      <p>Shares only make sense when the parts add up to a meaningful total. For two to five parts a bar, pie or waffle all work; for many parts or a hierarchy, use the area-based layouts. When the parts change over time, stacked bars or a streamgraph beat a row of pies.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="pie"><img src="img/charts/pie.webp" width="360" height="240" loading="lazy" decoding="async" alt="Pie rendered by Neper"><h3>Pie</h3><p>A few shares of one total, when "about a quarter" is precise enough. Five slices at most, the largest first, and labels on the slices instead of a legend.</p></figure>
+        <figure class="chart-card" id="donut"><img src="img/charts/donut.webp" width="360" height="240" loading="lazy" decoding="async" alt="Donut rendered by Neper"><h3>Donut</h3><p>A pie with room in the middle for the total or a headline number. Same limits as a pie.</p></figure>
+        <figure class="chart-card" id="waffle"><img src="img/charts/waffle.webp" width="360" height="240" loading="lazy" decoding="async" alt="Waffle rendered by Neper"><h3>Waffle</h3><p>Shares as countable squares out of 100. Friendlier than a pie for general readers, and small shares stay visible.</p></figure>
+        <figure class="chart-card" id="stacked_bar"><img src="img/charts/stacked_bar.webp" width="360" height="240" loading="lazy" decoding="async" alt="Stacked bar (signed) rendered by Neper"><h3>Stacked bar (signed)</h3><p>Totals per category and their make-up at once. Only the bottom segment shares a baseline, so compare inner segments with care. Negative parts stack below zero.</p></figure>
+        <figure class="chart-card" id="stacked_100"><img src="img/charts/stacked_100.webp" width="360" height="240" loading="lazy" decoding="async" alt="100% stacked bar rendered by Neper"><h3>100% stacked bar</h3><p>Composition across categories when the totals differ or don't matter: market share by region, answer mix by group.</p></figure>
+        <figure class="chart-card" id="treemap"><img src="img/charts/treemap.webp" width="360" height="240" loading="lazy" decoding="async" alt="Treemap rendered by Neper"><h3>Treemap</h3><p>Large hierarchies of sizes (budgets, disk usage, portfolio weights), where nested rectangles fit hundreds of items on a page. Colour can carry a second measure.</p></figure>
+        <figure class="chart-card" id="sunburst"><img src="img/charts/sunburst.webp" width="360" height="240" loading="lazy" decoding="async" alt="Sunburst rendered by Neper"><h3>Sunburst</h3><p>A hierarchy shown as rings. It reads well for a few levels when the path from the root matters more than precise area comparison.</p></figure>
+        <figure class="chart-card" id="icicle"><img src="img/charts/icicle.webp" width="360" height="240" loading="lazy" decoding="async" alt="Icicle rendered by Neper"><h3>Icicle</h3><p>The rectangular cousin of the sunburst. Depth runs top to bottom and the labels fit better, so it is often the more practical of the two.</p></figure>
+        <figure class="chart-card" id="circle_pack"><img src="img/charts/circle_pack.webp" width="360" height="240" loading="lazy" decoding="async" alt="Circle packing rendered by Neper"><h3>Circle packing</h3><p>Hierarchy and grouping at a glance, for organisation charts with sizes or clusters of clusters. It wastes space by design, so don't use it for exact comparison.</p></figure>
+        <figure class="chart-card" id="mekko"><img src="img/charts/mekko.webp" width="360" height="240" loading="lazy" decoding="async" alt="Marimekko rendered by Neper"><h3>Marimekko</h3><p>Two-dimensional shares: column width is each segment's size and the stacks show its mix, as in market size by region and share by vendor within each.</p></figure>
+        <figure class="chart-card" id="spine_plot"><img src="img/charts/spine_plot.webp" width="360" height="240" loading="lazy" decoding="async" alt="Spine plot rendered by Neper"><h3>Spine plot</h3><p>Outcome mix across groups of different sizes, from counts. Each bar's width is its group's size and its stack is the outcome proportions.</p></figure>
+        <figure class="chart-card" id="waterfall"><img src="img/charts/waterfall.webp" width="360" height="240" loading="lazy" decoding="async" alt="Waterfall / bridge rendered by Neper"><h3>Waterfall / bridge</h3><p>How a starting value becomes an ending value through positive and negative steps: profit bridges, budget variances, headcount changes.</p></figure>
+        <figure class="chart-card" id="aggregate_decomposition_tree"><img src="img/charts/aggregate_decomposition_tree.webp" width="360" height="240" loading="lazy" decoding="async" alt="Decomposition tree rendered by Neper"><h3>Decomposition tree</h3><p>Drilling a total into its contributors level by level, with each node's share. Good for "where does this number come from?"</p></figure>
+      </div>
+      <h2 id="time">Change over time</h2>
+      <p>Time goes left to right. A line says the points in between are meaningful; bars or dots say they are separate periods. Real calendars have uneven months and leap years, so use a date axis rather than evenly spaced labels.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="line"><img src="img/charts/line.webp" width="360" height="240" loading="lazy" decoding="async" alt="Line rendered by Neper"><h3>Line</h3><p>The default for a continuous series. Several series fit on one chart until they tangle (four or five); after that, use small multiples.</p></figure>
+        <figure class="chart-card" id="point_line"><img src="img/charts/point_line.webp" width="360" height="240" loading="lazy" decoding="async" alt="Points and line rendered by Neper"><h3>Points and line</h3><p>A line where each observation should stay visible: sparse or irregular measurements, or when individual readings matter.</p></figure>
+        <figure class="chart-card" id="step"><img src="img/charts/step.webp" width="360" height="240" loading="lazy" decoding="async" alt="Step rendered by Neper"><h3>Step</h3><p>Values that hold until they change: prices, inventory, interest rates, configuration states. A sloped line would wrongly suggest a gradual change.</p></figure>
+        <figure class="chart-card" id="area"><img src="img/charts/area.webp" width="360" height="240" loading="lazy" decoding="async" alt="Area rendered by Neper"><h3>Area</h3><p>A single series whose volume matters, such as cumulative totals or load over time. Area from zero; don't stack more than a few.</p></figure>
+        <figure class="chart-card" id="date_axis_line"><img src="img/charts/date_axis_line.webp" width="360" height="240" loading="lazy" decoding="async" alt="Date-aware line rendered by Neper"><h3>Date-aware line</h3><p>Real calendar time: months of different lengths, leap days, irregular sampling. Points sit at their true elapsed time and month starts are labelled.</p></figure>
+        <figure class="chart-card" id="labeled_line"><img src="img/charts/labeled_line.webp" width="360" height="240" loading="lazy" decoding="async" alt="Labeled line rendered by Neper"><h3>Labeled line</h3><p>A line with titled axes and tick labels, the standard published look. Use direct labels at the line ends instead of a legend whenever you can.</p></figure>
+        <figure class="chart-card" id="sparkline"><img src="img/charts/sparkline.webp" width="360" height="240" loading="lazy" decoding="async" alt="Sparklines rendered by Neper"><h3>Sparklines</h3><p>Word-sized trends in a table or dashboard row: shape and direction, not values. Put the current number next to it.</p></figure>
+        <figure class="chart-card" id="combo_bar_line"><img src="img/charts/combo_bar_line.webp" width="360" height="240" loading="lazy" decoding="async" alt="Bar + line (secondary axis) rendered by Neper"><h3>Bar + line (secondary axis)</h3><p>Two measures with different units, such as revenue bars and an index line. Label both axes clearly; dual axes invite false correlations, so use them sparingly.</p></figure>
+        <figure class="chart-card" id="streamgraph"><img src="img/charts/streamgraph.webp" width="360" height="240" loading="lazy" decoding="async" alt="Streamgraph rendered by Neper"><h3>Streamgraph</h3><p>Many categories' volumes flowing over time around a centre line. Striking for broad shifts in share; poor for reading exact values.</p></figure>
+        <figure class="chart-card" id="horizon"><img src="img/charts/horizon.webp" width="360" height="240" loading="lazy" decoding="async" alt="Horizon chart rendered by Neper"><h3>Horizon chart</h3><p>Many time series stacked in very little height. Bands are folded and shaded by magnitude, which suits monitoring dozens of servers or sensors at once.</p></figure>
+        <figure class="chart-card" id="calendar_heatmap"><img src="img/charts/calendar_heatmap.webp" width="360" height="240" loading="lazy" decoding="async" alt="Calendar heatmap rendered by Neper"><h3>Calendar heatmap</h3><p>Daily values on a week-by-weekday grid: activity, sales or incidents, when weekly rhythm and individual days both matter.</p></figure>
+        <figure class="chart-card" id="seasonal_subseries"><img src="img/charts/seasonal_subseries.webp" width="360" height="240" loading="lazy" decoding="async" alt="Seasonal subseries rendered by Neper"><h3>Seasonal subseries</h3><p>Is every January like every other January? Each season's values over the years, with its mean, to separate seasonality from trend.</p></figure>
+        <figure class="chart-card" id="decomposition"><img src="img/charts/decomposition.webp" width="360" height="240" loading="lazy" decoding="async" alt="Time-series decomposition rendered by Neper"><h3>Time-series decomposition</h3><p>A series split into trend, seasonal and remainder panels, to see what is structure and what is noise before forecasting.</p></figure>
+        <figure class="chart-card" id="fan_forecast"><img src="img/charts/fan_forecast.webp" width="360" height="240" loading="lazy" decoding="async" alt="Forecast fan rendered by Neper"><h3>Forecast fan</h3><p>A forecast with nested prediction intervals (50/80/95%) that widen with the horizon. It is honest about uncertainty in a way a single line never is.</p></figure>
+        <figure class="chart-card" id="correlogram"><img src="img/charts/correlogram.webp" width="360" height="240" loading="lazy" decoding="async" alt="ACF / PACF correlogram rendered by Neper"><h3>ACF / PACF correlogram</h3><p>Autocorrelation by lag with significance bounds: choosing ARIMA orders, checking residuals for leftover structure, finding seasonality.</p></figure>
+        <figure class="chart-card" id="connected_scatter"><img src="img/charts/connected_scatter.webp" width="360" height="240" loading="lazy" decoding="async" alt="Connected scatter rendered by Neper"><h3>Connected scatter</h3><p>Two measures that move together over time (unemployment and inflation, price and volume), with the path drawn in time order.</p></figure>
+      </div>
+      <h2 id="distributions">Distributions</h2>
+      <p>Before any summary statistic, look at the shape: one peak or two, skew, outliers, gaps. Histograms and densities show shape, box plots summarise it compactly for many groups, and Q-Q and probability plots check it against a model. With small samples, show every point.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="histogram"><img src="img/charts/histogram.webp" width="360" height="240" loading="lazy" decoding="async" alt="Histogram rendered by Neper"><h3>Histogram</h3><p>The shape of one numeric variable. Try a few bin widths; the story should survive them. Bars touch because the bins are contiguous.</p></figure>
+        <figure class="chart-card" id="frequency_polygon"><img src="img/charts/frequency_polygon.webp" width="360" height="240" loading="lazy" decoding="async" alt="Frequency polygon rendered by Neper"><h3>Frequency polygon</h3><p>A histogram drawn as a line, which makes it easy to overlay two or three distributions on one axis.</p></figure>
+        <figure class="chart-card" id="density"><img src="img/charts/density.webp" width="360" height="240" loading="lazy" decoding="async" alt="Density (KDE) rendered by Neper"><h3>Density (KDE)</h3><p>A smoothed distribution shape. Good for overlays and for comparing modes; state the bandwidth, because it changes the picture.</p></figure>
+        <figure class="chart-card" id="ecdf"><img src="img/charts/ecdf.webp" width="360" height="240" loading="lazy" decoding="async" alt="ECDF rendered by Neper"><h3>ECDF</h3><p>Every observation as a cumulative step: medians, percentiles and comparisons between groups with no binning choices at all. Underused and excellent.</p></figure>
+        <figure class="chart-card" id="box"><img src="img/charts/box.webp" width="360" height="240" loading="lazy" decoding="async" alt="Box plot rendered by Neper"><h3>Box plot</h3><p>Median, quartiles and outliers for many groups side by side. Compact, but it hides bimodality, so pair it with points or a violin when n is small.</p></figure>
+        <figure class="chart-card" id="boxen"><img src="img/charts/boxen.webp" width="360" height="240" loading="lazy" decoding="async" alt="Letter-value (boxen) plot rendered by Neper"><h3>Letter-value (boxen) plot</h3><p>A box plot for large samples: more quantiles in nested boxes show the tails that a plain box reduces to a swarm of outliers.</p></figure>
+        <figure class="chart-card" id="violin"><img src="img/charts/violin.webp" width="360" height="240" loading="lazy" decoding="async" alt="Violin rendered by Neper"><h3>Violin</h3><p>A mirrored density per group: shape and spread together. Better than a box plot when distributions can have two peaks.</p></figure>
+        <figure class="chart-card" id="half_violin"><img src="img/charts/half_violin.webp" width="360" height="240" loading="lazy" decoding="async" alt="Half violin rendered by Neper"><h3>Half violin</h3><p>One side of a violin, leaving room for points or a box on the other side.</p></figure>
+        <figure class="chart-card" id="raincloud"><img src="img/charts/raincloud.webp" width="360" height="240" loading="lazy" decoding="async" alt="Raincloud rendered by Neper"><h3>Raincloud</h3><p>Density, box summary and every raw observation together. The most complete small-sample distribution picture.</p></figure>
+        <figure class="chart-card" id="ridgeline"><img src="img/charts/ridgeline.webp" width="360" height="240" loading="lazy" decoding="async" alt="Ridgeline rendered by Neper"><h3>Ridgeline</h3><p>Distributions of many groups or periods stacked with slight overlap, such as monthly temperatures or response times by release.</p></figure>
+        <figure class="chart-card" id="beeswarm"><img src="img/charts/beeswarm.webp" width="360" height="240" loading="lazy" decoding="async" alt="Beeswarm rendered by Neper"><h3>Beeswarm</h3><p>Every point of a modest sample, nudged so none overlap. Shows both the distribution and the individual cases.</p></figure>
+        <figure class="chart-card" id="strip"><img src="img/charts/strip.webp" width="360" height="240" loading="lazy" decoding="async" alt="Strip (jitter) rendered by Neper"><h3>Strip (jitter)</h3><p>Raw points per group with random jitter. A quick honest look at small samples; use a beeswarm when overlap gets heavy.</p></figure>
+        <figure class="chart-card" id="rug"><img src="img/charts/rug.webp" width="360" height="240" loading="lazy" decoding="async" alt="Rug rendered by Neper"><h3>Rug</h3><p>Tick marks of the raw values along an axis, usually under a density or a scatter, to show where the data really are.</p></figure>
+        <figure class="chart-card" id="dot_plot"><img src="img/charts/dot_plot.webp" width="360" height="240" loading="lazy" decoding="async" alt="Binned dot plot rendered by Neper"><h3>Binned dot plot</h3><p>Stacked dots per bin: a histogram where each observation can still be counted, ideal for teaching and small samples.</p></figure>
+        <figure class="chart-card" id="stem_and_leaf"><img src="img/charts/stem_and_leaf.webp" width="360" height="240" loading="lazy" decoding="async" alt="Stem-and-leaf rendered by Neper"><h3>Stem-and-leaf</h3><p>A text histogram that keeps the digits of every value, for small datasets and printed reports.</p></figure>
+        <figure class="chart-card" id="qq"><img src="img/charts/qq.webp" width="360" height="240" loading="lazy" decoding="async" alt="Normal Q-Q plot rendered by Neper"><h3>Normal Q-Q plot</h3><p>Do the data follow a normal distribution? Points on the line mean yes; curved ends mean heavy or light tails. Standard for checking model residuals.</p></figure>
+        <figure class="chart-card" id="pp_normal"><img src="img/charts/pp_normal.webp" width="360" height="240" loading="lazy" decoding="async" alt="P-P plot rendered by Neper"><h3>P-P plot</h3><p>Compares cumulative probabilities instead of quantiles. More sensitive in the middle of the distribution and less in the tails than a Q-Q plot.</p></figure>
+        <figure class="chart-card" id="probability_plot"><img src="img/charts/probability_plot.webp" width="360" height="240" loading="lazy" decoding="async" alt="Normal probability plot rendered by Neper"><h3>Normal probability plot</h3><p>Observed values against a probability-scaled axis, the engineering form of the Q-Q plot, read directly as percent below a value.</p></figure>
+        <figure class="chart-card" id="weibull_probability"><img src="img/charts/weibull_probability.webp" width="360" height="240" loading="lazy" decoding="async" alt="Weibull probability plot rendered by Neper"><h3>Weibull probability plot</h3><p>Reliability data on Weibull paper, censored units included, against a reference Weibull line: straight means Weibull, and the slope tells infant mortality from wear-out.</p></figure>
+        <figure class="chart-card" id="marginal_histogram"><img src="img/charts/marginal_histogram.webp" width="360" height="240" loading="lazy" decoding="async" alt="Scatter with marginal histograms rendered by Neper"><h3>Scatter with marginal histograms</h3><p>A joint relationship plus each variable's own distribution on the edges, so skew or clusters in either axis are not missed.</p></figure>
+        <figure class="chart-card" id="monte_carlo_histogram"><img src="img/charts/monte_carlo_histogram.webp" width="360" height="240" loading="lazy" decoding="async" alt="Monte Carlo histogram rendered by Neper"><h3>Monte Carlo histogram</h3><p>Simulated outcomes of a model with a decision threshold marked: the spread of what could happen, not just the average.</p></figure>
+        <figure class="chart-card" id="monte_carlo_cdf"><img src="img/charts/monte_carlo_cdf.webp" width="360" height="240" loading="lazy" decoding="async" alt="Monte Carlo CDF rendered by Neper"><h3>Monte Carlo CDF</h3><p>The same simulation read cumulatively: "the chance the outcome is at most 70" comes straight off the curve.</p></figure>
+      </div>
+      <h2 id="relationships">Relationships between variables</h2>
+      <p>Scatter plots are the workhorse; everything here either adds a model to the scatter, copes with too many points, or extends the idea to more than two variables. Choose log or symmetric-log axes when values span orders of magnitude.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="scatter"><img src="img/charts/scatter.webp" width="360" height="240" loading="lazy" decoding="async" alt="Scatter rendered by Neper"><h3>Scatter</h3><p>Two numeric variables per observation: correlation, clusters, outliers. The first chart to draw for any pair of measurements.</p></figure>
+        <figure class="chart-card" id="bubble"><img src="img/charts/bubble.webp" width="360" height="240" loading="lazy" decoding="async" alt="Bubble rendered by Neper"><h3>Bubble</h3><p>A scatter with a third measure as circle area (never radius). Keep the bubbles few and labelled.</p></figure>
+        <figure class="chart-card" id="log_scatter"><img src="img/charts/log_scatter.webp" width="360" height="240" loading="lazy" decoding="async" alt="Log-scale scatter rendered by Neper"><h3>Log-scale scatter</h3><p>Values spanning orders of magnitude, such as income, population or response times, where multiplicative change is what matters.</p></figure>
+        <figure class="chart-card" id="labeled_log_scatter"><img src="img/charts/labeled_log_scatter.webp" width="360" height="240" loading="lazy" decoding="async" alt="Labeled log scatter rendered by Neper"><h3>Labeled log scatter</h3><p>The same with readable decade ticks (1, 10, 100, 1000), so readers never have to decode exponents.</p></figure>
+        <figure class="chart-card" id="symlog_line"><img src="img/charts/symlog_line.webp" width="360" height="240" loading="lazy" decoding="async" alt="Symmetric-log line rendered by Neper"><h3>Symmetric-log line</h3><p>Data that cross zero and also span magnitudes, such as profit and loss or signed growth. It is linear near zero and logarithmic beyond.</p></figure>
+        <figure class="chart-card" id="labeled_symlog_line"><img src="img/charts/labeled_symlog_line.webp" width="360" height="240" loading="lazy" decoding="async" alt="Labeled symmetric-log line rendered by Neper"><h3>Labeled symmetric-log line</h3><p>Symmetric-log with labelled ticks on both sides of zero.</p></figure>
+        <figure class="chart-card" id="regression_fit"><img src="img/charts/regression_fit.webp" width="360" height="240" loading="lazy" decoding="async" alt="Regression fit rendered by Neper"><h3>Regression fit</h3><p>A scatter with its least-squares line: direction and strength of a linear trend. Always look at the residuals before trusting it.</p></figure>
+        <figure class="chart-card" id="confidence_band"><img src="img/charts/confidence_band.webp" width="360" height="240" loading="lazy" decoding="async" alt="Mean confidence band rendered by Neper"><h3>Mean confidence band</h3><p>Where the true regression line probably lies. Narrow in the middle of the data, wider at the ends.</p></figure>
+        <figure class="chart-card" id="band"><img src="img/charts/band.webp" width="360" height="240" loading="lazy" decoding="async" alt="Interval band rendered by Neper"><h3>Interval band</h3><p>Any lower-and-upper envelope over x: tolerance bands, ranges or min-max over time.</p></figure>
+        <figure class="chart-card" id="prediction_band"><img src="img/charts/prediction_band.webp" width="360" height="240" loading="lazy" decoding="async" alt="Prediction band rendered by Neper"><h3>Prediction band</h3><p>Where a new observation will probably fall. Much wider than the confidence band, and the right band for setting expectations.</p></figure>
+        <figure class="chart-card" id="data_ellipse"><img src="img/charts/data_ellipse.webp" width="360" height="240" loading="lazy" decoding="async" alt="Data (covariance) ellipse rendered by Neper"><h3>Data (covariance) ellipse</h3><p>The shape of a bivariate cloud: orientation, spread and correlation in one outline. Good for comparing groups without plotting every point.</p></figure>
+        <figure class="chart-card" id="hexbin"><img src="img/charts/hexbin.webp" width="360" height="240" loading="lazy" decoding="async" alt="Hexbin rendered by Neper"><h3>Hexbin</h3><p>Tens of thousands of points or more. Counts per hexagon replace an unreadable black blob.</p></figure>
+        <figure class="chart-card" id="bin2d"><img src="img/charts/bin2d.webp" width="360" height="240" loading="lazy" decoding="async" alt="2-D bins rendered by Neper"><h3>2-D bins</h3><p>The rectangular version of hexbin; it lines up with gridded data and integer axes.</p></figure>
+        <figure class="chart-card" id="density2d"><img src="img/charts/density2d.webp" width="360" height="240" loading="lazy" decoding="async" alt="2-D density contours rendered by Neper"><h3>2-D density contours</h3><p>A smoothed joint density as contour lines. It shows clusters and modes without per-point clutter.</p></figure>
+        <figure class="chart-card" id="contour"><img src="img/charts/contour.webp" width="360" height="240" loading="lazy" decoding="async" alt="Contour lines rendered by Neper"><h3>Contour lines</h3><p>Lines of equal value over a 2-D field, as on a topographic map: response surfaces, potentials, model outputs over two inputs.</p></figure>
+        <figure class="chart-card" id="filled_contour"><img src="img/charts/filled_contour.webp" width="360" height="240" loading="lazy" decoding="async" alt="Filled contours rendered by Neper"><h3>Filled contours</h3><p>Contour bands filled by level, easier to read at a glance than lines alone.</p></figure>
+        <figure class="chart-card" id="heatmap"><img src="img/charts/heatmap.webp" width="360" height="240" loading="lazy" decoding="async" alt="Heatmap rendered by Neper"><h3>Heatmap</h3><p>A matrix of values coloured by magnitude: hour by weekday, gene by sample, feature by model. Order the rows and columns meaningfully.</p></figure>
+        <figure class="chart-card" id="correlation"><img src="img/charts/correlation.webp" width="360" height="240" loading="lazy" decoding="async" alt="Correlation matrix rendered by Neper"><h3>Correlation matrix</h3><p>Pairwise Pearson correlations of many variables with a diverging colour scale. The first look at a new dataset.</p></figure>
+        <figure class="chart-card" id="scatterplot_matrix"><img src="img/charts/scatterplot_matrix.webp" width="360" height="240" loading="lazy" decoding="async" alt="Scatterplot matrix rendered by Neper"><h3>Scatterplot matrix</h3><p>Every pairwise scatter of a few variables at once (up to about six), for exploring before modelling.</p></figure>
+        <figure class="chart-card" id="parallel_coordinates"><img src="img/charts/parallel_coordinates.webp" width="360" height="240" loading="lazy" decoding="async" alt="Parallel coordinates rendered by Neper"><h3>Parallel coordinates</h3><p>Many variables per item as polylines across parallel axes: trade-offs and clusters in multi-criteria data.</p></figure>
+        <figure class="chart-card" id="ternary"><img src="img/charts/ternary.webp" width="360" height="240" loading="lazy" decoding="async" alt="Ternary plot rendered by Neper"><h3>Ternary plot</h3><p>Three parts that sum to a constant, such as soil texture, alloy composition or three-party vote shares, placed inside a triangle.</p></figure>
+        <figure class="chart-card" id="missing_data_scatter"><img src="img/charts/missing_data_scatter.webp" width="360" height="240" loading="lazy" decoding="async" alt="Scatter with missing data rendered by Neper"><h3>Scatter with missing data</h3><p>Explicitly omits incomplete pairs while keeping the original row identities, so missingness is reported and never silently dropped.</p></figure>
+      </div>
+      <h2 id="categorical">Categories, tables and sets</h2>
+      <p>When both variables are categories, the question is usually "is there an association?" These charts show counts, proportions and where observed counts depart from independence. The report layouts carry numbers where readers want exact values.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="mosaic"><img src="img/charts/mosaic.webp" width="360" height="240" loading="lazy" decoding="async" alt="Mosaic plot rendered by Neper"><h3>Mosaic plot</h3><p>A two-way table as nested rectangles, coloured by Pearson residuals so over- and under-represented cells stand out.</p></figure>
+        <figure class="chart-card" id="association"><img src="img/charts/association.webp" width="360" height="240" loading="lazy" decoding="async" alt="Association plot rendered by Neper"><h3>Association plot</h3><p>Residuals from independence as bars above or below a baseline per cell: the departure itself, with nothing else.</p></figure>
+        <figure class="chart-card" id="fourfold"><img src="img/charts/fourfold.webp" width="360" height="240" loading="lazy" decoding="async" alt="Fourfold display rendered by Neper"><h3>Fourfold display</h3><p>A 2×2 table (treatment against outcome) with an odds-ratio confidence ring: does the association hold?</p></figure>
+        <figure class="chart-card" id="cross_tab_report"><img src="img/charts/cross_tab_report.webp" width="360" height="240" loading="lazy" decoding="async" alt="Cross-tab report rendered by Neper"><h3>Cross-tab report</h3><p>A table of counts with row, column and grand totals, for when readers need the exact numbers.</p></figure>
+        <figure class="chart-card" id="matrix_report"><img src="img/charts/matrix_report.webp" width="360" height="240" loading="lazy" decoding="async" alt="Matrix report rendered by Neper"><h3>Matrix report</h3><p>Grouped rows by period with subtotals, missing cells kept distinct from zeros, and in-cell bars: the paginated-report layout.</p></figure>
+        <figure class="chart-card" id="in_cell_data_bars"><img src="img/charts/in_cell_data_bars.webp" width="360" height="240" loading="lazy" decoding="async" alt="In-cell data bars rendered by Neper"><h3>In-cell data bars</h3><p>A small bar inside each table cell, the spreadsheet trick that makes a column of numbers scannable.</p></figure>
+        <figure class="chart-card" id="facet_heatmap"><img src="img/charts/facet_heatmap.webp" width="360" height="240" loading="lazy" decoding="async" alt="Faceted heatmap rendered by Neper"><h3>Faceted heatmap</h3><p>The same matrix for several groups side by side on one colour scale.</p></figure>
+        <figure class="chart-card" id="euler2"><img src="img/charts/euler2.webp" width="360" height="240" loading="lazy" decoding="async" alt="Euler diagram (area-proportional) rendered by Neper"><h3>Euler diagram (area-proportional)</h3><p>Two overlapping sets with circle and overlap areas proportional to the counts.</p></figure>
+        <figure class="chart-card" id="venn3"><img src="img/charts/venn3.webp" width="360" height="240" loading="lazy" decoding="async" alt="Venn diagram (three sets) rendered by Neper"><h3>Venn diagram (three sets)</h3><p>All the intersections of three sets, labelled. Logical rather than proportional: use it to explain membership, not to compare sizes.</p></figure>
+        <figure class="chart-card" id="word_cloud"><img src="img/charts/word_cloud.webp" width="360" height="240" loading="lazy" decoding="async" alt="Word cloud rendered by Neper"><h3>Word cloud</h3><p>A quick, informal impression of which terms dominate. Not for comparison (word length distorts size); use a sorted bar chart for that.</p></figure>
+      </div>
+      <h2 id="models">Classifiers and predictive models</h2>
+      <p>A single accuracy number hides almost everything. These curves show how a model behaves across thresholds, whether its probabilities can be trusted, and whether using it beats simple strategies.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="roc"><img src="img/charts/roc.webp" width="360" height="240" loading="lazy" decoding="async" alt="ROC curve rendered by Neper"><h3>ROC curve</h3><p>True-positive rate against false-positive rate across thresholds. AUC summarises how well the model ranks cases, independent of prevalence.</p></figure>
+        <figure class="chart-card" id="precision_recall"><img src="img/charts/precision_recall.webp" width="360" height="240" loading="lazy" decoding="async" alt="Precision-recall curve rendered by Neper"><h3>Precision-recall curve</h3><p>The better choice when positives are rare, as in fraud or disease screening, where ROC curves look optimistic.</p></figure>
+        <figure class="chart-card" id="cumulative_gain"><img src="img/charts/cumulative_gain.webp" width="360" height="240" loading="lazy" decoding="async" alt="Cumulative gain rendered by Neper"><h3>Cumulative gain</h3><p>"Contacting the top 20% finds 60% of the buyers": a model's value for targeting a budgeted share of the population.</p></figure>
+        <figure class="chart-card" id="cumulative_lift"><img src="img/charts/cumulative_lift.webp" width="360" height="240" loading="lazy" decoding="async" alt="Cumulative lift rendered by Neper"><h3>Cumulative lift</h3><p>Gain divided by the random baseline: how many times better than chance at each depth.</p></figure>
+        <figure class="chart-card" id="calibration"><img src="img/charts/calibration.webp" width="360" height="240" loading="lazy" decoding="async" alt="Calibration (reliability) rendered by Neper"><h3>Calibration (reliability)</h3><p>Do predicted probabilities match observed frequencies? Essential when the probabilities themselves drive decisions.</p></figure>
+        <figure class="chart-card" id="confusion_matrix"><img src="img/charts/confusion_matrix.webp" width="360" height="240" loading="lazy" decoding="async" alt="Confusion matrix rendered by Neper"><h3>Confusion matrix</h3><p>Counts of predicted against actual classes at one threshold: which errors the model makes, not just how many.</p></figure>
+        <figure class="chart-card" id="partial_auc"><img src="img/charts/partial_auc.webp" width="360" height="240" loading="lazy" decoding="async" alt="Partial AUC rendered by Neper"><h3>Partial AUC</h3><p>The area under the ROC curve over only the false-positive range you can tolerate, as in screening where FPR must stay low.</p></figure>
+        <figure class="chart-card" id="youden_index"><img src="img/charts/youden_index.webp" width="360" height="240" loading="lazy" decoding="async" alt="Youden index rendered by Neper"><h3>Youden index</h3><p>The threshold that maximises sensitivity plus specificity minus one, marked on the ROC curve. A common default cut-off.</p></figure>
+        <figure class="chart-card" id="decision_curve"><img src="img/charts/decision_curve.webp" width="360" height="240" loading="lazy" decoding="async" alt="Decision curve rendered by Neper"><h3>Decision curve</h3><p>Net benefit across threshold probabilities against "treat all" and "treat none": is using the model clinically worth it?</p></figure>
+      </div>
+      <h2 id="diagnostics">Regression diagnostics</h2>
+      <p>Fit a model, then try to break it. These four charts find curvature, unequal variance and the few observations that drive the result.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="residual_fitted"><img src="img/charts/residual_fitted.webp" width="360" height="240" loading="lazy" decoding="async" alt="Residuals vs fitted rendered by Neper"><h3>Residuals vs fitted</h3><p>Patterns here mean the model misses structure. A funnel means unequal variance; a curve means a missing term.</p></figure>
+        <figure class="chart-card" id="leverage_residual"><img src="img/charts/leverage_residual.webp" width="360" height="240" loading="lazy" decoding="async" alt="Leverage vs residual rendered by Neper"><h3>Leverage vs residual</h3><p>Points that are unusual in x (high leverage) and also poorly fitted (large residual) are the dangerous ones.</p></figure>
+        <figure class="chart-card" id="cooks_distance"><img src="img/charts/cooks_distance.webp" width="360" height="240" loading="lazy" decoding="async" alt="Cook&#x27;s distance rendered by Neper"><h3>Cook's distance</h3><p>Each observation's influence on the whole fit, as one number per row. Inspect the spikes.</p></figure>
+        <figure class="chart-card" id="influence_plot"><img src="img/charts/influence_plot.webp" width="360" height="240" loading="lazy" decoding="async" alt="Influence plot rendered by Neper"><h3>Influence plot</h3><p>Leverage, residual and Cook's distance (as bubble area) in one view: which points would change the conclusion.</p></figure>
+      </div>
+      <h2 id="medical">Medicine, survival and agreement</h2>
+      <p>Charts from clinical and reliability practice, where censoring, effect sizes and agreement between methods matter more than raw values.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="kaplan_meier"><img src="img/charts/kaplan_meier.webp" width="360" height="240" loading="lazy" decoding="async" alt="Kaplan-Meier survival rendered by Neper"><h3>Kaplan-Meier survival</h3><p>The probability of surviving (or not failing) past each time, with censored subjects handled correctly. Trials, churn, component life.</p></figure>
+        <figure class="chart-card" id="cumulative_hazard"><img src="img/charts/cumulative_hazard.webp" width="360" height="240" loading="lazy" decoding="async" alt="Nelson-Aalen cumulative hazard rendered by Neper"><h3>Nelson-Aalen cumulative hazard</h3><p>Accumulated risk over time; its slope shows whether the hazard rises or falls, which survival curves hide.</p></figure>
+        <figure class="chart-card" id="hazard_rate"><img src="img/charts/hazard_rate.webp" width="360" height="240" loading="lazy" decoding="async" alt="Interval hazard rendered by Neper"><h3>Interval hazard</h3><p>Events per person-time in each interval: when risk is highest, using exposure rather than head counts.</p></figure>
+        <figure class="chart-card" id="forest_plot"><img src="img/charts/forest_plot.webp" width="360" height="240" loading="lazy" decoding="async" alt="Forest plot rendered by Neper"><h3>Forest plot</h3><p>Effect estimates and confidence intervals from several studies or subgroups against a no-effect line, the face of every meta-analysis.</p></figure>
+        <figure class="chart-card" id="bland_altman"><img src="img/charts/bland_altman.webp" width="360" height="240" loading="lazy" decoding="async" alt="Bland-Altman rendered by Neper"><h3>Bland-Altman</h3><p>Do two measurement methods agree? Differences against means, with the bias and limits of agreement. Correlation is the wrong tool for this question.</p></figure>
+        <figure class="chart-card" id="dose_response"><img src="img/charts/dose_response.webp" width="360" height="240" loading="lazy" decoding="async" alt="Dose response rendered by Neper"><h3>Dose response</h3><p>Observed responses against log dose beside a four-parameter logistic (LL.4) curve whose parameters you supply: potency (EC50), slope and the plateaus.</p></figure>
+      </div>
+      <h2 id="spc">Statistical process control</h2>
+      <p>Control charts separate routine variation from signals. Pick by data type and subgroup:</p>
+      <div class="table-scroll"><table><thead><tr><th>Your data</th><th>Chart</th></tr></thead><tbody>
+        <tr><td>Individual measurements</td><td>I and MR charts</td></tr>
+        <tr><td>Subgroups of 2–9</td><td>X-bar and R</td></tr>
+        <tr><td>Subgroups of 10 or more</td><td>X-bar and S</td></tr>
+        <tr><td>Defectives, varying sample size</td><td>p (Laney p′ if huge samples)</td></tr>
+        <tr><td>Defectives, constant sample size</td><td>np</td></tr>
+        <tr><td>Defects, constant area</td><td>c</td></tr>
+        <tr><td>Defects, varying area</td><td>u (Laney u′ if huge samples)</td></tr>
+        <tr><td>Rare events</td><td>G or T</td></tr>
+        <tr><td>Small sustained shifts</td><td>CUSUM or EWMA</td></tr>
+        <tr><td>Several correlated variables</td><td>Hotelling T², MEWMA, generalized variance</td></tr>
+        <tr><td>A known change in the process</td><td>the phased versions</td></tr>
+      </tbody></table></div>
+      <p>Every chart in this family reports which points break its limits; the phased versions recompute the limits after a known change, so the process before the change does not mask the process after it.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="individuals_control"><img src="img/charts/individuals_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="Individuals (I) chart rendered by Neper"><h3>Individuals (I) chart</h3><p>One measurement at a time (batch assays, monthly figures) with limits from the moving range.</p></figure>
+        <figure class="chart-card" id="moving_range_control"><img src="img/charts/moving_range_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="Moving range (MR) chart rendered by Neper"><h3>Moving range (MR) chart</h3><p>The companion of the I chart, tracking short-term variation between consecutive points.</p></figure>
+        <figure class="chart-card" id="xbar_control"><img src="img/charts/xbar_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="X-bar chart rendered by Neper"><h3>X-bar chart</h3><p>The mean of small rational subgroups (typically 4–5 parts per sample): sensitive to shifts in the process average.</p></figure>
+        <figure class="chart-card" id="range_control"><img src="img/charts/range_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="Range (R) chart rendered by Neper"><h3>Range (R) chart</h3><p>Within-subgroup spread for small subgroups, read together with X-bar.</p></figure>
+        <figure class="chart-card" id="xbar_s_control"><img src="img/charts/xbar_s_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="X-bar / S chart rendered by Neper"><h3>X-bar / S chart</h3><p>Means monitored with standard-deviation-based limits, for larger subgroups (about ten or more).</p></figure>
+        <figure class="chart-card" id="s_control"><img src="img/charts/s_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="S chart rendered by Neper"><h3>S chart</h3><p>Subgroup standard deviations, the spread companion for larger subgroups.</p></figure>
+        <figure class="chart-card" id="p_control"><img src="img/charts/p_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="p chart rendered by Neper"><h3>p chart</h3><p>The proportion defective when sample sizes vary. Limits widen for small samples.</p></figure>
+        <figure class="chart-card" id="np_control"><img src="img/charts/np_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="np chart rendered by Neper"><h3>np chart</h3><p>The number defective with a constant sample size: easier for operators to read than proportions.</p></figure>
+        <figure class="chart-card" id="c_control"><img src="img/charts/c_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="c chart rendered by Neper"><h3>c chart</h3><p>Defect counts per unit when the inspection area is constant (scratches per panel, errors per form).</p></figure>
+        <figure class="chart-card" id="u_control"><img src="img/charts/u_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="u chart rendered by Neper"><h3>u chart</h3><p>Defects per unit when the area of opportunity varies.</p></figure>
+        <figure class="chart-card" id="laney_p"><img src="img/charts/laney_p.webp" width="360" height="240" loading="lazy" decoding="async" alt="Laney p′ chart rendered by Neper"><h3>Laney p′ chart</h3><p>A p chart corrected for overdispersion. Use it with very large samples, where ordinary p limits are so narrow that everything alarms.</p></figure>
+        <figure class="chart-card" id="laney_u"><img src="img/charts/laney_u.webp" width="360" height="240" loading="lazy" decoding="async" alt="Laney u′ chart rendered by Neper"><h3>Laney u′ chart</h3><p>The same correction for rates.</p></figure>
+        <figure class="chart-card" id="g_control"><img src="img/charts/g_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="G chart rendered by Neper"><h3>G chart</h3><p>Opportunities between rare events (cases between infections, units between failures), where p charts break down.</p></figure>
+        <figure class="chart-card" id="t_control"><img src="img/charts/t_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="T chart rendered by Neper"><h3>T chart</h3><p>Time between rare events, modelled as exponential.</p></figure>
+        <figure class="chart-card" id="cusum_high"><img src="img/charts/cusum_high.webp" width="360" height="240" loading="lazy" decoding="async" alt="CUSUM (upper) rendered by Neper"><h3>CUSUM (upper)</h3><p>Cumulative sums that catch small sustained upward shifts that Shewhart charts miss.</p></figure>
+        <figure class="chart-card" id="cusum_low"><img src="img/charts/cusum_low.webp" width="360" height="240" loading="lazy" decoding="async" alt="CUSUM (lower) rendered by Neper"><h3>CUSUM (lower)</h3><p>The downward side of a two-sided CUSUM.</p></figure>
+        <figure class="chart-card" id="ewma_control"><img src="img/charts/ewma_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="EWMA chart rendered by Neper"><h3>EWMA chart</h3><p>An exponentially weighted moving average, also tuned for small shifts, and robust to non-normal data.</p></figure>
+        <figure class="chart-card" id="run_rules_control"><img src="img/charts/run_rules_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="Run rules (Western Electric / Nelson) rendered by Neper"><h3>Run rules (Western Electric / Nelson)</h3><p>Flags the eight run-test patterns (trends, runs on one side, alternation) even inside the limits.</p></figure>
+        <figure class="chart-card" id="hotelling_t2"><img src="img/charts/hotelling_t2.webp" width="360" height="240" loading="lazy" decoding="async" alt="Hotelling T² rendered by Neper"><h3>Hotelling T²</h3><p>Several correlated measurements monitored as one. It catches combinations that look normal one variable at a time.</p></figure>
+        <figure class="chart-card" id="generalized_variance"><img src="img/charts/generalized_variance.webp" width="360" height="240" loading="lazy" decoding="async" alt="Generalized variance rendered by Neper"><h3>Generalized variance</h3><p>Multivariate spread: the determinant of each subgroup's covariance matrix, against a pooled reference.</p></figure>
+        <figure class="chart-card" id="mewma"><img src="img/charts/mewma.webp" width="360" height="240" loading="lazy" decoding="async" alt="MEWMA rendered by Neper"><h3>MEWMA</h3><p>The multivariate EWMA, for small drifts in correlated processes.</p></figure>
+        <figure class="chart-card" id="anom"><img src="img/charts/anom.webp" width="360" height="240" loading="lazy" decoding="async" alt="ANOM rendered by Neper"><h3>ANOM</h3><p>Analysis of means: which groups differ from the grand mean, shown in control-chart form for audiences who don't read ANOVA tables.</p></figure>
+        <figure class="chart-card" id="phase_control"><img src="img/charts/phase_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="Phased I chart rendered by Neper"><h3>Phased I chart</h3><p>Separate limits before and after a known change (a new machine or a new supplier), so the old data don't hide the new process.</p></figure>
+        <figure class="chart-card" id="phased_xbar_r"><img src="img/charts/phased_xbar_r.webp" width="360" height="240" loading="lazy" decoding="async" alt="Phased X-bar / R rendered by Neper"><h3>Phased X-bar / R</h3><p>Subgroup means and ranges with limits recomputed per phase.</p></figure>
+        <figure class="chart-card" id="phased_xbar_s"><img src="img/charts/phased_xbar_s.webp" width="360" height="240" loading="lazy" decoding="async" alt="Phased X-bar / S rendered by Neper"><h3>Phased X-bar / S</h3><p>The same pair for larger subgroups.</p></figure>
+        <figure class="chart-card" id="phased_range"><img src="img/charts/phased_range.webp" width="360" height="240" loading="lazy" decoding="async" alt="Phased R chart rendered by Neper"><h3>Phased R chart</h3><p>The range chart on its own, per phase.</p></figure>
+        <figure class="chart-card" id="phased_s"><img src="img/charts/phased_s.webp" width="360" height="240" loading="lazy" decoding="async" alt="Phased S chart rendered by Neper"><h3>Phased S chart</h3><p>The standard-deviation chart per phase.</p></figure>
+        <figure class="chart-card" id="phased_p_control"><img src="img/charts/phased_p_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="Phased p chart rendered by Neper"><h3>Phased p chart</h3><p>Proportion defective with limits per phase.</p></figure>
+        <figure class="chart-card" id="phased_np_control"><img src="img/charts/phased_np_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="Phased np chart rendered by Neper"><h3>Phased np chart</h3><p>Number defective per phase.</p></figure>
+        <figure class="chart-card" id="phased_c_control"><img src="img/charts/phased_c_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="Phased c chart rendered by Neper"><h3>Phased c chart</h3><p>Defect counts per phase.</p></figure>
+        <figure class="chart-card" id="phased_u_control"><img src="img/charts/phased_u_control.webp" width="360" height="240" loading="lazy" decoding="async" alt="Phased u chart rendered by Neper"><h3>Phased u chart</h3><p>Defect rates per phase.</p></figure>
+        <figure class="chart-card" id="phased_laney_p"><img src="img/charts/phased_laney_p.webp" width="360" height="240" loading="lazy" decoding="async" alt="Phased Laney p′ rendered by Neper"><h3>Phased Laney p′</h3><p>The overdispersion-corrected p chart, per phase.</p></figure>
+        <figure class="chart-card" id="phased_laney_u"><img src="img/charts/phased_laney_u.webp" width="360" height="240" loading="lazy" decoding="async" alt="Phased Laney u′ rendered by Neper"><h3>Phased Laney u′</h3><p>The overdispersion-corrected u chart, per phase.</p></figure>
+      </div>
+      <h2 id="capability">Capability and measurement systems</h2>
+      <p>Two questions come before any capability claim: is the process stable (see control charts), and can you measure it? These answer the questions that come after.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="capability_normal"><img src="img/charts/capability_normal.webp" width="360" height="240" loading="lazy" decoding="async" alt="Normal capability rendered by Neper"><h3>Normal capability</h3><p>Histogram against specification limits with Cp, Cpk, Pp and Ppk and expected defects per million, assuming normal data.</p></figure>
+        <figure class="chart-card" id="capability_nonnormal"><img src="img/charts/capability_nonnormal.webp" width="360" height="240" loading="lazy" decoding="async" alt="Non-normal capability rendered by Neper"><h3>Non-normal capability</h3><p>The same for skewed data via a lognormal fit, because normal-theory Cpk misleads badly for skewed processes.</p></figure>
+        <figure class="chart-card" id="capability_attribute"><img src="img/charts/capability_attribute.webp" width="360" height="240" loading="lazy" decoding="async" alt="Attribute (binomial) capability rendered by Neper"><h3>Attribute (binomial) capability</h3><p>Capability from pass/fail data: the defective rate per sample, its pooled value with Wilson confidence bounds, and PPM against a target.</p></figure>
+        <figure class="chart-card" id="capability_batch"><img src="img/charts/capability_batch.webp" width="360" height="240" loading="lazy" decoding="async" alt="Batch capability rendered by Neper"><h3>Batch capability</h3><p>Separates within-batch from between-batch variation, for processes made in lots.</p></figure>
+        <figure class="chart-card" id="capability_sixpack"><img src="img/charts/capability_sixpack.webp" width="360" height="240" loading="lazy" decoding="async" alt="Capability sixpack rendered by Neper"><h3>Capability sixpack</h3><p>Control charts, recent values, histogram, normality plot and capability indices on one page: the full Six Sigma report.</p></figure>
+        <figure class="chart-card" id="gage_rr"><img src="img/charts/gage_rr.webp" width="360" height="240" loading="lazy" decoding="async" alt="Gage R&amp;R rendered by Neper"><h3>Gage R&amp;R</h3><p>How much of the observed variation comes from the measurement system (repeatability, reproducibility) rather than the parts.</p></figure>
+        <figure class="chart-card" id="gage_run"><img src="img/charts/gage_run.webp" width="360" height="240" loading="lazy" decoding="async" alt="Gage run chart rendered by Neper"><h3>Gage run chart</h3><p>Every reading by part and operator, to see measurement consistency before computing any variance components.</p></figure>
+        <figure class="chart-card" id="gage_bias_linearity"><img src="img/charts/gage_bias_linearity.webp" width="360" height="240" loading="lazy" decoding="async" alt="Gage bias and linearity rendered by Neper"><h3>Gage bias and linearity</h3><p>Is the gauge accurate across its range, or does its bias change with the size of the part?</p></figure>
+        <figure class="chart-card" id="attribute_agreement"><img src="img/charts/attribute_agreement.webp" width="360" height="240" loading="lazy" decoding="async" alt="Attribute agreement rendered by Neper"><h3>Attribute agreement</h3><p>Do inspectors agree with each other and with the standard on pass/fail calls (kappa, percent agreement)?</p></figure>
+        <figure class="chart-card" id="oc_curve"><img src="img/charts/oc_curve.webp" width="360" height="240" loading="lazy" decoding="async" alt="Operating-characteristic curve rendered by Neper"><h3>Operating-characteristic curve</h3><p>The probability that an acceptance-sampling plan accepts a lot, by incoming defect rate: what protection the plan really gives.</p></figure>
+      </div>
+      <h2 id="improvement">Process improvement and experiments</h2>
+      <p>The diagrams of Lean and Six Sigma, plus the plots that read designed experiments.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="pareto"><img src="img/charts/pareto.webp" width="360" height="240" loading="lazy" decoding="async" alt="Pareto rendered by Neper"><h3>Pareto</h3><p>Causes sorted by frequency with a cumulative-percent line: the vital few worth fixing first.</p></figure>
+        <figure class="chart-card" id="fishbone"><img src="img/charts/fishbone.webp" width="360" height="240" loading="lazy" decoding="async" alt="Fishbone (Ishikawa) rendered by Neper"><h3>Fishbone (Ishikawa)</h3><p>Brainstormed causes grouped under the six Ms around one effect, the classic root-cause workshop artifact.</p></figure>
+        <figure class="chart-card" id="cause_effect_tree"><img src="img/charts/cause_effect_tree.webp" width="360" height="240" loading="lazy" decoding="async" alt="Cause-effect tree rendered by Neper"><h3>Cause-effect tree</h3><p>The same thinking as a tree with deeper sub-causes, when the fishbone runs out of room.</p></figure>
+        <figure class="chart-card" id="multi_vari"><img src="img/charts/multi_vari.webp" width="360" height="240" loading="lazy" decoding="async" alt="Multi-vari rendered by Neper"><h3>Multi-vari</h3><p>Variation broken down by nested factors (machine, then setting, then readings): where the variation lives.</p></figure>
+        <figure class="chart-card" id="main_effects"><img src="img/charts/main_effects.webp" width="360" height="240" loading="lazy" decoding="async" alt="Main effects rendered by Neper"><h3>Main effects</h3><p>The mean response at each level of each factor in a designed experiment: which knobs matter.</p></figure>
+        <figure class="chart-card" id="interaction_plot"><img src="img/charts/interaction_plot.webp" width="360" height="240" loading="lazy" decoding="async" alt="Interaction plot rendered by Neper"><h3>Interaction plot</h3><p>Non-parallel lines mean the effect of one factor depends on another. Check this before trusting main effects.</p></figure>
+        <figure class="chart-card" id="cube_plot"><img src="img/charts/cube_plot.webp" width="360" height="240" loading="lazy" decoding="async" alt="Cube plot rendered by Neper"><h3>Cube plot</h3><p>Mean responses at the corners of a 2³ design, to see a three-factor experiment at once.</p></figure>
+        <figure class="chart-card" id="sipoc"><img src="img/charts/sipoc.webp" width="360" height="240" loading="lazy" decoding="async" alt="SIPOC rendered by Neper"><h3>SIPOC</h3><p>Suppliers, inputs, process, outputs and customers on one page, to scope an improvement project.</p></figure>
+        <figure class="chart-card" id="value-stream-map"><img src="img/charts/value-stream-map.webp" width="360" height="240" loading="lazy" decoding="async" alt="Value-stream map rendered by Neper"><h3>Value-stream map</h3><p>Process steps with processing time against queue time and lead time: where the waiting is.</p></figure>
+        <figure class="chart-card" id="future_state_vsm"><img src="img/charts/future_state_vsm.webp" width="360" height="240" loading="lazy" decoding="async" alt="Future-state value stream rendered by Neper"><h3>Future-state value stream</h3><p>Current and target flows on comparable lead-time ladders, with pull and FIFO cues and takt-time violations.</p></figure>
+        <figure class="chart-card" id="branching_process_map"><img src="img/charts/branching_process_map.webp" width="360" height="240" loading="lazy" decoding="async" alt="Branching process map rendered by Neper"><h3>Branching process map</h3><p>Flow with probabilistic routes and rework loops, with yields along each branch.</p></figure>
+      </div>
+      <h2 id="projects">Projects and operations</h2>
+      <p>Charts for running work: schedules, progress, capacity, risk and state.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="gantt"><img src="img/charts/gantt.webp" width="360" height="240" loading="lazy" decoding="async" alt="Gantt rendered by Neper"><h3>Gantt</h3><p>Tasks on a time axis with progress, the default project schedule.</p></figure>
+        <figure class="chart-card" id="milestone_roadmap"><img src="img/charts/milestone_roadmap.webp" width="360" height="240" loading="lazy" decoding="async" alt="Milestone roadmap rendered by Neper"><h3>Milestone roadmap</h3><p>Key dates by workstream without task-level detail, for leadership and customers.</p></figure>
+        <figure class="chart-card" id="burndown"><img src="img/charts/burndown.webp" width="360" height="240" loading="lazy" decoding="async" alt="Burndown rendered by Neper"><h3>Burndown</h3><p>Work remaining against the ideal line within a sprint: will we finish?</p></figure>
+        <figure class="chart-card" id="burnup"><img src="img/charts/burnup.webp" width="360" height="240" loading="lazy" decoding="async" alt="Burnup rendered by Neper"><h3>Burnup</h3><p>Work done against total scope. Unlike a burndown, it shows scope creep.</p></figure>
+        <figure class="chart-card" id="earned_value"><img src="img/charts/earned_value.webp" width="360" height="240" loading="lazy" decoding="async" alt="Earned value rendered by Neper"><h3>Earned value</h3><p>Planned value, earned value and actual cost together: schedule and cost variance in one chart.</p></figure>
+        <figure class="chart-card" id="resource_histogram"><img src="img/charts/resource_histogram.webp" width="360" height="240" loading="lazy" decoding="async" alt="Resource histogram rendered by Neper"><h3>Resource histogram</h3><p>Allocated capacity over time with the over-allocation above the cap highlighted.</p></figure>
+        <figure class="chart-card" id="risk_matrix"><img src="img/charts/risk_matrix.webp" width="360" height="240" loading="lazy" decoding="async" alt="Risk matrix rendered by Neper"><h3>Risk matrix</h3><p>Likelihood against impact with counts per cell, to prioritise mitigation.</p></figure>
+        <figure class="chart-card" id="kanban"><img src="img/charts/kanban.webp" width="360" height="240" loading="lazy" decoding="async" alt="Kanban board rendered by Neper"><h3>Kanban board</h3><p>Work items by state with WIP limits: flow and bottlenecks at a glance.</p></figure>
+        <figure class="chart-card" id="swimlane"><img src="img/charts/swimlane.webp" width="360" height="240" loading="lazy" decoding="async" alt="Swimlane rendered by Neper"><h3>Swimlane</h3><p>A process across roles or teams, making the hand-offs visible.</p></figure>
+        <figure class="chart-card" id="pert-cpm-network"><img src="img/charts/pert-cpm-network.webp" width="360" height="240" loading="lazy" decoding="async" alt="PERT / CPM network rendered by Neper"><h3>PERT / CPM network</h3><p>Task dependencies with durations and the critical path: which delays move the end date.</p></figure>
+        <figure class="chart-card" id="event_timeline"><img src="img/charts/event_timeline.webp" width="360" height="240" loading="lazy" decoding="async" alt="Event timeline rendered by Neper"><h3>Event timeline</h3><p>Discrete events on tracks over time: releases, incidents, milestones.</p></figure>
+        <figure class="chart-card" id="state_timeline"><img src="img/charts/state_timeline.webp" width="360" height="240" loading="lazy" decoding="async" alt="State timeline rendered by Neper"><h3>State timeline</h3><p>Which state each entity was in over time (running, idle, paused), as abutting bands.</p></figure>
+        <figure class="chart-card" id="status_history"><img src="img/charts/status_history.webp" width="360" height="240" loading="lazy" decoding="async" alt="Status history rendered by Neper"><h3>Status history</h3><p>Health states per service over time, as on status pages and in SLO reviews.</p></figure>
+        <figure class="chart-card" id="cohort_retention"><img src="img/charts/cohort_retention.webp" width="360" height="240" loading="lazy" decoding="async" alt="Cohort retention rendered by Neper"><h3>Cohort retention</h3><p>A triangle of retention by sign-up cohort and age: is the product getting stickier?</p></figure>
+        <figure class="chart-card" id="gauge"><img src="img/charts/gauge.webp" width="360" height="240" loading="lazy" decoding="async" alt="Gauge rendered by Neper"><h3>Gauge</h3><p>One value against a target on a dial. Use it sparingly: a bullet graph says the same in less space.</p></figure>
+        <figure class="chart-card" id="kpi_target"><img src="img/charts/kpi_target.webp" width="360" height="240" loading="lazy" decoding="async" alt="KPI card rendered by Neper"><h3>KPI card</h3><p>A headline number, its status against target and a slim progress bar.</p></figure>
+      </div>
+      <h2 id="finance">Finance</h2>
+      <p>Market and corporate-finance staples. All of them work from data the caller supplies; none of them fetch market data or fit financial models.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="candlestick"><img src="img/charts/candlestick.webp" width="360" height="240" loading="lazy" decoding="async" alt="Candlestick rendered by Neper"><h3>Candlestick</h3><p>Open, high, low and close per period, coloured by direction: price action for traders.</p></figure>
+        <figure class="chart-card" id="ohlc"><img src="img/charts/ohlc.webp" width="360" height="240" loading="lazy" decoding="async" alt="OHLC bars rendered by Neper"><h3>OHLC bars</h3><p>The same four prices as ticks. Lighter than candles in dense charts.</p></figure>
+        <figure class="chart-card" id="price_volume"><img src="img/charts/price_volume.webp" width="360" height="240" loading="lazy" decoding="async" alt="Price and volume rendered by Neper"><h3>Price and volume</h3><p>A price line over volume bars on a shared time axis: did the move happen on volume?</p></figure>
+        <figure class="chart-card" id="returns_volatility"><img src="img/charts/returns_volatility.webp" width="360" height="240" loading="lazy" decoding="async" alt="Returns and rolling volatility rendered by Neper"><h3>Returns and rolling volatility</h3><p>Period returns over a rolling standard deviation: risk regimes over time.</p></figure>
+        <figure class="chart-card" id="drawdown"><img src="img/charts/drawdown.webp" width="360" height="240" loading="lazy" decoding="async" alt="Drawdown rendered by Neper"><h3>Drawdown</h3><p>The fall from the running peak: the pain an investor actually experienced, and how long recovery took.</p></figure>
+        <figure class="chart-card" id="yield_curve"><img src="img/charts/yield_curve.webp" width="360" height="240" loading="lazy" decoding="async" alt="Yield curve rendered by Neper"><h3>Yield curve</h3><p>Yield by maturity, comparing dates or scenarios: inversion, steepening, level shifts.</p></figure>
+        <figure class="chart-card" id="cap_table_waterfall"><img src="img/charts/cap_table_waterfall.webp" width="360" height="240" loading="lazy" decoding="async" alt="Cap-table waterfall rendered by Neper"><h3>Cap-table waterfall</h3><p>Ownership before and after an option-pool top-up and a funding round: dilution, holder by holder.</p></figure>
+        <figure class="chart-card" id="tornado"><img src="img/charts/tornado.webp" width="360" height="240" loading="lazy" decoding="async" alt="Tornado rendered by Neper"><h3>Tornado</h3><p>One-at-a-time sensitivity: which input assumptions move the output most, sorted by swing.</p></figure>
+        <figure class="chart-card" id="football_field"><img src="img/charts/football_field.webp" width="360" height="240" loading="lazy" decoding="async" alt="Valuation football field rendered by Neper"><h3>Valuation football field</h3><p>Value ranges from different methods (comparables, precedents, DCF) on one per-share scale.</p></figure>
+      </div>
+      <h2 id="diagrams">Flows, networks and diagrams</h2>
+      <p>When the data are connections rather than numbers. Flow diagrams carry quantities; the rest show structure.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="sankey"><img src="img/charts/sankey.webp" width="360" height="240" loading="lazy" decoding="async" alt="Sankey rendered by Neper"><h3>Sankey</h3><p>Quantities flowing between stages, with band width proportional to flow: energy, budgets, user journeys.</p></figure>
+        <figure class="chart-card" id="alluvial"><img src="img/charts/alluvial.webp" width="360" height="240" loading="lazy" decoding="async" alt="Alluvial rendered by Neper"><h3>Alluvial</h3><p>How the same items regroup across categorical stages (cohorts moving between segments).</p></figure>
+        <figure class="chart-card" id="chord"><img src="img/charts/chord.webp" width="360" height="240" loading="lazy" decoding="async" alt="Chord rendered by Neper"><h3>Chord</h3><p>Flows between members of one group, such as migration between regions or trade between teams. Best with few members.</p></figure>
+        <figure class="chart-card" id="org_chart"><img src="img/charts/org_chart.webp" width="360" height="240" loading="lazy" decoding="async" alt="Org chart rendered by Neper"><h3>Org chart</h3><p>Reporting lines as a tree.</p></figure>
+        <figure class="chart-card" id="dependency_graph"><img src="img/charts/dependency_graph.webp" width="360" height="240" loading="lazy" decoding="async" alt="Dependency graph rendered by Neper"><h3>Dependency graph</h3><p>A DAG of build steps or packages: what must happen first, where paths merge and split.</p></figure>
+        <figure class="chart-card" id="flowchart"><img src="img/charts/flowchart.webp" width="360" height="240" loading="lazy" decoding="async" alt="Flowchart rendered by Neper"><h3>Flowchart</h3><p>A procedure with decisions and loops, the universal process diagram.</p></figure>
+        <figure class="chart-card" id="decision_tree"><img src="img/charts/decision_tree.webp" width="360" height="240" loading="lazy" decoding="async" alt="Decision tree rendered by Neper"><h3>Decision tree</h3><p>Choices and chance nodes with probabilities and expected values: which option to take.</p></figure>
+        <figure class="chart-card" id="state_machine"><img src="img/charts/state_machine.webp" width="360" height="240" loading="lazy" decoding="async" alt="State machine rendered by Neper"><h3>State machine</h3><p>States and the events that move between them, including initial, final and self-loops.</p></figure>
+        <figure class="chart-card" id="sequence_diagram"><img src="img/charts/sequence_diagram.webp" width="360" height="240" loading="lazy" decoding="async" alt="Sequence diagram rendered by Neper"><h3>Sequence diagram</h3><p>Messages between components over time, including asynchronous returns: protocols and APIs.</p></figure>
+        <figure class="chart-card" id="entity_relationship"><img src="img/charts/entity_relationship.webp" width="360" height="240" loading="lazy" decoding="async" alt="Entity-relationship rendered by Neper"><h3>Entity-relationship</h3><p>Tables, keys and cardinalities: a database schema at a glance.</p></figure>
+      </div>
+      <h2 id="signals">Signals, fields and dynamics</h2>
+      <p>Engineering and science views where frequency, direction or state space is the axis.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="spectrogram"><img src="img/charts/spectrogram.webp" width="360" height="240" loading="lazy" decoding="async" alt="Spectrogram rendered by Neper"><h3>Spectrogram</h3><p>Frequency content over time (from a short-time Fourier transform): speech, vibration, radio.</p></figure>
+        <figure class="chart-card" id="waterfall_spectrum"><img src="img/charts/waterfall_spectrum.webp" width="360" height="240" loading="lazy" decoding="async" alt="Waterfall spectrum rendered by Neper"><h3>Waterfall spectrum</h3><p>Successive spectra offset in perspective, to watch a peak drift or grow.</p></figure>
+        <figure class="chart-card" id="bode"><img src="img/charts/bode.webp" width="360" height="240" loading="lazy" decoding="async" alt="Bode plot rendered by Neper"><h3>Bode plot</h3><p>Magnitude and phase of a system's frequency response on a log-frequency axis: filters and control loops.</p></figure>
+        <figure class="chart-card" id="nyquist"><img src="img/charts/nyquist.webp" width="360" height="240" loading="lazy" decoding="async" alt="Nyquist plot rendered by Neper"><h3>Nyquist plot</h3><p>A frequency response in the complex plane, read against the critical point for stability margins.</p></figure>
+        <figure class="chart-card" id="quiver"><img src="img/charts/quiver.webp" width="360" height="240" loading="lazy" decoding="async" alt="Quiver (vector field) rendered by Neper"><h3>Quiver (vector field)</h3><p>Arrows for direction and magnitude on a grid: wind, flow, gradients.</p></figure>
+        <figure class="chart-card" id="streamlines"><img src="img/charts/streamlines.webp" width="360" height="240" loading="lazy" decoding="async" alt="Streamlines rendered by Neper"><h3>Streamlines</h3><p>Paths through a vector field, which show the flow structure more clearly than arrows.</p></figure>
+        <figure class="chart-card" id="phase_space"><img src="img/charts/phase_space.webp" width="360" height="240" loading="lazy" decoding="async" alt="Phase portrait rendered by Neper"><h3>Phase portrait</h3><p>A system's state against its lagged state: cycles, attractors, chaos.</p></figure>
+        <figure class="chart-card" id="recurrence"><img src="img/charts/recurrence.webp" width="360" height="240" loading="lazy" decoding="async" alt="Recurrence plot rendered by Neper"><h3>Recurrence plot</h3><p>When a series returns close to an earlier state. It reveals periodicity and regime changes.</p></figure>
+        <figure class="chart-card" id="variogram"><img src="img/charts/variogram.webp" width="360" height="240" loading="lazy" decoding="async" alt="Empirical variogram rendered by Neper"><h3>Empirical variogram</h3><p>Semivariance by distance: spatial correlation range, the first step of kriging.</p></figure>
+        <figure class="chart-card" id="rose"><img src="img/charts/rose.webp" width="360" height="240" loading="lazy" decoding="async" alt="Wind rose rendered by Neper"><h3>Wind rose</h3><p>Frequencies by direction sector with area-scaled petals: wind, orientations, headings.</p></figure>
+      </div>
+      <h2 id="maps">Maps</h2>
+      <p>Geography on caller-supplied boundaries, projected without a map service.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="choropleth"><img src="img/charts/choropleth.webp" width="360" height="240" loading="lazy" decoding="async" alt="Choropleth rendered by Neper"><h3>Choropleth</h3><p>A rate per region by colour. Always map rates, not raw counts, or the map just shows where people live. Missing regions stay visibly grey.</p></figure>
+        <figure class="chart-card" id="proportional_symbol_map"><img src="img/charts/proportional_symbol_map.webp" width="360" height="240" loading="lazy" decoding="async" alt="Proportional-symbol map rendered by Neper"><h3>Proportional-symbol map</h3><p>Counts or volumes as circles at locations, with area-scaled sizes and a size legend. The right map for totals.</p></figure>
+      </div>
+      <h2 id="threed">3-D</h2>
+      <p>Perspective costs accuracy: bars and points at different depths can't be compared exactly. Use 3-D when the third dimension is the point (a surface or a helix) and prefer contours or small multiples for reading values.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="scatter3d"><img src="img/charts/scatter3d.webp" width="360" height="240" loading="lazy" decoding="async" alt="3-D scatter rendered by Neper"><h3>3-D scatter</h3><p>Points with three coordinates under an explicit camera, depth-sorted. For shape: helices, clusters, trajectories.</p></figure>
+        <figure class="chart-card" id="histogram3d"><img src="img/charts/histogram3d.webp" width="360" height="240" loading="lazy" decoding="async" alt="3-D histogram rendered by Neper"><h3>3-D histogram</h3><p>Joint counts of two variables as prisms. A 2-D bin heatmap is usually easier to read.</p></figure>
+        <figure class="chart-card" id="density_surface3d"><img src="img/charts/density_surface3d.webp" width="360" height="240" loading="lazy" decoding="async" alt="3-D density surface rendered by Neper"><h3>3-D density surface</h3><p>A joint density as a shaded surface, to show peaks and ridges.</p></figure>
+        <figure class="chart-card" id="wireframe3d"><img src="img/charts/wireframe3d.webp" width="360" height="240" loading="lazy" decoding="async" alt="3-D wireframe rendered by Neper"><h3>3-D wireframe</h3><p>A function of two variables as row and column traces, lighter than a filled surface.</p></figure>
+      </div>
+      <h2 id="engine">Composition, layout and accessibility</h2>
+      <p>These previews show the engine rather than a chart type: the pieces that make the charts above publishable.</p>
+      <div class="chart-grid">
+        <figure class="chart-card" id="facet_scales"><img src="img/charts/facet_scales.webp" width="360" height="240" loading="lazy" decoding="async" alt="Facets with shared or free scales rendered by Neper"><h3>Facets with shared or free scales</h3><p>Small multiples where you choose whether panels share axes (for comparison) or not (for shape).</p></figure>
+        <figure class="chart-card" id="category_facet"><img src="img/charts/category_facet.webp" width="360" height="240" loading="lazy" decoding="async" alt="Category facets rendered by Neper"><h3>Category facets</h3><p>One panel per category level, empty levels included, with strip labels.</p></figure>
+        <figure class="chart-card" id="shared_guide_facets"><img src="img/charts/shared_guide_facets.webp" width="360" height="240" loading="lazy" decoding="async" alt="Shared guides rendered by Neper"><h3>Shared guides</h3><p>Tick labels only on the outer edges of a facet grid, so panels stay large.</p></figure>
+        <figure class="chart-card" id="plot_grid"><img src="img/charts/plot_grid.webp" width="360" height="240" loading="lazy" decoding="async" alt="Plot grid rendered by Neper"><h3>Plot grid</h3><p>Independent charts of different kinds arranged in weighted cells, the way a dashboard is.</p></figure>
+        <figure class="chart-card" id="legend_collision"><img src="img/charts/legend_collision.webp" width="360" height="240" loading="lazy" decoding="async" alt="Wrapped legend rendered by Neper"><h3>Wrapped legend</h3><p>Legend items that wrap inside a fixed band without colliding.</p></figure>
+        <figure class="chart-card" id="label_placement"><img src="img/charts/label_placement.webp" width="360" height="240" loading="lazy" decoding="async" alt="Collision-free point labels rendered by Neper"><h3>Collision-free point labels</h3><p>Labels placed around their points by priority, never overprinting; those that don't fit are reported, not hidden in the clutter.</p></figure>
+        <figure class="chart-card" id="clipped_annotation"><img src="img/charts/clipped_annotation.webp" width="360" height="240" loading="lazy" decoding="async" alt="Clipped annotation rendered by Neper"><h3>Clipped annotation</h3><p>Marks and notes clipped to the plot area while titles stay outside.</p></figure>
+        <figure class="chart-card" id="interactive_selection"><img src="img/charts/interactive_selection.webp" width="360" height="240" loading="lazy" decoding="async" alt="Interactive selection rendered by Neper"><h3>Interactive selection</h3><p>Hit-testing that maps a pointer to the source row, and SVG points that are keyboard-focusable.</p></figure>
+        <figure class="chart-card" id="locale_axes"><img src="img/charts/locale_axes.webp" width="360" height="240" loading="lazy" decoding="async" alt="Locale-aware axes rendered by Neper"><h3>Locale-aware axes</h3><p>Ticks in the reader's number and date conventions (decimal and grouping separators, month names).</p></figure>
+        <figure class="chart-card" id="accessible_palette"><img src="img/charts/accessible_palette.webp" width="360" height="240" loading="lazy" decoding="async" alt="Accessible palette rendered by Neper"><h3>Accessible palette</h3><p>Six series colours that each reach 4.5:1 contrast against the background.</p></figure>
+        <figure class="chart-card" id="color_vision"><img src="img/charts/color_vision.webp" width="360" height="240" loading="lazy" decoding="async" alt="Colour-vision check rendered by Neper"><h3>Colour-vision check</h3><p>The palette as seen with protanopia, deuteranopia and tritanopia, with the closest pair's CIEDE2000 difference.</p></figure>
+        <figure class="chart-card" id="gradient_font"><img src="img/charts/gradient_font.webp" width="360" height="240" loading="lazy" decoding="async" alt="Gradients and embedded fonts rendered by Neper"><h3>Gradients and embedded fonts</h3><p>Gradient fills shared by the PNG and the SVG, with the font embedded in the SVG.</p></figure>
+        <figure class="chart-card" id="ui_canvas"><img src="img/charts/ui_canvas.webp" width="360" height="240" loading="lazy" decoding="async" alt="Chart in an e.ui canvas rendered by Neper"><h3>Chart in an e.ui canvas</h3><p>A chart hosted by the UI toolkit, laid out at whatever size the window gives it.</p></figure>
+      </div>
+      <h2>What is not there yet</h2>
+      <p>The gallery is complete against its plan, but the library is not finished. Still open:</p>
+      <ul>
+        <li>a PDF adapter (PNG, SVG and the e.ui canvas exist today);</li>
+        <li>font subsetting for embedded SVG fonts (the whole font is embedded now);</li>
+        <li>leader lines for labels that do not fit, and pointer events on charts in the UI;</li>
+        <li>published benchmarks against ggplot2 and matplotlib.</li>
+      </ul>
+      <p>The charts above that do statistics (capability, Weibull, dose response, the control-chart limits) compute what their captions say and no more. Where a parameter is supplied rather than estimated, the preview says so in its footer. A chart is a view of an analysis, not a substitute for one.</p>
+      <div class="try-cta">
+        <a class="button nu-btn lg" href="../">Try Neper →</a>
+      </div>
+    </article>
+
+    <footer>
+      <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
+      <a href="../#blog">← all posts</a>
+    </footer>
+  </div>
+</body>
+</html>
