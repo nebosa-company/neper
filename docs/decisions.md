@@ -35072,3 +35072,17 @@ each point in a focusable fragment link whose target is the mark index and whose
 `data-row-id` retains source identity. CSS `:target` and `:focus` expose a
 selection outline without script. The PNG is a selected-state snapshot; widget
 events, cross-filter state and zoom-aware interaction are still L062 work.
+
+## D2101 — Chart palettes guarantee contrast on the written bytes
+
+`accessible_palette` returns six qualitative series colors for an opaque
+background. Each seed hue that falls below 4.5:1 (the WCAG text threshold, so
+direct labels in series colors are readable too) moves toward black or white,
+whichever contrasts more with the background, by the smallest bisected amount
+that passes; seeds that already pass are returned unchanged. Contrast is
+measured after rounding each channel the way `scene.channel_byte` and the SVG
+adapter do, so the guarantee holds for the PNG and SVG output rather than for
+unrounded floats; no threshold margin is needed. One of black and white always
+reaches at least 4.58:1, so every opaque background has a solution. A palette
+cannot make color the only cue: previews label series directly.
+Color-vision-deficiency simulation and automatic marker shapes remain open.

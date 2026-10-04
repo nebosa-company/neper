@@ -8,6 +8,7 @@ use e.algo.stat
 use e.algo.sort
 use e.algo.geo
 use e.gfx.geometry
+use e.gfx.paint
 use e.math
 use e.math.special
 use e.math.filter as filter
@@ -323,6 +324,75 @@ fn finite64(v: f64) -> bool {
 
 fn valid_bounds(bounds: geometry.Rect) -> bool {
     ret finite(bounds.x) && finite(bounds.y) && finite(bounds.width) && finite(bounds.height) && bounds.width > 0.0 && bounds.height > 0.0
+}
+
+// WCAG relative luminance of the bytes the scene/PNG and SVG adapters write:
+// each channel rounds as scene.channel_byte does, then linearizes as sRGB.
+fn rendered_channel(c: f32) -> f64 {
+    ret f64(paint.srgb_to_linear(f32(u32(c * 255.0 + 0.5)) / 255.0))
+}
+
+fn rendered_luminance(color: paint.Color) -> f64 {
+    ret 0.2126f64 * rendered_channel(color.red) + 0.7152f64 * rendered_channel(color.green) + 0.0722f64 * rendered_channel(color.blue)
+}
+
+fn luminance_contrast(first: f64, second: f64) -> f64 {
+    var brighter = first
+    var darker = second
+    if second > first {
+        brighter = second
+        darker = first
+    }
+    ret (brighter + 0.05f64) / (darker + 0.05f64)
+}
+
+fn rendered_contrast_ratio(first: paint.Color, second: paint.Color) -> (f64, err) {
+    if !paint.color_ok(first) || !paint.color_ok(second) || first.alpha != 1.0 || second.alpha != 1.0 { ret (0.0f64, Invalid) }
+    ret (luminance_contrast(rendered_luminance(first), rendered_luminance(second)), ok)
+}
+
+// Six qualitative seed hues move toward black or white, whichever contrasts
+// more with the opaque background, only as far as 4.5:1 needs. One of the two
+// always reaches at least 4.58:1. Series still need labels or shapes: a
+// palette cannot make color the sole cue.
+fn accessible_palette(background: paint.Color, out: []paint.Color) -> ([]paint.Color, err) {
+    if !paint.color_ok(background) || background.alpha != 1.0 { ret (zero, Invalid) }
+    if out.len < 6usize { ret (zero, TooLarge) }
+    let seeds = [6]paint.Color{
+        paint.rgba(0.0, 114.0 / 255.0, 178.0 / 255.0, 1.0),
+        paint.rgba(213.0 / 255.0, 94.0 / 255.0, 0.0, 1.0),
+        paint.rgba(0.0, 158.0 / 255.0, 115.0 / 255.0, 1.0),
+        paint.rgba(142.0 / 255.0, 68.0 / 255.0, 173.0 / 255.0, 1.0),
+        paint.rgba(179.0 / 255.0, 38.0 / 255.0, 62.0 / 255.0, 1.0),
+        paint.rgba(179.0 / 255.0, 107.0 / 255.0, 0.0, 1.0),
+    }
+    let background_luminance = rendered_luminance(background)
+    var extreme = 0.0f32
+    if luminance_contrast(1.0f64, background_luminance) > luminance_contrast(0.0f64, background_luminance) { extreme = 1.0 }
+    var i = 0usize
+    while i < seeds.len {
+        let seed = seeds[i]
+        var chosen = seed
+        if luminance_contrast(rendered_luminance(seed), background_luminance) < 4.5f64 {
+            var low = 0.0f32
+            var high = 1.0f32
+            var step = 0usize
+            while step < 20usize {
+                let amount = (low + high) * 0.5
+                let trial = paint.rgba(seed.red + (extreme - seed.red) * amount, seed.green + (extreme - seed.green) * amount, seed.blue + (extreme - seed.blue) * amount, 1.0)
+                if luminance_contrast(rendered_luminance(trial), background_luminance) >= 4.5f64 {
+                    high = amount
+                } else {
+                    low = amount
+                }
+                step += 1usize
+            }
+            chosen = paint.rgba(seed.red + (extreme - seed.red) * high, seed.green + (extreme - seed.green) * high, seed.blue + (extreme - seed.blue) * high, 1.0)
+        }
+        out[i] = chosen
+        i += 1usize
+    }
+    ret (out[..seeds.len], ok)
 }
 
 fn extent(values: []const f32) -> (f32, f32, err) {

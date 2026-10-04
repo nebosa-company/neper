@@ -81,6 +81,29 @@ class ChartGuideTests(unittest.TestCase):
         self.assertIn("a:target .np-selection-halo", style.text)
         self.assertIn("a:focus .np-selection-halo", style.text)
 
+    def test_accessible_palette_labels_clear_wcag_contrast(self):
+        # An independent WCAG 2 computation over the bytes Neper wrote.
+        def luminance(rgb):
+            def linear(byte):
+                c = byte / 255
+                return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+            r, g, b = (linear(int(part)) for part in rgb.split(","))
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+        def contrast(first, second):
+            hi, lo = sorted((luminance(first), luminance(second)), reverse=True)
+            return (hi + 0.05) / (lo + 0.05)
+
+        svg = (DOCS / "chart-previews" / "accessible_palette.svg").read_text(encoding="utf-8")
+        labels = re.findall(r'fill="rgb\(([0-9,]+)\)" fill-opacity="1">S[1-6]<', svg)
+        self.assertEqual(len(labels), 12)
+        self.assertEqual(len(set(labels[:6])), 6)
+        self.assertEqual(len(set(labels[6:])), 6)
+        for color in labels[:6]:
+            self.assertGreaterEqual(contrast(color, "255,255,255"), 4.5)
+        for color in labels[6:]:
+            self.assertGreaterEqual(contrast(color, "28,33,43"), 4.5)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3009,6 +3009,11 @@ gfx_chart_selection_written=$($test_build/neper-self emit-executable "$repo/test
 chmod +x "$test_build/gfx-chart-selection-selfhost"
 gfx_chart_selection_output=$("$test_build/gfx-chart-selection-selfhost")
 [ "$gfx_chart_selection_output" = 'gfx chart selection ok' ]
+gfx_chart_accessible_palette_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_accessible_palette/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-accessible-palette-selfhost")
+[ "$gfx_chart_accessible_palette_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-accessible-palette-selfhost"
+gfx_chart_accessible_palette_output=$("$test_build/gfx-chart-accessible-palette-selfhost")
+[ "$gfx_chart_accessible_palette_output" = 'gfx chart accessible palette ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"

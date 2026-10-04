@@ -16448,6 +16448,8 @@ fn scatterplot_matrix(observations: []const f64, columns: usize, bounds: geometr
 fn facet_grid(bounds: geometry.Rect, columns: usize, count: usize, gap: f32, panels: []geometry.Rect) -> ([]geometry.Rect, err)
 fn shared_facet_guide_labels(panels: []const geometry.Rect, columns: usize, x_ticks: []const Tick, x_text: []const str, y_ticks: []const Tick, y_text: []const str, size: f32, out: []Label) -> ([]Label, err)
 fn plot_grid(bounds: geometry.Rect, column_weights: []const f32, row_weights: []const f32, gap_x: f32, gap_y: f32, panels: []geometry.Rect) -> ([]geometry.Rect, err)
+fn rendered_contrast_ratio(first: paint.Color, second: paint.Color) -> (f64, err)
+fn accessible_palette(background: paint.Color, out: []paint.Color) -> ([]paint.Color, err)
 ```
 
 ### `e.gfx.chart.scene`

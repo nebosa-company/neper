@@ -1993,6 +1993,110 @@ fn render_interactive_selection_preview(a: *mem.Arena, q: *gpu.Queue, output_tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_accessible_palette_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/accessible_palette.png"
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let night = paint.rgba(0.11, 0.13, 0.17, 1.0)
+    let dark = paint.rgba(0.18, 0.24, 0.32, 1.0)
+    let pale = paint.rgba(0.86, 0.89, 0.93, 1.0)
+    let border = paint.rgba(0.80, 0.84, 0.89, 1.0)
+    var light_store: [6]paint.Color = zero
+    var night_store: [6]paint.Color = zero
+    let (light, light_error) = chart.accessible_palette(white, light_store[..])
+    if light_error != ok { ret light_error }
+    let (night_colors, night_error) = chart.accessible_palette(night, night_store[..])
+    if night_error != ok { ret night_error }
+    let x = [5]f32{ 0.0, 1.0, 2.0, 3.0, 4.0 }
+    let y = [30]f32{
+        10.6, 11.2, 10.9, 11.6, 11.3,
+        8.4, 8.9, 9.3, 8.8, 9.4,
+        6.3, 6.0, 6.8, 7.1, 6.7,
+        4.6, 4.2, 4.0, 4.7, 5.0,
+        2.4, 2.9, 2.6, 2.2, 2.8,
+        0.5, 0.9, 1.3, 0.8, 0.4,
+    }
+    let names = [6]str{ "S1", "S2", "S3", "S4", "S5", "S6" }
+    let x_limits = [2]f32{ 0.0, 4.0 }
+    let y_limits = [2]f32{ 0.0, 12.0 }
+    let panels = [2]geometry.Rect{ geometry.rect(12.0, 42.0, 164.0, 186.0), geometry.rect(184.0, 42.0, 164.0, 186.0) }
+    var points: [60]chart.Coord = zero
+    var lines: [48]chart.Segment = zero
+    var marks: [12]chart.Layout = zero
+    var labels: [12]chart.Label = zero
+    var p = 0usize
+    while p < 2usize {
+        let plot = geometry.rect(panels[p].x + 12.0, panels[p].y + 12.0, panels[p].width - 44.0, panels[p].height - 40.0)
+        var s = 0usize
+        while s < 6usize {
+            let k = p * 6usize + s
+            let spec = chart.spec(.PointLine, plot, x[..], y[s * 5usize..s * 5usize + 5usize])
+            let (laid, marks_error) = chart.layout_with_limits(&spec, points[k * 5usize..k * 5usize + 5usize], lines[k * 4usize..k * 4usize + 4usize], zero, x_limits[..], y_limits[..])
+            if marks_error != ok { ret marks_error }
+            marks[k] = laid
+            let last = laid.coords[4usize]
+            labels[k] = chart.Label { text: names[s], anchor: chart.Coord { x: last.x + 7.0, y: last.y + 3.0 }, align: .Left }
+            s += 1usize
+        }
+        p += 1usize
+    }
+    let heading = [2]chart.Label{
+        chart.Label { text: "Accessible series palette", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center },
+        chart.Label { text: "Every color clears 4.5:1 on its background; labels carry identity", anchor: chart.Coord { x: 180.0, y: 32.0 }, align: .Center },
+    }
+    let captions = [2]chart.Label{
+        chart.Label { text: "White background", anchor: chart.Coord { x: 94.0, y: 219.0 }, align: .Center },
+        chart.Label { text: "Dark background", anchor: chart.Coord { x: 266.0, y: 219.0 }, align: .Center },
+    }
+    let inner = geometry.rect(panels[0usize].x + 1.0, panels[0usize].y + 1.0, panels[0usize].width - 2.0, panels[0usize].height - 2.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 256usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, panels[0usize], paint.Brush { Solid: border })
+    try fill(&builder, inner, paint.Brush { Solid: white })
+    try fill(&builder, panels[1usize], paint.Brush { Solid: night })
+    var k = 0usize
+    while k < 12usize {
+        var ink = night
+        if k < 6usize { ink = light[k] } else { ink = night_colors[k - 6usize] }
+        try chart_scene.append(a, &builder, &marks[k], paint.Brush { Solid: ink })
+        try chart_scene.append_labels(a, &builder, labels[k..k + 1usize], font, 8.0, paint.Brush { Solid: ink })
+        k += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, heading[..1usize], font, 11.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, heading[1usize..], font, 7.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, captions[..1usize], font, 7.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, captions[1usize..], font, 7.0, paint.Brush { Solid: pale })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, panels[0usize], border, false)
+    try chart_svg.rect(&writer, inner, white, false)
+    try chart_svg.rect(&writer, panels[1usize], night, false)
+    k = 0usize
+    while k < 12usize {
+        var ink = night
+        if k < 6usize { ink = light[k] } else { ink = night_colors[k - 6usize] }
+        try chart_svg.append(&writer, &marks[k], ink)
+        try chart_svg.append_labels(&writer, labels[k..k + 1usize], ink, 8.0)
+        k += 1usize
+    }
+    try chart_svg.append_labels(&writer, heading[..1usize], dark, 11.0)
+    try chart_svg.append_labels(&writer, heading[1usize..], dark, 7.0)
+    try chart_svg.append_labels(&writer, captions[..1usize], dark, 7.0)
+    try chart_svg.append_labels(&writer, captions[1usize..], pale, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_legend_collision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/legend_collision.png"
     let names = [4]str{ "Control baseline", "Treatment alpha extended", "Treatment beta extended", "Follow-up cohort" }
@@ -10776,6 +10880,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_plot_grid_preview(a, queue, output_target, canvas, &renderer)
     try render_shared_guide_facets_preview(a, queue, output_target, canvas, &renderer)
     try render_interactive_selection_preview(a, queue, output_target, canvas, &renderer)
+    try render_accessible_palette_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)

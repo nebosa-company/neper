@@ -162,6 +162,11 @@ Its SVG companion contains focusable point links: click or keyboard-focus a
 point to reveal its outline, with accessible titles and stable row IDs. This
 is a standalone SVG interaction; binding pointer events in a Neper widget and
 cross-chart filtering remain planned.
+The accessible-palette preview draws six labelled series with
+`accessible_palette` on a white and a dark background. Seeds that already
+reach 4.5:1 keep their hue unchanged; the rest move toward black or white only
+far enough to pass on the bytes the PNG and SVG actually contain. Direct labels
+carry series identity, so color is never the only cue.
 
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:

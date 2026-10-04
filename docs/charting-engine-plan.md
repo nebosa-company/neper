@@ -1090,6 +1090,18 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 ## How Neper can beat the reference tools
 
+`accessible_palette` returns six qualitative series colors for an opaque
+background, each at least 4.5:1 (WCAG text contrast) against it.
+`rendered_contrast_ratio` measures the bytes the scene/PNG and SVG adapters
+write, so the guarantee holds for the output rather than for unrounded floats.
+Seeds that fail move toward black or white, whichever contrasts more with the
+background, by the smallest bisected amount that passes. The
+`accessible_palette` PNG/SVG pair shows the palette on white and dark panels
+with direct labels; `gfx_chart_accessible_palette` checks contrast, unchanged
+passing seeds, white/black/mid-gray backgrounds, adapter colors and refusals on
+Windows and Linux. Color-vision-deficiency simulation and automatic marker
+shapes remain open.
+
 `hit_scatter` resolves a screen-space pointer to the nearest scatter mark and
 preserves original source-row identity after missing-data compaction;
 `selected_point_outline` returns a reusable Box layout for both renderers.
