@@ -172,6 +172,9 @@
     .catalog-dialog-close:hover, .catalog-dialog-close:focus-visible { border-width: 2px; border-color: var(--primary); }
     body.nu-page .catalog-dialog-close, body.nu-page .catalog-explore { cursor: pointer; }
     .catalog-dialog-close span { transform: translateY(-2px); }
+    .trailer-dialog { width: min(1080px, calc(100% - 32px), calc((84vh - 120px) * 16 / 9)); }
+    .trailer-frame { aspect-ratio: 16 / 9; background: #000; }
+    .trailer-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
     .catalog-dialog-body { overflow: auto; padding: var(--space-6); }
     .catalog-dialog-status { margin: 0 0 var(--space-6); color: var(--muted); }
     .catalog-dialog-groups { display: grid; gap: var(--space-8); }
@@ -289,6 +292,7 @@
           <div class="actions">
             <a class="button nu-btn lg" href="https://github.com/nebosa-company/neper">View on GitHub →</a>
             <a class="button secondary nu-btn tonal lg" href="#llm">See every LLM feature</a>
+            <a class="button secondary nu-btn tonal lg" href="https://youtu.be/iZI3FmttYn4" data-trailer>▶ Watch the 30-second trailer</a>
           </div>
         </div>
 
@@ -548,6 +552,15 @@ Hello, Neper</code></pre>
       <span>neper / MIT open source · 100% Neper · Windows, Linux, macOS.</span>
     </footer>
   </div>
+  <dialog class="catalog-dialog trailer-dialog" id="trailer" aria-labelledby="trailer-title">
+    <div class="catalog-dialog-frame">
+      <header class="catalog-dialog-header">
+        <div><div class="eyebrow">00 // trailer</div><h2 id="trailer-title">Neper in 30 seconds</h2></div>
+        <form method="dialog"><button class="catalog-dialog-close" aria-label="Close trailer"><span aria-hidden="true">×</span></button></form>
+      </header>
+      <div class="trailer-frame"></div>
+    </div>
+  </dialog>
   <dialog class="catalog-dialog" id="module-catalog" aria-labelledby="module-catalog-title">
     <div class="catalog-dialog-frame">
       <header class="catalog-dialog-header">
@@ -917,6 +930,23 @@ Hello, Neper</code></pre>
     for (const dialog of document.querySelectorAll(".catalog-dialog")) {
       dialog.addEventListener("click", event => { if (event.target === dialog) dialog.close() })
     }
+
+    // The trailer's player is created on open and removed on close, so YouTube loads only on request and stops with the dialog.
+    const trailer = document.getElementById("trailer")
+    const trailerFrame = trailer.querySelector(".trailer-frame")
+    for (const link of document.querySelectorAll("[data-trailer]")) {
+      link.addEventListener("click", event => {
+        event.preventDefault()
+        const player = document.createElement("iframe")
+        player.src = "https://www.youtube-nocookie.com/embed/iZI3FmttYn4?autoplay=1&rel=0"
+        player.title = "Neper in 30 seconds"
+        player.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"
+        player.allowFullscreen = true
+        trailerFrame.replaceChildren(player)
+        trailer.showModal()
+      })
+    }
+    trailer.addEventListener("close", () => trailerFrame.replaceChildren())
   </script>
 </body>
 </html>
