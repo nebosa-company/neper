@@ -2909,6 +2909,11 @@ gfx_chart_aggregate_tree_written=$($test_build/neper-self emit-executable "$repo
 chmod +x "$test_build/gfx-chart-aggregate-tree-selfhost"
 gfx_chart_aggregate_tree_output=$("$test_build/gfx-chart-aggregate-tree-selfhost")
 [ "$gfx_chart_aggregate_tree_output" = 'gfx chart aggregate tree ok' ]
+gfx_chart_date_axis_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_date_axis/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-date-axis-selfhost")
+[ "$gfx_chart_date_axis_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-date-axis-selfhost"
+gfx_chart_date_axis_output=$("$test_build/gfx-chart-date-axis-selfhost")
+[ "$gfx_chart_date_axis_output" = 'gfx chart date axis ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"

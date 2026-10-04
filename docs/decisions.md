@@ -34971,3 +34971,15 @@ interactive drill, field choice and AI-assisted splitting remain separate
 future capabilities. The visual's measure-and-dimension framing follows
 Microsoft's decomposition-tree description:
 https://learn.microsoft.com/en-us/power-bi/visuals/power-bi-visualization-decomposition-tree.
+
+## D1970 — Calendar axes use civil-day distances and explicit month breaks
+
+`chart.date_axis_line` borrows ordered `time.Date` values and maps them over an
+explicit civil-date domain using elapsed days, rather than treating months as
+equally spaced categories or passing large epoch timestamps through f32.
+`date_ticks` chooses month starts at a caller-specified stride and
+`format_date_ticks` writes ISO year-month labels into caller storage. The
+Windows/Linux fixture covers leap-year spacing, invalid dates, capacities and
+scene/SVG output; the gallery renders the same positions in a PNG/SVG pair.
+Locale-sensitive labels, time zones and automatic date-break selection remain
+separate follow-on work.

@@ -235,8 +235,10 @@ The stable sequence is:
    delivered, with equal transformed-space tick metadata. `nice_ticks` adds
    1/2/5 linear steps and sampled 1/2/5 log decades; symmetric-log retains
    equal transformed-space positions. `category_ticks` places ordinal category
-   centers for bar labels, without a full discrete scale. Date scales, locale/date label
-   formatting and out-of-bounds policy remain.
+   centers for bar labels, without a full discrete scale. `date_axis_line`
+   maps civil dates by elapsed days; `date_ticks` and `format_date_ticks`
+   provide month starts and ISO year-month labels. Broader date/time scales,
+   locale formatting and out-of-bounds policy remain.
 5. **Coordinates** — Cartesian first; polar, flipped, fixed-aspect, map and 3-D
    projections later.
 6. **Geometries** — marks only; no data analysis hidden in a painter.
@@ -935,6 +937,13 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    remain caller-visible; no interactive drill or automatic explanatory split
    is implied. The Windows/Linux fixture checks roll-ups, geometry, relative
    bars, scene/SVG adapters and refusals; the gallery adds a PNG/SVG pair.
+   `date_axis_line` maps ordered civil dates through elapsed day counts over an
+   explicit date and y domain, so unequal months and leap days retain their
+   spacing. `date_ticks` emits month-start fractions at an explicit stride;
+   `format_date_ticks` writes ISO year-month labels into caller storage. The
+   Windows/Linux fixture checks leap-year positions, labels, adapters and
+   invalid dates/storage; the gallery adds a paired PNG/SVG preview. Day/week
+   and locale-sensitive tick policies remain planned.
    Bullet charts now compose qualitative bands, an actual bar and a target
    rule from existing layers; `gfx_chart_composition` checks geometry,
    refusals and both adapters on Windows and Linux.

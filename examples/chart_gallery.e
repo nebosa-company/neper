@@ -19,6 +19,7 @@ use e.gfx.paint
 use e.gfx.scene
 use e.text.shape
 use e.text.layout as text_layout
+use e.time as calendar_time
 
 const WIDTH: u32 = 360u32
 const HEIGHT: u32 = 240u32
@@ -1556,6 +1557,89 @@ fn render_monte_carlo_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0f32)
     try chart_svg.append_labels(&writer, labels[1usize..6usize], dark, 8.0f32)
     if cumulative { try chart_svg.append_labels(&writer, labels[6usize..], dark, 8.0f32) }
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_date_axis_line_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/date_axis_line.png"
+    let dates = [7]calendar_time.Date{
+        calendar_time.Date { year: 2024i32, month: 1u8, day: 1u8 },
+        calendar_time.Date { year: 2024i32, month: 2u8, day: 1u8 },
+        calendar_time.Date { year: 2024i32, month: 3u8, day: 1u8 },
+        calendar_time.Date { year: 2024i32, month: 4u8, day: 1u8 },
+        calendar_time.Date { year: 2024i32, month: 5u8, day: 1u8 },
+        calendar_time.Date { year: 2024i32, month: 6u8, day: 1u8 },
+        calendar_time.Date { year: 2024i32, month: 7u8, day: 1u8 },
+    }
+    let values = [7]f64{ 12.0f64, 20.0f64, 17.0f64, 27.0f64, 24.0f64, 35.0f64, 32.0f64 }
+    let plot = geometry.rect(51.0, 61.0, 278.0, 129.0)
+    var points: [7]chart.Coord = zero
+    var segments: [6]chart.Segment = zero
+    let (series, series_error) = chart.date_axis_line(dates[..], values[..], dates[0usize], dates[6usize], 0.0f64, 40.0f64, plot, points[..], segments[..])
+    if series_error != ok { ret series_error }
+    var ticks: [7]chart.DateTick = zero
+    let (months, tick_error) = chart.date_ticks(dates[0usize], dates[6usize], 1usize, ticks[..])
+    if tick_error != ok || months.len != 7usize { ret chart.Invalid }
+    var tick_text: [7]str = zero
+    var tick_storage: [49]u8 = zero
+    let (_, label_error) = chart.format_date_ticks(months, tick_text[..], tick_storage[..])
+    if label_error != ok { ret label_error }
+    var grid_segments: [12]chart.Segment = zero
+    var labels: [15]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Date-aware line chart", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Elapsed calendar days / leap-year February", anchor: chart.Coord { x: 180.0, y: 40.0 }, align: .Center }
+    var i = 0usize
+    while i < months.len {
+        let x = plot.x + plot.width * months[i].fraction
+        grid_segments[i] = chart.Segment { from: chart.Coord { x: x, y: plot.y }, to: chart.Coord { x: x, y: plot.y + plot.height } }
+        labels[2usize + i] = chart.Label { text: tick_text[i], anchor: chart.Coord { x: x, y: 207.0 }, align: .Center }
+        i += 1usize
+    }
+    let y_text = [5]str{ "40", "30", "20", "10", "0" }
+    i = 0usize
+    while i < 5usize {
+        let y = plot.y + f32(i) * plot.height / 4.0
+        grid_segments[7usize + i] = chart.Segment { from: chart.Coord { x: plot.x, y: y }, to: chart.Coord { x: plot.x + plot.width, y: y } }
+        labels[9usize + i] = chart.Label { text: y_text[i], anchor: chart.Coord { x: 45.0, y: y + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    labels[14usize] = chart.Label { text: "Month starts use 31, 29, 31, 30, 31 and 30-day gaps", anchor: chart.Coord { x: 180.0, y: 232.0 }, align: .Center }
+    let guide = chart.Layout { kind: .Rug, coords: zero, segments: grid_segments[..], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    let blue = paint.rgba(0.11, 0.42, 0.77, 1.0)
+    let grid = paint.rgba(0.82, 0.86, 0.91, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let panel = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 100usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: panel })
+    try chart_scene.append(a, &builder, &guide, paint.Brush { Solid: grid })
+    try chart_scene.append(a, &builder, &series, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..14usize], font, 7.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[14usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, panel, false)
+    try chart_svg.append(&writer, &guide, grid)
+    try chart_svg.append(&writer, &series, blue)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[2usize..14usize], dark, 7.0)
+    try chart_svg.append_labels(&writer, labels[14usize..], dark, 7.0)
     try chart_svg.finish(&writer)
     let (svg_path, path_error) = vector_path(a, path)
     if path_error != ok { ret path_error }
@@ -10005,6 +10089,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_yield_curve_preview(a, queue, output_target, canvas, &renderer)
     try render_monte_carlo_preview(a, queue, output_target, canvas, &renderer, false)
     try render_monte_carlo_preview(a, queue, output_target, canvas, &renderer, true)
+    try render_date_axis_line_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)

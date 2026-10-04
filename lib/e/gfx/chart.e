@@ -14,12 +14,14 @@ use e.math.filter as filter
 use e.mem
 use e.str
 use e.text.layout as text_layout
+use e.time
 
 type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, SlopeGraph, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble, Pp, Mosaic, Association }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type BinaryMetric = enum u8 { Roc, PrecisionRecall, CumulativeGain, Lift }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
 type Tick = struct { value: f32, fraction: f32 }
+type DateTick = struct { date: time.Date, fraction: f32 }
 type Coord = struct { x: f32, y: f32 }
 type LabelAlign = enum u8 { Left, Center, Right }
 type Label = struct { text: str, anchor: Coord, align: LabelAlign }
@@ -552,6 +554,98 @@ fn category_ticks(count: usize, out: []Tick) -> ([]Tick, err) {
         i += 1usize
     }
     ret (out[..count], ok)
+}
+
+fn valid_chart_date(date: time.Date) -> bool {
+    if date.year < 1i32 || date.year > 9999i32 || date.month < 1u8 || date.month > 12u8 { ret false }
+    ret date.day >= 1u8 && i64(date.day) <= time.days_in_month(i64(date.year), i64(date.month))
+}
+
+// Month-start breaks preserve real calendar spacing, including leap days.
+// The stride is measured in calendar months, not a fixed number of days.
+fn date_ticks(start: time.Date, end: time.Date, month_stride: usize, out: []DateTick) -> ([]DateTick, err) {
+    if !valid_chart_date(start) || !valid_chart_date(end) || month_stride == 0usize || month_stride > 120usize { ret (zero, Invalid) }
+    let first_day = time.days_from_civil(i64(start.year), i64(start.month), i64(start.day))
+    let last_day = time.days_from_civil(i64(end.year), i64(end.month), i64(end.day))
+    if last_day <= first_day { ret (zero, Invalid) }
+    var month = i64(start.year) * 12i64 + i64(start.month) - 1i64
+    let last_month = i64(end.year) * 12i64 + i64(end.month) - 1i64
+    if start.day > 1u8 { month += 1i64 }
+    let stride = i64(month_stride)
+    let remainder = month % stride
+    if remainder != 0i64 { month += stride - remainder }
+    var count = 0usize
+    while month <= last_month {
+        let year = month / 12i64
+        let calendar_month = month % 12i64 + 1i64
+        let day = time.days_from_civil(year, calendar_month, 1i64)
+        if day <= last_day {
+            if count == out.len { ret (zero, TooLarge) }
+            out[count] = DateTick { date: time.Date { year: i32(year), month: u8(calendar_month), day: 1u8 }, fraction: f32(f64(day - first_day) / f64(last_day - first_day)) }
+            count += 1usize
+        }
+        month += stride
+    }
+    ret (out[..count], ok)
+}
+
+// ISO year-month labels live in caller storage and remain valid while it does.
+fn format_date_ticks(ticks_in: []const DateTick, out: []str, storage: []u8) -> ([]str, err) {
+    if out.len < ticks_in.len { ret (zero, TooLarge) }
+    var used = 0usize
+    var i = 0usize
+    while i < ticks_in.len {
+        let date = ticks_in[i].date
+        if !valid_chart_date(date) || date.day != 1u8 { ret (zero, Invalid) }
+        if storage.len - used < 7usize { ret (zero, TooLarge) }
+        var arena = mem.arena_from(storage[used..])
+        let (made, builder_error) = str.builder(&arena, 0usize)
+        if builder_error != ok { ret (zero, builder_error) }
+        var builder = made
+        if date.year < 10i32 {
+            try str.push(&builder, "000")
+        } else if date.year < 100i32 {
+            try str.push(&builder, "00")
+        } else if date.year < 1000i32 {
+            try str.push(&builder, "0")
+        }
+        try str.push_i32(&builder, date.year)
+        try str.push(&builder, "-")
+        if date.month < 10u8 { try str.push(&builder, "0") }
+        try str.push_i32(&builder, i32(date.month))
+        let label = str.done(&builder)
+        out[i] = label
+        used += label.len
+        i += 1usize
+    }
+    ret (out[..ticks_in.len], ok)
+}
+
+// Ordered civil dates map to elapsed days rather than equal category slots.
+// Explicit date/y domains let several series share the same axes.
+fn date_axis_line(dates: []const time.Date, values: []const f64, start: time.Date, end: time.Date, y_min: f64, y_max: f64, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err) {
+    let n = dates.len
+    if n == 0usize { ret (zero, Empty) }
+    if n < 2usize || values.len != n || !valid_chart_date(start) || !valid_chart_date(end) || !finite64(y_min) || !finite64(y_max) || y_max <= y_min || !valid_bounds(bounds) { ret (zero, Invalid) }
+    let first_day = time.days_from_civil(i64(start.year), i64(start.month), i64(start.day))
+    let last_day = time.days_from_civil(i64(end.year), i64(end.month), i64(end.day))
+    if last_day <= first_day { ret (zero, Invalid) }
+    if points.len < n || segments.len < n - 1usize { ret (zero, TooLarge) }
+    var previous = first_day - 1i64
+    var i = 0usize
+    while i < n {
+        if !valid_chart_date(dates[i]) || !finite64(values[i]) || values[i] < y_min || values[i] > y_max { ret (zero, Invalid) }
+        let day = time.days_from_civil(i64(dates[i].year), i64(dates[i].month), i64(dates[i].day))
+        if day <= previous || day < first_day || day > last_day { ret (zero, Invalid) }
+        let x = bounds.x + bounds.width * f32(f64(day - first_day) / f64(last_day - first_day))
+        let y = bounds.y + bounds.height * (1.0 - f32((values[i] - y_min) / (y_max - y_min)))
+        if !finite(x) || !finite(y) { ret (zero, Invalid) }
+        points[i] = Coord { x: x, y: y }
+        if i > 0usize { segments[i - 1usize] = Segment { from: points[i - 1usize], to: points[i] } }
+        previous = day
+        i += 1usize
+    }
+    ret (Layout { kind: .PointLine, coords: points[..n], segments: segments[..n - 1usize], bars: zero, x_min: f32(first_day), x_max: f32(last_day), y_min: f32(y_min), y_max: f32(y_max) }, ok)
 }
 
 // Palette stays with the caller; each swatch and label shares its series index.

@@ -3287,6 +3287,11 @@ $gfxChartAggregateTreeWritten = & $compiler emit-executable (Join-Path $PSScript
 if ($LASTEXITCODE -ne 0 -or $gfxChartAggregateTreeWritten -ne 'executable written') { throw 'gfx_chart_aggregate_tree emission failed' }
 $gfxChartAggregateTreeOutput = & $gfxChartAggregateTreePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartAggregateTreeOutput -ne 'gfx chart aggregate tree ok') { throw "the e.gfx.chart aggregate decomposition tree answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDateAxisPath = Join-Path $testBuild 'gfx-chart-date-axis-selfhost.exe'
+$gfxChartDateAxisWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_date_axis\src\main.e') $repo 'x64' 'windows' $gfxChartDateAxisPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDateAxisWritten -ne 'executable written') { throw 'gfx_chart_date_axis emission failed' }
+$gfxChartDateAxisOutput = & $gfxChartDateAxisPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDateAxisOutput -ne 'gfx chart date axis ok') { throw "the e.gfx.chart date axis answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }
