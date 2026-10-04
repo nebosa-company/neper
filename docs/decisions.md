@@ -34812,3 +34812,13 @@ invalid categories, inconsistent dimensions and undersized caller storage.
 
 The Windows/Linux fixture pins counts, intervals, kappa and a degenerate
 undefined-kappa case; the two-panel gallery preview is PNG/SVG paired.
+
+## D1957 — Keep the local chart gallery self-contained
+
+Embed each produced SVG as a data-URL thumbnail in generated `docs/charts.html`,
+with explicit 360 × 240 dimensions. The card links still point to the full PNG
+and SVG files. This lets the gallery display its previews without depending on
+`file:` subresource loading and avoids layout shifts from dimensionless lazy
+images. Regenerate this page independently with
+`python scripts/render_progress.py --charts-only` when other readiness documents
+have unrelated work in progress.

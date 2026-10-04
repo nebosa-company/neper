@@ -1,6 +1,7 @@
 """Keep the chart guide and readiness page in their separate roles."""
 
 from pathlib import Path
+import base64
 import re
 import subprocess
 import unittest
@@ -48,12 +49,16 @@ class ChartGuideTests(unittest.TestCase):
     def test_browser_gallery_resolves_every_preview(self):
         page = (DOCS / "charts.html").read_text(encoding="utf-8")
         pngs = tracked_pngs()
-        sources = re.findall(r'<img src="(chart-previews/[^"/]+\.png)"', page)
-        self.assertEqual(sources, [f"chart-previews/{path.name}" for path in pngs])
-        for path in pngs:
+        cards = re.findall(
+            r'<a href="chart-previews/([^"/]+\.png)"><img '
+            r'src="data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)" '
+            r'alt="[^"]+" width="360" height="240"', page)
+        self.assertEqual([name for name, _ in cards], [path.name for path in pngs])
+        for path, (_, thumbnail) in zip(pngs, cards):
             self.assertEqual(path.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
             self.assertIn(f'href="chart-previews/{path.stem}.svg"', page)
             self.assertTrue(path.with_suffix(".svg").is_file())
+            self.assertEqual(base64.b64decode(thumbnail), path.with_suffix(".svg").read_bytes())
         self.assertIn('href="charts.html"', (DOCS / "progress.html").read_text(encoding="utf-8"))
 
 

@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
 """Render readiness, the charting plan, and the unfinished backlog.
 
-Usage:  python scripts/render_progress.py     (from the repository root)
+Usage:  python scripts/render_progress.py [--charts-only]
+        (from the repository root; --charts-only preserves other generated docs)
 
 Compiler, tooling and library scores come from the active queue plus the
 completed ledger; module and UI/host scores come from their inventories.
 """
-import json, re, subprocess, datetime, html
+import base64, json, re, subprocess, datetime, html, sys
 from pathlib import Path
 
 from check_widget_plan import validate as validate_widget_plan
+CHARTS_ONLY = __name__ == '__main__' and sys.argv[1:] == ['--charts-only']
+if __name__ == '__main__' and sys.argv[1:] and not CHARTS_ONLY:
+    raise SystemExit('usage: python scripts/render_progress.py [--charts-only]')
 # Compiler/tooling readiness is data, not renderer code. The unfinished rows are
 # ordered for serial feature pickup; delivered rows are kept out of fresh-session context.
 WORK_QUEUE = Path("docs/work-queue.json")
@@ -310,15 +314,18 @@ chart_guide = (
          evidence=chart_item['evidence'],
          notes=preview_notes.removeprefix('# Chart previews\n').strip(),
          plan=re.sub(r'^(#+) ', lambda match: '#' + match.group(1) + ' ', chart_plan, flags=re.M).strip())
-Path('docs/charts.md').write_text(chart_guide, encoding='utf-8', newline='\n')
+if not CHARTS_ONLY:
+    Path('docs/charts.md').write_text(chart_guide, encoding='utf-8', newline='\n')
 gallery_cards = '\n'.join(
     '<figure class="chart"><a href="chart-previews/{png}">'
-    '<img src="chart-previews/{png}" alt="{title}" loading="lazy" decoding="async"></a>'
+    '<img src="data:image/svg+xml;base64,{thumbnail}" alt="{title}" '
+    'width="360" height="240" loading="lazy" decoding="async"></a>'
     '<figcaption><span>{title}</span><a href="chart-previews/{svg}">SVG</a></figcaption>'
     '</figure>'.format(
         title=html.escape(path.stem.replace('_', ' ').title(), quote=True),
         png=html.escape(path.name, quote=True),
-        svg=html.escape(path.with_suffix('.svg').name, quote=True))
+        svg=html.escape(path.with_suffix('.svg').name, quote=True),
+        thumbnail=base64.b64encode(path.with_suffix('.svg').read_bytes()).decode('ascii'))
     for path in preview_paths
 )
 charts_html = '''<!doctype html>
@@ -353,6 +360,8 @@ figcaption{display:flex;justify-content:space-between;gap:1rem;align-items:basel
 '''.replace('{rendered}', str(len(preview_paths))).replace(
     '{total}', str(chart_total)).replace('{cards}', gallery_cards)
 Path('docs/charts.html').write_text(charts_html, encoding='utf-8', newline='\n')
+if CHARTS_ONLY:
+    raise SystemExit(0)
 chart_section = (
     '<section class="tools" aria-label="Charting engine readiness">'
     '<h2>Charting engine</h2>'
