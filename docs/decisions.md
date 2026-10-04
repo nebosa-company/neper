@@ -34461,3 +34461,18 @@ does not misrepresent them as Type-I data. The NIST 20-unit reliability sample
 anchors the Windows/Linux fixture and PNG/SVG preview.
 
 References: https://itl.nist.gov/div898/handbook/apr/section2/apr221.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/graphs/probability-plot/methods-and-formulas/method-of-obtaining-probability-plot-points/
+
+## D1931 — Keep the single-sample OC curve tied to its sampling model
+
+`stat.binomial_acceptance_probability` evaluates P(X <= c) for a binomial
+sample of size n and incoming defective fraction p, using the regularized
+incomplete beta already in `e.math.special`. This is the large-lot,
+with-replacement approximation; isolated finite lots need a hypergeometric
+branch, and double/multiple sampling needs separate plan semantics.
+`chart.oc_curve` samples that calculator across caller-chosen p limits and
+resolution, emitting the existing point-line layout. The (n=52, c=3) NIST
+table anchors numeric and Windows/Linux scene/SVG tests and the gallery pair.
+The chart is descriptive, not an optimizer for n/c or a claim that one plan
+meets specified producer and consumer risks.
+
+References: https://www.itl.nist.gov/div898/handbook/pmc/section2/pmc243.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/acceptance-sampling/how-to/attributes-acceptance-sampling/before-you-start/data-considerations/

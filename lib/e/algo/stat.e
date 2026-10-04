@@ -1052,6 +1052,18 @@ type Distribution = enum u8 { Normal, Exponential, Gamma, Beta }
 // (rate, 0), Gamma (shape, scale), Beta (alpha, beta).
 type Fit = struct { a: f64, b: f64 }
 type Interval = struct { low: f64, high: f64 }
+
+// Probability that a large-lot, single-sample attributes plan accepts:
+// P[Binomial(sample_size, defective_fraction) <= acceptance_number].
+// Finite-lot sampling without replacement needs a hypergeometric model.
+fn binomial_acceptance_probability(sample_size: usize, acceptance_number: usize, defective_fraction: f64) -> (f64, err) {
+    if sample_size == 0usize || acceptance_number > sample_size || !(defective_fraction >= 0.0f64 && defective_fraction <= 1.0f64) { ret (0.0f64, Invalid) }
+    if acceptance_number == sample_size || defective_fraction == 0.0f64 { ret (1.0f64, ok) }
+    if defective_fraction == 1.0f64 { ret (0.0f64, ok) }
+    let probability = special.beta_i(f64(sample_size - acceptance_number), f64(acceptance_number + 1usize), 1.0f64 - defective_fraction)
+    if !(probability >= 0.0f64 && probability <= 1.0f64) { ret (0.0f64, Invalid) }
+    ret (probability, ok)
+}
 // `estimate` is the statistic of the full sample; the bias-corrected value is
 // `estimate - bias`.
 type Jackknife = struct { estimate: f64, bias: f64, standard_error: f64 }

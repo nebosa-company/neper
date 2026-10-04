@@ -2139,6 +2139,82 @@ fn render_weibull_probability_preview(a: *mem.Arena, q: *gpu.Queue, output_targe
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_oc_curve_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/oc_curve.png"
+    let plot = geometry.rect(68.0, 48.0, 248.0, 151.0)
+    var points: [13]chart.Coord = zero
+    var segments: [12]chart.Segment = zero
+    let (curve, curve_error) = chart.oc_curve(52usize, 3usize, 0.12f64, plot, points[..], segments[..])
+    if curve_error != ok || curve.coords.len != 13usize { ret chart.Invalid }
+    let x_ticks = [7]chart.Tick{
+        chart.Tick { value: 0.0, fraction: 0.0 },
+        chart.Tick { value: 0.02, fraction: 0.16666667 },
+        chart.Tick { value: 0.04, fraction: 0.33333334 },
+        chart.Tick { value: 0.06, fraction: 0.5 },
+        chart.Tick { value: 0.08, fraction: 0.6666667 },
+        chart.Tick { value: 0.10, fraction: 0.8333333 },
+        chart.Tick { value: 0.12, fraction: 1.0 },
+    }
+    let y_ticks = [6]chart.Tick{
+        chart.Tick { value: 0.0, fraction: 0.0 },
+        chart.Tick { value: 0.2, fraction: 0.2 },
+        chart.Tick { value: 0.4, fraction: 0.4 },
+        chart.Tick { value: 0.6, fraction: 0.6 },
+        chart.Tick { value: 0.8, fraction: 0.8 },
+        chart.Tick { value: 1.0, fraction: 1.0 },
+    }
+    let x_text = [7]str{ "0", "2", "4", "6", "8", "10", "12%" }
+    let y_text = [6]str{ "0%", "20%", "40%", "60%", "80%", "100%" }
+    var labels: [16]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Operating-characteristic curve", anchor: chart.Coord { x: 180.0, y: 19.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Single sample / n=52, accept up to 3 defects", anchor: chart.Coord { x: 180.0, y: 33.0 }, align: .Center }
+    var i = 0usize
+    while i < y_text.len {
+        labels[2usize + i] = chart.Label { text: y_text[i], anchor: chart.Coord { x: 58.0, y: plot.y + plot.height * (1.0 - y_ticks[i].fraction) + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    i = 0usize
+    while i < x_text.len {
+        labels[8usize + i] = chart.Label { text: x_text[i], anchor: chart.Coord { x: plot.x + plot.width * x_ticks[i].fraction, y: 215.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[15usize] = chart.Label { text: "Lot defective % / probability of acceptance", anchor: chart.Coord { x: 180.0, y: 232.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let grid = paint.rgba(0.87, 0.91, 0.95, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 32u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &curve, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..15usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[15usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid, dark)
+    try chart_svg.append(&writer, &curve, blue)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..15usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[15usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn two_cluster_sample(x: []f32, y: []f32) -> err {
     if x.len != 72usize || y.len != 72usize { ret chart.Invalid }
     var i = 0usize
@@ -7006,6 +7082,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_range_interval_preview(a, queue, output_target, canvas, &renderer)
     try render_probability_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_weibull_probability_preview(a, queue, output_target, canvas, &renderer)
+    try render_oc_curve_preview(a, queue, output_target, canvas, &renderer)
     try render_hexbin_preview(a, queue, output_target, canvas, &renderer)
     try render_bin2d_preview(a, queue, output_target, canvas, &renderer)
     try render_density2d_preview(a, queue, output_target, canvas, &renderer)

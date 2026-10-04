@@ -6804,6 +6804,26 @@ fn weibull_paper(p: f64) -> f64 {
     ret math.log[f64](0.0f64 - math.log[f64](1.0f64 - p))
 }
 
+// Binomial operating-characteristic curve for one attributes sampling plan.
+// The caller chooses curve resolution via `points.len`; each point is an
+// acceptance probability at an evenly spaced defective fraction.
+fn oc_curve(sample_size: usize, acceptance_number: usize, max_fraction: f64, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err) {
+    if sample_size == 0usize || acceptance_number > sample_size || !finite64(max_fraction) || max_fraction <= 0.0f64 || max_fraction > 1.0f64 || f32(max_fraction) <= 0.0 || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if points.len < 2usize || segments.len < points.len - 1usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < points.len {
+        let defect_fraction = max_fraction * f64(i) / f64(points.len - 1usize)
+        let (probability, probability_error) = stat.binomial_acceptance_probability(sample_size, acceptance_number, defect_fraction)
+        if probability_error != ok { ret (zero, Invalid) }
+        let point = Coord { x: bounds.x + bounds.width * f32(i) / f32(points.len - 1usize), y: bounds.y + bounds.height * f32(1.0f64 - probability) }
+        if !finite(point.x) || !finite(point.y) { ret (zero, Invalid) }
+        points[i] = point
+        if i > 0usize { segments[i - 1usize] = Segment { from: points[i - 1usize], to: point } }
+        i += 1usize
+    }
+    ret (Layout { kind: .PointLine, coords: points, segments: segments[..points.len - 1usize], bars: zero, x_min: 0.0, x_max: f32(max_fraction), y_min: 0.0, y_max: 1.0 }, ok)
+}
+
 // Two-parameter Weibull probability paper. `total_count` includes units
 // right-censored after the final failure; earlier removals need a different
 // plotting-position estimator. Shape and scale are caller-supplied, so the
