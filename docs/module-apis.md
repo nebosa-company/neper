@@ -3248,6 +3248,26 @@ association-rule mining (`apriori`, `apriori_rules` with support, confidence
 and lift) over `u64` comedication masks. Zero cells where a ratio needs them
 are `Invalid`; mining answers into caller storage.
 
+### `e.algo.stat.diagnostic`
+
+```neper
+type Table = struct { true_pos: u64, false_pos: u64, false_neg: u64, true_neg: u64 }
+type Metrics = struct { sensitivity: f64, specificity: f64, accuracy: f64, positive_predictive: f64, negative_predictive: f64, lr_positive: f64, lr_negative: f64, odds_ratio: f64 }
+type Interval = struct { low: f64, high: f64 }
+type Intervals = struct { sensitivity: Interval, specificity: Interval, accuracy: Interval, positive_predictive: Interval, negative_predictive: Interval, lr_positive: Interval, lr_negative: Interval, odds_ratio: Interval }
+error Invalid
+
+fn exact_interval(successes: u64, trials: u64, confidence: f64) -> (Interval, err)
+fn beta_quantile(p: f64, a: f64, b: f64) -> f64
+fn metrics(t: Table) -> (Metrics, err)
+fn metrics_ci(t: Table, confidence: f64) -> (Intervals, err)
+```
+
+Binary diagnostic-test statistics over a 2x2 table: the eight metrics with
+exact Clopper-Pearson intervals for the proportions and log-method intervals
+for the likelihood ratios and the odds ratio. Empty denominators and boundary
+sensitivities/specificities are `Invalid` rather than silent corrections.
+
 ### `e.algo.stat`
 
 ```neper

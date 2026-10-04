@@ -1399,6 +1399,12 @@ $algoStatSurvivalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $algoStatSurvivalWritten -ne 'executable written') { throw 'algo_stat_survival emission failed' }
 & $algoStatSurvivalPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_stat_survival check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.diagnostic` (L008): the eight 2x2 metrics with exact and log intervals, plus refusals.
+$algoStatDiagnosticPath = Join-Path $testBuild 'algo-stat-diagnostic-selfhost.exe'
+$algoStatDiagnosticWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_diagnostic\src\main.e') $repo 'x64' 'windows' $algoStatDiagnosticPath
+if ($LASTEXITCODE -ne 0 -or $algoStatDiagnosticWritten -ne 'executable written') { throw 'algo_stat_diagnostic emission failed' }
+& $algoStatDiagnosticPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_diagnostic check failed: exit $LASTEXITCODE" }
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 $algoGraphFlowPath = Join-Path $testBuild 'algo-graph-flow-selfhost.exe'
 $algoGraphFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_flow\src\main.e') $repo 'x64' 'windows' $algoGraphFlowPath

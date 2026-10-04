@@ -1298,6 +1298,11 @@ algo_stat_survival_written=$($test_build/neper-self emit-executable "$repo/tests
 [ "$algo_stat_survival_written" = 'executable written' ]
 chmod +x "$test_build/algo-stat-survival-selfhost"
 "$test_build/algo-stat-survival-selfhost"
+# `e.algo.stat.diagnostic` (L008): the eight 2x2 metrics with exact and log intervals, plus refusals.
+algo_stat_diagnostic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_diagnostic/src/main.e" "$repo" x64 linux "$test_build/algo-stat-diagnostic-selfhost")
+[ "$algo_stat_diagnostic_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-diagnostic-selfhost"
+"$test_build/algo-stat-diagnostic-selfhost"
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 algo_graph_flow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_flow/src/main.e" "$repo" x64 linux "$test_build/algo-graph-flow-selfhost")
 [ "$algo_graph_flow_written" = 'executable written' ]
