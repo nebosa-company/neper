@@ -16134,6 +16134,7 @@ fn date_axis_line(dates: []const time.Date, values: []const f64, start: time.Dat
 fn date_ticks(start: time.Date, end: time.Date, month_stride: usize, out: []DateTick) -> ([]DateTick, err)
 fn format_date_ticks(ticks: []const DateTick, out: []str, storage: []u8) -> ([]str, err)
 fn discrete_axis_bars(keys: []const str, values: []const f64, levels: []const str, domain_max: f64, bounds: geometry.Rect, sums: []f64, bars: []geometry.Rect, ticks_out: []Tick) -> (Layout, err)
+fn category_facet_scatter(keys: []const str, x: []const f32, y: []const f32, levels: []const str, bounds: geometry.Rect, columns: usize, gap: f32, strip_height: f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, panels: []geometry.Rect, points: []Coord, marks: []Layout, strips: []Label, counts: []usize) -> (CategoryFacetLayout, err)
 fn cross_tab_report(row_ids: []const usize, column_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, work: *CrossTabStorage) -> (CrossTabLayout, err)
 fn matrix_report(row_ids: []const usize, column_ids: []const usize, values: []const f64, present: []const bool, group_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, bar_scope: ReportBarScope, work: *MatrixReportStorage) -> (MatrixReportLayout, err)
 fn fishbone(effect: str, categories: []const str, causes: []const FishboneCause, bounds: geometry.Rect, spine: []Segment, ribs: []Segment, branches: []Segment, head_box: []geometry.Rect, labels: []Label) -> (FishboneLayout, err)

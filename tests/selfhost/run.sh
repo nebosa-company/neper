@@ -2919,6 +2919,11 @@ gfx_chart_discrete_axis_written=$($test_build/neper-self emit-executable "$repo/
 chmod +x "$test_build/gfx-chart-discrete-axis-selfhost"
 gfx_chart_discrete_axis_output=$("$test_build/gfx-chart-discrete-axis-selfhost")
 [ "$gfx_chart_discrete_axis_output" = 'gfx chart discrete axis ok' ]
+gfx_chart_category_facet_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_category_facet/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-category-facet-selfhost")
+[ "$gfx_chart_category_facet_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-category-facet-selfhost"
+gfx_chart_category_facet_output=$("$test_build/gfx-chart-category-facet-selfhost")
+[ "$gfx_chart_category_facet_output" = 'gfx chart category facet ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"

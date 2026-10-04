@@ -681,7 +681,9 @@ Matrix layouts map row-major values into caller-owned cells; Pearson correlation
 reuses `e.algo.stat`. The scene adapter applies caller-selected sequential or
 diverging colours. `facet_grid` supplies equal row-major panel rectangles; scale
 sharing/freeing each numeric axis is available through explicit limits;
-categorical facet mapping and strips remain future work.
+`category_facet_scatter` now maps explicit factor levels to Scatter panels,
+retains empty panels and emits strip labels on shared numeric domains. Broader
+geometry mapping, free-scale policy and strip collision handling remain.
 `scatterplot_matrix` maps row-major observations into off-diagonal scatter
 panels with one range per variable and caller-owned coordinates; diagonal
 panels are reserved for caller labels. `gfx_chart_parallel_coordinates` checks
@@ -951,6 +953,13 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    checks aggregation, slots, geometry, adapters and refusal paths; the gallery
    adds a paired PNG/SVG preview. A reusable discrete scale for every geometry
    and guide collision policy remain planned.
+   `category_facet_scatter` maps a categorical key into row-major panels in
+   caller-specified level order and retains empty levels as blank panels with
+   strip labels. Each Scatter panel uses the same explicit x/y domain; caller
+   storage holds panels, grouped points, marks, labels and counts. The
+   Windows/Linux fixture checks grouping, empty panels, coordinates, SVG
+   escaping, scene output and refusal paths; the gallery adds a PNG/SVG pair.
+   Generalized geom facets and free-scale category panels remain planned.
    Bullet charts now compose qualitative bands, an actual bar and a target
    rule from existing layers; `gfx_chart_composition` checks geometry,
    refusals and both adapters on Windows and Linux.

@@ -173,6 +173,7 @@ type CalendarDay = struct { offset: usize, value: f64 }
 type TimelineEvent = struct { time: f64, row: usize }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
 type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
+type CategoryFacetLayout = struct { panels: []geometry.Rect, marks: []Layout, strips: []Label, counts: []usize }
 type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
 type Bin2dLayout = struct { matrix: MatrixLayout, counts: []u64, max_count: u64, total_count: u64 }
 type Density2dLayout = struct { contours: []Layout, grid: []f64, cutoffs: []f64, peak: f64 }
@@ -10564,4 +10565,66 @@ fn facet_grid(bounds: geometry.Rect, columns: usize, count: usize, gap: f32, pan
         i += 1usize
     }
     ret (panels[..count], ok)
+}
+
+// One category key selects one panel. Levels fix row-major panel order and
+// reserve empty panels; all Scatter marks share the caller's x/y domains.
+fn category_facet_scatter(keys: []const str, x: []const f32, y: []const f32, levels: []const str, bounds: geometry.Rect, columns: usize, gap: f32, strip_height: f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, panels: []geometry.Rect, points: []Coord, marks: []Layout, strips: []Label, counts: []usize) -> (CategoryFacetLayout, err) {
+    if keys.len == 0usize || levels.len == 0usize { ret (zero, Empty) }
+    if x.len != keys.len || y.len != keys.len || !valid_bounds(bounds) || !finite(strip_height) || strip_height <= 0.0 || !finite(x_min) || !finite(x_max) || !finite(y_min) || !finite(y_max) || x_max <= x_min || y_max <= y_min || !finite(x_max - x_min) || !finite(y_max - y_min) { ret (zero, Invalid) }
+    let n = levels.len
+    if panels.len < n || points.len < keys.len || marks.len < n || strips.len < n || counts.len < n { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < n {
+        let label = Label { text: levels[i], anchor: Coord { x: bounds.x, y: bounds.y }, align: .Center }
+        if !valid_label(&label) { ret (zero, Invalid) }
+        var j = 0usize
+        while j < i {
+            if str.eq(levels[i], levels[j]) { ret (zero, Invalid) }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < keys.len {
+        if !finite(x[i]) || !finite(y[i]) || x[i] < x_min || x[i] > x_max || y[i] < y_min || y[i] > y_max { ret (zero, Invalid) }
+        var found = false
+        var j = 0usize
+        while j < n {
+            if str.eq(keys[i], levels[j]) {
+                found = true
+                break
+            }
+            j += 1usize
+        }
+        if !found { ret (zero, Invalid) }
+        i += 1usize
+    }
+    let (placed, panel_error) = facet_grid(bounds, columns, n, gap, panels)
+    if panel_error != ok { ret (zero, panel_error) }
+    var used = 0usize
+    i = 0usize
+    while i < n {
+        let panel = placed[i]
+        let plot = geometry.rect(panel.x + 5.0, panel.y + strip_height, panel.width - 10.0, panel.height - strip_height - 5.0)
+        if !valid_bounds(plot) { ret (zero, TooLarge) }
+        strips[i] = Label { text: levels[i], anchor: Coord { x: panel.x + panel.width * 0.5, y: panel.y + strip_height * 0.70 }, align: .Center }
+        let first = used
+        var j = 0usize
+        while j < keys.len {
+            if str.eq(keys[j], levels[i]) {
+                points[used] = Coord {
+                    x: plot.x + plot.width * ((x[j] - x_min) / (x_max - x_min)),
+                    y: plot.y + plot.height * (1.0 - (y[j] - y_min) / (y_max - y_min)),
+                }
+                if !finite(points[used].x) || !finite(points[used].y) { ret (zero, Invalid) }
+                used += 1usize
+            }
+            j += 1usize
+        }
+        counts[i] = used - first
+        marks[i] = Layout { kind: .Scatter, coords: points[first..used], segments: zero, bars: zero, x_min: x_min, x_max: x_max, y_min: y_min, y_max: y_max }
+        i += 1usize
+    }
+    ret (CategoryFacetLayout { panels: panels[..n], marks: marks[..n], strips: strips[..n], counts: counts[..n] }, ok)
 }

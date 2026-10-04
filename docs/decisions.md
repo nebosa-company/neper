@@ -34995,3 +34995,15 @@ caller-owned `Layout`, totals and ticks for the scene/SVG adapters. The
 Windows/Linux fixture covers aggregation, ordering, empty levels, adapters
 and refusal paths; the gallery renders a paired PNG/SVG preview. This does
 not yet imply a general discrete scale for every chart geometry.
+
+## D1972 — Category facets bind factor levels to shared-scale panels
+
+`chart.category_facet_scatter` maps each row's categorical key into an
+explicitly ordered `facet_grid` panel and emits strip labels, panel counts and
+caller-owned Scatter marks. All panels use the same caller-specified x/y
+domains; levels with no rows remain visible but empty. Duplicate levels,
+unknown keys, non-finite/out-of-domain data and undersized panels or storage
+fail explicitly. The Windows/Linux fixture checks grouping, coordinates,
+empty panels and scene/SVG adapters; the gallery renders a PNG/SVG pair.
+Generic geom faceting, free-scale strip guides and collision handling remain
+follow-on work.

@@ -3297,6 +3297,11 @@ $gfxChartDiscreteAxisWritten = & $compiler emit-executable (Join-Path $PSScriptR
 if ($LASTEXITCODE -ne 0 -or $gfxChartDiscreteAxisWritten -ne 'executable written') { throw 'gfx_chart_discrete_axis emission failed' }
 $gfxChartDiscreteAxisOutput = & $gfxChartDiscreteAxisPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartDiscreteAxisOutput -ne 'gfx chart discrete axis ok') { throw "the e.gfx.chart discrete axis answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCategoryFacetPath = Join-Path $testBuild 'gfx-chart-category-facet-selfhost.exe'
+$gfxChartCategoryFacetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_category_facet\src\main.e') $repo 'x64' 'windows' $gfxChartCategoryFacetPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCategoryFacetWritten -ne 'executable written') { throw 'gfx_chart_category_facet emission failed' }
+$gfxChartCategoryFacetOutput = & $gfxChartCategoryFacetPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCategoryFacetOutput -ne 'gfx chart category facet ok') { throw "the e.gfx.chart category facet answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

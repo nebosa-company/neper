@@ -1563,6 +1563,73 @@ fn render_monte_carlo_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_category_facet_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/category_facet.png"
+    let keys = [12]str{ "North", "South", "East", "North", "South", "East", "North", "South", "East", "North", "South", "East" }
+    let x = [12]f32{ 1.0, 1.0, 1.0, 3.5, 3.5, 3.5, 6.5, 6.5, 6.5, 9.0, 9.0, 9.0 }
+    let y = [12]f32{ 3.0, 8.0, 2.0, 4.0, 6.5, 4.0, 7.0, 4.5, 6.0, 8.5, 2.5, 9.0 }
+    let levels = [4]str{ "North", "South", "East", "West" }
+    var panels: [4]geometry.Rect = zero
+    var points: [12]chart.Coord = zero
+    var marks: [4]chart.Layout = zero
+    var strips: [4]chart.Label = zero
+    var counts: [4]usize = zero
+    let (facets, facet_error) = chart.category_facet_scatter(keys[..], x[..], y[..], levels[..], geometry.rect(14.0, 49.0, 332.0, 161.0), 2usize, 9.0, 18.0, 0.0, 10.0, 0.0, 10.0, panels[..], points[..], marks[..], strips[..], counts[..])
+    if facet_error != ok || counts[0usize] != 4usize || counts[3usize] != 0usize { ret chart.Invalid }
+    let blue = paint.rgba(0.15, 0.40, 0.70, 1.0)
+    let teal = paint.rgba(0.10, 0.55, 0.50, 1.0)
+    let panel = paint.rgba(0.95, 0.97, 0.99, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let gray = paint.rgba(0.48, 0.54, 0.61, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var labels: [4]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Category facets / shared scales", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Explicit panel order; West has no observations", anchor: chart.Coord { x: 180.0, y: 39.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "No observations", anchor: chart.Coord { x: panels[3usize].x + panels[3usize].width * 0.5, y: panels[3usize].y + 52.0 }, align: .Center }
+    labels[3usize] = chart.Label { text: "Every panel uses x = 0..10 and y = 0..10", anchor: chart.Coord { x: 180.0, y: 234.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 100usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    var i = 0usize
+    while i < facets.panels.len {
+        try fill(&builder, facets.panels[i], paint.Brush { Solid: panel })
+        try fill(&builder, geometry.rect(facets.panels[i].x, facets.panels[i].y, facets.panels[i].width, 18.0), paint.Brush { Solid: blue })
+        try chart_scene.append(a, &builder, &facets.marks[i], paint.Brush { Solid: teal })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, facets.strips, font, 9.0, paint.Brush { Solid: white })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..3usize], font, 8.0, paint.Brush { Solid: gray })
+    try chart_scene.append_labels(a, &builder, labels[3usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < facets.panels.len {
+        try chart_svg.rect(&writer, facets.panels[i], panel, false)
+        try chart_svg.rect(&writer, geometry.rect(facets.panels[i].x, facets.panels[i].y, facets.panels[i].width, 18.0), blue, false)
+        try chart_svg.append(&writer, &facets.marks[i], teal)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, facets.strips, white, 9.0)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[2usize..3usize], gray, 8.0)
+    try chart_svg.append_labels(&writer, labels[3usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_discrete_axis_bar_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/discrete_axis_bar.png"
     let keys = [5]str{ "North", "East", "North", "West", "South" }
@@ -10162,6 +10229,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_monte_carlo_preview(a, queue, output_target, canvas, &renderer, true)
     try render_date_axis_line_preview(a, queue, output_target, canvas, &renderer)
     try render_discrete_axis_bar_preview(a, queue, output_target, canvas, &renderer)
+    try render_category_facet_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)
