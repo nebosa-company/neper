@@ -223,6 +223,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 | `e.math.opt.meta` | new (split from `e.math.opt`) | #770, #771, #772, #773, #774, #779, #780 |
 | `e.math.opt.convex` | new (split from `e.math.opt`) | #517, #1461 |
 | `e.math.opt.milp` | new (under `e.math.opt`) | #1987 |
+| `e.math.pkpd` | new (under `e.math`) | #2265 |
 | `e.math.root` | new (under `e.math`) | #496, #497, #498, #499, #500 |
 | `e.mem` | existing | #679, #680, #681, #682, #683 |
 | `e.ml.ann` | new | #1096, #1226, #1227 |

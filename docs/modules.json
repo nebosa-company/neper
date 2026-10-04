@@ -346,7 +346,8 @@
     "e.algo.check",
     "e.debug.dump",
     "e.net.auth",
-    "e.debug.dump.host"
+    "e.debug.dump.host",
+    "e.math.pkpd"
    ]
   },
   {
@@ -4007,6 +4008,18 @@
     "e.algo.rand",
     "e.algo.rand.dist",
     "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.pkpd",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.opt"
    ],
    "blocked_by": []
   },
