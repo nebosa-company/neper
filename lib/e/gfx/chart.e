@@ -102,6 +102,7 @@ type InteractionStorage = struct { points: []Coord, lines: []Segment, means: []f
 type InteractionLayout = struct { series: []Layout, means: []f64, counts: []usize }
 type CubePlotStorage = struct { vertices: []Coord, edges: []Segment, means: []f64, counts: []usize }
 type CubePlotLayout = struct { vertices: Layout, frame: Layout, means: []f64, counts: []usize }
+type SpectrogramLayout = struct { matrix: MatrixLayout, time_start: f64, time_end: f64, frequency_max: f64 }
 type SpineLayout = struct { categories: []Layout, column_totals: []f64, grand_total: f64 }
 type HexCell = struct { center: Coord, count: u64 }
 type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
@@ -7148,6 +7149,47 @@ fn cube_plot(values: []const f64, factor_ids: []const usize, bounds: geometry.Re
     let corners = Layout { kind: .Scatter, coords: storage.vertices[..8usize], segments: zero, bars: zero, x_min: 0.0, x_max: 2.0, y_min: f32(lo), y_max: f32(hi) }
     let wireframe = Layout { kind: .Rug, coords: zero, segments: storage.edges[..12usize], bars: zero, x_min: 0.0, x_max: 2.0, y_min: f32(lo), y_max: f32(hi) }
     ret (CubePlotLayout { vertices: corners, frame: wireframe, means: storage.means[..8usize], counts: storage.counts[..8usize] }, ok)
+}
+
+// One-sided STFT power in dB relative to unit power, with a caller-selected
+// positive floor. `re` and `im` are frame-major FFT outputs from e.dsp.stft;
+// the lowest frequency occupies the bottom heatmap row.
+fn spectrogram(re: []const f64, im: []const f64, frames: usize, fft_size: usize, hop: usize, sample_rate: f64, floor_power: f64, bounds: geometry.Rect, cells: []Cell) -> (SpectrogramLayout, err) {
+    if frames == 0usize || fft_size < 2usize || hop == 0usize || !finite64(sample_rate) || sample_rate <= 0.0f64 || !finite64(floor_power) || floor_power <= 0.0f64 || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if frames > re.len / fft_size || re.len != frames * fft_size || im.len != re.len { ret (zero, Invalid) }
+    let rows = fft_size / 2usize + 1usize
+    if frames > cells.len / rows { ret (zero, TooLarge) }
+    let time_start = f64(fft_size) * 0.5f64 / sample_rate
+    let time_end = (f64(frames - 1usize) * f64(hop) + f64(fft_size) * 0.5f64) / sample_rate
+    let frequency_max = sample_rate * 0.5f64
+    if !finite64(time_start) || !finite64(time_end) || !finite64(frequency_max) { ret (zero, Invalid) }
+    var lo = 0.0f32
+    var hi = 0.0f32
+    var index = 0usize
+    var row = 0usize
+    while row < rows {
+        let bin = rows - row - 1usize
+        var frame = 0usize
+        while frame < frames {
+            let input = frame * fft_size + bin
+            let real = re[input]
+            let imag = im[input]
+            if !finite64(real) || !finite64(imag) { ret (zero, Invalid) }
+            let power = real * real + imag * imag
+            if !finite64(power) { ret (zero, Invalid) }
+            let db = 10.0f64 * math.log10[f64](math.max[f64](power, floor_power))
+            if !finite64(db) || !finite(f32(db)) { ret (zero, Invalid) }
+            let value = f32(db)
+            cells[index] = Cell { rect: cell_rect(bounds, frame, row, frames, rows), value: value }
+            if index == 0usize || value < lo { lo = value }
+            if index == 0usize || value > hi { hi = value }
+            index += 1usize
+            frame += 1usize
+        }
+        row += 1usize
+    }
+    let matrix = MatrixLayout { kind: .Heatmap, cells: cells[..frames * rows], columns: frames, rows: rows, value_min: lo, value_max: hi }
+    ret (SpectrogramLayout { matrix: matrix, time_start: time_start, time_end: time_end, frequency_max: frequency_max }, ok)
 }
 
 // Two-parameter Weibull probability paper. `total_count` includes units

@@ -5,7 +5,6 @@
 # Cartesian and distribution variants
 
 # Statistical, quality, medical and scientific diagrams
-spectrogram
 waterfall_spectrum
 bode
 nyquist

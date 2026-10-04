@@ -1,6 +1,7 @@
 // Render the currently delivered chart kinds through Neper's CPU scene and PNG encoder.
 // From the repository root, run this executable to refresh docs/chart-previews/*.png.
 use e.algo.stat
+use e.dsp
 use e.fs
 use e.gpu
 use e.io
@@ -2602,6 +2603,87 @@ fn render_cube_plot_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
     try chart_svg.append_labels(&writer, labels[1usize..10usize], dark, 9.0)
     try chart_svg.append_labels(&writer, labels[10usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_spectrogram_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/spectrogram.png"
+    let plot = geometry.rect(45.0, 51.0, 270.0, 138.0)
+    var samples: [512]f64 = zero
+    var phase = 0.0f64
+    var i = 0usize
+    while i < samples.len {
+        let time = f64(i) / 256.0f64
+        let frequency = 24.0f64 + 38.0f64 * time
+        phase += 6.283185307179586f64 * frequency / 256.0f64
+        samples[i] = math.sin[f64](phase) + 0.35f64 * math.sin[f64](6.283185307179586f64 * 12.0f64 * time)
+        i += 1usize
+    }
+    var win: [64]f64 = zero
+    try dsp.window(.Hann, 64usize, win[..])
+    var re: [1856]f64 = zero
+    var im: [1856]f64 = zero
+    let (frames, transform_error) = dsp.stft(samples[..], 64usize, 16usize, win[..], re[..], im[..])
+    if transform_error != ok { ret transform_error }
+    var cells: [957]chart.Cell = zero
+    let (map, map_error) = chart.spectrogram(re[..], im[..], frames, 64usize, 16usize, 256.0f64, 0.000001f64, plot, cells[..])
+    if map_error != ok { ret map_error }
+    let x_ticks = [3]chart.Tick{ chart.Tick { value: 0.125, fraction: 0.0 }, chart.Tick { value: 1.0, fraction: 0.5 }, chart.Tick { value: 1.875, fraction: 1.0 } }
+    let y_ticks = [5]chart.Tick{
+        chart.Tick { value: 0.0, fraction: 0.0 },
+        chart.Tick { value: 32.0, fraction: 0.25 },
+        chart.Tick { value: 64.0, fraction: 0.5 },
+        chart.Tick { value: 96.0, fraction: 0.75 },
+        chart.Tick { value: 128.0, fraction: 1.0 },
+    }
+    let y_text = [5]str{ "0", "32", "64", "96", "128" }
+    let x_text = [3]str{ "0.125", "1.0", "1.875" }
+    var labels: [11]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Spectrogram / rising tone", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "One-sided STFT power (dB) / 256 Hz samples", anchor: chart.Coord { x: 180.0, y: 34.0 }, align: .Center }
+    i = 0usize
+    while i < y_text.len {
+        labels[2usize + i] = chart.Label { text: y_text[i], anchor: chart.Coord { x: 36.0, y: plot.y + plot.height * (1.0 - y_ticks[i].fraction) + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    i = 0usize
+    while i < x_text.len {
+        labels[7usize + i] = chart.Label { text: x_text[i], anchor: chart.Coord { x: plot.x + plot.width * x_ticks[i].fraction, y: 204.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[10usize] = chart.Label { text: "Time (s)    /    Frequency (Hz)    /    Yellow = stronger", anchor: chart.Coord { x: 180.0, y: 227.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let low = paint.rgba(0.02, 0.08, 0.22, 1.0)
+    let high = paint.rgba(1.0, 0.78, 0.18, 1.0)
+    let middle = paint.rgba(0.0, 0.5, 0.75, 1.0)
+    let grid = paint.rgba(0.35, 0.46, 0.56, 0.65)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 32u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 1200usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append_matrix(&builder, &map.matrix, low, middle, high)
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..10usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[10usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_matrix(&writer, &map.matrix, low, middle, high)
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid, dark)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..10usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[10usize..], dark, 7.0)
     try chart_svg.finish(&writer)
     let (svg_path, path_error) = vector_path(a, path)
     if path_error != ok { ret path_error }
@@ -7481,6 +7563,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_main_effects_preview(a, queue, output_target, canvas, &renderer)
     try render_interaction_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_cube_plot_preview(a, queue, output_target, canvas, &renderer)
+    try render_spectrogram_preview(a, queue, output_target, canvas, &renderer)
     try render_hexbin_preview(a, queue, output_target, canvas, &renderer)
     try render_bin2d_preview(a, queue, output_target, canvas, &renderer)
     try render_density2d_preview(a, queue, output_target, canvas, &renderer)

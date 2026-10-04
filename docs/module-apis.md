@@ -16005,6 +16005,8 @@ fn interaction_plot(values: []const f64, x_ids: []const usize, series_ids: []con
 type CubePlotStorage = struct { vertices: []Coord, edges: []Segment, means: []f64, counts: []usize }
 type CubePlotLayout = struct { vertices: Layout, frame: Layout, means: []f64, counts: []usize }
 fn cube_plot(values: []const f64, factor_ids: []const usize, bounds: geometry.Rect, storage: *CubePlotStorage) -> (CubePlotLayout, err)
+type SpectrogramLayout = struct { matrix: MatrixLayout, time_start: f64, time_end: f64, frequency_max: f64 }
+fn spectrogram(re: []const f64, im: []const f64, frames: usize, fft_size: usize, hop: usize, sample_rate: f64, floor_power: f64, bounds: geometry.Rect, cells: []Cell) -> (SpectrogramLayout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)

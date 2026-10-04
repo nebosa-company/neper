@@ -34550,3 +34550,18 @@ flat responses and refusal paths. This slice does not fit a model or show
 four-plus-factor cube grids or design-only cubes.
 
 References: https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/yatescub.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/using-fitted-models/how-to/cube-plot/interpret-the-results/key-results/
+
+## D1937 — Spectrogram geometry consumes existing STFT coefficients
+
+`chart.spectrogram` borrows frame-major complex Fourier coefficients, keeps
+nonnegative frequencies, computes squared magnitude and maps its decibels
+relative to unit power to caller-owned heatmap cells. The lowest frequency is
+at the bottom, and the result exposes frame-center times and Nyquist frequency
+for axes. A positive caller floor makes zero-power cells finite. The focused
+Windows/Linux fixture checks bin order, cell geometry, dB values, adapters and
+refusals; the gallery uses `e.dsp.stft` with a Hann window to show a rising tone
+and a steady tone. This is unnormalised spectral power, not calibrated PSD;
+window-energy correction, logarithmic frequency, streaming updates and color
+legend controls remain planned.
+
+References: https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.ShortTimeFFT.spectrogram.html ; https://www.mathworks.com/help/signal/ref/spectrogram.html

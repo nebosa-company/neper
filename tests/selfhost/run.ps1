@@ -3347,6 +3347,11 @@ $gfxChartCubePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $gfxChartCubePlotWritten -ne 'executable written') { throw 'gfx_chart_cube_plot emission failed' }
 $gfxChartCubePlotOutput = & $gfxChartCubePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartCubePlotOutput -ne 'gfx chart cube plot ok') { throw "the e.gfx.chart cube plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSpectrogramPath = Join-Path $testBuild 'gfx-chart-spectrogram-selfhost.exe'
+$gfxChartSpectrogramWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spectrogram\src\main.e') $repo 'x64' 'windows' $gfxChartSpectrogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSpectrogramWritten -ne 'executable written') { throw 'gfx_chart_spectrogram emission failed' }
+$gfxChartSpectrogramOutput = & $gfxChartSpectrogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSpectrogramOutput -ne 'gfx chart spectrogram ok') { throw "the e.gfx.chart spectrogram answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
 $gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }
