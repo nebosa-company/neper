@@ -41,6 +41,11 @@ type LognormalCapability = struct {
     observed_below_ppm: f64, observed_above_ppm: f64,
     expected_below_ppm: f64, expected_above_ppm: f64,
 }
+type BinomialCapability = struct {
+    defective: u64, inspected: u64, fraction: f64, ppm: f64,
+    confidence: Interval, target_fraction: f64, meets_target: bool,
+    upper_bound_meets_target: bool, beyond_limits: usize,
+}
 type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
@@ -719,6 +724,38 @@ fn attribute_control(kind: AttributeControlKind, counts: []const usize, sizes: [
         i += 1usize
     }
     ret ok
+}
+
+// Binomial defective-unit capability over time-ordered subgroups. The pooled
+// rate weights each subgroup by inspected units; the 95% interval method is
+// explicitly Wilson rather than the Clopper-Pearson interval.
+fn binomial_capability(counts: []const usize, sizes: []const usize, target_fraction: f64, confidence: f64, controls: []AttributeControlPoint, cumulative: []f64) -> (BinomialCapability, err) {
+    if counts.len < 2usize || sizes.len != counts.len || !(target_fraction >= 0.0f64 && target_fraction <= 1.0f64) || !(confidence > 0.0f64 && confidence < 1.0f64) { ret (zero, Invalid) }
+    if controls.len < counts.len || cumulative.len < counts.len { ret (zero, TooSmall) }
+    let control_error = attribute_control(.P, counts, sizes, controls)
+    if control_error != ok { ret (zero, control_error) }
+    var defective = 0u64
+    var inspected = 0u64
+    var beyond = 0usize
+    var i = 0usize
+    while i < counts.len {
+        if u64(counts[i]) > 18446744073709551615u64 - defective || u64(sizes[i]) > 18446744073709551615u64 - inspected { ret (zero, Invalid) }
+        defective += u64(counts[i])
+        inspected += u64(sizes[i])
+        cumulative[i] = f64(defective) / f64(inspected)
+        if controls[i].value < controls[i].lower || controls[i].value > controls[i].upper { beyond += 1usize }
+        i += 1usize
+    }
+    let fraction = f64(defective) / f64(inspected)
+    let (interval, interval_error) = interval_wilson(defective, inspected, confidence)
+    if interval_error != ok || fraction - fraction != 0.0f64 { ret (zero, Invalid) }
+    ret (BinomialCapability {
+        defective: defective, inspected: inspected, fraction: fraction,
+        ppm: fraction * 1000000.0f64, confidence: interval, target_fraction: target_fraction,
+        meets_target: fraction <= target_fraction,
+        upper_bound_meets_target: interval.high <= target_fraction,
+        beyond_limits: beyond,
+    }, ok)
 }
 
 // Re-estimate each P/Np/C/U baseline within its own phase.

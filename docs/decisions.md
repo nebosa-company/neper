@@ -34771,3 +34771,6 @@ PNG/SVG pair. Weibull and other distributions, fit diagnostics, subgroup
 models and confidence intervals remain separate work.
 
 References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-analysis/nonnormal-capability-analysis/methods-and-formulas/overall-capability/ ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-analysis/nonnormal-capability-analysis-for-multiple-variables/methods-and-formulas/expected-overall-performance/
+## D1951 — Binomial attribute capability is defective-unit analysis, not defect-rate analysis
+
+L061's first attribute-capability report pools defective units over inspected units, retains unequal-size P-chart limits, plots the cumulative weighted rate and labels the Wilson interval explicitly. The target comparison distinguishes the point estimate from its upper confidence bound; only points outside three-sigma limits are signaled. Poisson defects-per-unit capability, exact binomial intervals and broader stability rules are separate follow-ons. Keep the caller-owned layout and PNG/SVG gallery contract.

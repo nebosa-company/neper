@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>capability_attribute</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="32" y="50" width="296" height="65" fill="rgb(245,250,255)" fill-opacity="1"/>
+<rect x="32" y="140" width="296" height="53" fill="rgb(245,250,255)" fill-opacity="1"/>
+<path d="M32 73.57836151123047 L51.733333587646484 74.11753845214844 L71.46666717529297 72.99716186523438 L91.19999694824219 74.61952209472656 L110.93333435058594 72.36817169189453 L130.6666717529297 73.57836151123047 L150.39999389648438 75.52766418457031 L170.13333129882812 70.93763732910156 L189.86666870117188 73.57836151123047 L209.60000610351562 74.11753845214844 L229.33334350585938 72.99716186523438 L249.06666564941406 73.57836151123047 L268.79998779296875 73.57836151123047 L288.5333251953125 74.61952209472656 L308.26666259765625 72.36817169189453 L328 73.57836151123047" fill="none" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<path d="M32 115 L51.733333587646484 115 L71.46666717529297 115 L91.19999694824219 115 L110.93333435058594 115 L130.6666717529297 115 L150.39999389648438 115 L170.13333129882812 115 L189.86666870117188 115 L209.60000610351562 115 L229.33334350585938 115 L249.06666564941406 115 L268.79998779296875 115 L288.5333251953125 115 L308.26666259765625 115 L328 115" fill="none" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<line x1="32" y1="95.95095825195312" x2="328" y2="95.95095825195312" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="32" y1="177.46771240234375" x2="328" y2="177.46771240234375" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="32" y1="180.18907165527344" x2="328" y2="180.18907165527344" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="32" y1="174.21336364746094" x2="328" y2="174.21336364746094" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="32" y1="172.71292114257812" x2="328" y2="172.71292114257812" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<path d="M32 102.559814453125 L51.733333587646484 97.22830200195312 L71.46666717529297 98.6313247680664 L91.19999694824219 95.20878601074219 L110.93333435058594 101.17756652832031 L130.6666717529297 99.44976043701172 L150.39999389648438 94.26634979248047 L170.13333129882812 103.33732604980469 L189.86666870117188 96.33970642089844 L209.60000610351562 94.26634979248047 L229.33334350585938 98.6313247680664 L249.06666564941406 102.559814453125 L268.79998779296875 55.909088134765625 L288.5333251953125 98.03610229492188 L308.26666259765625 101.17756652832031 L328 99.44976043701172" fill="none" stroke="rgb(48,125,196)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<rect x="29" y="99.559814453125" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="48.733333587646484" y="94.22830200195312" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="68.46666717529297" y="95.6313247680664" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="88.19999694824219" y="92.20878601074219" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="107.93333435058594" y="98.17756652832031" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="127.66667175292969" y="96.44976043701172" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="147.39999389648438" y="91.26634979248047" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="167.13333129882812" y="100.33732604980469" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="186.86666870117188" y="93.33970642089844" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="206.60000610351562" y="91.26634979248047" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="226.33334350585938" y="95.6313247680664" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="246.06666564941406" y="99.559814453125" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="265.79998779296875" y="52.909088134765625" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="285.5333251953125" y="95.03610229492188" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="305.26666259765625" y="98.17756652832031" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="325" y="96.44976043701172" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<path d="M32 182.85646057128906 L51.733333587646484 180.62982177734375 L71.46666717529297 180.32057189941406 L91.19999694824219 179.392822265625 L110.93333435058594 179.8134002685547 L130.6666717529297 179.89791870117188 L150.39999389648438 179.26394653320312 L170.13333129882812 179.6865997314453 L189.86666870117188 179.47528076171875 L209.60000610351562 179.1220245361328 L229.33334350585938 179.16790771484375 L249.06666564941406 179.47528076171875 L268.79998779296875 176.80935668945312 L288.5333251953125 176.99334716796875 L308.26666259765625 177.2775115966797 L328 177.46771240234375" fill="none" stroke="rgb(48,125,196)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<rect x="29" y="179.85646057128906" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="48.733333587646484" y="177.62982177734375" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="68.46666717529297" y="177.32057189941406" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="88.19999694824219" y="176.392822265625" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="107.93333435058594" y="176.8134002685547" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="127.66667175292969" y="176.89791870117188" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="147.39999389648438" y="176.26394653320312" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="167.13333129882812" y="176.6865997314453" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="186.86666870117188" y="176.47528076171875" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="206.60000610351562" y="176.1220245361328" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="226.33334350585938" y="176.16790771484375" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="246.06666564941406" y="176.47528076171875" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="265.79998779296875" y="173.80935668945312" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="285.5333251953125" y="173.99334716796875" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="305.26666259765625" y="174.2775115966797" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="325" y="174.46771240234375" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="265.79998779296875" y="52.909088134765625" width="6" height="6" fill="rgb(237,89,56)" fill-opacity="1"/>
+<text x="180" y="20" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Binomial capability / defective units</text>
+<text x="180" y="42" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">P chart | variable subgroup limits</text>
+<text x="180" y="132" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Cumulative defective rate</text>
+<text x="180" y="210" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Pooled defective 6.1%   PPM 61250</text>
+<text x="180" y="228" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Wilson 95% 5.1-7.4%   target 8%</text>
+</svg>

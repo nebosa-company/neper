@@ -3477,6 +3477,11 @@ $gfxChartCapabilityNonnormalWritten = & $compiler emit-executable (Join-Path $PS
 if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityNonnormalWritten -ne 'executable written') { throw 'gfx_chart_capability_nonnormal emission failed' }
 $gfxChartCapabilityNonnormalOutput = & $gfxChartCapabilityNonnormalPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityNonnormalOutput -ne 'gfx chart capability nonnormal ok') { throw "the e.gfx.chart capability nonnormal answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCapabilityAttributePath = Join-Path $testBuild 'gfx-chart-capability-attribute-selfhost.exe'
+$gfxChartCapabilityAttributeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_capability_attribute\src\main.e') $repo 'x64' 'windows' $gfxChartCapabilityAttributePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityAttributeWritten -ne 'executable written') { throw 'gfx_chart_capability_attribute emission failed' }
+$gfxChartCapabilityAttributeOutput = & $gfxChartCapabilityAttributePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityAttributeOutput -ne 'gfx chart capability attribute ok') { throw "the e.gfx.chart capability attribute answered wrongly: exit $LASTEXITCODE" }
 $gfxChartFishbonePath = Join-Path $testBuild 'gfx-chart-fishbone-selfhost.exe'
 $gfxChartFishboneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_fishbone\src\main.e') $repo 'x64' 'windows' $gfxChartFishbonePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartFishboneWritten -ne 'executable written') { throw 'gfx_chart_fishbone emission failed' }

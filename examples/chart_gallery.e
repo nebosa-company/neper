@@ -4339,6 +4339,95 @@ fn render_capability_nonnormal_preview(a: *mem.Arena, q: *gpu.Queue, output_targ
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_capability_attribute_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/capability_attribute.png"
+    let defectives = [16]usize{ 4usize, 6usize, 5usize, 7usize, 4usize, 5usize, 8usize, 3usize, 6usize, 7usize, 5usize, 4usize, 19usize, 6usize, 4usize, 5usize }
+    let inspected = [16]usize{ 100usize, 105usize, 95usize, 110usize, 90usize, 100usize, 120usize, 80usize, 100usize, 105usize, 95usize, 100usize, 100usize, 110usize, 90usize, 100usize }
+    var controls: [16]stat.AttributeControlPoint = zero
+    var cumulative_rates: [16]f64 = zero
+    var p_points: [16]chart.Coord = zero
+    var p_lines: [15]chart.Segment = zero
+    var cumulative_points: [16]chart.Coord = zero
+    var cumulative_lines: [15]chart.Segment = zero
+    var upper_limit: [15]chart.Segment = zero
+    var lower_limit: [15]chart.Segment = zero
+    var guides: [5]chart.Segment = zero
+    var signal_points: [16]chart.Coord = zero
+    var work = chart.BinomialCapabilityStorage {
+        controls: controls[..], cumulative_rates: cumulative_rates[..], p_points: p_points[..], p_lines: p_lines[..],
+        cumulative_points: cumulative_points[..], cumulative_lines: cumulative_lines[..],
+        upper_limit: upper_limit[..], lower_limit: lower_limit[..], guides: guides[..], signal_points: signal_points[..],
+    }
+    let panels = [2]geometry.Rect{ geometry.rect(32.0, 50.0, 296.0, 65.0), geometry.rect(32.0, 140.0, 296.0, 53.0) }
+    let (report, report_error) = chart.binomial_capability(defectives[..], inspected[..], 0.08f64, 0.95f64, panels[..], &work)
+    if report_error != ok { ret report_error }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let pale = paint.rgba(0.96, 0.98, 1.0, 1.0)
+    let blue = paint.rgba(0.19, 0.49, 0.77, 1.0)
+    let orange = paint.rgba(0.93, 0.35, 0.22, 1.0)
+    let dark = paint.rgba(0.16, 0.22, 0.31, 1.0)
+    let gray = paint.rgba(0.61, 0.68, 0.75, 1.0)
+    let (metrics_made, metrics_error) = str.builder(a, 128usize)
+    if metrics_error != ok { ret metrics_error }
+    var metrics = metrics_made
+    try str.push(&metrics, "Pooled defective ")
+    try str.push_f64_fixed(&metrics, report.summary.fraction * 100.0f64, 1u8)
+    try str.push(&metrics, "%   PPM ")
+    try str.push_f64_fixed(&metrics, report.summary.ppm, 0u8)
+    let (interval_made, interval_error) = str.builder(a, 128usize)
+    if interval_error != ok { ret interval_error }
+    var interval = interval_made
+    try str.push(&interval, "Wilson 95% ")
+    try str.push_f64_fixed(&interval, report.summary.confidence.low * 100.0f64, 1u8)
+    try str.push(&interval, "-")
+    try str.push_f64_fixed(&interval, report.summary.confidence.high * 100.0f64, 1u8)
+    try str.push(&interval, "%   target 8%")
+    let labels = [5]chart.Label{
+        chart.Label { text: "Binomial capability / defective units", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center },
+        chart.Label { text: "P chart | variable subgroup limits", anchor: chart.Coord { x: 180.0, y: 42.0 }, align: .Center },
+        chart.Label { text: "Cumulative defective rate", anchor: chart.Coord { x: 180.0, y: 132.0 }, align: .Center },
+        chart.Label { text: str.done(&metrics), anchor: chart.Coord { x: 180.0, y: 210.0 }, align: .Center },
+        chart.Label { text: str.done(&interval), anchor: chart.Coord { x: 180.0, y: 228.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 29u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 512usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, panels[0usize], paint.Brush { Solid: pale })
+    try fill(&builder, panels[1usize], paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &report.upper_limit, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &report.lower_limit, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &report.guides, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &report.p_chart, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &report.cumulative, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &report.signals, paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, panels[0usize], pale, false)
+    try chart_svg.rect(&writer, panels[1usize], pale, false)
+    try chart_svg.append(&writer, &report.upper_limit, gray)
+    try chart_svg.append(&writer, &report.lower_limit, gray)
+    try chart_svg.append(&writer, &report.guides, gray)
+    try chart_svg.append(&writer, &report.p_chart, blue)
+    try chart_svg.append(&writer, &report.cumulative, blue)
+    try chart_svg.append(&writer, &report.signals, orange)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_capability_normal_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/capability_normal.png"
     let values = [30]f64{
@@ -8679,6 +8768,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_hazard_rate_preview(a, queue, output_target, canvas, &renderer)
     try render_influence_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_nonnormal_preview(a, queue, output_target, canvas, &renderer)
+    try render_capability_attribute_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_normal_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_sixpack_preview(a, queue, output_target, canvas, &renderer)
     try render_fishbone_preview(a, queue, output_target, canvas, &renderer)

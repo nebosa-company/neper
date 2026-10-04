@@ -175,6 +175,17 @@ type LognormalCapabilityStorage = struct {
 type LognormalCapabilityLayout = struct {
     histogram: Layout, fit_curve: Layout, guides: Layout, summary: stat.LognormalCapability,
 }
+type BinomialCapabilityStorage = struct {
+    controls: []stat.AttributeControlPoint, cumulative_rates: []f64,
+    p_points: []Coord, p_lines: []Segment,
+    cumulative_points: []Coord, cumulative_lines: []Segment,
+    upper_limit: []Segment, lower_limit: []Segment,
+    guides: []Segment, signal_points: []Coord,
+}
+type BinomialCapabilityLayout = struct {
+    p_chart: Layout, cumulative: Layout, upper_limit: Layout, lower_limit: Layout,
+    guides: Layout, signals: Layout, summary: stat.BinomialCapability,
+}
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -972,6 +983,69 @@ fn lognormal_capability(values: []const f64, lsl: f64, usl: f64, bounds: geometr
     }
     let guide_layout = Layout { kind: .Rug, coords: zero, segments: work.guides[..3usize], bars: zero, x_min: f32(lo), x_max: f32(hi), y_min: 0.0, y_max: f32(peak) }
     ret (LognormalCapabilityLayout { histogram: hist_layout, fit_curve: fitted, guides: guide_layout, summary: summary }, ok)
+}
+
+// Binomial attribute capability: P chart and cumulative defective fraction.
+// Variable inspected subgroup sizes retain their own P-chart limits.
+fn binomial_capability(defectives: []const usize, inspected: []const usize, target_fraction: f64, confidence: f64, panels: []const geometry.Rect, work: *BinomialCapabilityStorage) -> (BinomialCapabilityLayout, err) {
+    let n = defectives.len
+    if n < 2usize || panels.len != 2usize || !valid_bounds(panels[0usize]) || !valid_bounds(panels[1usize]) { ret (zero, Invalid) }
+    if work.controls.len < n || work.cumulative_rates.len < n || work.p_points.len < n || work.p_lines.len < n - 1usize || work.cumulative_points.len < n || work.cumulative_lines.len < n - 1usize || work.upper_limit.len < n - 1usize || work.lower_limit.len < n - 1usize || work.guides.len < 5usize || work.signal_points.len < n { ret (zero, TooLarge) }
+    let (summary, summary_error) = stat.binomial_capability(defectives, inspected, target_fraction, confidence, work.controls, work.cumulative_rates)
+    if summary_error != ok { ret (zero, Invalid) }
+    var highest = math.max[f64](summary.target_fraction, summary.confidence.high)
+    var i = 0usize
+    while i < n {
+        if work.controls[i].value > highest { highest = work.controls[i].value }
+        if work.controls[i].upper > highest { highest = work.controls[i].upper }
+        i += 1usize
+    }
+    var y_max = math.max[f64](0.05f64, highest * 1.1f64)
+    if y_max > 1.0f64 { y_max = 1.0f64 }
+    if !finite(f32(y_max)) || !(y_max > 0.0f64) { ret (zero, Invalid) }
+    let p_rect = panels[0usize]
+    let c_rect = panels[1usize]
+    var signal_count = 0usize
+    i = 0usize
+    while i < n {
+        let subgroup_position = f32(i) / f32(n - 1usize)
+        let p_x = p_rect.x + p_rect.width * subgroup_position
+        let c_x = c_rect.x + c_rect.width * subgroup_position
+        work.p_points[i] = Coord { x: p_x, y: p_rect.y + p_rect.height * (1.0 - f32(work.controls[i].value / y_max)) }
+        work.cumulative_points[i] = Coord { x: c_x, y: c_rect.y + c_rect.height * (1.0 - f32(work.cumulative_rates[i] / y_max)) }
+        if work.controls[i].value < work.controls[i].lower || work.controls[i].value > work.controls[i].upper {
+            work.signal_points[signal_count] = work.p_points[i]
+            signal_count += 1usize
+        }
+        if i > 0usize {
+            work.p_lines[i - 1usize] = Segment { from: work.p_points[i - 1usize], to: work.p_points[i] }
+            work.cumulative_lines[i - 1usize] = Segment { from: work.cumulative_points[i - 1usize], to: work.cumulative_points[i] }
+            let before = f32(i - 1usize) / f32(n - 1usize)
+            let upper_before = Coord { x: p_rect.x + p_rect.width * before, y: p_rect.y + p_rect.height * (1.0 - f32(work.controls[i - 1usize].upper / y_max)) }
+            let upper_now = Coord { x: p_x, y: p_rect.y + p_rect.height * (1.0 - f32(work.controls[i].upper / y_max)) }
+            let lower_before = Coord { x: p_rect.x + p_rect.width * before, y: p_rect.y + p_rect.height * (1.0 - f32(work.controls[i - 1usize].lower / y_max)) }
+            let lower_now = Coord { x: p_x, y: p_rect.y + p_rect.height * (1.0 - f32(work.controls[i].lower / y_max)) }
+            work.upper_limit[i - 1usize] = Segment { from: upper_before, to: upper_now }
+            work.lower_limit[i - 1usize] = Segment { from: lower_before, to: lower_now }
+        }
+        i += 1usize
+    }
+    let p_chart = Layout { kind: .PointLine, coords: work.p_points[..n], segments: work.p_lines[..n - 1usize], bars: zero, x_min: 1.0, x_max: f32(n), y_min: 0.0, y_max: f32(y_max) }
+    let cumulative = Layout { kind: .PointLine, coords: work.cumulative_points[..n], segments: work.cumulative_lines[..n - 1usize], bars: zero, x_min: 1.0, x_max: f32(n), y_min: 0.0, y_max: f32(y_max) }
+    let upper_layout = Layout { kind: .Line, coords: zero, segments: work.upper_limit[..n - 1usize], bars: zero, x_min: 1.0, x_max: f32(n), y_min: 0.0, y_max: f32(y_max) }
+    let lower_layout = Layout { kind: .Line, coords: zero, segments: work.lower_limit[..n - 1usize], bars: zero, x_min: 1.0, x_max: f32(n), y_min: 0.0, y_max: f32(y_max) }
+    let guide_levels = [5]f64{ summary.fraction, summary.fraction, summary.confidence.low, summary.confidence.high, target_fraction }
+    i = 0usize
+    while i < 5usize {
+        var rect = c_rect
+        if i == 0usize { rect = p_rect }
+        let y = rect.y + rect.height * (1.0 - f32(guide_levels[i] / y_max))
+        work.guides[i] = Segment { from: Coord { x: rect.x, y: y }, to: Coord { x: rect.x + rect.width, y: y } }
+        i += 1usize
+    }
+    let guide_layout = Layout { kind: .Rug, coords: zero, segments: work.guides[..5usize], bars: zero, x_min: 1.0, x_max: f32(n), y_min: 0.0, y_max: f32(y_max) }
+    let signals = Layout { kind: .Scatter, coords: work.signal_points[..signal_count], segments: zero, bars: zero, x_min: 1.0, x_max: f32(n), y_min: 0.0, y_max: f32(y_max) }
+    ret (BinomialCapabilityLayout { p_chart: p_chart, cumulative: cumulative, upper_limit: upper_layout, lower_limit: lower_layout, guides: guide_layout, signals: signals, summary: summary }, ok)
 }
 
 // A sparkline is an evenly spaced Line with no guide contract.
