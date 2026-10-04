@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>box</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="30" x2="139.33" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="204" x2="139.33" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="30" x2="234.67" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="204" x2="234.67" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<rect x="135.52" y="155.92" width="102.96" height="32.05" fill="none" stroke="rgb(18,89,194)" stroke-width="2"/>
+<line x1="187" y1="187.97" x2="187" y2="204" stroke="rgb(18,89,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="187" y1="155.92" x2="187" y2="149.05" stroke="rgb(18,89,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="161.26" y1="204" x2="212.74" y2="204" stroke="rgb(18,89,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="161.26" y1="149.05" x2="212.74" y2="149.05" stroke="rgb(18,89,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="135.52" y1="171.95" x2="238.48" y2="171.95" stroke="rgb(18,89,194)" stroke-width="2" stroke-linecap="round"/>
+<rect x="184" y="27" width="6" height="6" fill="rgb(18,89,194)"/>
+</svg>

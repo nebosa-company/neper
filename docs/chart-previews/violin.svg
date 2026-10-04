@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>violin</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="30" x2="139.33" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="204" x2="139.33" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="30" x2="234.67" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="204" x2="234.67" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<path d="M186.83 204 L186.7 201.24 L186.49 198.48 L186.16 195.71 L185.64 192.95 L184.87 190.19 L183.77 187.43 L182.25 184.67 L180.19 181.9 L177.52 179.14 L174.16 176.38 L170.04 173.62 L165.16 170.86 L159.55 168.1 L153.29 165.33 L146.5 162.57 L139.35 159.81 L132.03 157.05 L124.75 154.29 L117.72 151.52 L111.12 148.76 L105.11 146 L99.84 143.24 L95.39 140.48 L91.85 137.71 L89.26 134.95 L87.62 132.19 L86.9 129.43 L87.05 126.67 L87.96 123.9 L89.54 121.14 L91.67 118.38 L94.23 115.62 L97.14 112.86 L100.31 110.1 L103.71 107.33 L107.29 104.57 L111.01 101.81 L114.83 99.05 L118.7 96.29 L122.57 93.52 L126.41 90.76 L130.22 88 L134.02 85.24 L137.85 82.48 L141.77 79.71 L145.82 76.95 L150.02 74.19 L154.34 71.43 L158.72 68.67 L163.05 65.9 L167.21 63.14 L171.08 60.38 L174.55 57.62 L177.54 54.86 L180.03 52.1 L182.02 49.33 L183.56 46.57 L184.7 43.81 L185.51 41.05 L186.06 38.29 L186.43 35.52 L186.67 32.76 L186.81 30 L187.19 30 L187.33 32.76 L187.57 35.52 L187.94 38.29 L188.49 41.05 L189.3 43.81 L190.44 46.57 L191.98 49.33 L193.97 52.1 L196.46 54.86 L199.45 57.62 L202.92 60.38 L206.79 63.14 L210.95 65.9 L215.28 68.67 L219.66 71.43 L223.98 74.19 L228.18 76.95 L232.23 79.71 L236.15 82.48 L239.98 85.24 L243.78 88 L247.59 90.76 L251.43 93.52 L255.3 96.29 L259.17 99.05 L262.99 101.81 L266.71 104.57 L270.29 107.33 L273.69 110.1 L276.86 112.86 L279.77 115.62 L282.33 118.38 L284.46 121.14 L286.04 123.9 L286.95 126.67 L287.1 129.43 L286.38 132.19 L284.74 134.95 L282.15 137.71 L278.61 140.48 L274.16 143.24 L268.89 146 L262.88 148.76 L256.28 151.52 L249.25 154.29 L241.97 157.05 L234.65 159.81 L227.5 162.57 L220.71 165.33 L214.45 168.1 L208.84 170.86 L203.96 173.62 L199.84 176.38 L196.48 179.14 L193.81 181.9 L191.75 184.67 L190.23 187.43 L189.13 190.19 L188.36 192.95 L187.84 195.71 L187.51 198.48 L187.3 201.24 L187.17 204 Z" fill="rgb(18,89,194)"/>
+</svg>

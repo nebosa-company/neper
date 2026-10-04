@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>scatter3d</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="45" y="48" width="270" height="150" fill="rgb(250,252,255)"/>
+<line x1="178.82" y1="118.69" x2="126.07" y2="147.04" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="178.82" y1="118.69" x2="234.65" y2="143.55" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="178.82" y1="118.69" x2="178.43" y2="56.04" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="126.07" y1="147.04" x2="184.9" y2="189.96" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="126.07" y1="147.04" x2="113.53" y2="70.02" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="234.65" y1="143.55" x2="184.9" y2="189.96" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="234.65" y1="143.55" x2="246.47" y2="68.22" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="184.9" y1="189.96" x2="186.14" y2="93.97" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="178.43" y1="56.04" x2="113.53" y2="70.02" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="178.43" y1="56.04" x2="246.47" y2="68.22" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="113.53" y1="70.02" x2="186.14" y2="93.97" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="246.47" y1="68.22" x2="186.14" y2="93.97" stroke="rgb(173,191,209)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="182.28" cy="107.36" r="2.42" fill="rgb(20,99,189)"/>
+<circle cx="188.2" cy="108.54" r="2.43" fill="rgb(20,99,189)"/>
+<circle cx="176.31" cy="106.64" r="2.43" fill="rgb(20,99,189)"/>
+<circle cx="193.99" cy="110.17" r="2.44" fill="rgb(20,99,189)"/>
+<circle cx="170.38" cy="106.36" r="2.46" fill="rgb(20,99,189)"/>
+<circle cx="199.53" cy="112.27" r="2.47" fill="rgb(20,99,189)"/>
+<circle cx="164.61" cy="106.52" r="2.49" fill="rgb(20,99,189)"/>
+<circle cx="204.72" cy="114.85" r="2.51" fill="rgb(20,99,189)"/>
+<circle cx="159.08" cy="107.09" r="2.53" fill="rgb(20,99,189)"/>
+<circle cx="209.45" cy="117.9" r="2.55" fill="rgb(20,99,189)"/>
+<circle cx="153.92" cy="108.07" r="2.59" fill="rgb(20,99,189)"/>
+<circle cx="213.6" cy="121.41" r="2.61" fill="rgb(20,99,189)"/>
+<circle cx="182.38" cy="73.86" r="2.64" fill="rgb(20,99,189)"/>
+<circle cx="188.83" cy="75.1" r="2.64" fill="rgb(20,99,189)"/>
+<circle cx="175.88" cy="72.94" r="2.65" fill="rgb(20,99,189)"/>
+<circle cx="195.14" cy="76.66" r="2.66" fill="rgb(20,99,189)"/>
+<circle cx="149.26" cy="109.43" r="2.66" fill="rgb(20,99,189)"/>
+<circle cx="169.42" cy="72.32" r="2.68" fill="rgb(20,99,189)"/>
+<circle cx="217.01" cy="125.36" r="2.68" fill="rgb(20,99,189)"/>
+<circle cx="201.2" cy="78.57" r="2.69" fill="rgb(20,99,189)"/>
+<circle cx="163.1" cy="71.98" r="2.72" fill="rgb(20,99,189)"/>
+<circle cx="206.9" cy="80.83" r="2.74" fill="rgb(20,99,189)"/>
+<circle cx="145.22" cy="111.15" r="2.74" fill="rgb(20,99,189)"/>
+<circle cx="219.55" cy="129.73" r="2.75" fill="rgb(20,99,189)"/>
+<circle cx="157.04" cy="71.92" r="2.77" fill="rgb(20,99,189)"/>
+<circle cx="212.12" cy="83.45" r="2.79" fill="rgb(20,99,189)"/>
+<circle cx="141.97" cy="113.19" r="2.84" fill="rgb(20,99,189)"/>
+<circle cx="221.07" cy="134.44" r="2.84" fill="rgb(20,99,189)"/>
+<circle cx="151.33" cy="72.12" r="2.84" fill="rgb(20,99,189)"/>
+<circle cx="216.73" cy="86.44" r="2.86" fill="rgb(20,99,189)"/>
+<circle cx="146.13" cy="72.55" r="2.92" fill="rgb(20,99,189)"/>
+<circle cx="221.42" cy="139.42" r="2.92" fill="rgb(20,99,189)"/>
+<circle cx="139.67" cy="115.5" r="2.94" fill="rgb(20,99,189)"/>
+<circle cx="220.57" cy="89.79" r="2.94" fill="rgb(20,99,189)"/>
+<circle cx="220.47" cy="144.54" r="3.01" fill="rgb(20,99,189)"/>
+<circle cx="141.57" cy="73.2" r="3.02" fill="rgb(20,99,189)"/>
+<circle cx="223.48" cy="93.49" r="3.04" fill="rgb(20,99,189)"/>
+<circle cx="138.49" cy="118.01" r="3.05" fill="rgb(20,99,189)"/>
+<circle cx="218.15" cy="149.67" r="3.1" fill="rgb(20,99,189)"/>
+<circle cx="137.84" cy="74.03" r="3.13" fill="rgb(20,99,189)"/>
+<circle cx="225.28" cy="97.5" r="3.14" fill="rgb(20,99,189)"/>
+<circle cx="151.4" cy="165.52" r="3.15" fill="rgb(20,99,189)"/>
+<circle cx="138.6" cy="120.61" r="3.17" fill="rgb(20,99,189)"/>
+<circle cx="214.42" cy="154.63" r="3.18" fill="rgb(20,99,189)"/>
+<circle cx="156.98" cy="167.94" r="3.23" fill="rgb(20,99,189)"/>
+<circle cx="225.81" cy="101.77" r="3.24" fill="rgb(20,99,189)"/>
+<circle cx="209.32" cy="159.22" r="3.25" fill="rgb(20,99,189)"/>
+<circle cx="135.12" cy="75.02" r="3.26" fill="rgb(20,99,189)"/>
+<circle cx="140.15" cy="123.21" r="3.29" fill="rgb(20,99,189)"/>
+<circle cx="163.7" cy="169.62" r="3.29" fill="rgb(20,99,189)"/>
+<circle cx="203" cy="163.24" r="3.31" fill="rgb(20,99,189)"/>
+<circle cx="171.3" cy="170.38" r="3.34" fill="rgb(20,99,189)"/>
+<circle cx="195.68" cy="166.49" r="3.35" fill="rgb(20,99,189)"/>
+<circle cx="224.91" cy="106.2" r="3.35" fill="rgb(20,99,189)"/>
+<circle cx="179.43" cy="170.13" r="3.36" fill="rgb(20,99,189)"/>
+<circle cx="187.69" cy="168.82" r="3.37" fill="rgb(20,99,189)"/>
+<circle cx="133.62" cy="76.1" r="3.4" fill="rgb(20,99,189)"/>
+<circle cx="143.24" cy="125.64" r="3.41" fill="rgb(20,99,189)"/>
+<circle cx="222.47" cy="110.69" r="3.46" fill="rgb(20,99,189)"/>
+<circle cx="147.89" cy="127.77" r="3.52" fill="rgb(20,99,189)"/>
+<circle cx="133.54" cy="77.21" r="3.54" fill="rgb(20,99,189)"/>
+<circle cx="218.41" cy="115.1" r="3.56" fill="rgb(20,99,189)"/>
+<circle cx="154.05" cy="129.41" r="3.62" fill="rgb(20,99,189)"/>
+<circle cx="212.79" cy="119.26" r="3.65" fill="rgb(20,99,189)"/>
+<circle cx="135.06" cy="78.28" r="3.7" fill="rgb(20,99,189)"/>
+<circle cx="161.54" cy="130.41" r="3.7" fill="rgb(20,99,189)"/>
+<circle cx="205.74" cy="122.98" r="3.72" fill="rgb(20,99,189)"/>
+<circle cx="170.06" cy="130.64" r="3.76" fill="rgb(20,99,189)"/>
+<circle cx="197.53" cy="126.11" r="3.77" fill="rgb(20,99,189)"/>
+<circle cx="179.22" cy="130.01" r="3.79" fill="rgb(20,99,189)"/>
+<circle cx="188.54" cy="128.48" r="3.8" fill="rgb(20,99,189)"/>
+<circle cx="138.34" cy="79.2" r="3.85" fill="rgb(20,99,189)"/>
+<circle cx="143.44" cy="79.88" r="3.99" fill="rgb(20,99,189)"/>
+<text x="180" y="18" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">3-D scatter / projected helix</text>
+<text x="180" y="33" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Camera: azimuth 42 deg / elevation 27 deg</text>
+<text x="132.07" y="152.04" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(43,59,82)">x</text>
+<text x="228.65" y="148.55" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">y</text>
+<text x="172.43" y="51.04" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">z</text>
+<text x="180" y="227" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)">Perspective size + far-to-near marker order</text>
+</svg>

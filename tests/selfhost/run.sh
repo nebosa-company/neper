@@ -1278,6 +1278,41 @@ algo_stat_test_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$algo_stat_test_written" = 'executable written' ]
 chmod +x "$test_build/algo-stat-test-selfhost"
 "$test_build/algo-stat-test-selfhost"
+# `e.algo.stat.safety` (L016): ROR/PRR with intervals and signal rules, the BCPNN information component and Apriori rules over comedication masks, with refusals.
+algo_stat_safety_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_safety/src/main.e" "$repo" x64 linux "$test_build/algo-stat-safety-selfhost")
+[ "$algo_stat_safety_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-safety-selfhost"
+"$test_build/algo-stat-safety-selfhost"
+# `e.algo.stat.mixed` random slopes: the log-Cholesky unpack, a random-slopes LMM recovering its effects and covariances with BLUPs, and refusals.
+algo_stat_mixed_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_mixed/src/main.e" "$repo" x64 linux "$test_build/algo-stat-mixed-selfhost")
+[ "$algo_stat_mixed_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-mixed-selfhost"
+"$test_build/algo-stat-mixed-selfhost"
+# `e.algo.stat` hypergeometric (L001): the PMF against exact combinatorics, the tails against complements, edges and refusals.
+algo_stat_hyper_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_hyper/src/main.e" "$repo" x64 linux "$test_build/algo-stat-hyper-selfhost")
+[ "$algo_stat_hyper_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-hyper-selfhost"
+"$test_build/algo-stat-hyper-selfhost"
+# `e.algo.stat.survival` (L005): Nelson-Aalen, competing-risk incidence, RMST and weighted log-ranks with refusals.
+algo_stat_survival_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_survival/src/main.e" "$repo" x64 linux "$test_build/algo-stat-survival-selfhost")
+[ "$algo_stat_survival_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-survival-selfhost"
+"$test_build/algo-stat-survival-selfhost"
+# `e.algo.stat.diagnostic` (L008): the eight 2x2 metrics with exact and log intervals, plus refusals.
+algo_stat_diagnostic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_diagnostic/src/main.e" "$repo" x64 linux "$test_build/algo-stat-diagnostic-selfhost")
+[ "$algo_stat_diagnostic_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-diagnostic-selfhost"
+"$test_build/algo-stat-diagnostic-selfhost"
+# `e.algo.stat.meta` (L006): effect sizes, fixed/random pooling with heterogeneity, subgroup Q and a dose meta-regression, plus refusals.
+algo_stat_meta_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_meta/src/main.e" "$repo" x64 linux "$test_build/algo-stat-meta-selfhost")
+[ "$algo_stat_meta_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-meta-selfhost"
+"$test_build/algo-stat-meta-selfhost"
+# `e.algo.stat.regression` (L007): Poisson/NB recoveries, matched conditional logistic, ordinal recovery, plus refusals.
+algo_stat_regression_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_regression/src/main.e" "$repo" x64 linux "$test_build/algo-stat-regression-selfhost")
+[ "$algo_stat_regression_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-regression-selfhost"
+"$test_build/algo-stat-regression-selfhost"
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 algo_graph_flow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_flow/src/main.e" "$repo" x64 linux "$test_build/algo-graph-flow-selfhost")
 [ "$algo_graph_flow_written" = 'executable written' ]
@@ -1533,6 +1568,41 @@ ml_nn_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 [ "$ml_nn_written" = 'executable written' ]
 chmod +x "$test_build/ml-nn-selfhost"
 "$test_build/ml-nn-selfhost"
+# `e.ml.recurrent`: one LSTM and GRU step against hand-computed gates, both two-step forwards, and the storage and empty cases.
+ml_recurrent_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_recurrent/src/main.e" "$repo" x64 linux "$test_build/ml-recurrent-selfhost")
+[ "$ml_recurrent_written" = 'executable written' ]
+chmod +x "$test_build/ml-recurrent-selfhost"
+"$test_build/ml-recurrent-selfhost"
+# `e.ml.gnn`: GCN, single-head GAT and message passing on a three-node chain against hand-computed projections, plus the storage and endpoint cases.
+ml_gnn_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_gnn/src/main.e" "$repo" x64 linux "$test_build/ml-gnn-selfhost")
+[ "$ml_gnn_written" = 'executable written' ]
+chmod +x "$test_build/ml-gnn-selfhost"
+"$test_build/ml-gnn-selfhost"
+# `e.ml.fingerprint`: Morgan and path fingerprints against packed keys, Tanimoto/Dice, Butina clusters, FMCS counts with map validity, and the storage, endpoint and empty cases.
+ml_fingerprint_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_fingerprint/src/main.e" "$repo" x64 linux "$test_build/ml-fingerprint-selfhost")
+[ "$ml_fingerprint_written" = 'executable written' ]
+chmod +x "$test_build/ml-fingerprint-selfhost"
+"$test_build/ml-fingerprint-selfhost"
+# `e.ml.linear` PLS and `e.ml.reduce` UMAP: NIPALS coefficients with the degenerate cases, the scaled PCA start, a 200-epoch layout keeping two groups apart, and the storage and parameter cases.
+ml_chemometric_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_chemometric/src/main.e" "$repo" x64 linux "$test_build/ml-chemometric-selfhost")
+[ "$ml_chemometric_written" = 'executable written' ]
+chmod +x "$test_build/ml-chemometric-selfhost"
+"$test_build/ml-chemometric-selfhost"
+# `e.algo.stat.mixed`: GEE under three working correlations, a random-intercept LMM, MMRM with unstructured covariance on complete and dropout data, treatment contrasts, and the helper and error cases.
+ml_mixed_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_mixed/src/main.e" "$repo" x64 linux "$test_build/ml-mixed-selfhost")
+[ "$ml_mixed_written" = 'executable written' ]
+chmod +x "$test_build/ml-mixed-selfhost"
+"$test_build/ml-mixed-selfhost"
+# `e.algo.stat.survival_trial`: Kaplan-Meier curves, the log-rank test and a Cox fit, spending functions, Simon optimal and minimax designs with operating characteristics, likelihood CRM dose finding, Farrington-Manning non-inferiority, and the storage and degenerate cases.
+survival_trial_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_survival_trial/src/main.e" "$repo" x64 linux "$test_build/survival-trial-selfhost")
+[ "$survival_trial_written" = 'executable written' ]
+chmod +x "$test_build/survival-trial-selfhost"
+"$test_build/survival-trial-selfhost"
+# `e.algo.stat.causal`: propensity scores feeding IPTW and doubly robust effects, hand-checkable units, a MICE mean imputation with determinism and interval checks, and the storage and degenerate cases.
+causal_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_causal/src/main.e" "$repo" x64 linux "$test_build/causal-selfhost")
+[ "$causal_written" = 'executable written' ]
+chmod +x "$test_build/causal-selfhost"
+"$test_build/causal-selfhost"
 # `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
 ml_hmm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_hmm/src/main.e" "$repo" x64 linux "$test_build/ml-hmm-selfhost")
 [ "$ml_hmm_written" = 'executable written' ]
@@ -1593,6 +1663,16 @@ algo_timeseries_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$algo_timeseries_written" = 'executable written' ]
 chmod +x "$test_build/algo-timeseries-selfhost"
 "$test_build/algo-timeseries-selfhost"
+# `e.algo.timeseries` VAR (L059): a VAR(1) fit recovering its coefficients, hand-checked forecasts, the companion form through the Kalman predict, and level/trend filters with refusals.
+algo_timeseries_var_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_timeseries_var/src/main.e" "$repo" x64 linux "$test_build/algo-timeseries-var-selfhost")
+[ "$algo_timeseries_var_written" = 'executable written' ]
+chmod +x "$test_build/algo-timeseries-var-selfhost"
+"$test_build/algo-timeseries-var-selfhost"
+# `e.algo.timeseries` ARIMA and inventory (L017): differencing, AR(1)/ARMA(1,1) recovery, hand-checked forecasts, EOQ and the newsvendor with refusals.
+algo_timeseries_arima_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_timeseries_arima/src/main.e" "$repo" x64 linux "$test_build/algo-timeseries-arima-selfhost")
+[ "$algo_timeseries_arima_written" = 'executable written' ]
+chmod +x "$test_build/algo-timeseries-arima-selfhost"
+"$test_build/algo-timeseries-arima-selfhost"
 # `e.algo.exact_cover`: the unique cover of the paper's matrix, an uncoverable one, and a Sudoku solved to its known solution (D850).
 algo_exact_cover_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_exact_cover/src/main.e" "$repo" x64 linux "$test_build/algo-exact-cover-selfhost")
 [ "$algo_exact_cover_written" = 'executable written' ]
@@ -1917,6 +1997,11 @@ gfx_vision_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$gfx_vision_written" = 'executable written' ]
 chmod +x "$test_build/gfx-vision-selfhost"
 "$test_build/gfx-vision-selfhost"
+# `e.gfx.vision` TLS lines (L002): an exact slope, a vertical line, one outlier-rejection pass and refusals.
+gfx_vision_tls_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_vision_tls/src/main.e" "$repo" x64 linux "$test_build/gfx-vision-tls-selfhost")
+[ "$gfx_vision_tls_written" = 'executable written' ]
+chmod +x "$test_build/gfx-vision-tls-selfhost"
+"$test_build/gfx-vision-tls-selfhost"
 # `e.audio.analysis`: four pitch trackers within 0.5 Hz, a click train's onsets, tempo and beats exact, chroma of a C-major chord, a calibrated sine reading -23 LUFS (D870).
 audio_analysis_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audio_analysis/src/main.e" "$repo" x64 linux "$test_build/audio-analysis-selfhost")
 [ "$audio_analysis_written" = 'executable written' ]
@@ -2333,6 +2418,11 @@ if command -v krb5kdc >/dev/null 2>&1 || [ -x /usr/sbin/krb5kdc ]; then
 else
     "$test_build/net-auth-selfhost"
 fi
+# `e.math.pkpd`: non-compartmental analysis of an exponential decay -- the linear and linear-up/log-down trapezoid areas, the first-moment area, the peak, the terminal rate and the half-life -- and the Emax/Hill and Michaelis-Menten fits recovering their parameters from clean data, with the too-few, non-positive and wrong-parameter refusals (D1962).
+math_pkpd_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_pkpd/src/main.e" "$repo" x64 linux "$test_build/math-pkpd-selfhost")
+[ "$math_pkpd_written" = 'executable written' ]
+chmod +x "$test_build/math-pkpd-selfhost"
+"$test_build/math-pkpd-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
@@ -2638,6 +2728,592 @@ gfx_core_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/gfx-core-selfhost"
 gfx_core_output=$("$test_build/gfx-core-selfhost")
 [ "$gfx_core_output" = 'gfx core ok' ]
+# `e.gfx.chart`: caller-owned series and distribution marks, plus scene commands.
+gfx_chart_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-selfhost")
+[ "$gfx_chart_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-selfhost"
+gfx_chart_output=$("$test_build/gfx-chart-selfhost")
+[ "$gfx_chart_output" = 'gfx chart ok' ]
+gfx_chart_qq_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_qq/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-qq-selfhost")
+[ "$gfx_chart_qq_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-qq-selfhost"
+gfx_chart_qq_output=$("$test_build/gfx-chart-qq-selfhost")
+[ "$gfx_chart_qq_output" = 'gfx chart qq ok' ]
+gfx_chart_matrix_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_matrix/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-matrix-selfhost")
+[ "$gfx_chart_matrix_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-matrix-selfhost"
+gfx_chart_matrix_output=$("$test_build/gfx-chart-matrix-selfhost")
+[ "$gfx_chart_matrix_output" = 'gfx chart matrix ok' ]
+gfx_chart_cartesian_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_cartesian/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-cartesian-selfhost")
+[ "$gfx_chart_cartesian_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-cartesian-selfhost"
+gfx_chart_cartesian_output=$("$test_build/gfx-chart-cartesian-selfhost")
+[ "$gfx_chart_cartesian_output" = 'gfx chart cartesian ok' ]
+gfx_chart_scale_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_scale/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-scale-selfhost")
+[ "$gfx_chart_scale_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-scale-selfhost"
+gfx_chart_scale_output=$("$test_build/gfx-chart-scale-selfhost")
+[ "$gfx_chart_scale_output" = 'gfx chart scale ok' ]
+gfx_chart_facet_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_facet/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-facet-selfhost")
+[ "$gfx_chart_facet_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-facet-selfhost"
+gfx_chart_facet_output=$("$test_build/gfx-chart-facet-selfhost")
+[ "$gfx_chart_facet_output" = 'gfx chart facet ok' ]
+gfx_chart_intervals_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_intervals/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-intervals-selfhost")
+[ "$gfx_chart_intervals_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-intervals-selfhost"
+gfx_chart_intervals_output=$("$test_build/gfx-chart-intervals-selfhost")
+[ "$gfx_chart_intervals_output" = 'gfx chart intervals ok' ]
+gfx_chart_labels_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_labels/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-labels-selfhost")
+[ "$gfx_chart_labels_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-labels-selfhost"
+gfx_chart_labels_output=$("$test_build/gfx-chart-labels-selfhost" "$repo/docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf")
+[ "$gfx_chart_labels_output" = 'gfx chart labels ok' ]
+gfx_chart_nice_ticks_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_nice_ticks/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-nice-ticks-selfhost")
+[ "$gfx_chart_nice_ticks_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-nice-ticks-selfhost"
+gfx_chart_nice_ticks_output=$("$test_build/gfx-chart-nice-ticks-selfhost")
+[ "$gfx_chart_nice_ticks_output" = 'gfx chart nice ticks ok' ]
+gfx_chart_composition_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_composition/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-composition-selfhost")
+[ "$gfx_chart_composition_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-composition-selfhost"
+gfx_chart_composition_output=$("$test_build/gfx-chart-composition-selfhost" "$repo/docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf")
+[ "$gfx_chart_composition_output" = 'gfx chart composition ok' ]
+gfx_chart_distribution_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_distribution/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-distribution-selfhost")
+[ "$gfx_chart_distribution_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-distribution-selfhost"
+gfx_chart_distribution_output=$("$test_build/gfx-chart-distribution-selfhost")
+[ "$gfx_chart_distribution_output" = 'gfx chart distribution ok' ]
+gfx_chart_svg_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_svg/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-svg-selfhost")
+[ "$gfx_chart_svg_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-svg-selfhost"
+gfx_chart_svg_output=$("$test_build/gfx-chart-svg-selfhost")
+[ "$gfx_chart_svg_output" = 'gfx chart svg ok' ]
+gfx_chart_horizon_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_horizon/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-horizon-selfhost")
+[ "$gfx_chart_horizon_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-horizon-selfhost"
+gfx_chart_horizon_output=$("$test_build/gfx-chart-horizon-selfhost")
+[ "$gfx_chart_horizon_output" = 'gfx chart horizon ok' ]
+gfx_chart_seasonal_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_seasonal/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-seasonal-selfhost")
+[ "$gfx_chart_seasonal_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-seasonal-selfhost"
+gfx_chart_seasonal_output=$("$test_build/gfx-chart-seasonal-selfhost")
+[ "$gfx_chart_seasonal_output" = 'gfx chart seasonal ok' ]
+gfx_chart_fan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_fan/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-fan-selfhost")
+[ "$gfx_chart_fan_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-fan-selfhost"
+gfx_chart_fan_output=$("$test_build/gfx-chart-fan-selfhost")
+[ "$gfx_chart_fan_output" = 'gfx chart fan ok' ]
+gfx_chart_decomposition_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_decomposition/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-decomposition-selfhost")
+[ "$gfx_chart_decomposition_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-decomposition-selfhost"
+gfx_chart_decomposition_output=$("$test_build/gfx-chart-decomposition-selfhost")
+[ "$gfx_chart_decomposition_output" = 'gfx chart decomposition ok' ]
+gfx_chart_correlogram_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_correlogram/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-correlogram-selfhost")
+[ "$gfx_chart_correlogram_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-correlogram-selfhost"
+gfx_chart_correlogram_output=$("$test_build/gfx-chart-correlogram-selfhost")
+[ "$gfx_chart_correlogram_output" = 'gfx chart correlogram ok' ]
+gfx_chart_variogram_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_variogram/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-variogram-selfhost")
+[ "$gfx_chart_variogram_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-variogram-selfhost"
+gfx_chart_variogram_output=$("$test_build/gfx-chart-variogram-selfhost")
+[ "$gfx_chart_variogram_output" = 'gfx chart variogram ok' ]
+gfx_chart_radial_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_radial/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-radial-selfhost")
+[ "$gfx_chart_radial_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-radial-selfhost"
+gfx_chart_radial_output=$("$test_build/gfx-chart-radial-selfhost")
+[ "$gfx_chart_radial_output" = 'gfx chart radial ok' ]
+gfx_chart_ternary_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_ternary/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-ternary-selfhost")
+[ "$gfx_chart_ternary_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-ternary-selfhost"
+gfx_chart_ternary_output=$("$test_build/gfx-chart-ternary-selfhost")
+[ "$gfx_chart_ternary_output" = 'gfx chart ternary ok' ]
+gfx_chart_quiver_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_quiver/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-quiver-selfhost")
+[ "$gfx_chart_quiver_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-quiver-selfhost"
+gfx_chart_quiver_output=$("$test_build/gfx-chart-quiver-selfhost")
+[ "$gfx_chart_quiver_output" = 'gfx chart quiver ok' ]
+gfx_chart_streamlines_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_streamlines/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-streamlines-selfhost")
+[ "$gfx_chart_streamlines_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-streamlines-selfhost"
+gfx_chart_streamlines_output=$("$test_build/gfx-chart-streamlines-selfhost")
+[ "$gfx_chart_streamlines_output" = 'gfx chart streamlines ok' ]
+gfx_chart_phase_space_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_phase_space/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-phase-space-selfhost")
+[ "$gfx_chart_phase_space_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-phase-space-selfhost"
+gfx_chart_phase_space_output=$("$test_build/gfx-chart-phase-space-selfhost")
+[ "$gfx_chart_phase_space_output" = 'gfx chart phase space ok' ]
+gfx_chart_recurrence_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_recurrence/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-recurrence-selfhost")
+[ "$gfx_chart_recurrence_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-recurrence-selfhost"
+gfx_chart_recurrence_output=$("$test_build/gfx-chart-recurrence-selfhost")
+[ "$gfx_chart_recurrence_output" = 'gfx chart recurrence ok' ]
+gfx_chart_drawdown_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_drawdown/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-drawdown-selfhost")
+[ "$gfx_chart_drawdown_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-drawdown-selfhost"
+gfx_chart_drawdown_output=$("$test_build/gfx-chart-drawdown-selfhost")
+[ "$gfx_chart_drawdown_output" = 'gfx chart drawdown ok' ]
+gfx_chart_cohort_retention_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_cohort_retention/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-cohort-retention-selfhost")
+[ "$gfx_chart_cohort_retention_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-cohort-retention-selfhost"
+gfx_chart_cohort_retention_output=$("$test_build/gfx-chart-cohort-retention-selfhost")
+[ "$gfx_chart_cohort_retention_output" = 'gfx chart cohort retention ok' ]
+gfx_chart_contour_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_contour/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-contour-selfhost")
+[ "$gfx_chart_contour_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-contour-selfhost"
+gfx_chart_contour_output=$("$test_build/gfx-chart-contour-selfhost")
+[ "$gfx_chart_contour_output" = 'gfx chart contour ok' ]
+gfx_chart_filled_contour_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_filled_contour/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-filled-contour-selfhost")
+[ "$gfx_chart_filled_contour_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-filled-contour-selfhost"
+gfx_chart_filled_contour_output=$("$test_build/gfx-chart-filled-contour-selfhost")
+[ "$gfx_chart_filled_contour_output" = 'gfx chart filled contour ok' ]
+gfx_chart_price_volume_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_price_volume/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-price-volume-selfhost")
+[ "$gfx_chart_price_volume_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-price-volume-selfhost"
+gfx_chart_price_volume_output=$("$test_build/gfx-chart-price-volume-selfhost")
+[ "$gfx_chart_price_volume_output" = 'gfx chart price volume ok' ]
+gfx_chart_returns_volatility_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_returns_volatility/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-returns-volatility-selfhost")
+[ "$gfx_chart_returns_volatility_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-returns-volatility-selfhost"
+gfx_chart_returns_volatility_output=$("$test_build/gfx-chart-returns-volatility-selfhost")
+[ "$gfx_chart_returns_volatility_output" = 'gfx chart returns volatility ok' ]
+gfx_chart_gantt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_gantt/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-gantt-selfhost")
+[ "$gfx_chart_gantt_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-gantt-selfhost"
+gfx_chart_gantt_output=$("$test_build/gfx-chart-gantt-selfhost")
+[ "$gfx_chart_gantt_output" = 'gfx chart gantt ok' ]
+gfx_chart_milestone_roadmap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_milestone_roadmap/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-milestone-roadmap-selfhost")
+[ "$gfx_chart_milestone_roadmap_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-milestone-roadmap-selfhost"
+gfx_chart_milestone_roadmap_output=$("$test_build/gfx-chart-milestone-roadmap-selfhost")
+[ "$gfx_chart_milestone_roadmap_output" = 'gfx chart milestone roadmap ok' ]
+gfx_chart_burn_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_burn/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-burn-selfhost")
+[ "$gfx_chart_burn_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-burn-selfhost"
+gfx_chart_burn_output=$("$test_build/gfx-chart-burn-selfhost")
+[ "$gfx_chart_burn_output" = 'gfx chart burn ok' ]
+gfx_chart_earned_value_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_earned_value/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-earned-value-selfhost")
+[ "$gfx_chart_earned_value_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-earned-value-selfhost"
+gfx_chart_earned_value_output=$("$test_build/gfx-chart-earned-value-selfhost")
+[ "$gfx_chart_earned_value_output" = 'gfx chart earned value ok' ]
+gfx_chart_risk_matrix_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_risk_matrix/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-risk-matrix-selfhost")
+[ "$gfx_chart_risk_matrix_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-risk-matrix-selfhost"
+gfx_chart_risk_matrix_output=$("$test_build/gfx-chart-risk-matrix-selfhost")
+[ "$gfx_chart_risk_matrix_output" = 'gfx chart risk matrix ok' ]
+gfx_chart_resource_histogram_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_resource_histogram/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-resource-histogram-selfhost")
+[ "$gfx_chart_resource_histogram_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-resource-histogram-selfhost"
+gfx_chart_resource_histogram_output=$("$test_build/gfx-chart-resource-histogram-selfhost")
+[ "$gfx_chart_resource_histogram_output" = 'gfx chart resource histogram ok' ]
+gfx_chart_swimlane_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_swimlane/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-swimlane-selfhost")
+[ "$gfx_chart_swimlane_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-swimlane-selfhost"
+gfx_chart_swimlane_output=$("$test_build/gfx-chart-swimlane-selfhost")
+[ "$gfx_chart_swimlane_output" = 'gfx chart swimlane ok' ]
+gfx_chart_kanban_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_kanban/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-kanban-selfhost")
+[ "$gfx_chart_kanban_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-kanban-selfhost"
+gfx_chart_kanban_output=$("$test_build/gfx-chart-kanban-selfhost")
+[ "$gfx_chart_kanban_output" = 'gfx chart kanban ok' ]
+gfx_chart_pert_cpm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_pert_cpm/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-pert-cpm-selfhost")
+[ "$gfx_chart_pert_cpm_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-pert-cpm-selfhost"
+gfx_chart_pert_cpm_output=$("$test_build/gfx-chart-pert-cpm-selfhost")
+[ "$gfx_chart_pert_cpm_output" = 'gfx chart pert cpm ok' ]
+gfx_chart_value_stream_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_value_stream/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-value-stream-selfhost")
+[ "$gfx_chart_value_stream_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-value-stream-selfhost"
+gfx_chart_value_stream_output=$("$test_build/gfx-chart-value-stream-selfhost")
+[ "$gfx_chart_value_stream_output" = 'gfx chart value stream ok' ]
+gfx_chart_future_vsm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_future_vsm/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-future-vsm-selfhost")
+[ "$gfx_chart_future_vsm_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-future-vsm-selfhost"
+gfx_chart_future_vsm_output=$("$test_build/gfx-chart-future-vsm-selfhost")
+[ "$gfx_chart_future_vsm_output" = 'gfx chart future vsm ok' ]
+gfx_chart_cap_table_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_cap_table/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-cap-table-selfhost")
+[ "$gfx_chart_cap_table_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-cap-table-selfhost"
+gfx_chart_cap_table_output=$("$test_build/gfx-chart-cap-table-selfhost")
+[ "$gfx_chart_cap_table_output" = 'gfx chart cap table ok' ]
+gfx_chart_tornado_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_tornado/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-tornado-selfhost")
+[ "$gfx_chart_tornado_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-tornado-selfhost"
+gfx_chart_tornado_output=$("$test_build/gfx-chart-tornado-selfhost")
+[ "$gfx_chart_tornado_output" = 'gfx chart tornado ok' ]
+gfx_chart_football_field_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_football_field/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-football-field-selfhost")
+[ "$gfx_chart_football_field_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-football-field-selfhost"
+gfx_chart_football_field_output=$("$test_build/gfx-chart-football-field-selfhost")
+[ "$gfx_chart_football_field_output" = 'gfx chart football field ok' ]
+gfx_chart_yield_curve_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_yield_curve/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-yield-curve-selfhost")
+[ "$gfx_chart_yield_curve_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-yield-curve-selfhost"
+gfx_chart_yield_curve_output=$("$test_build/gfx-chart-yield-curve-selfhost")
+[ "$gfx_chart_yield_curve_output" = 'gfx chart yield curve ok' ]
+gfx_chart_monte_carlo_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_monte_carlo/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-monte-carlo-selfhost")
+[ "$gfx_chart_monte_carlo_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-monte-carlo-selfhost"
+gfx_chart_monte_carlo_output=$("$test_build/gfx-chart-monte-carlo-selfhost")
+[ "$gfx_chart_monte_carlo_output" = 'gfx chart monte carlo ok' ]
+gfx_chart_aggregate_tree_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_aggregate_tree/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-aggregate-tree-selfhost")
+[ "$gfx_chart_aggregate_tree_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-aggregate-tree-selfhost"
+gfx_chart_aggregate_tree_output=$("$test_build/gfx-chart-aggregate-tree-selfhost")
+[ "$gfx_chart_aggregate_tree_output" = 'gfx chart aggregate tree ok' ]
+gfx_chart_date_axis_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_date_axis/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-date-axis-selfhost")
+[ "$gfx_chart_date_axis_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-date-axis-selfhost"
+gfx_chart_date_axis_output=$("$test_build/gfx-chart-date-axis-selfhost")
+[ "$gfx_chart_date_axis_output" = 'gfx chart date axis ok' ]
+gfx_chart_discrete_axis_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_discrete_axis/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-discrete-axis-selfhost")
+[ "$gfx_chart_discrete_axis_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-discrete-axis-selfhost"
+gfx_chart_discrete_axis_output=$("$test_build/gfx-chart-discrete-axis-selfhost")
+[ "$gfx_chart_discrete_axis_output" = 'gfx chart discrete axis ok' ]
+gfx_chart_category_facet_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_category_facet/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-category-facet-selfhost")
+[ "$gfx_chart_category_facet_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-category-facet-selfhost"
+gfx_chart_category_facet_output=$("$test_build/gfx-chart-category-facet-selfhost")
+[ "$gfx_chart_category_facet_output" = 'gfx chart category facet ok' ]
+gfx_chart_legend_wrap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_legend_wrap/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-legend-wrap-selfhost")
+[ "$gfx_chart_legend_wrap_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-legend-wrap-selfhost"
+gfx_chart_legend_wrap_output=$("$test_build/gfx-chart-legend-wrap-selfhost")
+[ "$gfx_chart_legend_wrap_output" = 'gfx chart legend wrap ok' ]
+gfx_chart_missing_scatter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_missing_scatter/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-missing-scatter-selfhost")
+[ "$gfx_chart_missing_scatter_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-missing-scatter-selfhost"
+gfx_chart_missing_scatter_output=$("$test_build/gfx-chart-missing-scatter-selfhost")
+[ "$gfx_chart_missing_scatter_output" = 'gfx chart missing scatter ok' ]
+gfx_chart_clipped_annotation_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_clipped_annotation/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-clipped-annotation-selfhost")
+[ "$gfx_chart_clipped_annotation_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-clipped-annotation-selfhost"
+gfx_chart_clipped_annotation_output=$("$test_build/gfx-chart-clipped-annotation-selfhost" "$repo/docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf")
+[ "$gfx_chart_clipped_annotation_output" = 'gfx chart clipped annotation ok' ]
+gfx_chart_plot_grid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_plot_grid/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-plot-grid-selfhost")
+[ "$gfx_chart_plot_grid_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-plot-grid-selfhost"
+gfx_chart_plot_grid_output=$("$test_build/gfx-chart-plot-grid-selfhost")
+[ "$gfx_chart_plot_grid_output" = 'gfx chart plot grid ok' ]
+gfx_chart_shared_guides_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_shared_guides/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-shared-guides-selfhost")
+[ "$gfx_chart_shared_guides_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-shared-guides-selfhost"
+gfx_chart_shared_guides_output=$("$test_build/gfx-chart-shared-guides-selfhost" "$repo/docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf")
+[ "$gfx_chart_shared_guides_output" = 'gfx chart shared guides ok' ]
+gfx_chart_selection_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_selection/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-selection-selfhost")
+[ "$gfx_chart_selection_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-selection-selfhost"
+gfx_chart_selection_output=$("$test_build/gfx-chart-selection-selfhost")
+[ "$gfx_chart_selection_output" = 'gfx chart selection ok' ]
+gfx_chart_accessible_palette_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_accessible_palette/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-accessible-palette-selfhost")
+[ "$gfx_chart_accessible_palette_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-accessible-palette-selfhost"
+gfx_chart_accessible_palette_output=$("$test_build/gfx-chart-accessible-palette-selfhost")
+[ "$gfx_chart_accessible_palette_output" = 'gfx chart accessible palette ok' ]
+gfx_chart_svg_paint_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_svg_paint/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-svg-paint-selfhost")
+[ "$gfx_chart_svg_paint_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-svg-paint-selfhost"
+gfx_chart_svg_paint_output=$("$test_build/gfx-chart-svg-paint-selfhost")
+[ "$gfx_chart_svg_paint_output" = 'gfx chart svg paint ok' ]
+gfx_chart_color_vision_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_color_vision/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-color-vision-selfhost")
+[ "$gfx_chart_color_vision_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-color-vision-selfhost"
+gfx_chart_color_vision_output=$("$test_build/gfx-chart-color-vision-selfhost")
+[ "$gfx_chart_color_vision_output" = 'gfx chart color vision ok' ]
+gfx_chart_label_placement_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_label_placement/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-label-placement-selfhost")
+[ "$gfx_chart_label_placement_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-label-placement-selfhost"
+gfx_chart_label_placement_output=$("$test_build/gfx-chart-label-placement-selfhost")
+[ "$gfx_chart_label_placement_output" = 'gfx chart label placement ok' ]
+gfx_chart_locale_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_locale/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-locale-selfhost")
+[ "$gfx_chart_locale_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-locale-selfhost"
+gfx_chart_locale_output=$("$test_build/gfx-chart-locale-selfhost")
+[ "$gfx_chart_locale_output" = 'gfx chart locale ok' ]
+gfx_chart_widget_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_widget/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-widget-selfhost")
+[ "$gfx_chart_widget_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-widget-selfhost"
+gfx_chart_widget_output=$("$test_build/gfx-chart-widget-selfhost")
+[ "$gfx_chart_widget_output" = 'gfx chart widget ok' ]
+gfx_chart_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_pdf/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-pdf-selfhost")
+[ "$gfx_chart_pdf_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-pdf-selfhost"
+gfx_chart_pdf_output=$("$test_build/gfx-chart-pdf-selfhost")
+[ "$gfx_chart_pdf_output" = 'gfx chart pdf ok' ]
+gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
+[ "$gfx_chart_sipoc_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-sipoc-selfhost"
+gfx_chart_sipoc_output=$("$test_build/gfx-chart-sipoc-selfhost")
+[ "$gfx_chart_sipoc_output" = 'gfx chart sipoc ok' ]
+gfx_chart_decision_tree_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_decision_tree/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-decision-tree-selfhost")
+[ "$gfx_chart_decision_tree_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-decision-tree-selfhost"
+gfx_chart_decision_tree_output=$("$test_build/gfx-chart-decision-tree-selfhost")
+[ "$gfx_chart_decision_tree_output" = 'gfx chart decision tree ok' ]
+gfx_chart_org_chart_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_org_chart/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-org-chart-selfhost")
+[ "$gfx_chart_org_chart_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-org-chart-selfhost"
+gfx_chart_org_chart_output=$("$test_build/gfx-chart-org-chart-selfhost")
+[ "$gfx_chart_org_chart_output" = 'gfx chart org chart ok' ]
+gfx_chart_dependency_graph_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_dependency_graph/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-dependency-graph-selfhost")
+[ "$gfx_chart_dependency_graph_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-dependency-graph-selfhost"
+gfx_chart_dependency_graph_output=$("$test_build/gfx-chart-dependency-graph-selfhost")
+[ "$gfx_chart_dependency_graph_output" = 'gfx chart dependency graph ok' ]
+gfx_chart_flowchart_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_flowchart/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-flowchart-selfhost")
+[ "$gfx_chart_flowchart_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-flowchart-selfhost"
+gfx_chart_flowchart_output=$("$test_build/gfx-chart-flowchart-selfhost")
+[ "$gfx_chart_flowchart_output" = 'gfx chart flowchart ok' ]
+gfx_chart_state_machine_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_state_machine/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-state-machine-selfhost")
+[ "$gfx_chart_state_machine_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-state-machine-selfhost"
+gfx_chart_state_machine_output=$("$test_build/gfx-chart-state-machine-selfhost")
+[ "$gfx_chart_state_machine_output" = 'gfx chart state machine ok' ]
+gfx_chart_sequence_diagram_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sequence_diagram/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sequence-diagram-selfhost")
+[ "$gfx_chart_sequence_diagram_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-sequence-diagram-selfhost"
+gfx_chart_sequence_diagram_output=$("$test_build/gfx-chart-sequence-diagram-selfhost")
+[ "$gfx_chart_sequence_diagram_output" = 'gfx chart sequence diagram ok' ]
+gfx_chart_entity_relationship_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_entity_relationship/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-entity-relationship-selfhost")
+[ "$gfx_chart_entity_relationship_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-entity-relationship-selfhost"
+gfx_chart_entity_relationship_output=$("$test_build/gfx-chart-entity-relationship-selfhost")
+[ "$gfx_chart_entity_relationship_output" = 'gfx chart entity relationship ok' ]
+gfx_chart_branching_process_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_branching_process/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-branching-process-selfhost")
+[ "$gfx_chart_branching_process_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-branching-process-selfhost"
+gfx_chart_branching_process_output=$("$test_build/gfx-chart-branching-process-selfhost")
+[ "$gfx_chart_branching_process_output" = 'gfx chart branching process ok' ]
+gfx_chart_stem_leaf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_stem_and_leaf/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-stem-and-leaf-selfhost")
+[ "$gfx_chart_stem_leaf_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-stem-and-leaf-selfhost"
+gfx_chart_stem_leaf_output=$("$test_build/gfx-chart-stem-and-leaf-selfhost")
+[ "$gfx_chart_stem_leaf_output" = 'gfx chart stem and leaf ok' ]
+gfx_chart_range_interval_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_range_interval/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-range-interval-selfhost")
+[ "$gfx_chart_range_interval_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-range-interval-selfhost"
+gfx_chart_range_interval_output=$("$test_build/gfx-chart-range-interval-selfhost")
+[ "$gfx_chart_range_interval_output" = 'gfx chart range interval ok' ]
+gfx_chart_probability_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_probability_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-probability-plot-selfhost")
+[ "$gfx_chart_probability_plot_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-probability-plot-selfhost"
+gfx_chart_probability_plot_output=$("$test_build/gfx-chart-probability-plot-selfhost")
+[ "$gfx_chart_probability_plot_output" = 'gfx chart probability plot ok' ]
+gfx_chart_weibull_probability_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_weibull_probability/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-weibull-probability-selfhost")
+[ "$gfx_chart_weibull_probability_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-weibull-probability-selfhost"
+gfx_chart_weibull_probability_output=$("$test_build/gfx-chart-weibull-probability-selfhost")
+[ "$gfx_chart_weibull_probability_output" = 'gfx chart weibull probability ok' ]
+gfx_chart_oc_curve_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_oc_curve/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-oc-curve-selfhost")
+[ "$gfx_chart_oc_curve_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-oc-curve-selfhost"
+gfx_chart_oc_curve_output=$("$test_build/gfx-chart-oc-curve-selfhost")
+[ "$gfx_chart_oc_curve_output" = 'gfx chart OC curve ok' ]
+gfx_chart_gage_rr_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_gage_rr/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-gage-rr-selfhost")
+[ "$gfx_chart_gage_rr_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-gage-rr-selfhost"
+gfx_chart_gage_rr_output=$("$test_build/gfx-chart-gage-rr-selfhost")
+[ "$gfx_chart_gage_rr_output" = 'gfx chart gage rr ok' ]
+gfx_chart_multi_vari_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_multi_vari/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-multi-vari-selfhost")
+[ "$gfx_chart_multi_vari_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-multi-vari-selfhost"
+gfx_chart_multi_vari_output=$("$test_build/gfx-chart-multi-vari-selfhost")
+[ "$gfx_chart_multi_vari_output" = 'gfx chart multi vari ok' ]
+gfx_chart_main_effects_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_main_effects/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-main-effects-selfhost")
+[ "$gfx_chart_main_effects_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-main-effects-selfhost"
+gfx_chart_main_effects_output=$("$test_build/gfx-chart-main-effects-selfhost")
+[ "$gfx_chart_main_effects_output" = 'gfx chart main effects ok' ]
+gfx_chart_interaction_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_interaction_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-interaction-plot-selfhost")
+[ "$gfx_chart_interaction_plot_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-interaction-plot-selfhost"
+gfx_chart_interaction_plot_output=$("$test_build/gfx-chart-interaction-plot-selfhost")
+[ "$gfx_chart_interaction_plot_output" = 'gfx chart interaction plot ok' ]
+gfx_chart_cube_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_cube_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-cube-plot-selfhost")
+[ "$gfx_chart_cube_plot_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-cube-plot-selfhost"
+gfx_chart_cube_plot_output=$("$test_build/gfx-chart-cube-plot-selfhost")
+[ "$gfx_chart_cube_plot_output" = 'gfx chart cube plot ok' ]
+gfx_chart_spectrogram_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_spectrogram/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-spectrogram-selfhost")
+[ "$gfx_chart_spectrogram_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-spectrogram-selfhost"
+gfx_chart_spectrogram_output=$("$test_build/gfx-chart-spectrogram-selfhost")
+[ "$gfx_chart_spectrogram_output" = 'gfx chart spectrogram ok' ]
+gfx_chart_waterfall_spectrum_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_waterfall_spectrum/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-waterfall-spectrum-selfhost")
+[ "$gfx_chart_waterfall_spectrum_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-waterfall-spectrum-selfhost"
+gfx_chart_waterfall_spectrum_output=$("$test_build/gfx-chart-waterfall-spectrum-selfhost")
+[ "$gfx_chart_waterfall_spectrum_output" = 'gfx chart waterfall spectrum ok' ]
+gfx_chart_bode_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_bode/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-bode-selfhost")
+[ "$gfx_chart_bode_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-bode-selfhost"
+gfx_chart_bode_output=$("$test_build/gfx-chart-bode-selfhost")
+[ "$gfx_chart_bode_output" = 'gfx chart bode ok' ]
+gfx_chart_nyquist_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_nyquist/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-nyquist-selfhost")
+[ "$gfx_chart_nyquist_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-nyquist-selfhost"
+gfx_chart_nyquist_output=$("$test_build/gfx-chart-nyquist-selfhost")
+[ "$gfx_chart_nyquist_output" = 'gfx chart nyquist ok' ]
+gfx_chart_scatter3d_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_scatter3d/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-scatter3d-selfhost")
+[ "$gfx_chart_scatter3d_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-scatter3d-selfhost"
+gfx_chart_scatter3d_output=$("$test_build/gfx-chart-scatter3d-selfhost")
+[ "$gfx_chart_scatter3d_output" = 'gfx chart scatter3d ok' ]
+gfx_chart_histogram3d_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_histogram3d/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-histogram3d-selfhost")
+[ "$gfx_chart_histogram3d_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-histogram3d-selfhost"
+gfx_chart_histogram3d_output=$("$test_build/gfx-chart-histogram3d-selfhost")
+[ "$gfx_chart_histogram3d_output" = 'gfx chart histogram3d ok' ]
+gfx_chart_surface3d_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_surface3d/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-surface3d-selfhost")
+[ "$gfx_chart_surface3d_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-surface3d-selfhost"
+gfx_chart_surface3d_output=$("$test_build/gfx-chart-surface3d-selfhost")
+[ "$gfx_chart_surface3d_output" = 'gfx chart surface3d ok' ]
+gfx_chart_anom_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_anom/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-anom-selfhost")
+[ "$gfx_chart_anom_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-anom-selfhost"
+gfx_chart_anom_output=$("$test_build/gfx-chart-anom-selfhost")
+[ "$gfx_chart_anom_output" = 'gfx chart anom ok' ]
+gfx_chart_hotelling_t2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_hotelling_t2/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-hotelling-t2-selfhost")
+[ "$gfx_chart_hotelling_t2_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-hotelling-t2-selfhost"
+gfx_chart_hotelling_t2_output=$("$test_build/gfx-chart-hotelling-t2-selfhost")
+[ "$gfx_chart_hotelling_t2_output" = 'gfx chart hotelling t2 ok' ]
+gfx_chart_generalized_variance_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_generalized_variance/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-generalized-variance-selfhost")
+[ "$gfx_chart_generalized_variance_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-generalized-variance-selfhost"
+gfx_chart_generalized_variance_output=$("$test_build/gfx-chart-generalized-variance-selfhost")
+[ "$gfx_chart_generalized_variance_output" = 'gfx chart generalized variance ok' ]
+gfx_chart_mewma_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_mewma/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-mewma-selfhost")
+[ "$gfx_chart_mewma_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-mewma-selfhost"
+gfx_chart_mewma_output=$("$test_build/gfx-chart-mewma-selfhost")
+[ "$gfx_chart_mewma_output" = 'gfx chart mewma ok' ]
+gfx_chart_spine_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_spine_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-spine-plot-selfhost")
+[ "$gfx_chart_spine_plot_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-spine-plot-selfhost"
+gfx_chart_spine_plot_output=$("$test_build/gfx-chart-spine-plot-selfhost")
+[ "$gfx_chart_spine_plot_output" = 'gfx chart spine plot ok' ]
+gfx_chart_hexbin_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_hexbin/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-hexbin-selfhost")
+[ "$gfx_chart_hexbin_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-hexbin-selfhost"
+gfx_chart_hexbin_output=$("$test_build/gfx-chart-hexbin-selfhost")
+[ "$gfx_chart_hexbin_output" = 'gfx chart hexbin ok' ]
+gfx_chart_bin2d_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_bin2d/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-bin2d-selfhost")
+[ "$gfx_chart_bin2d_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-bin2d-selfhost"
+gfx_chart_bin2d_output=$("$test_build/gfx-chart-bin2d-selfhost")
+[ "$gfx_chart_bin2d_output" = 'gfx chart bin2d ok' ]
+gfx_chart_density2d_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_density2d/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-density2d-selfhost")
+[ "$gfx_chart_density2d_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-density2d-selfhost"
+gfx_chart_density2d_output=$("$test_build/gfx-chart-density2d-selfhost")
+[ "$gfx_chart_density2d_output" = 'gfx chart density2d ok' ]
+gfx_chart_half_violin_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_half_violin/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-half-violin-selfhost")
+[ "$gfx_chart_half_violin_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-half-violin-selfhost"
+gfx_chart_half_violin_output=$("$test_build/gfx-chart-half-violin-selfhost")
+[ "$gfx_chart_half_violin_output" = 'gfx chart half violin ok' ]
+gfx_chart_raincloud_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_raincloud/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-raincloud-selfhost")
+[ "$gfx_chart_raincloud_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-raincloud-selfhost"
+gfx_chart_raincloud_output=$("$test_build/gfx-chart-raincloud-selfhost")
+[ "$gfx_chart_raincloud_output" = 'gfx chart raincloud ok' ]
+gfx_chart_slopegraph_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_slopegraph/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-slopegraph-selfhost")
+[ "$gfx_chart_slopegraph_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-slopegraph-selfhost"
+gfx_chart_slopegraph_output=$("$test_build/gfx-chart-slopegraph-selfhost")
+[ "$gfx_chart_slopegraph_output" = 'gfx chart slopegraph ok' ]
+gfx_chart_connected_scatter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_connected_scatter/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-connected-scatter-selfhost")
+[ "$gfx_chart_connected_scatter_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-connected-scatter-selfhost"
+gfx_chart_connected_scatter_output=$("$test_build/gfx-chart-connected-scatter-selfhost")
+[ "$gfx_chart_connected_scatter_output" = 'gfx chart connected scatter ok' ]
+gfx_chart_marginal_histogram_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_marginal_histogram/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-marginal-histogram-selfhost")
+[ "$gfx_chart_marginal_histogram_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-marginal-histogram-selfhost"
+gfx_chart_marginal_histogram_output=$("$test_build/gfx-chart-marginal-histogram-selfhost")
+[ "$gfx_chart_marginal_histogram_output" = 'gfx chart marginal histogram ok' ]
+gfx_chart_dose_response_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_dose_response/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-dose-response-selfhost")
+[ "$gfx_chart_dose_response_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-dose-response-selfhost"
+gfx_chart_dose_response_output=$("$test_build/gfx-chart-dose-response-selfhost")
+[ "$gfx_chart_dose_response_output" = 'gfx chart dose response ok' ]
+gfx_chart_hazard_rate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_hazard_rate/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-hazard-rate-selfhost")
+[ "$gfx_chart_hazard_rate_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-hazard-rate-selfhost"
+gfx_chart_hazard_rate_output=$("$test_build/gfx-chart-hazard-rate-selfhost")
+[ "$gfx_chart_hazard_rate_output" = 'gfx chart hazard rate ok' ]
+gfx_chart_influence_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_influence_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-influence-plot-selfhost")
+[ "$gfx_chart_influence_plot_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-influence-plot-selfhost"
+gfx_chart_influence_plot_output=$("$test_build/gfx-chart-influence-plot-selfhost")
+[ "$gfx_chart_influence_plot_output" = 'gfx chart influence plot ok' ]
+gfx_chart_capability_sixpack_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_capability_sixpack/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-capability-sixpack-selfhost")
+[ "$gfx_chart_capability_sixpack_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-capability-sixpack-selfhost"
+gfx_chart_capability_sixpack_output=$("$test_build/gfx-chart-capability-sixpack-selfhost")
+[ "$gfx_chart_capability_sixpack_output" = 'gfx chart capability sixpack ok' ]
+gfx_chart_capability_normal_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_capability_normal/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-capability-normal-selfhost")
+[ "$gfx_chart_capability_normal_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-capability-normal-selfhost"
+gfx_chart_capability_normal_output=$("$test_build/gfx-chart-capability-normal-selfhost")
+[ "$gfx_chart_capability_normal_output" = 'gfx chart capability normal ok' ]
+gfx_chart_capability_nonnormal_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_capability_nonnormal/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-capability-nonnormal-selfhost")
+[ "$gfx_chart_capability_nonnormal_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-capability-nonnormal-selfhost"
+gfx_chart_capability_nonnormal_output=$("$test_build/gfx-chart-capability-nonnormal-selfhost")
+[ "$gfx_chart_capability_nonnormal_output" = 'gfx chart capability nonnormal ok' ]
+gfx_chart_capability_attribute_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_capability_attribute/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-capability-attribute-selfhost")
+[ "$gfx_chart_capability_attribute_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-capability-attribute-selfhost"
+gfx_chart_capability_attribute_output=$("$test_build/gfx-chart-capability-attribute-selfhost")
+[ "$gfx_chart_capability_attribute_output" = 'gfx chart capability attribute ok' ]
+gfx_chart_capability_batch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_capability_batch/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-capability-batch-selfhost")
+[ "$gfx_chart_capability_batch_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-capability-batch-selfhost"
+gfx_chart_capability_batch_output=$("$test_build/gfx-chart-capability-batch-selfhost")
+[ "$gfx_chart_capability_batch_output" = 'gfx chart capability batch ok' ]
+gfx_chart_gage_bias_linearity_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_gage_bias_linearity/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-gage-bias-linearity-selfhost")
+[ "$gfx_chart_gage_bias_linearity_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-gage-bias-linearity-selfhost"
+gfx_chart_gage_bias_linearity_output=$("$test_build/gfx-chart-gage-bias-linearity-selfhost")
+[ "$gfx_chart_gage_bias_linearity_output" = 'gfx chart gage bias linearity ok' ]
+gfx_chart_attribute_agreement_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_attribute_agreement/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-attribute-agreement-selfhost")
+[ "$gfx_chart_attribute_agreement_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-attribute-agreement-selfhost"
+gfx_chart_attribute_agreement_output=$("$test_build/gfx-chart-attribute-agreement-selfhost")
+[ "$gfx_chart_attribute_agreement_output" = 'gfx chart attribute agreement ok' ]
+gfx_chart_gage_run_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_gage_run/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-gage-run-selfhost")
+[ "$gfx_chart_gage_run_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-gage-run-selfhost"
+gfx_chart_gage_run_output=$("$test_build/gfx-chart-gage-run-selfhost")
+[ "$gfx_chart_gage_run_output" = 'gfx chart gage run ok' ]
+gfx_chart_maps_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_maps/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-maps-selfhost")
+[ "$gfx_chart_maps_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-maps-selfhost"
+gfx_chart_maps_output=$("$test_build/gfx-chart-maps-selfhost")
+[ "$gfx_chart_maps_output" = 'gfx chart maps ok' ]
+gfx_chart_reports_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_reports/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-reports-selfhost")
+[ "$gfx_chart_reports_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-reports-selfhost"
+gfx_chart_reports_output=$("$test_build/gfx-chart-reports-selfhost")
+[ "$gfx_chart_reports_output" = 'gfx chart reports ok' ]
+gfx_chart_fishbone_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_fishbone/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-fishbone-selfhost")
+[ "$gfx_chart_fishbone_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-fishbone-selfhost"
+gfx_chart_fishbone_output=$("$test_build/gfx-chart-fishbone-selfhost")
+[ "$gfx_chart_fishbone_output" = 'gfx chart fishbone ok' ]
+gfx_chart_cause_effect_tree_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_cause_effect_tree/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-cause-effect-tree-selfhost")
+[ "$gfx_chart_cause_effect_tree_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-cause-effect-tree-selfhost"
+gfx_chart_cause_effect_tree_output=$("$test_build/gfx-chart-cause-effect-tree-selfhost")
+[ "$gfx_chart_cause_effect_tree_output" = 'gfx chart cause effect tree ok' ]
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png/src/main.e" "$repo" x64 linux "$test_build/fmt-png-selfhost")
@@ -2766,8 +3442,7 @@ chmod +x "$test_build/gpu-vulkan-loop-selfhost"
 # gpu_cache_corrupt (D1733-D1735): durable hit, driver-level corruption recovery,
 # failed rebuild preservation, and compiler-identity separation.
 previous_gpu_cache=${NEPER_GPU_CACHE-}
-gpu_cache=$test_build/gpu-cache
-mkdir -p "$gpu_cache"
+gpu_cache=$(mktemp -d "$test_build/gpu-cache.XXXXXX")
 export NEPER_GPU_CACHE=$gpu_cache
 gpu_vulkan_loop_output=$("$test_build/gpu-vulkan-loop-selfhost")
 case "$gpu_vulkan_loop_output" in
@@ -2777,7 +3452,6 @@ esac
 if [ "$gpu_vulkan_loop_output" != 'gpu loop cpu only' ]; then
     cache_file=$(find "$gpu_cache" -type f -name '*.bin' -print -quit)
     [ -n "$cache_file" ]
-    valid_cache_hash=$(sha256sum "$cache_file" | cut -d ' ' -f 1)
     python3 "$repo/scripts/corrupt_gpu_cache.py" "$cache_file"
     corrupt_cache_hash=$(sha256sum "$cache_file" | cut -d ' ' -f 1)
     gpu_vulkan_loop_output=$("$test_build/gpu-vulkan-loop-selfhost")
@@ -2787,12 +3461,11 @@ if [ "$gpu_vulkan_loop_output" != 'gpu loop cpu only' ]; then
     esac
     rebuilt_cache_hash=$(sha256sum "$cache_file" | cut -d ' ' -f 1)
     [ "$corrupt_cache_hash" != "$rebuilt_cache_hash" ]
-    [ "$valid_cache_hash" = "$rebuilt_cache_hash" ]
     if NEPER_GPU_CACHE_FAIL_REBUILD=1 "$test_build/gpu-vulkan-loop-selfhost" >/dev/null 2>&1; then
         printf '%s\n' 'the Vulkan cache rebuild failure was not injected' >&2
         exit 1
     fi
-    [ "$(sha256sum "$cache_file" | cut -d ' ' -f 1)" = "$valid_cache_hash" ]
+    [ "$(sha256sum "$cache_file" | cut -d ' ' -f 1)" = "$rebuilt_cache_hash" ]
     gpu_vulkan_loop_output=$("$test_build/gpu-vulkan-loop-selfhost")
     case "$gpu_vulkan_loop_output" in
         'gpu loop vulkan ok on '[1-9]' devices'|'gpu loop vulkan ok on '1[0-6]' devices') ;;
@@ -2850,6 +3523,22 @@ case "$gpu_vulkan_sync_output" in
     'gpu sync cpu only'|'gpu sync vulkan ok on '[1-9]' devices'|'gpu sync vulkan ok on '1[0-6]' devices') ;;
     *) printf '%s\n' "the Vulkan synchronization runtime failed: $gpu_vulkan_sync_output" >&2; exit 1 ;;
 esac
+gpu_staging_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_staging/src/main.e" "$repo" x64 linux "$test_build/gpu-staging-selfhost")
+[ "$gpu_staging_written" = 'executable written' ]
+chmod +x "$test_build/gpu-staging-selfhost"
+gpu_staging_output=$("$test_build/gpu-staging-selfhost")
+case "$gpu_staging_output" in
+    'gpu staging cpu only'|'gpu staging vulkan ok on '[1-9]' devices'|'gpu staging vulkan ok on '1[0-6]' devices') ;;
+    *) printf '%s\n' "the GPU staging runtime failed: $gpu_staging_output" >&2; exit 1 ;;
+esac
+gpu_device_lock_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_device_lock/src/main.e" "$repo" x64 linux "$test_build/gpu-device-lock-selfhost")
+[ "$gpu_device_lock_written" = 'executable written' ]
+chmod +x "$test_build/gpu-device-lock-selfhost"
+gpu_device_lock_output=$("$test_build/gpu-device-lock-selfhost")
+case "$gpu_device_lock_output" in
+    'gpu device lock cpu only'|'gpu device lock vulkan ok on '[1-9]' devices'|'gpu device lock vulkan ok on '1[0-6]' devices') ;;
+    *) printf '%s\n' "the GPU device lock runtime failed: $gpu_device_lock_output" >&2; exit 1 ;;
+esac
 # Subgroup identity and collectives are width-dependent by contract: pin the module,
 # then check the CPU's 32-lane model and every Vulkan device, including a partial group.
 subgroup_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/subgroup.e" "$repo" spv none "$test_build/subgroup.spv")
@@ -2882,9 +3571,9 @@ case "$gpu_direct" in
     *) printf '%s\n' "a direct kernel call was not refused: $gpu_direct" >&2; exit 1 ;;
 esac
 # (D1588) Section 10's device profile, from a kernel through what it reaches: recursion,
-# a private slice, a module-scope var behind a helper and a `usize` parameter are
-# refused at the kernel with the chain; slices of device and shared memory are not.
-for gpu_profile_case in 'recursion|main.e:14:1: error[E-GPU-9999]: `fill` reaches recursion `depth` through fill -> helper -> depth -> depth' 'private|main.e:9:1: error[E-GPU-9999]: `fill` reaches a slice of the private variable `local` through fill' 'global|main.e:11:1: error[E-GPU-9999]: `fill` reaches the module-scope `var` `counter` through fill -> bump' 'param|main.e:5:1: error[E-GPU-9999]: `fill` takes `n`, which is neither a device storage type'; do
+# a private slice, a module-scope var behind a helper or implicit `next`, and a
+# `usize` parameter are refused; slices of device and shared memory are not.
+for gpu_profile_case in 'recursion|main.e:14:1: error[E-GPU-9999]: `fill` reaches recursion `depth` through fill -> helper -> depth -> depth' 'private|main.e:9:1: error[E-GPU-9999]: `fill` reaches a slice of the private variable `local` through fill' 'global|main.e:11:1: error[E-GPU-9999]: `fill` reaches the module-scope `var` `counter` through fill -> bump' 'param|main.e:5:1: error[E-GPU-9999]: `fill` takes `n`, which is neither a device storage type' 'indirect|main.e:10:1: error[E-GPU-9999]: `fill` reaches a call through the function pointer field `run` through fill -> through_field' 'implicit_next|main.e:14:1: error[E-GPU-9999]: `sum` implicit iterator `next` reaches the module-scope `var` `counter`'; do
     gpu_profile_name=${gpu_profile_case%%|*}
     gpu_profile_expected=${gpu_profile_case#*|}
     gpu_profile=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/gpu_profile_$gpu_profile_name/src/main.e" "$repo" x64 linux 2>&1 || true)
@@ -2897,7 +3586,7 @@ done
 # (D1589) A device-only helper called from CPU code, a `gpu.Buf` of `usize`, a
 # capability outside `caps(...)` and a repeated `caps` member are refused; a kernel
 # within its `caps(...)` and `ftz` is not.
-for gpu_rule_case in 'gpu_device_only|main.e:15:9: error[E-GPU-9999]: `lane` is device-only' 'gpu_buf_element|main.e:5:5: error[E-GPU-9999]: a `gpu.Buf[T]` holds device memory' 'gpu_caps_bound|main.e:14:1: error[E-GPU-9999]: `fill` needs `.Float64` through fill -> scaled -> widen' 'gpu_caps_duplicate|main.e:5:1: error[E-GPU-9999]: `fill` carries `@gpu` without a usable workgroup size' 'gpu_shared_elsewhere|main.e:6:8: error[E-GPU-9999]: `plain` is device-only'; do
+for gpu_rule_case in 'gpu_device_only|main.e:15:9: error[E-GPU-9999]: `lane` is device-only' 'gpu_generic_device_only|main.e:9:9: error[E-GPU-9999]: `passthrough` is device-only' 'gpu_buf_element|main.e:5:5: error[E-GPU-9999]: a `gpu.Buf[T]` holds device memory' 'gpu_caps_bound|main.e:14:1: error[E-GPU-9999]: `fill` needs `.Float64` through fill -> scaled -> widen' 'gpu_caps_duplicate|main.e:5:1: error[E-GPU-9999]: `fill` carries `@gpu` without a usable workgroup size' 'gpu_shared_elsewhere|main.e:6:8: error[E-GPU-9999]: `plain` is device-only'; do
     gpu_rule_name=${gpu_rule_case%%|*}
     gpu_rule_expected=${gpu_rule_case#*|}
     gpu_rule=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/$gpu_rule_name/src/main.e" "$repo" x64 linux 2>&1 || true)
@@ -2959,6 +3648,29 @@ for mode in debug release; do
     chmod +x "$test_build/gpu-barrier-large-helper-$mode"
     gpu_large_helper_output=$("$test_build/gpu-barrier-large-helper-$mode")
     [ "$gpu_large_helper_output" = 'gpu barrier large helper ok' ]
+done
+for mode in debug release; do
+    if [ "$mode" = release ]; then
+        gpu_chain_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier_chain/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-chain-$mode" --release)
+    else
+        gpu_chain_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier_chain/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-chain-$mode")
+    fi
+    [ "$gpu_chain_written" = 'executable written' ]
+    chmod +x "$test_build/gpu-barrier-chain-$mode"
+    gpu_chain_output=$("$test_build/gpu-barrier-chain-$mode")
+    [ "$gpu_chain_output" = 'gpu barrier chain ok' ]
+done
+for mode in debug release; do
+    if [ "$mode" = release ]; then
+        gpu_helper_occurrence_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier_helper_occurrence/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-helper-occurrence-$mode" --release)
+    else
+        gpu_helper_occurrence_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_barrier_helper_occurrence/src/main.e" "$repo" x64 linux "$test_build/gpu-barrier-helper-occurrence-$mode")
+    fi
+    [ "$gpu_helper_occurrence_written" = 'executable written' ]
+    chmod +x "$test_build/gpu-barrier-helper-occurrence-$mode"
+    gpu_helper_occurrence_status=0
+    gpu_helper_occurrence_output=$("$test_build/gpu-barrier-helper-occurrence-$mode" 2>&1) || gpu_helper_occurrence_status=$?
+    [ "$gpu_helper_occurrence_status" = 134 ] && printf '%s\n' "$gpu_helper_occurrence_output" | grep -Fq 'reached barrier 1 (different loop occurrence)' || { printf '%s\n' "a $mode helper-loop mismatch did not trap: $gpu_helper_occurrence_output" >&2; exit 1; }
 done
 gpu_frame_many_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_frame_many/src/main.e" "$repo" x64 linux "$test_build/gpu-frame-many-selfhost")
 [ "$gpu_frame_many_written" = 'executable written' ]
@@ -4845,7 +5557,7 @@ for hot_mode in --release --time; do
     shape_status=0
     "$test_build/gpushape$hot_mode" || shape_status=$?
     [ "$shape_status" -eq 50 ]
-    for shape_step in 'main main.e main=rebuilt:source-changed k=kept:stable 50' 'body k.e main=kept:edges-hold k=rebuilt:source-changed 50' 'size k.e main=rebuilt:edge-changed k=rebuilt:source-changed 82'; do
+    for shape_step in 'main main.e main=rebuilt:source-changed k=kept:stable 50' 'body k.e main=rebuilt:edge-changed k=rebuilt:source-changed 50' 'size k.e main=rebuilt:edge-changed k=rebuilt:source-changed 82'; do
         set -- $shape_step
         cp "$shape_scratch/edits/$1.e" "$shape_scratch/src/$2"
         [ "$("$test_build/neper-self" emit-executable "$shape_scratch/src/main.e" "$repo" x64 linux "$test_build/gpushape$hot_mode" $hot_mode --incremental -j 1 2>/dev/null)" = "executable written" ]
@@ -5039,7 +5751,7 @@ for hot_mode in --release --time; do
     hot_fault_output=$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental --fault-write 1 2>&1) || hot_fault_status=$?
     [ "$hot_fault_status" -eq 1 ] || { echo "a build with an injected write fault exited $hot_fault_status, not 1" >&2; exit 1; }
     case "$hot_fault_output" in *"made to fail by --fault-write"*) ;; *) echo "a build with an injected write fault did not say so: $hot_fault_output" >&2; exit 1 ;; esac
-    [ -n "$(find "$hot_scratch/.neper" -name '*.tmp')" ] || { echo "the injected write fault left no staged file" >&2; exit 1; }
+    [ -n "$(find "$hot_scratch/.neper" -name '.neper-stage-*')" ] || { echo "the injected write fault left no staged file" >&2; exit 1; }
     [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
     python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:invalid-artifact dep=rebuilt:no-artifact
     cmp "$hot_exe" "$hot_clean"

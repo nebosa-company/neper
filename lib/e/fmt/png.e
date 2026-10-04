@@ -4,7 +4,7 @@
 // `image.R8` for opaque greyscale and `image.Rgba8` for everything else, a 16-bit
 // sample keeping its high byte. `inspect` reads only the header chunks, counting
 // frames from an APNG `acTL` when there is one. Dimensions are checked against the
-// options before any pixel memory is taken: a zero limit is no limit. `verify_crc`
+// options before any pixel memory is taken: zero selects finite defaults. `verify_crc`
 // checks every chunk's CRC-32 and the zlib Adler-32; off, they are skipped, which is
 // what a reader of a trusted file saves.
 //
@@ -172,9 +172,13 @@ fn inspect(source: io.Reader) -> (image.Info, err) {
 }
 
 fn within(h: Header, options: DecodeOptions) -> err {
-    if options.max_width != 0u32 && h.width > options.max_width { ret TooLarge }
-    if options.max_height != 0u32 && h.height > options.max_height { ret TooLarge }
-    if options.max_pixels != 0u64 && u64(h.width) * u64(h.height) > options.max_pixels { ret TooLarge }
+    var width = options.max_width
+    var height = options.max_height
+    var pixels = options.max_pixels
+    if width == 0u32 { width = 16384u32 }
+    if height == 0u32 { height = 16384u32 }
+    if pixels == 0u64 { pixels = 16777216u64 }
+    if h.width > width || h.height > height || u64(h.width) * u64(h.height) > pixels { ret TooLarge }
     ret ok
 }
 

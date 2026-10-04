@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>date_axis_line</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="51" y="61" width="278" height="129" fill="rgb(245,247,252)"/>
+<line x1="51" y1="61" x2="51" y2="190" stroke="rgb(209,219,232)" stroke-width="2" stroke-linecap="round"/>
+<line x1="98.35" y1="61" x2="98.35" y2="190" stroke="rgb(209,219,232)" stroke-width="2" stroke-linecap="round"/>
+<line x1="142.65" y1="61" x2="142.65" y2="190" stroke="rgb(209,219,232)" stroke-width="2" stroke-linecap="round"/>
+<line x1="190" y1="61" x2="190" y2="190" stroke="rgb(209,219,232)" stroke-width="2" stroke-linecap="round"/>
+<line x1="235.82" y1="61" x2="235.82" y2="190" stroke="rgb(209,219,232)" stroke-width="2" stroke-linecap="round"/>
+<line x1="283.18" y1="61" x2="283.18" y2="190" stroke="rgb(209,219,232)" stroke-width="2" stroke-linecap="round"/>
+<line x1="329" y1="61" x2="329" y2="190" stroke="rgb(209,219,232)" stroke-width="2" stroke-linecap="round"/>
+<line x1="51" y1="61" x2="329" y2="61" stroke="rgb(209,219,232)" stroke-width="2" stroke-linecap="round"/>
+<line x1="51" y1="93.25" x2="329" y2="93.25" stroke="rgb(209,219,232)" stroke-width="2" stroke-linecap="round"/>
+<line x1="51" y1="125.5" x2="329" y2="125.5" stroke="rgb(209,219,232)" stroke-width="2" stroke-linecap="round"/>
+<line x1="51" y1="157.75" x2="329" y2="157.75" stroke="rgb(209,219,232)" stroke-width="2" stroke-linecap="round"/>
+<line x1="51" y1="190" x2="329" y2="190" stroke="rgb(209,219,232)" stroke-width="2" stroke-linecap="round"/>
+<path d="M51 151.3 L98.35 125.5 L142.65 135.17 L190 102.93 L235.82 112.6 L283.18 77.12 L329 86.8" fill="none" stroke="rgb(28,107,196)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="48" y="148.3" width="6" height="6" fill="rgb(28,107,196)"/>
+<rect x="95.35" y="122.5" width="6" height="6" fill="rgb(28,107,196)"/>
+<rect x="139.65" y="132.17" width="6" height="6" fill="rgb(28,107,196)"/>
+<rect x="187" y="99.93" width="6" height="6" fill="rgb(28,107,196)"/>
+<rect x="232.82" y="109.6" width="6" height="6" fill="rgb(28,107,196)"/>
+<rect x="280.18" y="74.12" width="6" height="6" fill="rgb(28,107,196)"/>
+<rect x="326" y="83.8" width="6" height="6" fill="rgb(28,107,196)"/>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Date-aware line chart</text>
+<text x="180" y="40" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Elapsed calendar days / leap-year February</text>
+<text x="51" y="207" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(51,64,84)">2024-01</text>
+<text x="98.35" y="207" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(51,64,84)">2024-02</text>
+<text x="142.65" y="207" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(51,64,84)">2024-03</text>
+<text x="190" y="207" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(51,64,84)">2024-04</text>
+<text x="235.82" y="207" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(51,64,84)">2024-05</text>
+<text x="283.18" y="207" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(51,64,84)">2024-06</text>
+<text x="329" y="207" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(51,64,84)">2024-07</text>
+<text x="45" y="64" font-family="sans-serif" font-size="7" text-anchor="end" fill="rgb(51,64,84)">40</text>
+<text x="45" y="96.25" font-family="sans-serif" font-size="7" text-anchor="end" fill="rgb(51,64,84)">30</text>
+<text x="45" y="128.5" font-family="sans-serif" font-size="7" text-anchor="end" fill="rgb(51,64,84)">20</text>
+<text x="45" y="160.75" font-family="sans-serif" font-size="7" text-anchor="end" fill="rgb(51,64,84)">10</text>
+<text x="45" y="193" font-family="sans-serif" font-size="7" text-anchor="end" fill="rgb(51,64,84)">0</text>
+<text x="180" y="232" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(51,64,84)">Month starts use 31, 29, 31, 30, 31 and 30-day gaps</text>
+</svg>

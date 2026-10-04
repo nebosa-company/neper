@@ -80,5 +80,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if template.execute_typed[Model](&typed, &sink, &model) != ok { os.exit(20) }
     if !str.eq(out[..sink_state.off], "m/7/0.5/on") { os.exit(21) }
     if template.execute_typed[Model](&other, &sink, &model) != template.MissingValue { os.exit(22) }
+    // A huge empty repeat must fail before entering the loop. Nested repeats
+    // share their work budget, and output limits include ordinary interpolation.
+    let (_, huge_error) = render(a, "{{#repeat big}}{{/repeat}}", bindings[0..], out[0..])
+    if huge_error != template.TooLarge { os.exit(23) }
+    let (nested, nested_error) = template.parse(a, "{{#repeat three}}{{#repeat three}}{{/repeat}}{{/repeat}}", options)
+    if nested_error != ok { os.exit(24) }
+    sink_state.off = 0usize
+    if template.execute_with_limits(&nested, &sink, bindings[0..], 10u64, 100u64) != template.TooLarge { os.exit(25) }
+    if template.execute_with_limits(&nested, &sink, bindings[0..], 100u64, 100u64) != ok { os.exit(26) }
+    sink_state.off = 0usize
+    if template.execute_typed_with_limits[Model](&typed, &sink, &model, 100u64, 9u64) != template.TooLarge || sink_state.off > 9usize { os.exit(27) }
+    sink_state.off = 0usize
+    if template.execute_typed_with_limits[Model](&typed, &sink, &model, 100u64, 10u64) != ok || !str.eq(out[..sink_state.off], "m/7/0.5/on") { os.exit(28) }
+    // Sink failures still propagate through the bounded adapter.
+    sink_state.data = out[..1usize]
+    sink_state.off = 0usize
+    if template.execute_typed[Model](&typed, &sink, &model) != io.TooSmall { os.exit(29) }
     ret ok
 }

@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Render the four headline readiness metrics to docs/progress.html.
+"""Render readiness, the charting plan, and the unfinished backlog.
 
-Usage:  python scripts/render_progress.py     (from the repository root)
+Usage:  python scripts/render_progress.py [--charts-only]
+        (from the repository root; --charts-only preserves other generated docs)
 
-The page intentionally renders only four computed readiness metrics. Compiler and
-tooling scores come from the active queue plus the completed ledger; module and
-UI/host scores come from their machine-readable inventories.
+Compiler, tooling and library scores come from the active queue plus the
+completed ledger; module and UI/host scores come from their inventories.
 """
-import json, re, subprocess, datetime
+import json, re, subprocess, datetime, html, sys
 from pathlib import Path
 
 from check_widget_plan import validate as validate_widget_plan
+CHARTS_ONLY = __name__ == '__main__' and sys.argv[1:] == ['--charts-only']
+if __name__ == '__main__' and sys.argv[1:] and not CHARTS_ONLY:
+    raise SystemExit('usage: python scripts/render_progress.py [--charts-only]')
 # Compiler/tooling readiness is data, not renderer code. The unfinished rows are
 # ordered for serial feature pickup; delivered rows are kept out of fresh-session context.
 WORK_QUEUE = Path("docs/work-queue.json")
@@ -43,21 +46,23 @@ def load_work_rows():
         score = float(item["score"])
         if not 0 <= score <= 1 or delivered != (score == 1):
             raise SystemExit("work item is in the wrong file: " + item["id"])
-        if item["category"] not in {"compiler", "tooling"}:
+        if item["category"] not in {"compiler", "tooling", "library"}:
             raise SystemExit("invalid work item category: " + item["id"])
         rows.append(item)
 
-    compiler_rows, tooling_rows = {}, []
+    compiler_rows, tooling_rows, library_rows = {}, [], []
     for item in sorted(rows, key=lambda row: (row["category"], row["order"])):
         row = (item["title"], float(item["score"]), item["evidence"])
         if item["category"] == "compiler":
             compiler_rows.setdefault(item["group"], []).append(row)
-        else:
+        elif item["category"] == "tooling":
             tooling_rows.append(row)
-    return compiler_rows, tooling_rows
+        else:
+            library_rows.append(row)
+    return compiler_rows, tooling_rows, library_rows
 
 
-compiler, tooling = load_work_rows()
+compiler, tooling, library = load_work_rows()
 
 
 # Stamp the last commit that touched what this page measures, not HEAD. Stamping
@@ -74,7 +79,7 @@ offset = moment.strftime('%z')
 when = '%s UTC%s:%s' % (moment.strftime('%Y-%m-%d %H:%M:%S'), offset[:3], offset[3:])
 
 # ---- module numbers, recomputed here so the page cannot drift from the plan ----
-txt = open('docs/module-apis.md', encoding='utf-8').read()
+txt = Path('docs/module-apis.md').read_text(encoding='utf-8')
 blocks = dict(re.findall(r'^### `([^`]+)`\n(.*?)(?=^### |\Z)', txt, re.S | re.M))
 
 
@@ -105,17 +110,21 @@ for p in tracked:
     impl.setdefault(mod, set()).update(
         m.group(2) for m in
         (re.match(r'(fn|type|error|const)\s+([A-Za-z_][A-Za-z0-9_]*)', l)
-         for l in open(p, encoding='utf-8')) if m)
+         for l in Path(p).read_text(encoding='utf-8').splitlines()) if m)
 
 seeded = {}
 for mod, nm in re.findall(r'seed\(r,\s*g,\s*"([^"]+)",\s*"([^"]+)"',
-                          open('src/resolve.e', encoding='utf-8').read()):
+                          Path('src/resolve.e').read_text(encoding='utf-8')):
     seeded.setdefault(mod, set()).add(nm)
 
 dtot = dgot = 0
+module_missing = {}
 for mod, body in blocks.items():
     declarations = decl_names(body)
     present = impl.get(mod, set()) | seeded.get(mod, set())
+    missing = set(declarations) - present
+    if missing:
+        module_missing[mod] = missing
     dtot += len(declarations)
     dgot += sum(1 for name in declarations if name in present)
 
@@ -125,7 +134,7 @@ for mod, body in blocks.items():
 # count once.
 planned = {}
 for mod, fn in re.findall(r'→ `(e\.[A-Za-z0-9_.]+)\.([A-Za-z_][A-Za-z0-9_]*)`',
-                          open('docs/algos.md', encoding='utf-8').read()):
+                          Path('docs/algos.md').read_text(encoding='utf-8')):
     planned.setdefault(mod, set()).add(fn)
 algos_total = sum(len(fns) for fns in planned.values())
 algos_missing = 0
@@ -133,7 +142,10 @@ for mod, fns in planned.items():
     present = impl.get(mod, set()) | seeded.get(mod, set())
     if mod in blocks:
         present |= set(decl_names(blocks[mod]))
-    algos_missing += sum(1 for fn in fns if fn not in present)
+    missing = fns - present
+    if missing:
+        module_missing.setdefault(mod, set()).update(missing)
+    algos_missing += len(missing)
 dtot += algos_missing
 
 widget_plan, widget_errors = validate_widget_plan(Path('.'))
@@ -148,8 +160,11 @@ c_sum = sum(score for group in compiler.values() for _, score, _ in group)
 c_n = sum(len(group) for group in compiler.values())
 t_sum = sum(score for _, score, _ in tooling)
 t_n = len(tooling)
-C, M, W, T = (100 * c_sum / c_n, 100 * dgot / dtot,
-              100 * wgot / wtot, 100 * t_sum / t_n)
+l_sum = sum(score for _, score, _ in library)
+l_n = len(library)
+C, M, W, T, L = (100 * c_sum / c_n, 100 * dgot / dtot,
+                 100 * wgot / wtot, 100 * t_sum / t_n,
+                 100 * l_sum / l_n if l_n else 100.0)
 
 
 def previous_percentages(path):
@@ -190,9 +205,190 @@ kpi = '\n'.join([
     meter('Modules', M, '%d of %d declarations, %d of %d selected algorithms' % (dgot, dtot, algos_total - algos_missing, algos_total)),
     meter('UI and host integration', W, '%d of %d capabilities' % (wgot, wtot)),
     meter('Tooling', T, '%.2f of %d capabilities' % (t_sum, t_n)),
+    meter('Library', L, '%.2f of %d capabilities' % (l_sum, l_n)),
 ])
 
-html = """<!doctype html>
+# Keep the chart catalogue in its maintained Markdown source. The readiness
+# page links to a generated chart guide and shows the unfinished queue.
+chart_plan = Path('docs/charting-engine-plan.md').read_text(encoding='utf-8')
+queue_items = json.loads(WORK_QUEUE.read_text(encoding='utf-8'))['items']
+# The first stable CPU release follows the M2/tool-complete gate in roadmap.md.
+# These unfinished rows contain work that gate still requires. GPU milestones,
+# later libraries and optional tooling do not block this release.
+RELEASE_REQUIRED_IDS = {'C082', 'C088', 'T004', 'T012', 'T016', 'T023'}
+queue_ids = {item['id'] for item in queue_items}
+done_ids = {json.loads(line)['id'] for line in WORK_DONE.read_text(encoding='utf-8').splitlines()
+            if line.strip()}
+if not RELEASE_REQUIRED_IDS <= queue_ids | done_ids:
+    raise SystemExit('release-required item missing from work inventories: '
+                     + ', '.join(sorted(RELEASE_REQUIRED_IDS - queue_ids - done_ids)))
+module_plan = json.loads(Path('docs/modules.json').read_text(encoding='utf-8'))
+core_modules = set(next(tier['modules'] for tier in module_plan['tiers']
+                        if tier['id'] == 'core'))
+chart_item = next((item for item in queue_items if item['id'] == 'L061'), None)
+if chart_item is None:
+    for line in WORK_DONE.read_text(encoding='utf-8').splitlines():
+        if line.strip():
+            item = json.loads(line)
+            if item['id'] == 'L061':
+                chart_item = item
+                break
+if chart_item is None:
+    raise SystemExit('L061 missing from work queue and completion ledger')
+def unfinished_details(label, rows):
+    body = ''.join(
+        '<tr><td>{number}</td><td><code>{id}</code></td><td>{title}</td>'
+        '<td><span class="release-status {status_class}">{status}</span></td>'
+        '<td>{evidence}</td></tr>'.format(
+            number=number, id=html.escape(item_id), title=html.escape(title),
+            status_class='required' if required else 'enhancement',
+            status='Release required' if required else 'Enhancement',
+            evidence=html.escape(evidence))
+        for number, (item_id, title, evidence, required) in enumerate(rows, 1)
+    )
+    content = (
+        '<div class="table-scroll"><table><thead><tr><th scope="col">#</th>'
+        '<th scope="col">ID / module</th><th scope="col">Work and progress</th>'
+        '<th scope="col">Release status</th>'
+        '<th scope="col">Evidence and remaining work</th></tr></thead>'
+        '<tbody>' + body + '</tbody></table></div>'
+        if rows else '<p>No unfinished items.</p>'
+    )
+    return ('<details id="unfinished-' + label.lower() + '"><summary>'
+            + label + ' — ' + str(len(rows)) + ' unfinished</summary>'
+            + content + '</details>')
+
+
+backlog = unfinished_details('Queue', [
+    (item['id'], item['title'] + ' (' + format(float(item['score']), '.0%') + ')',
+     'See docs/charts.md for the engine, delivery evidence and previews.'
+     if item['id'] == 'L061' else item['evidence'],
+     item['id'] in RELEASE_REQUIRED_IDS)
+    for item in queue_items if float(item['score']) < 1
+])
+backlog += unfinished_details('Modules', [
+    (mod, str(len(missing)) + ' missing declarations / selected algorithms',
+     ', '.join(sorted(missing)), mod in core_modules)
+    for mod, missing in sorted(module_missing.items())
+])
+release_required_count = sum(item['id'] in RELEASE_REQUIRED_IDS for item in queue_items)
+module_required_count = sum(mod in core_modules for mod in module_missing)
+# A work-in-progress gallery render may exist before its chart is landed. Readiness
+# counts tracked preview pairs, not untracked files from another working session.
+preview_paths = sorted(Path(name) for name in subprocess.run(
+    ['git', 'ls-files', 'docs/chart-previews/*.png'],
+    capture_output=True, text=True, check=True).stdout.splitlines())
+preview_backlog = [line.strip() for line in Path('docs/chart-preview-backlog.txt').read_text(encoding='utf-8').splitlines()
+                   if line.strip() and not line.lstrip().startswith('#')]
+if len(preview_backlog) != len(set(preview_backlog)) or any(
+        re.fullmatch(r'[a-z][a-z0-9_]*', name) is None for name in preview_backlog):
+    raise SystemExit('chart preview backlog contains a duplicate or invalid slug')
+if any(not path.exists() or not path.with_suffix('.svg').exists()
+       for path in preview_paths):
+    raise SystemExit('a chart PNG is missing its SVG companion')
+if {path.stem for path in preview_paths} & set(preview_backlog):
+    raise SystemExit('a rendered chart remains in the preview backlog')
+chart_total = len(preview_paths) + len(preview_backlog)
+preview_notes = Path('docs/chart-previews/README.md').read_text(encoding='utf-8')
+gallery_rows = '\n'.join(
+    '| {title} | ![{title}](chart-previews/{png}) | [SVG](chart-previews/{svg}) |'.format(
+        title=path.stem.replace('_', ' ').title(), png=path.name,
+        svg=path.with_suffix('.svg').name)
+    for path in preview_paths
+)
+chart_guide = (
+    '# Neper charts and diagrams\n\n'
+    'Neper builds renderer-neutral chart layouts from borrowed data and caller-owned '
+    'output storage. The same marks feed its CPU scene/PNG and SVG adapters. '
+    'This guide collects the produced charts, their preview notes, and the '
+    'charting-engine design and catalogue. Readiness scores remain in '
+    '[progress.html](progress.html).\n\n'
+    '## Rendered previews ({rendered}/{total})\n\n'
+    'The total includes rendered PNG/SVG pairs and the '
+    '[planned gallery targets](chart-preview-backlog.txt).\n\n'
+    '| Chart | PNG preview | Vector |\n|---|---|---|\n{gallery}\n\n'
+    '## Charting-engine delivery evidence\n\n{evidence}\n\n'
+    '## Preview descriptions\n\n{notes}\n\n'
+    '{plan}\n'
+).format(rendered=len(preview_paths), total=chart_total, gallery=gallery_rows,
+         evidence=chart_item['evidence'],
+         notes=preview_notes.removeprefix('# Chart previews\n').strip(),
+         plan=re.sub(r'^(#+) ', lambda match: '#' + match.group(1) + ' ', chart_plan, flags=re.M).strip())
+if not CHARTS_ONLY:
+    Path('docs/charts.md').write_text(chart_guide, encoding='utf-8', newline='\n')
+gallery_cards = '\n'.join(
+    '<figure class="chart"><a href="chart-previews/{png}">'
+    '<img src="chart-previews/{png}" alt="{title}" width="360" height="240" loading="lazy" decoding="async"></a>'
+    '<figcaption><span>{title}</span><span><a href="chart-previews/{svg}">{vector_label}</a>{pdf}</span></figcaption>'
+    '</figure>'.format(
+        title=html.escape(path.stem.replace('_', ' ').title(), quote=True),
+        png=html.escape(path.name, quote=True),
+        svg=html.escape(path.with_suffix('.svg').name, quote=True),
+        vector_label='Select in SVG' if path.stem == 'interactive_selection' else 'SVG',
+        # A preview may also have a PDF companion from the PDF adapter.
+        pdf=' · <a href="chart-previews/{}">PDF</a>'.format(html.escape(path.with_suffix('.pdf').name, quote=True))
+        if path.with_suffix('.pdf').exists() else '')
+    for path in preview_paths
+)
+charts_html = '''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neper chart previews</title>
+<style>
+:root{color-scheme:light dark;font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+body{margin:0;background:#f4f6f9;color:#172033}
+main{max-width:88rem;margin:auto;padding:2rem 1.25rem 4rem}
+h1{margin:.5rem 0}p{margin:.5rem 0 1.5rem}a{color:#245aa8}
+.gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:1rem}
+.chart{margin:0;min-width:0;padding:.75rem;background:#fff;border:1px solid #dbe1ea;border-radius:.6rem}
+.chart>a{display:block}.chart img{display:block;width:100%;height:auto}
+figcaption{display:flex;justify-content:space-between;gap:1rem;align-items:baseline;padding:.6rem .2rem .1rem;font-weight:600}
+@media(prefers-color-scheme:dark){body{background:#0f1319;color:#e8edf4}.chart{background:#171d26;border-color:#354051}a{color:#9dc0ff}}
+</style>
+</head>
+<body>
+<main>
+<nav><a href="progress.html">Readiness</a> · <a href="charts.md">Charting-engine details</a></nav>
+<h1>Rendered chart previews ({rendered}/{total})</h1>
+<p>Click a preview to open its PNG, or choose SVG for the vector version. The interactive-selection SVG supports click and keyboard focus.</p>
+<div class="gallery">
+{cards}
+</div>
+</main>
+</body>
+</html>
+'''.replace('{rendered}', str(len(preview_paths))).replace(
+    '{total}', str(chart_total)).replace('{cards}', gallery_cards)
+Path('docs/charts.html').write_text(charts_html, encoding='utf-8', newline='\n')
+if CHARTS_ONLY:
+    raise SystemExit(0)
+chart_section = (
+    '<section class="tools" aria-label="Charting engine readiness">'
+    '<h2>Charting engine</h2>'
+    '<p>Chart capability <code>L061</code>: {score:.0%} complete. '
+    'Rendered previews ({preview_count}/{chart_total}). '
+    '<a href="charts.html">Browse chart previews</a> · '
+    '<a href="charts.md">Charting-engine details</a>.</p></section>'
+    '<section class="tools" aria-label="Unfinished work queue">'
+    '<h2>Unfinished work</h2><p>{count} queued capabilities in planned pickup order, '
+    'with chart work first across all categories; the first row is next. '
+    '{required_count} release-required '
+    'and {enhancement_count} enhancements. Release required means needed for the '
+    '<a href="roadmap.md">first stable CPU compiler release</a> under the M2 and '
+    'tool-complete gates; later GPU, extended-library and optional-tooling work is '
+    'an enhancement for that release. {module_count} modules with missing '
+    'declarations or selected algorithms appear separately as inventory gaps, not '
+    'queued tasks; {module_required_count} are core release requirements.</p>'
+    '{backlog}</section>'
+).format(score=float(chart_item['score']), preview_count=len(preview_paths), chart_total=chart_total,
+         count=len(queue_items), required_count=release_required_count,
+         enhancement_count=len(queue_items) - release_required_count,
+         module_count=len(module_missing), module_required_count=module_required_count,
+         backlog=backlog)
+
+page_html = """<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -212,6 +408,10 @@ footer{color:var(--muted);font-size:.8rem;margin-top:2rem;padding-top:1rem;borde
 .tools{margin-top:2.5rem}.tools h2{margin:0 0 .25rem;font-size:1.5rem}.tools h3{margin:1.5rem 0 .5rem;font-size:1rem}
 .tools table{width:100%;border-collapse:collapse;font-size:.85rem}.tools td{padding:.45rem .6rem;border-top:1px solid var(--rule);vertical-align:top}
 .tools td:first-child{width:45%;overflow-wrap:anywhere}.tools code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.8rem}
+.tools th{text-align:left;padding:.45rem .6rem}.tools details{margin:1rem 0}.tools summary{cursor:pointer;font-weight:600}
+.tools ol{padding-left:1.5rem}.tools li{margin:.3rem 0}
+.table-scroll{overflow-x:auto}.table-scroll table{min-width:48rem}.table-scroll td:first-child{width:auto}.table-scroll td{overflow-wrap:anywhere}
+.release-status{display:inline-block;white-space:nowrap;padding:.1rem .4rem;border:1px solid var(--rule);border-radius:.3rem;font-size:.75rem}.release-status.required{font-weight:700}
 @media(max-width:40rem){.tools td{display:block;width:auto}.tools td:first-child{width:auto;border-top:1px solid var(--rule);padding-bottom:0}.tools td+td{border-top:0}}
 </style>
 </head>
@@ -221,6 +421,7 @@ footer{color:var(--muted);font-size:.8rem;margin-top:2rem;padding-top:1rem;borde
 <section class="kpi" aria-label="Project readiness metrics">
 __KPI__
 </section>
+__CHART_SECTION__
 <section class="tools" aria-label="How to run the tools">
 <h2>Tools</h2>
 <p class="sub">From the repository root. PowerShell on Windows, Bash on Linux and macOS.</p>
@@ -244,7 +445,7 @@ __KPI__
 </table>
 <h3>Regenerate documents</h3>
 <table>
-<tr><td><code>python scripts/render_progress.py</code></td><td>This page, from the work queue, the completion ledger, the module and widget plans and the committed source.</td></tr>
+<tr><td><code>python scripts/render_progress.py</code></td><td>This readiness page and <code>docs/charts.md</code>, from the work queue, chart plan, preview inventory, completion ledger, module and widget plans and committed source.</td></tr>
 <tr><td><code>python scripts/render_tasks.py</code></td><td>One task file per unfinished feature under <code>docs/tasks</code>.</td></tr>
 <tr><td><code>python scripts/render_card.py [--check]</code></td><td>The LLM language card from the grammar and the diagnostic registry.</td></tr>
 <tr><td><code>python scripts/render_ux_theme.py [--check]</code></td><td>The UI theme block in <code>lib/e/ui/style.e</code> from <code>docs/ux/tokens.json</code>.</td></tr>
@@ -270,7 +471,7 @@ __KPI__
 </body>
 </html>
 """
-html = html.replace('__KPI__', kpi).replace('__REV__', rev).replace('__DATE__', when)
-progress_path.write_text(html, encoding='utf-8', newline='\n')
+page_html = page_html.replace('__KPI__', kpi).replace('__CHART_SECTION__', chart_section).replace('__REV__', rev).replace('__DATE__', when)
+progress_path.write_text(page_html, encoding='utf-8', newline='\n')
 print('wrote docs/progress.html')
-print('compiler %.2f  modules %.2f  ui-host %.2f  tooling %.2f' % (C, M, W, T))
+print('compiler %.2f  modules %.2f  ui-host %.2f  tooling %.2f  library %.2f' % (C, M, W, T, L))

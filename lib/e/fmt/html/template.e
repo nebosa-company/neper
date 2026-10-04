@@ -338,8 +338,17 @@ fn value_text(value: template.Value, scratch: []u8) -> (str, err) {
 }
 
 fn run(nodes: []const template.Node, contexts: []const u8, from: usize, to: usize, writer: *io.Writer, bindings: []const template.Binding, index: u64) -> err {
+    var budget = template.Budget { steps: template.DEFAULT_MAX_STEPS, bytes: template.DEFAULT_MAX_OUTPUT, sink: *writer }
+    var bounded = template.budget_writer(&budget)
+    let run_error = run_bounded(nodes, contexts, from, to, &bounded, bindings, index, &budget)
+    if run_error == template.TooLarge { ret TooLarge }
+    ret run_error
+}
+
+fn run_bounded(nodes: []const template.Node, contexts: []const u8, from: usize, to: usize, writer: *io.Writer, bindings: []const template.Binding, index: u64, budget: *template.Budget) -> err {
     var at = from
     while at < to {
+        try template.take_step(budget)
         let node = nodes[at]
         if node.kind == 0u8 {
             try io.write_all(writer, node.text)
@@ -362,9 +371,9 @@ fn run(nodes: []const template.Node, contexts: []const u8, from: usize, to: usiz
             if template.truthy(value) {
                 var stop = node.close
                 if node.other != 0usize { stop = node.other }
-                try run(nodes, contexts, at + 1usize, stop, writer, bindings, index)
+                try run_bounded(nodes, contexts, at + 1usize, stop, writer, bindings, index, budget)
             } else {
-                if node.other != 0usize { try run(nodes, contexts, node.other + 1usize, node.close, writer, bindings, index) }
+                if node.other != 0usize { try run_bounded(nodes, contexts, node.other + 1usize, node.close, writer, bindings, index, budget) }
             }
             at = node.close
         } else {
@@ -373,9 +382,11 @@ fn run(nodes: []const template.Node, contexts: []const u8, from: usize, to: usiz
             if !found { ret MissingValue }
             let (times, is_count) = template.count_of(value)
             if !is_count { ret MissingValue }
+            if times > budget.steps { ret TooLarge }
             var i = 0u64
             while i < times {
-                try run(nodes, contexts, at + 1usize, node.close, writer, bindings, i)
+                try template.take_step(budget)
+                try run_bounded(nodes, contexts, at + 1usize, node.close, writer, bindings, i, budget)
                 i += 1u64
             }
             at = node.close
@@ -389,8 +400,18 @@ fn run(nodes: []const template.Node, contexts: []const u8, from: usize, to: usiz
 }
 
 fn execute(value: *const Template, writer: *io.Writer, bindings: []const template.Binding) -> err {
+    ret execute_with_limits(value, writer, bindings, template.DEFAULT_MAX_STEPS, template.DEFAULT_MAX_OUTPUT)
+}
+
+fn execute_with_limits(value: *const Template, writer: *io.Writer, bindings: []const template.Binding, max_steps: u64, max_output: u64) -> err {
     let s = mem.cast[*State](value.inner.state)
-    ret run(s.nodes, s.contexts, 0usize, s.nodes.len, writer, bindings, 0u64)
+    var budget = template.Budget { steps: max_steps, bytes: max_output, sink: *writer }
+    if budget.steps == 0u64 { budget.steps = template.DEFAULT_MAX_STEPS }
+    if budget.bytes == 0u64 { budget.bytes = template.DEFAULT_MAX_OUTPUT }
+    var bounded = template.budget_writer(&budget)
+    let run_error = run_bounded(s.nodes, s.contexts, 0usize, s.nodes.len, &bounded, bindings, 0u64, &budget)
+    if run_error == template.TooLarge { ret TooLarge }
+    ret run_error
 }
 
 fn validate[T: type](value: *const Template) -> err {
@@ -400,6 +421,10 @@ fn validate[T: type](value: *const Template) -> err {
 }
 
 fn execute_typed[T: type](value: *const Template, writer: *io.Writer, data: *const T) -> err {
+    ret execute_typed_with_limits[T](value, writer, data, template.DEFAULT_MAX_STEPS, template.DEFAULT_MAX_OUTPUT)
+}
+
+fn execute_typed_with_limits[T: type](value: *const Template, writer: *io.Writer, data: *const T, max_steps: u64, max_output: u64) -> err {
     try validate[T](value)
     var bindings: [32]template.Binding = zero
     if template.field_count[T]() > 32usize { ret TooLarge }
@@ -427,5 +452,5 @@ fn execute_typed[T: type](value: *const Template, writer: *io.Writer, data: *con
         }
         used += 1usize
     }
-    ret execute(value, writer, bindings[..used])
+    ret execute_with_limits(value, writer, bindings[..used], max_steps, max_output)
 }

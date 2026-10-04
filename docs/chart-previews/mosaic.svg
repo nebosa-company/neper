@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>mosaic</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="46" y="73.8" width="50.03" height="117.2" fill="rgb(31,104,194)"/>
+<rect x="46" y="53.93" width="50.03" height="17.87" fill="rgb(229,174,179)"/>
+<rect x="46" y="44" width="50.03" height="7.93" fill="rgb(218,125,134)"/>
+<rect x="98.03" y="173.13" width="50.03" height="17.87" fill="rgb(223,145,152)"/>
+<rect x="98.03" y="73.8" width="50.03" height="97.33" fill="rgb(20,97,191)"/>
+<rect x="98.03" y="44" width="50.03" height="27.8" fill="rgb(231,183,187)"/>
+<rect x="150.06" y="145.59" width="74.31" height="45.41" fill="rgb(238,216,218)"/>
+<rect x="150.06" y="111.73" width="74.31" height="31.86" fill="rgb(238,214,216)"/>
+<rect x="150.06" y="44" width="74.31" height="65.73" fill="rgb(174,198,228)"/>
+<rect x="226.38" y="155.75" width="39.62" height="35.25" fill="rgb(235,199,202)"/>
+<rect x="226.38" y="143.33" width="39.62" height="10.42" fill="rgb(226,160,166)"/>
+<rect x="226.38" y="44" width="39.62" height="97.33" fill="rgb(93,145,209)"/>
+<rect x="295" y="57" width="12" height="12" fill="rgb(204,61,74)"/>
+<rect x="295" y="103" width="12" height="12" fill="rgb(20,97,191)"/>
+<text x="71.02" y="209" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">A</text>
+<text x="123.05" y="209" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">B</text>
+<text x="187.22" y="209" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">C</text>
+<text x="246.19" y="209" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">D</text>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Mosaic • residuals</text>
+<text x="301" y="80" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Deficit</text>
+<text x="301" y="126" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Surplus</text>
+</svg>

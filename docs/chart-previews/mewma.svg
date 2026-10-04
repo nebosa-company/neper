@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>mewma</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="46" y="53" width="268" height="133" fill="rgb(250,252,255)"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="46" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="53" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="186" x2="314" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="186" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="167.34" x2="314" y2="167.34" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="167.34" x2="46" y2="167.34" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="148.68" x2="314" y2="148.68" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="148.68" x2="46" y2="148.68" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="130.01" x2="314" y2="130.01" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="130.01" x2="46" y2="130.01" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="111.35" x2="314" y2="111.35" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="111.35" x2="46" y2="111.35" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="92.69" x2="314" y2="92.69" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="92.69" x2="46" y2="92.69" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="148.68" x2="314" y2="148.68" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<path d="M57.17 186 L79.5 185.83 L101.83 184.95 L124.17 182.74 L146.5 178.64 L168.83 172.11 L191.17 162.74 L213.5 150.23 L235.83 134.33 L258.17 114.9 L280.5 91.84 L302.83 65.09" fill="none" stroke="rgb(20,99,189)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="54.17" y="183" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="76.5" y="182.83" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="98.83" y="181.95" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="121.17" y="179.74" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="143.5" y="175.64" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="165.83" y="169.11" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="188.17" y="159.74" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="210.5" y="147.23" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="232.83" y="131.33" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="255.17" y="111.9" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="277.5" y="88.84" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="299.83" y="62.09" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="232.83" y="131.33" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="255.17" y="111.9" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="277.5" y="88.84" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="299.83" y="62.09" width="6" height="6" fill="rgb(209,48,56)"/>
+<text x="180" y="18" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">MEWMA / gradual correlated drift</text>
+<text x="180" y="34" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Phase II / lambda = 0.25 / finite-time covariance</text>
+<text x="37" y="189" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">0</text>
+<text x="37" y="170.34" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">5</text>
+<text x="37" y="151.68" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">10</text>
+<text x="37" y="133.01" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">15</text>
+<text x="37" y="114.35" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">20</text>
+<text x="37" y="95.69" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">25</text>
+<text x="57.17" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">1</text>
+<text x="124.17" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">4</text>
+<text x="213.5" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">8</text>
+<text x="302.83" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">12</text>
+<text x="321" y="151.68" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(43,59,82)">UCL</text>
+<text x="180" y="227" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)">Caller-selected UCL = 10 / ARL calibration external</text>
+</svg>

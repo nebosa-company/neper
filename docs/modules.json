@@ -125,6 +125,7 @@
     "e.fmt.mp3",
     "e.fmt.wav",
     "e.gfx.geometry",
+    "e.gfx.chart",
     "e.gfx.paint",
     "e.gfx.image",
     "e.audio",
@@ -166,6 +167,14 @@
     "e.math.special",
     "e.algo.rand.dist",
     "e.algo.stat.test",
+    "e.algo.stat.mixed",
+    "e.algo.stat.survival_trial",
+    "e.algo.stat.survival",
+    "e.algo.stat.causal",
+    "e.algo.stat.safety",
+    "e.algo.stat.diagnostic",
+    "e.algo.stat.meta",
+    "e.algo.stat.regression",
     "e.algo.graph.flow",
     "e.algo.graph.match",
     "e.algo.graph.path",
@@ -217,6 +226,9 @@
     "e.ml.loss",
     "e.ml.sample",
     "e.ml.nn",
+    "e.ml.recurrent",
+    "e.ml.gnn",
+    "e.ml.fingerprint",
     "e.ml.hmm",
     "e.ml.rl",
     "e.ml.reduce",
@@ -339,7 +351,8 @@
     "e.algo.check",
     "e.debug.dump",
     "e.net.auth",
-    "e.debug.dump.host"
+    "e.debug.dump.host",
+    "e.math.pkpd"
    ]
   },
   {
@@ -356,6 +369,11 @@
     "e.ui.style",
     "e.ui.layout",
     "e.gfx.scene",
+    "e.gfx.chart.scene",
+    "e.gfx.chart.svg",
+    "e.gfx.chart.locale",
+    "e.gfx.chart.widget",
+    "e.gfx.chart.pdf",
     "e.ui.asset",
     "e.ui.window",
     "e.ui.input",
@@ -2103,6 +2121,107 @@
    "blocked_by": []
   },
   {
+   "name": "e.gfx.chart",
+   "layer": 2,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.stat",
+    "e.algo.geo",
+    "e.math",
+    "e.math.special",
+    "e.gfx.geometry",
+    "e.gfx.paint"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.chart.scene",
+   "layer": 6,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.gfx.chart",
+    "e.gfx.geometry",
+    "e.gfx.paint",
+    "e.gfx.scene",
+    "e.text.shape"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.chart.svg",
+   "layer": 6,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.fmt.xml",
+    "e.gfx.chart",
+    "e.gfx.geometry",
+    "e.gfx.paint",
+    "e.io",
+    "e.math",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.chart.locale",
+   "layer": 6,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.gfx.chart",
+    "e.math",
+    "e.mem",
+    "e.text.locale",
+    "e.time",
+    "e.time.calendar"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.chart.widget",
+   "layer": 6,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.gfx.chart",
+    "e.gfx.chart.scene",
+    "e.gfx.geometry",
+    "e.gfx.paint",
+    "e.gfx.scene",
+    "e.mem",
+    "e.ui.layout",
+    "e.ui.widget"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.gfx.chart.pdf",
+   "layer": 6,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.gfx.chart",
+    "e.gfx.geometry",
+    "e.gfx.paint",
+    "e.io",
+    "e.math",
+    "e.text.layout"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.gfx.image",
    "layer": 2,
    "surface": "partial",
@@ -3532,6 +3651,103 @@
    "blocked_by": []
   },
   {
+   "name": "e.algo.stat.mixed",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.opt",
+    "e.math.special"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.stat.survival_trial",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.special"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.stat.survival",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.special"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.stat.causal",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math",
+    "e.math.special"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.stat.safety",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.stat.diagnostic",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.special"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.stat.meta",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.stat.regression",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.opt",
+    "e.math.special"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.algo.graph.flow",
    "layer": 2,
    "surface": "source",
@@ -3681,6 +3897,7 @@
    "direct_dependencies": [
     "e.algo.rand",
     "e.math",
+    "e.math.filter",
     "e.math.opt"
    ],
    "blocked_by": []
@@ -3918,6 +4135,18 @@
    "blocked_by": []
   },
   {
+   "name": "e.math.pkpd",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.opt"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.ratelimit",
    "layer": 2,
    "surface": "source",
@@ -4097,6 +4326,39 @@
    "blocked_by": []
   },
   {
+   "name": "e.ml.recurrent",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.gnn",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.fingerprint",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.ml.hmm",
    "layer": 2,
    "surface": "source",
@@ -4125,6 +4387,7 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.algo.rand",
     "e.math"
    ],
    "blocked_by": []

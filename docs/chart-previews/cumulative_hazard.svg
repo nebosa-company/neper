@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>cumulative_hazard</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="56" y="43" width="252" height="150" fill="rgb(245,247,252)"/>
+<line x1="56" y1="193" x2="308" y2="193" stroke="rgb(163,176,194)" stroke-width="2" stroke-linecap="round"/>
+<path d="M56 193 L76.16 193 L76.16 184.67 L91.28 184.67 L91.28 175.58 L116.48 175.58 L116.48 164.46 L134.12 164.46 L134.12 164.46 L151.76 164.46 L151.76 150.18 L174.44 150.18 L174.44 133.51 L189.56 133.51 L189.56 113.51 L224.84 113.51 L224.84 113.51 L252.56 113.51 L252.56 63.51 L287.84 63.51 L287.84 63.51" fill="none" stroke="rgb(20,102,194)" stroke-width="2" stroke-linejoin="round"/>
+<text x="56" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">0</text>
+<text x="182" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">0.5</text>
+<text x="308" y="210" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">1</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)">Cumulative hazard</text>
+<text x="180" y="231" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Years</text>
+<text x="56" y="38" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">Hazard</text>
+</svg>

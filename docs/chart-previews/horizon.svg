@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>horizon</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<path d="M43 185 L43 185 L56.65 75.4 L56.65 185 Z" fill="rgb(184,217,245)"/>
+<path d="M56.65 185 L56.65 75.4 L59.68 48 L59.68 185 Z" fill="rgb(184,217,245)"/>
+<path d="M59.68 185 L59.68 48 L70.29 48 L70.29 185 Z" fill="rgb(184,217,245)"/>
+<path d="M70.29 185 L70.29 48 L83.94 48 L83.94 185 Z" fill="rgb(184,217,245)"/>
+<path d="M83.94 185 L83.94 48 L97.59 48 L97.59 185 Z" fill="rgb(184,217,245)"/>
+<path d="M97.59 185 L97.59 48 L107.22 48 L107.22 185 Z" fill="rgb(184,217,245)"/>
+<path d="M107.22 185 L107.22 48 L111.24 116.5 L111.24 185 Z" fill="rgb(184,217,245)"/>
+<path d="M111.24 185 L111.24 116.5 L115.25 185 L115.25 185 Z" fill="rgb(184,217,245)"/>
+<path d="M164.31 185 L164.31 185 L165.82 157.6 L165.82 185 Z" fill="rgb(184,217,245)"/>
+<path d="M165.82 185 L165.82 157.6 L175.75 48 L175.75 185 Z" fill="rgb(184,217,245)"/>
+<path d="M175.75 185 L175.75 48 L179.47 48 L179.47 185 Z" fill="rgb(184,217,245)"/>
+<path d="M179.47 185 L179.47 48 L193.12 48 L193.12 185 Z" fill="rgb(184,217,245)"/>
+<path d="M193.12 185 L193.12 48 L206.76 48 L206.76 185 Z" fill="rgb(184,217,245)"/>
+<path d="M206.76 185 L206.76 48 L212.77 48 L212.77 185 Z" fill="rgb(184,217,245)"/>
+<path d="M212.77 185 L212.77 48 L218.23 185 L218.23 185 Z" fill="rgb(184,217,245)"/>
+<path d="M271.85 185 L271.85 185 L275 143.9 L275 185 Z" fill="rgb(184,217,245)"/>
+<path d="M59.68 185 L59.68 185 L70.29 89.1 L70.29 185 Z" fill="rgb(77,156,212)"/>
+<path d="M70.29 185 L70.29 89.1 L74.02 48 L74.02 185 Z" fill="rgb(77,156,212)"/>
+<path d="M74.02 185 L74.02 48 L83.94 48 L83.94 185 Z" fill="rgb(77,156,212)"/>
+<path d="M83.94 185 L83.94 48 L97.59 48 L97.59 185 Z" fill="rgb(77,156,212)"/>
+<path d="M97.59 185 L97.59 48 L99.19 48 L99.19 185 Z" fill="rgb(77,156,212)"/>
+<path d="M99.19 185 L99.19 48 L107.22 185 L107.22 185 Z" fill="rgb(77,156,212)"/>
+<path d="M175.75 185 L175.75 185 L179.47 143.9 L179.47 185 Z" fill="rgb(77,156,212)"/>
+<path d="M179.47 185 L179.47 143.9 L185.44 48 L185.44 185 Z" fill="rgb(77,156,212)"/>
+<path d="M185.44 185 L185.44 48 L193.12 48 L193.12 185 Z" fill="rgb(77,156,212)"/>
+<path d="M193.12 185 L193.12 48 L206.76 48 L206.76 185 Z" fill="rgb(77,156,212)"/>
+<path d="M206.76 185 L206.76 48 L207.31 48 L207.31 185 Z" fill="rgb(77,156,212)"/>
+<path d="M207.31 185 L207.31 48 L212.77 185 L212.77 185 Z" fill="rgb(77,156,212)"/>
+<path d="M74.02 185 L74.02 185 L83.94 75.4 L83.94 185 Z" fill="rgb(10,84,176)"/>
+<path d="M83.94 185 L83.94 75.4 L97.59 157.6 L97.59 185 Z" fill="rgb(10,84,176)"/>
+<path d="M97.59 185 L97.59 157.6 L99.19 185 L99.19 185 Z" fill="rgb(10,84,176)"/>
+<path d="M185.44 185 L185.44 185 L193.12 61.7 L193.12 185 Z" fill="rgb(10,84,176)"/>
+<path d="M193.12 185 L193.12 61.7 L206.76 171.3 L206.76 185 Z" fill="rgb(10,84,176)"/>
+<path d="M206.76 185 L206.76 171.3 L207.31 185 L207.31 185 Z" fill="rgb(10,84,176)"/>
+<path d="M115.25 185 L115.25 185 L123.28 48 L123.28 185 Z" fill="rgb(245,186,189)"/>
+<path d="M123.28 185 L123.28 48 L124.88 48 L124.88 185 Z" fill="rgb(245,186,189)"/>
+<path d="M124.88 185 L124.88 48 L138.53 48 L138.53 185 Z" fill="rgb(245,186,189)"/>
+<path d="M138.53 185 L138.53 48 L152.18 48 L152.18 185 Z" fill="rgb(245,186,189)"/>
+<path d="M152.18 185 L152.18 48 L156.73 48 L156.73 185 Z" fill="rgb(245,186,189)"/>
+<path d="M156.73 185 L156.73 48 L164.31 185 L164.31 185 Z" fill="rgb(245,186,189)"/>
+<path d="M218.23 185 L218.23 185 L220.41 130.2 L220.41 185 Z" fill="rgb(245,186,189)"/>
+<path d="M220.41 185 L220.41 130.2 L226.26 48 L226.26 185 Z" fill="rgb(245,186,189)"/>
+<path d="M226.26 185 L226.26 48 L234.06 48 L234.06 185 Z" fill="rgb(245,186,189)"/>
+<path d="M234.06 185 L234.06 48 L247.71 48 L247.71 185 Z" fill="rgb(245,186,189)"/>
+<path d="M247.71 185 L247.71 48 L261.35 48 L261.35 185 Z" fill="rgb(245,186,189)"/>
+<path d="M261.35 185 L261.35 48 L271.85 185 L271.85 185 Z" fill="rgb(245,186,189)"/>
+<path d="M123.28 185 L123.28 185 L124.88 157.6 L124.88 185 Z" fill="rgb(214,92,105)"/>
+<path d="M124.88 185 L124.88 157.6 L133.98 48 L133.98 185 Z" fill="rgb(214,92,105)"/>
+<path d="M133.98 185 L133.98 48 L138.53 48 L138.53 185 Z" fill="rgb(214,92,105)"/>
+<path d="M138.53 185 L138.53 48 L145.35 48 L145.35 185 Z" fill="rgb(214,92,105)"/>
+<path d="M145.35 185 L145.35 48 L152.18 102.8 L152.18 185 Z" fill="rgb(214,92,105)"/>
+<path d="M152.18 185 L152.18 102.8 L156.73 185 L156.73 185 Z" fill="rgb(214,92,105)"/>
+<path d="M226.26 185 L226.26 185 L234.06 75.4 L234.06 185 Z" fill="rgb(214,92,105)"/>
+<path d="M234.06 185 L234.06 75.4 L236.79 48 L236.79 185 Z" fill="rgb(214,92,105)"/>
+<path d="M236.79 185 L236.79 48 L247.71 48 L247.71 185 Z" fill="rgb(214,92,105)"/>
+<path d="M247.71 185 L247.71 48 L253.77 48 L253.77 185 Z" fill="rgb(214,92,105)"/>
+<path d="M253.77 185 L253.77 48 L261.35 185 L261.35 185 Z" fill="rgb(214,92,105)"/>
+<path d="M133.98 185 L133.98 185 L138.53 130.2 L138.53 185 Z" fill="rgb(161,33,56)"/>
+<path d="M138.53 185 L138.53 130.2 L145.35 185 L145.35 185 Z" fill="rgb(161,33,56)"/>
+<path d="M236.79 185 L236.79 185 L247.71 75.4 L247.71 185 Z" fill="rgb(161,33,56)"/>
+<path d="M247.71 185 L247.71 75.4 L253.77 185 L253.77 185 Z" fill="rgb(161,33,56)"/>
+<rect x="43" y="185" width="232" height="1" fill="rgb(186,196,212)"/>
+<rect x="294" y="60" width="13" height="13" fill="rgb(184,217,245)"/>
+<rect x="294" y="85" width="13" height="13" fill="rgb(77,156,212)"/>
+<rect x="294" y="110" width="13" height="13" fill="rgb(10,84,176)"/>
+<rect x="294" y="135" width="13" height="13" fill="rgb(245,186,189)"/>
+<rect x="294" y="160" width="13" height="13" fill="rgb(214,92,105)"/>
+<rect x="294" y="185" width="13" height="13" fill="rgb(161,33,56)"/>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Horizon • folded bands</text>
+<text x="43" y="207" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">0</text>
+<text x="97.6" y="207" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">4</text>
+<text x="152.2" y="207" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">8</text>
+<text x="206.8" y="207" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">12</text>
+<text x="275" y="207" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">17</text>
+<text x="324" y="71" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">+1</text>
+<text x="324" y="96" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">+2</text>
+<text x="324" y="121" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">+3</text>
+<text x="324" y="146" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">-1</text>
+<text x="324" y="171" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">-2</text>
+<text x="324" y="196" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">-3</text>
+</svg>

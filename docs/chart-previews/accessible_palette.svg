@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>accessible_palette</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="12" y="42" width="164" height="186" fill="rgb(204,214,227)"/>
+<rect x="13" y="43" width="162" height="184" fill="rgb(255,255,255)"/>
+<rect x="184" y="42" width="164" height="186" fill="rgb(28,33,43)"/>
+<path d="M24 71.03 L54 63.73 L84 67.38 L114 58.87 L144 62.52" fill="none" stroke="rgb(0,114,178)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="21" y="68.03" width="6" height="6" fill="rgb(0,114,178)"/>
+<rect x="51" y="60.73" width="6" height="6" fill="rgb(0,114,178)"/>
+<rect x="81" y="64.38" width="6" height="6" fill="rgb(0,114,178)"/>
+<rect x="111" y="55.87" width="6" height="6" fill="rgb(0,114,178)"/>
+<rect x="141" y="59.52" width="6" height="6" fill="rgb(0,114,178)"/>
+<text x="151" y="65.52" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(0,114,178)">S1</text>
+<path d="M24 97.8 L54 91.72 L84 86.85 L114 92.93 L144 85.63" fill="none" stroke="rgb(195,86,0)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="21" y="94.8" width="6" height="6" fill="rgb(195,86,0)"/>
+<rect x="51" y="88.72" width="6" height="6" fill="rgb(195,86,0)"/>
+<rect x="81" y="83.85" width="6" height="6" fill="rgb(195,86,0)"/>
+<rect x="111" y="89.93" width="6" height="6" fill="rgb(195,86,0)"/>
+<rect x="141" y="82.63" width="6" height="6" fill="rgb(195,86,0)"/>
+<text x="151" y="88.63" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(195,86,0)">S2</text>
+<path d="M24 123.35 L54 127 L84 117.27 L114 113.62 L144 118.48" fill="none" stroke="rgb(0,135,99)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="21" y="120.35" width="6" height="6" fill="rgb(0,135,99)"/>
+<rect x="51" y="124" width="6" height="6" fill="rgb(0,135,99)"/>
+<rect x="81" y="114.27" width="6" height="6" fill="rgb(0,135,99)"/>
+<rect x="111" y="110.62" width="6" height="6" fill="rgb(0,135,99)"/>
+<rect x="141" y="115.48" width="6" height="6" fill="rgb(0,135,99)"/>
+<text x="151" y="121.48" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(0,135,99)">S3</text>
+<path d="M24 144.03 L54 148.9 L84 151.33 L114 142.82 L144 139.17" fill="none" stroke="rgb(142,68,173)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="21" y="141.03" width="6" height="6" fill="rgb(142,68,173)"/>
+<rect x="51" y="145.9" width="6" height="6" fill="rgb(142,68,173)"/>
+<rect x="81" y="148.33" width="6" height="6" fill="rgb(142,68,173)"/>
+<rect x="111" y="139.82" width="6" height="6" fill="rgb(142,68,173)"/>
+<rect x="141" y="136.17" width="6" height="6" fill="rgb(142,68,173)"/>
+<text x="151" y="142.17" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(142,68,173)">S4</text>
+<path d="M24 170.8 L54 164.72 L84 168.37 L114 173.23 L144 165.93" fill="none" stroke="rgb(179,38,62)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="21" y="167.8" width="6" height="6" fill="rgb(179,38,62)"/>
+<rect x="51" y="161.72" width="6" height="6" fill="rgb(179,38,62)"/>
+<rect x="81" y="165.37" width="6" height="6" fill="rgb(179,38,62)"/>
+<rect x="111" y="170.23" width="6" height="6" fill="rgb(179,38,62)"/>
+<rect x="141" y="162.93" width="6" height="6" fill="rgb(179,38,62)"/>
+<text x="151" y="168.93" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(179,38,62)">S5</text>
+<path d="M24 193.92 L54 189.05 L84 184.18 L114 190.27 L144 195.13" fill="none" stroke="rgb(171,102,0)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="21" y="190.92" width="6" height="6" fill="rgb(171,102,0)"/>
+<rect x="51" y="186.05" width="6" height="6" fill="rgb(171,102,0)"/>
+<rect x="81" y="181.18" width="6" height="6" fill="rgb(171,102,0)"/>
+<rect x="111" y="187.27" width="6" height="6" fill="rgb(171,102,0)"/>
+<rect x="141" y="192.13" width="6" height="6" fill="rgb(171,102,0)"/>
+<text x="151" y="198.13" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(171,102,0)">S6</text>
+<path d="M196 71.03 L226 63.73 L256 67.38 L286 58.87 L316 62.52" fill="none" stroke="rgb(53,143,194)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="193" y="68.03" width="6" height="6" fill="rgb(53,143,194)"/>
+<rect x="223" y="60.73" width="6" height="6" fill="rgb(53,143,194)"/>
+<rect x="253" y="64.38" width="6" height="6" fill="rgb(53,143,194)"/>
+<rect x="283" y="55.87" width="6" height="6" fill="rgb(53,143,194)"/>
+<rect x="313" y="59.52" width="6" height="6" fill="rgb(53,143,194)"/>
+<text x="323" y="65.52" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(53,143,194)">S1</text>
+<path d="M196 97.8 L226 91.72 L256 86.85 L286 92.93 L316 85.63" fill="none" stroke="rgb(215,104,15)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="193" y="94.8" width="6" height="6" fill="rgb(215,104,15)"/>
+<rect x="223" y="88.72" width="6" height="6" fill="rgb(215,104,15)"/>
+<rect x="253" y="83.85" width="6" height="6" fill="rgb(215,104,15)"/>
+<rect x="283" y="89.93" width="6" height="6" fill="rgb(215,104,15)"/>
+<rect x="313" y="82.63" width="6" height="6" fill="rgb(215,104,15)"/>
+<text x="323" y="88.63" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(215,104,15)">S2</text>
+<path d="M196 123.35 L226 127 L256 117.27 L286 113.62 L316 118.48" fill="none" stroke="rgb(0,158,115)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="193" y="120.35" width="6" height="6" fill="rgb(0,158,115)"/>
+<rect x="223" y="124" width="6" height="6" fill="rgb(0,158,115)"/>
+<rect x="253" y="114.27" width="6" height="6" fill="rgb(0,158,115)"/>
+<rect x="283" y="110.62" width="6" height="6" fill="rgb(0,158,115)"/>
+<rect x="313" y="115.48" width="6" height="6" fill="rgb(0,158,115)"/>
+<text x="323" y="121.48" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(0,158,115)">S3</text>
+<path d="M196 144.03 L226 148.9 L256 151.33 L286 142.82 L316 139.17" fill="none" stroke="rgb(169,114,193)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="193" y="141.03" width="6" height="6" fill="rgb(169,114,193)"/>
+<rect x="223" y="145.9" width="6" height="6" fill="rgb(169,114,193)"/>
+<rect x="253" y="148.33" width="6" height="6" fill="rgb(169,114,193)"/>
+<rect x="283" y="139.82" width="6" height="6" fill="rgb(169,114,193)"/>
+<rect x="313" y="136.17" width="6" height="6" fill="rgb(169,114,193)"/>
+<text x="323" y="142.17" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(169,114,193)">S4</text>
+<path d="M196 170.8 L226 164.72 L256 168.37 L286 173.23 L316 165.93" fill="none" stroke="rgb(203,106,122)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="193" y="167.8" width="6" height="6" fill="rgb(203,106,122)"/>
+<rect x="223" y="161.72" width="6" height="6" fill="rgb(203,106,122)"/>
+<rect x="253" y="165.37" width="6" height="6" fill="rgb(203,106,122)"/>
+<rect x="283" y="170.23" width="6" height="6" fill="rgb(203,106,122)"/>
+<rect x="313" y="162.93" width="6" height="6" fill="rgb(203,106,122)"/>
+<text x="323" y="168.93" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(203,106,122)">S5</text>
+<path d="M196 193.92 L226 189.05 L256 184.18 L286 190.27 L316 195.13" fill="none" stroke="rgb(186,122,25)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="193" y="190.92" width="6" height="6" fill="rgb(186,122,25)"/>
+<rect x="223" y="186.05" width="6" height="6" fill="rgb(186,122,25)"/>
+<rect x="253" y="181.18" width="6" height="6" fill="rgb(186,122,25)"/>
+<rect x="283" y="187.27" width="6" height="6" fill="rgb(186,122,25)"/>
+<rect x="313" y="192.13" width="6" height="6" fill="rgb(186,122,25)"/>
+<text x="323" y="198.13" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(186,122,25)">S6</text>
+<text x="180" y="18" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(46,61,82)">Accessible series palette</text>
+<text x="180" y="32" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(46,61,82)">Every color clears 4.5:1 on its background; labels carry identity</text>
+<text x="94" y="219" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(46,61,82)">White background</text>
+<text x="266" y="219" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(219,227,237)">Dark background</text>
+</svg>

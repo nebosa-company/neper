@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>strip</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="30" x2="139.33" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="204" x2="139.33" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="30" x2="234.67" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="204" x2="234.67" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<rect x="41" y="90" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="79.13" y="123.6" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="79.13" y="104.4" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="98.2" y="138" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="117.27" y="118.8" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="136.33" y="99.6" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="155.4" y="133.2" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="155.4" y="114" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="155.4" y="94.8" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="193.53" y="128.4" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="212.6" y="109.2" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="231.67" y="90" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="231.67" y="123.6" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="269.8" y="104.4" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="307.93" y="138" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="327" y="118.8" width="6" height="6" fill="rgb(18,89,194)"/>
+</svg>

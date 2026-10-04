@@ -1,0 +1,13 @@
+# Planned gallery preview slugs. One target per line; remove a slug only when
+# its Neper-rendered PNG and SVG companion are committed with a focused fixture.
+# This is a finite delivery backlog, not a claim to enumerate every possible chart.
+
+# Cartesian and distribution variants
+
+# Statistical, quality, medical and scientific diagrams
+
+# Geographic and reporting
+
+# Operations, finance and network diagrams
+
+# Additional ggplot-style compositions and engine acceptance previews

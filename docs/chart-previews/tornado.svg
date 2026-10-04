@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>tornado</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="112" y="48" width="224" height="137" fill="rgb(245,247,252)"/>
+<rect x="113" y="53.59" width="111" height="7.83" fill="rgb(23,102,191)"/>
+<rect x="174.67" y="80.59" width="49.33" height="7.83" fill="rgb(23,102,191)"/>
+<rect x="194.4" y="107.59" width="29.6" height="7.83" fill="rgb(23,102,191)"/>
+<rect x="224" y="134.59" width="24.67" height="7.83" fill="rgb(23,102,191)"/>
+<rect x="199.33" y="161.59" width="24.67" height="7.83" fill="rgb(23,102,191)"/>
+<rect x="224" y="63.58" width="111" height="7.83" fill="rgb(235,128,48)"/>
+<rect x="224" y="90.58" width="74" height="7.83" fill="rgb(235,128,48)"/>
+<rect x="224" y="117.58" width="49.33" height="7.83" fill="rgb(235,128,48)"/>
+<rect x="199.33" y="144.58" width="24.67" height="7.83" fill="rgb(235,128,48)"/>
+<rect x="224" y="171.58" width="24.67" height="7.83" fill="rgb(235,128,48)"/>
+<line x1="224" y1="49" x2="224" y2="184" stroke="rgb(133,150,176)" stroke-width="2" stroke-linecap="round"/>
+<text x="180" y="22" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(51,64,84)">Tornado / one-at-a-time sensitivity</text>
+<text x="180" y="39" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Model output by input assumption</text>
+<text x="106" y="66" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">Unit price</text>
+<text x="106" y="93" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">Input cost</text>
+<text x="106" y="120" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">Demand</text>
+<text x="106" y="147" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">Tax rate</text>
+<text x="106" y="174" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">Retention</text>
+<text x="113" y="199" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">55</text>
+<text x="224" y="199" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">100 baseline</text>
+<text x="335" y="199" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">145</text>
+<text x="93" y="218" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Blue: low input</text>
+<text x="259" y="218" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Orange: high input</text>
+<text x="180" y="233" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Sorted by absolute output swing; scenarios stay distinct</text>
+</svg>

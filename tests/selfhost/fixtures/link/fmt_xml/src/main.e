@@ -171,5 +171,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e23 != ok || c8 != 6usize { os.exit(55) }
     let (c9, e24) = count_events(a, "<a></a><b></b>", 8u16)
     if e24 != xml.Invalid { os.exit(56) }
+    let options = xml.Options { max_depth: 8u16, preserve_comments: true }
+    var input = io.SliceReader { data: "<a/>", off: 0usize }
+    let (_, exact_error) = xml.reader_with_limit(a, io.slice_reader(&input), options, 4usize)
+    if exact_error != ok { os.exit(57) }
+    input.off = 0usize
+    let (_, above_error) = xml.reader_with_limit(a, io.slice_reader(&input), options, 3usize)
+    if above_error != xml.TooLarge { os.exit(58) }
+    input.off = 0usize
+    let (_, below_error) = xml.reader_with_limit(a, io.slice_reader(&input), options, 5usize)
+    if below_error != ok { os.exit(59) }
+    input.data = "<a/>x"
+    input.off = 0usize
+    let (_, trailing_error) = xml.reader_with_limit(a, io.slice_reader(&input), options, 4usize)
+    if trailing_error != xml.TooLarge { os.exit(60) }
+    let checkpoint = mem.mark(a)
+    let (_, default_error) = xml.reader(a, io.Reader { ctx: zero, read: endless }, options)
+    if default_error != xml.TooLarge || mem.mark(a) != checkpoint { os.exit(61) }
     ret ok
+}
+
+fn endless(ctx: *void, dst: []u8) -> (usize, err) {
+    var at = 0usize
+    while at < dst.len {
+        dst[at] = 32u8
+        at += 1usize
+    }
+    ret (dst.len, ok)
 }

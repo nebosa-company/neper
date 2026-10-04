@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>bubble</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="30" x2="139.33" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="204" x2="139.33" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="30" x2="234.67" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="204" x2="234.67" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<circle cx="44" cy="204" r="3.6" fill="rgb(18,89,194)"/>
+<circle cx="84.86" cy="117" r="5.4" fill="rgb(18,89,194)"/>
+<circle cx="125.71" cy="146" r="7.2" fill="rgb(18,89,194)"/>
+<circle cx="166.57" cy="59" r="9" fill="rgb(18,89,194)"/>
+<circle cx="207.43" cy="117" r="10.8" fill="rgb(18,89,194)"/>
+<circle cx="248.29" cy="88" r="12.6" fill="rgb(18,89,194)"/>
+<circle cx="289.14" cy="175" r="14.4" fill="rgb(18,89,194)"/>
+<circle cx="330" cy="30" r="18" fill="rgb(18,89,194)"/>
+</svg>

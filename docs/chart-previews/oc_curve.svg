@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>oc_curve</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="68" y="48" width="248" height="151" fill="rgb(250,252,255)"/>
+<line x1="68" y1="48" x2="68" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="199" x2="68" y2="204" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="109.33" y1="48" x2="109.33" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="109.33" y1="199" x2="109.33" y2="204" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="150.67" y1="48" x2="150.67" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="150.67" y1="199" x2="150.67" y2="204" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="192" y1="48" x2="192" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="192" y1="199" x2="192" y2="204" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="233.33" y1="48" x2="233.33" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="233.33" y1="199" x2="233.33" y2="204" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="274.67" y1="48" x2="274.67" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="274.67" y1="199" x2="274.67" y2="204" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="316" y1="48" x2="316" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="316" y1="199" x2="316" y2="204" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="199" x2="316" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="199" x2="68" y2="199" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="168.8" x2="316" y2="168.8" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="168.8" x2="68" y2="168.8" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="138.6" x2="316" y2="138.6" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="138.6" x2="68" y2="138.6" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="108.4" x2="316" y2="108.4" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="108.4" x2="68" y2="108.4" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="78.2" x2="316" y2="78.2" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="78.2" x2="68" y2="78.2" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="48" x2="316" y2="48" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="48" x2="68" y2="48" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="48" x2="68" y2="199" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="199" x2="316" y2="199" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<path d="M68 48 L88.67 48.28 L109.33 51.06 L130 58.64 L150.67 71.26 L171.33 87.51 L192 105.44 L212.67 123.22 L233.33 139.54 L254 153.66 L274.67 165.3 L295.33 174.53 L316 181.61" fill="none" stroke="rgb(20,99,189)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="65" y="45" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="85.67" y="45.28" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="106.33" y="48.06" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="127" y="55.64" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="147.67" y="68.26" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="168.33" y="84.51" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="189" y="102.44" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="209.67" y="120.22" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="230.33" y="136.54" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="251" y="150.66" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="271.67" y="162.3" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="292.33" y="171.53" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="313" y="178.61" width="6" height="6" fill="rgb(20,99,189)"/>
+<text x="180" y="19" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">Operating-characteristic curve</text>
+<text x="180" y="33" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Single sample / n=52, accept up to 3 defects</text>
+<text x="58" y="202" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">0%</text>
+<text x="58" y="171.8" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">20%</text>
+<text x="58" y="141.6" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">40%</text>
+<text x="58" y="111.4" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">60%</text>
+<text x="58" y="81.2" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">80%</text>
+<text x="58" y="51" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">100%</text>
+<text x="68" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">0</text>
+<text x="109.33" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">2</text>
+<text x="150.67" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">4</text>
+<text x="192" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">6</text>
+<text x="233.33" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">8</text>
+<text x="274.67" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">10</text>
+<text x="316" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">12%</text>
+<text x="180" y="232" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Lot defective % / probability of acceptance</text>
+</svg>

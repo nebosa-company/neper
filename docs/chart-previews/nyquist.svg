@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>nyquist</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="45" y="48" width="270" height="148" fill="rgb(250,252,255)"/>
+<line x1="115.08" y1="48" x2="115.08" y2="196" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="115.08" y1="196" x2="115.08" y2="201" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="141.06" y1="48" x2="141.06" y2="196" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="141.06" y1="196" x2="141.06" y2="201" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="193" y1="48" x2="193" y2="196" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="193" y1="196" x2="193" y2="201" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="244.95" y1="48" x2="244.95" y2="196" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="244.95" y1="196" x2="244.95" y2="201" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="173.95" x2="315" y2="173.95" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="173.95" x2="45" y2="173.95" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="122" x2="315" y2="122" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="122" x2="45" y2="122" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="70.05" x2="315" y2="70.05" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="70.05" x2="45" y2="70.05" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="48" x2="45" y2="196" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="196" x2="315" y2="196" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<path d="M244.92 124.08 L244.91 124.42 L244.89 124.82 L244.87 125.29 L244.84 125.84 L244.8 126.47 L244.75 127.21 L244.68 128.07 L244.59 129.08 L244.46 130.25 L244.28 131.6 L244.04 133.18 L243.72 135.01 L243.28 137.12 L242.68 139.56 L241.88 142.37 L240.81 145.58 L239.36 149.23 L237.44 153.34 L234.88 157.9 L231.53 162.88 L227.18 168.18 L221.62 173.62 L214.67 178.91 L206.2 183.64 L196.23 187.28 L185.01 189.27 L173.05 189.07 L161.13 186.35 L150.17 181.16 L141.06 173.95 L134.35 165.52 L130.2 156.83 L128.32 148.7 L128.18 141.7 L129.17 136.07 L130.73 131.77 L132.47 128.63 L134.15 126.43 L135.62 124.91 L136.86 123.9 L137.85 123.23 L138.64 122.79 L139.24 122.5 L139.7 122.32 L140.05 122.2 L140.31 122.13 L140.5 122.08 L140.65 122.05 L140.75 122.03 L140.83 122.02 L140.89 122.01 L140.94 122.01 L140.97 122.01 L140.99 122 L141.01 122 L141.02 122 L141.03 122 L141.04 122 L141.04 122 L141.05 122" fill="none" stroke="rgb(20,99,189)" stroke-width="2" stroke-linejoin="round"/>
+<path d="M141.05 122 L141.04 122 L141.04 122 L141.03 122 L141.02 122 L141.01 122 L140.99 122 L140.97 121.99 L140.94 121.99 L140.89 121.99 L140.83 121.98 L140.75 121.97 L140.65 121.95 L140.5 121.92 L140.31 121.87 L140.05 121.8 L139.7 121.68 L139.24 121.5 L138.64 121.21 L137.85 120.77 L136.86 120.1 L135.62 119.09 L134.15 117.57 L132.47 115.37 L130.73 112.23 L129.17 107.93 L128.18 102.3 L128.32 95.3 L130.2 87.17 L134.35 78.48 L141.06 70.05 L150.17 62.84 L161.13 57.65 L173.05 54.93 L185.01 54.73 L196.23 56.72 L206.2 60.36 L214.67 65.09 L221.62 70.38 L227.18 75.82 L231.53 81.12 L234.88 86.1 L237.44 90.66 L239.36 94.77 L240.81 98.42 L241.88 101.63 L242.68 104.44 L243.28 106.88 L243.72 108.99 L244.04 110.82 L244.28 112.4 L244.46 113.75 L244.59 114.92 L244.68 115.93 L244.75 116.79 L244.8 117.53 L244.84 118.16 L244.87 118.71 L244.89 119.18 L244.91 119.58 L244.92 119.92" fill="none" stroke="rgb(232,87,41)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="112.08" y="119" width="6" height="6" fill="rgb(191,26,46)"/>
+<text x="180" y="18" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">Nyquist / second-order response</text>
+<text x="180" y="33" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">G(jw) = 4 / (1 + jw)^2</text>
+<text x="115.08" y="208" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">-1</text>
+<text x="141.06" y="208" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">0</text>
+<text x="193" y="208" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">2</text>
+<text x="244.95" y="208" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">4</text>
+<text x="36" y="176.95" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">-2</text>
+<text x="36" y="125" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">0</text>
+<text x="36" y="73.05" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">2</text>
+<text x="180" y="229" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)">Blue: +w    Orange: -w    Red: critical (-1, 0)</text>
+</svg>

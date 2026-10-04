@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>ribbon_rank</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<path d="M18 42 L56.4 78.2 L94.8 114.4 L133.2 150.6 L171.6 186.8 L210 186.8 L210 218 L171.6 218 L133.2 181.8 L94.8 145.6 L56.4 109.4 L18 73.2 Z" fill="rgb(18,89,194)"/>
+<rect x="236" y="59" width="11" height="11" fill="rgb(18,89,194)"/>
+<path d="M18 78.2 L56.4 42 L94.8 78.2 L133.2 114.4 L171.6 150.6 L210 150.6 L210 181.8 L171.6 181.8 L133.2 145.6 L94.8 109.4 L56.4 73.2 L18 109.4 Z" fill="rgb(240,107,31)"/>
+<rect x="236" y="86" width="11" height="11" fill="rgb(240,107,31)"/>
+<path d="M18 114.4 L56.4 114.4 L94.8 42 L133.2 78.2 L171.6 114.4 L210 114.4 L210 145.6 L171.6 145.6 L133.2 109.4 L94.8 73.2 L56.4 145.6 L18 145.6 Z" fill="rgb(56,166,122)"/>
+<rect x="236" y="113" width="11" height="11" fill="rgb(56,166,122)"/>
+<path d="M18 150.6 L56.4 150.6 L94.8 150.6 L133.2 42 L171.6 78.2 L210 78.2 L210 109.4 L171.6 109.4 L133.2 73.2 L94.8 181.8 L56.4 181.8 L18 181.8 Z" fill="rgb(163,102,194)"/>
+<rect x="236" y="140" width="11" height="11" fill="rgb(163,102,194)"/>
+<path d="M18 186.8 L56.4 186.8 L94.8 186.8 L133.2 186.8 L171.6 42 L210 42 L210 73.2 L171.6 73.2 L133.2 218 L94.8 218 L56.4 218 L18 218 Z" fill="rgb(237,179,38)"/>
+<rect x="236" y="167" width="11" height="11" fill="rgb(237,179,38)"/>
+<text x="253" y="70" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">Atlas</text>
+<text x="253" y="97" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">Beacon</text>
+<text x="253" y="124" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">Comet</text>
+<text x="253" y="151" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">Delta</text>
+<text x="253" y="178" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">Ember</text>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(82,97,122)">Ranks over time</text>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>half_violin</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="54" y="46" width="252" height="160" fill="rgb(247,250,255)"/>
+<path d="M180 206 L179.88 206 L179.73 203.46 L179.43 200.92 L178.87 198.38 L177.94 195.84 L176.49 193.3 L174.41 190.76 L171.63 188.22 L168.17 185.68 L164.08 183.14 L159.46 180.6 L154.38 178.06 L148.87 175.52 L142.95 172.98 L136.65 170.44 L130.06 167.9 L123.36 165.37 L116.83 162.83 L110.75 160.29 L105.35 157.75 L100.8 155.21 L97.12 152.67 L94.34 150.13 L92.5 147.59 L91.8 145.05 L92.51 142.51 L94.88 139.97 L98.96 137.43 L104.52 134.89 L111.01 132.35 L117.71 129.81 L123.98 127.27 L129.36 124.73 L133.68 122.19 L137.04 119.65 L139.65 117.11 L141.73 114.57 L143.47 112.03 L144.99 109.49 L146.39 106.95 L147.77 104.41 L149.22 101.87 L150.82 99.33 L152.58 96.79 L154.47 94.25 L156.37 91.71 L158.17 89.17 L159.79 86.63 L161.19 84.1 L162.38 81.56 L163.45 79.02 L164.54 76.48 L165.8 73.94 L167.37 71.4 L169.25 68.86 L171.34 66.32 L173.46 63.78 L175.39 61.24 L176.98 58.7 L178.17 56.16 L178.97 53.62 L179.47 51.08 L179.74 48.54 L179.89 46 L180 46 Z" fill="rgb(99,173,230)" fill-opacity="0.9"/>
+<rect x="179.5" y="46" width="1" height="160" fill="rgb(20,84,171)"/>
+<text x="180" y="24" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(43,59,82)">Half violin / single-sided KDE</text>
+<text x="45" y="198.74" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">0</text>
+<text x="45" y="130.37" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">5</text>
+<text x="45" y="61.99" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">10</text>
+<text x="180" y="232" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Density on one side of the value axis</text>
+</svg>

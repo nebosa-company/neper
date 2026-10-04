@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>confidence_band</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="30" x2="139.33" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="204" x2="139.33" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="30" x2="234.67" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="204" x2="234.67" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<path d="M44 89.26 L53.23 89.91 L62.45 90.51 L71.68 91.04 L80.9 91.49 L90.13 91.85 L99.35 92.12 L108.58 92.26 L117.81 92.26 L127.03 92.11 L136.26 91.77 L145.48 91.23 L154.71 90.45 L163.94 89.42 L173.16 88.1 L182.39 86.5 L191.61 84.58 L200.84 82.37 L210.06 79.86 L219.29 77.07 L228.52 74.02 L237.74 70.74 L246.97 67.26 L256.19 63.59 L265.42 59.76 L274.65 55.79 L283.87 51.71 L293.1 47.52 L302.32 43.25 L311.55 38.89 L320.77 34.48 L330 30 L330 144.74 L320.77 144.09 L311.55 143.49 L302.32 142.96 L293.1 142.51 L283.87 142.15 L274.65 141.88 L265.42 141.74 L256.19 141.74 L246.97 141.89 L237.74 142.23 L228.52 142.77 L219.29 143.55 L210.06 144.58 L200.84 145.9 L191.61 147.5 L182.39 149.42 L173.16 151.63 L163.94 154.14 L154.71 156.93 L145.48 159.98 L136.26 163.26 L127.03 166.74 L117.81 170.41 L108.58 174.24 L99.35 178.21 L90.13 182.29 L80.9 186.48 L71.68 190.75 L62.45 195.11 L53.23 199.52 L44 204 Z" fill="rgb(191,217,245)"/>
+<rect x="41" y="173.26" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="81.86" y="114" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="122.71" y="133.75" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="163.57" y="74.49" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="204.43" y="114" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="245.29" y="94.25" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="286.14" y="153.51" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="327" y="54.74" width="6" height="6" fill="rgb(18,89,194)"/>
+<path d="M44 146.63 L330 87.37" fill="none" stroke="rgb(240,107,31)" stroke-width="2" stroke-linejoin="round"/>
+</svg>

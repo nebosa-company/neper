@@ -1375,6 +1375,48 @@ $algoStatTestWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $algoStatTestWritten -ne 'executable written') { throw 'algo_stat_test emission failed' }
 & $algoStatTestPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_stat_test check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.safety` (L016): ROR/PRR with intervals and signal rules, the BCPNN information component and Apriori rules over comedication masks, with refusals.
+$algoStatSafetyPath = Join-Path $testBuild 'algo-stat-safety-selfhost.exe'
+$algoStatSafetyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_safety\src\main.e') $repo 'x64' 'windows' $algoStatSafetyPath
+if ($LASTEXITCODE -ne 0 -or $algoStatSafetyWritten -ne 'executable written') { throw 'algo_stat_safety emission failed' }
+& $algoStatSafetyPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_safety check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.mixed` random slopes: the log-Cholesky unpack, a random-slopes LMM recovering its effects and covariances with BLUPs, and refusals.
+$algoStatMixedPath = Join-Path $testBuild 'algo-stat-mixed-selfhost.exe'
+$algoStatMixedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_mixed\src\main.e') $repo 'x64' 'windows' $algoStatMixedPath
+if ($LASTEXITCODE -ne 0 -or $algoStatMixedWritten -ne 'executable written') { throw 'algo_stat_mixed emission failed' }
+& $algoStatMixedPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_mixed check failed: exit $LASTEXITCODE" }
+# `e.algo.stat` hypergeometric (L001): the PMF against exact combinatorics, the tails against complements, edges and refusals.
+$algoStatHyperPath = Join-Path $testBuild 'algo-stat-hyper-selfhost.exe'
+$algoStatHyperWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_hyper\src\main.e') $repo 'x64' 'windows' $algoStatHyperPath
+if ($LASTEXITCODE -ne 0 -or $algoStatHyperWritten -ne 'executable written') { throw 'algo_stat_hyper emission failed' }
+& $algoStatHyperPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_hyper check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.survival` (L005): Nelson-Aalen, competing-risk incidence, RMST and weighted log-ranks with refusals.
+$algoStatSurvivalPath = Join-Path $testBuild 'algo-stat-survival-selfhost.exe'
+$algoStatSurvivalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_survival\src\main.e') $repo 'x64' 'windows' $algoStatSurvivalPath
+if ($LASTEXITCODE -ne 0 -or $algoStatSurvivalWritten -ne 'executable written') { throw 'algo_stat_survival emission failed' }
+& $algoStatSurvivalPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_survival check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.diagnostic` (L008): the eight 2x2 metrics with exact and log intervals, plus refusals.
+$algoStatDiagnosticPath = Join-Path $testBuild 'algo-stat-diagnostic-selfhost.exe'
+$algoStatDiagnosticWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_diagnostic\src\main.e') $repo 'x64' 'windows' $algoStatDiagnosticPath
+if ($LASTEXITCODE -ne 0 -or $algoStatDiagnosticWritten -ne 'executable written') { throw 'algo_stat_diagnostic emission failed' }
+& $algoStatDiagnosticPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_diagnostic check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.meta` (L006): effect sizes, fixed/random pooling with heterogeneity, subgroup Q and a dose meta-regression, plus refusals.
+$algoStatMetaPath = Join-Path $testBuild 'algo-stat-meta-selfhost.exe'
+$algoStatMetaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_meta\src\main.e') $repo 'x64' 'windows' $algoStatMetaPath
+if ($LASTEXITCODE -ne 0 -or $algoStatMetaWritten -ne 'executable written') { throw 'algo_stat_meta emission failed' }
+& $algoStatMetaPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_meta check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.regression` (L007): Poisson/NB recoveries, matched conditional logistic, ordinal recovery, plus refusals.
+$algoStatRegressionPath = Join-Path $testBuild 'algo-stat-regression-selfhost.exe'
+$algoStatRegressionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_regression\src\main.e') $repo 'x64' 'windows' $algoStatRegressionPath
+if ($LASTEXITCODE -ne 0 -or $algoStatRegressionWritten -ne 'executable written') { throw 'algo_stat_regression emission failed' }
+& $algoStatRegressionPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_regression check failed: exit $LASTEXITCODE" }
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 $algoGraphFlowPath = Join-Path $testBuild 'algo-graph-flow-selfhost.exe'
 $algoGraphFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_flow\src\main.e') $repo 'x64' 'windows' $algoGraphFlowPath
@@ -1681,6 +1723,48 @@ $mlNnWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $mlNnWritten -ne 'executable written') { throw 'ml_nn emission failed' }
 & $mlNnPath
 if ($LASTEXITCODE -ne 0) { throw "a ml_nn check failed: exit $LASTEXITCODE" }
+# `e.ml.recurrent`: one LSTM and GRU step against hand-computed gates, both two-step forwards, and the storage and empty cases.
+$mlRecurrentPath = Join-Path $testBuild 'ml-recurrent-selfhost.exe'
+$mlRecurrentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_recurrent\src\main.e') $repo 'x64' 'windows' $mlRecurrentPath
+if ($LASTEXITCODE -ne 0 -or $mlRecurrentWritten -ne 'executable written') { throw 'ml_recurrent emission failed' }
+& $mlRecurrentPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_recurrent check failed: exit $LASTEXITCODE" }
+# `e.ml.gnn`: GCN, single-head GAT and message passing on a three-node chain against hand-computed projections, plus the storage and endpoint cases.
+$mlGnnPath = Join-Path $testBuild 'ml-gnn-selfhost.exe'
+$mlGnnWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_gnn\src\main.e') $repo 'x64' 'windows' $mlGnnPath
+if ($LASTEXITCODE -ne 0 -or $mlGnnWritten -ne 'executable written') { throw 'ml_gnn emission failed' }
+& $mlGnnPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_gnn check failed: exit $LASTEXITCODE" }
+# `e.ml.fingerprint`: Morgan and path fingerprints against packed keys, Tanimoto/Dice, Butina clusters, FMCS counts with map validity, and the storage, endpoint and empty cases.
+$mlFingerprintPath = Join-Path $testBuild 'ml-fingerprint-selfhost.exe'
+$mlFingerprintWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_fingerprint\src\main.e') $repo 'x64' 'windows' $mlFingerprintPath
+if ($LASTEXITCODE -ne 0 -or $mlFingerprintWritten -ne 'executable written') { throw 'ml_fingerprint emission failed' }
+& $mlFingerprintPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_fingerprint check failed: exit $LASTEXITCODE" }
+# `e.ml.linear` PLS and `e.ml.reduce` UMAP: NIPALS coefficients with the degenerate cases, the scaled PCA start, a 200-epoch layout keeping two groups apart, and the storage and parameter cases.
+$mlChemometricPath = Join-Path $testBuild 'ml-chemometric-selfhost.exe'
+$mlChemometricWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_chemometric\src\main.e') $repo 'x64' 'windows' $mlChemometricPath
+if ($LASTEXITCODE -ne 0 -or $mlChemometricWritten -ne 'executable written') { throw 'ml_chemometric emission failed' }
+& $mlChemometricPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_chemometric check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.mixed`: GEE under three working correlations, a random-intercept LMM, MMRM with unstructured covariance on complete and dropout data, treatment contrasts, and the helper and error cases.
+$mlMixedPath = Join-Path $testBuild 'ml-mixed-selfhost.exe'
+$mlMixedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_mixed\src\main.e') $repo 'x64' 'windows' $mlMixedPath
+if ($LASTEXITCODE -ne 0 -or $mlMixedWritten -ne 'executable written') { throw 'ml_mixed emission failed' }
+& $mlMixedPath
+if ($LASTEXITCODE -ne 0) { throw "a ml_mixed check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.survival_trial`: Kaplan-Meier curves, the log-rank test and a Cox fit, spending functions, Simon optimal and minimax designs with operating characteristics, likelihood CRM dose finding, Farrington-Manning non-inferiority, and the storage and degenerate cases.
+$survivalTrialPath = Join-Path $testBuild 'survival-trial-selfhost.exe'
+$survivalTrialWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_survival_trial\src\main.e') $repo 'x64' 'windows' $survivalTrialPath
+if ($LASTEXITCODE -ne 0 -or $survivalTrialWritten -ne 'executable written') { throw 'algo_survival_trial emission failed' }
+& $survivalTrialPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_survival_trial check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.causal`: propensity scores feeding IPTW and doubly robust effects, hand-checkable units, a MICE mean imputation with determinism and interval checks, and the storage and degenerate cases.
+$causalPath = Join-Path $testBuild 'causal-selfhost.exe'
+$causalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_causal\src\main.e') $repo 'x64' 'windows' $causalPath
+if ($LASTEXITCODE -ne 0 -or $causalWritten -ne 'executable written') { throw 'algo_causal emission failed' }
+& $causalPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_causal check failed: exit $LASTEXITCODE" }
 # `e.ml.hmm`: forward, Viterbi and one Baum-Welch pass on a two-state model against a NumPy reference (D848).
 $mlHmmPath = Join-Path $testBuild 'ml-hmm-selfhost.exe'
 $mlHmmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_hmm\src\main.e') $repo 'x64' 'windows' $mlHmmPath
@@ -1753,6 +1837,18 @@ $algoTimeseriesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $algoTimeseriesWritten -ne 'executable written') { throw 'algo_timeseries emission failed' }
 & $algoTimeseriesPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_timeseries check failed: exit $LASTEXITCODE" }
+# `e.algo.timeseries` VAR (L059): a VAR(1) fit recovering its coefficients, hand-checked forecasts, the companion form through the Kalman predict, and level/trend filters with refusals.
+$algoTimeseriesVarPath = Join-Path $testBuild 'algo-timeseries-var-selfhost.exe'
+$algoTimeseriesVarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_timeseries_var\src\main.e') $repo 'x64' 'windows' $algoTimeseriesVarPath
+if ($LASTEXITCODE -ne 0 -or $algoTimeseriesVarWritten -ne 'executable written') { throw 'algo_timeseries_var emission failed' }
+& $algoTimeseriesVarPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_timeseries_var check failed: exit $LASTEXITCODE" }
+# `e.algo.timeseries` ARIMA and inventory (L017): differencing, AR(1)/ARMA(1,1) recovery, hand-checked forecasts, EOQ and the newsvendor with refusals.
+$algoTimeseriesArimaPath = Join-Path $testBuild 'algo-timeseries-arima-selfhost.exe'
+$algoTimeseriesArimaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_timeseries_arima\src\main.e') $repo 'x64' 'windows' $algoTimeseriesArimaPath
+if ($LASTEXITCODE -ne 0 -or $algoTimeseriesArimaWritten -ne 'executable written') { throw 'algo_timeseries_arima emission failed' }
+& $algoTimeseriesArimaPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_timeseries_arima check failed: exit $LASTEXITCODE" }
 # `e.algo.exact_cover`: the unique cover of the paper's matrix, an uncoverable one, and a Sudoku solved to its known solution (D850).
 $algoExactCoverPath = Join-Path $testBuild 'algo-exact-cover-selfhost.exe'
 $algoExactCoverWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_exact_cover\src\main.e') $repo 'x64' 'windows' $algoExactCoverPath
@@ -2137,6 +2233,12 @@ $gfxVisionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $gfxVisionWritten -ne 'executable written') { throw 'gfx_vision emission failed' }
 & $gfxVisionPath
 if ($LASTEXITCODE -ne 0) { throw "a gfx_vision check failed: exit $LASTEXITCODE" }
+# `e.gfx.vision` TLS lines (L002): an exact slope, a vertical line, one outlier-rejection pass and refusals.
+$gfxVisionTlsPath = Join-Path $testBuild 'gfx-vision-tls-selfhost.exe'
+$gfxVisionTlsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_vision_tls\src\main.e') $repo 'x64' 'windows' $gfxVisionTlsPath
+if ($LASTEXITCODE -ne 0 -or $gfxVisionTlsWritten -ne 'executable written') { throw 'gfx_vision_tls emission failed' }
+& $gfxVisionTlsPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_vision_tls check failed: exit $LASTEXITCODE" }
 # `e.audio.analysis`: four pitch trackers within 0.5 Hz, a click train's onsets, tempo and beats exact, chroma of a C-major chord, a calibrated sine reading -23 LUFS (D870).
 $audioAnalysisPath = Join-Path $testBuild 'audio-analysis-selfhost.exe'
 $audioAnalysisWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audio_analysis\src\main.e') $repo 'x64' 'windows' $audioAnalysisPath
@@ -2629,6 +2731,12 @@ $netAuthWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $netAuthWritten -ne 'executable written') { throw 'net_auth emission failed' }
 & $netAuthPath
 if ($LASTEXITCODE -ne 0) { throw "a net_auth check failed: exit $LASTEXITCODE" }
+# `e.math.pkpd`: non-compartmental analysis of an exponential decay -- the linear and linear-up/log-down trapezoid areas, the first-moment area, the peak, the terminal rate and the half-life -- and the Emax/Hill and Michaelis-Menten fits recovering their parameters from clean data, with the too-few, non-positive and wrong-parameter refusals (D1962).
+$mathPkpdPath = Join-Path $testBuild 'math-pkpd-selfhost.exe'
+$mathPkpdWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_pkpd\src\main.e') $repo 'x64' 'windows' $mathPkpdPath
+if ($LASTEXITCODE -ne 0 -or $mathPkpdWritten -ne 'executable written') { throw 'math_pkpd emission failed' }
+& $mathPkpdPath
+if ($LASTEXITCODE -ne 0) { throw "a math_pkpd check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
@@ -3009,6 +3117,592 @@ $gfxCoreWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $gfxCoreWritten -ne 'executable written') { throw 'gfx_core emission failed' }
 $gfxCoreOutput = & $gfxCorePath
 if ($LASTEXITCODE -ne 0 -or $gfxCoreOutput -ne 'gfx core ok') { throw "an e.gfx.geometry, e.gfx.paint or e.gfx.image answer was wrong: exit $LASTEXITCODE" }
+# `e.gfx.chart`: caller-owned series and distribution marks, plus scene commands.
+$gfxChartPath = Join-Path $testBuild 'gfx-chart-selfhost.exe'
+$gfxChartWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart\src\main.e') $repo 'x64' 'windows' $gfxChartPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartWritten -ne 'executable written') { throw 'gfx_chart emission failed' }
+$gfxChartOutput = & $gfxChartPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartOutput -ne 'gfx chart ok') { throw "the e.gfx.chart foundation answered wrongly: exit $LASTEXITCODE" }
+$gfxChartQqPath = Join-Path $testBuild 'gfx-chart-qq-selfhost.exe'
+$gfxChartQqWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_qq\src\main.e') $repo 'x64' 'windows' $gfxChartQqPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartQqWritten -ne 'executable written') { throw 'gfx_chart_qq emission failed' }
+$gfxChartQqOutput = & $gfxChartQqPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartQqOutput -ne 'gfx chart qq ok') { throw "the e.gfx.chart Q-Q plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMatrixPath = Join-Path $testBuild 'gfx-chart-matrix-selfhost.exe'
+$gfxChartMatrixWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_matrix\src\main.e') $repo 'x64' 'windows' $gfxChartMatrixPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMatrixWritten -ne 'executable written') { throw 'gfx_chart_matrix emission failed' }
+$gfxChartMatrixOutput = & $gfxChartMatrixPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMatrixOutput -ne 'gfx chart matrix ok') { throw "the e.gfx.chart matrix answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCartesianPath = Join-Path $testBuild 'gfx-chart-cartesian-selfhost.exe'
+$gfxChartCartesianWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_cartesian\src\main.e') $repo 'x64' 'windows' $gfxChartCartesianPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCartesianWritten -ne 'executable written') { throw 'gfx_chart_cartesian emission failed' }
+$gfxChartCartesianOutput = & $gfxChartCartesianPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCartesianOutput -ne 'gfx chart cartesian ok') { throw "the e.gfx.chart Cartesian marks answered wrongly: exit $LASTEXITCODE" }
+$gfxChartScalePath = Join-Path $testBuild 'gfx-chart-scale-selfhost.exe'
+$gfxChartScaleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_scale\src\main.e') $repo 'x64' 'windows' $gfxChartScalePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartScaleWritten -ne 'executable written') { throw 'gfx_chart_scale emission failed' }
+$gfxChartScaleOutput = & $gfxChartScalePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartScaleOutput -ne 'gfx chart scale ok') { throw "the e.gfx.chart scales answered wrongly: exit $LASTEXITCODE" }
+$gfxChartFacetPath = Join-Path $testBuild 'gfx-chart-facet-selfhost.exe'
+$gfxChartFacetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_facet\src\main.e') $repo 'x64' 'windows' $gfxChartFacetPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFacetWritten -ne 'executable written') { throw 'gfx_chart_facet emission failed' }
+$gfxChartFacetOutput = & $gfxChartFacetPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFacetOutput -ne 'gfx chart facet ok') { throw "the e.gfx.chart facet scales answered wrongly: exit $LASTEXITCODE" }
+$gfxChartIntervalsPath = Join-Path $testBuild 'gfx-chart-intervals-selfhost.exe'
+$gfxChartIntervalsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_intervals\src\main.e') $repo 'x64' 'windows' $gfxChartIntervalsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartIntervalsWritten -ne 'executable written') { throw 'gfx_chart_intervals emission failed' }
+$gfxChartIntervalsOutput = & $gfxChartIntervalsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartIntervalsOutput -ne 'gfx chart intervals ok') { throw "the e.gfx.chart interval marks answered wrongly: exit $LASTEXITCODE" }
+$gfxChartLabelsPath = Join-Path $testBuild 'gfx-chart-labels-selfhost.exe'
+$gfxChartLabelsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_labels\src\main.e') $repo 'x64' 'windows' $gfxChartLabelsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLabelsWritten -ne 'executable written') { throw 'gfx_chart_labels emission failed' }
+$gfxChartLabelsOutput = & $gfxChartLabelsPath (Join-Path $repo 'docs\video\neper-capabilities\fonts\Montserrat-ExtraBold.ttf')
+if ($LASTEXITCODE -ne 0 -or $gfxChartLabelsOutput -ne 'gfx chart labels ok') { throw "the e.gfx.chart labels answered wrongly: exit $LASTEXITCODE" }
+$gfxChartNiceTicksPath = Join-Path $testBuild 'gfx-chart-nice-ticks-selfhost.exe'
+$gfxChartNiceTicksWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_nice_ticks\src\main.e') $repo 'x64' 'windows' $gfxChartNiceTicksPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartNiceTicksWritten -ne 'executable written') { throw 'gfx_chart_nice_ticks emission failed' }
+$gfxChartNiceTicksOutput = & $gfxChartNiceTicksPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartNiceTicksOutput -ne 'gfx chart nice ticks ok') { throw "the e.gfx.chart automatic ticks answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCompositionPath = Join-Path $testBuild 'gfx-chart-composition-selfhost.exe'
+$gfxChartCompositionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_composition\src\main.e') $repo 'x64' 'windows' $gfxChartCompositionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCompositionWritten -ne 'executable written') { throw 'gfx_chart_composition emission failed' }
+$gfxChartCompositionOutput = & $gfxChartCompositionPath (Join-Path $repo 'docs\video\neper-capabilities\fonts\Montserrat-ExtraBold.ttf')
+if ($LASTEXITCODE -ne 0 -or $gfxChartCompositionOutput -ne 'gfx chart composition ok') { throw "the e.gfx.chart composed bars answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDistributionPath = Join-Path $testBuild 'gfx-chart-distribution-selfhost.exe'
+$gfxChartDistributionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_distribution\src\main.e') $repo 'x64' 'windows' $gfxChartDistributionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDistributionWritten -ne 'executable written') { throw 'gfx_chart_distribution emission failed' }
+$gfxChartDistributionOutput = & $gfxChartDistributionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDistributionOutput -ne 'gfx chart distribution ok') { throw "the e.gfx.chart distribution marks answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSvgPath = Join-Path $testBuild 'gfx-chart-svg-selfhost.exe'
+$gfxChartSvgWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_svg\src\main.e') $repo 'x64' 'windows' $gfxChartSvgPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSvgWritten -ne 'executable written') { throw 'gfx_chart_svg emission failed' }
+$gfxChartSvgOutput = & $gfxChartSvgPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSvgOutput -ne 'gfx chart svg ok') { throw "the e.gfx.chart SVG adapter answered wrongly: exit $LASTEXITCODE" }
+$gfxChartHorizonPath = Join-Path $testBuild 'gfx-chart-horizon-selfhost.exe'
+$gfxChartHorizonWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_horizon\src\main.e') $repo 'x64' 'windows' $gfxChartHorizonPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHorizonWritten -ne 'executable written') { throw 'gfx_chart_horizon emission failed' }
+$gfxChartHorizonOutput = & $gfxChartHorizonPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHorizonOutput -ne 'gfx chart horizon ok') { throw "the e.gfx.chart horizon bands answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSeasonalPath = Join-Path $testBuild 'gfx-chart-seasonal-selfhost.exe'
+$gfxChartSeasonalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_seasonal\src\main.e') $repo 'x64' 'windows' $gfxChartSeasonalPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSeasonalWritten -ne 'executable written') { throw 'gfx_chart_seasonal emission failed' }
+$gfxChartSeasonalOutput = & $gfxChartSeasonalPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSeasonalOutput -ne 'gfx chart seasonal ok') { throw "the e.gfx.chart seasonal subseries answered wrongly: exit $LASTEXITCODE" }
+$gfxChartFanPath = Join-Path $testBuild 'gfx-chart-fan-selfhost.exe'
+$gfxChartFanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_fan\src\main.e') $repo 'x64' 'windows' $gfxChartFanPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFanWritten -ne 'executable written') { throw 'gfx_chart_fan emission failed' }
+$gfxChartFanOutput = & $gfxChartFanPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFanOutput -ne 'gfx chart fan ok') { throw "the e.gfx.chart forecast fan answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDecompositionPath = Join-Path $testBuild 'gfx-chart-decomposition-selfhost.exe'
+$gfxChartDecompositionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_decomposition\src\main.e') $repo 'x64' 'windows' $gfxChartDecompositionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDecompositionWritten -ne 'executable written') { throw 'gfx_chart_decomposition emission failed' }
+$gfxChartDecompositionOutput = & $gfxChartDecompositionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDecompositionOutput -ne 'gfx chart decomposition ok') { throw "the e.gfx.chart additive decomposition answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCorrelogramPath = Join-Path $testBuild 'gfx-chart-correlogram-selfhost.exe'
+$gfxChartCorrelogramWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_correlogram\src\main.e') $repo 'x64' 'windows' $gfxChartCorrelogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCorrelogramWritten -ne 'executable written') { throw 'gfx_chart_correlogram emission failed' }
+$gfxChartCorrelogramOutput = & $gfxChartCorrelogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCorrelogramOutput -ne 'gfx chart correlogram ok') { throw "the e.gfx.chart correlogram answered wrongly: exit $LASTEXITCODE" }
+$gfxChartVariogramPath = Join-Path $testBuild 'gfx-chart-variogram-selfhost.exe'
+$gfxChartVariogramWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_variogram\src\main.e') $repo 'x64' 'windows' $gfxChartVariogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartVariogramWritten -ne 'executable written') { throw 'gfx_chart_variogram emission failed' }
+$gfxChartVariogramOutput = & $gfxChartVariogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartVariogramOutput -ne 'gfx chart variogram ok') { throw "the e.gfx.chart empirical variogram answered wrongly: exit $LASTEXITCODE" }
+$gfxChartRadialPath = Join-Path $testBuild 'gfx-chart-radial-selfhost.exe'
+$gfxChartRadialWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_radial\src\main.e') $repo 'x64' 'windows' $gfxChartRadialPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRadialWritten -ne 'executable written') { throw 'gfx_chart_radial emission failed' }
+$gfxChartRadialOutput = & $gfxChartRadialPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRadialOutput -ne 'gfx chart radial ok') { throw "the e.gfx.chart radar or rose answered wrongly: exit $LASTEXITCODE" }
+$gfxChartTernaryPath = Join-Path $testBuild 'gfx-chart-ternary-selfhost.exe'
+$gfxChartTernaryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_ternary\src\main.e') $repo 'x64' 'windows' $gfxChartTernaryPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartTernaryWritten -ne 'executable written') { throw 'gfx_chart_ternary emission failed' }
+$gfxChartTernaryOutput = & $gfxChartTernaryPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartTernaryOutput -ne 'gfx chart ternary ok') { throw "the e.gfx.chart ternary projection answered wrongly: exit $LASTEXITCODE" }
+$gfxChartQuiverPath = Join-Path $testBuild 'gfx-chart-quiver-selfhost.exe'
+$gfxChartQuiverWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_quiver\src\main.e') $repo 'x64' 'windows' $gfxChartQuiverPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartQuiverWritten -ne 'executable written') { throw 'gfx_chart_quiver emission failed' }
+$gfxChartQuiverOutput = & $gfxChartQuiverPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartQuiverOutput -ne 'gfx chart quiver ok') { throw "the e.gfx.chart vector arrows answered wrongly: exit $LASTEXITCODE" }
+$gfxChartStreamlinesPath = Join-Path $testBuild 'gfx-chart-streamlines-selfhost.exe'
+$gfxChartStreamlinesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_streamlines\src\main.e') $repo 'x64' 'windows' $gfxChartStreamlinesPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartStreamlinesWritten -ne 'executable written') { throw 'gfx_chart_streamlines emission failed' }
+$gfxChartStreamlinesOutput = & $gfxChartStreamlinesPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartStreamlinesOutput -ne 'gfx chart streamlines ok') { throw "the e.gfx.chart streamline integration answered wrongly: exit $LASTEXITCODE" }
+$gfxChartPhaseSpacePath = Join-Path $testBuild 'gfx-chart-phase-space-selfhost.exe'
+$gfxChartPhaseSpaceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_phase_space\src\main.e') $repo 'x64' 'windows' $gfxChartPhaseSpacePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPhaseSpaceWritten -ne 'executable written') { throw 'gfx_chart_phase_space emission failed' }
+$gfxChartPhaseSpaceOutput = & $gfxChartPhaseSpacePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPhaseSpaceOutput -ne 'gfx chart phase space ok') { throw "the e.gfx.chart delay embedding answered wrongly: exit $LASTEXITCODE" }
+$gfxChartRecurrencePath = Join-Path $testBuild 'gfx-chart-recurrence-selfhost.exe'
+$gfxChartRecurrenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_recurrence\src\main.e') $repo 'x64' 'windows' $gfxChartRecurrencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRecurrenceWritten -ne 'executable written') { throw 'gfx_chart_recurrence emission failed' }
+$gfxChartRecurrenceOutput = & $gfxChartRecurrencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRecurrenceOutput -ne 'gfx chart recurrence ok') { throw "the e.gfx.chart recurrence matrix answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDrawdownPath = Join-Path $testBuild 'gfx-chart-drawdown-selfhost.exe'
+$gfxChartDrawdownWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_drawdown\src\main.e') $repo 'x64' 'windows' $gfxChartDrawdownPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDrawdownWritten -ne 'executable written') { throw 'gfx_chart_drawdown emission failed' }
+$gfxChartDrawdownOutput = & $gfxChartDrawdownPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDrawdownOutput -ne 'gfx chart drawdown ok') { throw "the e.gfx.chart drawdown answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCohortRetentionPath = Join-Path $testBuild 'gfx-chart-cohort-retention-selfhost.exe'
+$gfxChartCohortRetentionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_cohort_retention\src\main.e') $repo 'x64' 'windows' $gfxChartCohortRetentionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCohortRetentionWritten -ne 'executable written') { throw 'gfx_chart_cohort_retention emission failed' }
+$gfxChartCohortRetentionOutput = & $gfxChartCohortRetentionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCohortRetentionOutput -ne 'gfx chart cohort retention ok') { throw "the e.gfx.chart cohort retention answered wrongly: exit $LASTEXITCODE" }
+$gfxChartContourPath = Join-Path $testBuild 'gfx-chart-contour-selfhost.exe'
+$gfxChartContourWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_contour\src\main.e') $repo 'x64' 'windows' $gfxChartContourPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartContourWritten -ne 'executable written') { throw 'gfx_chart_contour emission failed' }
+$gfxChartContourOutput = & $gfxChartContourPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartContourOutput -ne 'gfx chart contour ok') { throw "the e.gfx.chart isolines answered wrongly: exit $LASTEXITCODE" }
+$gfxChartFilledContourPath = Join-Path $testBuild 'gfx-chart-filled-contour-selfhost.exe'
+$gfxChartFilledContourWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_filled_contour\src\main.e') $repo 'x64' 'windows' $gfxChartFilledContourPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFilledContourWritten -ne 'executable written') { throw 'gfx_chart_filled_contour emission failed' }
+$gfxChartFilledContourOutput = & $gfxChartFilledContourPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFilledContourOutput -ne 'gfx chart filled contour ok') { throw "the e.gfx.chart scalar bands answered wrongly: exit $LASTEXITCODE" }
+$gfxChartPriceVolumePath = Join-Path $testBuild 'gfx-chart-price-volume-selfhost.exe'
+$gfxChartPriceVolumeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_price_volume\src\main.e') $repo 'x64' 'windows' $gfxChartPriceVolumePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPriceVolumeWritten -ne 'executable written') { throw 'gfx_chart_price_volume emission failed' }
+$gfxChartPriceVolumeOutput = & $gfxChartPriceVolumePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPriceVolumeOutput -ne 'gfx chart price volume ok') { throw "the e.gfx.chart price-volume alignment answered wrongly: exit $LASTEXITCODE" }
+$gfxChartReturnsVolatilityPath = Join-Path $testBuild 'gfx-chart-returns-volatility-selfhost.exe'
+$gfxChartReturnsVolatilityWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_returns_volatility\src\main.e') $repo 'x64' 'windows' $gfxChartReturnsVolatilityPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartReturnsVolatilityWritten -ne 'executable written') { throw 'gfx_chart_returns_volatility emission failed' }
+$gfxChartReturnsVolatilityOutput = & $gfxChartReturnsVolatilityPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartReturnsVolatilityOutput -ne 'gfx chart returns volatility ok') { throw "the e.gfx.chart simple returns and rolling SD answered wrongly: exit $LASTEXITCODE" }
+$gfxChartGanttPath = Join-Path $testBuild 'gfx-chart-gantt-selfhost.exe'
+$gfxChartGanttWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_gantt\src\main.e') $repo 'x64' 'windows' $gfxChartGanttPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGanttWritten -ne 'executable written') { throw 'gfx_chart_gantt emission failed' }
+$gfxChartGanttOutput = & $gfxChartGanttPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGanttOutput -ne 'gfx chart gantt ok') { throw "the e.gfx.chart Gantt durations and completion answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMilestoneRoadmapPath = Join-Path $testBuild 'gfx-chart-milestone-roadmap-selfhost.exe'
+$gfxChartMilestoneRoadmapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_milestone_roadmap\src\main.e') $repo 'x64' 'windows' $gfxChartMilestoneRoadmapPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMilestoneRoadmapWritten -ne 'executable written') { throw 'gfx_chart_milestone_roadmap emission failed' }
+$gfxChartMilestoneRoadmapOutput = & $gfxChartMilestoneRoadmapPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMilestoneRoadmapOutput -ne 'gfx chart milestone roadmap ok') { throw "the e.gfx.chart milestone diamonds answered wrongly: exit $LASTEXITCODE" }
+$gfxChartBurnPath = Join-Path $testBuild 'gfx-chart-burn-selfhost.exe'
+$gfxChartBurnWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_burn\src\main.e') $repo 'x64' 'windows' $gfxChartBurnPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBurnWritten -ne 'executable written') { throw 'gfx_chart_burn emission failed' }
+$gfxChartBurnOutput = & $gfxChartBurnPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBurnOutput -ne 'gfx chart burn ok') { throw "the e.gfx.chart burndown and burnup answered wrongly: exit $LASTEXITCODE" }
+$gfxChartEarnedValuePath = Join-Path $testBuild 'gfx-chart-earned-value-selfhost.exe'
+$gfxChartEarnedValueWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_earned_value\src\main.e') $repo 'x64' 'windows' $gfxChartEarnedValuePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartEarnedValueWritten -ne 'executable written') { throw 'gfx_chart_earned_value emission failed' }
+$gfxChartEarnedValueOutput = & $gfxChartEarnedValuePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartEarnedValueOutput -ne 'gfx chart earned value ok') { throw "the e.gfx.chart PV/EV/AC alignment answered wrongly: exit $LASTEXITCODE" }
+$gfxChartRiskMatrixPath = Join-Path $testBuild 'gfx-chart-risk-matrix-selfhost.exe'
+$gfxChartRiskMatrixWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_risk_matrix\src\main.e') $repo 'x64' 'windows' $gfxChartRiskMatrixPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRiskMatrixWritten -ne 'executable written') { throw 'gfx_chart_risk_matrix emission failed' }
+$gfxChartRiskMatrixOutput = & $gfxChartRiskMatrixPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRiskMatrixOutput -ne 'gfx chart risk matrix ok') { throw "the e.gfx.chart risk matrix answered wrongly: exit $LASTEXITCODE" }
+$gfxChartResourceHistogramPath = Join-Path $testBuild 'gfx-chart-resource-histogram-selfhost.exe'
+$gfxChartResourceHistogramWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_resource_histogram\src\main.e') $repo 'x64' 'windows' $gfxChartResourceHistogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartResourceHistogramWritten -ne 'executable written') { throw 'gfx_chart_resource_histogram emission failed' }
+$gfxChartResourceHistogramOutput = & $gfxChartResourceHistogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartResourceHistogramOutput -ne 'gfx chart resource histogram ok') { throw "the e.gfx.chart resource histogram answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSwimlanePath = Join-Path $testBuild 'gfx-chart-swimlane-selfhost.exe'
+$gfxChartSwimlaneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_swimlane\src\main.e') $repo 'x64' 'windows' $gfxChartSwimlanePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSwimlaneWritten -ne 'executable written') { throw 'gfx_chart_swimlane emission failed' }
+$gfxChartSwimlaneOutput = & $gfxChartSwimlanePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSwimlaneOutput -ne 'gfx chart swimlane ok') { throw "the e.gfx.chart swimlane answered wrongly: exit $LASTEXITCODE" }
+$gfxChartKanbanPath = Join-Path $testBuild 'gfx-chart-kanban-selfhost.exe'
+$gfxChartKanbanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_kanban\src\main.e') $repo 'x64' 'windows' $gfxChartKanbanPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartKanbanWritten -ne 'executable written') { throw 'gfx_chart_kanban emission failed' }
+$gfxChartKanbanOutput = & $gfxChartKanbanPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartKanbanOutput -ne 'gfx chart kanban ok') { throw "the e.gfx.chart Kanban board answered wrongly: exit $LASTEXITCODE" }
+$gfxChartPertCpmPath = Join-Path $testBuild 'gfx-chart-pert-cpm-selfhost.exe'
+$gfxChartPertCpmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_pert_cpm\src\main.e') $repo 'x64' 'windows' $gfxChartPertCpmPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPertCpmWritten -ne 'executable written') { throw 'gfx_chart_pert_cpm emission failed' }
+$gfxChartPertCpmOutput = & $gfxChartPertCpmPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPertCpmOutput -ne 'gfx chart pert cpm ok') { throw "the e.gfx.chart PERT/CPM network answered wrongly: exit $LASTEXITCODE" }
+$gfxChartValueStreamPath = Join-Path $testBuild 'gfx-chart-value-stream-selfhost.exe'
+$gfxChartValueStreamWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_value_stream\src\main.e') $repo 'x64' 'windows' $gfxChartValueStreamPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartValueStreamWritten -ne 'executable written') { throw 'gfx_chart_value_stream emission failed' }
+$gfxChartValueStreamOutput = & $gfxChartValueStreamPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartValueStreamOutput -ne 'gfx chart value stream ok') { throw "the e.gfx.chart value-stream map answered wrongly: exit $LASTEXITCODE" }
+$gfxChartFutureVsmPath = Join-Path $testBuild 'gfx-chart-future-vsm-selfhost.exe'
+$gfxChartFutureVsmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_future_vsm\src\main.e') $repo 'x64' 'windows' $gfxChartFutureVsmPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFutureVsmWritten -ne 'executable written') { throw 'gfx_chart_future_vsm emission failed' }
+$gfxChartFutureVsmOutput = & $gfxChartFutureVsmPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFutureVsmOutput -ne 'gfx chart future vsm ok') { throw "the e.gfx.chart future-state value stream answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCapTablePath = Join-Path $testBuild 'gfx-chart-cap-table-selfhost.exe'
+$gfxChartCapTableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_cap_table\src\main.e') $repo 'x64' 'windows' $gfxChartCapTablePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapTableWritten -ne 'executable written') { throw 'gfx_chart_cap_table emission failed' }
+$gfxChartCapTableOutput = & $gfxChartCapTablePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapTableOutput -ne 'gfx chart cap table ok') { throw "the e.gfx.chart cap-table waterfall answered wrongly: exit $LASTEXITCODE" }
+$gfxChartTornadoPath = Join-Path $testBuild 'gfx-chart-tornado-selfhost.exe'
+$gfxChartTornadoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_tornado\src\main.e') $repo 'x64' 'windows' $gfxChartTornadoPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartTornadoWritten -ne 'executable written') { throw 'gfx_chart_tornado emission failed' }
+$gfxChartTornadoOutput = & $gfxChartTornadoPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartTornadoOutput -ne 'gfx chart tornado ok') { throw "the e.gfx.chart tornado sensitivity answered wrongly: exit $LASTEXITCODE" }
+$gfxChartFootballFieldPath = Join-Path $testBuild 'gfx-chart-football-field-selfhost.exe'
+$gfxChartFootballFieldWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_football_field\src\main.e') $repo 'x64' 'windows' $gfxChartFootballFieldPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFootballFieldWritten -ne 'executable written') { throw 'gfx_chart_football_field emission failed' }
+$gfxChartFootballFieldOutput = & $gfxChartFootballFieldPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFootballFieldOutput -ne 'gfx chart football field ok') { throw "the e.gfx.chart football field answered wrongly: exit $LASTEXITCODE" }
+$gfxChartYieldCurvePath = Join-Path $testBuild 'gfx-chart-yield-curve-selfhost.exe'
+$gfxChartYieldCurveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_yield_curve\src\main.e') $repo 'x64' 'windows' $gfxChartYieldCurvePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartYieldCurveWritten -ne 'executable written') { throw 'gfx_chart_yield_curve emission failed' }
+$gfxChartYieldCurveOutput = & $gfxChartYieldCurvePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartYieldCurveOutput -ne 'gfx chart yield curve ok') { throw "the e.gfx.chart yield curve answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMonteCarloPath = Join-Path $testBuild 'gfx-chart-monte-carlo-selfhost.exe'
+$gfxChartMonteCarloWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_monte_carlo\src\main.e') $repo 'x64' 'windows' $gfxChartMonteCarloPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMonteCarloWritten -ne 'executable written') { throw 'gfx_chart_monte_carlo emission failed' }
+$gfxChartMonteCarloOutput = & $gfxChartMonteCarloPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMonteCarloOutput -ne 'gfx chart monte carlo ok') { throw "the e.gfx.chart Monte Carlo distribution answered wrongly: exit $LASTEXITCODE" }
+$gfxChartAggregateTreePath = Join-Path $testBuild 'gfx-chart-aggregate-tree-selfhost.exe'
+$gfxChartAggregateTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_aggregate_tree\src\main.e') $repo 'x64' 'windows' $gfxChartAggregateTreePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAggregateTreeWritten -ne 'executable written') { throw 'gfx_chart_aggregate_tree emission failed' }
+$gfxChartAggregateTreeOutput = & $gfxChartAggregateTreePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAggregateTreeOutput -ne 'gfx chart aggregate tree ok') { throw "the e.gfx.chart aggregate decomposition tree answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDateAxisPath = Join-Path $testBuild 'gfx-chart-date-axis-selfhost.exe'
+$gfxChartDateAxisWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_date_axis\src\main.e') $repo 'x64' 'windows' $gfxChartDateAxisPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDateAxisWritten -ne 'executable written') { throw 'gfx_chart_date_axis emission failed' }
+$gfxChartDateAxisOutput = & $gfxChartDateAxisPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDateAxisOutput -ne 'gfx chart date axis ok') { throw "the e.gfx.chart date axis answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDiscreteAxisPath = Join-Path $testBuild 'gfx-chart-discrete-axis-selfhost.exe'
+$gfxChartDiscreteAxisWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_discrete_axis\src\main.e') $repo 'x64' 'windows' $gfxChartDiscreteAxisPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDiscreteAxisWritten -ne 'executable written') { throw 'gfx_chart_discrete_axis emission failed' }
+$gfxChartDiscreteAxisOutput = & $gfxChartDiscreteAxisPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDiscreteAxisOutput -ne 'gfx chart discrete axis ok') { throw "the e.gfx.chart discrete axis answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCategoryFacetPath = Join-Path $testBuild 'gfx-chart-category-facet-selfhost.exe'
+$gfxChartCategoryFacetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_category_facet\src\main.e') $repo 'x64' 'windows' $gfxChartCategoryFacetPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCategoryFacetWritten -ne 'executable written') { throw 'gfx_chart_category_facet emission failed' }
+$gfxChartCategoryFacetOutput = & $gfxChartCategoryFacetPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCategoryFacetOutput -ne 'gfx chart category facet ok') { throw "the e.gfx.chart category facet answered wrongly: exit $LASTEXITCODE" }
+$gfxChartLegendWrapPath = Join-Path $testBuild 'gfx-chart-legend-wrap-selfhost.exe'
+$gfxChartLegendWrapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_legend_wrap\src\main.e') $repo 'x64' 'windows' $gfxChartLegendWrapPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLegendWrapWritten -ne 'executable written') { throw 'gfx_chart_legend_wrap emission failed' }
+$gfxChartLegendWrapOutput = & $gfxChartLegendWrapPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLegendWrapOutput -ne 'gfx chart legend wrap ok') { throw "the e.gfx.chart wrapped legend answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMissingScatterPath = Join-Path $testBuild 'gfx-chart-missing-scatter-selfhost.exe'
+$gfxChartMissingScatterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_missing_scatter\src\main.e') $repo 'x64' 'windows' $gfxChartMissingScatterPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMissingScatterWritten -ne 'executable written') { throw 'gfx_chart_missing_scatter emission failed' }
+$gfxChartMissingScatterOutput = & $gfxChartMissingScatterPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMissingScatterOutput -ne 'gfx chart missing scatter ok') { throw "the e.gfx.chart missing-data scatter answered wrongly: exit $LASTEXITCODE" }
+$gfxChartClippedAnnotationPath = Join-Path $testBuild 'gfx-chart-clipped-annotation-selfhost.exe'
+$gfxChartClippedAnnotationWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_clipped_annotation\src\main.e') $repo 'x64' 'windows' $gfxChartClippedAnnotationPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartClippedAnnotationWritten -ne 'executable written') { throw 'gfx_chart_clipped_annotation emission failed' }
+$gfxChartClippedAnnotationOutput = & $gfxChartClippedAnnotationPath (Join-Path $repo 'docs\video\neper-capabilities\fonts\Montserrat-ExtraBold.ttf')
+if ($LASTEXITCODE -ne 0 -or $gfxChartClippedAnnotationOutput -ne 'gfx chart clipped annotation ok') { throw "the e.gfx.chart clipped annotation answered wrongly: exit $LASTEXITCODE" }
+$gfxChartPlotGridPath = Join-Path $testBuild 'gfx-chart-plot-grid-selfhost.exe'
+$gfxChartPlotGridWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_plot_grid\src\main.e') $repo 'x64' 'windows' $gfxChartPlotGridPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPlotGridWritten -ne 'executable written') { throw 'gfx_chart_plot_grid emission failed' }
+$gfxChartPlotGridOutput = & $gfxChartPlotGridPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPlotGridOutput -ne 'gfx chart plot grid ok') { throw "the e.gfx.chart plot grid answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSharedGuidesPath = Join-Path $testBuild 'gfx-chart-shared-guides-selfhost.exe'
+$gfxChartSharedGuidesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_shared_guides\src\main.e') $repo 'x64' 'windows' $gfxChartSharedGuidesPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSharedGuidesWritten -ne 'executable written') { throw 'gfx_chart_shared_guides emission failed' }
+$gfxChartSharedGuidesOutput = & $gfxChartSharedGuidesPath (Join-Path $repo 'docs\video\neper-capabilities\fonts\Montserrat-ExtraBold.ttf')
+if ($LASTEXITCODE -ne 0 -or $gfxChartSharedGuidesOutput -ne 'gfx chart shared guides ok') { throw "the e.gfx.chart shared facet guides answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSelectionPath = Join-Path $testBuild 'gfx-chart-selection-selfhost.exe'
+$gfxChartSelectionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_selection\src\main.e') $repo 'x64' 'windows' $gfxChartSelectionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSelectionWritten -ne 'executable written') { throw 'gfx_chart_selection emission failed' }
+$gfxChartSelectionOutput = & $gfxChartSelectionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSelectionOutput -ne 'gfx chart selection ok') { throw "the e.gfx.chart selection answered wrongly: exit $LASTEXITCODE" }
+$gfxChartAccessiblePalettePath = Join-Path $testBuild 'gfx-chart-accessible-palette-selfhost.exe'
+$gfxChartAccessiblePaletteWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_accessible_palette\src\main.e') $repo 'x64' 'windows' $gfxChartAccessiblePalettePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAccessiblePaletteWritten -ne 'executable written') { throw 'gfx_chart_accessible_palette emission failed' }
+$gfxChartAccessiblePaletteOutput = & $gfxChartAccessiblePalettePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAccessiblePaletteOutput -ne 'gfx chart accessible palette ok') { throw "the e.gfx.chart accessible palette answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSvgPaintPath = Join-Path $testBuild 'gfx-chart-svg-paint-selfhost.exe'
+$gfxChartSvgPaintWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_svg_paint\src\main.e') $repo 'x64' 'windows' $gfxChartSvgPaintPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSvgPaintWritten -ne 'executable written') { throw 'gfx_chart_svg_paint emission failed' }
+$gfxChartSvgPaintOutput = & $gfxChartSvgPaintPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSvgPaintOutput -ne 'gfx chart svg paint ok') { throw "the e.gfx.chart SVG paint answered wrongly: exit $LASTEXITCODE" }
+$gfxChartColorVisionPath = Join-Path $testBuild 'gfx-chart-color-vision-selfhost.exe'
+$gfxChartColorVisionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_color_vision\src\main.e') $repo 'x64' 'windows' $gfxChartColorVisionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartColorVisionWritten -ne 'executable written') { throw 'gfx_chart_color_vision emission failed' }
+$gfxChartColorVisionOutput = & $gfxChartColorVisionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartColorVisionOutput -ne 'gfx chart color vision ok') { throw "the e.gfx.chart colour-vision simulation answered wrongly: exit $LASTEXITCODE" }
+$gfxChartLabelPlacementPath = Join-Path $testBuild 'gfx-chart-label-placement-selfhost.exe'
+$gfxChartLabelPlacementWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_label_placement\src\main.e') $repo 'x64' 'windows' $gfxChartLabelPlacementPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLabelPlacementWritten -ne 'executable written') { throw 'gfx_chart_label_placement emission failed' }
+$gfxChartLabelPlacementOutput = & $gfxChartLabelPlacementPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLabelPlacementOutput -ne 'gfx chart label placement ok') { throw "the e.gfx.chart label placement answered wrongly: exit $LASTEXITCODE" }
+$gfxChartLocalePath = Join-Path $testBuild 'gfx-chart-locale-selfhost.exe'
+$gfxChartLocaleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_locale\src\main.e') $repo 'x64' 'windows' $gfxChartLocalePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLocaleWritten -ne 'executable written') { throw 'gfx_chart_locale emission failed' }
+$gfxChartLocaleOutput = & $gfxChartLocalePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLocaleOutput -ne 'gfx chart locale ok') { throw "the e.gfx.chart.locale tick text answered wrongly: exit $LASTEXITCODE" }
+$gfxChartWidgetPath = Join-Path $testBuild 'gfx-chart-widget-selfhost.exe'
+$gfxChartWidgetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_widget\src\main.e') $repo 'x64' 'windows' $gfxChartWidgetPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartWidgetWritten -ne 'executable written') { throw 'gfx_chart_widget emission failed' }
+$gfxChartWidgetOutput = & $gfxChartWidgetPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartWidgetOutput -ne 'gfx chart widget ok') { throw "the e.gfx.chart.widget canvas answered wrongly: exit $LASTEXITCODE" }
+$gfxChartPdfPath = Join-Path $testBuild 'gfx-chart-pdf-selfhost.exe'
+$gfxChartPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_pdf\src\main.e') $repo 'x64' 'windows' $gfxChartPdfPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPdfWritten -ne 'executable written') { throw 'gfx_chart_pdf emission failed' }
+$gfxChartPdfOutput = & $gfxChartPdfPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPdfOutput -ne 'gfx chart pdf ok') { throw "the e.gfx.chart.pdf adapter answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
+$gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }
+$gfxChartSipocOutput = & $gfxChartSipocPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSipocOutput -ne 'gfx chart sipoc ok') { throw "the e.gfx.chart SIPOC overview answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDecisionTreePath = Join-Path $testBuild 'gfx-chart-decision-tree-selfhost.exe'
+$gfxChartDecisionTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_decision_tree\src\main.e') $repo 'x64' 'windows' $gfxChartDecisionTreePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDecisionTreeWritten -ne 'executable written') { throw 'gfx_chart_decision_tree emission failed' }
+$gfxChartDecisionTreeOutput = & $gfxChartDecisionTreePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDecisionTreeOutput -ne 'gfx chart decision tree ok') { throw "the e.gfx.chart decision tree answered wrongly: exit $LASTEXITCODE" }
+$gfxChartOrgChartPath = Join-Path $testBuild 'gfx-chart-org-chart-selfhost.exe'
+$gfxChartOrgChartWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_org_chart\src\main.e') $repo 'x64' 'windows' $gfxChartOrgChartPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartOrgChartWritten -ne 'executable written') { throw 'gfx_chart_org_chart emission failed' }
+$gfxChartOrgChartOutput = & $gfxChartOrgChartPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartOrgChartOutput -ne 'gfx chart org chart ok') { throw "the e.gfx.chart org chart answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDependencyGraphPath = Join-Path $testBuild 'gfx-chart-dependency-graph-selfhost.exe'
+$gfxChartDependencyGraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_dependency_graph\src\main.e') $repo 'x64' 'windows' $gfxChartDependencyGraphPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDependencyGraphWritten -ne 'executable written') { throw 'gfx_chart_dependency_graph emission failed' }
+$gfxChartDependencyGraphOutput = & $gfxChartDependencyGraphPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDependencyGraphOutput -ne 'gfx chart dependency graph ok') { throw "the e.gfx.chart dependency graph answered wrongly: exit $LASTEXITCODE" }
+$gfxChartFlowchartPath = Join-Path $testBuild 'gfx-chart-flowchart-selfhost.exe'
+$gfxChartFlowchartWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_flowchart\src\main.e') $repo 'x64' 'windows' $gfxChartFlowchartPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFlowchartWritten -ne 'executable written') { throw 'gfx_chart_flowchart emission failed' }
+$gfxChartFlowchartOutput = & $gfxChartFlowchartPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFlowchartOutput -ne 'gfx chart flowchart ok') { throw "the e.gfx.chart flowchart answered wrongly: exit $LASTEXITCODE" }
+$gfxChartStateMachinePath = Join-Path $testBuild 'gfx-chart-state-machine-selfhost.exe'
+$gfxChartStateMachineWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_state_machine\src\main.e') $repo 'x64' 'windows' $gfxChartStateMachinePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartStateMachineWritten -ne 'executable written') { throw 'gfx_chart_state_machine emission failed' }
+$gfxChartStateMachineOutput = & $gfxChartStateMachinePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartStateMachineOutput -ne 'gfx chart state machine ok') { throw "the e.gfx.chart state machine answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSequenceDiagramPath = Join-Path $testBuild 'gfx-chart-sequence-diagram-selfhost.exe'
+$gfxChartSequenceDiagramWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sequence_diagram\src\main.e') $repo 'x64' 'windows' $gfxChartSequenceDiagramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSequenceDiagramWritten -ne 'executable written') { throw 'gfx_chart_sequence_diagram emission failed' }
+$gfxChartSequenceDiagramOutput = & $gfxChartSequenceDiagramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSequenceDiagramOutput -ne 'gfx chart sequence diagram ok') { throw "the e.gfx.chart sequence diagram answered wrongly: exit $LASTEXITCODE" }
+$gfxChartEntityRelationshipPath = Join-Path $testBuild 'gfx-chart-entity-relationship-selfhost.exe'
+$gfxChartEntityRelationshipWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_entity_relationship\src\main.e') $repo 'x64' 'windows' $gfxChartEntityRelationshipPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartEntityRelationshipWritten -ne 'executable written') { throw 'gfx_chart_entity_relationship emission failed' }
+$gfxChartEntityRelationshipOutput = & $gfxChartEntityRelationshipPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartEntityRelationshipOutput -ne 'gfx chart entity relationship ok') { throw "the e.gfx.chart entity relationship answered wrongly: exit $LASTEXITCODE" }
+$gfxChartBranchingProcessPath = Join-Path $testBuild 'gfx-chart-branching-process-selfhost.exe'
+$gfxChartBranchingProcessWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_branching_process\src\main.e') $repo 'x64' 'windows' $gfxChartBranchingProcessPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBranchingProcessWritten -ne 'executable written') { throw 'gfx_chart_branching_process emission failed' }
+$gfxChartBranchingProcessOutput = & $gfxChartBranchingProcessPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBranchingProcessOutput -ne 'gfx chart branching process ok') { throw "the e.gfx.chart branching process answered wrongly: exit $LASTEXITCODE" }
+$gfxChartStemLeafPath = Join-Path $testBuild 'gfx-chart-stem-and-leaf-selfhost.exe'
+$gfxChartStemLeafWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_stem_and_leaf\src\main.e') $repo 'x64' 'windows' $gfxChartStemLeafPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartStemLeafWritten -ne 'executable written') { throw 'gfx_chart_stem_and_leaf emission failed' }
+$gfxChartStemLeafOutput = & $gfxChartStemLeafPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartStemLeafOutput -ne 'gfx chart stem and leaf ok') { throw "the e.gfx.chart stem and leaf answered wrongly: exit $LASTEXITCODE" }
+$gfxChartRangeIntervalPath = Join-Path $testBuild 'gfx-chart-range-interval-selfhost.exe'
+$gfxChartRangeIntervalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_range_interval\src\main.e') $repo 'x64' 'windows' $gfxChartRangeIntervalPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRangeIntervalWritten -ne 'executable written') { throw 'gfx_chart_range_interval emission failed' }
+$gfxChartRangeIntervalOutput = & $gfxChartRangeIntervalPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRangeIntervalOutput -ne 'gfx chart range interval ok') { throw "the e.gfx.chart range interval answered wrongly: exit $LASTEXITCODE" }
+$gfxChartProbabilityPlotPath = Join-Path $testBuild 'gfx-chart-probability-plot-selfhost.exe'
+$gfxChartProbabilityPlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_probability_plot\src\main.e') $repo 'x64' 'windows' $gfxChartProbabilityPlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartProbabilityPlotWritten -ne 'executable written') { throw 'gfx_chart_probability_plot emission failed' }
+$gfxChartProbabilityPlotOutput = & $gfxChartProbabilityPlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartProbabilityPlotOutput -ne 'gfx chart probability plot ok') { throw "the e.gfx.chart probability plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartWeibullProbabilityPath = Join-Path $testBuild 'gfx-chart-weibull-probability-selfhost.exe'
+$gfxChartWeibullProbabilityWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_weibull_probability\src\main.e') $repo 'x64' 'windows' $gfxChartWeibullProbabilityPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartWeibullProbabilityWritten -ne 'executable written') { throw 'gfx_chart_weibull_probability emission failed' }
+$gfxChartWeibullProbabilityOutput = & $gfxChartWeibullProbabilityPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartWeibullProbabilityOutput -ne 'gfx chart weibull probability ok') { throw "the e.gfx.chart Weibull probability plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartOcCurvePath = Join-Path $testBuild 'gfx-chart-oc-curve-selfhost.exe'
+$gfxChartOcCurveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_oc_curve\src\main.e') $repo 'x64' 'windows' $gfxChartOcCurvePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartOcCurveWritten -ne 'executable written') { throw 'gfx_chart_oc_curve emission failed' }
+$gfxChartOcCurveOutput = & $gfxChartOcCurvePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartOcCurveOutput -ne 'gfx chart OC curve ok') { throw "the e.gfx.chart OC curve answered wrongly: exit $LASTEXITCODE" }
+$gfxChartGageRrPath = Join-Path $testBuild 'gfx-chart-gage-rr-selfhost.exe'
+$gfxChartGageRrWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_gage_rr\src\main.e') $repo 'x64' 'windows' $gfxChartGageRrPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGageRrWritten -ne 'executable written') { throw 'gfx_chart_gage_rr emission failed' }
+$gfxChartGageRrOutput = & $gfxChartGageRrPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGageRrOutput -ne 'gfx chart gage rr ok') { throw "the e.gfx.chart Gage R&R answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMultiVariPath = Join-Path $testBuild 'gfx-chart-multi-vari-selfhost.exe'
+$gfxChartMultiVariWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_multi_vari\src\main.e') $repo 'x64' 'windows' $gfxChartMultiVariPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMultiVariWritten -ne 'executable written') { throw 'gfx_chart_multi_vari emission failed' }
+$gfxChartMultiVariOutput = & $gfxChartMultiVariPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMultiVariOutput -ne 'gfx chart multi vari ok') { throw "the e.gfx.chart multi-vari plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMainEffectsPath = Join-Path $testBuild 'gfx-chart-main-effects-selfhost.exe'
+$gfxChartMainEffectsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_main_effects\src\main.e') $repo 'x64' 'windows' $gfxChartMainEffectsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMainEffectsWritten -ne 'executable written') { throw 'gfx_chart_main_effects emission failed' }
+$gfxChartMainEffectsOutput = & $gfxChartMainEffectsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMainEffectsOutput -ne 'gfx chart main effects ok') { throw "the e.gfx.chart main-effects plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartInteractionPlotPath = Join-Path $testBuild 'gfx-chart-interaction-plot-selfhost.exe'
+$gfxChartInteractionPlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_interaction_plot\src\main.e') $repo 'x64' 'windows' $gfxChartInteractionPlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartInteractionPlotWritten -ne 'executable written') { throw 'gfx_chart_interaction_plot emission failed' }
+$gfxChartInteractionPlotOutput = & $gfxChartInteractionPlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartInteractionPlotOutput -ne 'gfx chart interaction plot ok') { throw "the e.gfx.chart interaction plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCubePlotPath = Join-Path $testBuild 'gfx-chart-cube-plot-selfhost.exe'
+$gfxChartCubePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_cube_plot\src\main.e') $repo 'x64' 'windows' $gfxChartCubePlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCubePlotWritten -ne 'executable written') { throw 'gfx_chart_cube_plot emission failed' }
+$gfxChartCubePlotOutput = & $gfxChartCubePlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCubePlotOutput -ne 'gfx chart cube plot ok') { throw "the e.gfx.chart cube plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSpectrogramPath = Join-Path $testBuild 'gfx-chart-spectrogram-selfhost.exe'
+$gfxChartSpectrogramWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spectrogram\src\main.e') $repo 'x64' 'windows' $gfxChartSpectrogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSpectrogramWritten -ne 'executable written') { throw 'gfx_chart_spectrogram emission failed' }
+$gfxChartSpectrogramOutput = & $gfxChartSpectrogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSpectrogramOutput -ne 'gfx chart spectrogram ok') { throw "the e.gfx.chart spectrogram answered wrongly: exit $LASTEXITCODE" }
+$gfxChartWaterfallSpectrumPath = Join-Path $testBuild 'gfx-chart-waterfall-spectrum-selfhost.exe'
+$gfxChartWaterfallSpectrumWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_waterfall_spectrum\src\main.e') $repo 'x64' 'windows' $gfxChartWaterfallSpectrumPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartWaterfallSpectrumWritten -ne 'executable written') { throw 'gfx_chart_waterfall_spectrum emission failed' }
+$gfxChartWaterfallSpectrumOutput = & $gfxChartWaterfallSpectrumPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartWaterfallSpectrumOutput -ne 'gfx chart waterfall spectrum ok') { throw "the e.gfx.chart waterfall spectrum answered wrongly: exit $LASTEXITCODE" }
+$gfxChartBodePath = Join-Path $testBuild 'gfx-chart-bode-selfhost.exe'
+$gfxChartBodeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_bode\src\main.e') $repo 'x64' 'windows' $gfxChartBodePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBodeWritten -ne 'executable written') { throw 'gfx_chart_bode emission failed' }
+$gfxChartBodeOutput = & $gfxChartBodePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBodeOutput -ne 'gfx chart bode ok') { throw "the e.gfx.chart Bode plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartNyquistPath = Join-Path $testBuild 'gfx-chart-nyquist-selfhost.exe'
+$gfxChartNyquistWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_nyquist\src\main.e') $repo 'x64' 'windows' $gfxChartNyquistPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartNyquistWritten -ne 'executable written') { throw 'gfx_chart_nyquist emission failed' }
+$gfxChartNyquistOutput = & $gfxChartNyquistPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartNyquistOutput -ne 'gfx chart nyquist ok') { throw "the e.gfx.chart Nyquist plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartScatter3dPath = Join-Path $testBuild 'gfx-chart-scatter3d-selfhost.exe'
+$gfxChartScatter3dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_scatter3d\src\main.e') $repo 'x64' 'windows' $gfxChartScatter3dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartScatter3dWritten -ne 'executable written') { throw 'gfx_chart_scatter3d emission failed' }
+$gfxChartScatter3dOutput = & $gfxChartScatter3dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartScatter3dOutput -ne 'gfx chart scatter3d ok') { throw "the e.gfx.chart 3-D scatter answered wrongly: exit $LASTEXITCODE" }
+$gfxChartHistogram3dPath = Join-Path $testBuild 'gfx-chart-histogram3d-selfhost.exe'
+$gfxChartHistogram3dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_histogram3d\src\main.e') $repo 'x64' 'windows' $gfxChartHistogram3dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHistogram3dWritten -ne 'executable written') { throw 'gfx_chart_histogram3d emission failed' }
+$gfxChartHistogram3dOutput = & $gfxChartHistogram3dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHistogram3dOutput -ne 'gfx chart histogram3d ok') { throw "the e.gfx.chart 3-D histogram answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSurface3dPath = Join-Path $testBuild 'gfx-chart-surface3d-selfhost.exe'
+$gfxChartSurface3dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_surface3d\src\main.e') $repo 'x64' 'windows' $gfxChartSurface3dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSurface3dWritten -ne 'executable written') { throw 'gfx_chart_surface3d emission failed' }
+$gfxChartSurface3dOutput = & $gfxChartSurface3dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSurface3dOutput -ne 'gfx chart surface3d ok') { throw "the e.gfx.chart 3-D surface/wireframe answered wrongly: exit $LASTEXITCODE" }
+$gfxChartAnomPath = Join-Path $testBuild 'gfx-chart-anom-selfhost.exe'
+$gfxChartAnomWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_anom\src\main.e') $repo 'x64' 'windows' $gfxChartAnomPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAnomWritten -ne 'executable written') { throw 'gfx_chart_anom emission failed' }
+$gfxChartAnomOutput = & $gfxChartAnomPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAnomOutput -ne 'gfx chart anom ok') { throw "the e.gfx.chart ANOM answered wrongly: exit $LASTEXITCODE" }
+$gfxChartHotellingT2Path = Join-Path $testBuild 'gfx-chart-hotelling-t2-selfhost.exe'
+$gfxChartHotellingT2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_hotelling_t2\src\main.e') $repo 'x64' 'windows' $gfxChartHotellingT2Path
+if ($LASTEXITCODE -ne 0 -or $gfxChartHotellingT2Written -ne 'executable written') { throw 'gfx_chart_hotelling_t2 emission failed' }
+$gfxChartHotellingT2Output = & $gfxChartHotellingT2Path
+if ($LASTEXITCODE -ne 0 -or $gfxChartHotellingT2Output -ne 'gfx chart hotelling t2 ok') { throw "the e.gfx.chart Hotelling T2 answered wrongly: exit $LASTEXITCODE" }
+$gfxChartGeneralizedVariancePath = Join-Path $testBuild 'gfx-chart-generalized-variance-selfhost.exe'
+$gfxChartGeneralizedVarianceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_generalized_variance\src\main.e') $repo 'x64' 'windows' $gfxChartGeneralizedVariancePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGeneralizedVarianceWritten -ne 'executable written') { throw 'gfx_chart_generalized_variance emission failed' }
+$gfxChartGeneralizedVarianceOutput = & $gfxChartGeneralizedVariancePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGeneralizedVarianceOutput -ne 'gfx chart generalized variance ok') { throw "the e.gfx.chart generalized variance answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMewmaPath = Join-Path $testBuild 'gfx-chart-mewma-selfhost.exe'
+$gfxChartMewmaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_mewma\src\main.e') $repo 'x64' 'windows' $gfxChartMewmaPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMewmaWritten -ne 'executable written') { throw 'gfx_chart_mewma emission failed' }
+$gfxChartMewmaOutput = & $gfxChartMewmaPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMewmaOutput -ne 'gfx chart mewma ok') { throw "the e.gfx.chart MEWMA answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
+$gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }
+$gfxChartSpinePlotOutput = & $gfxChartSpinePlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotOutput -ne 'gfx chart spine plot ok') { throw "the e.gfx.chart spine plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartHexbinPath = Join-Path $testBuild 'gfx-chart-hexbin-selfhost.exe'
+$gfxChartHexbinWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_hexbin\src\main.e') $repo 'x64' 'windows' $gfxChartHexbinPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHexbinWritten -ne 'executable written') { throw 'gfx_chart_hexbin emission failed' }
+$gfxChartHexbinOutput = & $gfxChartHexbinPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHexbinOutput -ne 'gfx chart hexbin ok') { throw "the e.gfx.chart hexbin answered wrongly: exit $LASTEXITCODE" }
+$gfxChartBin2dPath = Join-Path $testBuild 'gfx-chart-bin2d-selfhost.exe'
+$gfxChartBin2dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_bin2d\src\main.e') $repo 'x64' 'windows' $gfxChartBin2dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBin2dWritten -ne 'executable written') { throw 'gfx_chart_bin2d emission failed' }
+$gfxChartBin2dOutput = & $gfxChartBin2dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBin2dOutput -ne 'gfx chart bin2d ok') { throw "the e.gfx.chart bin2d answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDensity2dPath = Join-Path $testBuild 'gfx-chart-density2d-selfhost.exe'
+$gfxChartDensity2dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_density2d\src\main.e') $repo 'x64' 'windows' $gfxChartDensity2dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDensity2dWritten -ne 'executable written') { throw 'gfx_chart_density2d emission failed' }
+$gfxChartDensity2dOutput = & $gfxChartDensity2dPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDensity2dOutput -ne 'gfx chart density2d ok') { throw "the e.gfx.chart density2d answered wrongly: exit $LASTEXITCODE" }
+$gfxChartHalfViolinPath = Join-Path $testBuild 'gfx-chart-half-violin-selfhost.exe'
+$gfxChartHalfViolinWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_half_violin\src\main.e') $repo 'x64' 'windows' $gfxChartHalfViolinPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHalfViolinWritten -ne 'executable written') { throw 'gfx_chart_half_violin emission failed' }
+$gfxChartHalfViolinOutput = & $gfxChartHalfViolinPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHalfViolinOutput -ne 'gfx chart half violin ok') { throw "the e.gfx.chart half violin answered wrongly: exit $LASTEXITCODE" }
+$gfxChartRaincloudPath = Join-Path $testBuild 'gfx-chart-raincloud-selfhost.exe'
+$gfxChartRaincloudWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_raincloud\src\main.e') $repo 'x64' 'windows' $gfxChartRaincloudPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRaincloudWritten -ne 'executable written') { throw 'gfx_chart_raincloud emission failed' }
+$gfxChartRaincloudOutput = & $gfxChartRaincloudPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartRaincloudOutput -ne 'gfx chart raincloud ok') { throw "the e.gfx.chart raincloud answered wrongly: exit $LASTEXITCODE" }
+$gfxChartSlopegraphPath = Join-Path $testBuild 'gfx-chart-slopegraph-selfhost.exe'
+$gfxChartSlopegraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_slopegraph\src\main.e') $repo 'x64' 'windows' $gfxChartSlopegraphPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSlopegraphWritten -ne 'executable written') { throw 'gfx_chart_slopegraph emission failed' }
+$gfxChartSlopegraphOutput = & $gfxChartSlopegraphPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSlopegraphOutput -ne 'gfx chart slopegraph ok') { throw "the e.gfx.chart slopegraph answered wrongly: exit $LASTEXITCODE" }
+$gfxChartConnectedScatterPath = Join-Path $testBuild 'gfx-chart-connected-scatter-selfhost.exe'
+$gfxChartConnectedScatterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_connected_scatter\src\main.e') $repo 'x64' 'windows' $gfxChartConnectedScatterPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartConnectedScatterWritten -ne 'executable written') { throw 'gfx_chart_connected_scatter emission failed' }
+$gfxChartConnectedScatterOutput = & $gfxChartConnectedScatterPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartConnectedScatterOutput -ne 'gfx chart connected scatter ok') { throw "the e.gfx.chart connected scatter answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMarginalHistogramPath = Join-Path $testBuild 'gfx-chart-marginal-histogram-selfhost.exe'
+$gfxChartMarginalHistogramWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_marginal_histogram\src\main.e') $repo 'x64' 'windows' $gfxChartMarginalHistogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMarginalHistogramWritten -ne 'executable written') { throw 'gfx_chart_marginal_histogram emission failed' }
+$gfxChartMarginalHistogramOutput = & $gfxChartMarginalHistogramPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMarginalHistogramOutput -ne 'gfx chart marginal histogram ok') { throw "the e.gfx.chart marginal histogram answered wrongly: exit $LASTEXITCODE" }
+$gfxChartDoseResponsePath = Join-Path $testBuild 'gfx-chart-dose-response-selfhost.exe'
+$gfxChartDoseResponseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_dose_response\src\main.e') $repo 'x64' 'windows' $gfxChartDoseResponsePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDoseResponseWritten -ne 'executable written') { throw 'gfx_chart_dose_response emission failed' }
+$gfxChartDoseResponseOutput = & $gfxChartDoseResponsePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartDoseResponseOutput -ne 'gfx chart dose response ok') { throw "the e.gfx.chart dose response answered wrongly: exit $LASTEXITCODE" }
+$gfxChartHazardRatePath = Join-Path $testBuild 'gfx-chart-hazard-rate-selfhost.exe'
+$gfxChartHazardRateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_hazard_rate\src\main.e') $repo 'x64' 'windows' $gfxChartHazardRatePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHazardRateWritten -ne 'executable written') { throw 'gfx_chart_hazard_rate emission failed' }
+$gfxChartHazardRateOutput = & $gfxChartHazardRatePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartHazardRateOutput -ne 'gfx chart hazard rate ok') { throw "the e.gfx.chart hazard rate answered wrongly: exit $LASTEXITCODE" }
+$gfxChartInfluencePlotPath = Join-Path $testBuild 'gfx-chart-influence-plot-selfhost.exe'
+$gfxChartInfluencePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_influence_plot\src\main.e') $repo 'x64' 'windows' $gfxChartInfluencePlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartInfluencePlotWritten -ne 'executable written') { throw 'gfx_chart_influence_plot emission failed' }
+$gfxChartInfluencePlotOutput = & $gfxChartInfluencePlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartInfluencePlotOutput -ne 'gfx chart influence plot ok') { throw "the e.gfx.chart influence plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCapabilitySixpackPath = Join-Path $testBuild 'gfx-chart-capability-sixpack-selfhost.exe'
+$gfxChartCapabilitySixpackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_capability_sixpack\src\main.e') $repo 'x64' 'windows' $gfxChartCapabilitySixpackPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilitySixpackWritten -ne 'executable written') { throw 'gfx_chart_capability_sixpack emission failed' }
+$gfxChartCapabilitySixpackOutput = & $gfxChartCapabilitySixpackPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilitySixpackOutput -ne 'gfx chart capability sixpack ok') { throw "the e.gfx.chart capability sixpack answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCapabilityNormalPath = Join-Path $testBuild 'gfx-chart-capability-normal-selfhost.exe'
+$gfxChartCapabilityNormalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_capability_normal\src\main.e') $repo 'x64' 'windows' $gfxChartCapabilityNormalPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityNormalWritten -ne 'executable written') { throw 'gfx_chart_capability_normal emission failed' }
+$gfxChartCapabilityNormalOutput = & $gfxChartCapabilityNormalPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityNormalOutput -ne 'gfx chart capability normal ok') { throw "the e.gfx.chart capability normal answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCapabilityNonnormalPath = Join-Path $testBuild 'gfx-chart-capability-nonnormal-selfhost.exe'
+$gfxChartCapabilityNonnormalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_capability_nonnormal\src\main.e') $repo 'x64' 'windows' $gfxChartCapabilityNonnormalPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityNonnormalWritten -ne 'executable written') { throw 'gfx_chart_capability_nonnormal emission failed' }
+$gfxChartCapabilityNonnormalOutput = & $gfxChartCapabilityNonnormalPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityNonnormalOutput -ne 'gfx chart capability nonnormal ok') { throw "the e.gfx.chart capability nonnormal answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCapabilityAttributePath = Join-Path $testBuild 'gfx-chart-capability-attribute-selfhost.exe'
+$gfxChartCapabilityAttributeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_capability_attribute\src\main.e') $repo 'x64' 'windows' $gfxChartCapabilityAttributePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityAttributeWritten -ne 'executable written') { throw 'gfx_chart_capability_attribute emission failed' }
+$gfxChartCapabilityAttributeOutput = & $gfxChartCapabilityAttributePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityAttributeOutput -ne 'gfx chart capability attribute ok') { throw "the e.gfx.chart capability attribute answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCapabilityBatchPath = Join-Path $testBuild 'gfx-chart-capability-batch-selfhost.exe'
+$gfxChartCapabilityBatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_capability_batch\src\main.e') $repo 'x64' 'windows' $gfxChartCapabilityBatchPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityBatchWritten -ne 'executable written') { throw 'gfx_chart_capability_batch emission failed' }
+$gfxChartCapabilityBatchOutput = & $gfxChartCapabilityBatchPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityBatchOutput -ne 'gfx chart capability batch ok') { throw "the e.gfx.chart capability batch answered wrongly: exit $LASTEXITCODE" }
+$gfxChartGageBiasLinearityPath = Join-Path $testBuild 'gfx-chart-gage-bias-linearity-selfhost.exe'
+$gfxChartGageBiasLinearityWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_gage_bias_linearity\src\main.e') $repo 'x64' 'windows' $gfxChartGageBiasLinearityPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGageBiasLinearityWritten -ne 'executable written') { throw 'gfx_chart_gage_bias_linearity emission failed' }
+$gfxChartGageBiasLinearityOutput = & $gfxChartGageBiasLinearityPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGageBiasLinearityOutput -ne 'gfx chart gage bias linearity ok') { throw "the e.gfx.chart gage bias linearity answered wrongly: exit $LASTEXITCODE" }
+$gfxChartAttributeAgreementPath = Join-Path $testBuild 'gfx-chart-attribute-agreement-selfhost.exe'
+$gfxChartAttributeAgreementWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_attribute_agreement\src\main.e') $repo 'x64' 'windows' $gfxChartAttributeAgreementPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAttributeAgreementWritten -ne 'executable written') { throw 'gfx_chart_attribute_agreement emission failed' }
+$gfxChartAttributeAgreementOutput = & $gfxChartAttributeAgreementPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAttributeAgreementOutput -ne 'gfx chart attribute agreement ok') { throw "the e.gfx.chart attribute agreement answered wrongly: exit $LASTEXITCODE" }
+$gfxChartGageRunPath = Join-Path $testBuild 'gfx-chart-gage-run-selfhost.exe'
+$gfxChartGageRunWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_gage_run\src\main.e') $repo 'x64' 'windows' $gfxChartGageRunPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGageRunWritten -ne 'executable written') { throw 'gfx_chart_gage_run emission failed' }
+$gfxChartGageRunOutput = & $gfxChartGageRunPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGageRunOutput -ne 'gfx chart gage run ok') { throw "the e.gfx.chart gage run answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMapsPath = Join-Path $testBuild 'gfx-chart-maps-selfhost.exe'
+$gfxChartMapsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_maps\src\main.e') $repo 'x64' 'windows' $gfxChartMapsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMapsWritten -ne 'executable written') { throw 'gfx_chart_maps emission failed' }
+$gfxChartMapsOutput = & $gfxChartMapsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMapsOutput -ne 'gfx chart maps ok') { throw "the e.gfx.chart maps answered wrongly: exit $LASTEXITCODE" }
+$gfxChartReportsPath = Join-Path $testBuild 'gfx-chart-reports-selfhost.exe'
+$gfxChartReportsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_reports\src\main.e') $repo 'x64' 'windows' $gfxChartReportsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartReportsWritten -ne 'executable written') { throw 'gfx_chart_reports emission failed' }
+$gfxChartReportsOutput = & $gfxChartReportsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartReportsOutput -ne 'gfx chart reports ok') { throw "the e.gfx.chart reports answered wrongly: exit $LASTEXITCODE" }
+$gfxChartFishbonePath = Join-Path $testBuild 'gfx-chart-fishbone-selfhost.exe'
+$gfxChartFishboneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_fishbone\src\main.e') $repo 'x64' 'windows' $gfxChartFishbonePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFishboneWritten -ne 'executable written') { throw 'gfx_chart_fishbone emission failed' }
+$gfxChartFishboneOutput = & $gfxChartFishbonePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFishboneOutput -ne 'gfx chart fishbone ok') { throw "the e.gfx.chart fishbone answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCauseEffectTreePath = Join-Path $testBuild 'gfx-chart-cause-effect-tree-selfhost.exe'
+$gfxChartCauseEffectTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_cause_effect_tree\src\main.e') $repo 'x64' 'windows' $gfxChartCauseEffectTreePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCauseEffectTreeWritten -ne 'executable written') { throw 'gfx_chart_cause_effect_tree emission failed' }
+$gfxChartCauseEffectTreeOutput = & $gfxChartCauseEffectTreePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCauseEffectTreeOutput -ne 'gfx chart cause effect tree ok') { throw "the e.gfx.chart cause effect tree answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.png` (D774): every colour type and depth, tRNS and Adam7 decoded identically to libpng
 # through Pillow; an exact encode read back by both decoders; refusals for APNG and bounds.
 $fmtPngPath = Join-Path $testBuild 'fmt-png-selfhost.exe'
@@ -3127,7 +3821,7 @@ if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopWritten -ne 'executable written') { th
 # gpu_cache_corrupt (D1733-D1735): durable hit, driver-level corruption recovery,
 # failed rebuild preservation, and compiler-identity separation.
 $previousGpuCache = $env:NEPER_GPU_CACHE
-$gpuCache = Join-Path $testBuild 'gpu-cache'
+$gpuCache = Join-Path $testBuild ('gpu-cache-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $gpuCache | Out-Null
 $env:NEPER_GPU_CACHE = $gpuCache
 $gpuVulkanLoopOutput = & $gpuVulkanLoopPath
@@ -3135,20 +3829,19 @@ if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopOutput -notmatch '^gpu loop (cpu only|
 if ($gpuVulkanLoopOutput -ne 'gpu loop cpu only') {
     $cacheFile = Get-ChildItem -File -Recurse $gpuCache -Filter '*.bin' | Select-Object -First 1
     if ($null -eq $cacheFile) { throw 'the Vulkan launch wrote no durable pipeline cache' }
-    $validCacheHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash
     & python (Join-Path $repo 'scripts\corrupt_gpu_cache.py') $cacheFile.FullName
     if ($LASTEXITCODE -ne 0) { throw 'the Vulkan cache corruption fixture failed' }
     $corruptCacheHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash
     $gpuVulkanLoopOutput = & $gpuVulkanLoopPath
     if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopOutput -notmatch '^gpu loop vulkan ok on [1-9][0-9]* devices$') { throw 'the Vulkan runtime did not recover from a corrupt pipeline cache' }
     $rebuiltCacheHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash
-    if ($corruptCacheHash -eq $rebuiltCacheHash -or $validCacheHash -ne $rebuiltCacheHash) { throw 'the Vulkan runtime did not replace the corrupt pipeline cache atomically' }
+    if ($corruptCacheHash -eq $rebuiltCacheHash) { throw 'the Vulkan runtime did not replace the corrupt pipeline cache' }
     $env:NEPER_GPU_CACHE_FAIL_REBUILD = '1'
     & $gpuVulkanLoopPath 2>$null | Out-Null
     $failedRebuildExit = $LASTEXITCODE
     Remove-Item Env:NEPER_GPU_CACHE_FAIL_REBUILD
     if ($failedRebuildExit -eq 0) { throw 'the Vulkan cache rebuild failure was not injected' }
-    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash -ne $validCacheHash) { throw 'a failed Vulkan cache rebuild replaced the last valid entry' }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $cacheFile.FullName).Hash -ne $rebuiltCacheHash) { throw 'a failed Vulkan cache rebuild replaced the last valid entry' }
     $gpuVulkanLoopOutput = & $gpuVulkanLoopPath
     if ($LASTEXITCODE -ne 0 -or $gpuVulkanLoopOutput -notmatch '^gpu loop vulkan ok on [1-9][0-9]* devices$') { throw 'the Vulkan cache was unusable after an injected rebuild failure' }
     $cacheCount = @(Get-ChildItem -File -Recurse $gpuCache -Filter '*.bin').Count
@@ -3194,6 +3887,16 @@ $gpuVulkanSyncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanSyncWritten -ne 'executable written') { throw 'gpu_vulkan_sync emission failed' }
 $gpuVulkanSyncOutput = & $gpuVulkanSyncPath
 if ($LASTEXITCODE -ne 0 -or $gpuVulkanSyncOutput -notmatch '^gpu sync (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the Vulkan synchronization runtime failed: $gpuVulkanSyncOutput" }
+$gpuStagingPath = Join-Path $testBuild 'gpu-staging-selfhost.exe'
+$gpuStagingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_staging\src\main.e') $repo 'x64' 'windows' $gpuStagingPath
+if ($LASTEXITCODE -ne 0 -or $gpuStagingWritten -ne 'executable written') { throw 'gpu_staging emission failed' }
+$gpuStagingOutput = & $gpuStagingPath
+if ($LASTEXITCODE -ne 0 -or $gpuStagingOutput -notmatch '^gpu staging (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the GPU staging runtime failed: $gpuStagingOutput" }
+$gpuDeviceLockPath = Join-Path $testBuild 'gpu-device-lock-selfhost.exe'
+$gpuDeviceLockWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_device_lock\src\main.e') $repo 'x64' 'windows' $gpuDeviceLockPath
+if ($LASTEXITCODE -ne 0 -or $gpuDeviceLockWritten -ne 'executable written') { throw 'gpu_device_lock emission failed' }
+$gpuDeviceLockOutput = & $gpuDeviceLockPath
+if ($LASTEXITCODE -ne 0 -or $gpuDeviceLockOutput -notmatch '^gpu device lock (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the GPU device lock runtime failed: $gpuDeviceLockOutput" }
 # Subgroup identity and collectives are width-dependent by contract: pin the module,
 # then check the CPU's 32-lane model and every Vulkan device, including a partial group.
 $subgroupSpirv = Join-Path $testBuild 'subgroup.spv'
@@ -3218,13 +3921,15 @@ if ($LASTEXITCODE -ne 0 -or $gpuSubgroupReduceOutput -notmatch '^gpu subgroup re
 $gpuDirect = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\gpu_direct_call\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($gpuDirect -join "`n") -notmatch 'main\.e:9:5: error\[E-GPU-9999\]: `fill` is a kernel and can only be run through `gpu\.launch`') { throw "a direct kernel call was not refused: $($gpuDirect -join "`n")" }
 # (D1588) Section 10's device profile, from a kernel through what it reaches: recursion,
-# a private slice, a module-scope var behind a helper and a `usize` parameter are
-# refused at the kernel with the chain; slices of device and shared memory are not.
+# a private slice, a module-scope var behind a helper or implicit `next`, and a
+# `usize` parameter are refused; slices of device and shared memory are not.
 foreach ($gpuProfileCase in @(
     @('recursion', 'main.e:14:1: error[E-GPU-9999]: `fill` reaches recursion `depth` through fill -> helper -> depth -> depth'),
     @('private', 'main.e:9:1: error[E-GPU-9999]: `fill` reaches a slice of the private variable `local` through fill'),
     @('global', 'main.e:11:1: error[E-GPU-9999]: `fill` reaches the module-scope `var` `counter` through fill -> bump'),
-    @('param', 'main.e:5:1: error[E-GPU-9999]: `fill` takes `n`, which is neither a device storage type'))) {
+    @('param', 'main.e:5:1: error[E-GPU-9999]: `fill` takes `n`, which is neither a device storage type'),
+    @('indirect', 'main.e:10:1: error[E-GPU-9999]: `fill` reaches a call through the function pointer field `run` through fill -> through_field'),
+    @('implicit_next', 'main.e:14:1: error[E-GPU-9999]: `sum` implicit iterator `next` reaches the module-scope `var` `counter`'))) {
     $gpuProfile = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\gpu_profile_$($gpuProfileCase[0])\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1 -or -not ($gpuProfile -join "`n").Contains($gpuProfileCase[1])) { throw "the device profile did not refuse $($gpuProfileCase[0]): $($gpuProfile -join "`n")" }
 }
@@ -3235,6 +3940,7 @@ if ($LASTEXITCODE -ne 0 -or ($gpuProfileValid -join "`n") -ne 'module check ok')
 # within its `caps(...)` and `ftz` is not.
 foreach ($gpuRuleCase in @(
     @('gpu_device_only', 'main.e:15:9: error[E-GPU-9999]: `lane` is device-only'),
+    @('gpu_generic_device_only', 'main.e:9:9: error[E-GPU-9999]: `passthrough` is device-only'),
     @('gpu_buf_element', 'main.e:5:5: error[E-GPU-9999]: a `gpu.Buf[T]` holds device memory'),
     @('gpu_caps_bound', 'main.e:14:1: error[E-GPU-9999]: `fill` needs `.Float64` through fill -> scaled -> widen'),
     @('gpu_caps_duplicate', 'main.e:5:1: error[E-GPU-9999]: `fill` carries `@gpu` without a usable workgroup size'),
@@ -3288,6 +3994,24 @@ foreach ($mode in @('debug', 'release')) {
     if ($LASTEXITCODE -ne 0 -or $gpuLargeHelperWritten -ne 'executable written') { throw "gpu_barrier_large_helper $mode emission failed" }
     $gpuLargeHelperOutput = & $gpuLargeHelperPath
     if ($LASTEXITCODE -ne 0 -or $gpuLargeHelperOutput -ne 'gpu barrier large helper ok') { throw "a $mode large barrier helper answered wrongly: exit $LASTEXITCODE" }
+}
+foreach ($mode in @('debug', 'release')) {
+    $gpuChainPath = Join-Path $testBuild "gpu-barrier-chain-$mode.exe"
+    $gpuChainArgs = @('emit-executable', (Join-Path $PSScriptRoot 'fixtures\link\gpu_barrier_chain\src\main.e'), $repo, 'x64', 'windows', $gpuChainPath)
+    if ($mode -eq 'release') { $gpuChainArgs += '--release' }
+    $gpuChainWritten = & $compiler @gpuChainArgs
+    if ($LASTEXITCODE -ne 0 -or $gpuChainWritten -ne 'executable written') { throw "gpu_barrier_chain $mode emission failed" }
+    $gpuChainOutput = & $gpuChainPath
+    if ($LASTEXITCODE -ne 0 -or $gpuChainOutput -ne 'gpu barrier chain ok') { throw "a $mode barrier helper chain answered wrongly: exit $LASTEXITCODE" }
+}
+foreach ($mode in @('debug', 'release')) {
+    $gpuHelperOccurrencePath = Join-Path $testBuild "gpu-barrier-helper-occurrence-$mode.exe"
+    $gpuHelperOccurrenceArgs = @('emit-executable', (Join-Path $PSScriptRoot 'fixtures\link\gpu_barrier_helper_occurrence\src\main.e'), $repo, 'x64', 'windows', $gpuHelperOccurrencePath)
+    if ($mode -eq 'release') { $gpuHelperOccurrenceArgs += '--release' }
+    $gpuHelperOccurrenceWritten = & $compiler @gpuHelperOccurrenceArgs
+    if ($LASTEXITCODE -ne 0 -or $gpuHelperOccurrenceWritten -ne 'executable written') { throw "gpu_barrier_helper_occurrence $mode emission failed" }
+    $gpuHelperOccurrenceOutput = & $gpuHelperOccurrencePath 2>&1
+    if ($LASTEXITCODE -ne 134 -or ($gpuHelperOccurrenceOutput -join "`n") -notmatch 'reached barrier 1 \(different loop occurrence\)') { throw "a $mode helper-loop mismatch did not trap: exit $LASTEXITCODE, $($gpuHelperOccurrenceOutput -join "`n")" }
 }
 $gpuFrameManyPath = Join-Path $testBuild 'gpu-frame-many-selfhost.exe'
 $gpuFrameManyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_frame_many\src\main.e') $repo 'x64' 'windows' $gpuFrameManyPath
@@ -4881,7 +5605,7 @@ foreach ($hotMode in @('--release', '--time')) {
     if ($LASTEXITCODE -ne 0 -or $shapeFirst -ne 'executable written') { throw "the cold build of the gpu_reshape fixture failed ($hotMode)" }
     & $shapeExe
     if ($LASTEXITCODE -ne 50) { throw "the gpu_reshape fixture did not exit 50 before the edits ($hotMode): $LASTEXITCODE" }
-    foreach ($shapeStep in @(@('main', 'main.e', 'main=rebuilt:source-changed', 'k=kept:stable', 50), @('body', 'k.e', 'main=kept:edges-hold', 'k=rebuilt:source-changed', 50), @('size', 'k.e', 'main=rebuilt:edge-changed', 'k=rebuilt:source-changed', 82))) {
+    foreach ($shapeStep in @(@('main', 'main.e', 'main=rebuilt:source-changed', 'k=kept:stable', 50), @('body', 'k.e', 'main=rebuilt:edge-changed', 'k=rebuilt:source-changed', 50), @('size', 'k.e', 'main=rebuilt:edge-changed', 'k=rebuilt:source-changed', 82))) {
         $shapeEdit = $shapeStep[0]
         Copy-Item (Join-Path $shapeScratch "edits\$shapeEdit.e") (Join-Path $shapeScratch "src\$($shapeStep[1])") -Force
         $shapeWarm = & $compiler emit-executable $shapeMain $repo 'x64' 'windows' $shapeExe $hotMode --incremental -j 1 2>$null
@@ -5133,7 +5857,7 @@ foreach ($hotMode in @('--release', '--time')) {
     Remove-Item -LiteralPath (Join-Path $hotScratch '.neper') -Recurse -Force
     $hotFaultBuild = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental --fault-write 1 2>&1
     if ($LASTEXITCODE -ne 1 -or ($hotFaultBuild -join "`n") -notmatch 'made to fail by --fault-write') { throw "a build with an injected write fault did not fail as one ($hotMode): $hotFaultBuild" }
-    if (-not (Get-ChildItem -LiteralPath (Join-Path $hotScratch ".neper\$hotManifestMode") -Filter '*.tmp' -Recurse)) { throw "the injected write fault left no staged file ($hotMode)" }
+    if (-not (Get-ChildItem -LiteralPath (Join-Path $hotScratch ".neper\$hotManifestMode") -Filter '.neper-stage-*' -Recurse)) { throw "the injected write fault left no staged file ($hotMode)" }
     $hotAfterFault = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
     if ($LASTEXITCODE -ne 0 -or $hotAfterFault -ne 'executable written') { throw "the warm hot build after an injected write fault failed ($hotMode)" }
     & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:invalid-artifact' 'dep=rebuilt:no-artifact'

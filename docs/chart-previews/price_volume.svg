@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>price_volume</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="53" y="43" width="270" height="104.94" fill="rgb(247,250,252)"/>
+<rect x="53" y="157.94" width="270" height="54.06" fill="rgb(247,250,252)"/>
+<path d="M63.38 147.94 L84.15 131.8 L104.92 143.9 L146.46 111.61 L167.23 115.65 L208.77 87.4 L229.54 103.54 L250.31 67.22 L291.85 75.29 L312.62 43" fill="none" stroke="rgb(20,99,194)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="56.12" y="197.98" width="14.54" height="14.02" fill="rgb(18,140,110)"/>
+<rect x="76.88" y="191.98" width="14.54" height="20.02" fill="rgb(18,140,110)"/>
+<rect x="97.65" y="195.18" width="14.54" height="16.82" fill="rgb(18,140,110)"/>
+<rect x="139.19" y="183.97" width="14.54" height="28.03" fill="rgb(18,140,110)"/>
+<rect x="159.96" y="192.38" width="14.54" height="19.62" fill="rgb(18,140,110)"/>
+<rect x="201.5" y="173.96" width="14.54" height="38.04" fill="rgb(18,140,110)"/>
+<rect x="222.27" y="179.96" width="14.54" height="32.04" fill="rgb(18,140,110)"/>
+<rect x="243.04" y="163.95" width="14.54" height="48.05" fill="rgb(18,140,110)"/>
+<rect x="284.58" y="181.97" width="14.54" height="30.03" fill="rgb(18,140,110)"/>
+<rect x="305.35" y="157.94" width="14.54" height="54.06" fill="rgb(18,140,110)"/>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(77,92,115)">Price and volume</text>
+<text x="53" y="40" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(77,92,115)">Close</text>
+<text x="53" y="154.94" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(77,92,115)">Volume</text>
+<text x="180" y="237" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(77,92,115)">Observation</text>
+</svg>

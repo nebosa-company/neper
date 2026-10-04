@@ -85,6 +85,9 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 | `e.algo.smt` | new | #1966, #1968 |
 | `e.algo.sort` | existing | 15 entries, first #1 |
 | `e.algo.stat` | existing | 20 entries, first #1426 |
+| `e.algo.stat.safety` | new (under `e.algo.stat`) | #2266 |
+| `e.algo.stat.meta` | new (under `e.algo.stat`) | #2256 |
+| `e.algo.stat.regression` | new (under `e.algo.stat`) | #2257 |
 | `e.algo.stat.test` | new (under `e.algo.stat`) | 15 entries, first #1534 |
 | `e.algo.timeseries` | new | #1498, #1500, #2196, #2197, #2198, #2199, #2200 |
 | `e.algo.uuid` | existing | #954, #955, #956, #957, #958 |
@@ -223,6 +226,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 | `e.math.opt.meta` | new (split from `e.math.opt`) | #770, #771, #772, #773, #774, #779, #780 |
 | `e.math.opt.convex` | new (split from `e.math.opt`) | #517, #1461 |
 | `e.math.opt.milp` | new (under `e.math.opt`) | #1987 |
+| `e.math.pkpd` | new (under `e.math`) | #2265 |
 | `e.math.root` | new (under `e.math`) | #496, #497, #498, #499, #500 |
 | `e.mem` | existing | #679, #680, #681, #682, #683 |
 | `e.ml.ann` | new | #1096, #1226, #1227 |
@@ -2763,12 +2767,12 @@ docking scores, free-energy perturbation, force fields, and enhanced
 sampling → skip: physics; NONMEM/Simcyp, MedDRA/Derek, BLAST/BWA
 tools, DESeq2/DSSP/GSEA → skip: bio/system/product.
 
-2259. **Neural Layers for Molecules and Sequences** - Recurrent layers (LSTM/GRU) for SMILES and graph layers (GCN/GAT/MPNN, ChemProp-style message passing) for molecular property and drug-target prediction; trained weights excluded. -> `e.ml.gnn`, `e.ml.recurrent`
-2260. **Chemical Similarity and Scaffold Core** - Bit fingerprints (ECFP/Morgan, MACCS), Tanimoto/Dice scoring, Butina clustering for library diversity, and maximum-common-substructure (FMCS) scaffold matching. -> `e.ml.fingerprint`
-2261. **Chemometric Extensions** - Partial-least-squares regression for classical QSAR and PAT/NIR calibration, and UMAP for chemical and single-cell visualization. -> `e.ml.linear.pls`, `e.ml.reduce.umap`
-2262. **Longitudinal and Mixed-Model Core** - Linear mixed models and MMRM for repeated-measures efficacy plus GEE for population-averaged effects. -> `e.algo.stat.mixed`
-2263. **Time-to-Event Trial Extensions** - Kaplan-Meier estimator, log-rank test, Cox proportional-hazards fit, group-sequential alpha spending (O'Brien-Fleming/Pocock), Simon two-stage design, continual-reassessment dose escalation, and Farrington-Manning non-inferiority. -> `e.algo.stat.survival_trial`
-2264. **Causal and Missing-Data Core** - Propensity scores with IPTW, doubly-robust treatment-effect estimators, and multiple imputation by chained equations (MICE) for real-world evidence. -> `e.algo.stat.causal`
-2265. **PK/PD Mathematics** - Non-compartmental analysis (trapezoidal AUC/Cmax), Emax/Hill dose-response fits, and Michaelis-Menten enzyme-kinetics fits over the existing optimizers. -> `e.math.pkpd`
-2266. **Safety-Signal Detection** - Disproportionality scores (ROR, PRR, BCPNN information component) and frequent-itemset rule mining (Apriori/FP-growth) for drug-drug interactions. -> `e.algo.stat.safety`
-2267. **Forecast and Inventory Extensions** - ARIMA for surveillance and demand series plus EOQ and newsvendor inventory policies for supply planning. -> `e.algo.timeseries.arima`, `e.algo.combopt.inventory`
+2259. **Neural Layers for Molecules and Sequences** - Recurrent layers (LSTM/GRU) for SMILES and graph layers (GCN/GAT/MPNN, ChemProp-style message passing) for molecular property and drug-target prediction; trained weights excluded. → `e.ml.recurrent.lstm_step`, `e.ml.recurrent.lstm_forward`, `e.ml.recurrent.gru_step`, `e.ml.recurrent.gru_forward`, `e.ml.gnn.gcn_layer`, `e.ml.gnn.gat_layer`, `e.ml.gnn.mpnn_step`
+2260. **Chemical Similarity and Scaffold Core** - Bit fingerprints (ECFP/Morgan, MACCS), Tanimoto/Dice scoring, Butina clustering for library diversity, and maximum-common-substructure (FMCS) scaffold matching. → `e.ml.fingerprint.tanimoto`, `e.ml.fingerprint.butina`, `e.ml.fingerprint.fmcs`
+2261. **Chemometric Extensions** - Partial-least-squares regression for classical QSAR and PAT/NIR calibration, and UMAP for chemical and single-cell visualization. → `e.ml.linear.pls`, `e.ml.reduce.umap`
+2262. **Longitudinal and Mixed-Model Core** - Linear mixed models and MMRM for repeated-measures efficacy plus GEE for population-averaged effects. → `e.algo.stat.mixed.mmrm`, `e.algo.stat.mixed.gee`
+2263. **Time-to-Event Trial Extensions** - Kaplan-Meier estimator, log-rank test, Cox proportional-hazards fit, group-sequential alpha spending (O'Brien-Fleming/Pocock), Simon two-stage design, continual-reassessment dose escalation, and Farrington-Manning non-inferiority. → `e.algo.stat.survival_trial.kaplan_meier`, `e.algo.stat.survival_trial.log_rank`, `e.algo.stat.survival_trial.cox_ph`, `e.algo.stat.survival_trial.simon_two_stage`
+2264. **Causal and Missing-Data Core** - Propensity scores with IPTW, doubly-robust treatment-effect estimators, and multiple imputation by chained equations (MICE) for real-world evidence. → `e.algo.stat.causal.propensity`, `e.algo.stat.causal.mice`
+2265. **PK/PD Mathematics** - Non-compartmental analysis (trapezoidal AUC/Cmax), Emax/Hill dose-response fits, and Michaelis-Menten enzyme-kinetics fits over the existing optimizers. → `e.math.pkpd.nca`, `e.math.pkpd.emax_hill`, `e.math.pkpd.michaelis_menten`
+2266. **Safety-Signal Detection** - Disproportionality scores (ROR, PRR, BCPNN information component) and frequent-itemset rule mining (Apriori/FP-growth) for drug-drug interactions. → `e.algo.stat.safety.ror`, `e.algo.stat.safety.bcpnn`, `e.algo.stat.safety.apriori`
+2267. **Forecast and Inventory Extensions** - ARIMA for surveillance and demand series plus EOQ and newsvendor inventory policies for supply planning. → `e.algo.timeseries.arima`, `e.algo.combopt.inventory.eoq`

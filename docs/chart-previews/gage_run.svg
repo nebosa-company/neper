@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>gage_run</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="30" y="50" width="300" height="132" fill="rgb(245,250,255)"/>
+<line x1="90" y1="50" x2="90" y2="182" stroke="rgb(173,186,204)" stroke-width="2" stroke-linecap="round"/>
+<line x1="150" y1="50" x2="150" y2="182" stroke="rgb(173,186,204)" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="50" x2="210" y2="182" stroke="rgb(173,186,204)" stroke-width="2" stroke-linecap="round"/>
+<line x1="270" y1="50" x2="270" y2="182" stroke="rgb(173,186,204)" stroke-width="2" stroke-linecap="round"/>
+<line x1="30" y1="121.86" x2="330" y2="121.86" stroke="rgb(41,56,79)" stroke-width="2" stroke-linecap="round"/>
+<rect x="30.33" y="154.48" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="37" y="151.39" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="43.67" y="148.62" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="90.33" y="108.22" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="97" y="105.14" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="103.67" y="102.36" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="150.33" y="169.9" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="157" y="166.81" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="163.67" y="164.04" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="210.33" y="77.38" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="217" y="74.3" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="223.67" y="71.52" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="270.33" y="139.06" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="277" y="135.97" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="283.67" y="133.2" width="6" height="6" fill="rgb(31,102,194)"/>
+<rect x="50.33" y="146" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="57" y="142.91" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="63.67" y="140.14" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="110.33" y="99.74" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="117" y="96.66" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="123.67" y="93.88" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="170.33" y="161.42" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="177" y="158.33" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="183.67" y="155.56" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="230.33" y="68.9" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="237" y="65.82" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="243.67" y="63.04" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="290.33" y="130.58" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="297" y="127.49" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="303.67" y="124.72" width="6" height="6" fill="rgb(237,107,43)"/>
+<rect x="70.33" y="139.06" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="77" y="135.97" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="83.67" y="133.2" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="130.33" y="92.8" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="137" y="89.72" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="143.67" y="86.94" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="190.33" y="154.48" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="197" y="151.39" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="203.67" y="148.62" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="250.33" y="61.96" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="257" y="58.88" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="263.67" y="56.1" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="310.33" y="123.64" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="317" y="120.56" width="6" height="6" fill="rgb(28,153,122)"/>
+<rect x="323.67" y="117.78" width="6" height="6" fill="rgb(28,153,122)"/>
+<text x="180" y="20" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(41,56,79)">Gage run / crossed study</text>
+<text x="180" y="39" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Overall mean 11.76   max repeat range 0.38</text>
+<text x="60" y="198" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Part 1</text>
+<text x="120" y="198" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Part 2</text>
+<text x="180" y="198" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Part 3</text>
+<text x="240" y="198" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Part 4</text>
+<text x="300" y="198" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Part 5</text>
+<text x="73" y="227" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Operator A</text>
+<text x="180" y="227" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Operator B</text>
+<text x="287" y="227" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Operator C</text>
+<text x="180" y="213" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Measurements by part and operator</text>
+</svg>

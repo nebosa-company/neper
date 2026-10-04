@@ -142,6 +142,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if halves_error != ok || half_view_error != ok { os.exit(144i32) }
     if jpeg.encode(&w, half_view, jpeg.EncodeOptions { quality: 80u8, progressive: false }) != jpeg.Unsupported { os.exit(145i32) }
 
+    let (hostile, hostile_error) = mem.alloc[u8](a, baseline444_jpg().len)
+    if hostile_error != ok { os.exit(146i32) }
+    mem.copy[u8](hostile, baseline444_jpg())
+    var sof = 0usize
+    while sof + 9usize < hostile.len && !(hostile[sof] == 255u8 && hostile[sof + 1usize] == 192u8) { sof += 1usize }
+    if sof + 9usize >= hostile.len { os.exit(147i32) }
+    hostile[sof + 5usize] = 16u8
+    hostile[sof + 6usize] = 0u8
+    hostile[sof + 7usize] = 16u8
+    hostile[sof + 8usize] = 1u8
+    let (_, default_error) = jpeg.decode(a, reader_of(&state, hostile), options())
+    if default_error != jpeg.TooLarge { os.exit(148i32) }
+    var frame: jpeg.Frame = zero
+    frame.width = 16385usize
+    frame.height = 1usize
+    if jpeg.within(frame, options()) != jpeg.TooLarge { os.exit(149i32) }
+    var raised = options()
+    raised.max_width = 16385u32
+    if jpeg.within(frame, raised) != ok { os.exit(150i32) }
+    frame.width = 1usize
+    frame.height = 16385usize
+    if jpeg.within(frame, raised) != jpeg.TooLarge { os.exit(151i32) }
+
     try io.print("fmt jpeg ok\n")
     ret ok
 }

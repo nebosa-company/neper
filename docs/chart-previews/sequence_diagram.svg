@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>sequence_diagram</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="70.67" y1="76" x2="70.67" y2="83.53" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.67" y1="91.05" x2="70.67" y2="98.58" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.67" y1="106.11" x2="70.67" y2="113.63" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.67" y1="121.16" x2="70.67" y2="128.68" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.67" y1="136.21" x2="70.67" y2="143.74" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.67" y1="151.26" x2="70.67" y2="158.79" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.67" y1="166.32" x2="70.67" y2="173.84" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.67" y1="181.37" x2="70.67" y2="188.89" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.67" y1="196.42" x2="70.67" y2="203.95" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.67" y1="211.47" x2="70.67" y2="219" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="76" x2="180" y2="83.53" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="91.05" x2="180" y2="98.58" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="106.11" x2="180" y2="113.63" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="121.16" x2="180" y2="128.68" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="136.21" x2="180" y2="143.74" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="151.26" x2="180" y2="158.79" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="166.32" x2="180" y2="173.84" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="181.37" x2="180" y2="188.89" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="196.42" x2="180" y2="203.95" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="211.47" x2="180" y2="219" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="289.33" y1="76" x2="289.33" y2="83.53" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="289.33" y1="91.05" x2="289.33" y2="98.58" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="289.33" y1="106.11" x2="289.33" y2="113.63" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="289.33" y1="121.16" x2="289.33" y2="128.68" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="289.33" y1="136.21" x2="289.33" y2="143.74" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="289.33" y1="151.26" x2="289.33" y2="158.79" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="289.33" y1="166.32" x2="289.33" y2="173.84" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="289.33" y1="181.37" x2="289.33" y2="188.89" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="289.33" y1="196.42" x2="289.33" y2="203.95" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="289.33" y1="211.47" x2="289.33" y2="219" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<rect x="176" y="88.08" width="8" height="106.67" fill="rgb(196,222,247)"/>
+<rect x="285.33" y="132.42" width="8" height="40.17" fill="rgb(196,222,247)"/>
+<line x1="70.67" y1="97.08" x2="180" y2="97.08" stroke="rgb(41,110,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="173" y1="93.08" x2="180" y2="97.08" stroke="rgb(41,110,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="173" y1="101.08" x2="180" y2="97.08" stroke="rgb(41,110,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="112.25" x2="205" y2="112.25" stroke="rgb(41,110,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="205" y1="112.25" x2="205" y2="126.25" stroke="rgb(41,110,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="205" y1="126.25" x2="180" y2="126.25" stroke="rgb(41,110,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="186" y1="122.25" x2="180" y2="126.25" stroke="rgb(41,110,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="186" y1="130.25" x2="180" y2="126.25" stroke="rgb(41,110,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="141.42" x2="289.33" y2="141.42" stroke="rgb(41,110,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="282.33" y1="137.42" x2="289.33" y2="141.42" stroke="rgb(41,110,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="282.33" y1="145.42" x2="289.33" y2="141.42" stroke="rgb(41,110,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="289.33" y1="163.58" x2="275.67" y2="163.58" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="262" y1="163.58" x2="248.33" y2="163.58" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="234.67" y1="163.58" x2="221" y2="163.58" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="207.33" y1="163.58" x2="193.67" y2="163.58" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="187" y1="159.58" x2="180" y2="163.58" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="187" y1="167.58" x2="180" y2="163.58" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="185.75" x2="166.33" y2="185.75" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="152.67" y1="185.75" x2="139" y2="185.75" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="125.33" y1="185.75" x2="111.67" y2="185.75" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="98" y1="185.75" x2="84.33" y2="185.75" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="77.67" y1="181.75" x2="70.67" y2="185.75" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="77.67" y1="189.75" x2="70.67" y2="185.75" stroke="rgb(179,191,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.67" y1="207.92" x2="180" y2="207.92" stroke="rgb(33,135,117)" stroke-width="2" stroke-linecap="round"/>
+<line x1="173" y1="203.92" x2="180" y2="207.92" stroke="rgb(33,135,117)" stroke-width="2" stroke-linecap="round"/>
+<line x1="173" y1="211.92" x2="180" y2="207.92" stroke="rgb(33,135,117)" stroke-width="2" stroke-linecap="round"/>
+<rect x="30.21" y="48" width="80.91" height="24" fill="rgb(41,110,194)"/>
+<rect x="139.55" y="48" width="80.91" height="24" fill="rgb(41,110,194)"/>
+<rect x="248.88" y="48" width="80.91" height="24" fill="rgb(41,110,194)"/>
+<rect x="30.21" y="48" width="80.91" height="24" fill="rgb(41,77,138)"/>
+<rect x="248.88" y="48" width="80.91" height="24" fill="rgb(33,135,117)"/>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)">Sequence diagram / messages</text>
+<text x="180" y="238" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Calls, return dashes, async follow-up</text>
+<text x="70.67" y="63" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)">Client</text>
+<text x="180" y="63" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)">API</text>
+<text x="289.33" y="63" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(255,255,255)">DB</text>
+<text x="125.33" y="90.08" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">request</text>
+<text x="207" y="110.25" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">auth</text>
+<text x="234.67" y="134.42" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">lookup</text>
+<text x="234.67" y="156.58" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">row</text>
+<text x="125.33" y="178.75" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">200 OK</text>
+<text x="125.33" y="200.92" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">refresh</text>
+</svg>

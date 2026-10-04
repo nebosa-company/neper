@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>color_vision</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="123" y="49" width="32" height="32" fill="rgb(41,51,71)"/>
+<rect x="125" y="51" width="28" height="28" fill="rgb(255,255,255)"/>
+<rect x="243" y="49" width="32" height="32" fill="rgb(41,51,71)"/>
+<rect x="245" y="51" width="28" height="28" fill="rgb(255,255,255)"/>
+<rect x="123" y="93" width="32" height="32" fill="rgb(41,51,71)"/>
+<rect x="125" y="95" width="28" height="28" fill="rgb(255,255,255)"/>
+<rect x="243" y="93" width="32" height="32" fill="rgb(41,51,71)"/>
+<rect x="245" y="95" width="28" height="28" fill="rgb(255,255,255)"/>
+<rect x="93" y="137" width="32" height="32" fill="rgb(41,51,71)"/>
+<rect x="95" y="139" width="28" height="28" fill="rgb(255,255,255)"/>
+<rect x="183" y="137" width="32" height="32" fill="rgb(41,51,71)"/>
+<rect x="185" y="139" width="28" height="28" fill="rgb(255,255,255)"/>
+<rect x="93" y="181" width="32" height="32" fill="rgb(41,51,71)"/>
+<rect x="95" y="183" width="28" height="28" fill="rgb(255,255,255)"/>
+<rect x="153" y="181" width="32" height="32" fill="rgb(41,51,71)"/>
+<rect x="155" y="183" width="28" height="28" fill="rgb(255,255,255)"/>
+<rect x="96" y="52" width="26" height="26" fill="rgb(0,114,178)"/>
+<rect x="126" y="52" width="26" height="26" fill="rgb(195,86,0)"/>
+<rect x="156" y="52" width="26" height="26" fill="rgb(0,135,99)"/>
+<rect x="186" y="52" width="26" height="26" fill="rgb(142,68,173)"/>
+<rect x="216" y="52" width="26" height="26" fill="rgb(179,38,62)"/>
+<rect x="246" y="52" width="26" height="26" fill="rgb(171,102,0)"/>
+<rect x="96" y="96" width="26" height="26" fill="rgb(108,108,178)"/>
+<rect x="126" y="96" width="26" height="26" fill="rgb(106,106,6)"/>
+<rect x="156" y="96" width="26" height="26" fill="rgb(128,128,98)"/>
+<rect x="186" y="96" width="26" height="26" fill="rgb(81,81,173)"/>
+<rect x="216" y="96" width="26" height="26" fill="rgb(74,74,63)"/>
+<rect x="246" y="96" width="26" height="26" fill="rgb(113,113,4)"/>
+<rect x="96" y="140" width="26" height="26" fill="rgb(97,97,179)"/>
+<rect x="126" y="140" width="26" height="26" fill="rgb(131,131,0)"/>
+<rect x="156" y="140" width="26" height="26" fill="rgb(115,115,101)"/>
+<rect x="186" y="140" width="26" height="26" fill="rgb(97,97,172)"/>
+<rect x="216" y="140" width="26" height="26" fill="rgb(107,107,55)"/>
+<rect x="246" y="140" width="26" height="26" fill="rgb(128,128,0)"/>
+<rect x="96" y="184" width="26" height="26" fill="rgb(0,126,126)"/>
+<rect x="126" y="184" width="26" height="26" fill="rgb(198,80,80)"/>
+<rect x="156" y="184" width="26" height="26" fill="rgb(36,131,131)"/>
+<rect x="186" y="184" width="26" height="26" fill="rgb(129,93,93)"/>
+<rect x="216" y="184" width="26" height="26" fill="rgb(178,42,42)"/>
+<rect x="246" y="184" width="26" height="26" fill="rgb(175,95,95)"/>
+<text x="14" y="69" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(41,51,71)">Typical</text>
+<text x="282" y="63" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(41,51,71)">min 10.1</text>
+<text x="282" y="74" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(41,51,71)">S2 vs S6</text>
+<text x="14" y="113" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(41,51,71)">Protanopia</text>
+<text x="282" y="107" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(41,51,71)">min 2.7</text>
+<text x="282" y="118" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(41,51,71)">S2 vs S6</text>
+<text x="14" y="157" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(41,51,71)">Deuteranopia</text>
+<text x="282" y="151" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(41,51,71)">min 1.2</text>
+<text x="282" y="162" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(41,51,71)">S1 vs S4</text>
+<text x="14" y="201" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(41,51,71)">Tritanopia</text>
+<text x="282" y="195" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(41,51,71)">min 2.6</text>
+<text x="282" y="206" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(41,51,71)">S1 vs S3</text>
+<text x="180" y="20" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(41,51,71)">Palette under simulated colour vision</text>
+<text x="180" y="33" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(41,51,71)">Outlined: the closest pair; min is its CIEDE2000 difference</text>
+</svg>

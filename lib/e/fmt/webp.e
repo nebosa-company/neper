@@ -8,8 +8,8 @@
 // steps of libwebp's; a lossless decode is exact. `inspect` reads the container and
 // the first frame's header, counting `ANMF` frames; decoding more than the first
 // frame is `Unsupported`, as the fence says, and `first_frame_only` is honoured.
-// Dimensions are checked against the options before any plane is taken; a zero
-// limit is no limit.
+// Dimensions are checked against the options before any plane is taken; zero
+// selects finite defaults.
 //
 // Encoding writes lossless VP8L: no transforms, no cache, one prefix group whose
 // four channel codes are flat eight-bit codes and whose distance code is empty, so
@@ -204,9 +204,13 @@ fn inspect(source: io.Reader) -> (image.Info, err) {
 }
 
 fn within(w: u32, h: u32, options: DecodeOptions) -> err {
-    if options.max_width != 0u32 && w > options.max_width { ret TooLarge }
-    if options.max_height != 0u32 && h > options.max_height { ret TooLarge }
-    if options.max_pixels != 0u64 && u64(w) * u64(h) > options.max_pixels { ret TooLarge }
+    var width = options.max_width
+    var height = options.max_height
+    var pixels = options.max_pixels
+    if width == 0u32 { width = 16384u32 }
+    if height == 0u32 { height = 16384u32 }
+    if pixels == 0u64 { pixels = 16777216u64 }
+    if w > width || h > height || u64(w) * u64(h) > pixels { ret TooLarge }
     ret ok
 }
 

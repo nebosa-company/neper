@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>gage_rr</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="52" y="48" width="276" height="128" fill="rgb(250,252,255)"/>
+<line x1="52" y1="48" x2="52" y2="176" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="176" x2="52" y2="181" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="328" y1="48" x2="328" y2="176" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="328" y1="176" x2="328" y2="181" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="176" x2="328" y2="176" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="176" x2="52" y2="176" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="144" x2="328" y2="144" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="144" x2="52" y2="144" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="112" x2="328" y2="112" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="112" x2="52" y2="112" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="80" x2="328" y2="80" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="80" x2="52" y2="80" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="48" x2="328" y2="48" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="48" x2="52" y2="48" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="48" x2="52" y2="176" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="176" x2="328" y2="176" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<rect x="59.9" y="166.06" width="25.09" height="9.94" fill="rgb(20,99,189)"/>
+<rect x="128.9" y="171.66" width="25.09" height="4.34" fill="rgb(20,99,189)"/>
+<rect x="197.9" y="170.41" width="25.09" height="5.59" fill="rgb(20,99,189)"/>
+<rect x="266.9" y="57.94" width="25.09" height="118.06" fill="rgb(20,99,189)"/>
+<rect x="88.01" y="140.34" width="25.09" height="35.66" fill="rgb(232,87,41)"/>
+<rect x="157.01" y="152.42" width="25.09" height="23.58" fill="rgb(232,87,41)"/>
+<rect x="226.01" y="149.25" width="25.09" height="26.75" fill="rgb(232,87,41)"/>
+<rect x="295.01" y="53.07" width="25.09" height="122.93" fill="rgb(232,87,41)"/>
+<rect x="112" y="202" width="10" height="8" fill="rgb(20,99,189)"/>
+<rect x="220" y="202" width="10" height="8" fill="rgb(232,87,41)"/>
+<text x="180" y="18" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">Gage R&amp;R components</text>
+<text x="180" y="32" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Crossed ANOVA / 10 parts, 3 operators, 3 trials</text>
+<text x="43" y="179" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">0%</text>
+<text x="43" y="147" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">25%</text>
+<text x="43" y="115" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">50%</text>
+<text x="43" y="83" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">75%</text>
+<text x="43" y="51" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">100%</text>
+<text x="86.5" y="190" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Gage</text>
+<text x="155.5" y="190" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Repeat</text>
+<text x="224.5" y="190" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Reprod</text>
+<text x="293.5" y="190" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Part</text>
+<text x="135" y="210" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(43,59,82)">Variance %</text>
+<text x="243" y="210" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(43,59,82)">Study variation %</text>
+<text x="180" y="232" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Source of variation / percent of total</text>
+</svg>

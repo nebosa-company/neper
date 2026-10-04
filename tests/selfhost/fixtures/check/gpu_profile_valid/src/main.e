@@ -16,7 +16,7 @@ fn fill(v: []u32, src: []const u32, k: u32) {
     if i >= v.len { ret }
     let part = window(src, i)
     var total: [2]u32 = zero
-    total[0usize] = scale(part[0usize], k)
+    total[0usize] = scale(part[0usize], u32.trunc(u64(k)))
     shared var tile: [64]u32
     tile[usize(gpu.lid.x)] = total[0usize]
     let row = tile[0usize..4usize]

@@ -2,9 +2,12 @@
 // `pca` (the covariance eigendecomposition by cyclic Jacobi rotations,
 // components by falling variance) with `pca_project`, `pca_online` (Oja's
 // rule for the leading component from a stream), `frequent_directions` (the
-// deterministic sketch shrinking by its middle singular value) and `tsne`
-// (exact t-SNE with a perplexity search and momentum gradient descent).
+// deterministic sketch shrinking by its middle singular value), `tsne`
+// (exact t-SNE with a perplexity search and momentum gradient descent) and
+// `umap` (exact neighbourhoods, smooth-kNN fuzzy affinities, a PCA start
+// and cross-entropy SGD with uniform negative samples).
 
+use e.algo.rand
 use e.math
 
 error TooSmall
@@ -411,4 +414,209 @@ fn frequent_directions(x: []const f64, n: usize, d: usize, sketch: []f64, rows: 
         i += 1usize
     }
     ret (filled, ok)
+}
+
+// The fuzzy affinity of one row of `k` neighbour distances at `rho` and
+// `sigma`: the `exp(-max(d - rho, 0) / sigma)` sum, `goal` (`log2(k)` in
+// `umap`) at the right scale.
+fn umap_affinity(dist: []const f64, k: usize, rho: f64, sigma: f64) -> f64 {
+    var total = 0.0f64
+    var t = 0usize
+    while t < k {
+        var excess = dist[t] - rho
+        if excess < 0.0f64 { excess = 0.0f64 }
+        total += math.exp[f64](0.0f64 - excess / sigma)
+        t += 1usize
+    }
+    ret total
+}
+
+// The smooth-kNN scale with `affinity == goal`: halved from 1 until the
+// sum obeys (at most 1024 halvings), then bisected 64 rounds; floored at
+// 1e-12 so a duplicated neighbourhood stays finite.
+fn umap_sigma(dist: []const f64, k: usize, rho: f64, goal: f64) -> f64 {
+    var hi = 1.0f64
+    while hi > 1.0e-300f64 && umap_affinity(dist, k, rho, hi) > goal {
+        hi = hi / 2.0f64
+    }
+    var lo = 0.0f64
+    var step = 0u32
+    while step < 64u32 {
+        let mid = (lo + hi) / 2.0f64
+        if mid > 0.0f64 && umap_affinity(dist, k, rho, mid) > goal {
+            hi = mid
+        } else {
+            lo = mid
+        }
+        step += 1u32
+    }
+    ret math.max[f64]((lo + hi) / 2.0f64, 0.000000000001f64)
+}
+
+// Uniform manifold approximation of `x` (`n × d`) into `y` (`n × 2`):
+// exact `neighbors` neighbourhoods, smooth-kNN fuzzy affinities at
+// `log2(neighbors)` symmetrized by `a + b - a b`, a PCA start scaled to
+// span 10 per axis (not the spectral embedding), and `epochs` of
+// cross-entropy SGD at a linearly decaying `rate` with `negatives` uniform
+// negative samples drawn through `r` (head-point updates only, gradient
+// coefficients clipped at 4). Attraction skips coincident pairs. Distances
+// are squared throughout, and `a`/`b` are the curve pair directly (1.576
+// and 0.895 at the usual spread). `fscratch.len >= n * n + n * neighbors +
+// 2 * d * d + 2 * d + 2 * n` holds distances, the fuzzy matrix and the PCA
+// and neighbourhood temporaries; `iscratch.len >= n * neighbors` the
+// neighbour indices. Zero `epochs` keeps the PCA start.
+fn umap(x: []const f64, n: usize, d: usize, neighbors: usize, a: f64, b: f64, epochs: u32, rate: f64, negatives: usize, y: []f64, r: *rand.Pcg64, fscratch: []f64, iscratch: []usize) -> err {
+    let k = neighbors
+    if x.len < n * d || y.len < 2usize * n || fscratch.len < n * n + n * k + 2usize * d * d + 2usize * d + 2usize * n || iscratch.len < n * k { ret TooSmall }
+    if n == 0usize || d < 2usize || k < 2usize || k >= n || a <= 0.0f64 || b <= 0.0f64 { ret Invalid }
+    var dists = fscratch[..n * k]
+    var fuzzy = fscratch[n * k..n * k + n * n]
+    var at = n * k + n * n
+    var mean = fscratch[at..at + d]
+    at += d
+    var variances = fscratch[at..at + d]
+    at += d
+    var components = fscratch[at..at + d * d]
+    at += d * d
+    var workspace = fscratch[at..at + d * d]
+    at += d * d
+    var rho = fscratch[at..at + n]
+    at += n
+    var sigma = fscratch[at..at + n]
+    var idx = iscratch[..n * k]
+    // Exact neighbourhoods by sorted-prefix insertion, ties to the lower index.
+    var i = 0usize
+    while i < n {
+        var count = 0usize
+        var j = 0usize
+        while j < n {
+            if j != i {
+                var dd = 0.0f64
+                var c = 0usize
+                while c < d {
+                    let t = x[i * d + c] - x[j * d + c]
+                    dd += t * t
+                    c += 1usize
+                }
+                if count < k || dd < dists[i * k + k - 1usize] {
+                    var place = count
+                    if place == k { place = k - 1usize }
+                    while place > 0usize && dists[i * k + place - 1usize] > dd {
+                        dists[i * k + place] = dists[i * k + place - 1usize]
+                        idx[i * k + place] = idx[i * k + place - 1usize]
+                        place -= 1usize
+                    }
+                    dists[i * k + place] = dd
+                    idx[i * k + place] = j
+                    if count < k { count += 1usize }
+                }
+            }
+            j += 1usize
+        }
+        rho[i] = dists[i * k]
+        i += 1usize
+    }
+    // Fuzzy affinities, symmetrized in place.
+    let goal = math.log2[f64](f64(k))
+    i = 0usize
+    while i < n * n {
+        fuzzy[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        sigma[i] = umap_sigma(dists[i * k..(i + 1usize) * k], k, rho[i], goal)
+        var t = 0usize
+        while t < k {
+            var excess = dists[i * k + t] - rho[i]
+            if excess < 0.0f64 { excess = 0.0f64 }
+            fuzzy[i * n + idx[i * k + t]] = math.exp[f64](0.0f64 - excess / sigma[i])
+            t += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            let fwd = fuzzy[i * n + j]
+            let bwd = fuzzy[j * n + i]
+            fuzzy[i * n + j] = fwd + bwd - fwd * bwd
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // PCA start: every row projected once, then each axis scaled to span 10
+    // (projecting per axis would clobber the scaled axes through the shared
+    // rows, since one projection writes both coordinates).
+    let pca_error = pca(x, n, d, mean, variances, components, workspace)
+    if pca_error != ok { ret pca_error }
+    i = 0usize
+    while i < n {
+        let project_error = pca_project(x[i * d..(i + 1usize) * d], mean, components, d, 2usize, y[i * 2usize..(i + 1usize) * 2usize])
+        if project_error != ok { ret project_error }
+        i += 1usize
+    }
+    var c = 0usize
+    while c < 2usize {
+        var lo = y[c]
+        var hi = y[c]
+        i = 1usize
+        while i < n {
+            if y[i * 2usize + c] < lo { lo = y[i * 2usize + c] }
+            if y[i * 2usize + c] > hi { hi = y[i * 2usize + c] }
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            if hi > lo {
+                y[i * 2usize + c] = 10.0f64 * (y[i * 2usize + c] - lo) / (hi - lo) - 5.0f64
+            } else {
+                y[i * 2usize + c] = 0.0f64
+            }
+            i += 1usize
+        }
+        c += 1usize
+    }
+    // Cross-entropy SGD, head-point updates, linearly decaying rate.
+    var ep = 0u32
+    while ep < epochs {
+        let step = rate * (1.0f64 - f64(ep) / f64(epochs))
+        i = 0usize
+        while i < n {
+            var j = 0usize
+            while j < n {
+                let wgt = fuzzy[i * n + j]
+                if wgt > 0.0f64 {
+                    let dx = y[2usize * i] - y[2usize * j]
+                    let dy = y[2usize * i + 1usize] - y[2usize * j + 1usize]
+                    let d2 = dx * dx + dy * dy
+                    if d2 >= 0.000000000001f64 {
+                        var coeff = 2.0f64 * a * b * math.pow[f64](d2, b - 1.0f64) / (1.0f64 + a * math.pow[f64](d2, b)) * wgt
+                        if coeff > 4.0f64 { coeff = 4.0f64 }
+                        y[2usize * i] += step * coeff * (y[2usize * j] - y[2usize * i])
+                        y[2usize * i + 1usize] += step * coeff * (y[2usize * j + 1usize] - y[2usize * i + 1usize])
+                    }
+                    var s = 0usize
+                    while s < negatives {
+                        let v = usize(rand.pcg64_bounded(r, u64(n)))
+                        if v != i {
+                            let ex = y[2usize * i] - y[2usize * v]
+                            let ey = y[2usize * i + 1usize] - y[2usize * v + 1usize]
+                            let e2 = ex * ex + ey * ey
+                            var push = 2.0f64 * b / ((0.001f64 + e2) * (1.0f64 + a * math.pow[f64](e2, b)))
+                            if push > 4.0f64 { push = 4.0f64 }
+                            y[2usize * i] += step * push * (y[2usize * i] - y[2usize * v])
+                            y[2usize * i + 1usize] += step * push * (y[2usize * i + 1usize] - y[2usize * v + 1usize])
+                        }
+                        s += 1usize
+                    }
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        ep += 1u32
+    }
+    ret ok
 }

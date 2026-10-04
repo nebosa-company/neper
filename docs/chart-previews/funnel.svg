@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>funnel</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<path d="M28 33 L218 33 L193.3 67 L52.7 67 Z" fill="rgb(18,89,194)"/>
+<rect x="236" y="59" width="11" height="11" fill="rgb(18,89,194)"/>
+<path d="M52.7 71 L193.3 71 L172.4 105 L73.6 105 Z" fill="rgb(240,107,31)"/>
+<rect x="236" y="86" width="11" height="11" fill="rgb(240,107,31)"/>
+<path d="M73.6 109 L172.4 109 L152.45 143 L93.55 143 Z" fill="rgb(56,166,122)"/>
+<rect x="236" y="113" width="11" height="11" fill="rgb(56,166,122)"/>
+<path d="M93.55 147 L152.45 147 L140.1 181 L105.9 181 Z" fill="rgb(163,102,194)"/>
+<rect x="236" y="140" width="11" height="11" fill="rgb(163,102,194)"/>
+<path d="M105.9 185 L140.1 185 L140.1 219 L105.9 219 Z" fill="rgb(237,179,38)"/>
+<rect x="236" y="167" width="11" height="11" fill="rgb(237,179,38)"/>
+<text x="253" y="70" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">Visits 100</text>
+<text x="253" y="97" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">Leads 74</text>
+<text x="253" y="124" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">Qualified 52</text>
+<text x="253" y="151" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">Trials 31</text>
+<text x="253" y="178" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(82,97,122)">Won 18</text>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(82,97,122)">Conversion funnel</text>
+</svg>

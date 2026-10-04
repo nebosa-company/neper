@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>branching_process_map</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="68.45" y1="130.5" x2="79.2" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="79.2" y1="130.5" x2="79.2" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="79.2" y1="130.5" x2="89.95" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="86.08" y1="127.79" x2="89.95" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="86.08" y1="133.21" x2="89.95" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="135.65" y1="130.5" x2="146.4" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="146.4" y1="130.5" x2="146.4" y2="89.25" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="146.4" y1="89.25" x2="157.15" y2="89.25" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="153.28" y1="86.54" x2="157.15" y2="89.25" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="153.28" y1="91.96" x2="157.15" y2="89.25" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="135.65" y1="130.5" x2="146.4" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="146.4" y1="130.5" x2="146.4" y2="171.75" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="146.4" y1="171.75" x2="157.15" y2="171.75" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="153.28" y1="169.04" x2="157.15" y2="171.75" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="153.28" y1="174.46" x2="157.15" y2="171.75" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="202.85" y1="89.25" x2="213.6" y2="89.25" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="213.6" y1="89.25" x2="213.6" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="213.6" y1="130.5" x2="224.35" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="220.48" y1="127.79" x2="224.35" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="220.48" y1="133.21" x2="224.35" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="202.85" y1="171.75" x2="213.6" y2="171.75" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="213.6" y1="171.75" x2="213.6" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="213.6" y1="130.5" x2="224.35" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="220.48" y1="127.79" x2="224.35" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="220.48" y1="133.21" x2="224.35" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="270.05" y1="130.5" x2="280.8" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="280.8" y1="130.5" x2="280.8" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="280.8" y1="130.5" x2="291.55" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="287.68" y1="127.79" x2="291.55" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="287.68" y1="133.21" x2="291.55" y2="130.5" stroke="rgb(140,161,184)" stroke-width="2" stroke-linecap="round"/>
+<rect x="22.75" y="115.5" width="45.7" height="30" fill="rgb(41,110,194)"/>
+<rect x="89.95" y="115.5" width="45.7" height="30" fill="rgb(41,110,194)"/>
+<rect x="157.15" y="74.25" width="45.7" height="30" fill="rgb(41,110,194)"/>
+<rect x="157.15" y="156.75" width="45.7" height="30" fill="rgb(41,110,194)"/>
+<rect x="224.35" y="115.5" width="45.7" height="30" fill="rgb(41,110,194)"/>
+<rect x="291.55" y="115.5" width="45.7" height="30" fill="rgb(41,110,194)"/>
+<rect x="22.75" y="115.5" width="45.7" height="30" fill="rgb(41,77,138)"/>
+<rect x="157.15" y="74.25" width="45.7" height="30" fill="rgb(33,135,117)"/>
+<rect x="157.15" y="156.75" width="45.7" height="30" fill="rgb(201,110,33)"/>
+<rect x="291.55" y="115.5" width="45.7" height="30" fill="rgb(41,77,138)"/>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)">Branching process / yield</text>
+<text x="180" y="238" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">90.6% output / 6.85h expected work</text>
+<text x="45.6" y="133.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Start</text>
+<text x="112.8" y="133.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Triage</text>
+<text x="180" y="92.25" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Fast</text>
+<text x="180" y="174.75" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Manual</text>
+<text x="247.2" y="133.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Merge</text>
+<text x="314.4" y="133.5" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Done</text>
+<text x="143" y="89" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">70%</text>
+<text x="143" y="170" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">30%</text>
+</svg>

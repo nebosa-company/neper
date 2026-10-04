@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>proportional_symbol_map</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="30" y="49" width="300" height="142" fill="rgb(245,250,255)"/>
+<path d="M67.5 70.3 L142.5 63.2 L127.5 127.1 L45 120 Z M70.5 108.64 L85.5 108.64 L85.5 95.86 L70.5 95.86 Z" fill-rule="nonzero" fill="rgb(184,194,204)"/>
+<path d="M142.5 63.2 L210 67.46 L217.5 117.16 L127.5 127.1 Z" fill-rule="nonzero" fill="rgb(184,194,204)"/>
+<path d="M210 67.46 L292.5 77.4 L315 112.9 L217.5 117.16 Z" fill-rule="nonzero" fill="rgb(184,194,204)"/>
+<path d="M45 120 L127.5 127.1 L135 176.8 L60 162.6 Z" fill-rule="nonzero" fill="rgb(184,194,204)"/>
+<path d="M127.5 127.1 L217.5 117.16 L210 169.7 L135 176.8 Z" fill-rule="nonzero" fill="rgb(184,194,204)"/>
+<path d="M217.5 117.16 L315 112.9 L300 155.5 L210 169.7 Z" fill-rule="nonzero" fill="rgb(184,194,204)"/>
+<line x1="45" y1="120" x2="127.5" y2="127.1" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.5" y1="127.1" x2="142.5" y2="63.2" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="142.5" y1="63.2" x2="67.5" y2="70.3" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="67.5" y1="70.3" x2="45" y2="120" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.5" y1="108.64" x2="85.5" y2="108.64" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="85.5" y1="108.64" x2="85.5" y2="95.86" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="85.5" y1="95.86" x2="70.5" y2="95.86" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.5" y1="95.86" x2="70.5" y2="108.64" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.5" y1="127.1" x2="217.5" y2="117.16" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="217.5" y1="117.16" x2="210" y2="67.46" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="67.46" x2="142.5" y2="63.2" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="142.5" y1="63.2" x2="127.5" y2="127.1" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="217.5" y1="117.16" x2="315" y2="112.9" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="315" y1="112.9" x2="292.5" y2="77.4" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="292.5" y1="77.4" x2="210" y2="67.46" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="67.46" x2="217.5" y2="117.16" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="60" y1="162.6" x2="135" y2="176.8" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="135" y1="176.8" x2="127.5" y2="127.1" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.5" y1="127.1" x2="45" y2="120" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="45" y1="120" x2="60" y2="162.6" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="135" y1="176.8" x2="210" y2="169.7" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="169.7" x2="217.5" y2="117.16" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="217.5" y1="117.16" x2="127.5" y2="127.1" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.5" y1="127.1" x2="135" y2="176.8" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="169.7" x2="300" y2="155.5" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="300" y1="155.5" x2="315" y2="112.9" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="315" y1="112.9" x2="217.5" y2="117.16" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<line x1="217.5" y1="117.16" x2="210" y2="169.7" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
+<circle cx="97.5" cy="95.86" r="11.93" fill="rgb(18,94,184)" fill-opacity="0.82"/>
+<circle cx="175.5" cy="94.44" r="9.24" fill="rgb(18,94,184)" fill-opacity="0.82"/>
+<circle cx="258" cy="95.86" r="16" fill="rgb(18,94,184)" fill-opacity="0.82"/>
+<circle cx="94.5" cy="145.56" r="6.53" fill="rgb(18,94,184)" fill-opacity="0.82"/>
+<circle cx="177" cy="148.4" r="10.33" fill="rgb(18,94,184)" fill-opacity="0.82"/>
+<circle cx="122" cy="210" r="3.67" fill="rgb(18,94,184)" fill-opacity="0.82"/>
+<circle cx="191" cy="210" r="6.71" fill="rgb(18,94,184)" fill-opacity="0.82"/>
+<circle cx="272" cy="210" r="9" fill="rgb(18,94,184)" fill-opacity="0.82"/>
+<text x="180" y="19" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(41,56,79)">Proportional symbol map</text>
+<text x="180" y="38" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Circle area tracks site volume / missing site unmarked</text>
+</svg>

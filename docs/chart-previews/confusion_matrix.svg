@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>confusion_matrix</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="70" y="42" width="110" height="80" fill="rgb(126,170,210)"/>
+<rect x="180" y="42" width="110" height="80" fill="rgb(126,170,210)"/>
+<rect x="70" y="122" width="110" height="80" fill="rgb(227,240,250)"/>
+<rect x="180" y="122" width="110" height="80" fill="rgb(26,99,171)"/>
+<text x="125" y="86.8" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">4</text>
+<text x="235" y="86.8" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">4</text>
+<text x="125" y="166.8" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">2</text>
+<text x="235" y="166.8" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">6</text>
+<text x="65" y="88" font-family="sans-serif" font-size="10" text-anchor="end" fill="rgb(51,64,84)">Actual -</text>
+<text x="65" y="168" font-family="sans-serif" font-size="10" text-anchor="end" fill="rgb(51,64,84)">Actual +</text>
+<text x="125" y="219" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">Predicted -</text>
+<text x="235" y="219" font-family="sans-serif" font-size="10" text-anchor="middle" fill="rgb(51,64,84)">Predicted +</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)">Confusion matrix</text>
+</svg>

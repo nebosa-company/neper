@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>dose_response</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="60" y="48" width="244" height="150" fill="rgb(247,250,255)"/>
+<rect x="222.17" y="48" width="1" height="150" fill="rgb(194,207,222)"/>
+<path d="M60 197.96 L63.81 197.95 L67.62 197.94 L71.44 197.93 L75.25 197.92 L79.06 197.9 L82.88 197.88 L86.69 197.85 L90.5 197.82 L94.31 197.78 L98.12 197.74 L101.94 197.68 L105.75 197.61 L109.56 197.53 L113.38 197.43 L117.19 197.31 L121 197.16 L124.81 196.98 L128.62 196.77 L132.44 196.5 L136.25 196.19 L140.06 195.8 L143.88 195.34 L147.69 194.78 L151.5 194.11 L155.31 193.3 L159.12 192.34 L162.94 191.18 L166.75 189.79 L170.56 188.15 L174.38 186.2 L178.19 183.91 L182 181.23 L185.81 178.11 L189.62 174.51 L193.44 170.4 L197.25 165.75 L201.06 160.56 L204.88 154.85 L208.69 148.64 L212.5 142 L216.31 135.04 L220.12 127.85 L223.94 120.57 L227.75 113.34 L231.56 106.29 L235.38 99.53 L239.19 93.17 L243 87.28 L246.81 81.92 L250.62 77.09 L254.44 72.8 L258.25 69.04 L262.06 65.76 L265.88 62.94 L269.69 60.52 L273.5 58.46 L277.31 56.72 L281.12 55.26 L284.94 54.03 L288.75 53 L292.56 52.14 L296.38 51.43 L300.19 50.83 L304 50.34" fill="none" stroke="rgb(26,110,199)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="57" y="192" width="6" height="6" fill="rgb(222,97,43)"/>
+<rect x="81.48" y="189" width="6" height="6" fill="rgb(222,97,43)"/>
+<rect x="113.85" y="186" width="6" height="6" fill="rgb(222,97,43)"/>
+<rect x="138.33" y="180" width="6" height="6" fill="rgb(222,97,43)"/>
+<rect x="162.82" y="172.5" width="6" height="6" fill="rgb(222,97,43)"/>
+<rect x="195.18" y="145.5" width="6" height="6" fill="rgb(222,97,43)"/>
+<rect x="219.67" y="117" width="6" height="6" fill="rgb(222,97,43)"/>
+<rect x="244.15" y="91.5" width="6" height="6" fill="rgb(222,97,43)"/>
+<rect x="276.52" y="63" width="6" height="6" fill="rgb(222,97,43)"/>
+<rect x="301" y="49.5" width="6" height="6" fill="rgb(222,97,43)"/>
+<text x="180" y="22" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(46,61,82)">Dose response / LL.4 mean</text>
+<text x="60" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">0.1</text>
+<text x="141.33" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">1</text>
+<text x="222.67" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">10 / EC50</text>
+<text x="304" y="214" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">100</text>
+<text x="180" y="234" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(46,61,82)">Log dose; parameters supplied, not fitted</text>
+<text x="54" y="51" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(46,61,82)">100</text>
+<text x="54" y="126" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(46,61,82)">50</text>
+<text x="54" y="201" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(46,61,82)">0</text>
+</svg>

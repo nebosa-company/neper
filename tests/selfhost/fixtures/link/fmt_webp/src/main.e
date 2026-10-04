@@ -157,6 +157,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if halves_error != ok || half_view_error != ok { os.exit(145i32) }
     if webp.encode(&w, half_view, webp.EncodeOptions { quality: 80.0, lossless: true }) != webp.Unsupported { os.exit(146i32) }
 
+    let hostile = "RIFF\x12\x00\x00\x00WEBPVP8L\x05\x00\x00\x00/\x00\xd0\xff\x03\x00"
+    let (_, default_error) = webp.decode(a, reader_of(&state, hostile), options())
+    if default_error != webp.TooLarge { os.exit(147i32) }
+    if webp.within(16385u32, 1u32, options()) != webp.TooLarge { os.exit(148i32) }
+    var raised = options()
+    raised.max_width = 16385u32
+    if webp.within(16385u32, 1u32, raised) != ok { os.exit(149i32) }
+    if webp.within(1u32, 16385u32, raised) != webp.TooLarge { os.exit(150i32) }
+
     try io.print("fmt webp ok\n")
     ret ok
 }

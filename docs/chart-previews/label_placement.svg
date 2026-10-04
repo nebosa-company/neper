@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>label_placement</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="24" y="44" width="312" height="166" fill="rgb(242,245,250)"/>
+<rect x="117.9" y="106.64" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="238.51" y="99.65" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="86.07" y="183.35" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="230.49" y="173.11" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="140.01" y="124.97" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="264.98" y="129.46" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="208.11" y="92.53" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="306.35" y="101.66" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="138.4" y="176.64" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="200.98" y="148.49" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="247.6" y="116.53" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="280.14" y="52.55" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="181.1" y="110.58" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="162.74" y="100.69" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="214.89" y="48.54" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="231.11" y="77.8" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="63.25" y="93.91" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="196.43" y="116.32" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="158.99" y="103.8" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="37.58" y="195.1" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="158.28" y="108.64" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="195.19" y="135.27" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="157.83" y="111.2" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="173.79" y="143.37" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="173.7" y="119.78" width="6" height="6" fill="rgb(0,115,179)"/>
+<rect x="162.74" y="100.69" width="6" height="6" fill="rgb(158,171,189)"/>
+<rect x="158.99" y="103.8" width="6" height="6" fill="rgb(158,171,189)"/>
+<rect x="157.83" y="111.2" width="6" height="6" fill="rgb(158,171,189)"/>
+<rect x="173.7" y="119.78" width="6" height="6" fill="rgb(158,171,189)"/>
+<text x="123.4" y="105.64" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">London</text>
+<text x="244.01" y="98.65" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Berlin</text>
+<text x="91.57" y="182.35" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Madrid</text>
+<text x="235.99" y="172.11" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Rome</text>
+<text x="145.51" y="123.97" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Paris</text>
+<text x="270.48" y="128.46" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Vienna</text>
+<text x="173.56" y="91.53" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Hamburg</text>
+<text x="276.6" y="100.66" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Warsaw</text>
+<text x="143.9" y="175.64" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Barcelona</text>
+<text x="206.48" y="147.49" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Milan</text>
+<text x="253.1" y="115.53" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Prague</text>
+<text x="285.64" y="51.55" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Stockholm</text>
+<text x="186.6" y="109.58" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Cologne</text>
+<text x="220.39" y="60.54" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Oslo</text>
+<text x="236.61" y="76.8" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Copenhagen</text>
+<text x="68.75" y="92.91" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Dublin</text>
+<text x="201.93" y="128.32" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Frankfurt</text>
+<text x="43.08" y="194.1" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Lisbon</text>
+<text x="126.31" y="114.14" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Antwerp</text>
+<text x="171.75" y="134.27" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Zurich</text>
+<text x="146.47" y="142.37" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,51,71)">Geneva</text>
+<text x="180" y="20" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(41,51,71)">Label placement without collisions</text>
+<text x="180" y="33" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(41,51,71)">Largest cities claim the eight slots around their point first</text>
+<text x="180" y="226" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(41,51,71)">21 of 25 labels placed; grey cities would collide, so they stay unlabelled</text>
+</svg>

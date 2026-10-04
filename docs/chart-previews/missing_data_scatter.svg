@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>missing_data_scatter</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="47" y="56" width="282" height="133" fill="rgb(245,247,252)"/>
+<line x1="47" y1="56" x2="47" y2="189" stroke="rgb(212,222,235)" stroke-width="2" stroke-linecap="round"/>
+<line x1="175.18" y1="56" x2="175.18" y2="189" stroke="rgb(212,222,235)" stroke-width="2" stroke-linecap="round"/>
+<line x1="303.36" y1="56" x2="303.36" y2="189" stroke="rgb(212,222,235)" stroke-width="2" stroke-linecap="round"/>
+<line x1="47" y1="56" x2="329" y2="56" stroke="rgb(212,222,235)" stroke-width="2" stroke-linecap="round"/>
+<line x1="47" y1="122.5" x2="329" y2="122.5" stroke="rgb(212,222,235)" stroke-width="2" stroke-linecap="round"/>
+<line x1="47" y1="189" x2="329" y2="189" stroke="rgb(212,222,235)" stroke-width="2" stroke-linecap="round"/>
+<rect x="69.64" y="159.4" width="6" height="6" fill="rgb(33,110,199)"/>
+<rect x="95.27" y="146.1" width="6" height="6" fill="rgb(33,110,199)"/>
+<rect x="146.55" y="119.5" width="6" height="6" fill="rgb(33,110,199)"/>
+<rect x="172.18" y="106.2" width="6" height="6" fill="rgb(33,110,199)"/>
+<rect x="223.45" y="99.55" width="6" height="6" fill="rgb(33,110,199)"/>
+<rect x="249.09" y="79.6" width="6" height="6" fill="rgb(33,110,199)"/>
+<rect x="300.36" y="63.64" width="6" height="6" fill="rgb(33,110,199)"/>
+<text x="180" y="22" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(51,64,84)">Scatter with explicit missing data</text>
+<text x="180" y="40" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">7 complete pairs / 3 rows omitted</text>
+<text x="47" y="206" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">0</text>
+<text x="175.18" y="206" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">5</text>
+<text x="303.36" y="206" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">10</text>
+<text x="40" y="59" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">10</text>
+<text x="40" y="125.5" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">5</text>
+<text x="40" y="192" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">0</text>
+<text x="180" y="232" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(204,99,51)">Source rows 3, 6, 9 omitted; IDs retained for selection</text>
+</svg>

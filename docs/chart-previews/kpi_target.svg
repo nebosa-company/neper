@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>kpi_target</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="34" y="158" width="292" height="34" fill="rgb(227,235,242)"/>
+<rect x="34" y="158" width="204.4" height="34" fill="rgb(196,212,224)"/>
+<rect x="34" y="158" width="116.8" height="34" fill="rgb(163,184,204)"/>
+<rect x="34" y="169.05" width="280.32" height="11.9" fill="rgb(20,140,97)"/>
+<line x1="267.6" y1="158" x2="267.6" y2="192" stroke="rgb(232,94,36)" stroke-width="2" stroke-linecap="round"/>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Service KPI</text>
+<text x="36" y="103" font-family="sans-serif" font-size="32" text-anchor="start" fill="rgb(51,64,84)">96%</text>
+<text x="38" y="130" font-family="sans-serif" font-size="10" text-anchor="start" fill="rgb(20,140,97)">16 above target</text>
+<text x="238" y="130" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(232,94,36)">Target 80%</text>
+<text x="34" y="213" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">0</text>
+<text x="326" y="213" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)">100</text>
+</svg>

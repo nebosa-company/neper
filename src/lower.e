@@ -17,6 +17,7 @@ use syntax
 
 error FunctionNotFound
 error HelperInlineMissing
+error BarrierInlineCycle
 
 type Binding = struct {
     name: str,
@@ -2290,11 +2291,11 @@ fn helper_has_barrier(c: *check.Checker, g: *graph.Graph, function: check.Functi
     ret (answer, ok)
 }
 
-fn barrier_helper_present(c: *check.Checker, g: *graph.Graph) -> (bool, err) {
+fn barrier_helper_present(c: *check.Checker, g: *graph.Graph, reachable: []bool) -> (bool, err) {
     var at = 0usize
     while at < c.function_count {
         let function = c.functions[at]
-        if !function.gpu && check.device_only(c, g, at) {
+        if at < reachable.len && reachable[at] && !function.gpu {
             let (present, present_error) = helper_has_barrier(c, g, function)
             if present_error != ok { ret (false, present_error) }
             if present { ret (true, ok) }
@@ -2302,6 +2303,87 @@ fn barrier_helper_present(c: *check.Checker, g: *graph.Graph) -> (bool, err) {
         at += 1usize
     }
     ret (false, ok)
+}
+
+fn inline_entry_calls_marked(entries: []nir.InlineEntry, count: usize, entry: nir.InlineEntry) -> bool {
+    let oracle = entry.oracle
+    let function = oracle.functions[entry.function_index]
+    var at = function.first_instruction
+    while at < function.first_instruction + function.instruction_count {
+        let instruction = oracle.instructions[at]
+        if (instruction.opcode == .Call || instruction.opcode == .FunctionAddress) && instruction.immediate < oracle.function_ref_count {
+            let reference = oracle.function_refs[instruction.immediate]
+            var candidate = 0usize
+            while candidate < count {
+                let marked = entries[candidate]
+                if marked.mandatory && marked.module_index == reference.module_index && marked.instance == reference.instance && check.same(marked.name, reference.name) { ret true }
+                candidate += 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret false
+}
+
+// ponytail: this quadratic walk is only over kernel-reached device helpers;
+// index calls if GPU programs grow enough to make oracle time measurable.
+// Only callers of an actual barrier need mandatory inlining.
+fn mark_barrier_entries(entries: []nir.InlineEntry, count: usize) -> (usize, bool) {
+    var at = 0usize
+    while at < count {
+        let entry = entries[at]
+        let oracle = entry.oracle
+        let function = oracle.functions[entry.function_index]
+        var instruction_at = function.first_instruction
+        while instruction_at < function.first_instruction + function.instruction_count {
+            if oracle.instructions[instruction_at].opcode == .Barrier { entries[at].mandatory = true }
+            instruction_at += 1usize
+        }
+        at += 1usize
+    }
+    var changed = true
+    while changed {
+        changed = false
+        at = 0usize
+        while at < count {
+            if !entries[at].mandatory && inline_entry_calls_marked(entries, count, entries[at]) {
+                entries[at].mandatory = true
+                changed = true
+            }
+            at += 1usize
+        }
+    }
+    var marked_count = 0usize
+    var pending = false
+    at = 0usize
+    while at < count {
+        if entries[at].mandatory {
+            marked_count += 1usize
+            if inline_entry_calls_marked(entries, count, entries[at]) { pending = true }
+        }
+        at += 1usize
+    }
+    ret (marked_count, pending)
+}
+
+fn max_barrier_helper_depth(builder: *nir.Builder) -> usize {
+    var maximum = 0usize
+    var entry_at = 0usize
+    while entry_at < builder.inline_entry_count {
+        let entry = builder.inline_entries[entry_at]
+        if entry.mandatory {
+            let oracle = entry.oracle
+            let function = oracle.functions[entry.function_index]
+            var at = function.first_instruction
+            while at < function.first_instruction + function.instruction_count {
+                let instruction = oracle.instructions[at]
+                if instruction.opcode == .Barrier && instruction.operand_count > maximum { maximum = instruction.operand_count }
+                at += 1usize
+            }
+        }
+        entry_at += 1usize
+    }
+    ret maximum
 }
 
 // The oracle: every non-generic function of every module whose source is short is
@@ -2322,6 +2404,44 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
         if g.order_count == g.count { module_index = g.order[order_at] }
         try oracle_module(c, g, oracle, signatures, bindings, entries, entry_count, module_index, &entry_cursor, &oracle_defers)
         order_at += 1usize
+    }
+    if oracle.barrier_oracle {
+        // A concrete generic instance owns code in its calling module, but its
+        // body is the template's declaration; the ordinary oracle skips it.
+        var instance_at = c.signature_function_count
+        while instance_at < c.function_count {
+            let function = c.functions[instance_at]
+            let generic = c.function_generics[instance_at]
+            var reached = instance_at < oracle.barrier_reachable.len && oracle.barrier_reachable[instance_at]
+            if generic.instance && generic.template_index < oracle.barrier_reachable.len && oracle.barrier_reachable[generic.template_index] { reached = true }
+            if generic.instance && !function.generic && !generic.formatter && !generic.launcher && reached {
+                var wanted = true
+                if oracle.has_oracle {
+                    let (previous, found) = find_inline_entry(oracle, function.owner_module_index, function.name, function.instance_id)
+                    wanted = found && oracle.inline_entries[previous].mandatory
+                }
+                if wanted {
+                    let before = oracle.function_count
+                    var tree: parse.Tree = zero
+                    try graph.parse_module(g, function.module_index, &tree)
+                    try check.tokenize_module(c, g, function.module_index)
+                    try lower_instance(c, g, &tree, function.module_index, instance_at, oracle, signatures, bindings, &oracle_defers)
+                    c.failure_has_token = false
+                    if *entry_count == entries.len { ret check.Capacity }
+                    var entry: nir.InlineEntry = zero
+                    entry.module_index = function.owner_module_index
+                    entry.name = function.name
+                    entry.instance = function.instance_id
+                    entry.function_index = before
+                    entry.walked_in = function.module_index
+                    entry.oracle = oracle
+                    entry.checker = c
+                    entries[*entry_count] = entry
+                    *entry_count += 1usize
+                }
+            }
+            instance_at += 1usize
+        }
     }
     ret ok
 }
@@ -2359,8 +2479,9 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
             let (function_index, found) = check.find_function(c, module_index, name)
             if found {
                 let function = c.functions[function_index]
+                let device_helper = check.device_only(c, g, function_index)
                 var barrier_helper = false
-                if check.device_only(c, g, function_index) {
+                if device_helper && !oracle.barrier_oracle {
                     let (has_barrier, barrier_error) = helper_has_barrier(c, g, function)
                     if barrier_error != ok { ret barrier_error }
                     barrier_helper = has_barrier
@@ -2371,23 +2492,25 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                 // entries were recorded in this same walk order, so a cursor finds them.
                 var wanted = usize(node.token_end) - usize(node.token_start) <= oracle_candidate_tokens() || barrier_helper
                 if !oracle.release { wanted = barrier_helper }
+                if oracle.barrier_oracle { wanted = function_index < oracle.barrier_reachable.len && oracle.barrier_reachable[function_index] }
                 if oracle.has_oracle {
                     wanted = false
                     if entry_cursor < oracle.inline_entry_count {
                         let previous = oracle.inline_entries[entry_cursor]
                         if previous.module_index == function.owner_module_index && previous.instance == function.instance_id && check.same(previous.name, name) {
                             wanted = true
+                            if oracle.barrier_oracle { wanted = previous.mandatory }
                             entry_cursor += 1usize
                         }
                     }
                 }
-                if oracle.explain && wanted && (function.generic || function.external || function.intrinsic || check.same(name, "main") || function.return_count > 1usize) {
+                if oracle.explain && wanted && (function.generic || function.external || function.intrinsic || check.same(name, "main") || (function.return_count > 1usize && !oracle.barrier_oracle)) {
                     if function.generic { explain_inline(oracle, g, module_index, name, "not a candidate: generic, an instance is its instantiating module's own") }
                     if function.external || function.intrinsic { explain_inline(oracle, g, module_index, name, "not a candidate: no body of its own") }
                     if check.same(name, "main") { explain_inline(oracle, g, module_index, name, "not a candidate: the program root") }
-                    if function.return_count > 1usize { explain_inline(oracle, g, module_index, name, "not a candidate: more than one result") }
+                    if function.return_count > 1usize && !oracle.barrier_oracle { explain_inline(oracle, g, module_index, name, "not a candidate: more than one result") }
                 }
-                if wanted && !function.gpu && !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && function.return_count <= 1usize {
+                if wanted && !function.gpu && !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && (function.return_count <= 1usize || oracle.barrier_oracle) {
                     // A result that comes back through a slot is decided before any lowering.
                     var hidden = false
                     if function.return_count == 1usize {
@@ -2397,7 +2520,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                         try call_return_layout(c, function_call, &return_layout)
                         hidden = return_layout.via_slot
                     }
-                    if hidden {
+                    if hidden && !oracle.barrier_oracle {
                         if oracle.explain { explain_inline(oracle, g, module_index, name, "not a candidate: its result comes back through a slot") }
                         node_index += 1usize
                         continue
@@ -2407,7 +2530,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     let local_checkpoint = c.local_count
                     oracle.limit_base = oracle.instruction_count
                     oracle.instruction_limit = inline_cap(oracle) + 1usize
-                    if barrier_helper { oracle.instruction_limit = 0usize }
+                    if barrier_helper || oracle.barrier_oracle { oracle.instruction_limit = 0usize }
                     let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings, oracle_defers)
                     oracle.instruction_limit = 0usize
                     // The lowering arms the checker's failure position at every statement it
@@ -2425,9 +2548,8 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     }
                     if lower_error != ok { ret lower_error }
                     let lowered = oracle.functions[before]
-                    // A body that calls a generic instance stays out: an instance is the
-                    // instantiating module's own copy, not the target of anyone's edge,
-                    // and a copy of the call in another module would name it anyway.
+                    // Ordinary release inlining excludes a body that calls an instance;
+                    // the barrier oracle also holds the reached concrete instance.
                     var calls_instance = false
                     var scan_at = lowered.first_instruction
                     while scan_at < lowered.first_instruction + lowered.instruction_count {
@@ -2436,9 +2558,9 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                         scan_at += 1usize
                     }
                     if oracle.explain {
-                        if calls_instance { explain_inline(oracle, g, module_index, name, "rejected: it calls a generic instance") } else { explain_inline(oracle, g, module_index, name, "inlinable: at or under the cap") }
+                        if calls_instance && !oracle.barrier_oracle { explain_inline(oracle, g, module_index, name, "rejected: it calls a generic instance") } else { explain_inline(oracle, g, module_index, name, "inlinable: at or under the cap") }
                     }
-                    if (lowered.instruction_count <= inline_cap(oracle) || barrier_helper) && !calls_instance {
+                    if (lowered.instruction_count <= inline_cap(oracle) || barrier_helper || oracle.barrier_oracle) && (!calls_instance || oracle.barrier_oracle) {
                         let entry_at = *entry_count
                         if entry_at == entries.len { ret check.Capacity }
                         var entry: nir.InlineEntry = zero
@@ -2651,6 +2773,23 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
     // one: the types its instructions carry are imported as they are copied.
     let foreign = entry.checker.fork_id != c.fork_id
     let callee = oracle.functions[entry.function_index]
+    var return_layout: ReturnLayout = zero
+    try call_return_layout(c, call, &return_layout)
+    let hidden_return = return_layout.via_slot && results.count != 0usize
+    // ponytail: multi-result copies use one slot even for a single return;
+    // map values directly if a hot kernel makes the extra stores measurable.
+    let slot_results = hidden_return || results.count > 1usize
+    var return_slot = 0usize
+    if slot_results {
+        let (slots_aligned, slots_error) = layout.align_up(return_layout.size, 8usize)
+        if slots_error != ok { ret slots_error }
+        var slots = slots_aligned / 8usize
+        if slots == 0usize { slots = 1usize }
+        let slot_type = check.make_type(.Other, "return-slot", call.function.module_index)
+        let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, slot_type, true, slots, token)
+        if stack_error != ok { ret stack_error }
+        return_slot = stack
+    }
     try record_inlined(builder, entry.module_index, entry.name, entry.instance)
     // The callee's body may itself hold copies (D212): every callee of those is a
     // body edge of this module too, or an edit to it would leave this copy stale.
@@ -2690,7 +2829,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
     var result_type: check.Type = zero
     var slot = 0usize
     var slot_size = 0usize
-    if results.count == 1usize {
+    if results.count == 1usize && !hidden_return {
         let (returned, returned_error) = check.call_return(c, call, 0usize)
         if returned_error != ok { ret returned_error }
         result_type = returned
@@ -2742,23 +2881,79 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
             let (copied_origin, copied_origin_error) = add_inline_origin(builder, entry.module_index, entry.name, imported_origin)
             if copied_origin_error != ok { ret copied_origin_error }
             if instruction.opcode == .Parameter {
-                if instruction.immediate >= argument_count { ret check.ArgumentCount }
-                value_map[instruction.result] = arguments[instruction.immediate]
+                if hidden_return && instruction.immediate == 0usize {
+                    value_map[instruction.result] = return_slot
+                } else {
+                    var argument_index = instruction.immediate
+                    if hidden_return { argument_index = argument_index - 1usize }
+                    if argument_index >= argument_count { ret check.ArgumentCount }
+                    value_map[instruction.result] = arguments[argument_index]
+                }
             } else {
-                if instruction.opcode == .Barrier && builder.frame_mode {
-                    try emit_kernel_barrier(builder, call.function.module_index, nir.site_token(instruction.site))
+                if instruction.opcode == .Barrier && (builder.frame_mode || builder.frame_locals) {
+                    var no_slots: [1]usize = zero
+                    var mapped_slots = no_slots[0usize..0usize]
+                    if instruction.operand_count != 0usize {
+                        let (slots, slots_error) = mem.alloc[usize](c.arena, instruction.operand_count)
+                        if slots_error != ok { ret slots_error }
+                        mapped_slots = slots
+                        var slot_at = 0usize
+                        while slot_at < instruction.operand_count {
+                            mapped_slots[slot_at] = value_map[oracle.operands[instruction.first_operand + slot_at]]
+                            slot_at += 1usize
+                        }
+                    }
+                    if builder.frame_mode {
+                        try emit_kernel_barrier_slots(builder, call.function.module_index, mapped_slots, nir.site_token(instruction.site))
+                    } else {
+                        let (copied, ignored, barrier_error) = nir.emit_at(builder, .Barrier, zero, false, 0usize, instruction.site)
+                        if barrier_error != ok { ret barrier_error }
+                        builder.kernel_barriers += 1usize
+                        builder.instructions[copied].inline_origin = copied_origin
+                        var slot_at = 0usize
+                        while slot_at < builder.loop_depth {
+                            try nir.add_operand(builder, copied, builder.loop_slots[slot_at])
+                            slot_at += 1usize
+                        }
+                        slot_at = 0usize
+                        while slot_at < mapped_slots.len {
+                            try nir.add_operand(builder, copied, mapped_slots[slot_at])
+                            slot_at += 1usize
+                        }
+                    }
                 } else {
                 if instruction.opcode == .Return {
-                    if instruction.operand_count == 1usize {
-                        let returned = value_map[oracle.operands[instruction.first_operand]]
-                        if return_sites == 1usize {
-                            single_result = returned
-                        } else {
-                            let (store_instruction, store_ignored, store_error) = nir.emit_at(builder, .Store, result_type, false, slot_size, instruction.site)
+                    if !hidden_return && results.count > 1usize {
+                        if instruction.operand_count != results.count { ret check.InvalidReturn }
+                        var result_at = 0usize
+                        while result_at < results.count {
+                            let (returned_type, returned_error) = check.call_return(c, call, result_at)
+                            if returned_error != ok { ret returned_error }
+                            let (info, info_error) = layout.type_info(c, returned_type)
+                            if info_error != ok { ret info_error }
+                            let (address_instruction, address, address_error) = nir.emit_at(builder, .FieldAddress, returned_type, true, return_layout.offsets[result_at], instruction.site)
+                            if address_error != ok { ret address_error }
+                            builder.instructions[address_instruction].inline_origin = copied_origin
+                            try nir.add_operand(builder, address_instruction, return_slot)
+                            let (store_instruction, store_ignored, store_error) = nir.emit_at(builder, .Store, returned_type, false, info.size, instruction.site)
                             if store_error != ok { ret store_error }
                             builder.instructions[store_instruction].inline_origin = copied_origin
-                            try nir.add_operand(builder, store_instruction, slot)
-                            try nir.add_operand(builder, store_instruction, returned)
+                            try nir.add_operand(builder, store_instruction, address)
+                            try nir.add_operand(builder, store_instruction, value_map[oracle.operands[instruction.first_operand + result_at]])
+                            result_at += 1usize
+                        }
+                    } else {
+                        if instruction.operand_count == 1usize {
+                            let returned = value_map[oracle.operands[instruction.first_operand]]
+                            if return_sites == 1usize {
+                                single_result = returned
+                            } else {
+                                let (store_instruction, store_ignored, store_error) = nir.emit_at(builder, .Store, result_type, false, slot_size, instruction.site)
+                                if store_error != ok { ret store_error }
+                                builder.instructions[store_instruction].inline_origin = copied_origin
+                                try nir.add_operand(builder, store_instruction, slot)
+                                try nir.add_operand(builder, store_instruction, returned)
+                            }
                         }
                     }
                     let (leave, leave_error) = emit_branch_at(builder, instruction.site)
@@ -2828,6 +3023,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
     builder.current_path = caller_path
     let (continuation_index, continuation_error) = nir.begin_block(builder)
     if continuation_error != ok || continuation_index != continuation { ret nir.InvalidControlFlow }
+    if slot_results { ret read_return_slot(c, call, &return_layout, return_slot, builder, token, results) }
     if results.count == 1usize {
         if return_sites == 1usize {
             results.values[0usize] = single_result
@@ -2837,6 +3033,32 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
             try nir.add_operand(builder, load_instruction, slot)
             results.values[0usize] = loaded
         }
+    }
+    ret ok
+}
+
+// Both a native call and a copied helper leave slot-return results in the same
+// caller-owned storage. An aggregate remains an address; scalars are loaded.
+fn read_return_slot(c: *check.Checker, call: check.CallInfo, return_layout: *ReturnLayout, slot: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    var result_at = 0usize
+    while result_at < results.count {
+        let (result_type, result_type_error) = check.call_return(c, call, result_at)
+        if result_type_error != ok { ret result_type_error }
+        let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, result_type, true, return_layout.offsets[result_at], token)
+        if address_error != ok { ret address_error }
+        try nir.add_operand(builder, address_instruction, slot)
+        if aggregate_value(c, result_type) {
+            results.values[result_at] = address
+            results.addresses[result_at] = true
+        } else {
+            let (info, info_error) = layout.type_info(c, result_type)
+            if info_error != ok { ret info_error }
+            let (load_instruction, value, load_error) = nir.emit(builder, .Load, result_type, true, info.size, token)
+            if load_error != ok { ret load_error }
+            try nir.add_operand(builder, load_instruction, address)
+            results.values[result_at] = value
+        }
+        result_at += 1usize
     }
     ret ok
 }
@@ -3359,19 +3581,19 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
     var return_layout: ReturnLayout = zero
     let return_layout_error = call_return_layout(c, call, &return_layout)
     if return_layout_error != ok { ret return_layout_error }
-    // Section 12's inlining: a callee the oracle holds -- forty NIR instructions or
-    // fewer, one register result at most -- is copied in here instead of called (D207).
-    if builder.has_oracle && !call.indirect && !call.mem_alloc && !call.function.intrinsic && !call.function.external && !call.function.generic && !call.function.gpu && !return_layout.via_slot && results.count <= 1usize {
-        var scalar_result = true
+    // Section 12's ordinary oracle keeps scalar-only calls; the barrier oracle
+    // also copies a single result returned through a hidden slot.
+    if builder.has_oracle && !call.indirect && !call.mem_alloc && !call.function.intrinsic && !call.function.external && !call.function.generic && !call.function.gpu {
+        let (entry_index, inlinable) = find_inline_entry(builder, call.function.owner_module_index, call.function.name, call.function.instance_id)
+        var inline_shape = !return_layout.via_slot && results.count <= 1usize
         if results.count == 1usize {
             let (returned, returned_error) = check.call_return(c, call, 0usize)
             if returned_error != ok { ret returned_error }
-            scalar_result = !aggregate_value(c, returned)
+            if aggregate_value(c, returned) { inline_shape = false }
         }
-        if scalar_result {
-            let (entry_index, inlinable) = find_inline_entry(builder, call.function.owner_module_index, call.function.name, call.function.instance_id)
-            if inlinable { ret emit_inlined_call(c, call, entry_index, arguments, argument_count, builder, token, results) }
-        }
+        if builder.inline_only_mandatory && (results.count > 1usize || (return_layout.via_slot && results.count == 1usize)) { inline_shape = true }
+        if builder.frame_mode && inlinable && builder.inline_entries[entry_index].mandatory { inline_shape = true }
+        if inline_shape && inlinable && (!builder.inline_only_mandatory || builder.inline_entries[entry_index].mandatory) { ret emit_inlined_call(c, call, entry_index, arguments, argument_count, builder, token, results) }
     }
     // A barrier helper cannot fall back to a native call: it must be copied into
     // the kernel so its cut stores that invocation's pc and returns to the scheduler.
@@ -3510,29 +3732,7 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
         }
         ret ok
     }
-    var result_at = 0usize
-    while result_at < results.count {
-        let (result_type, result_type_error) = check.call_return(c, call, result_at)
-        if result_type_error != ok { ret result_type_error }
-        let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, result_type, true, return_layout.offsets[result_at], token)
-        if address_error != ok { ret address_error }
-        let address_operand_error = nir.add_operand(builder, address_instruction, slot)
-        if address_operand_error != ok { ret address_operand_error }
-        if aggregate_value(c, result_type) {
-            results.values[result_at] = address
-            results.addresses[result_at] = true
-        } else {
-            let (info, info_error) = layout.type_info(c, result_type)
-            if info_error != ok { ret info_error }
-            let (load_instruction, value, load_error) = nir.emit(builder, .Load, result_type, true, info.size, token)
-            if load_error != ok { ret load_error }
-            let load_operand_error = nir.add_operand(builder, load_instruction, address)
-            if load_operand_error != ok { ret load_operand_error }
-            results.values[result_at] = value
-        }
-        result_at += 1usize
-    }
-    ret ok
+    ret read_return_slot(c, call, &return_layout, slot, builder, token, results)
 }
 
 // Whether the storage a by-value argument names could be written during the call
@@ -3601,6 +3801,32 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
             }
             if child_position > 0usize {
                 if *argument_count == arguments.len { ret check.ArgumentCount }
+                let child_index = parse.child_index_at(tree, at)
+                var saved: [33]usize = zero
+                var saved_callee = 0usize
+                var pending = false
+                if !into_c && (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, child_index, builder) {
+                    pending = true
+                    let pointer_type = check.make_type(.Pointer, "", module_index)
+                    let token = c.tokens[usize(node.token_start)]
+                    if call.indirect {
+                        let (slot, slot_error) = frame_save_temporary(c, pointer_type, *callee_out, token, builder)
+                        if slot_error != ok { ret slot_error }
+                        saved_callee = slot
+                    }
+                    var previous = 0usize
+                    while previous < *argument_count {
+                        let (previous_type, type_error) = call_parameter_type(c, call, previous)
+                        if type_error != ok { ret type_error }
+                        var storage_type = previous_type
+                        if aggregate_value(c, previous_type) { storage_type = pointer_type }
+                        let (slot, slot_error) = frame_save_temporary(c, storage_type, arguments[previous], token, builder)
+                        if slot_error != ok { ret slot_error }
+                        saved[previous] = slot
+                        previous += 1usize
+                    }
+                }
+                let before = builder.kernel_barriers
                 var parameter_type = check.invalid_type()
                 let variadic_extra = lowered >= call.function.parameter_count
                 if variadic_extra {
@@ -3613,8 +3839,28 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
                     if parameter_type_error != ok { ret parameter_type_error }
                     parameter_type = declared_type
                 }
-                let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, parse.child_index_at(tree, at), parameter_type, builder, bindings, binding_count)
+                let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, child_index, parameter_type, builder, bindings, binding_count)
                 if value_error != ok { ret value_error }
+                if pending && builder.kernel_barriers != before {
+                    let pointer_type = check.make_type(.Pointer, "", module_index)
+                    let token = c.tokens[usize(node.token_start)]
+                    if call.indirect {
+                        let (restored, restore_error) = frame_resume_temporary(c, pointer_type, *callee_out, saved_callee, before, token, builder)
+                        if restore_error != ok { ret restore_error }
+                        *callee_out = restored
+                    }
+                    var previous = 0usize
+                    while previous < *argument_count {
+                        let (previous_type, type_error) = call_parameter_type(c, call, previous)
+                        if type_error != ok { ret type_error }
+                        var storage_type = previous_type
+                        if aggregate_value(c, previous_type) { storage_type = pointer_type }
+                        let (restored, restore_error) = frame_resume_temporary(c, storage_type, arguments[previous], saved[previous], before, token, builder)
+                        if restore_error != ok { ret restore_error }
+                        arguments[previous] = restored
+                        previous += 1usize
+                    }
+                }
                 lowered += 1usize
                 if into_c {
                     var crossing_type = parameter_type
@@ -3795,22 +4041,70 @@ fn lower_slice(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if zero_error != ok { ret (0usize, result_type, zero_error) }
     var lower = zero_value
     var upper = length
+    var bound_is_lower = usize(bracket.child_count) == 3usize
+    if usize(bracket.child_count) == 2usize {
+        var range_at = usize(tree.nodes[bracket.base].token_end)
+        while range_at < usize(node.token_end) && c.tokens[range_at].kind != .PunctRange { range_at += 1usize }
+        if range_at >= usize(node.token_end) { ret (0usize, result_type, parse.InvalidSyntax) }
+        bound_is_lower = usize(tree.nodes[bracket.first].token_start) < range_at
+    }
+    let frame = (builder.frame_mode || builder.frame_locals) && !builder.spirv
+    let second_cut = frame && usize(bracket.child_count) == 3usize && expression_may_cut(c, g, tree, module_index, bracket.second, builder)
+    let bounds_cut = frame && ((usize(bracket.child_count) >= 2usize && expression_may_cut(c, g, tree, module_index, bracket.first, builder)) || second_cut)
+    var data_slot = 0usize
+    var length_slot = 0usize
+    var lower_slot = 0usize
+    var lower_before = 0usize
+    let before = builder.kernel_barriers
+    if bounds_cut {
+        let token = c.tokens[usize(node.token_start)]
+        let (saved_data, data_error) = frame_save_temporary(c, pointer_type, data, token, builder)
+        if data_error != ok { ret (0usize, result_type, data_error) }
+        data_slot = saved_data
+        let (saved_length, length_error) = frame_save_temporary(c, length_type, length, token, builder)
+        if length_error != ok { ret (0usize, result_type, length_error) }
+        length_slot = saved_length
+        if !bound_is_lower {
+            let (saved_lower, lower_error) = frame_save_temporary(c, length_type, lower, token, builder)
+            if lower_error != ok { ret (0usize, result_type, lower_error) }
+            lower_slot = saved_lower
+            lower_before = before
+        }
+    }
     if usize(bracket.child_count) == 3usize {
         let (lower_value, lower_type, lower_error) = lower_expression(c, g, tree, module_index, bracket.first, length_type, builder, bindings, binding_count)
         if lower_error != ok { ret (0usize, result_type, lower_error) }
         lower = lower_value
+        if second_cut {
+            let (saved_lower, save_error) = frame_save_temporary(c, length_type, lower, c.tokens[usize(node.token_start)], builder)
+            if save_error != ok { ret (0usize, result_type, save_error) }
+            lower_slot = saved_lower
+            lower_before = builder.kernel_barriers
+        }
         let (upper_value, upper_type, upper_error) = lower_expression(c, g, tree, module_index, bracket.second, length_type, builder, bindings, binding_count)
         if upper_error != ok { ret (0usize, result_type, upper_error) }
         upper = upper_value
     } else {
         if usize(bracket.child_count) == 2usize {
-            var range_at = usize(tree.nodes[bracket.base].token_end)
-            while range_at < usize(node.token_end) && c.tokens[range_at].kind != .PunctRange { range_at += 1usize }
-            if range_at >= usize(node.token_end) { ret (0usize, result_type, parse.InvalidSyntax) }
             let (bound, bound_type, bound_error) = lower_expression(c, g, tree, module_index, bracket.first, length_type, builder, bindings, binding_count)
             if bound_error != ok { ret (0usize, result_type, bound_error) }
-            if usize(tree.nodes[bracket.first].token_start) < range_at { lower = bound } else { upper = bound }
+            if bound_is_lower { lower = bound } else { upper = bound }
         }
+    }
+    if data_slot != 0usize {
+        let token = c.tokens[usize(node.token_start)]
+        let (resumed_data, data_error) = frame_resume_temporary(c, pointer_type, data, data_slot, before, token, builder)
+        if data_error != ok { ret (0usize, result_type, data_error) }
+        data = resumed_data
+        let (resumed_length, length_error) = frame_resume_temporary(c, length_type, length, length_slot, before, token, builder)
+        if length_error != ok { ret (0usize, result_type, length_error) }
+        length = resumed_length
+        if lower_slot != 0usize {
+            let (resumed_lower, lower_error) = frame_resume_temporary(c, length_type, lower, lower_slot, lower_before, token, builder)
+            if lower_error != ok { ret (0usize, result_type, lower_error) }
+            lower = resumed_lower
+        }
+        if usize(bracket.child_count) == 2usize && bound_is_lower { upper = length }
     }
     let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, result_type, true, 2usize, c.tokens[usize(node.token_start)])
     if stack_error != ok { ret (0usize, result_type, stack_error) }
@@ -3850,10 +4144,21 @@ fn lower_index_address(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     if element_type_error != ok { ret (0usize, element_type, element_type_error) }
     let (base, lowered_base_type, base_error) = lower_expression(c, g, tree, module_index, children[0usize], base_type, builder, bindings, binding_count)
     if base_error != ok { ret (0usize, lowered_base_type, base_error) }
+    let saved_pointer_type = check.make_type(.Pointer, "", module_index)
+    let token = c.tokens[usize(node.token_start)]
+    var base_slot = 0usize
+    if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, children[1usize], builder) {
+        let (saved, save_error) = frame_save_temporary(c, saved_pointer_type, base, token, builder)
+        if save_error != ok { ret (0usize, element_type, save_error) }
+        base_slot = saved
+    }
+    let before = builder.kernel_barriers
     let usize_type = check.make_type(.Integer, "usize", module_index)
     let (index, index_type, index_error) = lower_expression(c, g, tree, module_index, children[1usize], usize_type, builder, bindings, binding_count)
     if index_error != ok { ret (0usize, index_type, index_error) }
-    var data = base
+    let (resumed_base, resume_error) = frame_resume_temporary(c, saved_pointer_type, base, base_slot, before, token, builder)
+    if resume_error != ok { ret (0usize, element_type, resume_error) }
+    var data = resumed_base
     var length = 0usize
     let (vector_lanes, is_vector) = check.vector_lanes(c, base_type)
     if base_type.kind == .Array || is_vector {
@@ -3868,7 +4173,7 @@ fn lower_index_address(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
         pointer_type.in_shared = base_type.in_shared
         let (data_address_instruction, data_address, data_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 0usize, c.tokens[usize(node.token_start)])
         if data_address_error != ok { ret (0usize, element_type, data_address_error) }
-        let data_address_operand_error = nir.add_operand(builder, data_address_instruction, base)
+        let data_address_operand_error = nir.add_operand(builder, data_address_instruction, resumed_base)
         if data_address_operand_error != ok { ret (0usize, element_type, data_address_operand_error) }
         let (data_load, data_result, data_load_error) = nir.emit(builder, .Load, pointer_type, true, 8usize, c.tokens[usize(node.token_start)])
         if data_load_error != ok { ret (0usize, element_type, data_load_error) }
@@ -3877,7 +4182,7 @@ fn lower_index_address(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
         data = data_result
         let (length_address_instruction, length_address, length_address_error) = nir.emit(builder, .FieldAddress, usize_type, true, 8usize, c.tokens[usize(node.token_start)])
         if length_address_error != ok { ret (0usize, element_type, length_address_error) }
-        let length_address_operand_error = nir.add_operand(builder, length_address_instruction, base)
+        let length_address_operand_error = nir.add_operand(builder, length_address_instruction, resumed_base)
         if length_address_operand_error != ok { ret (0usize, element_type, length_address_operand_error) }
         let (length_load, length_result, length_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, c.tokens[usize(node.token_start)])
         if length_load_error != ok { ret (0usize, element_type, length_load_error) }
@@ -4764,6 +5069,8 @@ fn lower_try_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
 
 fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
     var values: [16]usize = zero
+    var saved: [16]usize = zero
+    var saved_before: [16]usize = zero
     var count = 0usize
     var literal_ok = false
     let end = usize(node.first_child) + usize(node.child_count)
@@ -4775,7 +5082,25 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
             if count == 0usize && returned.kind == .LiteralExpr && c.tokens[usize(returned.token_start)].kind == .KwOk { literal_ok = true }
             let (expected, type_error) = check.function_return(c, function, count)
             if type_error != ok { ret type_error }
-            let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, parse.child_index_at(tree, at), expected, builder, bindings, binding_count)
+            let child_index = parse.child_index_at(tree, at)
+            if count != 0usize && (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, child_index, builder) {
+                let pointer_type = check.make_type(.Pointer, "", module_index)
+                var previous = 0usize
+                while previous < count {
+                    if saved[previous] == 0usize {
+                        let (previous_type, previous_error) = check.function_return(c, function, previous)
+                        if previous_error != ok { ret previous_error }
+                        var storage_type = previous_type
+                        if aggregate_value(c, previous_type) { storage_type = pointer_type }
+                        let (slot, save_error) = frame_save_temporary(c, storage_type, values[previous], c.tokens[usize(node.token_start)], builder)
+                        if save_error != ok { ret save_error }
+                        saved[previous] = slot
+                        saved_before[previous] = builder.kernel_barriers
+                    }
+                    previous += 1usize
+                }
+            }
+            let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, child_index, expected, builder, bindings, binding_count)
             if value_error != ok { ret value_error }
             values[count] = value
             count += 1usize
@@ -4783,6 +5108,19 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         at += 1usize
     }
     if count != function.return_count { ret check.InvalidReturn }
+    var previous = 0usize
+    while previous < count {
+        if saved[previous] != 0usize {
+            let (previous_type, previous_error) = check.function_return(c, function, previous)
+            if previous_error != ok { ret previous_error }
+            var storage_type = previous_type
+            if aggregate_value(c, previous_type) { storage_type = check.make_type(.Pointer, "", module_index) }
+            let (restored, restore_error) = frame_resume_temporary(c, storage_type, values[previous], saved[previous], saved_before[previous], c.tokens[usize(node.token_start)], builder)
+            if restore_error != ok { ret restore_error }
+            values[previous] = restored
+        }
+        previous += 1usize
+    }
     ret emit_return_values(c, g, tree, module_index, function, c.tokens[usize(node.token_start)], values[0usize..count], literal_ok, builder, bindings, binding_count, defers)
 }
 
@@ -4841,7 +5179,34 @@ fn emit_return_values(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
         try c_argument(c, &passing, returned_type, values[0usize], builder, token, pieces[..], &piece_count)
         c_result = c_result_type(crossing, module_index)
     }
+    var saved: [16]usize = zero
+    let before = builder.kernel_barriers
+    if count != 0usize && defers.count != 0usize && (builder.frame_mode || builder.frame_locals) && !builder.spirv {
+        // ponytail: spill return values for any defer; refine to cutting defers if frame size matters.
+        var result_at = 0usize
+        while result_at < count {
+            let result_type = c.return_types[function.first_return + result_at]
+            var storage_type = result_type
+            if aggregate_value(c, result_type) { storage_type = check.make_type(.Pointer, "", module_index) }
+            let (slot, save_error) = frame_save_temporary(c, storage_type, values[result_at], token, builder)
+            if save_error != ok { ret save_error }
+            saved[result_at] = slot
+            result_at += 1usize
+        }
+    }
     try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, binding_count, defers, 0usize)
+    if builder.kernel_barriers != before {
+        var result_at = 0usize
+        while result_at < count {
+            let result_type = c.return_types[function.first_return + result_at]
+            var storage_type = result_type
+            if aggregate_value(c, result_type) { storage_type = check.make_type(.Pointer, "", module_index) }
+            let (restored, restore_error) = frame_resume_temporary(c, storage_type, values[result_at], saved[result_at], before, token, builder)
+            if restore_error != ok { ret restore_error }
+            values[result_at] = restored
+            result_at += 1usize
+        }
+    }
     if piece_count != 0usize {
         let (pieces_instruction, pieces_ignored, pieces_error) = nir.emit(builder, .Return, c_result, false, 0usize, token)
         if pieces_error != ok { ret pieces_error }
@@ -5051,6 +5416,52 @@ fn store_assignment_value(c: *check.Checker, ty: check.Type, address: usize, val
     ret ok
 }
 
+// A caller may evaluate one operand before a helper that cuts at a barrier.
+// Put that pending value in the invocation frame, then reload it after the cut.
+fn frame_save_temporary(c: *check.Checker, ty: check.Type, value: usize, token: lex.Token, builder: *nir.Builder) -> (usize, err) {
+    if builder.spirv || (!builder.frame_mode && !builder.frame_locals) { ret (0usize, ok) }
+    let (info, info_error) = layout.type_info(c, ty)
+    if info_error != ok { ret (0usize, info_error) }
+    let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, ty, true, 0usize, token)
+    if slot_error != ok { ret (0usize, slot_error) }
+    let (store_instruction, ignored, store_error) = nir.emit(builder, .Store, ty, false, info.size, token)
+    if store_error != ok { ret (0usize, store_error) }
+    let operand_error = nir.add_operand(builder, store_instruction, slot)
+    if operand_error != ok { ret (0usize, operand_error) }
+    ret (slot, nir.add_operand(builder, store_instruction, value))
+}
+
+fn frame_resume_temporary(c: *check.Checker, ty: check.Type, value: usize, slot: usize, before: usize, token: lex.Token, builder: *nir.Builder) -> (usize, err) {
+    if slot == 0usize || builder.kernel_barriers == before { ret (value, ok) }
+    let (info, info_error) = layout.type_info(c, ty)
+    if info_error != ok { ret (0usize, info_error) }
+    let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, ty, true, info.size, token)
+    if load_error != ok { ret (0usize, load_error) }
+    ret (loaded, nir.add_operand(builder, load_instruction, slot))
+}
+
+fn expression_may_cut(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, builder: *nir.Builder) -> bool {
+    let node = tree.nodes[node_index]
+    if node.kind == .CallExpr {
+        let (call, call_error) = check.check_call(c, g, tree, module_index, node)
+        if call_error != ok { ret true }
+        if call.gpu_barrier || call.subgroup_op != .None || call.indirect { ret true }
+        if !call.is_cast && !call.function.intrinsic && !call.function.external {
+            let (entry_index, found) = find_inline_entry(builder, call.function.owner_module_index, call.function.name, call.function.instance_id)
+            if found && builder.inline_entries[entry_index].mandatory { ret true }
+            let (direct, barrier_error) = helper_has_barrier(c, g, call.function)
+            if barrier_error != ok || direct { ret true }
+        }
+    }
+    var at = usize(node.first_child)
+    let end = at + usize(node.child_count)
+    while at < end {
+        if parse.child_is_node_at(tree, at) && expression_may_cut(c, g, tree, module_index, parse.child_index_at(tree, at), builder) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
 fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
     var children: [17]usize = zero
     var count = 0usize
@@ -5074,23 +5485,51 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         if tried_places > 16usize { ret check.ArgumentCount }
         var tried_addresses: [16]usize = zero
         var tried_types: [16]check.Type = zero
+        var tried_slots: [16]usize = zero
+        let assignment_token = c.tokens[usize(node.token_start)]
+        let pointer_type = check.make_type(.Pointer, "", module_index)
+        let barriers_before = builder.kernel_barriers
         var tried_at = 0usize
         while tried_at < tried_places {
+            if tried_at != 0usize && (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, children[tried_at], builder) {
+                var previous = 0usize
+                while previous < tried_at {
+                    if tried_slots[previous] == 0usize {
+                        let (slot, save_error) = frame_save_temporary(c, pointer_type, tried_addresses[previous], assignment_token, builder)
+                        if save_error != ok { ret save_error }
+                        tried_slots[previous] = slot
+                    }
+                    previous += 1usize
+                }
+            }
             let (tried_address, tried_type, tried_error) = lower_place(c, g, tree, module_index, children[tried_at], builder, bindings, binding_count)
             if tried_error != ok { ret tried_error }
             tried_addresses[tried_at] = tried_address
             tried_types[tried_at] = tried_type
             tried_at += 1usize
         }
+        if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, initializer_at, builder) {
+            tried_at = 0usize
+            while tried_at < tried_places {
+                if tried_slots[tried_at] == 0usize {
+                    let (slot, save_error) = frame_save_temporary(c, pointer_type, tried_addresses[tried_at], assignment_token, builder)
+                    if save_error != ok { ret save_error }
+                    tried_slots[tried_at] = slot
+                }
+                tried_at += 1usize
+            }
+        }
         var tried: CallResults = zero
-        try lower_try_call(c, g, tree, module_index, function, tree.nodes[initializer_at], c.tokens[usize(node.token_start)], builder, bindings, binding_count, defers, &tried)
+        try lower_try_call(c, g, tree, module_index, function, tree.nodes[initializer_at], assignment_token, builder, bindings, binding_count, defers, &tried)
         if tried.count != tried_places { ret check.ArgumentCount }
         tried_at = 0usize
         while tried_at < tried_places {
             let (tried_result, tried_result_error) = check.call_return(c, tried.call, tried_at)
             if tried_result_error != ok { ret tried_result_error }
             if !check.type_assignable(c, tried_result, tried_types[tried_at]) { ret check.InvalidType }
-            try store_assignment_value(c, tried_types[tried_at], tried_addresses[tried_at], tried.values[tried_at], c.tokens[usize(node.token_start)], builder)
+            let (address, resume_error) = frame_resume_temporary(c, pointer_type, tried_addresses[tried_at], tried_slots[tried_at], barriers_before, assignment_token, builder)
+            if resume_error != ok { ret resume_error }
+            try store_assignment_value(c, tried_types[tried_at], address, tried.values[tried_at], assignment_token, builder)
             tried_at += 1usize
         }
         ret ok
@@ -5100,8 +5539,23 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         if place_count > 16usize { ret check.ArgumentCount }
         var addresses: [16]usize = zero
         var place_types: [16]check.Type = zero
+        var address_slots: [16]usize = zero
+        let assignment_token = c.tokens[usize(node.token_start)]
+        let pointer_type = check.make_type(.Pointer, "", module_index)
+        let barriers_before = builder.kernel_barriers
         var place_at = 0usize
         while place_at < place_count {
+            if place_at != 0usize && (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, children[place_at], builder) {
+                var previous = 0usize
+                while previous < place_at {
+                    if address_slots[previous] == 0usize {
+                        let (slot, save_error) = frame_save_temporary(c, pointer_type, addresses[previous], assignment_token, builder)
+                        if save_error != ok { ret save_error }
+                        address_slots[previous] = slot
+                    }
+                    previous += 1usize
+                }
+            }
             let (address, place_type, address_error) = lower_place(c, g, tree, module_index, children[place_at], builder, bindings, binding_count)
             if address_error != ok { ret address_error }
             addresses[place_at] = address
@@ -5110,6 +5564,17 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         }
         let initializer = tree.nodes[children[place_count]]
         if initializer.kind != .CallExpr { ret check.ArgumentCount }
+        if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, children[place_count], builder) {
+            place_at = 0usize
+            while place_at < place_count {
+                if address_slots[place_at] == 0usize {
+                    let (slot, save_error) = frame_save_temporary(c, pointer_type, addresses[place_at], assignment_token, builder)
+                    if save_error != ok { ret save_error }
+                    address_slots[place_at] = slot
+                }
+                place_at += 1usize
+            }
+        }
         var results: CallResults = zero
         let results_error = lower_call_results(c, g, tree, module_index, initializer, builder, bindings, binding_count, &results)
         if results_error != ok { ret results_error }
@@ -5119,13 +5584,24 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
             let (result_type, result_type_error) = check.call_return(c, results.call, place_at)
             if result_type_error != ok { ret result_type_error }
             if !check.type_assignable(c, result_type, place_types[place_at]) { ret check.InvalidType }
-            try store_assignment_value(c, place_types[place_at], addresses[place_at], results.values[place_at], c.tokens[usize(node.token_start)], builder)
+            let (address, resume_error) = frame_resume_temporary(c, pointer_type, addresses[place_at], address_slots[place_at], barriers_before, assignment_token, builder)
+            if resume_error != ok { ret resume_error }
+            try store_assignment_value(c, place_types[place_at], address, results.values[place_at], assignment_token, builder)
             place_at += 1usize
         }
         ret ok
     }
     let (address, place_type, address_error) = lower_place(c, g, tree, module_index, children[0usize], builder, bindings, binding_count)
     if address_error != ok { ret address_error }
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    let token = c.tokens[usize(node.token_start)]
+    var address_slot = 0usize
+    if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, children[1usize], builder) {
+        let (saved, save_error) = frame_save_temporary(c, pointer_type, address, token, builder)
+        if save_error != ok { ret save_error }
+        address_slot = saved
+    }
+    let before = builder.kernel_barriers
     let assignment = check.assignment_operator(c, usize(tree.nodes[children[0usize]].token_end), usize(tree.nodes[children[1usize]].token_start))
     if assignment != .PunctAssign {
         let opcode = compound_opcode(assignment)
@@ -5135,23 +5611,35 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         let (load_instruction, current, load_error) = nir.emit(builder, .Load, place_type, true, info.size, c.tokens[usize(node.token_start)])
         if load_error != ok { ret load_error }
         try nir.add_operand(builder, load_instruction, address)
+        var current_slot = 0usize
+        if address_slot != 0usize {
+            let (saved, save_error) = frame_save_temporary(c, place_type, current, token, builder)
+            if save_error != ok { ret save_error }
+            current_slot = saved
+        }
         var expected = place_type
         if opcode == .ShiftLeft || opcode == .ShiftRight { expected = check.invalid_type() }
         let (right, right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], expected, builder, bindings, binding_count)
         if right_error != ok { ret right_error }
         if opcode != .ShiftLeft && opcode != .ShiftRight && !check.type_equal(c, place_type, right_type) { ret check.InvalidType }
+        let (resumed_current, current_error) = frame_resume_temporary(c, place_type, current, current_slot, before, token, builder)
+        if current_error != ok { ret current_error }
+        let (resumed_address, resume_error) = frame_resume_temporary(c, pointer_type, address, address_slot, before, token, builder)
+        if resume_error != ok { ret resume_error }
         let (binary_instruction, value, binary_error) = nir.emit(builder, opcode, place_type, true, 0usize, c.tokens[usize(node.token_start)])
         if binary_error != ok { ret binary_error }
-        try nir.add_operand(builder, binary_instruction, current)
+        try nir.add_operand(builder, binary_instruction, resumed_current)
         try nir.add_operand(builder, binary_instruction, right)
-        ret store_assignment_value(c, place_type, address, value, c.tokens[usize(node.token_start)], builder)
+        ret store_assignment_value(c, place_type, resumed_address, value, token, builder)
     }
     let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, children[1usize], place_type, builder, bindings, binding_count)
     if value_error != ok { ret value_error }
     // What the checker admitted here is assignability, not equality: a `[]T` into a
     // `[]const T` place, a `*T` into a `*const T`. Both are the same bits.
     if !check.type_assignable(c, value_type, place_type) { ret check.InvalidType }
-    ret store_assignment_value(c, place_type, address, value, c.tokens[usize(node.token_start)], builder)
+    let (resumed_address, resume_error) = frame_resume_temporary(c, pointer_type, address, address_slot, before, token, builder)
+    if resume_error != ok { ret resume_error }
+    ret store_assignment_value(c, place_type, resumed_address, value, token, builder)
 }
 
 fn lower_call_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> err {
@@ -5900,7 +6388,7 @@ fn proof_offset_form(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
 // A loop's ordinal starts at zero on entry and advances for every body visit,
 // including visits that skip a barrier. Nested ordinals stay in separate slots.
 fn kernel_loop_open(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
-    if !builder.frame_mode { ret ok }
+    if !builder.frame_mode && !builder.frame_locals { ret ok }
     if builder.loop_depth >= builder.loop_slots.len { ret check.Capacity }
     let usize_type = check.make_type(.Integer, "usize", module_index)
     let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, usize_type, true, 0usize, token)
@@ -5917,7 +6405,7 @@ fn kernel_loop_open(builder: *nir.Builder, module_index: usize, token: lex.Token
 }
 
 fn kernel_loop_tick(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
-    if !builder.frame_mode { ret ok }
+    if !builder.frame_mode && !builder.frame_locals { ret ok }
     let usize_type = check.make_type(.Integer, "usize", module_index)
     let slot = builder.loop_slots[builder.loop_depth - 1usize]
     let (load_instruction, previous, load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
@@ -5936,7 +6424,7 @@ fn kernel_loop_tick(builder: *nir.Builder, module_index: usize, token: lex.Token
 }
 
 fn kernel_loop_close(builder: *nir.Builder) {
-    if builder.frame_mode { builder.loop_depth = builder.loop_depth - 1usize }
+    if builder.frame_mode || builder.frame_locals { builder.loop_depth = builder.loop_depth - 1usize }
 }
 
 fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, defers: *DeferState) -> err {
@@ -6081,6 +6569,13 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     if next_error != ok { ret next_error }
     var call: check.CallInfo = zero
     call.function = next
+    var iterator_slot = 0usize
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    if builder.frame_mode || builder.frame_locals {
+        let (slot, save_error) = frame_save_temporary(c, pointer_type, iterator_pointer, token, builder)
+        if save_error != ok { ret save_error }
+        iterator_slot = slot
+    }
     try kernel_loop_open(builder, module_index, token)
     let (entry_branch, entry_error) = emit_branch(builder, token)
     if entry_error != ok { ret entry_error }
@@ -6090,6 +6585,12 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     try nir.set_branch_targets(builder, entry_branch, condition_block, 0usize)
     var arguments: [1]usize = zero
     arguments[0usize] = iterator_pointer
+    if iterator_slot != 0usize {
+        let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, pointer_type, true, 8usize, token)
+        if load_error != ok { ret load_error }
+        try nir.add_operand(builder, load_instruction, iterator_slot)
+        arguments[0usize] = loaded
+    }
     var results: CallResults = zero
     try emit_call_results(c, g, call, 0usize, arguments[..], 1usize, builder, token, &results)
     if results.count != 2usize { ret check.InvalidType }
@@ -6279,7 +6780,11 @@ fn emit_device_overflow_guard(builder: *nir.Builder, opcode: nir.Opcode, ty: che
     var holds = 0usize
     if ty.name.len != 0usize && ty.name[0usize] == 117u8 {
         if opcode == .Add {
-            let (fits, fits_error) = emit_supplied_compare(builder, .GreaterEqual, boolean, result, left, token)
+            let (not_instruction, room, not_error) = nir.emit(builder, .BitNot, ty, true, 0usize, token)
+            if not_error != ok { ret not_error }
+            let not_operand_error = nir.add_operand(builder, not_instruction, left)
+            if not_operand_error != ok { ret not_operand_error }
+            let (fits, fits_error) = emit_supplied_compare(builder, .LessEqual, boolean, right, room, token)
             if fits_error != ok { ret fits_error }
             holds = fits
         } else {
@@ -6417,16 +6922,26 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     }
     let (left, lowered_left_type, left_error) = lower_expression(c, g, tree, module_index, children[0usize], left_type, builder, bindings, binding_count)
     if left_error != ok { ret (0usize, lowered_left_type, left_error) }
+    var left_slot = 0usize
+    let expression_token = c.tokens[usize(node.token_start)]
+    if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, children[1usize], builder) {
+        let (saved, save_error) = frame_save_temporary(c, lowered_left_type, left, expression_token, builder)
+        if save_error != ok { ret (0usize, result_type, save_error) }
+        left_slot = saved
+    }
+    let before = builder.kernel_barriers
     var right_expected = left_type
     if operator == .PunctShiftLeft || operator == .PunctShiftRight { right_expected = check.invalid_type() }
     let (right_type, right_type_error) = check.check_expr(c, g, tree, module_index, children[1usize], right_expected)
     if right_type_error != ok { ret (0usize, right_type, right_type_error) }
     let (right, lowered_right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], right_type, builder, bindings, binding_count)
     if right_error != ok { ret (0usize, lowered_right_type, right_error) }
-    var left_ordered = left
+    let (resumed_left, resume_error) = frame_resume_temporary(c, lowered_left_type, left, left_slot, before, expression_token, builder)
+    if resume_error != ok { ret (0usize, result_type, resume_error) }
+    var left_ordered = resumed_left
     var right_ordered = right
     if ordering_opcode(opcode) {
-        let (left_operand, left_coerce_error) = coerce_ordering_operand(c, left_type, left, builder, c.tokens[usize(node.token_start)])
+        let (left_operand, left_coerce_error) = coerce_ordering_operand(c, left_type, resumed_left, builder, c.tokens[usize(node.token_start)])
         if left_coerce_error != ok { ret (0usize, result_type, left_coerce_error) }
         let (right_operand, right_coerce_error) = coerce_ordering_operand(c, right_type, right, builder, c.tokens[usize(node.token_start)])
         if right_coerce_error != ok { ret (0usize, result_type, right_coerce_error) }
@@ -6627,6 +7142,14 @@ fn lower_vector_binary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     let shifting = opcode == .ShiftLeft || opcode == .ShiftRight
     let (left, left_type, left_error) = lower_expression(c, g, tree, module_index, left_index, result_type, builder, bindings, binding_count)
     if left_error != ok { ret (0usize, left_error) }
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    var left_slot = 0usize
+    if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, right_index, builder) {
+        let (saved, save_error) = frame_save_temporary(c, pointer_type, left, token, builder)
+        if save_error != ok { ret (0usize, save_error) }
+        left_slot = saved
+    }
+    let before = builder.kernel_barriers
     var right_expected = result_type
     if shifting {
         let (count_type, count_error) = check.check_expr(c, g, tree, module_index, right_index, check.invalid_type())
@@ -6636,6 +7159,8 @@ fn lower_vector_binary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     }
     let (right, right_type, right_error) = lower_expression(c, g, tree, module_index, right_index, right_expected, builder, bindings, binding_count)
     if right_error != ok { ret (0usize, right_error) }
+    let (resumed_left, resume_error) = frame_resume_temporary(c, pointer_type, left, left_slot, before, token, builder)
+    if resume_error != ok { ret (0usize, resume_error) }
     // The count is peeked here, before the slot below writes an instruction of its own
     // and leaves the constant no longer the last one emitted.
     let (count, count_known) = constant_lowered(builder, right)
@@ -6656,14 +7181,14 @@ fn lower_vector_binary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
         is_packed = binary_is_packed
     }
     if is_packed {
-        let packed_error = emit_packed_vector(c, result_type, packed, chunks, stack, left, right, builder, token)
+        let packed_error = emit_packed_vector(c, result_type, packed, chunks, stack, resumed_left, right, builder, token)
         if packed_error != ok { ret (0usize, packed_error) }
         ret (stack, ok)
     }
     var at = 0usize
     while at < lanes.array_length {
         let offset = at * lane_info.size
-        let (left_lane, left_lane_error) = component_at(c, lane, left, offset, builder, token)
+        let (left_lane, left_lane_error) = component_at(c, lane, resumed_left, offset, builder, token)
         if left_lane_error != ok { ret (0usize, left_lane_error) }
         var right_lane = right
         if !shifting {
@@ -6986,16 +7511,25 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         if check.is_untyped(first_type) { counter_type = second_type }
         let (first_value, lowered_first_type, first_error) = lower_expression(c, g, tree, module_index, expressions[0usize], counter_type, builder, bindings, *binding_count)
         if first_error != ok { ret first_error }
+        var first_slot = 0usize
+        if (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, expressions[1usize], builder) {
+            let (saved, save_error) = frame_save_temporary(c, counter_type, first_value, token, builder)
+            if save_error != ok { ret save_error }
+            first_slot = saved
+        }
+        let before = builder.kernel_barriers
         let (second_value, lowered_second_type, second_error) = lower_expression(c, g, tree, module_index, expressions[1usize], counter_type, builder, bindings, *binding_count)
         if second_error != ok { ret second_error }
-        initial = first_value
+        let (resumed_first, resume_error) = frame_resume_temporary(c, counter_type, first_value, first_slot, before, token, builder)
+        if resume_error != ok { ret resume_error }
+        initial = resumed_first
         limit = second_value
     }
     // The dispatch can resume inside the body, bypassing the expressions above.
     // Keep loop-invariant values in the invocation frame, as the counter is.
     var limit_slot = 0usize
     var data_slot = 0usize
-    if builder.frame_mode {
+    if builder.frame_mode || builder.frame_locals {
         let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, counter_type, true, 0usize, token)
         if slot_error != ok { ret slot_error }
         let (limit_info, limit_info_error) = layout.type_info(c, counter_type)
@@ -7036,7 +7570,7 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     try nir.add_operand(builder, condition_load_instruction, counter_stack)
     var condition_limit = limit
     var condition_data = data
-    if builder.frame_mode {
+    if builder.frame_mode || builder.frame_locals {
         let (limit_load, loaded_limit, limit_error) = nir.emit(builder, .Load, counter_type, true, counter_info.size, token)
         if limit_error != ok { ret limit_error }
         try nir.add_operand(builder, limit_load, limit_slot)
@@ -7164,6 +7698,19 @@ fn lower_defer(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         entry.kind = .Call
         let arguments_error = lower_call_arguments(c, g, tree, module_index, tree.nodes[call_index], builder, bindings, binding_count, true, &entry.call, &entry.callee, entry.arguments[..], &entry.argument_count)
         if arguments_error != ok { ret arguments_error }
+        if (builder.frame_mode || builder.frame_locals) && !builder.spirv {
+            var argument_at = 0usize
+            while argument_at < entry.argument_count {
+                let (argument_type, type_error) = call_parameter_type(c, entry.call, argument_at)
+                if type_error != ok { ret type_error }
+                var storage_type = argument_type
+                if aggregate_value(c, argument_type) { storage_type = check.make_type(.Pointer, "", module_index) }
+                let (slot, save_error) = frame_save_temporary(c, storage_type, entry.arguments[argument_at], entry.token, builder)
+                if save_error != ok { ret save_error }
+                entry.arguments[argument_at] = slot
+                argument_at += 1usize
+            }
+        }
     } else {
         entry.node_index = child_index
         if child.kind == .Block { entry.kind = .Block } else { entry.kind = .Statement }
@@ -7180,6 +7727,22 @@ fn emit_deferred_from(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
         at = at - 1usize
         var entry = defers.entries[at]
         if entry.kind == .Call {
+            if (builder.frame_mode || builder.frame_locals) && !builder.spirv {
+                var argument_at = 0usize
+                while argument_at < entry.argument_count {
+                    let (argument_type, type_error) = call_parameter_type(c, entry.call, argument_at)
+                    if type_error != ok { ret type_error }
+                    var storage_type = argument_type
+                    if aggregate_value(c, argument_type) { storage_type = check.make_type(.Pointer, "", module_index) }
+                    let (info, info_error) = layout.type_info(c, storage_type)
+                    if info_error != ok { ret info_error }
+                    let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, storage_type, true, info.size, entry.token)
+                    if load_error != ok { ret load_error }
+                    try nir.add_operand(builder, load_instruction, entry.arguments[argument_at])
+                    entry.arguments[argument_at] = loaded
+                    argument_at += 1usize
+                }
+            }
             var results: CallResults = zero
             try emit_call_results(c, g, entry.call, entry.callee, entry.arguments[..], entry.argument_count, builder, entry.token, &results)
         } else {
@@ -7590,7 +8153,14 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     // whatever body this checker checked last, so the call was refused on some schedules.
     c.body_device_only = check.device_only(c, g, function_index)
     c.body_is_main = check.same(function.name, "main")
-    builder.frame_locals = c.body_device_only && !function.gpu
+    builder.frame_locals = (c.body_device_only || builder.barrier_oracle) && !function.gpu
+    if builder.frame_locals {
+        let helper_depth = kernel_loop_nesting(tree, node, 0usize)
+        let (helper_slots, helper_slots_error) = mem.alloc[usize](c.arena, helper_depth)
+        if helper_slots_error != ok { ret helper_slots_error }
+        builder.loop_slots = helper_slots
+        builder.loop_depth = 0usize
+    }
     // The checker's local table still holds the last body it checked -- the last
     // generic instance, checked after every module's bodies -- and a name that is not
     // a local of this body but was one of that instance's would answer from it (D872):
@@ -7644,7 +8214,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         hidden_parameters = 2usize
         let (resume_blocks, resume_blocks_error) = mem.alloc[usize](c.arena, 64usize)
         if resume_blocks_error != ok { ret resume_blocks_error }
-        let loop_depth = kernel_loop_nesting(tree, node, 0usize)
+        let loop_depth = kernel_loop_nesting(tree, node, 0usize) + max_barrier_helper_depth(builder)
         let (loop_slots, loop_slots_error) = mem.alloc[usize](c.arena, loop_depth)
         if loop_slots_error != ok { ret loop_slots_error }
         try nir.begin_frame(builder, frame_value, resume_blocks, loop_slots)
@@ -8022,16 +8592,20 @@ fn emit_kernel_frame_store(builder: *nir.Builder, module_index: usize, offset: u
     ret nir.add_operand(builder, store_instruction, value)
 }
 
-fn emit_kernel_loop_signature(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
+fn emit_kernel_loop_signature(builder: *nir.Builder, module_index: usize, extra_slots: []usize, token: lex.Token) -> err {
+    let total_depth = builder.loop_depth + extra_slots.len
+    if total_depth > builder.loop_slots.len { ret check.Capacity }
     let usize_type = check.make_type(.Integer, "usize", module_index)
-    let (depth_instruction, depth, depth_error) = nir.emit(builder, .ConstInteger, usize_type, true, builder.loop_depth, token)
+    let (depth_instruction, depth, depth_error) = nir.emit(builder, .ConstInteger, usize_type, true, total_depth, token)
     if depth_error != ok { ret depth_error }
     try emit_kernel_frame_store(builder, module_index, 8usize, depth, token)
     var at = 0usize
-    while at < builder.loop_depth {
+    while at < total_depth {
+        var slot = 0usize
+        if at < builder.loop_depth { slot = builder.loop_slots[at] } else { slot = extra_slots[at - builder.loop_depth] }
         let (load_instruction, ordinal, load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
         if load_error != ok { ret load_error }
-        try nir.add_operand(builder, load_instruction, builder.loop_slots[at])
+        try nir.add_operand(builder, load_instruction, slot)
         try emit_kernel_frame_store(builder, module_index, 16usize + 8usize * at, ordinal, token)
         at += 1usize
     }
@@ -8104,10 +8678,24 @@ fn emit_kernel_bounds(builder: *nir.Builder, module_index: usize, index: usize, 
 
 // `gpu.barrier()`: the cut. The frame's `pc` becomes this barrier's number, the
 // step returns, and the code after the barrier begins a block the dispatch resumes.
-fn emit_kernel_cut(builder: *nir.Builder, module_index: usize, subgroup: bool, token: lex.Token) -> err {
+fn emit_kernel_cut(builder: *nir.Builder, module_index: usize, subgroup: bool, extra_slots: []usize, token: lex.Token) -> err {
     if (builder.spirv || builder.frame_locals) && !subgroup {
         let (instruction, ignored, emit_error) = nir.emit(builder, .Barrier, zero, false, 0usize, token)
-        ret emit_error
+        if emit_error != ok { ret emit_error }
+        if builder.frame_locals {
+            builder.kernel_barriers += 1usize
+            var at = 0usize
+            while at < builder.loop_depth {
+                try nir.add_operand(builder, instruction, builder.loop_slots[at])
+                at += 1usize
+            }
+            at = 0usize
+            while at < extra_slots.len {
+                try nir.add_operand(builder, instruction, extra_slots[at])
+                at += 1usize
+            }
+        }
+        ret ok
     }
     if !builder.frame_mode { ret check.Unsupported }
     if builder.kernel_barriers + 1usize >= builder.kernel_resume.len { ret check.Capacity }
@@ -8115,7 +8703,7 @@ fn emit_kernel_cut(builder: *nir.Builder, module_index: usize, subgroup: bool, t
     let number = builder.kernel_barriers
     var pc = number
     if subgroup { pc += KERNEL_SUBGROUP_PC }
-    try emit_kernel_loop_signature(builder, module_index, token)
+    try emit_kernel_loop_signature(builder, module_index, extra_slots, token)
     try emit_kernel_pc_store(builder, module_index, pc, token)
     let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, zero, false, 0usize, token)
     if return_error != ok { ret return_error }
@@ -8128,11 +8716,17 @@ fn emit_kernel_cut(builder: *nir.Builder, module_index: usize, subgroup: bool, t
 }
 
 fn emit_kernel_barrier(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
-    ret emit_kernel_cut(builder, module_index, false, token)
+    var none: [1]usize = zero
+    ret emit_kernel_cut(builder, module_index, false, none[0usize..0usize], token)
+}
+
+fn emit_kernel_barrier_slots(builder: *nir.Builder, module_index: usize, slots: []usize, token: lex.Token) -> err {
+    ret emit_kernel_cut(builder, module_index, false, slots, token)
 }
 
 fn emit_kernel_subgroup(builder: *nir.Builder, module_index: usize, token: lex.Token) -> err {
-    ret emit_kernel_cut(builder, module_index, true, token)
+    var none: [1]usize = zero
+    ret emit_kernel_cut(builder, module_index, true, none[0usize..0usize], token)
 }
 
 // The dispatch the entry branches to: `pc` from the frame, a comparison per barrier

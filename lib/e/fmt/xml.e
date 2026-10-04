@@ -21,54 +21,43 @@ type Options = struct { max_depth: u16, preserve_comments: bool }
 error Invalid
 error TooDeep
 error Unsupported
+error TooLarge
+
+const DEFAULT_MAX_BYTES: usize = 16777216usize
 
 // Open element names are kept on a stack of at most `max_depth` entries.
 type State = struct { a: *mem.Arena, source: []const u8, at: usize, options: Options, stack: []str, depth: usize, pending_end: str, has_pending: bool, started: bool, finished: bool }
 
 fn slurp(a: *mem.Arena, source: io.Reader) -> ([]u8, err) {
-    var capacity = 4096usize
-    let (first, first_error) = mem.alloc[u8](a, capacity)
-    if first_error != ok { ret (zero, first_error) }
-    var buffer = first
-    var filled = 0usize
+    let (contents, read_error) = slurp_with_limit(a, source, DEFAULT_MAX_BYTES)
+    ret (contents, read_error)
+}
+
+// One extra byte distinguishes an exact-size input from an oversized one.
+fn slurp_with_limit(a: *mem.Arena, source: io.Reader, limit: usize) -> ([]u8, err) {
+    var maximum = limit
+    if maximum == 0usize { maximum = DEFAULT_MAX_BYTES }
+    if maximum > 1073741824usize { ret (zero, TooLarge) }
+    let checkpoint = mem.mark(a)
     var input = source
-    while true {
-        if filled == capacity {
-            let (bigger, bigger_error) = mem.alloc[u8](a, capacity * 2usize)
-            if bigger_error != ok { ret (zero, bigger_error) }
-            mem.copy[u8](bigger[..filled], buffer[..filled])
-            buffer = bigger
-            capacity = capacity * 2usize
-        }
-        let (count, read_error) = io.read(&input, buffer[filled..])
-        if read_error == io.End { break }
-        if read_error != ok { ret (zero, read_error) }
-        if count == 0usize { break }
-        filled += count
+    let (contents, read_error) = io.read_all(a, &input, maximum + 1usize)
+    if read_error == io.TooSmall || contents.len > maximum {
+        mem.reset(a, checkpoint)
+        ret (zero, TooLarge)
     }
-    ret (buffer[..filled], ok)
+    ret (contents, read_error)
 }
 
 fn reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Reader, err) {
-    let (storage, storage_error) = mem.alloc[State](a, 1usize)
-    if storage_error != ok { ret (zero, storage_error) }
-    let (contents, slurp_error) = slurp(a, source)
-    if slurp_error != ok { ret (zero, slurp_error) }
-    let (stack, stack_error) = mem.alloc[str](a, usize(options.max_depth) + 1usize)
-    if stack_error != ok { ret (zero, stack_error) }
-    let s = &storage[0]
-    s.a = a
-    s.source = contents
-    s.at = 0usize
-    s.options = options
-    s.stack = stack
-    s.depth = 0usize
-    s.has_pending = false
-    s.started = false
-    s.finished = false
-    var r: Reader = zero
-    r.state = mem.cast[*void](s)
-    ret (r, ok)
+    let (made, read_error) = reader_with_limit(a, source, options, DEFAULT_MAX_BYTES)
+    ret (made, read_error)
+}
+
+fn reader_with_limit(a: *mem.Arena, source: io.Reader, options: Options, limit: usize) -> (Reader, err) {
+    let (contents, read_error) = slurp_with_limit(a, source, limit)
+    if read_error != ok { ret (zero, read_error) }
+    let (made, stream_error) = stream(a, contents, options)
+    ret (made, stream_error)
 }
 
 fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 }

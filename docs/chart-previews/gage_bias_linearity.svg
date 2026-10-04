@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>gage_bias_linearity</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="32" y="51" width="296" height="129" fill="rgb(245,250,255)"/>
+<line x1="32" y1="135.21" x2="328" y2="135.21" stroke="rgb(156,173,191)" stroke-width="2" stroke-linecap="round"/>
+<line x1="32" y1="167.16" x2="32" y2="153.42" stroke="rgb(156,173,191)" stroke-width="2" stroke-linecap="round"/>
+<line x1="91.2" y1="147.53" x2="91.2" y2="137.22" stroke="rgb(156,173,191)" stroke-width="2" stroke-linecap="round"/>
+<line x1="150.4" y1="128.5" x2="150.4" y2="120.42" stroke="rgb(156,173,191)" stroke-width="2" stroke-linecap="round"/>
+<line x1="209.6" y1="110.58" x2="209.6" y2="102.5" stroke="rgb(156,173,191)" stroke-width="2" stroke-linecap="round"/>
+<line x1="268.8" y1="93.78" x2="268.8" y2="83.47" stroke="rgb(156,173,191)" stroke-width="2" stroke-linecap="round"/>
+<line x1="328" y1="77.58" x2="328" y2="63.84" stroke="rgb(156,173,191)" stroke-width="2" stroke-linecap="round"/>
+<rect x="29" y="166.25" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="29" y="157.29" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="29" y="148.33" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="88.2" y="148.33" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="88.2" y="139.38" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="88.2" y="130.42" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="147.4" y="130.42" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="147.4" y="121.46" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="147.4" y="112.5" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="206.6" y="112.5" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="206.6" y="103.54" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="206.6" y="94.58" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="265.8" y="94.58" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="265.8" y="85.62" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="265.8" y="76.67" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="325" y="76.67" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="325" y="67.71" width="6" height="6" fill="rgb(48,125,196)"/>
+<rect x="325" y="58.75" width="6" height="6" fill="rgb(48,125,196)"/>
+<path d="M32 160.29 L91.2 142.38 L150.4 124.46 L209.6 106.54 L268.8 88.62 L328 70.71" fill="none" stroke="rgb(237,112,43)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="29" y="157.29" width="6" height="6" fill="rgb(41,56,79)"/>
+<rect x="88.2" y="139.38" width="6" height="6" fill="rgb(41,56,79)"/>
+<rect x="147.4" y="121.46" width="6" height="6" fill="rgb(41,56,79)"/>
+<rect x="206.6" y="103.54" width="6" height="6" fill="rgb(41,56,79)"/>
+<rect x="265.8" y="85.62" width="6" height="6" fill="rgb(41,56,79)"/>
+<rect x="325" y="67.71" width="6" height="6" fill="rgb(41,56,79)"/>
+<text x="180" y="20" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(41,56,79)">Gage bias and linearity</text>
+<text x="180" y="40" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Measurement minus reference</text>
+<text x="180" y="207" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Mean bias 0.055   Slope 0.025   Span drift 0.250</text>
+<text x="180" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Replicates / mean / fit / 95% mean CI</text>
+</svg>

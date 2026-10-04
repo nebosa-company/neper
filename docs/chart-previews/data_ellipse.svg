@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>data_ellipse</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="30" x2="139.33" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="204" x2="139.33" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="30" x2="234.67" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="204" x2="234.67" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<rect x="100.52" y="167.32" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="124.37" y="114" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="148.22" y="131.77" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="172.07" y="78.46" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="195.93" y="114" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="219.78" y="96.23" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="243.63" y="149.54" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="267.48" y="60.68" width="6" height="6" fill="rgb(18,89,194)"/>
+<path d="M330 71.33 L329.31 64.3 L327.25 57.77 L323.84 51.8 L319.11 46.47 L313.11 41.82 L305.9 37.89 L297.54 34.72 L288.12 32.35 L277.72 30.79 L266.45 30.06 L254.41 30.17 L241.72 31.11 L228.51 32.88 L214.9 35.46 L201.02 38.83 L187 42.95 L172.98 47.78 L159.1 53.28 L145.49 59.39 L132.28 66.06 L119.59 73.22 L107.55 80.8 L96.28 88.73 L85.88 96.93 L76.46 105.32 L68.1 113.83 L60.89 122.37 L54.89 130.85 L50.16 139.2 L46.75 147.34 L44.69 155.19 L44 162.67 L44.69 169.7 L46.75 176.23 L50.16 182.2 L54.89 187.53 L60.89 192.18 L68.1 196.11 L76.46 199.28 L85.88 201.65 L96.28 203.21 L107.55 203.94 L119.59 203.83 L132.28 202.89 L145.49 201.12 L159.1 198.54 L172.98 195.17 L187 191.05 L201.02 186.22 L214.9 180.72 L228.51 174.61 L241.72 167.94 L254.41 160.78 L266.45 153.2 L277.72 145.27 L288.12 137.07 L297.54 128.68 L305.9 120.17 L313.11 111.63 L319.11 103.15 L323.84 94.8 L327.25 86.66 L329.31 78.81 L330 71.33" fill="none" stroke="rgb(240,107,31)" stroke-width="2" stroke-linejoin="round"/>
+</svg>

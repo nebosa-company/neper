@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>ternary</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="92.24" y1="200" x2="267.76" y2="200" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="48" x2="92.24" y2="200" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="48" x2="267.76" y2="200" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="109.79" y1="169.6" x2="250.21" y2="169.6" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="197.55" y1="78.4" x2="127.35" y2="200" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="162.45" y1="78.4" x2="232.65" y2="200" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.35" y1="139.2" x2="232.65" y2="139.2" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="215.1" y1="108.8" x2="162.45" y2="200" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="144.9" y1="108.8" x2="197.55" y2="200" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="144.9" y1="108.8" x2="215.1" y2="108.8" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="232.65" y1="139.2" x2="197.55" y2="200" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.35" y1="139.2" x2="162.45" y2="200" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="162.45" y1="78.4" x2="197.55" y2="78.4" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="250.21" y1="169.6" x2="232.65" y2="200" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<line x1="109.79" y1="169.6" x2="127.35" y2="200" stroke="rgb(194,207,222)" stroke-width="2" stroke-linecap="round"/>
+<rect x="172.61" y="98.2" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="162.08" y="113.4" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="180.51" y="87.56" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="162.96" y="130.12" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="177" y="75.4" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="169.98" y="102.76" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="140.14" y="160.52" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="129.61" y="169.64" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="148.92" y="142.28" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="131.37" y="154.44" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="126.1" y="175.72" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="142.77" y="146.84" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="89" y="228" width="10" height="5" fill="rgb(18,89,194)"/>
+<rect x="213" y="228" width="10" height="5" fill="rgb(240,107,31)"/>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(61,77,102)">Three-part mixtures</text>
+<text x="180" y="41" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(61,77,102)">A</text>
+<text x="82" y="216" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(61,77,102)">B</text>
+<text x="278" y="216" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(61,77,102)">C</text>
+<text x="105" y="234" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(61,77,102)">Blend 1</text>
+<text x="229" y="234" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(61,77,102)">Blend 2</text>
+</svg>

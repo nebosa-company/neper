@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>word_cloud</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<text x="128.35" y="143.47" font-family="sans-serif" font-size="32" text-anchor="start" fill="rgb(20,99,194)">Neper</text>
+<text x="133.11" y="183.84" font-family="sans-serif" font-size="27.15" text-anchor="start" fill="rgb(222,92,43)">Charts</text>
+<text x="128.26" y="99.87" font-family="sans-serif" font-size="22.63" text-anchor="start" fill="rgb(26,143,107)">Graphics</text>
+<text x="150.88" y="66.42" font-family="sans-serif" font-size="20.24" text-anchor="start" fill="rgb(125,92,179)">Data</text>
+<text x="149.79" y="216.06" font-family="sans-serif" font-size="19.2" text-anchor="start" fill="rgb(184,120,31)">Layers</text>
+<text x="237.47" y="136.83" font-family="sans-serif" font-size="17.53" text-anchor="start" fill="rgb(20,99,194)">Scales</text>
+<text x="88.04" y="141.07" font-family="sans-serif" font-size="15.68" text-anchor="start" fill="rgb(222,92,43)">SVG</text>
+<text x="48.57" y="115.35" font-family="sans-serif" font-size="15.01" text-anchor="start" fill="rgb(26,143,107)">Statistics</text>
+<text x="236.66" y="160.72" font-family="sans-serif" font-size="14.31" text-anchor="start" fill="rgb(125,92,179)">Labels</text>
+<text x="80.34" y="174.41" font-family="sans-serif" font-size="13.58" text-anchor="start" fill="rgb(184,120,31)">Facets</text>
+<text x="209" y="66.71" font-family="sans-serif" font-size="12.8" text-anchor="start" fill="rgb(20,99,194)">Export</text>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Weighted word cloud</text>
+</svg>

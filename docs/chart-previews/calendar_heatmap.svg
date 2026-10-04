@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>calendar_heatmap</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="63.5" y="161.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="63.5" y="182.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="105.5" y="56.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="105.5" y="77.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="105.5" y="98.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="105.5" y="119.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="105.5" y="140.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="105.5" y="161.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="105.5" y="182.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="147.5" y="56.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="147.5" y="77.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="147.5" y="98.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="147.5" y="119.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="147.5" y="140.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="147.5" y="161.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="147.5" y="182.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="189.5" y="56.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="189.5" y="77.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="189.5" y="98.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="189.5" y="119.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="189.5" y="140.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="189.5" y="161.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="189.5" y="182.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="231.5" y="56.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="231.5" y="77.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="231.5" y="98.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="231.5" y="119.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="231.5" y="140.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="231.5" y="161.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="231.5" y="182.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="273.5" y="56.5" width="39" height="18" fill="rgb(235,240,247)"/>
+<rect x="63.5" y="161.5" width="39" height="18" fill="rgb(147,189,231)"/>
+<rect x="63.5" y="182.5" width="39" height="18" fill="rgb(45,117,194)"/>
+<rect x="105.5" y="56.5" width="39" height="18" fill="rgb(133,179,226)"/>
+<rect x="105.5" y="77.5" width="39" height="18" fill="rgb(30,107,189)"/>
+<rect x="105.5" y="98.5" width="39" height="18" fill="rgb(118,168,221)"/>
+<rect x="105.5" y="140.5" width="39" height="18" fill="rgb(103,158,215)"/>
+<rect x="105.5" y="161.5" width="39" height="18" fill="rgb(191,219,247)"/>
+<rect x="105.5" y="182.5" width="39" height="18" fill="rgb(89,148,210)"/>
+<rect x="147.5" y="56.5" width="39" height="18" fill="rgb(177,209,242)"/>
+<rect x="147.5" y="77.5" width="39" height="18" fill="rgb(74,138,205)"/>
+<rect x="147.5" y="98.5" width="39" height="18" fill="rgb(162,199,237)"/>
+<rect x="147.5" y="119.5" width="39" height="18" fill="rgb(59,128,200)"/>
+<rect x="147.5" y="140.5" width="39" height="18" fill="rgb(147,189,231)"/>
+<rect x="147.5" y="182.5" width="39" height="18" fill="rgb(133,179,226)"/>
+<rect x="189.5" y="56.5" width="39" height="18" fill="rgb(30,107,189)"/>
+<rect x="189.5" y="77.5" width="39" height="18" fill="rgb(118,168,221)"/>
+<rect x="189.5" y="98.5" width="39" height="18" fill="rgb(15,97,184)"/>
+<rect x="189.5" y="119.5" width="39" height="18" fill="rgb(103,158,215)"/>
+<rect x="189.5" y="140.5" width="39" height="18" fill="rgb(191,219,247)"/>
+<rect x="189.5" y="161.5" width="39" height="18" fill="rgb(89,148,210)"/>
+<rect x="231.5" y="56.5" width="39" height="18" fill="rgb(74,138,205)"/>
+<rect x="231.5" y="77.5" width="39" height="18" fill="rgb(162,199,237)"/>
+<rect x="231.5" y="98.5" width="39" height="18" fill="rgb(59,128,200)"/>
+<rect x="231.5" y="119.5" width="39" height="18" fill="rgb(147,189,231)"/>
+<rect x="231.5" y="140.5" width="39" height="18" fill="rgb(45,117,194)"/>
+<rect x="231.5" y="161.5" width="39" height="18" fill="rgb(133,179,226)"/>
+<rect x="231.5" y="182.5" width="39" height="18" fill="rgb(30,107,189)"/>
+<rect x="273.5" y="56.5" width="39" height="18" fill="rgb(118,168,221)"/>
+<text x="53" y="69" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)">Mon</text>
+<text x="53" y="90" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)">Tue</text>
+<text x="53" y="111" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)">Wed</text>
+<text x="53" y="132" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)">Thu</text>
+<text x="53" y="153" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)">Fri</text>
+<text x="53" y="174" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)">Sat</text>
+<text x="53" y="195" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)">Sun</text>
+<text x="83" y="221" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">W1</text>
+<text x="125" y="221" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">W2</text>
+<text x="167" y="221" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">W3</text>
+<text x="209" y="221" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">W4</text>
+<text x="251" y="221" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">W5</text>
+<text x="293" y="221" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">W6</text>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)">Calendar heatmap</text>
+</svg>

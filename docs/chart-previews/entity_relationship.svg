@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>entity_relationship</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="96" y1="136" x2="120" y2="136" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="120" y1="136" x2="120" y2="136" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="120" y1="136" x2="144" y2="136" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="104" y1="130" x2="104" y2="142" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="144" y1="136" x2="136" y2="130" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="144" y1="136" x2="136" y2="142" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="131" y1="136" x2="130.12" y2="138.12" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="130.12" y1="138.12" x2="128" y2="139" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="139" x2="125.88" y2="138.12" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="125.88" y1="138.12" x2="125" y2="136" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="125" y1="136" x2="125.88" y2="133.88" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="125.88" y1="133.88" x2="128" y2="133" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="128" y1="133" x2="130.12" y2="133.88" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="130.12" y1="133.88" x2="131" y2="136" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="216" y1="136" x2="240" y2="136" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="240" y1="136" x2="240" y2="136" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="240" y1="136" x2="264" y2="136" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="224" y1="130" x2="224" y2="142" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="264" y1="136" x2="256" y2="130" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<line x1="264" y1="136" x2="256" y2="142" stroke="rgb(122,145,173)" stroke-width="2" stroke-linecap="round"/>
+<rect x="24" y="97" width="72" height="78" fill="rgb(232,242,250)"/>
+<rect x="144" y="97" width="72" height="78" fill="rgb(232,242,250)"/>
+<rect x="264" y="97" width="72" height="78" fill="rgb(232,242,250)"/>
+<rect x="24" y="97" width="72" height="24" fill="rgb(41,110,194)"/>
+<rect x="144" y="97" width="72" height="24" fill="rgb(41,110,194)"/>
+<rect x="264" y="97" width="72" height="24" fill="rgb(41,110,194)"/>
+<rect x="24" y="97" width="72" height="24" fill="rgb(41,77,138)"/>
+<rect x="264" y="97" width="72" height="24" fill="rgb(33,135,117)"/>
+<text x="180" y="23" font-family="sans-serif" font-size="14" text-anchor="middle" fill="rgb(51,64,84)">Entity relationship / schema</text>
+<text x="180" y="238" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">Keys and one-to-many cardinalities</text>
+<text x="60" y="112" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Customer</text>
+<text x="180" y="112" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">Order</text>
+<text x="300" y="112" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(255,255,255)">LineItem</text>
+<text x="51" y="133" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(51,64,84)">id</text>
+<text x="30" y="151" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(51,64,84)">name</text>
+<text x="30" y="169" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(51,64,84)">email</text>
+<text x="171" y="133" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(51,64,84)">id</text>
+<text x="171" y="151" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(51,64,84)">cust_id</text>
+<text x="150" y="169" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(51,64,84)">total</text>
+<text x="291" y="133" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(51,64,84)">id</text>
+<text x="291" y="151" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(51,64,84)">order_id</text>
+<text x="270" y="169" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(51,64,84)">qty</text>
+<text x="30" y="133" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,110,194)">PK</text>
+<text x="150" y="133" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,110,194)">PK</text>
+<text x="150" y="151" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,110,194)">FK</text>
+<text x="270" y="133" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,110,194)">PK</text>
+<text x="270" y="151" font-family="sans-serif" font-size="7" text-anchor="start" fill="rgb(41,110,194)">FK</text>
+<text x="120" y="124" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(51,64,84)">places</text>
+<text x="240" y="124" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(51,64,84)">contains</text>
+</svg>

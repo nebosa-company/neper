@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>anom</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="46" y="53" width="268" height="133" fill="rgb(250,252,255)"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="46" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="53" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="186" x2="314" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="186" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="152.75" x2="314" y2="152.75" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="152.75" x2="46" y2="152.75" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="119.5" x2="314" y2="119.5" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="119.5" x2="46" y2="119.5" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="86.25" x2="314" y2="86.25" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="86.25" x2="46" y2="86.25" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="314" y2="53" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="53" x2="46" y2="53" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="136.12" x2="314" y2="136.12" stroke="rgb(117,138,158)" stroke-width="2" stroke-linecap="round"/>
+<line x1="46" y1="110.37" x2="99.6" y2="110.37" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<line x1="99.6" y1="110.37" x2="153.2" y2="110.37" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<line x1="153.2" y1="110.37" x2="206.8" y2="110.37" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<line x1="206.8" y1="110.37" x2="260.4" y2="110.37" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<line x1="260.4" y1="110.37" x2="314" y2="110.37" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<line x1="46" y1="161.88" x2="99.6" y2="161.88" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<line x1="99.6" y1="161.88" x2="153.2" y2="161.88" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<line x1="153.2" y1="161.88" x2="206.8" y2="161.88" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<line x1="206.8" y1="161.88" x2="260.4" y2="161.88" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<line x1="260.4" y1="161.88" x2="314" y2="161.88" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<rect x="69.8" y="166.38" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="123.4" y="149.75" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="177" y="133.12" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="230.6" y="149.75" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="284.2" y="66.62" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="69.8" y="166.38" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="284.2" y="66.62" width="6" height="6" fill="rgb(209,48,56)"/>
+<text x="180" y="18" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">ANOM / group means vs decision limits</text>
+<text x="180" y="34" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">One-way normal data / pooled within-group SD</text>
+<text x="37" y="189" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">9</text>
+<text x="37" y="155.75" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">11</text>
+<text x="37" y="122.5" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">13</text>
+<text x="37" y="89.25" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">15</text>
+<text x="37" y="56" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">17</text>
+<text x="72.8" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">A</text>
+<text x="126.4" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">B</text>
+<text x="180" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">C</text>
+<text x="233.6" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">D</text>
+<text x="287.2" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">E</text>
+<text x="321" y="113.37" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(43,59,82)">UDL</text>
+<text x="321" y="139.12" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(43,59,82)">CL</text>
+<text x="321" y="164.88" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(43,59,82)">LDL</text>
+<text x="180" y="227" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)">Blue: mean   Red: outside decision limits   h = 3</text>
+</svg>

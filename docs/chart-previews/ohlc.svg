@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>ohlc</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="124.44" y1="30" x2="124.44" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="124.44" y1="204" x2="124.44" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="213.81" y1="30" x2="213.81" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="213.81" y1="204" x2="213.81" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="303.19" y1="30" x2="303.19" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="303.19" y1="204" x2="303.19" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="134.4" x2="330" y2="134.4" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="134.4" x2="44" y2="134.4" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="47.4" x2="330" y2="47.4" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="47.4" x2="44" y2="47.4" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52.94" y1="134.4" x2="52.94" y2="204" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="47.22" y1="186.6" x2="52.94" y2="186.6" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="52.94" y1="151.8" x2="58.66" y2="151.8" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.81" y1="134.4" x2="70.81" y2="186.6" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="65.09" y1="151.8" x2="70.81" y2="151.8" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.81" y1="169.2" x2="76.53" y2="169.2" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="88.69" y1="117" x2="88.69" y2="186.6" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="82.97" y1="169.2" x2="88.69" y2="169.2" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="88.69" y1="134.4" x2="94.41" y2="134.4" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="106.56" y1="117" x2="106.56" y2="169.2" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="100.84" y1="134.4" x2="106.56" y2="134.4" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="106.56" y1="151.8" x2="112.28" y2="151.8" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="160.19" y1="99.6" x2="160.19" y2="169.2" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="154.47" y1="151.8" x2="160.19" y2="151.8" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="160.19" y1="117" x2="165.91" y2="117" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="178.06" y1="82.2" x2="178.06" y2="134.4" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="172.34" y1="117" x2="178.06" y2="117" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="178.06" y1="99.6" x2="183.78" y2="99.6" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="195.94" y1="82.2" x2="195.94" y2="134.4" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="190.22" y1="99.6" x2="195.94" y2="99.6" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="195.94" y1="117" x2="201.66" y2="117" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="213.81" y1="64.8" x2="213.81" y2="134.4" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="208.09" y1="117" x2="213.81" y2="117" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="213.81" y1="82.2" x2="219.53" y2="82.2" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="231.69" y1="64.8" x2="231.69" y2="117" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="225.97" y1="82.2" x2="231.69" y2="82.2" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="231.69" y1="99.6" x2="237.41" y2="99.6" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="285.31" y1="47.4" x2="285.31" y2="117" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="279.59" y1="99.6" x2="285.31" y2="99.6" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="285.31" y1="64.8" x2="291.03" y2="64.8" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="303.19" y1="47.4" x2="303.19" y2="99.6" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="297.47" y1="64.8" x2="303.19" y2="64.8" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="303.19" y1="82.2" x2="308.91" y2="82.2" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="321.06" y1="30" x2="321.06" y2="99.6" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="315.34" y1="82.2" x2="321.06" y2="82.2" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<line x1="321.06" y1="47.4" x2="326.78" y2="47.4" stroke="rgb(56,69,89)" stroke-width="2" stroke-linecap="round"/>
+<text x="124.44" y="219" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">5</text>
+<text x="213.81" y="219" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">10</text>
+<text x="303.19" y="219" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(82,97,122)">15</text>
+<text x="35" y="137.55" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">15</text>
+<text x="35" y="50.55" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(82,97,122)">20</text>
+<text x="180" y="22" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(82,97,122)">OHLC price bars</text>
+</svg>

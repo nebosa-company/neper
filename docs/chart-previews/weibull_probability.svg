@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>weibull_probability</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="68" y="48" width="248" height="151" fill="rgb(250,252,255)"/>
+<line x1="68" y1="48" x2="68" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="199" x2="68" y2="204" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="130" y1="48" x2="130" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="130" y1="199" x2="130" y2="204" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="192" y1="48" x2="192" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="192" y1="199" x2="192" y2="204" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="273.96" y1="48" x2="273.96" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="273.96" y1="199" x2="273.96" y2="204" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="316" y1="48" x2="316" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="316" y1="199" x2="316" y2="204" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="199" x2="316" y2="199" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="199" x2="68" y2="199" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="158.83" x2="316" y2="158.83" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="158.83" x2="68" y2="158.83" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="116.34" x2="316" y2="116.34" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="116.34" x2="68" y2="116.34" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="94.67" x2="316" y2="94.67" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="94.67" x2="68" y2="94.67" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="77.59" x2="316" y2="77.59" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="77.59" x2="68" y2="77.59" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="58.6" x2="316" y2="58.6" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="58.6" x2="68" y2="58.6" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="48" x2="316" y2="48" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="63" y1="48" x2="68" y2="48" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="48" x2="68" y2="199" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="68" y1="199" x2="316" y2="199" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<path d="M68 170.75 L316 68.26" fill="none" stroke="rgb(232,87,41)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="71.88" y="165.31" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="182.99" y="142.81" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="195.88" y="130.74" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="205.31" y="122.28" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="206.79" y="115.66" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="235.14" y="110.13" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="241.82" y="105.33" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="244.75" y="101.04" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="245.23" y="97.1" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="247.81" y="93.43" width="6" height="6" fill="rgb(20,99,189)"/>
+<text x="180" y="19" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">Weibull probability plot</text>
+<text x="180" y="33" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">10 failures / 20 units; 10 censored at 500h</text>
+<text x="58" y="202" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">1%</text>
+<text x="58" y="161.83" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">5%</text>
+<text x="58" y="119.34" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">25%</text>
+<text x="58" y="97.67" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">50%</text>
+<text x="58" y="80.59" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">75%</text>
+<text x="58" y="61.6" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">95%</text>
+<text x="58" y="51" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">99%</text>
+<text x="68" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">50</text>
+<text x="130" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">100</text>
+<text x="192" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">200</text>
+<text x="273.96" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">500</text>
+<text x="316" y="215" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">800</text>
+<text x="180" y="232" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Time (hours) / cumulative failure probability</text>
+</svg>

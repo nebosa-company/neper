@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>mekko</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="44" y="133.8" width="52.5" height="59.2" fill="rgb(20,94,191)"/>
+<rect x="96.5" y="168.33" width="31.5" height="24.67" fill="rgb(20,94,191)"/>
+<rect x="128" y="140.14" width="73.5" height="52.86" fill="rgb(20,94,191)"/>
+<rect x="201.5" y="163.4" width="52.5" height="29.6" fill="rgb(20,94,191)"/>
+<rect x="268" y="63" width="10" height="10" fill="rgb(20,94,191)"/>
+<rect x="44" y="104.2" width="52.5" height="29.6" fill="rgb(235,107,33)"/>
+<rect x="96.5" y="94.33" width="31.5" height="74" fill="rgb(235,107,33)"/>
+<rect x="128" y="97.86" width="73.5" height="42.29" fill="rgb(235,107,33)"/>
+<rect x="201.5" y="119" width="52.5" height="44.4" fill="rgb(235,107,33)"/>
+<rect x="268" y="94" width="10" height="10" fill="rgb(235,107,33)"/>
+<rect x="44" y="45" width="52.5" height="59.2" fill="rgb(41,148,110)"/>
+<rect x="96.5" y="45" width="31.5" height="49.33" fill="rgb(41,148,110)"/>
+<rect x="128" y="45" width="73.5" height="52.86" fill="rgb(41,148,110)"/>
+<rect x="201.5" y="45" width="52.5" height="74" fill="rgb(41,148,110)"/>
+<rect x="268" y="125" width="10" height="10" fill="rgb(41,148,110)"/>
+<text x="70.25" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">North</text>
+<text x="112.25" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">South</text>
+<text x="164.75" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">East</text>
+<text x="227.75" y="209" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(51,64,84)">West</text>
+<text x="31" y="48" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)">100%</text>
+<text x="31" y="122" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)">50%</text>
+<text x="31" y="195" font-family="sans-serif" font-size="9" text-anchor="end" fill="rgb(51,64,84)">0%</text>
+<text x="180" y="23" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(51,64,84)">Marimekko shares</text>
+<text x="284" y="73" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">Core</text>
+<text x="284" y="104" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">Growth</text>
+<text x="284" y="135" font-family="sans-serif" font-size="9" text-anchor="start" fill="rgb(51,64,84)">Services</text>
+</svg>

@@ -32394,3 +32394,2847 @@ its barrier. The previous compiler refused its kernel during lowering; the
 grown-map compiler builds and runs it in debug and release on Windows and WSL,
 including a four-worker Windows release build. Consecutive self-hosted stages
 are byte-identical on both hosts. Nested helper calls are still pending.
+
+## D1754 — Inline only barrier-reachable helper chains into CPU steps
+
+**Decision.** Build a separate, uncapped oracle for kernel-reachable device
+helpers and repeatedly copy the bodies that transitively reach a barrier.
+Ordinary debug calls remain calls, and release keeps its ordinary two-pass
+inliner. A copied helper barrier carries its nested loop-iteration ordinals
+into the CPU kernel's barrier signature, so different occurrences of the same
+static barrier still trap. Unreached helpers do not enter this oracle.
+
+**Evidence.** `link/gpu_barrier_chain` passes through five helper calls,
+including nested `for` and `while` loops, a scalar return, and an unused
+recursive helper. It passes in debug and release on Windows and WSL.
+`link/gpu_barrier_helper_occurrence` traps on a helper-loop mismatch in both
+modes on both hosts. The existing barrier, direct-helper, large-helper,
+frame-many, shared and subgroup fixtures pass on Windows. Consecutive
+self-hosted compiler stages are byte-identical on both hosts. A caller
+temporary computed before a barrier-bearing expression is not yet retained
+across the CPU cut; the fixture evaluates the helper before its store address.
+
+## D1755 — Retain pending assignment and binary values across helper barriers
+
+**Decision.** A CPU kernel or device helper saves a pending store address or
+binary left operand in a frame slot before evaluating a right-hand expression
+that contains a call. If inlining that call reaches a barrier, lowering reloads
+the saved value after the cut. The barrier oracle counts copied barriers in
+helper bodies as well as cuts in kernels. Evaluation order is unchanged;
+ordinary host expressions and SPIR-V builds do not acquire these slots.
+
+**Evidence.** `link/gpu_barrier_chain` now evaluates both the indexed store
+address and a binary left operand before the innermost barrier helper returns.
+It passes in debug and release on Windows and WSL. The helper-loop occurrence
+still traps, and the neighboring barrier, large-helper, frame-many, shared,
+subgroup-width and gaps fixtures pass on Windows; frame-many and shared also
+pass on WSL. Consecutive self-hosted compiler stages are byte-identical on
+both hosts. Other pending-expression shapes, including earlier call arguments
+and a computed index base, remain to be checked.
+
+## D1756 — Keep earlier arguments and index bases across helper cuts
+
+**Decision.** Use the same invocation-frame spill for already-evaluated call
+arguments (including aggregate addresses) before a later argument can cut,
+and for an indexed expression's base before its index can cut. Reload them
+after a cut without changing left-to-right evaluation. Only a barrier-reachable
+call or subgroup operation warrants the spill; a cast is not one. This avoids
+copying speculative CPU frame stores from a helper oracle into the Vulkan
+kernel's SPIR-V build.
+
+**Evidence.** The expanded `link/gpu_barrier_chain` failed on the old compiler
+at a call operand and then at an indexed field base. It now passes in debug
+and release on Windows and WSL, including a slice argument before the barrier
+call. `link/gpu_barrier_helper` again runs on CPU and available Vulkan devices
+on both hosts; barrier, large-helper, frame-many, shared, subgroup-width and
+gaps fixtures pass on Windows. Five repeated Windows self-builds passed, and
+consecutive Windows and WSL compiler stages are byte-identical. Generic,
+aggregate-return, indirect and other pending-expression helper shapes remain
+unverified.
+
+## D1757 — Retain a compound assignment's prior value across a helper barrier
+
+**Decision.** A compound assignment evaluates its place and reads its old
+value before evaluating the right side. When that side can reach a barrier,
+save both the address and the old value in the invocation frame and reload
+them after the cut. The ordinary `=` path shares the address save; neither
+path changes source evaluation order or adds slots for calls that cannot cut.
+
+**Evidence.** An added `+=` after two helper calls in
+`link/gpu_barrier_chain` previously failed NIR verification at the binary
+operand. It now passes in debug and release on Windows and WSL, including a
+four-worker Windows release build. The direct helper still runs on CPU and
+available Vulkan devices on both hosts; barrier, large-helper, frame-many,
+shared, subgroup-width and gaps fixtures pass on Windows. Sequential
+self-hosted compiler stages are byte-identical on Windows and WSL. A generic
+barrier helper remains refused by the checker before lowering, so C091 is
+still partial.
+
+## D1758 — Inline reached generic barrier instances into CPU kernel steps
+
+**Decision.** Treat a generic template with `gpu.barrier()` as device-only,
+just like a non-generic helper. For the CPU barrier oracle, lower each concrete
+instance reached from a kernel under its owner module and inline its body;
+allow a barrier-reachable ordinary helper to call that instance. Keep the
+ordinary release oracle's generic-call exclusion unchanged.
+
+**Evidence.** `link/gpu_barrier_chain` now passes a value through a generic
+barrier helper in debug and release on Windows and WSL. A CPU host call to the
+same shape is refused by `check/gpu_generic_device_only`. Sequential
+self-hosted compiler stages are byte-identical on both hosts. Aggregate-return,
+indirect and other pending-expression helper shapes remain unverified;
+C091 is partial.
+
+## D1759 — Keep the C bootstrap large enough to build its current compiler
+
+**Decision.** Raise the bootstrap's type-member limit from 160 to 161 for
+`Checker` and its local limit from 256 to 272 for `dispatch`. Return operand
+errors explicitly from the two `(usize, err)` frame-temporary helpers, because
+the C bootstrap does not accept `try` in a tuple-returning function.
+
+**Evidence.** Before these changes, the Windows suite stopped building
+`neper-self` on the 161st `Checker` field, then on `dispatch`'s locals and the
+three `try` expressions. The Windows and Linux suites now build `neper-self`
+and pass 226 source-surface checks; both stop at the pre-existing stale
+`docs/library-fixtures.json` gate in the shared dirty tree. Focused generic
+barrier fixtures pass with the freshly bootstrapped compilers on both hosts;
+`lint_bootstrap.py` reports zero findings.
+
+## D1760 — Copy barrier helpers with one hidden-slot result
+
+**Decision.** The barrier-only oracle admits a helper with one aggregate result
+returned through the caller's hidden slot; ordinary release inlining keeps its
+scalar-only rule. An inlined body's hidden `Parameter` maps to a new caller-owned
+slot, and the shared result reader exposes the aggregate address after the
+continuation. The same path handles a concrete generic instance. Superseding
+D1759's provisional bootstrap local capacity, 265 is the measured minimum for
+`dispatch` (264 fails); the smaller per-function table leaves room for the
+additional result reader.
+
+**Evidence.** `link/gpu_barrier_chain` previously trapped when `packed` returned
+a struct after a barrier. It now passes both direct and generic aggregate
+returns in debug and release on Windows and WSL. Ordinary aggregate-return
+fixtures `link/advanced` and `link/by_value_snapshot` pass on Windows, and
+`link/advanced` passes on WSL. Windows C bootstrap builds the current compiler;
+both self-hosted compiler stages are byte-identical and `lint_bootstrap.py`
+finds no violations. Linux's C bootstrap generated assembly but the assembler
+reported ENOMEM under this WSL host's 4.9 GB memory limit; its existing
+self-hosted compiler built the change and ran the fixture. The full suites
+remain gated by the shared tree's stale library-fixture manifest. Multi-result,
+indirect and other pending-expression helper shapes remain unverified.
+
+## D1761 — Keep every result of a copied barrier helper
+
+**Decision.** The barrier-only oracle admits multi-result helpers. A copied
+helper with two register results writes both into a caller-owned temporary
+slot at each return, then reloads them at the continuation; a helper with a
+hidden result slot already writes there and uses the same reader. Ordinary
+release inlining keeps its prior scalar-only eligibility. The C bootstrap now
+allocates its `Function.locals` table only while checking each body and trims
+it to the actual local count afterward; `MAX_LOCALS` remains 265. This keeps
+the current compiler within the bootstrap's memory budget without reducing
+the language's parameter or local limits.
+
+**Evidence.** `link/gpu_barrier_chain` previously reached `pair` as a native
+barrier call and trapped. Single-return and branched two-scalar results,
+generic two-scalar results, and three-result hidden-slot returns now pass in
+debug and release on Windows and WSL. `link/by_value_snapshot` still passes
+on both hosts. Both C bootstraps build the current compiler, both bootstrapped
+compilers run the fixture, and consecutive self-hosted stages are byte-identical
+on both hosts. The full suites still stop at the shared tree's stale
+`docs/library-fixtures.json` gate. Indirect and other pending-expression
+helper shapes remain unverified.
+
+## D1762 — Refuse indirect device calls through function-pointer fields
+
+**Decision.** Keep C091's CPU barrier inlining limited to direct calls: the GPU
+profile bans indirect calls on both CPU and Vulkan. The device reachability walk
+now reports an unresolved field call as a function-pointer call at the kernel,
+with its helper chain. Qualified module calls retain their existing handling.
+
+**Evidence.** Before the check, `check/gpu_profile_indirect` accepted a field
+call through a zero-initialized function pointer; it now reports the violation
+through `fill -> through_field` on Windows and WSL. The barrier-chain runtime
+fixture still passes on both hosts, valid device code still checks, and the
+C-bootstrap and self-hosted compiler builds are byte-identical on both hosts.
+The full suites remain gated by the shared tree's stale library-fixture
+manifest. Other pending-expression helper shapes remain unverified.
+
+## D1763 — Keep earlier return values across later barrier expressions
+
+**Decision.** When a later return expression may reach a CPU barrier, save
+earlier results in the invocation frame before evaluating it and reload after
+the cut. An aggregate result saves its address; its storage already belongs
+to the frame. Non-cutting returns keep their existing lowering.
+
+**Evidence.** `link/gpu_barrier_chain` previously failed NIR verification when
+the second result of `ret (value, passthrough(lane))` reached a barrier. Scalar,
+aggregate and three-result returns now pass in debug and release on Windows
+and WSL, including two later cuts. `link/by_value_snapshot` still passes;
+both C bootstraps build and run the changed compiler, and bootstrapped and
+self-hosted builds are byte-identical on both hosts. The full suites remain
+gated by the shared tree's stale library-fixture manifest. Other
+pending-expression helper shapes remain unverified.
+
+## D1764 — Keep slice inputs across barrier-bearing bounds
+
+**Decision.** A slice evaluates its base before its bounds. If a bound may
+reach a CPU barrier, save the already-read data pointer and length in the
+invocation frame. Save an earlier lower bound before a later cutting upper
+bound, and restore implicit bounds from the preserved values. Ordinary slices
+and Vulkan lowering keep their existing path.
+
+**Evidence.** `out[lower..passthrough(upper)]` previously failed NIR
+verification. `link/gpu_barrier_chain` now passes lower-only, upper-only and
+two-bound slices with barrier-bearing helpers in debug and release on Windows
+and WSL. `link/mem_slices` still passes. Both C bootstraps build the changed
+compiler; bootstrapped, self-hosted and next-stage binaries are byte-identical
+on both hosts when built sequentially. The full suites remain gated by the
+shared tree's stale library-fixture manifest. Other pending-expression helper
+shapes remain unverified.
+
+## D1765 — Preserve return values while deferred barriers run
+
+**Decision.** The ordinary return path saves results in invocation-frame slots
+before emitting deferred statements and reloads only when they introduced a
+barrier cut. Aggregate results save their address. A hidden-slot return has
+already copied its results before defers, so it keeps its existing path. The
+simple rule spills for any defer in a CPU step; narrow it only if frame size
+becomes material (`ponytail:` in lowering).
+
+**Evidence.** A helper returning a scalar after `defer gpu.barrier()` previously
+failed NIR verification. `link/gpu_barrier_chain` now checks scalar,
+two-register and aggregate returns across deferred barriers in debug and
+release on Windows and WSL. The ordinary `link/try_positions` fixture passes
+on both hosts. Both C bootstraps build the compiler; next-stage hashes match
+their self-hosted builds on both hosts, and three further sequential Windows
+self-builds passed after two intermittent access violations. The full suites
+still stop at the shared tree's stale library-fixture manifest. Captured
+defer arguments and other pending-expression helper shapes remain unverified.
+
+## D1766 — Capture deferred call arguments in the CPU invocation frame
+
+**Decision.** A deferred call still evaluates and snapshots its arguments at
+declaration, but a CPU kernel step stores their values in invocation-frame
+slots and reloads them on each exit path. Aggregate arguments keep the address
+of their already captured copy. Host and SPIR-V defer lowering are unchanged.
+
+**Evidence.** A deferred store after a barrier previously failed NIR
+verification. `link/gpu_barrier_chain` now captures a device slice, index and
+computed value, mutates the source variable, crosses two barriers and writes
+the original value; debug and release pass on Windows and WSL. Ordinary
+`link/try_positions` passes on both hosts. Bootstrapped, self-hosted and next
+compiler stages are byte-identical on both hosts; Windows needed retries after
+two intermittent access violations while building the compiler. The full
+suites remain gated by the shared tree's stale library-fixture manifest. Other
+pending-expression helper shapes remain unverified.
+
+## D1767 — Retain a computed vector operand across a barrier helper
+
+**Decision.** Vector binary lowering saves the left operand's address in the
+invocation frame when evaluating the right operand may cut at a barrier, then
+reloads it if a cut occurred. This uses the existing frame-temporary path; a
+plain frame-slot address needs no special case.
+
+**Evidence.** A vector loaded through a computed array index on the left of
+`+%` failed NIR verification when the right side called a barrier helper.
+`link/gpu_barrier_chain` now covers that case, plus short-circuit expressions
+with barrier-bearing right sides, in debug and release on Windows and WSL.
+Consecutive self-hosted compiler stages are byte-identical on both hosts.
+The Vulkan raw SAXPY test passes on two Windows devices and one WSL device,
+and emitted SPIR-V still matches the pinned conformance file on both hosts.
+The full suites remain gated by
+the shared tree's stale library-fixture manifest.
+
+## D1768 — Retain a range loop's start across a barrier-bearing end
+
+**Decision.** Runtime range lowering saves the computed start in the CPU
+invocation frame when the end expression may call a barrier helper, then
+reloads it if that evaluation cuts the step. Ordinary host and SPIR-V range
+lowering remain unchanged.
+
+**Evidence.** `for step in lane..passthrough(lane + 1u32)` previously failed
+NIR verification. `link/gpu_barrier_chain` now executes it in debug and
+release on Windows and WSL. Consecutive self-hosted compiler stages match
+byte-for-byte on both hosts; Windows SAXPY SPIR-V still matches the pinned
+conformance file. The full suites remain gated by the shared tree's stale
+library-fixture manifest.
+
+## D1769 — Keep the self-host gate runnable after C091 fixture additions
+
+**Decision.** Regenerate the committed library-fixture manifest for the GPU and
+SIMD fixtures already in the tree, and close the Windows device-profile test
+table's `foreach` expression. These are test-harness corrections, not a
+change to compiler semantics.
+
+**Evidence.** In a clean worktree at `3f9c448`, the manifest check initially
+failed and Windows PowerShell could not parse `tests/selfhost/run.ps1`. After
+the two corrections, PowerShell 7 passed 226 exact source surfaces, the
+123-module fixture-manifest check and bootstrap lint, then ran through the
+library link fixtures. The next gate, `link/gpu_tensor`, exits 58 because a
+Vulkan `u32` matmul result differs from the CPU backend. C091 remains partial
+until that parity failure is resolved and the remaining suite passes.
+
+## D1770 — Check device unsigned addition against the remaining range
+
+**Decision.** In checked SPIR-V lowering, unsigned addition now tests
+`right <= ~left` instead of comparing the wrapped result with `left`. The
+existing NIR fault guard and loop structure remain in place.
+
+**Evidence.** The old guard made `link/gpu_tensor` differ from CPU on both
+Windows Vulkan devices. The new guard passes that fixture, `link/gpu_vulkan_loop`
+and `link/gpu_fault_bounds`, including its overflow fault. All five affected
+conformance SPIR-V modules validate for Vulkan 1.2. In an isolated worktree,
+the Windows self-host suite passes its surface, manifest, library, pinned
+SPIR-V and tensor gates, then stops at `link/gpu_shared_address_spaces` with
+`e.gpu.Unsupported`; C091 remains partial.
+
+## D1771 — Save shared pointers in private SPIR-V slots
+
+**Decision.** A store of a workgroup pointer into a private local slot writes
+its byte offset into the workgroup block. A later shared-pointer load already
+reconstructs that address from the slot; other aggregate stores remain refused.
+
+**Evidence.** `link/gpu_spaces` previously embedded no SPIR-V module because
+`cell(*shared u32)` saved its parameter into a private slot. The module now
+emits and validates for Vulkan 1.2. The unchanged fixture passes on CPU and
+both Windows Vulkan devices; the Linux build emits and validates the module
+and prints `gpu spaces ok`.
+
+## D1772 — Test cache recovery without requiring canonical driver bytes
+
+**Decision.** The Vulkan cache-recovery fixture checks that a corrupted entry
+is replaced and that an injected failed rebuild preserves the replacement.
+It no longer demands that a driver's opaque rebuilt blob hash match the blob
+from an earlier pipeline creation.
+
+**Evidence.** From a fresh cache directory, corrupting one file changed its
+hash; the next launch passed and replaced it with a third hash. Injected
+rebuild failure then failed as intended, and a normal launch recovered. The
+old byte-equality assertion stopped otherwise passing Windows suite runs
+intermittently. C091 remains partial pending the remaining suite gates.
+
+## D1773 — Preserve multi-target assignment addresses across a barrier
+
+**Decision.** When a CPU kernel assigns multiple destinations from a call
+that may cross a barrier, save each evaluated destination address in the
+invocation frame and reload it after the call. Apply the same rule to
+multi-target `try` assignments. Ordinary assignments without a cut keep
+their existing path.
+
+**Evidence.** An indexed destination paired with a local destination failed
+the old compiler's NIR verifier after a barrier-bearing helper call. The
+`link/gpu_barrier_chain` regression now passes in debug and release on Windows
+and Linux; `link/try_positions` still passes on Linux. C091 remains partial.
+
+## D1774 — Isolate the Vulkan cache-recovery suite per run
+
+**Decision.** Each self-host suite run uses a new cache directory for its
+corruption and compiler-identity checks. The Linux gate, like the Windows
+gate, verifies replacement and failed-rebuild preservation without demanding
+byte-identical opaque driver blobs.
+
+**Evidence.** A reused Windows cache held six entries, including stale keys;
+the test corrupted the first file, which the current two-device launch did
+not use. A fresh directory held exactly two entries, and corruption,
+replacement and injected failure passed on both Windows devices and one
+Linux device. The isolated Windows self-host suite then passed end-to-end.
+
+## D1775 — Preserve earlier assignment places across later place cuts
+
+**Decision.** In a CPU kernel's multi-target assignment, save each earlier
+destination address before evaluating a later place that may cross a barrier.
+Reuse those frame slots if the right-side call may also cut; reload only when
+a barrier actually occurred. Apply this to ordinary and `try` assignments.
+
+**Evidence.** A second indexed destination using a barrier-bearing helper
+made the previous compiler fail NIR verification. The extended
+`link/gpu_barrier_chain` fixture passes in debug and release on Windows and
+Linux. `link/try_positions` passes on both hosts, and consecutive self-hosted
+compiler stages are byte-identical on both hosts. The full Linux suite's C
+bootstrap still terminates its WSL host during compiler build.
+
+## D1776 — Exercise barrier-bearing loop conditions and both bounds
+
+**Decision.** Keep a uniform barrier-bearing helper call in a `while`
+condition and in both bounds of a runtime `for` range in the existing
+barrier-chain fixture. The cases reuse the current frame and occurrence
+machinery; no new lowering path is needed.
+
+**Evidence.** The extended fixture passes in debug and release on Windows
+and Linux, returning the expected value after two `while` iterations and
+the one-step `for` range.
+
+## D1777 — Keep a protocol iterator address across CPU barrier resumes
+
+**Decision.** A protocol `for` saves its iterator pointer in the invocation
+frame before entering the loop and reloads it in the condition block. A
+barrier in the body can resume past the pointer-producing expression, just
+as with a slice collection's data pointer. Ordinary CPU and SPIR-V loops
+keep their existing direct pointer.
+
+**Evidence.** A computed field address for `state.iter` failed NIR
+verification on the next iteration after a body barrier. The
+`link/gpu_barrier_chain` regression now uses that shape and checks every
+lane; debug and release builds pass on Windows and Linux, and the isolated
+Windows self-host suite passes end-to-end with the patched compiler. A
+barrier inside the implicit `iter_next` method is a separate reachability
+gap: the device walk does not yet see that generated call.
+
+## D1778 — Audit aggregate fields and switch subjects across barrier cuts
+
+**Decision.** Extend the barrier-chain regression with an aggregate literal
+whose later field calls a barrier helper, then switch on another barrier-
+bearing helper result while retaining that aggregate. The existing frame
+slots and switch lowering need no change for these shapes.
+
+**Evidence.** The extended `link/gpu_barrier_chain` fixture returns the
+lane-specific result in debug and release on Windows and Linux. It checks
+both the earlier aggregate field and the later field after the cut, plus
+the aggregate again after the switch subject cuts.
+
+## D1779 — Discover implicit iterator calls before CPU barrier fission
+
+**Decision.** Recheck device-reachable loop bodies with dispatch recording to
+find the concrete protocol `next` call hidden behind each `for`. Extend device
+reachability through that call and include the reached body in the CPU barrier
+oracle, even when its caller has no explicit GPU primitive. A mandatory
+barrier-bearing `next` returning `(value, bool)` is inlined into the resumable
+kernel step. Discard generic instances created only by this discovery recheck;
+the completed body sweep already owns the real instances.
+
+**Evidence.** Adding a barrier to `iter_next` in `link/gpu_barrier_chain` made
+the prior compiler's executable trap on a native barrier-helper call. The new
+compiler runs the fixture in debug and release on Windows and Linux. Ten
+other GPU fixtures passed on Windows and six on Linux; consecutive self-hosted
+compiler stages are byte-identical on both hosts. Full suites were not rerun
+for this increment: the C: drive has less than 2 MB free. The clean full Linux
+suite and the remaining pending-expression audit are still open.
+
+## D1780 — Keep iterator discovery compatible with the C bootstrap
+
+**Decision.** Pass the iterator-discovery scratch buffer as a plain slice,
+allocated once by the reachability walk. The C bootstrap parser rejects
+`(*pointer_to_slice).len` and `(*pointer_to_slice)[index]` even though the
+self-hosted compiler accepts them. This also removes the lazy allocation
+branch. Add an array-literal regression whose later element calls a barrier
+helper, preserving its earlier element across the cut.
+
+**Evidence.** The Windows C bootstrap builds the compiler at a 512 MB arena;
+that compiler builds the next self-hosted stage, which runs the expanded
+`link/gpu_barrier_chain` in debug and release. The Linux self-hosted compiler
+also runs both modes; consecutive self-hosted stages match byte-for-byte on
+both hosts. The clean Linux suite stopped during its C-bootstrap
+build and WSL restarted; a separate 512 MB Linux bootstrap attempt did the
+same. Neither is a full-suite pass.
+
+## D1781 — Check implicit iterator device reachability in `check-file`
+
+**Decision.** Run the existing device-reachability pass after successful
+`check-file` body checks, inside `check_file_bodies`. This makes a protocol
+`next` reached only by a GPU `for` subject obey the same device profile in
+`check-file` as in executable emission. Keep its locals out of `dispatch`,
+which is at the C bootstrap's 265-local limit.
+
+**Evidence.** Before the change, `check-file` accepted a kernel whose implicit
+`next` reads a module-scope `var`, while executable emission rejected it.
+`check/gpu_profile_implicit_next` now gets the same E-GPU diagnostic on
+Windows and Linux; the valid profile and barrier-chain checks pass. Windows C
+bootstrap builds the compiler with a 640 MB arena, the barrier-chain executable
+runs on both hosts, and consecutive self-hosted stages are byte-identical.
+The full suites remain unverified on the current host.
+
+## D1782 — Exercise deferred barriers on uniform loop exits
+
+**Decision.** Keep C091's barrier-chain regression on a uniform `for` that
+executes a deferred barrier on its normal edge, a `continue`, and a `break`.
+The counter and accumulator must resume correctly; no lowering change is
+needed for these control-flow exits.
+
+**Evidence.** `link/gpu_barrier_chain` checks the loop's sum of two and returns
+the expected value for every lane in debug and release on Windows and Linux.
+A separate Vulkan probe from
+the same temporary source path runs a plain kernel, but a protocol-iterator
+kernel returns `e.gpu.Unsupported` with or without a barrier in `next`; that
+is not evidence about CPU loop-fission and is not claimed as C091 support.
+
+## D1783 — Keep nested iterator barrier helpers in the CPU regression
+
+**Decision.** Have the protocol `next` method call a separate barrier helper
+after its own barrier. This exercises the device reachability walk and
+mandatory inlining through the implicit `next` call and another helper,
+without widening the language's current device-only calling rule.
+
+**Evidence.** The expanded `link/gpu_barrier_chain` passes in debug and
+release on Windows and Linux. A temporary probe where `next` calls the
+barrier helper but contains no direct GPU use is rejected by the checker as
+an ordinary helper calling a device-only helper; adding a `gpu.lid` read to
+`next` makes the same chain run. Inferring device-callability for such pure
+wrappers is separate from C091's CPU barrier fission.
+
+## D1784 — Reconcile the fixture manifest before judging C091 suites
+
+**Decision.** Keep the generated M1 fixture list in `docs/library-fixtures.json`
+current when running the full self-host suites. Treat the unrelated
+`algo_survival_trial` executable failure separately from CPU barrier
+fission; do not modify that fixture in this shared tree for C091.
+
+**Evidence.** `python scripts/library_fixtures.py --write` added only
+`algo_causal`, `algo_survival_trial`, and `ml_mixed`, and the manifest check
+then passed with 123 partial modules and 123 executable fixtures. An isolated
+Windows suite passed end-to-end with only the survival-trial execution
+skipped; the same fixture exits 2 when built by an earlier compiler binary.
+
+## D1785 — Queue the R/Python statistics gaps as L056-L064, exclude trained stacks and dashboards
+
+**Decision.** The `stats.md` catalogue evaluation lands as `docs/stats-coverage.md`
+with nine backlog items: L056 elementary inference (z-tests, chi-square
+independence, Levene/Bartlett, Tukey HSD, power, mode), L057 elastic net plus
+quantile/robust regression and polynomial features, L058 factor/CCA/MANOVA/
+LDA-QDA, L059 VAR and structural time-series, L060 variational inference, L061
+standard charts in a new `e.gfx.chart`, L062 specialized visualization
+(interactive, geographic, network, 3D), L063 histogram GBM plus CV/pipeline/
+calibration, L064 tidy-data verbs atop L032. Already-queued L005 (survival
+extensions), L007 (GLM), L017 (ARIMA) and L032 (table query) are referenced,
+not duplicated. Non-goals: Prophet (composable from STL plus regression),
+TensorFlow/PyTorch/transformer/NLP stacks (no trained models per the catalog
+policy), shiny/streamlit/dash-style dashboard frameworks (hand-build on
+`e.ui.app` plus `e.net.http`), Spark, finance/bio/quantum domains.
+
+**Evidence.** `docs/stats-coverage.md` §1–§4 maps every catalogue entry to its
+implementing module or to one of L056–L064; `docs/work-queue.json` carries the
+nine items with orders 154–162 and one task file each under
+`docs/tasks/library/`.
+
+## D1786 — Close CPU barrier fission after the pending-expression audit
+
+**Decision.** Keep the specific frame spills for values held across a
+barrier-bearing child expression; do not add a generic spill pass. The switch
+subject needs no per-case spill because the checker requires constant case
+labels. Inferring device-callability for pure helper wrappers is a separate
+GPU-profile concern, not CPU barrier fission.
+
+**Evidence.** The `lower_expression` call sites in `src/lower.e` were audited
+for values consumed after a later child can cut: calls, slices, indexing,
+aggregate literals, returns, assignments, binary/vector operations, loop
+bounds and switches. The existing `link/gpu_barrier_chain` covers the runtime
+cases, and `check/switch_non_constant` enforces the excluded switch case.
+With the survival-trial library fix at `afdc224b`, both canonical self-host
+suites pass end-to-end, including their final compiler-image comparisons.
+Linux used `VK_ICD_FILENAMES=/dev/null` after this WSL host's llvmpipe run
+stalled; Windows exercised live Vulkan devices.
+
+## D1787 — Reuse one lazy staging block per synchronous Vulkan queue
+
+**Decision.** `queue_with` keeps its staging block size and allocates one
+driver-owned, host-visible block on the first nonempty upload or write. Copies
+larger than the block pass through it in chunks. Because this runtime's
+transfers complete before returning, one block is enough per queue; the
+requested block count remains an upper bound rather than eager allocation.
+CPU queues continue copying directly into their arena-backed buffers.
+
+**Evidence.** `link/gpu_staging` round-trips an upload, an offset write, and a
+kernel launch through three-byte staging chunks on the CPU and both Windows
+Vulkan devices. `link/gpu_vulkan_sync`, `link/gpu_cpu`, and `link/gpu_gaps`
+still pass on Windows Vulkan; the staging fixture passes Linux's CPU/no-device
+path. The full self-host suites remain to be rerun with this change.
+
+## D1788 — Serialize each GPU device's bookkeeping and close transition
+
+`DeviceState` now owns a mutex held through each operation on its queue and
+buffer table. The same thread may enter it again because `upload`, presentation,
+and the built-in kernels call other GPU functions; the owner thread and depth
+make that nesting explicit. `close` takes the same lock, marks the device
+closed, then frees resources, so an in-flight call finishes first and later
+calls reject the handle. A short registry lock protects device publication and
+token lookup; a separate lock serializes the CPU scheduler's module globals.
+The mutexes use `e.sync`; no new blocking primitive is introduced. The two
+module-global mutexes are one-element arrays because this compiler cannot
+take the address of a direct module-global struct.
+
+`link/gpu_device_lock` drives two threads with separate queues on one device,
+repeated uploads, launches, downloads and releases, then checks close and stale
+handles. Ten Windows runs passed on CPU and two Vulkan devices. Existing GPU
+staging, sync, CPU, gaps and presentation fixtures pass with the lock; the new
+fixture and staging pass Linux's CPU/no-device path. Full suites remain pending.
+
+## D1789 — Keep chart geometry renderer-neutral and caller-owned
+
+The first `e.gfx.chart` slice maps borrowed numeric columns into caller-provided
+screen-space marks. It does not depend on a device, window, global theme or
+implicit allocation. Scatter, line and bar layouts share one Cartesian domain;
+bar baselines participate in the y domain and screen y is explicitly inverted.
+Scene, image and widget adapters remain later layers over the same layout. This
+keeps the grammar reusable for histograms, distributions, matrices and facets
+without making every chart family own a painter or a data container.
+
+## D1790 — Bin histograms into caller-owned counts and contiguous bars
+
+The first distribution statistic uses equal-width bins over the observed range.
+Every bin is left-closed and right-open except the final bin, which includes
+the maximum. A constant sample gets a padded range and lands in the central
+bin. `chart.histogram` fills caller-provided counts and screen-space rectangles;
+no allocation or renderer is introduced. The readiness generator embeds the
+maintained chart plan and unfinished queue so `docs/progress.html` stays
+generated while exposing planned charts and backlog evidence.
+
+## D1791 — Keep chart marks separate from scene rendering
+
+`e.gfx.chart` adds ordered step segments and pads categorical bar domains so
+the first and last bars stay inside plot bounds. `e.gfx.chart.scene` translates
+caller-owned scatter, line, bar, histogram and step marks into an existing scene
+builder. The chart core stays renderer-neutral. The gallery example uses that
+adapter with Neper's CPU scene and PNG encoder, producing one inspected PNG per
+delivered chart kind; axes, guides and export APIs remain separate work.
+
+## D1792 — Treat ECDF input as a sorted numeric view
+
+`chart.ecdf` borrows an ascending sample, validates its order and finite values,
+and emits one vertical 1/n rise per observation with horizontal steps between
+them. Equal values share an x coordinate, so their rises coincide without a
+separate grouping allocation. The first and last CDF ordinates are exactly zero
+and one. Sorting remains the caller's responsibility, consistent with the
+existing `e.algo.stat.quantile` sorted-sample contract.
+
+## D1793 — Bound untrusted ingestion and execution; publish through exclusive staging
+
+Compiler publication creates a random 96-bit sibling name with `os.create_new_with_mode`,
+writes through the returned handle, closes it, and only then atomically replaces
+the destination. The injected artifact-write fault uses the same helper. Stale
+`.tmp` files and interrupted random staging files are ignored, preserving recovery
+without following a supplied symlink or deleting another writer's file. The host's
+exclusive create requests ordinary 0644 permissions subject to umask; it never
+reopens the name or follows it to change permissions. `create_new` keeps its 0600
+default for private temporary files and locks. ELF publication still applies its
+executable mode. Ordinary write, close and replacement failures remove the owned
+staging file; only deliberate fault injection or process termination leaves it.
+Directory ownership and parent-directory resolution remain
+the caller's filesystem boundary. The bootstrap cannot parse `fs.temp_file`, so
+the compiler uses its existing host primitives and hex formatter directly.
+
+XML ingestion reuses `io.read_all` with an inclusive limit and one-byte lookahead:
+16 MiB by default, explicit finite limits up to 1 GiB, and `TooLarge` with the
+partial allocation released. Existing `Options` initializers remain valid; borrowed
+`stream` input keeps the caller's own size policy. Image decoders resolve each zero
+limit independently to 16,384 per dimension and 16,777,216 pixels before allocation;
+larger limits require explicit values. Encoded buffers and codec workspace remain
+separate from decoded dimensions.
+
+Text and HTML execution share one remaining-step and remaining-output budget across
+all nested blocks: 100,000 node/iteration steps and 16 MiB by default. Empty repeats
+consume steps; the output adapter checks final escaped bytes before forwarding them.
+Explicit-limit and typed APIs retain larger-workload support. Exhaustion is `TooLarge`
+and may leave streamed output already accepted by the caller's sink.
+
+`scripts/check_security.py` runs nine nearby fixtures and interrupted-build recovery
+on Windows and Linux; Linux additionally verifies a planted staging symlink and stale
+regular file stay untouched. All pass with independently rebuilt compiler images.
+Linux filesystem fixtures run on the native Linux volume, not WSL's Windows mount.
+
+## D1794 — Reuse statistical kernels for distribution marks
+
+`chart.box_plot` borrows an ascending `f64` sample and uses `e.algo.stat`
+R7 quartiles for a Tukey box, 1.5-IQR whiskers and explicit outlier points.
+`chart.density` uses the existing Gaussian KDE with a caller-selected bandwidth
+or Scott's rule; callers own the grid, estimates and segments. `chart.qq_normal`
+uses `e.math.special.normal_quantile` at `(i + 0.5)/n` positions and the sample's
+R7 quartiles for a reference segment. The same scene adapter renders each set
+of marks. Violin mirrors the KDE estimate into a filled caller-owned outline.
+Q-Q gets a small separate fixture because the combined fixture exceeds the
+current self-host compiler arena.
+
+## D1796 — Keep matrix values separate from palette and panel layout
+
+`chart.heatmap` maps row-major numeric values to caller-owned tiles, while
+`chart.correlation_matrix` gathers columns into caller-provided scratch arrays
+and reuses `e.algo.stat.correlation_pearson`. The scene adapter chooses colours
+from caller-provided low, neutral and high swatches: sequential for heatmaps,
+zero-centred diverging for correlations. `chart.facet_grid` supplies equal
+row-major panel rectangles without binding scales or labels; shared/free scales,
+strips and legends remain separate work. `gfx_chart_matrix` verifies geometry,
+exact positive/negative correlations, refusal paths and scene command counts.
+
+## D1797 — Reuse Cartesian marks for area, lollipop and error bars
+
+Area and lollipop use the existing `Spec` baseline and shared Cartesian mapping.
+Area requires ordered x values and emits a closed caller-owned polygon;
+lollipop emits a baseline stem and point for each observation. `error_bars`
+borrows x, center, lower and upper columns, refuses intervals that do not
+contain their center, and emits independent stems, caps and points. The scene
+adapter reuses its polygon and disconnected-segment branches. A separate
+`gfx_chart_cartesian` fixture keeps the self-host compiler arena bounded and
+checks geometry, refusal paths and scene command counts.
+
+## D1798 — Transform Cartesian domains without copying data columns
+
+`chart.Spec` carries independent x/y scales. Linear, log10 and symmetric-log
+mapping use the same borrowed input columns and caller-owned mark outputs;
+log10 refuses non-positive domains and symmetric-log exposes its linear
+threshold. Reverse changes the normalized fraction, not input order. The
+`ticks` result retains both data values and normalized fractions for adapters;
+the scene pass draws grid, axis and tick strokes from those fractions, leaving
+text shaping and label margins for a later guide stage. `gfx_chart_scale`
+checks transformed and reversed geometry, invalid domains, tick values and
+scene command counts.
+
+## D1799 — Stream SVG from the chart layout contract
+
+`e.gfx.chart.svg` consumes the same caller-owned series and matrix layouts as
+the scene adapter. It streams XML to `io.Writer`, reuses `e.fmt.xml` escaping for
+title and description, packs solid-colour channels like the current CPU scene
+renderer for visual parity, and emits marks plus tick/grid/axis strokes.
+The gallery writes one SVG beside each of its eighteen PNG previews, including
+the faceted matrix. `gfx_chart_svg` checks escaped metadata, series and matrix
+elements and refusal paths. Gradient brushes, font/layout-backed labels and
+PDF are separate later adapters rather than hidden SVG-only analysis.
+
+## D1800 — Share facet scales by borrowing explicit Cartesian domains
+
+`chart.layout_with_limits` takes zero- or two-value x/y limit slices alongside
+the existing borrowed columns and caller-owned output. Empty limits retain the
+original per-panel auto-domain; explicit limits make an axis shareable across
+panels, without storing facet data or copying observations. Limits must be
+finite, ordered, valid for the selected scale and contain the data and baseline;
+clipping is deferred to a separate out-of-bounds policy. The original `layout`
+calls this path with empty limits. `gfx_chart_facet` checks shared/free x and y,
+constant data and rejection paths. The gallery adds a four-panel PNG/SVG pair.
+
+## D1801 — Represent confidence bands and dumbbells as existing mark shapes
+
+`chart.band` borrows ordered x and lower/upper columns and emits one closed
+caller-owned polygon; `chart.dumbbell` borrows numeric vertical positions and
+lower/upper horizontal endpoints and emits disconnected segments plus dots.
+Both validate interval order and storage capacity before writing marks. The
+scene and SVG adapters reuse their filled-path and disconnected-segment paths,
+so no new renderer primitive or owned data frame is introduced. Their first
+slice is linear; nonlinear scales and clipping remain later grammar work.
+`gfx_chart_intervals` checks geometry, refusals and both adapters, and the
+gallery adds one PNG/SVG pair for each chart.
+
+## D1802 — Keep chart text as positioned, caller-owned label metadata
+
+`chart.Label` borrows one single-line UTF-8 string, a baseline anchor and a
+horizontal alignment. `guide_labels` positions caller-supplied tick strings;
+the chart grammar does not guess numeric formatting or own a font. The scene
+adapter shapes through `e.text.layout` and emits existing `scene.DrawText`
+commands with a font registered by the caller. The SVG adapter escapes those
+same strings into `<text>` elements. The gallery's labeled line uses a checked-in
+TrueType font for its PNG and a generic sans-serif fallback for SVG; font
+embedding, collision handling, automatic formatting and theme margins remain
+future work. `gfx_chart_labels` checks positioning, escaping and refusal paths.
+
+## D1803 — Derive readable numeric ticks without owning text storage
+
+`chart.nice_ticks` uses 1/2/5 steps inside linear domains and samples ordered
+1/2/5 decade candidates inside log10 domains, preserving reversed fractions.
+Symmetric-log continues to use the existing equal transformed-space ticks;
+their strings are automatic, but a separate symmetric break policy remains.
+`format_ticks` reuses `e.str.push_f32` for shortest-round-trip labels and writes
+them into a caller-supplied byte buffer. An empty buffer returns `TooLarge`
+before `mem.arena_from` can read its first element. The gallery's labeled
+linear, log and symmetric-log previews exercise the shared guide and text
+adapters; `gfx_chart_nice_ticks` checks break values, reversal and refusals.
+
+## D1804 — Compose bar series from existing Bar layouts
+
+`grouped_bars` and `stacked_bars` take category-major numeric values and
+caller-owned rectangle/layer storage. Their series-major `Bar` layouts let the
+existing scene and SVG adapters paint each series independently without a new
+renderer primitive. Grouped bars dodge within each category. Stacks accumulate
+positive and negative values separately around zero; normalization requires a
+positive nonnegative total in every category. `gfx_chart_composition` checks
+geometry, both adapters and refusal paths; the gallery adds three PNG/SVG
+pairs. Category labels, legends and more composition types remain planned.
+
+## D1805 — Reuse chart labels for category centers and series legends
+
+`category_ticks` emits caller-owned ordinal centers that pass directly into
+`guide_labels`; `legend_items` emits caller-owned swatch rectangles and borrowed
+text labels, indexed with the caller's series colours. The scene and SVG
+adapters already draw text and filled rectangles, so neither needs a new mark
+kind or legend painter. Grouped and stacked previews now include the same
+category labels and two-series legend in PNG and SVG. The gallery finishes its
+scene render before opening the SVG memory writer to keep its buffer intact.
+Automatic placement, wrapping, palette policy and collision avoidance remain
+planned. `gfx_chart_composition` checks centers, legend positions, escaping and
+capacity refusals on both hosts.
+
+## D1806 — Derive distribution variants from histogram and axis strokes
+
+`frequency_polygon` calls the existing equal-width histogram calculation,
+then connects the caller-owned bin centers to the zero baseline at each outer
+edge. `rug` emits one disconnected short stroke per observation, preserving
+ties and the original numeric extent. Scene and SVG reuse their connected-line
+and independent-segment branches; no binning or painter code is duplicated.
+`gfx_chart_distribution` checks geometry, refusal paths and both adapters on
+Windows and Linux. The gallery adds a PNG/SVG pair for each chart. Rug guides
+omit a meaningless y-grid; richer density-plus-rug composition remains planned.
+
+## D1808 — Compose point-line charts and jittered strips from existing marks
+
+`PointLine` combines the existing scatter and line layouts under the same
+Cartesian domain; scene and SVG paint the connected path before its points.
+`strip` maps every observation to its numeric x position and a deterministic
+eleven-offset vertical jitter. It preserves ties, but does not promise
+collision avoidance; beeswarm packing is a separate planned chart. Both use
+caller-owned storage and existing mark adapters. `gfx_chart_distribution`
+checks geometry, capacity and adapter output on Windows and Linux, and the
+gallery adds a PNG/SVG pair for each.
+
+## D1810 — Pack beeswarm dots and stack histogram observations
+
+`beeswarm` reuses strip's numeric x positions and tests successive vertical
+lanes against earlier six-pixel marks. It keeps ties visible and returns
+`TooLarge` when the supplied panel cannot fit them; the current scan has a
+cubic worst case, so large clouds need an x-lane index. `dot_plot` reuses
+histogram bin counts and places one square mark per observation at each bin
+center, refusing vertical overflow. Their y positions are visual lanes, not
+a numeric scale. Both use caller-owned storage and the existing scatter
+scene/SVG adapters. `gfx_chart_distribution` passes on Windows and Linux;
+the gallery adds two paired previews.
+
+## D1811 — Do not shift pixels beneath unchanged scene paint
+
+The gallery's strip-to-beeswarm transition exposed a retained-scene damage
+error: `scroll_run` recognized a moved dot and shifted the whole clip, moving
+unchanged guide pixels from the equal command prefix into the lower margin.
+`damage_of` now refuses the shift shortcut when equal prefix or suffix commands
+paint anything, leaving fixed content stationary while replaying changed marks.
+The targeted scene transition in `gfx_chart_distribution` fails without this
+guard and passes with it on both hosts. This conservatively costs the scroll
+shortcut for scenes with fixed paint; tracking its exact repaint bounds is the
+later optimization. The gallery's existing PNGs re-render without guide ghosts.
+
+## D1814 — Derive waterfall bars and connectors from cumulative levels
+
+`chart.waterfall` treats the first value as an absolute opening amount and
+remaining values as signed changes. It emits floating intermediate bars, a
+closing-total bar and one connector per step into caller-owned arrays. The
+bar renderer draws the rectangles and reuses the existing segment adapter for
+connectors; no separate mark grammar is needed. Zero-height steps remain
+level connectors. The focused composition fixture checks signed geometry,
+capacity and scene/SVG emission on Windows and Linux. Step colours and
+category labels remain a gallery/guide composition concern.
+
+## D1815 — Export chart rasters before opening arena-backed PNG writers
+
+`e.gfx.chart.scene.rasterize` renders a finished display list to caller-owned
+straight RGBA, releasing the compiled scene even on error. The caller then
+uses the existing `e.fmt.png.encode` with its chosen writer and options.
+Neper's `io.MemoryWriter` stores a contiguous span in its arena; allocating
+render scratch after creating that writer corrupts the output. Separating
+rasterization from encoding preserves this contract without another PNG codec
+or a dedicated device owner. `gfx_chart_png` decodes a transparent round trip
+on Windows and Linux; the gallery now uses the same path for all 34 PNGs.
+
+## D1818 — Compose bullet charts from existing bar and rule layers
+
+`chart.bullet` returns widest-to-narrowest qualitative bands, a thinner actual
+bar and a target rule on one zero-to-maximum domain. The caller owns storage
+and chooses each layer's colour; Bar and Rug scene/SVG branches need no new
+paint code. Thresholds must be strictly ascending and both values within the
+last threshold. `gfx_chart_composition` checks geometry, capacity, invalid
+domains and adapter commands on Windows and Linux, and the gallery adds a
+PNG/SVG pair. Multi-row labels and palette defaults remain guide work.
+
+## D1820 — Keep Pareto counts and cumulative share as separate layers
+
+`chart.pareto` borrows nonnegative category counts, stably sorts caller-owned
+indices, and emits descending Bar rectangles plus a PointLine at cumulative
+fractions. The two layers share category centers but retain independent count
+and 0–1 percentage domains; the gallery draws both labeled axes. Zero totals,
+negative/non-finite input and short storage are refused. A quadratic insertion
+sort is the present ceiling; replace it with caller-scratch mergesort for large
+category sets. `gfx_chart_composition` checks geometry and scene/SVG adapters
+on Windows and Linux, and the gallery adds a paired preview.
+
+## D1822 — Compose pie and donut slices as Area polygons
+
+`chart.pie` borrows nonnegative category weights and emits one caller-owned
+closed polygon per slice. An inner-radius ratio of zero yields pie; a ratio
+strictly between zero and one yields donut. Existing Area scene/SVG adapters
+and caller-supplied colours render both without a new mark kind. Zero totals,
+invalid bounds or ratios, non-finite weights and short storage are refused.
+The fixed 96-segment full-circle tessellation is a deliberate ceiling;
+adaptive segments can follow when zoom-aware rendering needs them.
+`gfx_chart_polar` checks geometry, refusals and both backends on Windows and
+Linux; the gallery adds two paired previews with category legends.
+
+## D1823 — Reuse rectangular and polygon marks for grid and stage compositions
+
+`chart.waffle` borrows nonnegative category weights and allocates a caller-sized
+grid by rounded cumulative boundaries, returning one Bar layer per category.
+The exact grid count is preserved, though ordered rounding can shift a category
+by one cell; use caller-scratch largest remainders if that precision matters.
+`chart.funnel` requires nonincreasing stage counts and returns centered Area
+trapezoids, tapering each stage to the next. It represents conversion stages,
+not a statistical funnel plot. Both keep geometry caller-owned and reuse scene
+and SVG adapters. `gfx_chart_funnel_grid` checks geometry and refusals on
+Windows and Linux; the gallery adds two paired previews.
+
+## D1825 — Map bubble values to circle area on scatter scales
+
+`chart.bubble` borrows x/y and nonnegative size columns, reuses scatter's
+independent x/y scale mapping, and returns caller-owned circle bounds. Radius
+is proportional to the square root of size, so circle area represents the
+value; a zero value emits no visible mark. Scene uses cubic-circle paths and
+SVG uses circle elements without a new global painter. All-zero sizes,
+negative/non-finite values, invalid radius and short output are refused.
+`gfx_chart_bubble` checks size ratios, log mapping and both backends on Windows
+and Linux; the gallery adds a paired preview. A quantitative size legend and
+overlap policy remain guide work.
+
+## D1826 — Keep fitted and covariance overlays on shared scatter domains
+
+`chart.regression_line` reuses `e.algo.stat.Regression` to fit an OLS line in
+data coordinates and extends the returned domain to cover both observations and
+fitted endpoints. `chart.covariance_ellipse` uses the same accumulator's sample
+covariance, a caller-selected Mahalanobis radius and a caller-sized segment
+buffer. It rejects singular covariance. Both return existing Line layers;
+callers map scatter marks with those explicit domains before composing scene
+and SVG output. The ellipse is a data contour, not a confidence region for
+the mean. `gfx_chart_overlays` checks numeric references, refusals and adapters
+on Windows and Linux; the gallery adds two paired previews. Confidence and
+prediction bands remain later statistical work.
+
+## D1827 — Distinguish OLS mean confidence from prediction intervals
+
+`chart.regression_interval` reuses the bivariate OLS accumulator and the
+existing filled Band and Line marks. Residual variance uses n-2 degrees of
+freedom; pointwise mean intervals include leverage 1/n+(x-mean_x)^2/Sxx,
+while prediction intervals add one for a new observation. The caller supplies
+the two-sided Student-t critical value for the chosen confidence level and
+owns ribbon resolution/storage. Both layers share limits that also contain the
+observations, so scatter, band and fit align without new renderer primitives.
+Singular/short samples, invalid critical values and inadequate storage are
+refused. `gfx_chart_overlays` checks numerical references and scene/SVG paths
+on Windows and Linux; the gallery adds two PNG/SVG pairs. Simultaneous bands,
+automatic quantiles and non-linear smoothers remain separate work.
+
+## D1828 — Compose category-centered bar and line layers with independent y axes
+
+`chart.combo_bar_line` borrows paired category series and caller-owned center,
+bar, point, segment and layer storage. It delegates geometry to the existing
+Bar and PointLine `layout_with_limits` paths, fixing a common categorical x
+domain while retaining separate baseline-inclusive bar and line y domains.
+This needs no new mark or renderer path. The gallery reuses Pareto's dual-axis
+guides but formats numeric right-hand ticks for a volume/index preview.
+`gfx_chart_composition` checks signed bars, independent domains, alignment,
+invalid data/capacity and scene/SVG output on Windows and Linux. Irregular
+x, additional axes and aligned axis tables remain planned.
+
+## D1829 — Keep ridgeline heights comparable across groups
+
+`chart.ridgeline` borrows concatenated group samples and lengths, uses the
+existing Gaussian KDE estimator on one shared x grid, and fills caller-owned
+Area polygons on top-to-bottom baselines. Bandwidth may be supplied or chosen
+per group by Scott's rule; a single maximum across all estimated densities
+scales every ridge, preserving cross-group peak-height differences. The caller
+sets ridge height in row spacings, allowing controlled overlap without clipping
+the top or bottom of the panel. Empty/mismatched groups, non-finite values,
+invalid bandwidth/overlap and short storage are refused. `gfx_chart_ridgeline`
+checks a numeric KDE reference and scene/SVG output on Windows and Linux; the
+gallery adds one labeled PNG/SVG pair. Weighted samples and transformed axes
+remain future work.
+
+## D1830 — Keep OHLC semantics in geometry, not the paint backend
+
+`chart.candlestick` and `chart.ohlc` share validation of strictly ascending
+numeric x positions and open/high/low/close price envelopes. The smallest x
+gap sets mark width and outer padding, so trading gaps retain their spacing.
+Candlesticks return existing Rug wick/doji strokes and separate rising/falling
+Bar layers; OHLC returns Rug stems and left-open/right-close ticks. This keeps
+colours with the caller and uses the existing scene/SVG adapters unchanged.
+`gfx_chart_finance` checks irregular spacing, numeric body heights, doji,
+refusals and both adapters on Windows and Linux. Two labeled PNG/SVG previews
+demonstrate the results. Date-axis formatting, adjustments and volume stay
+planned.
+
+## D1831 — Model a treemap as hierarchy layout over Bar leaves
+
+`chart.treemap` borrows parent indices in parent-before-child order, requires
+weights only on leaves and emits caller-owned rectangles for every node. Each
+parent splits its rectangle along the longer side in sibling order, so leaf
+area is proportional to weight without a new painter. Internal nodes retain
+empty Bar layers; leaves receive one Bar layer each, and group outlines and
+labels stay with the caller. The simple sibling scan is quadratic and may
+yield skinny rectangles; squarified packing is an explicit upgrade path.
+`gfx_chart_treemap` checks hierarchy, proportions, invalid data/storage and
+scene/SVG output on both hosts. The gallery adds a labeled PNG/SVG pair.
+
+## D1832 — Share hierarchy validation between treemap and sunburst
+
+`hierarchy_totals` validates parent-before-child indices, finite nonnegative
+leaf weights, empty/mismatched input, and subtree totals once for both layouts.
+`chart.sunburst` assigns ordered sibling arcs from those totals, then tessellates
+one concentric Area sector per positive node. A leaf may fill remaining rings;
+zero-total nodes return empty Bar layers so callers can append every result
+through existing scene/SVG adapters. The center-hole ratio and all scratch
+arrays belong to the caller. `gfx_chart_sunburst` checks angular shares, ring
+depths, invalid input/capacity and both adapters on Windows and Linux; the
+gallery adds one labeled PNG/SVG pair. Adaptive tessellation, curved labels
+and interactive drilldown remain planned.
+
+## D1833 — Reuse proportional hierarchy totals for an icicle
+
+`chart.icicle` assigns horizontal width by sibling subtree totals and one
+band per depth, with shallow positive leaves extending to the panel bottom.
+It borrows the same validated parent-before-child hierarchy as treemap and
+sunburst, keeps depths and rectangles caller-owned, and returns existing Bar
+layers to scene and SVG. Zero-total nodes have empty layers. A preceding-
+sibling scan stays quadratic until large-tree evidence justifies caller-owned
+cursors. `gfx_chart_icicle` checks shares, depth, invalid input/storage and
+both adapters on Windows and Linux; the gallery adds one labeled PNG/SVG pair.
+
+## D1834 — Place hierarchy circles on safe sibling rings
+
+`chart.circle_pack` shares hierarchy validation and subtree totals with the
+treemap, icicle and sunburst. The root fits the panel's shorter side; each
+sibling group sits on an inner ring with radii proportional to square roots
+of subtree totals. Scaling by the largest sibling and ring chord guarantees
+containment and non-overlap without iterative search. The caller owns circle
+bounds and padding, and existing Bubble scene/SVG paths draw the result.
+Zero-total nodes remain empty. `gfx_chart_circle_pack` checks ratios, nested
+containment, sibling separation, invalid input/storage and both adapters on
+Windows and Linux; the gallery adds one PNG/SVG pair. The ring layout trades
+density for predictable cost; tangent packing can replace it if needed.
+
+## D1835 — Mirror population bars on one scale
+
+`chart.population_pyramid` takes aligned nonnegative age columns, finds one
+maximum and makes opposing horizontal Bar layers from a central gutter. Input
+age groups run youngest to oldest and display bottom to top. Caller-owned
+gutter and row gap leave space for age labels; colours and labels stay with
+the caller. The common Bar scene/SVG adapters need no new painter.
+`gfx_chart_population_pyramid` checks reference geometry, malformed values,
+gaps, storage and both adapters on Windows and Linux; the gallery adds a
+labeled PNG/SVG pair.
+
+## D1836 — Keep Sankey flow scale shared across columns
+
+`chart.sankey` accepts nodes assigned to ordered columns and forward weighted
+links. Each node height is its larger incoming/outgoing total, and the smallest
+column capacity fixes one pixel-per-unit scale for nodes and ribbons. Link
+points and node rectangles belong to the caller; smoothstep Area polygons
+paint before Bar nodes through the existing scene and SVG adapters. Zero links
+are empty layers; imbalance leaves unused node space rather than inventing
+flow. Input order fixes both node and ribbon stacking, so crossings may remain
+until a separate identity-preserving ordering pass is justified.
+`gfx_chart_sankey` checks reference geometry, three-column flow, refusal paths
+and both adapters on Windows and Linux; the gallery adds one PNG/SVG pair.
+
+## D1837 — Conserve alluvial flow on adjacent stages
+
+`chart.alluvial` reuses Sankey's caller-owned ribbon and node layout, but
+rejects links that skip a stage and interior strata whose incoming and
+outgoing weights differ beyond relative numeric tolerance. This keeps the
+same Area/Bar scene and SVG adapters; callers assign consistent cohort
+colours to links across stages. Ordering remains input-driven, so automatic
+crossing reduction and identity tracking remain separate future work.
+`gfx_chart_alluvial` checks four-stage geometry, conservation/refusal paths
+and both adapters; the gallery adds one PNG/SVG pair.
+
+## D1838 — Center streamgraph layers on one shared scale
+
+`chart.streamgraph` borrows strictly increasing x positions and nonnegative
+sample-major values. It first finds the largest time-slice total, centers
+each stack within that shared range, and emits one caller-owned Area polygon
+per series. This keeps inter-series boundaries exact without another painter
+or per-series remapping. The scene and SVG adapters are unchanged.
+`gfx_chart_streamgraph` checks reference geometry, malformed data, storage
+and both adapters on Windows and Linux; the gallery adds one PNG/SVG pair.
+The simple silhouette offset retains input layer order. Wiggle offsets and
+automatic ordering remain separate work.
+
+## D1839 — Preserve asymmetric matrix weights in chord ribbons
+
+`chart.chord` maps each row of a directed square matrix to an outer group arc,
+then joins opposite cells in one ribbon with independently sized ends. This
+preserves directional asymmetry without a second arrow painter. Diagonal
+weights form self loops; zero pairs remain empty layers. Fixed-step curved
+polygons and outer rings reuse Area in both scene and SVG. Geometry, storage,
+invalid input and adapter output are checked by `gfx_chart_chord` on Windows
+and Linux; the gallery adds one PNG/SVG pair. Adaptive tessellation,
+direction arrows and interactive highlighting remain later work.
+
+## D1840 — Make mekko cell area the encoded quantity
+
+`chart.mekko` borrows category-major nonnegative values and computes each
+column's width from its share of the grand total, then stacks series at
+within-column shares. Thus every cell's area fraction equals its value's
+fraction of the total. Empty categories retain zero width; an all-zero
+table returns `Empty`. Caller-owned series-major Bar layers reuse the scene
+and SVG adapters, with labels and palette owned by the caller.
+`gfx_chart_mekko` checks numeric area references, malformed inputs, zero
+categories, capacity and adapters on Windows and Linux; the gallery adds
+one PNG/SVG pair. Pixel gaps are omitted because they would distort area.
+
+## D1841 — Separate measured two-set Euler from nominal three-set Venn
+
+`chart.euler2` derives circle radii from set totals and bisects the exact
+two-circle intersection formula to place the circles for a requested overlap.
+Disjoint and full-containment cases use explicit layouts. `chart.venn3` uses
+three fixed equal circles with anchors in all seven membership regions, but
+makes no area-proportional claim. Both return caller-owned Bubble layers and
+reuse the scene/SVG adapters. `gfx_chart_venn_euler` checks overlap geometry,
+membership, refusals and both adapters on Windows and Linux; the gallery adds
+two PNG/SVG pairs. Arbitrary three-set area fitting remains future work.
+
+## D1842 — Keep rank-over-time ribbons ordinal and tie-stable
+
+`chart.ribbon_rank` compares sample-major series values at each ordered x
+position and maps their stable ranks to equal-height, gapped Area bands.
+Higher values rank first; ties retain caller series order. The existing
+scene/SVG Area adapters and five-series preview renderer need no new paint
+path. `gfx_chart_ribbon_rank` checks rank geometry, ties, refusals and both
+adapters on Windows and Linux; the gallery adds one PNG/SVG pair. The
+quadratic comparison scan is sufficient for small series counts; missing
+categories and smoother crossovers remain separate work.
+
+## D1843 — Compose target gauges and KPI cards from existing marks
+
+`chart.gauge` places a background and measured-value semicircular Area ring
+plus a target Rug rule on one explicit maximum. `chart.target_status` returns
+signed actual-minus-target delta and attainment under a caller-selected
+higher- or lower-is-better rule. The KPI preview composes that result with
+existing bullet layers and text, without another painter. `gfx_chart_gauge`
+checks geometric endpoints, zero/full values, invalid bounds and capacities,
+both target directions and scene/SVG output on Windows and Linux. The gallery
+adds two PNG/SVG pairs. Dynamic labels, threshold bands and widget binding
+remain future work; the existing UI gauge is a separate control surface.
+
+## D1844 — Keep word-cloud packing font-metric driven and renderer-neutral
+
+`chart.word_cloud` accepts pre-tokenized unique words, nonnegative weights,
+size-normalized font metrics and exact exclusions. It maps weight to type
+size with a legibility floor, then searches deterministic spiral positions
+against previously placed rectangles and refuses an unfit cloud. The caller
+measures one font and paints each returned label at its selected size through
+the existing scene/SVG text adapters. `gfx_chart_word_cloud` checks order,
+exclusions, collisions, bounds, refusals and both adapters on Windows and
+Linux; the gallery adds one PNG/SVG pair. The quadratic collision scan and
+finite spiral search suit small clouds. Tokenization, case normalization,
+font embedding and scalable packing remain later work.
+
+## D1845 — Share ordered interval geometry across state and status histories
+
+`chart.state_timeline` accepts f64 half-open time intervals ordered by row and
+start, maps them to caller-owned Bar layers, and returns each layer's state ID
+for palette/legend binding. Equal states at exactly abutting endpoints merge;
+uncovered time remains blank. Overlap, row disorder, invalid state/domain and
+short storage are refused. `gfx_chart_state_timeline` checks large timestamp
+precision, coalescing, gaps, refusals and scene/SVG output on Windows and Linux.
+The gallery adds separate state-timeline and status-history PNG/SVG pairs with
+distinct palettes. Date/time text, timezone policy and event annotations remain
+separate work rather than being hidden in this geometry function.
+
+## D1846 — Reuse Line and sparse Heatmap geometry for compact time reports
+
+`chart.sparkline` generates evenly spaced x scratch and returns the existing
+Line layout, leaving guide omission and cell composition with the caller.
+`chart.calendar_heatmap` takes sorted zero-based day offsets, a Monday-first
+weekday and up to 366 days, returning only observed cells in their week/weekday
+positions. Sparse cells reuse the Heatmap palette and scene/SVG adapters;
+unobserved offsets remain visible as background, and a caller gap separates
+tiles. `gfx_chart_calendar_sparkline` checks layout, refusals and both adapters
+on Windows and Linux. Locale/date text, calendar-domain scales, null samples
+and cross-cell sparklines scales remain later work.
+
+## D1847 — Compose discrete events and report bars from existing marks
+
+`chart.event_timeline` maps sorted f64 timestamps to row-centered Lollipop
+points and short stems on an explicit time domain. Event identity and text stay
+with the caller. `chart.in_cell_bars` maps nonnegative values to Bar rectangles
+inside caller-owned cells using one explicit maximum and inset; a zero value
+draws no fill. `gfx_chart_events_cellbars` checks numeric geometry, invalid
+inputs, storage and scene/SVG output on Windows and Linux. Event label collision,
+missing report values and per-row normalization stay planned.
+
+## D1848 — Keep agreement statistics outside chart geometry
+
+`e.algo.stat.agreement_limits` computes paired-difference bias and sample-SD
+limits from a caller-selected multiplier. `chart.bland_altman` only maps those
+statistics, means and differences to Scatter/Rug layouts; it does not hide a
+confidence-interval policy. `chart.forest_plot` similarly accepts already
+estimated effects and intervals, with a separate reference Rug and existing
+linear/log10/symlog scales. `gfx_chart_agreement_forest` checks numeric values,
+refusals and scene/SVG output on Windows and Linux. Pooled-effect estimators,
+study weighting and uncertainty intervals stay in statistics work.
+
+## D1849 — Group tied classification scores before drawing diagnostic curves
+
+`e.algo.stat.binary_curve` sorts caller-owned indices by score and advances all
+equal scores as one threshold, exposing cumulative true/false-positive counts.
+ROC, precision–recall, cumulative gain and lift reuse those counts and the
+existing Line scene/SVG adapters. AUC uses trapezoids; average precision uses
+recall-weighted precision steps. `gfx_chart_binary_curves` checks reference
+values, ties, capacity and class refusals on Windows and Linux. Calibration,
+threshold selection and confusion-matrix views remain separate work.
+
+## D1850 — Keep classifier diagnostics as statistics plus existing marks
+
+`e.algo.stat.binary_calibration` aggregates caller-chosen equal-width probability
+bins, including score 1 in the last bin; empty bins remain explicit. A separate
+thresholded `binary_confusion` counts actual/predicted negative and positive
+cases without requiring both classes. Gallery compositions map nonempty bins to
+PointLine on fixed unit axes and the four confusion counts to a 2×2 Heatmap.
+`gfx_chart_diagnostic_tables` checks reference values, input/storage refusals
+and scene/SVG output on Windows and Linux. No new painter branch is needed.
+
+## D1851 — Extend the ROC sweep without a second threshold engine
+
+`roc_partial_auc` integrates the raw area to a caller-selected false-positive
+cutoff; `chart.roc_partial_region` interpolates the matching Area polygon on
+full ROC axes. `youden_index` returns the first point attaining maximal
+sensitivity minus false-positive rate, preserving the higher-score tie choice.
+`decision_curve` takes probability thresholds and reuses `binary_confusion` for
+model and treat-all net benefit; treat-none is zero. It deliberately scans each
+threshold, with a sorted-sweep upgrade path if large grids demand it. The
+existing Area, Rug and Line adapters render all three previews. Numeric and
+scene/SVG checks run in `gfx_chart_binary_curves` on Windows and Linux.
+
+## D1853 — Derive OLS influence values once, then reuse existing marks
+
+`e.algo.stat.regression_diagnostics` streams the existing bivariate moments once
+and writes fitted values, raw/internally standardized residuals, leverage and
+Cook's distance to caller storage. Cook's distance uses two fitted parameters
+and mean squared error with n-2 residual degrees of freedom. Singular x,
+exact fits and non-finite inputs cannot yield these statistics and are refused.
+Residual/fitted and leverage/residual views reuse Scatter; Cook by observation
+reuses Lollipop, preserving scene/SVG parity without a new geom. A five-point
+numeric reference plus adapter check passes on Windows and Linux; three new
+PNG/SVG gallery pairs are generated. Leave-one-out influence, robust fits and
+automatic diagnostic thresholds remain planned.
+
+## D1854 — Group tied follow-up times before drawing survival steps
+
+`e.algo.stat.survival_curve` accepts sorted nonnegative times with event flags,
+groups ties, counts events before censoring at each time, and emits both
+Kaplan–Meier survival and Nelson–Aalen cumulative hazard from the same risk set.
+The time-zero baseline and per-time risk, event and censor counts support later
+risk tables and censor markers. Existing Step and Scatter marks render two new
+PNG/SVG pairs without a survival-specific painter. A numeric tie/censor fixture
+and scene/SVG check pass on Windows and Linux. Greenwood intervals, log-rank
+comparisons and competing risks remain separate work.
+
+## D1855 — Keep Shewhart limits in statistics and reuse Cartesian marks
+
+`e.algo.stat.imr_limits` computes adjacent moving ranges and three-sigma
+Individuals limits using d2 = 1.128; MR upper limit uses D4 = 3.267.
+`xbar_r_limits` computes equal-size subgroup means and ranges using the
+standard A2/D3/D4 factors for subgroup sizes 2–10. Four previews compose
+existing PointLine and Rug layouts, so scene/SVG adapters gain no new branch.
+The numeric fixture checks NIST's Individuals example and subgroup-factor
+values on Windows and Linux. Phase-specific limits and run rules are deferred.
+References: https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc322.htm
+and https://itl.nist.gov/div898/handbook/pmc/section3/pmc321.htm.
+
+## D1856 — Let subgroup size shape attribute-control limits
+
+`e.algo.stat.attribute_control` keeps the four conventional three-sigma
+attribute charts together: pooled binomial p/np and Poisson c/u. P and u
+limits are calculated for each actual subgroup size; np requires equal sizes
+and c one inspection unit per point. Probability/count lower bounds are
+clamped to their valid domains. PointLine plus Rug traces render observations
+and limits without a painter branch. Reference numbers and invalid-size tests
+pass on Windows and Linux, alongside four PNG/SVG previews. Historical
+baselines, Laney overdispersion and run rules remain planned.
+References: https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc332.htm,
+https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc331.htm and
+https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/u-chart/perform-the-analysis/u-chart-options/modify-the-control-limits/.
+
+## D1857 — Reuse run and limit layers for X-bar/S, CUSUM and EWMA
+
+`e.algo.stat.xbar_s_limits` uses sample subgroup deviations and the c4
+correction for three-sigma X-bar and S limits. `cusum_control` exposes both
+one-sided tabular sums and decision signals from one pass. `ewma_control`
+starts at the supplied center and retains exact startup variance rather than
+immediately using steady-state limits. All three use caller-owned output,
+finite-input checks and existing PointLine/Rug rendering. Five new PNG/SVG
+previews bring the gallery to one hundred pairs. A numeric fixture checks
+references and refusals on Windows and Linux. Phase baselines, run rules and
+Laney dispersion adjustments remain separate work.
+References: https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc321.htm,
+https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc323.htm and
+https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc324.htm.
+
+## D1858 — Estimate Laney dispersion from adjacent standardized subgroups
+
+`e.algo.stat.laney_control` builds on the pooled p/u calculator. It divides
+each subgroup's deviation from its center by the binomial or Poisson sigma,
+then uses mean adjacent z-score moving range / 1.128 as Sigma Z. Limits are
+the ordinary subgroup-specific three-sigma limits scaled by Sigma Z, with
+probability bounds clipped to [0,1]. This supports over- and underdispersion
+without another renderer. Degenerate pooled rates with zero theoretical
+variance are refused because z scores are undefined. Numeric reference and
+refusal checks pass on Windows and Linux; two PNG/SVG pairs bring the gallery
+to 102. Historical baselines and special-cause run rules remain planned.
+References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/laney-p-chart/methods-and-formulas/methods-and-formulas/
+and https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/laney-u-chart/methods-and-formulas/methods-and-formulas/.
+
+## D1859 — Rare-event gaps use geometric limits; elapsed times use exponential limits
+
+`g_control_limits` accepts whole opportunities between events, estimates the
+geometric event probability as one over mean gap plus one, and interpolates
+neighboring discrete CDF steps at 0.135%, 50% and 99.865%. The lower bound
+cannot be negative. `t_exponential_control_limits` accepts strictly positive
+elapsed times and uses their mean as the exponential MLE scale at the same
+percentiles. These are distinct models with distinct input types, rendered
+through existing PointLine/Rug marks. The fixture checks numeric values,
+degenerate and invalid inputs, and large-gap precision on Windows and Linux;
+two previews bring the gallery to 104 pairs. Date conversion, simultaneous
+events, Weibull limits and rare-event run tests remain planned.
+References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/rare-event-charts/g-chart/methods-and-formulas/methods-and-formulas/
+and https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/rare-event-charts/t-chart/methods-and-formulas/methods-and-formulas/.
+
+## D1860 — Mark the completing point for eight SPC special-cause tests
+
+`e.algo.stat.control_run_rules` accepts observed values and per-observation
+centers/sigmas, so fixed-limit and varying-limit charts can share one checker.
+It returns eight named flags per point: beyond 3 sigma; nine on one side; six
+trending; fourteen alternating; two of three beyond 2 sigma on one side;
+four of five beyond 1 sigma on one side; fifteen within 1 sigma; and eight
+outside 1 sigma. Strict boundaries apply to the beyond/outside tests; a
+value on the center breaks the same-side run. Flags mark the observation
+that completes a window, not every member of it. The focused fixture checks
+all eight rules and refusal paths on Windows and Linux. Existing PointLine,
+Rug and Scatter passes render a signal preview, bringing the gallery to 105
+pairs. Phase resets and automatic chart-specific test sets remain planned.
+References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/supporting-topics/basics/using-tests-for-special-causes/
+and https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/contchar.htm.
+
+## D1861 — Phase Individuals limits and stop run tests at phase boundaries
+
+Treat each explicit phase as a separate Individuals baseline, requiring at least
+two observations per phase. Reuse `imr_limits` within each phase and set the
+cross-boundary moving-range slot to zero (not a measured range); expose the
+per-observation center and limits for renderers. Keep the original eight-rule
+API as a single-phase wrapper and reset streaks and windows in the phased
+entry point so no rule inherits evidence from an earlier process phase.
+The focused `gfx_chart_phases` fixture checks limits, excluded ranges,
+boundary resets and invalid phase declarations on Windows and Linux. A
+dedicated preview uses disconnected phase limit segments and a boundary rule.
+Subgroup/attribute phase estimators and chart-specific test selection remain
+planned. Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/supporting-topics/options/add-stages-to-show-how-a-process-changed/
+
+## D1862 — Estimate attribute-control limits independently by phase
+
+Run the existing P/Np/C/U estimator on each validated phase slice; do not
+duplicate its binomial and Poisson formulas. Each phase needs at least two
+subgroups. Np sample size may change at a phase boundary but remains fixed
+within that phase. Preserve per-point limits for variable-size P and U charts.
+The shared preview renderer skips cross-boundary limit connections and draws
+a stage divider; it produces four new PNG/SVG pairs. A focused fixture checks
+all four kinds against independent phase calculations and refuses malformed
+phase declarations on Windows and Linux. Laney phase-specific dispersion
+remains planned. Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/p-chart/interpret-the-results/all-statistics-and-graphs/
+
+## D1863 — Re-estimate Laney dispersion within each phase
+
+Validate phase boundaries through `attribute_control_phased`, then invoke the
+existing Laney P-prime/U-prime calculator on each phase slice. Each slice has
+its own pooled baseline and adjacent-z moving-range Sigma Z; no boundary pair
+contributes. Return per-point Sigma Z beside the existing per-point limits so
+callers can inspect the phase estimate. Reuse the stage-aware attribute preview
+renderer for two new PNG/SVG pairs. `gfx_chart_laney_phases` compares both
+kinds with independent phase calculations and checks refusals on Windows and
+Linux. Subgroup X-bar/R/S phases remain planned. Reference:
+https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/laney-p-chart/interpret-the-results/all-statistics-and-graphs/
+
+## D1864 — Re-estimate X-bar/R and X-bar/S limits by phase
+
+Use subgroup-index phase starts and the existing X-bar/R or X-bar/S calculator
+within each phase. Require at least two complete, equal-size subgroups per
+phase; retain caller-owned mean/spread scratch and per-subgroup plotted values
+with their phase-specific limits. One kind selector avoids duplicating the
+phase traversal and keeps range and standard-deviation formulas in their
+existing calculators. Reuse the phase-aware attribute renderer for four new
+PNG/SVG pairs. The focused `gfx_chart_subgroup_phases` fixture compares both
+methods with independent phase calculations and checks malformed boundaries,
+storage and nonfinite values on Windows and Linux. Unequal subgroup sizes and
+historical parameter overrides remain planned. References:
+https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/variables-charts-for-subgroups/xbar-r-chart/perform-the-analysis/xbar-r-options/define-stages/
+and https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/variables-charts-for-subgroups/xbar-s-chart/interpret-the-results/all-statistics-and-graphs/
+
+## D1865 — Parallel coordinates reuse independent segment marks
+
+Map row-major finite observations to one vertical axis per column, with each
+axis normalized against that column's data range. Put constant columns at the
+midpoint instead of rejecting otherwise usable rows. Return caller-owned
+axis and row segments as existing Rug layouts, so scene and SVG need no new
+mark implementation. The gallery labels axes and their min/max values;
+`gfx_chart_parallel_coordinates` checks geometry, constant axes, refusal
+paths and both adapters on Windows and Linux. Per-row colour, reordering,
+brushing and missing-value policy remain planned. Reference:
+https://plotly.com/python/parallel-coordinates-plot/
+
+## D1866 — Normal P-P shares the Q-Q point-and-reference adapters
+
+`pp_normal` compares sorted observations' empirical midpoint ranks with a
+caller-specified normal CDF. Keep the mean and positive standard deviation
+explicit so the plot does not silently fit parameters. Reuse the Q-Q
+point-and-reference scene/SVG paths but retain a distinct `Pp` kind and
+fixed probability axes. The `gfx_chart_qq` fixture checks numeric positions,
+refusals and both adapters; the gallery adds a PNG/SVG pair.
+
+## D1867 — Scatterplot matrices share facet and scatter geometry
+
+Map every off-diagonal variable pair into a `facet_grid` panel using one
+observed range per column. Preserve row-major input and return caller-owned
+panels, points and Scatter layers; keep the diagonal empty for application
+labels instead of embedding a new text policy in geometry. Reuse the scene
+and SVG scatter adapters. `gfx_chart_parallel_coordinates` checks constant
+columns, refusals and both adapters on Windows and Linux; the gallery adds
+a labeled 3-by-3 PNG/SVG pair. Diagonal histograms and linked brushing remain
+planned.
+
+## D1868 — Boxen reuses R7 quantiles and Box marks
+
+`boxen_plot` takes a sorted sample and an explicit letter-value depth. Each
+level halves the lower-tail probability from 1/4, uses R7 quantiles, and
+narrows the wider outer range; depth is refused once a tail has fewer than
+one expected observation. Existing Box outlines, median segments and point
+marks render the nested ranges and observations beyond the deepest range in
+both scene and SVG. `gfx_chart_qq` checks numeric levels and refusal paths
+on Windows and Linux; the gallery adds a PNG/SVG pair. Automatic depth
+selection and richer per-level styling remain planned.
+
+## D1869 — Mosaic separates area from contingency residual colour
+
+`mosaic` takes a column-major nonnegative contingency table. Column widths
+follow marginal totals, and within-column heights follow observed counts;
+zero cells emit no drawable tile. It computes each cell's Pearson residual
+against the independence expectation and supplies symmetric bounds for the
+existing matrix scene/SVG palettes, with a neutral zero and explicit gutter.
+The `Mosaic` kind keeps this statistical meaning distinct from heatmaps and
+Mekko bars. `gfx_chart_mekko` checks geometry, residuals, refusals and both
+adapters on Windows and Linux; the gallery adds a labeled PNG/SVG pair.
+
+## D1870 — Association plots encode signed departures from independence
+
+`association` accepts column-major nonnegative two-way counts and computes
+Pearson residuals from the row and column margins. It lays out each row against
+its own zero baseline with rectangle widths proportional to square-root
+expected counts and signed heights proportional to residuals, giving a common
+area scale for observed-minus-expected counts. Zero residuals emit no bar;
+zero-margin rows retain their baseline. The `Association` matrix kind reuses
+the diverging scene/SVG palette, and existing Rug segments draw baselines.
+`gfx_chart_mekko` checks reference residuals, geometry, empty/invalid/capacity
+paths and both adapters on Windows and Linux; the gallery adds a PNG/SVG pair.
+
+## D1871 — Fourfold geometry composes existing area and line marks
+
+`fourfold` represents one 2x2 table as four quarter-circle Area polygons and
+optional odds-ratio confidence arcs as Rug segments, with caller-owned storage.
+Equal-margin standardization maps the log odds ratio to diagonal/off-diagonal
+shares while retaining association direction; squared radii therefore track
+the standardized frequencies. Confidence arcs map a Wald log-odds interval to
+the same shares, using a 0.5 continuity correction when any observed cell is
+zero. Multi-stratum composition and alternate R standardizations remain
+planned. `gfx_chart_mekko` checks numeric references and scene/SVG parity on
+Windows and Linux; the gallery adds a PNG/SVG pair. Reference: R graphics
+`fourfoldplot` and vcd `fourfold` documentation.
+
+## D1872 — Horizon bands split at every threshold crossing
+
+`horizon` accepts sorted numeric x values, an explicit origin, band width and
+band count. It folds positive and negative deviations into the same panel and
+returns caller-owned four-point Area patches carrying band and sign metadata
+for palette selection. Each source segment is split where it crosses either
+edge of a band, avoiding the inaccurate straight-line clipping that would
+result from transforming only the original samples. Data beyond the supplied
+range is refused. `gfx_chart_horizon` checks threshold positions, irregular
+spacing, storage/invalid refusals and scene/SVG parity on Windows and Linux;
+the gallery adds a PNG/SVG pair. Automatic scaling, missing gaps and grouped
+multi-series layout remain planned. Reference: latticeExtra `horizonplot` and
+ggHoriPlot `geom_horizon` documentation.
+
+## D1874 — Seasonal subseries compose line traces and mean rules
+
+`seasonal_subseries` groups a numeric sequence by caller-selected period,
+placing consecutive cycles inside one x slot per seasonal position. Each slot
+returns a Line layout, and a Rug rule marks that position's arithmetic mean.
+A partial final cycle is retained; a one-cycle series, invalid bounds and short
+caller storage are refused. `gfx_chart_seasonal` checks exact positions, means,
+partial cycles, flat data and scene/SVG output on Windows and Linux; the gallery
+adds a PNG/SVG pair. Explicit phase labels/times, missing-value gaps and
+alternative reference statistics remain planned. Reference: R `stats::monthplot`
+and forecast `ggsubseriesplot` documentation.
+
+## D1875 — Fan intervals share one scale and retain quantile nesting
+
+`fan` takes caller-computed, band-major outer-to-inner forecast intervals and
+a median curve. It validates each interval encloses the median and each inner
+interval stays within its outer neighbour, then maps every Band polygon and
+the Line median to the same x/y domain. This avoids independently autoscaling
+each ribbon through `band`. `gfx_chart_fan` checks irregular x positions,
+nesting, flat distributions, capacity refusals and scene/SVG output on Windows
+and Linux; the gallery adds a PNG/SVG pair. Simulation-to-quantile conversion,
+probability labels, observed-history anchoring and automated forecasting
+remain planned. Reference: CRAN fanplot `fan` and fabletools forecast-plot docs.
+
+## D1876 — Classical additive decomposition owns calculation and four-panel layout
+
+`decomposition` computes a centered moving-average trend, using half-weighted
+endpoints for even periods, then phase-average seasonal values centered to
+zero and an additive remainder. Only samples with a complete trend window
+enter trend/remainder traces; all four panels keep the full time-axis mapping
+and independently scale their values. Caller-owned slices hold numeric
+components and Line segments. `gfx_chart_decomposition` checks exact even/odd
+references, flat data, window and capacity refusals, and scene/SVG output on
+Windows and Linux; the gallery adds a PNG/SVG pair. Multiplicative and STL
+decomposition, missing observations and date labels remain planned. Reference:
+R `stats::decompose` and forecast `autoplot.decomposed.ts` documentation.
+
+## D1878 — Correlogram shares Rug strokes across ACF and PACF
+
+`correlogram` computes mean-centered, lag-zero-normalized sample ACF and
+Durbin–Levinson PACF with caller-owned arrays. Two comparable [-1, 1] stem
+panels and zero/approximate 95% reference rules reuse Rug scene/SVG adapters;
+PACF omits lag zero. `gfx_chart_correlogram` checks exact numerical values,
+geometry, refusals and both adapters on Windows and Linux. The gallery adds a
+paired-panel PNG/SVG preview. Missing-value policy, alternative confidence
+intervals and FFT acceleration for long lag windows remain planned. Reference:
+R `stats::acf` / `stats::pacf` documentation.
+
+## D1879 — Empirical variogram keeps pair statistics beside scatter geometry
+
+`variogram` accepts 2D Euclidean sites and values, a caller-selected cutoff and
+the number of equal-width bins implied by caller-owned arrays. It returns pair
+counts, mean pair distances and classical half-mean-squared semivariances for
+nonempty bins; the same values map to existing Scatter scene/SVG marks.
+`gfx_chart_variogram` checks exact distance/bin references, vertical pairs,
+empty/capacity refusals and both adapters on Windows and Linux. The gallery
+adds a PNG/SVG preview. Geographic distances, directional and robust
+estimators, trend removal and model fitting remain planned. Reference:
+`gstat::variogram` documentation.
+
+## D1880 — Radar and rose reuse polar Area polygons and Rug guides
+
+`radar` maps three or more values through explicit per-axis minimum/maximum
+ranges into a closed Area polygon, with caller-owned spoke and ring-grid Rug
+segments. Multiple calls sharing ranges and bounds overlay comparable series.
+`rose` accepts pre-binned nonnegative angular weights, uses equal-angle sectors
+centered on each bin direction and square-root radii so sector area tracks
+weight. Its filled sectors reuse the existing pie/share renderer. The
+`gfx_chart_radial` fixture checks reference coordinates, area scaling,
+refusals and scene/SVG output on Windows and Linux; two PNG/SVG previews are
+added. Raw-angle binning, curved text and polar axis interaction remain planned.
+References: R `fmsb::radarchart`, `circular::rose.diag` and ggplot2 `coord_radial`.
+
+## D1882 — Ternary diagrams close three parts into reusable Scatter/Rug marks
+
+`ternary` accepts three aligned nonnegative columns and normalizes each row to
+unit sum, so equivalent compositions project to the same point. An equilateral
+triangle is centered within the caller bounds; A is top, B left and C right.
+Caller-owned Scatter coordinates and Rug grid segments work unchanged in the
+scene and SVG adapters. `gfx_chart_ternary` checks corners, mixtures, invalid
+rows, capacities and both adapters on Windows and Linux. The gallery adds one
+PNG/SVG preview. Density, contours and custom axis scales remain planned.
+Reference: R `Ternary::TernaryPoints` and `ggtern`.
+
+## D1883 — Quiver arrows reuse Cartesian tail mapping and Rug segments
+
+`quiver` maps x/y tails through the existing Scatter scale, then turns each
+nonzero (u,v) vector into one shaft and two head strokes. An explicit
+pixels-per-unit factor keeps length policy with the caller; head size is
+bounded by the shaft length. Zero vectors produce no arrow because their
+direction is undefined. The `gfx_chart_quiver` fixture checks exact horizontal
+and vertical coordinates, signed and zero vectors, invalid/capacity refusals,
+and scene/SVG output on Windows and Linux. The gallery adds a PNG/SVG pair.
+Streamline integration and magnitude-colour legends remain planned. References:
+R `graphics::arrows`, `ggquiver::geom_quiver` and Matplotlib `quiver`.
+
+## D1884 — Streamlines integrate a regular vector field into independent strokes
+
+`streamlines` accepts row-major u/v grids, domain limits, caller seeds, a
+fixed-distance step and a per-seed step cap. Bilinear field sampling and a
+midpoint direction step produce paths clipped at the domain boundary. The
+returned Rug segments stay independent across seeds; a Line layout would join
+unrelated paths in the current scene adapter. `gfx_chart_streamlines` checks
+uniform, varying and stationary fields, edge clipping, refusals and scene/SVG
+output on Windows and Linux. The gallery adds one PNG/SVG pair. Bidirectional
+tracing, adaptive error control and crowding suppression remain planned.
+References: R `metR::geom_streamline` and Matplotlib `streamplot`.
+
+## D1885 — Share a two-dimensional delay embedding across phase and recurrence plots
+
+`phase_space` pairs x(t) with x(t+lag), uses one numeric domain and centers an
+equal-aspect panel so slopes are not distorted. Existing PointLine geometry
+connects the orbit in temporal order. `recurrence` compares the same pairs
+with an inclusive Euclidean radius and emits a symmetric binary Heatmap with
+its diagonal present. The two focused fixtures check coordinates, cell values,
+constant/repeated inputs, refusals and scene/SVG adapters on Windows and Linux;
+the gallery adds two PNG/SVG previews. Its existing font ID is reused to stay
+within the scene renderer's 16-font registration limit. Higher-dimensional
+embedding and recurrence quantification remain planned. References: R
+`nonlinearTseries::buildTakens` and `nonlinearTseries::recurrencePlot`.
+
+## D1886 — Drawdown and cohort retention reuse Area and Heatmap
+
+`drawdown` divides positive prices by their running maximum and subtracts one,
+so recoveries meet a zero baseline and losses fill an existing Area polygon.
+`cohort_retention` accepts a compact oldest-to-newest row-major triangle; each
+row's first positive count is its denominator, and future periods emit no tile.
+Its Heatmap fixes the palette to 0..1 across datasets. Both return caller-owned
+geometry and reuse scene/SVG adapters. Focused fixtures check values, shape and
+capacity refusals, and adapters on Windows and Linux; the gallery adds two
+PNG/SVG previews. Returns/volatility, cohort date labels and automated colour
+legends remain separate work.
+
+## D1887 — Contour levels become isolines and clipped scalar bands
+
+`contour` uses marching squares on a row-major finite scalar grid, linearly
+interpolating sorted levels at cell edges. Diagonal saddles use the centre
+sample to select connectivity. `filled_contour` clips the two piecewise-linear
+triangles in each cell against the same levels into caller-owned Area polygons
+and band IDs. Independent polygons are deliberate geometry; the scene and SVG
+adapters group every band into a single path so antialiased shared triangle
+edges do not produce seams. Focused fixtures check coordinates, saddle cases,
+band area conservation, refusals and both adapters on Windows and Linux; the
+gallery adds two PNG/SVG pairs. Missing masks, irregular grids, region merging
+and contour labels remain planned. References: scikit-image `find_contours`
+and Matplotlib `contourf` documentation.
+
+## D1888 — Finance panels align x and state their return semantics
+
+`price_volume` reuses the OHLC numeric-domain validation to align positive
+closing prices and nonnegative volume on one padded x axis, while Line and Bar
+retain independent vertical domains. `returns_volatility` computes simple
+per-observation price returns and trailing sample SD with a caller-selected
+window; both panels share the original x domain so the shorter volatility
+series starts at its true observation. This is not annualized volatility or
+total return: callers must provide adjusted prices or time scaling if needed.
+Focused fixtures check numeric references, irregular x positions, alignment,
+flat data, refusals and scene/SVG adapters on Windows and Linux; the gallery
+adds two PNG/SVG pairs. References: R PerformanceAnalytics `Return.calculate`
+and `roll::roll_sd` documentation.
+
+## D1892 — Gantt progress composes two Bar layers on a shared time axis
+
+`gantt` accepts caller-owned tasks with f64 start/end times, categorical rows
+and completion fractions. It maps each duration to a pale Bar and its completed
+portion to an aligned second Bar. The engine validates the explicit time
+domain, row bounds, interval ordering, fractions and caller storage; it does
+not silently infer dependencies or a project calendar. `gfx_chart_gantt`
+checks geometry, refusals and scene/SVG adapters on Windows and Linux. The
+gallery adds a PNG/SVG pair; milestones, dependency links and critical-path
+calculation remain separate planned capabilities.
+
+## D1893 — Milestone roadmaps reuse time positions with filled diamond marks
+
+`milestone_roadmap` calls the existing validated event-position mapping and
+turns each lane-centered timestamp into a caller-owned four-point Area polygon.
+The existing scene and SVG adapters fill those polygons; no new backend mark
+is needed. Marker size is bounded by lane height, while exact time ordering,
+row/domain validation and capacity refusals follow the event contract. The
+focused fixture passes on Windows and Linux, and the gallery adds a PNG/SVG
+pair. Dependency links and calendar scheduling remain separate work.
+
+## D1894 — Burndown and burnup share explicit Line domains
+
+`burndown` derives an ideal linear descent from initial remaining work across
+the observed time span. `burnup` plots completion against a caller-provided
+scope series, which may change but must not fall below completed work. Both
+reuse the Cartesian Line layout with identical explicit x/y limits so overlay
+positions agree. The focused fixture checks irregular time steps, references,
+flat series, invalid/capacity paths and scene/SVG output on Windows and Linux.
+The gallery adds two PNG/SVG pairs. Missing observations, sprint calendars
+and forecasts remain separate planned work.
+
+## D1895 — Earned-value curves keep the plan horizon separate from observations
+
+`earned_value` aligns PV, EV and AC Line layers with one explicit time and
+nonnegative value domain. Planned value may extend beyond the measured EV/AC
+prefix; the adapter neither fabricates future results nor treats actual cost
+as earned value. The focused fixture checks numeric positions, partial horizon,
+flat series, invalid/capacity paths and scene/SVG output on Windows and Linux.
+The gallery adds a PNG/SVG pair. Variance indices and forecasts remain project
+analytics, not implicit chart calculations. Terminology follows NASA's EVM
+tutorial: https://www.nasa.gov/ocfo/ppc-corner/evm/tutorial/
+
+## D1896 — Risk matrices separate policy ratings from observed counts
+
+`risk_matrix` accepts a square caller-supplied rating grid and likelihood/impact
+pairs indexed from one. It places larger impact toward the top and larger
+likelihood toward the right, returning the existing Heatmap tiles plus a
+separate caller-owned count per cell. The chart does not classify a score as
+acceptable or unacceptable: those thresholds depend on the caller's risk
+policy. The focused fixture checks orientation, duplicate counts, invalid
+ratings and coordinates, storage refusal, and scene/SVG output on Windows and
+Linux. The gallery adds a PNG/SVG pair with cell counts.
+
+## D1897 — Resource histograms preserve assignment-boundary peaks
+
+`resource_histogram` accepts half-open assignment intervals with nonnegative
+units and a positive capacity. It uses every start/end as a time boundary,
+sums concurrent units in each period and returns variable-width normal and
+excess Bar layers plus a capacity Rug rule. Thus a short peak stays visible;
+there is no arbitrary fixed bin width or calendar assumption. The fixture
+checks overlap and gap loads, over-capacity geometry, invalid/caller-storage
+paths and scene/SVG output on Windows and Linux. The gallery adds a PNG/SVG
+pair. Microsoft Project's Resource Graph documents workload bars and a maximum
+units comparison: https://support.microsoft.com/en-us/project/view-resource-workloads-and-availability-in-project-desktop
+
+## D1899 — Swimlane flows cross role partitions without claiming BPMN conformance
+
+`swimlane` maps steps to one role lane and one ordered stage each, returning
+caller-owned lane bands and step Bar rectangles. Forward links become five Rug
+strokes: an orthogonal route plus two arrowhead sides. Cross-lane handoffs and
+same-lane flows share this geometry. Duplicate cells, out-of-range or backward
+links and short storage are refused. The focused Windows/Linux fixture checks
+positions and both scene/SVG adapters; the gallery adds a PNG/SVG pair with
+role and step labels. This is not a BPMN 2.0 model: gateways, events, message
+flows, execution semantics and interchange remain separate work. OMG's BPMN
+specification distinguishes lane partitions from sequence flow:
+https://www.omg.org/spec/BPMN/2.0/PDF
+
+## D1900 — Kanban boards show WIP breaches without discarding cards
+
+`kanban` borrows cards in caller order, stacks each column independently and
+returns column/card Bar geometry plus per-column count, limit and breach status.
+A zero limit is unrestricted; positive limits are visible policies, not a reason
+to reject an overfull board. Caller-owned card heights support different text
+contents, while explicit padding, gutters and header space keep the geometry
+deterministic. The focused fixture checks interleaved input order, a 2/1 breach,
+unrestricted and empty columns, invalid/overflow cases and scene/SVG output on
+Windows and Linux. The gallery adds a PNG/SVG pair. Pull rules, commitment
+points and grouped WIP limits remain separate work. Kanban University's guide
+describes workflow columns and visible WIP limits:
+https://kanban.university/kanban-guide/
+
+## D1901 — PERT/CPM separates task timing from network geometry
+
+`pert_cpm_schedule` borrows activity estimates and dependencies, then computes
+the PERT three-point mean and per-activity variance. A caller-owned adjacency
+workspace supports topological forward and backward passes in O(V+E), yielding
+earliest/latest times, slack and the unconstrained project duration. Cycles,
+invalid estimates and insufficient storage are refused. `pert_cpm_network`
+places activity boxes by dependency depth and emits directional connectors;
+only zero-slack, timing-contiguous edges are highlighted as critical. The
+Windows/Linux fixture checks timing, variance, refusal paths and scene/SVG
+adapters; the gallery adds a PNG/SVG pair. Calendars, lag constraints, resource
+levelling, multiple-path uncertainty and Monte Carlo completion forecasts are
+not implied by this slice. The forward/backward calculation follows PMI's
+critical-path description: https://www.pmi.org/learning/library/critical-path-method-calculations-scheduling-8040
+
+## D1902 — Keep value-stream metrics distinct from readable stage placement
+
+`value_stream_map` borrows an ordered single stream of process time, value-added
+time, preceding queue time and good fraction. It returns process/queue totals,
+lead time, value-added divided by lead time as process-cycle efficiency, and
+the product of good fractions as rolled yield. Stage boxes use equal spacing
+for legible names; a second time ladder uses actual duration ratios. Caller
+storage owns rectangles and arrow segments, with invalid values, short arrays
+and unrenderably narrow intervals refused. The Windows/Linux fixture checks
+numerical totals, proportional widths, single-stage/zero-wait behavior,
+refusals and scene/SVG adapters; the gallery adds a PNG/SVG pair. It is not a
+branching process simulator or a full VSM stencil: inventory and transport
+symbols, takt/capacity constraints and future-state comparison remain planned.
+
+## D1903 — SIPOC is a fixed five-column overview, not an executable flow
+
+`sipoc` reserves supplier, input, process, output and customer columns in that
+order. Caller-owned entries retain input order within each column; the layout
+returns five bands and headers, entry cards, directional header connectors,
+counts and the maximum row count. Labels and colours remain caller-side. The
+layout rejects invalid columns, non-finite or cramped geometry and short
+storage, but permits an empty column so incomplete overviews can be shown.
+The Windows/Linux fixture checks interleaved entries, sizing, sparse columns,
+refusals and scene/SVG adapters; the gallery adds a PNG/SVG pair. SIPOC sets a
+process boundary. It does not model decisions, handoffs, simulation or an
+entity-relationship graph; those remain separate chart families.
+
+## D1906 — Count gallery deliverables, not grouped catalogue entries
+
+The earlier `Rendered previews (x/155)` compared PNG files with 155 grouped
+catalogue entries, unlike units. `docs/chart-preview-backlog.txt` now records
+one slug per unrendered gallery target; the generator counts committed PNG/SVG
+pairs plus those slugs, refuses duplicate/invalid slugs and missing companions,
+and links the finite backlog from the page. A rendered target leaves the list.
+This denominator is a maintained delivery set, not every mathematically
+possible chart or a chart-engine readiness score. The grouped 155-entry
+catalogue remains useful for family planning but does not drive this ratio.
+
+## D1907 — Evaluate decision trees before drawing their geometry
+
+`decision_tree_values` requires a rooted single-parent tree with choice,
+chance and terminal outcome nodes. Chance probabilities sum to one, outcomes
+carry finite payoffs, and choices select the maximum expected child value,
+breaking ties by input edge order. The caller owns the adjacency/work arrays
+and per-node values. `decision_tree_layout` uses subtree leaf intervals for
+stable vertical placement and flags the chosen choice edge; scene and SVG
+consume the same Bar/Rug geometry. Windows/Linux fixtures check numerical
+references, invalid probabilities/parents/cycles, capacity and adapters. The
+gallery adds a PNG/SVG pair. Risk preferences, influence diagrams, utility
+functions and decision DAGs remain follow-on work.
+
+## D1908 — Org charts use leaf-weighted hierarchy geometry
+
+`org_chart` accepts one rooted single-parent tree and preserves the input order
+of direct reports. A reverse-built adjacency list and breadth-first traversal
+establish depths; bottom-up leaf counts then reserve contiguous horizontal
+intervals for each subtree. Boxes and orthogonal connectors use caller-owned
+buffers and reuse Bar/Rug scene and SVG rendering. The Windows and Linux
+fixture checks hierarchy, ordering, capacity and malformed trees; the gallery
+adds one PNG/SVG pair. Multiple roots, dotted-line relationships and collapse
+behavior remain separate work.
+
+## D1909 — Layer dependency graphs by longest path through a DAG
+
+`dependency_graph` uses a caller-owned Kahn traversal to validate acyclicity,
+allow multiple sources and disconnected nodes, and assign each node its longest
+incoming-path rank. Each rank gets an x column; peers share its y slots, and
+five Rug segments per dependency form orthogonal arrows into Bar node boxes.
+Windows and Linux fixtures check merges, splits, disconnected nodes, cycles,
+invalid endpoints, capacities and scene/SVG adapters. The gallery adds a
+PNG/SVG pair. Crossing reduction, edge-port selection and editing are future
+work, not implied by this static layout.
+
+## D1910 — Flowcharts keep control-flow geometry separate from DAG ranking
+
+`flowchart` takes caller-placed nodes and explicit opposing exit/entry ports,
+rather than forcing decision loops through the acyclic dependency layout.
+Terminal chamfers and decision diamonds are Area polygons; processes are Bar
+rectangles. Each edge is a five-segment orthogonal Rug arrow. Overlapping boxes,
+invalid ports and inward/backward routes refuse. Windows and Linux fixtures
+cover a decision loop, geometry, adapters and refusals. Automatic layout,
+collision-free routing and
+mixed-axis ports remain separate work.
+
+## D1911 — State machines pair deterministic events with explicit diagram geometry
+
+`state_machine_step` keeps the current state on an absent event, advances on a
+unique `(state,event)` match and rejects ambiguous transitions. `state_machine`
+requires one initial state, checks event and state indices and overlapping
+circles, and emits caller-owned circular Area nodes, arrowed Rug transitions,
+event labels, a start arrow and final-state inner rings. Self-loops use a routed
+arch. Windows and Linux fixtures check event behavior, visual geometry,
+adapters and refusals; the gallery adds a PNG/SVG pair. Hierarchical/concurrent
+states and automatic placement remain future work.
+
+## D1912 — Sequence diagrams preserve message order and explicit activations
+
+`sequence_diagram` assigns one row per ordered message, independent of a graph
+topology. Participants get headers and dashed lifelines; caller-provided spans
+become activation bars. Call and async arrows, dashed returns, and self-call
+loops remain separate message layouts for adapter styling, with caller-owned
+text anchors. Windows and Linux fixtures check rows, direction, self-calls,
+returns, invalid endpoints/spans, capacity and scene/SVG output. The gallery
+adds a PNG/SVG pair. Call-stack inference, fragments and destruction markers
+remain follow-on work.
+
+## D1913 — ER diagrams keep schema ownership and cardinality visible
+
+`entity_relationship` groups caller-supplied fields by table while retaining
+their order, lays out PK/FK tags beside names and returns table/header Bar
+layers plus Rug relationship segments. Endpoint glyphs distinguish one,
+optional one, many and optional many; both relationship directions are
+supported between horizontally separated tables. The Windows fixture checks
+interleaved fields, optional and reverse links, malformed geometry, capacity
+and scene/SVG output. The Linux runner is registered; its focused check awaits
+WSL service recovery. Automatic placement and vertical/collision-free routing
+remain follow-on work.
+
+## D1914 — Branching process maps conserve split flow and expose losses
+
+`branching_process_map` requires a single rooted acyclic process. Each
+nonterminal node's outgoing fractions sum to one; its good fraction is applied
+before flow reaches child nodes. Joins sum surviving arrivals, and the summary
+reports terminal good output plus arrival-weighted expected processing time.
+Longest-path stages produce caller-owned Bar nodes and directional Rug links.
+The Windows fixture checks numeric split/merge references, multiple sinks,
+cycles, malformed fractions, capacities and scene/SVG. Its Linux runner is
+registered pending WSL recovery. Rework loops, calendars, distributions and
+crossing minimization remain follow-on work.
+
+## D1915 — Stem-and-leaf rows preserve duplicates and signed reconstruction
+
+`stem_and_leaf` rounds sorted observations to an explicit leaf unit, groups
+them by floor-divided signed stems, and returns row baselines plus every leaf
+digit in caller-owned storage. The key reconstructs a rounded value as
+`(10 * stem + leaf) * leaf_unit`, including negative stems; repeated values
+remain separate leaves. The PNG and SVG adapters render the same row data and
+divider. Windows and Linux fixtures check negative and decimal values,
+duplicates, geometry, capacity and malformed inputs. Focused Linux checks
+also now pass for the previously pending ER and branching-process fixtures.
+Automatic leaf-unit selection, split stems and label collision handling remain
+follow-on work.
+
+## D1916 — Floating range bars keep bounds and interval fill separate
+
+`range_intervals` maps nonzero low-to-high values onto an explicit shared
+numeric domain and categorical rows. It returns caller-owned Bar rectangles
+for the filled spans and a distinct Rug layer for vertical endpoint caps,
+allowing both adapters to style the bounds independently. The focused Windows
+and Linux fixture checks exact pixel geometry, unsorted input rows, capacities,
+invalid intervals/domains and scene/SVG output. The gallery adds a daily
+temperature range PNG/SVG pair. Zero-length point intervals, open endpoints,
+overlap dodging and automatic domain selection remain follow-on work.
+
+## D1917 — Probability paper separates observed values from percent-scale geometry
+
+`probability_plot` maps sorted sample values to `(i + 1/2)/n` positions on
+normal or exponential probability paper. Tick metadata contains the original
+probabilities and nonlinear screen fractions, while the fitted location/scale
+reference is clipped to both the explicit numeric domain and 1%-99% paper.
+The output uses separate caller-owned Scatter and Line layers, allowing
+independent adapter styling. Windows and Linux fixtures check ties, normal
+symmetry, exponential nonlinear spacing, reference clipping, storage and
+invalid inputs; the gallery adds a labeled PNG/SVG pair. Automatic fitting,
+confidence envelopes and other families remain follow-on work.
+
+## D1918 — Spine plots color outcomes without changing count-proportional area
+
+`spine_plot` accepts a nonnegative column-major contingency table, makes
+column widths proportional to marginals and stacks conditional outcome
+fractions within each column. It returns caller-owned category-major Bar
+layers and column/grand totals. At zero gutter, cell area is exactly its
+count divided by the grand total; optional gutters improve visual separation.
+Unlike `mosaic`, category color is stable rather than Pearson-residual based.
+Windows and Linux fixtures check exact geometry, zero cells, refusals and
+scene/SVG output. The gallery adds a PNG/SVG pair with outcome legend. Empty
+columns are refused; automatic zero-column omission remains follow-on work.
+
+## D1919 — Hexagonal bins conserve observations at panel boundaries
+
+`hexbin` uses an explicit data domain and a pointy-top offset-row lattice within
+the caller's panel. It assigns each observation to the nearest valid center,
+including points exactly on domain boundaries, so total cell count equals input
+length. Caller-owned cells retain counts and six-vertex `Area` polygons reuse
+the existing scene and SVG adapters; colour remains an application choice.
+Windows and Linux fixtures cover count conservation, corner assignment,
+geometry, adapters and malformed/capacity inputs. The gallery adds a PNG/SVG
+pair. Adaptive bins and weighted counts remain planned.
+
+## D1920 — Rectangular 2D bins reuse the matrix renderer
+
+`bin2d` counts bounded x/y observations into a caller-sized rectangular grid.
+It uses row-major screen order and includes both domain maxima in the last
+column and row, so no point is dropped at an edge. Exact caller-owned `u64`
+counts accompany heatmap-compatible cells; the existing scene and SVG matrix
+adapters supply colour without chart-specific rendering branches. Windows
+and Linux fixtures check count conservation, corners, midpoint policy,
+geometry and refusal paths. The gallery adds a paired PNG/SVG preview.
+Automatic bin sizing, weights and continuous density remain follow-on work.
+
+## D1921 — 2D KDE contours share the statistical kernel and contour layout
+
+`e.algo.stat.kde2d` evaluates a normalized product-Gaussian density on
+caller-owned x/y axes. `chart.density2d` validates explicit domains and
+bandwidths, builds a row-major density grid, and reuses marching squares at
+increasing fractions of the sampled peak. These levels describe relative
+height, not enclosed probability mass. The gallery adds a paired PNG/SVG
+preview; Windows and Linux fixtures pin the Gaussian reference value,
+contour geometry, adapters and refusal paths. Automatic bandwidth selection,
+weighted samples and probability-mass levels remain follow-on work.
+
+## D1922 — Raincloud layers share the half-violin value axis
+
+`half_violin` anchors a one-sided Gaussian KDE polygon at the panel centre;
+left and right variants use the same density scale. `raincloud` composes the
+left polygon, every raw observation and an R7 Tukey box summary against the
+KDE-extended value domain. Raw observations stay visible even beyond whisker
+fences. Their eleven deterministic x lanes may overlap on dense ties; future
+packing can improve this without changing the statistical summary. Separate
+Windows and Linux fixtures cover symmetry, quartiles, outliers, adapters and
+capacity/invalid-input refusals. Two PNG/SVG previews join the gallery.
+
+## D1923 — Slopegraphs use a shared paired-value scale
+
+`slopegraph` preserves each caller-ordered before/after pair as a separate
+segment with two endpoints at fixed left and right positions. All series use
+the same vertical domain, including pairs that cross or tie; constant data
+expand symmetrically. The adapter draws segments independently rather than
+joining them into a misleading polyline. The gallery labels both ends of all
+five sample series. Windows and Linux fixtures check exact geometry, scene/SVG
+output, constant-domain expansion and invalid/capacity refusals. Automatic
+endpoint-label collision handling remains planned.
+
+## D1924 — Reuse ordered paths and exact bins for paired scatter views
+
+`connected_scatter` is a named wrapper around ordered `PointLine` geometry:
+it does not sort x values, so the line can reverse direction and its points
+retain observation identity. `marginal_histogram` composes a scatter panel with
+the existing equal-width x histogram and a rotated y histogram. The marginal
+domains match the scatter domain, including constant-data expansion; bins and
+counts stay caller-owned. Two Windows/Linux fixtures cover order, exact counts,
+alignment, scene/SVG adapters and refusals. Two PNG/SVG previews join the
+gallery. Sequence labels and automatic layout remain gallery concerns.
+
+## D1925 — Separate modelled dose means from observed interval hazards
+
+The dose preview evaluates the `drc` LL.4 parameterization
+`c + (d-c)/(1+exp(b*(log(dose)-log(EC50))))` for strictly positive dose,
+caller-supplied lower/upper asymptotes, midpoint and nonzero slope. Negative
+slope increases the curve; positive slope decreases it. Neither fitting nor
+parameter uncertainty is claimed. `chart.dose_response` shares the log-dose
+axis and response domain between observed points and the sampled mean curve.
+
+The hazard preview is an *interval* event-rate estimate, not an instantaneous
+hazard: events in `(left,right]` divided by observed person-time in that bin.
+Subjects enter at zero and contribute until event or right censoring. Empty
+exposure bins refuse instead of displaying a misleading zero rate. The step
+geometry uses the same explicit edges; no smoothing, delayed entry or competing
+risks is claimed. Focused Windows/Linux fixtures pin the LL.4 midpoint and
+tails, exposure totals, boundary events, rendering and refusal paths. Two
+PNG/SVG pairs join the gallery.
+
+Sources: R `drc` log-logistic documentation
+(https://stat.ethz.ch/CRAN/web/packages/drc/drc.pdf), R `survival::pyears`
+(https://stat.ethz.ch/R-manual/R-devel/library/survival/html/pyears.html),
+and NIST's hazard-rate definition
+(https://www.itl.nist.gov/div898/handbook/apr/section1/apr123.htm).
+
+## D1926 — Influence bubbles reuse one-predictor OLS diagnostics
+
+`chart.influence_plot` consumes the existing `stat.regression_diagnostics`
+rows. Horizontal position is leverage, vertical position is the internally
+standardized residual, and circle area is proportional to Cook's distance.
+The separate point layer keeps observations with zero Cook's distance visible.
+The guide layer draws residual levels -2, 0 and +2, and optional leverage
+levels 2x and 3x the mean hat value (2/n for intercept plus one predictor).
+These are visual heuristics, not significance tests. Unlike the default of
+R `car::influencePlot`, Neper does not yet compute externally studentized
+residuals or automatic noteworthy labels. A Windows/Linux fixture checks the
+known OLS reference, area ratios, guide geometry, adapters and refusals; the
+gallery adds one PNG/SVG pair.
+
+Reference: https://search.r-project.org/CRAN/refmans/car/html/influencePlot.html
+
+## D1927 — Compose a normal capability sixpack for individuals
+
+`stat.normal_capability_individuals` reuses I/MR limits, estimates within
+sigma as MR-bar/1.128 and overall sigma as the sample standard deviation, and
+reports Cp/Cpk/Pp/Ppk only when both spreads and both specifications are
+defined. `chart.capability_sixpack` maps the same summary into six panels:
+individuals, moving range, last 25 observations, histogram with both fitted
+normal curves, normal Q-Q and within/overall/specification intervals. Data
+and scratch arrays are caller-owned; scene and SVG consume the returned marks.
+The gallery adds one paired preview and the Windows/Linux fixture checks
+reference indices, geometry, adapters and refusal paths. Subgroup sizes above
+one, nonnormal fits, automatic assumption-test p-values and probability
+confidence bands remain separate work; this report does not claim them.
+
+Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-sixpack/normal-capability-sixpack/interpret-the-results/all-statistics-and-graphs/graphs/
+
+## D1928 — Keep fishbone categories and nested causes in one ordered input
+
+`chart.fishbone` takes an effect label, category names and cause records whose
+parent is -1 for a direct cause or an earlier cause index in the same category.
+This preordered representation rules out cycles and lets the renderer build
+alternating ribs and nested subcauses without heap ownership or a
+separate graph pass. Segments, head rectangle and text labels are caller-owned,
+so scene and SVG adapters share geometry. A Windows/Linux fixture checks a
+three-level chain, exact anchor placement, escaped labels and refusal paths;
+the gallery adds one PNG/SVG pair. Font-measured collision avoidance, editing
+and cause prioritization remain follow-on work.
+
+References: https://asq.org/quality-resources/fishbone ; https://support.minitab.com/en-us/workspace/help-and-how-to/brainstorming/types-of-brainstorming-tools/fishbone/
+
+## D1929 — Make the cause–effect tree a distinct hierarchical layout
+
+The fishbone layout groups causes on alternating ribs; `chart.cause_effect_tree`
+instead uses a single effect root at index zero, earlier-parent cause records,
+leaf-proportional subtree spans and right-to-left columns. It returns
+caller-owned rectangles, orthogonal connectors and labels for the same scene
+and SVG adapters. This tree communicates candidate-cause hierarchy, not
+causal proof or AND/OR fault logic. A Windows/Linux fixture covers unequal
+subtrees, three cause depths, coordinate references, escaped text and refusal
+paths; the gallery adds one PNG/SVG pair. Measured label fitting and editing
+remain planned.
+
+Reference: https://asq.org/quality-resources/tree-diagram
+
+## D1930 — Put Type-I censored lifetimes on Weibull probability paper
+
+`chart.weibull_probability_plot` keeps the existing caller-owned point, line
+and tick layers but transforms time with ln(t) and cumulative probability with
+ln(-ln(1-p)). Median-rank positions `(i - 0.3)/(n + 0.4)` use the total unit
+count, so failures followed by end-of-test right censoring can be plotted
+without pretending the censored units failed. The straight reference takes
+caller-supplied shape and scale, which can be fitted elsewhere or historical.
+The paper spans at least 1–99%, expanding when a large sample's first or last
+median rank would otherwise place a point outside the panel.
+Earlier censor removals need their own plotting-position estimator; this API
+does not misrepresent them as Type-I data. The NIST 20-unit reliability sample
+anchors the Windows/Linux fixture and PNG/SVG preview.
+
+References: https://itl.nist.gov/div898/handbook/apr/section2/apr221.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/graphs/probability-plot/methods-and-formulas/method-of-obtaining-probability-plot-points/
+
+## D1931 — Keep the single-sample OC curve tied to its sampling model
+
+`stat.binomial_acceptance_probability` evaluates P(X <= c) for a binomial
+sample of size n and incoming defective fraction p, using the regularized
+incomplete beta already in `e.math.special`. This is the large-lot,
+with-replacement approximation; isolated finite lots need a hypergeometric
+branch, and double/multiple sampling needs separate plan semantics.
+`chart.oc_curve` samples that calculator across caller-chosen p limits and
+resolution, emitting the existing point-line layout. The (n=52, c=3) NIST
+table anchors numeric and Windows/Linux scene/SVG tests and the gallery pair.
+The chart is descriptive, not an optimizer for n/c or a claim that one plan
+meets specified producer and consumer risks.
+
+References: https://www.itl.nist.gov/div898/handbook/pmc/section2/pmc243.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/acceptance-sampling/how-to/attributes-acceptance-sampling/before-you-start/data-considerations/
+
+## D1932 — Derive Gage R&R bars from a balanced crossed random-effects study
+
+`stat.gage_rr_crossed` accepts part-major, operator-major repeated readings
+and computes two-factor sums of squares, tests part-by-operator interaction,
+then either retains its variance component or pools it into repeatability.
+All components are nonnegative method-of-moments estimates; the caller supplies
+the interaction significance threshold. `gage_rr_variance_components` also
+accepts a mean-square table, which lets the fixture reproduce Minitab's
+published 10-part/3-operator/3-trial reduced-model components. The gallery
+plots four sources as paired %variance-contribution and %study-variation bars
+through the existing bar adapters. This covers balanced crossed studies, not
+nested or unbalanced designs, confidence intervals, tolerance ratios, distinct
+categories, or the whole multi-panel Minitab report.
+
+References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/methods-and-formulas/method-of-analysis/ ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/before-you-start/example/
+
+## D1933 — Separate within-group and between-group lines in multi-vari charts
+
+`chart.multi_vari` accepts balanced outer-factor/inner-factor cells with one
+or more readings per cell. It returns caller-owned raw-point, cell-mean,
+within-group-segment and outer-group-mean layers, plus the numeric means.
+Within-group segments use independent Rug strokes, because the generic Line
+adapter would join the end of one group to the start of the next. The gallery
+shows a two-machine, three-setting example where the differing cell-mean
+slopes suggest a possible interaction; it does not claim a significance test
+or causal effect. The focused Windows/Linux fixture checks means, group
+boundaries, repeated readings, constant data and refusals. Three- and
+four-factor nesting, missing/unbalanced cells and uncertainty remain planned.
+
+Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/quality-tools/supporting-topics/multi-vari-chart-basics/
+
+## D1934 — Raw main effects keep factors independent and expose counts
+
+`chart.main_effects` accepts observation-major categorical factor ids with
+declared levels, computes each raw response mean and count, and draws one
+independent connected series per factor panel. A separate reference stroke in
+each panel marks the overall response mean. Unlike the multi-vari slice, cells
+may be unbalanced; empty declared levels are rejected rather than shown as a
+misleading zero. The Windows/Linux fixture checks uneven counts, means,
+geometry, scene/SVG adapters, flat values and refusal paths. This is a
+descriptive raw-means plot, not fitted marginal means, a significance test, or
+evidence of a causal effect; interactions and confounding require separate
+analysis.
+
+Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/anova/supporting-topics/basics/what-is-a-main-effects-plot/
+
+## D1935 — Interaction plots keep factor-level series independent
+
+`chart.interaction_plot` accepts response values and two categorical factor-id
+columns. It computes raw cell means and sample counts, then gives every level
+of the series factor a separate PointLine layout across the x-factor levels.
+The caller can style those series independently while sharing one numeric
+domain. Unequal nonempty cells are supported; empty cells are refused instead
+of silently drawing a zero or bridging a gap. The Windows/Linux fixture checks
+means, counts, crossing geometry, adapter output, flat data and refusals.
+Nonparallel lines are descriptive, not a significance test or a model-adjusted
+interaction estimate.
+
+References: https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/anova/supporting-topics/anova-models/what-is-an-interaction/ ; https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/inteplot.htm
+
+## D1936 — Put three two-level raw cell means at cube vertices
+
+`chart.cube_plot` accepts observation-major A/B/C binary factor ids and
+response values. Index bits map each combination to one of eight projected
+vertices; twelve independent edges form the wireframe. Caller-owned means
+and counts keep the response information separate from geometry so text and
+styling can be supplied by the host. Unequal nonempty cells are supported;
+missing combinations are refused rather than labeled zero. The Windows/Linux
+fixture checks all eight means, projection, edge count, scene/SVG adapters,
+flat responses and refusal paths. This slice does not fit a model or show
+four-plus-factor cube grids or design-only cubes.
+
+References: https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/yatescub.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/using-fitted-models/how-to/cube-plot/interpret-the-results/key-results/
+
+## D1937 — Spectrogram geometry consumes existing STFT coefficients
+
+`chart.spectrogram` borrows frame-major complex Fourier coefficients, keeps
+nonnegative frequencies, computes squared magnitude and maps its decibels
+relative to unit power to caller-owned heatmap cells. The lowest frequency is
+at the bottom, and the result exposes frame-center times and Nyquist frequency
+for axes. A positive caller floor makes zero-power cells finite. The focused
+Windows/Linux fixture checks bin order, cell geometry, dB values, adapters and
+refusals; the gallery uses `e.dsp.stft` with a Hann window to show a rising tone
+and a steady tone. This is unnormalised spectral power, not calibrated PSD;
+window-energy correction, logarithmic frequency, streaming updates and color
+legend controls remain planned.
+
+References: https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.ShortTimeFFT.spectrogram.html ; https://www.mathworks.com/help/signal/ref/spectrogram.html
+
+## D1938 — Reproject spectrogram power as independent waterfall traces
+
+`chart.waterfall_spectrum` borrows a one-sided `SpectrogramLayout` and samples
+its time columns at a caller-chosen frame step. Each selected frame becomes a
+separate connected frequency trace in an oblique projection, with retained
+source-frame indices for labels or interaction. It shares the spectrogram's
+decibel range; no FFT or PSD conversion is duplicated. The focused
+Windows/Linux fixture checks frequency order, frame sampling, geometry,
+scene/SVG output, flat values and refusals. The gallery colors eight traces
+from early blue to later orange. This is a 2-D projected view, not a 3-D
+depth-buffered mesh; occlusion, interactive rotation and calibrated PSD remain
+planned.
+
+References: https://www.mathworks.com/help/signal/ref/pspectrum.html ; https://download.ni.com/support/manuals/372879c.pdf
+
+## D1939 — Bode plots share log frequency and keep magnitude and phase separate
+
+`chart.bode` accepts strictly increasing positive frequencies and borrowed
+complex response components. It derives magnitude in dB with a caller-selected
+positive amplitude floor, unwraps phase across the ±180° branch cut and emits
+independent line layouts in two panels with a shared log-frequency axis.
+Caller-owned buffers retain the numeric magnitude and phase values for guides,
+labels or interaction. The Windows/Linux fixture checks a first-order low-pass
+reference, decade geometry, phase unwrapping, zero gain, adapters and refusal
+paths. This is a sampled-response plot, not a transfer-function solver; gain/
+phase margins, model fitting and MIMO panel grids remain planned.
+
+References: https://www.mathworks.com/help/control/ref/dynamicsystem.bode.html ; https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.bode.html
+
+## D1940 — Nyquist charts keep sampled branches separate and axes equally scaled
+
+`chart.nyquist` accepts strictly increasing positive frequencies and borrowed
+complex response components for a real-coefficient SISO system. It maps the
+positive-frequency branch in sample order and the conjugate negative-frequency
+branch in reverse sample order, retaining the critical point (-1, 0) as a
+separate scatter mark. Equal real/imaginary units preserve complex-plane
+geometry even in a rectangular panel. Caller-owned coordinates and segments
+feed the existing scene/SVG line adapters. The Windows/Linux fixture checks
+reflection, aspect, marker, input/capacity refusals and both adapters. Sampled
+frequency data omit the Nyquist contour arcs and cannot certify stability or
+encirclement counts; model evaluation, pole handling and MIMO remain planned.
+
+References: https://www.mathworks.com/help/control/ref/nyquistplot.html ; https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.lti.freqresp.html
+
+## D1941 — Share a perspective camera for three-dimensional chart families
+
+`chart.scatter3d` normalizes three borrowed numeric columns into a unit cube,
+projects them with azimuth/elevation and a finite perspective distance, and
+fits the projected cube into a caller panel with one uniform pixel scale.
+Caller-owned point/depth/order buffers support deterministic O(n log n)
+far-to-near bubble painting; marker diameter varies with perspective. Twelve
+projected cube edges are a separate `Rug` layer. The Windows/Linux fixture
+checks extents, camera projection, sorting, frame geometry, flat data, both
+rendering adapters and refusal paths. The gallery shows a projected helix.
+This painter order handles independent opaque markers but is not a general
+depth buffer for intersecting surfaces; interactive rotation, per-point
+colour/size mapping, calibrated axis ticks and hidden-edge removal remain.
+
+Reference: https://matplotlib.org/stable/api/_as_gen/mpl_toolkits.mplot3d.axes3d.Axes3D.scatter.html
+
+## D1942 — Extrude joint x-y bins through the shared 3-D camera
+
+`chart.histogram3d` reuses `bin2d`'s row-major counts and inclusive high-end
+boundary convention. Each nonempty cell becomes a z-axis prism whose height
+is count/max_count; top and the two camera-facing sides become separate
+four-vertex Area layouts. `Viewport3d` now fits a projected unit cube once
+for scatter, histograms and forthcoming surface/wireframe charts. Face layouts
+and their average depths stay caller-owned, with deterministic far-to-near
+sorting; the scene/SVG gallery shades top and side faces separately. The
+Windows/Linux fixture checks counts, face order, reversed camera azimuth,
+adapters and refusals. The first histogram slice requires an above-plane
+camera and uses painter ordering, not exact z-buffered occlusion.
+
+Reference: https://matplotlib.org/stable/gallery/mplot3d/hist3d.html
+
+## D1943 — Keep density surfaces and wireframes on one regular 3-D grid
+
+`chart.surface3d_grid` normalizes finite row-major scalar values into the
+shared perspective unit cube. It returns caller-owned projected vertices,
+average-depth-sorted filled quads and independent row/column line segments;
+callers may render either or both. `density_surface3d` computes a normalized
+product-Gaussian KDE at explicit-bandwidth grid coordinates before projection,
+while `wireframe3d` consumes any finite regular scalar grid. The Windows/Linux
+fixture checks grid indexing, KDE peak/domain, painter order, flat grids,
+scene/SVG adapters and refusal paths. The gallery adds both PNG/SVG previews.
+Painter sorting is an approximation for overlapping tilted quads; exact
+z-buffered hidden-surface removal, adaptive sampling and interactive rotation
+remain planned.
+
+References: https://matplotlib.org/stable/api/_as_gen/mpl_toolkits.mplot3d.axes3d.Axes3D.plot_surface.html ; https://matplotlib.org/stable/gallery/mplot3d/subplot3d.html ; https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gaussian_kde.html
+
+## D1944 — ANOM decision limits use pooled within-group variation and an explicit critical
+
+One-way ANOM takes observation-major responses and group IDs, computes group
+means, the observation-weighted grand mean, pooled within-group standard
+deviation and group-specific decision limits. An explicit positive critical
+`h` keeps the plot valid for both balanced and unbalanced groups without
+misrepresenting a normal quantile as an exact ANOM critical. The caller chooses
+`h` for its familywise alpha, number of groups and error degrees of freedom;
+Neper returns the chosen value alongside numeric limits and out-of-limit
+points. Separate `Rug` layers for upper, lower and center lines, and `Scatter`
+layers for all means and signals, work in both scene and SVG adapters. The
+Windows/Linux fixture checks balanced and unequal groups, numeric limits,
+signal classification, flat data, adapters and invalid/capacity refusals. The
+gallery adds an ANOM PNG/SVG pair. Exact Nelson critical tables or numerical
+calibration, two-way ANOM and nonnormal binomial/Poisson ANOM remain planned.
+
+Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/anova/how-to/analysis-of-means/methods-and-formulas/one-way-designs-with-normal-data/
+
+## D1945 — Individual Hotelling T² charts distinguish Phase I and Phase II limits
+
+`hotelling_t2_individuals` accepts row-major multivariate observations and
+optional historical rows. With no historical rows, it estimates a Phase I
+reference from the plotted data and uses the beta upper limit. With historical
+rows, it estimates the mean and sample covariance only from those rows, then
+uses the Phase II F upper limit. A Cholesky solve computes each covariance-
+adjusted squared distance without materializing an inverse. The API returns
+numeric scores, mean/covariance, upper limit and signal points; scene/SVG
+adapters render the shared `PointLine`, `Scatter` and `Rug` layers. The fixture
+checks correlated covariance, both phase limits, singular covariance,
+adapters and refusal paths on Windows and Linux. The gallery adds the PNG/SVG
+pair. Subgroup T², historical point exclusion after assignable-cause review,
+and a lower Phase I limit remain planned.
+
+References: https://itl.nist.gov/div898/software/dataplot/refman1/auxillar/hotell.htm ; https://www.itl.nist.gov/div898/handbook/pmc/section5/pmc5434.htm
+
+## D1946 — Generalized variance exposes the moment-normal approximation explicitly
+
+`generalized_variance` accepts equal-size row-major multivariate subgroups.
+Each plotted value is the determinant of its unbiased sample covariance
+matrix. A pooled Phase I covariance estimates the in-control determinant;
+the finite-reference determinant correction `b3` prevents silently treating
+that estimate as known. `b1` and `b2` are the exact first two determinant
+moment factors; a normal quantile converts them into an upper-only or
+two-sided approximate control limit. Phase II subgroups never update the
+reference. Singular individual subgroups plot zero; a singular pooled
+reference is refused. The Windows/Linux fixture checks two- and three-variate
+data, moments, the finite-reference correction, Phase II isolation, signal
+classification, scene/SVG adapters and refusals. The gallery adds a PNG/SVG
+pair. Exact and Cornish-Fisher limit calibration and non-equal subgroup sizes
+remain planned; the normal approximation can materially inflate false-alarm
+risk for small subgroups, so the preview labels it.
+
+References: https://flaviobarros.github.io/IQCC/reference/cchart.GV.html ; https://flaviobarros.github.io/IQCC/articles/statistical-foundations.html ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/multivariate-charts/generalized-variance-chart/methods-and-formulas/methods-and-formulas-for-generalized-variance-chart/
+
+## D1947 — MEWMA separates exact finite-time scores from limit calibration
+
+`mewma` smooths row-major multivariate individual observations with one
+shared `lambda` in `(0, 1]`, starting at the Phase I/historical mean. The
+sample covariance comes from historical rows for Phase II, or from the plotted
+rows for retrospective Phase I. Each score divides the Cholesky-solved
+quadratic form by the finite-time covariance factor
+`lambda/(2-lambda) * (1-(1-lambda)^(2*i))`; at `lambda = 1`, the scores reduce
+to individual covariance-adjusted squared distances. The caller supplies a
+positive upper limit calibrated for its desired in-control run length; the
+chart does not assert that a chi-square cutoff has that run length. It returns
+smoothed vectors, scores and signals, with shared scene/SVG layers. The
+Windows/Linux fixture checks numeric recurrence, finite-time scaling,
+lambda-one equivalence, Phase I/II reference behavior, singular covariance,
+adapters and refusals. The gallery adds a PNG/SVG pair. In-library ARL limit
+calibration, per-variable lambdas and subgroup means remain planned.
+
+References: https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc343.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/multivariate-charts/multivariate-ewma-chart/methods-and-formulas/methods-and-formulas/
+
+## D1948 — Focused normal capability distinguishes empirical and fitted tails
+
+`normal_capability` reuses the individuals capability estimator for mean,
+moving-range within sigma, sample overall sigma and Cp/Cpk/Pp/Ppk. It plots
+sample counts with within and overall normal fits scaled to expected counts
+per histogram bin, plus LSL, mean and USL guides. Observed PPM counts only
+measurements strictly outside specifications; fitted PPM uses the matching
+normal tail probabilities separately for within and overall sigma. The report
+does not infer process stability or normality from these curves. The
+Windows/Linux fixture checks numeric indices, observed tails, scene/SVG
+adapters, invalid specifications and flat data. The gallery adds a PNG/SVG
+pair. Nonnormal, attribute and batch capability remain planned.
+
+Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-analysis/normal-capability-analysis/interpret-the-results/all-statistics-and-graphs/graphs/
+
+## D1949 — Separate chart documentation from readiness reporting
+
+`docs/progress.html` remains the sole generated readiness page: it keeps the
+L061 score and rendered/total preview count but links to `docs/charts.md`
+instead of embedding the delivery evidence, gallery and full chart plan.
+`scripts/render_progress.py` also generates `docs/charts.md` from the maintained
+chart plan, preview notes, committed PNG/SVG pairs and planned preview slugs.
+The chart guide holds descriptions and every produced preview; it links back
+to the readiness page for scores. This keeps the chart catalogue readable and
+prevents its preview inventory from drifting away from the generated count.
+
+## D1950 — Nonnormal capability starts with a labeled lognormal MLE
+
+`stat.lognormal_capability` estimates the two-parameter lognormal model from
+positive individuals by MLE on the log scale. It reports overall Pp, PPL, PPU
+and Ppk using the Z-score method; this is not the ISO percentile-spread method.
+Observed out-of-spec PPM counts strict sample tails, while expected PPM uses
+the fitted lognormal CDF. `chart.lognormal_capability` overlays a fitted curve
+scaled to expected histogram counts per bin and marks LSL, median and USL.
+The API refuses nonpositive data/specifications and degenerate log variance.
+Its fixture uses an exact geometric sample for fit, index and tail references
+on Windows and Linux, plus scene/SVG and refusal checks. The gallery adds one
+PNG/SVG pair. Weibull and other distributions, fit diagnostics, subgroup
+models and confidence intervals remain separate work.
+
+References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-analysis/nonnormal-capability-analysis/methods-and-formulas/overall-capability/ ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-analysis/nonnormal-capability-analysis-for-multiple-variables/methods-and-formulas/expected-overall-performance/
+## D1951 — Binomial attribute capability is defective-unit analysis, not defect-rate analysis
+
+L061's first attribute-capability report pools defective units over inspected units, retains unequal-size P-chart limits, plots the cumulative weighted rate and labels the Wilson interval explicitly. The target comparison distinguishes the point estimate from its upper confidence bound; only points outside three-sigma limits are signaled. Poisson defects-per-unit capability, exact binomial intervals and broader stability rules are separate follow-ons. Keep the caller-owned layout and PNG/SVG gallery contract.
+
+## D1952 — Balanced batch capability uses explicit ANOVA variance components
+
+The first batch-capability surface accepts equally sized subgroups, estimates the pooled within variance as MS-within and the between-batch variance as `max((MS-between - MS-within) / batch_size, 0)`, and combines them by square-rooting their sum. No c4 correction is applied. Cp/Cpk use this between/within estimate; Pp/Ppk use the ordinary overall sample standard deviation. Show batch means and subgroup sample standard deviations with specification and pooled-within guides, and label the ANOVA method. Unequal-size batches, Minitab's alternative moving-range estimators, uncertainty bounds and stability diagnostics remain follow-ons.
+
+References: https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/onewayan.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-sixpack/between-within-capability-sixpack/methods-and-formulas/methods/
+
+## D1953 — Gage linearity fits replicate bias against ordered reference standards
+
+Use measurement minus reference for signed bias. Require at least five distinct, increasing standards and two or more readings per standard; fit every replicate by OLS rather than fitting only the standard-level means. Report the average bias, intercept, slope, signed drift across the observed reference span, residual spread, slope standard error and two-sided t p-value. The chart retains replicate and mean points, fit, caller-critical confidence limits for mean bias, and a zero-bias guide in caller-owned storage. Do not label a caller-selected critical as automatically calibrated; the preview uses a displayed approximate 95% value. Process-variation %bias, automated t quantiles and temporal drift remain follow-ons.
+
+References: https://www.itl.nist.gov/div898/handbook/mpc/section4/mpc452.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/gage-linearity-and-bias-study/methods-and-formulas/gage-bias/
+
+## D1955 — Finish chart work before other unfinished capabilities
+
+**Decision.** Keep active chart and visualization capabilities at the front of
+`docs/work-queue.json` in their existing relative order: L061, L062, L068–L075,
+and L092–L097. The first active chart item remains the next serial pickup. This
+priority does not change the separate first-stable-CPU release classification:
+chart enhancements may precede release-required compiler work by explicit choice.
+
+**Evidence.** The generated `docs/progress.html` follows the queue order and labels
+release requirements independently. Its ordering test checks that chart work is
+a contiguous prefix of the active queue.
+
+## D1956 — Attribute agreement separates item-level repeatability from pooled ratings
+
+For a known nominal standard, an appraiser matches an item within-appraiser only
+when all repeated trials agree; matching the standard additionally requires that
+consistent value to equal the reference. Each appraiser's matched-item fraction
+uses an exact Clopper–Pearson interval. The summary counts all-appraiser
+item-level agreement separately from pooled individual-rating agreement and
+Cohen-style nominal kappa against repeated standard labels. The pooled kappa is
+not Minitab's average of trial-level kappas and must be labeled as such. Refuse
+invalid categories, inconsistent dimensions and undersized caller storage.
+
+The Windows/Linux fixture pins counts, intervals, kappa and a degenerate
+undefined-kappa case; the two-panel gallery preview is PNG/SVG paired.
+
+## D1957 — Keep the local chart gallery self-contained
+
+Embed each produced SVG as a data-URL thumbnail in generated `docs/charts.html`,
+with explicit 360 × 240 dimensions. The card links still point to the full PNG
+and SVG files. This lets the gallery display its previews without depending on
+`file:` subresource loading and avoids layout shifts from dimensionless lazy
+images. Regenerate this page independently with
+`python scripts/render_progress.py --charts-only` when other readiness documents
+have unrelated work in progress.
+
+## D1958 — Keep crossed gage runs at individual-measurement granularity
+
+For a crossed part/operator/repeat study, `stat.gage_run_summary` accepts
+part-major, operator-major, repeat-major measurements and reports the grand
+mean, extrema and maximum within-cell repeat range. `chart.gage_run` maps every
+observation to a caller-owned point, preserving separate operator mark layers
+for color, plus part dividers and a grand-mean guide. It neither averages away
+repeats nor treats the visualization as a Gage R&R variance estimate. Invalid
+dimensions, nonfinite values, unusable bounds and insufficient storage fail
+before rendering. The Windows/Linux fixture and PNG/SVG preview cover the
+contract; nested designs and time-order diagnostics remain future work.
+
+## D1959 — Share explicit map windows across polygon and symbol charts
+
+`e.algo.geo.map_project` maps WGS84 degrees into a caller-chosen equirectangular
+or Mercator window. Centering that window on 180 degrees keeps nearby positive
+and negative longitudes adjacent. The first chart slice rejects out-of-window
+vertices and unsplit polygons that still cross the opposite seam rather than
+drawing false long edges; general clipping remains required for arbitrary
+world maps. `chart.choropleth` joins values by region key, retains missing data
+separately from zero and emits caller-owned compound rings with opposite hole
+winding for scene/SVG parity. `chart.proportional_symbol_map` shares the
+projection and encodes nonnegative values by circle area. Synthetic gallery
+geometry avoids implying real administrative boundaries; Windows/Linux
+fixtures cover projection, joins, holes, symbol ratios and refusal paths.
+
+## D1960 — Render chart gallery thumbnails as inline SVG
+
+Embed the generated SVG markup directly in each `docs/charts.html` card. The
+gallery remains self-contained, but no longer relies on `data:image/svg+xml`
+support for thumbnails or on `file:` subresource loading. Keep the PNG and SVG
+links for opening the original files. Size the inline SVG through its viewBox
+and the card CSS; regenerate with `python scripts/render_progress.py --charts-only`.
+
+## D1961 — Keep report aggregates distinct from their rendered cells
+
+`stat.cross_tabulate` writes exact `u64` intersection and marginal counts;
+`stat.matrix_aggregate` writes finite sums together with observation counts so
+an observed zero is not confused with missing data. `chart.cross_tab_report`
+and `chart.matrix_report` turn those aggregates into caller-owned cell geometry
+with header, subtotal and grand-total kinds. Matrix row groups must be
+contiguous and numbered from zero; one subtotal follows each group. Data bars
+require nonnegative cell sums and declare row or global normalization rather
+than silently mixing scales. The scene and SVG adapters share the cell palette
+and bars, while labels stay a caller-owned composition concern. Windows/Linux
+fixtures cover arithmetic, geometry, nulls, scale ratios and refusal paths;
+paired gallery previews show both reports. Pagination and print drivers remain
+outside this first chart slice.
+
+## D1962 — Treat a future-state value stream as an explicit target plan
+
+`chart.future_value_stream_map` compares independently validated current and
+target streams rather than relabeling the current map. Available time divided
+by customer demand supplies takt; the target marks one caller-selected
+pacemaker, typed push/FIFO/pull links, and stages whose processing time exceeds
+takt. Its signed lead-time, process-cycle-efficiency and rolled-yield changes
+may be negative; the chart does not silently enforce improvement. Both states
+retain proportional time ladders and caller-owned geometry, and existing
+scene/SVG adapters paint the control cues. This is a design comparison rather
+than an operational simulator; inventory, transport, branching and capacity
+balancing remain separate planned work. The Windows/Linux fixture tests
+arithmetic, placement and refusal paths; the gallery adds a paired preview.
+
+## D1964 — Separate exact cap-table share counts from percentage geometry
+
+`chart.cap_table_waterfall` accepts existing holder shares on one common basis,
+an optional pool top-up and an optional investor issuance. It overflow-checks
+the `u64` totals before computing before/after ownership percentages, and
+reuses the generic waterfall for the incumbent-retention bridge: 100%, after
+pool, after financing. Caller-owned layers keep existing holders in input
+order and append nonzero pool and investor segments. It refuses zero-share
+holders, no issuance, unrepresentable visible segments and short storage.
+It does not infer SAFE/note conversion, option exercise, liquidation preference,
+voting power, valuation or per-holder new grants. The Windows/Linux fixture
+checks fractions, geometry, omitted events and refusals; the gallery adds a
+paired PNG/SVG preview. The share-issuance and dilution framing follows
+Carta's pro-forma cap-table guidance: https://carta.com/learn/startups/fundraising/pro-forma-cap-table/.
+
+## D1965 — Keep tornado assumption identity across response reversal
+
+`chart.tornado_sensitivity` treats each input as two supplied one-at-a-time
+model outputs, not as a distribution. It sorts by the absolute output swing,
+stably retaining source order on ties, but emits distinct low-input and
+high-input Bar layers so colour continues to identify the tested assumption
+even when the response reverses. All rows share the baseline and numeric
+output domain. Non-finite values, collapsed domains, unrepresentable f32
+endpoints and short caller storage are refused. The Windows/Linux fixture
+checks order, reverse direction, geometry, scene/SVG and refusal paths; the
+gallery renders a paired PNG/SVG example. Oracle's tornado-chart guide uses
+largest swing first and notes reversed bars for inverse relationships:
+https://docs.oracle.com/cd/E52437_01/en/crystal_ball_users_guide/ch09s03s01.html.
+
+## D1966 — Football-field ranges share one caller-declared valuation basis
+
+`chart.football_field` does not calculate a valuation. It composes ordered
+low/high method ranges through `range_intervals` and one benchmark line on an
+explicit numeric domain. Caller-owned bars, caps and rule let the CPU scene
+and SVG adapters style each method separately. Each method takes exactly one
+row; reversed/out-of-domain ranges, invalid benchmarks and short storage are
+refused. The API deliberately cannot infer enterprise-to-equity conversion,
+currency, date or which method deserves more weight. The Windows/Linux fixture
+checks the shared mapping, caps, benchmark, adapters and refusals; the gallery
+adds a paired PNG/SVG example. This range-by-method presentation follows CFI's
+football-field chart description:
+https://corporatefinanceinstitute.com/resources/financial-modeling/football-field-chart-template/.
+
+## D1967 — Yield curves keep supplied rates and actual tenor spacing
+
+`chart.yield_curve` renders rates against strictly increasing positive tenors
+measured in years. The caller supplies one common tenor maximum and yield
+domain, so differently dated curves can be overlaid without each series
+silently rescaling itself. Yields are accepted in one caller-consistent rate
+unit and can be negative. PointLine geometry connects observations as given;
+the library does not bootstrap spot rates, interpolate missing maturities or
+extrapolate beyond the final tenor. The Windows/Linux fixture covers uneven
+spacing, an inverted segment, negative yields, scene/SVG output and refusals.
+The gallery's two curves are synthetic. The maturity-versus-par-yield framing
+follows the U.S. Treasury's description of its daily par yield curve:
+https://home.treasury.gov/policy-issues/financing-the-government/interest-rate-statistics/.
+
+## D1968 — Monte Carlo previews summarise caller-owned trial outcomes
+
+`chart.monte_carlo_distribution` accepts finished, equal-weight model outcomes
+and a shared domain, rather than hiding a sampler or choosing a distribution.
+It copies and sorts them into caller scratch, counts left-closed/right-open
+histogram bins (last bin includes the maximum), draws an exact empirical CDF,
+and reports the observed fraction at or below an explicit threshold. Both
+layouts use the same samples and threshold, so their summaries cannot drift.
+The Windows/Linux fixture checks counts, sorted ties, CDF steps, threshold
+arithmetic, scene/SVG adapters and refusals. The gallery uses a fixed-seed
+PCG toy model for reproducible paired PNG/SVG previews; it does not assert
+forecast uncertainty or model calibration. EPA guidance discusses presenting
+Monte Carlo output as histogram and CDF:
+https://nepis.epa.gov/Exe/ZyPURL.cgi?Dockey=30004ZGL.TXT.
+
+## D1969 — Decomposition trees retain explicit aggregate semantics
+
+`chart.aggregate_decomposition_tree` accepts a depth-first-preorder parent
+hierarchy and nonnegative leaf measures. The existing hierarchy roll-up
+calculates every internal value exactly before layout; each node bar represents
+its share of its immediate parent's aggregate, while the root bar is full.
+Caller-owned arrays hold totals, card geometry, bars and connectors for the
+scene and SVG adapters. Invalid topology, internal weights and undersized
+scratch or panels fail explicitly. This is a static, deterministic visual;
+interactive drill, field choice and AI-assisted splitting remain separate
+future capabilities. The visual's measure-and-dimension framing follows
+Microsoft's decomposition-tree description:
+https://learn.microsoft.com/en-us/power-bi/visuals/power-bi-visualization-decomposition-tree.
+
+## D1970 — Calendar axes use civil-day distances and explicit month breaks
+
+`chart.date_axis_line` borrows ordered `time.Date` values and maps them over an
+explicit civil-date domain using elapsed days, rather than treating months as
+equally spaced categories or passing large epoch timestamps through f32.
+`date_ticks` chooses month starts at a caller-specified stride and
+`format_date_ticks` writes ISO year-month labels into caller storage. The
+Windows/Linux fixture covers leap-year spacing, invalid dates, capacities and
+scene/SVG output; the gallery renders the same positions in a PNG/SVG pair.
+Locale-sensitive labels, time zones and automatic date-break selection remain
+separate follow-on work.
+
+## D1971 — Discrete bar axes preserve explicit factor order and empty levels
+
+`chart.discrete_axis_bars` uses a caller-ordered level list as its axis domain.
+Repeated input keys sum into that level, while a level with no observations
+retains a zero-height bar slot and tick. Unknown keys, duplicate levels,
+non-finite or negative values, and aggregates beyond the explicit numeric
+domain fail instead of changing the displayed scale. Outputs remain
+caller-owned `Layout`, totals and ticks for the scene/SVG adapters. The
+Windows/Linux fixture covers aggregation, ordering, empty levels, adapters
+and refusal paths; the gallery renders a paired PNG/SVG preview. This does
+not yet imply a general discrete scale for every chart geometry.
+
+## D1972 — Category facets bind factor levels to shared-scale panels
+
+`chart.category_facet_scatter` maps each row's categorical key into an
+explicitly ordered `facet_grid` panel and emits strip labels, panel counts and
+caller-owned Scatter marks. All panels use the same caller-specified x/y
+domains; levels with no rows remain visible but empty. Duplicate levels,
+unknown keys, non-finite/out-of-domain data and undersized panels or storage
+fail explicitly. The Windows/Linux fixture checks grouping, coordinates,
+empty panels and scene/SVG adapters; the gallery renders a PNG/SVG pair.
+Generic geom faceting, free-scale strip guides and collision handling remain
+follow-on work.
+
+## D1973 — Wrapped legends use caller-measured text widths
+
+`chart.wrapped_legend_items` receives label widths measured in the caller's
+font and size, then keeps each swatch and label together while wrapping rows
+inside an explicit rectangle. Items wider than that rectangle, excess rows,
+invalid measurements and short caller storage are refused rather than clipped
+or allowed to collide. The gallery measures the actual font, draws four
+series and renders the same bounded legend in PNG and SVG; a Windows/Linux
+fixture checks placement and refusal paths. Automatic margin allocation and
+legend-to-plot placement remain separate composition work.
+
+## D1974 — Missing scatter cells use explicit presence masks
+
+`chart.masked_scatter` takes separate presence masks for x and y. A row with
+either coordinate absent is omitted without inspecting its payload; a present
+non-finite or out-of-domain coordinate remains an error. Returned scatter
+marks are compacted alongside original source row IDs and an omitted count,
+which preserves selection identity and permits an explicit missingness note.
+An all-missing input yields empty marks rather than a fabricated point. The
+Windows/Linux fixture checks mapping, row IDs, empty output, scene/SVG
+adapters and refusal paths; the gallery renders a PNG/SVG pair. Other geoms
+still need their own missing-data policies.
+
+## D1975 — Chart clipping is an explicit adapter scope
+
+The chart scene and SVG adapters expose `begin_clip`/`end_clip` around existing
+mark and label emitters. Both use the same finite, positive rectangular bounds;
+SVG requires a caller-unique, restricted ASCII clip ID to avoid malformed
+markup. Scene begin checks room for Save and Clip before changing the display
+list, and the caller leaves room for Restore. Titles, axes and legends emitted
+after the scope are not clipped. This composes with existing layers instead of
+adding an annotation-specific mark type; arbitrary path clips and automatic
+annotation placement remain future work.
+
+## D1976 — Weighted plot grids compose independent chart specifications
+
+`chart.plot_grid` returns row-major rectangles from positive caller-supplied
+column and row weights and separate nonnegative gaps. It does not impose one
+data domain, mark type, guide, colour or title across cells: callers render
+independent chart specifications into those rectangles. This distinguishes
+multi-plot composition from `facet_grid` and keeps panel contents in the
+existing scene/SVG adapters. Zero or non-finite weights, exhausted space and
+insufficient caller storage are refused. Shared guides, cell spanning and
+automatic margin allocation remain follow-on composition work.
+
+## D1977 — Shared facet guides label only exterior panel edges
+
+`shared_facet_guide_labels` accepts a complete, aligned row-major panel grid
+and one shared x/y tick set. It reuses `guide_labels` to place x tick text only
+below the last row and y tick text only beside the first column. Grid lines
+and tick strokes remain per-panel, so every panel can be read against the same
+domain without repeated interior labels. Incomplete or misaligned grids are
+refused; free-scale guides and a common legend require separate policies.
+
+## D1978 — Scatter selection preserves source rows and SVG focus targets
+
+`hit_scatter` chooses the nearest rendered point within an explicit pixel
+radius, breaking equal-distance ties by displayed order. Optional row IDs map
+compacted marks back to their original data rows; `selected_point_outline`
+returns an ordinary Box mark for renderer parity. Standalone SVG output wraps
+each point in a focusable fragment link whose target is the mark index and whose
+`data-row-id` retains source identity. CSS `:target` and `:focus` expose a
+selection outline without script. The PNG is a selected-state snapshot; widget
+events, cross-filter state and zoom-aware interaction are still L062 work.
+
+## D2101 — Chart palettes guarantee contrast on the written bytes
+
+`accessible_palette` returns six qualitative series colors for an opaque
+background. Each seed hue that falls below 4.5:1 (the WCAG text threshold, so
+direct labels in series colors are readable too) moves toward black or white,
+whichever contrasts more with the background, by the smallest bisected amount
+that passes; seeds that already pass are returned unchanged. Contrast is
+measured after rounding each channel the way `scene.channel_byte` and the SVG
+adapter do, so the guarantee holds for the PNG and SVG output rather than for
+unrounded floats; no threshold margin is needed. One of black and white always
+reaches at least 4.58:1, so every opaque background has a solution. A palette
+cannot make color the only cue: previews label series directly.
+Color-vision-deficiency simulation and automatic marker shapes remain open.
+
+## D2102 — SVG charts take the scene's brushes and can carry their face
+
+`chart.svg.append_brush` accepts the same `paint.Brush` as the scene adapter.
+A gradient is written once as a user-space `linearGradient` or
+`radialGradient` under a caller-unique id and every mark of the layer refers to
+it, so a gradient spans the layer as it does in the rasterizer rather than
+restarting per mark. Stops, pad spread and straight channel interpolation
+follow `scene.brush_at`; a zero-length linear gradient is refused because SVG
+paints it with the last stop and the rasterizer with the first. Solid colours
+keep the existing byte-identical output. `embed_font` writes a whole TrueType
+or OpenType file as a base64 data URL inside a `@font-face` rule, streamed in
+765-byte chunks so no buffer scales with the font; `append_labels_in` names
+the family with a sans-serif fallback. Embedding the whole file is the simple
+first step: Montserrat makes a ~600 KB SVG, and glyph subsetting is follow-on
+work.
+
+## D2103 — Chart colour-vision checks simulate dichromats and score with CIEDE2000
+
+`simulate_color_vision` uses the Vienot-Brettel-Mollon (1999) dichromat model:
+linear sRGB to Hunt-Pointer-Estevez LMS, the missing cone replaced by the
+plane through white and blue (protan, deutan) or white and red (tritan), and
+back, folded into one linear-RGB matrix per kind and derived by
+`scripts/chart_cvd_reference.py`. Severity blends toward the original in linear
+RGB, the common approximation for anomalous trichromacy; Machado's (2009)
+severity tables would need a dependency download or hand-typed constants, so
+they stay open. `palette_separation` reports the closest pair under a viewer's
+simulation by CIEDE2000 (Sharma, Wu and Dalal 2005) on D65 CIELAB, the metric
+palette tools use. Measuring D2101's palette this way shows ~10 for typical
+vision but 1.2 for deuteranopes (blue against purple): six colours at 4.5:1 on
+white leave little room on the blue-yellow axis, so the palette keeps its
+contrast guarantee and charts keep labelling series directly.
+
+## D2104 — Point labels are placed greedily and dropped rather than overprinted
+
+`place_point_labels` takes points in the caller's priority order (for example
+by population or value) and gives each label the first of Imhof's eight
+candidate positions — upper-right, upper-left, lower-right, lower-left, right,
+left, above, below — whose box stays inside the plot, overlaps no label
+already placed and keeps a clearance from every other point. A label with no
+free position is returned unplaced, and the caller decides whether to mute its
+point, list it elsewhere or draw a leader. Greedy placement is deterministic,
+needs no scratch beyond the caller's output and is O(n^2) per label; annealing
+or conflict-graph optimisation would place more labels in dense clusters and
+remains follow-on work, as do leader lines. Text widths are measured by the
+caller, as `wrapped_legend_items` already does, so the geometry stays
+renderer-neutral.
+
+## D2105 — Locale-aware chart tick text lives in its own module
+
+`e.gfx.chart` is a layer-2 pure-domain module and `e.text.locale` sits at
+layer 6, so locale formatting goes in a new layer-6 `e.gfx.chart.locale`
+beside the scene and SVG adapters instead of widening the core. It allocates
+strings from the caller's arena, as `e.text.locale` does, while the core's
+`format_ticks` keeps writing into caller storage. `format_ticks_in` gives one
+axis a shared precision — the fewest decimals (up to six) that write every
+tick exactly — so a 0.25 step reads 0,00 0,25 0,50 rather than mixing 0 and
+0,5, and it inherits CLDR minimum grouping (Spanish 2500 but 10.000).
+`format_date_ticks_in` takes an LDML pattern through `locale.format_pattern`,
+a new public wrapper over the pattern writer the four date styles already
+used. Text a face cannot draw is not substituted: French grouping uses U+202F,
+which Montserrat lacks, so font fallback stays a renderer concern.
+
+## D2106 — Charts join e.ui through a canvas custom that lays out at paint time
+
+`e.gfx.chart.widget` adds no widget kind: a `View` becomes the existing
+`widget.Custom`, so charts reuse `control.canvas` and `framed_canvas` (D962)
+for framing, clipping and accessible labels. Paint receives the canvas's inner
+rectangle and runs `chart.layout` there, so a chart follows window and layout
+changes without the caller recomputing geometry; the laid-out marks and plot
+are kept on the view for hit testing. The custom's state is the view's
+revision, so the runtime replays an unchanged chart's commands (D917) and the
+caller bumps the revision when data or look change — without a bump a data
+change is not repainted, which the fixture pins. The view borrows caller mark
+storage and an arena for the scene adapter's paths, as every other chart
+adapter does. One layer per view keeps the first version small; multi-layer
+views, legends and pointer events (L062) are follow-on work.
+
+## D2107 — Chart PDFs use built-in Helvetica and caller-owned content storage
+
+`e.gfx.chart.pdf` writes a single-page PDF 1.4 with the same mark kinds,
+shapes and stroke widths as the SVG adapter, one layout pixel per point and
+the y axis flipped to PDF's bottom-left origin. Text uses the standard
+Helvetica in WinAnsi encoding, so nothing is embedded and files stay small;
+centre and right alignment use Adobe's advance widths, generated from
+reportlab's AFM copy by `scripts/chart_pdf_metrics.py`, and text outside
+WinAnsi (Greek, CJK) is refused rather than silently dropped. Opacity uses up
+to sixteen named ExtGState entries. The content stream is written into
+caller-owned storage instead of an arena-backed memory writer, because that
+writer is only contiguous while nothing else allocates from its arena;
+`finish` then writes catalog, page, font, stream, states, info and an exact
+cross-reference table to any writer. Reals are fixed-point with trimmed zeros,
+since PDF has no exponent syntax. The document title is written as UTF-16BE with
+a byte-order mark, because information strings are PDFDocEncoding, where WinAnsi
+bytes such as the euro sign mean something else. Embedded TrueType text, FlateDecode
+compression, gradients and multi-page reports are follow-on work.
+
+## D2108 — Chart performance is measured against matplotlib in-process
+
+`benchmarks/charts` renders one workload in Neper and in matplotlib from the
+same deterministic data: a 1,000-point line, 200 markers, a y grid with
+labels and a title at 360x240, 200 charts per pass, written to memory as SVG
+(text as text in both) and as PNG (Neper at deflate `.Balanced`, matplotlib
+through Agg with a new figure per chart). Timing is in-process with medians
+of nine runs, because the host is shared and single runs vary by up to half;
+whole-process time and matplotlib's import are reported separately. Neper
+also reports layout alone and rasterization alone, so a loss can be
+attributed: on Windows SVG is 6.1x faster than matplotlib, PNG is 1.15x
+slower, and the PNG gap is the encoder (2.0 of 20.3 ms is rasterization).
+ggplot2, base R and lattice are not measured without an R installation.
+
+## D2109 — Close L061 and queue the R chart benchmarks as L162
+
+L061 reaches score 1. Every planned gallery target is rendered (235 previews,
+each with an SVG companion, one with a PDF), the scene/PNG, SVG, PDF and e.ui
+widget adapters exist, tick text follows the reader's locale, palettes are
+checked for contrast and colour-vision separation, labels avoid collisions,
+and the engine is benchmarked against matplotlib (D2108). The remaining
+comparison with ggplot2, base R graphics and lattice needs an R installation,
+which needs the user's approval to download, so it is queued as L162 at the
+end of the work queue instead of holding L061 open. Refinements listed in the
+closing evidence (leader lines, SVG font subsetting, PDF font embedding and
+compression, multi-layer widget views, Machado tables, a faster PNG deflate)
+are follow-on work for L062 and later items, not part of standard charts.
+
+## D2110 — Queue faster PNG encoding as L163
+
+The chart benchmark puts Neper's whole PNG gap to matplotlib in the encoder:
+on the same 360x240 raster, `e.fmt.png` at `.Balanced` takes about 18 ms
+for 14,004 B while zlib level 6 over the same filter-0 rows takes 1.74 ms for
+11,283 B. `e.algo.deflate` writes fixed Huffman codes only (about 1.6 KB of
+the difference), has no lazy matching and restarts its hash chain per 32 KiB
+block (about 1.1 KB more), and `e.fmt.png` computes CRC-32 bit by bit. Adaptive
+row filters, the usual suspect, would make this chart larger. L163 asks for
+dynamic Huffman blocks, lazy matching across blocks and a table CRC, measured
+against zlib on the same rows; it sits after L162 at the end of the queue.
+
+## D2111 — SVG charts write numbers to 0.01 px and omit default opacity
+
+The SVG adapter rounds every number it writes to 0.01 (ties to even), writes
+negative zero as 0, and leaves `fill-opacity`/`stroke-opacity` out when the
+ink is opaque, since 1 is the SVG default. Full f32 digits such as
+81.85714721679688 were most of each file: across the previews the companions
+shrink by 33% (14% gzipped), and the benchmark chart drops from 61,962 B to
+30,224 B, below matplotlib's 44,387 B. A hundredth of a pixel is below any
+display's resolution; rasterizing every preview before and after with an
+independent renderer moves no chart by more than anti-aliasing along edges.
+The precision is fixed because the writer keeps no per-document state;
+merging same-colour markers into one path is not done, because rect markers
+keep per-point structure that fixtures and selection rely on. A general
+optimizer for third-party SVG (svgo-style) is a separate tool and not needed
+for Neper's own output.

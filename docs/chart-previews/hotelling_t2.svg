@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>hotelling_t2</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="46" y="53" width="268" height="133" fill="rgb(250,252,255)"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="46" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="53" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="186" x2="314" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="186" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="142.82" x2="314" y2="142.82" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="142.82" x2="46" y2="142.82" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="99.64" x2="314" y2="99.64" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="99.64" x2="46" y2="99.64" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="56.45" x2="314" y2="56.45" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="56.45" x2="46" y2="56.45" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="103.71" x2="314" y2="103.71" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<path d="M62.75 186 L96.25 178.44 L129.75 155.77 L163.25 178.44 L196.75 178.44 L230.25 186 L263.75 65.09 L297.25 170.89" fill="none" stroke="rgb(20,99,189)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="59.75" y="183" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="93.25" y="175.44" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="126.75" y="152.77" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="160.25" y="175.44" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="193.75" y="175.44" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="227.25" y="183" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="260.75" y="62.09" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="294.25" y="167.89" width="6" height="6" fill="rgb(20,99,189)"/>
+<rect x="260.75" y="62.09" width="6" height="6" fill="rgb(209,48,56)"/>
+<text x="180" y="18" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">Hotelling T2 / correlated process</text>
+<text x="180" y="34" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Phase II individuals / 8 historical references</text>
+<text x="37" y="189" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">0</text>
+<text x="37" y="145.82" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">10</text>
+<text x="37" y="102.64" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">20</text>
+<text x="37" y="59.45" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)">30</text>
+<text x="62.75" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">1</text>
+<text x="163.25" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">4</text>
+<text x="297.25" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">8</text>
+<text x="321" y="106.71" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(43,59,82)">UCL</text>
+<text x="180" y="227" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)">Red: T2 beyond Phase II limit / alpha = 0.05</text>
+</svg>

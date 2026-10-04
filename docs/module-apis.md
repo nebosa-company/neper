@@ -1787,12 +1787,18 @@ slope order and queries at increasing `x`.
 ### `e.algo.geo`
 
 ```neper
+type MapProjection = enum u8 { Equirectangular, Mercator }
+type MapWindow = struct { projection: MapProjection, center_lon: f64, half_lon_span: f64, south_lat: f64, north_lat: f64 }
+error Invalid
 fn pi() -> f64
 fn max_level() -> u32
 fn max_size() -> i64
 fn earth_radius_m() -> f64
 fn radians(deg: f64) -> f64
 fn degrees(rad: f64) -> f64
+fn map_finite(value: f64) -> bool
+fn mercator_y(lat_deg: f64) -> f64
+fn map_project(lon_deg: f64, lat_deg: f64, window: MapWindow) -> (f64, f64, err)
 fn pos_to_ij(o: u32, p: u32) -> u32
 fn ij_to_pos(o: u32, ij: u32) -> u32
 fn pos_to_orientation(p: u32) -> u32
@@ -2318,6 +2324,23 @@ fn hawkes_log_likelihood(mu: f64, alpha: f64, beta: f64, events: []const f64, ho
 fn hawkes_simulate(mu: f64, alpha: f64, beta: f64, horizon: f64, r: *rand.Pcg64, out: []f64) -> (usize, err)
 fn garch(omega: f64, alpha: f64, beta: f64, returns: []const f64, out: []f64) -> err
 fn hawkes(mu: f64, alpha: f64, beta: f64, events: []const f64, out: []f64) -> err
+fn solve_normal(a: []const f64, b: []const f64, x: []f64, n: usize, work: []f64) -> err
+fn var_fit(series: []const f64, n: usize, k: usize, p: usize, coefs: []f64, intercept: []f64, scratch: []f64) -> err
+fn var_forecast(coefs: []const f64, intercept: []const f64, k: usize, p: usize, history: []const f64, horizon: usize, out: []f64) -> err
+fn var_companion(coefs: []const f64, k: usize, p: usize, f: []f64, h: []f64) -> err
+fn level_filter(observations: []const f64, level_var: f64, obs_var: f64, initial: f64, initial_var: f64, filtered: []f64, scratch: []f64) -> err
+fn trend_filter(observations: []const f64, level_var: f64, slope_var: f64, obs_var: f64, initial_level: f64, initial_slope: f64, initial_var: f64, level_out: []f64, trend_out: []f64, scratch: []f64) -> err
+type ArmaFit = struct { series: []const f64, resid: []f64, p: usize, q: usize }
+fn arima_difference(series: []const f64, d: usize, out: []f64) -> (usize, err)
+fn ar_fit(series: []const f64, p: usize, coefs: []f64, intercept: []f64, scratch: []f64) -> err
+fn arma_css(series: []const f64, ar: []const f64, ma: []const f64, intercept: f64, resid: []f64) -> (f64, err)
+fn arma_objective(fit: *ArmaFit, params: []const f64) -> f64
+fn arma_fit(series: []const f64, p: usize, q: usize, params: []f64, scale: f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (f64, err)
+fn arma_forecast(ar: []const f64, ma: []const f64, intercept: f64, past: []const f64, past_resid: []const f64, horizon: usize, out: []f64) -> err
+fn eoq(demand: f64, order_cost: f64, holding_cost: f64) -> (f64, err)
+fn eoq_total(demand: f64, order_cost: f64, holding_cost: f64, quantity: f64) -> (f64, err)
+fn newsvendor_ratio(underage: f64, overage: f64) -> (f64, err)
+fn newsvendor_discrete(demands: []const f64, probs: []const f64, ratio: f64) -> (f64, err)
 ```
 
 `holt_winters` (additive triple smoothing with forecasts), `loess` and `stl` (a LOESS
@@ -2325,6 +2348,13 @@ trend, phase-mean season, two passes), the streaming detectors `Cusum`, `PageHin
 and `Adwin` (a ring of recent values cut by the Hoeffding bound), GARCH(1,1)
 (`garch_log_likelihood`, `garch_fit` by Nelder-Mead, `garch_forecast`) and the Hawkes
 process (`hawkes_intensity`, `hawkes_log_likelihood`, `hawkes_simulate` by thinning).
+VAR(p) (`var_fit` by equation-wise least squares over `solve_normal`, `var_forecast`
+by recursion) with its companion state-space form (`var_companion`) for
+`e.math.filter`'s Kalman, plus the local-level and local-linear-trend structural
+models (`level_filter`, `trend_filter`) run through that same Kalman.
+ARIMA (`arima_difference`, `ar_fit` by least squares, `arma_css` with the
+`arma_fit` Nelder-Mead refinement, `arma_forecast`) and the inventory core
+(`eoq` with `eoq_total`, `newsvendor_ratio` with `newsvendor_discrete`).
 
 ### `e.algo.egraph`
 
@@ -3046,11 +3076,284 @@ sorts its inputs and uses the Numerical Recipes small-sample correction;
 Scratch: `mann_whitney` `2 * (a.len + b.len)` floats, `wilcoxon` `3 * a.len`,
 `kruskal_wallis` the total, each with as many indices in `order`.
 
+### `e.algo.stat.mixed`
+
+```neper
+error TooSmall
+error Singular
+error Invalid
+type Corr = enum u8 { Independence, Exchangeable, Ar1 }
+type MmrmCtx = struct { y: []const f64, x: []const f64, n: usize, p: usize, counts: []const usize, groups: usize, visit: []const usize, visits: usize, lbuf: []f64, vbuf: []f64, xvx: []f64, xvy: []f64, ybuf: []f64, xcol: []f64 }
+type RiCtx = struct { y: []const f64, x: []const f64, n: usize, d: usize, counts: []const usize, groups: usize, xvx: []f64, xvy: []f64 }
+fn mixed_solve(matrix: []f64, rhs: []f64, n: usize) -> err
+fn mixed_chol(matrix: []f64, n: usize) -> err
+fn mixed_chol_solve(l: []const f64, rhs: []f64, n: usize) -> err
+fn mixed_chol_logdet(l: []const f64, n: usize) -> f64
+fn wald_p(estimate: f64, se: f64) -> (f64, err)
+fn mixed_contrast(beta: []const f64, covariance: []const f64, p: usize, weights: []const f64) -> (f64, f64, f64, err)
+fn gee_solve_block(corr: Corr, alpha: f64, phi: f64, v: []const f64, m: usize, w: []f64) -> err
+fn gee(y: []const f64, x: []const f64, n: usize, d: usize, sizes: []const usize, groups: usize, corr: Corr, beta: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
+fn mmrm_unpack(theta: []const f64, v: usize, l: []f64)
+fn mmrm_fit_given(ctx: *MmrmCtx, l: []const f64) -> (f64, err)
+fn mmrm_objective(ctx: *MmrmCtx, theta: []const f64) -> f64
+fn mmrm_un(y: []const f64, x: []const f64, n: usize, p: usize, counts: []const usize, groups: usize, visit: []const usize, visits: usize, beta: []f64, beta_cov: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
+fn ri_fit_given(ctx: *RiCtx, tau2: f64, sig2: f64) -> (f64, err)
+fn ri_objective(ctx: *RiCtx, theta: []const f64) -> f64
+fn lmm_intercept(y: []const f64, x: []const f64, n: usize, d: usize, counts: []const usize, groups: usize, beta: []f64, beta_cov: []f64, variances: []f64, blups: []f64, scratch: []f64) -> (u32, err)
+type RsCtx = struct { y: []const f64, x: []const f64, z: []const f64, w: []const f64, n: usize, d: usize, q: usize, counts: []const usize, groups: usize, xvx: []f64, xvy: []f64, gbuf: []f64, vbuf: []f64, rbuf: []f64, tbuf: []f64 }
+fn rs_unpack(theta: []const f64, q: usize, g: []f64) -> err
+fn rs_build_v(ctx: *RsCtx, sig2: f64, off: usize, m: usize) -> err
+fn rs_fit_given(ctx: *RsCtx, theta: []const f64, sig2: f64) -> (f64, err)
+fn rs_objective(ctx: *RsCtx, theta: []const f64) -> f64
+fn rs_blups(ctx: *RsCtx, beta: []const f64, sig2: f64, blups: []f64) -> err
+fn lmm_slopes(y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize, q: usize, counts: []const usize, groups: usize, beta: []f64, beta_cov: []f64, variances: []f64, blups: []f64, scratch: []f64) -> (u32, err)
+type Family = enum u8 { Binomial, Poisson }
+fn glmm_pql(y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize, q: usize, counts: []const usize, groups: usize, family: Family, beta: []f64, beta_cov: []f64, variances: []f64, blups: []f64, tolerance: f64, max_outer: u32, scratch: []f64) -> (u32, err)
+```
+
+Longitudinal Gaussian models over subject-grouped rows (a missed visit is an
+absent row): `gee` by Fisher scoring with moment-estimated working
+correlations (closed-form block inverses) and the robust sandwich;
+`mmrm_un` with an unstructured covariance by REML (log-Cholesky Nelder-Mead,
+GLS at the optimum); `lmm_intercept` for the random-intercept model by REML
+with BLUPs; `lmm_slopes` for random slopes and intercepts over a caller-built
+`z` design by REML (log-Cholesky Nelder-Mead over `rs_objective`, GLS through
+`rs_fit_given`, BLUPs through `rs_blups`) with per-subject BLUPs; `glmm_pql`
+for binomial (logit) and Poisson (log) responses by penalized
+quasi-likelihood outer rounds over the same machinery; `wald_p` and
+`mixed_contrast` for inference. Scratch: `gee`
+`4d² + d + n + 2·mmax`, `mmrm_un` `(m+1)² + 5m + 2v² + p² + p + 2v` with
+`m = v(v+1)/2`, `lmm_intercept` `19 + 2d² + d`, `lmm_slopes`
+`(r+2)² + 5(r+1) + 2d² + d + q² + q + maxm² + maxm` with `r = q(q+1)/2`,
+`glmm_pql` the same plus `2n + (r+1)` for the working response, weights and
+starting values.
+
+### `e.algo.stat.survival_trial`
+
+```neper
+error TooSmall
+error Singular
+error Invalid
+
+type Result = struct { statistic: f64, p_value: f64 }
+type SimonDesign = struct { n1: usize, r1: usize, n: usize, r: usize }
+fn survival_solve(matrix: []f64, rhs: []f64, n: usize) -> err
+fn kaplan_meier(times: []const f64, events: []const u8, n: usize, out_times: []f64, out_survival: []f64, out_risk: []usize, order: []usize) -> (usize, err)
+fn log_rank(ta: []const f64, ea: []const u8, na: usize, tb: []const f64, eb: []const u8, nb: usize) -> (Result, err)
+fn cox_ph(times: []const f64, events: []const u8, x: []const f64, n: usize, p: usize, beta: []f64, covariance: []f64, fscratch: []f64, iscratch: []usize) -> (u32, err)
+fn spending_obrien_fleming(t: f64, alpha: f64) -> (f64, err)
+fn spending_pocock(t: f64, alpha: f64) -> (f64, err)
+fn binom_sf(n: usize, k: usize, p: f64) -> (f64, err)
+fn simon_pmf(n: usize, p: f64, pmf: []f64) -> err
+fn simon_oc(n1: usize, r1: usize, n: usize, r: usize, p: f64, scratch: []f64) -> (f64, f64, err)
+fn simon_tail(sf: []const f64, n2: usize, r: usize, x: usize) -> f64
+fn simon_fill(n1: usize, n2: usize, p0: f64, p1: f64, b1_0: []f64, b1_1: []f64, b2_0: []f64, b2_1: []f64, sf_0: []f64, sf_1: []f64) -> err
+fn simon_search(p0: f64, p1: f64, alpha: f64, beta: f64, minimax: bool, scratch: []f64) -> (SimonDesign, err)
+fn simon_optimal(p0: f64, p1: f64, alpha: f64, beta: f64, scratch: []f64) -> (SimonDesign, err)
+fn simon_minimax(p0: f64, p1: f64, alpha: f64, beta: f64, scratch: []f64) -> (SimonDesign, err)
+fn crm_objective(skeleton: []const f64, doses: usize, assigned: []const usize, outcomes: []const u8, patients: usize, a: f64) -> f64
+fn crm_next(skeleton: []const f64, doses: usize, goal: f64, assigned: []const usize, outcomes: []const u8, patients: usize, means: []f64) -> (usize, err)
+fn fm_score(x1: u64, n1: u64, x2: u64, n2: u64, d: f64, pc: f64) -> f64
+fn fm_mle(x1: u64, n1: u64, x2: u64, n2: u64, margin: f64) -> (f64, f64, err)
+fn farrington_manning(x1: u64, n1: u64, x2: u64, n2: u64, margin: f64) -> (Result, err)
+```
+
+Time-to-event trial methods over observed cases: `kaplan_meier` curves,
+unweighted `log_rank`, Cox `cox_ph` by Newton-Raphson (Breslow ties),
+Lan-DeMets `spending_obrien_fleming`/`spending_pocock`, Simon two-stage
+designs by exact exhaustive search (`simon_optimal` smallest expectation,
+`simon_minimax` smallest total; totals to 60), likelihood `crm_next` dose
+finding by golden section, and `farrington_manning` non-inferiority with
+`fm_mle` constrained estimates.
+
+### `e.algo.stat.survival`
+
+```neper
+type Result = struct { statistic: f64, p_value: f64 }
+type Weight = enum u8 { LogRank, Breslow, TaroneWare, PetoPeto, FlemingHarrington }
+type Rmst = struct { mean: f64, se: f64 }
+error TooSmall
+error Invalid
+
+fn nelson_aalen(times: []const f64, events: []const u8, n: usize, out_times: []f64, out_hazard: []f64, out_variance: []f64, out_risk: []usize, order: []usize) -> (usize, err)
+fn cumulative_incidence(times: []const f64, causes: []const u8, n: usize, cause: u8, out_times: []f64, out_cif: []f64, order: []usize) -> (usize, err)
+fn rmst(times: []const f64, events: []const u8, n: usize, tau: f64, order: []usize) -> (Rmst, err)
+fn wlw_sweep(ta: []const f64, ea: []const u8, na: usize, tb: []const f64, eb: []const u8, nb: usize, weight: Weight, rho: f64, gamma: f64) -> (Result, err)
+fn weighted_log_rank(ta: []const f64, ea: []const u8, na: usize, tb: []const f64, eb: []const u8, nb: usize, weight: Weight) -> (Result, err)
+fn fleming_harrington(ta: []const f64, ea: []const u8, na: usize, tb: []const f64, eb: []const u8, nb: usize, rho: f64, gamma: f64) -> (Result, err)
+```
+
+Nonparametric survival estimators over right-censored times: the Nelson-Aalen
+cumulative hazard with Aalen variance, the Aalen-Johansen cumulative
+incidence for competing risks, restricted mean survival with Greenwood
+standard error, and weighted log-rank tests (Breslow, Tarone-Ware, Peto-Peto,
+Fleming-Harrington) sharing one sweep, with the plain weight equal to
+Mantel-Cox.
+
+### `e.algo.stat.causal`
+
+```neper
+error TooSmall
+error Singular
+error Invalid
+
+fn causal_solve(matrix: []f64, rhs: []f64, n: usize) -> err
+fn causal_chol(matrix: []f64, n: usize) -> err
+fn causal_chol_solve(l: []const f64, rhs: []f64, n: usize) -> err
+fn causal_at(x: []const f64, d: usize, i: usize, j: usize) -> f64
+fn propensity_scores(x: []const f64, treated: []const u8, n: usize, d: usize, tolerance: f64, max_iterations: u32, scores: []f64, scratch: []f64) -> (u32, err)
+fn iptw_ate(y: []const f64, treated: []const u8, scores: []const f64, n: usize) -> (f64, f64, f64, err)
+fn doubly_robust(y: []const f64, treated: []const u8, scores: []const f64, mu1: []const f64, mu0: []const f64, n: usize) -> (f64, f64, f64, err)
+fn mice_impute(data: []const f64, missing: []const u8, n: usize, d: usize, cycles: u32, r: *rand.Pcg64, completed: []f64, scratch: []f64) -> err
+fn mice_pool(estimates: []const f64, variances: []const f64, m: usize) -> (f64, f64, f64, err)
+fn mice[Ctx: type](data: []const f64, missing: []const u8, n: usize, d: usize, cycles: u32, m: usize, r: *rand.Pcg64, ctx: *Ctx, estimate: fn(*Ctx, []const f64, usize, usize) -> (f64, f64), completed: []f64, pooled: []f64, scratch: []f64) -> err
+```
+
+Causal and missing-data methods over caller storage: `propensity_scores` by
+Newton's method (fixed 1e-8 ridge), Hajek `iptw_ate` with the known-weights
+sandwich, `doubly_robust` augmentation over caller outcome predictions, and
+Bayesian `mice_impute` chained equations for continuous variables with
+`mice_pool` Rubin's rules behind the generic `mice` driver. Treatments and
+missingness are `u8` flags; scores must stay inside (0, 1).
+
+### `e.algo.stat.safety`
+
+```neper
+type Table = struct { a: u64, b: u64, c: u64, d: u64 }
+type Score = struct { estimate: f64, lower: f64, upper: f64 }
+type Rule = struct { antecedent: u64, consequent: u64, support: usize, confidence: f64, lift: f64 }
+error TooSmall
+error Invalid
+
+fn chi_square_2x2(t: Table) -> (f64, err)
+fn ror(t: Table) -> (Score, err)
+fn prr(t: Table) -> (Score, err)
+fn ror_signal(t: Table) -> (bool, err)
+fn prr_signal(t: Table) -> (bool, err)
+fn ic(t: Table) -> (Score, err)
+fn ic_signal(t: Table) -> (bool, err)
+fn bit_count(mask: u64) -> usize
+fn support_of(masks: []const u64, mask: u64) -> usize
+fn mask_seen(masks: []const u64, count: usize, mask: u64) -> bool
+fn apriori(masks: []const u64, min_support: usize, itemsets: []u64, supports: []usize) -> (usize, err)
+fn apriori_rules(masks: []const u64, min_support: usize, min_confidence: f64, rules: []Rule, scratch_items: []u64, scratch_sups: []usize) -> (usize, err)
+```
+
+Pharmacovigilance signal detection over FAERS-style counts: the reporting odds
+ratio (`ror`) and proportional reporting ratio (`prr`) with Woolf logit
+intervals and their signal rules (lower bound above one; the Evans estimate,
+chi-square and count gates over `chi_square_2x2`), the BCPNN information
+component (`ic`) with its credibility signal, and Apriori frequent-itemset and
+association-rule mining (`apriori`, `apriori_rules` with support, confidence
+and lift) over `u64` comedication masks. Zero cells where a ratio needs them
+are `Invalid`; mining answers into caller storage.
+
+### `e.algo.stat.diagnostic`
+
+```neper
+type Table = struct { true_pos: u64, false_pos: u64, false_neg: u64, true_neg: u64 }
+type Metrics = struct { sensitivity: f64, specificity: f64, accuracy: f64, positive_predictive: f64, negative_predictive: f64, lr_positive: f64, lr_negative: f64, odds_ratio: f64 }
+type Interval = struct { low: f64, high: f64 }
+type Intervals = struct { sensitivity: Interval, specificity: Interval, accuracy: Interval, positive_predictive: Interval, negative_predictive: Interval, lr_positive: Interval, lr_negative: Interval, odds_ratio: Interval }
+error Invalid
+
+fn exact_interval(successes: u64, trials: u64, confidence: f64) -> (Interval, err)
+fn beta_quantile(p: f64, a: f64, b: f64) -> f64
+fn metrics(t: Table) -> (Metrics, err)
+fn metrics_ci(t: Table, confidence: f64) -> (Intervals, err)
+```
+
+Binary diagnostic-test statistics over a 2x2 table: the eight metrics with
+exact Clopper-Pearson intervals for the proportions and log-method intervals
+for the likelihood ratios and the odds ratio. Empty denominators and boundary
+sensitivities/specificities are `Invalid` rather than silent corrections.
+
+### `e.algo.stat.meta`
+
+```neper
+type Effect = struct { estimate: f64, variance: f64 }
+type Pooled = struct { estimate: f64, se: f64, low: f64, high: f64 }
+error TooSmall
+error Singular
+error Invalid
+
+fn log_odds_ratio(a: u64, b: u64, c: u64, d: u64) -> (Effect, err)
+fn log_risk_ratio(a: u64, b: u64, c: u64, d: u64) -> (Effect, err)
+fn cohen_d(m1: f64, sd1: f64, n1: u64, m2: f64, sd2: f64, n2: u64) -> (Effect, err)
+fn hedges_g(m1: f64, sd1: f64, n1: u64, m2: f64, sd2: f64, n2: u64) -> (Effect, err)
+fn fisher_z(r: f64, n: u64) -> (Effect, err)
+fn fixed_pool(estimates: []const f64, variances: []const f64, n: usize) -> (Pooled, err)
+fn q_statistic(estimates: []const f64, variances: []const f64, n: usize, pooled: f64) -> (f64, err)
+fn tau_squared_dl(q: f64, variances: []const f64, n: usize) -> (f64, err)
+fn i_squared(q: f64, df: usize) -> f64
+fn q_between(q_total: f64, q_subs: []const f64, groups: usize) -> (f64, err)
+fn random_pool(estimates: []const f64, variances: []const f64, n: usize, tau2: f64) -> (Pooled, err)
+fn meta_solve(matrix: []f64, rhs: []f64, p: usize) -> err
+fn meta_regression(estimates: []const f64, variances: []const f64, x: []const f64, n: usize, p: usize, tau2: f64, beta: []f64, covariance: []f64, scratch: []f64) -> err
+```
+
+Meta-analysis core over caller slices: log odds-ratio, log risk-ratio,
+Cohen-d, Hedges-g and Fisher-z effects with sampling variances,
+inverse-variance fixed and DerSimonian-Laird random pooling, Cochran's Q,
+I-squared, DerSimonian-Laird tau-squared, between-subgroup Q, and
+weighted-least-squares meta-regression over a caller-built design.
+
+### `e.algo.stat.regression`
+
+```neper
+type OrdinalCtx = struct { x: []const f64, y: []const u8, n: usize, d: usize, levels: usize }
+error TooSmall
+error Singular
+error Invalid
+
+fn reg_solve(matrix: []f64, rhs: []f64, k: usize) -> err
+fn reg_at(x: []const f64, d: usize, i: usize, j: usize) -> f64
+fn reg_covariance(hessian: []const f64, covariance: []f64, k: usize, step: []f64, work: []f64) -> err
+fn poisson(x: []const f64, y: []const f64, exposure: []const f64, n: usize, d: usize, tolerance: f64, max_iterations: u32, coefficients: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
+fn negbin_beta(x: []const f64, y: []const f64, exposure: []const f64, n: usize, d: usize, theta: f64, tolerance: f64, max_iterations: u32, coefficients: []f64, hessian: []f64, gradient: []f64, step: []f64, work: []f64) -> (u32, err)
+fn negbin_profile(x: []const f64, y: []const f64, exposure: []const f64, n: usize, d: usize, theta: f64, coefficients: []const f64) -> f64
+fn negbin(x: []const f64, y: []const f64, exposure: []const f64, n: usize, d: usize, tolerance: f64, max_iterations: u32, max_outer: u32, theta: []f64, coefficients: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
+fn cond_logistic(x: []const f64, y: []const u8, stratum: []const usize, n: usize, d: usize, tolerance: f64, max_iterations: u32, coefficients: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
+fn ordinal_objective(ctx: *OrdinalCtx, params: []const f64) -> f64
+fn ordinal_logistic(x: []const f64, y: []const u8, n: usize, d: usize, levels: usize, tolerance: f64, max_iterations: u32, thresholds: []f64, coefficients: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
+```
+
+Generalized regressions over row-major samples with the intercept last:
+Poisson rates with exposure offsets by IRLS, negative-binomial rates by IRLS
+inside a golden-section dispersion search, conditional logistic regression for
+1:M matched sets by Newton, and proportional-odds ordinal logistic regression
+by Nelder-Mead with a numeric covariance. Every fit answers coefficients with
+their model-based covariance.
+
 ### `e.algo.stat`
 
 ```neper
 type Moments = struct { count: u64, mean: f64, m2: f64, min: f64, max: f64 }
 type Regression = struct { count: u64, mean_x: f64, mean_y: f64, m2_x: f64, m2_y: f64, cov: f64 }
+type RegressionDiagnostic = struct { fitted: f64, residual: f64, leverage: f64, standardized: f64, cook: f64 }
+type SurvivalPoint = struct { time: f64, survival: f64, cumulative_hazard: f64, at_risk: usize, events: usize, censored: usize }
+type ControlLimits = struct { center: f64, lower: f64, upper: f64 }
+type NormalCapability = struct { mean: f64, within_sigma: f64, overall_sigma: f64, cp: f64, cpk: f64, pp: f64, ppk: f64, individuals: ControlLimits, moving_range: ControlLimits }
+type CapabilityPerformance = struct { observed_below_ppm: f64, observed_above_ppm: f64, within_below_ppm: f64, within_above_ppm: f64, overall_below_ppm: f64, overall_above_ppm: f64 }
+type LognormalCapability = struct { log_mean: f64, log_sigma: f64, median: f64, pp: f64, ppl: f64, ppu: f64, ppk: f64, observed_below_ppm: f64, observed_above_ppm: f64, expected_below_ppm: f64, expected_above_ppm: f64 }
+type BinomialCapability = struct { defective: u64, inspected: u64, fraction: f64, ppm: f64, confidence: Interval, target_fraction: f64, meets_target: bool, upper_bound_meets_target: bool, beyond_limits: usize }
+type BatchCapability = struct { batches: usize, batch_size: usize, mean: f64, within_sigma: f64, between_sigma: f64, between_within_sigma: f64, overall_sigma: f64, cp: f64, cpk: f64, pp: f64, ppk: f64, observed_ppm: f64, expected_bw_ppm: f64, expected_overall_ppm: f64 }
+type GageLinearity = struct { reference_count: usize, repeats: usize, average_bias: f64, intercept: f64, slope: f64, linearity: f64, residual_sigma: f64, slope_standard_error: f64, slope_p: f64 }
+type AttributeAgreementRate = struct { matched: usize, total: usize, fraction: f64, confidence: Interval }
+type AttributeAgreement = struct { items: usize, appraisers: usize, trials: usize, between_matched: usize, all_vs_standard_matched: usize, pooled_rating_fraction: f64, pooled_rating_kappa: f64, kappa_defined: bool }
+type GageRunSummary = struct { parts: usize, operators: usize, repeats: usize, grand_mean: f64, minimum: f64, maximum: f64, max_repeat_range: f64 }
+type CrossTabSummary = struct { rows: usize, columns: usize, total: u64 }
+type ReportAggregate = struct { sum: f64, count: usize }
+type SubgroupSpreadKind = enum u8 { Range, StdDev }
+type AttributeControlKind = enum u8 { P, Np, C, U }
+type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
+type CusumPoint = struct { high: f64, low: f64, high_signal: bool, low_signal: bool }
+type ControlSignal = struct { beyond3: bool, same_side9: bool, trend6: bool, alternating14: bool, two_of_three2: bool, four_of_five1: bool, within1_15: bool, outside1_8: bool }
+type AgreementLimits = struct { bias: f64, lower: f64, upper: f64 }
+type BinaryPoint = struct { tp: usize, fp: usize }
+type BinaryCurve = struct { points: []BinaryPoint, positives: usize, negatives: usize }
+type CalibrationBin = struct { count: usize, positives: usize, score_sum: f64 }
+type BinaryConfusion = struct { true_negative: usize, false_positive: usize, false_negative: usize, true_positive: usize }
 type QuantileMethod = enum u8 { R1, R2, R3, R4, R5, R6, R7, R8, R9, Nearest }
 type Bandwidth = enum u8 { Silverman, Scott }
 type Distribution = enum u8 { Normal, Exponential, Gamma, Beta }
@@ -3068,10 +3371,49 @@ fn variance_population(s: *const Moments) -> (f64, bool)
 fn variance_sample(s: *const Moments) -> (f64, bool)
 fn standard_deviation_population(s: *const Moments) -> (f64, bool)
 fn standard_deviation_sample(s: *const Moments) -> (f64, bool)
+fn agreement_limits(left: []const f64, right: []const f64, critical: f64) -> (AgreementLimits, bool)
+fn binary_curve(scores: []const f64, positive: []const bool, order: []usize, out: []BinaryPoint) -> (BinaryCurve, err)
+fn roc_auc(c: *const BinaryCurve) -> (f64, bool)
+fn roc_partial_auc(c: *const BinaryCurve, max_fpr: f64) -> (f64, bool)
+fn youden_index(c: *const BinaryCurve) -> (usize, f64, bool)
+fn average_precision(c: *const BinaryCurve) -> (f64, bool)
+fn binary_calibration(scores: []const f64, positive: []const bool, bins: []CalibrationBin) -> err
+fn binary_confusion(scores: []const f64, positive: []const bool, threshold: f64) -> (BinaryConfusion, err)
+fn decision_curve(scores: []const f64, positive: []const bool, thresholds: []const f64, model: []f64, treat_all: []f64) -> err
 fn regression() -> Regression
 fn regression_add(s: *Regression, x: f64, y: f64)
 fn regression_slope(s: *const Regression) -> (f64, bool)
 fn regression_intercept(s: *const Regression) -> (f64, bool)
+fn regression_diagnostics(x: []const f64, y: []const f64, out: []RegressionDiagnostic) -> err
+fn survival_curve(times: []const f64, event: []const bool, out: []SurvivalPoint) -> ([]SurvivalPoint, err)
+fn log_logistic4(dose: f64, lower: f64, upper: f64, ec50: f64, slope: f64) -> (f64, err)
+fn interval_hazard(times: []const f64, event: []const bool, edges: []const f64, counts: []u64, exposure: []f64, rates: []f64) -> err
+fn imr_limits(values: []const f64, moving: []f64) -> (ControlLimits, ControlLimits, err)
+fn normal_capability_individuals(values: []const f64, lsl: f64, usl: f64, moving: []f64) -> (NormalCapability, err)
+fn normal_capability_performance(values: []const f64, lsl: f64, usl: f64, summary: NormalCapability) -> (CapabilityPerformance, err)
+fn lognormal_capability(values: []const f64, lsl: f64, usl: f64) -> (LognormalCapability, err)
+fn binomial_capability(counts: []const usize, sizes: []const usize, target_fraction: f64, confidence: f64, controls: []AttributeControlPoint, cumulative: []f64) -> (BinomialCapability, err)
+fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, batch_means: []f64, batch_spreads: []f64) -> (BatchCapability, err)
+fn gage_linearity(references: []const f64, measurements: []const f64, repeats: usize, critical: f64, biases: []f64, means: []f64, fitted: []f64, lower: []f64, upper: []f64) -> (GageLinearity, err)
+fn attribute_agreement(standard: []const usize, ratings: []const usize, appraisers: usize, trials: usize, categories: usize, confidence: f64, within: []AttributeAgreementRate, versus_standard: []AttributeAgreementRate) -> (AttributeAgreement, err)
+fn gage_run_summary(values: []const f64, parts: usize, operators: usize, repeats: usize) -> (GageRunSummary, err)
+fn cross_tabulate(row_ids: []const usize, column_ids: []const usize, rows: usize, columns: usize, cells: []u64, row_totals: []u64, column_totals: []u64) -> (CrossTabSummary, err)
+fn matrix_aggregate(row_ids: []const usize, column_ids: []const usize, values: []const f64, present: []const bool, rows: usize, columns: usize, cells: []ReportAggregate, row_totals: []ReportAggregate, column_totals: []ReportAggregate) -> (ReportAggregate, err)
+fn imr_phase_control(values: []const f64, starts: []const bool, moving: []f64, out: []AttributeControlPoint) -> err
+fn xbar_r_limits(values: []const f64, subgroup: usize, means: []f64, ranges: []f64) -> (ControlLimits, ControlLimits, err)
+fn attribute_control(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, out: []AttributeControlPoint) -> err
+fn attribute_control_phased(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, starts: []const bool, out: []AttributeControlPoint) -> err
+fn laney_control(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, out: []AttributeControlPoint) -> (f64, err)
+fn laney_control_phased(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, starts: []const bool, out: []AttributeControlPoint, sigma_z: []f64) -> err
+fn geometric_gap_percentile(probability: f64, fraction: f64) -> (f64, bool)
+fn g_control_limits(gaps: []const usize) -> (ControlLimits, err)
+fn t_exponential_control_limits(intervals: []const f64) -> (ControlLimits, err)
+fn control_run_rules(values: []const f64, centers: []const f64, sigmas: []const f64, out: []ControlSignal) -> err
+fn control_run_rules_phased(values: []const f64, centers: []const f64, sigmas: []const f64, starts: []const bool, out: []ControlSignal) -> err
+fn xbar_s_limits(values: []const f64, subgroup: usize, means: []f64, deviations: []f64) -> (ControlLimits, ControlLimits, err)
+fn subgroup_control_phased(kind: SubgroupSpreadKind, values: []const f64, subgroup: usize, starts: []const bool, means: []f64, spreads: []f64, mean_points: []AttributeControlPoint, spread_points: []AttributeControlPoint) -> err
+fn cusum_control(values: []const f64, center: f64, reference: f64, decision: f64, out: []CusumPoint) -> err
+fn ewma_control(values: []const f64, center: f64, sigma: f64, lambda: f64, width: f64, out: []AttributeControlPoint) -> err
 fn correlation(s: *const Regression) -> (f64, bool)
 fn sum_plain(values: []const f64) -> f64
 fn mean_compensated(values: []const f64) -> (f64, bool)
@@ -3093,11 +3435,24 @@ fn correlation_spearman(x: []const f64, y: []const f64, scratch: []f64, order: [
 fn correlation_kendall(x: []const f64, y: []const f64) -> (f64, bool)
 fn kde_bandwidth(values: []const f64, rule: Bandwidth) -> (f64, bool)
 fn kde(values: []const f64, bandwidth: f64, points: []const f64, out: []f64) -> err
+fn kde2d(x: []const f64, y: []const f64, bandwidth_x: f64, bandwidth_y: f64, grid_x: []const f64, grid_y: []const f64, out: []f64) -> err
 fn bootstrap[Ctx: type](r: *rand.Pcg64, values: []const f64, ctx: *Ctx, statistic: fn(*Ctx, []const f64) -> f64, rounds: usize, confidence: f64, sample: []f64, stats: []f64) -> (Interval, err)
 fn jackknife[Ctx: type](values: []const f64, ctx: *Ctx, statistic: fn(*Ctx, []const f64) -> f64, scratch: []f64) -> (Jackknife, err)
 fn interval_wilson(successes: u64, trials: u64, confidence: f64) -> (Interval, err)
 fn beta_quantile(p: f64, a: f64, b: f64) -> f64
 fn interval_clopper_pearson(successes: u64, trials: u64, confidence: f64) -> (Interval, err)
+fn binomial_acceptance_probability(sample_size: usize, acceptance_number: usize, defective_fraction: f64) -> (f64, err)
+fn log_binomial(n: u64, k: u64) -> f64
+fn hypergeometric_pmf(population: u64, successes: u64, draws: u64, observed: u64) -> (f64, err)
+fn hypergeometric_cdf(population: u64, successes: u64, draws: u64, observed: u64) -> (f64, err)
+fn hypergeometric_sf(population: u64, successes: u64, draws: u64, observed: u64) -> (f64, err)
+type GageRrMeanSquares = struct { part: f64, operator: f64, interaction: f64, repeatability: f64 }
+type GageRrComponents = struct { repeatability: f64, operator: f64, interaction: f64, part: f64, gage: f64, total: f64 }
+type GageRrWork = struct { part_means: []f64, operator_means: []f64, cell_means: []f64 }
+type GageRrSummary = struct { mean_squares: GageRrMeanSquares, components: GageRrComponents, interaction_p: f64, interaction_included: bool }
+fn gage_finite(value: f64) -> bool
+fn gage_rr_variance_components(parts: usize, operators: usize, repeats: usize, means: *const GageRrMeanSquares, include_interaction: bool) -> (GageRrComponents, err)
+fn gage_rr_crossed(values: []const f64, parts: usize, operators: usize, repeats: usize, alpha: f64, work: *GageRrWork) -> (GageRrSummary, err)
 fn value_at_risk(sorted: []const f64, level: f64) -> (f64, bool)
 fn expected_shortfall(sorted: []const f64, level: f64) -> (f64, bool)
 fn fit_moments(values: []const f64, distribution: Distribution) -> (Fit, err)
@@ -4229,6 +4584,7 @@ fn format_f64(a: *mem.Arena, selected_locale: Locale, value: f64, options: Numbe
 fn parse_f64(selected_locale: Locale, value: str) -> (f64, err)
 fn format_currency(a: *mem.Arena, selected_locale: Locale, value: decimal.Decimal, options: CurrencyOptions) -> (str, err)
 fn format_date(a: *mem.Arena, selected_locale: Locale, value: calendar.DateTime, style: DateStyle) -> (str, err)
+fn format_pattern(a: *mem.Arena, selected_locale: Locale, pattern: str, value: calendar.DateTime) -> (str, err)
 fn compare(selected_locale: Locale, a: str, b: str) -> i32
 fn lower(a: *mem.Arena, selected_locale: Locale, value: str) -> (str, err)
 fn upper(a: *mem.Arena, selected_locale: Locale, value: str) -> (str, err)
@@ -4252,13 +4608,19 @@ error TooLarge
 
 fn parse(a: *mem.Arena, source: str, options: Options) -> (Template, err)
 fn execute(template: *const Template, writer: *io.Writer, bindings: []const Binding) -> err
+fn execute_with_limits(template: *const Template, writer: *io.Writer, bindings: []const Binding, max_steps: u64, max_output: u64) -> err
 fn validate[T: type](template: *const Template) -> err
 fn execute_typed[T: type](template: *const Template, writer: *io.Writer, value: *const T) -> err
+fn execute_typed_with_limits[T: type](template: *const Template, writer: *io.Writer, value: *const T, max_steps: u64, max_output: u64) -> err
 ```
 
 Templates provide deterministic interpolation, conditionals and bounded iteration
 over explicit values or compile-time-inspected structs. The core engine performs no
 contextual escaping; specialized output modules such as `e.fmt.html.template` own it.
+Execution defaults to 100,000 node/iteration steps and 16 MiB of output. Every nested
+block shares these budgets; empty repeats consume steps and oversized writes fail
+before reaching the sink. The explicit-limit APIs accept larger budgets; zero selects
+the defaults. A `TooLarge` error can leave already-written output in the caller's sink.
 
 ### `e.text.regex`
 
@@ -5817,6 +6179,7 @@ error Unsupported
 
 fn open(a: *mem.Arena, path: str, flags: OpenFlags) -> (File, err)
 fn create_new(a: *mem.Arena, path: str) -> (File, err)
+fn create_new_with_mode(a: *mem.Arena, path: str, mode: u32) -> (File, err)
 fn read(f: File, buf: []u8) -> (usize, err)
 fn write(f: File, buf: []const u8) -> (usize, err)
 fn read_detail(f: File, buffer: []u8, detail: *ErrorDetail) -> (usize, err)
@@ -5967,6 +6330,9 @@ move between devices is `Unsupported` rather than a copy nothing asked for.
 for reading and writing with no sharing. It is the one call that makes a name safe to hand
 out, since the name is taken before it is returned; `OpenFlags` has no exclusive form
 because that has to be one operation, not a check and then an open.
+`create_new_with_mode` sets the initial POSIX permission bits in that same exclusive
+create, subject to the process umask; Windows maps write bits to its read-only
+attribute. `create_new` retains its owner-only default.
 
 `canonical` is absolute with every symbolic link, `.` and `..` resolved, and it requires
 the path to exist: both hosts answer it by opening the path and asking what was opened, so
@@ -9617,6 +9983,11 @@ fn triangulate(rotation: []const f64, t: []const f64, a: Point, b: Point) -> (ge
 fn to_normalised(kinv: []const f64, p: Point) -> Point
 fn structure_from_motion(k: []const f64, a: []const Point, b: []const Point, rotation: []f64, translation: []f64, points: []geom3.Vec3, scratch: []Point) -> err
 fn pose_candidate(u: []const f64, r1: []const f64, r2: []const f64, pose: usize, rotation: []f64, t: []f64)
+type TlsLine = struct { point: Point, direction: Point }
+fn tls_distance(fit: TlsLine, p: Point) -> f64
+fn tls_axis(sxx: f64, sxy: f64, syy: f64, mx: f64, my: f64) -> (TlsLine, err)
+fn fit_line_tls(points: []const Point, n: usize) -> (TlsLine, err)
+fn fit_line_tls_robust(points: []const Point, n: usize, threshold: f64, fit: *TlsLine, inliers: []bool) -> (usize, err)
 ```
 
 `harris_corners`, `hough_lines` (skimage-identical accumulator), `homography` (normalised
@@ -9625,7 +9996,9 @@ DLT) with `apply_homography`, `fundamental_matrix` (eight-point, rank two) with
 `phase_correlate`, `optical_flow_lk` and `optical_flow_farneback`, `icp` (Kabsch),
 `orb` (FAST-9, Harris ranking, rBRIEF with the OpenCV pattern), `sift` (three octaves,
 4x4x8 descriptors), `calibrate_camera` (Zhang) and `structure_from_motion` (essential
-matrix, cheirality, linear triangulation); `svd3`, `hamming`.
+matrix, cheirality, linear triangulation); `svd3`, `hamming`. Orthogonal
+total-least-squares lines (`fit_line_tls` over `tls_axis`, vertical-safe) with
+one outlier-rejection pass (`fit_line_tls_robust`) and `tls_distance`.
 
 ### `e.gfx.scene`
 
@@ -12322,10 +12695,14 @@ type PathSet = struct { ids: []NodeId, count: usize }
 error Invalid
 error TooDeep
 error Unsupported
+error TooLarge
+const DEFAULT_MAX_BYTES: usize = 16777216usize
 const NONE: NodeId = 4294967295u32
 
 fn slurp(a: *mem.Arena, source: io.Reader) -> ([]u8, err)
+fn slurp_with_limit(a: *mem.Arena, source: io.Reader, limit: usize) -> ([]u8, err)
 fn reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Reader, err)
+fn reader_with_limit(a: *mem.Arena, source: io.Reader, options: Options, limit: usize) -> (Reader, err)
 fn is_space(c: u8) -> bool
 fn is_name_byte(c: u8) -> bool
 fn name_end(source: []const u8, at: usize) -> usize
@@ -12360,6 +12737,10 @@ fn xpath(a: *mem.Arena, document: *const Document, context: NodeId, path: str) -
 
 XML 1.0 names, namespaces and entity escaping are supported. External entities and
 DTDs are always `Unsupported`; the module never performs hidden I/O.
+`reader` and `slurp` cap ingestion at 16 MiB and return `TooLarge` without keeping
+partial input. Their explicit-limit variants accept an inclusive maximum up to
+1 GiB; zero selects the default. `stream` borrows already-buffered bytes, so its
+input budget remains the caller's responsibility.
 
 ### `e.fmt.html`
 
@@ -12467,13 +12848,17 @@ error TooLarge
 
 fn parse(a: *mem.Arena, source: str, options: Options) -> (Template, err)
 fn execute(value: *const Template, writer: *io.Writer, bindings: []const template.Binding) -> err
+fn execute_with_limits(value: *const Template, writer: *io.Writer, bindings: []const template.Binding, max_steps: u64, max_output: u64) -> err
 fn validate[T: type](value: *const Template) -> err
 fn execute_typed[T: type](value: *const Template, writer: *io.Writer, data: *const T) -> err
+fn execute_typed_with_limits[T: type](value: *const Template, writer: *io.Writer, data: *const T, max_steps: u64, max_output: u64) -> err
 ```
 
 HTML templates track text, attribute, URI, CSS and script contexts and apply the
 matching escaping rules. Ambiguous or unsafe context transitions fail at parse time;
 trusted raw insertion is intentionally absent from version 1.
+Execution uses the text engine's shared work and output budgets, counting the final
+escaped bytes. The same defaults and explicit-limit APIs apply to typed rendering.
 
 ### `e.fmt.opus`
 
@@ -12794,6 +13179,10 @@ fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -
 PNG decoding supports the standard grayscale, RGB, indexed and alpha color types and
 rejects dimensions before pixel allocation. Encoding is deterministic for identical
 pixels and options.
+For PNG, JPEG and WebP, each zero dimension limit selects 16,384 and a zero pixel
+limit selects 16,777,216. Explicit nonzero limits can raise or lower these bounds;
+raising one field does not disable defaults in the others. Encoded input buffering
+and codec workspace are separate costs; these limits bound decoded dimensions.
 
 ### `e.fmt.jpeg`
 
@@ -14202,6 +14591,48 @@ deterministic Miller-Rabin test. Tables are caller storage: `sieve` needs
 `factor_trial` fifteen slots for any 64-bit value, `discrete_log_bsgs` `2 * ceil(sqrt(bound))`
 words. `crt` takes pairwise coprime moduli whose product fits a `u64`.
 
+### `e.math.pkpd`
+
+```neper
+type Peak = struct { value: f64, time: f64 }
+type Nca = struct { auc: f64, auc_inf: f64, aumc: f64, mrt: f64, cmax: f64, tmax: f64, lambda_z: f64, half_life: f64 }
+type Fit = struct { value: f64, iterations: u32, converged: bool }
+type Data = struct { x: []const f64, y: []const f64 }
+error TooFew
+error Invalid
+
+fn auc_linear(times: []const f64, values: []const f64) -> f64
+fn auc_log_linear(times: []const f64, values: []const f64) -> f64
+fn aumc_linear(times: []const f64, values: []const f64) -> f64
+fn peak(times: []const f64, values: []const f64) -> Peak
+fn terminal_rate(times: []const f64, values: []const f64, first: usize) -> (f64, err)
+fn half_life(lambda_z: f64) -> f64
+fn nca(times: []const f64, values: []const f64, first: usize, out: *Nca) -> err
+fn emax(e0: f64, e_max: f64, ec50: f64, c: f64) -> f64
+fn hill(e0: f64, e_max: f64, ec50: f64, h: f64, c: f64) -> f64
+fn mm_rate(v_max: f64, k_m: f64, s: f64) -> f64
+fn emax_hill_sse(data: *Data, parameters: []const f64) -> f64
+fn emax_hill(data: *Data, parameters: []f64, scale: f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (Fit, err)
+fn michaelis_menten_sse(data: *Data, parameters: []const f64) -> f64
+fn michaelis_menten(data: *Data, parameters: []f64, scale: f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (Fit, err)
+```
+
+Non-compartmental analysis and two saturating dose-response fits. The areas
+are the linear and the linear-up/log-down trapezoids (`auc_linear`,
+`auc_log_linear`) and the first-moment area (`aumc_linear`); `peak` answers the
+largest concentration and the first time it is reached. `terminal_rate` fits
+`ln` concentration on time over the window from `first` to the last sample
+(strictly positive and ordered there) and `half_life` inverts it; `nca` fills a
+whole `Nca` record (`auc` the linear trapezoid) and extrapolates the last
+interval to infinity. The models
+are `emax` (`E0 + Emax C / (EC50 + C)`), `hill` (the same with `C^h` and
+`EC50^h`) and `mm_rate` (`Vmax S / (Km + S)`); the fits `emax_hill` and
+`michaelis_menten` minimise `emax_hill_sse` and `michaelis_menten_sse` over
+`e.math.opt`'s Nelder-Mead, taking `[E0, Emax, EC50, h]` (or `[Vmax, Km]`) as
+an initial guess in place and leaving the fitted values there. A window with
+fewer than two samples is `TooFew`; a non-positive terminal sample, an
+unordered window or a parameter slice of the wrong length is `Invalid`.
+
 ### `e.math.root`
 
 ```neper
@@ -14583,13 +15014,17 @@ fn sigmoid(z: f64) -> f64
 fn predict(x: []const f64, d: usize, i: usize, coefficients: []const f64) -> f64
 fn predict_probability(x: []const f64, d: usize, i: usize, coefficients: []const f64) -> f64
 fn logistic(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, tolerance: f64, max_iterations: u32, coefficients: []f64, scratch: []f64) -> (u32, err)
+fn pls_solve(matrix: []f64, rhs: []f64, c: usize) -> err
+fn pls(x: []const f64, y: []const f64, n: usize, d: usize, components: usize, coefficients: []f64, scratch: []f64) -> err
 ```
 
 Row-major samples (`n` rows of `d`), coefficients `d + 1` with the intercept last:
 `ols` and `ridge` solve the normal equations (`Singular` without a unique solution),
 `lasso` is cyclic coordinate descent with soft thresholding on
 `(1 / 2n) Σ (y - Xβ)² + λ Σ |β|`, `logistic` is Newton on the log loss with a ridge
-of `lambda`; `predict` and `predict_probability` apply the coefficients.
+of `lambda`; `predict` and `predict_probability` apply the coefficients; `pls` is
+NIPALS partial least squares over `components` directions (`pls_solve` the principal
+regression in place).
 
 ### `e.ml.cluster`
 
@@ -14859,6 +15294,73 @@ Discrete-emission models as row-major probabilities: `forward` (scaled log
 likelihood), `viterbi` (the most probable path and its log probability) and
 `baum_welch` (one re-estimation pass in place, answering the likelihood before it).
 
+### `e.ml.recurrent`
+
+```neper
+error TooSmall
+error Invalid
+
+fn sigmoid(x: f64) -> f64
+fn tanh(x: f64) -> f64
+fn lstm_step(x: []const f64, h_prev: []const f64, c_prev: []const f64, d: usize, h: usize, wx: []const f64, wh: []const f64, b: []const f64, h_new: []f64, c_new: []f64, scratch: []f64) -> err
+fn lstm_forward(x: []const f64, steps: usize, d: usize, h: usize, wx: []const f64, wh: []const f64, b: []const f64, h0: []const f64, c0: []const f64, h_out: []f64, c_out: []f64, scratch: []f64) -> err
+fn gru_step(x: []const f64, h_prev: []const f64, d: usize, h: usize, wx: []const f64, wh: []const f64, b: []const f64, h_new: []f64, scratch: []f64) -> err
+fn gru_forward(x: []const f64, steps: usize, d: usize, h: usize, wx: []const f64, wh: []const f64, b: []const f64, h0: []const f64, h_out: []f64, scratch: []f64) -> err
+```
+
+Single-layer LSTM and GRU over caller storage with packed weights (`4h` rows
+input/forget/cell/output, `3h` rows reset/update/candidate): `lstm_step` and
+`gru_step` advance one input, `lstm_forward` and `gru_forward` run a sequence
+from an initial state keeping every state.
+
+### `e.ml.gnn`
+
+```neper
+error TooSmall
+error Invalid
+
+fn relu(x: f64) -> f64
+fn leaky_relu(x: f64, slope: f64) -> f64
+fn gat_score(p: []const f64, n: usize, e: usize, i: usize, j: usize, attention: []const f64, slope: f64) -> f64
+fn gcn_layer(x: []const f64, n: usize, d: usize, e: usize, src: []const usize, dst: []const usize, m: usize, weight: []const f64, out: []f64, scratch: []f64) -> err
+fn gat_layer(x: []const f64, n: usize, d: usize, e: usize, src: []const usize, dst: []const usize, m: usize, weight: []const f64, attention: []const f64, slope: f64, out: []f64, scratch: []f64) -> err
+fn mpnn_step(x: []const f64, n: usize, d: usize, e: usize, src: []const usize, dst: []const usize, m: usize, message: []const f64, update: []const f64, out: []f64, scratch: []f64) -> err
+```
+
+Graph layers over edge lists (`src[k] -> dst[k]`) with an implicit self-loop on
+every node: `gcn_layer` (symmetric degree normalization), `gat_layer`
+(single-head max-subtracted softmax attention, `gat_score` the unnormalized
+edge score) and `mpnn_step` (sum aggregation with separate message and update
+maps), each ending in `relu`.
+
+### `e.ml.fingerprint`
+
+```neper
+error TooSmall
+error Invalid
+
+type Graph = struct { atoms: []const u32, n: usize, src: []const usize, dst: []const usize, order: []const u8, m: usize }
+fn splitmix64(state: u64) -> u64
+fn mix(h: u64, x: u64) -> u64
+fn morgan_fingerprint(atoms: []const u32, n: usize, src: []const usize, dst: []const usize, order: []const u8, m: usize, radius: u32, bits: []u8, scratch: []u64) -> err
+fn bad_endpoints(src: []const usize, dst: []const usize, m: usize, n: usize) -> bool
+fn collect_bits(ids: []const u64, n: usize, bits: []u8)
+fn path_fingerprint(atoms: []const u32, n: usize, src: []const usize, dst: []const usize, order: []const u8, m: usize, max_length: u32, bits: []u8, scratch: []usize) -> err
+fn tanimoto(a: []const u8, b: []const u8, n: usize) -> (f64, err)
+fn dice(a: []const u8, b: []const u8, n: usize) -> (f64, err)
+fn bit_distance(a: []const u8, b: []const u8, n: usize) -> (f64, err)
+fn butina(fp: []const u8, k: usize, w: usize, cutoff: f64, labels: []usize, order: []usize, scratch: []usize) -> (usize, err)
+fn fmcs(atoms_a: []const u32, na: usize, src_a: []const usize, dst_a: []const usize, order_a: []const u8, ma: usize, atoms_b: []const u32, nb: usize, src_b: []const usize, dst_b: []const usize, order_b: []const u8, mb: usize, budget: u32, map_a: []usize, scratch: []usize) -> (usize, err)
+fn fmcs_search(ga: *const Graph, gb: *const Graph, work_a: []usize, work_b: []usize, used_a: []usize, used_b: []usize, map_a: []usize, best: *usize, budget: *u32, mapped: usize, ra: usize, rb: usize)
+```
+
+Circular (Morgan) and path fingerprints over atom types and bond orders folded
+into caller-sized bit vectors (`splitmix64`/`mix` the hashing,
+`collect_bits` the folding); `tanimoto`, `dice` and `bit_distance` scoring;
+Taylor-`butina` clustering by falling neighbour count; and `fmcs`
+(McGregor branch and bound over compatible edge pairs, `fmcs_search` one
+state, budget-bounded with the best map kept).
+
 ### `e.ml.rl`
 
 ```neper
@@ -14887,12 +15389,17 @@ fn pca_online(w: []f64, sample: []const f64, rate: f64) -> (f64, err)
 fn frequent_directions_insert(sketch: []f64, rows: usize, d: usize, filled: *usize, sample: []const f64, scratch: []f64) -> err
 fn tsne(x: []const f64, n: usize, d: usize, perplexity: f64, iterations: u32, rate: f64, momentum: f64, y: []f64, scratch: []f64) -> err
 fn frequent_directions(x: []const f64, n: usize, d: usize, sketch: []f64, rows: usize, scratch: []f64) -> (usize, err)
+fn umap_affinity(dist: []const f64, k: usize, rho: f64, sigma: f64) -> f64
+fn umap_sigma(dist: []const f64, k: usize, rho: f64, goal: f64) -> f64
+fn umap(x: []const f64, n: usize, d: usize, neighbors: usize, a: f64, b: f64, epochs: u32, rate: f64, negatives: usize, y: []f64, r: *rand.Pcg64, fscratch: []f64, iscratch: []usize) -> err
 ```
 
 `symmetric_eigen` (cyclic Jacobi) serves `pca` (mean, falling variances, components
 by row) and `pca_project`; `pca_online` is Oja's rule; `frequent_directions_insert`
 maintains the deterministic sketch; `tsne` is exact t-SNE with a perplexity search
-and momentum gradient descent into two dimensions.
+and momentum gradient descent into two dimensions; `umap` (`umap_sigma` smooth-kNN
+scales, `umap_affinity` the fuzzy sums) runs exact neighbourhoods, symmetrized
+fuzzy affinities, a PCA start and cross-entropy SGD with uniform negatives.
 
 ### `e.ml.ann`
 
@@ -15672,4 +16179,359 @@ fn attenuate(l: Listener, s: Source) -> i32
 fn place(m: *mixer.Mixer, voice: usize, l: Listener, s: Source) -> err
 fn trigger(m: *mixer.Mixer, c: *Cue, variants: []const audio.Frames, state: *rand.Pcg64, l: Listener, s: Source) -> (usize, err)
 fn step_cues(cues: []Cue) -> err
+```
+
+### `e.gfx.chart`
+
+```neper
+type BinaryMetric = enum u8 { Roc, PrecisionRecall, CumulativeGain, Lift }
+type ColorVision = enum u8 { Typical, Protan, Deutan, Tritan }
+type Lab = struct { l: f64, a: f64, b: f64 }
+type PaletteSeparation = struct { difference: f64, first: usize, second: usize }
+type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, SlopeGraph, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble, Pp, Mosaic, Association }
+type ScaleKind = enum u8 { Linear, Log10, Symlog }
+type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
+type Tick = struct { value: f32, fraction: f32 }
+type Coord = struct { x: f32, y: f32 }
+type LabelAlign = enum u8 { Left, Center, Right }
+type Label = struct { text: str, anchor: Coord, align: LabelAlign }
+type LegendItem = struct { swatch: geometry.Rect, label: Label }
+type LabelPlacement = struct { label: Label, box: geometry.Rect, placed: bool, slot: u8 }
+type PointLabels = struct { labels: []LabelPlacement, placed: usize }
+type Segment = struct { from: Coord, to: Coord }
+type Cell = struct { rect: geometry.Rect, value: f32 }
+type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
+type Layout = struct { kind: Kind, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32 }
+type MatrixLayout = struct { kind: Kind, cells: []Cell, columns: usize, rows: usize, value_min: f32, value_max: f32 }
+type HexCell = struct { center: Coord, count: u64 }
+type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
+type Bin2dLayout = struct { matrix: MatrixLayout, counts: []u64, max_count: u64, total_count: u64 }
+type Density2dLayout = struct { contours: []Layout, grid: []f64, cutoffs: []f64, peak: f64 }
+type RaincloudLayout = struct { cloud: Layout, drops: Layout, summary: Layout }
+type MarginalHistogramLayout = struct { scatter: Layout, top: Layout, right: Layout }
+type DoseResponseLayout = struct { observations: Layout, curve: Layout }
+type InfluenceLayout = struct { points: Layout, bubbles: Layout, guides: Layout, max_cook: f64 }
+type FishboneCause = struct { category: usize, parent: i32, text: str }
+type FishboneLayout = struct { spine: Layout, ribs: Layout, causes: Layout, head: Layout, labels: []Label }
+type CauseTreeNode = struct { parent: i32, text: str }
+type CauseTreePlacement = struct { depth: usize, leaf_start: usize, leaf_count: usize, children: usize }
+type CauseTreeWork = struct { placements: []CauseTreePlacement, cursor: []usize }
+type CauseTreeLayout = struct { nodes: Layout, connectors: Layout, labels: []Label, levels: usize, leaves: usize }
+type CapabilitySixpackStorage = struct { moving: []f64, individual_points: []Coord, individual_lines: []Segment, range_points: []Coord, range_lines: []Segment, recent_points: []Coord, histogram_counts: []u64, histogram_bars: []geometry.Rect, within_curve: []Segment, overall_curve: []Segment, probability_points: []Coord, probability_reference: []Segment, interval_bars: []geometry.Rect, guides: []Segment }
+type NormalCapabilityStorage = struct { moving: []f64, counts: []u64, bars: []geometry.Rect, within_curve: []Segment, overall_curve: []Segment, guides: []Segment }
+type NormalCapabilityLayout = struct { histogram: Layout, within_curve: Layout, overall_curve: Layout, guides: Layout, summary: stat.NormalCapability, performance: stat.CapabilityPerformance }
+type LognormalCapabilityStorage = struct { counts: []u64, bars: []geometry.Rect, fit_curve: []Segment, guides: []Segment }
+type LognormalCapabilityLayout = struct { histogram: Layout, fit_curve: Layout, guides: Layout, summary: stat.LognormalCapability }
+type BinomialCapabilityStorage = struct { controls: []stat.AttributeControlPoint, cumulative_rates: []f64, p_points: []Coord, p_lines: []Segment, cumulative_points: []Coord, cumulative_lines: []Segment, upper_limit: []Segment, lower_limit: []Segment, guides: []Segment, signal_points: []Coord }
+type BinomialCapabilityLayout = struct { p_chart: Layout, cumulative: Layout, upper_limit: Layout, lower_limit: Layout, guides: Layout, signals: Layout, summary: stat.BinomialCapability }
+type BatchCapabilityStorage = struct { batch_means: []f64, batch_spreads: []f64, mean_points: []Coord, mean_lines: []Segment, spread_bars: []geometry.Rect, guides: []Segment }
+type BatchCapabilityLayout = struct { means: Layout, spreads: Layout, guides: Layout, summary: stat.BatchCapability }
+type GageLinearityStorage = struct { biases: []f64, mean_biases: []f64, fitted_biases: []f64, ci_lower: []f64, ci_upper: []f64, raw_points: []Coord, mean_points: []Coord, fit_segments: []Segment, ci_segments: []Segment, zero_guide: []Segment }
+type GageLinearityLayout = struct { observations: Layout, means: Layout, fit: Layout, confidence: Layout, zero_line: Layout, summary: stat.GageLinearity }
+type AttributeAgreementStorage = struct { within_rates: []stat.AttributeAgreementRate, standard_rates: []stat.AttributeAgreementRate, within_points: []Coord, standard_points: []Coord, within_intervals: []Segment, standard_intervals: []Segment }
+type AttributeAgreementLayout = struct { within: Layout, within_intervals: Layout, versus_standard: Layout, standard_intervals: Layout, summary: stat.AttributeAgreement }
+type GageRunStorage = struct { operator_points: []Coord, operator_layouts: []Layout, part_centers: []Coord, part_dividers: []Segment, mean_guide: []Segment }
+type GageRunLayout = struct { operators: []Layout, part_centers: []Coord, dividers: Layout, reference: Layout, summary: stat.GageRunSummary }
+type MapVertex = struct { lon: f64, lat: f64 }
+type MapRegion = struct { key: str }
+type MapMetric = struct { key: str, value: f64 }
+type MapRing = struct { region: usize, first: usize, count: usize, hole: bool }
+type MapProjectedRing = struct { first: usize, count: usize, hole: bool, reverse: bool }
+type MapRegionLayout = struct { key: str, rings: []const MapProjectedRing, points: []const Coord, has_value: bool, value: f64, fraction: f32 }
+type ChoroplethStorage = struct { points: []Coord, rings: []MapProjectedRing, regions: []MapRegionLayout }
+type ChoroplethLayout = struct { regions: []MapRegionLayout, minimum: f64, maximum: f64, has_values: bool }
+type MapSite = struct { key: str, lon: f64, lat: f64, value: f64, present: bool }
+type ProportionalMapLayout = struct { marks: Layout, maximum: f64, present_count: usize }
+type ReportCellKind = enum u8 { Corner, ColumnHeader, RowHeader, Body, RowTotal, ColumnTotal, GroupSubtotal, GrandTotal }
+type ReportBarScope = enum u8 { None, Row, Global }
+type ReportCell = struct { rect: geometry.Rect, bar: geometry.Rect, kind: ReportCellKind, value: f64, present: bool, source: usize }
+type CrossTabStorage = struct { counts: []u64, row_totals: []u64, column_totals: []u64, cells: []ReportCell }
+type CrossTabLayout = struct { cells: []ReportCell, summary: stat.CrossTabSummary, display_rows: usize, display_columns: usize }
+type MatrixReportStorage = struct { aggregates: []stat.ReportAggregate, row_totals: []stat.ReportAggregate, column_totals: []stat.ReportAggregate, group_aggregates: []stat.ReportAggregate, group_totals: []stat.ReportAggregate, cells: []ReportCell }
+type MatrixReportLayout = struct { cells: []ReportCell, grand: stat.ReportAggregate, display_rows: usize, display_columns: usize, group_count: usize }
+type CapabilitySixpackLayout = struct { individuals: Layout, moving_range: Layout, recent: Layout, histogram: Layout, within_curve: Layout, overall_curve: Layout, probability: Layout, intervals: Layout, guides: Layout, summary: stat.NormalCapability }
+type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
+type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
+type GanttTask = struct { row: usize, start: f64, end: f64, complete: f32 }
+type ValueStreamStep = struct { process_time: f64, value_added_time: f64, wait_before: f64, good_fraction: f64 }
+type ValueStreamSummary = struct { process_time: f64, value_added_time: f64, wait_time: f64, lead_time: f64, process_cycle_efficiency: f64, rolled_yield: f64 }
+type ValueStreamLayout = struct { nodes: Layout, connectors: Layout, process: Layout, waiting: Layout, summary: ValueStreamSummary }
+type ValueStreamFlow = enum u8 { Push, Fifo, Pull }
+type ValueStreamWork = struct { boxes: []geometry.Rect, arrows: []Segment, process_bars: []geometry.Rect, wait_bars: []geometry.Rect }
+type FutureValueStreamWork = struct { current: ValueStreamWork, future: ValueStreamWork, fifo_cues: []geometry.Rect, pull_cues: []geometry.Rect, over_takt: []geometry.Rect, pacemaker: []geometry.Rect }
+type FutureValueStreamLayout = struct { current: ValueStreamLayout, future: ValueStreamLayout, fifo: Layout, pull: Layout, over_takt: Layout, pacemaker: Layout, takt_time: f64, lead_reduction: f64, pce_gain: f64, yield_gain: f64 }
+type CapTableSummary = struct { before_shares: u64, after_shares: u64, pool_added: u64, investor_added: u64, incumbent_fraction: f64, pool_fraction: f64, investor_fraction: f64 }
+type CapTableWork = struct { before_bars: []geometry.Rect, after_bars: []geometry.Rect, before_layers: []Layout, after_layers: []Layout, before_fractions: []f64, after_fractions: []f64, bridge_bars: []geometry.Rect, bridge_links: []Segment }
+type CapTableLayout = struct { before: []Layout, after: []Layout, bridge: Layout, before_fractions: []f64, after_fractions: []f64, pool_present: bool, investor_present: bool, summary: CapTableSummary }
+type TornadoCase = struct { low_result: f64, high_result: f64 }
+type TornadoLayout = struct { low: Layout, high: Layout, baseline: Layout, order: []usize, minimum: f64, maximum: f64 }
+type MonteCarloLayout = struct { histogram: Layout, cdf: Layout, histogram_threshold: Layout, cdf_threshold: Layout, sorted: []f64, counts: []u64, at_or_below: u64, probability: f64 }
+type RangeInterval = struct { row: usize, lower: f64, upper: f64 }
+type RangeIntervalLayout = struct { ranges: Layout, caps: Layout }
+type FootballFieldLayout = struct { ranges: Layout, caps: Layout, benchmark: Layout }
+type ResourceSpan = struct { start: f64, end: f64, units: f64 }
+type SwimlaneStep = struct { lane: usize, stage: usize }
+type SwimlaneLink = struct { from: usize, to: usize }
+type KanbanCard = struct { column: usize, height: f32 }
+type KanbanStatus = struct { count: usize, limit: usize, exceeded: bool }
+type RiskPoint = struct { likelihood: usize, impact: usize }
+type TimelineEvent = struct { time: f64, row: usize }
+error Invalid
+error Empty
+error TooLarge
+
+fn spec(kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32) -> Spec
+fn ticks(scale: Scale, lo: f32, hi: f32, out: []Tick) -> ([]Tick, err)
+fn nice_ticks(scale: Scale, lo: f32, hi: f32, wanted: usize, out: []Tick) -> ([]Tick, err)
+fn format_ticks(values: []const Tick, out: []str, storage: []u8) -> ([]str, err)
+fn valid_label(label: *const Label) -> bool
+fn guide_labels(bounds: geometry.Rect, x_ticks: []const Tick, x_text: []const str, y_ticks: []const Tick, y_text: []const str, size: f32, out: []Label) -> ([]Label, err)
+fn category_ticks(count: usize, out: []Tick) -> ([]Tick, err)
+fn legend_items(names: []const str, origin: Coord, swatch: f32, row_height: f32, out: []LegendItem) -> ([]LegendItem, err)
+fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err)
+fn connected_scatter(x: []const f32, y: []const f32, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
+fn influence_plot(diagnostics: []const stat.RegressionDiagnostic, bounds: geometry.Rect, max_radius: f32, points: []Coord, circles: []geometry.Rect, reference_lines: []Segment) -> (InfluenceLayout, err)
+fn capability_sixpack(values: []const f64, sorted: []const f64, lsl: f64, usl: f64, panels: []const geometry.Rect, work: *CapabilitySixpackStorage) -> (CapabilitySixpackLayout, err)
+fn normal_capability(values: []const f64, lsl: f64, usl: f64, bounds: geometry.Rect, work: *NormalCapabilityStorage) -> (NormalCapabilityLayout, err)
+fn lognormal_capability(values: []const f64, lsl: f64, usl: f64, bounds: geometry.Rect, work: *LognormalCapabilityStorage) -> (LognormalCapabilityLayout, err)
+fn binomial_capability(defectives: []const usize, inspected: []const usize, target_fraction: f64, confidence: f64, panels: []const geometry.Rect, work: *BinomialCapabilityStorage) -> (BinomialCapabilityLayout, err)
+fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, panels: []const geometry.Rect, work: *BatchCapabilityStorage) -> (BatchCapabilityLayout, err)
+fn gage_linearity(references: []const f64, measurements: []const f64, repeats: usize, critical: f64, bounds: geometry.Rect, work: *GageLinearityStorage) -> (GageLinearityLayout, err)
+fn attribute_agreement(standard: []const usize, ratings: []const usize, appraisers: usize, trials: usize, categories: usize, confidence: f64, panels: []const geometry.Rect, work: *AttributeAgreementStorage) -> (AttributeAgreementLayout, err)
+fn gage_run(values: []const f64, parts: usize, operators: usize, repeats: usize, bounds: geometry.Rect, work: *GageRunStorage) -> (GageRunLayout, err)
+fn map_point(lon: f64, lat: f64, window: geo.MapWindow, bounds: geometry.Rect) -> (Coord, err)
+fn choropleth(regions: []const MapRegion, rings: []const MapRing, vertices: []const MapVertex, metrics: []const MapMetric, window: geo.MapWindow, bounds: geometry.Rect, work: *ChoroplethStorage) -> (ChoroplethLayout, err)
+fn proportional_symbol_map(sites: []const MapSite, window: geo.MapWindow, bounds: geometry.Rect, max_radius: f32, bars: []geometry.Rect) -> (ProportionalMapLayout, err)
+fn value_stream_map(steps: []const ValueStreamStep, bounds: geometry.Rect, boxes: []geometry.Rect, arrows: []Segment, process_bars: []geometry.Rect, wait_bars: []geometry.Rect) -> (ValueStreamLayout, err)
+fn future_value_stream_map(current_steps: []const ValueStreamStep, future_steps: []const ValueStreamStep, links: []const ValueStreamFlow, available_time: f64, customer_demand: f64, pacemaker: usize, current_bounds: geometry.Rect, future_bounds: geometry.Rect, work: *FutureValueStreamWork) -> (FutureValueStreamLayout, err)
+fn cap_table_waterfall(existing_shares: []const u64, pool_added: u64, investor_added: u64, before_bounds: geometry.Rect, after_bounds: geometry.Rect, bridge_bounds: geometry.Rect, work: *CapTableWork) -> (CapTableLayout, err)
+fn tornado_sensitivity(cases: []const TornadoCase, baseline: f64, bounds: geometry.Rect, order: []usize, low_bars: []geometry.Rect, high_bars: []geometry.Rect, baseline_line: []Segment) -> (TornadoLayout, err)
+fn range_intervals(items: []const RangeInterval, rows: usize, domain_min: f64, domain_max: f64, bounds: geometry.Rect, thickness: f32, bands: []geometry.Rect, endpoints: []Segment) -> (RangeIntervalLayout, err)
+fn football_field(methods: []const RangeInterval, domain_min: f64, domain_max: f64, benchmark_value: f64, bounds: geometry.Rect, bands: []geometry.Rect, endpoints: []Segment, benchmark_line: []Segment) -> (FootballFieldLayout, err)
+fn yield_curve(tenors: []const f64, yields: []const f64, tenor_max: f64, yield_min: f64, yield_max: f64, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
+fn monte_carlo_distribution(samples: []const f64, domain_min: f64, domain_max: f64, threshold: f64, histogram_bounds: geometry.Rect, cdf_bounds: geometry.Rect, sorted: []f64, counts: []u64, bars: []geometry.Rect, cdf_segments: []Segment, threshold_rules: []Segment) -> (MonteCarloLayout, err)
+fn aggregate_decomposition_tree(parents: []const usize, weights: []const f32, bounds: geometry.Rect, totals: []f64, depths: []usize, spans: []geometry.Rect, cards: []geometry.Rect, value_bars: []geometry.Rect, connectors: []Segment) -> (AggregateTreeLayout, err)
+fn date_axis_line(dates: []const time.Date, values: []const f64, start: time.Date, end: time.Date, y_min: f64, y_max: f64, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
+fn date_ticks(start: time.Date, end: time.Date, month_stride: usize, out: []DateTick) -> ([]DateTick, err)
+fn format_date_ticks(ticks_in: []const DateTick, out: []str, storage: []u8) -> ([]str, err)
+fn discrete_axis_bars(keys: []const str, values: []const f64, levels: []const str, domain_max: f64, bounds: geometry.Rect, sums: []f64, bars: []geometry.Rect, ticks_out: []Tick) -> (Layout, err)
+fn category_facet_scatter(keys: []const str, x: []const f32, y: []const f32, levels: []const str, bounds: geometry.Rect, columns: usize, gap: f32, strip_height: f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, panels: []geometry.Rect, points: []Coord, marks: []Layout, strips: []Label, counts: []usize) -> (CategoryFacetLayout, err)
+fn wrapped_legend_items(names: []const str, text_widths: []const f32, bounds: geometry.Rect, swatch: f32, gap: f32, row_height: f32, out: []LegendItem) -> (WrappedLegend, err)
+fn boxes_overlap(a: geometry.Rect, b: geometry.Rect) -> bool
+fn place_point_labels(points: []const Coord, texts: []const str, widths: []const f32, height: f32, baseline: f32, bounds: geometry.Rect, offset: f32, clearance: f32, out: []LabelPlacement) -> (PointLabels, err)
+fn masked_scatter(x: []const f32, y: []const f32, x_present: []const bool, y_present: []const bool, bounds: geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32, points: []Coord, row_ids: []usize) -> (MaskedScatterLayout, err)
+type SelectionHit = struct { mark_index: usize, source_row: usize, distance_squared: f64 }
+fn hit_scatter(marks: *const Layout, row_ids: []const usize, pointer: Coord, radius: f32) -> (SelectionHit, bool, err)
+fn selected_point_outline(marks: *const Layout, mark_index: usize, padding: f32, storage: []geometry.Rect) -> (Layout, err)
+fn cross_tab_report(row_ids: []const usize, column_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, work: *CrossTabStorage) -> (CrossTabLayout, err)
+fn matrix_report(row_ids: []const usize, column_ids: []const usize, values: []const f64, present: []const bool, group_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, bar_scope: ReportBarScope, work: *MatrixReportStorage) -> (MatrixReportLayout, err)
+fn fishbone(effect: str, categories: []const str, causes: []const FishboneCause, bounds: geometry.Rect, spine: []Segment, ribs: []Segment, branches: []Segment, head_box: []geometry.Rect, labels: []Label) -> (FishboneLayout, err)
+fn cause_effect_tree(nodes: []const CauseTreeNode, bounds: geometry.Rect, work: *CauseTreeWork, boxes: []geometry.Rect, connectors: []Segment, labels: []Label) -> (CauseTreeLayout, err)
+fn weibull_probability_plot(sorted_failures: []const f64, total_count: usize, shape: f64, scale: f64, domain_min: f64, domain_max: f64, bounds: geometry.Rect, points: []Coord, reference: []Segment, tick_storage: []Tick) -> (ProbabilityLayout, err)
+fn oc_curve(sample_size: usize, acceptance_number: usize, max_fraction: f64, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
+type GageRrLayout = struct { contribution: Layout, study_variation: Layout, percentages: []f32 }
+fn gage_rr_components(components: *const stat.GageRrComponents, bounds: geometry.Rect, bars: []geometry.Rect, percentages: []f32) -> (GageRrLayout, err)
+type MultiVariStorage = struct { raw_points: []Coord, cell_points: []Coord, cell_lines: []Segment, group_points: []Coord, group_lines: []Segment, cell_means: []f64, group_means: []f64 }
+type MultiVariLayout = struct { observations: Layout, cells: Layout, within: Layout, groups: Layout, cell_means: []f64, group_means: []f64 }
+fn multi_vari(values: []const f64, outer_levels: usize, inner_levels: usize, replicates: usize, bounds: geometry.Rect, storage: *MultiVariStorage) -> (MultiVariLayout, err)
+type MainEffectsStorage = struct { points: []Coord, lines: []Segment, references: []Segment, means: []f64, counts: []usize }
+type MainEffectsLayout = struct { levels: Layout, connections: Layout, reference: Layout, means: []f64, counts: []usize, grand_mean: f64 }
+fn main_effects(values: []const f64, factor_ids: []const usize, factor_levels: []const usize, bounds: geometry.Rect, storage: *MainEffectsStorage) -> (MainEffectsLayout, err)
+type AnomStorage = struct { points: []Coord, signals: []Coord, upper: []Segment, lower: []Segment, center: []Segment, means: []f64, counts: []usize, upper_limits: []f64, lower_limits: []f64 }
+type AnomLayout = struct { groups: Layout, signals: Layout, upper: Layout, lower: Layout, center: Layout, means: []f64, counts: []usize, upper_limits: []f64, lower_limits: []f64, grand_mean: f64, pooled_sd: f64, critical: f64 }
+fn anom(values: []const f64, group_ids: []const usize, groups: usize, critical: f64, bounds: geometry.Rect, storage: *AnomStorage) -> (AnomLayout, err)
+type HotellingStorage = struct { means: []f64, covariance: []f64, factor: []f64, residual: []f64, scores: []f64, points: []Coord, segments: []Segment, signals: []Coord, upper: []Segment }
+type HotellingLayout = struct { trace: Layout, signals: Layout, upper: Layout, means: []f64, covariance: []f64, scores: []f64, upper_limit: f64, historical_count: usize, phase_two: bool }
+fn hotelling_t2_individuals(values: []const f64, columns: usize, historical: []const f64, alpha: f64, bounds: geometry.Rect, storage: *HotellingStorage) -> (HotellingLayout, err)
+type GeneralizedVarianceStorage = struct { covariance: []f64, pooled: []f64, factor: []f64, determinants: []f64, points: []Coord, segments: []Segment, signals: []Coord, upper: []Segment, lower: []Segment, center: []Segment }
+type GeneralizedVarianceLayout = struct { trace: Layout, signals: Layout, upper: Layout, lower: Layout, center: Layout, determinants: []f64, pooled_covariance: []f64, center_value: f64, lower_limit: f64, upper_limit: f64, b1: f64, b2: f64, b3: f64, phase_one_count: usize, phase_two_count: usize }
+fn generalized_variance(phase_one: []const f64, phase_two: []const f64, subgroup_size: usize, columns: usize, alpha: f64, two_sided: bool, bounds: geometry.Rect, storage: *GeneralizedVarianceStorage) -> (GeneralizedVarianceLayout, err)
+type MewmaStorage = struct { means: []f64, covariance: []f64, factor: []f64, state: []f64, residual: []f64, smoothed: []f64, scores: []f64, points: []Coord, segments: []Segment, signals: []Coord, upper: []Segment }
+type MewmaLayout = struct { trace: Layout, signals: Layout, upper: Layout, means: []f64, covariance: []f64, smoothed: []f64, scores: []f64, upper_limit: f64, lambda: f64, historical_count: usize, phase_two: bool }
+fn mewma(values: []const f64, columns: usize, historical: []const f64, lambda: f64, upper_limit: f64, bounds: geometry.Rect, storage: *MewmaStorage) -> (MewmaLayout, err)
+type InteractionStorage = struct { points: []Coord, lines: []Segment, means: []f64, counts: []usize, series: []Layout }
+type InteractionLayout = struct { series: []Layout, means: []f64, counts: []usize }
+fn interaction_plot(values: []const f64, x_ids: []const usize, series_ids: []const usize, x_levels: usize, series_levels: usize, bounds: geometry.Rect, storage: *InteractionStorage) -> (InteractionLayout, err)
+type CubePlotStorage = struct { vertices: []Coord, edges: []Segment, means: []f64, counts: []usize }
+type CubePlotLayout = struct { vertices: Layout, frame: Layout, means: []f64, counts: []usize }
+fn cube_plot(values: []const f64, factor_ids: []const usize, bounds: geometry.Rect, storage: *CubePlotStorage) -> (CubePlotLayout, err)
+type SpectrogramLayout = struct { matrix: MatrixLayout, time_start: f64, time_end: f64, frequency_max: f64 }
+fn spectrogram(re: []const f64, im: []const f64, frames: usize, fft_size: usize, hop: usize, sample_rate: f64, floor_power: f64, bounds: geometry.Rect, cells: []Cell) -> (SpectrogramLayout, err)
+type WaterfallSpectrumStorage = struct { points: []Coord, segments: []Segment, traces: []Layout, frame_indices: []usize }
+type WaterfallSpectrumLayout = struct { traces: []Layout, frame_indices: []usize, value_min: f32, value_max: f32 }
+fn waterfall_spectrum(spectrum: *const SpectrogramLayout, frame_step: usize, bounds: geometry.Rect, storage: *WaterfallSpectrumStorage) -> (WaterfallSpectrumLayout, err)
+type BodeStorage = struct { magnitude_points: []Coord, magnitude_segments: []Segment, phase_points: []Coord, phase_segments: []Segment, magnitude_db: []f64, phase_degrees: []f64 }
+type BodeLayout = struct { magnitude: Layout, phase: Layout, magnitude_bounds: geometry.Rect, phase_bounds: geometry.Rect, magnitude_db: []f64, phase_degrees: []f64, frequency_min: f64, frequency_max: f64 }
+fn bode(frequency: []const f64, real: []const f64, imag: []const f64, magnitude_floor: f64, bounds: geometry.Rect, storage: *BodeStorage) -> (BodeLayout, err)
+type NyquistStorage = struct { positive_points: []Coord, positive_segments: []Segment, negative_points: []Coord, negative_segments: []Segment, critical_point: []Coord }
+type NyquistLayout = struct { positive: Layout, negative: Layout, critical: Layout, frequency_min: f64, frequency_max: f64 }
+fn nyquist(frequency: []const f64, real: []const f64, imag: []const f64, bounds: geometry.Rect, storage: *NyquistStorage) -> (NyquistLayout, err)
+type Camera3d = struct { azimuth_degrees: f64, elevation_degrees: f64, distance: f64 }
+type Projection3d = struct { sin_azimuth: f64, cos_azimuth: f64, sin_elevation: f64, cos_elevation: f64, distance: f64 }
+type Viewport3d = struct { projection: Projection3d, u_center: f64, v_center: f64, scale: f64, x_center: f64, y_center: f64 }
+type Scatter3dStorage = struct { points: []Coord, depths: []f64, order: []usize, bubbles: []geometry.Rect, corners: []Coord, edges: []Segment }
+type Scatter3dLayout = struct { marks: Layout, frame: Layout, points: []Coord, depths: []f64, order: []usize, corners: []Coord, x_min: f64, x_max: f64, y_min: f64, y_max: f64, z_min: f64, z_max: f64 }
+type Scatter3dOrder = struct { depths: []f64 }
+fn project3d(camera: *const Projection3d, x: f64, y: f64, z: f64) -> (Coord, f64, err)
+fn viewport3d(camera: Camera3d, bounds: geometry.Rect, corners: []Coord) -> (Viewport3d, err)
+fn project3d_view(view: *const Viewport3d, x: f64, y: f64, z: f64) -> (Coord, f64, err)
+fn cube_frame3d(corners: []const Coord, edges: []Segment) -> err
+fn scatter3d_depth_compare(key: *Scatter3dOrder, left: usize, right: usize) -> i32
+fn scatter3d(x: []const f64, y: []const f64, z: []const f64, camera: Camera3d, bounds: geometry.Rect, storage: *Scatter3dStorage) -> (Scatter3dLayout, err)
+type Histogram3dFace = enum u8 { Top, XSide, YSide }
+type Histogram3dStorage = struct { counts: []u64, cells: []Cell, vertices: []Coord, faces: []Layout, depths: []f64, order: []usize, face_kinds: []Histogram3dFace, corners: []Coord, edges: []Segment }
+type Histogram3dLayout = struct { faces: []Layout, depths: []f64, order: []usize, face_kinds: []Histogram3dFace, counts: []u64, frame: Layout, corners: []Coord, columns: usize, rows: usize, max_count: u64, total_count: u64 }
+fn histogram3d(x: []const f32, y: []const f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, columns: usize, rows: usize, camera: Camera3d, bounds: geometry.Rect, storage: *Histogram3dStorage) -> (Histogram3dLayout, err)
+type Surface3dStorage = struct { points: []Coord, depths: []f64, face_vertices: []Coord, faces: []Layout, face_depths: []f64, face_values: []f64, order: []usize, wires: []Segment, corners: []Coord, edges: []Segment }
+type Surface3dLayout = struct { faces: []Layout, face_depths: []f64, face_values: []f64, order: []usize, wireframe: Layout, frame: Layout, points: []Coord, depths: []f64, values: []const f64, corners: []Coord, columns: usize, rows: usize, value_min: f64, value_max: f64 }
+fn surface3d_grid(values: []const f64, columns: usize, camera: Camera3d, bounds: geometry.Rect, storage: *Surface3dStorage) -> (Surface3dLayout, err)
+fn density_surface3d(x: []const f64, y: []const f64, x_min: f64, x_max: f64, y_min: f64, y_max: f64, bandwidth_x: f64, bandwidth_y: f64, camera: Camera3d, bounds: geometry.Rect, grid_x: []f64, grid_y: []f64, values: []f64, storage: *Surface3dStorage) -> (Surface3dLayout, err)
+fn wireframe3d(values: []const f64, columns: usize, camera: Camera3d, bounds: geometry.Rect, storage: *Surface3dStorage) -> (Surface3dLayout, err)
+fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
+fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
+fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)
+fn error_bars(x: []const f32, center: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err)
+fn band(x: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, outline: []Coord) -> (Layout, err)
+fn fan(x: []const f32, median: []const f32, lower: []const f32, upper: []const f32, bands: usize, bounds: geometry.Rect, outlines: []Coord, median_segments: []Segment, layers: []Layout) -> ([]Layout, Layout, err)
+fn dumbbell(position: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err)
+fn slopegraph(before: []const f32, after: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err)
+fn grouped_bars(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err)
+fn stacked_bars(values: []const f32, categories: usize, series: usize, bounds: geometry.Rect, normalize: bool, bars: []geometry.Rect, layers: []Layout) -> ([]Layout, err)
+fn mosaic(counts: []const f64, columns: usize, bounds: geometry.Rect, gutter: f32, column_totals: []f64, row_totals: []f64, cells: []Cell) -> (MatrixLayout, err)
+fn association(counts: []const f64, columns: usize, bounds: geometry.Rect, space: f32, column_totals: []f64, row_totals: []f64, cells: []Cell, baselines: []Segment) -> (MatrixLayout, err)
+fn fourfold(counts: []const f64, bounds: geometry.Rect, confidence: f64, points: []Coord, ring_segments: []Segment, wedges: []Layout) -> (FourfoldLayout, err)
+fn horizon(x: []const f32, y: []const f32, origin: f32, band_width: f32, bands: usize, bounds: geometry.Rect, points: []Coord, patches: []HorizonPatch) -> ([]HorizonPatch, err)
+fn seasonal_subseries(values: []const f32, period: usize, bounds: geometry.Rect, segments: []Segment, means: []Segment, layers: []Layout) -> ([]Layout, Layout, err)
+fn decomposition(values: []const f32, period: usize, bounds: geometry.Rect, gap: f32, trend: []f32, seasonal: []f32, residual: []f32, segments: []Segment, panels: []Layout) -> ([]Layout, usize, usize, err)
+fn correlogram(values: []const f32, max_lag: usize, bounds: geometry.Rect, gap: f32, acf: []f64, pacf: []f64, coefficients: []f64, next: []f64, stems: []Segment, guides: []Segment, panels: []Layout) -> ([]Layout, Layout, err)
+fn variogram(x: []const f32, y: []const f32, values: []const f32, cutoff: f32, bounds: geometry.Rect, pair_counts: []u64, distances: []f64, semivariances: []f64, points: []Coord) -> (Layout, err)
+fn radar(values: []const f32, minimum: []const f32, maximum: []const f32, bounds: geometry.Rect, levels: usize, points: []Coord, guides: []Segment) -> (Layout, Layout, err)
+fn ternary(a: []const f32, b: []const f32, c: []const f32, bounds: geometry.Rect, levels: usize, points: []Coord, guides: []Segment) -> (Layout, Layout, err)
+fn quiver(x: []const f32, y: []const f32, u: []const f32, v: []const f32, bounds: geometry.Rect, pixels_per_unit: f32, head_size: f32, tails: []Coord, arrows: []Segment) -> (Layout, err)
+fn streamlines(u: []const f32, v: []const f32, columns: usize, rows: usize, x_min: f32, x_max: f32, y_min: f32, y_max: f32, seeds: []const Coord, step: f32, max_steps: usize, bounds: geometry.Rect, segments: []Segment) -> (Layout, err)
+fn phase_space(values: []const f32, lag: usize, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
+fn recurrence(values: []const f32, lag: usize, radius: f32, bounds: geometry.Rect, cells: []Cell) -> (MatrixLayout, err)
+fn drawdown(x: []const f32, prices: []const f32, bounds: geometry.Rect, losses: []f32, points: []Coord) -> (Layout, err)
+fn price_volume(x: []const f32, prices: []const f32, volumes: []const f32, bounds: geometry.Rect, gap: f32, price_segments: []Segment, volume_bars: []geometry.Rect) -> (Layout, Layout, err)
+fn returns_volatility(x: []const f32, prices: []const f32, window: usize, bounds: geometry.Rect, gap: f32, returns: []f32, volatility: []f32, return_segments: []Segment, volatility_segments: []Segment) -> (Layout, Layout, err)
+fn burndown(x: []const f32, remaining: []const f32, bounds: geometry.Rect, ideal: []f32, remaining_segments: []Segment, ideal_segments: []Segment) -> (Layout, Layout, err)
+fn burnup(x: []const f32, completed: []const f32, scope: []const f32, bounds: geometry.Rect, completed_segments: []Segment, scope_segments: []Segment) -> (Layout, Layout, err)
+fn earned_value(x: []const f32, planned: []const f32, earned: []const f32, actual: []const f32, bounds: geometry.Rect, planned_segments: []Segment, earned_segments: []Segment, actual_segments: []Segment) -> (Layout, Layout, Layout, err)
+fn gantt(tasks: []const GanttTask, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, row_gap: f32, spans: []geometry.Rect, completed: []geometry.Rect) -> (Layout, Layout, err)
+fn resource_histogram(spans: []const ResourceSpan, domain_start: f64, domain_end: f64, capacity: f64, bounds: geometry.Rect, edges: []f64, loads: []f64, normal_bars: []geometry.Rect, excess_bars: []geometry.Rect, capacity_rule: []Segment) -> (Layout, Layout, Layout, err)
+fn swimlane(steps: []const SwimlaneStep, links: []const SwimlaneLink, lane_count: usize, stage_count: usize, bounds: geometry.Rect, lane_bands: []geometry.Rect, boxes: []geometry.Rect, arrows: []Segment) -> (Layout, Layout, err)
+fn kanban(cards: []const KanbanCard, limits: []const usize, bounds: geometry.Rect, gutter: f32, padding: f32, header_height: f32, card_gap: f32, columns: []geometry.Rect, card_boxes: []geometry.Rect, status: []KanbanStatus, next_y: []f32) -> (Layout, Layout, err)
+fn event_timeline(events: []const TimelineEvent, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, points: []Coord, stems: []Segment) -> (Layout, err)
+fn milestone_roadmap(events: []const TimelineEvent, rows: usize, domain_start: f64, domain_end: f64, bounds: geometry.Rect, size: f32, centers: []Coord, stems: []Segment, diamonds: []Coord, layers: []Layout) -> ([]Layout, err)
+fn rose(values: []const f32, bounds: geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err)
+fn histogram(values: []const f32, bounds: geometry.Rect, counts: []u64, bars: []geometry.Rect) -> (Layout, err)
+fn marginal_histogram(x: []const f32, y: []const f32, bounds: geometry.Rect, top_height: f32, right_width: f32, gap: f32, points: []Coord, x_counts: []u64, x_bars: []geometry.Rect, y_counts: []u64, y_bars: []geometry.Rect) -> (MarginalHistogramLayout, err)
+fn dose_response(dose: []const f64, response: []const f64, lower: f64, upper: f64, ec50: f64, slope: f64, bounds: geometry.Rect, grid: []f64, estimates: []f64, points: []Coord, segments: []Segment) -> (DoseResponseLayout, err)
+fn hazard_rate(edges: []const f64, rates: []const f64, bounds: geometry.Rect, segments: []Segment) -> (Layout, err)
+fn frequency_polygon(values: []const f32, bounds: geometry.Rect, counts: []u64, bins: []geometry.Rect, segments: []Segment) -> (Layout, err)
+fn rug(values: []const f32, bounds: geometry.Rect, height: f32, segments: []Segment) -> (Layout, err)
+fn strip(values: []const f32, bounds: geometry.Rect, spread: f32, coords: []Coord) -> (Layout, err)
+fn beeswarm(values: []const f32, bounds: geometry.Rect, spacing: f32, coords: []Coord) -> (Layout, err)
+fn dot_plot(values: []const f32, bounds: geometry.Rect, spacing: f32, counts: []u64, bins: []geometry.Rect, coords: []Coord) -> (Layout, err)
+fn ecdf(sorted: []const f32, bounds: geometry.Rect, segments: []Segment) -> (Layout, err)
+fn box_plot(sorted: []const f64, bounds: geometry.Rect, outliers: []Coord, lines: []Segment, boxes: []geometry.Rect) -> (Layout, err)
+fn boxen_plot(sorted: []const f64, bounds: geometry.Rect, depth: usize, tails: []Coord, median_line: []Segment, boxes: []geometry.Rect) -> (Layout, err)
+fn density(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f64, estimates: []f64, segments: []Segment) -> (Layout, err)
+fn qq_normal(sorted: []const f64, bounds: geometry.Rect, points: []Coord, reference: []Segment) -> (Layout, err)
+fn pp_normal(sorted: []const f64, mean: f64, deviation: f64, bounds: geometry.Rect, points: []Coord, reference: []Segment) -> (Layout, err)
+fn violin(values: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f64, estimates: []f64, outline: []Coord) -> (Layout, err)
+fn half_violin(values: []const f64, bounds: geometry.Rect, bandwidth: f64, right: bool, grid: []f64, estimates: []f64, outline: []Coord) -> (Layout, err)
+fn raincloud(sorted: []const f64, bounds: geometry.Rect, bandwidth: f64, grid: []f64, estimates: []f64, outline: []Coord, drops: []Coord, whiskers: []Segment, boxes: []geometry.Rect) -> (RaincloudLayout, err)
+fn hexbin(x: []const f32, y: []const f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, bounds: geometry.Rect, columns: usize, rows: usize, cells: []HexCell, vertices: []Coord, layers: []Layout) -> (HexbinLayout, err)
+fn bin2d(x: []const f32, y: []const f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, bounds: geometry.Rect, columns: usize, rows: usize, counts: []u64, cells: []Cell) -> (Bin2dLayout, err)
+fn density2d(x: []const f64, y: []const f64, x_min: f64, x_max: f64, y_min: f64, y_max: f64, bounds: geometry.Rect, bandwidth_x: f64, bandwidth_y: f64, fractions: []const f64, grid_x: []f64, grid_y: []f64, values: []f64, cutoffs: []f64, segments: []Segment, layers: []Layout) -> (Density2dLayout, err)
+fn heatmap(values: []const f64, columns: usize, bounds: geometry.Rect, cells: []Cell) -> (MatrixLayout, err)
+fn risk_matrix(risks: []const RiskPoint, ratings: []const f64, levels: usize, bounds: geometry.Rect, counts: []u64, cells: []Cell) -> (MatrixLayout, err)
+fn cohort_retention(counts: []const f64, periods: usize, bounds: geometry.Rect, gap: f32, cells: []Cell) -> (MatrixLayout, err)
+fn contour(values: []const f64, columns: usize, rows: usize, levels: []const f64, bounds: geometry.Rect, segments: []Segment, layers: []Layout) -> ([]Layout, err)
+fn filled_contour(values: []const f64, columns: usize, rows: usize, levels: []const f64, bounds: geometry.Rect, points: []Coord, layers: []Layout, band_ids: []usize) -> ([]Layout, err)
+fn correlation_matrix(observations: []const f64, columns: usize, bounds: geometry.Rect, x: []f64, y: []f64, cells: []Cell) -> (MatrixLayout, err)
+fn parallel_coordinates(observations: []const f64, columns: usize, bounds: geometry.Rect, minimums: []f64, maximums: []f64, lines: []Segment, axes: []Segment) -> (Layout, Layout, err)
+fn scatterplot_matrix(observations: []const f64, columns: usize, bounds: geometry.Rect, gap: f32, minimums: []f64, maximums: []f64, panels: []geometry.Rect, points: []Coord, layers: []Layout) -> ([]Layout, err)
+fn facet_grid(bounds: geometry.Rect, columns: usize, count: usize, gap: f32, panels: []geometry.Rect) -> ([]geometry.Rect, err)
+fn shared_facet_guide_labels(panels: []const geometry.Rect, columns: usize, x_ticks: []const Tick, x_text: []const str, y_ticks: []const Tick, y_text: []const str, size: f32, out: []Label) -> ([]Label, err)
+fn plot_grid(bounds: geometry.Rect, column_weights: []const f32, row_weights: []const f32, gap_x: f32, gap_y: f32, panels: []geometry.Rect) -> ([]geometry.Rect, err)
+fn rendered_contrast_ratio(first: paint.Color, second: paint.Color) -> (f64, err)
+fn accessible_palette(background: paint.Color, out: []paint.Color) -> ([]paint.Color, err)
+fn simulate_color_vision(color: paint.Color, vision: ColorVision, severity: f32) -> (paint.Color, err)
+fn color_lab(color: paint.Color) -> (Lab, err)
+fn ciede2000(first: Lab, second: Lab) -> f64
+fn palette_separation(colors: []const paint.Color, vision: ColorVision, severity: f32) -> (PaletteSeparation, err)
+```
+
+### `e.gfx.chart.scene`
+
+```neper
+fn begin_clip(builder: *scene.Builder, bounds: geometry.Rect) -> err
+fn end_clip(builder: *scene.Builder) -> err
+fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, brush: paint.Brush) -> err
+fn append_map_region(a: *mem.Arena, builder: *scene.Builder, region: *const chart.MapRegionLayout, brush: paint.Brush) -> err
+fn append_report_cells(builder: *scene.Builder, cells: []const chart.ReportCell, fills: []const paint.Color, bar_ink: paint.Color) -> err
+fn append_filled_contour(a: *mem.Arena, builder: *scene.Builder, layers: []const chart.Layout, band_ids: []const usize, colors: []const paint.Color) -> err
+fn append_matrix(builder: *scene.Builder, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err
+fn append_guides(builder: *scene.Builder, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Brush, axis: paint.Brush) -> err
+fn append_labels(a: *mem.Arena, builder: *scene.Builder, labels: []const chart.Label, font: shape.Font, size: f32, brush: paint.Brush) -> err
+```
+
+### `e.gfx.chart.svg`
+
+```neper
+error Invalid
+fn begin_clip(w: *io.Writer, bounds: geometry.Rect, id: str) -> err
+fn end_clip(w: *io.Writer) -> err
+fn begin(w: *io.Writer, width: f32, height: f32, title: str, description: str) -> err
+fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err
+fn append_selectable_scatter(w: *io.Writer, marks: *const chart.Layout, row_ids: []const usize, descriptions: []const str, ink: paint.Color, selected_ink: paint.Color, id_prefix: str) -> err
+fn append_map_region(w: *io.Writer, region: *const chart.MapRegionLayout, ink: paint.Color) -> err
+fn append_report_cells(w: *io.Writer, cells: []const chart.ReportCell, fills: []const paint.Color, bar_ink: paint.Color) -> err
+fn append_filled_contour(w: *io.Writer, layers: []const chart.Layout, band_ids: []const usize, colors: []const paint.Color) -> err
+fn append_matrix(w: *io.Writer, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err
+fn append_guides(w: *io.Writer, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Color, axis: paint.Color) -> err
+fn append_labels(w: *io.Writer, labels: []const chart.Label, ink: paint.Color, size: f32) -> err
+fn gradient(w: *io.Writer, id: str, brush: paint.Brush) -> err
+fn append_brush(w: *io.Writer, marks: *const chart.Layout, brush: paint.Brush, id: str) -> err
+fn embed_font(w: *io.Writer, family: str, font: []const u8) -> err
+fn append_labels_in(w: *io.Writer, labels: []const chart.Label, ink: paint.Color, size: f32, family: str) -> err
+fn finish(w: *io.Writer) -> err
+```
+
+### `e.gfx.chart.locale`
+
+```neper
+error Invalid
+error TooLarge
+fn tick_decimals(values: []const chart.Tick) -> (u8, err)
+fn format_ticks_in(a: *mem.Arena, place: locale.Locale, values: []const chart.Tick, out: []str) -> ([]str, err)
+fn format_date_ticks_in(a: *mem.Arena, place: locale.Locale, ticks: []const chart.DateTick, pattern: str, out: []str) -> ([]str, err)
+```
+
+### `e.gfx.chart.widget`
+
+```neper
+type View = struct { arena: *mem.Arena, spec: chart.Spec, brush: paint.Brush, grid: paint.Brush, axis: paint.Brush, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, padding: f32, width: f32, height: f32, coords: []chart.Coord, segments: []chart.Segment, bars: []geometry.Rect, revision: u64, marks: chart.Layout, plot: geometry.Rect }
+fn view(a: *mem.Arena, spec: chart.Spec, brush: paint.Brush, coords: []chart.Coord, segments: []chart.Segment, bars: []geometry.Rect) -> View
+fn custom(v: *View) -> widget.Custom
+```
+
+### `e.gfx.chart.pdf`
+
+```neper
+error Invalid
+error TooLarge
+type Document = struct { storage: []u8, len: usize, width: f32, height: f32, title: str, alphas: [16]f32, alpha_count: usize }
+fn begin(storage: []u8, width: f32, height: f32, title: str) -> (Document, err)
+fn real_text(value: f32, decimals: u32, out: []u8) -> ([]u8, err)
+fn rect(doc: *Document, r: geometry.Rect, ink: paint.Color, outline: bool) -> err
+fn rule(doc: *Document, from: chart.Coord, to: chart.Coord, ink: paint.Color, width: f32) -> err
+fn append(doc: *Document, marks: *const chart.Layout, ink: paint.Color) -> err
+fn append_matrix(doc: *Document, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err
+fn append_guides(doc: *Document, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Color, axis: paint.Color) -> err
+fn text_width(text: str, size: f32) -> (f32, err)
+fn append_labels(doc: *Document, labels: []const chart.Label, ink: paint.Color, size: f32) -> err
+fn finish(doc: *Document, w: *io.Writer) -> err
 ```

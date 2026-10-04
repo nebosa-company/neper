@@ -648,6 +648,16 @@ fn format_date(a: *mem.Arena, selected_locale: Locale, value: calendar.DateTime,
     ret (out, out_error)
 }
 
+// One LDML pattern in the locale's words, for labels the four styles do not
+// cover (an axis wants `MMM y`, not a full date).
+fn format_pattern(a: *mem.Arena, selected_locale: Locale, pattern: str, value: calendar.DateTime) -> (str, err) {
+    if pattern.len == 0usize || value.date.month < 1u8 || value.date.month > 12u8 || value.date.day < 1u8 || value.date.day > 31u8 || value.time.hour > 23u8 || value.time.minute > 59u8 || value.time.second > 60u8 { ret ("", Invalid) }
+    var s: Sink = zero
+    put_pattern(&s, record(selected_locale), pattern, value)
+    let (out, out_error) = finish(a, &s)
+    ret (out, out_error)
+}
+
 fn compare(selected_locale: Locale, a: str, b: str) -> i32 {
     let unused = selected_locale
     let natural = collate.natural_cmp(a, b, collate.Options { case_sensitive: false, numeric: true })

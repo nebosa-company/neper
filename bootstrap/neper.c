@@ -45,7 +45,8 @@
    costs 8 bytes and this can grow; the struct and error tables are still by value. */
 #define MAX_DECLS 4096
 #define MAX_PARAMS 32
-#define MAX_LOCALS 256
+/* ponytail: 265 fits dispatch today; split it if it grows rather than enlarging every Function. */
+#define MAX_LOCALS 265
 #define MAX_ARGS 16
 #define MAX_USES 256
 /* Program-wide string literals, held by pointer. Raised from 4096 (D361): the
@@ -58,7 +59,7 @@
 #define MAX_LOOP_DEPTH 64
 #define MAX_NESTING 1024
 #define MAX_ARRAY_ELEMENTS 4096
-#define MAX_FIELDS 160
+#define MAX_FIELDS 161
 #define MAX_FIELD_PATH 32
 #define MAX_SOURCES 128
 
@@ -442,7 +443,7 @@ typedef struct Function {
     size_t return_offsets[MAX_ARGS];
     size_t return_storage_size;
     Stmt *body;
-    Local locals[MAX_LOCALS];
+    Local *locals; /* full MAX_LOCALS while checked, then trimmed to local_count */
     int local_count;
     int frame_size;
     int return_slot_local_index;
@@ -1119,6 +1120,7 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.stderr", "neper_os_stderr"); intrinsic_returns(fn, 1, file, error);
     OS_FN("os.readdir", "neper_os_readdir"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 2, entries, error);
     OS_FN("os.mkdir", "neper_os_mkdir"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 1, error, error);
+    OS_FN("os.remove_file", "neper_os_remove_file"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 1, error, error);
     /* `os.replace(a, src, dst, overwrite, durable)` (D343): the atomic rename the artifacts are published by. */
     OS_FN("os.replace", "neper_os_replace"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "src", string); intrinsic_param(fn, token, "dst", string); intrinsic_param(fn, token, "overwrite", type_make(TY_BOOL, "bool")); intrinsic_param(fn, token, "durable", type_make(TY_BOOL, "bool")); intrinsic_returns(fn, 1, error, error);
     OS_FN("os.set_mode", "neper_os_set_mode"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_param(fn, token, "mode", u32); intrinsic_returns(fn, 1, error, error);
@@ -1133,6 +1135,7 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.env", "neper_os_env"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "name", string); intrinsic_returns(fn, 2, string, error);
     OS_FN("os.random", "neper_os_random"); intrinsic_param(fn, token, "buffer", bytes); intrinsic_returns(fn, 1, error, error);
     OS_FN("os.create_new", "neper_os_create_new"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 2, file, error);
+    OS_FN("os.create_new_with_mode", "neper_os_create_new_with_mode"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_param(fn, token, "mode", u32); intrinsic_returns(fn, 2, file, error);
     OS_FN("os.reserve", "neper_os_reserve"); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 2, byte_pointer, error);
     OS_FN("os.commit", "neper_os_commit"); intrinsic_param(fn, token, "p", byte_pointer); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 1, error, error);
     /* `os.release(p, n)` (D1665): the other half of `reserve`, in the bootstrap alone as
@@ -5236,8 +5239,17 @@ static void check_program(Compiler *c) {
             resolve_type_constants(c, &fn->return_types[j], &fn->token);
         }
         if (fn->return_count) fn->return_type = fn->return_types[0];
+        fn->locals = (Local *)calloc(MAX_LOCALS, sizeof(Local));
+        if (!fn->locals) {
+            fprintf(stderr, "error: out of memory allocating function locals\n");
+            exit(1);
+        }
         prepare_return_convention(c, fn);
-        if (fn->is_intrinsic) continue;
+        if (fn->is_intrinsic) {
+            Local *used = (Local *)realloc(fn->locals, (size_t)(fn->local_count ? fn->local_count : 1) * sizeof(Local));
+            if (used) fn->locals = used;
+            continue;
+        }
         for (j = 0; j < fn->param_count; ++j) {
             Local *local = &fn->locals[fn->local_count];
             qualify_type_for_module(c, &fn->params[j].type, fn->module);
@@ -5259,6 +5271,10 @@ static void check_program(Compiler *c) {
             char message[256];
             snprintf(message, sizeof(message), "fn %s needs more than %d locals", fn->name, MAX_LOCALS);
             diagnostic_at(c, &fn->token, "E-TOOL-9999", message);
+        }
+        {
+            Local *used = (Local *)realloc(fn->locals, (size_t)(fn->local_count ? fn->local_count : 1) * sizeof(Local));
+            if (used) fn->locals = used;
         }
         if (strcmp(fn->name, "main") == 0) main_fn = fn;
     }
@@ -7433,9 +7449,9 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN CommandLineToArgvW:PROC\n"
         "EXTERN neper_os_set_args:PROC\nEXTERN neper_os_open:PROC\nEXTERN neper_os_read:PROC\n"
         "EXTERN neper_os_write:PROC\nEXTERN neper_os_close:PROC\nEXTERN neper_os_stdin:PROC\nEXTERN neper_os_stdout:PROC\n"
-        "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_replace:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\nEXTERN neper_os_spawn_with_options:PROC\n"
+        "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_remove_file:PROC\nEXTERN neper_os_replace:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\nEXTERN neper_os_spawn_with_options:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_wait_usage:PROC\nEXTERN neper_os_peak_memory:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\nEXTERN neper_os_current_dir:PROC\nEXTERN neper_os_env:PROC\n"
-        "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_release:PROC\nEXTERN neper_os_clock:PROC\nEXTERN neper_os_random:PROC\nEXTERN neper_os_create_new:PROC\n"
+        "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_release:PROC\nEXTERN neper_os_clock:PROC\nEXTERN neper_os_random:PROC\nEXTERN neper_os_create_new:PROC\nEXTERN neper_os_create_new_with_mode:PROC\n"
         "EXTERN neper_os_thread_create:PROC\nEXTERN neper_os_thread_join:PROC\nEXTERN neper_os_seek:PROC\nEXTERN neper_os_copy_bytes:PROC\nEXTERN neper_os_sha256_blocks:PROC\nEXTERN neper_os_crc32c_bytes:PROC\n"
         "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\nEXTERN neper_mem_root:PROC\n"
         "EXTERN neper_mem_mark:PROC\nEXTERN neper_mem_reset:PROC\nEXTERN neper_mem_stats:PROC\n\n"
