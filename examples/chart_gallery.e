@@ -1409,6 +1409,76 @@ fn render_football_field_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *g
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_yield_curve_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/yield_curve.png"
+    let tenors = [5]f64{ 0.25f64, 1.0f64, 2.0f64, 5.0f64, 10.0f64 }
+    let current = [5]f64{ 4.8f64, 4.1f64, 3.9f64, 4.0f64, 4.3f64 }
+    let prior = [5]f64{ 4.4f64, 4.25f64, 4.2f64, 4.25f64, 4.5f64 }
+    var current_points: [5]chart.Coord = zero
+    var current_links: [4]chart.Segment = zero
+    var prior_points: [5]chart.Coord = zero
+    var prior_links: [4]chart.Segment = zero
+    let plot = geometry.rect(50.0, 50.0, 280.0, 140.0)
+    let (current_curve, current_error) = chart.yield_curve(tenors[..], current[..], 10.0f64, 3.5f64, 5.0f64, plot, current_points[..], current_links[..])
+    let (prior_curve, prior_error) = chart.yield_curve(tenors[..], prior[..], 10.0f64, 3.5f64, 5.0f64, plot, prior_points[..], prior_links[..])
+    if current_error != ok || prior_error != ok || current_curve.coords.len != 5usize || prior_curve.coords.len != 5usize { ret chart.Invalid }
+    let blue = paint.rgba(0.09, 0.40, 0.76, 1.0)
+    let orange = paint.rgba(0.91, 0.50, 0.18, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let grid = paint.rgba(0.84, 0.88, 0.93, 1.0)
+    let panel = paint.rgba(0.97, 0.98, 1.0, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    var guides: [3]chart.Segment = zero
+    var i = 0usize
+    while i < 3usize {
+        let y = plot.y + f32(i) * plot.height * 0.5f32
+        guides[i] = chart.Segment { from: chart.Coord { x: plot.x, y: y }, to: chart.Coord { x: plot.x + plot.width, y: y } }
+        i += 1usize
+    }
+    let guide = chart.Layout { kind: .Rug, coords: zero, segments: guides[..], bars: zero, x_min: 0.0f32, x_max: 10.0f32, y_min: 3.5f32, y_max: 5.0f32 }
+    var labels: [11]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Yield curve / maturity vs yield", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Illustrative observations, not live Treasury data", anchor: chart.Coord { x: 180.0, y: 39.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "5.0%", anchor: chart.Coord { x: 45.0, y: 53.0 }, align: .Right }
+    labels[3usize] = chart.Label { text: "4.25%", anchor: chart.Coord { x: 45.0, y: 123.0 }, align: .Right }
+    labels[4usize] = chart.Label { text: "3.5%", anchor: chart.Coord { x: 45.0, y: 193.0 }, align: .Right }
+    labels[5usize] = chart.Label { text: "0", anchor: chart.Coord { x: 50.0, y: 206.0 }, align: .Center }
+    labels[6usize] = chart.Label { text: "2y", anchor: chart.Coord { x: 106.0, y: 206.0 }, align: .Center }
+    labels[7usize] = chart.Label { text: "5y", anchor: chart.Coord { x: 190.0, y: 206.0 }, align: .Center }
+    labels[8usize] = chart.Label { text: "10y", anchor: chart.Coord { x: 330.0, y: 206.0 }, align: .Center }
+    labels[9usize] = chart.Label { text: "Blue: current scenario", anchor: chart.Coord { x: 103.0, y: 226.0 }, align: .Center }
+    labels[10usize] = chart.Label { text: "Orange: prior scenario", anchor: chart.Coord { x: 261.0, y: 226.0 }, align: .Center }
+    let (made, builder_error) = scene.builder(a, 80usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: panel })
+    try chart_scene.append(a, &builder, &guide, paint.Brush { Solid: grid })
+    try chart_scene.append(a, &builder, &prior_curve, paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &current_curve, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0f32, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0f32, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, panel, false)
+    try chart_svg.append(&writer, &guide, grid)
+    try chart_svg.append(&writer, &prior_curve, orange)
+    try chart_svg.append(&writer, &current_curve, blue)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0f32)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0f32)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_sipoc_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/sipoc.png"
     let plot = geometry.rect(13.0, 49.0, 334.0, 171.0)
@@ -9784,6 +9854,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_cap_table_waterfall_preview(a, queue, output_target, canvas, &renderer)
     try render_tornado_preview(a, queue, output_target, canvas, &renderer)
     try render_football_field_preview(a, queue, output_target, canvas, &renderer)
+    try render_yield_curve_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_org_chart_preview(a, queue, output_target, canvas, &renderer)

@@ -583,6 +583,30 @@ fn connected_scatter(x: []const f32, y: []const f32, bounds: geometry.Rect, poin
     ret (marks, marks_error)
 }
 
+// Tenor is measured in years and yield in the caller's consistent rate unit
+// (for example percent). Explicit domains let several dated curves share axes;
+// the layout connects supplied observations without fitting or extrapolation.
+fn yield_curve(tenors: []const f64, yields: []const f64, tenor_max: f64, yield_min: f64, yield_max: f64, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err) {
+    let n = tenors.len
+    if n == 0usize { ret (zero, Empty) }
+    if n < 2usize || yields.len != n || !finite64(tenor_max) || tenor_max <= 0.0f64 || !finite64(yield_min) || !finite64(yield_max) || yield_max <= yield_min || !finite64(yield_max - yield_min) || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if !finite(f32(tenor_max)) || !finite(f32(yield_min)) || !finite(f32(yield_max)) || f32(yield_min) == f32(yield_max) { ret (zero, Invalid) }
+    if points.len < n || segments.len < n - 1usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < n {
+        let tenor = tenors[i]
+        let rate = yields[i]
+        if !finite64(tenor) || tenor <= 0.0f64 || tenor > tenor_max || (i > 0usize && tenor <= tenors[i - 1usize]) || !finite64(rate) || rate < yield_min || rate > yield_max { ret (zero, Invalid) }
+        let x = bounds.x + bounds.width * f32(tenor / tenor_max)
+        let y = bounds.y + bounds.height * (1.0f32 - f32((rate - yield_min) / (yield_max - yield_min)))
+        if !finite(x) || !finite(y) { ret (zero, Invalid) }
+        points[i] = Coord { x: x, y: y }
+        if i > 0usize { segments[i - 1usize] = Segment { from: points[i - 1usize], to: points[i] } }
+        i += 1usize
+    }
+    ret (Layout { kind: .PointLine, coords: points[..n], segments: segments[..n - 1usize], bars: zero, x_min: 0.0f32, x_max: f32(tenor_max), y_min: f32(yield_min), y_max: f32(yield_max) }, ok)
+}
+
 // Right-facing Ishikawa diagram. A cause's parent is -1 for a direct category
 // cause, or an earlier cause index in the same category for a deeper subcause.
 // Input order is stable and defines sibling order; output never owns the text.

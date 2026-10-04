@@ -34928,3 +34928,17 @@ checks the shared mapping, caps, benchmark, adapters and refusals; the gallery
 adds a paired PNG/SVG example. This range-by-method presentation follows CFI's
 football-field chart description:
 https://corporatefinanceinstitute.com/resources/financial-modeling/football-field-chart-template/.
+
+## D1967 — Yield curves keep supplied rates and actual tenor spacing
+
+`chart.yield_curve` renders rates against strictly increasing positive tenors
+measured in years. The caller supplies one common tenor maximum and yield
+domain, so differently dated curves can be overlaid without each series
+silently rescaling itself. Yields are accepted in one caller-consistent rate
+unit and can be negative. PointLine geometry connects observations as given;
+the library does not bootstrap spot rates, interpolate missing maturities or
+extrapolate beyond the final tenor. The Windows/Linux fixture covers uneven
+spacing, an inverted segment, negative yields, scene/SVG output and refusals.
+The gallery's two curves are synthetic. The maturity-versus-par-yield framing
+follows the U.S. Treasury's description of its daily par yield curve:
+https://home.treasury.gov/policy-issues/financing-the-government/interest-rate-statistics/.

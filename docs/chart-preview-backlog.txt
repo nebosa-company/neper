@@ -9,7 +9,6 @@
 # Geographic and reporting
 
 # Operations, finance and network diagrams
-yield_curve
 monte_carlo_histogram
 monte_carlo_cdf
 aggregate_decomposition_tree

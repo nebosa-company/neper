@@ -2894,6 +2894,11 @@ gfx_chart_football_field_written=$($test_build/neper-self emit-executable "$repo
 chmod +x "$test_build/gfx-chart-football-field-selfhost"
 gfx_chart_football_field_output=$("$test_build/gfx-chart-football-field-selfhost")
 [ "$gfx_chart_football_field_output" = 'gfx chart football field ok' ]
+gfx_chart_yield_curve_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_yield_curve/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-yield-curve-selfhost")
+[ "$gfx_chart_yield_curve_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-yield-curve-selfhost"
+gfx_chart_yield_curve_output=$("$test_build/gfx-chart-yield-curve-selfhost")
+[ "$gfx_chart_yield_curve_output" = 'gfx chart yield curve ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"

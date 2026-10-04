@@ -3272,6 +3272,11 @@ $gfxChartFootballFieldWritten = & $compiler emit-executable (Join-Path $PSScript
 if ($LASTEXITCODE -ne 0 -or $gfxChartFootballFieldWritten -ne 'executable written') { throw 'gfx_chart_football_field emission failed' }
 $gfxChartFootballFieldOutput = & $gfxChartFootballFieldPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartFootballFieldOutput -ne 'gfx chart football field ok') { throw "the e.gfx.chart football field answered wrongly: exit $LASTEXITCODE" }
+$gfxChartYieldCurvePath = Join-Path $testBuild 'gfx-chart-yield-curve-selfhost.exe'
+$gfxChartYieldCurveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_yield_curve\src\main.e') $repo 'x64' 'windows' $gfxChartYieldCurvePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartYieldCurveWritten -ne 'executable written') { throw 'gfx_chart_yield_curve emission failed' }
+$gfxChartYieldCurveOutput = & $gfxChartYieldCurvePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartYieldCurveOutput -ne 'gfx chart yield curve ok') { throw "the e.gfx.chart yield curve answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }
