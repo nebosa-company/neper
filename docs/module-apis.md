@@ -16032,6 +16032,11 @@ type Histogram3dFace = enum u8 { Top, XSide, YSide }
 type Histogram3dStorage = struct { counts: []u64, cells: []Cell, vertices: []Coord, faces: []Layout, depths: []f64, order: []usize, face_kinds: []Histogram3dFace, corners: []Coord, edges: []Segment }
 type Histogram3dLayout = struct { faces: []Layout, depths: []f64, order: []usize, face_kinds: []Histogram3dFace, counts: []u64, frame: Layout, corners: []Coord, columns: usize, rows: usize, max_count: u64, total_count: u64 }
 fn histogram3d(x: []const f32, y: []const f32, x_min: f32, x_max: f32, y_min: f32, y_max: f32, columns: usize, rows: usize, camera: Camera3d, bounds: geometry.Rect, storage: *Histogram3dStorage) -> (Histogram3dLayout, err)
+type Surface3dStorage = struct { points: []Coord, depths: []f64, face_vertices: []Coord, faces: []Layout, face_depths: []f64, face_values: []f64, order: []usize, wires: []Segment, corners: []Coord, edges: []Segment }
+type Surface3dLayout = struct { faces: []Layout, face_depths: []f64, face_values: []f64, order: []usize, wireframe: Layout, frame: Layout, points: []Coord, depths: []f64, values: []const f64, corners: []Coord, columns: usize, rows: usize, value_min: f64, value_max: f64 }
+fn surface3d_grid(values: []const f64, columns: usize, camera: Camera3d, bounds: geometry.Rect, storage: *Surface3dStorage) -> (Surface3dLayout, err)
+fn density_surface3d(x: []const f64, y: []const f64, x_min: f64, x_max: f64, y_min: f64, y_max: f64, bandwidth_x: f64, bandwidth_y: f64, camera: Camera3d, bounds: geometry.Rect, grid_x: []f64, grid_y: []f64, values: []f64, storage: *Surface3dStorage) -> (Surface3dLayout, err)
+fn wireframe3d(values: []const f64, columns: usize, camera: Camera3d, bounds: geometry.Rect, storage: *Surface3dStorage) -> (Surface3dLayout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)

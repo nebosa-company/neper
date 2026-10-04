@@ -34640,3 +34640,19 @@ adapters and refusals. The first histogram slice requires an above-plane
 camera and uses painter ordering, not exact z-buffered occlusion.
 
 Reference: https://matplotlib.org/stable/gallery/mplot3d/hist3d.html
+
+## D1943 — Keep density surfaces and wireframes on one regular 3-D grid
+
+`chart.surface3d_grid` normalizes finite row-major scalar values into the
+shared perspective unit cube. It returns caller-owned projected vertices,
+average-depth-sorted filled quads and independent row/column line segments;
+callers may render either or both. `density_surface3d` computes a normalized
+product-Gaussian KDE at explicit-bandwidth grid coordinates before projection,
+while `wireframe3d` consumes any finite regular scalar grid. The Windows/Linux
+fixture checks grid indexing, KDE peak/domain, painter order, flat grids,
+scene/SVG adapters and refusal paths. The gallery adds both PNG/SVG previews.
+Painter sorting is an approximation for overlapping tilted quads; exact
+z-buffered hidden-surface removal, adaptive sampling and interactive rotation
+remain planned.
+
+References: https://matplotlib.org/stable/api/_as_gen/mpl_toolkits.mplot3d.axes3d.Axes3D.plot_surface.html ; https://matplotlib.org/stable/gallery/mplot3d/subplot3d.html ; https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gaussian_kde.html

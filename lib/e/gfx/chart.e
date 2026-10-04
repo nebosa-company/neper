@@ -119,6 +119,8 @@ type Scatter3dOrder = struct { depths: []f64 }
 type Histogram3dFace = enum u8 { Top, XSide, YSide }
 type Histogram3dStorage = struct { counts: []u64, cells: []Cell, vertices: []Coord, faces: []Layout, depths: []f64, order: []usize, face_kinds: []Histogram3dFace, corners: []Coord, edges: []Segment }
 type Histogram3dLayout = struct { faces: []Layout, depths: []f64, order: []usize, face_kinds: []Histogram3dFace, counts: []u64, frame: Layout, corners: []Coord, columns: usize, rows: usize, max_count: u64, total_count: u64 }
+type Surface3dStorage = struct { points: []Coord, depths: []f64, face_vertices: []Coord, faces: []Layout, face_depths: []f64, face_values: []f64, order: []usize, wires: []Segment, corners: []Coord, edges: []Segment }
+type Surface3dLayout = struct { faces: []Layout, face_depths: []f64, face_values: []f64, order: []usize, wireframe: Layout, frame: Layout, points: []Coord, depths: []f64, values: []const f64, corners: []Coord, columns: usize, rows: usize, value_min: f64, value_max: f64 }
 type SpineLayout = struct { categories: []Layout, column_totals: []f64, grand_total: f64 }
 type HexCell = struct { center: Coord, count: u64 }
 type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
@@ -7618,6 +7620,123 @@ fn histogram3d(x: []const f32, y: []const f32, x_min: f32, x_max: f32, y_min: f3
     sort.in_place_by[usize, Scatter3dOrder](storage.order[..face_count], &key, scatter3d_depth_compare)
     let frame = Layout { kind: .Rug, coords: zero, segments: storage.edges[..12usize], bars: zero, x_min: x_min, x_max: x_max, y_min: y_min, y_max: y_max }
     ret (Histogram3dLayout { faces: storage.faces[..face_count], depths: storage.depths[..face_count], order: storage.order[..face_count], face_kinds: storage.face_kinds[..face_count], counts: storage.counts[..bins], frame: frame, corners: storage.corners[..8usize], columns: columns, rows: rows, max_count: grid.max_count, total_count: grid.total_count }, ok)
+}
+
+// Project one regular row-major scalar grid as both shaded quads and independent
+// row/column wire segments. Row zero is the high-y edge. The caller chooses
+// whether to paint filled faces, wires, or both from this shared geometry.
+fn surface3d_grid(values: []const f64, columns: usize, camera: Camera3d, bounds: geometry.Rect, storage: *Surface3dStorage) -> (Surface3dLayout, err) {
+    if columns < 2usize || values.len < 4usize || values.len % columns != 0usize { ret (zero, Invalid) }
+    let rows = values.len / columns
+    if rows < 2usize { ret (zero, Invalid) }
+    let quads = (columns - 1usize) * (rows - 1usize)
+    if storage.points.len < values.len || storage.depths.len < values.len || storage.faces.len < quads || storage.face_depths.len < quads || storage.face_values.len < quads || storage.order.len < quads || quads > storage.face_vertices.len / 4usize || storage.corners.len < 8usize || storage.edges.len < 12usize { ret (zero, TooLarge) }
+    if rows > storage.wires.len / (columns - 1usize) { ret (zero, TooLarge) }
+    let horizontal = rows * (columns - 1usize)
+    if columns > (storage.wires.len - horizontal) / (rows - 1usize) { ret (zero, TooLarge) }
+    let wire_count = horizontal + columns * (rows - 1usize)
+    var low = values[0usize]
+    var high = low
+    var i = 0usize
+    while i < values.len {
+        if !finite64(values[i]) { ret (zero, Invalid) }
+        low = math.min[f64](low, values[i])
+        high = math.max[f64](high, values[i])
+        i += 1usize
+    }
+    let span = high - low
+    if !finite64(span) || !finite(f32(low)) || !finite(f32(high)) { ret (zero, Invalid) }
+    let (view, view_error) = viewport3d(camera, bounds, storage.corners[..8usize])
+    if view_error != ok { ret (zero, view_error) }
+    try cube_frame3d(storage.corners[..8usize], storage.edges[..12usize])
+    i = 0usize
+    while i < values.len {
+        let row = i / columns
+        let column = i % columns
+        let nx = -1.0f64 + 2.0f64 * f64(column) / f64(columns - 1usize)
+        let ny = 1.0f64 - 2.0f64 * f64(row) / f64(rows - 1usize)
+        var nz = 0.0f64
+        if span > 0.0f64 { nz = -1.0f64 + 2.0f64 * (values[i] - low) / span }
+        let (point, depth, projection_error) = project3d_view(&view, nx, ny, nz)
+        if projection_error != ok { ret (zero, projection_error) }
+        storage.points[i] = point
+        storage.depths[i] = depth
+        i += 1usize
+    }
+    var face = 0usize
+    var wire = 0usize
+    var row = 0usize
+    while row < rows {
+        var column = 0usize
+        while column < columns {
+            let at = row * columns + column
+            if column + 1usize < columns {
+                storage.wires[wire] = Segment { from: storage.points[at], to: storage.points[at + 1usize] }
+                wire += 1usize
+            }
+            if row + 1usize < rows {
+                storage.wires[wire] = Segment { from: storage.points[at], to: storage.points[at + columns] }
+                wire += 1usize
+            }
+            if column + 1usize < columns && row + 1usize < rows {
+                let a = at
+                let b = at + 1usize
+                let c = at + columns + 1usize
+                let d = at + columns
+                let first = face * 4usize
+                storage.face_vertices[first] = storage.points[a]
+                storage.face_vertices[first + 1usize] = storage.points[b]
+                storage.face_vertices[first + 2usize] = storage.points[c]
+                storage.face_vertices[first + 3usize] = storage.points[d]
+                storage.faces[face] = Layout { kind: .Area, coords: storage.face_vertices[first..first + 4usize], segments: zero, bars: zero, x_min: 0.0, x_max: f32(columns - 1usize), y_min: f32(low), y_max: f32(high) }
+                storage.face_depths[face] = (storage.depths[a] + storage.depths[b] + storage.depths[c] + storage.depths[d]) * 0.25f64
+                storage.face_values[face] = (values[a] + values[b] + values[c] + values[d]) * 0.25f64
+                storage.order[face] = face
+                face += 1usize
+            }
+            column += 1usize
+        }
+        row += 1usize
+    }
+    if face != quads || wire != wire_count { ret (zero, Invalid) }
+    var key = Scatter3dOrder { depths: storage.face_depths[..quads] }
+    sort.in_place_by[usize, Scatter3dOrder](storage.order[..quads], &key, scatter3d_depth_compare)
+    let wires = Layout { kind: .Rug, coords: zero, segments: storage.wires[..wire_count], bars: zero, x_min: 0.0, x_max: f32(columns - 1usize), y_min: f32(low), y_max: f32(high) }
+    let frame = Layout { kind: .Rug, coords: zero, segments: storage.edges[..12usize], bars: zero, x_min: 0.0, x_max: f32(columns - 1usize), y_min: f32(low), y_max: f32(high) }
+    ret (Surface3dLayout { faces: storage.faces[..quads], face_depths: storage.face_depths[..quads], face_values: storage.face_values[..quads], order: storage.order[..quads], wireframe: wires, frame: frame, points: storage.points[..values.len], depths: storage.depths[..values.len], values: values, corners: storage.corners[..8usize], columns: columns, rows: rows, value_min: low, value_max: high }, ok)
+}
+
+// Product-Gaussian KDE values feed the same projected grid as a general
+// wireframe. Bandwidths are explicit; there is no hidden data-dependent fit.
+fn density_surface3d(x: []const f64, y: []const f64, x_min: f64, x_max: f64, y_min: f64, y_max: f64, bandwidth_x: f64, bandwidth_y: f64, camera: Camera3d, bounds: geometry.Rect, grid_x: []f64, grid_y: []f64, values: []f64, storage: *Surface3dStorage) -> (Surface3dLayout, err) {
+    if x.len == 0usize { ret (zero, Empty) }
+    if x.len != y.len || !finite64(x_min) || !finite64(x_max) || !finite64(y_min) || !finite64(y_max) || x_max <= x_min || y_max <= y_min || !finite64(bandwidth_x) || !finite64(bandwidth_y) || bandwidth_x <= 0.0f64 || bandwidth_y <= 0.0f64 || grid_x.len < 2usize || grid_y.len < 2usize { ret (zero, Invalid) }
+    if grid_x.len > values.len / grid_y.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < x.len {
+        if !finite64(x[i]) || !finite64(y[i]) || x[i] < x_min || x[i] > x_max || y[i] < y_min || y[i] > y_max { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < grid_x.len {
+        grid_x[i] = x_min + (x_max - x_min) * f64(i) / f64(grid_x.len - 1usize)
+        i += 1usize
+    }
+    i = 0usize
+    while i < grid_y.len {
+        grid_y[i] = y_max - (y_max - y_min) * f64(i) / f64(grid_y.len - 1usize)
+        i += 1usize
+    }
+    let needed = grid_x.len * grid_y.len
+    let kde_error = stat.kde2d(x, y, bandwidth_x, bandwidth_y, grid_x, grid_y, values[..needed])
+    if kde_error != ok { ret (zero, Invalid) }
+    let (surface, surface_error) = surface3d_grid(values[..needed], grid_x.len, camera, bounds, storage)
+    ret (surface, surface_error)
+}
+
+fn wireframe3d(values: []const f64, columns: usize, camera: Camera3d, bounds: geometry.Rect, storage: *Surface3dStorage) -> (Surface3dLayout, err) {
+    let (surface, surface_error) = surface3d_grid(values, columns, camera, bounds, storage)
+    ret (surface, surface_error)
 }
 
 // Two-parameter Weibull probability paper. `total_count` includes units

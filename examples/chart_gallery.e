@@ -3115,6 +3115,146 @@ fn render_histogram3d_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_surface3d_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, density: bool) -> err {
+    var path = "docs/chart-previews/density_surface3d.png"
+    if !density { path = "docs/chart-previews/wireframe3d.png" }
+    let bounds = geometry.rect(45.0, 48.0, 270.0, 150.0)
+    var values: [81]f64 = zero
+    var points: [81]chart.Coord = zero
+    var depths: [81]f64 = zero
+    var face_vertices: [256]chart.Coord = zero
+    var faces: [64]chart.Layout = zero
+    var face_depths: [64]f64 = zero
+    var face_values: [64]f64 = zero
+    var order: [64]usize = zero
+    var wires: [144]chart.Segment = zero
+    var corners: [8]chart.Coord = zero
+    var edges: [12]chart.Segment = zero
+    var storage = chart.Surface3dStorage { points: points[..], depths: depths[..], face_vertices: face_vertices[..], faces: faces[..], face_depths: face_depths[..], face_values: face_values[..], order: order[..], wires: wires[..], corners: corners[..], edges: edges[..] }
+    let camera = chart.Camera3d { azimuth_degrees: 46.0f64, elevation_degrees: 31.0f64, distance: 5.0f64 }
+    var map: chart.Surface3dLayout = zero
+    if density {
+        var sample_x: [64]f64 = zero
+        var sample_y: [64]f64 = zero
+        var i = 0usize
+        while i < sample_x.len {
+            let angle = 6.283185307179586f64 * f64((i * 19usize) % 31usize) / 31.0f64
+            let radius = 0.03f64 + 0.28f64 * f64((i * 17usize) % 31usize) / 31.0f64
+            var cx = -0.35f64
+            var cy = -0.22f64
+            if i >= 32usize {
+                cx = 0.38f64
+                cy = 0.31f64
+            }
+            sample_x[i] = cx + radius * math.cos[f64](angle)
+            sample_y[i] = cy + radius * math.sin[f64](angle)
+            i += 1usize
+        }
+        var grid_x: [9]f64 = zero
+        var grid_y: [9]f64 = zero
+        let (made, map_error) = chart.density_surface3d(sample_x[..], sample_y[..], -1.0f64, 1.0f64, -1.0f64, 1.0f64, 0.24f64, 0.24f64, camera, bounds, grid_x[..], grid_y[..], values[..], &storage)
+        if map_error != ok { ret map_error }
+        map = made
+    } else {
+        var row = 0usize
+        while row < 9usize {
+            var column = 0usize
+            while column < 9usize {
+                let xx = -1.0f64 + 2.0f64 * f64(column) / 8.0f64
+                let yy = 1.0f64 - 2.0f64 * f64(row) / 8.0f64
+                let dx1 = xx + 0.35f64
+                let dy1 = yy + 0.25f64
+                let dx2 = xx - 0.4f64
+                let dy2 = yy - 0.35f64
+                values[row * 9usize + column] = math.exp[f64](-4.0f64 * (dx1 * dx1 + dy1 * dy1)) + 0.75f64 * math.exp[f64](-5.0f64 * (dx2 * dx2 + dy2 * dy2))
+                column += 1usize
+            }
+            row += 1usize
+        }
+        let (made, map_error) = chart.wireframe3d(values[..], 9usize, camera, bounds, &storage)
+        if map_error != ok { ret map_error }
+        map = made
+    }
+    var labels: [6]chart.Label = zero
+    var subtitle = "Product-Gaussian KDE / 64 observations"
+    var footer = "Height = estimated joint density"
+    labels[0usize] = chart.Label { text: "3-D density surface / twin peaks", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center }
+    if !density {
+        labels[0usize] = chart.Label { text: "3-D wireframe / twin peaks", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center }
+        subtitle = "9 x 9 sampled scalar grid"
+        footer = "Row and column traces share a perspective camera"
+    }
+    labels[1usize] = chart.Label { text: subtitle, anchor: chart.Coord { x: 180.0, y: 33.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "x", anchor: chart.Coord { x: map.corners[1usize].x + 6.0, y: map.corners[1usize].y + 5.0 }, align: .Left }
+    labels[3usize] = chart.Label { text: "y", anchor: chart.Coord { x: map.corners[2usize].x - 6.0, y: map.corners[2usize].y + 5.0 }, align: .Right }
+    labels[4usize] = chart.Label { text: "z", anchor: chart.Coord { x: map.corners[4usize].x - 6.0, y: map.corners[4usize].y - 5.0 }, align: .Right }
+    labels[5usize] = chart.Label { text: footer, anchor: chart.Coord { x: 180.0, y: 227.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let gray = paint.rgba(0.70, 0.77, 0.83, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 32u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 256usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, bounds, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &map.frame, paint.Brush { Solid: gray })
+    if density {
+        var i = 0usize
+        while i < map.order.len {
+            let face = map.order[i]
+            let share = map.face_values[face] / map.value_max
+            var ink = paint.rgba(0.12, 0.37, 0.67, 1.0)
+            if share > 0.2f64 { ink = paint.rgba(0.16, 0.53, 0.73, 1.0) }
+            if share > 0.4f64 { ink = paint.rgba(0.34, 0.69, 0.69, 1.0) }
+            if share > 0.6f64 { ink = paint.rgba(0.70, 0.78, 0.43, 1.0) }
+            if share > 0.8f64 { ink = paint.rgba(0.94, 0.68, 0.27, 1.0) }
+            try chart_scene.append(a, &builder, &map.faces[face], paint.Brush { Solid: ink })
+            i += 1usize
+        }
+    } else {
+        try chart_scene.append(a, &builder, &map.wireframe, paint.Brush { Solid: blue })
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..5usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[5usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, bounds, pale, false)
+    try chart_svg.append(&writer, &map.frame, gray)
+    if density {
+        var i = 0usize
+        while i < map.order.len {
+            let face = map.order[i]
+            let share = map.face_values[face] / map.value_max
+            var ink = paint.rgba(0.12, 0.37, 0.67, 1.0)
+            if share > 0.2f64 { ink = paint.rgba(0.16, 0.53, 0.73, 1.0) }
+            if share > 0.4f64 { ink = paint.rgba(0.34, 0.69, 0.69, 1.0) }
+            if share > 0.6f64 { ink = paint.rgba(0.70, 0.78, 0.43, 1.0) }
+            if share > 0.8f64 { ink = paint.rgba(0.94, 0.68, 0.27, 1.0) }
+            try chart_svg.append(&writer, &map.faces[face], ink)
+            i += 1usize
+        }
+    } else {
+        try chart_svg.append(&writer, &map.wireframe, blue)
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..5usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[5usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn two_cluster_sample(x: []f32, y: []f32) -> err {
     if x.len != 72usize || y.len != 72usize { ret chart.Invalid }
     var i = 0usize
@@ -7994,6 +8134,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_nyquist_preview(a, queue, output_target, canvas, &renderer)
     try render_scatter3d_preview(a, queue, output_target, canvas, &renderer)
     try render_histogram3d_preview(a, queue, output_target, canvas, &renderer)
+    try render_surface3d_preview(a, queue, output_target, canvas, &renderer, true)
+    try render_surface3d_preview(a, queue, output_target, canvas, &renderer, false)
     try render_hexbin_preview(a, queue, output_target, canvas, &renderer)
     try render_bin2d_preview(a, queue, output_target, canvas, &renderer)
     try render_density2d_preview(a, queue, output_target, canvas, &renderer)
