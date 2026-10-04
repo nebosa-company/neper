@@ -87,6 +87,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 | `e.algo.stat` | existing | 20 entries, first #1426 |
 | `e.algo.stat.safety` | new (under `e.algo.stat`) | #2266 |
 | `e.algo.stat.meta` | new (under `e.algo.stat`) | #2256 |
+| `e.algo.stat.regression` | new (under `e.algo.stat`) | #2257 |
 | `e.algo.stat.test` | new (under `e.algo.stat`) | 15 entries, first #1534 |
 | `e.algo.timeseries` | new | #1498, #1500, #2196, #2197, #2198, #2199, #2200 |
 | `e.algo.uuid` | existing | #954, #955, #956, #957, #958 |

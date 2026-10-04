@@ -1308,6 +1308,11 @@ algo_stat_meta_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$algo_stat_meta_written" = 'executable written' ]
 chmod +x "$test_build/algo-stat-meta-selfhost"
 "$test_build/algo-stat-meta-selfhost"
+# `e.algo.stat.regression` (L007): Poisson/NB recoveries, matched conditional logistic, ordinal recovery, plus refusals.
+algo_stat_regression_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_regression/src/main.e" "$repo" x64 linux "$test_build/algo-stat-regression-selfhost")
+[ "$algo_stat_regression_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-regression-selfhost"
+"$test_build/algo-stat-regression-selfhost"
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 algo_graph_flow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_flow/src/main.e" "$repo" x64 linux "$test_build/algo-graph-flow-selfhost")
 [ "$algo_graph_flow_written" = 'executable written' ]

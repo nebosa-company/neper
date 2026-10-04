@@ -3298,6 +3298,33 @@ inverse-variance fixed and DerSimonian-Laird random pooling, Cochran's Q,
 I-squared, DerSimonian-Laird tau-squared, between-subgroup Q, and
 weighted-least-squares meta-regression over a caller-built design.
 
+### `e.algo.stat.regression`
+
+```neper
+type OrdinalCtx = struct { x: []const f64, y: []const u8, n: usize, d: usize, levels: usize }
+error TooSmall
+error Singular
+error Invalid
+
+fn reg_solve(matrix: []f64, rhs: []f64, k: usize) -> err
+fn reg_at(x: []const f64, d: usize, i: usize, j: usize) -> f64
+fn reg_covariance(hessian: []const f64, covariance: []f64, k: usize, step: []f64, work: []f64) -> err
+fn poisson(x: []const f64, y: []const f64, exposure: []const f64, n: usize, d: usize, tolerance: f64, max_iterations: u32, coefficients: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
+fn negbin_beta(x: []const f64, y: []const f64, exposure: []const f64, n: usize, d: usize, theta: f64, tolerance: f64, max_iterations: u32, coefficients: []f64, hessian: []f64, gradient: []f64, step: []f64, work: []f64) -> (u32, err)
+fn negbin_profile(x: []const f64, y: []const f64, exposure: []const f64, n: usize, d: usize, theta: f64, coefficients: []const f64) -> f64
+fn negbin(x: []const f64, y: []const f64, exposure: []const f64, n: usize, d: usize, tolerance: f64, max_iterations: u32, max_outer: u32, theta: []f64, coefficients: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
+fn cond_logistic(x: []const f64, y: []const u8, stratum: []const usize, n: usize, d: usize, tolerance: f64, max_iterations: u32, coefficients: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
+fn ordinal_objective(ctx: *OrdinalCtx, params: []const f64) -> f64
+fn ordinal_logistic(x: []const f64, y: []const u8, n: usize, d: usize, levels: usize, tolerance: f64, max_iterations: u32, thresholds: []f64, coefficients: []f64, covariance: []f64, scratch: []f64) -> (u32, err)
+```
+
+Generalized regressions over row-major samples with the intercept last:
+Poisson rates with exposure offsets by IRLS, negative-binomial rates by IRLS
+inside a golden-section dispersion search, conditional logistic regression for
+1:M matched sets by Newton, and proportional-odds ordinal logistic regression
+by Nelder-Mead with a numeric covariance. Every fit answers coefficients with
+their model-based covariance.
+
 ### `e.algo.stat`
 
 ```neper

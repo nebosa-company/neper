@@ -174,6 +174,7 @@
     "e.algo.stat.safety",
     "e.algo.stat.diagnostic",
     "e.algo.stat.meta",
+    "e.algo.stat.regression",
     "e.algo.graph.flow",
     "e.algo.graph.match",
     "e.algo.graph.path",
@@ -3672,6 +3673,19 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.stat.regression",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.opt",
+    "e.math.special"
    ],
    "blocked_by": []
   },
