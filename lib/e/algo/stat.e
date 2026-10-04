@@ -1421,6 +1421,70 @@ fn binomial_acceptance_probability(sample_size: usize, acceptance_number: usize,
     if !(probability >= 0.0f64 && probability <= 1.0f64) { ret (0.0f64, Invalid) }
     ret (probability, ok)
 }
+
+// The log binomial coefficient by `lgamma`, stable past `u64` range where
+// the multiplicative form overflows.
+fn log_binomial(n: u64, k: u64) -> f64 {
+    ret special.lgamma(f64(n) + 1.0f64) - special.lgamma(f64(k) + 1.0f64) - special.lgamma(f64(n - k) + 1.0f64)
+}
+
+// P[X = observed] drawing `draws` without replacement from `population`
+// holding `successes`: `C(successes, observed) C(population - successes,
+// draws - observed) / C(population, draws)` in log space. An inconsistent
+// population (`successes` or `draws` past `population`) is `Invalid`; an
+// `observed` outside the support answers `0`.
+fn hypergeometric_pmf(population: u64, successes: u64, draws: u64, observed: u64) -> (f64, err) {
+    if successes > population || draws > population { ret (0.0f64, Invalid) }
+    var low = 0u64
+    if draws > population - successes { low = draws - (population - successes) }
+    var high = draws
+    if successes < high { high = successes }
+    if observed < low || observed > high { ret (0.0f64, ok) }
+    ret (math.exp[f64](log_binomial(successes, observed) + log_binomial(population - successes, draws - observed) - log_binomial(population, draws)), ok)
+}
+
+// P[X <= observed] over the same model; past the support edge this is
+// exactly `1` (below it, `0`).
+fn hypergeometric_cdf(population: u64, successes: u64, draws: u64, observed: u64) -> (f64, err) {
+    if successes > population || draws > population { ret (0.0f64, Invalid) }
+    var low = 0u64
+    if draws > population - successes { low = draws - (population - successes) }
+    var high = draws
+    if successes < high { high = successes }
+    if observed >= high { ret (1.0f64, ok) }
+    var total = 0.0f64
+    var k = low
+    while k <= observed {
+        let (point, point_error) = hypergeometric_pmf(population, successes, draws, k)
+        if point_error != ok { ret (0.0f64, point_error) }
+        total += point
+        if k == 18446744073709551615u64 { ret (total, ok) }
+        k += 1u64
+    }
+    ret (total, ok)
+}
+
+// P[X >= observed] over the same model, summed upward from `observed` so the
+// tail of interest keeps its digits; below the support edge this is exactly
+// `1` (past it, `0`).
+fn hypergeometric_sf(population: u64, successes: u64, draws: u64, observed: u64) -> (f64, err) {
+    if successes > population || draws > population { ret (0.0f64, Invalid) }
+    var low = 0u64
+    if draws > population - successes { low = draws - (population - successes) }
+    var high = draws
+    if successes < high { high = successes }
+    if observed <= low { ret (1.0f64, ok) }
+    var total = 0.0f64
+    var k = observed
+    while k <= high {
+        let (point, point_error) = hypergeometric_pmf(population, successes, draws, k)
+        if point_error != ok { ret (0.0f64, point_error) }
+        total += point
+        if k == 18446744073709551615u64 { ret (total, ok) }
+        k += 1u64
+    }
+    ret (total, ok)
+}
 // `estimate` is the statistic of the full sample; the bias-corrected value is
 // `estimate - bias`.
 type Jackknife = struct { estimate: f64, bias: f64, standard_error: f64 }

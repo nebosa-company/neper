@@ -3341,6 +3341,10 @@ fn interval_wilson(successes: u64, trials: u64, confidence: f64) -> (Interval, e
 fn beta_quantile(p: f64, a: f64, b: f64) -> f64
 fn interval_clopper_pearson(successes: u64, trials: u64, confidence: f64) -> (Interval, err)
 fn binomial_acceptance_probability(sample_size: usize, acceptance_number: usize, defective_fraction: f64) -> (f64, err)
+fn log_binomial(n: u64, k: u64) -> f64
+fn hypergeometric_pmf(population: u64, successes: u64, draws: u64, observed: u64) -> (f64, err)
+fn hypergeometric_cdf(population: u64, successes: u64, draws: u64, observed: u64) -> (f64, err)
+fn hypergeometric_sf(population: u64, successes: u64, draws: u64, observed: u64) -> (f64, err)
 type GageRrMeanSquares = struct { part: f64, operator: f64, interaction: f64, repeatability: f64 }
 type GageRrComponents = struct { repeatability: f64, operator: f64, interaction: f64, part: f64, gage: f64, total: f64 }
 type GageRrWork = struct { part_means: []f64, operator_means: []f64, cell_means: []f64 }

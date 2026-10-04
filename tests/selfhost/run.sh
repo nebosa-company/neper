@@ -1288,6 +1288,11 @@ algo_stat_mixed_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$algo_stat_mixed_written" = 'executable written' ]
 chmod +x "$test_build/algo-stat-mixed-selfhost"
 "$test_build/algo-stat-mixed-selfhost"
+# `e.algo.stat` hypergeometric (L001): the PMF against exact combinatorics, the tails against complements, edges and refusals.
+algo_stat_hyper_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_hyper/src/main.e" "$repo" x64 linux "$test_build/algo-stat-hyper-selfhost")
+[ "$algo_stat_hyper_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-hyper-selfhost"
+"$test_build/algo-stat-hyper-selfhost"
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 algo_graph_flow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_flow/src/main.e" "$repo" x64 linux "$test_build/algo-graph-flow-selfhost")
 [ "$algo_graph_flow_written" = 'executable written' ]

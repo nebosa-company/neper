@@ -1387,6 +1387,12 @@ $algoStatMixedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $algoStatMixedWritten -ne 'executable written') { throw 'algo_stat_mixed emission failed' }
 & $algoStatMixedPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_stat_mixed check failed: exit $LASTEXITCODE" }
+# `e.algo.stat` hypergeometric (L001): the PMF against exact combinatorics, the tails against complements, edges and refusals.
+$algoStatHyperPath = Join-Path $testBuild 'algo-stat-hyper-selfhost.exe'
+$algoStatHyperWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_hyper\src\main.e') $repo 'x64' 'windows' $algoStatHyperPath
+if ($LASTEXITCODE -ne 0 -or $algoStatHyperWritten -ne 'executable written') { throw 'algo_stat_hyper emission failed' }
+& $algoStatHyperPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_hyper check failed: exit $LASTEXITCODE" }
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 $algoGraphFlowPath = Join-Path $testBuild 'algo-graph-flow-selfhost.exe'
 $algoGraphFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_flow\src\main.e') $repo 'x64' 'windows' $algoGraphFlowPath
