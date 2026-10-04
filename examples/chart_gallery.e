@@ -2296,6 +2296,94 @@ fn render_gage_rr_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targ
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_multi_vari_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/multi_vari.png"
+    let plot = geometry.rect(45.0, 49.0, 270.0, 137.0)
+    let readings = [12]f64{ 8.0f64, 10.0f64, 10.0f64, 12.0f64, 12.0f64, 14.0f64, 9.0f64, 11.0f64, 14.0f64, 16.0f64, 15.0f64, 17.0f64 }
+    var raw_points: [12]chart.Coord = zero
+    var cell_points: [6]chart.Coord = zero
+    var cell_lines: [4]chart.Segment = zero
+    var group_points: [2]chart.Coord = zero
+    var group_lines: [1]chart.Segment = zero
+    var cell_means: [6]f64 = zero
+    var group_means: [2]f64 = zero
+    var storage = chart.MultiVariStorage { raw_points: raw_points[..], cell_points: cell_points[..], cell_lines: cell_lines[..], group_points: group_points[..], group_lines: group_lines[..], cell_means: cell_means[..], group_means: group_means[..] }
+    let (map, map_error) = chart.multi_vari(readings[..], 2usize, 3usize, 2usize, plot, &storage)
+    if map_error != ok { ret map_error }
+    let x_ticks = [2]chart.Tick{ chart.Tick { value: 0.0, fraction: 0.0 }, chart.Tick { value: 6.0, fraction: 1.0 } }
+    let y_ticks = [5]chart.Tick{
+        chart.Tick { value: 8.0, fraction: 0.0 },
+        chart.Tick { value: 10.0, fraction: 0.22222222 },
+        chart.Tick { value: 12.0, fraction: 0.44444445 },
+        chart.Tick { value: 14.0, fraction: 0.6666667 },
+        chart.Tick { value: 16.0, fraction: 0.8888889 },
+    }
+    let y_text = [5]str{ "8", "10", "12", "14", "16" }
+    let setting_text = [6]str{ "1", "2", "3", "1", "2", "3" }
+    var labels: [16]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Multi-vari / machine and setting", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "2 machines / 3 settings / 2 readings each", anchor: chart.Coord { x: 180.0, y: 32.0 }, align: .Center }
+    var i = 0usize
+    while i < y_text.len {
+        labels[2usize + i] = chart.Label { text: y_text[i], anchor: chart.Coord { x: 36.0, y: plot.y + plot.height * (1.0 - y_ticks[i].fraction) + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    i = 0usize
+    while i < setting_text.len {
+        labels[7usize + i] = chart.Label { text: setting_text[i], anchor: chart.Coord { x: cell_points[i].x, y: 199.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[13usize] = chart.Label { text: "Machine A", anchor: chart.Coord { x: 112.5, y: 214.0 }, align: .Center }
+    labels[14usize] = chart.Label { text: "Machine B", anchor: chart.Coord { x: 247.5, y: 214.0 }, align: .Center }
+    labels[15usize] = chart.Label { text: "Gray: readings    Blue: setting means    Orange: machine means", anchor: chart.Coord { x: 180.0, y: 232.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let gray = paint.rgba(0.63, 0.69, 0.76, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let orange = paint.rgba(0.91, 0.34, 0.16, 1.0)
+    let grid = paint.rgba(0.87, 0.91, 0.95, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var divider_segment = [1]chart.Segment{ chart.Segment { from: chart.Coord { x: 180.0, y: plot.y }, to: chart.Coord { x: 180.0, y: plot.y + plot.height } } }
+    let divider = chart.Layout { kind: .Rug, coords: zero, segments: divider_segment[..], bars: zero, x_min: 0.0, x_max: 6.0, y_min: 8.0, y_max: 17.0 }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 32u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &divider, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &map.observations, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &map.within, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.cells, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.groups, paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..15usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[15usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid, dark)
+    try chart_svg.append(&writer, &divider, gray)
+    try chart_svg.append(&writer, &map.observations, gray)
+    try chart_svg.append(&writer, &map.within, blue)
+    try chart_svg.append(&writer, &map.cells, blue)
+    try chart_svg.append(&writer, &map.groups, orange)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..15usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[15usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn two_cluster_sample(x: []f32, y: []f32) -> err {
     if x.len != 72usize || y.len != 72usize { ret chart.Invalid }
     var i = 0usize
@@ -7165,6 +7253,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_weibull_probability_preview(a, queue, output_target, canvas, &renderer)
     try render_oc_curve_preview(a, queue, output_target, canvas, &renderer)
     try render_gage_rr_preview(a, queue, output_target, canvas, &renderer)
+    try render_multi_vari_preview(a, queue, output_target, canvas, &renderer)
     try render_hexbin_preview(a, queue, output_target, canvas, &renderer)
     try render_bin2d_preview(a, queue, output_target, canvas, &renderer)
     try render_density2d_preview(a, queue, output_target, canvas, &renderer)

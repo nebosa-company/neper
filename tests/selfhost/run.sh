@@ -2949,6 +2949,11 @@ gfx_chart_gage_rr_written=$($test_build/neper-self emit-executable "$repo/tests/
 chmod +x "$test_build/gfx-chart-gage-rr-selfhost"
 gfx_chart_gage_rr_output=$("$test_build/gfx-chart-gage-rr-selfhost")
 [ "$gfx_chart_gage_rr_output" = 'gfx chart gage rr ok' ]
+gfx_chart_multi_vari_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_multi_vari/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-multi-vari-selfhost")
+[ "$gfx_chart_multi_vari_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-multi-vari-selfhost"
+gfx_chart_multi_vari_output=$("$test_build/gfx-chart-multi-vari-selfhost")
+[ "$gfx_chart_multi_vari_output" = 'gfx chart multi vari ok' ]
 gfx_chart_spine_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_spine_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-spine-plot-selfhost")
 [ "$gfx_chart_spine_plot_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-spine-plot-selfhost"

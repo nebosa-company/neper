@@ -34492,3 +34492,18 @@ nested or unbalanced designs, confidence intervals, tolerance ratios, distinct
 categories, or the whole multi-panel Minitab report.
 
 References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/methods-and-formulas/method-of-analysis/ ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/before-you-start/example/
+
+## D1933 — Separate within-group and between-group lines in multi-vari charts
+
+`chart.multi_vari` accepts balanced outer-factor/inner-factor cells with one
+or more readings per cell. It returns caller-owned raw-point, cell-mean,
+within-group-segment and outer-group-mean layers, plus the numeric means.
+Within-group segments use independent Rug strokes, because the generic Line
+adapter would join the end of one group to the start of the next. The gallery
+shows a two-machine, three-setting example where the differing cell-mean
+slopes suggest a possible interaction; it does not claim a significance test
+or causal effect. The focused Windows/Linux fixture checks means, group
+boundaries, repeated readings, constant data and refusals. Three- and
+four-factor nesting, missing/unbalanced cells and uncertainty remain planned.
+
+Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/quality-tools/supporting-topics/multi-vari-chart-basics/

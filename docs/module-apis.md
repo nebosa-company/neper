@@ -15993,6 +15993,9 @@ fn weibull_probability_plot(sorted_failures: []const f64, total_count: usize, sh
 fn oc_curve(sample_size: usize, acceptance_number: usize, max_fraction: f64, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
 type GageRrLayout = struct { contribution: Layout, study_variation: Layout, percentages: []f32 }
 fn gage_rr_components(components: *const stat.GageRrComponents, bounds: geometry.Rect, bars: []geometry.Rect, percentages: []f32) -> (GageRrLayout, err)
+type MultiVariStorage = struct { raw_points: []Coord, cell_points: []Coord, cell_lines: []Segment, group_points: []Coord, group_lines: []Segment, cell_means: []f64, group_means: []f64 }
+type MultiVariLayout = struct { observations: Layout, cells: Layout, within: Layout, groups: Layout, cell_means: []f64, group_means: []f64 }
+fn multi_vari(values: []const f64, outer_levels: usize, inner_levels: usize, replicates: usize, bounds: geometry.Rect, storage: *MultiVariStorage) -> (MultiVariLayout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)

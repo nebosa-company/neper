@@ -94,6 +94,8 @@ type RangeIntervalLayout = struct { ranges: Layout, caps: Layout }
 type ProbabilityFamily = enum u8 { Normal, Exponential }
 type ProbabilityLayout = struct { observations: Layout, reference: Layout, probability_ticks: []Tick }
 type GageRrLayout = struct { contribution: Layout, study_variation: Layout, percentages: []f32 }
+type MultiVariStorage = struct { raw_points: []Coord, cell_points: []Coord, cell_lines: []Segment, group_points: []Coord, group_lines: []Segment, cell_means: []f64, group_means: []f64 }
+type MultiVariLayout = struct { observations: Layout, cells: Layout, within: Layout, groups: Layout, cell_means: []f64, group_means: []f64 }
 type SpineLayout = struct { categories: []Layout, column_totals: []f64, grand_total: f64 }
 type HexCell = struct { center: Coord, count: u64 }
 type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
@@ -6852,6 +6854,75 @@ fn gage_rr_components(components: *const stat.GageRrComponents, bounds: geometry
     let contribution_layout = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[..4usize], x_min: 0.0, x_max: 4.0, y_min: 0.0, y_max: 100.0 }
     let study_layout = Layout { kind: .Bar, coords: zero, segments: zero, bars: bars[4usize..8usize], x_min: 0.0, x_max: 4.0, y_min: 0.0, y_max: 100.0 }
     ret (GageRrLayout { contribution: contribution_layout, study_variation: study_layout, percentages: percentages[..8usize] }, ok)
+}
+
+// Two-factor multi-vari: values are outer factor, inner factor, then replicate.
+// Raw readings are retained; cell means connect only within each outer group,
+// while group means connect across groups. All work is caller-owned.
+fn multi_vari(values: []const f64, outer_levels: usize, inner_levels: usize, replicates: usize, bounds: geometry.Rect, storage: *MultiVariStorage) -> (MultiVariLayout, err) {
+    if outer_levels < 2usize || inner_levels < 2usize || replicates == 0usize || values.len == 0usize || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if outer_levels > values.len / inner_levels { ret (zero, Invalid) }
+    let cells = outer_levels * inner_levels
+    if replicates > values.len / cells || cells * replicates != values.len { ret (zero, Invalid) }
+    if storage.raw_points.len < values.len || storage.cell_points.len < cells || storage.cell_lines.len < outer_levels * (inner_levels - 1usize) || storage.group_points.len < outer_levels || storage.group_lines.len < outer_levels - 1usize || storage.cell_means.len < cells || storage.group_means.len < outer_levels { ret (zero, TooLarge) }
+    var lo = values[0usize]
+    var hi = values[0usize]
+    var i = 0usize
+    while i < values.len {
+        if !finite64(values[i]) { ret (zero, Invalid) }
+        if values[i] < lo { lo = values[i] }
+        if values[i] > hi { hi = values[i] }
+        i += 1usize
+    }
+    if lo == hi {
+        let pad = math.max[f64](1.0f64, math.abs[f64](lo) * 0.05f64)
+        lo -= pad
+        hi += pad
+    }
+    if !finite64(lo) || !finite64(hi) || !finite64(hi - lo) || hi <= lo || !finite(f32(lo)) || !finite(f32(hi)) { ret (zero, Invalid) }
+    let group_width = bounds.width / f32(outer_levels)
+    let cell_width = group_width / f32(inner_levels)
+    let baseline = values[0usize]
+    var group = 0usize
+    while group < outer_levels {
+        var group_sum = 0.0f64
+        var level = 0usize
+        while level < inner_levels {
+            let cell = group * inner_levels + level
+            let x = bounds.x + group_width * (f32(group) + (f32(level) + 0.5) / f32(inner_levels))
+            var centered_sum = 0.0f64
+            var trial = 0usize
+            while trial < replicates {
+                let value = values[cell * replicates + trial]
+                centered_sum += value - baseline
+                let offset = (f32(trial) - (f32(replicates) - 1.0) * 0.5) * cell_width * 0.3 / f32(replicates)
+                storage.raw_points[cell * replicates + trial] = Coord { x: x + offset, y: bounds.y + bounds.height * f32((hi - value) / (hi - lo)) }
+                trial += 1usize
+            }
+            if !finite64(centered_sum) { ret (zero, Invalid) }
+            let cell_mean = baseline + centered_sum / f64(replicates)
+            storage.cell_means[cell] = cell_mean
+            group_sum += centered_sum / f64(replicates)
+            let point = Coord { x: x, y: bounds.y + bounds.height * f32((hi - cell_mean) / (hi - lo)) }
+            if !finite(point.x) || !finite(point.y) { ret (zero, Invalid) }
+            storage.cell_points[cell] = point
+            if level > 0usize { storage.cell_lines[group * (inner_levels - 1usize) + level - 1usize] = Segment { from: storage.cell_points[cell - 1usize], to: point } }
+            level += 1usize
+        }
+        if !finite64(group_sum) { ret (zero, Invalid) }
+        let group_mean = baseline + group_sum / f64(inner_levels)
+        storage.group_means[group] = group_mean
+        let group_point = Coord { x: bounds.x + group_width * (f32(group) + 0.5), y: bounds.y + bounds.height * f32((hi - group_mean) / (hi - lo)) }
+        if !finite(group_point.x) || !finite(group_point.y) { ret (zero, Invalid) }
+        storage.group_points[group] = group_point
+        if group > 0usize { storage.group_lines[group - 1usize] = Segment { from: storage.group_points[group - 1usize], to: group_point } }
+        group += 1usize
+    }
+    let raw = Layout { kind: .Scatter, coords: storage.raw_points[..values.len], segments: zero, bars: zero, x_min: 0.0, x_max: f32(cells), y_min: f32(lo), y_max: f32(hi) }
+    let cell_marks = Layout { kind: .Scatter, coords: storage.cell_points[..cells], segments: zero, bars: zero, x_min: 0.0, x_max: f32(cells), y_min: f32(lo), y_max: f32(hi) }
+    let within = Layout { kind: .Rug, coords: zero, segments: storage.cell_lines[..outer_levels * (inner_levels - 1usize)], bars: zero, x_min: 0.0, x_max: f32(cells), y_min: f32(lo), y_max: f32(hi) }
+    let between = Layout { kind: .PointLine, coords: storage.group_points[..outer_levels], segments: storage.group_lines[..outer_levels - 1usize], bars: zero, x_min: 0.0, x_max: f32(cells), y_min: f32(lo), y_max: f32(hi) }
+    ret (MultiVariLayout { observations: raw, cells: cell_marks, within: within, groups: between, cell_means: storage.cell_means[..cells], group_means: storage.group_means[..outer_levels] }, ok)
 }
 
 // Two-parameter Weibull probability paper. `total_count` includes units
