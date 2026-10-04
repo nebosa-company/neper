@@ -311,12 +311,55 @@ chart_guide = (
          notes=preview_notes.removeprefix('# Chart previews\n').strip(),
          plan=re.sub(r'^(#+) ', lambda match: '#' + match.group(1) + ' ', chart_plan, flags=re.M).strip())
 Path('docs/charts.md').write_text(chart_guide, encoding='utf-8', newline='\n')
+gallery_cards = '\n'.join(
+    '<figure class="chart"><a href="chart-previews/{png}">'
+    '<img src="chart-previews/{png}" alt="{title}" loading="lazy" decoding="async"></a>'
+    '<figcaption><span>{title}</span><a href="chart-previews/{svg}">SVG</a></figcaption>'
+    '</figure>'.format(
+        title=html.escape(path.stem.replace('_', ' ').title(), quote=True),
+        png=html.escape(path.name, quote=True),
+        svg=html.escape(path.with_suffix('.svg').name, quote=True))
+    for path in preview_paths
+)
+charts_html = '''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neper chart previews</title>
+<style>
+:root{color-scheme:light dark;font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+body{margin:0;background:#f4f6f9;color:#172033}
+main{max-width:88rem;margin:auto;padding:2rem 1.25rem 4rem}
+h1{margin:.5rem 0}p{margin:.5rem 0 1.5rem}a{color:#245aa8}
+.gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:1rem}
+.chart{margin:0;min-width:0;padding:.75rem;background:#fff;border:1px solid #dbe1ea;border-radius:.6rem}
+.chart>a{display:block}.chart img{display:block;width:100%;height:auto}
+figcaption{display:flex;justify-content:space-between;gap:1rem;align-items:baseline;padding:.6rem .2rem .1rem;font-weight:600}
+@media(prefers-color-scheme:dark){body{background:#0f1319;color:#e8edf4}.chart{background:#171d26;border-color:#354051}a{color:#9dc0ff}}
+</style>
+</head>
+<body>
+<main>
+<nav><a href="progress.html">Readiness</a> · <a href="charts.md">Charting-engine details</a></nav>
+<h1>Rendered chart previews ({rendered}/{total})</h1>
+<p>Click a preview to open its PNG, or choose SVG for the vector version.</p>
+<div class="gallery">
+{cards}
+</div>
+</main>
+</body>
+</html>
+'''.replace('{rendered}', str(len(preview_paths))).replace(
+    '{total}', str(chart_total)).replace('{cards}', gallery_cards)
+Path('docs/charts.html').write_text(charts_html, encoding='utf-8', newline='\n')
 chart_section = (
     '<section class="tools" aria-label="Charting engine readiness">'
     '<h2>Charting engine</h2>'
     '<p>Chart capability <code>L061</code>: {score:.0%} complete. '
     'Rendered previews ({preview_count}/{chart_total}). '
-    '<a href="charts.md">Charting-engine description and produced charts</a>.</p></section>'
+    '<a href="charts.html">Browse chart previews</a> · '
+    '<a href="charts.md">Charting-engine details</a>.</p></section>'
     '<section class="tools" aria-label="Unfinished work queue">'
     '<h2>Unfinished work</h2><p>{count} queued capabilities in planned pickup order, '
     'with chart work first across all categories; the first row is next. '

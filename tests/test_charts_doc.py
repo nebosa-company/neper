@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import re
+import subprocess
 import unittest
 
 
@@ -9,10 +10,17 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 
 
+def tracked_pngs():
+    names = subprocess.check_output(
+        ["git", "ls-files", "docs/chart-previews/*.png"], cwd=ROOT, text=True
+    ).splitlines()
+    return [ROOT / name for name in sorted(names)]
+
+
 class ChartGuideTests(unittest.TestCase):
     def test_gallery_matches_rendered_pairs_and_backlog(self):
         guide = (DOCS / "charts.md").read_text(encoding="utf-8")
-        pngs = sorted((DOCS / "chart-previews").glob("*.png"))
+        pngs = tracked_pngs()
         planned = [line for line in (DOCS / "chart-preview-backlog.txt").read_text(
             encoding="utf-8").splitlines() if line and not line.startswith("#")]
         self.assertIn(f"## Rendered previews ({len(pngs)}/{len(pngs) + len(planned)})", guide)
@@ -25,7 +33,7 @@ class ChartGuideTests(unittest.TestCase):
     def test_progress_links_to_guide_without_embedding_gallery_or_plan(self):
         progress = (DOCS / "progress.html").read_text(encoding="utf-8")
         guide = (DOCS / "charts.md").read_text(encoding="utf-8")
-        rendered = len(list((DOCS / "chart-previews").glob("*.png")))
+        rendered = len(tracked_pngs())
         planned = sum(bool(line and not line.startswith("#")) for line in
                       (DOCS / "chart-preview-backlog.txt").read_text(
                           encoding="utf-8").splitlines())
@@ -36,6 +44,17 @@ class ChartGuideTests(unittest.TestCase):
         self.assertIn("## Preview descriptions", guide)
         self.assertIn("## Neper charting engine plan", guide)
         self.assertIn("[progress.html](progress.html)", guide)
+
+    def test_browser_gallery_resolves_every_preview(self):
+        page = (DOCS / "charts.html").read_text(encoding="utf-8")
+        pngs = tracked_pngs()
+        sources = re.findall(r'<img src="(chart-previews/[^"/]+\.png)"', page)
+        self.assertEqual(sources, [f"chart-previews/{path.name}" for path in pngs])
+        for path in pngs:
+            self.assertEqual(path.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
+            self.assertIn(f'href="chart-previews/{path.stem}.svg"', page)
+            self.assertTrue(path.with_suffix(".svg").is_file())
+        self.assertIn('href="charts.html"', (DOCS / "progress.html").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
