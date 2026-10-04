@@ -16,6 +16,7 @@ use e.gfx.chart.scene as chart_scene
 use e.gfx.chart.svg as chart_svg
 use e.gfx.chart.locale as chart_locale
 use e.gfx.chart.widget as chart_widget
+use e.gfx.chart.pdf as chart_pdf
 use e.gfx.geometry
 use e.gfx.image
 use e.gfx.paint
@@ -2578,6 +2579,105 @@ fn render_ui_canvas_preview(a: *mem.Arena) -> err {
     try widget.close(&runtime)
     try scene.close(&renderer)
     ret gpu.close(device)
+}
+
+// One layout, three files: the PNG and SVG every preview has, and a PDF page
+// whose marks sit exactly where the PNG's do (text is Helvetica in the PDF).
+fn render_pdf_export_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/pdf_export.png"
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let dark = paint.rgba(0.16, 0.20, 0.28, 1.0)
+    let grid = paint.rgba(0.84, 0.87, 0.92, 1.0)
+    let axis = paint.rgba(0.56, 0.62, 0.70, 1.0)
+    let blue = paint.rgba(0.0, 114.0 / 255.0, 178.0 / 255.0, 1.0)
+    let orange = paint.rgba(195.0 / 255.0, 86.0 / 255.0, 0.0, 1.0)
+    let plot = geometry.rect(48.0, 50.0, 286.0, 150.0)
+    let x = [6]f32{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 }
+    let revenue = [6]f32{ 31.0, 36.0, 44.0, 40.0, 52.0, 59.0 }
+    let margin = [6]f32{ 12.0, 15.0, 21.0, 17.0, 26.0, 31.0 }
+    let limits = [2]f32{ 0.0, 60.0 }
+    var bar_storage: [6]geometry.Rect = zero
+    var point_storage: [6]chart.Coord = zero
+    var line_storage: [5]chart.Segment = zero
+    let bar_spec = chart.spec(.Bar, plot, x[..], revenue[..])
+    let (bars, bars_error) = chart.layout_with_limits(&bar_spec, zero, zero, bar_storage[..], zero, limits[..])
+    if bars_error != ok { ret bars_error }
+    let x_limits = [2]f32{ bars.x_min, bars.x_max }
+    let line_spec = chart.spec(.PointLine, plot, x[..], margin[..])
+    let (trend, trend_error) = chart.layout_with_limits(&line_spec, point_storage[..], line_storage[..], zero, x_limits[..], limits[..])
+    if trend_error != ok { ret trend_error }
+    let y_ticks = [4]chart.Tick{ chart.Tick { value: 0.0, fraction: 0.0 }, chart.Tick { value: 20.0, fraction: 1.0 / 3.0 }, chart.Tick { value: 40.0, fraction: 2.0 / 3.0 }, chart.Tick { value: 60.0, fraction: 1.0 } }
+    let y_text = [4]str{ "0", "20", "40", "60" }
+    let quarters = [6]str{ "Q1", "Q2", "Q3", "Q4", "Q5", "Q6" }
+    var labels: [14]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Revenue and margin, \xe2\x82\xacm", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Bars: revenue \xc2\xb7 line: margin \xe2\x80\x93 one layout, PNG/SVG/PDF", anchor: chart.Coord { x: 180.0, y: 36.0 }, align: .Center }
+    var i = 0usize
+    while i < 6usize {
+        let bar = bars.bars[i]
+        labels[2usize + i] = chart.Label { text: quarters[i], anchor: chart.Coord { x: bar.x + bar.width / 2.0, y: plot.y + plot.height + 14.0 }, align: .Center }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 4usize {
+        labels[8usize + i] = chart.Label { text: y_text[i], anchor: chart.Coord { x: plot.x - 8.0, y: plot.y + plot.height * (1.0 - y_ticks[i].fraction) + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    labels[12usize] = chart.Label { text: "Revenue", anchor: chart.Coord { x: 300.0, y: 228.0 }, align: .Right }
+    labels[13usize] = chart.Label { text: "Margin", anchor: chart.Coord { x: 340.0, y: 228.0 }, align: .Right }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append_guides(&builder, plot, zero, y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: axis })
+    try chart_scene.append(a, &builder, &bars, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &trend, paint.Brush { Solid: orange })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 11.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 7.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..12usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[12usize..13usize], font, 8.0, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[13usize..], font, 8.0, paint.Brush { Solid: orange })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_guides(&writer, plot, zero, y_ticks[..], grid, axis)
+    try chart_svg.append(&writer, &bars, blue)
+    try chart_svg.append(&writer, &trend, orange)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 11.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 7.0)
+    try chart_svg.append_labels(&writer, labels[2usize..12usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[12usize..13usize], blue, 8.0)
+    try chart_svg.append_labels(&writer, labels[13usize..], orange, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    try fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+    let (content, content_error) = mem.alloc[u8](a, 65536usize)
+    if content_error != ok { ret content_error }
+    let (started, begin_error) = chart_pdf.begin(content, f32(WIDTH), f32(HEIGHT), "Revenue and margin, \xe2\x82\xacm")
+    if begin_error != ok { ret begin_error }
+    var doc = started
+    try chart_pdf.rect(&doc, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), white, false)
+    try chart_pdf.append_guides(&doc, plot, zero, y_ticks[..], grid, axis)
+    try chart_pdf.append(&doc, &bars, blue)
+    try chart_pdf.append(&doc, &trend, orange)
+    try chart_pdf.append_labels(&doc, labels[..1usize], dark, 11.0)
+    try chart_pdf.append_labels(&doc, labels[1usize..2usize], dark, 7.0)
+    try chart_pdf.append_labels(&doc, labels[2usize..12usize], dark, 8.0)
+    try chart_pdf.append_labels(&doc, labels[12usize..13usize], blue, 8.0)
+    try chart_pdf.append_labels(&doc, labels[13usize..], orange, 8.0)
+    let (pdf_state, unused, pdf_writer_error) = io.memory_writer(a, 0usize)
+    if pdf_writer_error != ok { ret pdf_writer_error }
+    var pdf_held = pdf_state
+    var pdf_writer = io.writer(mem.cast[*void](&pdf_held), io.memory_write)
+    try chart_pdf.finish(&doc, &pdf_writer)
+    ret fs.write_file(a, "docs/chart-previews/pdf_export.pdf", io.memory_bytes(&pdf_held))
 }
 
 fn render_legend_collision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
@@ -11368,6 +11468,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_color_vision_preview(a, queue, output_target, canvas, &renderer)
     try render_label_placement_preview(a, queue, output_target, canvas, &renderer)
     try render_locale_axes_preview(a, queue, output_target, canvas, &renderer)
+    try render_pdf_export_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)

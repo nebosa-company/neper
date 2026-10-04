@@ -3428,6 +3428,11 @@ $gfxChartWidgetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $gfxChartWidgetWritten -ne 'executable written') { throw 'gfx_chart_widget emission failed' }
 $gfxChartWidgetOutput = & $gfxChartWidgetPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartWidgetOutput -ne 'gfx chart widget ok') { throw "the e.gfx.chart.widget canvas answered wrongly: exit $LASTEXITCODE" }
+$gfxChartPdfPath = Join-Path $testBuild 'gfx-chart-pdf-selfhost.exe'
+$gfxChartPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_pdf\src\main.e') $repo 'x64' 'windows' $gfxChartPdfPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPdfWritten -ne 'executable written') { throw 'gfx_chart_pdf emission failed' }
+$gfxChartPdfOutput = & $gfxChartPdfPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartPdfOutput -ne 'gfx chart pdf ok') { throw "the e.gfx.chart.pdf adapter answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

@@ -35163,3 +35163,22 @@ change is not repainted, which the fixture pins. The view borrows caller mark
 storage and an arena for the scene adapter's paths, as every other chart
 adapter does. One layer per view keeps the first version small; multi-layer
 views, legends and pointer events (L062) are follow-on work.
+
+## D2107 — Chart PDFs use built-in Helvetica and caller-owned content storage
+
+`e.gfx.chart.pdf` writes a single-page PDF 1.4 with the same mark kinds,
+shapes and stroke widths as the SVG adapter, one layout pixel per point and
+the y axis flipped to PDF's bottom-left origin. Text uses the standard
+Helvetica in WinAnsi encoding, so nothing is embedded and files stay small;
+centre and right alignment use Adobe's advance widths, generated from
+reportlab's AFM copy by `scripts/chart_pdf_metrics.py`, and text outside
+WinAnsi (Greek, CJK) is refused rather than silently dropped. Opacity uses up
+to sixteen named ExtGState entries. The content stream is written into
+caller-owned storage instead of an arena-backed memory writer, because that
+writer is only contiguous while nothing else allocates from its arena;
+`finish` then writes catalog, page, font, stream, states, info and an exact
+cross-reference table to any writer. Reals are fixed-point with trimmed zeros,
+since PDF has no exponent syntax. The document title is written as UTF-16BE with
+a byte-order mark, because information strings are PDFDocEncoding, where WinAnsi
+bytes such as the euro sign mean something else. Embedded TrueType text, FlateDecode
+compression, gradients and multi-page reports are follow-on work.

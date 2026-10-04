@@ -118,6 +118,31 @@ class ChartGuideTests(unittest.TestCase):
         self.assertIn('stroke="url(#trend)"', svg)
         self.assertNotIn("font-family=\"sans-serif\"", svg)
 
+    def test_pdf_export_is_a_valid_page_matching_the_png(self):
+        try:
+            import pypdf
+            import pymupdf
+            from PIL import Image, ImageChops
+        except ImportError as missing:
+            self.skipTest(f"PDF tooling unavailable: {missing}")
+        pdf = DOCS / "chart-previews" / "pdf_export.pdf"
+        reader = pypdf.PdfReader(pdf, strict=True)
+        self.assertEqual(len(reader.pages), 1)
+        self.assertEqual([float(v) for v in reader.pages[0].mediabox], [0, 0, 360, 240])
+        self.assertEqual(reader.metadata.title, "Revenue and margin, €m")
+        text = reader.pages[0].extract_text()
+        for label in ("Revenue and margin, €m", "· line: margin – one", "Q6", "60"):
+            self.assertIn(label, text)
+        self.assertIn('href="chart-previews/pdf_export.pdf">PDF</a>', (DOCS / "charts.html").read_text(encoding="utf-8"))
+        # Rasterized independently, the plot area matches Neper's own PNG; only
+        # the text differs (Helvetica in the PDF, Montserrat in the PNG).
+        pixmap = pymupdf.open(pdf)[0].get_pixmap(dpi=72)
+        rendered = Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
+        png = Image.open(DOCS / "chart-previews" / "pdf_export.png").convert("RGB")
+        plot = (48, 50, 334, 200)
+        histogram = ImageChops.difference(png.crop(plot), rendered.crop(plot)).convert("L").histogram()
+        self.assertGreater(sum(histogram[:17]) / sum(histogram), 0.95)
+
     def test_color_vision_rows_match_an_independent_simulation(self):
         # Vienot-Brettel-Mollon from the LMS matrix and anchor planes, solved here
         # rather than copied from Neper's folded matrices.

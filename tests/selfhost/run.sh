@@ -3039,6 +3039,11 @@ gfx_chart_widget_written=$($test_build/neper-self emit-executable "$repo/tests/s
 chmod +x "$test_build/gfx-chart-widget-selfhost"
 gfx_chart_widget_output=$("$test_build/gfx-chart-widget-selfhost")
 [ "$gfx_chart_widget_output" = 'gfx chart widget ok' ]
+gfx_chart_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_pdf/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-pdf-selfhost")
+[ "$gfx_chart_pdf_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-pdf-selfhost"
+gfx_chart_pdf_output=$("$test_build/gfx-chart-pdf-selfhost")
+[ "$gfx_chart_pdf_output" = 'gfx chart pdf ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"

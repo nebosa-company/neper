@@ -319,12 +319,15 @@ if not CHARTS_ONLY:
 gallery_cards = '\n'.join(
     '<figure class="chart"><a href="chart-previews/{png}">'
     '<img src="chart-previews/{png}" alt="{title}" width="360" height="240" loading="lazy" decoding="async"></a>'
-    '<figcaption><span>{title}</span><a href="chart-previews/{svg}">{vector_label}</a></figcaption>'
+    '<figcaption><span>{title}</span><span><a href="chart-previews/{svg}">{vector_label}</a>{pdf}</span></figcaption>'
     '</figure>'.format(
         title=html.escape(path.stem.replace('_', ' ').title(), quote=True),
         png=html.escape(path.name, quote=True),
         svg=html.escape(path.with_suffix('.svg').name, quote=True),
-        vector_label='Select in SVG' if path.stem == 'interactive_selection' else 'SVG')
+        vector_label='Select in SVG' if path.stem == 'interactive_selection' else 'SVG',
+        # A preview may also have a PDF companion from the PDF adapter.
+        pdf=' · <a href="chart-previews/{}">PDF</a>'.format(html.escape(path.with_suffix('.pdf').name, quote=True))
+        if path.with_suffix('.pdf').exists() else '')
     for path in preview_paths
 )
 charts_html = '''<!doctype html>

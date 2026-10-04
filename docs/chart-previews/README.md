@@ -197,6 +197,12 @@ harness. A themed `framed_canvas` hosts an `e.gfx.chart.widget` view, which
 lays the bars out against the rectangle the canvas receives when it paints;
 the title and note are ordinary `e.ui` text controls. The SVG companion draws
 the marks and frame the runtime actually placed.
+The PDF-export preview has a third companion, `pdf_export.pdf`, written by
+`e.gfx.chart.pdf` from the same layout: a one-page PDF 1.4 with vector bars,
+line, guides and Helvetica text, including WinAnsi characters (€, ·, –).
+Rasterized by an independent PDF renderer, its marks match the PNG; only the
+typeface differs, because the PDF uses the built-in Helvetica rather than
+embedding Montserrat.
 
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:

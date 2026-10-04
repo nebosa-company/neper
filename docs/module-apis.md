@@ -16517,3 +16517,21 @@ type View = struct { arena: *mem.Arena, spec: chart.Spec, brush: paint.Brush, gr
 fn view(a: *mem.Arena, spec: chart.Spec, brush: paint.Brush, coords: []chart.Coord, segments: []chart.Segment, bars: []geometry.Rect) -> View
 fn custom(v: *View) -> widget.Custom
 ```
+
+### `e.gfx.chart.pdf`
+
+```neper
+error Invalid
+error TooLarge
+type Document = struct { storage: []u8, len: usize, width: f32, height: f32, title: str, alphas: [16]f32, alpha_count: usize }
+fn begin(storage: []u8, width: f32, height: f32, title: str) -> (Document, err)
+fn real_text(value: f32, decimals: u32, out: []u8) -> ([]u8, err)
+fn rect(doc: *Document, r: geometry.Rect, ink: paint.Color, outline: bool) -> err
+fn rule(doc: *Document, from: chart.Coord, to: chart.Coord, ink: paint.Color, width: f32) -> err
+fn append(doc: *Document, marks: *const chart.Layout, ink: paint.Color) -> err
+fn append_matrix(doc: *Document, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err
+fn append_guides(doc: *Document, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Color, axis: paint.Color) -> err
+fn text_width(text: str, size: f32) -> (f32, err)
+fn append_labels(doc: *Document, labels: []const chart.Label, ink: paint.Color, size: f32) -> err
+fn finish(doc: *Document, w: *io.Writer) -> err
+```
