@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>main_effects</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="45" y="59" width="270" height="128" fill="rgb(250,252,255)" fill-opacity="1"/>
+<line x1="45" y1="59" x2="45" y2="187" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="187" x2="45" y2="192" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="315" y1="59" x2="315" y2="187" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="315" y1="187" x2="315" y2="192" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="187" x2="315" y2="187" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="187" x2="45" y2="187" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="155" x2="315" y2="155" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="155" x2="45" y2="155" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="123" x2="315" y2="123" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="123" x2="45" y2="123" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="91" x2="315" y2="91" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="91" x2="45" y2="91" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="59" x2="315" y2="59" stroke="rgb(222,232,242)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="40" y1="59" x2="45" y2="59" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="59" x2="45" y2="187" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="45" y1="187" x2="315" y2="187" stroke="rgb(43,59,82)" stroke-opacity="1" stroke-width="1" stroke-linecap="round"/>
+<line x1="180" y1="59" x2="180" y2="187" stroke="rgb(148,166,186)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="45" y1="123" x2="180" y2="123" stroke="rgb(148,166,186)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="123" x2="315" y2="123" stroke="rgb(148,166,186)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="78.75" y1="171" x2="146.25" y2="91" stroke="rgb(20,99,189)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="213.75" y1="155" x2="281.25" y2="101.66667175292969" stroke="rgb(20,99,189)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="75.75" y="168" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="143.25" y="88" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="210.75" y="152" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<rect x="278.25" y="98.66667175292969" width="6" height="6" fill="rgb(20,99,189)" fill-opacity="1"/>
+<text x="180" y="18" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Main effects / process and temperature</text>
+<text x="180" y="34" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Raw response means / unequal sample sizes</text>
+<text x="36" y="190" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">2</text>
+<text x="36" y="158" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">4</text>
+<text x="36" y="126" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">6</text>
+<text x="36" y="94" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">8</text>
+<text x="36" y="62" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(43,59,82)" fill-opacity="1">10</text>
+<text x="78.75" y="201" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Low</text>
+<text x="146.25" y="201" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">High</text>
+<text x="213.75" y="201" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Cool</text>
+<text x="281.25" y="201" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Hot</text>
+<text x="112.5" y="216" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Process</text>
+<text x="247.5" y="216" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Temperature</text>
+<text x="180" y="233" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)" fill-opacity="1">Blue: level mean    Gray: overall mean (6)</text>
+</svg>

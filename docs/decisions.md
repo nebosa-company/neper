@@ -34507,3 +34507,18 @@ boundaries, repeated readings, constant data and refusals. Three- and
 four-factor nesting, missing/unbalanced cells and uncertainty remain planned.
 
 Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/quality-tools/supporting-topics/multi-vari-chart-basics/
+
+## D1934 — Raw main effects keep factors independent and expose counts
+
+`chart.main_effects` accepts observation-major categorical factor ids with
+declared levels, computes each raw response mean and count, and draws one
+independent connected series per factor panel. A separate reference stroke in
+each panel marks the overall response mean. Unlike the multi-vari slice, cells
+may be unbalanced; empty declared levels are rejected rather than shown as a
+misleading zero. The Windows/Linux fixture checks uneven counts, means,
+geometry, scene/SVG adapters, flat values and refusal paths. This is a
+descriptive raw-means plot, not fitted marginal means, a significance test, or
+evidence of a causal effect; interactions and confounding require separate
+analysis.
+
+Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/anova/supporting-topics/basics/what-is-a-main-effects-plot/

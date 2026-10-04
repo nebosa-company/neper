@@ -15996,6 +15996,9 @@ fn gage_rr_components(components: *const stat.GageRrComponents, bounds: geometry
 type MultiVariStorage = struct { raw_points: []Coord, cell_points: []Coord, cell_lines: []Segment, group_points: []Coord, group_lines: []Segment, cell_means: []f64, group_means: []f64 }
 type MultiVariLayout = struct { observations: Layout, cells: Layout, within: Layout, groups: Layout, cell_means: []f64, group_means: []f64 }
 fn multi_vari(values: []const f64, outer_levels: usize, inner_levels: usize, replicates: usize, bounds: geometry.Rect, storage: *MultiVariStorage) -> (MultiVariLayout, err)
+type MainEffectsStorage = struct { points: []Coord, lines: []Segment, references: []Segment, means: []f64, counts: []usize }
+type MainEffectsLayout = struct { levels: Layout, connections: Layout, reference: Layout, means: []f64, counts: []usize, grand_mean: f64 }
+fn main_effects(values: []const f64, factor_ids: []const usize, factor_levels: []const usize, bounds: geometry.Rect, storage: *MainEffectsStorage) -> (MainEffectsLayout, err)
 fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect, x_limits: []const f32, y_limits: []const f32) -> (Layout, err)
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)

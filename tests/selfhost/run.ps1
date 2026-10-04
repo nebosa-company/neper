@@ -3332,6 +3332,11 @@ $gfxChartMultiVariWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $gfxChartMultiVariWritten -ne 'executable written') { throw 'gfx_chart_multi_vari emission failed' }
 $gfxChartMultiVariOutput = & $gfxChartMultiVariPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartMultiVariOutput -ne 'gfx chart multi vari ok') { throw "the e.gfx.chart multi-vari plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMainEffectsPath = Join-Path $testBuild 'gfx-chart-main-effects-selfhost.exe'
+$gfxChartMainEffectsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_main_effects\src\main.e') $repo 'x64' 'windows' $gfxChartMainEffectsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMainEffectsWritten -ne 'executable written') { throw 'gfx_chart_main_effects emission failed' }
+$gfxChartMainEffectsOutput = & $gfxChartMainEffectsPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMainEffectsOutput -ne 'gfx chart main effects ok') { throw "the e.gfx.chart main-effects plot answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
 $gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }

@@ -2954,6 +2954,11 @@ gfx_chart_multi_vari_written=$($test_build/neper-self emit-executable "$repo/tes
 chmod +x "$test_build/gfx-chart-multi-vari-selfhost"
 gfx_chart_multi_vari_output=$("$test_build/gfx-chart-multi-vari-selfhost")
 [ "$gfx_chart_multi_vari_output" = 'gfx chart multi vari ok' ]
+gfx_chart_main_effects_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_main_effects/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-main-effects-selfhost")
+[ "$gfx_chart_main_effects_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-main-effects-selfhost"
+gfx_chart_main_effects_output=$("$test_build/gfx-chart-main-effects-selfhost")
+[ "$gfx_chart_main_effects_output" = 'gfx chart main effects ok' ]
 gfx_chart_spine_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_spine_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-spine-plot-selfhost")
 [ "$gfx_chart_spine_plot_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-spine-plot-selfhost"

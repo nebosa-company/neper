@@ -96,6 +96,8 @@ type ProbabilityLayout = struct { observations: Layout, reference: Layout, proba
 type GageRrLayout = struct { contribution: Layout, study_variation: Layout, percentages: []f32 }
 type MultiVariStorage = struct { raw_points: []Coord, cell_points: []Coord, cell_lines: []Segment, group_points: []Coord, group_lines: []Segment, cell_means: []f64, group_means: []f64 }
 type MultiVariLayout = struct { observations: Layout, cells: Layout, within: Layout, groups: Layout, cell_means: []f64, group_means: []f64 }
+type MainEffectsStorage = struct { points: []Coord, lines: []Segment, references: []Segment, means: []f64, counts: []usize }
+type MainEffectsLayout = struct { levels: Layout, connections: Layout, reference: Layout, means: []f64, counts: []usize, grand_mean: f64 }
 type SpineLayout = struct { categories: []Layout, column_totals: []f64, grand_total: f64 }
 type HexCell = struct { center: Coord, count: u64 }
 type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
@@ -6923,6 +6925,103 @@ fn multi_vari(values: []const f64, outer_levels: usize, inner_levels: usize, rep
     let within = Layout { kind: .Rug, coords: zero, segments: storage.cell_lines[..outer_levels * (inner_levels - 1usize)], bars: zero, x_min: 0.0, x_max: f32(cells), y_min: f32(lo), y_max: f32(hi) }
     let between = Layout { kind: .PointLine, coords: storage.group_points[..outer_levels], segments: storage.group_lines[..outer_levels - 1usize], bars: zero, x_min: 0.0, x_max: f32(cells), y_min: f32(lo), y_max: f32(hi) }
     ret (MultiVariLayout { observations: raw, cells: cell_marks, within: within, groups: between, cell_means: storage.cell_means[..cells], group_means: storage.group_means[..outer_levels] }, ok)
+}
+
+// Raw-data main effects: factor ids are observation-major, with one id per
+// factor per response. Each factor gets an independent panel and reference
+// line; unequal nonempty level counts are allowed. No model is fitted.
+fn main_effects(values: []const f64, factor_ids: []const usize, factor_levels: []const usize, bounds: geometry.Rect, storage: *MainEffectsStorage) -> (MainEffectsLayout, err) {
+    if values.len == 0usize || factor_levels.len == 0usize || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if factor_levels.len > factor_ids.len / values.len || factor_ids.len != values.len * factor_levels.len { ret (zero, Invalid) }
+    var total_levels = 0usize
+    var factor = 0usize
+    while factor < factor_levels.len {
+        let levels = factor_levels[factor]
+        if levels < 2usize || levels > values.len || levels > factor_ids.len - total_levels { ret (zero, Invalid) }
+        total_levels += levels
+        factor += 1usize
+    }
+    let connections = total_levels - factor_levels.len
+    if storage.points.len < total_levels || storage.lines.len < connections || storage.references.len < factor_levels.len || storage.means.len < total_levels || storage.counts.len < total_levels { ret (zero, TooLarge) }
+    var lo = values[0usize]
+    var hi = values[0usize]
+    var centered_total = 0.0f64
+    var row = 0usize
+    while row < values.len {
+        let value = values[row]
+        if !finite64(value) { ret (zero, Invalid) }
+        if value < lo { lo = value }
+        if value > hi { hi = value }
+        centered_total += value - values[0usize]
+        factor = 0usize
+        while factor < factor_levels.len {
+            if factor_ids[row * factor_levels.len + factor] >= factor_levels[factor] { ret (zero, Invalid) }
+            factor += 1usize
+        }
+        row += 1usize
+    }
+    if !finite64(centered_total) { ret (zero, Invalid) }
+    let grand_mean = values[0usize] + centered_total / f64(values.len)
+    if !finite64(grand_mean) { ret (zero, Invalid) }
+    if lo == hi {
+        let pad = math.max[f64](1.0f64, math.abs[f64](lo) * 0.05f64)
+        lo -= pad
+        hi += pad
+    }
+    if !finite64(lo) || !finite64(hi) || !finite64(hi - lo) || hi <= lo || !finite(f32(lo)) || !finite(f32(hi)) { ret (zero, Invalid) }
+    var level = 0usize
+    while level < total_levels {
+        storage.means[level] = 0.0f64
+        storage.counts[level] = 0usize
+        level += 1usize
+    }
+    row = 0usize
+    while row < values.len {
+        var offset = 0usize
+        factor = 0usize
+        while factor < factor_levels.len {
+            let index = offset + factor_ids[row * factor_levels.len + factor]
+            storage.means[index] += values[row] - values[0usize]
+            storage.counts[index] += 1usize
+            offset += factor_levels[factor]
+            factor += 1usize
+        }
+        row += 1usize
+    }
+    let panel_width = bounds.width / f32(factor_levels.len)
+    let reference_y = bounds.y + bounds.height * f32((hi - grand_mean) / (hi - lo))
+    if !finite(panel_width) || !finite(reference_y) { ret (zero, Invalid) }
+    var offset = 0usize
+    var line = 0usize
+    factor = 0usize
+    while factor < factor_levels.len {
+        let levels = factor_levels[factor]
+        let left = bounds.x + panel_width * f32(factor)
+        let right = left + panel_width
+        storage.references[factor] = Segment { from: Coord { x: left, y: reference_y }, to: Coord { x: right, y: reference_y } }
+        level = 0usize
+        while level < levels {
+            let index = offset + level
+            if storage.counts[index] == 0usize || !finite64(storage.means[index]) { ret (zero, Invalid) }
+            let mean = values[0usize] + storage.means[index] / f64(storage.counts[index])
+            if !finite64(mean) { ret (zero, Invalid) }
+            storage.means[index] = mean
+            let point = Coord { x: left + panel_width * (f32(level) + 0.5) / f32(levels), y: bounds.y + bounds.height * f32((hi - mean) / (hi - lo)) }
+            if !finite(point.x) || !finite(point.y) { ret (zero, Invalid) }
+            storage.points[index] = point
+            if level > 0usize {
+                storage.lines[line] = Segment { from: storage.points[index - 1usize], to: point }
+                line += 1usize
+            }
+            level += 1usize
+        }
+        offset += levels
+        factor += 1usize
+    }
+    let marks = Layout { kind: .Scatter, coords: storage.points[..total_levels], segments: zero, bars: zero, x_min: 0.0, x_max: f32(total_levels), y_min: f32(lo), y_max: f32(hi) }
+    let joins = Layout { kind: .Rug, coords: zero, segments: storage.lines[..connections], bars: zero, x_min: 0.0, x_max: f32(total_levels), y_min: f32(lo), y_max: f32(hi) }
+    let references = Layout { kind: .Rug, coords: zero, segments: storage.references[..factor_levels.len], bars: zero, x_min: 0.0, x_max: f32(total_levels), y_min: f32(lo), y_max: f32(hi) }
+    ret (MainEffectsLayout { levels: marks, connections: joins, reference: references, means: storage.means[..total_levels], counts: storage.counts[..total_levels], grand_mean: grand_mean }, ok)
 }
 
 // Two-parameter Weibull probability paper. `total_count` includes units
