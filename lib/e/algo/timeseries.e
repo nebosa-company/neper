@@ -701,3 +701,214 @@ fn trend_filter(observations: []const f64, level_var: f64, slope_var: f64, obs_v
     }
     ret ok
 }
+
+// The ARMA residual context: `series` observed, `resid` caller workspace
+// (`resid.len >= series.len`), `p`/`q` the orders.
+type ArmaFit = struct { series: []const f64, resid: []f64, p: usize, q: usize }
+
+// Difference `series` `d` times into `out[..n - d]` (`out.len >= n`,
+// `d == 0` copies); answers the effective length `n - d`.
+fn arima_difference(series: []const f64, d: usize, out: []f64) -> (usize, err) {
+    let n = series.len
+    if n == 0usize { ret (0usize, Invalid) }
+    if out.len < n { ret (0usize, TooSmall) }
+    if d > n { ret (0usize, Invalid) }
+    var i = 0usize
+    while i < n {
+        out[i] = series[i]
+        i += 1usize
+    }
+    var pass = 0usize
+    while pass < d {
+        i = 0usize
+        while i < n - 1usize - pass {
+            out[i] = out[i + 1usize] - out[i]
+            i += 1usize
+        }
+        pass += 1usize
+    }
+    ret (n - d, ok)
+}
+
+// Fit an AR(p) with intercept by ordinary least squares over `solve_normal`:
+// `coefs` receives the `p` lags, `intercept` its constant;
+// `scratch.len >= 2 * m * (m + 1)` with `m = p + 1`. Needs at least `m`
+// observations past the lags.
+fn ar_fit(series: []const f64, p: usize, coefs: []f64, intercept: []f64, scratch: []f64) -> err {
+    let n = series.len
+    if p == 0usize || n == 0usize { ret Invalid }
+    if n <= p { ret Invalid }
+    let obs = n - p
+    let m = p + 1usize
+    if obs < m { ret Invalid }
+    if coefs.len < p || intercept.len < 1usize { ret TooSmall }
+    if scratch.len < 2usize * m * (m + 1usize) { ret TooSmall }
+    var xtx = scratch[..m * m]
+    var xty = scratch[m * m..m * m + m]
+    var work = scratch[m * m + m..2usize * m * (m + 1usize)]
+    var a = 0usize
+    while a < m * m {
+        xtx[a] = 0.0f64
+        a += 1usize
+    }
+    a = 0usize
+    while a < m {
+        xty[a] = 0.0f64
+        a += 1usize
+    }
+    var t = p
+    while t < n {
+        var u = 0usize
+        while u < m {
+            var ru = 1.0f64
+            if u > 0usize { ru = series[t - u] }
+            var v = 0usize
+            while v < m {
+                var rv = 1.0f64
+                if v > 0usize { rv = series[t - v] }
+                xtx[u * m + v] += ru * rv
+                v += 1usize
+            }
+            xty[u] += ru * series[t]
+            u += 1usize
+        }
+        t += 1usize
+    }
+    let fit_error = solve_normal(xtx, xty, xty, m, work)
+    if fit_error != ok { ret fit_error }
+    intercept[0usize] = xty[0usize]
+    var lag = 0usize
+    while lag < p {
+        coefs[lag] = xty[1usize + lag]
+        lag += 1usize
+    }
+    ret ok
+}
+
+// The conditional sum of squared residuals of the ARMA(p, q) with `intercept`
+// (pre-sample values and shocks are zero); `resid` is workspace
+// (`resid.len >= series.len`).
+fn arma_css(series: []const f64, ar: []const f64, ma: []const f64, intercept: f64, resid: []f64) -> (f64, err) {
+    let n = series.len
+    let p = ar.len
+    let q = ma.len
+    if n == 0usize { ret (0.0f64, Invalid) }
+    if resid.len < n { ret (0.0f64, TooSmall) }
+    var total = 0.0f64
+    var t = 0usize
+    while t < n {
+        var fitted = intercept
+        var i = 0usize
+        while i < p {
+            if t > i { fitted += ar[i] * series[t - 1usize - i] }
+            i += 1usize
+        }
+        var j = 0usize
+        while j < q {
+            if t > j { fitted += ma[j] * resid[t - 1usize - j] }
+            j += 1usize
+        }
+        resid[t] = series[t] - fitted
+        total += resid[t] * resid[t]
+        t += 1usize
+    }
+    ret (total, ok)
+}
+
+// The `arma_fit` objective over `params = [intercept, ar..., ma...]`; answers
+// a large penalty when the residual workspace misbehaves so a derivative-free
+// search turns back.
+fn arma_objective(fit: *ArmaFit, params: []const f64) -> f64 {
+    let (value, css_error) = arma_css(fit.series, params[1usize..1usize + fit.p], params[1usize + fit.p..1usize + fit.p + fit.q], params[0usize], fit.resid)
+    if css_error != ok { ret 1.0e300f64 }
+    ret value
+}
+
+// Fit ARMA(p, q) by Nelder-Mead over the conditional sum of squares:
+// `params` holds `p + q + 1` entries, an initial guess in place
+// (`[intercept, ar..., ma...]`), and receives the fit;
+// `scratch.len >= n + (r + 1)^2 + 4 * r` with `r = p + q + 1` (the first `n`
+// cells are the residual workspace). Answers the residual sum.
+fn arma_fit(series: []const f64, p: usize, q: usize, params: []f64, scale: f64, tolerance: f64, max_iterations: u32, scratch: []f64) -> (f64, err) {
+    let n = series.len
+    let r = p + q + 1usize
+    if n == 0usize { ret (0.0f64, Invalid) }
+    if params.len != r { ret (0.0f64, Invalid) }
+    if scratch.len < n + (r + 1usize) * (r + 1usize) + 4usize * r { ret (0.0f64, TooSmall) }
+    var fit = ArmaFit { series: series, resid: scratch[..n], p: p, q: q }
+    let (result, fit_error) = opt.nelder_mead[ArmaFit](&fit, arma_objective, params, scale, tolerance, max_iterations, scratch[n..])
+    if fit_error != ok { ret (0.0f64, fit_error) }
+    ret (result.value, ok)
+}
+
+// Forecast `horizon` steps under AR coefficients `ar`, MA coefficients `ma`
+// and `intercept` from the last `past` observations (`past.len >= ar.len`)
+// and the last `past_resid` shocks (`past_resid.len >= ma.len`, zero where
+// unknown); future shocks are zero. `out.len >= horizon`.
+fn arma_forecast(ar: []const f64, ma: []const f64, intercept: f64, past: []const f64, past_resid: []const f64, horizon: usize, out: []f64) -> err {
+    let p = ar.len
+    let q = ma.len
+    if past.len < p || past_resid.len < q { ret Invalid }
+    if out.len < horizon { ret TooSmall }
+    let base = past.len
+    let rbase = past_resid.len
+    var s = 0usize
+    while s < horizon {
+        var total = intercept
+        var i = 0usize
+        while i < p {
+            if s > i {
+                total += ar[i] * out[s - 1usize - i]
+            } else {
+                total += ar[i] * past[base - 1usize - i + s]
+            }
+            i += 1usize
+        }
+        var j = 0usize
+        while j < q {
+            if s <= j { total += ma[j] * past_resid[rbase - 1usize - j + s] }
+            j += 1usize
+        }
+        out[s] = total
+        s += 1usize
+    }
+    ret ok
+}
+
+// The economic order quantity `sqrt(2 * demand * order_cost / holding_cost)`.
+fn eoq(demand: f64, order_cost: f64, holding_cost: f64) -> (f64, err) {
+    if demand <= 0.0f64 || order_cost <= 0.0f64 || holding_cost <= 0.0f64 { ret (0.0f64, Invalid) }
+    ret (math.sqrt[f64](2.0f64 * demand * order_cost / holding_cost), ok)
+}
+
+// The total cost at `quantity`: `demand / quantity * order_cost` ordering
+// plus `quantity / 2 * holding_cost` holding.
+fn eoq_total(demand: f64, order_cost: f64, holding_cost: f64, quantity: f64) -> (f64, err) {
+    if demand <= 0.0f64 || order_cost <= 0.0f64 || holding_cost <= 0.0f64 || quantity <= 0.0f64 { ret (0.0f64, Invalid) }
+    ret (demand / quantity * order_cost + quantity / 2.0f64 * holding_cost, ok)
+}
+
+// The newsvendor critical ratio `underage / (underage + overage)`.
+fn newsvendor_ratio(underage: f64, overage: f64) -> (f64, err) {
+    if underage < 0.0f64 || overage < 0.0f64 || underage + overage <= 0.0f64 { ret (0.0f64, Invalid) }
+    ret (underage / (underage + overage), ok)
+}
+
+// The smallest of the ascending candidate `demands` whose cumulative `probs`
+// reach `ratio` (the last when rounding never reaches it); the two slices
+// share their length and `ratio` sits in `[0, 1]`.
+fn newsvendor_discrete(demands: []const f64, probs: []const f64, ratio: f64) -> (f64, err) {
+    let n = demands.len
+    if n == 0usize || probs.len != n { ret (0.0f64, Invalid) }
+    if ratio < 0.0f64 || ratio > 1.0f64 { ret (0.0f64, Invalid) }
+    var cumulative = 0.0f64
+    var i = 0usize
+    while i < n {
+        if probs[i] < 0.0f64 { ret (0.0f64, Invalid) }
+        if i > 0usize && demands[i] < demands[i - 1usize] { ret (0.0f64, Invalid) }
+        cumulative += probs[i]
+        if cumulative >= ratio { ret (demands[i], ok) }
+        i += 1usize
+    }
+    ret (demands[n - 1usize], ok)
+}
