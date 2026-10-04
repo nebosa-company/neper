@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>gage_bias_linearity</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="32" y="51" width="296" height="129" fill="rgb(245,250,255)" fill-opacity="1"/>
+<line x1="32" y1="135.20834350585938" x2="328" y2="135.20834350585938" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="32" y1="167.16424560546875" x2="32" y2="153.41908264160156" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="91.19999694824219" y1="147.53463745117188" x2="91.19999694824219" y2="137.21536254882812" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="150.39999389648438" y1="128.49771118164062" x2="150.39999389648438" y2="120.4189453125" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="209.60000610351562" y1="110.5810546875" x2="209.60000610351562" y2="102.50228881835938" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="268.79998779296875" y1="93.78463745117188" x2="268.79998779296875" y2="83.46536254882812" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="328" y1="77.58091735839844" x2="328" y2="63.83575439453125" stroke="rgb(156,173,191)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="29" y="166.25" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="29" y="157.29165649414062" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="29" y="148.33334350585938" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="88.19999694824219" y="148.33334350585938" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="88.19999694824219" y="139.375" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="88.19999694824219" y="130.41665649414062" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="147.39999389648438" y="130.41665649414062" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="147.39999389648438" y="121.45832824707031" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="147.39999389648438" y="112.5" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="206.60000610351562" y="112.5" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="206.60000610351562" y="103.54167175292969" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="206.60000610351562" y="94.58332824707031" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="265.79998779296875" y="94.58332824707031" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="265.79998779296875" y="85.625" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="265.79998779296875" y="76.66666412353516" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="325" y="76.66666412353516" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="325" y="67.70833587646484" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<rect x="325" y="58.749996185302734" width="6" height="6" fill="rgb(48,125,196)" fill-opacity="1"/>
+<path d="M32 160.29165649414062 L91.19999694824219 142.375 L150.39999389648438 124.45832824707031 L209.60000610351562 106.54167175292969 L268.79998779296875 88.625 L328 70.70833587646484" fill="none" stroke="rgb(237,112,43)" stroke-opacity="1" stroke-width="2" stroke-linejoin="round"/>
+<rect x="29" y="157.29165649414062" width="6" height="6" fill="rgb(41,56,79)" fill-opacity="1"/>
+<rect x="88.19999694824219" y="139.375" width="6" height="6" fill="rgb(41,56,79)" fill-opacity="1"/>
+<rect x="147.39999389648438" y="121.45832824707031" width="6" height="6" fill="rgb(41,56,79)" fill-opacity="1"/>
+<rect x="206.60000610351562" y="103.54167175292969" width="6" height="6" fill="rgb(41,56,79)" fill-opacity="1"/>
+<rect x="265.79998779296875" y="85.625" width="6" height="6" fill="rgb(41,56,79)" fill-opacity="1"/>
+<rect x="325" y="67.70833587646484" width="6" height="6" fill="rgb(41,56,79)" fill-opacity="1"/>
+<text x="180" y="20" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Gage bias and linearity</text>
+<text x="180" y="40" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Measurement minus reference</text>
+<text x="180" y="207" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Mean bias 0.055   Slope 0.025   Span drift 0.250</text>
+<text x="180" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Replicates / mean / fit / 95% mean CI</text>
+</svg>

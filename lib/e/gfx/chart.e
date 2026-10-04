@@ -194,6 +194,16 @@ type BatchCapabilityStorage = struct {
 type BatchCapabilityLayout = struct {
     means: Layout, spreads: Layout, guides: Layout, summary: stat.BatchCapability,
 }
+type GageLinearityStorage = struct {
+    biases: []f64, mean_biases: []f64, fitted_biases: []f64,
+    ci_lower: []f64, ci_upper: []f64,
+    raw_points: []Coord, mean_points: []Coord,
+    fit_segments: []Segment, ci_segments: []Segment, zero_guide: []Segment,
+}
+type GageLinearityLayout = struct {
+    observations: Layout, means: Layout, fit: Layout, confidence: Layout,
+    zero_line: Layout, summary: stat.GageLinearity,
+}
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -1104,6 +1114,69 @@ fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, 
     let spreads = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.spread_bars[..n], x_min: 1.0f32, x_max: f32(n), y_min: 0.0f32, y_max: f32(spread_high) }
     let guides = Layout { kind: .Rug, coords: zero, segments: work.guides[..3usize], bars: zero, x_min: 1.0f32, x_max: f32(n), y_min: f32(low), y_max: f32(high) }
     ret (BatchCapabilityLayout { means: means, spreads: spreads, guides: guides, summary: summary }, ok)
+}
+
+// Bias-versus-reference plot with one mark per replicate, per-reference means,
+// OLS fit and caller-critical confidence intervals for the fitted mean bias.
+fn gage_linearity(references: []const f64, measurements: []const f64, repeats: usize, critical: f64, bounds: geometry.Rect, work: *GageLinearityStorage) -> (GageLinearityLayout, err) {
+    if !valid_bounds(bounds) || references.len < 5usize || repeats < 2usize || measurements.len % repeats != 0usize || measurements.len / repeats != references.len { ret (zero, Invalid) }
+    let q = references.len
+    let n = measurements.len
+    if work.biases.len < n || work.mean_biases.len < q || work.fitted_biases.len < q || work.ci_lower.len < q || work.ci_upper.len < q || work.raw_points.len < n || work.mean_points.len < q || work.fit_segments.len < q - 1usize || work.ci_segments.len < q || work.zero_guide.len < 1usize { ret (zero, TooLarge) }
+    let (summary, summary_error) = stat.gage_linearity(references, measurements, repeats, critical, work.biases, work.mean_biases, work.fitted_biases, work.ci_lower, work.ci_upper)
+    if summary_error != ok { ret (zero, Invalid) }
+    let x_low = references[0usize]
+    let x_high = references[q - 1usize]
+    var y_low = 0.0f64
+    var y_high = 0.0f64
+    var i = 0usize
+    while i < n {
+        if work.biases[i] < y_low { y_low = work.biases[i] }
+        if work.biases[i] > y_high { y_high = work.biases[i] }
+        i += 1usize
+    }
+    i = 0usize
+    while i < q {
+        if work.ci_lower[i] < y_low { y_low = work.ci_lower[i] }
+        if work.ci_upper[i] > y_high { y_high = work.ci_upper[i] }
+        i += 1usize
+    }
+    var span = y_high - y_low
+    if !(span > 0.0f64) { span = 1.0f64 }
+    y_low -= span * 0.1f64
+    y_high += span * 0.1f64
+    if !finite(f32(x_low)) || !finite(f32(x_high)) || !finite(f32(y_low)) || !finite(f32(y_high)) { ret (zero, Invalid) }
+    i = 0usize
+    while i < q {
+        let x = bounds.x + bounds.width * f32((references[i] - x_low) / (x_high - x_low))
+        let mean_y = bounds.y + bounds.height * (1.0f32 - f32((work.mean_biases[i] - y_low) / (y_high - y_low)))
+        let fit_y = bounds.y + bounds.height * (1.0f32 - f32((work.fitted_biases[i] - y_low) / (y_high - y_low)))
+        let lower_y = bounds.y + bounds.height * (1.0f32 - f32((work.ci_lower[i] - y_low) / (y_high - y_low)))
+        let upper_y = bounds.y + bounds.height * (1.0f32 - f32((work.ci_upper[i] - y_low) / (y_high - y_low)))
+        work.mean_points[i] = Coord { x: x, y: mean_y }
+        work.ci_segments[i] = Segment { from: Coord { x: x, y: lower_y }, to: Coord { x: x, y: upper_y } }
+        if i > 0usize {
+            let before = bounds.x + bounds.width * f32((references[i - 1usize] - x_low) / (x_high - x_low))
+            let before_y = bounds.y + bounds.height * (1.0f32 - f32((work.fitted_biases[i - 1usize] - y_low) / (y_high - y_low)))
+            work.fit_segments[i - 1usize] = Segment { from: Coord { x: before, y: before_y }, to: Coord { x: x, y: fit_y } }
+        }
+        var j = 0usize
+        while j < repeats {
+            let index = i * repeats + j
+            let y = bounds.y + bounds.height * (1.0f32 - f32((work.biases[index] - y_low) / (y_high - y_low)))
+            work.raw_points[index] = Coord { x: x, y: y }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let zero_y = bounds.y + bounds.height * (1.0f32 - f32((0.0f64 - y_low) / (y_high - y_low)))
+    work.zero_guide[0usize] = Segment { from: Coord { x: bounds.x, y: zero_y }, to: Coord { x: bounds.x + bounds.width, y: zero_y } }
+    let observations = Layout { kind: .Scatter, coords: work.raw_points[..n], segments: zero, bars: zero, x_min: f32(x_low), x_max: f32(x_high), y_min: f32(y_low), y_max: f32(y_high) }
+    let means = Layout { kind: .Scatter, coords: work.mean_points[..q], segments: zero, bars: zero, x_min: f32(x_low), x_max: f32(x_high), y_min: f32(y_low), y_max: f32(y_high) }
+    let fit = Layout { kind: .Line, coords: zero, segments: work.fit_segments[..q - 1usize], bars: zero, x_min: f32(x_low), x_max: f32(x_high), y_min: f32(y_low), y_max: f32(y_high) }
+    let confidence = Layout { kind: .ErrorBar, coords: zero, segments: work.ci_segments[..q], bars: zero, x_min: f32(x_low), x_max: f32(x_high), y_min: f32(y_low), y_max: f32(y_high) }
+    let zero_line = Layout { kind: .Rug, coords: zero, segments: work.zero_guide[..1usize], bars: zero, x_min: f32(x_low), x_max: f32(x_high), y_min: f32(y_low), y_max: f32(y_high) }
+    ret (GageLinearityLayout { observations: observations, means: means, fit: fit, confidence: confidence, zero_line: zero_line, summary: summary }, ok)
 }
 
 // A sparkline is an evenly spaced Line with no guide contract.

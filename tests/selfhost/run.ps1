@@ -3487,6 +3487,11 @@ $gfxChartCapabilityBatchWritten = & $compiler emit-executable (Join-Path $PSScri
 if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityBatchWritten -ne 'executable written') { throw 'gfx_chart_capability_batch emission failed' }
 $gfxChartCapabilityBatchOutput = & $gfxChartCapabilityBatchPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityBatchOutput -ne 'gfx chart capability batch ok') { throw "the e.gfx.chart capability batch answered wrongly: exit $LASTEXITCODE" }
+$gfxChartGageBiasLinearityPath = Join-Path $testBuild 'gfx-chart-gage-bias-linearity-selfhost.exe'
+$gfxChartGageBiasLinearityWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_gage_bias_linearity\src\main.e') $repo 'x64' 'windows' $gfxChartGageBiasLinearityPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGageBiasLinearityWritten -ne 'executable written') { throw 'gfx_chart_gage_bias_linearity emission failed' }
+$gfxChartGageBiasLinearityOutput = & $gfxChartGageBiasLinearityPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGageBiasLinearityOutput -ne 'gfx chart gage bias linearity ok') { throw "the e.gfx.chart gage bias linearity answered wrongly: exit $LASTEXITCODE" }
 $gfxChartFishbonePath = Join-Path $testBuild 'gfx-chart-fishbone-selfhost.exe'
 $gfxChartFishboneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_fishbone\src\main.e') $repo 'x64' 'windows' $gfxChartFishbonePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartFishboneWritten -ne 'executable written') { throw 'gfx_chart_fishbone emission failed' }

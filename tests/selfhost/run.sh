@@ -3109,6 +3109,11 @@ gfx_chart_capability_batch_written=$($test_build/neper-self emit-executable "$re
 chmod +x "$test_build/gfx-chart-capability-batch-selfhost"
 gfx_chart_capability_batch_output=$("$test_build/gfx-chart-capability-batch-selfhost")
 [ "$gfx_chart_capability_batch_output" = 'gfx chart capability batch ok' ]
+gfx_chart_gage_bias_linearity_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_gage_bias_linearity/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-gage-bias-linearity-selfhost")
+[ "$gfx_chart_gage_bias_linearity_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-gage-bias-linearity-selfhost"
+gfx_chart_gage_bias_linearity_output=$("$test_build/gfx-chart-gage-bias-linearity-selfhost")
+[ "$gfx_chart_gage_bias_linearity_output" = 'gfx chart gage bias linearity ok' ]
 gfx_chart_fishbone_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_fishbone/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-fishbone-selfhost")
 [ "$gfx_chart_fishbone_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-fishbone-selfhost"

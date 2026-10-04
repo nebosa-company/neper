@@ -52,6 +52,11 @@ type BatchCapability = struct {
     cp: f64, cpk: f64, pp: f64, ppk: f64,
     observed_ppm: f64, expected_bw_ppm: f64, expected_overall_ppm: f64,
 }
+type GageLinearity = struct {
+    reference_count: usize, repeats: usize, average_bias: f64,
+    intercept: f64, slope: f64, linearity: f64,
+    residual_sigma: f64, slope_standard_error: f64, slope_p: f64,
+}
 type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
@@ -628,6 +633,76 @@ fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, 
         observed_ppm: million * f64(outside) / f64(values.len),
         expected_bw_ppm: million * (special.normal_cdf((lsl - total.mean) / combined) + special.normal_cdf((total.mean - usl) / combined)),
         expected_overall_ppm: million * (special.normal_cdf((lsl - total.mean) / overall) + special.normal_cdf((total.mean - usl) / overall)),
+    }, ok)
+}
+
+// Bias = measurement - reference. OLS fits every replicate, while the means
+// and caller-critical confidence limits are reported at each reference value.
+fn gage_linearity(references: []const f64, measurements: []const f64, repeats: usize, critical: f64, biases: []f64, means: []f64, fitted: []f64, lower: []f64, upper: []f64) -> (GageLinearity, err) {
+    if references.len < 5usize || repeats < 2usize || measurements.len % repeats != 0usize || measurements.len / repeats != references.len || !(critical > 0.0f64) || critical - critical != 0.0f64 { ret (zero, Invalid) }
+    if biases.len < measurements.len || means.len < references.len || fitted.len < references.len || lower.len < references.len || upper.len < references.len { ret (zero, TooSmall) }
+    var regression_state = regression()
+    var i = 0usize
+    while i < references.len {
+        let reference = references[i]
+        if reference - reference != 0.0f64 || (i > 0usize && !(reference > references[i - 1usize])) { ret (zero, Invalid) }
+        var total_bias = 0.0f64
+        var j = 0usize
+        while j < repeats {
+            let index = i * repeats + j
+            let measurement = measurements[index]
+            if measurement - measurement != 0.0f64 { ret (zero, Invalid) }
+            let observed_bias = measurement - reference
+            if observed_bias - observed_bias != 0.0f64 { ret (zero, Invalid) }
+            biases[index] = observed_bias
+            total_bias += observed_bias
+            regression_add(&regression_state, reference, observed_bias)
+            j += 1usize
+        }
+        means[i] = total_bias / f64(repeats)
+        i += 1usize
+    }
+    let (slope, defined) = regression_slope(&regression_state)
+    if !defined || !(regression_state.m2_x > 0.0f64) { ret (zero, Invalid) }
+    let intercept = regression_state.mean_y - slope * regression_state.mean_x
+    var residual_ss = 0.0f64
+    i = 0usize
+    while i < references.len {
+        var j = 0usize
+        while j < repeats {
+            let residual = biases[i * repeats + j] - (intercept + slope * references[i])
+            residual_ss += residual * residual
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let mse = residual_ss / f64(measurements.len - 2usize)
+    let residual_sigma = math.sqrt[f64](mse)
+    let slope_se = math.sqrt[f64](mse / regression_state.m2_x)
+    if mse - mse != 0.0f64 || residual_sigma - residual_sigma != 0.0f64 || intercept - intercept != 0.0f64 || slope - slope != 0.0f64 { ret (zero, Invalid) }
+    var slope_p = 1.0f64
+    if slope_se == 0.0f64 {
+        if slope != 0.0f64 { slope_p = 0.0f64 }
+    } else {
+        let t = math.abs[f64](slope / slope_se)
+        slope_p = 2.0f64 * (1.0f64 - special.t_cdf(t, f64(measurements.len - 2usize)))
+    }
+    i = 0usize
+    while i < references.len {
+        let x = references[i]
+        fitted[i] = intercept + slope * x
+        let dx = x - regression_state.mean_x
+        let se = math.sqrt[f64](mse * (1.0f64 / f64(measurements.len) + dx * dx / regression_state.m2_x))
+        lower[i] = fitted[i] - critical * se
+        upper[i] = fitted[i] + critical * se
+        if lower[i] - lower[i] != 0.0f64 || upper[i] - upper[i] != 0.0f64 { ret (zero, Invalid) }
+        i += 1usize
+    }
+    ret (GageLinearity {
+        reference_count: references.len, repeats: repeats,
+        average_bias: regression_state.mean_y, intercept: intercept, slope: slope,
+        linearity: slope * (references[references.len - 1usize] - references[0usize]),
+        residual_sigma: residual_sigma, slope_standard_error: slope_se, slope_p: slope_p,
     }, ok)
 }
 

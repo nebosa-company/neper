@@ -4507,6 +4507,87 @@ fn render_capability_batch_preview(a: *mem.Arena, q: *gpu.Queue, output_target: 
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_gage_bias_linearity_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/gage_bias_linearity.png"
+    let references = [6]f64{ 2.0f64, 4.0f64, 6.0f64, 8.0f64, 10.0f64, 12.0f64 }
+    let measurements = [18]f64{
+        1.905f64, 1.930f64, 1.955f64, 3.955f64, 3.980f64, 4.005f64,
+        6.005f64, 6.030f64, 6.055f64, 8.055f64, 8.080f64, 8.105f64,
+        10.105f64, 10.130f64, 10.155f64, 12.155f64, 12.180f64, 12.205f64,
+    }
+    var biases: [18]f64 = zero
+    var mean_biases: [6]f64 = zero
+    var fitted_biases: [6]f64 = zero
+    var ci_lower: [6]f64 = zero
+    var ci_upper: [6]f64 = zero
+    var raw_points: [18]chart.Coord = zero
+    var mean_points: [6]chart.Coord = zero
+    var fit_segments: [5]chart.Segment = zero
+    var ci_segments: [6]chart.Segment = zero
+    var zero_guide: [1]chart.Segment = zero
+    var work = chart.GageLinearityStorage {
+        biases: biases[..], mean_biases: mean_biases[..], fitted_biases: fitted_biases[..], ci_lower: ci_lower[..], ci_upper: ci_upper[..],
+        raw_points: raw_points[..], mean_points: mean_points[..], fit_segments: fit_segments[..], ci_segments: ci_segments[..], zero_guide: zero_guide[..],
+    }
+    let plot = geometry.rect(32.0, 51.0, 296.0, 129.0)
+    let (report, report_error) = chart.gage_linearity(references[..], measurements[..], 3usize, 2.12f64, plot, &work)
+    if report_error != ok { ret report_error }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let pale = paint.rgba(0.96, 0.98, 1.0, 1.0)
+    let blue = paint.rgba(0.19, 0.49, 0.77, 1.0)
+    let orange = paint.rgba(0.93, 0.44, 0.17, 1.0)
+    let dark = paint.rgba(0.16, 0.22, 0.31, 1.0)
+    let gray = paint.rgba(0.61, 0.68, 0.75, 1.0)
+    let (metrics_made, metrics_error) = str.builder(a, 120usize)
+    if metrics_error != ok { ret metrics_error }
+    var metrics = metrics_made
+    try str.push(&metrics, "Mean bias ")
+    try str.push_f64_fixed(&metrics, report.summary.average_bias, 3u8)
+    try str.push(&metrics, "   Slope ")
+    try str.push_f64_fixed(&metrics, report.summary.slope, 3u8)
+    try str.push(&metrics, "   Span drift ")
+    try str.push_f64_fixed(&metrics, report.summary.linearity, 3u8)
+    let labels = [4]chart.Label{
+        chart.Label { text: "Gage bias and linearity", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center },
+        chart.Label { text: "Measurement minus reference", anchor: chart.Coord { x: 180.0, y: 40.0 }, align: .Center },
+        chart.Label { text: str.done(&metrics), anchor: chart.Coord { x: 180.0, y: 207.0 }, align: .Center },
+        chart.Label { text: "Replicates / mean / fit / 95% mean CI", anchor: chart.Coord { x: 180.0, y: 226.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 29u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 512usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &report.zero_line, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &report.confidence, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &report.observations, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &report.fit, paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &report.means, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append(&writer, &report.zero_line, gray)
+    try chart_svg.append(&writer, &report.confidence, gray)
+    try chart_svg.append(&writer, &report.observations, blue)
+    try chart_svg.append(&writer, &report.fit, orange)
+    try chart_svg.append(&writer, &report.means, dark)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_capability_normal_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/capability_normal.png"
     let values = [30]f64{
@@ -8849,6 +8930,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_capability_nonnormal_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_attribute_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_batch_preview(a, queue, output_target, canvas, &renderer)
+    try render_gage_bias_linearity_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_normal_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_sixpack_preview(a, queue, output_target, canvas, &renderer)
     try render_fishbone_preview(a, queue, output_target, canvas, &renderer)

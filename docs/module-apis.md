@@ -3158,6 +3158,7 @@ type CapabilityPerformance = struct { observed_below_ppm: f64, observed_above_pp
 type LognormalCapability = struct { log_mean: f64, log_sigma: f64, median: f64, pp: f64, ppl: f64, ppu: f64, ppk: f64, observed_below_ppm: f64, observed_above_ppm: f64, expected_below_ppm: f64, expected_above_ppm: f64 }
 type BinomialCapability = struct { defective: u64, inspected: u64, fraction: f64, ppm: f64, confidence: Interval, target_fraction: f64, meets_target: bool, upper_bound_meets_target: bool, beyond_limits: usize }
 type BatchCapability = struct { batches: usize, batch_size: usize, mean: f64, within_sigma: f64, between_sigma: f64, between_within_sigma: f64, overall_sigma: f64, cp: f64, cpk: f64, pp: f64, ppk: f64, observed_ppm: f64, expected_bw_ppm: f64, expected_overall_ppm: f64 }
+type GageLinearity = struct { reference_count: usize, repeats: usize, average_bias: f64, intercept: f64, slope: f64, linearity: f64, residual_sigma: f64, slope_standard_error: f64, slope_p: f64 }
 type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
@@ -3208,6 +3209,7 @@ fn normal_capability_performance(values: []const f64, lsl: f64, usl: f64, summar
 fn lognormal_capability(values: []const f64, lsl: f64, usl: f64) -> (LognormalCapability, err)
 fn binomial_capability(counts: []const usize, sizes: []const usize, target_fraction: f64, confidence: f64, controls: []AttributeControlPoint, cumulative: []f64) -> (BinomialCapability, err)
 fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, batch_means: []f64, batch_spreads: []f64) -> (BatchCapability, err)
+fn gage_linearity(references: []const f64, measurements: []const f64, repeats: usize, critical: f64, biases: []f64, means: []f64, fitted: []f64, lower: []f64, upper: []f64) -> (GageLinearity, err)
 fn imr_phase_control(values: []const f64, starts: []const bool, moving: []f64, out: []AttributeControlPoint) -> err
 fn xbar_r_limits(values: []const f64, subgroup: usize, means: []f64, ranges: []f64) -> (ControlLimits, ControlLimits, err)
 fn attribute_control(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, out: []AttributeControlPoint) -> err
@@ -15976,6 +15978,8 @@ type BinomialCapabilityStorage = struct { controls: []stat.AttributeControlPoint
 type BinomialCapabilityLayout = struct { p_chart: Layout, cumulative: Layout, upper_limit: Layout, lower_limit: Layout, guides: Layout, signals: Layout, summary: stat.BinomialCapability }
 type BatchCapabilityStorage = struct { batch_means: []f64, batch_spreads: []f64, mean_points: []Coord, mean_lines: []Segment, spread_bars: []geometry.Rect, guides: []Segment }
 type BatchCapabilityLayout = struct { means: Layout, spreads: Layout, guides: Layout, summary: stat.BatchCapability }
+type GageLinearityStorage = struct { biases: []f64, mean_biases: []f64, fitted_biases: []f64, ci_lower: []f64, ci_upper: []f64, raw_points: []Coord, mean_points: []Coord, fit_segments: []Segment, ci_segments: []Segment, zero_guide: []Segment }
+type GageLinearityLayout = struct { observations: Layout, means: Layout, fit: Layout, confidence: Layout, zero_line: Layout, summary: stat.GageLinearity }
 type CapabilitySixpackLayout = struct { individuals: Layout, moving_range: Layout, recent: Layout, histogram: Layout, within_curve: Layout, overall_curve: Layout, probability: Layout, intervals: Layout, guides: Layout, summary: stat.NormalCapability }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
@@ -16007,6 +16011,7 @@ fn normal_capability(values: []const f64, lsl: f64, usl: f64, bounds: geometry.R
 fn lognormal_capability(values: []const f64, lsl: f64, usl: f64, bounds: geometry.Rect, work: *LognormalCapabilityStorage) -> (LognormalCapabilityLayout, err)
 fn binomial_capability(defectives: []const usize, inspected: []const usize, target_fraction: f64, confidence: f64, panels: []const geometry.Rect, work: *BinomialCapabilityStorage) -> (BinomialCapabilityLayout, err)
 fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, panels: []const geometry.Rect, work: *BatchCapabilityStorage) -> (BatchCapabilityLayout, err)
+fn gage_linearity(references: []const f64, measurements: []const f64, repeats: usize, critical: f64, bounds: geometry.Rect, work: *GageLinearityStorage) -> (GageLinearityLayout, err)
 fn fishbone(effect: str, categories: []const str, causes: []const FishboneCause, bounds: geometry.Rect, spine: []Segment, ribs: []Segment, branches: []Segment, head_box: []geometry.Rect, labels: []Label) -> (FishboneLayout, err)
 fn cause_effect_tree(nodes: []const CauseTreeNode, bounds: geometry.Rect, work: *CauseTreeWork, boxes: []geometry.Rect, connectors: []Segment, labels: []Label) -> (CauseTreeLayout, err)
 fn weibull_probability_plot(sorted_failures: []const f64, total_count: usize, shape: f64, scale: f64, domain_min: f64, domain_max: f64, bounds: geometry.Rect, points: []Coord, reference: []Segment, tick_storage: []Tick) -> (ProbabilityLayout, err)
