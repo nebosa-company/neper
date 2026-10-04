@@ -2934,6 +2934,11 @@ gfx_chart_probability_plot_written=$($test_build/neper-self emit-executable "$re
 chmod +x "$test_build/gfx-chart-probability-plot-selfhost"
 gfx_chart_probability_plot_output=$("$test_build/gfx-chart-probability-plot-selfhost")
 [ "$gfx_chart_probability_plot_output" = 'gfx chart probability plot ok' ]
+gfx_chart_weibull_probability_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_weibull_probability/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-weibull-probability-selfhost")
+[ "$gfx_chart_weibull_probability_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-weibull-probability-selfhost"
+gfx_chart_weibull_probability_output=$("$test_build/gfx-chart-weibull-probability-selfhost")
+[ "$gfx_chart_weibull_probability_output" = 'gfx chart weibull probability ok' ]
 gfx_chart_spine_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_spine_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-spine-plot-selfhost")
 [ "$gfx_chart_spine_plot_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-spine-plot-selfhost"

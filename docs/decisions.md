@@ -34445,3 +34445,19 @@ paths; the gallery adds one PNG/SVG pair. Measured label fitting and editing
 remain planned.
 
 Reference: https://asq.org/quality-resources/tree-diagram
+
+## D1930 — Put Type-I censored lifetimes on Weibull probability paper
+
+`chart.weibull_probability_plot` keeps the existing caller-owned point, line
+and tick layers but transforms time with ln(t) and cumulative probability with
+ln(-ln(1-p)). Median-rank positions `(i - 0.3)/(n + 0.4)` use the total unit
+count, so failures followed by end-of-test right censoring can be plotted
+without pretending the censored units failed. The straight reference takes
+caller-supplied shape and scale, which can be fitted elsewhere or historical.
+The paper spans at least 1–99%, expanding when a large sample's first or last
+median rank would otherwise place a point outside the panel.
+Earlier censor removals need their own plotting-position estimator; this API
+does not misrepresent them as Type-I data. The NIST 20-unit reliability sample
+anchors the Windows/Linux fixture and PNG/SVG preview.
+
+References: https://itl.nist.gov/div898/handbook/apr/section2/apr221.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/graphs/probability-plot/methods-and-formulas/method-of-obtaining-probability-plot-points/

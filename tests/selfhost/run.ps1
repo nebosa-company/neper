@@ -3312,6 +3312,11 @@ $gfxChartProbabilityPlotWritten = & $compiler emit-executable (Join-Path $PSScri
 if ($LASTEXITCODE -ne 0 -or $gfxChartProbabilityPlotWritten -ne 'executable written') { throw 'gfx_chart_probability_plot emission failed' }
 $gfxChartProbabilityPlotOutput = & $gfxChartProbabilityPlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartProbabilityPlotOutput -ne 'gfx chart probability plot ok') { throw "the e.gfx.chart probability plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartWeibullProbabilityPath = Join-Path $testBuild 'gfx-chart-weibull-probability-selfhost.exe'
+$gfxChartWeibullProbabilityWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_weibull_probability\src\main.e') $repo 'x64' 'windows' $gfxChartWeibullProbabilityPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartWeibullProbabilityWritten -ne 'executable written') { throw 'gfx_chart_weibull_probability emission failed' }
+$gfxChartWeibullProbabilityOutput = & $gfxChartWeibullProbabilityPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartWeibullProbabilityOutput -ne 'gfx chart weibull probability ok') { throw "the e.gfx.chart Weibull probability plot answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
 $gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }

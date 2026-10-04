@@ -6800,6 +6800,63 @@ fn probability_paper_quantile(family: ProbabilityFamily, p: f64) -> f64 {
     ret special.normal_quantile(p)
 }
 
+fn weibull_paper(p: f64) -> f64 {
+    ret math.log[f64](0.0f64 - math.log[f64](1.0f64 - p))
+}
+
+// Two-parameter Weibull probability paper. `total_count` includes units
+// right-censored after the final failure; earlier removals need a different
+// plotting-position estimator. Shape and scale are caller-supplied, so the
+// reference can represent either a fitted or historical distribution.
+fn weibull_probability_plot(sorted_failures: []const f64, total_count: usize, shape: f64, scale: f64, domain_min: f64, domain_max: f64, bounds: geometry.Rect, points: []Coord, reference: []Segment, tick_storage: []Tick) -> (ProbabilityLayout, err) {
+    if sorted_failures.len < 2usize { ret (zero, Empty) }
+    if total_count < sorted_failures.len || !finite64(shape) || !finite64(scale) || shape <= 0.0f64 || scale <= 0.0f64 || !finite64(domain_min) || !finite64(domain_max) || domain_min <= 0.0f64 || domain_max <= domain_min || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if points.len < sorted_failures.len || reference.len == 0usize || tick_storage.len < 7usize { ret (zero, TooLarge) }
+    let log_min = math.log[f64](domain_min)
+    let log_max = math.log[f64](domain_max)
+    let log_scale = math.log[f64](scale)
+    var paper_lo = weibull_paper(0.01f64)
+    var paper_hi = weibull_paper(0.99f64)
+    let first_p = 0.7f64 / (f64(total_count) + 0.4f64)
+    let last_p = (f64(sorted_failures.len) - 0.3f64) / (f64(total_count) + 0.4f64)
+    if first_p < 0.01f64 { paper_lo = weibull_paper(first_p) }
+    if last_p > 0.99f64 { paper_hi = weibull_paper(last_p) }
+    if !finite64(log_min) || !finite64(log_max) || !finite64(log_scale) || log_max <= log_min || !finite(f32(log_min)) || !finite(f32(log_max)) || f32(log_max) <= f32(log_min) || !finite64(paper_lo) || !finite64(paper_hi) { ret (zero, Invalid) }
+    var i = 0usize
+    while i < sorted_failures.len {
+        let value = sorted_failures[i]
+        if !finite64(value) || value < domain_min || value > domain_max || (i > 0usize && value < sorted_failures[i - 1usize]) { ret (zero, Invalid) }
+        let p = (f64(i) + 0.7f64) / (f64(total_count) + 0.4f64)
+        let paper = weibull_paper(p)
+        let x = bounds.x + bounds.width * f32((math.log[f64](value) - log_min) / (log_max - log_min))
+        let y = bounds.y + bounds.height * f32((paper_hi - paper) / (paper_hi - paper_lo))
+        if !finite(x) || !finite(y) { ret (zero, Invalid) }
+        points[i] = Coord { x: x, y: y }
+        i += 1usize
+    }
+    var line_lo = shape * (log_min - log_scale)
+    var line_hi = shape * (log_max - log_scale)
+    if !finite64(line_lo) || !finite64(line_hi) { ret (zero, Invalid) }
+    if line_lo < paper_lo { line_lo = paper_lo }
+    if line_hi > paper_hi { line_hi = paper_hi }
+    if line_hi <= line_lo { ret (zero, Invalid) }
+    let from_x = bounds.x + bounds.width * f32((log_scale + line_lo / shape - log_min) / (log_max - log_min))
+    let to_x = bounds.x + bounds.width * f32((log_scale + line_hi / shape - log_min) / (log_max - log_min))
+    let from_y = bounds.y + bounds.height * f32((paper_hi - line_lo) / (paper_hi - paper_lo))
+    let to_y = bounds.y + bounds.height * f32((paper_hi - line_hi) / (paper_hi - paper_lo))
+    if !finite(from_x) || !finite(to_x) || !finite(from_y) || !finite(to_y) { ret (zero, Invalid) }
+    reference[0usize] = Segment { from: Coord { x: from_x, y: from_y }, to: Coord { x: to_x, y: to_y } }
+    let probabilities = [7]f64{ 0.01f64, 0.05f64, 0.25f64, 0.5f64, 0.75f64, 0.95f64, 0.99f64 }
+    i = 0usize
+    while i < probabilities.len {
+        tick_storage[i] = Tick { value: f32(probabilities[i]), fraction: f32((weibull_paper(probabilities[i]) - paper_lo) / (paper_hi - paper_lo)) }
+        i += 1usize
+    }
+    let observed = Layout { kind: .Scatter, coords: points[..sorted_failures.len], segments: zero, bars: zero, x_min: f32(log_min), x_max: f32(log_max), y_min: f32(paper_lo), y_max: f32(paper_hi) }
+    let fitted = Layout { kind: .Line, coords: zero, segments: reference[..1usize], bars: zero, x_min: f32(log_min), x_max: f32(log_max), y_min: f32(paper_lo), y_max: f32(paper_hi) }
+    ret (ProbabilityLayout { observations: observed, reference: fitted, probability_ticks: tick_storage[..7usize] }, ok)
+}
+
 // An observed-value axis against nonlinearly spaced probability paper.
 // Plotting positions are (i + 1/2)/n; the returned ticks carry percentage
 // values and transformed fractions, while the fitted line is clipped to both
