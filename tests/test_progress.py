@@ -41,6 +41,38 @@ class ProgressTests(unittest.TestCase):
         self.assertIn(f"{len(expected)} unfinished</summary>", section)
         self.assertNotIn("<details open", section)
 
+    def test_release_labels_match_the_cpu_release_gate(self):
+        queue = json.loads((ROOT / "docs/work-queue.json").read_text(encoding="utf-8"))
+        expected_ids = self.render["RELEASE_REQUIRED_IDS"]
+        self.assertEqual(expected_ids,
+                         {"C082", "C088", "T004", "T012", "T016", "T023"})
+        section = self.sections["queue"]
+        actual = re.findall(
+            r'<code>([CTL]\d{3})</code></td><td>.*?</td>'
+            r'<td><span class="release-status (required|enhancement)">',
+            section)
+        self.assertEqual(actual, [
+            (item["id"], "required" if item["id"] in expected_ids else "enhancement")
+            for item in queue["items"] if float(item["score"]) < 1
+        ])
+        active_required = len(expected_ids & {item["id"] for item in queue["items"]})
+        self.assertIn(
+            f"{active_required} release-required and "
+            f"{len(queue['items']) - active_required} enhancements", self.page)
+
+    def test_module_release_labels_follow_module_tiers(self):
+        section = self.sections["modules"]
+        actual = re.findall(
+            r'<code>(e\.[^<]+)</code></td><td>.*?</td>'
+            r'<td><span class="release-status (required|enhancement)">',
+            section)
+        core = self.render["core_modules"]
+        self.assertEqual(actual, [
+            (module, "required" if module in core else "enhancement")
+            for module in sorted(self.render["module_missing"])
+        ])
+        self.assertIn("0 are core release requirements", self.page)
+
     def test_module_rows_account_for_every_missing_symbol(self):
         section = self.sections["modules"]
         missing = self.render["module_missing"]
@@ -55,7 +87,7 @@ class ProgressTests(unittest.TestCase):
     def test_empty_section_and_untrusted_text(self):
         render = self.render["unfinished_details"]
         self.assertIn("No unfinished items.", render("Library", []))
-        result = render("Library", [("L001", '<script>alert("x")</script>', "a & b")])
+        result = render("Library", [("L001", '<script>alert("x")</script>', "a & b", False)])
         self.assertNotIn("<script>", result)
         self.assertIn("&lt;script&gt;", result)
         self.assertIn("a &amp; b", result)

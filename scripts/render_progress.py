@@ -208,6 +208,19 @@ kpi = '\n'.join([
 # page links to a generated chart guide and shows the unfinished queue.
 chart_plan = Path('docs/charting-engine-plan.md').read_text(encoding='utf-8')
 queue_items = json.loads(WORK_QUEUE.read_text(encoding='utf-8'))['items']
+# The first stable CPU release follows the M2/tool-complete gate in roadmap.md.
+# These unfinished rows contain work that gate still requires. GPU milestones,
+# later libraries and optional tooling do not block this release.
+RELEASE_REQUIRED_IDS = {'C082', 'C088', 'T004', 'T012', 'T016', 'T023'}
+queue_ids = {item['id'] for item in queue_items}
+done_ids = {json.loads(line)['id'] for line in WORK_DONE.read_text(encoding='utf-8').splitlines()
+            if line.strip()}
+if not RELEASE_REQUIRED_IDS <= queue_ids | done_ids:
+    raise SystemExit('release-required item missing from work inventories: '
+                     + ', '.join(sorted(RELEASE_REQUIRED_IDS - queue_ids - done_ids)))
+module_plan = json.loads(Path('docs/modules.json').read_text(encoding='utf-8'))
+core_modules = set(next(tier['modules'] for tier in module_plan['tiers']
+                        if tier['id'] == 'core'))
 chart_item = next((item for item in queue_items if item['id'] == 'L061'), None)
 if chart_item is None:
     for line in WORK_DONE.read_text(encoding='utf-8').splitlines():
@@ -221,14 +234,18 @@ if chart_item is None:
 def unfinished_details(label, rows):
     body = ''.join(
         '<tr><td>{number}</td><td><code>{id}</code></td><td>{title}</td>'
+        '<td><span class="release-status {status_class}">{status}</span></td>'
         '<td>{evidence}</td></tr>'.format(
             number=number, id=html.escape(item_id), title=html.escape(title),
+            status_class='required' if required else 'enhancement',
+            status='Release required' if required else 'Enhancement',
             evidence=html.escape(evidence))
-        for number, (item_id, title, evidence) in enumerate(rows, 1)
+        for number, (item_id, title, evidence, required) in enumerate(rows, 1)
     )
     content = (
         '<div class="table-scroll"><table><thead><tr><th scope="col">#</th>'
         '<th scope="col">ID / module</th><th scope="col">Work and progress</th>'
+        '<th scope="col">Release status</th>'
         '<th scope="col">Evidence and remaining work</th></tr></thead>'
         '<tbody>' + body + '</tbody></table></div>'
         if rows else '<p>No unfinished items.</p>'
@@ -241,21 +258,29 @@ def unfinished_details(label, rows):
 backlog = unfinished_details('Queue', [
     (item['id'], item['title'] + ' (' + format(float(item['score']), '.0%') + ')',
      'See docs/charts.md for the engine, delivery evidence and previews.'
-     if item['id'] == 'L061' else item['evidence'])
+     if item['id'] == 'L061' else item['evidence'],
+     item['id'] in RELEASE_REQUIRED_IDS)
     for item in queue_items if float(item['score']) < 1
 ])
 backlog += unfinished_details('Modules', [
     (mod, str(len(missing)) + ' missing declarations / selected algorithms',
-     ', '.join(sorted(missing)))
+     ', '.join(sorted(missing)), mod in core_modules)
     for mod, missing in sorted(module_missing.items())
 ])
-preview_paths = sorted(Path('docs/chart-previews').glob('*.png'))
+release_required_count = sum(item['id'] in RELEASE_REQUIRED_IDS for item in queue_items)
+module_required_count = sum(mod in core_modules for mod in module_missing)
+# A work-in-progress gallery render may exist before its chart is landed. Readiness
+# counts tracked preview pairs, not untracked files from another working session.
+preview_paths = sorted(Path(name) for name in subprocess.run(
+    ['git', 'ls-files', 'docs/chart-previews/*.png'],
+    capture_output=True, text=True, check=True).stdout.splitlines())
 preview_backlog = [line.strip() for line in Path('docs/chart-preview-backlog.txt').read_text(encoding='utf-8').splitlines()
                    if line.strip() and not line.lstrip().startswith('#')]
 if len(preview_backlog) != len(set(preview_backlog)) or any(
         re.fullmatch(r'[a-z][a-z0-9_]*', name) is None for name in preview_backlog):
     raise SystemExit('chart preview backlog contains a duplicate or invalid slug')
-if any(not path.with_suffix('.svg').exists() for path in preview_paths):
+if any(not path.exists() or not path.with_suffix('.svg').exists()
+       for path in preview_paths):
     raise SystemExit('a chart PNG is missing its SVG companion')
 if {path.stem for path in preview_paths} & set(preview_backlog):
     raise SystemExit('a rendered chart remains in the preview backlog')
@@ -294,12 +319,19 @@ chart_section = (
     '<a href="charts.md">Charting-engine description and produced charts</a>.</p></section>'
     '<section class="tools" aria-label="Unfinished work queue">'
     '<h2>Unfinished work</h2><p>{count} queued capabilities in planned pickup order, '
-    'across all categories; the first row is next. {module_count} modules with missing '
+    'across all categories; the first row is next. {required_count} release-required '
+    'and {enhancement_count} enhancements. Release required means needed for the '
+    '<a href="roadmap.md">first stable CPU compiler release</a> under the M2 and '
+    'tool-complete gates; later GPU, extended-library and optional-tooling work is '
+    'an enhancement for that release. {module_count} modules with missing '
     'declarations or selected algorithms appear separately as inventory gaps, not '
-    'queued tasks.</p>'
+    'queued tasks; {module_required_count} are core release requirements.</p>'
     '{backlog}</section>'
 ).format(score=float(chart_item['score']), preview_count=len(preview_paths), chart_total=chart_total,
-         count=len(queue_items), module_count=len(module_missing), backlog=backlog)
+         count=len(queue_items), required_count=release_required_count,
+         enhancement_count=len(queue_items) - release_required_count,
+         module_count=len(module_missing), module_required_count=module_required_count,
+         backlog=backlog)
 
 page_html = """<!doctype html>
 <html lang="en">
@@ -324,6 +356,7 @@ footer{color:var(--muted);font-size:.8rem;margin-top:2rem;padding-top:1rem;borde
 .tools th{text-align:left;padding:.45rem .6rem}.tools details{margin:1rem 0}.tools summary{cursor:pointer;font-weight:600}
 .tools ol{padding-left:1.5rem}.tools li{margin:.3rem 0}
 .table-scroll{overflow-x:auto}.table-scroll table{min-width:48rem}.table-scroll td:first-child{width:auto}.table-scroll td{overflow-wrap:anywhere}
+.release-status{display:inline-block;white-space:nowrap;padding:.1rem .4rem;border:1px solid var(--rule);border-radius:.3rem;font-size:.75rem}.release-status.required{font-weight:700}
 @media(max-width:40rem){.tools td{display:block;width:auto}.tools td:first-child{width:auto;border-top:1px solid var(--rule);padding-bottom:0}.tools td+td{border-top:0}}
 </style>
 </head>
