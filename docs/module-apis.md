@@ -9955,6 +9955,11 @@ fn triangulate(rotation: []const f64, t: []const f64, a: Point, b: Point) -> (ge
 fn to_normalised(kinv: []const f64, p: Point) -> Point
 fn structure_from_motion(k: []const f64, a: []const Point, b: []const Point, rotation: []f64, translation: []f64, points: []geom3.Vec3, scratch: []Point) -> err
 fn pose_candidate(u: []const f64, r1: []const f64, r2: []const f64, pose: usize, rotation: []f64, t: []f64)
+type TlsLine = struct { point: Point, direction: Point }
+fn tls_distance(fit: TlsLine, p: Point) -> f64
+fn tls_axis(sxx: f64, sxy: f64, syy: f64, mx: f64, my: f64) -> (TlsLine, err)
+fn fit_line_tls(points: []const Point, n: usize) -> (TlsLine, err)
+fn fit_line_tls_robust(points: []const Point, n: usize, threshold: f64, fit: *TlsLine, inliers: []bool) -> (usize, err)
 ```
 
 `harris_corners`, `hough_lines` (skimage-identical accumulator), `homography` (normalised
@@ -9963,7 +9968,9 @@ DLT) with `apply_homography`, `fundamental_matrix` (eight-point, rank two) with
 `phase_correlate`, `optical_flow_lk` and `optical_flow_farneback`, `icp` (Kabsch),
 `orb` (FAST-9, Harris ranking, rBRIEF with the OpenCV pattern), `sift` (three octaves,
 4x4x8 descriptors), `calibrate_camera` (Zhang) and `structure_from_motion` (essential
-matrix, cheirality, linear triangulation); `svd3`, `hamming`.
+matrix, cheirality, linear triangulation); `svd3`, `hamming`. Orthogonal
+total-least-squares lines (`fit_line_tls` over `tls_axis`, vertical-safe) with
+one outlier-rejection pass (`fit_line_tls_robust`) and `tls_distance`.
 
 ### `e.gfx.scene`
 

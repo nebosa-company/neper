@@ -1621,3 +1621,127 @@ fn pose_candidate(u: []const f64, r1: []const f64, r2: []const f64, pose: usize,
     t[1usize] = sign * u[5usize]
     t[2usize] = sign * u[8usize]
 }
+
+// An orthogonal (total-least-squares) 2D line: `point` on the line (the fit
+// centroid) with a unit `direction`. Vertical-safe, unlike slope/intercept.
+type TlsLine = struct { point: Point, direction: Point }
+
+// Orthogonal distance from `p` to `fit` (exact for unit direction).
+fn tls_distance(fit: TlsLine, p: Point) -> f64 {
+    let dx = p.x - fit.point.x
+    let dy = p.y - fit.point.y
+    var cross = dx * fit.direction.y - dy * fit.direction.x
+    if cross < 0.0f64 { cross = 0.0f64 - cross }
+    ret cross
+}
+
+// The principal axis of 2x2 scatter sums about centroid (`mx`, `my`) by
+// closed-form eigendecomposition; a cloud with no extent is `Invalid`.
+fn tls_axis(sxx: f64, sxy: f64, syy: f64, mx: f64, my: f64) -> (TlsLine, err) {
+    if sxx == 0.0f64 && sxy == 0.0f64 && syy == 0.0f64 { ret (zero, Invalid) }
+    let trace = sxx + syy
+    var disc = trace * trace / 4.0f64 - (sxx * syy - sxy * sxy)
+    if disc < 0.0f64 { disc = 0.0f64 }
+    let lambda = trace / 2.0f64 + math.sqrt[f64](disc)
+    var dx = 0.0f64
+    var dy = 0.0f64
+    if sxy == 0.0f64 {
+        if sxx >= syy {
+            dx = 1.0f64
+        } else {
+            dy = 1.0f64
+        }
+    } else {
+        dx = sxy
+        dy = lambda - sxx
+    }
+    let norm = math.sqrt[f64](dx * dx + dy * dy)
+    if !(norm > 0.0f64) { ret (zero, Invalid) }
+    ret (TlsLine { point: Point { x: mx, y: my }, direction: Point { x: dx / norm, y: dy / norm } }, ok)
+}
+
+// Total-least-squares line through `n` points: centroid plus the principal
+// axis of the scatter. Fewer than two points, or a point cloud with no
+// extent, is `Invalid`.
+fn fit_line_tls(points: []const Point, n: usize) -> (TlsLine, err) {
+    if points.len < n { ret (zero, TooSmall) }
+    if n < 2usize { ret (zero, Invalid) }
+    var mx = 0.0f64
+    var my = 0.0f64
+    var i = 0usize
+    while i < n {
+        mx += points[i].x
+        my += points[i].y
+        i += 1usize
+    }
+    mx /= f64(n)
+    my /= f64(n)
+    var sxx = 0.0f64
+    var sxy = 0.0f64
+    var syy = 0.0f64
+    i = 0usize
+    while i < n {
+        let ex = points[i].x - mx
+        let ey = points[i].y - my
+        sxx += ex * ex
+        sxy += ex * ey
+        syy += ey * ey
+        i += 1usize
+    }
+    let (axis, axis_error) = tls_axis(sxx, sxy, syy, mx, my)
+    ret (axis, axis_error)
+}
+
+// One outlier-rejection pass: fit, keep the points within `threshold`
+// orthogonal distance in `inliers`, refit over the kept set into `fit`.
+// Answers the inlier count; a non-positive threshold, or fewer than two
+// survivors, is `Invalid`.
+fn fit_line_tls_robust(points: []const Point, n: usize, threshold: f64, fit: *TlsLine, inliers: []bool) -> (usize, err) {
+    if points.len < n || inliers.len < n { ret (0usize, TooSmall) }
+    if n < 2usize || !(threshold > 0.0f64) { ret (0usize, Invalid) }
+    let (first, fit_error) = fit_line_tls(points, n)
+    if fit_error != ok { ret (0usize, fit_error) }
+    var kept = 0usize
+    var i = 0usize
+    while i < n {
+        if tls_distance(first, points[i]) <= threshold {
+            inliers[i] = true
+            kept += 1usize
+        } else {
+            inliers[i] = false
+        }
+        i += 1usize
+    }
+    if kept < 2usize { ret (0usize, Invalid) }
+    var mx = 0.0f64
+    var my = 0.0f64
+    i = 0usize
+    while i < n {
+        if inliers[i] {
+            mx += points[i].x
+            my += points[i].y
+        }
+        i += 1usize
+    }
+    mx /= f64(kept)
+    my /= f64(kept)
+    var sxx = 0.0f64
+    var sxy = 0.0f64
+    var syy = 0.0f64
+    i = 0usize
+    while i < n {
+        if inliers[i] {
+            let ex = points[i].x - mx
+            let ey = points[i].y - my
+            sxx += ex * ex
+            sxy += ex * ey
+            syy += ey * ey
+        }
+        i += 1usize
+    }
+    let (refit, refit_error) = tls_axis(sxx, sxy, syy, mx, my)
+    if refit_error != ok { ret (0usize, refit_error) }
+    fit.point = refit.point
+    fit.direction = refit.direction
+    ret (kept, ok)
+}

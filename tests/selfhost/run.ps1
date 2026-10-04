@@ -2227,6 +2227,12 @@ $gfxVisionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $gfxVisionWritten -ne 'executable written') { throw 'gfx_vision emission failed' }
 & $gfxVisionPath
 if ($LASTEXITCODE -ne 0) { throw "a gfx_vision check failed: exit $LASTEXITCODE" }
+# `e.gfx.vision` TLS lines (L002): an exact slope, a vertical line, one outlier-rejection pass and refusals.
+$gfxVisionTlsPath = Join-Path $testBuild 'gfx-vision-tls-selfhost.exe'
+$gfxVisionTlsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_vision_tls\src\main.e') $repo 'x64' 'windows' $gfxVisionTlsPath
+if ($LASTEXITCODE -ne 0 -or $gfxVisionTlsWritten -ne 'executable written') { throw 'gfx_vision_tls emission failed' }
+& $gfxVisionTlsPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_vision_tls check failed: exit $LASTEXITCODE" }
 # `e.audio.analysis`: four pitch trackers within 0.5 Hz, a click train's onsets, tempo and beats exact, chroma of a C-major chord, a calibrated sine reading -23 LUFS (D870).
 $audioAnalysisPath = Join-Path $testBuild 'audio-analysis-selfhost.exe'
 $audioAnalysisWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audio_analysis\src\main.e') $repo 'x64' 'windows' $audioAnalysisPath

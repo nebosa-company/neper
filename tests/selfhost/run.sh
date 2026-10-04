@@ -1992,6 +1992,11 @@ gfx_vision_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$gfx_vision_written" = 'executable written' ]
 chmod +x "$test_build/gfx-vision-selfhost"
 "$test_build/gfx-vision-selfhost"
+# `e.gfx.vision` TLS lines (L002): an exact slope, a vertical line, one outlier-rejection pass and refusals.
+gfx_vision_tls_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_vision_tls/src/main.e" "$repo" x64 linux "$test_build/gfx-vision-tls-selfhost")
+[ "$gfx_vision_tls_written" = 'executable written' ]
+chmod +x "$test_build/gfx-vision-tls-selfhost"
+"$test_build/gfx-vision-tls-selfhost"
 # `e.audio.analysis`: four pitch trackers within 0.5 Hz, a click train's onsets, tempo and beats exact, chroma of a C-major chord, a calibrated sine reading -23 LUFS (D870).
 audio_analysis_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audio_analysis/src/main.e" "$repo" x64 linux "$test_build/audio-analysis-selfhost")
 [ "$audio_analysis_written" = 'executable written' ]
