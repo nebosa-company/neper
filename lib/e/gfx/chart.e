@@ -106,6 +106,8 @@ type HotellingStorage = struct { means: []f64, covariance: []f64, factor: []f64,
 type HotellingLayout = struct { trace: Layout, signals: Layout, upper: Layout, means: []f64, covariance: []f64, scores: []f64, upper_limit: f64, historical_count: usize, phase_two: bool }
 type GeneralizedVarianceStorage = struct { covariance: []f64, pooled: []f64, factor: []f64, determinants: []f64, points: []Coord, segments: []Segment, signals: []Coord, upper: []Segment, lower: []Segment, center: []Segment }
 type GeneralizedVarianceLayout = struct { trace: Layout, signals: Layout, upper: Layout, lower: Layout, center: Layout, determinants: []f64, pooled_covariance: []f64, center_value: f64, lower_limit: f64, upper_limit: f64, b1: f64, b2: f64, b3: f64, phase_one_count: usize, phase_two_count: usize }
+type MewmaStorage = struct { means: []f64, covariance: []f64, factor: []f64, state: []f64, residual: []f64, smoothed: []f64, scores: []f64, points: []Coord, segments: []Segment, signals: []Coord, upper: []Segment }
+type MewmaLayout = struct { trace: Layout, signals: Layout, upper: Layout, means: []f64, covariance: []f64, smoothed: []f64, scores: []f64, upper_limit: f64, lambda: f64, historical_count: usize, phase_two: bool }
 type InteractionStorage = struct { points: []Coord, lines: []Segment, means: []f64, counts: []usize, series: []Layout }
 type InteractionLayout = struct { series: []Layout, means: []f64, counts: []usize }
 type CubePlotStorage = struct { vertices: []Coord, edges: []Segment, means: []f64, counts: []usize }
@@ -7391,6 +7393,110 @@ fn generalized_variance(phase_one: []const f64, phase_two: []const f64, subgroup
     let lower = Layout { kind: .Rug, coords: zero, segments: storage.lower[..1usize], bars: zero, x_min: 0.0, x_max: f32(count), y_min: 0.0, y_max: f32(top) }
     let center = Layout { kind: .Rug, coords: zero, segments: storage.center[..1usize], bars: zero, x_min: 0.0, x_max: f32(count), y_min: 0.0, y_max: f32(top) }
     ret (GeneralizedVarianceLayout { trace: trace, signals: signals, upper: upper, lower: lower, center: center, determinants: storage.determinants[..count], pooled_covariance: storage.pooled[..columns * columns], center_value: center_value, lower_limit: lower_limit, upper_limit: upper_limit, b1: b1, b2: b2, b3: b3, phase_one_count: first_count, phase_two_count: second_count }, ok)
+}
+
+// Multivariate EWMA for individual observations with a shared smoothing
+// coefficient. The caller supplies an ARL-calibrated UCL; the finite-time
+// covariance factor is exact under the fixed-reference model. Historical rows
+// estimate the mean/covariance for Phase II, or empty historical data makes a
+// retrospective Phase I chart from the plotted observations.
+fn mewma(values: []const f64, columns: usize, historical: []const f64, lambda: f64, upper_limit: f64, bounds: geometry.Rect, storage: *MewmaStorage) -> (MewmaLayout, err) {
+    if columns < 2usize || values.len == 0usize || values.len % columns != 0usize || historical.len % columns != 0usize || !finite64(lambda) || lambda <= 0.0f64 || lambda > 1.0f64 || !finite64(upper_limit) || upper_limit <= 0.0f64 || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    var baseline = values
+    let phase_two = historical.len != 0usize
+    if phase_two { baseline = historical }
+    let monitored = values.len / columns
+    let m = baseline.len / columns
+    if m <= columns + 1usize { ret (zero, Invalid) }
+    if storage.means.len < columns || storage.covariance.len < columns * columns || storage.factor.len < columns * columns || storage.state.len < columns || storage.residual.len < columns || storage.smoothed.len < values.len || storage.scores.len < monitored || storage.points.len < monitored || storage.segments.len < monitored - 1usize || storage.signals.len < monitored || storage.upper.len < 1usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < baseline.len {
+        if !finite64(baseline[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < values.len {
+        if !finite64(values[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    var j = 0usize
+    while j < columns {
+        let origin = baseline[j]
+        var total = 0.0f64
+        i = 0usize
+        while i < m {
+            total += baseline[i * columns + j] - origin
+            i += 1usize
+        }
+        storage.means[j] = origin + total / f64(m)
+        storage.state[j] = 0.0f64
+        if !finite64(storage.means[j]) { ret (zero, Invalid) }
+        j += 1usize
+    }
+    if stat.covariance_matrix(baseline, columns, storage.covariance[..columns * columns]) != ok { ret (zero, Invalid) }
+    i = 0usize
+    while i < columns * columns {
+        if !finite64(storage.covariance[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    if filter.cholesky(storage.covariance[..columns * columns], columns, storage.factor[..columns * columns]) != ok { ret (zero, Invalid) }
+    let decay = 1.0f64 - lambda
+    var decay_power = 1.0f64
+    var highest = upper_limit
+    i = 0usize
+    while i < monitored {
+        decay_power *= decay * decay
+        let covariance_factor = lambda / (2.0f64 - lambda) * (1.0f64 - decay_power)
+        if !finite64(covariance_factor) || covariance_factor <= 0.0f64 { ret (zero, Invalid) }
+        j = 0usize
+        while j < columns {
+            storage.state[j] = decay * storage.state[j] + lambda * (values[i * columns + j] - storage.means[j])
+            storage.smoothed[i * columns + j] = storage.means[j] + storage.state[j]
+            storage.residual[j] = storage.state[j]
+            if !finite64(storage.state[j]) || !finite64(storage.smoothed[i * columns + j]) { ret (zero, Invalid) }
+            j += 1usize
+        }
+        var quadratic = 0.0f64
+        j = 0usize
+        while j < columns {
+            var component = storage.residual[j]
+            var k = 0usize
+            while k < j {
+                component -= storage.factor[j * columns + k] * storage.residual[k]
+                k += 1usize
+            }
+            component /= storage.factor[j * columns + j]
+            storage.residual[j] = component
+            quadratic += component * component
+            j += 1usize
+        }
+        let score = quadratic / covariance_factor
+        if !finite64(score) || score < 0.0f64 { ret (zero, Invalid) }
+        storage.scores[i] = score
+        highest = math.max[f64](highest, score)
+        i += 1usize
+    }
+    let top = highest * 1.1f64
+    if !finite64(top) || !finite(f32(top)) { ret (zero, Invalid) }
+    var flags = 0usize
+    i = 0usize
+    while i < monitored {
+        let point = Coord { x: bounds.x + bounds.width * (f32(i) + 0.5) / f32(monitored), y: bounds.y + bounds.height * f32(1.0f64 - storage.scores[i] / top) }
+        if !finite(point.x) || !finite(point.y) { ret (zero, Invalid) }
+        storage.points[i] = point
+        if i > 0usize { storage.segments[i - 1usize] = Segment { from: storage.points[i - 1usize], to: point } }
+        if storage.scores[i] > upper_limit {
+            storage.signals[flags] = point
+            flags += 1usize
+        }
+        i += 1usize
+    }
+    let upper_y = bounds.y + bounds.height * f32(1.0f64 - upper_limit / top)
+    storage.upper[0usize] = Segment { from: Coord { x: bounds.x, y: upper_y }, to: Coord { x: bounds.x + bounds.width, y: upper_y } }
+    let trace = Layout { kind: .PointLine, coords: storage.points[..monitored], segments: storage.segments[..monitored - 1usize], bars: zero, x_min: 0.0, x_max: f32(monitored), y_min: 0.0, y_max: f32(top) }
+    let signals = Layout { kind: .Scatter, coords: storage.signals[..flags], segments: zero, bars: zero, x_min: 0.0, x_max: f32(monitored), y_min: 0.0, y_max: f32(top) }
+    let upper = Layout { kind: .Rug, coords: zero, segments: storage.upper[..1usize], bars: zero, x_min: 0.0, x_max: f32(monitored), y_min: 0.0, y_max: f32(top) }
+    ret (MewmaLayout { trace: trace, signals: signals, upper: upper, means: storage.means[..columns], covariance: storage.covariance[..columns * columns], smoothed: storage.smoothed[..values.len], scores: storage.scores[..monitored], upper_limit: upper_limit, lambda: lambda, historical_count: m, phase_two: phase_two }, ok)
 }
 
 // Two-factor raw-means interaction plot. Cell order is series-major, then

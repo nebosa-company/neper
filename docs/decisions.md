@@ -34710,3 +34710,22 @@ remain planned; the normal approximation can materially inflate false-alarm
 risk for small subgroups, so the preview labels it.
 
 References: https://flaviobarros.github.io/IQCC/reference/cchart.GV.html ; https://flaviobarros.github.io/IQCC/articles/statistical-foundations.html ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/multivariate-charts/generalized-variance-chart/methods-and-formulas/methods-and-formulas-for-generalized-variance-chart/
+
+## D1947 — MEWMA separates exact finite-time scores from limit calibration
+
+`mewma` smooths row-major multivariate individual observations with one
+shared `lambda` in `(0, 1]`, starting at the Phase I/historical mean. The
+sample covariance comes from historical rows for Phase II, or from the plotted
+rows for retrospective Phase I. Each score divides the Cholesky-solved
+quadratic form by the finite-time covariance factor
+`lambda/(2-lambda) * (1-(1-lambda)^(2*i))`; at `lambda = 1`, the scores reduce
+to individual covariance-adjusted squared distances. The caller supplies a
+positive upper limit calibrated for its desired in-control run length; the
+chart does not assert that a chi-square cutoff has that run length. It returns
+smoothed vectors, scores and signals, with shared scene/SVG layers. The
+Windows/Linux fixture checks numeric recurrence, finite-time scaling,
+lambda-one equivalence, Phase I/II reference behavior, singular covariance,
+adapters and refusals. The gallery adds a PNG/SVG pair. In-library ARL limit
+calibration, per-variable lambdas and subgroup means remain planned.
+
+References: https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc343.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/multivariate-charts/multivariate-ewma-chart/methods-and-formulas/methods-and-formulas/

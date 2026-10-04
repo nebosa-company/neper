@@ -5,7 +5,6 @@
 # Cartesian and distribution variants
 
 # Statistical, quality, medical and scientific diagrams
-mewma
 capability_normal
 capability_nonnormal
 capability_attribute

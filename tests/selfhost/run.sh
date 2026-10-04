@@ -3019,6 +3019,11 @@ gfx_chart_generalized_variance_written=$($test_build/neper-self emit-executable 
 chmod +x "$test_build/gfx-chart-generalized-variance-selfhost"
 gfx_chart_generalized_variance_output=$("$test_build/gfx-chart-generalized-variance-selfhost")
 [ "$gfx_chart_generalized_variance_output" = 'gfx chart generalized variance ok' ]
+gfx_chart_mewma_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_mewma/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-mewma-selfhost")
+[ "$gfx_chart_mewma_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-mewma-selfhost"
+gfx_chart_mewma_output=$("$test_build/gfx-chart-mewma-selfhost")
+[ "$gfx_chart_mewma_output" = 'gfx chart mewma ok' ]
 gfx_chart_spine_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_spine_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-spine-plot-selfhost")
 [ "$gfx_chart_spine_plot_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-spine-plot-selfhost"

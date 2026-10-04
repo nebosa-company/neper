@@ -3397,6 +3397,11 @@ $gfxChartGeneralizedVarianceWritten = & $compiler emit-executable (Join-Path $PS
 if ($LASTEXITCODE -ne 0 -or $gfxChartGeneralizedVarianceWritten -ne 'executable written') { throw 'gfx_chart_generalized_variance emission failed' }
 $gfxChartGeneralizedVarianceOutput = & $gfxChartGeneralizedVariancePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartGeneralizedVarianceOutput -ne 'gfx chart generalized variance ok') { throw "the e.gfx.chart generalized variance answered wrongly: exit $LASTEXITCODE" }
+$gfxChartMewmaPath = Join-Path $testBuild 'gfx-chart-mewma-selfhost.exe'
+$gfxChartMewmaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_mewma\src\main.e') $repo 'x64' 'windows' $gfxChartMewmaPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMewmaWritten -ne 'executable written') { throw 'gfx_chart_mewma emission failed' }
+$gfxChartMewmaOutput = & $gfxChartMewmaPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMewmaOutput -ne 'gfx chart mewma ok') { throw "the e.gfx.chart MEWMA answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
 $gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }
