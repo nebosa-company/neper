@@ -1,4 +1,6 @@
 /build/
+# Videos live on YouTube only.
+*.mp4
 /progress-site/
 /.pytest_cache/
 **/__pycache__/

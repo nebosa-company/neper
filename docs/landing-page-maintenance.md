@@ -104,10 +104,11 @@ The editable records are:
 
 Keep Gideon as the voice and the pronunciation note `NEE-per`. When spoken data
 changes, regenerate the affected narration block rather than the whole voiceover,
-record the new job ID, rerender the composition, and replace both published files:
-
-- `docs/gtm/neper-capabilities.mp4`
-- `docs/gtm/neper-capabilities-poster.png`
+record the new job ID, rerender the composition, replace the poster
+`docs/gtm/neper-capabilities-poster.png`, and upload the rebuilt
+`docs/gtm/neper-capabilities.mp4` to YouTube. Videos are published only on
+YouTube (the landing page embeds https://youtu.be/S5dMLUpOtRg); MP4 files are
+ignored by git and never committed.
 
 The Higgsedit project expects the logo and showcase assets as `neper-icon.png`
 and `forge.png`. After rendering, watch the final MP4 from start to finish and
