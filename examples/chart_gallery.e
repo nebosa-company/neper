@@ -1562,6 +1562,71 @@ fn render_monte_carlo_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_aggregate_decomposition_tree_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/aggregate_decomposition_tree.png"
+    let parents = [9]usize{ 0usize, 0usize, 1usize, 1usize, 1usize, 0usize, 5usize, 5usize, 5usize }
+    let weights = [9]f32{ 0.0, 0.0, 36.0, 22.0, 17.0, 0.0, 20.0, 15.0, 10.0 }
+    let names = [9]str{ "All 120", "Digital 75", "Cloud 36", "Apps 22", "Data 17", "Operations 45", "Supply 20", "Field 15", "Support 10" }
+    var totals: [9]f64 = zero
+    var depths: [9]usize = zero
+    var spans: [9]geometry.Rect = zero
+    var cards: [9]geometry.Rect = zero
+    var bars: [9]geometry.Rect = zero
+    var links: [24]chart.Segment = zero
+    let (tree, tree_error) = chart.aggregate_decomposition_tree(parents[..], weights[..], geometry.rect(8.0, 45.0, 344.0, 165.0), totals[..], depths[..], spans[..], cards[..], bars[..], links[..])
+    if tree_error != ok || tree.levels != 3usize || tree.leaves != 6usize || totals[0usize] != 120.0f64 { ret chart.Invalid }
+    let navy = paint.rgba(0.15, 0.30, 0.53, 1.0)
+    let blue = paint.rgba(0.18, 0.44, 0.75, 1.0)
+    let teal = paint.rgba(0.13, 0.54, 0.49, 1.0)
+    let gold = paint.rgba(0.96, 0.79, 0.32, 1.0)
+    let gray = paint.rgba(0.54, 0.61, 0.70, 1.0)
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    var labels: [11]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Aggregate decomposition tree", anchor: chart.Coord { x: 180.0, y: 23.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Leaf values roll up; bars show share of parent", anchor: chart.Coord { x: 180.0, y: 233.0 }, align: .Center }
+    var i = 0usize
+    while i < cards.len {
+        labels[2usize + i] = chart.Label { text: names[i], anchor: chart.Coord { x: cards[i].x + cards[i].width * 0.5, y: cards[i].y + cards[i].height * 0.5 + 1.0 }, align: .Center }
+        i += 1usize
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 80usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &tree.connectors, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &tree.nodes, paint.Brush { Solid: teal })
+    try fill(&builder, cards[0usize], paint.Brush { Solid: navy })
+    try fill(&builder, cards[1usize], paint.Brush { Solid: blue })
+    try fill(&builder, cards[5usize], paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &tree.value_bars, paint.Brush { Solid: gold })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..], font, 7.0, paint.Brush { Solid: white })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &tree.connectors, gray)
+    try chart_svg.append(&writer, &tree.nodes, teal)
+    try chart_svg.rect(&writer, cards[0usize], navy, false)
+    try chart_svg.rect(&writer, cards[1usize], blue, false)
+    try chart_svg.rect(&writer, cards[5usize], blue, false)
+    try chart_svg.append(&writer, &tree.value_bars, gold)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[2usize..], white, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_sipoc_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/sipoc.png"
     let plot = geometry.rect(13.0, 49.0, 334.0, 171.0)
@@ -9940,6 +10005,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_yield_curve_preview(a, queue, output_target, canvas, &renderer)
     try render_monte_carlo_preview(a, queue, output_target, canvas, &renderer, false)
     try render_monte_carlo_preview(a, queue, output_target, canvas, &renderer, true)
+    try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_org_chart_preview(a, queue, output_target, canvas, &renderer)

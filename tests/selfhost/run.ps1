@@ -3282,6 +3282,11 @@ $gfxChartMonteCarloWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $gfxChartMonteCarloWritten -ne 'executable written') { throw 'gfx_chart_monte_carlo emission failed' }
 $gfxChartMonteCarloOutput = & $gfxChartMonteCarloPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartMonteCarloOutput -ne 'gfx chart monte carlo ok') { throw "the e.gfx.chart Monte Carlo distribution answered wrongly: exit $LASTEXITCODE" }
+$gfxChartAggregateTreePath = Join-Path $testBuild 'gfx-chart-aggregate-tree-selfhost.exe'
+$gfxChartAggregateTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_aggregate_tree\src\main.e') $repo 'x64' 'windows' $gfxChartAggregateTreePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAggregateTreeWritten -ne 'executable written') { throw 'gfx_chart_aggregate_tree emission failed' }
+$gfxChartAggregateTreeOutput = & $gfxChartAggregateTreePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAggregateTreeOutput -ne 'gfx chart aggregate tree ok') { throw "the e.gfx.chart aggregate decomposition tree answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

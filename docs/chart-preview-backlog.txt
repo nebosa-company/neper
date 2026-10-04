@@ -9,7 +9,6 @@
 # Geographic and reporting
 
 # Operations, finance and network diagrams
-aggregate_decomposition_tree
 
 # Additional ggplot-style compositions and engine acceptance previews
 date_axis_line

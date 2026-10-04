@@ -34957,3 +34957,17 @@ PCG toy model for reproducible paired PNG/SVG previews; it does not assert
 forecast uncertainty or model calibration. EPA guidance discusses presenting
 Monte Carlo output as histogram and CDF:
 https://nepis.epa.gov/Exe/ZyPURL.cgi?Dockey=30004ZGL.TXT.
+
+## D1969 — Decomposition trees retain explicit aggregate semantics
+
+`chart.aggregate_decomposition_tree` accepts a depth-first-preorder parent
+hierarchy and nonnegative leaf measures. The existing hierarchy roll-up
+calculates every internal value exactly before layout; each node bar represents
+its share of its immediate parent's aggregate, while the root bar is full.
+Caller-owned arrays hold totals, card geometry, bars and connectors for the
+scene and SVG adapters. Invalid topology, internal weights and undersized
+scratch or panels fail explicitly. This is a static, deterministic visual;
+interactive drill, field choice and AI-assisted splitting remain separate
+future capabilities. The visual's measure-and-dimension framing follows
+Microsoft's decomposition-tree description:
+https://learn.microsoft.com/en-us/power-bi/visuals/power-bi-visualization-decomposition-tree.

@@ -88,6 +88,7 @@ type OrgLink = struct { manager: usize, report: usize }
 type OrgPlacement = struct { depth: usize, leaf_start: usize, leaf_count: usize, direct_reports: usize }
 type OrgWork = struct { indegree: []usize, head: []usize, next: []usize, order: []usize }
 type OrgLayout = struct { nodes: Layout, connectors: Layout, levels: usize, leaves: usize }
+type AggregateTreeLayout = struct { nodes: Layout, value_bars: Layout, connectors: Layout, levels: usize, leaves: usize }
 type DependencyLink = struct { from: usize, to: usize }
 type DependencyWork = struct { indegree: []usize, head: []usize, next: []usize, order: []usize, stage: []usize, stage_counts: []usize, stage_used: []usize }
 type DependencyLayout = struct { nodes: Layout, connectors: Layout, stages: usize, sources: usize }
@@ -5588,6 +5589,95 @@ fn hierarchy_totals(parents: []const usize, weights: []const f32, totals: []f64)
     }
     if !(totals[0usize] > 0.0f64) { ret Invalid }
     ret ok
+}
+
+// A static measure decomposition. Nodes are in depth-first preorder, root 0
+// names itself, and only leaves carry nonnegative measure values. Each card's
+// bar shows its fraction of its parent's rolled-up total (root: full bar).
+fn aggregate_decomposition_tree(parents: []const usize, weights: []const f32, bounds: geometry.Rect, totals: []f64, depths: []usize, spans: []geometry.Rect, cards: []geometry.Rect, value_bars: []geometry.Rect, connectors: []Segment) -> (AggregateTreeLayout, err) {
+    if !valid_bounds(bounds) { ret (zero, Invalid) }
+    let total_error = hierarchy_totals(parents, weights, totals)
+    if total_error != ok { ret (zero, total_error) }
+    let n = parents.len
+    if depths.len < n || spans.len < n || cards.len < n || value_bars.len < n || connectors.len / 3usize < n - 1usize { ret (zero, TooLarge) }
+    depths[0usize] = 0usize
+    var levels = 1usize
+    var leaves = 0usize
+    var i = 0usize
+    while i < n {
+        if i > 0usize {
+            // A depth-first preorder keeps every subtree's leaf interval
+            // contiguous, so the caller can label parents at its midpoint.
+            var ancestor = i - 1usize
+            while ancestor > parents[i] { ancestor = parents[ancestor] }
+            if ancestor != parents[i] { ret (zero, Invalid) }
+            depths[i] = depths[parents[i]] + 1usize
+            if depths[i] + 1usize > levels { levels = depths[i] + 1usize }
+        }
+        spans[i] = geometry.rect(0.0, 0.0, 0.0, 0.0)
+        var child = false
+        var j = i + 1usize
+        while j < n {
+            if parents[j] == i { child = true }
+            j += 1usize
+        }
+        if !child {
+            spans[i] = geometry.rect(0.0, f32(leaves), 0.0, 1.0)
+            leaves += 1usize
+        }
+        i += 1usize
+    }
+    i = n
+    while i > 1usize {
+        i -= 1usize
+        let p = parents[i]
+        if spans[p].height == 0.0 {
+            spans[p] = spans[i]
+        } else {
+            let top = spans[p].y
+            var low = spans[i].y
+            if top < low { low = top }
+            var high = spans[p].y + spans[p].height
+            let child_high = spans[i].y + spans[i].height
+            if child_high > high { high = child_high }
+            spans[p] = geometry.rect(0.0, low, 0.0, high - low)
+        }
+    }
+    let column = bounds.width / f32(levels)
+    let row = bounds.height / f32(leaves)
+    var card_width = column * 0.72
+    if card_width > 116.0 { card_width = 116.0 }
+    var card_height = row * 0.65
+    if card_height > 38.0 { card_height = 38.0 }
+    if !finite(column) || !finite(row) || column < 56.0 || row < 20.0 || !finite(card_width) || !finite(card_height) { ret (zero, TooLarge) }
+    i = 0usize
+    while i < n {
+        let x = bounds.x + f32(depths[i]) * column + (column - card_width) * 0.5
+        let y = bounds.y + (spans[i].y + spans[i].height * 0.5) * row - card_height * 0.5
+        if !finite(x + card_width) || !finite(y + card_height) { ret (zero, Invalid) }
+        cards[i] = geometry.rect(x, y, card_width, card_height)
+        var ratio = 1.0f64
+        if i > 0usize { ratio = totals[i] / totals[parents[i]] }
+        if !finite64(ratio) || ratio < 0.0f64 || ratio > 1.0f64 { ret (zero, Invalid) }
+        value_bars[i] = geometry.rect(x + 4.0, y + card_height - 6.0, (card_width - 8.0) * f32(ratio), 3.0)
+        if i > 0usize {
+            let parent_card = cards[parents[i]]
+            let x0 = parent_card.x + parent_card.width
+            let x1 = x
+            let y0 = parent_card.y + parent_card.height * 0.5
+            let y1 = y + card_height * 0.5
+            let middle = (x0 + x1) * 0.5
+            let first = (i - 1usize) * 3usize
+            connectors[first] = Segment { from: Coord { x: x0, y: y0 }, to: Coord { x: middle, y: y0 } }
+            connectors[first + 1usize] = Segment { from: Coord { x: middle, y: y0 }, to: Coord { x: middle, y: y1 } }
+            connectors[first + 2usize] = Segment { from: Coord { x: middle, y: y1 }, to: Coord { x: x1, y: y1 } }
+        }
+        i += 1usize
+    }
+    let nodes = Layout { kind: .Bar, coords: zero, segments: zero, bars: cards[..n], x_min: 0.0, x_max: f32(levels), y_min: 0.0, y_max: f32(leaves) }
+    let bars = Layout { kind: .Bar, coords: zero, segments: zero, bars: value_bars[..n], x_min: 0.0, x_max: f32(levels), y_min: 0.0, y_max: f32(leaves) }
+    let lines = Layout { kind: .Rug, coords: zero, segments: connectors[..(n - 1usize) * 3usize], bars: zero, x_min: 0.0, x_max: f32(levels), y_min: 0.0, y_max: f32(leaves) }
+    ret (AggregateTreeLayout { nodes: nodes, value_bars: bars, connectors: lines, levels: levels, leaves: leaves }, ok)
 }
 
 // Every node gets a rectangle, while only leaves get a Bar layer.

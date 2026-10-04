@@ -929,6 +929,12 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
    Windows/Linux fixture checks endpoint bins, sorted values, CDF steps,
    threshold arithmetic, adapters and refusals. A seeded PCG toy model in
    the gallery renders histogram and CDF PNG/SVG pairs from the same draws.
+   `aggregate_decomposition_tree` rolls nonnegative leaf measures up through a
+   depth-first-preorder hierarchy, then lays out labeled cards left to right
+   with bars proportional to each node's parent total. Root and child totals
+   remain caller-visible; no interactive drill or automatic explanatory split
+   is implied. The Windows/Linux fixture checks roll-ups, geometry, relative
+   bars, scene/SVG adapters and refusals; the gallery adds a PNG/SVG pair.
    Bullet charts now compose qualitative bands, an actual bar and a target
    rule from existing layers; `gfx_chart_composition` checks geometry,
    refusals and both adapters on Windows and Linux.
