@@ -1303,6 +1303,11 @@ algo_stat_diagnostic_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$algo_stat_diagnostic_written" = 'executable written' ]
 chmod +x "$test_build/algo-stat-diagnostic-selfhost"
 "$test_build/algo-stat-diagnostic-selfhost"
+# `e.algo.stat.meta` (L006): effect sizes, fixed/random pooling with heterogeneity, subgroup Q and a dose meta-regression, plus refusals.
+algo_stat_meta_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_meta/src/main.e" "$repo" x64 linux "$test_build/algo-stat-meta-selfhost")
+[ "$algo_stat_meta_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-meta-selfhost"
+"$test_build/algo-stat-meta-selfhost"
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 algo_graph_flow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_flow/src/main.e" "$repo" x64 linux "$test_build/algo-graph-flow-selfhost")
 [ "$algo_graph_flow_written" = 'executable written' ]

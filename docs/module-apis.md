@@ -3268,6 +3268,36 @@ exact Clopper-Pearson intervals for the proportions and log-method intervals
 for the likelihood ratios and the odds ratio. Empty denominators and boundary
 sensitivities/specificities are `Invalid` rather than silent corrections.
 
+### `e.algo.stat.meta`
+
+```neper
+type Effect = struct { estimate: f64, variance: f64 }
+type Pooled = struct { estimate: f64, se: f64, low: f64, high: f64 }
+error TooSmall
+error Singular
+error Invalid
+
+fn log_odds_ratio(a: u64, b: u64, c: u64, d: u64) -> (Effect, err)
+fn log_risk_ratio(a: u64, b: u64, c: u64, d: u64) -> (Effect, err)
+fn cohen_d(m1: f64, sd1: f64, n1: u64, m2: f64, sd2: f64, n2: u64) -> (Effect, err)
+fn hedges_g(m1: f64, sd1: f64, n1: u64, m2: f64, sd2: f64, n2: u64) -> (Effect, err)
+fn fisher_z(r: f64, n: u64) -> (Effect, err)
+fn fixed_pool(estimates: []const f64, variances: []const f64, n: usize) -> (Pooled, err)
+fn q_statistic(estimates: []const f64, variances: []const f64, n: usize, pooled: f64) -> (f64, err)
+fn tau_squared_dl(q: f64, variances: []const f64, n: usize) -> (f64, err)
+fn i_squared(q: f64, df: usize) -> f64
+fn q_between(q_total: f64, q_subs: []const f64, groups: usize) -> (f64, err)
+fn random_pool(estimates: []const f64, variances: []const f64, n: usize, tau2: f64) -> (Pooled, err)
+fn meta_solve(matrix: []f64, rhs: []f64, p: usize) -> err
+fn meta_regression(estimates: []const f64, variances: []const f64, x: []const f64, n: usize, p: usize, tau2: f64, beta: []f64, covariance: []f64, scratch: []f64) -> err
+```
+
+Meta-analysis core over caller slices: log odds-ratio, log risk-ratio,
+Cohen-d, Hedges-g and Fisher-z effects with sampling variances,
+inverse-variance fixed and DerSimonian-Laird random pooling, Cochran's Q,
+I-squared, DerSimonian-Laird tau-squared, between-subgroup Q, and
+weighted-least-squares meta-regression over a caller-built design.
+
 ### `e.algo.stat`
 
 ```neper

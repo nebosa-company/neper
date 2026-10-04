@@ -1405,6 +1405,12 @@ $algoStatDiagnosticWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $algoStatDiagnosticWritten -ne 'executable written') { throw 'algo_stat_diagnostic emission failed' }
 & $algoStatDiagnosticPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_stat_diagnostic check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.meta` (L006): effect sizes, fixed/random pooling with heterogeneity, subgroup Q and a dose meta-regression, plus refusals.
+$algoStatMetaPath = Join-Path $testBuild 'algo-stat-meta-selfhost.exe'
+$algoStatMetaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_meta\src\main.e') $repo 'x64' 'windows' $algoStatMetaPath
+if ($LASTEXITCODE -ne 0 -or $algoStatMetaWritten -ne 'executable written') { throw 'algo_stat_meta emission failed' }
+& $algoStatMetaPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_meta check failed: exit $LASTEXITCODE" }
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 $algoGraphFlowPath = Join-Path $testBuild 'algo-graph-flow-selfhost.exe'
 $algoGraphFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_flow\src\main.e') $repo 'x64' 'windows' $algoGraphFlowPath
