@@ -2,7 +2,7 @@
   <rect width="1200" height="630" fill="#0c0e14"/>
   <rect x="60" y="60" width="1080" height="510" rx="28" fill="none" stroke="#39475f" stroke-width="2"/>
   <text x="120" y="180" font-family="Segoe UI, system-ui, sans-serif" font-size="44" fill="#8d909e" letter-spacing="2">BLOG // LIBRARY</text>
-  <text x="120" y="280" font-family="Segoe UI, system-ui, sans-serif" font-size="84" font-weight="600" fill="#ffffff">233 charts,</text>
+  <text x="120" y="280" font-family="Segoe UI, system-ui, sans-serif" font-size="84" font-weight="600" fill="#ffffff">234 charts,</text>
   <text x="120" y="380" font-family="Segoe UI, system-ui, sans-serif" font-size="84" font-weight="600" fill="#ffffff">when to use each</text>
   <text x="120" y="460" font-family="Cascadia Code, Consolas, monospace" font-size="36" fill="#b3c5ff">e.gfx.chart &#183; PNG &#183; SVG &#183; e.ui</text>
   <text x="120" y="515" font-family="Cascadia Code, Consolas, monospace" font-size="36" fill="#ffb692">19 families &#183; every one drawn by Neper</text>

@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>233 charts, and when to use each — Neper blog</title>
-  <meta name="description" content="A field guide to every chart Neper&#x27;s e.gfx.chart can draw: what question each one answers, when to pick it over its neighbours, and when not to. Every picture below was rendered by Neper.">
+  <title>234 charts, and when to use each — Neper blog</title>
+  <meta name="description" content="A field guide to every chart Neper&#x27;s e.gfx.chart can draw: what question each one answers, when to pick it over its neighbours, and when not to, with speed measured against matplotlib. Every picture below was rendered by Neper.">
   <link rel="canonical" href="https://neper.dev/blog/charts-field-guide.html">
   <meta name="theme-color" content="#145db2">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Neper">
-  <meta property="og:title" content="233 charts, and when to use each">
-  <meta property="og:description" content="A field guide to every chart Neper&#x27;s e.gfx.chart can draw: what question each one answers, when to pick it over its neighbours, and when not to. Every picture below was rendered by Neper.">
+  <meta property="og:title" content="234 charts, and when to use each">
+  <meta property="og:description" content="A field guide to every chart Neper&#x27;s e.gfx.chart can draw: what question each one answers, when to pick it over its neighbours, and when not to, with speed measured against matplotlib. Every picture below was rendered by Neper.">
   <meta property="og:url" content="https://neper.dev/blog/charts-field-guide.html">
   <meta property="og:image" content="https://neper.dev/blog/img/charts-field-guide.svg">
   <meta property="article:published_time" content="2026-10-04">
@@ -151,10 +151,11 @@
 
     <article>
       <div class="eyebrow">&gt; blog // library</div>
-      <h1>233 charts, and when to use each</h1>
-      <p class="meta">October 4, 2026 · <code>e.gfx.chart</code>, <code>e.gfx.chart.scene</code>, <code>e.gfx.chart.svg</code>, <code>e.gfx.chart.locale</code>, <code>e.gfx.chart.widget</code></p>
-      <img class="banner" src="img/charts-field-guide.svg" width="1200" height="630" alt="233 charts, and when to use each: bars, lines, distributions, control charts, maps and diagrams, all drawn by Neper.">
-      <p class="lede">Neper's chart library now draws 233 kinds of chart, from a bar chart to a Laney u′ control chart, a Kaplan-Meier curve, a Sankey diagram and a Nyquist plot. That is too many to pick from by scrolling. This post is the guide we wanted ourselves: each chart, the question it answers, and when to reach for something else instead.</p>
+      <h1>234 charts, and when to use each</h1>
+      <p class="meta">October 4, 2026 · <code>e.gfx.chart</code>, <code>e.gfx.chart.scene</code>, <code>e.gfx.chart.svg</code>, <code>e.gfx.chart.pdf</code>, <code>e.gfx.chart.locale</code>, <code>e.gfx.chart.widget</code></p>
+      <p class="meta">Updated October 4, 2026: PDF export, and <a href="#speed">speed measured against matplotlib</a>.</p>
+      <img class="banner" src="img/charts-field-guide.svg" width="1200" height="630" alt="234 charts, and when to use each: bars, lines, distributions, control charts, maps and diagrams, all drawn by Neper.">
+      <p class="lede">Neper's chart library now draws 234 kinds of chart, from a bar chart to a Laney u′ control chart, a Kaplan-Meier curve, a Sankey diagram and a Nyquist plot. That is too many to pick from by scrolling. This post is the guide we wanted ourselves: each chart, the question it answers, and when to reach for something else instead.</p>
       <p>Every picture here was rendered by Neper itself, by <code>examples/chart_gallery.e</code> through the CPU scene renderer and PNG encoder, and each has an SVG twin streamed from the same layout. Behind the gallery, 156 test programs check the geometry, statistics and refusal paths on Windows and on Linux.</p>
       <h2>How the library is built</h2>
       <p>A chart in <code>e.gfx.chart</code> is a layout, not a picture. You hand it borrowed columns of numbers and caller-owned storage; it fills that storage with renderer-neutral marks (points, segments, rectangles, polygons, labels) and never allocates on its own. The same marks then go wherever you need them:</p>
@@ -162,6 +163,7 @@
         <li><code>e.gfx.chart.scene</code> draws them into a scene for the CPU or GPU renderer, and from there into a PNG;</li>
         <li><code>e.gfx.chart.svg</code> streams them as SVG, with gradients, embedded fonts and accessible titles;</li>
         <li><code>e.gfx.chart.widget</code> puts them in an <code>e.ui</code> canvas, laid out again at whatever size the window gives it;</li>
+        <li><code>e.gfx.chart.pdf</code> writes them as a vector PDF page, with Helvetica text and nothing embedded;</li>
         <li><code>e.gfx.chart.locale</code> writes tick labels in the reader's number and date conventions.</li>
       </ul>
       <p>Here is a whole program: six bars, the library's accessible palette, a colour-blindness check of that palette, and an SVG file. We compiled and ran it on Windows and on Linux, and both printed exactly this.</p>
@@ -208,6 +210,24 @@ closest pair, typical vision: 1 and 5, CIEDE2000 10.082577076760705
 closest pair, deuteranopia:   0 and 3, CIEDE2000 1.219605253081527
 wrote revenue.svg: 836 bytes</code></pre>
       <p>The last two lines carry a real lesson. The palette keeps every series colour at 4.5:1 contrast against white, and for typical vision its closest pair is still clearly different. For a reader with deuteranopia, though, series 0 (blue) and 3 (purple) are barely distinguishable. Contrast is not colour-blind safety, which is why the previews label series directly instead of relying on a colour legend.</p>
+      <h2 id="speed">How fast is it?</h2>
+      <p>We timed one realistic chart in Neper and in matplotlib: a 1,000-point line, 200 square markers, a y grid with tick labels and a title at 360×240 pixels, built from the same data. Each pass draws 200 charts and writes them to memory as SVG and as PNG. matplotlib uses its Agg backend and a new figure per chart, as a reporting script would, and keeps SVG text as text, as Neper does. The times are medians of nine runs on one Windows laptop (Intel Core i5-12500H, Python 3.12.10, matplotlib 3.9.4).</p>
+      <div class="table-scroll"><table><thead><tr><th>Per chart</th><th>Neper</th><th>matplotlib</th><th>Faster</th></tr></thead><tbody>
+        <tr><td>SVG</td><td class="rank-1">2.62 ms</td><td>16.02 ms</td><td>Neper, 6.1×</td></tr>
+        <tr><td>PNG</td><td>20.28 ms</td><td class="rank-1">17.68 ms</td><td>matplotlib, 1.15×</td></tr>
+        <tr><td>Layout only</td><td>0.16 ms</td><td>–</td><td></td></tr>
+        <tr><td>Rasterize only, no encoding</td><td>2.00 ms</td><td>–</td><td></td></tr>
+        <tr><td>SVG / PNG file size</td><td>62.0 / 14.0 KB</td><td>44.4 / 11.2 KB</td><td></td></tr>
+        <tr><td>Whole run, both passes</td><td>5.0 s</td><td>7.6 s</td><td>matplotlib import: 0.55 s</td></tr>
+      </tbody></table></div>
+      <figure><img src="img/charts/benchmark_matplotlib.webp" width="360" height="240" loading="lazy" decoding="async" alt="Grouped bar chart of milliseconds per chart: SVG 2.62 for Neper against 16.02 for matplotlib; PNG 20.28 against 17.68." style="max-width: 540px; background: #fff"><figcaption>The same results, drawn by Neper's grouped bar chart.</figcaption></figure>
+      <p>We report both results, because one of them is a loss.</p>
+      <ul>
+        <li><strong>SVG is 6.1× faster.</strong> This is where the design pays off: borrowed columns are laid out into caller-owned storage in 0.16 ms and streamed straight to the writer, with no figure object model to build and tear down for every chart.</li>
+        <li><strong>PNG is 15% slower.</strong> The renderer is not the problem: it rasterizes a chart in 2.0 ms. The other 18 ms is the PNG encoder's deflate, the next thing we will make faster. Neper's PNGs are also about 25% larger.</li>
+        <li><strong>Neper's SVG files are larger</strong> (62 KB against 44 KB) because they write every coordinate at full float precision, where matplotlib rounds.</li>
+      </ul>
+      <p>The same Neper program on Linux (WSL) runs within a few percent of these times and writes byte-identical files. Not measured: ggplot2, base R graphics and lattice, which need an R installation this machine does not have, and matplotlib on Linux. The harness is in <code>benchmarks/charts</code>: <code>python benchmarks/charts/run.py &lt;neper-self&gt; 9</code> builds the Neper side, runs both nine times and writes the medians to <code>results/</code>. Single runs on this shared machine varied by up to half, which is why the table uses medians.</p>
       <h2>Start from the question</h2>
       <p>Most bad charts are good charts answering the wrong question. Decide what you want the reader to see, then pick from the matching family:</p>
       <div class="table-scroll"><table><thead><tr><th>If the question is…</th><th>Start with</th><th>Family</th></tr></thead><tbody>
@@ -257,7 +277,7 @@ wrote revenue.svg: 836 bytes</code></pre>
         <li><a href="#signals">Signals, fields and dynamics</a> <span class="count">(10)</span></li>
         <li><a href="#maps">Maps</a> <span class="count">(2)</span></li>
         <li><a href="#threed">3-D</a> <span class="count">(4)</span></li>
-        <li><a href="#engine">Composition, layout and accessibility</a> <span class="count">(13)</span></li>
+        <li><a href="#engine">Composition, layout and accessibility</a> <span class="count">(14)</span></li>
       </ul>
       <h2 id="amounts">Comparing amounts and ranks</h2>
       <p>Use these when the question is "how much, and which is bigger?" Position along a common baseline is what the eye judges best, so a plain bar or dot beats anything round or three-dimensional for exact comparison. Sort the categories unless their order means something.</p>
@@ -581,14 +601,16 @@ wrote revenue.svg: 836 bytes</code></pre>
         <figure class="chart-card" id="color_vision"><img src="img/charts/color_vision.webp" width="360" height="240" loading="lazy" decoding="async" alt="Colour-vision check rendered by Neper"><h3>Colour-vision check</h3><p>The palette as seen with protanopia, deuteranopia and tritanopia, with the closest pair's CIEDE2000 difference.</p></figure>
         <figure class="chart-card" id="gradient_font"><img src="img/charts/gradient_font.webp" width="360" height="240" loading="lazy" decoding="async" alt="Gradients and embedded fonts rendered by Neper"><h3>Gradients and embedded fonts</h3><p>Gradient fills shared by the PNG and the SVG, with the font embedded in the SVG.</p></figure>
         <figure class="chart-card" id="ui_canvas"><img src="img/charts/ui_canvas.webp" width="360" height="240" loading="lazy" decoding="async" alt="Chart in an e.ui canvas rendered by Neper"><h3>Chart in an e.ui canvas</h3><p>A chart hosted by the UI toolkit, laid out at whatever size the window gives it.</p></figure>
+        <figure class="chart-card" id="pdf_export"><img src="img/charts/pdf_export.webp" width="360" height="240" loading="lazy" decoding="async" alt="PDF export rendered by Neper"><h3>PDF export</h3><p>The same layout as a vector PDF page for reports and print, beside the PNG and SVG; text is the built-in Helvetica, so nothing is embedded.</p></figure>
       </div>
       <h2>What is not there yet</h2>
       <p>The gallery is complete against its plan, but the library is not finished. Still open:</p>
       <ul>
-        <li>a PDF adapter (PNG, SVG and the e.ui canvas exist today);</li>
+        <li>a faster PNG encoder: drawing a chart takes 2 ms, deflate takes the other 18 (see <a href="#speed">the benchmark</a>);</li>
+        <li>embedded fonts and compression in PDF output;</li>
         <li>font subsetting for embedded SVG fonts (the whole font is embedded now);</li>
         <li>leader lines for labels that do not fit, and pointer events on charts in the UI;</li>
-        <li>published benchmarks against ggplot2 and matplotlib.</li>
+        <li>comparisons with ggplot2, base R graphics and lattice, which need an R installation we did not have.</li>
       </ul>
       <p>The charts above that do statistics (capability, Weibull, dose response, the control-chart limits) compute what their captions say and no more. Where a parameter is supplied rather than estimated, the preview says so in its footer. A chart is a view of an analysis, not a substitute for one.</p>
       <div class="try-cta">
