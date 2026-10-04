@@ -3019,6 +3019,11 @@ gfx_chart_svg_paint_written=$($test_build/neper-self emit-executable "$repo/test
 chmod +x "$test_build/gfx-chart-svg-paint-selfhost"
 gfx_chart_svg_paint_output=$("$test_build/gfx-chart-svg-paint-selfhost")
 [ "$gfx_chart_svg_paint_output" = 'gfx chart svg paint ok' ]
+gfx_chart_color_vision_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_color_vision/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-color-vision-selfhost")
+[ "$gfx_chart_color_vision_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-color-vision-selfhost"
+gfx_chart_color_vision_output=$("$test_build/gfx-chart-color-vision-selfhost")
+[ "$gfx_chart_color_vision_output" = 'gfx chart color vision ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"

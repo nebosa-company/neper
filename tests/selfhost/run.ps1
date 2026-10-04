@@ -3408,6 +3408,11 @@ $gfxChartSvgPaintWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $gfxChartSvgPaintWritten -ne 'executable written') { throw 'gfx_chart_svg_paint emission failed' }
 $gfxChartSvgPaintOutput = & $gfxChartSvgPaintPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSvgPaintOutput -ne 'gfx chart svg paint ok') { throw "the e.gfx.chart SVG paint answered wrongly: exit $LASTEXITCODE" }
+$gfxChartColorVisionPath = Join-Path $testBuild 'gfx-chart-color-vision-selfhost.exe'
+$gfxChartColorVisionWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_color_vision\src\main.e') $repo 'x64' 'windows' $gfxChartColorVisionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartColorVisionWritten -ne 'executable written') { throw 'gfx_chart_color_vision emission failed' }
+$gfxChartColorVisionOutput = & $gfxChartColorVisionPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartColorVisionOutput -ne 'gfx chart color vision ok') { throw "the e.gfx.chart colour-vision simulation answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

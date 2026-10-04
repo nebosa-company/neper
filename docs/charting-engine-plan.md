@@ -1090,6 +1090,18 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 ## How Neper can beat the reference tools
 
+`simulate_color_vision` applies the Vienot-Brettel-Mollon dichromat model
+(protan, deutan, tritan) with a linear-RGB severity blend; `color_lab` and
+`ciede2000` measure colour differences; `palette_separation` reports the
+closest pair of a palette as a given viewer sees it. Checking the accessible
+palette this way shows it keeps ~10 CIEDE2000 for typical vision but only 1.2
+for deuteranopes, so contrast does not imply colour-blind safety and labels
+remain required. The `color_vision` PNG/SVG pair shows the four rows;
+`gfx_chart_color_vision` checks Sharma's CIEDE2000 pairs, CIELAB, simulated
+colours and separations against NumPy/scikit-image references and refusals on
+Windows and Linux, and the doc test re-simulates the SVG swatches from the LMS
+model. Anomalous-trichromacy tables (Machado 2009) remain open.
+
 `chart.svg.append_brush` gives the SVG adapter the brush parity the scene
 adapter already had: `gradient` writes a linear or radial gradient in user
 space with the rasterizer's pad and stop interpolation, and every mark of the

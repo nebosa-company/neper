@@ -20,6 +20,9 @@ use e.time
 type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, SlopeGraph, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble, Pp, Mosaic, Association }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type BinaryMetric = enum u8 { Roc, PrecisionRecall, CumulativeGain, Lift }
+type ColorVision = enum u8 { Typical, Protan, Deutan, Tritan }
+type Lab = struct { l: f64, a: f64, b: f64 }
+type PaletteSeparation = struct { difference: f64, first: usize, second: usize }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
 type Tick = struct { value: f32, fraction: f32 }
 type DateTick = struct { date: time.Date, fraction: f32 }
@@ -393,6 +396,140 @@ fn accessible_palette(background: paint.Color, out: []paint.Color) -> ([]paint.C
         i += 1usize
     }
     ret (out[..seeds.len], ok)
+}
+
+fn srgb_linear64(c: f32) -> f64 {
+    let v = f64(c)
+    if v <= 0.04045f64 { ret v / 12.92f64 }
+    ret math.pow[f64]((v + 0.055f64) / 1.055f64, 2.4f64)
+}
+
+// Dichromat simulation after Vienot, Brettel and Mollon (1999): linear RGB to
+// Hunt-Pointer-Estevez LMS, the missing cone response replaced by the plane
+// through white and blue (protan, deutan) or white and red (tritan), and back.
+// Each kind folds into one linear-RGB matrix; scripts/chart_cvd_reference.py derives
+// them. Severity below 1 blends toward the original in linear RGB, the usual
+// approximation for anomalous trichromacy. Tritan is the least accurate of
+// the three in this model.
+fn simulate_color_vision(color: paint.Color, vision: ColorVision, severity: f32) -> (paint.Color, err) {
+    if !paint.color_ok(color) || !(severity >= 0.0 && severity <= 1.0) { ret (zero, Invalid) }
+    if vision == .Typical || severity == 0.0 { ret (color, ok) }
+    var m = [9]f64{ 0.11238292f64, 0.88761708f64, 0.0f64, 0.11238292f64, 0.88761708f64, 0.0f64, 0.004005757f64, -0.004005757f64, 1.0f64 }
+    if vision == .Deutan {
+        m = [9]f64{ 0.292750016f64, 0.707249984f64, 0.0f64, 0.292750016f64, 0.707249984f64, 0.0f64, -0.022336501f64, 0.022336501f64, 1.0f64 }
+    } else if vision == .Tritan {
+        m = [9]f64{ 1.0f64, 0.144613171f64, -0.144613171f64, 0.0f64, 0.859235494f64, 0.140764506f64, 0.0f64, 0.859235494f64, 0.140764506f64 }
+    }
+    let r = srgb_linear64(color.red)
+    let g = srgb_linear64(color.green)
+    let b = srgb_linear64(color.blue)
+    let s = f64(severity)
+    let red = r + (m[0usize] * r + m[1usize] * g + m[2usize] * b - r) * s
+    let green = g + (m[3usize] * r + m[4usize] * g + m[5usize] * b - g) * s
+    let blue = b + (m[6usize] * r + m[7usize] * g + m[8usize] * b - b) * s
+    ret (paint.rgba(paint.linear_to_srgb(f32(red)), paint.linear_to_srgb(f32(green)), paint.linear_to_srgb(f32(blue)), color.alpha), ok)
+}
+
+fn lab_f(t: f64) -> f64 {
+    if t > 0.008856451679035631f64 { ret math.pow[f64](t, 1.0f64 / 3.0f64) }
+    ret t / 0.12841854934601665f64 + 4.0f64 / 29.0f64
+}
+
+// CIELAB under D65 of an sRGB colour (alpha ignored).
+fn color_lab(color: paint.Color) -> (Lab, err) {
+    if !paint.color_ok(color) { ret (zero, Invalid) }
+    let r = srgb_linear64(color.red)
+    let g = srgb_linear64(color.green)
+    let b = srgb_linear64(color.blue)
+    let x = lab_f((0.4124564f64 * r + 0.3575761f64 * g + 0.1804375f64 * b) / 0.95047f64)
+    let y = lab_f(0.2126729f64 * r + 0.7151522f64 * g + 0.0721750f64 * b)
+    let z = lab_f((0.0193339f64 * r + 0.1191920f64 * g + 0.9503041f64 * b) / 1.08883f64)
+    ret (Lab { l: 116.0f64 * y - 16.0f64, a: 500.0f64 * (x - y), b: 200.0f64 * (y - z) }, ok)
+}
+
+fn hue_degrees(b: f64, a: f64) -> f64 {
+    if a == 0.0f64 && b == 0.0f64 { ret 0.0f64 }
+    var h = math.atan2[f64](b, a) * 180.0f64 / 3.141592653589793f64
+    if h < 0.0f64 { h += 360.0f64 }
+    ret h
+}
+
+fn radians(degrees: f64) -> f64 { ret degrees * 3.141592653589793f64 / 180.0f64 }
+
+// CIEDE2000 colour difference (Sharma, Wu and Dalal 2005), kL = kC = kH = 1.
+fn ciede2000(first: Lab, second: Lab) -> f64 {
+    let pow25 = 6103515625.0f64
+    let c1 = math.sqrt[f64](first.a * first.a + first.b * first.b)
+    let c2 = math.sqrt[f64](second.a * second.a + second.b * second.b)
+    let c_mean7 = math.pow[f64]((c1 + c2) / 2.0f64, 7.0f64)
+    let g = 0.5f64 * (1.0f64 - math.sqrt[f64](c_mean7 / (c_mean7 + pow25)))
+    let a1 = (1.0f64 + g) * first.a
+    let a2 = (1.0f64 + g) * second.a
+    let c1p = math.sqrt[f64](a1 * a1 + first.b * first.b)
+    let c2p = math.sqrt[f64](a2 * a2 + second.b * second.b)
+    let h1 = hue_degrees(first.b, a1)
+    let h2 = hue_degrees(second.b, a2)
+    var dh = 0.0f64
+    var h_mean = h1 + h2
+    if c1p * c2p != 0.0f64 {
+        dh = h2 - h1
+        if dh > 180.0f64 { dh -= 360.0f64 } else if dh < -180.0f64 { dh += 360.0f64 }
+        if math.abs[f64](h1 - h2) <= 180.0f64 {
+            h_mean = (h1 + h2) / 2.0f64
+        } else if h1 + h2 < 360.0f64 {
+            h_mean = (h1 + h2 + 360.0f64) / 2.0f64
+        } else {
+            h_mean = (h1 + h2 - 360.0f64) / 2.0f64
+        }
+    }
+    let d_l = second.l - first.l
+    let d_c = c2p - c1p
+    let d_h = 2.0f64 * math.sqrt[f64](c1p * c2p) * math.sin[f64](radians(dh / 2.0f64))
+    let l_mean = (first.l + second.l) / 2.0f64
+    let c_mean = (c1p + c2p) / 2.0f64
+    let t = 1.0f64 - 0.17f64 * math.cos[f64](radians(h_mean - 30.0f64)) + 0.24f64 * math.cos[f64](radians(2.0f64 * h_mean)) + 0.32f64 * math.cos[f64](radians(3.0f64 * h_mean + 6.0f64)) - 0.20f64 * math.cos[f64](radians(4.0f64 * h_mean - 63.0f64))
+    let theta = 30.0f64 * math.exp[f64](-((h_mean - 275.0f64) / 25.0f64) * ((h_mean - 275.0f64) / 25.0f64))
+    let c_mean_p7 = math.pow[f64](c_mean, 7.0f64)
+    let r_c = 2.0f64 * math.sqrt[f64](c_mean_p7 / (c_mean_p7 + pow25))
+    let l50 = (l_mean - 50.0f64) * (l_mean - 50.0f64)
+    let s_l = 1.0f64 + 0.015f64 * l50 / math.sqrt[f64](20.0f64 + l50)
+    let s_c = 1.0f64 + 0.045f64 * c_mean
+    let s_h = 1.0f64 + 0.015f64 * c_mean * t
+    let r_t = -math.sin[f64](radians(2.0f64 * theta)) * r_c
+    let lt = d_l / s_l
+    let ct = d_c / s_c
+    let ht = d_h / s_h
+    ret math.sqrt[f64](lt * lt + ct * ct + ht * ht + r_t * ct * ht)
+}
+
+// The closest pair of a palette as seen with the given colour vision: the
+// smallest CIEDE2000 difference between simulated colours and its indices.
+fn palette_separation(colors: []const paint.Color, vision: ColorVision, severity: f32) -> (PaletteSeparation, err) {
+    if colors.len < 2usize { ret (zero, Empty) }
+    var best = PaletteSeparation { difference: 0.0f64, first: 0usize, second: 0usize }
+    var found = false
+    var i = 0usize
+    while i < colors.len {
+        let (seen_i, i_error) = simulate_color_vision(colors[i], vision, severity)
+        if i_error != ok { ret (zero, i_error) }
+        let (lab_i, lab_i_error) = color_lab(seen_i)
+        if lab_i_error != ok { ret (zero, lab_i_error) }
+        var j = i + 1usize
+        while j < colors.len {
+            let (seen_j, j_error) = simulate_color_vision(colors[j], vision, severity)
+            if j_error != ok { ret (zero, j_error) }
+            let (lab_j, lab_j_error) = color_lab(seen_j)
+            if lab_j_error != ok { ret (zero, lab_j_error) }
+            let difference = ciede2000(lab_i, lab_j)
+            if !found || difference < best.difference {
+                best = PaletteSeparation { difference: difference, first: i, second: j }
+                found = true
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (best, ok)
 }
 
 fn extent(values: []const f32) -> (f32, f32, err) {

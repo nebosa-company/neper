@@ -172,6 +172,12 @@ strokes the margin line with a three-stop horizontal one, using the same
 `paint.Brush` values for the PNG and the SVG. The SVG embeds Montserrat as a
 data URL, so its labels render in the face the PNG used (it is ~600 KB
 because the whole font is embedded; subsetting is not implemented yet).
+The colour-vision preview shows the white-background accessible palette as
+seen with typical vision and simulated protanopia, deuteranopia and
+tritanopia. Each row outlines its closest pair and prints their CIEDE2000
+difference: about 10 for typical vision but 1.2 for deuteranopia, where blue
+and purple nearly coincide. That is why the palette's previews label series
+directly instead of relying on colour.
 
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:

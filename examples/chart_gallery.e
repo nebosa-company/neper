@@ -2166,6 +2166,114 @@ fn render_gradient_font_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gp
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn one_decimal(a: *mem.Arena, prefix: str, value: f64, suffix: str) -> (str, err) {
+    let tenths = u64(value * 10.0f64 + 0.5f64)
+    let (made, builder_error) = str.builder(a, prefix.len + suffix.len + 24usize)
+    if builder_error != ok { ret (zero, builder_error) }
+    var built = made
+    try str.push(&built, prefix)
+    try str.push_usize(&built, usize(tenths / 10u64))
+    try str.push(&built, ".")
+    try str.push_usize(&built, usize(tenths % 10u64))
+    try str.push(&built, suffix)
+    ret (str.done(&built), ok)
+}
+
+fn render_color_vision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/color_vision.png"
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let dark = paint.rgba(0.16, 0.20, 0.28, 1.0)
+    var palette_store: [6]paint.Color = zero
+    let (palette, palette_error) = chart.accessible_palette(white, palette_store[..])
+    if palette_error != ok { ret palette_error }
+    let visions = [4]chart.ColorVision{ .Typical, .Protan, .Deutan, .Tritan }
+    let names = [4]str{ "Typical", "Protanopia", "Deuteranopia", "Tritanopia" }
+    let series = [6]str{ "S1", "S2", "S3", "S4", "S5", "S6" }
+    var swatches: [24]geometry.Rect = zero
+    var inks: [24]paint.Color = zero
+    var outlines: [8]geometry.Rect = zero
+    var labels: [12]chart.Label = zero
+    var row = 0usize
+    while row < 4usize {
+        let y = 52.0 + f32(row) * 44.0
+        let (gap, gap_error) = chart.palette_separation(palette, visions[row], 1.0)
+        if gap_error != ok { ret gap_error }
+        var i = 0usize
+        while i < 6usize {
+            let (seen, seen_error) = chart.simulate_color_vision(palette[i], visions[row], 1.0)
+            if seen_error != ok { ret seen_error }
+            swatches[row * 6usize + i] = geometry.rect(96.0 + f32(i) * 30.0, y, 26.0, 26.0)
+            inks[row * 6usize + i] = seen
+            i += 1usize
+        }
+        let first = swatches[row * 6usize + gap.first]
+        let second = swatches[row * 6usize + gap.second]
+        outlines[row * 2usize] = geometry.rect(first.x - 3.0, first.y - 3.0, first.width + 6.0, first.height + 6.0)
+        outlines[row * 2usize + 1usize] = geometry.rect(second.x - 3.0, second.y - 3.0, second.width + 6.0, second.height + 6.0)
+        let (gap_text, text_error) = one_decimal(a, "min ", gap.difference, "")
+        if text_error != ok { ret text_error }
+        let (made_pair, pair_error) = str.builder(a, 16usize)
+        if pair_error != ok { ret pair_error }
+        var pair_text = made_pair
+        try str.push(&pair_text, series[gap.first])
+        try str.push(&pair_text, " vs ")
+        try str.push(&pair_text, series[gap.second])
+        labels[row * 3usize] = chart.Label { text: names[row], anchor: chart.Coord { x: 14.0, y: y + 17.0 }, align: .Left }
+        labels[row * 3usize + 1usize] = chart.Label { text: gap_text, anchor: chart.Coord { x: 282.0, y: y + 11.0 }, align: .Left }
+        labels[row * 3usize + 2usize] = chart.Label { text: str.done(&pair_text), anchor: chart.Coord { x: 282.0, y: y + 22.0 }, align: .Left }
+        row += 1usize
+    }
+    let heading = [2]chart.Label{
+        chart.Label { text: "Palette under simulated colour vision", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center },
+        chart.Label { text: "Outlined: the closest pair; min is its CIEDE2000 difference", anchor: chart.Coord { x: 180.0, y: 33.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 96usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    var k = 0usize
+    while k < 8usize {
+        try fill(&builder, outlines[k], paint.Brush { Solid: dark })
+        try fill(&builder, geometry.rect(outlines[k].x + 2.0, outlines[k].y + 2.0, outlines[k].width - 4.0, outlines[k].height - 4.0), paint.Brush { Solid: white })
+        k += 1usize
+    }
+    k = 0usize
+    while k < 24usize {
+        try fill(&builder, swatches[k], paint.Brush { Solid: inks[k] })
+        k += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, heading[..1usize], font, 11.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, heading[1usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    k = 0usize
+    while k < 8usize {
+        try chart_svg.rect(&writer, outlines[k], dark, false)
+        try chart_svg.rect(&writer, geometry.rect(outlines[k].x + 2.0, outlines[k].y + 2.0, outlines[k].width - 4.0, outlines[k].height - 4.0), white, false)
+        k += 1usize
+    }
+    k = 0usize
+    while k < 24usize {
+        try chart_svg.rect(&writer, swatches[k], inks[k], false)
+        k += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..], dark, 8.0)
+    try chart_svg.append_labels(&writer, heading[..1usize], dark, 11.0)
+    try chart_svg.append_labels(&writer, heading[1usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_legend_collision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/legend_collision.png"
     let names = [4]str{ "Control baseline", "Treatment alpha extended", "Treatment beta extended", "Follow-up cohort" }
@@ -10951,6 +11059,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_interactive_selection_preview(a, queue, output_target, canvas, &renderer)
     try render_accessible_palette_preview(a, queue, output_target, canvas, &renderer)
     try render_gradient_font_preview(a, queue, output_target, canvas, &renderer)
+    try render_color_vision_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)

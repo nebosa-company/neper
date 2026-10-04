@@ -16184,6 +16184,9 @@ fn step_cues(cues: []Cue) -> err
 
 ```neper
 type BinaryMetric = enum u8 { Roc, PrecisionRecall, CumulativeGain, Lift }
+type ColorVision = enum u8 { Typical, Protan, Deutan, Tritan }
+type Lab = struct { l: f64, a: f64, b: f64 }
+type PaletteSeparation = struct { difference: f64, first: usize, second: usize }
 type Kind = enum u8 { Scatter, Line, Bar, Histogram, Step, Ecdf, Box, Density, Qq, Violin, Heatmap, Correlation, Area, Lollipop, ErrorBar, Band, Dumbbell, SlopeGraph, FrequencyPolygon, Rug, PointLine, Strip, Beeswarm, DotPlot, Waterfall, Bubble, Pp, Mosaic, Association }
 type ScaleKind = enum u8 { Linear, Log10, Symlog }
 type Scale = struct { kind: ScaleKind, reverse: bool, linthresh: f32 }
@@ -16450,6 +16453,10 @@ fn shared_facet_guide_labels(panels: []const geometry.Rect, columns: usize, x_ti
 fn plot_grid(bounds: geometry.Rect, column_weights: []const f32, row_weights: []const f32, gap_x: f32, gap_y: f32, panels: []geometry.Rect) -> ([]geometry.Rect, err)
 fn rendered_contrast_ratio(first: paint.Color, second: paint.Color) -> (f64, err)
 fn accessible_palette(background: paint.Color, out: []paint.Color) -> ([]paint.Color, err)
+fn simulate_color_vision(color: paint.Color, vision: ColorVision, severity: f32) -> (paint.Color, err)
+fn color_lab(color: paint.Color) -> (Lab, err)
+fn ciede2000(first: Lab, second: Lab) -> f64
+fn palette_separation(colors: []const paint.Color, vision: ColorVision, severity: f32) -> (PaletteSeparation, err)
 ```
 
 ### `e.gfx.chart.scene`

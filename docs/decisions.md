@@ -35102,3 +35102,19 @@ or OpenType file as a base64 data URL inside a `@font-face` rule, streamed in
 the family with a sans-serif fallback. Embedding the whole file is the simple
 first step: Montserrat makes a ~600 KB SVG, and glyph subsetting is follow-on
 work.
+
+## D2103 — Chart colour-vision checks simulate dichromats and score with CIEDE2000
+
+`simulate_color_vision` uses the Vienot-Brettel-Mollon (1999) dichromat model:
+linear sRGB to Hunt-Pointer-Estevez LMS, the missing cone replaced by the
+plane through white and blue (protan, deutan) or white and red (tritan), and
+back, folded into one linear-RGB matrix per kind and derived by
+`scripts/chart_cvd_reference.py`. Severity blends toward the original in linear
+RGB, the common approximation for anomalous trichromacy; Machado's (2009)
+severity tables would need a dependency download or hand-typed constants, so
+they stay open. `palette_separation` reports the closest pair under a viewer's
+simulation by CIEDE2000 (Sharma, Wu and Dalal 2005) on D65 CIELAB, the metric
+palette tools use. Measuring D2101's palette this way shows ~10 for typical
+vision but 1.2 for deuteranopes (blue against purple): six colours at 4.5:1 on
+white leave little room on the blue-yellow axis, so the palette keeps its
+contrast guarantee and charts keep labelling series directly.

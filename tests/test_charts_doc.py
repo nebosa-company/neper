@@ -118,6 +118,49 @@ class ChartGuideTests(unittest.TestCase):
         self.assertIn('stroke="url(#trend)"', svg)
         self.assertNotIn("font-family=\"sans-serif\"", svg)
 
+    def test_color_vision_rows_match_an_independent_simulation(self):
+        # Vienot-Brettel-Mollon from the LMS matrix and anchor planes, solved here
+        # rather than copied from Neper's folded matrices.
+        lms = [[17.8824, 43.5161, 4.11935], [3.45565, 27.1554, 3.86714], [0.0299566, 0.184309, 1.46709]]
+
+        def mul(m, v):
+            return [sum(m[i][j] * v[j] for j in range(3)) for i in range(3)]
+
+        def inverse(m):
+            (a, b, c), (d, e, f), (g, h, i) = m
+            det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g)
+            return [[(e * i - f * h) / det, (c * h - b * i) / det, (b * f - c * e) / det],
+                    [(f * g - d * i) / det, (a * i - c * g) / det, (c * d - a * f) / det],
+                    [(d * h - e * g) / det, (b * g - a * h) / det, (a * e - b * d) / det]]
+
+        def plane(target, anchors):
+            o = [k for k in range(3) if k != target]
+            (p, q), (r, s) = [[mul(lms, x)[k] for k in o] for x in anchors]
+            y1, y2 = [mul(lms, x)[target] for x in anchors]
+            det = p * s - q * r
+            return target, o, ((y1 * s - q * y2) / det, (p * y2 - y1 * r) / det)
+
+        planes = [plane(0, ([1, 1, 1], [0, 0, 1])), plane(1, ([1, 1, 1], [0, 0, 1])), plane(2, ([1, 1, 1], [1, 0, 0]))]
+        back = inverse(lms)
+
+        def simulate(rgb, kind):
+            lin = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
+            cone = mul(lms, lin)
+            target, others, (u, v) = planes[kind]
+            cone[target] = u * cone[others[0]] + v * cone[others[1]]
+            out = [min(max(c, 0.0), 1.0) for c in mul(back, cone)]
+            return [round(255 * (c * 12.92 if c <= 0.0031308 else 1.055 * c ** (1 / 2.4) - 0.055)) for c in out]
+
+        svg = (DOCS / "chart-previews" / "color_vision.svg").read_text(encoding="utf-8")
+        swatches = [list(map(int, m)) for m in re.findall(
+            r'width="26" height="26" fill="rgb\((\d+),(\d+),(\d+)\)"', svg)]
+        self.assertEqual(len(swatches), 24)
+        for row in range(3):
+            for i in range(6):
+                expected = simulate([c / 255 for c in swatches[i]], row)
+                got = swatches[6 * (row + 1) + i]
+                self.assertTrue(all(abs(e - g) <= 1 for e, g in zip(expected, got)), (row, i, expected, got))
+
 
 if __name__ == "__main__":
     unittest.main()
