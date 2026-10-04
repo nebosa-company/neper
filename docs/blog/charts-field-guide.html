@@ -14,7 +14,7 @@
   <meta property="og:url" content="https://neper.dev/blog/charts-field-guide.html">
   <meta property="og:image" content="https://neper.dev/blog/img/charts-field-guide.svg">
   <meta property="article:published_time" content="2026-10-04">
-  <meta property="article:modified_time" content="2026-10-04">
+  <meta property="article:modified_time" content="2026-10-05">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="../gtm/logo/neper-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../ux/components/bundle.css">
@@ -61,7 +61,7 @@
 
     * { box-sizing: border-box; }
     @media (hover: hover) and (pointer: fine) {
-      body.nu-page, body.nu-page a { cursor: url("../gtm/neper-cursor.svg") 9 7, auto; }
+      body.nu-page, body.nu-page a { cursor: url("../gtm/neper-cursor.svg") 7 5, auto; }
     }
     body.nu-page { margin: 0; background: var(--surface); color: var(--on-surface); font: 400 16px/26px var(--font-sans); letter-spacing: .15px; }
     a { color: var(--primary); }
@@ -153,7 +153,7 @@
       <div class="eyebrow">&gt; blog // library</div>
       <h1>234 charts, and when to use each</h1>
       <p class="meta">October 4, 2026 · <code>e.gfx.chart</code>, <code>e.gfx.chart.scene</code>, <code>e.gfx.chart.svg</code>, <code>e.gfx.chart.pdf</code>, <code>e.gfx.chart.locale</code>, <code>e.gfx.chart.widget</code></p>
-      <p class="meta">Updated October 4, 2026: PDF export, and <a href="#speed">speed measured against matplotlib</a>.</p>
+      <p class="meta">Updated October 5, 2026: PDF export, <a href="#speed">speed measured against matplotlib</a>, and SVG files a third smaller.</p>
       <img class="banner" src="img/charts-field-guide.svg" width="1200" height="630" alt="234 charts, and when to use each: bars, lines, distributions, control charts, maps and diagrams, all drawn by Neper.">
       <p class="lede">Neper's chart library now draws 234 kinds of chart, from a bar chart to a Laney u′ control chart, a Kaplan-Meier curve, a Sankey diagram and a Nyquist plot. That is too many to pick from by scrolling. This post is the guide we wanted ourselves: each chart, the question it answers, and when to reach for something else instead.</p>
       <p>Every picture here was rendered by Neper itself, by <code>examples/chart_gallery.e</code> through the CPU scene renderer and PNG encoder, and each has an SVG twin streamed from the same layout. Behind the gallery, 156 test programs check the geometry, statistics and refusal paths on Windows and on Linux.</p>
@@ -213,21 +213,21 @@ wrote revenue.svg: 836 bytes</code></pre>
       <h2 id="speed">How fast is it?</h2>
       <p>We timed one realistic chart in Neper and in matplotlib: a 1,000-point line, 200 square markers, a y grid with tick labels and a title at 360×240 pixels, built from the same data. Each pass draws 200 charts and writes them to memory as SVG and as PNG. matplotlib uses its Agg backend and a new figure per chart, as a reporting script would, and keeps SVG text as text, as Neper does. The times are medians of nine runs on one Windows laptop (Intel Core i5-12500H, Python 3.12.10, matplotlib 3.9.4).</p>
       <div class="table-scroll"><table><thead><tr><th>Per chart</th><th>Neper</th><th>matplotlib</th><th>Faster</th></tr></thead><tbody>
-        <tr><td>SVG</td><td class="rank-1">2.62 ms</td><td>16.02 ms</td><td>Neper, 6.1×</td></tr>
-        <tr><td>PNG</td><td>20.28 ms</td><td class="rank-1">17.68 ms</td><td>matplotlib, 1.15×</td></tr>
-        <tr><td>Layout only</td><td>0.16 ms</td><td>–</td><td></td></tr>
-        <tr><td>Rasterize only, no encoding</td><td>2.00 ms</td><td>–</td><td></td></tr>
-        <tr><td>SVG / PNG file size</td><td>62.0 / 14.0 KB</td><td>44.4 / 11.2 KB</td><td></td></tr>
-        <tr><td>Whole run, both passes</td><td>5.0 s</td><td>7.6 s</td><td>matplotlib import: 0.55 s</td></tr>
+        <tr><td>SVG</td><td class="rank-1">2.50 ms</td><td>15.63 ms</td><td>Neper, 6.2×</td></tr>
+        <tr><td>PNG</td><td>20.02 ms</td><td class="rank-1">16.51 ms</td><td>matplotlib, 1.21×</td></tr>
+        <tr><td>Layout only</td><td>0.15 ms</td><td>–</td><td></td></tr>
+        <tr><td>Rasterize only, no encoding</td><td>1.99 ms</td><td>–</td><td></td></tr>
+        <tr><td>SVG / PNG file size</td><td>30.2 / 14.0 KB</td><td>44.4 / 11.2 KB</td><td></td></tr>
+        <tr><td>Whole run, both passes</td><td>5.0 s</td><td>7.2 s</td><td>matplotlib import: 0.53 s</td></tr>
       </tbody></table></div>
-      <figure><img src="img/charts/benchmark_matplotlib.webp" width="360" height="240" loading="lazy" decoding="async" alt="Grouped bar chart of milliseconds per chart: SVG 2.62 for Neper against 16.02 for matplotlib; PNG 20.28 against 17.68." style="max-width: 540px; background: #fff"><figcaption>The same results, drawn by Neper's grouped bar chart.</figcaption></figure>
+      <figure><img src="img/charts/benchmark_matplotlib.webp" width="360" height="240" loading="lazy" decoding="async" alt="Grouped bar chart of milliseconds per chart: SVG 2.50 for Neper against 15.63 for matplotlib; PNG 20.02 against 16.51." style="max-width: 540px; background: #fff"><figcaption>The same results, drawn by Neper's grouped bar chart.</figcaption></figure>
       <p>We report both results, because one of them is a loss.</p>
       <ul>
-        <li><strong>SVG is 6.1× faster.</strong> This is where the design pays off: borrowed columns are laid out into caller-owned storage in 0.16 ms and streamed straight to the writer, with no figure object model to build and tear down for every chart.</li>
-        <li><strong>PNG is 15% slower.</strong> The renderer is not the problem: it rasterizes a chart in 2.0 ms. The other 18 ms is the PNG encoder's deflate, the next thing we will make faster. Neper's PNGs are also about 25% larger.</li>
-        <li><strong>Neper's SVG files are larger</strong> (62 KB against 44 KB) because they write every coordinate at full float precision, where matplotlib rounds.</li>
+        <li><strong>SVG is 6.2× faster.</strong> This is where the design pays off: borrowed columns are laid out into caller-owned storage in 0.15 ms and streamed straight to the writer, with no figure object model to build and tear down for every chart.</li>
+        <li><strong>PNG is 21% slower, and the files are about 25% larger.</strong> The renderer is not the problem: it rasterizes a chart in 2.0 ms. The other 18 ms is the PNG encoder. Encoding the very pixels Neper drew with zlib at level 6, which is what matplotlib uses through Pillow, takes 1.74 ms and writes 11.3 KB; Neper's deflate takes about 18 ms for 14.0 KB. It writes only fixed Huffman codes (worth about 1.6 KB here), does no lazy matching and restarts its search window every 32 KiB (about 1.1 KB more), and the PNG layer computes its CRC one bit at a time. Smarter row filters would not help: Pillow's adaptive filters made this image larger. Faster, smaller encoding is queued as the next piece of library work.</li>
+        <li><strong>Neper's SVG files are 32% smaller</strong> (30.2 KB against 44.4 KB). They used to be larger, at 62.0 KB, because the writer printed every coordinate with full float digits, such as 81.85714721679688. It now writes numbers to 0.01 px and leaves out attributes that only restate SVG defaults; across the gallery that makes the SVG files a third smaller (a quarter counting the one that embeds a 610 KB font), and an independent renderer finds no change beyond anti-aliasing along edges.</li>
       </ul>
-      <p>The same Neper program on Linux (WSL) runs within a few percent of these times and writes byte-identical files. Not measured: ggplot2, base R graphics and lattice, which need an R installation this machine does not have, and matplotlib on Linux. The harness is in <code>benchmarks/charts</code>: <code>python benchmarks/charts/run.py &lt;neper-self&gt; 9</code> builds the Neper side, runs both nine times and writes the medians to <code>results/</code>. Single runs on this shared machine varied by up to half, which is why the table uses medians.</p>
+      <p>The same Neper program on Linux (WSL) runs within a few percent of these times and writes output of exactly the same size. Not measured: ggplot2, base R graphics and lattice, which need an R installation this machine does not have, and matplotlib on Linux. The harness is in <code>benchmarks/charts</code>: <code>python benchmarks/charts/run.py &lt;neper-self&gt; 9</code> builds the Neper side, runs both nine times and writes the medians to <code>results/</code>. Single runs on this shared machine varied by up to half, which is why the table uses medians.</p>
       <h2>Start from the question</h2>
       <p>Most bad charts are good charts answering the wrong question. Decide what you want the reader to see, then pick from the matching family:</p>
       <div class="table-scroll"><table><thead><tr><th>If the question is…</th><th>Start with</th><th>Family</th></tr></thead><tbody>
@@ -606,7 +606,7 @@ wrote revenue.svg: 836 bytes</code></pre>
       <h2>What is not there yet</h2>
       <p>The gallery is complete against its plan, but the library is not finished. Still open:</p>
       <ul>
-        <li>a faster PNG encoder: drawing a chart takes 2 ms, deflate takes the other 18 (see <a href="#speed">the benchmark</a>);</li>
+        <li>a faster PNG encoder: drawing a chart takes 2 ms, deflate takes the other 18 (see <a href="#speed">the benchmark</a>), queued next;</li>
         <li>embedded fonts and compression in PDF output;</li>
         <li>font subsetting for embedded SVG fonts (the whole font is embedded now);</li>
         <li>leader lines for labels that do not fit, and pointer events on charts in the UI;</li>
