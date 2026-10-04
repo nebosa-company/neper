@@ -11,6 +11,7 @@ ALIASES = {
     "e.gpu.tensor": {"e.algo.linalg.tensor": "linalg_tensor"},
     "e.ui.widget": {"e.text.layout": "layout", "e.ui.layout": "ui_layout"},
     "e.async.io": {"e.cancel": "cancel_api"},
+    "e.gfx.chart.widget": {"e.gfx.chart.scene": "chart_scene", "e.ui.layout": "ui_layout"},
 }
 RESERVED = {
     "target", "void", "err", "bool", "type", "usize", "isize", "f16", "bf16",

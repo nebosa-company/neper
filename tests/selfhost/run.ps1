@@ -3423,6 +3423,11 @@ $gfxChartLocaleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $gfxChartLocaleWritten -ne 'executable written') { throw 'gfx_chart_locale emission failed' }
 $gfxChartLocaleOutput = & $gfxChartLocalePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartLocaleOutput -ne 'gfx chart locale ok') { throw "the e.gfx.chart.locale tick text answered wrongly: exit $LASTEXITCODE" }
+$gfxChartWidgetPath = Join-Path $testBuild 'gfx-chart-widget-selfhost.exe'
+$gfxChartWidgetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_widget\src\main.e') $repo 'x64' 'windows' $gfxChartWidgetPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartWidgetWritten -ne 'executable written') { throw 'gfx_chart_widget emission failed' }
+$gfxChartWidgetOutput = & $gfxChartWidgetPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartWidgetOutput -ne 'gfx chart widget ok') { throw "the e.gfx.chart.widget canvas answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

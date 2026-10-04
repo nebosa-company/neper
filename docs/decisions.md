@@ -35148,3 +35148,18 @@ tick exactly — so a 0.25 step reads 0,00 0,25 0,50 rather than mixing 0 and
 a new public wrapper over the pattern writer the four date styles already
 used. Text a face cannot draw is not substituted: French grouping uses U+202F,
 which Montserrat lacks, so font fallback stays a renderer concern.
+
+## D2106 — Charts join e.ui through a canvas custom that lays out at paint time
+
+`e.gfx.chart.widget` adds no widget kind: a `View` becomes the existing
+`widget.Custom`, so charts reuse `control.canvas` and `framed_canvas` (D962)
+for framing, clipping and accessible labels. Paint receives the canvas's inner
+rectangle and runs `chart.layout` there, so a chart follows window and layout
+changes without the caller recomputing geometry; the laid-out marks and plot
+are kept on the view for hit testing. The custom's state is the view's
+revision, so the runtime replays an unchanged chart's commands (D917) and the
+caller bumps the revision when data or look change — without a bump a data
+change is not repainted, which the fixture pins. The view borrows caller mark
+storage and an arena for the scene adapter's paths, as every other chart
+adapter does. One layer per view keeps the first version small; multi-layer
+views, legends and pointer events (L062) are follow-on work.

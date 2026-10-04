@@ -15,13 +15,20 @@ use e.gfx.chart
 use e.gfx.chart.scene as chart_scene
 use e.gfx.chart.svg as chart_svg
 use e.gfx.chart.locale as chart_locale
+use e.gfx.chart.widget as chart_widget
 use e.gfx.geometry
+use e.gfx.image
 use e.gfx.paint
 use e.gfx.scene
 use e.text.shape
 use e.text.layout as text_layout
 use e.text.locale as text_locale
 use e.time as calendar_time
+use e.ui.control
+use e.ui.layout as ui_layout
+use e.ui.style as ui_style
+use e.ui.testing
+use e.ui.widget
 
 const WIDTH: u32 = 360u32
 const HEIGHT: u32 = 240u32
@@ -2474,6 +2481,103 @@ fn render_locale_axes_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     let (svg_path, path_error) = vector_path(a, path)
     if path_error != ok { ret path_error }
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+// The PNG is the e.ui runtime's own frame: a themed framed canvas whose chart
+// view is laid out at paint time, read back through the headless harness.
+fn render_ui_canvas_preview(a: *mem.Arena) -> err {
+    let path = "docs/chart-previews/ui_canvas.png"
+    let quarters = [8]f32{ 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0 }
+    let revenue = [8]f32{ 3.1, 3.6, 4.4, 4.0, 5.2, 5.9, 6.3, 7.1 }
+    var bars: [8]geometry.Rect = zero
+    let spec = chart.spec(.Bar, geometry.rect(0.0, 0.0, 1.0, 1.0), quarters[..], revenue[..])
+    let accent = paint.rgba(0.40, 0.31, 0.64, 1.0)
+    var v = chart_widget.view(a, spec, paint.Brush { Solid: accent }, zero, zero, bars[..])
+    var tick_storage: [8]chart.Tick = zero
+    let (y_ticks, tick_error) = chart.nice_ticks(chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }, 0.0, 7.1, 4usize, tick_storage[..])
+    if tick_error != ok { ret tick_error }
+    v.y_ticks = y_ticks
+    let (device, open_error) = gpu.open(a, .Cpu, 0u32)
+    if open_error != ok { ret open_error }
+    let (q, queue_error) = gpu.queue(device)
+    if queue_error != ok { ret queue_error }
+    let (made_renderer, renderer_error) = scene.renderer(a, device, q, 4u32, 4u32)
+    if renderer_error != ok { ret renderer_error }
+    var renderer = made_renderer
+    let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 64usize, max_states: 8usize, state_bytes: 256usize, state_classes: 2u16, max_depth: 16u16, max_commands: 512usize })
+    if runtime_error != ok { ret runtime_error }
+    var runtime = rt
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let fonts = [1]shape.Font{ shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 } }
+    try scene.register_font(&renderer, fonts[0usize])
+    var tokens = ui_style.reference(.Light)
+    let theme = control.Theme { tokens: &tokens, fonts: fonts[..], language: "", runtime: &runtime }
+    let (h, harness_error) = testing.harness(a, &runtime, WIDTH, HEIGHT, 1.0)
+    if harness_error != ok { ret harness_error }
+    var harness = h
+    var title_options = control.text_options()
+    title_options.role = .TitleSmall
+    let (title, title_error) = control.text(a, 1u64, "Revenue by quarter, in an e.ui canvas", &theme, title_options)
+    if title_error != ok { ret title_error }
+    var note_options = control.text_options()
+    note_options.role = .LabelSmall
+    note_options.color = .OnSurfaceVariant
+    let (note, note_error) = control.text(a, 2u64, "Bars laid out when the canvas paints, at its size", &theme, note_options)
+    if note_error != ok { ret note_error }
+    var options = control.canvas_options()
+    options.width = 336.0
+    options.height = 168.0
+    options.label = "Revenue by quarter"
+    let (frame, frame_error) = control.framed_canvas(a, 3u64, &theme, chart_widget.custom(&v), options)
+    if frame_error != ok { ret frame_error }
+    let (children, children_error) = mem.alloc[widget.Node](a, 3usize)
+    if children_error != ok { ret children_error }
+    children[0usize] = title
+    children[1usize] = note
+    children[2usize] = frame
+    var page = ui_style.defaults()
+    page.width = ui_style.Length { Px: f32(WIDTH) }
+    page.height = ui_style.Length { Px: f32(HEIGHT) }
+    page.background = paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) }
+    let pad = ui_style.Length { Px: 12.0 }
+    page.padding = ui_style.EdgeLengths { left: pad, top: pad, right: pad, bottom: pad }
+    let root = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, page, children[..3usize])
+    try testing.pump(&harness, root, calendar_time.Instant { nanos: 1000000000i64 })
+    let (shot, shot_error) = testing.snapshot(&harness, a)
+    if shot_error != ok { ret shot_error }
+    let (frame_bounds, has_frame) = widget.bounds_of(&runtime, testing.by_key(&harness, 3u64).element)
+    if !has_frame || v.marks.bars.len != 8usize { ret chart.Invalid }
+    let (view, view_error) = image.make_const(shot.pixels, shot.width, shot.height, shot.stride, shot.format, shot.alpha)
+    if view_error != ok { ret view_error }
+    let (png_state, unused, png_writer_error) = io.memory_writer(a, 0usize)
+    if png_writer_error != ok { ret png_writer_error }
+    var png_held = png_state
+    var png_writer = io.writer(mem.cast[*void](&png_held), io.memory_write)
+    try png.encode(&png_writer, view, png.EncodeOptions { compression: .Fast, interlace: false })
+    try fs.write_file(a, path, io.memory_bytes(&png_held))
+    // The vector companion draws what the canvas painted, where it painted it.
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, frame_bounds, ui_style.color(&tokens, .SurfaceContainerLowest), false)
+    try chart_svg.append_guides(&writer, v.plot, zero, y_ticks, paint.rgba(0.80, 0.84, 0.89, 1.0), paint.rgba(0.80, 0.84, 0.89, 1.0))
+    try chart_svg.append(&writer, &v.marks, accent)
+    let captions = [2]chart.Label{
+        chart.Label { text: "Revenue by quarter, in an e.ui canvas", anchor: chart.Coord { x: 12.0, y: 26.0 }, align: .Left },
+        chart.Label { text: "Bars laid out when the canvas paints, at its size", anchor: chart.Coord { x: 12.0, y: 42.0 }, align: .Left },
+    }
+    try chart_svg.append_labels(&writer, captions[..1usize], ui_style.color(&tokens, .Text), 12.0)
+    try chart_svg.append_labels(&writer, captions[1usize..], ui_style.color(&tokens, .OnSurfaceVariant), 9.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    try fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+    try testing.close(&harness)
+    try widget.close(&runtime)
+    try scene.close(&renderer)
+    ret gpu.close(device)
 }
 
 fn render_legend_collision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
@@ -11576,6 +11680,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_labeled_chart(a, queue, output_target, canvas, &renderer, 0u8)
     try render_labeled_chart(a, queue, output_target, canvas, &renderer, 1u8)
     try render_labeled_chart(a, queue, output_target, canvas, &renderer, 2u8)
+    try render_ui_canvas_preview(a)
     try scene.close(&renderer)
     try gpu.close_target(output_target)
     try gpu.close(device)

@@ -16509,3 +16509,11 @@ fn tick_decimals(values: []const chart.Tick) -> (u8, err)
 fn format_ticks_in(a: *mem.Arena, place: locale.Locale, values: []const chart.Tick, out: []str) -> ([]str, err)
 fn format_date_ticks_in(a: *mem.Arena, place: locale.Locale, ticks: []const chart.DateTick, pattern: str, out: []str) -> ([]str, err)
 ```
+
+### `e.gfx.chart.widget`
+
+```neper
+type View = struct { arena: *mem.Arena, spec: chart.Spec, brush: paint.Brush, grid: paint.Brush, axis: paint.Brush, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, padding: f32, width: f32, height: f32, coords: []chart.Coord, segments: []chart.Segment, bars: []geometry.Rect, revision: u64, marks: chart.Layout, plot: geometry.Rect }
+fn view(a: *mem.Arena, spec: chart.Spec, brush: paint.Brush, coords: []chart.Coord, segments: []chart.Segment, bars: []geometry.Rect) -> View
+fn custom(v: *View) -> widget.Custom
+```

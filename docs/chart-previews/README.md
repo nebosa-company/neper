@@ -191,6 +191,12 @@ Italian with full stops, and Spanish leaves four-digit numbers ungrouped
 abbreviations. French, whose grouping separator is a narrow no-break space
 (U+202F), is checked by the fixture but left out of the picture because
 Montserrat has no glyph for that character.
+The UI-canvas preview is not drawn by the chart scene adapter directly: it is
+a frame of the `e.ui` widget runtime, read back through the headless test
+harness. A themed `framed_canvas` hosts an `e.gfx.chart.widget` view, which
+lays the bars out against the rectangle the canvas receives when it paints;
+the title and note are ordinary `e.ui` text controls. The SVG companion draws
+the marks and frame the runtime actually placed.
 
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:

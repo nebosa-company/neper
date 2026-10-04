@@ -1090,6 +1090,19 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 ## How Neper can beat the reference tools
 
+`e.gfx.chart.widget` is the `e.ui` adapter: a `View` holds a chart spec, brush,
+optional guides and caller-owned mark storage, and `custom` turns it into a
+`widget.Custom` for `control.canvas` or `framed_canvas`. Measure answers the
+preferred size within the constraints; paint lays the spec out inside the
+padded rectangle the canvas receives, so charts follow resizes, and keeps the
+marks for hit testing. The custom's state is the view's revision, so the
+runtime replays an unchanged chart and repaints after a bump (D917). The
+`ui_canvas` PNG is a real widget-runtime frame from the headless harness.
+`gfx_chart_widget` checks measure, re-layout across rectangles, the too-small
+case, accessibility label, pixels under a mark and the replay/revision
+contract on Windows and Linux. Multi-layer views, legends and pointer events
+on the canvas remain open (events are L062).
+
 `e.gfx.chart.locale` writes tick text through `e.text.locale`:
 `format_ticks_in` picks one shared precision per axis (`tick_decimals`) and
 applies the locale's decimal and grouping separators, including CLDR minimum
