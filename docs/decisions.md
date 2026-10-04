@@ -34786,3 +34786,15 @@ References: https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/o
 Use measurement minus reference for signed bias. Require at least five distinct, increasing standards and two or more readings per standard; fit every replicate by OLS rather than fitting only the standard-level means. Report the average bias, intercept, slope, signed drift across the observed reference span, residual spread, slope standard error and two-sided t p-value. The chart retains replicate and mean points, fit, caller-critical confidence limits for mean bias, and a zero-bias guide in caller-owned storage. Do not label a caller-selected critical as automatically calibrated; the preview uses a displayed approximate 95% value. Process-variation %bias, automated t quantiles and temporal drift remain follow-ons.
 
 References: https://www.itl.nist.gov/div898/handbook/mpc/section4/mpc452.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/gage-linearity-and-bias-study/methods-and-formulas/gage-bias/
+
+## D1955 — Finish chart work before other unfinished capabilities
+
+**Decision.** Keep active chart and visualization capabilities at the front of
+`docs/work-queue.json` in their existing relative order: L061, L062, L068–L075,
+and L092–L097. The first active chart item remains the next serial pickup. This
+priority does not change the separate first-stable-CPU release classification:
+chart enhancements may precede release-required compiler work by explicit choice.
+
+**Evidence.** The generated `docs/progress.html` follows the queue order and labels
+release requirements independently. Its ordering test checks that chart work is
+a contiguous prefix of the active queue.

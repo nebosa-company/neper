@@ -41,6 +41,16 @@ class ProgressTests(unittest.TestCase):
         self.assertIn(f"{len(expected)} unfinished</summary>", section)
         self.assertNotIn("<details open", section)
 
+    def test_chart_work_stays_a_prefix_of_the_pickup_queue(self):
+        queue = json.loads((ROOT / "docs/work-queue.json").read_text(encoding="utf-8"))
+        chart_ids = {"L061", "L062"} | {f"L{i:03}" for i in range(68, 76)} | {
+            f"L{i:03}" for i in range(92, 98)
+        }
+        actual = [item["id"] for item in queue["items"]]
+        active_chart_ids = chart_ids & set(actual)
+        self.assertEqual(set(actual[:len(active_chart_ids)]), active_chart_ids)
+        self.assertIn("with chart work first", self.page)
+
     def test_release_labels_match_the_cpu_release_gate(self):
         queue = json.loads((ROOT / "docs/work-queue.json").read_text(encoding="utf-8"))
         expected_ids = self.render["RELEASE_REQUIRED_IDS"]
