@@ -34656,3 +34656,21 @@ z-buffered hidden-surface removal, adaptive sampling and interactive rotation
 remain planned.
 
 References: https://matplotlib.org/stable/api/_as_gen/mpl_toolkits.mplot3d.axes3d.Axes3D.plot_surface.html ; https://matplotlib.org/stable/gallery/mplot3d/subplot3d.html ; https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gaussian_kde.html
+
+## D1944 — ANOM decision limits use pooled within-group variation and an explicit critical
+
+One-way ANOM takes observation-major responses and group IDs, computes group
+means, the observation-weighted grand mean, pooled within-group standard
+deviation and group-specific decision limits. An explicit positive critical
+`h` keeps the plot valid for both balanced and unbalanced groups without
+misrepresenting a normal quantile as an exact ANOM critical. The caller chooses
+`h` for its familywise alpha, number of groups and error degrees of freedom;
+Neper returns the chosen value alongside numeric limits and out-of-limit
+points. Separate `Rug` layers for upper, lower and center lines, and `Scatter`
+layers for all means and signals, work in both scene and SVG adapters. The
+Windows/Linux fixture checks balanced and unequal groups, numeric limits,
+signal classification, flat data, adapters and invalid/capacity refusals. The
+gallery adds an ANOM PNG/SVG pair. Exact Nelson critical tables or numerical
+calibration, two-way ANOM and nonnormal binomial/Poisson ANOM remain planned.
+
+Reference: https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/anova/how-to/analysis-of-means/methods-and-formulas/one-way-designs-with-normal-data/

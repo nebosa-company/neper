@@ -99,6 +99,8 @@ type MultiVariStorage = struct { raw_points: []Coord, cell_points: []Coord, cell
 type MultiVariLayout = struct { observations: Layout, cells: Layout, within: Layout, groups: Layout, cell_means: []f64, group_means: []f64 }
 type MainEffectsStorage = struct { points: []Coord, lines: []Segment, references: []Segment, means: []f64, counts: []usize }
 type MainEffectsLayout = struct { levels: Layout, connections: Layout, reference: Layout, means: []f64, counts: []usize, grand_mean: f64 }
+type AnomStorage = struct { points: []Coord, signals: []Coord, upper: []Segment, lower: []Segment, center: []Segment, means: []f64, counts: []usize, upper_limits: []f64, lower_limits: []f64 }
+type AnomLayout = struct { groups: Layout, signals: Layout, upper: Layout, lower: Layout, center: Layout, means: []f64, counts: []usize, upper_limits: []f64, lower_limits: []f64, grand_mean: f64, pooled_sd: f64, critical: f64 }
 type InteractionStorage = struct { points: []Coord, lines: []Segment, means: []f64, counts: []usize, series: []Layout }
 type InteractionLayout = struct { series: []Layout, means: []f64, counts: []usize }
 type CubePlotStorage = struct { vertices: []Coord, edges: []Segment, means: []f64, counts: []usize }
@@ -7045,6 +7047,100 @@ fn main_effects(values: []const f64, factor_ids: []const usize, factor_levels: [
     let joins = Layout { kind: .Rug, coords: zero, segments: storage.lines[..connections], bars: zero, x_min: 0.0, x_max: f32(total_levels), y_min: f32(lo), y_max: f32(hi) }
     let references = Layout { kind: .Rug, coords: zero, segments: storage.references[..factor_levels.len], bars: zero, x_min: 0.0, x_max: f32(total_levels), y_min: f32(lo), y_max: f32(hi) }
     ret (MainEffectsLayout { levels: marks, connections: joins, reference: references, means: storage.means[..total_levels], counts: storage.counts[..total_levels], grand_mean: grand_mean }, ok)
+}
+
+// One-way analysis of means. The caller supplies the ANOM critical h for its
+// chosen familywise alpha, group count and error degrees of freedom. This
+// keeps exact/table criticals distinct from ordinary normal quantiles. Unequal
+// group sizes get independent decision limits; the variance is pooled within
+// groups, not across their different means.
+fn anom(values: []const f64, group_ids: []const usize, groups: usize, critical: f64, bounds: geometry.Rect, storage: *AnomStorage) -> (AnomLayout, err) {
+    if values.len == 0usize || values.len != group_ids.len || groups < 2usize || values.len <= groups || !finite64(critical) || critical <= 0.0f64 || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if storage.points.len < groups || storage.signals.len < groups || storage.upper.len < groups || storage.lower.len < groups || storage.center.len < 1usize || storage.means.len < groups || storage.counts.len < groups || storage.upper_limits.len < groups || storage.lower_limits.len < groups { ret (zero, TooLarge) }
+    var group = 0usize
+    while group < groups {
+        storage.means[group] = 0.0f64
+        storage.counts[group] = 0usize
+        group += 1usize
+    }
+    let baseline = values[0usize]
+    var total = 0.0f64
+    var row = 0usize
+    while row < values.len {
+        let value = values[row]
+        let id = group_ids[row]
+        if !finite64(value) || id >= groups { ret (zero, Invalid) }
+        let centered = value - baseline
+        if !finite64(centered) { ret (zero, Invalid) }
+        total += centered
+        storage.means[id] += centered
+        storage.counts[id] += 1usize
+        row += 1usize
+    }
+    let grand_mean = baseline + total / f64(values.len)
+    if !finite64(total) || !finite64(grand_mean) { ret (zero, Invalid) }
+    group = 0usize
+    while group < groups {
+        if storage.counts[group] == 0usize || !finite64(storage.means[group]) { ret (zero, Invalid) }
+        storage.means[group] = baseline + storage.means[group] / f64(storage.counts[group])
+        if !finite64(storage.means[group]) { ret (zero, Invalid) }
+        group += 1usize
+    }
+    var squared_error = 0.0f64
+    row = 0usize
+    while row < values.len {
+        let residual = values[row] - storage.means[group_ids[row]]
+        squared_error += residual * residual
+        row += 1usize
+    }
+    let pooled_sd = math.sqrt[f64](squared_error / f64(values.len - groups))
+    if !finite64(pooled_sd) { ret (zero, Invalid) }
+    var lo = grand_mean
+    var hi = grand_mean
+    group = 0usize
+    while group < groups {
+        let n = f64(storage.counts[group])
+        let standard_error = pooled_sd * math.sqrt[f64]((f64(values.len) - n) / (f64(values.len) * n))
+        let offset = critical * standard_error
+        storage.lower_limits[group] = grand_mean - offset
+        storage.upper_limits[group] = grand_mean + offset
+        if !finite64(storage.lower_limits[group]) || !finite64(storage.upper_limits[group]) { ret (zero, Invalid) }
+        lo = math.min[f64](lo, math.min[f64](storage.means[group], storage.lower_limits[group]))
+        hi = math.max[f64](hi, math.max[f64](storage.means[group], storage.upper_limits[group]))
+        group += 1usize
+    }
+    let pad = math.max[f64](1.0f64, (hi - lo) * 0.08f64)
+    lo -= pad
+    hi += pad
+    if !finite64(lo) || !finite64(hi) || !finite64(hi - lo) || !finite(f32(lo)) || !finite(f32(hi)) { ret (zero, Invalid) }
+    let cell = bounds.width / f32(groups)
+    var signals = 0usize
+    group = 0usize
+    while group < groups {
+        let x0 = bounds.x + cell * f32(group)
+        let x1 = x0 + cell
+        let x = x0 + cell * 0.5
+        let mean_y = bounds.y + bounds.height * f32((hi - storage.means[group]) / (hi - lo))
+        let lower_y = bounds.y + bounds.height * f32((hi - storage.lower_limits[group]) / (hi - lo))
+        let upper_y = bounds.y + bounds.height * f32((hi - storage.upper_limits[group]) / (hi - lo))
+        if !finite(x) || !finite(mean_y) || !finite(lower_y) || !finite(upper_y) { ret (zero, Invalid) }
+        storage.points[group] = Coord { x: x, y: mean_y }
+        if storage.means[group] < storage.lower_limits[group] || storage.means[group] > storage.upper_limits[group] {
+            storage.signals[signals] = storage.points[group]
+            signals += 1usize
+        }
+        storage.lower[group] = Segment { from: Coord { x: x0, y: lower_y }, to: Coord { x: x1, y: lower_y } }
+        storage.upper[group] = Segment { from: Coord { x: x0, y: upper_y }, to: Coord { x: x1, y: upper_y } }
+        group += 1usize
+    }
+    let center_y = bounds.y + bounds.height * f32((hi - grand_mean) / (hi - lo))
+    storage.center[0usize] = Segment { from: Coord { x: bounds.x, y: center_y }, to: Coord { x: bounds.x + bounds.width, y: center_y } }
+    let points = Layout { kind: .Scatter, coords: storage.points[..groups], segments: zero, bars: zero, x_min: 0.0, x_max: f32(groups), y_min: f32(lo), y_max: f32(hi) }
+    let flags = Layout { kind: .Scatter, coords: storage.signals[..signals], segments: zero, bars: zero, x_min: 0.0, x_max: f32(groups), y_min: f32(lo), y_max: f32(hi) }
+    let udl = Layout { kind: .Rug, coords: zero, segments: storage.upper[..groups], bars: zero, x_min: 0.0, x_max: f32(groups), y_min: f32(lo), y_max: f32(hi) }
+    let ldl = Layout { kind: .Rug, coords: zero, segments: storage.lower[..groups], bars: zero, x_min: 0.0, x_max: f32(groups), y_min: f32(lo), y_max: f32(hi) }
+    let mid = Layout { kind: .Rug, coords: zero, segments: storage.center[..1usize], bars: zero, x_min: 0.0, x_max: f32(groups), y_min: f32(lo), y_max: f32(hi) }
+    ret (AnomLayout { groups: points, signals: flags, upper: udl, lower: ldl, center: mid, means: storage.means[..groups], counts: storage.counts[..groups], upper_limits: storage.upper_limits[..groups], lower_limits: storage.lower_limits[..groups], grand_mean: grand_mean, pooled_sd: pooled_sd, critical: critical }, ok)
 }
 
 // Two-factor raw-means interaction plot. Cell order is series-major, then

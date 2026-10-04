@@ -15999,6 +15999,9 @@ fn multi_vari(values: []const f64, outer_levels: usize, inner_levels: usize, rep
 type MainEffectsStorage = struct { points: []Coord, lines: []Segment, references: []Segment, means: []f64, counts: []usize }
 type MainEffectsLayout = struct { levels: Layout, connections: Layout, reference: Layout, means: []f64, counts: []usize, grand_mean: f64 }
 fn main_effects(values: []const f64, factor_ids: []const usize, factor_levels: []const usize, bounds: geometry.Rect, storage: *MainEffectsStorage) -> (MainEffectsLayout, err)
+type AnomStorage = struct { points: []Coord, signals: []Coord, upper: []Segment, lower: []Segment, center: []Segment, means: []f64, counts: []usize, upper_limits: []f64, lower_limits: []f64 }
+type AnomLayout = struct { groups: Layout, signals: Layout, upper: Layout, lower: Layout, center: Layout, means: []f64, counts: []usize, upper_limits: []f64, lower_limits: []f64, grand_mean: f64, pooled_sd: f64, critical: f64 }
+fn anom(values: []const f64, group_ids: []const usize, groups: usize, critical: f64, bounds: geometry.Rect, storage: *AnomStorage) -> (AnomLayout, err)
 type InteractionStorage = struct { points: []Coord, lines: []Segment, means: []f64, counts: []usize, series: []Layout }
 type InteractionLayout = struct { series: []Layout, means: []f64, counts: []usize }
 fn interaction_plot(values: []const f64, x_ids: []const usize, series_ids: []const usize, x_levels: usize, series_levels: usize, bounds: geometry.Rect, storage: *InteractionStorage) -> (InteractionLayout, err)

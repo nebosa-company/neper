@@ -5,7 +5,6 @@
 # Cartesian and distribution variants
 
 # Statistical, quality, medical and scientific diagrams
-anom
 hotelling_t2
 generalized_variance
 mewma

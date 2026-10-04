@@ -2470,6 +2470,93 @@ fn render_main_effects_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_anom_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/anom.png"
+    let plot = geometry.rect(46.0, 53.0, 268.0, 133.0)
+    let values = [15]f64{ 9.0f64, 10.0f64, 11.0f64, 10.0f64, 11.0f64, 12.0f64, 11.0f64, 12.0f64, 13.0f64, 10.0f64, 11.0f64, 12.0f64, 15.0f64, 16.0f64, 17.0f64 }
+    let ids = [15]usize{ 0usize, 0usize, 0usize, 1usize, 1usize, 1usize, 2usize, 2usize, 2usize, 3usize, 3usize, 3usize, 4usize, 4usize, 4usize }
+    var points: [5]chart.Coord = zero
+    var signals: [5]chart.Coord = zero
+    var upper: [5]chart.Segment = zero
+    var lower: [5]chart.Segment = zero
+    var center: [1]chart.Segment = zero
+    var means: [5]f64 = zero
+    var counts: [5]usize = zero
+    var upper_limits: [5]f64 = zero
+    var lower_limits: [5]f64 = zero
+    var storage = chart.AnomStorage { points: points[..], signals: signals[..], upper: upper[..], lower: lower[..], center: center[..], means: means[..], counts: counts[..], upper_limits: upper_limits[..], lower_limits: lower_limits[..] }
+    let (map, map_error) = chart.anom(values[..], ids[..], 5usize, 3.0f64, plot, &storage)
+    if map_error != ok { ret map_error }
+    let x_ticks = [2]chart.Tick{ chart.Tick { value: 0.0, fraction: 0.0 }, chart.Tick { value: 5.0, fraction: 1.0 } }
+    var y_ticks: [5]chart.Tick = zero
+    let y_values = [5]f64{ 9.0f64, 11.0f64, 13.0f64, 15.0f64, 17.0f64 }
+    let y_text = [5]str{ "9", "11", "13", "15", "17" }
+    var labels: [16]chart.Label = zero
+    labels[0usize] = chart.Label { text: "ANOM / group means vs decision limits", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "One-way normal data / pooled within-group SD", anchor: chart.Coord { x: 180.0, y: 34.0 }, align: .Center }
+    var i = 0usize
+    while i < y_ticks.len {
+        let fraction = f32((y_values[i] - f64(map.groups.y_min)) / f64(map.groups.y_max - map.groups.y_min))
+        y_ticks[i] = chart.Tick { value: f32(y_values[i]), fraction: fraction }
+        labels[2usize + i] = chart.Label { text: y_text[i], anchor: chart.Coord { x: 37.0, y: plot.y + plot.height * (1.0 - fraction) + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    let group_text = [5]str{ "A", "B", "C", "D", "E" }
+    i = 0usize
+    while i < group_text.len {
+        labels[7usize + i] = chart.Label { text: group_text[i], anchor: chart.Coord { x: points[i].x, y: 202.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[12usize] = chart.Label { text: "UDL", anchor: chart.Coord { x: 321.0, y: upper[4usize].from.y + 3.0 }, align: .Left }
+    labels[13usize] = chart.Label { text: "CL", anchor: chart.Coord { x: 321.0, y: center[0usize].from.y + 3.0 }, align: .Left }
+    labels[14usize] = chart.Label { text: "LDL", anchor: chart.Coord { x: 321.0, y: lower[4usize].from.y + 3.0 }, align: .Left }
+    labels[15usize] = chart.Label { text: "Blue: mean   Red: outside decision limits   h = 3", anchor: chart.Coord { x: 180.0, y: 227.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let red = paint.rgba(0.82, 0.19, 0.22, 1.0)
+    let gray = paint.rgba(0.46, 0.54, 0.62, 1.0)
+    let grid = paint.rgba(0.87, 0.91, 0.95, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 32u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &map.center, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &map.upper, paint.Brush { Solid: red })
+    try chart_scene.append(a, &builder, &map.lower, paint.Brush { Solid: red })
+    try chart_scene.append(a, &builder, &map.groups, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.signals, paint.Brush { Solid: red })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..15usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[15usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid, dark)
+    try chart_svg.append(&writer, &map.center, gray)
+    try chart_svg.append(&writer, &map.upper, red)
+    try chart_svg.append(&writer, &map.lower, red)
+    try chart_svg.append(&writer, &map.groups, blue)
+    try chart_svg.append(&writer, &map.signals, red)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..15usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[15usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_interaction_plot_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/interaction_plot.png"
     let plot = geometry.rect(45.0, 54.0, 270.0, 136.0)
@@ -8126,6 +8213,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_gage_rr_preview(a, queue, output_target, canvas, &renderer)
     try render_multi_vari_preview(a, queue, output_target, canvas, &renderer)
     try render_main_effects_preview(a, queue, output_target, canvas, &renderer)
+    try render_anom_preview(a, queue, output_target, canvas, &renderer)
     try render_interaction_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_cube_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_spectrogram_preview(a, queue, output_target, canvas, &renderer)

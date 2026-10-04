@@ -3382,6 +3382,11 @@ $gfxChartSurface3dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $gfxChartSurface3dWritten -ne 'executable written') { throw 'gfx_chart_surface3d emission failed' }
 $gfxChartSurface3dOutput = & $gfxChartSurface3dPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSurface3dOutput -ne 'gfx chart surface3d ok') { throw "the e.gfx.chart 3-D surface/wireframe answered wrongly: exit $LASTEXITCODE" }
+$gfxChartAnomPath = Join-Path $testBuild 'gfx-chart-anom-selfhost.exe'
+$gfxChartAnomWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_anom\src\main.e') $repo 'x64' 'windows' $gfxChartAnomPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAnomWritten -ne 'executable written') { throw 'gfx_chart_anom emission failed' }
+$gfxChartAnomOutput = & $gfxChartAnomPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartAnomOutput -ne 'gfx chart anom ok') { throw "the e.gfx.chart ANOM answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
 $gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }
