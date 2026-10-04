@@ -35196,3 +35196,17 @@ also reports layout alone and rasterization alone, so a loss can be
 attributed: on Windows SVG is 6.1x faster than matplotlib, PNG is 1.15x
 slower, and the PNG gap is the encoder (2.0 of 20.3 ms is rasterization).
 ggplot2, base R and lattice are not measured without an R installation.
+
+## D2109 — Close L061 and queue the R chart benchmarks as L162
+
+L061 reaches score 1. Every planned gallery target is rendered (235 previews,
+each with an SVG companion, one with a PDF), the scene/PNG, SVG, PDF and e.ui
+widget adapters exist, tick text follows the reader's locale, palettes are
+checked for contrast and colour-vision separation, labels avoid collisions,
+and the engine is benchmarked against matplotlib (D2108). The remaining
+comparison with ggplot2, base R graphics and lattice needs an R installation,
+which needs the user's approval to download, so it is queued as L162 at the
+end of the work queue instead of holding L061 open. Refinements listed in the
+closing evidence (leader lines, SVG font subsetting, PDF font embedding and
+compression, multi-layer widget views, Machado tables, a faster PNG deflate)
+are follow-on work for L062 and later items, not part of standard charts.

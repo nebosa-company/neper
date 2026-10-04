@@ -37,7 +37,8 @@ class ProgressTests(unittest.TestCase):
         section = self.sections["queue"]
         actual = re.findall(r'<tr><td>(\d+)</td><td><code>(.*?)</code>', section)
         self.assertEqual(actual, [(str(i), task) for i, task in enumerate(expected, 1)])
-        self.assertEqual(expected[0], "L061")
+        # Chart work is picked up first (D1955) while any of it remains.
+        self.assertTrue(re.fullmatch(r"L0(6[1-2]|6[8-9]|7[0-5]|9[2-7])", expected[0]), expected[0])
         self.assertIn(f"{len(expected)} unfinished</summary>", section)
         self.assertNotIn("<details open", section)
 
