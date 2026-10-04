@@ -4689,6 +4689,99 @@ fn render_attribute_agreement_preview(a: *mem.Arena, q: *gpu.Queue, output_targe
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_gage_run_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/gage_run.png"
+    let baseline = [5]f64{ 10.0f64, 13.0f64, 9.0f64, 15.0f64, 11.0f64 }
+    let bias = [3]f64{ -0.35f64, 0.20f64, 0.65f64 }
+    let trial_offset = [3]f64{ -0.20f64, 0.0f64, 0.18f64 }
+    var values: [45]f64 = zero
+    var part = 0usize
+    while part < 5usize {
+        var operator = 0usize
+        while operator < 3usize {
+            var trial = 0usize
+            while trial < 3usize {
+                values[(part * 3usize + operator) * 3usize + trial] = baseline[part] + bias[operator] + trial_offset[trial]
+                trial += 1usize
+            }
+            operator += 1usize
+        }
+        part += 1usize
+    }
+    var operator_points: [45]chart.Coord = zero
+    var operator_layouts: [3]chart.Layout = zero
+    var part_centers: [5]chart.Coord = zero
+    var part_dividers: [4]chart.Segment = zero
+    var mean_guide: [1]chart.Segment = zero
+    var work = chart.GageRunStorage {
+        operator_points: operator_points[..], operator_layouts: operator_layouts[..],
+        part_centers: part_centers[..], part_dividers: part_dividers[..], mean_guide: mean_guide[..],
+    }
+    let plot = geometry.rect(30.0, 50.0, 300.0, 132.0)
+    let (report, report_error) = chart.gage_run(values[..], 5usize, 3usize, 3usize, plot, &work)
+    if report_error != ok { ret report_error }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let pale = paint.rgba(0.96, 0.98, 1.0, 1.0)
+    let blue = paint.rgba(0.12, 0.40, 0.76, 1.0)
+    let orange = paint.rgba(0.93, 0.42, 0.17, 1.0)
+    let green = paint.rgba(0.11, 0.60, 0.48, 1.0)
+    let gray = paint.rgba(0.68, 0.73, 0.80, 1.0)
+    let dark = paint.rgba(0.16, 0.22, 0.31, 1.0)
+    let (metrics_made, metrics_error) = str.builder(a, 96usize)
+    if metrics_error != ok { ret metrics_error }
+    var metrics = metrics_made
+    try str.push(&metrics, "Overall mean ")
+    try str.push_f64_fixed(&metrics, report.summary.grand_mean, 2u8)
+    try str.push(&metrics, "   max repeat range ")
+    try str.push_f64_fixed(&metrics, report.summary.max_repeat_range, 2u8)
+    let labels = [11]chart.Label{
+        chart.Label { text: "Gage run / crossed study", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center },
+        chart.Label { text: str.done(&metrics), anchor: chart.Coord { x: 180.0, y: 39.0 }, align: .Center },
+        chart.Label { text: "Part 1", anchor: chart.Coord { x: report.part_centers[0usize].x, y: 198.0 }, align: .Center },
+        chart.Label { text: "Part 2", anchor: chart.Coord { x: report.part_centers[1usize].x, y: 198.0 }, align: .Center },
+        chart.Label { text: "Part 3", anchor: chart.Coord { x: report.part_centers[2usize].x, y: 198.0 }, align: .Center },
+        chart.Label { text: "Part 4", anchor: chart.Coord { x: report.part_centers[3usize].x, y: 198.0 }, align: .Center },
+        chart.Label { text: "Part 5", anchor: chart.Coord { x: report.part_centers[4usize].x, y: 198.0 }, align: .Center },
+        chart.Label { text: "Operator A", anchor: chart.Coord { x: 73.0, y: 227.0 }, align: .Center },
+        chart.Label { text: "Operator B", anchor: chart.Coord { x: 180.0, y: 227.0 }, align: .Center },
+        chart.Label { text: "Operator C", anchor: chart.Coord { x: 287.0, y: 227.0 }, align: .Center },
+        chart.Label { text: "Measurements by part and operator", anchor: chart.Coord { x: 180.0, y: 213.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 30u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 512usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &report.dividers, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &report.reference, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &report.operators[0usize], paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &report.operators[1usize], paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &report.operators[2usize], paint.Brush { Solid: green })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append(&writer, &report.dividers, gray)
+    try chart_svg.append(&writer, &report.reference, dark)
+    try chart_svg.append(&writer, &report.operators[0usize], blue)
+    try chart_svg.append(&writer, &report.operators[1usize], orange)
+    try chart_svg.append(&writer, &report.operators[2usize], green)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_capability_normal_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/capability_normal.png"
     let values = [30]f64{
@@ -9033,6 +9126,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_capability_batch_preview(a, queue, output_target, canvas, &renderer)
     try render_gage_bias_linearity_preview(a, queue, output_target, canvas, &renderer)
     try render_attribute_agreement_preview(a, queue, output_target, canvas, &renderer)
+    try render_gage_run_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_normal_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_sixpack_preview(a, queue, output_target, canvas, &renderer)
     try render_fishbone_preview(a, queue, output_target, canvas, &renderer)

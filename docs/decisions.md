@@ -34822,3 +34822,15 @@ and SVG files. This lets the gallery display its previews without depending on
 images. Regenerate this page independently with
 `python scripts/render_progress.py --charts-only` when other readiness documents
 have unrelated work in progress.
+
+## D1958 — Keep crossed gage runs at individual-measurement granularity
+
+For a crossed part/operator/repeat study, `stat.gage_run_summary` accepts
+part-major, operator-major, repeat-major measurements and reports the grand
+mean, extrema and maximum within-cell repeat range. `chart.gage_run` maps every
+observation to a caller-owned point, preserving separate operator mark layers
+for color, plus part dividers and a grand-mean guide. It neither averages away
+repeats nor treats the visualization as a Gage R&R variance estimate. Invalid
+dimensions, nonfinite values, unusable bounds and insufficient storage fail
+before rendering. The Windows/Linux fixture and PNG/SVG preview cover the
+contract; nested designs and time-order diagnostics remain future work.

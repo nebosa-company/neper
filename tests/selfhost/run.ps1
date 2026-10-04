@@ -3497,6 +3497,11 @@ $gfxChartAttributeAgreementWritten = & $compiler emit-executable (Join-Path $PSS
 if ($LASTEXITCODE -ne 0 -or $gfxChartAttributeAgreementWritten -ne 'executable written') { throw 'gfx_chart_attribute_agreement emission failed' }
 $gfxChartAttributeAgreementOutput = & $gfxChartAttributeAgreementPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartAttributeAgreementOutput -ne 'gfx chart attribute agreement ok') { throw "the e.gfx.chart attribute agreement answered wrongly: exit $LASTEXITCODE" }
+$gfxChartGageRunPath = Join-Path $testBuild 'gfx-chart-gage-run-selfhost.exe'
+$gfxChartGageRunWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_gage_run\src\main.e') $repo 'x64' 'windows' $gfxChartGageRunPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGageRunWritten -ne 'executable written') { throw 'gfx_chart_gage_run emission failed' }
+$gfxChartGageRunOutput = & $gfxChartGageRunPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGageRunOutput -ne 'gfx chart gage run ok') { throw "the e.gfx.chart gage run answered wrongly: exit $LASTEXITCODE" }
 $gfxChartFishbonePath = Join-Path $testBuild 'gfx-chart-fishbone-selfhost.exe'
 $gfxChartFishboneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_fishbone\src\main.e') $repo 'x64' 'windows' $gfxChartFishbonePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartFishboneWritten -ne 'executable written') { throw 'gfx_chart_fishbone emission failed' }

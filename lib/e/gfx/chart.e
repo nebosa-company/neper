@@ -214,6 +214,14 @@ type AttributeAgreementLayout = struct {
     versus_standard: Layout, standard_intervals: Layout,
     summary: stat.AttributeAgreement,
 }
+type GageRunStorage = struct {
+    operator_points: []Coord, operator_layouts: []Layout,
+    part_centers: []Coord, part_dividers: []Segment, mean_guide: []Segment,
+}
+type GageRunLayout = struct {
+    operators: []Layout, part_centers: []Coord,
+    dividers: Layout, reference: Layout, summary: stat.GageRunSummary,
+}
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -1219,6 +1227,72 @@ fn attribute_agreement(standard: []const usize, ratings: []const usize, appraise
     let standard_marks = Layout { kind: .Scatter, coords: work.standard_points[..appraisers], segments: zero, bars: zero, x_min: 1.0f32, x_max: f32(appraisers), y_min: 0.0f32, y_max: 1.0f32 }
     let standard_ci = Layout { kind: .ErrorBar, coords: zero, segments: work.standard_intervals[..appraisers], bars: zero, x_min: 1.0f32, x_max: f32(appraisers), y_min: 0.0f32, y_max: 1.0f32 }
     ret (AttributeAgreementLayout { within: within_marks, within_intervals: within_ci, versus_standard: standard_marks, standard_intervals: standard_ci, summary: summary }, ok)
+}
+
+// Crossed gage run chart: every replicate remains visible, colored by operator
+// by the caller; part dividers and the grand-mean reference are separate layers.
+fn gage_run(values: []const f64, parts: usize, operators: usize, repeats: usize, bounds: geometry.Rect, work: *GageRunStorage) -> (GageRunLayout, err) {
+    if !valid_bounds(bounds) { ret (zero, Invalid) }
+    let (summary, summary_error) = stat.gage_run_summary(values, parts, operators, repeats)
+    if summary_error != ok { ret (zero, Invalid) }
+    if work.operator_points.len < values.len || work.operator_layouts.len < operators || work.part_centers.len < parts || work.part_dividers.len < parts - 1usize || work.mean_guide.len < 1usize { ret (zero, TooLarge) }
+    let spread = summary.maximum - summary.minimum
+    var padding = spread * 0.08f64
+    if spread == 0.0f64 {
+        padding = math.abs[f64](summary.minimum) * 0.05f64
+        if padding == 0.0f64 { padding = 1.0f64 }
+    }
+    let y_low = summary.minimum - padding
+    let y_high = summary.maximum + padding
+    let y_span = y_high - y_low
+    if !finite64(y_low) || !finite64(y_high) || !finite64(y_span) || !(y_span > 0.0f64) || !finite(f32(y_low)) || !finite(f32(y_high)) { ret (zero, Invalid) }
+    var part = 0usize
+    while part < parts {
+        let part_x = bounds.x + bounds.width * (f32(part) + 0.5f32) / f32(parts)
+        work.part_centers[part] = Coord { x: part_x, y: bounds.y + bounds.height }
+        if part > 0usize {
+            let divider_x = bounds.x + bounds.width * f32(part) / f32(parts)
+            work.part_dividers[part - 1usize] = Segment {
+                from: Coord { x: divider_x, y: bounds.y },
+                to: Coord { x: divider_x, y: bounds.y + bounds.height },
+            }
+        }
+        var operator = 0usize
+        while operator < operators {
+            var trial = 0usize
+            while trial < repeats {
+                let value = values[(part * operators + operator) * repeats + trial]
+                let x_fraction = (f32(part) + (f32(operator) + (f32(trial) + 0.5f32) / f32(repeats)) / f32(operators)) / f32(parts)
+                let y_fraction = f32((value - y_low) / y_span)
+                let index = (operator * parts + part) * repeats + trial
+                work.operator_points[index] = Coord {
+                    x: bounds.x + bounds.width * x_fraction,
+                    y: bounds.y + bounds.height * (1.0f32 - y_fraction),
+                }
+                trial += 1usize
+            }
+            operator += 1usize
+        }
+        part += 1usize
+    }
+    let mean_y = bounds.y + bounds.height * (1.0f32 - f32((summary.grand_mean - y_low) / y_span))
+    work.mean_guide[0usize] = Segment {
+        from: Coord { x: bounds.x, y: mean_y },
+        to: Coord { x: bounds.x + bounds.width, y: mean_y },
+    }
+    var operator = 0usize
+    while operator < operators {
+        let start = operator * parts * repeats
+        let end = start + parts * repeats
+        work.operator_layouts[operator] = Layout {
+            kind: .Scatter, coords: work.operator_points[start..end], segments: zero, bars: zero,
+            x_min: 0.0f32, x_max: f32(parts), y_min: f32(y_low), y_max: f32(y_high),
+        }
+        operator += 1usize
+    }
+    let dividers = Layout { kind: .Rug, coords: zero, segments: work.part_dividers[..parts - 1usize], bars: zero, x_min: 0.0f32, x_max: f32(parts), y_min: f32(y_low), y_max: f32(y_high) }
+    let reference = Layout { kind: .Rug, coords: zero, segments: work.mean_guide[..1usize], bars: zero, x_min: 0.0f32, x_max: f32(parts), y_min: f32(y_low), y_max: f32(y_high) }
+    ret (GageRunLayout { operators: work.operator_layouts[..operators], part_centers: work.part_centers[..parts], dividers: dividers, reference: reference, summary: summary }, ok)
 }
 
 // A sparkline is an evenly spaced Line with no guide contract.

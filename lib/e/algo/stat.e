@@ -65,6 +65,10 @@ type AttributeAgreement = struct {
     between_matched: usize, all_vs_standard_matched: usize,
     pooled_rating_fraction: f64, pooled_rating_kappa: f64, kappa_defined: bool,
 }
+type GageRunSummary = struct {
+    parts: usize, operators: usize, repeats: usize,
+    grand_mean: f64, minimum: f64, maximum: f64, max_repeat_range: f64,
+}
 type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
@@ -2181,6 +2185,48 @@ type GageRrSummary = struct { mean_squares: GageRrMeanSquares, components: GageR
 
 fn gage_finite(value: f64) -> bool {
     ret value == value && value - value == 0.0f64
+}
+
+// Measurements are part-major, operator-major, then replicate-major.
+// Centering the sum on the first observation avoids overflow for large offsets.
+fn gage_run_summary(values: []const f64, parts: usize, operators: usize, repeats: usize) -> (GageRunSummary, err) {
+    if parts < 2usize || operators < 2usize || repeats < 2usize || values.len == 0usize { ret (zero, Invalid) }
+    if parts > values.len / operators { ret (zero, Invalid) }
+    let cells = parts * operators
+    if repeats > values.len / cells || cells * repeats != values.len { ret (zero, Invalid) }
+    let baseline = values[0usize]
+    if !gage_finite(baseline) { ret (zero, Invalid) }
+    var minimum = baseline
+    var maximum = baseline
+    var max_range = 0.0f64
+    var centered_sum = 0.0f64
+    var cell = 0usize
+    while cell < cells {
+        var cell_min = values[cell * repeats]
+        var cell_max = cell_min
+        var trial = 0usize
+        while trial < repeats {
+            let value = values[cell * repeats + trial]
+            if !gage_finite(value) { ret (zero, Invalid) }
+            if value < minimum { minimum = value }
+            if value > maximum { maximum = value }
+            if value < cell_min { cell_min = value }
+            if value > cell_max { cell_max = value }
+            centered_sum += value - baseline
+            trial += 1usize
+        }
+        let cell_range = cell_max - cell_min
+        if !gage_finite(cell_range) || !gage_finite(centered_sum) { ret (zero, Invalid) }
+        if cell_range > max_range { max_range = cell_range }
+        cell += 1usize
+    }
+    let grand_mean = baseline + centered_sum / f64(values.len)
+    if !gage_finite(grand_mean) || !gage_finite(maximum - minimum) { ret (zero, Invalid) }
+    ret (GageRunSummary {
+        parts: parts, operators: operators, repeats: repeats,
+        grand_mean: grand_mean, minimum: minimum, maximum: maximum,
+        max_repeat_range: max_range,
+    }, ok)
 }
 
 fn gage_rr_variance_components(parts: usize, operators: usize, repeats: usize, means: *const GageRrMeanSquares, include_interaction: bool) -> (GageRrComponents, err) {

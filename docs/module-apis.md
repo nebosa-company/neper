@@ -3161,6 +3161,7 @@ type BatchCapability = struct { batches: usize, batch_size: usize, mean: f64, wi
 type GageLinearity = struct { reference_count: usize, repeats: usize, average_bias: f64, intercept: f64, slope: f64, linearity: f64, residual_sigma: f64, slope_standard_error: f64, slope_p: f64 }
 type AttributeAgreementRate = struct { matched: usize, total: usize, fraction: f64, confidence: Interval }
 type AttributeAgreement = struct { items: usize, appraisers: usize, trials: usize, between_matched: usize, all_vs_standard_matched: usize, pooled_rating_fraction: f64, pooled_rating_kappa: f64, kappa_defined: bool }
+type GageRunSummary = struct { parts: usize, operators: usize, repeats: usize, grand_mean: f64, minimum: f64, maximum: f64, max_repeat_range: f64 }
 type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
@@ -3213,6 +3214,7 @@ fn binomial_capability(counts: []const usize, sizes: []const usize, target_fract
 fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, batch_means: []f64, batch_spreads: []f64) -> (BatchCapability, err)
 fn gage_linearity(references: []const f64, measurements: []const f64, repeats: usize, critical: f64, biases: []f64, means: []f64, fitted: []f64, lower: []f64, upper: []f64) -> (GageLinearity, err)
 fn attribute_agreement(standard: []const usize, ratings: []const usize, appraisers: usize, trials: usize, categories: usize, confidence: f64, within: []AttributeAgreementRate, versus_standard: []AttributeAgreementRate) -> (AttributeAgreement, err)
+fn gage_run_summary(values: []const f64, parts: usize, operators: usize, repeats: usize) -> (GageRunSummary, err)
 fn imr_phase_control(values: []const f64, starts: []const bool, moving: []f64, out: []AttributeControlPoint) -> err
 fn xbar_r_limits(values: []const f64, subgroup: usize, means: []f64, ranges: []f64) -> (ControlLimits, ControlLimits, err)
 fn attribute_control(kind: AttributeControlKind, counts: []const usize, sizes: []const usize, out: []AttributeControlPoint) -> err
@@ -15985,6 +15987,8 @@ type GageLinearityStorage = struct { biases: []f64, mean_biases: []f64, fitted_b
 type GageLinearityLayout = struct { observations: Layout, means: Layout, fit: Layout, confidence: Layout, zero_line: Layout, summary: stat.GageLinearity }
 type AttributeAgreementStorage = struct { within_rates: []stat.AttributeAgreementRate, standard_rates: []stat.AttributeAgreementRate, within_points: []Coord, standard_points: []Coord, within_intervals: []Segment, standard_intervals: []Segment }
 type AttributeAgreementLayout = struct { within: Layout, within_intervals: Layout, versus_standard: Layout, standard_intervals: Layout, summary: stat.AttributeAgreement }
+type GageRunStorage = struct { operator_points: []Coord, operator_layouts: []Layout, part_centers: []Coord, part_dividers: []Segment, mean_guide: []Segment }
+type GageRunLayout = struct { operators: []Layout, part_centers: []Coord, dividers: Layout, reference: Layout, summary: stat.GageRunSummary }
 type CapabilitySixpackLayout = struct { individuals: Layout, moving_range: Layout, recent: Layout, histogram: Layout, within_curve: Layout, overall_curve: Layout, probability: Layout, intervals: Layout, guides: Layout, summary: stat.NormalCapability }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
@@ -16018,6 +16022,7 @@ fn binomial_capability(defectives: []const usize, inspected: []const usize, targ
 fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, panels: []const geometry.Rect, work: *BatchCapabilityStorage) -> (BatchCapabilityLayout, err)
 fn gage_linearity(references: []const f64, measurements: []const f64, repeats: usize, critical: f64, bounds: geometry.Rect, work: *GageLinearityStorage) -> (GageLinearityLayout, err)
 fn attribute_agreement(standard: []const usize, ratings: []const usize, appraisers: usize, trials: usize, categories: usize, confidence: f64, panels: []const geometry.Rect, work: *AttributeAgreementStorage) -> (AttributeAgreementLayout, err)
+fn gage_run(values: []const f64, parts: usize, operators: usize, repeats: usize, bounds: geometry.Rect, work: *GageRunStorage) -> (GageRunLayout, err)
 fn fishbone(effect: str, categories: []const str, causes: []const FishboneCause, bounds: geometry.Rect, spine: []Segment, ribs: []Segment, branches: []Segment, head_box: []geometry.Rect, labels: []Label) -> (FishboneLayout, err)
 fn cause_effect_tree(nodes: []const CauseTreeNode, bounds: geometry.Rect, work: *CauseTreeWork, boxes: []geometry.Rect, connectors: []Segment, labels: []Label) -> (CauseTreeLayout, err)
 fn weibull_probability_plot(sorted_failures: []const f64, total_count: usize, shape: f64, scale: f64, domain_min: f64, domain_max: f64, bounds: geometry.Rect, points: []Coord, reference: []Segment, tick_storage: []Tick) -> (ProbabilityLayout, err)

@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>gage_run</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="30" y="50" width="300" height="132" fill="rgb(245,250,255)" fill-opacity="1"/>
+<line x1="90" y1="50" x2="90" y2="182" stroke="rgb(173,186,204)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="150" y1="50" x2="150" y2="182" stroke="rgb(173,186,204)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="50" x2="210" y2="182" stroke="rgb(173,186,204)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="270" y1="50" x2="270" y2="182" stroke="rgb(173,186,204)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="30" y1="121.85926818847656" x2="330" y2="121.85926818847656" stroke="rgb(41,56,79)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<rect x="30.333332061767578" y="154.47743225097656" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="37" y="151.39361572265625" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="43.666664123535156" y="148.6181640625" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="90.33333587646484" y="108.22007751464844" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="96.99999237060547" y="105.13624572753906" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="103.66667175292969" y="102.36080932617188" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="150.33334350585938" y="169.89654541015625" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="157" y="166.81272888183594" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="163.66665649414062" y="164.03729248046875" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="210.3333282470703" y="77.3818359375" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="217" y="74.29800415039062" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="223.66665649414062" y="71.52256774902344" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="270.33331298828125" y="139.0583038330078" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="277" y="135.9744873046875" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="283.6666564941406" y="133.1990509033203" width="6" height="6" fill="rgb(31,102,194)" fill-opacity="1"/>
+<rect x="50.33333206176758" y="145.99691772460938" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="57" y="142.9130859375" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="63.66667175292969" y="140.13763427734375" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="110.33332824707031" y="99.73955535888672" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="117" y="96.65573120117188" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="123.66667175292969" y="93.88029479980469" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="170.3333282470703" y="161.41604614257812" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="177" y="158.33221435546875" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="183.6666717529297" y="155.5567626953125" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="230.3333282470703" y="68.90132141113281" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="237" y="65.81749725341797" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="243.66665649414062" y="63.04205322265625" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="290.33331298828125" y="130.57778930664062" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="297" y="127.49397277832031" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="303.66668701171875" y="124.7185287475586" width="6" height="6" fill="rgb(237,107,43)" fill-opacity="1"/>
+<rect x="70.33333587646484" y="139.0583038330078" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="77" y="135.9744873046875" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="83.66666412353516" y="133.1990509033203" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="130.33334350585938" y="92.80095672607422" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="137" y="89.71712493896484" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="143.6666717529297" y="86.94168090820312" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="190.3333282470703" y="154.47743225097656" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="197" y="151.39361572265625" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="203.6666717529297" y="148.6181640625" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="250.33334350585938" y="61.96271514892578" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="257" y="58.87888717651367" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="263.6666564941406" y="56.10344696044922" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="310.3333435058594" y="123.63919067382812" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="317" y="120.55536651611328" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<rect x="323.66668701171875" y="117.7799301147461" width="6" height="6" fill="rgb(28,153,122)" fill-opacity="1"/>
+<text x="180" y="20" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Gage run / crossed study</text>
+<text x="180" y="39" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Overall mean 11.76   max repeat range 0.38</text>
+<text x="60" y="198" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Part 1</text>
+<text x="120" y="198" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Part 2</text>
+<text x="180" y="198" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Part 3</text>
+<text x="240" y="198" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Part 4</text>
+<text x="300" y="198" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Part 5</text>
+<text x="73" y="227" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Operator A</text>
+<text x="180" y="227" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Operator B</text>
+<text x="287" y="227" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Operator C</text>
+<text x="180" y="213" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Measurements by part and operator</text>
+</svg>
