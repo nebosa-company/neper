@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>proportional_symbol_map</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)" fill-opacity="1"/>
+<rect x="30" y="49" width="300" height="142" fill="rgb(245,250,255)" fill-opacity="1"/>
+<path d="M67.5 70.30000305175781 L142.5 63.20000076293945 L127.5 127.0999984741211 L45 120 Z M70.5 108.63999938964844 L85.5 108.63999938964844 L85.5 95.86000061035156 L70.5 95.86000061035156 Z" fill-rule="nonzero" fill="rgb(184,194,204)" fill-opacity="1"/>
+<path d="M142.5 63.20000076293945 L210 67.45999908447266 L217.5 117.15999603271484 L127.5 127.0999984741211 Z" fill-rule="nonzero" fill="rgb(184,194,204)" fill-opacity="1"/>
+<path d="M210 67.45999908447266 L292.5 77.4000015258789 L315 112.89999389648438 L217.5 117.15999603271484 Z" fill-rule="nonzero" fill="rgb(184,194,204)" fill-opacity="1"/>
+<path d="M45 120 L127.5 127.0999984741211 L135 176.79998779296875 L60 162.60000610351562 Z" fill-rule="nonzero" fill="rgb(184,194,204)" fill-opacity="1"/>
+<path d="M127.5 127.0999984741211 L217.5 117.15999603271484 L210 169.70001220703125 L135 176.79998779296875 Z" fill-rule="nonzero" fill="rgb(184,194,204)" fill-opacity="1"/>
+<path d="M217.5 117.15999603271484 L315 112.89999389648438 L300 155.5 L210 169.70001220703125 Z" fill-rule="nonzero" fill="rgb(184,194,204)" fill-opacity="1"/>
+<line x1="45" y1="120" x2="127.5" y2="127.0999984741211" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.5" y1="127.0999984741211" x2="142.5" y2="63.20000076293945" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="142.5" y1="63.20000076293945" x2="67.5" y2="70.30000305175781" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="67.5" y1="70.30000305175781" x2="45" y2="120" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.5" y1="108.63999938964844" x2="85.5" y2="108.63999938964844" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="85.5" y1="108.63999938964844" x2="85.5" y2="95.86000061035156" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="85.5" y1="95.86000061035156" x2="70.5" y2="95.86000061035156" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="70.5" y1="95.86000061035156" x2="70.5" y2="108.63999938964844" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.5" y1="127.0999984741211" x2="217.5" y2="117.15999603271484" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="217.5" y1="117.15999603271484" x2="210" y2="67.45999908447266" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="67.45999908447266" x2="142.5" y2="63.20000076293945" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="142.5" y1="63.20000076293945" x2="127.5" y2="127.0999984741211" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="217.5" y1="117.15999603271484" x2="315" y2="112.89999389648438" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="315" y1="112.89999389648438" x2="292.5" y2="77.4000015258789" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="292.5" y1="77.4000015258789" x2="210" y2="67.45999908447266" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="67.45999908447266" x2="217.5" y2="117.15999603271484" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="60" y1="162.60000610351562" x2="135" y2="176.79998779296875" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="135" y1="176.79998779296875" x2="127.5" y2="127.0999984741211" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.5" y1="127.0999984741211" x2="45" y2="120" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="45" y1="120" x2="60" y2="162.60000610351562" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="135" y1="176.79998779296875" x2="210" y2="169.70001220703125" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="169.70001220703125" x2="217.5" y2="117.15999603271484" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="217.5" y1="117.15999603271484" x2="127.5" y2="127.0999984741211" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="127.5" y1="127.0999984741211" x2="135" y2="176.79998779296875" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="210" y1="169.70001220703125" x2="300" y2="155.5" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="300" y1="155.5" x2="315" y2="112.89999389648438" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="315" y1="112.89999389648438" x2="217.5" y2="117.15999603271484" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<line x1="217.5" y1="117.15999603271484" x2="210" y2="169.70001220703125" stroke="rgb(255,255,255)" stroke-opacity="1" stroke-width="2" stroke-linecap="round"/>
+<circle cx="97.5" cy="95.86000061035156" r="11.925695419311523" fill="rgb(18,94,184)" fill-opacity="0.8199999928474426"/>
+<circle cx="175.5" cy="94.44000244140625" r="9.237604141235352" fill="rgb(18,94,184)" fill-opacity="0.8199999928474426"/>
+<circle cx="258" cy="95.86000061035156" r="16" fill="rgb(18,94,184)" fill-opacity="0.8199999928474426"/>
+<circle cx="94.5" cy="145.55999755859375" r="6.531972885131836" fill="rgb(18,94,184)" fill-opacity="0.8199999928474426"/>
+<circle cx="177" cy="148.39999389648438" r="10.32795524597168" fill="rgb(18,94,184)" fill-opacity="0.8199999928474426"/>
+<circle cx="122" cy="210" r="3.6742348670959473" fill="rgb(18,94,184)" fill-opacity="0.8199999928474426"/>
+<circle cx="191" cy="210" r="6.70820426940918" fill="rgb(18,94,184)" fill-opacity="0.8199999928474426"/>
+<circle cx="272" cy="210" r="9" fill="rgb(18,94,184)" fill-opacity="0.8199999928474426"/>
+<text x="180" y="19" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Proportional symbol map</text>
+<text x="180" y="38" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)" fill-opacity="1">Circle area tracks site volume / missing site unmarked</text>
+</svg>

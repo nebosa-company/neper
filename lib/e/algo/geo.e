@@ -7,6 +7,13 @@
 use e.bytes
 use e.math
 
+type MapProjection = enum u8 { Equirectangular, Mercator }
+type MapWindow = struct {
+    projection: MapProjection, center_lon: f64, half_lon_span: f64,
+    south_lat: f64, north_lat: f64,
+}
+error Invalid
+
 fn pi() -> f64 { ret 3.141592653589793f64 }
 fn max_level() -> u32 { ret 30u32 }
 fn max_size() -> i64 { ret 1073741824i64 }
@@ -14,6 +21,33 @@ fn earth_radius_m() -> f64 { ret 6371008.8f64 }
 
 fn radians(deg: f64) -> f64 { ret deg * (pi() / 180.0f64) }
 fn degrees(rad: f64) -> f64 { ret rad * (180.0f64 / pi()) }
+
+fn map_finite(value: f64) -> bool { ret value == value && value - value == 0.0f64 }
+
+fn mercator_y(lat_deg: f64) -> f64 {
+    ret math.log[f64](math.tan[f64](pi() * 0.25f64 + radians(lat_deg) * 0.5f64))
+}
+
+// A centered WGS84-degree map window. The central meridian can sit on the
+// antimeridian, making 179 and -179 degrees adjacent in a regional viewport.
+// Geometry that still crosses the opposite seam must be cut before projection.
+fn map_project(lon_deg: f64, lat_deg: f64, window: MapWindow) -> (f64, f64, err) {
+    if !map_finite(lon_deg) || !map_finite(lat_deg) || !map_finite(window.center_lon) || !map_finite(window.half_lon_span) || !map_finite(window.south_lat) || !map_finite(window.north_lat) || lon_deg < -180.0f64 || lon_deg > 180.0f64 || window.center_lon < -180.0f64 || window.center_lon > 180.0f64 || window.half_lon_span <= 0.0f64 || window.half_lon_span > 180.0f64 || window.south_lat < -90.0f64 || window.north_lat > 90.0f64 || window.south_lat >= window.north_lat || lat_deg < window.south_lat || lat_deg > window.north_lat { ret (0.0f64, 0.0f64, Invalid) }
+    var delta = lon_deg - window.center_lon
+    if delta > 180.0f64 { delta -= 360.0f64 }
+    if delta < -180.0f64 { delta += 360.0f64 }
+    if delta < -window.half_lon_span || delta > window.half_lon_span { ret (0.0f64, 0.0f64, Invalid) }
+    var y = (window.north_lat - lat_deg) / (window.north_lat - window.south_lat)
+    if window.projection == .Mercator {
+        if window.south_lat < -85.0f64 || window.north_lat > 85.0f64 { ret (0.0f64, 0.0f64, Invalid) }
+        let north = mercator_y(window.north_lat)
+        let south = mercator_y(window.south_lat)
+        y = (north - mercator_y(lat_deg)) / (north - south)
+    }
+    let x = (delta + window.half_lon_span) / (2.0f64 * window.half_lon_span)
+    if !map_finite(x) || !map_finite(y) { ret (0.0f64, 0.0f64, Invalid) }
+    ret (x, y, ok)
+}
 
 // Hilbert curve: the (i, j) quadrant of position `p` under orientation `o`, its
 // inverse, and the orientation change a child position adds.

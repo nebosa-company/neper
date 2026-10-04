@@ -9,6 +9,41 @@ use e.gfx.scene
 use e.text.layout as text_layout
 use e.text.shape
 
+fn append_map_region(a: *mem.Arena, builder: *scene.Builder, region: *const chart.MapRegionLayout, brush: paint.Brush) -> err {
+    if region.rings.len == 0usize { ret chart.Invalid }
+    var vertices = 0usize
+    var ring_index = 0usize
+    while ring_index < region.rings.len {
+        let ring = region.rings[ring_index]
+        if ring.count < 3usize || ring.first > region.points.len || ring.count > region.points.len - ring.first { ret chart.Invalid }
+        vertices += ring.count
+        ring_index += 1usize
+    }
+    let (made, path_error) = geometry.path_builder(a, vertices + region.rings.len, vertices)
+    if path_error != ok { ret path_error }
+    var path = made
+    ring_index = 0usize
+    while ring_index < region.rings.len {
+        let ring = region.rings[ring_index]
+        var vertex_index = 0usize
+        while vertex_index < ring.count {
+            var index = ring.first + vertex_index
+            if ring.reverse { index = ring.first + ring.count - 1usize - vertex_index }
+            let point = region.points[index]
+            let projected = geometry.Point { x: point.x, y: point.y }
+            if vertex_index == 0usize {
+                try geometry.move_to(&path, projected)
+            } else {
+                try geometry.line_to(&path, projected)
+            }
+            vertex_index += 1usize
+        }
+        try geometry.close_path(&path)
+        ring_index += 1usize
+    }
+    ret scene.push(builder, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&path), brush: brush } })
+}
+
 fn straight_channel(premultiplied: u32, alpha: u32) -> u8 {
     if alpha == 0u32 { ret 0u8 }
     let value = (premultiplied * 255u32 + alpha / 2u32) / alpha

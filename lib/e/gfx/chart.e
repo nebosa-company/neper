@@ -6,6 +6,7 @@
 
 use e.algo.stat
 use e.algo.sort
+use e.algo.geo
 use e.gfx.geometry
 use e.math
 use e.math.special
@@ -222,6 +223,19 @@ type GageRunLayout = struct {
     operators: []Layout, part_centers: []Coord,
     dividers: Layout, reference: Layout, summary: stat.GageRunSummary,
 }
+type MapVertex = struct { lon: f64, lat: f64 }
+type MapRegion = struct { key: str }
+type MapMetric = struct { key: str, value: f64 }
+type MapRing = struct { region: usize, first: usize, count: usize, hole: bool }
+type MapProjectedRing = struct { first: usize, count: usize, hole: bool, reverse: bool }
+type MapRegionLayout = struct {
+    key: str, rings: []const MapProjectedRing, points: []const Coord,
+    has_value: bool, value: f64, fraction: f32,
+}
+type ChoroplethStorage = struct { points: []Coord, rings: []MapProjectedRing, regions: []MapRegionLayout }
+type ChoroplethLayout = struct { regions: []MapRegionLayout, minimum: f64, maximum: f64, has_values: bool }
+type MapSite = struct { key: str, lon: f64, lat: f64, value: f64, present: bool }
+type ProportionalMapLayout = struct { marks: Layout, maximum: f64, present_count: usize }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -1293,6 +1307,155 @@ fn gage_run(values: []const f64, parts: usize, operators: usize, repeats: usize,
     let dividers = Layout { kind: .Rug, coords: zero, segments: work.part_dividers[..parts - 1usize], bars: zero, x_min: 0.0f32, x_max: f32(parts), y_min: f32(y_low), y_max: f32(y_high) }
     let reference = Layout { kind: .Rug, coords: zero, segments: work.mean_guide[..1usize], bars: zero, x_min: 0.0f32, x_max: f32(parts), y_min: f32(y_low), y_max: f32(y_high) }
     ret (GageRunLayout { operators: work.operator_layouts[..operators], part_centers: work.part_centers[..parts], dividers: dividers, reference: reference, summary: summary }, ok)
+}
+
+fn map_point(lon: f64, lat: f64, window: geo.MapWindow, bounds: geometry.Rect) -> (Coord, err) {
+    if !valid_bounds(bounds) { ret (zero, Invalid) }
+    let (x, y, project_error) = geo.map_project(lon, lat, window)
+    if project_error != ok { ret (zero, Invalid) }
+    let point = Coord { x: bounds.x + bounds.width * f32(x), y: bounds.y + bounds.height * f32(y) }
+    if !finite(point.x) || !finite(point.y) { ret (zero, Invalid) }
+    ret (point, ok)
+}
+
+// A region owns contiguous rings; each ring owns contiguous WGS84 vertices.
+// The first ring of each region is exterior. Reversed projected winding makes
+// holes subtract under both scene's nonzero fill and SVG's nonzero fill.
+fn choropleth(regions: []const MapRegion, rings: []const MapRing, vertices: []const MapVertex, metrics: []const MapMetric, window: geo.MapWindow, bounds: geometry.Rect, work: *ChoroplethStorage) -> (ChoroplethLayout, err) {
+    if !valid_bounds(bounds) || regions.len == 0usize || rings.len < regions.len || vertices.len / 3usize < rings.len { ret (zero, Invalid) }
+    if work.points.len < vertices.len || work.rings.len < rings.len || work.regions.len < regions.len { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < regions.len {
+        if regions[i].key.len == 0usize { ret (zero, Invalid) }
+        var prior = 0usize
+        while prior < i {
+            if str.eq(regions[prior].key, regions[i].key) { ret (zero, Invalid) }
+            prior += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < metrics.len {
+        if metrics[i].key.len == 0usize || !finite64(metrics[i].value) { ret (zero, Invalid) }
+        var prior = 0usize
+        while prior < i {
+            if str.eq(metrics[prior].key, metrics[i].key) { ret (zero, Invalid) }
+            prior += 1usize
+        }
+        i += 1usize
+    }
+    var minimum = 0.0f64
+    var maximum = 0.0f64
+    var has_values = false
+    i = 0usize
+    while i < regions.len {
+        var metric = 0usize
+        while metric < metrics.len {
+            if str.eq(regions[i].key, metrics[metric].key) {
+                let value = metrics[metric].value
+                if !has_values || value < minimum { minimum = value }
+                if !has_values || value > maximum { maximum = value }
+                has_values = true
+                break
+            }
+            metric += 1usize
+        }
+        i += 1usize
+    }
+    let spread = maximum - minimum
+    if !finite64(spread) { ret (zero, Invalid) }
+    var ring_index = 0usize
+    var vertex_index = 0usize
+    i = 0usize
+    while i < regions.len {
+        let ring_start = ring_index
+        var has_outer = false
+        while ring_index < rings.len && rings[ring_index].region == i {
+            let ring = rings[ring_index]
+            if ring.first != vertex_index || ring.count < 3usize || ring.count > vertices.len - vertex_index || (ring.hole && !has_outer) { ret (zero, Invalid) }
+            if !ring.hole { has_outer = true }
+            var edge = 0usize
+            while edge < ring.count {
+                let vertex = vertices[vertex_index + edge]
+                let (point, point_error) = map_point(vertex.lon, vertex.lat, window, bounds)
+                if point_error != ok { ret (zero, Invalid) }
+                work.points[vertex_index + edge] = point
+                edge += 1usize
+            }
+            var area = 0.0f64
+            edge = 0usize
+            while edge < ring.count {
+                let next = (edge + 1usize) % ring.count
+                let a = work.points[vertex_index + edge]
+                let b = work.points[vertex_index + next]
+                // A wrapped jump over 180 degrees still straddles the seam.
+                if math.abs[f64](f64(a.x - b.x) / f64(bounds.width) * 2.0f64 * window.half_lon_span) > 180.0f64 { ret (zero, Invalid) }
+                area += f64(a.x) * f64(b.y) - f64(b.x) * f64(a.y)
+                edge += 1usize
+            }
+            if !finite64(area) || math.abs[f64](area) < 0.000001f64 { ret (zero, Invalid) }
+            var reverse = area < 0.0f64
+            if ring.hole { reverse = area > 0.0f64 }
+            work.rings[ring_index] = MapProjectedRing { first: vertex_index, count: ring.count, hole: ring.hole, reverse: reverse }
+            vertex_index += ring.count
+            ring_index += 1usize
+        }
+        if !has_outer { ret (zero, Invalid) }
+        var found = false
+        var value = 0.0f64
+        var metric = 0usize
+        while metric < metrics.len {
+            if str.eq(regions[i].key, metrics[metric].key) {
+                found = true
+                value = metrics[metric].value
+                break
+            }
+            metric += 1usize
+        }
+        var value_fraction = 0.0f32
+        if found {
+            value_fraction = 0.5f32
+            if spread > 0.0f64 { value_fraction = f32((value - minimum) / spread) }
+        }
+        work.regions[i] = MapRegionLayout {
+            key: regions[i].key, rings: work.rings[ring_start..ring_index],
+            points: work.points[..vertices.len], has_value: found, value: value, fraction: value_fraction,
+        }
+        i += 1usize
+    }
+    if ring_index != rings.len || vertex_index != vertices.len { ret (zero, Invalid) }
+    ret (ChoroplethLayout { regions: work.regions[..regions.len], minimum: minimum, maximum: maximum, has_values: has_values }, ok)
+}
+
+// Circle area, not radius, is proportional to a nonnegative site value.
+fn proportional_symbol_map(sites: []const MapSite, window: geo.MapWindow, bounds: geometry.Rect, max_radius: f32, bars: []geometry.Rect) -> (ProportionalMapLayout, err) {
+    if !valid_bounds(bounds) || sites.len == 0usize || !finite(max_radius) || max_radius <= 0.0f32 { ret (zero, Invalid) }
+    if bars.len < sites.len { ret (zero, TooLarge) }
+    var maximum = 0.0f64
+    var present_count = 0usize
+    var i = 0usize
+    while i < sites.len {
+        if sites[i].key.len == 0usize || !finite64(sites[i].value) || sites[i].value < 0.0f64 { ret (zero, Invalid) }
+        let (_, point_error) = map_point(sites[i].lon, sites[i].lat, window, bounds)
+        if point_error != ok { ret (zero, Invalid) }
+        if sites[i].present {
+            present_count += 1usize
+            if sites[i].value > maximum { maximum = sites[i].value }
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < sites.len {
+        bars[i] = geometry.rect(0.0, 0.0, 0.0, 0.0)
+        if sites[i].present && sites[i].value > 0.0f64 && maximum > 0.0f64 {
+            let (point, _) = map_point(sites[i].lon, sites[i].lat, window, bounds)
+            let radius = max_radius * f32(math.sqrt[f64](sites[i].value / maximum))
+            bars[i] = geometry.rect(point.x - radius, point.y - radius, 2.0f32 * radius, 2.0f32 * radius)
+        }
+        i += 1usize
+    }
+    let marks = Layout { kind: .Bubble, coords: zero, segments: zero, bars: bars[..sites.len], x_min: 0.0f32, x_max: 1.0f32, y_min: 0.0f32, y_max: 1.0f32 }
+    ret (ProportionalMapLayout { marks: marks, maximum: maximum, present_count: present_count }, ok)
 }
 
 // A sparkline is an evenly spaced Line with no guide contract.

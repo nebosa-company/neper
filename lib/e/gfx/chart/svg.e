@@ -50,6 +50,34 @@ fn begin(w: *io.Writer, width: f32, height: f32, title: str, description: str) -
 
 fn finish(w: *io.Writer) -> err { ret io.write_all(w, "</svg>\n") }
 
+fn append_map_region(w: *io.Writer, region: *const chart.MapRegionLayout, ink: paint.Color) -> err {
+    if region.rings.len == 0usize || !paint.color_ok(ink) { ret Invalid }
+    try io.write_all(w, "<path d=\"")
+    var ring_index = 0usize
+    while ring_index < region.rings.len {
+        let ring = region.rings[ring_index]
+        if ring.count < 3usize || ring.first > region.points.len || ring.count > region.points.len - ring.first { ret Invalid }
+        if ring_index > 0usize { try io.write_all(w, " ") }
+        try io.write_all(w, "M")
+        var vertex_index = 0usize
+        while vertex_index < ring.count {
+            var index = ring.first + vertex_index
+            if ring.reverse { index = ring.first + ring.count - 1usize - vertex_index }
+            let point = region.points[index]
+            if vertex_index > 0usize { try io.write_all(w, " L") }
+            try number(w, point.x)
+            try io.write_all(w, " ")
+            try number(w, point.y)
+            vertex_index += 1usize
+        }
+        try io.write_all(w, " Z")
+        ring_index += 1usize
+    }
+    try io.write_all(w, "\" fill-rule=\"nonzero\"")
+    try color(w, ink, false)
+    ret io.write_all(w, "/>\n")
+}
+
 fn color(w: *io.Writer, ink: paint.Color, stroke: bool) -> err {
     if !paint.color_ok(ink) { ret Invalid }
     // Match scene.channel_byte until the raster backend changes its output transfer.

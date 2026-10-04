@@ -8,7 +8,7 @@ reverse Cartesian scales, caller-owned ticks and text labels, linear/log nice
 breaks, grid/axis passes,
 basic category-center labels and per-series legend metadata, facet panel
 geometry, explicit limits for shared/free facet scales, and
-two hundred and six PNG plus two hundred and six SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map, a SIPOC overview, an expected-value decision tree, a rooted org chart, a layered dependency graph, an explicitly placed flowchart, an event-labeled state machine, an ordered sequence diagram, an entity-relationship diagram, a branching process map, a fishbone/Ishikawa diagram, a cause-effect tree, a Weibull probability plot, a binomial OC curve, a crossed Gage R&R component chart, a two-factor multi-vari chart, a raw-data main-effects chart, a two-factor interaction plot, a three-factor cube plot, a one-sided spectrogram, a waterfall spectrum, a Bode plot, a Nyquist plot, a 3-D scatter plot, a 3-D histogram, a 3-D density surface, a 3-D wireframe, a one-way ANOM chart, an individual Hotelling T-squared chart, a generalized-variance chart, a MEWMA chart, a focused normal-capability chart, a fitted lognormal-capability chart, a binomial attribute-capability chart, a balanced batch-capability chart, a gage bias/linearity chart, an attribute-agreement chart and a crossed gage-run chart are also delivered. Individuals, moving-range,
+two hundred and eight PNG plus two hundred and eight SVG previews from Neper. Basic Gantt scheduling, milestone roadmaps, burndown, burnup, earned-value curves, a likelihood-impact risk matrix, a resource histogram, a basic swimlane workflow, a Kanban board layout, a PERT/CPM activity network, a single-stream value-stream map, a SIPOC overview, an expected-value decision tree, a rooted org chart, a layered dependency graph, an explicitly placed flowchart, an event-labeled state machine, an ordered sequence diagram, an entity-relationship diagram, a branching process map, a fishbone/Ishikawa diagram, a cause-effect tree, a Weibull probability plot, a binomial OC curve, a crossed Gage R&R component chart, a two-factor multi-vari chart, a raw-data main-effects chart, a two-factor interaction plot, a three-factor cube plot, a one-sided spectrogram, a waterfall spectrum, a Bode plot, a Nyquist plot, a 3-D scatter plot, a 3-D histogram, a 3-D density surface, a 3-D wireframe, a one-way ANOM chart, an individual Hotelling T-squared chart, a generalized-variance chart, a MEWMA chart, a focused normal-capability chart, a fitted lognormal-capability chart, a binomial attribute-capability chart, a balanced batch-capability chart, a gage bias/linearity chart, an attribute-agreement chart, a crossed gage-run chart, a choropleth and a proportional-symbol map are also delivered. Individuals, moving-range,
 X-bar, subgroup-range, X-bar/S, p/np/c/u, Laney P-prime/U-prime, geometric G, exponential T, CUSUM and EWMA control charts are delivered. Kaplan–Meier
 survival and Nelson–Aalen cumulative-hazard curves are delivered. OLS residual/fitted,
 leverage/standardized-residual and Cook's-distance diagnostics are delivered.
@@ -151,6 +151,19 @@ observations are collapsed into averages. A Windows/Linux fixture checks exact
 summary statistics, part positions, mean guide, scene/SVG output and refusal
 paths. The gallery adds a PNG/SVG pair. Nested-operator and time-ordered
 stability studies remain follow-ons.
+
+`choropleth` joins keyed metric values to caller-supplied region rings and
+projects WGS84-degree vertices through a shared equirectangular or Mercator
+window. It produces one fill-ready compound polygon per region, normalizing
+outer and hole winding for matching scene/SVG fills and retaining missing
+regions separately from numeric zero. `proportional_symbol_map` projects keyed
+sites through the same window and scales circle area with nonnegative values.
+The Windows/Linux fixture checks projection references, dateline-centered
+continuity, keyed values, missing data, hole winding, area ratios, adapters and
+refusals; two PNG/SVG pairs join the gallery. This first map slice requires
+caller-supplied boundaries entirely within the window; it rejects geometry
+that crosses the opposite seam. Automatic clipping, map-file import, geographic
+legends and accessible per-region metadata remain planned.
 
 `fishbone` lays out a right-facing effect, alternating category ribs and
 parent-linked causes, including deeper subcauses, as caller-owned segment,

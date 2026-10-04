@@ -34834,3 +34834,17 @@ repeats nor treats the visualization as a Gage R&R variance estimate. Invalid
 dimensions, nonfinite values, unusable bounds and insufficient storage fail
 before rendering. The Windows/Linux fixture and PNG/SVG preview cover the
 contract; nested designs and time-order diagnostics remain future work.
+
+## D1959 — Share explicit map windows across polygon and symbol charts
+
+`e.algo.geo.map_project` maps WGS84 degrees into a caller-chosen equirectangular
+or Mercator window. Centering that window on 180 degrees keeps nearby positive
+and negative longitudes adjacent. The first chart slice rejects out-of-window
+vertices and unsplit polygons that still cross the opposite seam rather than
+drawing false long edges; general clipping remains required for arbitrary
+world maps. `chart.choropleth` joins values by region key, retains missing data
+separately from zero and emits caller-owned compound rings with opposite hole
+winding for scene/SVG parity. `chart.proportional_symbol_map` shares the
+projection and encodes nonnegative values by circle area. Synthetic gallery
+geometry avoids implying real administrative boundaries; Windows/Linux
+fixtures cover projection, joins, holes, symbol ratios and refusal paths.

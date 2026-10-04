@@ -1787,12 +1787,18 @@ slope order and queries at increasing `x`.
 ### `e.algo.geo`
 
 ```neper
+type MapProjection = enum u8 { Equirectangular, Mercator }
+type MapWindow = struct { projection: MapProjection, center_lon: f64, half_lon_span: f64, south_lat: f64, north_lat: f64 }
+error Invalid
 fn pi() -> f64
 fn max_level() -> u32
 fn max_size() -> i64
 fn earth_radius_m() -> f64
 fn radians(deg: f64) -> f64
 fn degrees(rad: f64) -> f64
+fn map_finite(value: f64) -> bool
+fn mercator_y(lat_deg: f64) -> f64
+fn map_project(lon_deg: f64, lat_deg: f64, window: MapWindow) -> (f64, f64, err)
 fn pos_to_ij(o: u32, p: u32) -> u32
 fn ij_to_pos(o: u32, ij: u32) -> u32
 fn pos_to_orientation(p: u32) -> u32
@@ -15989,6 +15995,16 @@ type AttributeAgreementStorage = struct { within_rates: []stat.AttributeAgreemen
 type AttributeAgreementLayout = struct { within: Layout, within_intervals: Layout, versus_standard: Layout, standard_intervals: Layout, summary: stat.AttributeAgreement }
 type GageRunStorage = struct { operator_points: []Coord, operator_layouts: []Layout, part_centers: []Coord, part_dividers: []Segment, mean_guide: []Segment }
 type GageRunLayout = struct { operators: []Layout, part_centers: []Coord, dividers: Layout, reference: Layout, summary: stat.GageRunSummary }
+type MapVertex = struct { lon: f64, lat: f64 }
+type MapRegion = struct { key: str }
+type MapMetric = struct { key: str, value: f64 }
+type MapRing = struct { region: usize, first: usize, count: usize, hole: bool }
+type MapProjectedRing = struct { first: usize, count: usize, hole: bool, reverse: bool }
+type MapRegionLayout = struct { key: str, rings: []const MapProjectedRing, points: []const Coord, has_value: bool, value: f64, fraction: f32 }
+type ChoroplethStorage = struct { points: []Coord, rings: []MapProjectedRing, regions: []MapRegionLayout }
+type ChoroplethLayout = struct { regions: []MapRegionLayout, minimum: f64, maximum: f64, has_values: bool }
+type MapSite = struct { key: str, lon: f64, lat: f64, value: f64, present: bool }
+type ProportionalMapLayout = struct { marks: Layout, maximum: f64, present_count: usize }
 type CapabilitySixpackLayout = struct { individuals: Layout, moving_range: Layout, recent: Layout, histogram: Layout, within_curve: Layout, overall_curve: Layout, probability: Layout, intervals: Layout, guides: Layout, summary: stat.NormalCapability }
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
@@ -16023,6 +16039,9 @@ fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, 
 fn gage_linearity(references: []const f64, measurements: []const f64, repeats: usize, critical: f64, bounds: geometry.Rect, work: *GageLinearityStorage) -> (GageLinearityLayout, err)
 fn attribute_agreement(standard: []const usize, ratings: []const usize, appraisers: usize, trials: usize, categories: usize, confidence: f64, panels: []const geometry.Rect, work: *AttributeAgreementStorage) -> (AttributeAgreementLayout, err)
 fn gage_run(values: []const f64, parts: usize, operators: usize, repeats: usize, bounds: geometry.Rect, work: *GageRunStorage) -> (GageRunLayout, err)
+fn map_point(lon: f64, lat: f64, window: geo.MapWindow, bounds: geometry.Rect) -> (Coord, err)
+fn choropleth(regions: []const MapRegion, rings: []const MapRing, vertices: []const MapVertex, metrics: []const MapMetric, window: geo.MapWindow, bounds: geometry.Rect, work: *ChoroplethStorage) -> (ChoroplethLayout, err)
+fn proportional_symbol_map(sites: []const MapSite, window: geo.MapWindow, bounds: geometry.Rect, max_radius: f32, bars: []geometry.Rect) -> (ProportionalMapLayout, err)
 fn fishbone(effect: str, categories: []const str, causes: []const FishboneCause, bounds: geometry.Rect, spine: []Segment, ribs: []Segment, branches: []Segment, head_box: []geometry.Rect, labels: []Label) -> (FishboneLayout, err)
 fn cause_effect_tree(nodes: []const CauseTreeNode, bounds: geometry.Rect, work: *CauseTreeWork, boxes: []geometry.Rect, connectors: []Segment, labels: []Label) -> (CauseTreeLayout, err)
 fn weibull_probability_plot(sorted_failures: []const f64, total_count: usize, shape: f64, scale: f64, domain_min: f64, domain_max: f64, bounds: geometry.Rect, points: []Coord, reference: []Segment, tick_storage: []Tick) -> (ProbabilityLayout, err)
@@ -16158,6 +16177,7 @@ fn facet_grid(bounds: geometry.Rect, columns: usize, count: usize, gap: f32, pan
 
 ```neper
 fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, brush: paint.Brush) -> err
+fn append_map_region(a: *mem.Arena, builder: *scene.Builder, region: *const chart.MapRegionLayout, brush: paint.Brush) -> err
 fn append_filled_contour(a: *mem.Arena, builder: *scene.Builder, layers: []const chart.Layout, band_ids: []const usize, colors: []const paint.Color) -> err
 fn append_matrix(builder: *scene.Builder, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err
 fn append_guides(builder: *scene.Builder, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Brush, axis: paint.Brush) -> err
@@ -16170,6 +16190,7 @@ fn append_labels(a: *mem.Arena, builder: *scene.Builder, labels: []const chart.L
 error Invalid
 fn begin(w: *io.Writer, width: f32, height: f32, title: str, description: str) -> err
 fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err
+fn append_map_region(w: *io.Writer, region: *const chart.MapRegionLayout, ink: paint.Color) -> err
 fn append_filled_contour(w: *io.Writer, layers: []const chart.Layout, band_ids: []const usize, colors: []const paint.Color) -> err
 fn append_matrix(w: *io.Writer, marks: *const chart.MatrixLayout, low: paint.Color, middle: paint.Color, high: paint.Color) -> err
 fn append_guides(w: *io.Writer, bounds: geometry.Rect, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, grid: paint.Color, axis: paint.Color) -> err

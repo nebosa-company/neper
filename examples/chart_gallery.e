@@ -1,6 +1,7 @@
 // Render the currently delivered chart kinds through Neper's CPU scene and PNG encoder.
 // From the repository root, run this executable to refresh docs/chart-previews/*.png.
 use e.algo.stat
+use e.algo.geo
 use e.dsp
 use e.fs
 use e.gpu
@@ -4782,6 +4783,184 @@ fn render_gage_run_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_map_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, symbols: bool) -> err {
+    var path: str = "docs/chart-previews/choropleth.png"
+    var title: str = "Choropleth / district rate"
+    var subtitle: str = "Rate per 1,000 / gray district has no data"
+    if symbols {
+        path = "docs/chart-previews/proportional_symbol_map.png"
+        title = "Proportional symbol map"
+        subtitle = "Circle area tracks site volume / missing site unmarked"
+    }
+    let regions = [6]chart.MapRegion{
+        chart.MapRegion { key: "A" }, chart.MapRegion { key: "B" }, chart.MapRegion { key: "C" },
+        chart.MapRegion { key: "D" }, chart.MapRegion { key: "E" }, chart.MapRegion { key: "F" },
+    }
+    let rings = [7]chart.MapRing{
+        chart.MapRing { region: 0usize, first: 0usize, count: 4usize, hole: false },
+        chart.MapRing { region: 0usize, first: 4usize, count: 4usize, hole: true },
+        chart.MapRing { region: 1usize, first: 8usize, count: 4usize, hole: false },
+        chart.MapRing { region: 2usize, first: 12usize, count: 4usize, hole: false },
+        chart.MapRing { region: 3usize, first: 16usize, count: 4usize, hole: false },
+        chart.MapRing { region: 4usize, first: 20usize, count: 4usize, hole: false },
+        chart.MapRing { region: 5usize, first: 24usize, count: 4usize, hole: false },
+    }
+    let vertices = [28]chart.MapVertex{
+        chart.MapVertex { lon: -9.0f64, lat: 5.0f64 }, chart.MapVertex { lon: -3.5f64, lat: 4.5f64 }, chart.MapVertex { lon: -2.5f64, lat: 9.0f64 }, chart.MapVertex { lon: -7.5f64, lat: 8.5f64 },
+        chart.MapVertex { lon: -7.3f64, lat: 5.8f64 }, chart.MapVertex { lon: -6.3f64, lat: 5.8f64 }, chart.MapVertex { lon: -6.3f64, lat: 6.7f64 }, chart.MapVertex { lon: -7.3f64, lat: 6.7f64 },
+        chart.MapVertex { lon: -3.5f64, lat: 4.5f64 }, chart.MapVertex { lon: 2.5f64, lat: 5.2f64 }, chart.MapVertex { lon: 2.0f64, lat: 8.7f64 }, chart.MapVertex { lon: -2.5f64, lat: 9.0f64 },
+        chart.MapVertex { lon: 2.5f64, lat: 5.2f64 }, chart.MapVertex { lon: 9.0f64, lat: 5.5f64 }, chart.MapVertex { lon: 7.5f64, lat: 8.0f64 }, chart.MapVertex { lon: 2.0f64, lat: 8.7f64 },
+        chart.MapVertex { lon: -8.0f64, lat: 2.0f64 }, chart.MapVertex { lon: -3.0f64, lat: 1.0f64 }, chart.MapVertex { lon: -3.5f64, lat: 4.5f64 }, chart.MapVertex { lon: -9.0f64, lat: 5.0f64 },
+        chart.MapVertex { lon: -3.0f64, lat: 1.0f64 }, chart.MapVertex { lon: 2.0f64, lat: 1.5f64 }, chart.MapVertex { lon: 2.5f64, lat: 5.2f64 }, chart.MapVertex { lon: -3.5f64, lat: 4.5f64 },
+        chart.MapVertex { lon: 2.0f64, lat: 1.5f64 }, chart.MapVertex { lon: 8.0f64, lat: 2.5f64 }, chart.MapVertex { lon: 9.0f64, lat: 5.5f64 }, chart.MapVertex { lon: 2.5f64, lat: 5.2f64 },
+    }
+    let metrics = [5]chart.MapMetric{
+        chart.MapMetric { key: "A", value: 12.0f64 }, chart.MapMetric { key: "B", value: 26.0f64 },
+        chart.MapMetric { key: "C", value: 38.0f64 }, chart.MapMetric { key: "D", value: 18.0f64 },
+        chart.MapMetric { key: "E", value: 32.0f64 },
+    }
+    let sites = [6]chart.MapSite{
+        chart.MapSite { key: "A", lon: -5.5f64, lat: 6.7f64, value: 100.0f64, present: true },
+        chart.MapSite { key: "B", lon: -0.3f64, lat: 6.8f64, value: 60.0f64, present: true },
+        chart.MapSite { key: "C", lon: 5.2f64, lat: 6.7f64, value: 180.0f64, present: true },
+        chart.MapSite { key: "D", lon: -5.7f64, lat: 3.2f64, value: 30.0f64, present: true },
+        chart.MapSite { key: "E", lon: -0.2f64, lat: 3.0f64, value: 75.0f64, present: true },
+        chart.MapSite { key: "F", lon: 5.5f64, lat: 3.7f64, value: 0.0f64, present: false },
+    }
+    let window = geo.MapWindow { projection: .Equirectangular, center_lon: 0.0f64, half_lon_span: 10.0f64, south_lat: 0.0f64, north_lat: 10.0f64 }
+    let plot = geometry.rect(30.0, 49.0, 300.0, 142.0)
+    var projected: [28]chart.Coord = zero
+    var projected_rings: [7]chart.MapProjectedRing = zero
+    var region_layouts: [6]chart.MapRegionLayout = zero
+    var work = chart.ChoroplethStorage { points: projected[..], rings: projected_rings[..], regions: region_layouts[..] }
+    let (map, map_error) = chart.choropleth(regions[..], rings[..], vertices[..], metrics[..], window, plot, &work)
+    if map_error != ok { ret map_error }
+    var circle_boxes: [6]geometry.Rect = zero
+    let (circles, circle_error) = chart.proportional_symbol_map(sites[..], window, plot, 16.0f32, circle_boxes[..])
+    if circle_error != ok { ret circle_error }
+    var border_segments: [28]chart.Segment = zero
+    var region_index = 0usize
+    while region_index < rings.len {
+        var edge = 0usize
+        while edge < 4usize {
+            let first = rings[region_index].first
+            border_segments[first + edge] = chart.Segment {
+                from: projected[first + edge], to: projected[first + (edge + 1usize) % 4usize],
+            }
+            edge += 1usize
+        }
+        region_index += 1usize
+    }
+    let borders = chart.Layout { kind: .Rug, coords: zero, segments: border_segments[..], bars: zero, x_min: 0.0f32, x_max: 1.0f32, y_min: 0.0f32, y_max: 1.0f32 }
+    let small_radius = 9.0f32 * math.sqrt[f32](30.0f32 / 180.0f32)
+    let mid_radius = 9.0f32 * math.sqrt[f32](100.0f32 / 180.0f32)
+    var legend_boxes = [3]geometry.Rect{
+        geometry.rect(122.0f32 - small_radius, 210.0f32 - small_radius, 2.0f32 * small_radius, 2.0f32 * small_radius),
+        geometry.rect(191.0f32 - mid_radius, 210.0f32 - mid_radius, 2.0f32 * mid_radius, 2.0f32 * mid_radius),
+        geometry.rect(263.0, 201.0, 18.0, 18.0),
+    }
+    let legend_circles = chart.Layout { kind: .Bubble, coords: zero, segments: zero, bars: legend_boxes[..], x_min: 0.0f32, x_max: 1.0f32, y_min: 0.0f32, y_max: 1.0f32 }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let dark = paint.rgba(0.16, 0.22, 0.31, 1.0)
+    let pale = paint.rgba(0.96, 0.98, 1.0, 1.0)
+    let missing = paint.rgba(0.72, 0.76, 0.80, 1.0)
+    let bubble = paint.rgba(0.07, 0.37, 0.72, 0.82)
+    let palette = [5]paint.Color{
+        paint.rgba(0.79, 0.88, 0.96, 1.0), paint.rgba(0.59, 0.77, 0.91, 1.0),
+        paint.rgba(0.37, 0.64, 0.85, 1.0), paint.rgba(0.20, 0.50, 0.75, 1.0),
+        paint.rgba(0.08, 0.34, 0.63, 1.0),
+    }
+    let labels = [4]chart.Label{
+        chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 19.0 }, align: .Center },
+        chart.Label { text: subtitle, anchor: chart.Coord { x: 180.0, y: 38.0 }, align: .Center },
+        chart.Label { text: "Low", anchor: chart.Coord { x: 52.0, y: 226.0 }, align: .Center },
+        chart.Label { text: "High", anchor: chart.Coord { x: 306.0, y: 226.0 }, align: .Center },
+    }
+    let region_labels = [6]chart.Label{
+        chart.Label { text: "A", anchor: chart.Coord { x: 95.0, y: 91.0 }, align: .Center },
+        chart.Label { text: "B", anchor: chart.Coord { x: 175.0, y: 88.0 }, align: .Center },
+        chart.Label { text: "C", anchor: chart.Coord { x: 258.0, y: 92.0 }, align: .Center },
+        chart.Label { text: "D", anchor: chart.Coord { x: 92.0, y: 153.0 }, align: .Center },
+        chart.Label { text: "E", anchor: chart.Coord { x: 175.0, y: 152.0 }, align: .Center },
+        chart.Label { text: "F", anchor: chart.Coord { x: 260.0, y: 152.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    var font_id = 31u32
+    if symbols { font_id = 32u32 }
+    let font = shape.Font { id: font_id, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 512usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    region_index = 0usize
+    while region_index < map.regions.len {
+        var ink = missing
+        if !symbols && map.regions[region_index].has_value { ink = palette[usize(map.regions[region_index].fraction * 4.0f32)] }
+        try chart_scene.append_map_region(a, &builder, &map.regions[region_index], paint.Brush { Solid: ink })
+        region_index += 1usize
+    }
+    try chart_scene.append(a, &builder, &borders, paint.Brush { Solid: white })
+    if symbols {
+        try chart_scene.append(a, &builder, &circles.marks, paint.Brush { Solid: bubble })
+        try chart_scene.append(a, &builder, &legend_circles, paint.Brush { Solid: bubble })
+    }
+    if !symbols { try chart_scene.append_labels(a, &builder, region_labels[..], font, 10.0, paint.Brush { Solid: dark }) }
+    if !symbols {
+        region_index = 0usize
+        while region_index < palette.len {
+            try fill(&builder, geometry.rect(78.0 + f32(region_index) * 40.0f32, 209.0, 40.0, 9.0), paint.Brush { Solid: palette[region_index] })
+            region_index += 1usize
+        }
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 8.0, paint.Brush { Solid: dark })
+    if !symbols { try chart_scene.append_labels(a, &builder, labels[2usize..], font, 8.0, paint.Brush { Solid: dark }) }
+    if symbols {
+        let symbol_legend = [3]chart.Label{
+            chart.Label { text: "30", anchor: chart.Coord { x: 122.0, y: 229.0 }, align: .Center },
+            chart.Label { text: "100", anchor: chart.Coord { x: 191.0, y: 229.0 }, align: .Center },
+            chart.Label { text: "180", anchor: chart.Coord { x: 272.0, y: 229.0 }, align: .Center },
+        }
+        try chart_scene.append_labels(a, &builder, symbol_legend[..], font, 8.0, paint.Brush { Solid: dark })
+    }
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    region_index = 0usize
+    while region_index < map.regions.len {
+        var ink = missing
+        if !symbols && map.regions[region_index].has_value { ink = palette[usize(map.regions[region_index].fraction * 4.0f32)] }
+        try chart_svg.append_map_region(&writer, &map.regions[region_index], ink)
+        region_index += 1usize
+    }
+    try chart_svg.append(&writer, &borders, white)
+    if symbols {
+        try chart_svg.append(&writer, &circles.marks, bubble)
+        try chart_svg.append(&writer, &legend_circles, bubble)
+    }
+    if !symbols { try chart_svg.append_labels(&writer, region_labels[..], dark, 10.0) }
+    if !symbols {
+        region_index = 0usize
+        while region_index < palette.len {
+            try chart_svg.rect(&writer, geometry.rect(78.0 + f32(region_index) * 40.0f32, 209.0, 40.0, 9.0), palette[region_index], false)
+            region_index += 1usize
+        }
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 8.0)
+    if !symbols { try chart_svg.append_labels(&writer, labels[2usize..], dark, 8.0) }
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_capability_normal_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/capability_normal.png"
     let values = [30]f64{
@@ -9127,6 +9306,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_gage_bias_linearity_preview(a, queue, output_target, canvas, &renderer)
     try render_attribute_agreement_preview(a, queue, output_target, canvas, &renderer)
     try render_gage_run_preview(a, queue, output_target, canvas, &renderer)
+    try render_map_preview(a, queue, output_target, canvas, &renderer, false)
+    try render_map_preview(a, queue, output_target, canvas, &renderer, true)
     try render_capability_normal_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_sixpack_preview(a, queue, output_target, canvas, &renderer)
     try render_fishbone_preview(a, queue, output_target, canvas, &renderer)

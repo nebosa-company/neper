@@ -7,8 +7,6 @@
 # Statistical, quality, medical and scientific diagrams
 
 # Geographic and reporting
-choropleth
-proportional_symbol_map
 cross_tab_report
 matrix_report
 
