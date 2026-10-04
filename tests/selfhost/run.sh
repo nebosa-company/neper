@@ -2964,6 +2964,11 @@ gfx_chart_interaction_plot_written=$($test_build/neper-self emit-executable "$re
 chmod +x "$test_build/gfx-chart-interaction-plot-selfhost"
 gfx_chart_interaction_plot_output=$("$test_build/gfx-chart-interaction-plot-selfhost")
 [ "$gfx_chart_interaction_plot_output" = 'gfx chart interaction plot ok' ]
+gfx_chart_cube_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_cube_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-cube-plot-selfhost")
+[ "$gfx_chart_cube_plot_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-cube-plot-selfhost"
+gfx_chart_cube_plot_output=$("$test_build/gfx-chart-cube-plot-selfhost")
+[ "$gfx_chart_cube_plot_output" = 'gfx chart cube plot ok' ]
 gfx_chart_spine_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_spine_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-spine-plot-selfhost")
 [ "$gfx_chart_spine_plot_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-spine-plot-selfhost"

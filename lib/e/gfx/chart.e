@@ -100,6 +100,8 @@ type MainEffectsStorage = struct { points: []Coord, lines: []Segment, references
 type MainEffectsLayout = struct { levels: Layout, connections: Layout, reference: Layout, means: []f64, counts: []usize, grand_mean: f64 }
 type InteractionStorage = struct { points: []Coord, lines: []Segment, means: []f64, counts: []usize, series: []Layout }
 type InteractionLayout = struct { series: []Layout, means: []f64, counts: []usize }
+type CubePlotStorage = struct { vertices: []Coord, edges: []Segment, means: []f64, counts: []usize }
+type CubePlotLayout = struct { vertices: Layout, frame: Layout, means: []f64, counts: []usize }
 type SpineLayout = struct { categories: []Layout, column_totals: []f64, grand_total: f64 }
 type HexCell = struct { center: Coord, count: u64 }
 type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
@@ -7080,6 +7082,72 @@ fn interaction_plot(values: []const f64, x_ids: []const usize, series_ids: []con
         series += 1usize
     }
     ret (InteractionLayout { series: storage.series[..series_levels], means: storage.means[..cells], counts: storage.counts[..cells] }, ok)
+}
+
+// Three two-level factors: ids are observation-major triples; bits of each
+// vertex index encode factor A, B and C. The projected cube geometry is
+// response-independent, while numeric raw cell means stay caller-owned.
+fn cube_plot(values: []const f64, factor_ids: []const usize, bounds: geometry.Rect, storage: *CubePlotStorage) -> (CubePlotLayout, err) {
+    if values.len < 8usize || values.len > factor_ids.len / 3usize || factor_ids.len != values.len * 3usize || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if storage.vertices.len < 8usize || storage.edges.len < 12usize || storage.means.len < 8usize || storage.counts.len < 8usize { ret (zero, TooLarge) }
+    var lo = values[0usize]
+    var hi = values[0usize]
+    var row = 0usize
+    while row < values.len {
+        if !finite64(values[row]) || factor_ids[row * 3usize] > 1usize || factor_ids[row * 3usize + 1usize] > 1usize || factor_ids[row * 3usize + 2usize] > 1usize { ret (zero, Invalid) }
+        if values[row] < lo { lo = values[row] }
+        if values[row] > hi { hi = values[row] }
+        row += 1usize
+    }
+    if lo == hi {
+        let pad = math.max[f64](1.0f64, math.abs[f64](lo) * 0.05f64)
+        lo -= pad
+        hi += pad
+    }
+    if !finite64(lo) || !finite64(hi) || !finite64(hi - lo) || hi <= lo || !finite(f32(lo)) || !finite(f32(hi)) { ret (zero, Invalid) }
+    var vertex = 0usize
+    while vertex < 8usize {
+        storage.means[vertex] = 0.0f64
+        storage.counts[vertex] = 0usize
+        let x = f32(vertex % 2usize)
+        let y = f32((vertex / 2usize) % 2usize)
+        let z = f32(vertex / 4usize)
+        let point = Coord { x: bounds.x + bounds.width * (0.16 + 0.58 * x + 0.18 * z), y: bounds.y + bounds.height * (0.88 - 0.58 * y - 0.18 * z) }
+        if !finite(point.x) || !finite(point.y) { ret (zero, Invalid) }
+        storage.vertices[vertex] = point
+        vertex += 1usize
+    }
+    row = 0usize
+    while row < values.len {
+        let index = factor_ids[row * 3usize] + factor_ids[row * 3usize + 1usize] * 2usize + factor_ids[row * 3usize + 2usize] * 4usize
+        storage.means[index] += values[row] - values[0usize]
+        storage.counts[index] += 1usize
+        row += 1usize
+    }
+    vertex = 0usize
+    var edge = 0usize
+    while vertex < 8usize {
+        if storage.counts[vertex] == 0usize || !finite64(storage.means[vertex]) { ret (zero, Invalid) }
+        let mean = values[0usize] + storage.means[vertex] / f64(storage.counts[vertex])
+        if !finite64(mean) { ret (zero, Invalid) }
+        storage.means[vertex] = mean
+        if vertex % 2usize == 0usize {
+            storage.edges[edge] = Segment { from: storage.vertices[vertex], to: storage.vertices[vertex + 1usize] }
+            edge += 1usize
+        }
+        if (vertex / 2usize) % 2usize == 0usize {
+            storage.edges[edge] = Segment { from: storage.vertices[vertex], to: storage.vertices[vertex + 2usize] }
+            edge += 1usize
+        }
+        if vertex < 4usize {
+            storage.edges[edge] = Segment { from: storage.vertices[vertex], to: storage.vertices[vertex + 4usize] }
+            edge += 1usize
+        }
+        vertex += 1usize
+    }
+    let corners = Layout { kind: .Scatter, coords: storage.vertices[..8usize], segments: zero, bars: zero, x_min: 0.0, x_max: 2.0, y_min: f32(lo), y_max: f32(hi) }
+    let wireframe = Layout { kind: .Rug, coords: zero, segments: storage.edges[..12usize], bars: zero, x_min: 0.0, x_max: 2.0, y_min: f32(lo), y_max: f32(hi) }
+    ret (CubePlotLayout { vertices: corners, frame: wireframe, means: storage.means[..8usize], counts: storage.counts[..8usize] }, ok)
 }
 
 // Two-parameter Weibull probability paper. `total_count` includes units

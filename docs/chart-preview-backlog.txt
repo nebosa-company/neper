@@ -5,7 +5,6 @@
 # Cartesian and distribution variants
 
 # Statistical, quality, medical and scientific diagrams
-cube_plot
 spectrogram
 waterfall_spectrum
 bode

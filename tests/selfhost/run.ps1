@@ -3342,6 +3342,11 @@ $gfxChartInteractionPlotWritten = & $compiler emit-executable (Join-Path $PSScri
 if ($LASTEXITCODE -ne 0 -or $gfxChartInteractionPlotWritten -ne 'executable written') { throw 'gfx_chart_interaction_plot emission failed' }
 $gfxChartInteractionPlotOutput = & $gfxChartInteractionPlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartInteractionPlotOutput -ne 'gfx chart interaction plot ok') { throw "the e.gfx.chart interaction plot answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCubePlotPath = Join-Path $testBuild 'gfx-chart-cube-plot-selfhost.exe'
+$gfxChartCubePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_cube_plot\src\main.e') $repo 'x64' 'windows' $gfxChartCubePlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCubePlotWritten -ne 'executable written') { throw 'gfx_chart_cube_plot emission failed' }
+$gfxChartCubePlotOutput = & $gfxChartCubePlotPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCubePlotOutput -ne 'gfx chart cube plot ok') { throw "the e.gfx.chart cube plot answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
 $gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }

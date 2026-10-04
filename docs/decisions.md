@@ -34536,3 +34536,17 @@ Nonparallel lines are descriptive, not a significance test or a model-adjusted
 interaction estimate.
 
 References: https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/anova/supporting-topics/anova-models/what-is-an-interaction/ ; https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/inteplot.htm
+
+## D1936 — Put three two-level raw cell means at cube vertices
+
+`chart.cube_plot` accepts observation-major A/B/C binary factor ids and
+response values. Index bits map each combination to one of eight projected
+vertices; twelve independent edges form the wireframe. Caller-owned means
+and counts keep the response information separate from geometry so text and
+styling can be supplied by the host. Unequal nonempty cells are supported;
+missing combinations are refused rather than labeled zero. The Windows/Linux
+fixture checks all eight means, projection, edge count, scene/SVG adapters,
+flat responses and refusal paths. This slice does not fit a model or show
+four-plus-factor cube grids or design-only cubes.
+
+References: https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/yatescub.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/using-fitted-models/how-to/cube-plot/interpret-the-results/key-results/
