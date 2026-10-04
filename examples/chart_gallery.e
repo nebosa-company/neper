@@ -2680,6 +2680,77 @@ fn render_pdf_export_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.T
     ret fs.write_file(a, "docs/chart-previews/pdf_export.pdf", io.memory_bytes(&pdf_held))
 }
 
+// benchmarks/charts/results/windows.json, 2026-10-04: nine-run medians of 200
+// charts per pass (i5-12500H, matplotlib 3.9.4). Re-running the benchmark
+// does not change this picture; update the numbers here by hand.
+fn render_benchmark_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/benchmark_matplotlib.png"
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let dark = paint.rgba(0.16, 0.20, 0.28, 1.0)
+    let axis = paint.rgba(0.56, 0.62, 0.70, 1.0)
+    let colors = [2]paint.Color{ paint.rgba(0.0, 114.0 / 255.0, 178.0 / 255.0, 1.0), paint.rgba(195.0 / 255.0, 86.0 / 255.0, 0.0, 1.0) }
+    let values = [4]f32{ 2.62, 16.02, 20.28, 17.68 }
+    let shown = [4]str{ "2.62", "16.02", "20.28", "17.68" }
+    let plot = geometry.rect(30.0, 52.0, 300.0, 136.0)
+    var bar_storage: [4]geometry.Rect = zero
+    var layer_storage: [2]chart.Layout = zero
+    let (layers, layers_error) = chart.grouped_bars(values[..], 2usize, 2usize, plot, bar_storage[..], layer_storage[..])
+    if layers_error != ok { ret layers_error }
+    var labels: [11]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Milliseconds per chart (lower is better)", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Neper vs matplotlib: 1,000-point line, 200 markers, grid, 360x240", anchor: chart.Coord { x: 180.0, y: 34.0 }, align: .Center }
+    var i = 0usize
+    while i < 4usize {
+        let bar = layers[i % 2usize].bars[i / 2usize]
+        labels[2usize + i] = chart.Label { text: shown[i], anchor: chart.Coord { x: bar.x + bar.width / 2.0, y: bar.y - 4.0 }, align: .Center }
+        i += 1usize
+    }
+    labels[6usize] = chart.Label { text: "SVG", anchor: chart.Coord { x: plot.x + plot.width * 0.25, y: plot.y + plot.height + 14.0 }, align: .Center }
+    labels[7usize] = chart.Label { text: "PNG", anchor: chart.Coord { x: plot.x + plot.width * 0.75, y: plot.y + plot.height + 14.0 }, align: .Center }
+    labels[8usize] = chart.Label { text: "Neper", anchor: chart.Coord { x: 52.0, y: 64.0 }, align: .Left }
+    labels[9usize] = chart.Label { text: "matplotlib", anchor: chart.Coord { x: 52.0, y: 78.0 }, align: .Left }
+    labels[10usize] = chart.Label { text: "Windows, 9-run medians; Neper PNG = 2.0 ms raster + 18.3 ms PNG encode", anchor: chart.Coord { x: 180.0, y: 226.0 }, align: .Center }
+    let swatches = [2]geometry.Rect{ geometry.rect(38.0, 59.0, 10.0, 4.0), geometry.rect(38.0, 73.0, 10.0, 4.0) }
+    let baseline = geometry.rect(plot.x, plot.y + plot.height, plot.width, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 64usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, baseline, paint.Brush { Solid: axis })
+    try chart_scene.append(a, &builder, &layers[0usize], paint.Brush { Solid: colors[0usize] })
+    try chart_scene.append(a, &builder, &layers[1usize], paint.Brush { Solid: colors[1usize] })
+    try fill(&builder, swatches[0usize], paint.Brush { Solid: colors[0usize] })
+    try fill(&builder, swatches[1usize], paint.Brush { Solid: colors[1usize] })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 11.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 7.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..8usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[8usize..10usize], font, 7.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[10usize..], font, 6.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, baseline, axis, false)
+    try chart_svg.append(&writer, &layers[0usize], colors[0usize])
+    try chart_svg.append(&writer, &layers[1usize], colors[1usize])
+    try chart_svg.rect(&writer, swatches[0usize], colors[0usize], false)
+    try chart_svg.rect(&writer, swatches[1usize], colors[1usize], false)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 11.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 7.0)
+    try chart_svg.append_labels(&writer, labels[2usize..8usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[8usize..10usize], dark, 7.0)
+    try chart_svg.append_labels(&writer, labels[10usize..], dark, 6.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_legend_collision_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/legend_collision.png"
     let names = [4]str{ "Control baseline", "Treatment alpha extended", "Treatment beta extended", "Follow-up cohort" }
@@ -11469,6 +11540,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_label_placement_preview(a, queue, output_target, canvas, &renderer)
     try render_locale_axes_preview(a, queue, output_target, canvas, &renderer)
     try render_pdf_export_preview(a, queue, output_target, canvas, &renderer)
+    try render_benchmark_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)

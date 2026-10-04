@@ -35182,3 +35182,17 @@ since PDF has no exponent syntax. The document title is written as UTF-16BE with
 a byte-order mark, because information strings are PDFDocEncoding, where WinAnsi
 bytes such as the euro sign mean something else. Embedded TrueType text, FlateDecode
 compression, gradients and multi-page reports are follow-on work.
+
+## D2108 — Chart performance is measured against matplotlib in-process
+
+`benchmarks/charts` renders one workload in Neper and in matplotlib from the
+same deterministic data: a 1,000-point line, 200 markers, a y grid with
+labels and a title at 360x240, 200 charts per pass, written to memory as SVG
+(text as text in both) and as PNG (Neper at deflate `.Balanced`, matplotlib
+through Agg with a new figure per chart). Timing is in-process with medians
+of nine runs, because the host is shared and single runs vary by up to half;
+whole-process time and matplotlib's import are reported separately. Neper
+also reports layout alone and rasterization alone, so a loss can be
+attributed: on Windows SVG is 6.1x faster than matplotlib, PNG is 1.15x
+slower, and the PNG gap is the encoder (2.0 of 20.3 ms is rasterization).
+ggplot2, base R and lattice are not measured without an R installation.

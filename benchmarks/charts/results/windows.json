@@ -1,0 +1,56 @@
+{
+  "host": "windows",
+  "machine": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+  "python": "3.12.10",
+  "matplotlib": "3.9.4",
+  "runs": 9,
+  "neper": {
+    "layout": {
+      "charts": 200,
+      "ms": 31.3261,
+      "bytes": 0
+    },
+    "svg": {
+      "charts": 200,
+      "ms": 524.833,
+      "bytes": 12392412
+    },
+    "raster": {
+      "charts": 200,
+      "ms": 399.1197,
+      "bytes": 0
+    },
+    "png": {
+      "charts": 200,
+      "ms": 4055.4882,
+      "bytes": 2800800
+    },
+    "process": {
+      "charts": 0,
+      "ms": 5037.267899999279,
+      "bytes": 0
+    }
+  },
+  "matplotlib_results": {
+    "import": {
+      "charts": 0,
+      "ms": 545.6664000012097,
+      "bytes": 0
+    },
+    "svg": {
+      "charts": 200,
+      "ms": 3203.091099996527,
+      "bytes": 8877473
+    },
+    "png": {
+      "charts": 200,
+      "ms": 3536.960299999919,
+      "bytes": 2243472
+    },
+    "process": {
+      "charts": 0,
+      "ms": 7639.752299997781,
+      "bytes": 0
+    }
+  }
+}
