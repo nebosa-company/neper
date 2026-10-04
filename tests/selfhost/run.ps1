@@ -3482,6 +3482,11 @@ $gfxChartCapabilityAttributeWritten = & $compiler emit-executable (Join-Path $PS
 if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityAttributeWritten -ne 'executable written') { throw 'gfx_chart_capability_attribute emission failed' }
 $gfxChartCapabilityAttributeOutput = & $gfxChartCapabilityAttributePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityAttributeOutput -ne 'gfx chart capability attribute ok') { throw "the e.gfx.chart capability attribute answered wrongly: exit $LASTEXITCODE" }
+$gfxChartCapabilityBatchPath = Join-Path $testBuild 'gfx-chart-capability-batch-selfhost.exe'
+$gfxChartCapabilityBatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_capability_batch\src\main.e') $repo 'x64' 'windows' $gfxChartCapabilityBatchPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityBatchWritten -ne 'executable written') { throw 'gfx_chart_capability_batch emission failed' }
+$gfxChartCapabilityBatchOutput = & $gfxChartCapabilityBatchPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartCapabilityBatchOutput -ne 'gfx chart capability batch ok') { throw "the e.gfx.chart capability batch answered wrongly: exit $LASTEXITCODE" }
 $gfxChartFishbonePath = Join-Path $testBuild 'gfx-chart-fishbone-selfhost.exe'
 $gfxChartFishboneWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_fishbone\src\main.e') $repo 'x64' 'windows' $gfxChartFishbonePath
 if ($LASTEXITCODE -ne 0 -or $gfxChartFishboneWritten -ne 'executable written') { throw 'gfx_chart_fishbone emission failed' }

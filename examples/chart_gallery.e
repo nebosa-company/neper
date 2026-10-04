@@ -4428,6 +4428,85 @@ fn render_capability_attribute_preview(a: *mem.Arena, q: *gpu.Queue, output_targ
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_capability_batch_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/capability_batch.png"
+    let values = [32]f64{
+        9.78f64, 9.83f64, 9.85f64, 9.94f64, 10.02f64, 10.10f64, 10.20f64, 10.28f64,
+        9.91f64, 9.98f64, 10.04f64, 10.07f64, 10.15f64, 10.28f64, 10.40f64, 10.48f64,
+        9.75f64, 9.82f64, 9.95f64, 10.00f64, 10.08f64, 10.16f64, 10.20f64, 10.25f64,
+        9.60f64, 9.68f64, 9.75f64, 9.82f64, 10.01f64, 10.07f64, 10.18f64, 10.22f64,
+    }
+    var batch_means: [8]f64 = zero
+    var batch_spreads: [8]f64 = zero
+    var mean_points: [8]chart.Coord = zero
+    var mean_lines: [7]chart.Segment = zero
+    var spread_bars: [8]geometry.Rect = zero
+    var guides: [3]chart.Segment = zero
+    var work = chart.BatchCapabilityStorage { batch_means: batch_means[..], batch_spreads: batch_spreads[..], mean_points: mean_points[..], mean_lines: mean_lines[..], spread_bars: spread_bars[..], guides: guides[..] }
+    let panels = [2]geometry.Rect{ geometry.rect(30.0, 50.0, 300.0, 65.0), geometry.rect(30.0, 140.0, 300.0, 53.0) }
+    let (report, report_error) = chart.batch_capability(values[..], 4usize, 9.70f64, 10.40f64, panels[..], &work)
+    if report_error != ok { ret report_error }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let pale = paint.rgba(0.96, 0.98, 1.0, 1.0)
+    let blue = paint.rgba(0.19, 0.49, 0.77, 1.0)
+    let dark = paint.rgba(0.16, 0.22, 0.31, 1.0)
+    let gray = paint.rgba(0.61, 0.68, 0.75, 1.0)
+    let (metrics_made, metrics_error) = str.builder(a, 128usize)
+    if metrics_error != ok { ret metrics_error }
+    var metrics = metrics_made
+    try str.push(&metrics, "B/W Cp ")
+    try str.push_f64_fixed(&metrics, report.summary.cp, 2u8)
+    try str.push(&metrics, "   Cpk ")
+    try str.push_f64_fixed(&metrics, report.summary.cpk, 2u8)
+    try str.push(&metrics, "   Overall Ppk ")
+    try str.push_f64_fixed(&metrics, report.summary.ppk, 2u8)
+    let (sigma_made, sigma_error) = str.builder(a, 128usize)
+    if sigma_error != ok { ret sigma_error }
+    var sigmas = sigma_made
+    try str.push(&sigmas, "SD within ")
+    try str.push_f64_fixed(&sigmas, report.summary.within_sigma, 3u8)
+    try str.push(&sigmas, "   between ")
+    try str.push_f64_fixed(&sigmas, report.summary.between_sigma, 3u8)
+    let labels = [5]chart.Label{
+        chart.Label { text: "Batch capability / balanced ANOVA", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center },
+        chart.Label { text: "Batch means | specification guides", anchor: chart.Coord { x: 180.0, y: 42.0 }, align: .Center },
+        chart.Label { text: "Within-batch SD | pooled guide", anchor: chart.Coord { x: 180.0, y: 132.0 }, align: .Center },
+        chart.Label { text: str.done(&metrics), anchor: chart.Coord { x: 180.0, y: 210.0 }, align: .Center },
+        chart.Label { text: str.done(&sigmas), anchor: chart.Coord { x: 180.0, y: 228.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 29u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 512usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, panels[0usize], paint.Brush { Solid: pale })
+    try fill(&builder, panels[1usize], paint.Brush { Solid: pale })
+    try chart_scene.append(a, &builder, &report.guides, paint.Brush { Solid: gray })
+    try chart_scene.append(a, &builder, &report.means, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &report.spreads, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, panels[0usize], pale, false)
+    try chart_svg.rect(&writer, panels[1usize], pale, false)
+    try chart_svg.append(&writer, &report.guides, gray)
+    try chart_svg.append(&writer, &report.means, blue)
+    try chart_svg.append(&writer, &report.spreads, blue)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_capability_normal_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/capability_normal.png"
     let values = [30]f64{
@@ -8769,6 +8848,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_influence_plot_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_nonnormal_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_attribute_preview(a, queue, output_target, canvas, &renderer)
+    try render_capability_batch_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_normal_preview(a, queue, output_target, canvas, &renderer)
     try render_capability_sixpack_preview(a, queue, output_target, canvas, &renderer)
     try render_fishbone_preview(a, queue, output_target, canvas, &renderer)

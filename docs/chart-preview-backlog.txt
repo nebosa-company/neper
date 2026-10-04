@@ -5,7 +5,6 @@
 # Cartesian and distribution variants
 
 # Statistical, quality, medical and scientific diagrams
-capability_batch
 gage_bias_linearity
 attribute_agreement
 gage_run

@@ -46,6 +46,12 @@ type BinomialCapability = struct {
     confidence: Interval, target_fraction: f64, meets_target: bool,
     upper_bound_meets_target: bool, beyond_limits: usize,
 }
+type BatchCapability = struct {
+    batches: usize, batch_size: usize, mean: f64,
+    within_sigma: f64, between_sigma: f64, between_within_sigma: f64, overall_sigma: f64,
+    cp: f64, cpk: f64, pp: f64, ppk: f64,
+    observed_ppm: f64, expected_bw_ppm: f64, expected_overall_ppm: f64,
+}
 type SubgroupSpreadKind = enum u8 { Range, StdDev }
 type AttributeControlKind = enum u8 { P, Np, C, U }
 type AttributeControlPoint = struct { value: f64, center: f64, lower: f64, upper: f64 }
@@ -563,6 +569,66 @@ fn normal_capability_performance(values: []const f64, lsl: f64, usl: f64, summar
         overall_above_ppm: million * special.normal_cdf((summary.mean - usl) / summary.overall_sigma),
     }
     ret (result, ok)
+}
+
+// Balanced one-way random-effects batch capability. The between component is
+// max((MS_between - MS_within) / batch_size, 0); no c4 correction is applied.
+fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, batch_means: []f64, batch_spreads: []f64) -> (BatchCapability, err) {
+    if batch_size < 2usize || values.len / batch_size < 3usize || values.len % batch_size != 0usize || !(usl > lsl) || lsl - lsl != 0.0f64 || usl - usl != 0.0f64 { ret (zero, Invalid) }
+    let batches = values.len / batch_size
+    if batch_means.len < batches || batch_spreads.len < batches { ret (zero, TooSmall) }
+    var total = moments()
+    var within_ss = 0.0f64
+    var outside = 0usize
+    var i = 0usize
+    while i < batches {
+        var subgroup = moments()
+        var j = 0usize
+        while j < batch_size {
+            let x = values[i * batch_size + j]
+            if x - x != 0.0f64 { ret (zero, Invalid) }
+            moments_add(&subgroup, x)
+            moments_add(&total, x)
+            if x < lsl || x > usl { outside += 1usize }
+            j += 1usize
+        }
+        batch_means[i] = subgroup.mean
+        batch_spreads[i] = math.sqrt[f64](subgroup.m2 / f64(batch_size - 1usize))
+        within_ss += subgroup.m2
+        i += 1usize
+    }
+    let ms_within = within_ss / f64(batches * (batch_size - 1usize))
+    var between_ss = 0.0f64
+    i = 0usize
+    while i < batches {
+        let offset = batch_means[i] - total.mean
+        between_ss += f64(batch_size) * offset * offset
+        i += 1usize
+    }
+    let ms_between = between_ss / f64(batches - 1usize)
+    var between_var = (ms_between - ms_within) / f64(batch_size)
+    if between_var < 0.0f64 { between_var = 0.0f64 }
+    let within = math.sqrt[f64](ms_within)
+    let between = math.sqrt[f64](between_var)
+    let combined = math.sqrt[f64](ms_within + between_var)
+    let overall = math.sqrt[f64](total.m2 / f64(values.len - 1usize))
+    if !(within > 0.0f64) || !(combined > 0.0f64) || !(overall > 0.0f64) || combined - combined != 0.0f64 || overall - overall != 0.0f64 { ret (zero, Invalid) }
+    let width = usl - lsl
+    let closest = math.min[f64](total.mean - lsl, usl - total.mean)
+    let cp = width / (6.0f64 * combined)
+    let cpk = closest / (3.0f64 * combined)
+    let pp = width / (6.0f64 * overall)
+    let ppk = closest / (3.0f64 * overall)
+    if cp - cp != 0.0f64 || cpk - cpk != 0.0f64 || pp - pp != 0.0f64 || ppk - ppk != 0.0f64 { ret (zero, Invalid) }
+    let million = 1000000.0f64
+    ret (BatchCapability {
+        batches: batches, batch_size: batch_size, mean: total.mean,
+        within_sigma: within, between_sigma: between, between_within_sigma: combined, overall_sigma: overall,
+        cp: cp, cpk: cpk, pp: pp, ppk: ppk,
+        observed_ppm: million * f64(outside) / f64(values.len),
+        expected_bw_ppm: million * (special.normal_cdf((lsl - total.mean) / combined) + special.normal_cdf((total.mean - usl) / combined)),
+        expected_overall_ppm: million * (special.normal_cdf((lsl - total.mean) / overall) + special.normal_cdf((total.mean - usl) / overall)),
+    }, ok)
 }
 
 // Two-parameter lognormal MLE on the log scale (overall variation only).

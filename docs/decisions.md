@@ -34774,3 +34774,9 @@ References: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-an
 ## D1951 — Binomial attribute capability is defective-unit analysis, not defect-rate analysis
 
 L061's first attribute-capability report pools defective units over inspected units, retains unequal-size P-chart limits, plots the cumulative weighted rate and labels the Wilson interval explicitly. The target comparison distinguishes the point estimate from its upper confidence bound; only points outside three-sigma limits are signaled. Poisson defects-per-unit capability, exact binomial intervals and broader stability rules are separate follow-ons. Keep the caller-owned layout and PNG/SVG gallery contract.
+
+## D1952 — Balanced batch capability uses explicit ANOVA variance components
+
+The first batch-capability surface accepts equally sized subgroups, estimates the pooled within variance as MS-within and the between-batch variance as `max((MS-between - MS-within) / batch_size, 0)`, and combines them by square-rooting their sum. No c4 correction is applied. Cp/Cpk use this between/within estimate; Pp/Ppk use the ordinary overall sample standard deviation. Show batch means and subgroup sample standard deviations with specification and pooled-within guides, and label the ANOVA method. Unequal-size batches, Minitab's alternative moving-range estimators, uncertainty bounds and stability diagnostics remain follow-ons.
+
+References: https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/onewayan.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/capability-analysis/how-to/capability-sixpack/between-within-capability-sixpack/methods-and-formulas/methods/

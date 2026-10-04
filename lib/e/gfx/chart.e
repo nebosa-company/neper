@@ -186,6 +186,14 @@ type BinomialCapabilityLayout = struct {
     p_chart: Layout, cumulative: Layout, upper_limit: Layout, lower_limit: Layout,
     guides: Layout, signals: Layout, summary: stat.BinomialCapability,
 }
+type BatchCapabilityStorage = struct {
+    batch_means: []f64, batch_spreads: []f64,
+    mean_points: []Coord, mean_lines: []Segment, spread_bars: []geometry.Rect,
+    guides: []Segment,
+}
+type BatchCapabilityLayout = struct {
+    means: Layout, spreads: Layout, guides: Layout, summary: stat.BatchCapability,
+}
 type FourfoldLayout = struct { wedges: []Layout, rings: Layout, odds_ratio: f64, ci_low: f64, ci_high: f64 }
 type HorizonPatch = struct { layout: Layout, band: usize, negative: bool }
 error Invalid
@@ -1046,6 +1054,56 @@ fn binomial_capability(defectives: []const usize, inspected: []const usize, targ
     let guide_layout = Layout { kind: .Rug, coords: zero, segments: work.guides[..5usize], bars: zero, x_min: 1.0, x_max: f32(n), y_min: 0.0, y_max: f32(y_max) }
     let signals = Layout { kind: .Scatter, coords: work.signal_points[..signal_count], segments: zero, bars: zero, x_min: 1.0, x_max: f32(n), y_min: 0.0, y_max: f32(y_max) }
     ret (BinomialCapabilityLayout { p_chart: p_chart, cumulative: cumulative, upper_limit: upper_layout, lower_limit: lower_layout, guides: guide_layout, signals: signals, summary: summary }, ok)
+}
+
+// Balanced batch capability: subgroup means, subgroup sample spread and
+// specification/pooled-within guides, all in caller-owned mark storage.
+fn batch_capability(values: []const f64, batch_size: usize, lsl: f64, usl: f64, panels: []const geometry.Rect, work: *BatchCapabilityStorage) -> (BatchCapabilityLayout, err) {
+    if batch_size < 2usize || values.len / batch_size < 3usize || values.len % batch_size != 0usize || panels.len != 2usize || !valid_bounds(panels[0usize]) || !valid_bounds(panels[1usize]) { ret (zero, Invalid) }
+    let n = values.len / batch_size
+    if work.batch_means.len < n || work.batch_spreads.len < n || work.mean_points.len < n || work.mean_lines.len < n - 1usize || work.spread_bars.len < n || work.guides.len < 3usize { ret (zero, TooLarge) }
+    let (summary, summary_error) = stat.batch_capability(values, batch_size, lsl, usl, work.batch_means, work.batch_spreads)
+    if summary_error != ok { ret (zero, Invalid) }
+    var low = lsl
+    var high = usl
+    var spread_high = summary.within_sigma
+    var i = 0usize
+    while i < n {
+        if work.batch_means[i] < low { low = work.batch_means[i] }
+        if work.batch_means[i] > high { high = work.batch_means[i] }
+        if work.batch_spreads[i] > spread_high { spread_high = work.batch_spreads[i] }
+        i += 1usize
+    }
+    let pad = (high - low) * 0.1f64
+    low -= pad
+    high += pad
+    spread_high *= 1.15f64
+    if !(high > low) || !(spread_high > 0.0f64) || high - high != 0.0f64 || spread_high - spread_high != 0.0f64 { ret (zero, Invalid) }
+    let mean_rect = panels[0usize]
+    let spread_rect = panels[1usize]
+    let bar_width = spread_rect.width / f32(n) * 0.65f32
+    i = 0usize
+    while i < n {
+        let x_fraction = f32(i) / f32(n - 1usize)
+        let mean_x = mean_rect.x + mean_rect.width * x_fraction
+        let mean_y = mean_rect.y + mean_rect.height * (1.0f32 - f32((work.batch_means[i] - low) / (high - low)))
+        work.mean_points[i] = Coord { x: mean_x, y: mean_y }
+        if i > 0usize { work.mean_lines[i - 1usize] = Segment { from: work.mean_points[i - 1usize], to: work.mean_points[i] } }
+        let center = spread_rect.x + spread_rect.width * (f32(i) + 0.5f32) / f32(n)
+        let bar_height = spread_rect.height * f32(work.batch_spreads[i] / spread_high)
+        work.spread_bars[i] = geometry.rect(center - bar_width * 0.5f32, spread_rect.y + spread_rect.height - bar_height, bar_width, bar_height)
+        i += 1usize
+    }
+    let lower_y = mean_rect.y + mean_rect.height * (1.0f32 - f32((lsl - low) / (high - low)))
+    let upper_y = mean_rect.y + mean_rect.height * (1.0f32 - f32((usl - low) / (high - low)))
+    let within_y = spread_rect.y + spread_rect.height * (1.0f32 - f32(summary.within_sigma / spread_high))
+    work.guides[0usize] = Segment { from: Coord { x: mean_rect.x, y: lower_y }, to: Coord { x: mean_rect.x + mean_rect.width, y: lower_y } }
+    work.guides[1usize] = Segment { from: Coord { x: mean_rect.x, y: upper_y }, to: Coord { x: mean_rect.x + mean_rect.width, y: upper_y } }
+    work.guides[2usize] = Segment { from: Coord { x: spread_rect.x, y: within_y }, to: Coord { x: spread_rect.x + spread_rect.width, y: within_y } }
+    let means = Layout { kind: .PointLine, coords: work.mean_points[..n], segments: work.mean_lines[..n - 1usize], bars: zero, x_min: 1.0f32, x_max: f32(n), y_min: f32(low), y_max: f32(high) }
+    let spreads = Layout { kind: .Bar, coords: zero, segments: zero, bars: work.spread_bars[..n], x_min: 1.0f32, x_max: f32(n), y_min: 0.0f32, y_max: f32(spread_high) }
+    let guides = Layout { kind: .Rug, coords: zero, segments: work.guides[..3usize], bars: zero, x_min: 1.0f32, x_max: f32(n), y_min: f32(low), y_max: f32(high) }
+    ret (BatchCapabilityLayout { means: means, spreads: spreads, guides: guides, summary: summary }, ok)
 }
 
 // A sparkline is an evenly spaced Line with no guide contract.

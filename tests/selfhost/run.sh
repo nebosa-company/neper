@@ -3104,6 +3104,11 @@ gfx_chart_capability_attribute_written=$($test_build/neper-self emit-executable 
 chmod +x "$test_build/gfx-chart-capability-attribute-selfhost"
 gfx_chart_capability_attribute_output=$("$test_build/gfx-chart-capability-attribute-selfhost")
 [ "$gfx_chart_capability_attribute_output" = 'gfx chart capability attribute ok' ]
+gfx_chart_capability_batch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_capability_batch/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-capability-batch-selfhost")
+[ "$gfx_chart_capability_batch_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-capability-batch-selfhost"
+gfx_chart_capability_batch_output=$("$test_build/gfx-chart-capability-batch-selfhost")
+[ "$gfx_chart_capability_batch_output" = 'gfx chart capability batch ok' ]
 gfx_chart_fishbone_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_fishbone/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-fishbone-selfhost")
 [ "$gfx_chart_fishbone_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-fishbone-selfhost"
