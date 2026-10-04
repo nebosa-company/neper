@@ -345,17 +345,6 @@
       "evidence": "Pharmacovigilance mines FAERS-style tables with disproportionality scores (reporting odds ratio, proportional reporting ratio, BCPNN information component) and comedication patterns with frequent-itemset rules (Apriori/FP-growth) for drug-drug interactions. Neper has binomial proportion intervals and chi-squared/Fisher contingency tests in `e.algo.stat` and `e.algo.stat.test`, but no disproportionality or frequent-itemset surface. Keep the scores and rule mining with caller storage; exclude case-report workflows and MedDRA coding products. The catalog entry is 2266."
     },
     {
-      "id": "L017",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 115,
-      "title": "Forecast and inventory extensions (ARIMA, EOQ/newsvendor)",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "`e.algo.timeseries` forecasts with Holt-Winters, STL/LOESS, GARCH, and Hawkes plus CUSUM/Page-Hinkley/ADWIN change detection, and `e.algo.combopt` solves tours (nearest-neighbor, 2-opt/3-opt, Held-Karp, Christofides, Lin-Kernighan) and VRP by savings, but there is no ARIMA for ADR-surveillance and demand series and no inventory core (EOQ, newsvendor) for supply planning. Keep ARIMA plus the two inventory policies; exclude cold-chain logistics products. The catalog entry is 2267."
-    },
-    {
       "id": "L018",
       "category": "library",
       "group": "Algorithms",
@@ -827,17 +816,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "lib/e/ml/reduce.e covers PCA, streaming PCA, t-SNE and UMAP, lib/e/ml/cluster.e covers the k-means family, DBSCAN, OPTICS, BIRCH and GMM, and lib/e/ml/bayes.e covers naive Bayes only -- the R/Python multivariate gap is factor analysis, CCA, MANOVA and LDA/QDA discriminant analysis. Keep caller-storage conventions; fixtures against R/sklearn values. Plan: docs/stats-coverage.md rows L058 (D1785)."
-    },
-    {
-      "id": "L059",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 157,
-      "title": "VAR and structural time-series in e.algo.timeseries",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "lib/e/algo/timeseries.e covers Holt-Winters, STL/LOESS, CUSUM/Page-Hinkley/ADWIN, GARCH(1,1) and Hawkes, and lib/e/math/filter.e covers Kalman/EKF/UKF -- the R/Python time-series gap is VAR(p) estimation and forecasting plus a structural/state-space bridge onto the existing Kalman filter. ARIMA is already L017 and out of scope here; Prophet is a non-goal (D1785). Keep caller-storage conventions; fixtures against statsmodels values. Plan: docs/stats-coverage.md rows L059 (D1785)."
     },
     {
       "id": "L060",
