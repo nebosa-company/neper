@@ -3267,6 +3267,11 @@ $gfxChartTornadoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $gfxChartTornadoWritten -ne 'executable written') { throw 'gfx_chart_tornado emission failed' }
 $gfxChartTornadoOutput = & $gfxChartTornadoPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartTornadoOutput -ne 'gfx chart tornado ok') { throw "the e.gfx.chart tornado sensitivity answered wrongly: exit $LASTEXITCODE" }
+$gfxChartFootballFieldPath = Join-Path $testBuild 'gfx-chart-football-field-selfhost.exe'
+$gfxChartFootballFieldWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_football_field\src\main.e') $repo 'x64' 'windows' $gfxChartFootballFieldPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFootballFieldWritten -ne 'executable written') { throw 'gfx_chart_football_field emission failed' }
+$gfxChartFootballFieldOutput = & $gfxChartFootballFieldPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartFootballFieldOutput -ne 'gfx chart football field ok') { throw "the e.gfx.chart football field answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

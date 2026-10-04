@@ -123,6 +123,7 @@ type StemLeafRow = struct { stem: i64, first: usize, count: usize, baseline: f32
 type StemLeafLayout = struct { rows: []StemLeafRow, leaves: []u8, divider: Segment, leaf_start: f32, leaf_step: f32, leaf_unit: f64 }
 type RangeInterval = struct { row: usize, lower: f64, upper: f64 }
 type RangeIntervalLayout = struct { ranges: Layout, caps: Layout }
+type FootballFieldLayout = struct { ranges: Layout, caps: Layout, benchmark: Layout }
 type ProbabilityFamily = enum u8 { Normal, Exponential }
 type ProbabilityLayout = struct { observations: Layout, reference: Layout, probability_ticks: []Tick }
 type GageRrLayout = struct { contribution: Layout, study_variation: Layout, percentages: []f32 }
@@ -3714,6 +3715,27 @@ fn range_intervals(items: []const RangeInterval, rows: usize, domain_min: f64, d
     let ranges = Layout { kind: .Bar, coords: zero, segments: zero, bars: bands[..items.len], x_min: x_min, x_max: x_max, y_min: 0.0, y_max: y_max }
     let caps = Layout { kind: .Rug, coords: zero, segments: endpoints[..2usize * items.len], bars: zero, x_min: x_min, x_max: x_max, y_min: 0.0, y_max: y_max }
     ret (RangeIntervalLayout { ranges: ranges, caps: caps }, ok)
+}
+
+// A football field compares one valuation interval per method on a single
+// caller-specified value basis. The caller owns labels, colours and units;
+// this composes the generic capped intervals with a shared benchmark rule.
+fn football_field(methods: []const RangeInterval, domain_min: f64, domain_max: f64, benchmark_value: f64, bounds: geometry.Rect, bands: []geometry.Rect, endpoints: []Segment, benchmark_line: []Segment) -> (FootballFieldLayout, err) {
+    if methods.len == 0usize { ret (zero, Empty) }
+    if !finite64(benchmark_value) || benchmark_value < domain_min || benchmark_value > domain_max { ret (zero, Invalid) }
+    if benchmark_line.len < 1usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < methods.len {
+        if methods[i].row != i { ret (zero, Invalid) }
+        i += 1usize
+    }
+    let (intervals, interval_error) = range_intervals(methods, methods.len, domain_min, domain_max, bounds, 0.55f32, bands, endpoints)
+    if interval_error != ok { ret (zero, interval_error) }
+    let x = bounds.x + bounds.width * f32((benchmark_value - domain_min) / (domain_max - domain_min))
+    if !finite(x) { ret (zero, Invalid) }
+    benchmark_line[0usize] = Segment { from: Coord { x: x, y: bounds.y }, to: Coord { x: x, y: bounds.y + bounds.height } }
+    let benchmark = Layout { kind: .Rug, coords: zero, segments: benchmark_line[..1usize], bars: zero, x_min: intervals.ranges.x_min, x_max: intervals.ranges.x_max, y_min: 0.0f32, y_max: f32(methods.len) }
+    ret (FootballFieldLayout { ranges: intervals.ranges, caps: intervals.caps, benchmark: benchmark }, ok)
 }
 
 // Task durations and completion fractions share a numeric time domain and

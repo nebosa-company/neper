@@ -16032,6 +16032,9 @@ type CapTableWork = struct { before_bars: []geometry.Rect, after_bars: []geometr
 type CapTableLayout = struct { before: []Layout, after: []Layout, bridge: Layout, before_fractions: []f64, after_fractions: []f64, pool_present: bool, investor_present: bool, summary: CapTableSummary }
 type TornadoCase = struct { low_result: f64, high_result: f64 }
 type TornadoLayout = struct { low: Layout, high: Layout, baseline: Layout, order: []usize, minimum: f64, maximum: f64 }
+type RangeInterval = struct { row: usize, lower: f64, upper: f64 }
+type RangeIntervalLayout = struct { ranges: Layout, caps: Layout }
+type FootballFieldLayout = struct { ranges: Layout, caps: Layout, benchmark: Layout }
 type ResourceSpan = struct { start: f64, end: f64, units: f64 }
 type SwimlaneStep = struct { lane: usize, stage: usize }
 type SwimlaneLink = struct { from: usize, to: usize }
@@ -16069,6 +16072,8 @@ fn value_stream_map(steps: []const ValueStreamStep, bounds: geometry.Rect, boxes
 fn future_value_stream_map(current_steps: []const ValueStreamStep, future_steps: []const ValueStreamStep, links: []const ValueStreamFlow, available_time: f64, customer_demand: f64, pacemaker: usize, current_bounds: geometry.Rect, future_bounds: geometry.Rect, work: *FutureValueStreamWork) -> (FutureValueStreamLayout, err)
 fn cap_table_waterfall(existing_shares: []const u64, pool_added: u64, investor_added: u64, before_bounds: geometry.Rect, after_bounds: geometry.Rect, bridge_bounds: geometry.Rect, work: *CapTableWork) -> (CapTableLayout, err)
 fn tornado_sensitivity(cases: []const TornadoCase, baseline: f64, bounds: geometry.Rect, order: []usize, low_bars: []geometry.Rect, high_bars: []geometry.Rect, baseline_line: []Segment) -> (TornadoLayout, err)
+fn range_intervals(items: []const RangeInterval, rows: usize, domain_min: f64, domain_max: f64, bounds: geometry.Rect, thickness: f32, bands: []geometry.Rect, endpoints: []Segment) -> (RangeIntervalLayout, err)
+fn football_field(methods: []const RangeInterval, domain_min: f64, domain_max: f64, benchmark_value: f64, bounds: geometry.Rect, bands: []geometry.Rect, endpoints: []Segment, benchmark_line: []Segment) -> (FootballFieldLayout, err)
 fn cross_tab_report(row_ids: []const usize, column_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, work: *CrossTabStorage) -> (CrossTabLayout, err)
 fn matrix_report(row_ids: []const usize, column_ids: []const usize, values: []const f64, present: []const bool, group_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, bar_scope: ReportBarScope, work: *MatrixReportStorage) -> (MatrixReportLayout, err)
 fn fishbone(effect: str, categories: []const str, causes: []const FishboneCause, bounds: geometry.Rect, spine: []Segment, ribs: []Segment, branches: []Segment, head_box: []geometry.Rect, labels: []Label) -> (FishboneLayout, err)

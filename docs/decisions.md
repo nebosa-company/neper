@@ -34914,3 +34914,17 @@ checks order, reverse direction, geometry, scene/SVG and refusal paths; the
 gallery renders a paired PNG/SVG example. Oracle's tornado-chart guide uses
 largest swing first and notes reversed bars for inverse relationships:
 https://docs.oracle.com/cd/E52437_01/en/crystal_ball_users_guide/ch09s03s01.html.
+
+## D1966 — Football-field ranges share one caller-declared valuation basis
+
+`chart.football_field` does not calculate a valuation. It composes ordered
+low/high method ranges through `range_intervals` and one benchmark line on an
+explicit numeric domain. Caller-owned bars, caps and rule let the CPU scene
+and SVG adapters style each method separately. Each method takes exactly one
+row; reversed/out-of-domain ranges, invalid benchmarks and short storage are
+refused. The API deliberately cannot infer enterprise-to-equity conversion,
+currency, date or which method deserves more weight. The Windows/Linux fixture
+checks the shared mapping, caps, benchmark, adapters and refusals; the gallery
+adds a paired PNG/SVG example. This range-by-method presentation follows CFI's
+football-field chart description:
+https://corporatefinanceinstitute.com/resources/financial-modeling/football-field-chart-template/.

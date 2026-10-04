@@ -1331,6 +1331,84 @@ fn render_tornado_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targ
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_football_field_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/football_field.png"
+    let methods = [4]chart.RangeInterval{
+        chart.RangeInterval { row: 0usize, lower: 70.0f64, upper: 115.0f64 },
+        chart.RangeInterval { row: 1usize, lower: 100.0f64, upper: 150.0f64 },
+        chart.RangeInterval { row: 2usize, lower: 85.0f64, upper: 145.0f64 },
+        chart.RangeInterval { row: 3usize, lower: 60.0f64, upper: 95.0f64 },
+    }
+    let names = [4]str{ "Trading comps", "Deal precedents", "DCF", "52-week range" }
+    var bars: [4]geometry.Rect = zero
+    var caps: [8]chart.Segment = zero
+    var benchmark_line: [1]chart.Segment = zero
+    let plot = geometry.rect(114.0, 48.0, 220.0, 136.0)
+    let (field, field_error) = chart.football_field(methods[..], 50.0f64, 160.0f64, 100.0f64, plot, bars[..], caps[..], benchmark_line[..])
+    if field_error != ok || field.ranges.bars.len != 4usize { ret chart.Invalid }
+    let colors = [4]paint.Color{
+        paint.rgba(0.10, 0.40, 0.76, 1.0), paint.rgba(0.91, 0.51, 0.19, 1.0),
+        paint.rgba(0.12, 0.59, 0.49, 1.0), paint.rgba(0.48, 0.39, 0.70, 1.0),
+    }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let red = paint.rgba(0.81, 0.24, 0.25, 1.0)
+    let panel = paint.rgba(0.96, 0.97, 0.99, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    var labels: [10]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Valuation football field", anchor: chart.Coord { x: 180.0, y: 22.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Illustrative implied price / share", anchor: chart.Coord { x: 180.0, y: 39.0 }, align: .Center }
+    var i = 0usize
+    while i < 4usize {
+        labels[2usize + i] = chart.Label { text: names[i], anchor: chart.Coord { x: 108.0, y: 69.0f32 + f32(i) * 34.0f32 }, align: .Right }
+        i += 1usize
+    }
+    labels[6usize] = chart.Label { text: "$50", anchor: chart.Coord { x: 114.0, y: 200.0 }, align: .Center }
+    labels[7usize] = chart.Label { text: "$100 ref", anchor: chart.Coord { x: 214.0, y: 200.0 }, align: .Center }
+    labels[8usize] = chart.Label { text: "$160", anchor: chart.Coord { x: 334.0, y: 200.0 }, align: .Center }
+    labels[9usize] = chart.Label { text: "Ranges share one equity / per-share basis", anchor: chart.Coord { x: 180.0, y: 225.0 }, align: .Center }
+    let (made, builder_error) = scene.builder(a, 80usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, plot, paint.Brush { Solid: panel })
+    i = 0usize
+    while i < field.ranges.bars.len {
+        var row = field.ranges
+        row.bars = field.ranges.bars[i..i + 1usize]
+        try chart_scene.append(a, &builder, &row, paint.Brush { Solid: colors[i] })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &field.caps, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &field.benchmark, paint.Brush { Solid: red })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0f32, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0f32, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, panel, false)
+    i = 0usize
+    while i < field.ranges.bars.len {
+        var row = field.ranges
+        row.bars = field.ranges.bars[i..i + 1usize]
+        try chart_svg.append(&writer, &row, colors[i])
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &field.caps, dark)
+    try chart_svg.append(&writer, &field.benchmark, red)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0f32)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0f32)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_sipoc_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
     let path = "docs/chart-previews/sipoc.png"
     let plot = geometry.rect(13.0, 49.0, 334.0, 171.0)
@@ -9705,6 +9783,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_future_state_vsm_preview(a, queue, output_target, canvas, &renderer)
     try render_cap_table_waterfall_preview(a, queue, output_target, canvas, &renderer)
     try render_tornado_preview(a, queue, output_target, canvas, &renderer)
+    try render_football_field_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_org_chart_preview(a, queue, output_target, canvas, &renderer)
