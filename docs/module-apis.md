@@ -3100,6 +3100,11 @@ fn mmrm_un(y: []const f64, x: []const f64, n: usize, p: usize, counts: []const u
 fn ri_fit_given(ctx: *RiCtx, tau2: f64, sig2: f64) -> (f64, err)
 fn ri_objective(ctx: *RiCtx, theta: []const f64) -> f64
 fn lmm_intercept(y: []const f64, x: []const f64, n: usize, d: usize, counts: []const usize, groups: usize, beta: []f64, beta_cov: []f64, variances: []f64, blups: []f64, scratch: []f64) -> (u32, err)
+type RsCtx = struct { y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize, q: usize, counts: []const usize, groups: usize, xvx: []f64, xvy: []f64, gbuf: []f64, vbuf: []f64, rbuf: []f64, tbuf: []f64 }
+fn rs_unpack(theta: []const f64, q: usize, g: []f64) -> err
+fn rs_fit_given(ctx: *RsCtx, theta: []const f64, sig2: f64) -> (f64, err)
+fn rs_objective(ctx: *RsCtx, theta: []const f64) -> f64
+fn lmm_slopes(y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize, q: usize, counts: []const usize, groups: usize, beta: []f64, beta_cov: []f64, variances: []f64, blups: []f64, scratch: []f64) -> (u32, err)
 ```
 
 Longitudinal Gaussian models over subject-grouped rows (a missed visit is an
@@ -3107,9 +3112,13 @@ absent row): `gee` by Fisher scoring with moment-estimated working
 correlations (closed-form block inverses) and the robust sandwich;
 `mmrm_un` with an unstructured covariance by REML (log-Cholesky Nelder-Mead,
 GLS at the optimum); `lmm_intercept` for the random-intercept model by REML
-with BLUPs; `wald_p` and `mixed_contrast` for inference. Scratch: `gee`
+with BLUPs; `lmm_slopes` for random slopes and intercepts over a caller-built
+`z` design by REML (log-Cholesky Nelder-Mead over `rs_objective`, GLS through
+`rs_fit_given`) with per-subject BLUPs; `wald_p` and `mixed_contrast` for
+inference. Scratch: `gee`
 `4d² + d + n + 2·mmax`, `mmrm_un` `(m+1)² + 5m + 2v² + p² + p + 2v` with
-`m = v(v+1)/2`, `lmm_intercept` `19 + 2d² + d`.
+`m = v(v+1)/2`, `lmm_intercept` `19 + 2d² + d`, `lmm_slopes`
+`(r+2)² + 5(r+1) + 2d² + d + q² + q + maxm² + maxm` with `r = q(q+1)/2`.
 
 ### `e.algo.stat.survival_trial`
 

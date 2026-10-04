@@ -1381,6 +1381,12 @@ $algoStatSafetyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $algoStatSafetyWritten -ne 'executable written') { throw 'algo_stat_safety emission failed' }
 & $algoStatSafetyPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_stat_safety check failed: exit $LASTEXITCODE" }
+# `e.algo.stat.mixed` random slopes: the log-Cholesky unpack, a random-slopes LMM recovering its effects and covariances with BLUPs, and refusals.
+$algoStatMixedPath = Join-Path $testBuild 'algo-stat-mixed-selfhost.exe'
+$algoStatMixedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_mixed\src\main.e') $repo 'x64' 'windows' $algoStatMixedPath
+if ($LASTEXITCODE -ne 0 -or $algoStatMixedWritten -ne 'executable written') { throw 'algo_stat_mixed emission failed' }
+& $algoStatMixedPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_stat_mixed check failed: exit $LASTEXITCODE" }
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 $algoGraphFlowPath = Join-Path $testBuild 'algo-graph-flow-selfhost.exe'
 $algoGraphFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph_flow\src\main.e') $repo 'x64' 'windows' $algoGraphFlowPath

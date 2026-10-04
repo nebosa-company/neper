@@ -1,7 +1,7 @@
 // Longitudinal models over `f64` responses in caller storage: Gaussian GEE
 // with working correlations, MMRM with an unstructured covariance by REML,
-// and random-intercept LMMs by REML, all with model-based or robust
-// covariances for Wald inference (`wald_p`, `mixed_contrast`).
+// random-intercept and random-slopes LMMs by REML, all with model-based or
+// robust covariances for Wald inference (`wald_p`, `mixed_contrast`).
 //
 // Rows are observed cases grouped by subject: `counts`/`sizes` give the rows
 // of each group consecutively, so a missed visit is an absent row and no
@@ -9,7 +9,9 @@
 // row-major); MMRM subjects hold at most one row per visit. Pearson scales
 // are maximum-likelihood (`Σe² / n`, matching statsmodels), which the
 // sandwich and the Fisher steps cancel out of, leaving only the working
-// correlations to matter.
+// correlations to matter. Random-slopes subjects carry a second caller-built
+// design (`z` is `n × q` row-major) whose `q` columns vary within subject;
+// an intercept-only `z` is the random-intercept model.
 
 use e.math
 use e.math.opt
@@ -22,6 +24,7 @@ error Invalid
 type Corr = enum u8 { Independence, Exchangeable, Ar1 }
 type MmrmCtx = struct { y: []const f64, x: []const f64, n: usize, p: usize, counts: []const usize, groups: usize, visit: []const usize, visits: usize, lbuf: []f64, vbuf: []f64, xvx: []f64, xvy: []f64, ybuf: []f64, xcol: []f64 }
 type RiCtx = struct { y: []const f64, x: []const f64, n: usize, d: usize, counts: []const usize, groups: usize, xvx: []f64, xvy: []f64 }
+type RsCtx = struct { y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize, q: usize, counts: []const usize, groups: usize, xvx: []f64, xvy: []f64, gbuf: []f64, vbuf: []f64, rbuf: []f64, tbuf: []f64 }
 
 // Solve the dense `n × n` system in place by Gaussian elimination with
 // partial pivoting; the answer replaces `rhs`. `Singular` below 1e-12 pivots.
@@ -1076,6 +1079,384 @@ fn lmm_intercept(y: []const f64, x: []const f64, n: usize, d: usize, counts: []c
             t += 1usize
         }
         blups[g] = weight * s
+        off += m
+        g += 1usize
+    }
+    ret (result.iterations, ok)
+}
+
+// Unpack the random-effects covariance from log-Cholesky `theta`
+// (`q(q+1)/2` lower-triangle entries row by row, the diagonal in log scale)
+// into `g` (`q × q` symmetric positive definite).
+fn rs_unpack(theta: []const f64, q: usize, g: []f64) -> err {
+    if q == 0usize { ret Invalid }
+    if theta.len < q * (q + 1usize) / 2usize || g.len < q * q { ret TooSmall }
+    var a = 0usize
+    while a < q {
+        var b = 0usize
+        while b < q {
+            var total = 0.0f64
+            var j = 0usize
+            while j <= a && j <= b {
+                var left = theta[a * (a + 1usize) / 2usize + j]
+                if j == a { left = math.exp[f64](left) }
+                var right = theta[b * (b + 1usize) / 2usize + j]
+                if j == b { right = math.exp[f64](right) }
+                total += left * right
+                j += 1usize
+            }
+            g[a * q + b] = total
+            b += 1usize
+        }
+        a += 1usize
+    }
+    ret ok
+}
+
+// The GLS accumulation for random slopes with covariance `g` (`q × q`) and
+// within variance `sig2` by per-group Cholesky: `xvx` receives `X'V^-1 X`,
+// `xvy` the coefficients solved in place. Answers `log |V|` plus the
+// residual-form term. Rank failure surfaces as `Singular`; a short `vbuf`
+// for the largest group is `TooSmall`.
+fn rs_fit_given(ctx: *RsCtx, theta: []const f64, sig2: f64) -> (f64, err) {
+    let d = ctx.d
+    let q = ctx.q
+    if sig2 <= 0.0f64 { ret (0.0f64, Invalid) }
+    var maxm = 0usize
+    var g = 0usize
+    while g < ctx.groups {
+        if ctx.counts[g] > maxm { maxm = ctx.counts[g] }
+        g += 1usize
+    }
+    if maxm == 0usize { ret (0.0f64, Invalid) }
+    if ctx.gbuf.len < q * q || ctx.rbuf.len < maxm || ctx.tbuf.len < q || ctx.vbuf.len < maxm * maxm { ret (0.0f64, TooSmall) }
+    let unpack_error = rs_unpack(theta, q, ctx.gbuf)
+    if unpack_error != ok { ret (0.0f64, unpack_error) }
+    var e = 0usize
+    while e < d * d {
+        ctx.xvx[e] = 0.0f64
+        e += 1usize
+    }
+    e = 0usize
+    while e < d {
+        ctx.xvy[e] = 0.0f64
+        e += 1usize
+    }
+    var logdet = 0.0f64
+    var off = 0usize
+    g = 0usize
+    while g < ctx.groups {
+        let m = ctx.counts[g]
+        var a = 0usize
+        while a < m {
+            var b = 0usize
+            while b < m {
+                var total = 0.0f64
+                if a == b { total = sig2 }
+                var i = 0usize
+                while i < q {
+                    var j = 0usize
+                    while j < q {
+                        total += ctx.z[(off + a) * q + i] * ctx.gbuf[i * q + j] * ctx.z[(off + b) * q + j]
+                        j += 1usize
+                    }
+                    i += 1usize
+                }
+                ctx.vbuf[a * m + b] = total
+                b += 1usize
+            }
+            a += 1usize
+        }
+        let chol_error = mixed_chol(ctx.vbuf, m)
+        if chol_error != ok { ret (0.0f64, chol_error) }
+        logdet += mixed_chol_logdet(ctx.vbuf, m)
+        var c = 0usize
+        while c < d {
+            var t = 0usize
+            while t < m {
+                ctx.rbuf[t] = ctx.x[(off + t) * d + c]
+                t += 1usize
+            }
+            let solve_error = mixed_chol_solve(ctx.vbuf, ctx.rbuf, m)
+            if solve_error != ok { ret (0.0f64, solve_error) }
+            a = 0usize
+            while a < d {
+                t = 0usize
+                while t < m {
+                    ctx.xvx[a * d + c] += ctx.x[(off + t) * d + a] * ctx.rbuf[t]
+                    t += 1usize
+                }
+                a += 1usize
+            }
+            c += 1usize
+        }
+        var t = 0usize
+        while t < m {
+            ctx.rbuf[t] = ctx.y[off + t]
+            t += 1usize
+        }
+        let ysolve_error = mixed_chol_solve(ctx.vbuf, ctx.rbuf, m)
+        if ysolve_error != ok { ret (0.0f64, ysolve_error) }
+        a = 0usize
+        while a < d {
+            t = 0usize
+            while t < m {
+                ctx.xvy[a] += ctx.x[(off + t) * d + a] * ctx.rbuf[t]
+                t += 1usize
+            }
+            a += 1usize
+        }
+        off += m
+        g += 1usize
+    }
+    let chol_error = mixed_chol(ctx.xvx, d)
+    if chol_error != ok { ret (0.0f64, chol_error) }
+    let beta_error = mixed_chol_solve(ctx.xvx, ctx.xvy, d)
+    if beta_error != ok { ret (0.0f64, beta_error) }
+    ret (logdet + mixed_chol_logdet(ctx.xvx, d), ok)
+}
+
+// The negative REML log-likelihood at `theta` (log-Cholesky covariances then
+// log within variance): GLS and the residual form, `1e300` where a group
+// covariance or the design is rank-deficient.
+fn rs_objective(ctx: *RsCtx, theta: []const f64) -> f64 {
+    let r = ctx.q * (ctx.q + 1usize) / 2usize
+    if theta.len != r + 1usize { ret 1.0e300f64 }
+    let sig2 = math.exp[f64](theta[r])
+    let (kernel, fit_error) = rs_fit_given(ctx, theta, sig2)
+    if fit_error != ok { ret 1.0e300f64 }
+    var rwr = 0.0f64
+    var off = 0usize
+    var g = 0usize
+    while g < ctx.groups {
+        let m = ctx.counts[g]
+        var a = 0usize
+        while a < m {
+            var b = 0usize
+            while b < m {
+                var total = 0.0f64
+                if a == b { total = sig2 }
+                var i = 0usize
+                while i < ctx.q {
+                    var j = 0usize
+                    while j < ctx.q {
+                        total += ctx.z[(off + a) * ctx.q + i] * ctx.gbuf[i * ctx.q + j] * ctx.z[(off + b) * ctx.q + j]
+                        j += 1usize
+                    }
+                    i += 1usize
+                }
+                ctx.vbuf[a * m + b] = total
+                b += 1usize
+            }
+            a += 1usize
+        }
+        if mixed_chol(ctx.vbuf, m) != ok { ret 1.0e300f64 }
+        a = 0usize
+        while a < m {
+            var resid = ctx.y[off + a]
+            var j = 0usize
+            while j < ctx.d {
+                resid -= ctx.x[(off + a) * ctx.d + j] * ctx.xvy[j]
+                j += 1usize
+            }
+            ctx.rbuf[a] = resid
+            a += 1usize
+        }
+        if mixed_chol_solve(ctx.vbuf, ctx.rbuf, m) != ok { ret 1.0e300f64 }
+        a = 0usize
+        while a < m {
+            var resid = ctx.y[off + a]
+            var j = 0usize
+            while j < ctx.d {
+                resid -= ctx.x[(off + a) * ctx.d + j] * ctx.xvy[j]
+                j += 1usize
+            }
+            rwr += resid * ctx.rbuf[a]
+            a += 1usize
+        }
+        off += m
+        g += 1usize
+    }
+    ret 0.5f64 * (f64(ctx.n - ctx.d) * 1.8378770654093453f64 + kernel + rwr)
+}
+
+// A random-slopes LMM by REML: `y = X beta + Z u + e` with `u ~ N(0, G)` per
+// subject over the `q` columns of `z` and `e ~ N(0, sig2)`. The covariance
+// rides a log-Cholesky from half the sample variance by Nelder-Mead (simplex
+// 0.5, value spread 1e-12, at most 500 rounds), the coefficients by GLS at
+// the optimum. Answers the Nelder-Mead rounds taken, `beta`, its model-based
+// covariance `beta_cov`, the variances (lower-triangle `G` then `sig2`), and
+// the per-subject BLUPs (`blups`, `groups × q`). `scratch.len >= (r + 2)^2 +
+// 5 * (r + 1) + 2 * d * d + d + q * q + q + maxm * maxm + maxm` with
+// `r = q(q+1)/2` and `maxm` the largest group.
+fn lmm_slopes(y: []const f64, x: []const f64, z: []const f64, n: usize, d: usize, q: usize, counts: []const usize, groups: usize, beta: []f64, beta_cov: []f64, variances: []f64, blups: []f64, scratch: []f64) -> (u32, err) {
+    let r = q * (q + 1usize) / 2usize
+    if y.len < n || x.len < n * d || z.len < n * q || counts.len < groups || beta.len < d || beta_cov.len < d * d || variances.len < r + 1usize || blups.len < groups * q { ret (0u32, TooSmall) }
+    if n == 0usize || d == 0usize || q == 0usize || groups == 0usize { ret (0u32, Invalid) }
+    var total = 0usize
+    var maxm = 0usize
+    var g = 0usize
+    while g < groups {
+        if counts[g] == 0usize { ret (0u32, Invalid) }
+        if counts[g] > maxm { maxm = counts[g] }
+        total += counts[g]
+        g += 1usize
+    }
+    if total != n { ret (0u32, Invalid) }
+    if n < 2usize || n < d { ret (0u32, Invalid) }
+    if scratch.len < (r + 2usize) * (r + 2usize) + 5usize * (r + 1usize) + 2usize * d * d + d + q * q + q + maxm * maxm + maxm { ret (0u32, TooSmall) }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += y[i] / f64(n)
+        i += 1usize
+    }
+    var spread = 0.0f64
+    i = 0usize
+    while i < n {
+        let t = y[i] - mean
+        spread += t * t
+        i += 1usize
+    }
+    let variance = spread / f64(n - 1usize)
+    if variance <= 0.0f64 { ret (0u32, Invalid) }
+    var at = 0usize
+    var nm = scratch[at..at + (r + 2usize) * (r + 2usize) + 4usize * (r + 1usize)]
+    at += (r + 2usize) * (r + 2usize) + 4usize * (r + 1usize)
+    var theta = scratch[at..at + r + 1usize]
+    at += r + 1usize
+    var xvx = scratch[at..at + d * d]
+    at += d * d
+    var xvy = scratch[at..at + d]
+    at += d
+    var inverse = scratch[at..at + d * d]
+    at += d * d
+    var gbuf = scratch[at..at + q * q]
+    at += q * q
+    var tbuf = scratch[at..at + q]
+    at += q
+    var vbuf = scratch[at..at + maxm * maxm]
+    at += maxm * maxm
+    var rbuf = scratch[at..at + maxm]
+    var ctx = RsCtx { y: y, x: x, z: z, n: n, d: d, q: q, counts: counts, groups: groups, xvx: xvx, xvy: xvy, gbuf: gbuf, vbuf: vbuf, rbuf: rbuf, tbuf: tbuf }
+    let start = 0.5f64 * math.log[f64](variance / 2.0f64)
+    let logsig = math.log[f64](variance / 2.0f64)
+    var k = 0usize
+    while k < r {
+        theta[k] = 0.0f64
+        k += 1usize
+    }
+    var a = 0usize
+    while a < q {
+        theta[a * (a + 3usize) / 2usize] = start
+        a += 1usize
+    }
+    theta[r] = logsig
+    let (result, nm_error) = opt.nelder_mead[RsCtx](&ctx, rs_objective, theta, 0.5f64, 0.000000000001f64, 500u32, nm)
+    if nm_error != ok { ret (0u32, nm_error) }
+    let sig2 = math.exp[f64](theta[r])
+    let (_, fit_error) = rs_fit_given(&ctx, theta, sig2)
+    if fit_error != ok { ret (0u32, fit_error) }
+    i = 0usize
+    while i < q {
+        var j = 0usize
+        while j <= i {
+            variances[i * (i + 1usize) / 2usize + j] = gbuf[i * q + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    variances[r] = sig2
+    i = 0usize
+    while i < d {
+        beta[i] = xvy[i]
+        i += 1usize
+    }
+    var j = 0usize
+    while j < d {
+        var c = 0usize
+        while c < d {
+            if c == j {
+                xvy[c] = 1.0f64
+            } else {
+                xvy[c] = 0.0f64
+            }
+            c += 1usize
+        }
+        let inverse_error = mixed_chol_solve(xvx, xvy, d)
+        if inverse_error != ok { ret (0u32, inverse_error) }
+        c = 0usize
+        while c < d {
+            inverse[c * d + j] = xvy[c]
+            c += 1usize
+        }
+        j += 1usize
+    }
+    i = 0usize
+    while i < d * d {
+        beta_cov[i] = inverse[i]
+        i += 1usize
+    }
+    var off = 0usize
+    g = 0usize
+    while g < groups {
+        let m = counts[g]
+        a = 0usize
+        while a < m {
+            var b = 0usize
+            while b < m {
+                var cell = 0.0f64
+                if a == b { cell = sig2 }
+                var s = 0usize
+                while s < q {
+                    var h = 0usize
+                    while h < q {
+                        cell += z[(off + a) * q + s] * gbuf[s * q + h] * z[(off + b) * q + h]
+                        h += 1usize
+                    }
+                    s += 1usize
+                }
+                vbuf[a * m + b] = cell
+                b += 1usize
+            }
+            a += 1usize
+        }
+        let chol_error = mixed_chol(vbuf, m)
+        if chol_error != ok { ret (0u32, chol_error) }
+        a = 0usize
+        while a < m {
+            var resid = y[off + a]
+            var c = 0usize
+            while c < d {
+                resid -= x[(off + a) * d + c] * beta[c]
+                c += 1usize
+            }
+            rbuf[a] = resid
+            a += 1usize
+        }
+        let bsolve_error = mixed_chol_solve(vbuf, rbuf, m)
+        if bsolve_error != ok { ret (0u32, bsolve_error) }
+        var s = 0usize
+        while s < q {
+            tbuf[s] = 0.0f64
+            var t = 0usize
+            while t < m {
+                tbuf[s] += z[(off + t) * q + s] * rbuf[t]
+                t += 1usize
+            }
+            s += 1usize
+        }
+        s = 0usize
+        while s < q {
+            var blup = 0.0f64
+            var h = 0usize
+            while h < q {
+                blup += gbuf[s * q + h] * tbuf[h]
+                h += 1usize
+            }
+            blups[g * q + s] = blup
+            s += 1usize
+        }
         off += m
         g += 1usize
     }

@@ -1283,6 +1283,11 @@ algo_stat_safety_written=$($test_build/neper-self emit-executable "$repo/tests/s
 [ "$algo_stat_safety_written" = 'executable written' ]
 chmod +x "$test_build/algo-stat-safety-selfhost"
 "$test_build/algo-stat-safety-selfhost"
+# `e.algo.stat.mixed` random slopes: the log-Cholesky unpack, a random-slopes LMM recovering its effects and covariances with BLUPs, and refusals.
+algo_stat_mixed_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_mixed/src/main.e" "$repo" x64 linux "$test_build/algo-stat-mixed-selfhost")
+[ "$algo_stat_mixed_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-mixed-selfhost"
+"$test_build/algo-stat-mixed-selfhost"
 # `e.algo.graph.flow`: Edmonds-Karp, Dinic and push-relabel agree on CLRS's network (23), on parallel and anti-parallel arcs and on a bipartite instance; the minimum cut equals the flow and edge flows conserve (D837).
 algo_graph_flow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph_flow/src/main.e" "$repo" x64 linux "$test_build/algo-graph-flow-selfhost")
 [ "$algo_graph_flow_written" = 'executable written' ]
