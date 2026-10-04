@@ -34691,3 +34691,22 @@ pair. Subgroup T², historical point exclusion after assignable-cause review,
 and a lower Phase I limit remain planned.
 
 References: https://itl.nist.gov/div898/software/dataplot/refman1/auxillar/hotell.htm ; https://www.itl.nist.gov/div898/handbook/pmc/section5/pmc5434.htm
+
+## D1946 — Generalized variance exposes the moment-normal approximation explicitly
+
+`generalized_variance` accepts equal-size row-major multivariate subgroups.
+Each plotted value is the determinant of its unbiased sample covariance
+matrix. A pooled Phase I covariance estimates the in-control determinant;
+the finite-reference determinant correction `b3` prevents silently treating
+that estimate as known. `b1` and `b2` are the exact first two determinant
+moment factors; a normal quantile converts them into an upper-only or
+two-sided approximate control limit. Phase II subgroups never update the
+reference. Singular individual subgroups plot zero; a singular pooled
+reference is refused. The Windows/Linux fixture checks two- and three-variate
+data, moments, the finite-reference correction, Phase II isolation, signal
+classification, scene/SVG adapters and refusals. The gallery adds a PNG/SVG
+pair. Exact and Cornish-Fisher limit calibration and non-equal subgroup sizes
+remain planned; the normal approximation can materially inflate false-alarm
+risk for small subgroups, so the preview labels it.
+
+References: https://flaviobarros.github.io/IQCC/reference/cchart.GV.html ; https://flaviobarros.github.io/IQCC/articles/statistical-foundations.html ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/multivariate-charts/generalized-variance-chart/methods-and-formulas/methods-and-formulas-for-generalized-variance-chart/

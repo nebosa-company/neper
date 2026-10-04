@@ -3014,6 +3014,11 @@ gfx_chart_hotelling_t2_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-hotelling-t2-selfhost"
 gfx_chart_hotelling_t2_output=$("$test_build/gfx-chart-hotelling-t2-selfhost")
 [ "$gfx_chart_hotelling_t2_output" = 'gfx chart hotelling t2 ok' ]
+gfx_chart_generalized_variance_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_generalized_variance/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-generalized-variance-selfhost")
+[ "$gfx_chart_generalized_variance_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-generalized-variance-selfhost"
+gfx_chart_generalized_variance_output=$("$test_build/gfx-chart-generalized-variance-selfhost")
+[ "$gfx_chart_generalized_variance_output" = 'gfx chart generalized variance ok' ]
 gfx_chart_spine_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_spine_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-spine-plot-selfhost")
 [ "$gfx_chart_spine_plot_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-spine-plot-selfhost"

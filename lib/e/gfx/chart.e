@@ -104,6 +104,8 @@ type AnomStorage = struct { points: []Coord, signals: []Coord, upper: []Segment,
 type AnomLayout = struct { groups: Layout, signals: Layout, upper: Layout, lower: Layout, center: Layout, means: []f64, counts: []usize, upper_limits: []f64, lower_limits: []f64, grand_mean: f64, pooled_sd: f64, critical: f64 }
 type HotellingStorage = struct { means: []f64, covariance: []f64, factor: []f64, residual: []f64, scores: []f64, points: []Coord, segments: []Segment, signals: []Coord, upper: []Segment }
 type HotellingLayout = struct { trace: Layout, signals: Layout, upper: Layout, means: []f64, covariance: []f64, scores: []f64, upper_limit: f64, historical_count: usize, phase_two: bool }
+type GeneralizedVarianceStorage = struct { covariance: []f64, pooled: []f64, factor: []f64, determinants: []f64, points: []Coord, segments: []Segment, signals: []Coord, upper: []Segment, lower: []Segment, center: []Segment }
+type GeneralizedVarianceLayout = struct { trace: Layout, signals: Layout, upper: Layout, lower: Layout, center: Layout, determinants: []f64, pooled_covariance: []f64, center_value: f64, lower_limit: f64, upper_limit: f64, b1: f64, b2: f64, b3: f64, phase_one_count: usize, phase_two_count: usize }
 type InteractionStorage = struct { points: []Coord, lines: []Segment, means: []f64, counts: []usize, series: []Layout }
 type InteractionLayout = struct { series: []Layout, means: []f64, counts: []usize }
 type CubePlotStorage = struct { vertices: []Coord, edges: []Segment, means: []f64, counts: []usize }
@@ -7253,6 +7255,142 @@ fn hotelling_t2_individuals(values: []const f64, columns: usize, historical: []c
     let signals = Layout { kind: .Scatter, coords: storage.signals[..flags], segments: zero, bars: zero, x_min: 0.0, x_max: f32(monitored), y_min: 0.0, y_max: f32(top) }
     let upper = Layout { kind: .Rug, coords: zero, segments: storage.upper[..1usize], bars: zero, x_min: 0.0, x_max: f32(monitored), y_min: 0.0, y_max: f32(top) }
     ret (HotellingLayout { trace: trace, signals: signals, upper: upper, means: storage.means[..columns], covariance: storage.covariance[..columns * columns], scores: storage.scores[..monitored], upper_limit: upper_limit, historical_count: m, phase_two: phase_two }, ok)
+}
+
+// Generalized-variance |S| chart for equal-size multivariate subgroups.
+// Phase I estimates the reference covariance; optional Phase II subgroups do
+// not change it. Limits are the moment-normal approximation, not exact tail
+// quantiles. A one-sided chart has LCL 0; two-sided uses alpha/2 per tail.
+fn generalized_variance(phase_one: []const f64, phase_two: []const f64, subgroup_size: usize, columns: usize, alpha: f64, two_sided: bool, bounds: geometry.Rect, storage: *GeneralizedVarianceStorage) -> (GeneralizedVarianceLayout, err) {
+    if columns < 2usize || subgroup_size <= columns || phase_one.len == 0usize || !finite64(alpha) || alpha <= 0.0f64 || alpha >= 1.0f64 || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    if phase_one.len % columns != 0usize || phase_two.len % columns != 0usize { ret (zero, Invalid) }
+    let phase_one_rows = phase_one.len / columns
+    let phase_two_rows = phase_two.len / columns
+    if phase_one_rows % subgroup_size != 0usize || phase_two_rows % subgroup_size != 0usize { ret (zero, Invalid) }
+    let first_count = phase_one_rows / subgroup_size
+    let second_count = phase_two_rows / subgroup_size
+    if first_count < 2usize { ret (zero, Invalid) }
+    let count = first_count + second_count
+    if storage.covariance.len < columns * columns || storage.pooled.len < columns * columns || storage.factor.len < columns * columns || storage.determinants.len < count || storage.points.len < count || storage.segments.len < count - 1usize || storage.signals.len < count || storage.upper.len < 1usize || storage.lower.len < 1usize || storage.center.len < 1usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < phase_one.len {
+        if !finite64(phase_one[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < phase_two.len {
+        if !finite64(phase_two[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < columns * columns {
+        storage.pooled[i] = 0.0f64
+        i += 1usize
+    }
+    var highest = 0.0f64
+    var group = 0usize
+    while group < count {
+        var source = phase_one
+        var local_group = group
+        if group >= first_count {
+            source = phase_two
+            local_group = group - first_count
+        }
+        let start = local_group * subgroup_size * columns
+        let sample = source[start..start + subgroup_size * columns]
+        if stat.covariance_matrix(sample, columns, storage.covariance[..columns * columns]) != ok { ret (zero, Invalid) }
+        i = 0usize
+        while i < columns * columns {
+            if !finite64(storage.covariance[i]) { ret (zero, Invalid) }
+            if group < first_count { storage.pooled[i] += storage.covariance[i] / f64(first_count) }
+            i += 1usize
+        }
+        var determinant = 0.0f64
+        if filter.cholesky(storage.covariance[..columns * columns], columns, storage.factor[..columns * columns]) == ok {
+            determinant = 1.0f64
+            i = 0usize
+            while i < columns {
+                let diagonal = storage.factor[i * columns + i]
+                determinant *= diagonal * diagonal
+                i += 1usize
+            }
+        }
+        if !finite64(determinant) || determinant < 0.0f64 { ret (zero, Invalid) }
+        storage.determinants[group] = determinant
+        highest = math.max[f64](highest, determinant)
+        group += 1usize
+    }
+    i = 0usize
+    while i < columns * columns {
+        if !finite64(storage.pooled[i]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    if filter.cholesky(storage.pooled[..columns * columns], columns, storage.factor[..columns * columns]) != ok { ret (zero, Invalid) }
+    var pooled_det = 1.0f64
+    i = 0usize
+    while i < columns {
+        let diagonal = storage.factor[i * columns + i]
+        pooled_det *= diagonal * diagonal
+        i += 1usize
+    }
+    let n = f64(subgroup_size)
+    let df = n - 1.0f64
+    let pooled_df = f64(first_count) * df
+    var b1 = 1.0f64
+    var second_moment = 1.0f64
+    var b3 = 1.0f64
+    i = 0usize
+    while i < columns {
+        let j = f64(i + 1usize)
+        let term = n - j
+        b1 *= term / df
+        second_moment *= term * (term + 2.0f64) / (df * df)
+        b3 *= (pooled_df - f64(i)) / pooled_df
+        i += 1usize
+    }
+    var b2 = second_moment - b1 * b1
+    if b2 < 0.0f64 && b2 > -1.0e-12f64 { b2 = 0.0f64 }
+    if !finite64(pooled_det) || pooled_det <= 0.0f64 || !finite64(b1) || !finite64(b2) || !finite64(b3) || b2 < 0.0f64 || b3 <= 0.0f64 { ret (zero, Invalid) }
+    let det_sigma = pooled_det / b3
+    var tail = alpha
+    if two_sided { tail = alpha / 2.0f64 }
+    let z = special.normal_quantile(1.0f64 - tail)
+    let center_value = b1 * det_sigma
+    let spread = z * math.sqrt[f64](b2) * det_sigma
+    let upper_limit = center_value + spread
+    var lower_limit = 0.0f64
+    if two_sided { lower_limit = math.max[f64](0.0f64, center_value - spread) }
+    if !finite64(center_value) || !finite64(upper_limit) || !finite64(lower_limit) || upper_limit <= 0.0f64 { ret (zero, Invalid) }
+    highest = math.max[f64](highest, upper_limit)
+    let top = highest * 1.1f64
+    if !finite64(top) || !finite(f32(top)) { ret (zero, Invalid) }
+    var flags = 0usize
+    group = 0usize
+    while group < count {
+        let point = Coord { x: bounds.x + bounds.width * (f32(group) + 0.5) / f32(count), y: bounds.y + bounds.height * f32(1.0f64 - storage.determinants[group] / top) }
+        if !finite(point.x) || !finite(point.y) { ret (zero, Invalid) }
+        storage.points[group] = point
+        if group > 0usize { storage.segments[group - 1usize] = Segment { from: storage.points[group - 1usize], to: point } }
+        if storage.determinants[group] > upper_limit || storage.determinants[group] < lower_limit {
+            storage.signals[flags] = point
+            flags += 1usize
+        }
+        group += 1usize
+    }
+    let center_y = bounds.y + bounds.height * f32(1.0f64 - center_value / top)
+    let upper_y = bounds.y + bounds.height * f32(1.0f64 - upper_limit / top)
+    let lower_y = bounds.y + bounds.height * f32(1.0f64 - lower_limit / top)
+    let left = bounds.x
+    let right = bounds.x + bounds.width
+    storage.center[0usize] = Segment { from: Coord { x: left, y: center_y }, to: Coord { x: right, y: center_y } }
+    storage.upper[0usize] = Segment { from: Coord { x: left, y: upper_y }, to: Coord { x: right, y: upper_y } }
+    storage.lower[0usize] = Segment { from: Coord { x: left, y: lower_y }, to: Coord { x: right, y: lower_y } }
+    let trace = Layout { kind: .PointLine, coords: storage.points[..count], segments: storage.segments[..count - 1usize], bars: zero, x_min: 0.0, x_max: f32(count), y_min: 0.0, y_max: f32(top) }
+    let signals = Layout { kind: .Scatter, coords: storage.signals[..flags], segments: zero, bars: zero, x_min: 0.0, x_max: f32(count), y_min: 0.0, y_max: f32(top) }
+    let upper = Layout { kind: .Rug, coords: zero, segments: storage.upper[..1usize], bars: zero, x_min: 0.0, x_max: f32(count), y_min: 0.0, y_max: f32(top) }
+    let lower = Layout { kind: .Rug, coords: zero, segments: storage.lower[..1usize], bars: zero, x_min: 0.0, x_max: f32(count), y_min: 0.0, y_max: f32(top) }
+    let center = Layout { kind: .Rug, coords: zero, segments: storage.center[..1usize], bars: zero, x_min: 0.0, x_max: f32(count), y_min: 0.0, y_max: f32(top) }
+    ret (GeneralizedVarianceLayout { trace: trace, signals: signals, upper: upper, lower: lower, center: center, determinants: storage.determinants[..count], pooled_covariance: storage.pooled[..columns * columns], center_value: center_value, lower_limit: lower_limit, upper_limit: upper_limit, b1: b1, b2: b2, b3: b3, phase_one_count: first_count, phase_two_count: second_count }, ok)
 }
 
 // Two-factor raw-means interaction plot. Cell order is series-major, then

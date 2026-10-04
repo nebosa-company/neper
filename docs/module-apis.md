@@ -16005,6 +16005,9 @@ fn anom(values: []const f64, group_ids: []const usize, groups: usize, critical: 
 type HotellingStorage = struct { means: []f64, covariance: []f64, factor: []f64, residual: []f64, scores: []f64, points: []Coord, segments: []Segment, signals: []Coord, upper: []Segment }
 type HotellingLayout = struct { trace: Layout, signals: Layout, upper: Layout, means: []f64, covariance: []f64, scores: []f64, upper_limit: f64, historical_count: usize, phase_two: bool }
 fn hotelling_t2_individuals(values: []const f64, columns: usize, historical: []const f64, alpha: f64, bounds: geometry.Rect, storage: *HotellingStorage) -> (HotellingLayout, err)
+type GeneralizedVarianceStorage = struct { covariance: []f64, pooled: []f64, factor: []f64, determinants: []f64, points: []Coord, segments: []Segment, signals: []Coord, upper: []Segment, lower: []Segment, center: []Segment }
+type GeneralizedVarianceLayout = struct { trace: Layout, signals: Layout, upper: Layout, lower: Layout, center: Layout, determinants: []f64, pooled_covariance: []f64, center_value: f64, lower_limit: f64, upper_limit: f64, b1: f64, b2: f64, b3: f64, phase_one_count: usize, phase_two_count: usize }
+fn generalized_variance(phase_one: []const f64, phase_two: []const f64, subgroup_size: usize, columns: usize, alpha: f64, two_sided: bool, bounds: geometry.Rect, storage: *GeneralizedVarianceStorage) -> (GeneralizedVarianceLayout, err)
 type InteractionStorage = struct { points: []Coord, lines: []Segment, means: []f64, counts: []usize, series: []Layout }
 type InteractionLayout = struct { series: []Layout, means: []f64, counts: []usize }
 fn interaction_plot(values: []const f64, x_ids: []const usize, series_ids: []const usize, x_levels: usize, series_levels: usize, bounds: geometry.Rect, storage: *InteractionStorage) -> (InteractionLayout, err)

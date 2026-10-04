@@ -3392,6 +3392,11 @@ $gfxChartHotellingT2Written = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChartHotellingT2Written -ne 'executable written') { throw 'gfx_chart_hotelling_t2 emission failed' }
 $gfxChartHotellingT2Output = & $gfxChartHotellingT2Path
 if ($LASTEXITCODE -ne 0 -or $gfxChartHotellingT2Output -ne 'gfx chart hotelling t2 ok') { throw "the e.gfx.chart Hotelling T2 answered wrongly: exit $LASTEXITCODE" }
+$gfxChartGeneralizedVariancePath = Join-Path $testBuild 'gfx-chart-generalized-variance-selfhost.exe'
+$gfxChartGeneralizedVarianceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_generalized_variance\src\main.e') $repo 'x64' 'windows' $gfxChartGeneralizedVariancePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGeneralizedVarianceWritten -ne 'executable written') { throw 'gfx_chart_generalized_variance emission failed' }
+$gfxChartGeneralizedVarianceOutput = & $gfxChartGeneralizedVariancePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGeneralizedVarianceOutput -ne 'gfx chart generalized variance ok') { throw "the e.gfx.chart generalized variance answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSpinePlotPath = Join-Path $testBuild 'gfx-chart-spine-plot-selfhost.exe'
 $gfxChartSpinePlotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spine_plot\src\main.e') $repo 'x64' 'windows' $gfxChartSpinePlotPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSpinePlotWritten -ne 'executable written') { throw 'gfx_chart_spine_plot emission failed' }
