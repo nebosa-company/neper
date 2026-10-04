@@ -5,7 +5,6 @@
 # Cartesian and distribution variants
 
 # Statistical, quality, medical and scientific diagrams
-nyquist
 scatter3d
 histogram3d
 density_surface3d

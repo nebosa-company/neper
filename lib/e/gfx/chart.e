@@ -107,6 +107,8 @@ type WaterfallSpectrumStorage = struct { points: []Coord, segments: []Segment, t
 type WaterfallSpectrumLayout = struct { traces: []Layout, frame_indices: []usize, value_min: f32, value_max: f32 }
 type BodeStorage = struct { magnitude_points: []Coord, magnitude_segments: []Segment, phase_points: []Coord, phase_segments: []Segment, magnitude_db: []f64, phase_degrees: []f64 }
 type BodeLayout = struct { magnitude: Layout, phase: Layout, magnitude_bounds: geometry.Rect, phase_bounds: geometry.Rect, magnitude_db: []f64, phase_degrees: []f64, frequency_min: f64, frequency_max: f64 }
+type NyquistStorage = struct { positive_points: []Coord, positive_segments: []Segment, negative_points: []Coord, negative_segments: []Segment, critical_point: []Coord }
+type NyquistLayout = struct { positive: Layout, negative: Layout, critical: Layout, frequency_min: f64, frequency_max: f64 }
 type SpineLayout = struct { categories: []Layout, column_totals: []f64, grand_total: f64 }
 type HexCell = struct { center: Coord, count: u64 }
 type HexbinLayout = struct { cells: []HexCell, hexes: []Layout, max_count: u64, total_count: u64 }
@@ -7324,6 +7326,59 @@ fn bode(frequency: []const f64, real: []const f64, imag: []const f64, magnitude_
     let magnitude = Layout { kind: .Line, coords: storage.magnitude_points[..n], segments: storage.magnitude_segments[..n - 1usize], bars: zero, x_min: f32(log_lo), x_max: f32(log_hi), y_min: f32(mag_lo), y_max: f32(mag_hi) }
     let phase = Layout { kind: .Line, coords: storage.phase_points[..n], segments: storage.phase_segments[..n - 1usize], bars: zero, x_min: f32(log_lo), x_max: f32(log_hi), y_min: f32(phase_lo), y_max: f32(phase_hi) }
     ret (BodeLayout { magnitude: magnitude, phase: phase, magnitude_bounds: magnitude_bounds, phase_bounds: phase_bounds, magnitude_db: storage.magnitude_db[..n], phase_degrees: storage.phase_degrees[..n], frequency_min: frequency[0usize], frequency_max: frequency[n - 1usize] }, ok)
+}
+
+// The negative-frequency branch is the conjugate reflection of a sampled
+// real-coefficient SISO response. Separate paths avoid inventing the missing
+// contour arcs at zero/infinity; no stability verdict follows from samples.
+fn nyquist(frequency: []const f64, real: []const f64, imag: []const f64, bounds: geometry.Rect, storage: *NyquistStorage) -> (NyquistLayout, err) {
+    if frequency.len < 2usize || frequency.len != real.len || frequency.len != imag.len || !valid_bounds(bounds) || !finite(bounds.x + bounds.width) || !finite(bounds.y + bounds.height) { ret (zero, Invalid) }
+    let n = frequency.len
+    if storage.positive_points.len < n || storage.positive_segments.len < n - 1usize || storage.negative_points.len < n || storage.negative_segments.len < n - 1usize || storage.critical_point.len == 0usize { ret (zero, TooLarge) }
+    var real_lo = -1.0f64
+    var real_hi = -1.0f64
+    var imag_abs = 0.0f64
+    var i = 0usize
+    while i < n {
+        if !finite64(frequency[i]) || frequency[i] <= 0.0f64 || !finite64(real[i]) || !finite64(imag[i]) || (i > 0usize && frequency[i] <= frequency[i - 1usize]) { ret (zero, Invalid) }
+        real_lo = math.min[f64](real_lo, real[i])
+        real_hi = math.max[f64](real_hi, real[i])
+        imag_abs = math.max[f64](imag_abs, math.abs[f64](imag[i]))
+        i += 1usize
+    }
+    let span_x = math.max[f64](real_hi - real_lo, 1.0f64)
+    let span_y = math.max[f64](2.0f64 * imag_abs, 1.0f64)
+    let scale = math.min[f64](f64(bounds.width) / (1.1f64 * span_x), f64(bounds.height) / (1.1f64 * span_y))
+    let center_x = real_lo + (real_hi - real_lo) * 0.5f64
+    if !finite64(scale) || scale <= 0.0f64 || !finite64(center_x) { ret (zero, Invalid) }
+    let x_min = center_x - f64(bounds.width) / (2.0f64 * scale)
+    let x_max = center_x + f64(bounds.width) / (2.0f64 * scale)
+    let y_min = -f64(bounds.height) / (2.0f64 * scale)
+    let y_max = -y_min
+    if !finite(f32(x_min)) || !finite(f32(x_max)) || !finite(f32(y_min)) || !finite(f32(y_max)) { ret (zero, Invalid) }
+    let mid_x = f64(bounds.x) + f64(bounds.width) * 0.5f64
+    let mid_y = f64(bounds.y) + f64(bounds.height) * 0.5f64
+    i = 0usize
+    while i < n {
+        let forward = Coord { x: f32(mid_x + (real[i] - center_x) * scale), y: f32(mid_y - imag[i] * scale) }
+        let reverse_index = n - 1usize - i
+        let reverse = Coord { x: f32(mid_x + (real[reverse_index] - center_x) * scale), y: f32(mid_y + imag[reverse_index] * scale) }
+        if !finite(forward.x) || !finite(forward.y) || !finite(reverse.x) || !finite(reverse.y) { ret (zero, Invalid) }
+        storage.positive_points[i] = forward
+        storage.negative_points[i] = reverse
+        if i > 0usize {
+            storage.positive_segments[i - 1usize] = Segment { from: storage.positive_points[i - 1usize], to: forward }
+            storage.negative_segments[i - 1usize] = Segment { from: storage.negative_points[i - 1usize], to: reverse }
+        }
+        i += 1usize
+    }
+    let critical = Coord { x: f32(mid_x + (-1.0f64 - center_x) * scale), y: f32(mid_y) }
+    if !finite(critical.x) || !finite(critical.y) { ret (zero, Invalid) }
+    storage.critical_point[0usize] = critical
+    let positive = Layout { kind: .Line, coords: storage.positive_points[..n], segments: storage.positive_segments[..n - 1usize], bars: zero, x_min: f32(x_min), x_max: f32(x_max), y_min: f32(y_min), y_max: f32(y_max) }
+    let negative = Layout { kind: .Line, coords: storage.negative_points[..n], segments: storage.negative_segments[..n - 1usize], bars: zero, x_min: f32(x_min), x_max: f32(x_max), y_min: f32(y_min), y_max: f32(y_max) }
+    let marker = Layout { kind: .Scatter, coords: storage.critical_point[..1usize], segments: zero, bars: zero, x_min: f32(x_min), x_max: f32(x_max), y_min: f32(y_min), y_max: f32(y_max) }
+    ret (NyquistLayout { positive: positive, negative: negative, critical: marker, frequency_min: frequency[0usize], frequency_max: frequency[n - 1usize] }, ok)
 }
 
 // Two-parameter Weibull probability paper. `total_count` includes units

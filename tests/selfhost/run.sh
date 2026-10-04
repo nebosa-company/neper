@@ -2984,6 +2984,11 @@ gfx_chart_bode_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/gfx-chart-bode-selfhost"
 gfx_chart_bode_output=$("$test_build/gfx-chart-bode-selfhost")
 [ "$gfx_chart_bode_output" = 'gfx chart bode ok' ]
+gfx_chart_nyquist_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_nyquist/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-nyquist-selfhost")
+[ "$gfx_chart_nyquist_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-nyquist-selfhost"
+gfx_chart_nyquist_output=$("$test_build/gfx-chart-nyquist-selfhost")
+[ "$gfx_chart_nyquist_output" = 'gfx chart nyquist ok' ]
 gfx_chart_spine_plot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_spine_plot/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-spine-plot-selfhost")
 [ "$gfx_chart_spine_plot_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-spine-plot-selfhost"

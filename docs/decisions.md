@@ -34594,3 +34594,18 @@ paths. This is a sampled-response plot, not a transfer-function solver; gain/
 phase margins, model fitting and MIMO panel grids remain planned.
 
 References: https://www.mathworks.com/help/control/ref/dynamicsystem.bode.html ; https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.bode.html
+
+## D1940 — Nyquist charts keep sampled branches separate and axes equally scaled
+
+`chart.nyquist` accepts strictly increasing positive frequencies and borrowed
+complex response components for a real-coefficient SISO system. It maps the
+positive-frequency branch in sample order and the conjugate negative-frequency
+branch in reverse sample order, retaining the critical point (-1, 0) as a
+separate scatter mark. Equal real/imaginary units preserve complex-plane
+geometry even in a rectangular panel. Caller-owned coordinates and segments
+feed the existing scene/SVG line adapters. The Windows/Linux fixture checks
+reflection, aspect, marker, input/capacity refusals and both adapters. Sampled
+frequency data omit the Nyquist contour arcs and cannot certify stability or
+encirclement counts; model evaluation, pole handling and MIMO remain planned.
+
+References: https://www.mathworks.com/help/control/ref/nyquistplot.html ; https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.lti.freqresp.html

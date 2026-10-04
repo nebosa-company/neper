@@ -2867,6 +2867,94 @@ fn render_bode_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target,
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+fn render_nyquist_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/nyquist.png"
+    let bounds = geometry.rect(45.0, 48.0, 270.0, 148.0)
+    var frequency: [61]f64 = zero
+    var real: [61]f64 = zero
+    var imag: [61]f64 = zero
+    var i = 0usize
+    while i < frequency.len {
+        let omega = math.pow[f64](10.0f64, -2.0f64 + 4.0f64 * f64(i) / 60.0f64)
+        let square = omega * omega
+        let denominator = (1.0f64 + square) * (1.0f64 + square)
+        frequency[i] = omega
+        real[i] = 4.0f64 * (1.0f64 - square) / denominator
+        imag[i] = -8.0f64 * omega / denominator
+        i += 1usize
+    }
+    var positive_points: [61]chart.Coord = zero
+    var positive_segments: [60]chart.Segment = zero
+    var negative_points: [61]chart.Coord = zero
+    var negative_segments: [60]chart.Segment = zero
+    var critical_point: [1]chart.Coord = zero
+    var storage = chart.NyquistStorage { positive_points: positive_points[..], positive_segments: positive_segments[..], negative_points: negative_points[..], negative_segments: negative_segments[..], critical_point: critical_point[..] }
+    let (map, map_error) = chart.nyquist(frequency[..], real[..], imag[..], bounds, &storage)
+    if map_error != ok { ret map_error }
+    let x_values = [4]f32{ -1.0, 0.0, 2.0, 4.0 }
+    let x_text = [4]str{ "-1", "0", "2", "4" }
+    let y_values = [3]f32{ -2.0, 0.0, 2.0 }
+    let y_text = [3]str{ "-2", "0", "2" }
+    var x_ticks: [4]chart.Tick = zero
+    var y_ticks: [3]chart.Tick = zero
+    var labels: [10]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Nyquist / second-order response", anchor: chart.Coord { x: 180.0, y: 18.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "G(jw) = 4 / (1 + jw)^2", anchor: chart.Coord { x: 180.0, y: 33.0 }, align: .Center }
+    i = 0usize
+    while i < x_ticks.len {
+        x_ticks[i] = chart.Tick { value: x_values[i], fraction: (x_values[i] - map.positive.x_min) / (map.positive.x_max - map.positive.x_min) }
+        labels[2usize + i] = chart.Label { text: x_text[i], anchor: chart.Coord { x: bounds.x + bounds.width * x_ticks[i].fraction, y: 208.0 }, align: .Center }
+        i += 1usize
+    }
+    i = 0usize
+    while i < y_ticks.len {
+        y_ticks[i] = chart.Tick { value: y_values[i], fraction: (y_values[i] - map.positive.y_min) / (map.positive.y_max - map.positive.y_min) }
+        labels[6usize + i] = chart.Label { text: y_text[i], anchor: chart.Coord { x: 36.0, y: bounds.y + bounds.height * (1.0 - y_ticks[i].fraction) + 3.0 }, align: .Right }
+        i += 1usize
+    }
+    labels[9usize] = chart.Label { text: "Blue: +w    Orange: -w    Red: critical (-1, 0)", anchor: chart.Coord { x: 180.0, y: 229.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let orange = paint.rgba(0.91, 0.34, 0.16, 1.0)
+    let red = paint.rgba(0.75, 0.1, 0.18, 1.0)
+    let grid = paint.rgba(0.87, 0.91, 0.95, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 32u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 128usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try fill(&builder, bounds, paint.Brush { Solid: pale })
+    try chart_scene.append_guides(&builder, bounds, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid }, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &map.positive, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &map.negative, paint.Brush { Solid: orange })
+    try chart_scene.append(a, &builder, &map.critical, paint.Brush { Solid: red })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..9usize], font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[9usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, bounds, pale, false)
+    try chart_svg.append_guides(&writer, bounds, x_ticks[..], y_ticks[..], grid, dark)
+    try chart_svg.append(&writer, &map.positive, blue)
+    try chart_svg.append(&writer, &map.negative, orange)
+    try chart_svg.append(&writer, &map.critical, red)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..9usize], dark, 8.0)
+    try chart_svg.append_labels(&writer, labels[9usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn two_cluster_sample(x: []f32, y: []f32) -> err {
     if x.len != 72usize || y.len != 72usize { ret chart.Invalid }
     var i = 0usize
@@ -7743,6 +7831,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_spectrogram_preview(a, queue, output_target, canvas, &renderer)
     try render_waterfall_spectrum_preview(a, queue, output_target, canvas, &renderer)
     try render_bode_preview(a, queue, output_target, canvas, &renderer)
+    try render_nyquist_preview(a, queue, output_target, canvas, &renderer)
     try render_hexbin_preview(a, queue, output_target, canvas, &renderer)
     try render_bin2d_preview(a, queue, output_target, canvas, &renderer)
     try render_density2d_preview(a, queue, output_target, canvas, &renderer)
