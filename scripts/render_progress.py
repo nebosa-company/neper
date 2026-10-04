@@ -75,7 +75,7 @@ offset = moment.strftime('%z')
 when = '%s UTC%s:%s' % (moment.strftime('%Y-%m-%d %H:%M:%S'), offset[:3], offset[3:])
 
 # ---- module numbers, recomputed here so the page cannot drift from the plan ----
-txt = open('docs/module-apis.md', encoding='utf-8').read()
+txt = Path('docs/module-apis.md').read_text(encoding='utf-8')
 blocks = dict(re.findall(r'^### `([^`]+)`\n(.*?)(?=^### |\Z)', txt, re.S | re.M))
 
 
@@ -106,17 +106,21 @@ for p in tracked:
     impl.setdefault(mod, set()).update(
         m.group(2) for m in
         (re.match(r'(fn|type|error|const)\s+([A-Za-z_][A-Za-z0-9_]*)', l)
-         for l in open(p, encoding='utf-8')) if m)
+         for l in Path(p).read_text(encoding='utf-8').splitlines()) if m)
 
 seeded = {}
 for mod, nm in re.findall(r'seed\(r,\s*g,\s*"([^"]+)",\s*"([^"]+)"',
-                          open('src/resolve.e', encoding='utf-8').read()):
+                          Path('src/resolve.e').read_text(encoding='utf-8')):
     seeded.setdefault(mod, set()).add(nm)
 
 dtot = dgot = 0
+module_missing = {}
 for mod, body in blocks.items():
     declarations = decl_names(body)
     present = impl.get(mod, set()) | seeded.get(mod, set())
+    missing = set(declarations) - present
+    if missing:
+        module_missing[mod] = missing
     dtot += len(declarations)
     dgot += sum(1 for name in declarations if name in present)
 
@@ -126,7 +130,7 @@ for mod, body in blocks.items():
 # count once.
 planned = {}
 for mod, fn in re.findall(r'→ `(e\.[A-Za-z0-9_.]+)\.([A-Za-z_][A-Za-z0-9_]*)`',
-                          open('docs/algos.md', encoding='utf-8').read()):
+                          Path('docs/algos.md').read_text(encoding='utf-8')):
     planned.setdefault(mod, set()).add(fn)
 algos_total = sum(len(fns) for fns in planned.values())
 algos_missing = 0
@@ -134,7 +138,10 @@ for mod, fns in planned.items():
     present = impl.get(mod, set()) | seeded.get(mod, set())
     if mod in blocks:
         present |= set(decl_names(blocks[mod]))
-    algos_missing += sum(1 for fn in fns if fn not in present)
+    missing = fns - present
+    if missing:
+        module_missing.setdefault(mod, set()).update(missing)
+    algos_missing += len(missing)
 dtot += algos_missing
 
 widget_plan, widget_errors = validate_widget_plan(Path('.'))
@@ -211,14 +218,37 @@ if chart_item is None:
                 break
 if chart_item is None:
     raise SystemExit('L061 missing from work queue and completion ledger')
-backlog = '\n'.join(
-    '<tr><td><code>{id}</code></td><td>{title}</td><td>{score:.0%}</td><td>{evidence}</td></tr>'.format(
-        id=html.escape(item['id']), title=html.escape(item['title']),
-        score=float(item['score']), evidence=html.escape(
-            'See docs/charts.md for the engine, delivery evidence and previews.'
-            if item['id'] == 'L061' else item['evidence']))
-    for item in queue_items
-)
+def unfinished_details(label, rows):
+    body = ''.join(
+        '<tr><td>{number}</td><td><code>{id}</code></td><td>{title}</td>'
+        '<td>{evidence}</td></tr>'.format(
+            number=number, id=html.escape(item_id), title=html.escape(title),
+            evidence=html.escape(evidence))
+        for number, (item_id, title, evidence) in enumerate(rows, 1)
+    )
+    content = (
+        '<div class="table-scroll"><table><thead><tr><th scope="col">#</th>'
+        '<th scope="col">ID / module</th><th scope="col">Work and progress</th>'
+        '<th scope="col">Evidence and remaining work</th></tr></thead>'
+        '<tbody>' + body + '</tbody></table></div>'
+        if rows else '<p>No unfinished items.</p>'
+    )
+    return ('<details id="unfinished-' + label.lower() + '"><summary>'
+            + label + ' — ' + str(len(rows)) + ' unfinished</summary>'
+            + content + '</details>')
+
+
+backlog = unfinished_details('Queue', [
+    (item['id'], item['title'] + ' (' + format(float(item['score']), '.0%') + ')',
+     'See docs/charts.md for the engine, delivery evidence and previews.'
+     if item['id'] == 'L061' else item['evidence'])
+    for item in queue_items if float(item['score']) < 1
+])
+backlog += unfinished_details('Modules', [
+    (mod, str(len(missing)) + ' missing declarations / selected algorithms',
+     ', '.join(sorted(missing)))
+    for mod, missing in sorted(module_missing.items())
+])
 preview_paths = sorted(Path('docs/chart-previews').glob('*.png'))
 preview_backlog = [line.strip() for line in Path('docs/chart-preview-backlog.txt').read_text(encoding='utf-8').splitlines()
                    if line.strip() and not line.lstrip().startswith('#')]
@@ -263,12 +293,13 @@ chart_section = (
     'Rendered previews ({preview_count}/{chart_total}). '
     '<a href="charts.md">Charting-engine description and produced charts</a>.</p></section>'
     '<section class="tools" aria-label="Unfinished work queue">'
-    '<h2>Backlog</h2><p>{count} unfinished capabilities in pickup order.</p>'
-    '<details><summary>Show the full backlog</summary><div class="table-scroll">'
-    '<table><thead><tr><th>ID</th><th>Capability</th><th>Progress</th><th>Evidence and remaining work</th></tr></thead>'
-    '<tbody>{backlog}</tbody></table></div></details></section>'
+    '<h2>Unfinished work</h2><p>{count} queued capabilities in planned pickup order, '
+    'across all categories; the first row is next. {module_count} modules with missing '
+    'declarations or selected algorithms appear separately as inventory gaps, not '
+    'queued tasks.</p>'
+    '{backlog}</section>'
 ).format(score=float(chart_item['score']), preview_count=len(preview_paths), chart_total=chart_total,
-         count=len(queue_items), backlog=backlog)
+         count=len(queue_items), module_count=len(module_missing), backlog=backlog)
 
 page_html = """<!doctype html>
 <html lang="en">

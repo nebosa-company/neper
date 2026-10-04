@@ -1,0 +1,66 @@
+"""Check the generated unfinished-work lists against their inventories."""
+import contextlib
+import html
+import io
+import json
+import os
+from pathlib import Path
+import re
+import runpy
+import sys
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class ProgressTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        previous = Path.cwd()
+        sys.path.insert(0, str(ROOT / "scripts"))
+        try:
+            os.chdir(ROOT)
+            with contextlib.redirect_stdout(io.StringIO()):
+                cls.render = runpy.run_path(str(ROOT / "scripts/render_progress.py"))
+        finally:
+            os.chdir(previous)
+            sys.path.pop(0)
+        cls.page = (ROOT / "docs/progress.html").read_text(encoding="utf-8")
+        cls.sections = dict(re.findall(
+            r'<details id="unfinished-([a-z]+)">(.*?)</details>', cls.page, re.S))
+
+    def test_numbered_queue_follows_pickup_order_across_categories(self):
+        self.assertEqual(list(self.sections), ["queue", "modules"])
+        queue = json.loads((ROOT / "docs/work-queue.json").read_text(encoding="utf-8"))
+        expected = [item["id"] for item in queue["items"] if float(item["score"]) < 1]
+        section = self.sections["queue"]
+        actual = re.findall(r'<tr><td>(\d+)</td><td><code>(.*?)</code>', section)
+        self.assertEqual(actual, [(str(i), task) for i, task in enumerate(expected, 1)])
+        self.assertEqual(expected[0], "L061")
+        self.assertIn(f"{len(expected)} unfinished</summary>", section)
+        self.assertNotIn("<details open", section)
+
+    def test_module_rows_account_for_every_missing_symbol(self):
+        section = self.sections["modules"]
+        missing = self.render["module_missing"]
+        actual = re.findall(r'<tr><td>(\d+)</td><td><code>(.*?)</code>', section)
+        self.assertEqual(actual, [(str(i), name)
+                                 for i, name in enumerate(sorted(missing), 1)])
+        self.assertEqual(sum(map(len, missing.values())),
+                         self.render["dtot"] - self.render["dgot"])
+        for names in missing.values():
+            self.assertIn(html.escape(", ".join(sorted(names))), section)
+
+    def test_empty_section_and_untrusted_text(self):
+        render = self.render["unfinished_details"]
+        self.assertIn("No unfinished items.", render("Library", []))
+        result = render("Library", [("L001", '<script>alert("x")</script>', "a & b")])
+        self.assertNotIn("<script>", result)
+        self.assertIn("&lt;script&gt;", result)
+        self.assertIn("a &amp; b", result)
+        self.assertIn('<tr><td>1</td><td><code>L001</code>', result)
+
+
+if __name__ == "__main__":
+    unittest.main()
