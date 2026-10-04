@@ -18,3 +18,27 @@
   way took twice the output tokens per byte and cost 4-5x as much per KB of new code
   (`python scripts/lang-stats.py`). A script is for content it computes: constants,
   tables, generated fixtures.
+
+## Prompt routing (measured: `python scripts/lang-stats.py`)
+
+- Name the queue item (`L0xx`/`C0xx`/`T0xx`) plus its acceptance list in
+  every build prompt. Bare delegates ("continue", "do it", "implement
+  those", "/goal continue") correlate with repeat 59–72% and turns/ed
+  6–7 — restate the item ID instead.
+- Read `docs/llm-neper-card.md` (traps section: `target`, `Vec`/`i8`,
+  D66 no-shadow, string escapes, bootstrap-only rules) and resolve
+  symbols via context-file/`neper index` before opening files.
+  Full-turn context at 400–500 Ktk vs 1–5 K via context-file is the
+  largest cost lever (T026).
+- Repair prompts carry the diagnostic identity: code (`E-XXXX-nnnn`),
+  span, expected vs found. Median fix is 1–2 turns with it, 3+ without;
+  repeated codes across consecutive failures mean the message was
+  misread — re-attach the subject (T028).
+- Separate verify-only turns (run suite, report tail, no edits) from
+  build turns. Never combine "implement + verify everything" in one
+  prompt.
+- Multi-file edits are one transaction with preconditions per file
+  (expected SHA-256); a stale precondition aborts, never partially
+  applies. No Python patch script or `python - <<EOF` heredoc carrying
+  `old`/`new` strings — Edit or `build/windows/patch.exe` spec only.
+  Scripts are for content they compute.
