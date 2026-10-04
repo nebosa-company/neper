@@ -16319,6 +16319,8 @@ fn facet_grid(bounds: geometry.Rect, columns: usize, count: usize, gap: f32, pan
 ### `e.gfx.chart.scene`
 
 ```neper
+fn begin_clip(builder: *scene.Builder, bounds: geometry.Rect) -> err
+fn end_clip(builder: *scene.Builder) -> err
 fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, brush: paint.Brush) -> err
 fn append_map_region(a: *mem.Arena, builder: *scene.Builder, region: *const chart.MapRegionLayout, brush: paint.Brush) -> err
 fn append_report_cells(builder: *scene.Builder, cells: []const chart.ReportCell, fills: []const paint.Color, bar_ink: paint.Color) -> err
@@ -16332,6 +16334,8 @@ fn append_labels(a: *mem.Arena, builder: *scene.Builder, labels: []const chart.L
 
 ```neper
 error Invalid
+fn begin_clip(w: *io.Writer, bounds: geometry.Rect, id: str) -> err
+fn end_clip(w: *io.Writer) -> err
 fn begin(w: *io.Writer, width: f32, height: f32, title: str, description: str) -> err
 fn append(w: *io.Writer, marks: *const chart.Layout, ink: paint.Color) -> err
 fn append_map_region(w: *io.Writer, region: *const chart.MapRegionLayout, ink: paint.Color) -> err

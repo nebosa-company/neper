@@ -3336,6 +3336,11 @@ $gfxChartMissingScatterWritten = & $compiler emit-executable (Join-Path $PSScrip
 if ($LASTEXITCODE -ne 0 -or $gfxChartMissingScatterWritten -ne 'executable written') { throw 'gfx_chart_missing_scatter emission failed' }
 $gfxChartMissingScatterOutput = & $gfxChartMissingScatterPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartMissingScatterOutput -ne 'gfx chart missing scatter ok') { throw "the e.gfx.chart missing-data scatter answered wrongly: exit $LASTEXITCODE" }
+$gfxChartClippedAnnotationPath = Join-Path $testBuild 'gfx-chart-clipped-annotation-selfhost.exe'
+$gfxChartClippedAnnotationWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_clipped_annotation\src\main.e') $repo 'x64' 'windows' $gfxChartClippedAnnotationPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartClippedAnnotationWritten -ne 'executable written') { throw 'gfx_chart_clipped_annotation emission failed' }
+$gfxChartClippedAnnotationOutput = & $gfxChartClippedAnnotationPath (Join-Path $repo 'docs\video\neper-capabilities\fonts\Montserrat-ExtraBold.ttf')
+if ($LASTEXITCODE -ne 0 -or $gfxChartClippedAnnotationOutput -ne 'gfx chart clipped annotation ok') { throw "the e.gfx.chart clipped annotation answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

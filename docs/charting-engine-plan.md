@@ -1090,6 +1090,13 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 ## How Neper can beat the reference tools
 
+The `clipped_annotation` preview exercises reusable rectangular clip scopes in
+the CPU scene and SVG adapters. Each backend clips marks and text inside a
+panel while leaving later labels unaffected. `gfx_chart_clipped_annotation`
+checks command ordering, escaped SVG text, invalid clips and IDs, and short
+scene-builder refusal on Windows and Linux. Arbitrary path clips and automatic
+annotation placement remain open.
+
 The target is not “more enum values.” It is a smaller, deterministic core with
 zero-copy inputs, explicit caller storage, stable scene replay, backend parity,
 accessible metadata, and one mark grammar shared by every chart. Benchmark gates

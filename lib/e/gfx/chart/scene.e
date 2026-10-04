@@ -346,6 +346,22 @@ fn append_guides(builder: *scene.Builder, bounds: geometry.Rect, x_ticks: []cons
 
 // The caller registers `font` with the renderer before replaying the scene.
 // Layout objects live in the caller's arena, alongside the display list.
+// Save/Restore lets labels and marks be scoped to a panel without clipping
+// subsequent title, axis or legend commands. Reserve both begin commands so
+// a short builder cannot be left with an unmatched Save.
+fn begin_clip(builder: *scene.Builder, bounds: geometry.Rect) -> err {
+    if !chart.valid_bounds(bounds) || !chart.finite(bounds.x + bounds.width) || !chart.finite(bounds.y + bounds.height) { ret chart.Invalid }
+    if scene.builder_remaining(builder) < 2usize { ret chart.TooLarge }
+    let save: scene.Command = .Save
+    try scene.push(builder, save)
+    ret scene.push(builder, scene.Command { Clip: scene.Clip { Rect: bounds } })
+}
+
+fn end_clip(builder: *scene.Builder) -> err {
+    let restore: scene.Command = .Restore
+    ret scene.push(builder, restore)
+}
+
 fn append_labels(a: *mem.Arena, builder: *scene.Builder, labels: []const chart.Label, font: shape.Font, size: f32, brush: paint.Brush) -> err {
     if !chart.finite(size) || size <= 0.0 { ret chart.Invalid }
     try shape.validate_font(font)

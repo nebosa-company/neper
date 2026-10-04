@@ -35030,3 +35030,14 @@ An all-missing input yields empty marks rather than a fabricated point. The
 Windows/Linux fixture checks mapping, row IDs, empty output, scene/SVG
 adapters and refusal paths; the gallery renders a PNG/SVG pair. Other geoms
 still need their own missing-data policies.
+
+## D1975 — Chart clipping is an explicit adapter scope
+
+The chart scene and SVG adapters expose `begin_clip`/`end_clip` around existing
+mark and label emitters. Both use the same finite, positive rectangular bounds;
+SVG requires a caller-unique, restricted ASCII clip ID to avoid malformed
+markup. Scene begin checks room for Save and Clip before changing the display
+list, and the caller leaves room for Restore. Titles, axes and legends emitted
+after the scope are not clipped. This composes with existing layers instead of
+adding an annotation-specific mark type; arbitrary path clips and automatic
+annotation placement remain future work.

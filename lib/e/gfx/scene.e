@@ -127,6 +127,12 @@ fn builder_count(b: *Builder) -> usize {
     ret s.count
 }
 
+fn builder_remaining(b: *Builder) -> usize {
+    let s = mem.cast[*BuilderState](b.state)
+    if mem.address_of(s) == 0usize || s.finished { ret 0usize }
+    ret s.commands.len - s.count
+}
+
 // Commands `from..to` of `id` -- the scene compiled last, released to its caller
 // but kept for the next frame's comparison (D914) -- pushed into `b` again
 // (D916). False when that scene is gone or the range is not its.

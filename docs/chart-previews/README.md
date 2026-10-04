@@ -147,6 +147,10 @@ fixed-seed, three-uniform toy model. The histogram shows exact bin counts;
 the CDF steps at each sorted outcome. Both mark the same threshold at 70
 and display the observed sample fraction at or below it. The pictures are
 reproducible examples, not a calibrated forecast or confidence interval.
+The clipped annotation preview demonstrates a shared rectangular plot clip in
+the CPU scene and SVG adapters: a red note and line are cut at the panel edge,
+while title and footer text remain outside the clip.
+
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:
 

@@ -50,6 +50,39 @@ fn begin(w: *io.Writer, width: f32, height: f32, title: str, description: str) -
 
 fn finish(w: *io.Writer) -> err { ret io.write_all(w, "</svg>\n") }
 
+fn clip_id_ok(id: str) -> bool {
+    if id.len == 0usize { ret false }
+    var i = 0usize
+    while i < id.len {
+        let c = id[i]
+        let letter = (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8)
+        if !letter && (i == 0usize || !((c >= 48u8 && c <= 57u8) || c == 45u8 || c == 95u8)) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// Caller-owned ID must be unique within the SVG document. The group can wrap
+// any existing mark or label output; end_clip closes it before outer labels.
+fn begin_clip(w: *io.Writer, bounds: geometry.Rect, id: str) -> err {
+    if !chart.valid_bounds(bounds) || !chart.finite(bounds.x + bounds.width) || !chart.finite(bounds.y + bounds.height) || !clip_id_ok(id) { ret Invalid }
+    try io.write_all(w, "<defs><clipPath id=\"")
+    try io.write_all(w, id)
+    try io.write_all(w, "\"><rect x=\"")
+    try number(w, bounds.x)
+    try io.write_all(w, "\" y=\"")
+    try number(w, bounds.y)
+    try io.write_all(w, "\" width=\"")
+    try number(w, bounds.width)
+    try io.write_all(w, "\" height=\"")
+    try number(w, bounds.height)
+    try io.write_all(w, "\"/></clipPath></defs><g clip-path=\"url(#")
+    try io.write_all(w, id)
+    ret io.write_all(w, ")\">\n")
+}
+
+fn end_clip(w: *io.Writer) -> err { ret io.write_all(w, "</g>\n") }
+
 fn append_map_region(w: *io.Writer, region: *const chart.MapRegionLayout, ink: paint.Color) -> err {
     if region.rings.len == 0usize || !paint.color_ok(ink) { ret Invalid }
     try io.write_all(w, "<path d=\"")
