@@ -2292,7 +2292,7 @@ fn helper_has_barrier(c: *check.Checker, g: *graph.Graph, function: check.Functi
 }
 
 fn barrier_helper_present(c: *check.Checker, g: *graph.Graph, reachable: []bool) -> (bool, err) {
-    var at = 0usize
+    var at = check.function_row(c, 0usize)
     while at < c.function_count {
         let function = c.functions[at]
         if at < reachable.len && reachable[at] && !function.gpu {
@@ -2300,7 +2300,7 @@ fn barrier_helper_present(c: *check.Checker, g: *graph.Graph, reachable: []bool)
             if present_error != ok { ret (false, present_error) }
             if present { ret (true, ok) }
         }
-        at += 1usize
+        at = check.function_row(c, at + 1usize)
     }
     ret (false, ok)
 }
@@ -2408,7 +2408,7 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
     if oracle.barrier_oracle {
         // A concrete generic instance owns code in its calling module, but its
         // body is the template's declaration; the ordinary oracle skips it.
-        var instance_at = c.signature_function_count
+        var instance_at = check.own_rows(c)
         while instance_at < c.function_count {
             let function = c.functions[instance_at]
             let generic = c.function_generics[instance_at]
@@ -2771,7 +2771,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
     let oracle = entry.oracle
     // The body was lowered with another worker's checker (D326) when it was not this
     // one: the types its instructions carry are imported as they are copied.
-    let foreign = entry.checker.fork_id != c.fork_id
+    let foreign = entry.checker.fork.id != c.fork.id
     let callee = oracle.functions[entry.function_index]
     var return_layout: ReturnLayout = zero
     try call_return_layout(c, call, &return_layout)
@@ -8336,10 +8336,12 @@ fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     let generic_mark = c.function_count
     let (generic_lowered, generic_error) = mem.alloc[bool](c.arena, generic_mark + 1usize)
     if generic_error != ok { ret generic_error }
-    var generic_at = 0usize
+    // Only the declarations and this checker's own rows: a crew worker's window
+    // follows the other workers', whose rows they write as this one runs (D1671).
+    var generic_at = check.function_row(c, 0usize)
     while generic_at < generic_mark {
         generic_lowered[generic_at] = c.function_generics[generic_at].lowered
-        generic_at += 1usize
+        generic_at = check.function_row(c, generic_at + 1usize)
     }
     builder.spirv = true
     var defers: DeferState = zero
@@ -8365,14 +8367,14 @@ fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     nir.reset(builder, at)
     signatures.count = signature_mark
     if has_pending {
-        generic_at = 0usize
+        generic_at = check.function_row(c, 0usize)
         while generic_at < c.function_count {
             if generic_at < generic_mark {
                 c.function_generics[generic_at].lowered = generic_lowered[generic_at]
             } else {
                 c.function_generics[generic_at].lowered = false
             }
-            generic_at += 1usize
+            generic_at = check.function_row(c, generic_at + 1usize)
         }
     }
     if lowered == mem.Exhausted { ret lowered }
@@ -8848,7 +8850,7 @@ fn lower_instance(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
 }
 
 fn pending_instance(c: *check.Checker, owner_module_index: usize) -> (usize, bool) {
-    var at = c.signature_function_count
+    var at = check.own_rows(c)
     while at < c.function_count {
         let generic = c.function_generics[at]
         if generic.instance && !generic.formatter && !generic.launcher && !generic.lowered && !c.functions[at].generic && c.functions[at].owner_module_index == owner_module_index { ret (at, true) }
@@ -9922,7 +9924,7 @@ fn lower_launch_step(c: *check.Checker, g: *graph.Graph, module_index: usize, in
 }
 
 fn pending_formatter(c: *check.Checker, owner_module_index: usize) -> (usize, bool) {
-    var at = c.signature_function_count
+    var at = check.own_rows(c)
     while at < c.function_count {
         let generic = c.function_generics[at]
         if (generic.formatter || generic.launcher) && !generic.lowered && c.functions[at].owner_module_index == owner_module_index { ret (at, true) }

@@ -632,6 +632,15 @@ type Diagnostic = struct {
     related_note: str,
 }
 
+// Which fork a checker is: zero for the program's checker, a worker's number for its
+// -- and (D1671) where its own function rows begin when they follow the other
+// workers' windows in the crew's table, zero when they follow the declarations. One
+// field of the checker, which is at the C bootstrap's limit (MAX_FIELDS, 161).
+type Fork = struct {
+    id: usize,
+    window: usize,
+}
+
 type Checker = struct {
     resolver: *resolve.Resolver,
     // The build's deadline (D441, H16): nanoseconds of the monotonic clock since
@@ -664,8 +673,8 @@ type Checker = struct {
     fork_types: usize,
     fork_aggregates: usize,
     fork_signatures: usize,
-    // Which fork this is: zero for the program's checker, a worker's number for its.
-    fork_id: usize,
+    // Which fork this is, and where its own function rows begin (`Fork`, D1671).
+    fork: Fork,
     // The body sweep's answers kept for the lowering (D327): per module, per tree
     // node, the expected and resulting types as ids in `memo_types`, each plus one,
     // packed as `(expected + 1) << 32 | (result + 1)`; zero is no answer. Only a
@@ -5124,10 +5133,10 @@ fn find_function(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
             ret (found_at, found)
         }
     }
-    var i = 0usize
+    var i = function_row(c, 0usize)
     while i < c.function_count {
         if c.functions[i].module_index == module_index && same(c.functions[i].name, name) { ret (i, true) }
-        i += 1usize
+        i = function_row(c, i + 1usize)
     }
     ret (0usize, false)
 }
@@ -6293,7 +6302,7 @@ fn interp_module(c: *Checker, g: *graph.Graph, module_index: usize) -> (usize, e
     // parse pool are shared by every worker's checker, and so are its token slots.
     // ponytail: the copy takes the header path's text-sized pools; copy it out at its
     // own size if comptime-heavy lowerings make the pools felt.
-    let privately = !g.modules[module_index].has_tree || !graph.front_readable(g, module_index, c.fork_id)
+    let privately = !g.modules[module_index].has_tree || !graph.front_readable(g, module_index, c.fork.id)
     var tokens: []lex.Token = zero
     if privately {
         let (lexed, lexed_error) = graph.lex_private(c.arena, g.modules[module_index].text)
@@ -8662,13 +8671,29 @@ fn generic_arguments_equal(c: *Checker, function_index: usize, first: usize, sec
     ret true
 }
 
+// (D1671) Where this checker's own function rows begin: past the declarations, or, in
+// a crew worker with a window of the crew's function table, past the windows of the
+// workers before it, whose rows it never reads. A worker's own rows are one run, so an
+// instance scan starts here and steps by one.
+fn own_rows(c: *Checker) -> usize {
+    if c.fork.window > c.signature_function_count { ret c.fork.window }
+    ret c.signature_function_count
+}
+
+// (D1671) The next row of a walk over every function row this checker holds: the
+// declarations, then its own rows. The identity where they follow each other.
+fn function_row(c: *Checker, at: usize) -> usize {
+    if at == c.signature_function_count { ret own_rows(c) }
+    ret at
+}
+
 // A NIR function is identified by its owning module, its name and this
 // discriminator, so the discriminator has to separate every instance a module
 // owns under one name -- including instances of same-named templates declared in
 // different modules, such as `list.init` and `heap.init` used by one consumer.
 fn owner_instance_count(c: *Checker, owner_module_index: usize, name: str) -> usize {
     var count = 0usize
-    var at = c.signature_function_count
+    var at = own_rows(c)
     while at < c.function_count {
         let candidate = c.function_generics[at]
         if candidate.instance && c.functions[at].owner_module_index == owner_module_index && same(c.functions[at].name, name) { count += 1usize }
@@ -8683,7 +8708,7 @@ fn instance_owner(c: *Checker, module_index: usize) -> usize {
 }
 
 fn find_function_instance(c: *Checker, owner_module_index: usize, template_index: usize, first_argument: usize) -> (usize, bool) {
-    var at = c.signature_function_count
+    var at = own_rows(c)
     while at < c.function_count {
         let candidate = c.function_generics[at]
         if candidate.instance && candidate.template_index == template_index && c.functions[at].owner_module_index == owner_module_index && generic_arguments_equal(c, template_index, candidate.first_argument, first_argument) { ret (at, true) }
@@ -10595,7 +10620,7 @@ fn launcher_instance_matches(c: *Checker, candidate: usize, owner_module_index: 
 // The launch as a function of its own, one per calling module, kernel and argument
 // shape, the way a formatter expansion is: its body is generated at lowering.
 fn launcher_instance(c: *Checker, owner_module_index: usize, target_module: usize, kernel: usize, argument_types: []const Type) -> (usize, err) {
-    var at = c.signature_function_count
+    var at = own_rows(c)
     while at < c.function_count {
         if launcher_instance_matches(c, at, owner_module_index, target_module, kernel, argument_types) { ret (at, ok) }
         at += 1usize
@@ -10652,7 +10677,7 @@ fn formatter_instance_matches(c: *Checker, candidate: usize, owner_module_index:
 // module, formatter, format string and argument-type list, so two calls that agree
 // share a body and two that differ do not.
 fn formatter_instance(c: *Checker, owner_module_index: usize, target_module: usize, member: str, spelling: str, argument_types: []const Type, arena: bool) -> (usize, err) {
-    var at = c.signature_function_count
+    var at = own_rows(c)
     while at < c.function_count {
         if formatter_instance_matches(c, at, owner_module_index, target_module, member, spelling, argument_types) { ret (at, ok) }
         at += 1usize
@@ -10699,7 +10724,7 @@ fn formatter_instance(c: *Checker, owner_module_index: usize, target_module: usi
 // So the compiler generates it, once per module that calls `printf`, the same way it
 // generates the expansions themselves.
 fn formatter_sink_instance(c: *Checker, owner_module_index: usize, io_module: usize) -> (usize, err) {
-    var at = c.signature_function_count
+    var at = own_rows(c)
     while at < c.function_count {
         if c.function_generics[at].formatter_sink && c.functions[at].owner_module_index == owner_module_index { ret (at, ok) }
         at += 1usize
@@ -10739,7 +10764,7 @@ fn formatter_sink_instance(c: *Checker, owner_module_index: usize, io_module: us
 // one: the body is generated, so it belongs to the module that asked for it rather
 // than to `e.str`.
 fn error_push_instance(c: *Checker, owner_module_index: usize, str_module: usize) -> (usize, err) {
-    var at = c.signature_function_count
+    var at = own_rows(c)
     while at < c.function_count {
         if c.function_generics[at].formatter_error && c.functions[at].owner_module_index == owner_module_index { ret (at, ok) }
         at += 1usize
@@ -12028,10 +12053,10 @@ fn protocol_receiver(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 const NO_FUNCTION: usize = 4294967295usize
 
 fn explain_function_index(c: *Checker, function: Function) -> usize {
-    var at = 0usize
+    var at = function_row(c, 0usize)
     while at < c.function_count {
         if c.functions[at].module_index == function.module_index && c.functions[at].first_parameter == function.first_parameter && same(c.functions[at].name, function.name) { ret at }
-        at += 1usize
+        at = function_row(c, at + 1usize)
     }
     // An instance of a generic (D396): its parameters are its own, and the
     // template of that name in that module is the function the fact names.
@@ -16301,7 +16326,7 @@ fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, skip: []cons
         }
         module_index += 1usize
     }
-    var instance_index = c.signature_function_count
+    var instance_index = own_rows(c)
     while instance_index < c.function_count {
         if c.function_generics[instance_index].instance && !c.function_generics[instance_index].checked && !c.functions[instance_index].generic {
             c.function_generics[instance_index].checked = true
@@ -16585,7 +16610,7 @@ fn bodies_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, module_inde
 // After the last module's bodies: the instances they created, checked against their
 // templates' modules, exactly as `check_bodies` ends.
 fn finish_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
-    var instance_index = c.signature_function_count
+    var instance_index = own_rows(c)
     while instance_index < c.function_count {
         if c.function_generics[instance_index].instance && !c.function_generics[instance_index].checked && !c.functions[instance_index].generic {
             c.function_generics[instance_index].checked = true
@@ -16672,7 +16697,7 @@ fn run_partial(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, failed: []boo
         }
         module_index += 1usize
     }
-    var instance_index = c.signature_function_count
+    var instance_index = own_rows(c)
     while instance_index < c.function_count {
         if c.function_generics[instance_index].instance && !c.function_generics[instance_index].checked && !c.functions[instance_index].generic {
             c.function_generics[instance_index].checked = true
@@ -18343,7 +18368,7 @@ fn device_reachable_functions(c: *Checker, g: *graph.Graph, reachable: []bool) -
         reachable[at] = false
         at += 1usize
     }
-    at = 0usize
+    at = function_row(c, 0usize)
     while at < c.function_count {
         if c.functions[at].gpu {
             var walk: DeviceWalk = zero
@@ -18355,13 +18380,13 @@ fn device_reachable_functions(c: *Checker, g: *graph.Graph, reachable: []bool) -
                 visited += 1usize
             }
         }
-        at += 1usize
+        at = function_row(c, at + 1usize)
     }
     var any_kernel = false
-    at = 0usize
+    at = function_row(c, 0usize)
     while at < c.function_count {
         if c.functions[at].gpu { any_kernel = true }
-        at += 1usize
+        at = function_row(c, at + 1usize)
     }
     if !any_kernel { ret ok }
     // ponytail: one bounded scratch buffer per device walk; grow it only if a real body exceeds 8192 dispatch records.
@@ -18377,14 +18402,14 @@ fn device_reachable_functions(c: *Checker, g: *graph.Graph, reachable: []bool) -
     var changed = true
     while changed {
         changed = false
-        at = 0usize
+        at = function_row(c, 0usize)
         while at < c.function_count {
             if at < reachable.len && at < visited.len && reachable[at] && !visited[at] {
                 visited[at] = true
                 try device_implicit_next(c, g, at, records, reachable)
                 changed = true
             }
-            at += 1usize
+            at = function_row(c, at + 1usize)
         }
     }
     ret ok
@@ -18592,11 +18617,11 @@ fn pin_still_live(c: *Checker, g: *graph.Graph, module_index: usize, pinned: usi
     if c.loop_depth != 0usize || usize(node.token_end) > c.token_count || usize(node.token_start) >= c.token_count { ret true }
     let here = usize(c.tokens[usize(node.token_start)].start)
     var body_end = 0usize
-    var at = 0usize
+    var at = function_row(c, 0usize)
     while at < c.function_count {
         let function = c.functions[at]
         if function.module_index == module_index && function.source_start <= here && here < function.source_end { body_end = function.source_end }
-        at += 1usize
+        at = function_row(c, at + 1usize)
     }
     if body_end == 0usize { ret true }
     var holders = 0usize

@@ -10,6 +10,12 @@ Not checked: a module-scope function name shared with another module (`put`, `he
 `same` in seven modules does not, so the rule is not a name test), and a bare enum
 member as a call argument in the enum's own module, which needs types.
 
+Two rules are the crew's, not the bootstrap's (D1671): a crew worker's own function rows
+follow the other workers' windows in one table, which no image comparison sees a scan
+walk into. An instance scan starts at `check.own_rows`, not at the declarations' end,
+and a walk over every function row from zero steps with `check.function_row`. The two
+shapes are caught; a scan of another shape is the reviewer's.
+
     python scripts/lint_bootstrap.py [src]
 """
 import re, sys, os
@@ -21,7 +27,12 @@ RULES = [
     ('minus-assign', re.compile(r'(?<![-<>=!])-=(?!=)'), "`-=` has no bootstrap lowering; write `x = x - y`"),
     ('const-compare-brace', re.compile(r'[<>]=?\s+[A-Z][A-Z0-9_]{2,}\s*\{'), "`> CONST {` is read as an aggregate literal; bind the constant to a local first"),
     ('reserved-local', re.compile(r'\b(?:let|var)\s+(?:target|shared|when)\b'), "`target`, `shared` and `when` are reserved names"),
+    ('instance-scan', re.compile(r'\b(?:var|let)\s+\w+\s*=\s*(?:c|checker)\.signature_function_count\s*$|\b\w+\s*=\s*(?:c|checker)\.signature_function_count\s*\}|\bwhile\s+\w+\s*>\s*(?:c|checker)\.signature_function_count\b|\.function_count\s*-\s*\S*\.signature_function_count\b'), "an instance scan starts at `check.own_rows` (D1671): a crew worker's own rows follow the other workers' windows"),
 ]
+
+# (D1671) A walk from zero over every function row, in the files a crew worker runs.
+FUNCTION_SCAN = re.compile(r'\bwhile\s+(\w+)\s*<\s*(?:c|checker)\.function_count\b')
+FUNCTION_SCAN_FILES = ('check.e', 'lower.e', 'em.e', 'main.e')
 
 def strip(line):
     """The line without its comment and with string literals blanked."""
@@ -60,8 +71,13 @@ def lint(root, strict):
         with open(path, encoding='utf-8') as f:
             lines = f.read().split('\n')
         tuple_fn, depth = False, 0
+        recent = []
         for number, raw in enumerate(lines, 1):
             line = strip(raw)
+            scan = FUNCTION_SCAN.search(line) if name in FUNCTION_SCAN_FILES else None
+            if scan and any(re.search(r'\bvar\s+%s\s*=\s*0usize\b' % scan.group(1), p) for p in recent):
+                findings.append(f'{path}:{number}: function-scan: a walk over every function row steps with `check.function_row` (D1671)')
+            recent = (recent + [line])[-3:]
             head = re.match(r'fn\s+(\w+)\s*(\[[^\]]*\])?\s*\(', line)
             if head and not raw.startswith(' '):
                 tuple_fn = bool(re.search(r'\)\s*->\s*\(', line))

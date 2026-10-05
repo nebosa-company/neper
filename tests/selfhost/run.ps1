@@ -884,12 +884,15 @@ foreach ($lowerResetMode in @('--release', '--time')) {
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $lowerResetPerturbed).Hash -ne $lowerResetHash) { throw "lower_reset at -j 1 is not the -j 3 --perturb image ($lowerResetMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $lowerResetLinked).Hash -ne $lowerResetHash) { throw "lower_reset at -j 1 is not the image linked from its artifacts ($lowerResetMode)" }
 }
-# A crew of two or more workers shares the program's parameter and return rows and
-# appends into a window of each worker's own (D1670), where `-j 1` copies them: six
-# modules append instances, a formatter, a sink and a `push_err` each, and the image
-# is one at `-j 1`, `-j 3 --perturb`, `-j 8` and the default, and linked from
-# `emit-em-all`'s artifacts, which no crew makes, in both modes. That windows are
-# taken at all is the static gate's to see: `sc500k` at eight workers falls by them.
+# A crew of two or more workers shares the program's function, parameter and return
+# rows and appends into a window of each worker's own (D1670, D1671), where `-j 1`
+# copies them: six modules append instances, a formatter, a sink and a `push_err`
+# each, and the image is one at `-j 1`, `-j 3 --perturb`, `-j 8` and the default, and
+# linked from `emit-em-all`'s artifacts, which no crew makes, in both modes. The
+# `--instances` refusal counts each worker's own rows, which under windows begin past
+# the other workers': its stream is one at every `-j`, and a count that took another
+# worker's window for its own reported 170737. That windows are taken at all is the
+# static gate's to see: `sc500k` at eight workers falls by them.
 $crewWindows =Join-Path $PSScriptRoot 'fixtures\link\crew_windows\src\main.e'
 foreach ($crewWindowsMode in @('--release', '--time')) {
     $crewWindowsOne = Join-Path $testBuild "crew-windows-j1$crewWindowsMode.exe"
@@ -916,6 +919,14 @@ foreach ($crewWindowsMode in @('--release', '--time')) {
     $crewWindowsLinkWritten = & $compiler link-em $crewWindowsLinked @crewWindowsList
     if ($LASTEXITCODE -ne 0 -or $crewWindowsLinkWritten -ne 'artifact executable written') { throw "crew_windows compiled modules did not link ($crewWindowsMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $crewWindowsLinked).Hash -ne $crewWindowsHash) { throw "crew_windows at -j 1 is not the image linked from its artifacts ($crewWindowsMode)" }
+    # Without `--time`, whose rows would join the stream.
+    $crewWindowsExpected = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot 'fixtures\link\crew_windows\instances.expected.jsonl')).Hash
+    foreach ($crewWindowsJobs in @(@('-j', '1'), @('-j', '3', '--perturb'), @('-j', '8'))) {
+        $crewWindowsInstances = Join-Path $testBuild ("crew-windows-instances" + ($crewWindowsJobs -join '') + "$crewWindowsMode.jsonl")
+        cmd /c "`"$compiler`" emit-executable `"$crewWindows`" `"$repo`" x64 windows `"$(Join-Path $testBuild 'crew-windows-refused.exe')`" $($crewWindowsFlags -join ' ') $($crewWindowsJobs -join ' ') --json --instances 0 > `"$crewWindowsInstances`""
+        if ($LASTEXITCODE -ne 1) { throw "crew_windows under '$crewWindowsJobs' --instances 0 exited $LASTEXITCODE, not 1 ($crewWindowsMode)" }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $crewWindowsInstances).Hash -ne $crewWindowsExpected) { throw "crew_windows under '$crewWindowsJobs' counts its instances otherwise ($crewWindowsMode)" }
+    }
 }
 # An `@import` extern reached from a sequence's or tagged union's supplied `cmp` and
 # `hash` binds its library from its declaration in every module (D1664). Nothing calls

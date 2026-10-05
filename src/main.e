@@ -2201,12 +2201,13 @@ fn past_deadline(report: *Sink) -> bool {
 fn check_instance_budget(report: *Sink, args: []str, checker: *check.Checker, crew: *Crew, with_crew: bool) -> err {
     let (budget, given) = decimal_flag(args, "--instances")
     if !given { ret ok }
-    var instances = checker.function_count - checker.signature_function_count
+    // A worker's own rows are its instances, past the other workers' windows (D1671).
+    var instances = checker.function_count - check.own_rows(checker)
     if with_crew {
         instances = 0usize
         var worker_at = 0usize
         while worker_at < crew.count {
-            instances += crew.workers[worker_at].checker.function_count - crew.workers[worker_at].checker.signature_function_count
+            instances += crew.workers[worker_at].checker.function_count - check.own_rows(&crew.workers[worker_at].checker)
             worker_at += 1usize
         }
     }
@@ -9276,7 +9277,7 @@ fn relate_instance_site(report: *Sink, g: *graph.Graph, checker: *check.Checker)
     report.chain_count = 0usize
     var found = checker.function_count
     var at = checker.function_count
-    while at > checker.signature_function_count && found == checker.function_count {
+    while at > check.own_rows(checker) && found == checker.function_count {
         at = at - 1usize
         let generic = checker.function_generics[at]
         if generic.instance && generic.checked && generic.has_site && checker.functions[at].module_index == checker.failure_module && same(checker.functions[at].name, checker.failure_name) { found = at }
@@ -9657,7 +9658,7 @@ fn check_bodies_each(report: *Sink, checker: *check.Checker, resolver: *resolve.
             node_index += 1usize
         }
     }
-    var instance_index = checker.signature_function_count
+    var instance_index = check.own_rows(checker)
     while instance_index < checker.function_count {
         if checker.function_generics[instance_index].instance && !checker.function_generics[instance_index].checked && !checker.functions[instance_index].generic {
             checker.function_generics[instance_index].checked = true
@@ -10796,8 +10797,9 @@ fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
 // bodies first: a worker's checker is a copy that shares the declaration tables and
 // owns a tail of every table a body check or a lowering appends to -- the instances
 // its modules make, their types, signatures and generic arguments, and their
-// parameters and returns, which since D1670 are a window in the crew's tables where
-// the crew made them -- with its locals, its caches and its diagnostics; its builder,
+// parameters and returns; the instances, parameters and returns are a window in the
+// crew's tables where the crew made them (D1670, D1671) -- with its locals, its
+// caches and its diagnostics; its builder,
 // staging, artifact writer and, in a release build, its two inlining oracles are its
 // own. A worker writes only its own modules' artifact slots. The modules go to the
 // workers largest first to the least loaded, and a worker that cannot go on -- an
@@ -10868,7 +10870,8 @@ type LowerWorker = struct {
     // Made on the main thread, set up on its own (D402).
     setup_pending: bool,
     fork_id: usize,
-    // (D1670) Its window in the crew's parameter and return tables; zero is a copy.
+    // (D1670, D1671) Its window in the crew's function, parameter and return tables;
+    // zero is a copy.
     window: TableWindow,
     // Handed to the generous worker: nothing of this one's is used any more.
     replaced: bool,
@@ -10924,9 +10927,9 @@ type Crew = struct {
     // (D1667) Whether the lowered modules' fronts go back once the crew has joined:
     // the build's crew, not the one `emit_per_module` makes for itself.
     drops: bool,
-    // (D1670) The program's parameter and return rows once, then a window of each
-    // worker's own, in a reservation of the crew's (`crew_windows`); `on` false where
-    // the workers copy.
+    // (D1670, D1671) The program's function, parameter and return rows once, then a
+    // window of each worker's own, in a reservation of the crew's (`crew_windows`);
+    // `on` false where the workers copy.
     window: TableWindow,
     window_arena: mem.Arena,
 }
@@ -10939,6 +10942,11 @@ type Crew = struct {
 // may keep them past the build. A full window is refused after as many rows as a full
 // tail was. The program's counts it was cut from are kept, and a fork that finds other
 // counts copies. `on` false is the copy.
+// (D1671) The function and generic tables likewise, the two sharing one base. Its own
+// function rows are one run from `function_base`, where `check.own_rows` puts every
+// instance scan; a walk over every row steps over the others' with `check.function_row`.
+// An instance's index is its worker's, and an image carries its owner, name and number,
+// which depend on its own module alone.
 type TableWindow = struct {
     on: bool,
     parameters: []check.Parameter,
@@ -10947,34 +10955,51 @@ type TableWindow = struct {
     return_types: []check.Type,
     return_program: usize,
     return_base: usize,
+    functions: []check.Function,
+    generics: []check.FunctionGeneric,
+    function_program: usize,
+    function_base: usize,
 }
 
 // The worker's checker forked from the program's (D326): the declaration tables
 // copied, with a tail of its own on each one a body check or a lowering appends to,
 // sized from the worker's share of the text; the comptime parameters, which nothing
-// appends to, are shared (D1662), and the parameters and returns are a window in the
-// crew's tables where the crew made them (D1670). The copies are made on the worker's
-// thread, out of its arena, so eight of them cost the time of one.
+// appends to, are shared (D1662), and the functions, parameters and returns are a
+// window in the crew's tables where the crew made them (D1670, D1671). The copies are
+// made on the worker's thread, out of its arena, so eight of them cost the time of one.
 fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share: usize, largest: usize, fork_id: usize, window: TableWindow) -> err {
     *into = *from
-    into.fork_id = fork_id
+    into.fork.id = fork_id
+    into.fork.window = 0usize
     // A worker's steps are its own (D474): the sum over the workers is the build's.
     into.interp_total = 0usize
     let bytes = share * 2usize + largest
-    let (functions, functions_error) = mem.alloc[check.Function](a, from.function_count + sized(1024usize, bytes, 128usize))
-    if functions_error != ok { ret functions_error }
-    try copy_functions(functions, from.functions[0usize..from.function_count])
-    into.functions = functions
-    let (generics, generics_error) = mem.alloc[check.FunctionGeneric](a, functions.len)
-    if generics_error != ok { ret generics_error }
-    try copy_generics(generics, from.function_generics[0usize..from.function_count])
-    into.function_generics = generics
-    if window.on && from.parameter_count == window.parameter_program && from.return_type_count == window.return_program {
+    // (D1671) The window only while the program is as the crew cut it from: its
+    // function rows the declarations alone, every one of them in the name index.
+    var windowed = window.on && from.parameter_count == window.parameter_program && from.return_type_count == window.return_program
+    windowed = windowed && from.function_count == window.function_program && from.function_count == from.signature_function_count
+    windowed = windowed && from.names.indexed[1usize] == from.function_count
+    if windowed {
+        into.functions = window.functions
+        into.function_generics = window.generics
+        into.function_count = window.function_base
+        into.fork.window = window.function_base
+        // The index's walk starts at its own rows, which are instances and never
+        // indexed, so it reads nothing of the other workers' windows.
+        into.names.indexed[1usize] = window.function_base
         into.parameters = window.parameters
         into.parameter_count = window.parameter_base
         into.return_types = window.return_types
         into.return_type_count = window.return_base
     } else {
+        let (functions, functions_error) = mem.alloc[check.Function](a, from.function_count + function_tail(bytes))
+        if functions_error != ok { ret functions_error }
+        try copy_functions(functions, from.functions[0usize..from.function_count])
+        into.functions = functions
+        let (generics, generics_error) = mem.alloc[check.FunctionGeneric](a, functions.len)
+        if generics_error != ok { ret generics_error }
+        try copy_generics(generics, from.function_generics[0usize..from.function_count])
+        into.function_generics = generics
         let (parameters, parameters_error) = mem.alloc[check.Parameter](a, from.parameter_count + parameter_tail(bytes))
         if parameters_error != ok { ret parameters_error }
         try copy_parameters(parameters, from.parameters[0usize..from.parameter_count])
@@ -11145,21 +11170,24 @@ fn copy_types(into: []check.Type, from: []check.Type) -> err {
     ret ok
 }
 
-// A worker's own parameter and return rows, past the program's: a copy's tail and a
-// crew window alike (D1670), `bytes` being the worker's share twice and the largest
-// module.
+// A worker's own function, parameter and return rows, past the program's: a copy's
+// tail and a crew window alike (D1670, D1671), `bytes` being the worker's share twice
+// and the largest module.
+fn function_tail(bytes: usize) -> usize { ret sized(1024usize, bytes, 128usize) }
+
 fn parameter_tail(bytes: usize) -> usize { ret sized(2048usize, bytes, 64usize) }
 
 fn return_tail(bytes: usize) -> usize { ret sized(4096usize, bytes, 64usize) }
 
-// (D1670) The crew's parameter and return tables: the program's rows copied once, on the
-// main thread, then a window of each worker's own, which is where it appends once the
-// declarations are done. Every worker copied the program's rows into its arena before:
-// 13 MB each over the million-line program. Only where there is a copy to save, with
-// nothing but declarations in the program's function table, and never under
-// `--memory-budget`, whose shares a table outside the workers' arenas would escape. A
-// reservation or an allocation that fails leaves the workers copying, and only address
-// is lost.
+// (D1670) The crew's parameter and return tables, and (D1671) its function and generic
+// tables: the program's rows copied once, on the main thread, then a window of each
+// worker's own, which is where it appends once the declarations are done. Every worker
+// copied the program's rows into its arena before: 13 MB each over the million-line
+// program for the parameters and returns, and the functions' more. Only where there is
+// a copy to save, with nothing but declarations in the program's function table, and
+// never under `--memory-budget`, whose shares a table outside the workers' arenas
+// would escape. A reservation or an allocation that fails leaves the workers copying,
+// and only address is lost.
 fn crew_windows(a: *mem.Arena, crew: *Crew, loaded: *graph.Graph, checker: *check.Checker, worker_count: usize, bytes: usize) -> err {
     if worker_count < 2usize || loaded.memory_budget != 0usize || checker.function_count != checker.signature_function_count { ret ok }
     let (window_arena, window_arena_error) = graph.reserved_arena(a)
@@ -11169,8 +11197,17 @@ fn crew_windows(a: *mem.Arena, crew: *Crew, loaded: *graph.Graph, checker: *chec
     if parameters_error != ok { ret ok }
     let (returns, returns_error) = mem.alloc[check.Type](&crew.window_arena, checker.return_type_count + worker_count * return_tail(bytes))
     if returns_error != ok { ret ok }
+    let (functions, functions_error) = mem.alloc[check.Function](&crew.window_arena, checker.function_count + worker_count * function_tail(bytes))
+    if functions_error != ok { ret ok }
+    let (generics, generics_error) = mem.alloc[check.FunctionGeneric](&crew.window_arena, functions.len)
+    if generics_error != ok { ret ok }
     try copy_parameters(parameters, checker.parameters[0usize..checker.parameter_count])
     try copy_types(returns, checker.return_types[0usize..checker.return_type_count])
+    try copy_functions(functions, checker.functions[0usize..checker.function_count])
+    try copy_generics(generics, checker.function_generics[0usize..checker.function_count])
+    crew.window.functions = functions
+    crew.window.generics = generics
+    crew.window.function_program = checker.function_count
     crew.window.on = true
     crew.window.parameters = parameters
     crew.window.parameter_program = checker.parameter_count
@@ -11188,6 +11225,9 @@ fn worker_window(crew: *Crew, at: usize, bytes: usize) -> TableWindow {
     window.parameters = crew.window.parameters[0usize..window.parameter_base + parameter_tail(bytes)]
     window.return_base = window.return_program + at * return_tail(bytes)
     window.return_types = crew.window.return_types[0usize..window.return_base + return_tail(bytes)]
+    window.function_base = window.function_program + at * function_tail(bytes)
+    window.functions = crew.window.functions[0usize..window.function_base + function_tail(bytes)]
+    window.generics = crew.window.generics[0usize..window.function_base + function_tail(bytes)]
     ret window
 }
 
@@ -12331,11 +12371,11 @@ fn begin_drops(a: *mem.Arena, crew: *Crew, loaded: *graph.Graph, checker: *check
         }
         worker_at += 1usize
     }
-    var function_at = 0usize
+    var function_at = check.function_row(checker, 0usize)
     while function_at < checker.function_count {
         let declared_in = checker.functions[function_at].module_index
         if checker.functions[function_at].generic && declared_in < loaded.count { loaded.modules[declared_in].droppable = false }
-        function_at += 1usize
+        function_at = check.function_row(checker, function_at + 1usize)
     }
     var aggregate_at = 0usize
     while aggregate_at < checker.aggregate_count {

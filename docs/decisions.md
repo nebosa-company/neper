@@ -35548,3 +35548,57 @@ Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50
 - C (the function tables) is not started. By the plan's go/no-go, B measured inside its ranges and the `-j 8` peak is still at the lowering's start.
 
 ---
+
+## D1671 — The crew shares the function tables through windows too
+
+**Why.** Increment C of the fork plan, the second half of step 5 of D1660's revised list, which D1670 left open. Every crew worker's fork still copied the program's function and generic rows into its own arena, only so that the instances it appends would follow them in one slice. The fork's function table was 44 of its 103 MB at `sc1m` (D1669). It is committed at the fork and held to the end, so every worker's copy is at the peak, which is still at the lowering's start.
+
+**Decision.**
+
+- **One copy, then a window each,** as D1670 does for the parameters and returns. `crew_windows` copies the program's function and generic rows once into the crew's reservation, and `worker_window` cuts worker k's slices to end where its window does. `function_tail` holds the fork's old formula (`sized(1024, bytes, 128)`), and the copy and the windows both take it, so a full window is refused after as many rows as a full tail was. `TableWindow` gains `functions`, `generics`, `function_program` and `function_base`.
+- **Where a worker's own rows begin.** Under a window they follow the windows of the workers before it, not the declarations. `Checker.fork_id` became `fork: Fork { id, window }`, so the checker stays at the C bootstrap's 161 fields. Two functions carry the rule:
+  - `check.own_rows(c)` is where a checker's own function rows begin. Every instance scan starts there: `owner_instance_count`, `find_function_instance`, the launcher, formatter, sink and `push_err` instances, `check_bodies`, `finish_bodies`, `run_partial`, `check_bodies_each`, `pending_instance`, `pending_formatter`, `update_spans`, `owned_template_dependency`, `relate_instance_site`, the `--instances` budget and `--stats`' "function instances".
+  - `check.function_row(c, at)` is the next row of a walk over every row: from the declarations' end it steps to `own_rows`. Every walk from zero takes it: `find_function`, `explain_function_index`, `pin_still_live`, `seeded_function`, `begin_drops`, `device_reachable_functions`, `barrier_helper_present` and `emit_kernel_spirv`.
+  - The name index's walk (`names.indexed[1]`) starts at the window's base. A worker's own rows are instances, which are never indexed, so it reads nothing of the other workers' windows.
+- **When.** As D1670, and only while the program's function rows are the declarations alone, every one of them in the name index. `fork_checker` takes the window only when `function_count` is the crew's `function_program` and `signature_function_count`, and `names.indexed[1]` is `function_count`; otherwise the worker copies. An instance's index depends on its worker, as a parameter's did in D1670. An image carries an instance's owner, name and number, which depend on its own module alone.
+- **What the port found.** The implementation was interrupted on 2026-09-28 and ported onto dcbf7972. Four scans master gained in the meantime (the GPU barrier and kernel work of 2026-10-01) walked rows a windowed worker does not own:
+  - `barrier_helper_present` walked every row from zero, and `build_inline_oracle`'s barrier-instance scan started at the declarations' end. The new lint rules caught both.
+  - `device_reachable_functions` walked every row from zero, three times. Its two callers use the program's checker today, so it takes `function_row` for the rule's sake.
+  - `emit_kernel_spirv` saved and restored every row's `lowered` flag around a kernel's lowering. Under windows that writes the other workers' rows while they run, which could put back a flag another worker had just set.
+- **Lint.** `scripts/lint_bootstrap.py` gains two rules: `instance-scan`, a scan that starts at `signature_function_count`, and `function-scan`, a walk from zero over `function_count` in `check.e`, `lower.e`, `em.e` and `main.e`. A scan of another shape is the reviewer's; the audit for this row listed every loop bounded by a checker's `function_count`, every local copied from one, and every allocation sized by one.
+- **Tests.** `crew_windows` gains the `--instances` stream check that D1670 left to C. `emit-executable --json --instances 0` at `-j 1`, `-j 3 --perturb` and `-j 8`, in both modes and without `--time` (whose rows would join the stream), must exit 1 with `instances.expected.jsonl`: "the program makes 49 instances". A compiler whose `own_rows` ignored the window built the same images, passed at `-j 1`, and reported 170737 instances at `-j 8`.
+
+**Evidence.** The gate ran on Windows. The baseline is dcbf7972's compilers and the candidate this tree's, both self-built from their own trees by a stage 1 from the C bootstrap; the release compilers and stage 2 carry `--arena 14g`, so one worker holds `sc1m`.
+
+- **Lint.** 0 findings.
+- **Images.** `sc500k` and `sc1m`, release `--unchecked` at `-j 1`, `-j 4`, `-j 8` and `-j 3 --perturb`, and `sc500k` debug at `-j 8`: 9 of 9 are the baseline's byte for byte, and each workload gives one image at every `-j`.
+- **Emit sweep.** 817 link fixtures in debug and release, 1,634 emits by both stage 2 compilers. 1,586 are one in exit code, output and image. The other 48 (24 fixtures, each with a `@gpu` kernel, in both modes) differ only in the compiler identity a kernel embeds as its pipeline-cache key: one run of twelve hex digits per kernel, in images of equal size, checked for all 48. D1670's sweep predates that key.
+- **`crew_windows`.** One image at `-j 1`, `-j 3 --perturb`, `-j 8` and the default in both modes, `sum 2352`, and the stream check above.
+- **Static gate** (`sc500k`, 8 workers), debug / release:
+  - Arena high-water: 2,192 / 2,896 → 2,129 / 2,833 MB (−63 / −63). The release figure was already 22 MB under D1670's pin of 2,918 on dcbf7972.
+  - Images: 1,936,791 / 1,458,009 B, unchanged.
+- **Linux static gate** (`sc500k`, 8 workers, from the Linux suites' own measurements), debug / release: 2,192 / 2,896 → 2,130 / 2,833 MB (−62 / −63). The baseline is the Linux suite run on dcbf7972's compiler source. Images 1,942,008 / 1,466,464 B on both.
+- **The re-pins.** `benchmarks/baseline/results/static-windows.json` is re-pinned downward to 2,129 / 2,833 MB, and `static-linux.json` to 2,130 / 2,833 MB and its images to 1,942,008 / 1,466,464 B; it still held 2,285 / 2,996 MB and 3,015,649 / 2,115,025 B. Against either, the baseline breaches both arena measures, so a change that turned the function windows off would breach it.
+- **Full suites.** `tests/selfhost/run.ps1` passes in 20.9 minutes with both Vulkan devices visible, against the re-pinned file. That includes the stable stage at `-j 1` against `-j 3 --perturb`, the nested-inlining and `--memory-budget` pairs, and `crew_windows` with its stream check. `scripts/run-linux-suite.sh` passes in 19 minutes. It ran against the old `static-linux.json`; the re-pinned one was then judged against that run's own measurement with `gate.py`: 0 of 4 breached.
+
+Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50), baseline → this, each cell run baseline then candidate:
+
+| workload | workers | peak commit | peak working set | worker arenas reached | check bodies | lower and codegen | cold p50 |
+|---|---|---|---|---|---|---|---|
+| sc1m | 1 | 576 → 577 MB | 503 → 503 MB | 2,254 → 2,254 MB | 2,674 → 2,657 ms | 5,579 → 5,648 ms | 10,313 → 10,373 ms |
+| sc1m | 4 | 803 → 749 MB | 603 → 550 MB | 3,235 → 3,182 MB | 755 → 805 ms | 1,652 → 1,816 ms | 3,321 → 3,526 ms |
+| sc1m | 8 | 1,075 → 949 MB | 728 → 605 MB | 4,547 → 4,420 MB | 704 → 672 ms | 1,427 → 1,447 ms | 2,952 → 2,948 ms |
+| sc500k | 4 | 537 → 506 MB | 338 → 311 MB | 1,935 → 1,908 MB | 419 → 426 ms | 876 → 891 ms | 1,774 → 1,828 ms |
+| sc500k | 8 | 767 → 696 MB | 426 → 364 MB | 2,896 → 2,833 MB | 356 → 337 ms | 744 → 772 ms | 1,525 → 1,552 ms |
+| compiler | 4 | 426 → 420 MB | 238 → 236 MB | 1,477 → 1,475 MB | 65 → 65 ms | 325 → 328 ms | 604 → 605 ms |
+| compiler | 8 | 677 → 663 MB | 311 → 306 MB | 2,865 → 2,860 MB | 61 → 60 ms | 345 → 327 ms | 624 → 604 ms |
+
+- **Peak commit** falls 54 MB at `sc1m -j 4` and 126 at `-j 8`, 31 and 71 at `sc500k`, and 6 and 14 for the `compiler` workload. At `-j 1` there is no crew, and it moves 1 MB. Every run is within 2 MB of its cell's p50.
+- **Time.** The unpaired `-j 4` cells above are slower in both phases. `paired.py` (`sc1m`, seven alternated pairs per cell, debug and release, cold and warm) gives median cold ratios of 1.003 and 0.999 at `-j 4`, and 1.006 and 0.992 at `-j 8`, with no breach, so the unpaired difference is the machine's. The one serial copy moved into `crew_begin` does not show.
+
+**Not done or not measured.**
+
+- Linux peak commit, the per-phase owners (`live.py`) and where the peak now falls (`timeline_x.py`) were not measured.
+- The plan's go/no-go after C was not re-read: the fork plan's own documents did not survive the interruption, so this row stands on D1660, D1669 and D1670.
+
+---

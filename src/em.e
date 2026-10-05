@@ -1032,7 +1032,7 @@ fn body_hash_uncached(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
         // worker may give back: an inlined callee's hash was taken before the lowering
         // (`prefill_body_hash`), and any other is a miss, refused whenever the module is
         // another worker's or its owner has given it back already (`front_readable`).
-        if !graph.front_readable(g, function.module_index, c.fork_id) { ret (0usize, graph.ModuleDropped) }
+        if !graph.front_readable(g, function.module_index, c.fork.id) { ret (0usize, graph.ModuleDropped) }
         let marker_error = binary.byte(scratch, 2usize)
         if marker_error != ok { ret (0usize, marker_error) }
         // The line the declaration starts on is part of the hash (D322): a copy of the
@@ -1145,9 +1145,10 @@ fn update_spans(c: *check.Checker, builder: *nir.Builder) -> err {
         at += 1usize
     }
     c.writer_scanned[span_functions()] = c.signature_function_count
-    // An instance is owned by the module that instantiated it.
+    // An instance is owned by the module that instantiated it. A worker's own rows
+    // start past the other workers' windows (D1671), and its scan with them.
     at = c.writer_scanned[span_instances()]
-    if at < c.signature_function_count { at = c.signature_function_count }
+    if at < check.own_rows(c) { at = check.own_rows(c) }
     while at < c.function_count {
         span_extend(c, span_instances(), c.functions[at].owner_module_index, at)
         at += 1usize
@@ -2271,7 +2272,7 @@ fn owned_template_dependency(c: *check.Checker, module_index: usize, at: usize) 
     if template_index >= c.function_count || c.functions[template_index].module_index == module_index { ret (0usize, false) }
     let (first, end) = span_of(c, span_instances(), module_index)
     var prior = first
-    if prior < c.signature_function_count { prior = c.signature_function_count }
+    if prior < check.own_rows(c) { prior = check.own_rows(c) }
     while prior < at {
         let earlier = c.function_generics[prior]
         if earlier.instance && !c.functions[prior].generic && c.functions[prior].owner_module_index == module_index && earlier.template_index == template_index { ret (0usize, false) }
@@ -5230,10 +5231,10 @@ fn declare_interface_symbols(r: *resolve.Resolver, g: *graph.Graph, module_index
 // Whether the checker seeded the function itself (an intrinsic of `e.mem`,
 // `e.str` or `e.meta`), which its module's Interface lists as the checker keeps it.
 fn seeded_function(c: *check.Checker, module_index: usize, name: str) -> bool {
-    var at = 0usize
+    var at = check.function_row(c, 0usize)
     while at < c.function_count {
         if c.functions[at].intrinsic && c.functions[at].module_index == module_index && same(c.functions[at].name, name) { ret true }
-        at += 1usize
+        at = check.function_row(c, at + 1usize)
     }
     ret false
 }

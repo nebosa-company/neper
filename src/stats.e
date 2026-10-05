@@ -441,7 +441,7 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
         try out(b, "\n")
     }
     try row_number(b, "functions", c.signature_function_count)
-    try row_number(b, "function instances", c.function_count - c.signature_function_count)
+    try row_number(b, "function instances", c.function_count - check.own_rows(c))
     try row_number(b, "imports", g.import_count)
     try row_number(b, "types", c.aggregate_count + c.alias_count)
     try row_number(b, "constants", c.constant_count)
