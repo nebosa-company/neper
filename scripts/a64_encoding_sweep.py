@@ -190,6 +190,11 @@ def lines():
             for m in R4:
                 for shift in (0, 1, 3, 4, 63):
                     out.append('add %s, %s, %s, lsl #%d' % (x(d), x(n), x(m), shift))
+    for d in R4:
+        for n in R4:
+            for m in R4:
+                for shift in (0, 1, 32, 63):
+                    out.append('orr %s, %s, %s, lsl #%d' % (x(d), x(n), x(m), shift))
     out.extend(vector_lines())
     return out
 

@@ -1,18 +1,51 @@
 {
   "schema": "neper-work-queue-v1",
   "version": 1,
-  "policy": "The first item is the only capability eligible for the next serial feature session. C099, the first NeperOS stage, comes first by the user's priority (D2119); after it, finish active chart and visualization items before non-chart work, preserving their relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
+  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 (C100-C103) comes first by the user's priority (D2119, D2125); after it, finish active chart and visualization items before non-chart work, preserving their relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C099",
+      "id": "C100",
       "category": "compiler",
-      "group": "Back end",
-      "order": 99,
-      "title": "M4-01: aarch64 emitter for Linux, the first NeperOS stage",
-      "score": 0.9,
+      "group": "NeperOS",
+      "order": 100,
+      "title": "NeperOS 1a: an aarch64-none kernel image that boots on QEMU virt",
+      "score": 0,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Planned in D2119 (NeperOS, a capability microkernel written in Neper for Google Pixel phones, starts here; this is the roadmap's M4 aarch64 emitter pulled forward), delivered in D2123. Acceptance: `--target aarch64-linux` builds a freestanding static ELF through an aarch64 selector and A64 encoder over the existing NIR and allocator; the Linux fixture suite passes under `qemu-aarch64` with x64's output; the encoder agrees with the GNU tools on a sweep; and neper-self built for aarch64 runs under `qemu-aarch64` and emits what the x64 one does. Delivered: `codegen_a64` (AAPCS64 over the shared NIR, allocator, relocations, line table and trap protocol, NEON for `Vec` lanes) and `emit_a64` (A64 words); `link_elf_a64`, a static image or, with an `@import`, a dynamic one bound through `R_AARCH64_GLOB_DAT` slots, with the x64 image's symbols and DWARF and aarch64's frame description (`gdb-multiarch` breaks and walks frames); and `runtime_elf_a64.s`, whose `neper_os_syscall` translates `e.os`'s x86-64 numbers, flags, structures, signal restorer and seccomp filters. `self-test` checks 110 encodings and a 63,354-encoding sweep against GNU as (`scripts/a64_encoding_sweep.py`). `scripts/a64-differential.ps1` and `.sh` build every link fixture for both targets and compare stdout, stderr and status: 642 of 785 match under `qemu-aarch64` 8.2.2; of the rest, 139 are dynamic images whose aarch64 loader and libraries WSL lacks, `os_fs` (openat2), `os_gaps` (seccomp) and `debug_dump` (gcore of an emulated process) meet QEMU user-mode limits, `when_target` answers for its own architecture as it should, and `os_watch` waits on DrvFS on both. The compiler built for aarch64 passes `self-test` under QEMU and is a fixed point with the x64 one: each builds the compiler, for either target, into byte-identical images, and their 42 `.em` artifacts differ only in the writing compiler's identity (D398). Both self-host suites pass. Tools: QEMU 11.1.0 for Windows at `D:\\tools\\qemu`; in WSL `qemu-user` 8.2.2, `gdb-multiarch` 15.1, `binutils-aarch64-linux-gnu` 2.42. Not yet: the 139 dynamic-image fixtures run against an aarch64 loader and libraries, and AAPCS64 by-value aggregates across `extern fn` and `@cc` (`extern_struct`), which also needs an aarch64 C compiler to test."
+      "evidence": "Queued by D2125 when C099 closed; stage 1 of D2119. Acceptance: `--target aarch64-none` writes a raw image with the Linux arm64 Image header (magic `ARM\\x64`, `text_offset`, `image_size` covering what the kernel zeroes) that `qemu-system-aarch64 -M virt -cpu cortex-a76 -kernel` loads and enters at EL1 with the device tree in `x0`, position-independent wherever the loader places it; no Linux runtime, only a boot stub that sets the stack, clears what the image does not carry and calls `main` with an arena carved from memory after the image; Neper reaches system registers (`mrs`/`msr`), barriers (`dsb`/`dmb`/`isb`), `wfi`/`wfe`, `hvc`/`smc` and volatile MMIO loads and stores through intrinsics that any other target refuses at check time; an exception vector table (sixteen entries, 2 KB aligned) saves the interrupted registers into a frame and calls a Neper handler; a kernel reads its memory and PL011 base from the device tree, turns on the MMU and caches with an identity map, writes to the PL011, and powers off through PSCI `SYSTEM_OFF` by the conduit the tree names. A fixture boots under QEMU on both hosts, checks the serial transcript, and takes a deliberate synchronous fault whose ESR and FAR the handler reports. A trap (bounds, overflow) reports its message and position on the console and powers off with a non-zero status. Not started."
+    },
+    {
+      "id": "C101",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 101,
+      "title": "NeperOS 1b: interrupts, the timer and preemptive threads at EL0",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Queued by D2125 after C100. Acceptance: the GICv3 distributor and redistributors found in the device tree, the generic timer driving a preemptive round-robin scheduler, user threads at EL0 in their own translation tables (ASIDs, no shared kernel writable mappings, PAN and execute-never set), system calls by `svc`, and a QEMU fixture that runs two EL0 threads interleaved by timer interrupts and kills one that touches kernel memory. Not started."
+    },
+    {
+      "id": "C102",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 102,
+      "title": "NeperOS 1c: capabilities and synchronous IPC",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Queued by D2125 after C101. Acceptance: every kernel object (untyped memory, thread, address space, endpoint, notification, IRQ handler, device frame) is reached only through a capability in the caller's capability space; untyped memory retypes into objects so the kernel allocates nothing after boot; endpoints carry synchronous IPC with capability transfer, notifications deliver interrupts to user drivers; capabilities derive with reduced rights and revoke recursively. The console moves to a user-mode server, and a QEMU fixture checks that a thread without the console capability cannot print, that a derived read-only frame cannot be written, and that revocation reaches every derived capability. Not started."
+    },
+    {
+      "id": "C103",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 103,
+      "title": "NeperOS 1d: virtio over PCI in user-mode drivers, closing stage 1",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Queued by D2125 after C102. Acceptance: the PCI ECAM window read from the device tree, the modern virtio-pci transport, and virtio console, block and entropy drivers running as EL0 servers that hold only their device's frames and interrupt; a QEMU fixture reads and writes a disk image and echoes the virtio console. Closing this item closes D2119 stage 1 and queues stage 2 (the AVF guest on a Pixel). Not started."
     },
     {
       "id": "L069",

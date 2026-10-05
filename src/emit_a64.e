@@ -174,6 +174,12 @@ fn add_shifted(output: *emit_x64.Buffer, rd: usize, rn: usize, rm: usize, shift:
     ret instruction_word(output, 0x8B000000usize | (rm << 16usize) | (shift << 10usize) | (rn << 5usize) | rd)
 }
 
+// `orr rd, rn, rm, lsl #shift`: two halves put together.
+fn orr_shifted(output: *emit_x64.Buffer, rd: usize, rn: usize, rm: usize, shift: usize) -> err {
+    if shift >= 64usize { ret OutOfRange }
+    ret instruction_word(output, 0xAA000000usize | (rm << 16usize) | (shift << 10usize) | (rn << 5usize) | rd)
+}
+
 // `madd rd, rn, rm, ra`: ra + rn * rm.
 fn madd_register(output: *emit_x64.Buffer, rd: usize, rn: usize, rm: usize, ra: usize) -> err {
     ret instruction_word(output, 0x9B000000usize | (rm << 16usize) | (ra << 10usize) | (rn << 5usize) | rd)
@@ -611,7 +617,7 @@ fn vector_shift_immediate(output: *emit_x64.Buffer, kind: usize, size: usize, vd
 // ---------------------------------------------------------------- the sweep
 
 // The grid `scripts/a64_encoding_sweep.py` writes as assembly text -- every form over
-// registers, immediates, widths, conditions and vector arrangements, 63,354 instructions --
+// registers, immediates, widths, conditions and vector arrangements, 63,610 instructions --
 // encoded here in the same order and folded into one FNV-1a hash, which GNU as gave for
 // the text. The hash is a literal in `sweep`: the bootstrap refuses a constant past i64.
 
@@ -1136,6 +1142,25 @@ fn sweep_shifted(output: *emit_x64.Buffer, hash: *usize, r4: []const usize) -> e
         }
         d += 1usize
     }
+    let orr_shifts = [_]usize{ 0usize, 1usize, 32usize, 63usize }
+    var od = 0usize
+    while od < r4.len {
+        var on = 0usize
+        while on < r4.len {
+            var om = 0usize
+            while om < r4.len {
+                var os = 0usize
+                while os < orr_shifts.len {
+                    try orr_shifted(output, r4[od], r4[on], r4[om], orr_shifts[os])
+                    os += 1usize
+                }
+                sweep_fold(output, hash)
+                om += 1usize
+            }
+            on += 1usize
+        }
+        od += 1usize
+    }
     ret ok
 }
 
@@ -1270,7 +1295,7 @@ fn sweep() -> err {
     try sweep_floats(&output, &hash, r[..], v[..])
     try sweep_shifted(&output, &hash, r4[..])
     try sweep_vectors(&output, &hash, r[..], r4sp[..], v[..])
-    if hash != 15902130361496764838usize { ret OutOfRange }
+    if hash != 15813672905048176038usize { ret OutOfRange }
     ret ok
 }
 

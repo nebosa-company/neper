@@ -71,6 +71,10 @@ type Crossing = struct {
     count: usize,
     sse: usize,
     memory: bool,
+    // AAPCS64's homogeneous floating-point aggregate (D2124): one to four members of one
+    // float type, each in a vector register of its own; `hfa_width` is the member's bytes.
+    hfa: usize,
+    hfa_width: usize,
 }
 
 // Where a call into C has put its arguments so far (D1675): System V passes a small
@@ -3077,6 +3081,82 @@ fn windows_target(c: *check.Checker) -> bool {
     ret c.has_graph && check.same(c.graph.os, "windows")
 }
 
+// AAPCS64 (D2124) passes a struct or union by value differently again: a homogeneous
+// floating-point aggregate -- one to four members of one float type -- one member to a
+// vector register; anything else of at most sixteen bytes in one or two general
+// registers whatever its fields; a larger one as the address of a copy; and one that does
+// not fit the registers left on the stack, closing that file to every later argument. A
+// larger result comes back through the address in x8 rather than one passed first.
+fn aapcs64_target(c: *check.Checker) -> bool {
+    ret c.has_graph && check.same(c.graph.arch, "aarch64")
+}
+
+// Whether `ty` is made of floats of one width alone, counting them into `members`; a
+// union, an integer or a pointer anywhere answers false.
+fn hfa_members(c: *check.Checker, ty: check.Type, width: *usize, members: *usize, depth: usize) -> (bool, err) {
+    if depth > 16usize { ret (false, check.InvalidType) }
+    let (canonical, canonical_error) = check.canonical_type(c, ty)
+    if canonical_error != ok { ret (false, canonical_error) }
+    if canonical.kind == .Float {
+        let (info, info_error) = layout.type_info(c, canonical)
+        if info_error != ok { ret (false, info_error) }
+        if info.size != 4usize && info.size != 8usize { ret (false, ok) }
+        if *width == 0usize { *width = info.size }
+        if *width != info.size { ret (false, ok) }
+        *members = *members + 1usize
+        ret (true, ok)
+    }
+    if canonical.kind == .Array {
+        if !canonical.has_element || canonical.element >= c.type_count { ret (false, check.InvalidType) }
+        var element_at = 0usize
+        while element_at < canonical.array_length {
+            let (element_floats, element_error) = hfa_members(c, c.types[canonical.element], width, members, depth + 1usize)
+            if element_error != ok || !element_floats { ret (element_floats, element_error) }
+            element_at += 1usize
+        }
+        ret (true, ok)
+    }
+    if !aggregate_value(c, canonical) { ret (false, ok) }
+    let (aggregate_index, found) = layout.aggregate_index(c, canonical)
+    if !found { ret (false, check.InvalidType) }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.kind != .Struct || aggregate.packed { ret (false, ok) }
+    var member_at = 0usize
+    while member_at < aggregate.field_count {
+        if aggregate.first_field + member_at >= c.aggregate_field_count { ret (false, check.InvalidType) }
+        let (member_floats, member_error) = hfa_members(c, c.aggregate_fields[aggregate.first_field + member_at].ty, width, members, depth + 1usize)
+        if member_error != ok || !member_floats { ret (member_floats, member_error) }
+        member_at += 1usize
+    }
+    ret (true, ok)
+}
+
+fn aapcs64_crossing(c: *check.Checker, ty: check.Type) -> (Crossing, err) {
+    var crossing: Crossing = zero
+    let (info, info_error) = layout.type_info(c, ty)
+    if info_error != ok { ret (crossing, info_error) }
+    crossing.size = info.size
+    var width = 0usize
+    var members = 0usize
+    let (floats, floats_error) = hfa_members(c, ty, &width, &members, 0usize)
+    if floats_error != ok { ret (crossing, floats_error) }
+    if floats && members >= 1usize && members <= 4usize {
+        crossing.hfa = members
+        crossing.hfa_width = width
+        crossing.count = members
+        ret (crossing, ok)
+    }
+    if info.size > 16usize {
+        crossing.memory = true
+        // ponytail: a copy is eight-byte aligned, as on x64; refused past that.
+        if info.alignment > 8usize { ret (crossing, check.Unsupported) }
+        ret (crossing, ok)
+    }
+    crossing.count = (info.size + 7usize) / 8usize
+    if crossing.count == 0usize { crossing.count = 1usize }
+    ret (crossing, ok)
+}
+
 // Called by the C convention: an `@import` extern, or a `@cc` function, which C calls and
 // so neper's own calls reach the same way (D1676).
 fn foreign_function(function: check.Function) -> bool {
@@ -3147,6 +3227,10 @@ fn sysv_classes(c: *check.Checker, ty: check.Type, offset: usize, classes: []boo
 }
 
 fn c_crossing(c: *check.Checker, ty: check.Type, windows: bool) -> (Crossing, err) {
+    if !windows && aapcs64_target(c) {
+        let (arm, arm_error) = aapcs64_crossing(c, ty)
+        ret (arm, arm_error)
+    }
     var crossing: Crossing = zero
     let (info, info_error) = layout.type_info(c, ty)
     if info_error != ok { ret (crossing, info_error) }
@@ -3191,7 +3275,8 @@ fn c_arguments_of(c: *check.Checker, call: check.CallInfo) -> (CArguments, err) 
     if !aggregate_value(c, returned) { ret (passing, ok) }
     let (crossing, crossing_error) = c_crossing(c, returned, passing.windows)
     if crossing_error != ok { ret (passing, crossing_error) }
-    if crossing.memory { passing.integer_used = 1usize }
+    // AAPCS64 passes the result's address in x8, which is no argument register (D2124).
+    if crossing.memory && !aapcs64_target(c) { passing.integer_used = 1usize }
     ret (passing, ok)
 }
 
@@ -3228,6 +3313,7 @@ fn c_argument(c: *check.Checker, passing: *CArguments, ty: check.Type, value: us
     }
     let (crossing, crossing_error) = c_crossing(c, canonical, passing.windows)
     if crossing_error != ok { ret crossing_error }
+    if !passing.windows && aapcs64_target(c) { ret c_argument_aapcs64(c, passing, canonical, crossing, value, builder, token, out, count) }
     if crossing.memory && passing.windows {
         let (copy, copy_error) = copy_to_stack(canonical, crossing.size, value, builder, token)
         if copy_error != ok { ret copy_error }
@@ -3289,6 +3375,146 @@ fn c_argument(c: *check.Checker, passing: *CArguments, ty: check.Type, value: us
     ret ok
 }
 
+// How an AAPCS64 aggregate of `crossing` goes (D2124): `pieces` loads of `width` bytes
+// typed `piece_type`, or -- `stacked` -- its eightbytes on the stack, typed `c-stack` when
+// the general registers ran out and `c-stack-vector` when the vector ones did, so the back
+// end closes that file to what follows. The registers it takes are counted in `passing`.
+fn aapcs64_pieces(passing: *CArguments, crossing: Crossing, module_index: usize, pieces: *usize, width: *usize, stacked: *bool, piece_type: *check.Type) {
+    *pieces = crossing.count
+    *width = 8usize
+    *stacked = false
+    *piece_type = check.make_type(.Integer, "u64", module_index)
+    if crossing.hfa != 0usize {
+        *width = crossing.hfa_width
+        *piece_type = check.make_type(.Float, "f64", module_index)
+        if crossing.hfa_width == 4usize { *piece_type = check.make_type(.Float, "f32", module_index) }
+        if passing.sse_used + crossing.hfa > 8usize {
+            *stacked = true
+            passing.sse_used = 8usize
+            *piece_type = check.make_type(.Other, "c-stack-vector", module_index)
+        } else {
+            passing.sse_used += crossing.hfa
+        }
+    } else {
+        if passing.integer_used + crossing.count > 8usize {
+            *stacked = true
+            passing.integer_used = 8usize
+            *piece_type = check.make_type(.Other, "c-stack", module_index)
+        } else {
+            passing.integer_used += crossing.count
+        }
+    }
+    if *stacked {
+        *pieces = (crossing.size + 7usize) / 8usize
+        *width = 8usize
+    }
+}
+
+// The type of a call's result slot: AAPCS64 passes a C function the address of a larger
+// result in x8 rather than as an argument (D2124), and the back end finds it by this name.
+fn call_slot_type(c: *check.Checker, call: check.CallInfo, via_slot: bool) -> check.Type {
+    if via_slot && calls_c(call) && aapcs64_target(c) { ret check.make_type(.Other, "c-return-slot", call.function.module_index) }
+    ret check.make_type(.Other, "return-slot", call.function.module_index)
+}
+
+// Whether C returns a struct or union of this type through memory -- the caller's slot.
+// A type the convention cannot classify answers true, the slot path, whose error the
+// parameters' classification reports.
+fn c_result_in_memory(c: *check.Checker, ty: check.Type) -> bool {
+    let (crossing, crossing_error) = c_crossing(c, ty, windows_target(c))
+    ret crossing_error != ok || crossing.memory
+}
+
+// A `@cc` function's own result slot on AAPCS64 arrives in x8 (D2124), named so the back
+// end reads it there.
+fn callback_slot_type(c: *check.Checker, function: check.Function, pointer_type: check.Type) -> check.Type {
+    if function.callback && aapcs64_target(c) { ret check.make_type(.Other, "c-return-slot", pointer_type.module_index) }
+    ret pointer_type
+}
+
+fn c_argument_aapcs64(c: *check.Checker, passing: *CArguments, canonical: check.Type, crossing: Crossing, value: usize, builder: *nir.Builder, token: lex.Token, out: []usize, count: *usize) -> err {
+    let module_index = canonical.module_index
+    if crossing.memory {
+        let (copy, copy_error) = copy_to_stack(canonical, crossing.size, value, builder, token)
+        if copy_error != ok { ret copy_error }
+        if *count >= out.len { ret check.Capacity }
+        out[*count] = copy
+        *count += 1usize
+        if passing.integer_used < 8usize { passing.integer_used += 1usize }
+        ret ok
+    }
+    var pieces = 0usize
+    var width = 0usize
+    var stacked = false
+    var piece_type = check.invalid_type()
+    aapcs64_pieces(passing, crossing, module_index, &pieces, &width, &stacked, &piece_type)
+    // Eightbytes read whole read past an odd-sized aggregate: from a copy padded to them.
+    var source = value
+    if width == 8usize && crossing.size % 8usize != 0usize {
+        let (padded, padded_error) = copy_to_stack(canonical, crossing.size, value, builder, token)
+        if padded_error != ok { ret padded_error }
+        source = padded
+    }
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    var piece = 0usize
+    while piece < pieces {
+        var address = source
+        if piece != 0usize {
+            let (offset_instruction, offset_address, offset_error) = nir.emit(builder, .FieldAddress, pointer_type, true, piece * width, token)
+            if offset_error != ok { ret offset_error }
+            try nir.add_operand(builder, offset_instruction, source)
+            address = offset_address
+        }
+        let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, piece_type, true, width, token)
+        if load_error != ok { ret load_error }
+        try nir.add_operand(builder, load_instruction, address)
+        if *count >= out.len { ret check.Capacity }
+        out[*count] = loaded
+        *count += 1usize
+        piece += 1usize
+    }
+    ret ok
+}
+
+// AAPCS64's mirror of `c_argument_aapcs64` (D2124): the pieces received as the
+// convention placed them and stored to a slot of the aggregate's own, which is the value.
+fn c_parameter_aapcs64(passing: *CArguments, canonical: check.Type, crossing: Crossing, builder: *nir.Builder, token: lex.Token, next: *usize) -> (usize, err) {
+    let module_index = canonical.module_index
+    var pieces = 0usize
+    var width = 0usize
+    var stacked = false
+    var piece_type = check.invalid_type()
+    aapcs64_pieces(passing, crossing, module_index, &pieces, &width, &stacked, &piece_type)
+    let (slots_aligned, slots_error) = layout.align_up(crossing.size, 8usize)
+    if slots_error != ok { ret (0usize, slots_error) }
+    let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, canonical, true, slots_aligned / 8usize, token)
+    if slot_error != ok { ret (0usize, slot_error) }
+    let u64_type = check.make_type(.Integer, "u64", module_index)
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    var piece = 0usize
+    while piece < pieces {
+        let (piece_instruction, received, piece_error) = nir.emit(builder, .Parameter, piece_type, true, *next, token)
+        if piece_error != ok { ret (0usize, piece_error) }
+        *next += 1usize
+        var address = slot
+        if piece != 0usize {
+            let (offset_instruction, offset_address, offset_error) = nir.emit(builder, .FieldAddress, pointer_type, true, piece * width, token)
+            if offset_error != ok { ret (0usize, offset_error) }
+            let offset_operand_error = nir.add_operand(builder, offset_instruction, slot)
+            if offset_operand_error != ok { ret (0usize, offset_operand_error) }
+            address = offset_address
+        }
+        let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, u64_type, false, width, token)
+        if store_error != ok { ret (0usize, store_error) }
+        let address_error = nir.add_operand(builder, store_instruction, address)
+        if address_error != ok { ret (0usize, address_error) }
+        let value_error = nir.add_operand(builder, store_instruction, received)
+        if value_error != ok { ret (0usize, value_error) }
+        piece += 1usize
+    }
+    ret (slot, ok)
+}
+
 // One parameter of a `@cc` function as C passed it (D1676), the mirror of `c_argument`:
 // a scalar as it is; an aggregate's bits or eightbytes -- in registers, or `c-stack` from
 // the caller's stack -- stored to a slot of its own, which the parameter then names; or,
@@ -3304,14 +3530,20 @@ fn c_parameter(c: *check.Checker, passing: *CArguments, ty: check.Type, builder:
         if crossing_error != ok { ret (0usize, crossing_error) }
         crossing = classified
     }
-    if crossing.count == 0usize && (!crossing.memory || passing.windows) {
+    // AAPCS64 (D2124) passes a larger aggregate as the address of the caller's copy.
+    let arm = !passing.windows && aapcs64_target(c)
+    if crossing.count == 0usize && (!crossing.memory || passing.windows || arm) {
         let (whole_instruction, whole, whole_error) = nir.emit(builder, .Parameter, ty, true, *next, token)
         if whole_error != ok { ret (0usize, whole_error) }
         *next += 1usize
-        if !aggregate_value(c, canonical) {
+        if !aggregate_value(c, canonical) || arm {
             if canonical.kind == .Float { passing.sse_used += 1usize } else { passing.integer_used += 1usize }
         }
         ret (whole, ok)
+    }
+    if arm {
+        let (received, received_error) = c_parameter_aapcs64(passing, canonical, crossing, builder, token, next)
+        ret (received, received_error)
     }
     var pieces = crossing.count
     var stacked = crossing.memory
@@ -3367,6 +3599,22 @@ fn c_parameter(c: *check.Checker, passing: *CArguments, ty: check.Type, builder:
 // The type a call into C answers a register aggregate in: one eightbyte as `u64` or
 // `f64`, and two named for the back end by where System V left each half.
 fn c_result_type(crossing: Crossing, module_index: usize) -> check.Type {
+    // An AAPCS64 HFA comes back in v0 to v3 (D2124): one member as itself, more named for
+    // the back end, which packs their bits into the eightbytes the slot holds.
+    if crossing.hfa != 0usize {
+        if crossing.hfa == 1usize {
+            if crossing.hfa_width == 4usize { ret check.make_type(.Float, "f32", module_index) }
+            ret check.make_type(.Float, "f64", module_index)
+        }
+        if crossing.hfa_width == 4usize {
+            if crossing.hfa == 2usize { ret check.make_type(.Other, "return-hfa-2-4", module_index) }
+            if crossing.hfa == 3usize { ret check.make_type(.Other, "return-hfa-3-4", module_index) }
+            ret check.make_type(.Other, "return-hfa-4-4", module_index)
+        }
+        if crossing.hfa == 2usize { ret check.make_type(.Other, "return-hfa-2-8", module_index) }
+        if crossing.hfa == 3usize { ret check.make_type(.Other, "return-hfa-3-8", module_index) }
+        ret check.make_type(.Other, "return-hfa-4-8", module_index)
+    }
     if crossing.count == 1usize {
         if crossing.sse == 1usize { ret check.make_type(.Float, "f64", module_index) }
         ret check.make_type(.Integer, "u64", module_index)
@@ -3383,9 +3631,15 @@ fn c_result_type(crossing: Crossing, module_index: usize) -> check.Type {
 fn store_c_result(returned_type: check.Type, crossing: Crossing, call_result: usize, slot: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
     let module_index = returned_type.module_index
     let u64_type = check.make_type(.Integer, "u64", module_index)
+    // An HFA's members arrive packed into eightbytes (D2124); three or four doubles would
+    // need more than the two a pair carries.
+    // ponytail: refused; an HFA of three or four f64 crossing back from C wants a third result.
+    var eightbytes = crossing.count
+    if crossing.hfa != 0usize { eightbytes = (crossing.hfa * crossing.hfa_width + 7usize) / 8usize }
+    if eightbytes > 2usize { ret check.Unsupported }
     var low = call_result
     var high = 0usize
-    if crossing.count == 2usize {
+    if eightbytes == 2usize {
         let (low_instruction, low_value, low_error) = nir.emit(builder, .Extract, u64_type, true, 0usize, token)
         if low_error != ok { ret low_error }
         try nir.add_operand(builder, low_instruction, call_result)
@@ -3399,7 +3653,7 @@ fn store_c_result(returned_type: check.Type, crossing: Crossing, call_result: us
     if low_store_error != ok { ret low_store_error }
     try nir.add_operand(builder, low_store, slot)
     try nir.add_operand(builder, low_store, low)
-    if crossing.count == 2usize {
+    if eightbytes == 2usize {
         let pointer_type = check.make_type(.Pointer, "", module_index)
         let (high_address_instruction, high_address, high_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 8usize, token)
         if high_address_error != ok { ret high_address_error }
@@ -3656,7 +3910,7 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
         if slots_error != ok { ret slots_error }
         var slots = slots_aligned / 8usize
         if slots == 0usize { slots = 1usize }
-        let slot_type = check.make_type(.Other, "return-slot", call.function.module_index)
+        let slot_type = call_slot_type(c, call, return_layout.via_slot)
         let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, slot_type, true, slots, token)
         if stack_error != ok { ret stack_error }
         slot = stack
@@ -5167,7 +5421,8 @@ fn emit_return_values(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     // A struct or union a `@cc` function returns in registers (D1676): read out as its bits
     // or eightbytes before the deferred calls run, as the slot path copies it first, and
     // returned in the registers its classes name.
-    var pieces: [2]usize = zero
+    // Up to four: an AAPCS64 HFA returns a member per vector register (D2124).
+    var pieces: [4]usize = zero
     var piece_count = 0usize
     var c_result = check.invalid_type()
     if function.callback && count == 1usize && aggregate_value(c, c.return_types[function.first_return]) {
@@ -8185,12 +8440,12 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         let (initial, initial_error) = c_arguments_of(c, function_call)
         if initial_error != ok { ret initial_error }
         passing = initial
-        // `c_arguments_of` counts the hidden result pointer, which only a MEMORY one has.
-        if function.return_count == 1usize && aggregate_value(c, c.return_types[function.first_return]) && passing.integer_used == 0usize { return_layout.via_slot = false }
+        // Only a result C returns in memory comes through a slot.
+        if function.return_count == 1usize && aggregate_value(c, c.return_types[function.first_return]) && !c_result_in_memory(c, c.return_types[function.first_return]) { return_layout.via_slot = false }
     }
     if return_layout.via_slot && function.return_count != 0usize {
         let pointer_type = check.make_type(.Pointer, "", module_index)
-        let (return_parameter, return_slot, return_parameter_error) = nir.emit(builder, .Parameter, pointer_type, true, 0usize, c.tokens[usize(node.token_start)])
+        let (return_parameter, return_slot, return_parameter_error) = nir.emit(builder, .Parameter, callback_slot_type(c, function, pointer_type), true, 0usize, c.tokens[usize(node.token_start)])
         if return_parameter_error != ok { ret return_parameter_error }
         try add_binding(bindings, &binding_count, Binding { name: "$return", ty: pointer_type, value: return_slot, address: false })
         hidden_parameters = 1usize

@@ -37,8 +37,8 @@ class ProgressTests(unittest.TestCase):
         section = self.sections["queue"]
         actual = re.findall(r'<tr><td>(\d+)</td><td><code>(.*?)</code>', section)
         self.assertEqual(actual, [(str(i), task) for i, task in enumerate(expected, 1)])
-        # The NeperOS stage is picked up first (D2119), then chart work (D1955) while any remains.
-        self.assertTrue(re.fullmatch(r"C099|L0(6[1-2]|6[8-9]|7[0-5]|9[2-7])", expected[0]), expected[0])
+        # NeperOS stage 1 is picked up first (D2119, D2125), then chart work (D1955) while any remains.
+        self.assertTrue(re.fullmatch(r"C10[0-3]|L0(6[1-2]|6[8-9]|7[0-5]|9[2-7])", expected[0]), expected[0])
         self.assertIn(f"{len(expected)} unfinished</summary>", section)
         self.assertNotIn("<details open", section)
 
@@ -48,7 +48,7 @@ class ProgressTests(unittest.TestCase):
             f"L{i:03}" for i in range(92, 98)
         }
         actual = [item["id"] for item in queue["items"]]
-        if actual[:1] == ["C099"]:  # ahead of chart work by the user's priority (D2119)
+        while actual[:1] and actual[0] in {"C100", "C101", "C102", "C103"}:  # NeperOS first (D2125)
             actual = actual[1:]
         active_chart_ids = chart_ids & set(actual)
         self.assertEqual(set(actual[:len(active_chart_ids)]), active_chart_ids)

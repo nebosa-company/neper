@@ -36366,3 +36366,54 @@ each builds the compiler for aarch64 and for x64 into byte-identical images (9-1
 QEMU against 2-3 s natively), and its 42 `.em` artifacts differ from the x64-hosted ones
 only in the writing compiler's CRC identity (D398) and the one digest over it -- which is
 the point of that field.
+
+## D2124 — AAPCS64 passes C aggregates by its own rules, and the arm64 test bed is real
+
+A struct or union crossing to C by value on aarch64 is classified by AAPCS64 rather than
+System V (`lower.aapcs64_crossing`). A homogeneous floating-point aggregate -- one to four
+members of one float type, found through nested structs and arrays, never a union or a
+packed struct -- goes one member to a vector register, as `f32` or `f64` pieces. Anything
+else of at most sixteen bytes goes in one or two general registers as eightbytes, whatever
+its fields hold: `{f64, i64}`, two SSE-and-INTEGER halves on System V, is two x registers
+here. A larger one goes as the address of a copy. An aggregate that does not fit the
+registers left goes to the stack whole, and its file takes nothing more: lowering types its
+eightbytes `c-stack` or `c-stack-vector` so the back end knows which file closed. A larger
+result comes back through the address in x8, which is no argument register, so the slot is
+typed `c-return-slot` on both sides of the call and `c_arguments_of` no longer counts it.
+An HFA result arrives in v0 to v3 and the back end packs the members into the one or two
+eightbytes the slot stores (`return-hfa-N-W`); three or four doubles would need a third and
+are refused. `@cc` callees mirror all of it. The x64 paths are unchanged.
+
+The arm64 environment is now complete in WSL: `libc6-arm64-cross` and
+`gcc-aarch64-linux-gnu` from the Ubuntu archive, and from `ports.ubuntu.com` -- with
+`dpkg --add-architecture arm64` and the existing sources pinned to amd64 -- `libc6`,
+`libsqlite3-0`, `libodbc2`, `libmysqlclient21`, `libpq5`, `libvulkan1` and
+`mesa-vulkan-drivers` for arm64, so a dynamic image runs under `qemu-aarch64` with its own
+loader at `/lib/ld-linux-aarch64.so.1`, Vulkan included, on lavapipe. `extern_struct`
+passes against its C library built by the cross gcc. `scripts/a64-differential.sh`
+builds that library for both targets, runs os_watch from `$HOME` because DrvFS reports no
+changes, and names the five differences that are not the back end's: `when_target`, whose
+exit code encodes the architecture, and `os_fs`, `fs_basics`, `os_gaps` and `debug_dump`,
+which need openat2 (fs_basics for `open_at`'s `.NoSymlinks` race), seccomp and gcore of the
+process itself -- none of which QEMU 8.2's user mode gives a guest. Their translations in
+the runtime stand untested until a real aarch64 kernel runs them. With these, 812 of the
+817 buildable link fixtures agree on both targets.
+
+## D2125 — NeperOS stage 1 is four queue items, and a kernel image is position-independent
+
+C099 closed, so stage 1 of D2119 is queued. It is too large for one item to carry an honest
+score, so it is four, in order: C100 boots an `aarch64-none` image on QEMU `virt` (the
+image format, system-register and MMIO intrinsics, exception vectors, MMU, PL011, PSCI);
+C101 adds the GICv3, the timer and preemptive EL0 threads; C102 capabilities and
+synchronous IPC; C103 virtio over PCI in user-mode drivers, which closes the stage. Stage 2
+is queued only when C103 closes, as D2119 says.
+
+The image is the Linux arm64 `Image` format, not ELF, because that is the one protocol
+QEMU's `-kernel`, crosvm and a Pixel's bootloader all speak: a 64-byte header, the device
+tree's physical address in `x0`, the MMU off. They load it at different addresses (QEMU at
+RAM base plus `text_offset`, crosvm elsewhere), and the image is never relinked, so it is
+position-independent: the back end already reaches code, globals and the runtime only by
+`adr`, `adrp` and `bl`, and the one table holding absolute addresses -- the trap symbol
+table -- holds them relative to the image start under `none`. The writable globals follow
+the code inside the file, so a page delta between two file offsets is the one between
+their addresses wherever the image lands.

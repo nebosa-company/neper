@@ -1065,8 +1065,58 @@ fn select_atomic(builder: *nir.Builder, current: nir.Function, instruction: nir.
 
 // ---------------------------------------------------------------- calls
 
+// What lowering marks for a C crossing (D2124): a larger result's address, which goes in
+// x8 and takes no argument register (`c-return-slot`); an aggregate's eightbyte on the stack
+// because the general registers ran out (`c-stack`, 1) or the vector ones did
+// (`c-stack-vector`, 2), after which that file takes nothing more; and an HFA result's
+// members and their width, packed into eightbytes after the call (`return-hfa-N-W`).
+fn c_result_slot(ty: check.Type) -> bool {
+    ret ty.kind == .Other && check.same(ty.name, "c-return-slot")
+}
+
+fn c_stack_kind(ty: check.Type) -> usize {
+    if ty.kind != .Other { ret 0usize }
+    if check.same(ty.name, "c-stack") { ret 1usize }
+    if check.same(ty.name, "c-stack-vector") { ret 2usize }
+    ret 0usize
+}
+
+fn hfa_result(ty: check.Type) -> (usize, usize) {
+    if ty.kind != .Other || ty.name.len != 14usize || !check.same(ty.name[0usize..11usize], "return-hfa-") { ret (0usize, 0usize) }
+    ret (usize(ty.name[11usize]) - 48usize, usize(ty.name[13usize]) - 48usize)
+}
+
 // AAPCS64: integers to x0-x7 and floats to v0-v7, each counted on its own, the rest
-// to the stack in order, eight bytes each.
+// to the stack in order, eight bytes each. Where one of this type goes: 0 a general
+// register, 1 a vector register, 2 the stack, 3 x8; `index` is the register or the slot.
+fn place_argument(ty: check.Type, integers: *usize, floats: *usize, stacked: *usize, index: *usize) -> usize {
+    if c_result_slot(ty) {
+        *index = 8usize
+        ret 3usize
+    }
+    let stack_kind = c_stack_kind(ty)
+    if stack_kind != 0usize {
+        if stack_kind == 1usize { *integers = 8usize } else { *floats = 8usize }
+    } else {
+        if codegen_x64.float_width(ty) != 0usize {
+            if *floats < 8usize {
+                *index = *floats
+                *floats = *floats + 1usize
+                ret 1usize
+            }
+        } else {
+            if *integers < 8usize {
+                *index = *integers
+                *integers = *integers + 1usize
+                ret 0usize
+            }
+        }
+    }
+    *index = *stacked
+    *stacked = *stacked + 1usize
+    ret 2usize
+}
+
 fn stack_argument_count(builder: *nir.Builder, current: nir.Function) -> (usize, err) {
     var most = 0usize
     let end = current.first_instruction + current.instruction_count
@@ -1079,15 +1129,12 @@ fn stack_argument_count(builder: *nir.Builder, current: nir.Function) -> (usize,
             var integers = 0usize
             var floats = 0usize
             var stacked = 0usize
+            var index = 0usize
             var operand_at = first_argument
             while operand_at < instruction.operand_count {
                 let (operand_type, operand_type_error) = codegen_x64.value_type(builder, current, builder.operands[instruction.first_operand + operand_at])
                 if operand_type_error != ok { ret (0usize, operand_type_error) }
-                if codegen_x64.float_width(operand_type) != 0usize {
-                    if floats < 8usize { floats += 1usize } else { stacked += 1usize }
-                } else {
-                    if integers < 8usize { integers += 1usize } else { stacked += 1usize }
-                }
+                let place = place_argument(operand_type, &integers, &floats, &stacked, &index)
                 operand_at += 1usize
             }
             if stacked > most { most = stacked }
@@ -1101,28 +1148,24 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
     var integers = 0usize
     var floats = 0usize
     var stacked = 0usize
+    var index = 0usize
     var at = first_argument
     while at < instruction.operand_count {
         let value = builder.operands[instruction.first_operand + at]
         let (argument_type, argument_type_error) = codegen_x64.value_type(builder, current, value)
         if argument_type_error != ok { ret argument_type_error }
-        if codegen_x64.stacked_argument(argument_type) { ret codegen_x64.Unsupported }
         let width = codegen_x64.float_width(argument_type)
         if argument_type.kind == .Float && width == 0usize { ret codegen_x64.Unsupported }
-        if width != 0usize && floats < 8usize {
+        let place = place_argument(argument_type, &integers, &floats, &stacked, &index)
+        if place == 0usize || place == 3usize {
+            try read_into(allocations, value, index, output)
+        } else {
             let (source, source_error) = read_value(allocations, value, A64_S0, output)
             if source_error != ok { ret source_error }
-            try emit_a64.move_to_float(output, floats, source, width == 64usize)
-            floats += 1usize
-        } else {
-            if width == 0usize && integers < 8usize {
-                try read_into(allocations, value, integers, output)
-                integers += 1usize
+            if place == 1usize {
+                try emit_a64.move_to_float(output, index, source, width == 64usize)
             } else {
-                let (source, source_error) = read_value(allocations, value, A64_S0, output)
-                if source_error != ok { ret source_error }
-                try emit_a64.store_offset(output, source, A64_STACK, stacked * 8usize, 8usize)
-                stacked += 1usize
+                try emit_a64.store_offset(output, source, A64_STACK, index * 8usize, 8usize)
             }
         }
         at += 1usize
@@ -1136,26 +1179,64 @@ fn store_incoming_parameters(builder: *nir.Builder, current: nir.Function, stack
     var integers = 0usize
     var floats = 0usize
     var stacked = 0usize
+    var index = 0usize
     var at = 0usize
     while at < parameters {
         let incoming = codegen_x64.parameter_type(builder, current, at)
-        if codegen_x64.stacked_argument(incoming) { ret codegen_x64.Unsupported }
         let width = codegen_x64.float_width(incoming)
-        if width != 0usize && floats < 8usize {
-            try emit_a64.move_from_float(output, A64_S0, floats, width == 64usize)
-            try slot_store(output, A64_S0, stack_slots + at)
-            floats += 1usize
+        let place = place_argument(incoming, &integers, &floats, &stacked, &index)
+        if place == 0usize || place == 3usize {
+            try slot_store(output, index, stack_slots + at)
         } else {
-            if width == 0usize && integers < 8usize {
-                try slot_store(output, integers, stack_slots + at)
-                integers += 1usize
+            if place == 1usize {
+                try emit_a64.move_from_float(output, A64_S0, index, width == 64usize)
             } else {
-                try emit_a64.load_offset(output, A64_S0, A64_FP, 16usize + stacked * 8usize, 8usize, false)
-                try slot_store(output, A64_S0, stack_slots + at)
-                stacked += 1usize
+                try emit_a64.load_offset(output, A64_S0, A64_FP, 16usize + index * 8usize, 8usize, false)
             }
+            try slot_store(output, A64_S0, stack_slots + at)
         }
         at += 1usize
+    }
+    ret ok
+}
+
+fn returns_hfa(ty: check.Type) -> bool {
+    let (members, width) = hfa_result(ty)
+    ret members != 0usize
+}
+
+// A `@cc` function's HFA result (D2124): each member, a float lowering read out of the
+// aggregate, to its own vector register.
+fn return_hfa(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+    let (members, width) = hfa_result(instruction.ty)
+    if instruction.operand_count != members { ret codegen_x64.Unsupported }
+    var member = 0usize
+    while member < members {
+        let (source, source_error) = read_value(allocations, builder.operands[instruction.first_operand + member], A64_S0, output)
+        if source_error != ok { ret source_error }
+        try emit_a64.move_to_float(output, member, source, width == 8usize)
+        member += 1usize
+    }
+    ret ok
+}
+
+// An HFA's members from v0 to v3 into x16 and x17 as the eightbytes they make (D2124):
+// doubles one to a register, floats two to a register, low then high.
+fn pack_hfa(output: *emit_x64.Buffer, members: usize, width: usize) -> err {
+    if width == 8usize {
+        try emit_a64.move_from_float(output, A64_S0, 0usize, true)
+        if members >= 2usize { try emit_a64.move_from_float(output, A64_S1, 1usize, true) }
+        ret ok
+    }
+    try emit_a64.move_from_float(output, A64_S0, 0usize, false)
+    if members >= 2usize {
+        try emit_a64.move_from_float(output, A64_S2, 1usize, false)
+        try emit_a64.orr_shifted(output, A64_S0, A64_S0, A64_S2, 32usize)
+    }
+    if members >= 3usize { try emit_a64.move_from_float(output, A64_S1, 2usize, false) }
+    if members == 4usize {
+        try emit_a64.move_from_float(output, A64_S2, 3usize, false)
+        try emit_a64.orr_shifted(output, A64_S1, A64_S1, A64_S2, 32usize)
     }
     ret ok
 }
@@ -1188,17 +1269,23 @@ fn select_call(builder: *nir.Builder, current: nir.Function, instruction: nir.In
         }
     }
     if codegen_x64.result_pair_sse(instruction.ty) != 0usize { ret codegen_x64.Unsupported }
-    let multiple_results = instruction.has_result && (instruction.ty.kind == .Invalid || (instruction.ty.kind == .Other && check.same(instruction.ty.name, "return-values")))
+    let (hfa_members, hfa_width) = hfa_result(instruction.ty)
+    let hfa_pair = hfa_members != 0usize && (hfa_members * hfa_width + 7usize) / 8usize == 2usize
+    let multiple_results = instruction.has_result && (instruction.ty.kind == .Invalid || (instruction.ty.kind == .Other && check.same(instruction.ty.name, "return-values")) || hfa_pair)
     if instruction.has_result {
         let result_float = codegen_x64.float_width(instruction.ty)
-        if result_float != 0usize {
-            try emit_a64.move_from_float(output, A64_S0, 0usize, result_float == 64usize)
+        if hfa_members != 0usize {
+            try pack_hfa(output, hfa_members, hfa_width)
         } else {
-            if instruction.ty.kind == .Float { ret codegen_x64.Unsupported }
-            // A callee narrower than a register defines only its own bits: widened here.
-            try normalize(output, A64_S0, 0usize, instruction.ty)
+            if result_float != 0usize {
+                try emit_a64.move_from_float(output, A64_S0, 0usize, result_float == 64usize)
+            } else {
+                if instruction.ty.kind == .Float { ret codegen_x64.Unsupported }
+                // A callee narrower than a register defines only its own bits: widened here.
+                try normalize(output, A64_S0, 0usize, instruction.ty)
+            }
+            if multiple_results { try emit_a64.move_register(output, A64_S1, 1usize) }
         }
-        if multiple_results { try emit_a64.move_register(output, A64_S1, 1usize) }
     }
     try restore_masked(output, live_mask, preserve_base)
     if instruction.has_result && !multiple_results {
@@ -1576,6 +1663,9 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
             try emit_trap(builder, current, instruction.site, instruction.path, kind, message, "", "", instruction.operand_count, signed, first_register, second_register, "", context)
         } else {
         if opcode == .Return {
+            if returns_hfa(instruction.ty) {
+                try return_hfa(builder, instruction, allocations, output)
+            } else {
             if instruction.operand_count == 1usize {
                 let value = builder.operands[instruction.first_operand]
                 let (returned_type, returned_error) = codegen_x64.value_type(builder, current, value)
@@ -1599,6 +1689,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     // The entry's void return is the exit status the startup reads (D230).
                     if current.module_index == 0usize && check.same(current.name, "main") { try emit_a64.movz(output, 0usize, 0usize, 0usize) }
                 }
+            }
             }
             try restore_kept(output, saved_base, saved_count)
             try frame_epilogue(output)
