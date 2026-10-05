@@ -3429,16 +3429,21 @@ gpu_vulkan_raw_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$gpu_vulkan_raw_written" = 'executable written' ]
 chmod +x "$test_build/gpu-vulkan-raw-selfhost"
 gpu_vulkan_raw_output=$("$test_build/gpu-vulkan-raw-selfhost" "$test_build/saxpy.spv")
+# A device that runs the raw module but flushes denormals (WSL's lavapipe) is one
+# saxpy skips by name (D2118).
+saxpy_skipped=''
 case "$gpu_vulkan_raw_output" in
     'no vulkan device') saxpy_expected='cpu    checksum 16777216' ;;
-    'vulkan saxpy ok on '[1-9]' devices'|'vulkan saxpy ok on '1[0-6]' devices') saxpy_expected=$(printf 'cpu    checksum 16777216\nvulkan checksum 16777216') ;;
+    'vulkan saxpy ok on '[1-9]' devices'|'vulkan saxpy ok on '1[0-6]' devices')
+        saxpy_expected=$(printf 'cpu    checksum 16777216\nvulkan checksum 16777216')
+        saxpy_skipped=$(printf 'cpu    checksum 16777216\nvulkan skipped: no device preserves denormals') ;;
     *) printf '%s\n' "the Vulkan runtime failed: $gpu_vulkan_raw_output" >&2; exit 1 ;;
 esac
 saxpy_written=$($test_build/neper-self emit-executable "$repo/examples/saxpy.e" "$repo" x64 linux "$test_build/saxpy-selfhost")
 [ "$saxpy_written" = 'executable written' ]
 chmod +x "$test_build/saxpy-selfhost"
 saxpy_output=$("$test_build/saxpy-selfhost")
-[ "$saxpy_output" = "$saxpy_expected" ]
+[ "$saxpy_output" = "$saxpy_expected" ] || [ "$saxpy_output" = "$saxpy_skipped" ]
 # (D1612) Structured `while`, `for`, `break` and `continue`, pinned byte for byte and
 # run through the public CPU/Vulkan launch path.
 loop_spirv_written=$($test_build/neper-self emit-executable "$repo/tests/conformance/spirv/loop.e" "$repo" spv none "$test_build/loop.spv")

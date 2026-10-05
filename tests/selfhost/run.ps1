@@ -3813,8 +3813,13 @@ if ($LASTEXITCODE -ne 0 -or $saxpyWritten -ne 'executable written') { throw 'exa
 $saxpyOutput = & $saxpyPath
 $saxpyText = $saxpyOutput -join "`n"
 $saxpyExpected = 'cpu    checksum 16777216'
-if ($gpuVulkanRawOutput -ne 'no vulkan device') { $saxpyExpected += "`nvulkan checksum 16777216" }
-if ($LASTEXITCODE -ne 0 -or $saxpyText -ne $saxpyExpected) { throw "examples/saxpy.e answered wrongly: $saxpyText" }
+$saxpySkipped = ''
+if ($gpuVulkanRawOutput -ne 'no vulkan device') {
+    $saxpyExpected += "`nvulkan checksum 16777216"
+    # A device that flushes denormals is one saxpy skips by name (D2118).
+    $saxpySkipped = "cpu    checksum 16777216`nvulkan skipped: no device preserves denormals"
+}
+if ($LASTEXITCODE -ne 0 -or ($saxpyText -ne $saxpyExpected -and $saxpyText -ne $saxpySkipped)) { throw "examples/saxpy.e answered wrongly: $saxpyText" }
 # (D1612) Structured `while`, `for`, `break` and `continue`, pinned byte for byte and
 # run through the public CPU/Vulkan launch path.
 $loopSpirv = Join-Path $testBuild 'loop.spv'

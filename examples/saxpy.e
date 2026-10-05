@@ -88,7 +88,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while device_at < found.len && (!found[device_at].supported || !supports(found[device_at].capabilities, .DenormPreserve)) {
         device_at += 1usize
     }
-    if device_at == found.len { ret ok }
+    // A device that flushes denormals (lavapipe, D2118) would not match the CPU bit for bit.
+    if device_at == found.len {
+        try io.print("vulkan skipped: no device preserves denormals\n")
+        ret ok
+    }
     let (dev, open_error) = gpu.open(a, .Vulkan, u32(device_at))
     if open_error != ok { ret open_error }
     defer let _ = gpu.close(dev)

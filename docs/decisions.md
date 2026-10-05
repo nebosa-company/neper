@@ -35251,3 +35251,14 @@ in the runtime are deliberate: a thread trampoline ends one thread, and a failed
 `execve` child is single-threaded. `link/os_exit_threads` blocks a detached
 thread on a held mutex and returns from main; it ran until killed before the fix
 and exits at once after it, and the Linux runner runs it under `timeout`.
+
+## D2118 — saxpy names the device it skips for flushing denormals
+
+`examples/saxpy.e` runs its kernel only on a Vulkan device that preserves
+denormals, so the device result matches the CPU bit for bit, and returned
+silently when none did. WSL's only Vulkan device is Mesa's lavapipe, which the
+raw-module fixture runs but which reports no DenormPreserve, so the Linux runner
+expected a `vulkan checksum` line saxpy rightly never printed. saxpy now prints
+`vulkan skipped: no device preserves denormals` in that case, and both runners
+accept that line, but only when the raw fixture found a device. The kernel's
+SPIR-V is unchanged.
