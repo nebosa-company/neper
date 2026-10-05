@@ -36269,3 +36269,22 @@ outside the domain is refused and an empty cell is a missing value. Text stays
 the caller's, as with `guide_labels`. `gfx_chart_combo_axes` checks the
 geometry, the gap, three axes, table alignment, the refusals and both adapters
 on Windows and Linux.
+
+## D2122 — The plan checker takes import renames from the source it checks
+
+`scripts/check_module_plan.py` gives each planned dependency a qualifier, its
+last path segment, and checks the API fence against them: duplicates, clashes
+with declarations, shadowed parameters, qualifiers a signature uses but never
+imports. Renames came from a hand-kept table of four modules, while written
+sources rename freely (`use e.parse as base`, `use e.crypto.hash as chash`), so
+`tests.test_module_plan` reported 21 problems that were not in the code. The
+checker now reads a written module's own `use X as Y` lines, and only a
+planned module without source imports by last segment; the table is gone, since
+every entry was in its source.
+
+The five that remained were wrong plan rows, fixed by the layer rule rather
+than by loosening it: `e.thread.pool` imports `e.thread`, `e.sync` and
+`e.concurrent.queue`, so it is layer 4 like them, not 2; `e.fmt.json.schema`
+imports `e.fmt.json`, so it is layer 6 like it; and `e.gfx.chart` signs
+`time.Date` in its date axes, so it lists `e.time` and moves to layer 4, the
+lowest layer that may import it. Nothing below those layers depends on them.

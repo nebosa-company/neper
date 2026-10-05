@@ -2123,7 +2123,7 @@
   },
   {
    "name": "e.gfx.chart",
-   "layer": 2,
+   "layer": 4,
    "surface": "partial",
    "milestone": null,
    "schedule": "later",
@@ -2133,7 +2133,8 @@
     "e.math",
     "e.math.special",
     "e.gfx.geometry",
-    "e.gfx.paint"
+    "e.gfx.paint",
+    "e.time"
    ],
    "blocked_by": []
   },
@@ -4604,7 +4605,7 @@
   },
   {
    "name": "e.fmt.json.schema",
-   "layer": 2,
+   "layer": 6,
    "surface": "source",
    "milestone": null,
    "schedule": "later",
@@ -4850,7 +4851,7 @@
   },
   {
    "name": "e.thread.pool",
-   "layer": 2,
+   "layer": 4,
    "surface": "source",
    "milestone": null,
    "schedule": "later",

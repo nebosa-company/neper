@@ -7,12 +7,7 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ALIASES = {
-    "e.gpu.tensor": {"e.algo.linalg.tensor": "linalg_tensor"},
-    "e.ui.widget": {"e.text.layout": "layout", "e.ui.layout": "ui_layout"},
-    "e.async.io": {"e.cancel": "cancel_api"},
-    "e.gfx.chart.widget": {"e.gfx.chart.scene": "chart_scene", "e.ui.layout": "ui_layout"},
-}
+USE = re.compile(r"^use ([\w.]+) as (\w+)", re.M)
 RESERVED = {
     "target", "void", "err", "bool", "type", "usize", "isize", "f16", "bf16",
     "f32", "f64", "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64",
@@ -36,7 +31,13 @@ def catalogue_sections(text):
     return sections, errors
 
 
-def validate(plan, catalogue):
+def source_aliases(root, name):
+    """A written module's `use X as Y` renames; a planned one imports by last segment."""
+    path = root / "lib" / Path(*name.split(".")).with_suffix(".e")
+    return dict(USE.findall(path.read_text(encoding="utf-8"))) if path.exists() else {}
+
+
+def validate(plan, catalogue, root=ROOT):
     errors = []
     modules = {}
     for module in plan["modules"]:
@@ -98,8 +99,9 @@ def validate(plan, catalogue):
                 errors.append(f"{name}: stable-tier dependency on experimental {dependency}")
         visit(name)
         aliases = {}
+        renames = source_aliases(root, name)
         for dependency in dependencies:
-            qualifier = ALIASES.get(name, {}).get(dependency, dependency.rsplit(".", 1)[-1])
+            qualifier = renames.get(dependency, dependency.rsplit(".", 1)[-1])
             if qualifier in aliases:
                 errors.append(f"{name}: duplicate import qualifier {qualifier}")
             aliases[qualifier] = dependency
@@ -136,7 +138,7 @@ def main():
     args = parser.parse_args()
     plan = json.loads((args.root / "docs/modules.json").read_text(encoding="utf-8"))
     catalogue = (args.root / "docs" / plan["api_catalog"]).read_text(encoding="utf-8")
-    errors = validate(plan, catalogue)
+    errors = validate(plan, catalogue, args.root)
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
