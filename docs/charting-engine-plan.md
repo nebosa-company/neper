@@ -1,6 +1,6 @@
 # Neper charting engine plan
 
-Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, candlestick, OHLC, price-volume, returns/volatility, waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, radar, rose/wind, ternary, waffle, mekko, two-set Euler, three-set Venn, basic word cloud, treemap, sunburst, icicle, circle packing, Sankey, alluvial, chord, streamgraph, horizon, seasonal subseries, forecast fan, additive decomposition, ACF/PACF correlogram, empirical variogram, vector/quiver, streamlines, phase-space, recurrence, drawdown, cohort retention, contour, filled contour, rank-over-time ribbon, stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars, calendar heatmap, forest plot, Bland–Altman agreement, ROC, precision–recall, cumulative gain, cumulative lift, calibration, confusion matrix, partial ROC area, Youden index and decision curve,
+Status: scatter, line, points+line, bubble, OLS fitted line, OLS mean-confidence and prediction bands, LOESS smoothing curve with confidence and prediction bands, covariance data ellipse, bar, grouped bar, signed stacked bar, 100% stacked bar, categorical bar+line combo with a secondary axis, multi-axis mixed-mark combo with explicit side axes and aligned axis tables, candlestick, OHLC, price-volume, returns/volatility, waterfall, bullet, target gauge, KPI/target-status card, Pareto, population pyramid, pie, donut, radar, rose/wind, ternary, waffle, mekko, two-set Euler, three-set Venn, basic word cloud, treemap, sunburst, icicle, circle packing, Sankey, alluvial, chord, streamgraph, horizon, seasonal subseries, forecast fan, additive decomposition, ACF/PACF correlogram, empirical variogram, vector/quiver, streamlines, phase-space, recurrence, drawdown, cohort retention, contour, filled contour, rank-over-time ribbon, stage funnel, state timeline, status history, event timeline, in-cell sparklines, in-cell data bars, calendar heatmap, forest plot, Bland–Altman agreement, ROC, precision–recall, cumulative gain, cumulative lift, calibration, confusion matrix, partial ROC area, Youden index and decision curve,
 histogram, frequency polygon, rug, strip/jitter, beeswarm, binned dot plot, stem-and-leaf, range/interval bars, step, area, lollipop, error bars,
 confidence bands, dumbbells, ECDF, box, boxen, density, hexbin, 2D rectangular bins, 2D KDE contours, ridgeline, normal Q-Q and P-P, probability paper, violin, half violin, raincloud, slopegraph, connected scatter, marginal histogram, dose response, interval hazard, influence plot, capability sixpack, heatmap,
 correlation matrix, mosaic, spine plot, association plot, single-stratum fourfold display, parallel coordinates and scatterplot matrix are delivered, with linear/log10/symmetric-log and
@@ -293,8 +293,17 @@ produce either a two-sided mean-confidence or new-observation prediction
 ribbon. The caller supplies the appropriate Student-t critical value and
 polygon resolution; the filled Band and fitted Line share a domain including
 observations. `gfx_chart_overlays` checks numeric values and both adapters on
-Windows and Linux. Simultaneous confidence bands, nonlinear smoothers,
-automatic quantiles and transformed-axis overlays remain planned.
+Windows and Linux. `loess_interval` is the nonlinear smoother: local-linear
+LOESS with tricube weights over the q = floor(span*n) nearest x (Cleveland
+1979, no robustness passes) on unsorted x, sampled evenly across the data, with
+a pointwise ribbon fit ± t·s·|l(x0)|, where l(x0) are the fit's weights on y
+and s² = RSS / trace((I−L)ᵀ(I−L)) (Cleveland and Grosse's δ1), or the
+prediction ribbon ± t·s·sqrt(1 + |l(x0)|²) for a new observation. It refuses
+spans under three neighbours, neighbourhoods without x spread and non-finite
+data. `gfx_chart_loess` checks fit and band against statsmodels' LOWESS and an
+explicit smoother matrix (`scripts/chart_loess_reference.py`). Simultaneous
+confidence bands, robustness iterations, automatic quantiles and
+transformed-axis overlays remain planned.
 `e.algo.stat.regression_diagnostics` emits fitted values, raw and internally
 standardized residuals, leverage and Cook's distance from one streaming OLS
 fit into caller storage. It refuses singular x, exact fits and undefined
@@ -429,8 +438,18 @@ category centers. The bar domain includes zero; the line keeps its independent
 vertical domain, and the caller renders the corresponding left/right guides.
 It rejects mismatched/non-finite columns and short storage. The gallery's
 secondary-axis preview reuses the Pareto guide renderer, with numeric right
-labels instead of percentage labels. Arbitrary x positions, more than two
-vertical scales and aligned axis tables remain planned.
+labels instead of percentage labels. `combo` generalizes it: Bar, Line,
+PointLine and Scatter series at arbitrary numeric x share one x domain, and
+each binds to one of any number of independent vertical domains. A NaN y is a
+missing observation that emits no mark and breaks its line (both adapters now
+start a new subpath where a Line's segments are disjoint; contiguous lines
+render byte-identically); infinities, NaN x, unordered bar x and axes with no
+values are refused. `side_axis` draws an explicit axis for one domain, a rule
+with outward ticks and labels left or right of the plot at any offset, so a
+third scale sits beside the secondary one. `axis_table` aligns rows of caller
+text under the marks in a layer's x domain (SAS's XAXISTABLE); empty cells are
+missing values and x outside the domain is refused. `gfx_chart_combo_axes`
+checks the geometry, gaps, axes, table alignment, refusals and both adapters.
 `candlestick` and `ohlc` borrow open/high/low/close columns at strictly increasing
 numeric x positions. The shared domain validates the price envelope and pads
 the first and last marks by half the smallest x interval. Candlestick emits
@@ -890,7 +909,7 @@ the prior 133), including delivered and planned charts and diagrams.
 
 | Backlog | Missing capability and acceptance gate |
 |---|---|
-| L068 | Bubble size mapping; confidence ellipses; fitted regression/smoothing curves with confidence/prediction bands; mixed-mark combo plots with explicit secondary axes; aligned axis tables. Reuse existing marks, statistical calculations, text and guides. Check size-to-area semantics, singular covariance, curve/band reference values, layer alignment, independent axis domains, missing values, capacity refusals and scene/SVG output. |
+| L068 | Delivered: `bubble` (size to area), `covariance_ellipse` (singular covariance refused), `regression_line`/`regression_interval` (OLS confidence and prediction bands), `loess_interval` (smoothing curve with a confidence or prediction band, checked against statsmodels), `combo` (mixed marks, arbitrary x, any number of independent axes, missing values), `side_axis` (explicit secondary and further axes) and `axis_table` (aligned axis tables), each with scene/SVG output and capacity refusals in `gfx_chart_bubble`, `gfx_chart_overlays`, `gfx_chart_loess` and `gfx_chart_combo_axes`. |
 | L069 | 3-D scatter, bivariate histograms and density surfaces over existing mesh/scene and statistical modules. Check bin counts/KDE against numeric references, camera/projection transforms, clipping/depth, non-finite data, degenerate domains and caller storage. This specifies the corresponding 3-D part of L062. |
 | L070 | Choropleth and proportional-symbol maps; projections, region-key joins, geographic legends, missing regions, polygon holes, antimeridian handling and clipping. Reuse e.algo.geo and the common scene backend. Check projection reference points, area-scaled symbols, region matching and rendered geometry; accept caller-provided boundaries rather than requiring a map service. This specifies the geographic part of L062. |
 | L071 | ANOM; Laney P-prime/U-prime; rare-event G/T; Hotelling T-squared, generalized variance and MEWMA; normal/nonnormal/attribute/batch capability plots; Gage bias/linearity, attribute agreement and Gage run charts. Keep calculations in the owning statistics module, including subgroup/phase rules, limit estimation, special-cause flags and applicable intervals. Require published numeric reference fixtures, invalid/small-sample cases, singular-covariance handling and shared-mark previews. Existing basic SPC, capability sixpack and Gage R&R entries stay in the plan. |

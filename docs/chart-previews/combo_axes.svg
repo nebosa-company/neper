@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>combo_axes</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="52" y1="158" x2="248" y2="158" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="158" x2="52" y2="158" stroke="rgb(51,64,84)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="122.33" x2="248" y2="122.33" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="122.33" x2="52" y2="122.33" stroke="rgb(51,64,84)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="86.65" x2="248" y2="86.65" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="86.65" x2="52" y2="86.65" stroke="rgb(51,64,84)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="50.98" x2="248" y2="50.98" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="47" y1="50.98" x2="52" y2="50.98" stroke="rgb(51,64,84)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="36" x2="52" y2="158" stroke="rgb(51,64,84)" stroke-width="1" stroke-linecap="round"/>
+<line x1="52" y1="158" x2="248" y2="158" stroke="rgb(51,64,84)" stroke-width="1" stroke-linecap="round"/>
+<rect x="55.27" y="72.39" width="26.13" height="85.61" fill="rgb(18,89,194)"/>
+<rect x="87.93" y="61.68" width="26.13" height="96.32" fill="rgb(18,89,194)"/>
+<rect x="120.6" y="66.68" width="26.13" height="91.32" fill="rgb(18,89,194)"/>
+<rect x="153.27" y="50.98" width="26.13" height="107.02" fill="rgb(18,89,194)"/>
+<rect x="185.93" y="42.42" width="26.13" height="115.58" fill="rgb(18,89,194)"/>
+<rect x="218.6" y="36" width="26.13" height="122" fill="rgb(18,89,194)"/>
+<line x1="52" y1="36" x2="52" y2="158" stroke="rgb(18,89,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="52" y1="158" x2="47" y2="158" stroke="rgb(18,89,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="52" y1="122.33" x2="47" y2="122.33" stroke="rgb(18,89,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="52" y1="86.65" x2="47" y2="86.65" stroke="rgb(18,89,194)" stroke-width="2" stroke-linecap="round"/>
+<line x1="52" y1="50.98" x2="47" y2="50.98" stroke="rgb(18,89,194)" stroke-width="2" stroke-linecap="round"/>
+<text x="43" y="160.8" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(18,89,194)">0</text>
+<text x="43" y="125.13" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(18,89,194)">50</text>
+<text x="43" y="89.45" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(18,89,194)">100</text>
+<text x="43" y="53.78" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(18,89,194)">150</text>
+<text x="52" y="28" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(18,89,194)">Orders</text>
+<path d="M68.33 158 L101 142.26 M166.33 87.16 L199 59.61 L231.67 36" fill="none" stroke="rgb(240,107,31)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="65.33" y="155" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="98" y="139.26" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="163.33" y="84.16" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="196" y="56.61" width="6" height="6" fill="rgb(240,107,31)"/>
+<rect x="228.67" y="33" width="6" height="6" fill="rgb(240,107,31)"/>
+<line x1="248" y1="36" x2="248" y2="158" stroke="rgb(240,107,31)" stroke-width="2" stroke-linecap="round"/>
+<line x1="248" y1="158" x2="253" y2="158" stroke="rgb(240,107,31)" stroke-width="2" stroke-linecap="round"/>
+<line x1="248" y1="118.65" x2="253" y2="118.65" stroke="rgb(240,107,31)" stroke-width="2" stroke-linecap="round"/>
+<line x1="248" y1="79.29" x2="253" y2="79.29" stroke="rgb(240,107,31)" stroke-width="2" stroke-linecap="round"/>
+<line x1="248" y1="39.94" x2="253" y2="39.94" stroke="rgb(240,107,31)" stroke-width="2" stroke-linecap="round"/>
+<text x="257" y="160.8" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(240,107,31)">100</text>
+<text x="257" y="121.45" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(240,107,31)">110</text>
+<text x="257" y="82.09" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(240,107,31)">120</text>
+<text x="257" y="42.74" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(240,107,31)">130</text>
+<text x="248" y="28" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(240,107,31)">Index</text>
+<path d="M68.33 58.18 L101 91.45 L133.67 36 L166.33 113.64 L199 135.82 L231.67 158" fill="none" stroke="rgb(26,140,82)" stroke-width="2" stroke-linejoin="round"/>
+<line x1="292" y1="36" x2="292" y2="158" stroke="rgb(26,140,82)" stroke-width="2" stroke-linecap="round"/>
+<line x1="292" y1="158" x2="297" y2="158" stroke="rgb(26,140,82)" stroke-width="2" stroke-linecap="round"/>
+<line x1="292" y1="102.55" x2="297" y2="102.55" stroke="rgb(26,140,82)" stroke-width="2" stroke-linecap="round"/>
+<line x1="292" y1="47.09" x2="297" y2="47.09" stroke="rgb(26,140,82)" stroke-width="2" stroke-linecap="round"/>
+<text x="301" y="160.8" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(26,140,82)">1.5</text>
+<text x="301" y="105.35" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(26,140,82)">2</text>
+<text x="301" y="49.89" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(26,140,82)">2.5</text>
+<text x="292" y="28" font-family="sans-serif" font-size="9" text-anchor="middle" fill="rgb(26,140,82)">Defect %</text>
+<text x="43" y="171" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">Month</text>
+<text x="68.33" y="171" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Jan</text>
+<text x="101" y="171" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Feb</text>
+<text x="133.67" y="171" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Mar</text>
+<text x="166.33" y="171" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Apr</text>
+<text x="199" y="171" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">May</text>
+<text x="231.67" y="171" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">Jun</text>
+<text x="43" y="183" font-family="sans-serif" font-size="8" text-anchor="end" fill="rgb(51,64,84)">Orders</text>
+<text x="68.33" y="183" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">120</text>
+<text x="101" y="183" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">135</text>
+<text x="133.67" y="183" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">128</text>
+<text x="166.33" y="183" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">150</text>
+<text x="199" y="183" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">162</text>
+<text x="231.67" y="183" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(51,64,84)">171</text>
+<text x="180" y="16" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(51,64,84)">Orders, index and defect rate on three axes</text>
+</svg>

@@ -467,6 +467,14 @@ fn append_ink(w: *io.Writer, marks: *const chart.Layout, ink: Ink) -> err {
         try number(w, marks.segments[0usize].from.y)
         var i = 0usize
         while i < marks.segments.len {
+            // A segment that does not start where the last one ended is a gap.
+            let start = marks.segments[i].from
+            if i > 0usize && (start.x != marks.segments[i - 1usize].to.x || start.y != marks.segments[i - 1usize].to.y) {
+                try io.write_all(w, " M")
+                try number(w, start.x)
+                try io.write_all(w, " ")
+                try number(w, start.y)
+            }
             try io.write_all(w, " L")
             try number(w, marks.segments[i].to.x)
             try io.write_all(w, " ")

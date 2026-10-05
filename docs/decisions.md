@@ -36219,3 +36219,53 @@ The test tools were installed on 2026-10-05: QEMU 11.1.0 for Windows at
 `aarch64-linux-gnu-objdump`, and steps under `gdb-multiarch` through QEMU's
 gdbstub. WSL clears `/tmp` between sessions, so test binaries stay under
 `/mnt/d`.
+
+## D2120 — LOESS is the smoothing overlay, with a band from the smoother matrix
+
+`chart.loess_interval` adds the nonlinear smoother L068 asked for beside the OLS
+`regression_interval`: Cleveland's local-linear LOESS, tricube weights over the
+q = floor(span * n) nearest x (the q-th weighs zero), no robustness passes, on
+unsorted x, sampled at fit.len + 1 even x. `e.algo.timeseries.loess` was not
+reusable: it smooths an index-spaced series, and a scatter needs distances in x.
+The band follows Cleveland and Grosse: the fit at x0 is l(x0)·y, so its
+standard error is s·|l(x0)|, with s² = RSS / δ1 and δ1 = trace((I−L)ᵀ(I−L)).
+δ1 needs no n×n matrix: it is Σ_i (1 − 2·l_ii + |l(x_i)|²), one local fit per
+observation, so the only scratch is n distances. `prediction` widens the band
+to s·sqrt(1 + |l(x0)|²) for a new observation. The caller supplies the t
+quantile, as for the OLS bands; R's look-up degrees of freedom (δ1²/δ2) would
+need the matrix. Each fit sorts the distances to find the neighbourhood, which
+makes the band O(n² log n); quickselect waits for data that needs it. A
+neighbourhood whose positive weights sit at one x has no slope and is refused,
+as are spans under three neighbours. `scripts/chart_loess_reference.py` checks
+the weights against statsmodels' LOWESS (it=0) to 1e-9 and computes the band
+from an explicit smoother matrix; `gfx_chart_loess` holds the fit and band to
+those values on Windows and Linux.
+
+## D2121 — Combos bind series to any number of axes; a missing value breaks the line
+
+`chart.combo` lays out Bar, Line, PointLine and Scatter series at arbitrary
+numeric x over one shared x domain, each series bound to one of `axes`
+independent vertical domains, which the result reports so guides can be drawn.
+`combo_bar_line` stays as the categorical two-axis shortcut. A NaN y is a
+missing observation: it emits no mark and its line stops there, rather than
+interpolating across the gap or refusing the series; infinities, NaN x,
+unordered bar x and an axis with no values are refused. Marks are compacted, so
+`missing` reports what was dropped. Bar axes include zero, and bars default to
+0.8 of the narrowest gap between bar x, padded half a gap each side. Area
+series are left out: a gap would split the polygon into one layer per run.
+
+Both adapters drew a Line as one path from the first segment's start through
+every segment's end, so disjoint segments were silently bridged. They now start
+a new subpath where a segment does not begin at the previous end; every
+existing line is contiguous, and all previews re-rendered byte-identical.
+
+`chart.side_axis` draws an explicit axis for one domain: a rule at the plot's
+left or right edge plus an offset, outward ticks and labels beyond them, a Rug
+layout the adapters already draw. A third scale is a second right axis further
+out; the gallery's dual-axis previews hand-drew theirs. `chart.axis_table` is
+SAS's XAXISTABLE: rows of caller text, each cell centred on its x mapped through
+a layer's own x domain, so it lines up with the marks by construction; an x
+outside the domain is refused and an empty cell is a missing value. Text stays
+the caller's, as with `guide_labels`. `gfx_chart_combo_axes` checks the
+geometry, the gap, three axes, table alignment, the refusals and both adapters
+on Windows and Linux.

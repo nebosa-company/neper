@@ -3100,6 +3100,16 @@ gfx_chart_geojson_written=$($test_build/neper-self emit-executable "$repo/tests/
 chmod +x "$test_build/gfx-chart-geojson-selfhost"
 gfx_chart_geojson_output=$("$test_build/gfx-chart-geojson-selfhost")
 [ "$gfx_chart_geojson_output" = 'gfx chart geojson ok' ]
+gfx_chart_loess_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_loess/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-loess-selfhost")
+[ "$gfx_chart_loess_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-loess-selfhost"
+gfx_chart_loess_output=$("$test_build/gfx-chart-loess-selfhost")
+[ "$gfx_chart_loess_output" = 'gfx chart loess ok' ]
+gfx_chart_combo_axes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_combo_axes/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-combo-axes-selfhost")
+[ "$gfx_chart_combo_axes_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-combo-axes-selfhost"
+gfx_chart_combo_axes_output=$("$test_build/gfx-chart-combo-axes-selfhost")
+[ "$gfx_chart_combo_axes_output" = 'gfx chart combo axes ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"

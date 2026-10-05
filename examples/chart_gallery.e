@@ -9985,6 +9985,108 @@ fn render_dual_axis(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, ca
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+// Three independent vertical domains over one month axis: orders as bars on the
+// left axis, an index with a missing March on the right, a defect rate on a
+// third axis 44 px further out, and an axis table of months and counts.
+fn render_combo_axes_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let plot = geometry.rect(52.0, 36.0, 196.0, 122.0)
+    let months = [6]f32{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 }
+    let orders = [6]f32{ 120.0, 135.0, 128.0, 150.0, 162.0, 171.0 }
+    let index_values = [6]f32{ 100.0, 104.0, f32(math.nan64()), 118.0, 125.0, 131.0 }
+    let rates = [6]f32{ 2.4, 2.1, 2.6, 1.9, 1.7, 1.5 }
+    let series = [3]chart.ComboSeries{
+        chart.ComboSeries { mark: .Bar, axis: 0usize, x: months[..], y: orders[..] },
+        chart.ComboSeries { mark: .PointLine, axis: 1usize, x: months[..], y: index_values[..] },
+        chart.ComboSeries { mark: .Line, axis: 2usize, x: months[..], y: rates[..] },
+    }
+    var coords: [6]chart.Coord = zero
+    var segments: [10]chart.Segment = zero
+    var bars: [6]geometry.Rect = zero
+    var layers: [3]chart.Layout = zero
+    var axes: [3]chart.ComboAxis = zero
+    let storage = chart.ComboStorage { coords: coords[..], segments: segments[..], bars: bars[..], layers: layers[..], axes: axes[..] }
+    let (combo, combo_error) = chart.combo(series[..], 3usize, plot, 0.0, storage)
+    if combo_error != ok { ret combo_error }
+    let colors = [3]paint.Color{ paint.rgba(0.07, 0.35, 0.76, 1.0), paint.rgba(0.94, 0.42, 0.12, 1.0), paint.rgba(0.10, 0.55, 0.32, 1.0) }
+    let dark = paint.rgba(0.20, 0.25, 0.33, 1.0)
+    let grid = paint.rgba(0.88, 0.91, 0.95, 1.0)
+    let offsets = [3]f32{ 0.0, 0.0, 44.0 }
+    let rights = [3]bool{ false, true, true }
+    let linear = chart.Scale { kind: .Linear, reverse: false, linthresh: 1.0 }
+    var tick_storage: [15]chart.Tick = zero
+    var words: [15]str = zero
+    var word_bytes: [192]u8 = zero
+    var rules: [18]chart.Segment = zero
+    var axis_text: [15]chart.Label = zero
+    var axis_layers: [3]chart.Layout = zero
+    var axis_counts: [3]usize = zero
+    var left_ticks = tick_storage[..0usize]
+    var k = 0usize
+    while k < 3usize {
+        let (made_ticks, tick_error) = chart.nice_ticks(linear, combo.axes[k].y_min, combo.axes[k].y_max, 5usize, tick_storage[5usize * k..5usize * k + 5usize])
+        if tick_error != ok { ret tick_error }
+        if k == 0usize { left_ticks = made_ticks }
+        let (made_words, word_error) = chart.format_ticks(made_ticks, words[5usize * k..5usize * k + 5usize], word_bytes[64usize * k..64usize * k + 64usize])
+        if word_error != ok { ret word_error }
+        let (rule_layer, made_labels, axis_error) = chart.side_axis(plot, made_ticks, made_words, rights[k], offsets[k], 8.0, rules[6usize * k..6usize * k + 6usize], axis_text[5usize * k..5usize * k + 5usize])
+        if axis_error != ok { ret axis_error }
+        axis_layers[k] = rule_layer
+        axis_counts[k] = made_labels.len
+        k += 1usize
+    }
+    let titles = [3]chart.Label{
+        chart.Label { text: "Orders", anchor: chart.Coord { x: plot.x, y: plot.y - 8.0 }, align: .Center },
+        chart.Label { text: "Index", anchor: chart.Coord { x: plot.x + plot.width, y: plot.y - 8.0 }, align: .Center },
+        chart.Label { text: "Defect %", anchor: chart.Coord { x: plot.x + plot.width + offsets[2usize], y: plot.y - 8.0 }, align: .Center },
+    }
+    let row_titles = [2]str{ "Month", "Orders" }
+    let cells = [12]str{ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "120", "135", "128", "150", "162", "171" }
+    var table_storage: [14]chart.Label = zero
+    let (table, table_error) = chart.axis_table(months[..], &combo.layers[0usize], plot, row_titles[..], cells[..], plot.y + plot.height + 1.0, 12.0, table_storage[..])
+    if table_error != ok { ret table_error }
+    let heading = [1]chart.Label{ chart.Label { text: "Orders, index and defect rate on three axes", anchor: chart.Coord { x: 180.0, y: 16.0 }, align: .Center } }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, builder_error) = scene.builder(a, 160usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_guides(&builder, plot, tick_storage[..0usize], left_ticks, paint.Brush { Solid: grid }, paint.Brush { Solid: dark })
+    k = 0usize
+    while k < 3usize {
+        try chart_scene.append(a, &builder, &combo.layers[k], paint.Brush { Solid: colors[k] })
+        try chart_scene.append(a, &builder, &axis_layers[k], paint.Brush { Solid: colors[k] })
+        try chart_scene.append_labels(a, &builder, axis_text[5usize * k..5usize * k + axis_counts[k]], font, 8.0, paint.Brush { Solid: colors[k] })
+        try chart_scene.append_labels(a, &builder, titles[k..k + 1usize], font, 9.0, paint.Brush { Solid: colors[k] })
+        k += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, table, font, 8.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, heading[..], font, 11.0, paint.Brush { Solid: dark })
+    let path = "docs/chart-previews/combo_axes.png"
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_guides(&writer, plot, tick_storage[..0usize], left_ticks, grid, dark)
+    k = 0usize
+    while k < 3usize {
+        try chart_svg.append(&writer, &combo.layers[k], colors[k])
+        try chart_svg.append(&writer, &axis_layers[k], colors[k])
+        try chart_svg.append_labels(&writer, axis_text[5usize * k..5usize * k + axis_counts[k]], colors[k], 8.0)
+        try chart_svg.append_labels(&writer, titles[k..k + 1usize], colors[k], 9.0)
+        k += 1usize
+    }
+    try chart_svg.append_labels(&writer, table, dark, 8.0)
+    try chart_svg.append_labels(&writer, heading[..], dark, 11.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn render_share(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, layers: []chart.Layout, names: []const str, title: str, path: str) -> err {
     if layers.len != 5usize || names.len != layers.len { ret chart.Invalid }
     let colors = [5]paint.Color{
@@ -11349,6 +11451,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if prediction_dots_error != ok { ret prediction_dots_error }
     let prediction_underlay = [1]chart.Layout{ prediction }
     try render_scatter_overlay(a, queue, output_target, canvas, &renderer, &prediction_dots, &prediction_line, prediction_underlay[..], "docs/chart-previews/prediction_band.png")
+    let loess_x = [24]f32{ 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 11.5 }
+    let loess_y = [24]f32{ 4.88, 5.92, 6.22, 6.71, 6.82, 7.36, 7.99, 7.52, 7.45, 6.61, 6.07, 5.3, 3.77, 4.25, 3.53, 3.09, 1.83, 1.72, 2.2, 2.68, 3.47, 3.89, 4.81, 4.97 }
+    var loess_distances: [24]f64 = zero
+    var loess_outline: [98]chart.Coord = zero
+    var loess_fit: [48]chart.Segment = zero
+    let (loess_ribbon, loess_curve, loess_error) = chart.loess_interval(loess_x[..], loess_y[..], 0.4, 2.0, false, bounds, loess_distances[..], loess_outline[..], loess_fit[..])
+    if loess_error != ok { ret loess_error }
+    let loess_x_limits = [2]f32{ loess_curve.x_min, loess_curve.x_max }
+    let loess_y_limits = [2]f32{ loess_curve.y_min, loess_curve.y_max }
+    var loess_spec = chart.spec(.Scatter, bounds, loess_x[..], loess_y[..])
+    var loess_points: [24]chart.Coord = zero
+    let (loess_dots, loess_dots_error) = chart.layout_with_limits(&loess_spec, loess_points[..], segments[..0usize], bars[..0usize], loess_x_limits[..], loess_y_limits[..])
+    if loess_dots_error != ok { ret loess_dots_error }
+    let loess_underlay = [1]chart.Layout{ loess_ribbon }
+    try render_scatter_overlay(a, queue, output_target, canvas, &renderer, &loess_dots, &loess_curve, loess_underlay[..], "docs/chart-previews/loess_band.png")
     let grouped_values = [8]f32{ 3.0, 2.0, 5.0, 4.0, 2.0, 6.0, 4.0, 3.0 }
     let category_names = [4]str{ "North", "South", "East", "West" }
     let series_names = [2]str{ "Alpha", "Beta" }
@@ -11444,6 +11561,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (combo_layers, combo_error) = chart.combo_bar_line(combo_columns[..], combo_trend[..], pareto_bounds, combo_x[..], combo_bars[..], combo_points[..], combo_segments[..], combo_storage[..])
     if combo_error != ok { ret combo_error }
     try render_dual_axis(a, queue, output_target, canvas, &renderer, combo_layers, pareto_names[..], "Volume and index (secondary axis)", false, "docs/chart-previews/combo_bar_line.png")
+    try render_combo_axes_preview(a, queue, output_target, canvas, &renderer)
     let pie_values = [5]f32{ 30.0, 24.0, 18.0, 16.0, 12.0 }
     let pie_names = [5]str{ "North 30%", "South 24%", "East 18%", "West 16%", "Other 12%" }
     var pie_points: [512]chart.Coord = zero

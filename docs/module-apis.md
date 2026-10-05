@@ -16399,6 +16399,14 @@ fn layout_with_limits(s: *const Spec, coords: []Coord, segments: []Segment, bars
 fn binary_metric_curve(c: *const stat.BinaryCurve, metric: BinaryMetric, bounds: geometry.Rect, x: []f32, y: []f32, segments: []Segment) -> (Layout, err)
 fn roc_partial_region(c: *const stat.BinaryCurve, max_fpr: f32, bounds: geometry.Rect, points: []Coord) -> (Layout, err)
 fn error_bars(x: []const f32, center: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err)
+fn loess_interval(x: []const f32, y: []const f32, span: f32, critical: f32, prediction: bool, bounds: geometry.Rect, distances: []f64, outline: []Coord, fit: []Segment) -> (Layout, Layout, err)
+type ComboSeries = struct { mark: Kind, axis: usize, x: []const f32, y: []const f32 }
+type ComboAxis = struct { y_min: f32, y_max: f32 }
+type ComboStorage = struct { coords: []Coord, segments: []Segment, bars: []geometry.Rect, layers: []Layout, axes: []ComboAxis }
+type ComboLayout = struct { layers: []Layout, axes: []ComboAxis, x_min: f32, x_max: f32, missing: usize }
+fn combo(series: []const ComboSeries, axes: usize, bounds: geometry.Rect, bar_width: f32, storage: ComboStorage) -> (ComboLayout, err)
+fn side_axis(bounds: geometry.Rect, axis_ticks: []const Tick, text: []const str, right: bool, offset: f32, size: f32, rules: []Segment, labels: []Label) -> (Layout, []Label, err)
+fn axis_table(x: []const f32, domain: *const Layout, bounds: geometry.Rect, titles: []const str, cells: []const str, top: f32, row_height: f32, labels: []Label) -> ([]Label, err)
 fn band(x: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, outline: []Coord) -> (Layout, err)
 fn fan(x: []const f32, median: []const f32, lower: []const f32, upper: []const f32, bands: usize, bounds: geometry.Rect, outlines: []Coord, median_segments: []Segment, layers: []Layout) -> ([]Layout, Layout, err)
 fn dumbbell(position: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err)

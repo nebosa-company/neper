@@ -3493,6 +3493,16 @@ $gfxChartGeojsonWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $gfxChartGeojsonWritten -ne 'executable written') { throw 'gfx_chart_geojson emission failed' }
 $gfxChartGeojsonOutput = & $gfxChartGeojsonPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartGeojsonOutput -ne 'gfx chart geojson ok') { throw "the e.gfx.chart.geojson reader or class legend answered wrongly: exit $LASTEXITCODE" }
+$gfxChartLoessPath = Join-Path $testBuild 'gfx-chart-loess-selfhost.exe'
+$gfxChartLoessWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_loess\src\main.e') $repo 'x64' 'windows' $gfxChartLoessPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLoessWritten -ne 'executable written') { throw 'gfx_chart_loess emission failed' }
+$gfxChartLoessOutput = & $gfxChartLoessPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartLoessOutput -ne 'gfx chart loess ok') { throw "the e.gfx.chart LOESS interval answered wrongly: exit $LASTEXITCODE" }
+$gfxChartComboAxesPath = Join-Path $testBuild 'gfx-chart-combo-axes-selfhost.exe'
+$gfxChartComboAxesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_combo_axes\src\main.e') $repo 'x64' 'windows' $gfxChartComboAxesPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartComboAxesWritten -ne 'executable written') { throw 'gfx_chart_combo_axes emission failed' }
+$gfxChartComboAxesOutput = & $gfxChartComboAxesPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartComboAxesOutput -ne 'gfx chart combo axes ok') { throw "the e.gfx.chart combo, side axes or axis table answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

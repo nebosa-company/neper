@@ -192,6 +192,11 @@ type RaincloudLayout = struct { cloud: Layout, drops: Layout, summary: Layout }
 type MarginalHistogramLayout = struct { scatter: Layout, top: Layout, right: Layout }
 type DoseResponseLayout = struct { observations: Layout, curve: Layout }
 type InfluenceLayout = struct { points: Layout, bubbles: Layout, guides: Layout, max_cook: f64 }
+type LoessFit = struct { value: f64, spread: f64, own: f64 }
+type ComboSeries = struct { mark: Kind, axis: usize, x: []const f32, y: []const f32 }
+type ComboAxis = struct { y_min: f32, y_max: f32 }
+type ComboStorage = struct { coords: []Coord, segments: []Segment, bars: []geometry.Rect, layers: []Layout, axes: []ComboAxis }
+type ComboLayout = struct { layers: []Layout, axes: []ComboAxis, x_min: f32, x_max: f32, missing: usize }
 type CapabilitySixpackStorage = struct {
     moving: []f64,
     individual_points: []Coord, individual_lines: []Segment,
@@ -2837,6 +2842,132 @@ fn covariance_ellipse(x: []const f32, y: []const f32, bounds: geometry.Rect, rad
     ret (Layout { kind: .Line, coords: zero, segments: segments, bars: zero, x_min: xmin, x_max: xmax, y_min: ymin, y_max: ymax }, ok)
 }
 
+fn loess_weight(offset: f64, reach: f64) -> f64 {
+    var r = offset / reach
+    if r < 0.0f64 { r = 0.0f64 - r }
+    if r >= 1.0f64 { ret 0.0f64 }
+    let c = 1.0f64 - r * r * r
+    ret c * c * c
+}
+
+// One local-linear tricube fit at `at` over the q nearest x: its value, the
+// squared norm of its weights on y, and its weight on observation `own_index`
+// (none when that is x.len). A neighbourhood without x spread is refused.
+fn loess_at(x: []const f32, y: []const f32, q: usize, at: f64, own_index: usize, distances: []f64) -> (LoessFit, err) {
+    let n = x.len
+    var i = 0usize
+    while i < n {
+        var gap = f64(x[i]) - at
+        if gap < 0.0f64 { gap = 0.0f64 - gap }
+        distances[i] = gap
+        i += 1usize
+    }
+    // ponytail: a full sort per fit makes loess_interval O(n^2 log n); quickselect when n warrants.
+    var comparison_context = 0u8
+    sort.in_place_by[f64, u8](distances[..n], &comparison_context, monte_carlo_compare)
+    let reach = distances[q - 1usize]
+    if !(reach > 0.0f64) { ret (zero, Invalid) }
+    var s0 = 0.0f64
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    i = 0usize
+    while i < n {
+        let offset = f64(x[i]) - at
+        let w = loess_weight(offset, reach)
+        s0 += w
+        s1 += w * offset
+        s2 += w * offset * offset
+        i += 1usize
+    }
+    let determinant = s0 * s2 - s1 * s1
+    if !finite64(determinant) || determinant <= 0.000000000001f64 * s0 * s2 { ret (zero, Invalid) }
+    var result = LoessFit { value: 0.0f64, spread: 0.0f64, own: 0.0f64 }
+    i = 0usize
+    while i < n {
+        let offset = f64(x[i]) - at
+        let l = loess_weight(offset, reach) * (s2 - s1 * offset) / determinant
+        result.value += l * f64(y[i])
+        result.spread += l * l
+        if i == own_index { result.own = l }
+        i += 1usize
+    }
+    ret (result, ok)
+}
+
+fn plotted(p: Coord, x_min: f32, x_max: f32, y_min: f32, y_max: f32, bounds: geometry.Rect) -> Coord {
+    ret Coord { x: mapped(p.x, x_min, x_max, bounds.x, bounds.width), y: bounds.y + bounds.height - mapped(p.y, y_min, y_max, 0.0, bounds.height) }
+}
+
+// Local-linear LOESS (Cleveland 1979: tricube weights over the q = floor(span*n)
+// nearest x, no robustness passes) with a pointwise ribbon fit +/- critical * s *
+// |l(x0)|, where l(x0) are the fit's weights on y and s^2 = RSS / trace((I-L)'(I-L)),
+// Cleveland & Grosse's delta1; `prediction` widens it to s * sqrt(1 + |l(x0)|^2)
+// for a new observation. `critical` is the caller's t quantile. The curve
+// samples fit.len + 1 even x across the data; x need not be sorted; `distances`
+// is n f64 of scratch. Both layers share a domain holding observations and ribbon.
+fn loess_interval(x: []const f32, y: []const f32, span: f32, critical: f32, prediction: bool, bounds: geometry.Rect, distances: []f64, outline: []Coord, fit: []Segment) -> (Layout, Layout, err) {
+    if !valid_bounds(bounds) || !finite(span) || span <= 0.0 || span > 1.0 || !finite(critical) || critical <= 0.0 { ret (zero, zero, Invalid) }
+    let (data, data_error) = paired_stats(x, y)
+    if data_error != ok { ret (zero, zero, data_error) }
+    let n = x.len
+    let samples = fit.len + 1usize
+    if fit.len == 0usize || distances.len < n || outline.len / 2usize < samples { ret (zero, zero, TooLarge) }
+    let q = usize(f64(span) * f64(n) + 0.0000000001f64)
+    if q < 3usize || data.x_min == data.x_max { ret (zero, zero, Invalid) }
+    var residual = 0.0f64
+    var delta = 0.0f64
+    var i = 0usize
+    while i < n {
+        let (local, local_error) = loess_at(x, y, q, f64(x[i]), i, distances)
+        if local_error != ok { ret (zero, zero, local_error) }
+        let gap = f64(y[i]) - local.value
+        residual += gap * gap
+        delta += 1.0f64 - 2.0f64 * local.own + local.spread
+        i += 1usize
+    }
+    if !finite64(residual) || !(delta > 0.0f64) { ret (zero, zero, Invalid) }
+    let deviation = math.sqrt[f64](residual / delta)
+    var ymin = data.y_min
+    var ymax = data.y_max
+    i = 0usize
+    while i < samples {
+        let at = f64(data.x_min) + (f64(data.x_max) - f64(data.x_min)) * f64(i) / f64(samples - 1usize)
+        let (local, local_error) = loess_at(x, y, q, at, n, distances)
+        if local_error != ok { ret (zero, zero, local_error) }
+        var spread = local.spread
+        if prediction { spread += 1.0f64 }
+        let half = f64(critical) * deviation * math.sqrt[f64](spread)
+        let lower = f32(local.value - half)
+        let upper = f32(local.value + half)
+        let middle = Coord { x: f32(at), y: f32(local.value) }
+        if !finite(lower) || !finite(upper) || !finite(middle.x) { ret (zero, zero, Invalid) }
+        outline[i] = Coord { x: middle.x, y: upper }
+        outline[2usize * samples - 1usize - i] = Coord { x: middle.x, y: lower }
+        if i < fit.len { fit[i].from = middle }
+        if i > 0usize { fit[i - 1usize].to = middle }
+        if lower < ymin { ymin = lower }
+        if upper > ymax { ymax = upper }
+        i += 1usize
+    }
+    if ymin == ymax {
+        ymin -= 0.5
+        ymax += 0.5
+    }
+    i = 0usize
+    while i < 2usize * samples {
+        outline[i] = plotted(outline[i], data.x_min, data.x_max, ymin, ymax, bounds)
+        i += 1usize
+    }
+    i = 0usize
+    while i < fit.len {
+        fit[i] = Segment { from: plotted(fit[i].from, data.x_min, data.x_max, ymin, ymax, bounds), to: plotted(fit[i].to, data.x_min, data.x_max, ymin, ymax, bounds) }
+        i += 1usize
+    }
+    let ribbon = Layout { kind: .Band, coords: outline[..2usize * samples], segments: zero, bars: zero, x_min: data.x_min, x_max: data.x_max, y_min: ymin, y_max: ymax }
+    let curve = Layout { kind: .Line, coords: zero, segments: fit, bars: zero, x_min: data.x_min, x_max: data.x_max, y_min: ymin, y_max: ymax }
+    ret (ribbon, curve, ok)
+}
+
 // Vertical intervals with a point estimate and two caps per observation.
 // Lower/upper values must enclose each estimate; all output is caller-owned.
 fn error_bars(x: []const f32, center: []const f32, lower: []const f32, upper: []const f32, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (Layout, err) {
@@ -3563,6 +3694,208 @@ fn combo_bar_line(columns: []const f32, line: []const f32, bounds: geometry.Rect
     layers[0usize] = column_layer
     layers[1usize] = line_layer
     ret (layers[..2usize], ok)
+}
+
+// Mixed Bar, Line, PointLine and Scatter series over one numeric x domain, each
+// bound to one of `axes` independent vertical domains (left, right, a third...).
+// A NaN y is a missing observation: it emits no mark and breaks its line; NaN x
+// and infinities are refused. Bar x must strictly increase and bar axes include
+// zero; the shared x domain pads half the narrowest bar gap on each side, and
+// bar_width 0 means 0.8 of that gap. Marks are compacted in observation order.
+fn combo(series: []const ComboSeries, axes: usize, bounds: geometry.Rect, bar_width: f32, storage: ComboStorage) -> (ComboLayout, err) {
+    if series.len == 0usize { ret (zero, Empty) }
+    if axes == 0usize || !valid_bounds(bounds) || !finite(bar_width) || bar_width < 0.0 { ret (zero, Invalid) }
+    if storage.layers.len < series.len || storage.axes.len < axes { ret (zero, TooLarge) }
+    var xmin = 0.0f32
+    var xmax = 0.0f32
+    var gap = 0.0f32
+    var has_bars = false
+    var coord_need = 0usize
+    var segment_need = 0usize
+    var bar_need = 0usize
+    var i = 0usize
+    while i < series.len {
+        let s = series[i]
+        if s.x.len == 0usize { ret (zero, Empty) }
+        if s.y.len != s.x.len || s.axis >= axes || (s.mark != .Bar && s.mark != .Line && s.mark != .PointLine && s.mark != .Scatter) { ret (zero, Invalid) }
+        var j = 0usize
+        while j < s.x.len {
+            if !finite(s.x[j]) || (s.y[j] == s.y[j] && !finite(s.y[j])) { ret (zero, Invalid) }
+            if (i == 0usize && j == 0usize) || s.x[j] < xmin { xmin = s.x[j] }
+            if (i == 0usize && j == 0usize) || s.x[j] > xmax { xmax = s.x[j] }
+            if s.mark == .Bar && j > 0usize {
+                let step = s.x[j] - s.x[j - 1usize]
+                if !(step > 0.0) { ret (zero, Invalid) }
+                if gap == 0.0 || step < gap { gap = step }
+            }
+            j += 1usize
+        }
+        if s.mark == .Bar {
+            has_bars = true
+            bar_need += s.x.len
+        }
+        if s.mark == .Scatter || s.mark == .PointLine { coord_need += s.x.len }
+        if s.mark == .Line || s.mark == .PointLine { segment_need += s.x.len - 1usize }
+        i += 1usize
+    }
+    if storage.coords.len < coord_need || storage.segments.len < segment_need || storage.bars.len < bar_need { ret (zero, TooLarge) }
+    if xmin == xmax {
+        xmin -= 0.5
+        xmax += 0.5
+    }
+    var width = bar_width
+    if has_bars {
+        if gap == 0.0 { gap = xmax - xmin }
+        xmin -= gap * 0.5
+        xmax += gap * 0.5
+        if width == 0.0 { width = 0.8 * gap / (xmax - xmin) * bounds.width }
+    }
+    if !finite(xmin) || !finite(xmax) || !finite(width) { ret (zero, Invalid) }
+    var k = 0usize
+    while k < axes {
+        var seen = false
+        var bars_here = false
+        var low = 0.0f32
+        var high = 0.0f32
+        i = 0usize
+        while i < series.len {
+            if series[i].axis == k {
+                if series[i].mark == .Bar { bars_here = true }
+                var j = 0usize
+                while j < series[i].y.len {
+                    let v = series[i].y[j]
+                    if v == v {
+                        if !seen || v < low { low = v }
+                        if !seen || v > high { high = v }
+                        seen = true
+                    }
+                    j += 1usize
+                }
+            }
+            i += 1usize
+        }
+        if !seen { ret (zero, Invalid) }
+        if bars_here && low > 0.0 { low = 0.0 }
+        if bars_here && high < 0.0 { high = 0.0 }
+        if low == high {
+            low -= 0.5
+            high += 0.5
+        }
+        storage.axes[k] = ComboAxis { y_min: low, y_max: high }
+        k += 1usize
+    }
+    var missing = 0usize
+    var coord_used = 0usize
+    var segment_used = 0usize
+    var bar_used = 0usize
+    i = 0usize
+    while i < series.len {
+        let s = series[i]
+        let domain = storage.axes[s.axis]
+        let coord_start = coord_used
+        let segment_start = segment_used
+        let bar_start = bar_used
+        let zero_y = plotted(Coord { x: xmin, y: 0.0 }, xmin, xmax, domain.y_min, domain.y_max, bounds).y
+        var j = 0usize
+        while j < s.x.len {
+            let present = s.y[j] == s.y[j]
+            let p = plotted(Coord { x: s.x[j], y: s.y[j] }, xmin, xmax, domain.y_min, domain.y_max, bounds)
+            if !present {
+                missing += 1usize
+            } else if s.mark == .Bar {
+                var top = p.y
+                var bottom = zero_y
+                if top > bottom {
+                    top = zero_y
+                    bottom = p.y
+                }
+                storage.bars[bar_used] = geometry.rect(p.x - width / 2.0, top, width, bottom - top)
+                bar_used += 1usize
+            } else {
+                if s.mark != .Line {
+                    storage.coords[coord_used] = p
+                    coord_used += 1usize
+                }
+                if s.mark != .Scatter && j > 0usize && s.y[j - 1usize] == s.y[j - 1usize] {
+                    storage.segments[segment_used] = Segment { from: plotted(Coord { x: s.x[j - 1usize], y: s.y[j - 1usize] }, xmin, xmax, domain.y_min, domain.y_max, bounds), to: p }
+                    segment_used += 1usize
+                }
+            }
+            j += 1usize
+        }
+        storage.layers[i] = Layout { kind: s.mark, coords: storage.coords[coord_start..coord_used], segments: storage.segments[segment_start..segment_used], bars: storage.bars[bar_start..bar_used], x_min: xmin, x_max: xmax, y_min: domain.y_min, y_max: domain.y_max }
+        i += 1usize
+    }
+    ret (ComboLayout { layers: storage.layers[..series.len], axes: storage.axes[..axes], x_min: xmin, x_max: xmax, missing: missing }, ok)
+}
+
+// An explicit vertical axis for one combo domain: a rule `offset` px outside the
+// plot's left edge (or right edge when `right`), outward 5 px ticks and labels
+// beyond them, right-aligned on the left and left-aligned on the right. A third
+// scale is a second right axis at a larger offset. Caller text, so caller format.
+fn side_axis(bounds: geometry.Rect, axis_ticks: []const Tick, text: []const str, right: bool, offset: f32, size: f32, rules: []Segment, labels: []Label) -> (Layout, []Label, err) {
+    if !valid_bounds(bounds) || !finite(offset) || offset < 0.0 || !finite(size) || size <= 0.0 || axis_ticks.len != text.len { ret (zero, zero, Invalid) }
+    if rules.len < axis_ticks.len + 1usize || labels.len < axis_ticks.len { ret (zero, zero, TooLarge) }
+    var rule_x = bounds.x - offset
+    var outward = -5.0f32
+    var align: LabelAlign = .Right
+    if right {
+        rule_x = bounds.x + bounds.width + offset
+        outward = 5.0
+        align = .Left
+    }
+    if !finite(rule_x) { ret (zero, zero, Invalid) }
+    rules[0usize] = Segment { from: Coord { x: rule_x, y: bounds.y }, to: Coord { x: rule_x, y: bounds.y + bounds.height } }
+    var i = 0usize
+    while i < axis_ticks.len {
+        let position = axis_ticks[i].fraction
+        if !finite(position) || position < 0.0 || position > 1.0 { ret (zero, zero, Invalid) }
+        let y = bounds.y + bounds.height * (1.0 - position)
+        rules[i + 1usize] = Segment { from: Coord { x: rule_x, y: y }, to: Coord { x: rule_x + outward, y: y } }
+        let label = Label { text: text[i], anchor: Coord { x: rule_x + outward * 1.8, y: y + size * 0.35 }, align: align }
+        if !valid_label(&label) { ret (zero, zero, Invalid) }
+        labels[i] = label
+        i += 1usize
+    }
+    ret (Layout { kind: .Rug, coords: zero, segments: rules[..axis_ticks.len + 1usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }, labels[..axis_ticks.len], ok)
+}
+
+// Rows of caller text aligned to data x in a layer's linear x domain (SAS
+// XAXISTABLE): `cells` is row-major, titles.len rows of x.len, and an empty cell
+// is a missing value that emits nothing. Row r's baseline is top + (r + 1) *
+// row_height; a nonempty title sits right-aligned 9 px left of the plot. An x
+// outside the domain is refused, so every cell stays under its mark.
+fn axis_table(x: []const f32, domain: *const Layout, bounds: geometry.Rect, titles: []const str, cells: []const str, top: f32, row_height: f32, labels: []Label) -> ([]Label, err) {
+    if x.len == 0usize || titles.len == 0usize { ret (zero, Empty) }
+    if cells.len != titles.len * x.len || !valid_bounds(bounds) || !finite(top) || !finite(row_height) || row_height <= 0.0 || !finite(domain.x_min) || !finite(domain.x_max) || !(domain.x_max > domain.x_min) { ret (zero, Invalid) }
+    var used = 0usize
+    var row = 0usize
+    while row < titles.len {
+        let baseline = top + f32(row + 1usize) * row_height
+        if !finite(baseline) { ret (zero, Invalid) }
+        if titles[row].len > 0usize {
+            if used == labels.len { ret (zero, TooLarge) }
+            let heading = Label { text: titles[row], anchor: Coord { x: bounds.x - 9.0, y: baseline }, align: .Right }
+            if !valid_label(&heading) { ret (zero, Invalid) }
+            labels[used] = heading
+            used += 1usize
+        }
+        var i = 0usize
+        while i < x.len {
+            if !finite(x[i]) || x[i] < domain.x_min || x[i] > domain.x_max { ret (zero, Invalid) }
+            let entry = cells[row * x.len + i]
+            if entry.len > 0usize {
+                if used == labels.len { ret (zero, TooLarge) }
+                let label = Label { text: entry, anchor: Coord { x: mapped(x[i], domain.x_min, domain.x_max, bounds.x, bounds.width), y: baseline }, align: .Center }
+                if !valid_label(&label) { ret (zero, Invalid) }
+                labels[used] = label
+                used += 1usize
+            }
+            i += 1usize
+        }
+        row += 1usize
+    }
+    ret (labels[..used], ok)
 }
 
 // Each slice is a filled polygon; hole=0 gives a pie, 0<hole<1 a donut.

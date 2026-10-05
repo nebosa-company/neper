@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>loess_band</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="44" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="30" x2="139.33" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="139.33" y1="204" x2="139.33" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="30" x2="234.67" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="234.67" y1="204" x2="234.67" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="30" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="330" y1="204" x2="330" y2="209" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="204" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="146" x2="330" y2="146" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="146" x2="44" y2="146" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="88" x2="330" y2="88" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="88" x2="44" y2="88" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="330" y2="30" stroke="rgb(224,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="39" y1="30" x2="44" y2="30" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="30" x2="44" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<line x1="44" y1="204" x2="330" y2="204" stroke="rgb(82,97,122)" stroke-width="1" stroke-linecap="round"/>
+<path d="M44 92.65 L49.96 88.24 L55.92 83.71 L61.88 78.99 L67.83 74.02 L73.79 68.7 L79.75 62.99 L85.71 56.89 L91.67 50.83 L97.62 46.9 L103.58 43.11 L109.54 40.57 L115.5 38.82 L121.46 38.13 L127.42 39.1 L133.38 40.45 L139.33 44.61 L145.29 48.61 L151.25 56.27 L157.21 63.14 L163.17 72.81 L169.12 81 L175.08 90.15 L181.04 98.86 L187 107.03 L192.96 115.49 L198.92 123.57 L204.88 131.74 L210.83 140.15 L216.79 147.63 L222.75 154.96 L228.71 161.03 L234.67 166.25 L240.62 171 L246.58 174.26 L252.54 176.64 L258.5 176.93 L264.46 175.57 L270.42 172.75 L276.38 167.67 L282.33 161.54 L288.29 154.32 L294.25 146.93 L300.21 139.12 L306.17 130.87 L312.12 122.24 L318.08 113.3 L324.04 104.1 L330 94.71 L330 124.47 L324.04 130.4 L318.08 136.52 L312.12 142.82 L306.17 149.36 L300.21 156.21 L294.25 163.43 L288.29 171.09 L282.33 179.23 L276.38 185.05 L270.42 190.35 L264.46 193.04 L258.5 194.45 L252.54 194.2 L246.58 191.69 L240.62 188.65 L234.67 183.6 L228.71 178.76 L222.75 172.21 L216.79 165.45 L210.83 157.32 L204.88 149.64 L198.92 140.66 L192.96 133.47 L187 124.04 L181.04 116.85 L175.08 107.24 L169.12 98.9 L163.17 89.98 L157.21 80.96 L151.25 73.53 L145.29 66.34 L139.33 61.95 L133.38 58.1 L127.42 56.53 L121.46 55.69 L115.5 56.34 L109.54 58.04 L103.58 60.71 L97.62 64.29 L91.67 68.52 L85.71 73.66 L79.75 79.49 L73.79 85.79 L67.83 92.51 L61.88 99.57 L55.92 106.93 L49.96 114.54 L44 122.4 Z" fill="rgb(191,217,245)"/>
+<rect x="41" y="113.31" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="53.43" y="84.44" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="65.87" y="76.12" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="78.3" y="62.52" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="90.74" y="59.47" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="103.17" y="44.48" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="115.61" y="27" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="128.04" y="40.04" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="140.48" y="41.99" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="152.91" y="65.3" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="165.35" y="80.28" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="177.78" y="101.65" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="190.22" y="144.11" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="202.65" y="130.79" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="215.09" y="150.77" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="227.52" y="162.98" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="239.96" y="197.95" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="252.39" y="201" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="264.83" y="187.68" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="277.26" y="174.36" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="289.7" y="152.44" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="302.13" y="140.78" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="314.57" y="115.25" width="6" height="6" fill="rgb(18,89,194)"/>
+<rect x="327" y="110.81" width="6" height="6" fill="rgb(18,89,194)"/>
+<path d="M44 107.53 L49.96 101.39 L55.92 95.32 L61.88 89.28 L67.83 83.26 L73.79 77.25 L79.75 71.24 L85.71 65.28 L91.67 59.67 L97.62 55.6 L103.58 51.91 L109.54 49.31 L115.5 47.58 L121.46 46.91 L127.42 47.82 L133.38 49.27 L139.33 53.28 L145.29 57.48 L151.25 64.9 L157.21 72.05 L163.17 81.39 L169.12 89.95 L175.08 98.7 L181.04 107.86 L187 115.54 L192.96 124.48 L198.92 132.12 L204.88 140.69 L210.83 148.73 L216.79 156.54 L222.75 163.58 L228.71 169.89 L234.67 174.92 L240.62 179.83 L246.58 182.97 L252.54 185.42 L258.5 185.69 L264.46 184.3 L270.42 181.55 L276.38 176.36 L282.33 170.38 L288.29 162.71 L294.25 155.18 L300.21 147.66 L306.17 140.11 L312.12 132.53 L318.08 124.91 L324.04 117.25 L330 109.59" fill="none" stroke="rgb(240,107,31)" stroke-width="2" stroke-linejoin="round"/>
+</svg>

@@ -227,6 +227,16 @@ alternating barycentre sweeps order each row against crossings. Unlike the
 boxed `dependency_graph` diagram, it places points for a caller-drawn graph of
 any size.
 
+The LOESS band smooths 24 noisy samples of a sine with `loess_interval` (span
+0.4): the local-linear curve and its pointwise ±2·s·|l(x0)| confidence ribbon,
+the scatter sharing the ribbon's domain.
+
+The three-axis combo draws monthly orders as bars on the left axis, a revenue
+index on the right and a defect rate on a third axis 44 px further out, each
+axis a `side_axis` coloured like its series. The index has no March value, so
+its line breaks there rather than bridging the gap. Under the months,
+`axis_table` aligns rows of month names and order counts with the bars.
+
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:
 

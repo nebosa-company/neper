@@ -130,13 +130,18 @@ fn append(a: *mem.Arena, builder: *scene.Builder, marks: *const chart.Layout, br
         }
     } else if marks.kind == .Line || marks.kind == .Step || marks.kind == .Ecdf || marks.kind == .Density || marks.kind == .FrequencyPolygon {
         if marks.segments.len == 0usize { ret ok }
-        let (made, path_error) = geometry.path_builder(a, marks.segments.len + 1usize, marks.segments.len + 1usize)
+        let (made, path_error) = geometry.path_builder(a, 2usize * marks.segments.len, 2usize * marks.segments.len)
         if path_error != ok { ret path_error }
         var path = made
         let first = marks.segments[0usize].from
         try geometry.move_to(&path, geometry.Point { x: first.x, y: first.y })
         var i = 0usize
         while i < marks.segments.len {
+            // A segment that does not start where the last one ended is a gap.
+            let start = marks.segments[i].from
+            if i > 0usize && (start.x != marks.segments[i - 1usize].to.x || start.y != marks.segments[i - 1usize].to.y) {
+                try geometry.move_to(&path, geometry.Point { x: start.x, y: start.y })
+            }
             let p = marks.segments[i].to
             try geometry.line_to(&path, geometry.Point { x: p.x, y: p.y })
             i += 1usize
