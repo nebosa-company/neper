@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>layered</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<line x1="180" y1="63.5" x2="102" y2="90.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="63.5" x2="258" y2="90.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="63.5" x2="102" y2="117.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="102" y1="90.5" x2="102" y2="117.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="102" y1="117.5" x2="102" y2="144.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="63.5" x2="102" y2="144.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="102" y1="90.5" x2="102" y2="144.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="90.5" x2="258" y2="117.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="63.5" x2="258" y2="117.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="117.5" x2="258" y2="144.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="90.5" x2="258" y2="144.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="117.5" x2="258" y2="171.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="144.5" x2="258" y2="171.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="90.5" x2="258" y2="171.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="63.5" x2="258" y2="171.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="90.5" x2="102" y2="171.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="117.5" x2="102" y2="171.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="144.5" x2="102" y2="171.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="63.5" x2="284" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="102" y1="171.5" x2="284" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="117.5" x2="284" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="144.5" x2="284" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="171.5" x2="284" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="102" y1="171.5" x2="180" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="117.5" x2="180" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="144.5" x2="180" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="102" y1="117.5" x2="180" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="258" y1="90.5" x2="180" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="63.5" x2="180" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="102" y1="90.5" x2="180" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="102" y1="144.5" x2="76" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="102" y1="171.5" x2="76" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="180" y1="63.5" x2="76" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<line x1="102" y1="90.5" x2="76" y2="198.5" stroke="rgb(184,194,209)" stroke-width="2" stroke-linecap="round"/>
+<rect x="136" y="56.5" width="88" height="14" fill="rgb(222,235,250)"/>
+<rect x="58" y="83.5" width="88" height="14" fill="rgb(222,235,250)"/>
+<rect x="214" y="83.5" width="88" height="14" fill="rgb(222,235,250)"/>
+<rect x="58" y="110.5" width="88" height="14" fill="rgb(222,235,250)"/>
+<rect x="58" y="137.5" width="88" height="14" fill="rgb(222,235,250)"/>
+<rect x="214" y="110.5" width="88" height="14" fill="rgb(222,235,250)"/>
+<rect x="214" y="137.5" width="88" height="14" fill="rgb(222,235,250)"/>
+<rect x="214" y="164.5" width="88" height="14" fill="rgb(222,235,250)"/>
+<rect x="58" y="164.5" width="88" height="14" fill="rgb(222,235,250)"/>
+<rect x="240" y="191.5" width="88" height="14" fill="rgb(222,235,250)"/>
+<rect x="136" y="191.5" width="88" height="14" fill="rgb(222,235,250)"/>
+<rect x="32" y="191.5" width="88" height="14" fill="rgb(222,235,250)"/>
+<text x="180" y="66" font-family="sans-serif" font-size="6" text-anchor="middle" fill="rgb(41,51,71)">e.mem</text>
+<text x="102" y="93" font-family="sans-serif" font-size="6" text-anchor="middle" fill="rgb(41,51,71)">e.str</text>
+<text x="258" y="93" font-family="sans-serif" font-size="6" text-anchor="middle" fill="rgb(41,51,71)">e.math</text>
+<text x="102" y="120" font-family="sans-serif" font-size="6" text-anchor="middle" fill="rgb(41,51,71)">e.io</text>
+<text x="102" y="147" font-family="sans-serif" font-size="6" text-anchor="middle" fill="rgb(41,51,71)">e.fmt.json</text>
+<text x="258" y="120" font-family="sans-serif" font-size="6" text-anchor="middle" fill="rgb(41,51,71)">e.gfx.geometry</text>
+<text x="258" y="147" font-family="sans-serif" font-size="6" text-anchor="middle" fill="rgb(41,51,71)">e.gfx.paint</text>
+<text x="258" y="174" font-family="sans-serif" font-size="6" text-anchor="middle" fill="rgb(41,51,71)">e.gfx.scene</text>
+<text x="102" y="174" font-family="sans-serif" font-size="6" text-anchor="middle" fill="rgb(41,51,71)">e.gfx.chart</text>
+<text x="284" y="201" font-family="sans-serif" font-size="6" text-anchor="middle" fill="rgb(41,51,71)">e.gfx.chart.scene</text>
+<text x="180" y="201" font-family="sans-serif" font-size="6" text-anchor="middle" fill="rgb(41,51,71)">e.gfx.chart.svg</text>
+<text x="76" y="201" font-family="sans-serif" font-size="6" text-anchor="middle" fill="rgb(41,51,71)">e.gfx.chart.geojson</text>
+<text x="180" y="20" font-family="sans-serif" font-size="11" text-anchor="middle" fill="rgb(41,51,71)">Layered dependency graph</text>
+<text x="180" y="33" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(41,51,71)">Chart modules and what they build on; every link points down</text>
+<text x="180" y="228" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(41,51,71)">Longest-path rows, 4 barycentre sweeps; edges from docs/modules.json</text>
+</svg>

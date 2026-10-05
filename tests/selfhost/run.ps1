@@ -3483,6 +3483,16 @@ $gfxChartPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $gfxChartPdfWritten -ne 'executable written') { throw 'gfx_chart_pdf emission failed' }
 $gfxChartPdfOutput = & $gfxChartPdfPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartPdfOutput -ne 'gfx chart pdf ok') { throw "the e.gfx.chart.pdf adapter answered wrongly: exit $LASTEXITCODE" }
+$gfxChartNetworkPath = Join-Path $testBuild 'gfx-chart-network-selfhost.exe'
+$gfxChartNetworkWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_network\src\main.e') $repo 'x64' 'windows' $gfxChartNetworkPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartNetworkWritten -ne 'executable written') { throw 'gfx_chart_network emission failed' }
+$gfxChartNetworkOutput = & $gfxChartNetworkPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartNetworkOutput -ne 'gfx chart network ok') { throw "the e.gfx.chart network layout answered wrongly: exit $LASTEXITCODE" }
+$gfxChartGeojsonPath = Join-Path $testBuild 'gfx-chart-geojson-selfhost.exe'
+$gfxChartGeojsonWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_geojson\src\main.e') $repo 'x64' 'windows' $gfxChartGeojsonPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGeojsonWritten -ne 'executable written') { throw 'gfx_chart_geojson emission failed' }
+$gfxChartGeojsonOutput = & $gfxChartGeojsonPath
+if ($LASTEXITCODE -ne 0 -or $gfxChartGeojsonOutput -ne 'gfx chart geojson ok') { throw "the e.gfx.chart.geojson reader or class legend answered wrongly: exit $LASTEXITCODE" }
 $gfxChartSipocPath = Join-Path $testBuild 'gfx-chart-sipoc-selfhost.exe'
 $gfxChartSipocWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_sipoc\src\main.e') $repo 'x64' 'windows' $gfxChartSipocPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSipocWritten -ne 'executable written') { throw 'gfx_chart_sipoc emission failed' }

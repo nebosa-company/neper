@@ -17,6 +17,7 @@ use e.gfx.chart.svg as chart_svg
 use e.gfx.chart.locale as chart_locale
 use e.gfx.chart.widget as chart_widget
 use e.gfx.chart.pdf as chart_pdf
+use e.gfx.chart.geojson
 use e.gfx.geometry
 use e.gfx.image
 use e.gfx.paint
@@ -25,6 +26,8 @@ use e.text.shape
 use e.text.layout as text_layout
 use e.text.locale as text_locale
 use e.time as calendar_time
+use e.algo.graph.community as community
+use e.data.graph as data_graph
 use e.ui.control
 use e.ui.layout as ui_layout
 use e.ui.style as ui_style
@@ -2745,6 +2748,187 @@ fn render_benchmark_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Ta
     try chart_svg.append_labels(&writer, labels[2usize..8usize], dark, 8.0)
     try chart_svg.append_labels(&writer, labels[8usize..10usize], dark, 7.0)
     try chart_svg.append_labels(&writer, labels[10usize..], dark, 6.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+// Zachary's karate club (NetworkX's 78 edges): force-directed layout, Louvain
+// communities from e.algo.graph.community, node area by degree.
+fn render_network_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/network.png"
+    let from = [78]u32{ 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 0u32, 1u32, 1u32, 1u32, 1u32, 1u32, 1u32, 1u32, 1u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 2u32, 3u32, 3u32, 3u32, 4u32, 4u32, 5u32, 5u32, 5u32, 6u32, 8u32, 8u32, 8u32, 9u32, 13u32, 14u32, 14u32, 15u32, 15u32, 18u32, 18u32, 19u32, 20u32, 20u32, 22u32, 22u32, 23u32, 23u32, 23u32, 23u32, 23u32, 24u32, 24u32, 24u32, 25u32, 26u32, 26u32, 27u32, 28u32, 28u32, 29u32, 29u32, 30u32, 30u32, 31u32, 31u32, 32u32 }
+    let to = [78]u32{ 1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32, 8u32, 10u32, 11u32, 12u32, 13u32, 17u32, 19u32, 21u32, 31u32, 2u32, 3u32, 7u32, 13u32, 17u32, 19u32, 21u32, 30u32, 3u32, 7u32, 8u32, 9u32, 13u32, 27u32, 28u32, 32u32, 7u32, 12u32, 13u32, 6u32, 10u32, 6u32, 10u32, 16u32, 16u32, 30u32, 32u32, 33u32, 33u32, 33u32, 32u32, 33u32, 32u32, 33u32, 32u32, 33u32, 33u32, 32u32, 33u32, 32u32, 33u32, 25u32, 27u32, 29u32, 32u32, 33u32, 25u32, 27u32, 31u32, 31u32, 29u32, 33u32, 33u32, 31u32, 33u32, 32u32, 33u32, 32u32, 33u32, 32u32, 33u32, 33u32 }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let dark = paint.rgba(0.16, 0.20, 0.28, 1.0)
+    let link_ink = paint.rgba(0.72, 0.76, 0.82, 1.0)
+    // Communities, computed rather than drawn from a reference.
+    let (made_graph, builder_error) = data_graph.builder[u8](a, 34usize, 156usize)
+    if builder_error != ok { ret builder_error }
+    var graph_builder = made_graph
+    var e = 0usize
+    while e < 78usize {
+        try data_graph.add_undirected[u8](&graph_builder, from[e], to[e], 0u8)
+        e += 1usize
+    }
+    let club = try data_graph.finish[u8](a, &graph_builder)
+    var groups: [34]u32 = zero
+    let quality = try community.louvain[u8](a, &club, groups[..])
+    var degree: [34]usize = zero
+    e = 0usize
+    while e < 78usize {
+        degree[usize(from[e])] += 1usize
+        degree[usize(to[e])] += 1usize
+        e += 1usize
+    }
+    var work: [136]f64 = zero
+    var node_storage: [34]chart.Coord = zero
+    var segment_storage: [78]chart.Segment = zero
+    let frame = geometry.rect(24.0, 46.0, 312.0, 160.0)
+    let net = try chart.network_layout(34usize, from[..], to[..], frame, 300usize, work[..], node_storage[..], segment_storage[..])
+    var palette_store: [6]paint.Color = zero
+    let palette = try chart.accessible_palette(white, palette_store[..])
+    // One bubble layer per community; area grows with degree.
+    var bubbles: [34]geometry.Rect = zero
+    var layers: [6]chart.Layout = zero
+    var used = 0usize
+    var group = 0u32
+    var group_count = 0usize
+    while group < 6u32 {
+        let first = used
+        var i = 0usize
+        while i < 34usize {
+            if groups[i] == group {
+                let d = 5.0 + 2.2 * math.sqrt[f32](f32(degree[i]))
+                bubbles[used] = geometry.rect(net.nodes[i].x - d / 2.0, net.nodes[i].y - d / 2.0, d, d)
+                used += 1usize
+            }
+            i += 1usize
+        }
+        if used > first {
+            layers[group_count] = chart.Layout { kind: .Bubble, coords: zero, segments: zero, bars: bubbles[first..used], x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+            group_count += 1usize
+        }
+        group += 1u32
+    }
+    let hundredths = u64(quality * 100.0f64 + 0.5f64)
+    let (made_note, note_error) = str.builder(a, 80usize)
+    if note_error != ok { ret note_error }
+    var note = made_note
+    try str.push_usize(&note, group_count)
+    try str.push(&note, " Louvain communities, modularity 0.")
+    if hundredths % 100u64 < 10u64 { try str.push(&note, "0") }
+    try str.push_usize(&note, usize(hundredths % 100u64))
+    try str.push(&note, "; node area by degree")
+    let labels = [4]chart.Label{
+        chart.Label { text: "Karate club network", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center },
+        chart.Label { text: str.done(&note), anchor: chart.Coord { x: 180.0, y: 33.0 }, align: .Center },
+        chart.Label { text: "Instructor", anchor: chart.Coord { x: net.nodes[0usize].x, y: net.nodes[0usize].y + 18.0 }, align: .Center },
+        chart.Label { text: "Administrator", anchor: chart.Coord { x: net.nodes[33usize].x, y: net.nodes[33usize].y + 18.0 }, align: .Center },
+    }
+    let footer = [1]chart.Label{ chart.Label { text: "Fruchterman-Reingold, 300 steps from a golden-angle spiral", anchor: chart.Coord { x: 180.0, y: 228.0 }, align: .Center } }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, scene_error) = scene.builder(a, 256usize)
+    if scene_error != ok { ret scene_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &net.links, paint.Brush { Solid: link_ink })
+    var k = 0usize
+    while k < group_count {
+        try chart_scene.append(a, &builder, &layers[k], paint.Brush { Solid: palette[k] })
+        k += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 11.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 7.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[2usize..], font, 7.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, footer[..], font, 6.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &net.links, link_ink)
+    k = 0usize
+    while k < group_count {
+        try chart_svg.append(&writer, &layers[k], palette[k])
+        k += 1usize
+    }
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 11.0)
+    try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 7.0)
+    try chart_svg.append_labels(&writer, labels[2usize..], dark, 7.0)
+    try chart_svg.append_labels(&writer, footer[..], dark, 6.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+// The chart modules and what they build on, in rows (D2117): the links are
+// docs/modules.json's direct dependencies among these twelve.
+fn render_layered_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/layered.png"
+    let names = [12]str{ "e.mem", "e.str", "e.math", "e.io", "e.fmt.json", "e.gfx.geometry", "e.gfx.paint", "e.gfx.scene", "e.gfx.chart", "e.gfx.chart.scene", "e.gfx.chart.svg", "e.gfx.chart.geojson" }
+    let from = [34]u32{ 0u32, 0u32, 0u32, 1u32, 3u32, 0u32, 1u32, 2u32, 0u32, 5u32, 2u32, 5u32, 6u32, 2u32, 0u32, 2u32, 5u32, 6u32, 0u32, 8u32, 5u32, 6u32, 7u32, 8u32, 5u32, 6u32, 3u32, 2u32, 0u32, 1u32, 4u32, 8u32, 0u32, 1u32 }
+    let to = [34]u32{ 1u32, 2u32, 3u32, 3u32, 4u32, 4u32, 4u32, 5u32, 5u32, 6u32, 6u32, 7u32, 7u32, 7u32, 7u32, 8u32, 8u32, 8u32, 9u32, 9u32, 9u32, 9u32, 9u32, 10u32, 10u32, 10u32, 10u32, 10u32, 10u32, 10u32, 11u32, 11u32, 11u32, 11u32 }
+    let white = paint.rgba(1.0, 1.0, 1.0, 1.0)
+    let dark = paint.rgba(0.16, 0.20, 0.28, 1.0)
+    let link_ink = paint.rgba(0.72, 0.76, 0.82, 1.0)
+    let box_ink = paint.rgba(0.87, 0.92, 0.98, 1.0)
+    var work: [48]f64 = zero
+    var node_storage: [12]chart.Coord = zero
+    var segment_storage: [34]chart.Segment = zero
+    let frame = geometry.rect(24.0, 50.0, 312.0, 162.0)
+    let graph = try chart.layered_layout(12usize, from[..], to[..], frame, 4usize, work[..], node_storage[..], segment_storage[..])
+    var boxes: [12]geometry.Rect = zero
+    var names_placed: [12]chart.Label = zero
+    var i = 0usize
+    while i < 12usize {
+        boxes[i] = geometry.rect(graph.nodes[i].x - 44.0, graph.nodes[i].y - 7.0, 88.0, 14.0)
+        names_placed[i] = chart.Label { text: names[i], anchor: chart.Coord { x: graph.nodes[i].x, y: graph.nodes[i].y + 2.5 }, align: .Center }
+        i += 1usize
+    }
+    let labels = [3]chart.Label{
+        chart.Label { text: "Layered dependency graph", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center },
+        chart.Label { text: "Chart modules and what they build on; every link points down", anchor: chart.Coord { x: 180.0, y: 33.0 }, align: .Center },
+        chart.Label { text: "Longest-path rows, 4 barycentre sweeps; edges from docs/modules.json", anchor: chart.Coord { x: 180.0, y: 228.0 }, align: .Center },
+    }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    // The renderer holds sixteen fonts (scene's MAX_FONTS), and the gallery's sixteen
+    // ids are taken: this face is already registered as 32.
+    let font = shape.Font { id: 32u32, data: font_bytes, face_index: 0u32 }
+    try scene.register_font(renderer, font)
+    let (made, scene_error) = scene.builder(a, 256usize)
+    if scene_error != ok { ret scene_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: white })
+    try chart_scene.append(a, &builder, &graph.links, paint.Brush { Solid: link_ink })
+    i = 0usize
+    while i < 12usize {
+        try fill(&builder, boxes[i], paint.Brush { Solid: box_ink })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, names_placed[..], font, 6.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 11.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append(&writer, &graph.links, link_ink)
+    i = 0usize
+    while i < 12usize {
+        try chart_svg.rect(&writer, boxes[i], box_ink, false)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, names_placed[..], dark, 6.0)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 11.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 7.0)
     try chart_svg.finish(&writer)
     let (svg_path, path_error) = vector_path(a, path)
     if path_error != ok { ret path_error }
@@ -6908,28 +7092,13 @@ fn render_map_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, 
         title = "Proportional symbol map"
         subtitle = "Circle area tracks site volume / missing site unmarked"
     }
-    let regions = [6]chart.MapRegion{
-        chart.MapRegion { key: "A" }, chart.MapRegion { key: "B" }, chart.MapRegion { key: "C" },
-        chart.MapRegion { key: "D" }, chart.MapRegion { key: "E" }, chart.MapRegion { key: "F" },
-    }
-    let rings = [7]chart.MapRing{
-        chart.MapRing { region: 0usize, first: 0usize, count: 4usize, hole: false },
-        chart.MapRing { region: 0usize, first: 4usize, count: 4usize, hole: true },
-        chart.MapRing { region: 1usize, first: 8usize, count: 4usize, hole: false },
-        chart.MapRing { region: 2usize, first: 12usize, count: 4usize, hole: false },
-        chart.MapRing { region: 3usize, first: 16usize, count: 4usize, hole: false },
-        chart.MapRing { region: 4usize, first: 20usize, count: 4usize, hole: false },
-        chart.MapRing { region: 5usize, first: 24usize, count: 4usize, hole: false },
-    }
-    let vertices = [28]chart.MapVertex{
-        chart.MapVertex { lon: -9.0f64, lat: 5.0f64 }, chart.MapVertex { lon: -3.5f64, lat: 4.5f64 }, chart.MapVertex { lon: -2.5f64, lat: 9.0f64 }, chart.MapVertex { lon: -7.5f64, lat: 8.5f64 },
-        chart.MapVertex { lon: -7.3f64, lat: 5.8f64 }, chart.MapVertex { lon: -6.3f64, lat: 5.8f64 }, chart.MapVertex { lon: -6.3f64, lat: 6.7f64 }, chart.MapVertex { lon: -7.3f64, lat: 6.7f64 },
-        chart.MapVertex { lon: -3.5f64, lat: 4.5f64 }, chart.MapVertex { lon: 2.5f64, lat: 5.2f64 }, chart.MapVertex { lon: 2.0f64, lat: 8.7f64 }, chart.MapVertex { lon: -2.5f64, lat: 9.0f64 },
-        chart.MapVertex { lon: 2.5f64, lat: 5.2f64 }, chart.MapVertex { lon: 9.0f64, lat: 5.5f64 }, chart.MapVertex { lon: 7.5f64, lat: 8.0f64 }, chart.MapVertex { lon: 2.0f64, lat: 8.7f64 },
-        chart.MapVertex { lon: -8.0f64, lat: 2.0f64 }, chart.MapVertex { lon: -3.0f64, lat: 1.0f64 }, chart.MapVertex { lon: -3.5f64, lat: 4.5f64 }, chart.MapVertex { lon: -9.0f64, lat: 5.0f64 },
-        chart.MapVertex { lon: -3.0f64, lat: 1.0f64 }, chart.MapVertex { lon: 2.0f64, lat: 1.5f64 }, chart.MapVertex { lon: 2.5f64, lat: 5.2f64 }, chart.MapVertex { lon: -3.5f64, lat: 4.5f64 },
-        chart.MapVertex { lon: 2.0f64, lat: 1.5f64 }, chart.MapVertex { lon: 8.0f64, lat: 2.5f64 }, chart.MapVertex { lon: 9.0f64, lat: 5.5f64 }, chart.MapVertex { lon: 2.5f64, lat: 5.2f64 },
-    }
+    // The districts arrive as GeoJSON keyed by their `name` (D2115); A has a lake.
+    let districts = "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"properties\":{\"name\":\"A\"},\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-9,5],[-3.5,4.5],[-2.5,9],[-7.5,8.5],[-9,5]],[[-7.3,5.8],[-6.3,5.8],[-6.3,6.7],[-7.3,6.7],[-7.3,5.8]]]}},{\"type\":\"Feature\",\"properties\":{\"name\":\"B\"},\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-3.5,4.5],[2.5,5.2],[2,8.7],[-2.5,9],[-3.5,4.5]]]}},{\"type\":\"Feature\",\"properties\":{\"name\":\"C\"},\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[2.5,5.2],[9,5.5],[7.5,8],[2,8.7],[2.5,5.2]]]}},{\"type\":\"Feature\",\"properties\":{\"name\":\"D\"},\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-8,2],[-3,1],[-3.5,4.5],[-9,5],[-8,2]]]}},{\"type\":\"Feature\",\"properties\":{\"name\":\"E\"},\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[-3,1],[2,1.5],[2.5,5.2],[-3.5,4.5],[-3,1]]]}},{\"type\":\"Feature\",\"properties\":{\"name\":\"F\"},\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[2,1.5],[8,2.5],[9,5.5],[2.5,5.2],[2,1.5]]]}}]}"
+    let (parsed, parsed_error) = geojson.read(a, districts, "name")
+    if parsed_error != ok { ret parsed_error }
+    let regions = parsed.regions
+    let rings = parsed.rings
+    let vertices = parsed.vertices
     let metrics = [5]chart.MapMetric{
         chart.MapMetric { key: "A", value: 12.0f64 }, chart.MapMetric { key: "B", value: 26.0f64 },
         chart.MapMetric { key: "C", value: 38.0f64 }, chart.MapMetric { key: "D", value: 18.0f64 },
@@ -6986,12 +7155,23 @@ fn render_map_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, 
         paint.rgba(0.37, 0.64, 0.85, 1.0), paint.rgba(0.20, 0.50, 0.75, 1.0),
         paint.rgba(0.08, 0.34, 0.63, 1.0),
     }
-    let labels = [4]chart.Label{
+    let labels = [2]chart.Label{
         chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 19.0 }, align: .Center },
         chart.Label { text: subtitle, anchor: chart.Coord { x: 180.0, y: 38.0 }, align: .Center },
-        chart.Label { text: "Low", anchor: chart.Coord { x: 52.0, y: 226.0 }, align: .Center },
-        chart.Label { text: "High", anchor: chart.Coord { x: 306.0, y: 226.0 }, align: .Center },
     }
+    // Equal-interval classes: a swatch per palette colour, the breaks written under it.
+    let strip = geometry.rect(78.0, 209.0, 200.0, 9.0)
+    var swatch_storage: [5]geometry.Rect = zero
+    var break_storage: [6]chart.Tick = zero
+    let (classes, classes_error) = chart.class_legend(map.minimum, map.maximum, palette.len, strip, swatch_storage[..], break_storage[..])
+    if classes_error != ok { ret classes_error }
+    var break_words: [6]str = zero
+    var word_storage: [64]u8 = zero
+    let (words, words_error) = chart.format_ticks(classes.breaks, break_words[..], word_storage[..])
+    if words_error != ok { ret words_error }
+    var break_labels: [6]chart.Label = zero
+    let (placed, placed_error) = chart.guide_labels(strip, classes.breaks, words, zero, zero, 8.0, break_labels[..])
+    if placed_error != ok { ret placed_error }
     let region_labels = [6]chart.Label{
         chart.Label { text: "A", anchor: chart.Coord { x: 95.0, y: 91.0 }, align: .Center },
         chart.Label { text: "B", anchor: chart.Coord { x: 175.0, y: 88.0 }, align: .Center },
@@ -7014,7 +7194,7 @@ fn render_map_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, 
     region_index = 0usize
     while region_index < map.regions.len {
         var ink = missing
-        if !symbols && map.regions[region_index].has_value { ink = palette[usize(map.regions[region_index].fraction * 4.0f32)] }
+        if !symbols && map.regions[region_index].has_value { ink = palette[chart.class_of(map.regions[region_index].fraction, palette.len)] }
         try chart_scene.append_map_region(a, &builder, &map.regions[region_index], paint.Brush { Solid: ink })
         region_index += 1usize
     }
@@ -7027,13 +7207,13 @@ fn render_map_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, 
     if !symbols {
         region_index = 0usize
         while region_index < palette.len {
-            try fill(&builder, geometry.rect(78.0 + f32(region_index) * 40.0f32, 209.0, 40.0, 9.0), paint.Brush { Solid: palette[region_index] })
+            try fill(&builder, classes.swatches[region_index], paint.Brush { Solid: palette[region_index] })
             region_index += 1usize
         }
     }
     try chart_scene.append_labels(a, &builder, labels[..1usize], font, 12.0, paint.Brush { Solid: dark })
     try chart_scene.append_labels(a, &builder, labels[1usize..2usize], font, 8.0, paint.Brush { Solid: dark })
-    if !symbols { try chart_scene.append_labels(a, &builder, labels[2usize..], font, 8.0, paint.Brush { Solid: dark }) }
+    if !symbols { try chart_scene.append_labels(a, &builder, placed, font, 8.0, paint.Brush { Solid: dark }) }
     if symbols {
         let symbol_legend = [3]chart.Label{
             chart.Label { text: "30", anchor: chart.Coord { x: 122.0, y: 229.0 }, align: .Center },
@@ -7051,7 +7231,7 @@ fn render_map_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, 
     region_index = 0usize
     while region_index < map.regions.len {
         var ink = missing
-        if !symbols && map.regions[region_index].has_value { ink = palette[usize(map.regions[region_index].fraction * 4.0f32)] }
+        if !symbols && map.regions[region_index].has_value { ink = palette[chart.class_of(map.regions[region_index].fraction, palette.len)] }
         try chart_svg.append_map_region(&writer, &map.regions[region_index], ink)
         region_index += 1usize
     }
@@ -7064,13 +7244,13 @@ fn render_map_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, 
     if !symbols {
         region_index = 0usize
         while region_index < palette.len {
-            try chart_svg.rect(&writer, geometry.rect(78.0 + f32(region_index) * 40.0f32, 209.0, 40.0, 9.0), palette[region_index], false)
+            try chart_svg.rect(&writer, classes.swatches[region_index], palette[region_index], false)
             region_index += 1usize
         }
     }
     try chart_svg.append_labels(&writer, labels[..1usize], dark, 12.0)
     try chart_svg.append_labels(&writer, labels[1usize..2usize], dark, 8.0)
-    if !symbols { try chart_svg.append_labels(&writer, labels[2usize..], dark, 8.0) }
+    if !symbols { try chart_svg.append_labels(&writer, placed, dark, 8.0) }
     try chart_svg.finish(&writer)
     let (svg_path, path_error) = vector_path(a, path)
     if path_error != ok { ret path_error }
@@ -11541,6 +11721,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_locale_axes_preview(a, queue, output_target, canvas, &renderer)
     try render_pdf_export_preview(a, queue, output_target, canvas, &renderer)
     try render_benchmark_preview(a, queue, output_target, canvas, &renderer)
+    try render_network_preview(a, queue, output_target, canvas, &renderer)
+    try render_layered_preview(a, queue, output_target, canvas, &renderer)
     try render_aggregate_decomposition_tree_preview(a, queue, output_target, canvas, &renderer)
     try render_sipoc_preview(a, queue, output_target, canvas, &renderer)
     try render_decision_tree_preview(a, queue, output_target, canvas, &renderer)

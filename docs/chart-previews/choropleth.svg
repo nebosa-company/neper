@@ -4,7 +4,7 @@
 <path d="M67.5 70.3 L142.5 63.2 L127.5 127.1 L45 120 Z M70.5 108.64 L85.5 108.64 L85.5 95.86 L70.5 95.86 Z" fill-rule="nonzero" fill="rgb(201,224,245)"/>
 <path d="M142.5 63.2 L210 67.46 L217.5 117.16 L127.5 127.1 Z" fill-rule="nonzero" fill="rgb(94,163,217)"/>
 <path d="M210 67.46 L292.5 77.4 L315 112.9 L217.5 117.16 Z" fill-rule="nonzero" fill="rgb(20,87,161)"/>
-<path d="M45 120 L127.5 127.1 L135 176.8 L60 162.6 Z" fill-rule="nonzero" fill="rgb(201,224,245)"/>
+<path d="M45 120 L127.5 127.1 L135 176.8 L60 162.6 Z" fill-rule="nonzero" fill="rgb(150,196,232)"/>
 <path d="M127.5 127.1 L217.5 117.16 L210 169.7 L135 176.8 Z" fill-rule="nonzero" fill="rgb(51,128,191)"/>
 <path d="M217.5 117.16 L315 112.9 L300 155.5 L210 169.7 Z" fill-rule="nonzero" fill="rgb(184,194,204)"/>
 <line x1="45" y1="120" x2="127.5" y2="127.1" stroke="rgb(255,255,255)" stroke-width="2" stroke-linecap="round"/>
@@ -48,6 +48,10 @@
 <rect x="238" y="209" width="40" height="9" fill="rgb(20,87,161)"/>
 <text x="180" y="19" font-family="sans-serif" font-size="12" text-anchor="middle" fill="rgb(41,56,79)">Choropleth / district rate</text>
 <text x="180" y="38" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Rate per 1,000 / gray district has no data</text>
-<text x="52" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">Low</text>
-<text x="306" y="226" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">High</text>
+<text x="78" y="232" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">12</text>
+<text x="118" y="232" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">17.2</text>
+<text x="158" y="232" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">22.4</text>
+<text x="198" y="232" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">27.6</text>
+<text x="238" y="232" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">32.8</text>
+<text x="278" y="232" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(41,56,79)">38</text>
 </svg>

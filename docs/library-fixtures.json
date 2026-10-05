@@ -913,6 +913,7 @@
     "gfx_chart_gantt",
     "gfx_chart_gauge",
     "gfx_chart_generalized_variance",
+    "gfx_chart_geojson",
     "gfx_chart_half_violin",
     "gfx_chart_hazard_rate",
     "gfx_chart_hexbin",
@@ -937,6 +938,7 @@
     "gfx_chart_missing_scatter",
     "gfx_chart_monte_carlo",
     "gfx_chart_multi_vari",
+    "gfx_chart_network",
     "gfx_chart_nyquist",
     "gfx_chart_oc_curve",
     "gfx_chart_org_chart",
@@ -1094,8 +1096,8 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 277,
-   "delivered": 277,
+   "catalogue": 284,
+   "delivered": 284,
    "pending": [],
    "fixtures": [
     "gfx_chart",
@@ -1161,6 +1163,7 @@
     "gfx_chart_gantt",
     "gfx_chart_gauge",
     "gfx_chart_generalized_variance",
+    "gfx_chart_geojson",
     "gfx_chart_half_violin",
     "gfx_chart_hazard_rate",
     "gfx_chart_hexbin",
@@ -1186,6 +1189,7 @@
     "gfx_chart_missing_scatter",
     "gfx_chart_monte_carlo",
     "gfx_chart_multi_vari",
+    "gfx_chart_network",
     "gfx_chart_nice_ticks",
     "gfx_chart_nyquist",
     "gfx_chart_oc_curve",
@@ -1488,6 +1492,7 @@
     "gfx_chart_missing_scatter",
     "gfx_chart_monte_carlo",
     "gfx_chart_multi_vari",
+    "gfx_chart_network",
     "gfx_chart_nyquist",
     "gfx_chart_oc_curve",
     "gfx_chart_org_chart",
@@ -1561,8 +1566,8 @@
    "module": "e.gfx.chart.widget",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 3,
-   "delivered": 3,
+   "catalogue": 7,
+   "delivered": 7,
    "pending": [],
    "fixtures": [
     "gfx_chart_widget"
@@ -1577,6 +1582,17 @@
    "pending": [],
    "fixtures": [
     "gfx_chart_pdf"
+   ]
+  },
+  {
+   "module": "e.gfx.chart.geojson",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 4,
+   "delivered": 4,
+   "pending": [],
+   "fixtures": [
+    "gfx_chart_geojson"
    ]
   },
   {
@@ -1737,6 +1753,7 @@
     "gfx_chart_missing_scatter",
     "gfx_chart_monte_carlo",
     "gfx_chart_multi_vari",
+    "gfx_chart_network",
     "gfx_chart_nyquist",
     "gfx_chart_oc_curve",
     "gfx_chart_org_chart",
@@ -3681,8 +3698,8 @@
    "module": "e.ui.widget",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 118,
-   "delivered": 118,
+   "catalogue": 119,
+   "delivered": 119,
    "pending": [],
    "fixtures": [
     "gfx_chart_widget",

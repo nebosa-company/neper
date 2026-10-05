@@ -35602,3 +35602,91 @@ Plain measurements (`measure.py --plain`, release `--unchecked`, three runs, p50
 - The plan's go/no-go after C was not re-read: the fork plan's own documents did not survive the interruption, so this row stands on D1660, D1669 and D1670.
 
 ---
+
+## D2112 — Network charts use deterministic Fruchterman-Reingold layout
+
+`network_layout` lays out an undirected edge list by Fruchterman and Reingold
+(1991) in a unit square: k^2/d repulsion between every pair, d^2/k attraction
+along edges, each step capped by a temperature cooling linearly from 0.1 to 0,
+then a uniform fit into the plot that keeps the aspect ratio. Nodes start on a
+golden-angle spiral rather than at random, so the same graph always gives the
+same picture without a seed parameter, and a symmetric start cannot trap the
+layout. The function takes plain from/to columns, so it serves `e.data.graph`
+graphs, adjacency lists and tables alike, and returns edges as a Rug layout;
+node marks stay with the caller, who sizes and colours them by any measure
+(degree, centrality, community). Repulsion is all-pairs, O(n^2) per step,
+adequate for the hundreds of nodes a chart can show; Barnes-Hut is the upgrade.
+
+## D2114 — Chart widgets zoom, pan and hover through a wheel-taking region
+
+`e.gfx.chart.widget.region(&view)` gives a chart canvas the pointer. The wheel
+zooms a window over the plot about the pointer (a tenth per turn, as the zoom
+view does), a drag pans it by what the pointer moved since the press, a double
+tap shows the whole plot again, and hovering the nearest point within 8 px
+outlines it in the view's `highlight` and records it in `hovered`. The chart is
+laid out once over all its data and its marks are mapped through the window and
+clipped, because `layout_with_limits` refuses limits narrower than the data, and
+for linear and log axes zooming the pixel space is zooming the domain anyway.
+The widget's `Zoom` node was not used: it scales painted pixels, so axes, marker
+sizes and stroke widths would grow with the zoom. `e.ui.widget` regions gained
+`Gesture.Wheel` (notches, positive away from the user) under bit 32; a region
+that takes the wheel has it before any zoom or scroll view, which suits a chart
+inside a scrolling page. Zoom is on both axes and there is no keyboard
+equivalent yet.
+
+## D2115 — GeoJSON polygons feed choropleths; equal-interval classes get a legend
+
+`e.gfx.chart.geojson.read` turns an RFC 7946 FeatureCollection into the
+region, ring and vertex arrays `chart.choropleth` already takes, in the caller's
+arena: Polygon and MultiPolygon features in order, keyed by a named property or
+by the feature's `id` (a number by its text as written), null geometries left
+out, other geometry types refused as Unsupported. Rings must be closed as the RFC
+requires, and the closing position is dropped because the chart closes rings
+itself; each polygon's first ring is its exterior and the rest are holes, and
+winding stays the chart's business. It is a layer-6 adapter beside the scene,
+SVG and PDF ones, so `e.gfx.chart` itself takes no JSON dependency; it looks up
+members by plain equality because `json.member_index` applies JSON Pointer
+escapes. `chart.class_of` maps a region's fraction to one of n equal-interval
+classes with the maximum in the top class: the gallery's `usize(fraction * 4)`
+for five colours had put only the maximum in the darkest class.
+`chart.class_legend` lays the swatch strip and returns the n + 1 breaks as
+ticks, so `format_ticks` and `guide_labels` write them as for an axis. The
+gallery's choropleth now reads its districts from GeoJSON and labels the breaks
+instead of Low and High. Quantile or Jenks classes, antimeridian splitting and
+TopoJSON are not done.
+
+## D2116 — 3-D charts orbit by dragging
+
+`chart.orbit` turns a `Camera3d` by an azimuth and raises it by an elevation,
+wrapping the azimuth into [-180, 180) and holding the elevation within caller
+bounds inside -90..90; it is plain arithmetic so any gesture handler can use it.
+`e.gfx.chart.widget.Orbit` keeps a camera, its home and a revision, and
+`orbit_region` gives a canvas the drag: the scene follows the pointer at half a
+degree a pixel measured from the press (right turns the front right, down tips
+the top toward the viewer), the elevation stays within 5..85 by default so
+surfaces, which need 0 < elevation < 90, stay drawable, and a double tap goes
+home. The caller's custom lays its 3-D chart out with the camera and takes the
+revision as its state, so each turn repaints and nothing else does. There is no
+wheel dolly: the 3-D viewport scales the cube to its bounds, so the camera
+distance changes perspective, not size.
+
+## D2117 — Hierarchies get a layered layout; Barnes-Hut waits for large graphs
+
+`chart.layered_layout` draws a directed acyclic graph in rows after Sugiyama,
+Tagawa and Toda: a node's row is its longest path from a source, found by
+relaxing every link until none moves (a row reaching the node count is a cycle,
+refused as Invalid), so every link points down. Nodes start in index order and
+alternating barycentre sweeps, down then up, reorder every row at once by the
+mean place of a node's predecessors or successors; ties keep the old order, so
+the result is deterministic. Rows and places split the bounds evenly, and the
+links come back as the same `NetworkLayout` Rug segments `network_layout`
+returns, so the scene and SVG adapters draw both alike. It complements
+`dependency_graph`, which ranks the same way but is a boxed diagram: index
+order within a stage, fixed 30-pixel boxes, TooLarge once a stage outgrows its
+column. `layered_layout` places points, so the caller draws what it likes, and
+its sweeps cut crossings that index order leaves. Edges spanning several
+rows get no dummy nodes and are straight; ranking is O(n^2) and each pass
+O(n * edges), fine for the hundreds of nodes a readable hierarchy has.
+Barnes-Hut repulsion for `network_layout` is not done: the all-pairs O(n^2)
+step lays out a few thousand nodes, beyond which a node-link drawing is no
+longer readable anyway.

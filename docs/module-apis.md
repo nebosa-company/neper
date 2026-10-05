@@ -10303,7 +10303,8 @@ type Custom = struct { ctx: *void, measure: fn(*void, ui_layout.Constraints) -> 
 type Change[T: type] = struct { ctx: *void, invoke: fn(*void, T) -> err }
 type Submit = struct { ctx: *void, invoke: fn(*void) -> err }
 type Drag = struct { start: geometry.Point, position: geometry.Point, delta: geometry.Point }
-type Gesture = union enum u8 { Tap: geometry.Point, DragStart: geometry.Point, DragMove: Drag, DragEnd: geometry.Point, Hover: geometry.Point, HoverEnd, Drop: Dropped }
+type Wheel = struct { position: geometry.Point, notches: f32 }
+type Gesture = union enum u8 { Tap: geometry.Point, DoubleTap: geometry.Point, DragStart: geometry.Point, DragMove: Drag, DragEnd: geometry.Point, Hover: geometry.Point, HoverEnd, Drop: Dropped, Wheel: Wheel }
 type Dropped = struct { position: geometry.Point, payload: u64 }
 type GestureAction = struct { ctx: *void, invoke: fn(*void, Gesture) -> err }
 type Region = struct { gesture: GestureAction, gestures: u8, enabled: bool, focusable: bool }
@@ -16198,6 +16199,7 @@ type Label = struct { text: str, anchor: Coord, align: LabelAlign }
 type LegendItem = struct { swatch: geometry.Rect, label: Label }
 type LabelPlacement = struct { label: Label, box: geometry.Rect, placed: bool, slot: u8 }
 type PointLabels = struct { labels: []LabelPlacement, placed: usize }
+type NetworkLayout = struct { nodes: []Coord, links: Layout }
 type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
 type Spec = struct { kind: Kind, bounds: geometry.Rect, x: []const f32, y: []const f32, baseline: f32, bar_width: f32, x_scale: Scale, y_scale: Scale }
@@ -16288,6 +16290,9 @@ fn valid_label(label: *const Label) -> bool
 fn guide_labels(bounds: geometry.Rect, x_ticks: []const Tick, x_text: []const str, y_ticks: []const Tick, y_text: []const str, size: f32, out: []Label) -> ([]Label, err)
 fn category_ticks(count: usize, out: []Tick) -> ([]Tick, err)
 fn legend_items(names: []const str, origin: Coord, swatch: f32, row_height: f32, out: []LegendItem) -> ([]LegendItem, err)
+type ClassLegend = struct { swatches: []geometry.Rect, breaks: []Tick }
+fn class_of(fraction: f32, classes: usize) -> usize
+fn class_legend(minimum: f64, maximum: f64, classes: usize, bounds: geometry.Rect, swatches: []geometry.Rect, breaks: []Tick) -> (ClassLegend, err)
 fn layout(s: *const Spec, coords: []Coord, segments: []Segment, bars: []geometry.Rect) -> (Layout, err)
 fn connected_scatter(x: []const f32, y: []const f32, bounds: geometry.Rect, points: []Coord, segments: []Segment) -> (Layout, err)
 fn influence_plot(diagnostics: []const stat.RegressionDiagnostic, bounds: geometry.Rect, max_radius: f32, points: []Coord, circles: []geometry.Rect, reference_lines: []Segment) -> (InfluenceLayout, err)
@@ -16319,6 +16324,8 @@ fn category_facet_scatter(keys: []const str, x: []const f32, y: []const f32, lev
 fn wrapped_legend_items(names: []const str, text_widths: []const f32, bounds: geometry.Rect, swatch: f32, gap: f32, row_height: f32, out: []LegendItem) -> (WrappedLegend, err)
 fn boxes_overlap(a: geometry.Rect, b: geometry.Rect) -> bool
 fn place_point_labels(points: []const Coord, texts: []const str, widths: []const f32, height: f32, baseline: f32, bounds: geometry.Rect, offset: f32, clearance: f32, out: []LabelPlacement) -> (PointLabels, err)
+fn network_layout(node_count: usize, from: []const u32, to: []const u32, bounds: geometry.Rect, iterations: usize, work: []f64, nodes: []Coord, segments: []Segment) -> (NetworkLayout, err)
+fn layered_layout(node_count: usize, from: []const u32, to: []const u32, bounds: geometry.Rect, sweeps: usize, work: []f64, nodes: []Coord, segments: []Segment) -> (NetworkLayout, err)
 fn masked_scatter(x: []const f32, y: []const f32, x_present: []const bool, y_present: []const bool, bounds: geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32, points: []Coord, row_ids: []usize) -> (MaskedScatterLayout, err)
 type SelectionHit = struct { mark_index: usize, source_row: usize, distance_squared: f64 }
 fn hit_scatter(marks: *const Layout, row_ids: []const usize, pointer: Coord, radius: f32) -> (SelectionHit, bool, err)
@@ -16377,6 +16384,7 @@ fn viewport3d(camera: Camera3d, bounds: geometry.Rect, corners: []Coord) -> (Vie
 fn project3d_view(view: *const Viewport3d, x: f64, y: f64, z: f64) -> (Coord, f64, err)
 fn cube_frame3d(corners: []const Coord, edges: []Segment) -> err
 fn scatter3d_depth_compare(key: *Scatter3dOrder, left: usize, right: usize) -> i32
+fn orbit(camera: Camera3d, azimuth_degrees: f64, elevation_degrees: f64, low: f64, high: f64) -> (Camera3d, err)
 fn scatter3d(x: []const f64, y: []const f64, z: []const f64, camera: Camera3d, bounds: geometry.Rect, storage: *Scatter3dStorage) -> (Scatter3dLayout, err)
 type Histogram3dFace = enum u8 { Top, XSide, YSide }
 type Histogram3dStorage = struct { counts: []u64, cells: []Cell, vertices: []Coord, faces: []Layout, depths: []f64, order: []usize, face_kinds: []Histogram3dFace, corners: []Coord, edges: []Segment }
@@ -16513,9 +16521,22 @@ fn format_date_ticks_in(a: *mem.Arena, place: locale.Locale, ticks: []const char
 ### `e.gfx.chart.widget`
 
 ```neper
-type View = struct { arena: *mem.Arena, spec: chart.Spec, brush: paint.Brush, grid: paint.Brush, axis: paint.Brush, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, padding: f32, width: f32, height: f32, coords: []chart.Coord, segments: []chart.Segment, bars: []geometry.Rect, revision: u64, marks: chart.Layout, plot: geometry.Rect }
+type View = struct { arena: *mem.Arena, spec: chart.Spec, brush: paint.Brush, grid: paint.Brush, axis: paint.Brush, x_ticks: []const chart.Tick, y_ticks: []const chart.Tick, padding: f32, width: f32, height: f32, coords: []chart.Coord, segments: []chart.Segment, bars: []geometry.Rect, revision: u64, marks: chart.Layout, plot: geometry.Rect, window: geometry.Rect, min_window: f32, hover_radius: f32, hovered: usize, has_hovered: bool, highlight: paint.Brush, outline: [1]geometry.Rect, shown: []chart.Tick, pan_from: geometry.Rect }
 fn view(a: *mem.Arena, spec: chart.Spec, brush: paint.Brush, coords: []chart.Coord, segments: []chart.Segment, bars: []geometry.Rect) -> View
 fn custom(v: *View) -> widget.Custom
+fn region(v: *View) -> widget.Region
+type Orbit = struct { camera: chart.Camera3d, home: chart.Camera3d, from: chart.Camera3d, revision: u64, low: f64, high: f64, degrees_per_pixel: f64 }
+fn orbit(camera: chart.Camera3d) -> Orbit
+fn orbit_region(o: *Orbit) -> widget.Region
+```
+
+### `e.gfx.chart.geojson`
+
+```neper
+error Invalid
+error Unsupported
+type Map = struct { regions: []chart.MapRegion, rings: []chart.MapRing, vertices: []chart.MapVertex }
+fn read(a: *mem.Arena, text: str, key: str) -> (Map, err)
 ```
 
 ### `e.gfx.chart.pdf`

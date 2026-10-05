@@ -3090,6 +3090,16 @@ gfx_chart_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/gfx-chart-pdf-selfhost"
 gfx_chart_pdf_output=$("$test_build/gfx-chart-pdf-selfhost")
 [ "$gfx_chart_pdf_output" = 'gfx chart pdf ok' ]
+gfx_chart_network_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_network/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-network-selfhost")
+[ "$gfx_chart_network_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-network-selfhost"
+gfx_chart_network_output=$("$test_build/gfx-chart-network-selfhost")
+[ "$gfx_chart_network_output" = 'gfx chart network ok' ]
+gfx_chart_geojson_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_geojson/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-geojson-selfhost")
+[ "$gfx_chart_geojson_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-geojson-selfhost"
+gfx_chart_geojson_output=$("$test_build/gfx-chart-geojson-selfhost")
+[ "$gfx_chart_geojson_output" = 'gfx chart geojson ok' ]
 gfx_chart_sipoc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_sipoc/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-sipoc-selfhost")
 [ "$gfx_chart_sipoc_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-sipoc-selfhost"

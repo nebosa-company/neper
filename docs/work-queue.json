@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. Finish active chart and visualization items before non-chart work, preserving their relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "L062",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 160,
-      "title": "Specialized visualization (interactive, geographic, network, 3D)",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Standard charts are L061; the specialized layers are all missing: no plotly/bokeh-style interactive layer (e.ui widgets plus animation/input are the base for hover/select/zoom), geographic math without a renderer (e.algo.geo S2/haversine), graph algorithms without layout/draw (e.algo.graph plus centrality/community), low-level 3D only (e.gfx.mesh/scene/trace/shade, e.gpu). Build interactive selection/zoom over L061 charts, a geographic renderer atop e.algo.geo, a network layout atop e.algo.graph and 3D surfaces atop e.gfx.mesh/scene. Dashboards are a non-goal (D1785). Plan: docs/stats-coverage.md rows L062 (D1785)."
-    },
-    {
       "id": "C092",
       "category": "compiler",
       "group": "Back end",

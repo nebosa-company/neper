@@ -2,7 +2,7 @@
 
 Neper builds renderer-neutral chart layouts from borrowed data and caller-owned output storage. The same marks feed its CPU scene/PNG and SVG adapters. This guide collects the produced charts, their preview notes, and the charting-engine design and catalogue. Readiness scores remain in [progress.html](progress.html).
 
-## Rendered previews (235/235)
+## Rendered previews (237/237)
 
 The total includes rendered PNG/SVG pairs and the [planned gallery targets](chart-preview-backlog.txt).
 
@@ -128,6 +128,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Labeled Symlog Line | ![Labeled Symlog Line](chart-previews/labeled_symlog_line.png) | [SVG](chart-previews/labeled_symlog_line.svg) |
 | Laney P | ![Laney P](chart-previews/laney_p.png) | [SVG](chart-previews/laney_p.svg) |
 | Laney U | ![Laney U](chart-previews/laney_u.png) | [SVG](chart-previews/laney_u.svg) |
+| Layered | ![Layered](chart-previews/layered.png) | [SVG](chart-previews/layered.svg) |
 | Legend Collision | ![Legend Collision](chart-previews/legend_collision.png) | [SVG](chart-previews/legend_collision.svg) |
 | Leverage Residual | ![Leverage Residual](chart-previews/leverage_residual.png) | [SVG](chart-previews/leverage_residual.svg) |
 | Line | ![Line](chart-previews/line.png) | [SVG](chart-previews/line.svg) |
@@ -146,6 +147,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Mosaic | ![Mosaic](chart-previews/mosaic.png) | [SVG](chart-previews/mosaic.svg) |
 | Moving Range Control | ![Moving Range Control](chart-previews/moving_range_control.png) | [SVG](chart-previews/moving_range_control.svg) |
 | Multi Vari | ![Multi Vari](chart-previews/multi_vari.png) | [SVG](chart-previews/multi_vari.svg) |
+| Network | ![Network](chart-previews/network.png) | [SVG](chart-previews/network.svg) |
 | Np Control | ![Np Control](chart-previews/np_control.png) | [SVG](chart-previews/np_control.svg) |
 | Nyquist | ![Nyquist](chart-previews/nyquist.png) | [SVG](chart-previews/nyquist.svg) |
 | Oc Curve | ![Oc Curve](chart-previews/oc_curve.png) | [SVG](chart-previews/oc_curve.svg) |
@@ -348,8 +350,12 @@ The gage-run preview keeps every crossed part/operator/repeat observation
 visible, colors points by operator, separates parts and marks the overall mean.
 The summary shows the grand mean and largest within-part/operator repeat range;
 it does not estimate variance components or claim measurement-system approval.
-The choropleth joins keyed district rates to caller-supplied polygon rings,
+The choropleth joins keyed district rates to polygon rings read from a GeoJSON
+FeatureCollection (`e.gfx.chart.geojson`, keyed by each feature's `name`),
 preserves a gray missing-data district, and renders holes with opposite winding.
+Its five colours are equal-interval classes (`chart.class_of`), and the legend
+under the map is `chart.class_legend`'s strip with the class breaks written by
+`format_ticks`.
 The proportional-symbol map reuses the same map window and district boundaries;
 its circle areas, including the size legend, scale with site volume. These
 synthetic district outlines avoid implying a real administrative geography.
@@ -459,6 +465,19 @@ ms against matplotlib's 15.63 ms, while matplotlib writes PNG faster (16.51
 against 20.02 ms), because Neper's PNG time is mostly the encoder.
 Every SVG companion writes coordinates to 0.01 px and omits default opacity
 (D2111); the PNGs are unaffected.
+
+The network preview lays out Zachary's karate club (NetworkX's 78 edges) with
+`network_layout` and colours nodes by Louvain communities that
+`e.algo.graph.community` computes in the gallery itself (modularity 0.42, as
+NetworkX reports for its Louvain partition); node area grows with degree, and
+the instructor and administrator whose split the dataset records are labelled.
+
+The layered preview draws twelve chart and foundation modules with
+`layered_layout`, linked by their direct dependencies in `docs/modules.json`:
+longest-path rows put every module below what it builds on, and four
+alternating barycentre sweeps order each row against crossings. Unlike the
+boxed `dependency_graph` diagram, it places points for a caller-drawn graph of
+any size.
 
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:
@@ -1560,6 +1579,22 @@ OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
 
 ### How Neper can beat the reference tools
 
+`network_layout` places an undirected graph by Fruchterman-Reingold force
+direction: all-pairs k^2/d repulsion, d^2/k attraction along edges, moves
+capped by a linearly cooling temperature, a golden-angle spiral start so the
+result is deterministic, and a uniform fit into the plot keeping the aspect
+ratio. Edges come back as a Rug layout for the existing adapters, and node
+marks are the caller's (bubbles sized and coloured by any measure). The
+`network` PNG/SVG pair draws the karate-club graph with Louvain communities
+from `e.algo.graph.community`. `gfx_chart_network` matches a Python replica
+on a small graph, checks structure, determinism, self-loops and refusals on
+the karate club on Windows and Linux. `layered_layout` draws a DAG in rows
+(D2117): longest-path rows so every link points down, alternating barycentre
+sweeps against crossings, cycles refused; the same fixture checks a sweep
+uncrossing two links, the rows, self-loops and refusals. Barnes-Hut repulsion
+waits for graphs past a few thousand nodes; edge bundling and dummy nodes for
+links spanning rows remain open.
+
 The SVG adapter writes numbers to 0.01 px and leaves opacity 1 to the SVG
 default (D2111). Across the 235 previews that makes the SVG companions 33%
 smaller (excluding the one that embeds a 610 KB font) and 14% smaller
@@ -1600,8 +1635,30 @@ runtime replays an unchanged chart and repaints after a bump (D917). The
 `ui_canvas` PNG is a real widget-runtime frame from the headless harness.
 `gfx_chart_widget` checks measure, re-layout across rectangles, the too-small
 case, accessibility label, pixels under a mark and the replay/revision
-contract on Windows and Linux. Multi-layer views, legends and pointer events
-on the canvas remain open (events are L062).
+contract on Windows and Linux. Wrapped in `region(&view)` the chart takes the
+pointer (D2114): the wheel zooms about the pointer, a drag pans, a double tap
+shows everything again, and hovering a point outlines it and names it in
+`hovered`. The zoom is a window over the plot laid out once, so it changes no
+scale; the caller's ticks move with the marks and the marks are clipped to the
+plot. Regions gained a wheel gesture for this (bit 32), ahead of zoom and
+scroll views. The fixture checks the hover outline's pixels, a zoom keeping
+the point under the pointer, a pan from the press, the reset and the zoom
+limit. A 3-D chart orbits through `Orbit` and `orbit_region` (D2116): a drag
+turns the camera with `chart.orbit` from where the press found it, holding the
+elevation within 5..85, and a double tap returns home; the caller's custom lays
+the chart out with the camera and repaints on the orbit's revision. Multi-layer
+views, legends, keyboard zoom and orbit, and single-axis zoom remain open.
+
+`e.gfx.chart.geojson` reads a GeoJSON FeatureCollection's Polygon and
+MultiPolygon features into the region, ring and vertex arrays `choropleth`
+takes, keyed by a property or by `id`, with null geometries left out and
+closed rings required (D2115). `class_of` and `class_legend` give a choropleth
+equal-interval colour classes and the matching swatch strip, whose breaks are
+ticks for `format_ticks` and `guide_labels`. `gfx_chart_geojson` checks a holed
+polygon, a MultiPolygon, a null geometry, altitudes, both keyings, the
+resulting choropleth and every refusal; the gallery's choropleth reads its
+districts from GeoJSON. Quantile and Jenks classes, antimeridian splitting and
+TopoJSON remain open.
 
 `e.gfx.chart.locale` writes tick text through `e.text.locale`:
 `format_ticks_in` picks one shared precision per axis (`tick_decimals`) and

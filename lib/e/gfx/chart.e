@@ -31,8 +31,10 @@ type LabelAlign = enum u8 { Left, Center, Right }
 type Label = struct { text: str, anchor: Coord, align: LabelAlign }
 type LegendItem = struct { swatch: geometry.Rect, label: Label }
 type WrappedLegend = struct { items: []LegendItem, rows: usize }
+type ClassLegend = struct { swatches: []geometry.Rect, breaks: []Tick }
 type LabelPlacement = struct { label: Label, box: geometry.Rect, placed: bool, slot: u8 }
 type PointLabels = struct { labels: []LabelPlacement, placed: usize }
+type NetworkLayout = struct { nodes: []Coord, links: Layout }
 type Segment = struct { from: Coord, to: Coord }
 type Cell = struct { rect: geometry.Rect, value: f32 }
 type ContourVertex = struct { point: Coord, value: f64 }
@@ -926,6 +928,33 @@ fn legend_items(names: []const str, origin: Coord, swatch: f32, row_height: f32,
         i += 1usize
     }
     ret (out[..names.len], ok)
+}
+
+// Equal-interval classes for a choropleth's colours (D2115): the class of a
+// region's place `t` in the range, a `fraction` from 0 to 1; 0 for the lowest, the
+// maximum in the top class.
+fn class_of(t: f32, classes: usize) -> usize {
+    if classes == 0usize || !(t > 0.0) { ret 0usize }
+    let c = usize(t * f32(classes))
+    if c >= classes { ret classes - 1usize }
+    ret c
+}
+
+// `classes` swatches left to right across `bounds`, swatch i holding `class_of`'s
+// class i, and the `classes + 1` breaks between and around them as ticks (the
+// value, and the fraction along the strip) for `format_ticks` to write.
+fn class_legend(minimum: f64, maximum: f64, classes: usize, bounds: geometry.Rect, swatches: []geometry.Rect, breaks: []Tick) -> (ClassLegend, err) {
+    if classes == 0usize || !finite64(minimum) || !finite64(maximum) || maximum < minimum || !finite(f32(minimum)) || !finite(f32(maximum)) || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if swatches.len < classes || breaks.len < classes + 1usize { ret (zero, TooLarge) }
+    let width = bounds.width / f32(classes)
+    var i = 0usize
+    while i <= classes {
+        let t = f64(i) / f64(classes)
+        breaks[i] = Tick { value: f32(minimum + (maximum - minimum) * t), fraction: f32(t) }
+        if i < classes { swatches[i] = geometry.rect(bounds.x + width * f32(i), bounds.y, width, bounds.height) }
+        i += 1usize
+    }
+    ret (ClassLegend { swatches: swatches[..classes], breaks: breaks[..classes + 1usize] }, ok)
 }
 
 // Text widths are measured by the caller's chosen font/size. Wrapping only
@@ -6340,7 +6369,7 @@ fn circle_pack(parents: []const usize, weights: []const f32, bounds: geometry.Re
             let center_x = f64(parent.x) + f64(parent.width) * 0.5f64
             let center_y = f64(parent.y) + f64(parent.height) * 0.5f64
             let parent_radius = f64(parent.width) * 0.5f64
-            let orbit = parent_radius * f64(1.0 - padding) * 0.5f64
+            let ring = parent_radius * f64(1.0 - padding) * 0.5f64
             var rank = 0usize
             // ponytail: sibling scans are O(n^2) and ring packing wastes space
             // for large groups; use caller-scratch tangent packing if density matters.
@@ -6353,13 +6382,13 @@ fn circle_pack(parents: []const usize, weights: []const f32, bounds: geometry.Re
                         radius = parent_radius * f64(1.0 - padding)
                     } else {
                         angle = 6.283185307179586f64 * f64(rank) / f64(count)
-                        if maximum > 0.0f64 { radius = orbit * math.sin[f64](3.141592653589793f64 / f64(count)) * math.sqrt[f64](totals[j] / maximum) }
+                        if maximum > 0.0f64 { radius = ring * math.sin[f64](3.141592653589793f64 / f64(count)) * math.sqrt[f64](totals[j] / maximum) }
                     }
                     var x = center_x
                     var y = center_y
                     if count > 1usize {
-                        x += orbit * math.cos[f64](angle)
-                        y += orbit * math.sin[f64](angle)
+                        x += ring * math.cos[f64](angle)
+                        y += ring * math.sin[f64](angle)
                     }
                     let left = f32(x - radius)
                     let top = f32(y - radius)
@@ -9710,6 +9739,20 @@ fn nyquist(frequency: []const f64, real: []const f64, imag: []const f64, bounds:
     ret (NyquistLayout { positive: positive, negative: negative, critical: marker, frequency_min: frequency[0usize], frequency_max: frequency[n - 1usize] }, ok)
 }
 
+// The camera turned by `azimuth_degrees` and raised by `elevation_degrees`
+// (D2116): the azimuth wraps into [-180, 180) and the elevation stays within
+// `low`..`high`, themselves within -90..90 (a surface needs 0 < elevation < 90).
+fn orbit(camera: Camera3d, azimuth_degrees: f64, elevation_degrees: f64, low: f64, high: f64) -> (Camera3d, err) {
+    if !finite64(camera.azimuth_degrees) || !finite64(camera.elevation_degrees) || !finite64(azimuth_degrees) || !finite64(elevation_degrees) || !finite64(low) || !finite64(high) || low > high || low < -90.0f64 || high > 90.0f64 { ret (zero, Invalid) }
+    let turned = camera.azimuth_degrees + azimuth_degrees
+    let azimuth = turned - 360.0f64 * math.floor[f64]((turned + 180.0f64) / 360.0f64)
+    var elevation = camera.elevation_degrees + elevation_degrees
+    if elevation < low { elevation = low }
+    if elevation > high { elevation = high }
+    if !finite64(azimuth) { ret (zero, Invalid) }
+    ret (Camera3d { azimuth_degrees: azimuth, elevation_degrees: elevation, distance: camera.distance }, ok)
+}
+
 // Unit-cube camera coordinates; positive depth is nearer the viewer.
 fn project3d(camera: *const Projection3d, x: f64, y: f64, z: f64) -> (Coord, f64, err) {
     let right = -camera.sin_azimuth * x + camera.cos_azimuth * y
@@ -11108,4 +11151,254 @@ fn category_facet_scatter(keys: []const str, x: []const f32, y: []const f32, lev
         i += 1usize
     }
     ret (CategoryFacetLayout { panels: panels[..n], marks: marks[..n], strips: strips[..n], counts: counts[..n] }, ok)
+}
+
+// Node-link layout of an undirected graph by Fruchterman and Reingold (1991):
+// nodes repel with k^2/d and linked nodes attract with d^2/k in a unit square
+// (k = sqrt(1/n)), each step moving a node at most the temperature, which
+// cools linearly from 0.1 to 0. Nodes start on a golden-angle spiral, so the
+// result is deterministic and a symmetric start cannot trap it. The finished
+// positions are scaled uniformly into `bounds`, keeping the aspect ratio.
+// `work` holds 4 * node_count values; `links` is a Rug layout of one segment
+// per edge that is not a self-loop, for the scene and SVG adapters.
+// ponytail: all-pairs repulsion, O(n^2) per step; Barnes-Hut when graphs pass
+// a few thousand nodes.
+fn network_layout(node_count: usize, from: []const u32, to: []const u32, bounds: geometry.Rect, iterations: usize, work: []f64, nodes: []Coord, segments: []Segment) -> (NetworkLayout, err) {
+    if node_count == 0usize { ret (zero, Empty) }
+    if from.len != to.len || !valid_bounds(bounds) || iterations > 100000usize { ret (zero, Invalid) }
+    if work.len < 4usize * node_count || nodes.len < node_count { ret (zero, TooLarge) }
+    var links = 0usize
+    var e = 0usize
+    while e < from.len {
+        if usize(from[e]) >= node_count || usize(to[e]) >= node_count { ret (zero, Invalid) }
+        if from[e] != to[e] { links += 1usize }
+        e += 1usize
+    }
+    if segments.len < links { ret (zero, TooLarge) }
+    let n = node_count
+    let k = math.sqrt[f64](1.0f64 / f64(n))
+    var i = 0usize
+    while i < n {
+        let radius = 0.45f64 * math.sqrt[f64]((f64(i) + 0.5f64) / f64(n))
+        let angle = f64(i) * 2.399963229728653f64
+        work[2usize * i] = 0.5f64 + radius * math.cos[f64](angle)
+        work[2usize * i + 1usize] = 0.5f64 + radius * math.sin[f64](angle)
+        i += 1usize
+    }
+    var step = 0usize
+    while step < iterations {
+        let temperature = 0.1f64 * (1.0f64 - f64(step) / f64(iterations))
+        i = 0usize
+        while i < 2usize * n {
+            work[2usize * n + i] = 0.0f64
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var j = i + 1usize
+            while j < n {
+                let dx = work[2usize * i] - work[2usize * j]
+                let dy = work[2usize * i + 1usize] - work[2usize * j + 1usize]
+                var d = math.sqrt[f64](dx * dx + dy * dy)
+                if d < 0.000000001f64 { d = 0.000000001f64 }
+                let f = k * k / d / d
+                work[2usize * n + 2usize * i] += dx * f
+                work[2usize * n + 2usize * i + 1usize] += dy * f
+                work[2usize * n + 2usize * j] -= dx * f
+                work[2usize * n + 2usize * j + 1usize] -= dy * f
+                j += 1usize
+            }
+            i += 1usize
+        }
+        e = 0usize
+        while e < from.len {
+            let u = usize(from[e])
+            let v = usize(to[e])
+            if u != v {
+                let dx = work[2usize * u] - work[2usize * v]
+                let dy = work[2usize * u + 1usize] - work[2usize * v + 1usize]
+                let d = math.sqrt[f64](dx * dx + dy * dy)
+                let f = d / k
+                work[2usize * n + 2usize * u] -= dx * f
+                work[2usize * n + 2usize * u + 1usize] -= dy * f
+                work[2usize * n + 2usize * v] += dx * f
+                work[2usize * n + 2usize * v + 1usize] += dy * f
+            }
+            e += 1usize
+        }
+        i = 0usize
+        while i < n {
+            let dx = work[2usize * n + 2usize * i]
+            let dy = work[2usize * n + 2usize * i + 1usize]
+            let length = math.sqrt[f64](dx * dx + dy * dy)
+            if length > 0.0f64 {
+                var limited = length
+                if limited > temperature { limited = temperature }
+                work[2usize * i] += dx / length * limited
+                work[2usize * i + 1usize] += dy / length * limited
+            }
+            i += 1usize
+        }
+        step += 1usize
+    }
+    var min_x = work[0usize]
+    var max_x = work[0usize]
+    var min_y = work[1usize]
+    var max_y = work[1usize]
+    i = 1usize
+    while i < n {
+        if work[2usize * i] < min_x { min_x = work[2usize * i] }
+        if work[2usize * i] > max_x { max_x = work[2usize * i] }
+        if work[2usize * i + 1usize] < min_y { min_y = work[2usize * i + 1usize] }
+        if work[2usize * i + 1usize] > max_y { max_y = work[2usize * i + 1usize] }
+        i += 1usize
+    }
+    var span = max_x - min_x
+    if max_y - min_y > span * f64(bounds.height) / f64(bounds.width) { span = (max_y - min_y) * f64(bounds.width) / f64(bounds.height) }
+    var scale = 0.0f64
+    if span > 0.0f64 { scale = f64(bounds.width) / span }
+    let center_x = (min_x + max_x) / 2.0f64
+    let center_y = (min_y + max_y) / 2.0f64
+    i = 0usize
+    while i < n {
+        nodes[i] = Coord { x: bounds.x + bounds.width / 2.0 + f32((work[2usize * i] - center_x) * scale), y: bounds.y + bounds.height / 2.0 + f32((work[2usize * i + 1usize] - center_y) * scale) }
+        if !finite(nodes[i].x) || !finite(nodes[i].y) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    var s = 0usize
+    e = 0usize
+    while e < from.len {
+        if from[e] != to[e] {
+            segments[s] = Segment { from: nodes[usize(from[e])], to: nodes[usize(to[e])] }
+            s += 1usize
+        }
+        e += 1usize
+    }
+    let link_layout = Layout { kind: .Rug, coords: zero, segments: segments[..s], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
+    ret (NetworkLayout { nodes: nodes[..n], links: link_layout }, ok)
+}
+
+// Each node's place in its row as a fraction, ordered by its key in
+// `work[2n..3n)`, then by its old place in `work[n..2n)`, then by index; rows are
+// `work[0..n)`.
+fn place_rows(n: usize, work: []f64) {
+    var i = 0usize
+    while i < n {
+        var rank = 0usize
+        var size = 0usize
+        var j = 0usize
+        while j < n {
+            if work[j] == work[i] {
+                size += 1usize
+                let kj = work[2usize * n + j]
+                let ki = work[2usize * n + i]
+                if kj < ki || (kj == ki && (work[n + j] < work[n + i] || (work[n + j] == work[n + i] && j < i))) { rank += 1usize }
+            }
+            j += 1usize
+        }
+        work[3usize * n + i] = (f64(rank) + 0.5f64) / f64(size)
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        work[n + i] = work[3usize * n + i]
+        i += 1usize
+    }
+}
+
+// A directed acyclic graph in rows (D2117), after Sugiyama, Tagawa and Toda
+// (1981): a node's row is its longest path from a source, so every link points
+// down. Nodes start in index order within their row, and `sweeps` alternating
+// passes (down, then up) reorder every row by the mean place of each node's
+// predecessors, then successors, to cut crossings; a node with none keeps its
+// place. Rows split `bounds` evenly top to bottom, and nodes split their row
+// evenly left to right. A cycle is Invalid and self-loops are ignored. `work`
+// holds 4 * node_count values; `links` is a Rug layout of one straight segment
+// per edge that is not a self-loop.
+// ponytail: O(n^2) ranking and O(n * edges) passes suit the hundreds of nodes a
+// readable hierarchy has; edges spanning rows get no dummy nodes, so they may
+// pass through nodes in the rows between.
+fn layered_layout(node_count: usize, from: []const u32, to: []const u32, bounds: geometry.Rect, sweeps: usize, work: []f64, nodes: []Coord, segments: []Segment) -> (NetworkLayout, err) {
+    if node_count == 0usize { ret (zero, Empty) }
+    if from.len != to.len || !valid_bounds(bounds) || sweeps > 1000usize { ret (zero, Invalid) }
+    if work.len < 4usize * node_count || nodes.len < node_count { ret (zero, TooLarge) }
+    var links = 0usize
+    var e = 0usize
+    while e < from.len {
+        if usize(from[e]) >= node_count || usize(to[e]) >= node_count { ret (zero, Invalid) }
+        if from[e] != to[e] { links += 1usize }
+        e += 1usize
+    }
+    if segments.len < links { ret (zero, TooLarge) }
+    let n = node_count
+    // Rows by relaxing every link until none moves; a row reaching n is a cycle.
+    var i = 0usize
+    while i < n {
+        work[i] = 0.0f64
+        work[n + i] = 0.0f64
+        work[2usize * n + i] = f64(i)
+        i += 1usize
+    }
+    var rows = 1usize
+    var moved = true
+    while moved {
+        moved = false
+        e = 0usize
+        while e < from.len {
+            let u = usize(from[e])
+            let v = usize(to[e])
+            if u != v && work[v] < work[u] + 1.0f64 {
+                work[v] = work[u] + 1.0f64
+                if work[v] >= f64(n) { ret (zero, Invalid) }
+                if usize(work[v]) + 1usize > rows { rows = usize(work[v]) + 1usize }
+                moved = true
+            }
+            e += 1usize
+        }
+    }
+    place_rows(n, work)
+    var sweep = 0usize
+    while sweep < sweeps {
+        let downward = sweep % 2usize == 0usize
+        i = 0usize
+        while i < n {
+            var total = 0.0f64
+            var count = 0usize
+            e = 0usize
+            while e < from.len {
+                let u = usize(from[e])
+                let v = usize(to[e])
+                if u != v && downward && v == i {
+                    total += work[n + u]
+                    count += 1usize
+                }
+                if u != v && !downward && u == i {
+                    total += work[n + v]
+                    count += 1usize
+                }
+                e += 1usize
+            }
+            work[2usize * n + i] = work[n + i]
+            if count > 0usize { work[2usize * n + i] = total / f64(count) }
+            i += 1usize
+        }
+        place_rows(n, work)
+        sweep += 1usize
+    }
+    i = 0usize
+    while i < n {
+        nodes[i] = Coord { x: bounds.x + bounds.width * f32(work[n + i]), y: bounds.y + bounds.height * f32((work[i] + 0.5f64) / f64(rows)) }
+        i += 1usize
+    }
+    var s = 0usize
+    e = 0usize
+    while e < from.len {
+        if from[e] != to[e] {
+            segments[s] = Segment { from: nodes[usize(from[e])], to: nodes[usize(to[e])] }
+            s += 1usize
+        }
+        e += 1usize
+    }
+    let link_layout = Layout { kind: .Rug, coords: zero, segments: segments[..s], bars: zero, x_min: bounds.x, x_max: bounds.x + bounds.width, y_min: bounds.y, y_max: bounds.y + bounds.height }
+    ret (NetworkLayout { nodes: nodes[..n], links: link_layout }, ok)
 }

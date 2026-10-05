@@ -44,6 +44,8 @@ fn on_gesture(ctx: *void, g: widget.Gesture) -> err {
         log.hover_ends += 1usize
     case .Drop as d:
         log.taps += 0usize
+    case .Wheel as w:
+        log.taps += 0usize
     }
     ret ok
 }

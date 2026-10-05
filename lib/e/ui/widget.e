@@ -64,11 +64,14 @@ type Custom = struct { ctx: *void, measure: fn(*void, ui_layout.Constraints) -> 
 type Change[T: type] = struct { ctx: *void, invoke: fn(*void, T) -> err }
 type Submit = struct { ctx: *void, invoke: fn(*void) -> err }
 // A gesture the arena settled on: a tap, a drag from its start through its moves to
-// its end, a hover entering and leaving. Positions are logical pixels.
+// its end, a hover entering and leaving, a wheel turned over it (D2114: notches,
+// positive away from the user). Positions are logical pixels.
 type Drag = struct { start: geometry.Point, position: geometry.Point, delta: geometry.Point }
-type Gesture = union enum u8 { Tap: geometry.Point, DoubleTap: geometry.Point, DragStart: geometry.Point, DragMove: Drag, DragEnd: geometry.Point, Hover: geometry.Point, HoverEnd, Drop: Dropped }
+type Wheel = struct { position: geometry.Point, notches: f32 }
+type Gesture = union enum u8 { Tap: geometry.Point, DoubleTap: geometry.Point, DragStart: geometry.Point, DragMove: Drag, DragEnd: geometry.Point, Hover: geometry.Point, HoverEnd, Drop: Dropped, Wheel: Wheel }
 type GestureAction = struct { ctx: *void, invoke: fn(*void, Gesture) -> err }
-// The gestures a region takes part in, as bits: 1 tap, 2 drag, 4 hover.
+// The gestures a region takes part in, as bits: 1 tap, 2 drag, 4 hover, 8 drop,
+// 16 space, 32 wheel.
 type Region = struct { gesture: GestureAction, gestures: u8, enabled: bool, focusable: bool }
 type Shortcut = struct { key: u32, modifiers: input.Modifiers, action: Submit }
 // A focus and shortcut scope: Tab and Shift+Tab travel its focusable descendants
@@ -191,6 +194,7 @@ const GESTURE_DRAG: u8 = 2u8
 const GESTURE_HOVER: u8 = 4u8
 const GESTURE_DROP: u8 = 8u8
 const GESTURE_SPACE: u8 = 16u8
+const GESTURE_WHEEL: u8 = 32u8
 
 type Cell = struct { live: bool, generation: u32, offset: usize, size: usize, align: usize, owner: u32 }
 type Element = struct {
@@ -5189,6 +5193,13 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
         s.long_press_fired = false
         s.has_tooltip_touch = false
         s.has_rich_tooltip = false
+        // A region that takes the wheel (D2114) has it before any zoom or scroll view.
+        // ponytail: even one nested inside it; compare depths if a wheel region ever
+        // holds a scroll view.
+        let (wheeled, has_wheeled) = hit_region(s, usize(s.root), p.position, GESTURE_WHEEL)
+        if has_wheeled {
+            ret fire_gesture(s.elements[wheeled].gesture, Gesture { Wheel: Wheel { position: p.position, notches: f32(mem.bitcast[i32](p.device)) / 120.0 } })
+        }
         let (zoomed, has_zoomed) = hit_zoom(s, usize(s.root), p.position)
         if has_zoomed {
             // A notch scales by a tenth either way.

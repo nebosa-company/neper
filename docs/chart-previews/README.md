@@ -98,8 +98,12 @@ The gage-run preview keeps every crossed part/operator/repeat observation
 visible, colors points by operator, separates parts and marks the overall mean.
 The summary shows the grand mean and largest within-part/operator repeat range;
 it does not estimate variance components or claim measurement-system approval.
-The choropleth joins keyed district rates to caller-supplied polygon rings,
+The choropleth joins keyed district rates to polygon rings read from a GeoJSON
+FeatureCollection (`e.gfx.chart.geojson`, keyed by each feature's `name`),
 preserves a gray missing-data district, and renders holes with opposite winding.
+Its five colours are equal-interval classes (`chart.class_of`), and the legend
+under the map is `chart.class_legend`'s strip with the class breaks written by
+`format_ticks`.
 The proportional-symbol map reuses the same map window and district boundaries;
 its circle areas, including the size legend, scale with site volume. These
 synthetic district outlines avoid implying a real administrative geography.
@@ -209,6 +213,19 @@ ms against matplotlib's 15.63 ms, while matplotlib writes PNG faster (16.51
 against 20.02 ms), because Neper's PNG time is mostly the encoder.
 Every SVG companion writes coordinates to 0.01 px and omits default opacity
 (D2111); the PNGs are unaffected.
+
+The network preview lays out Zachary's karate club (NetworkX's 78 edges) with
+`network_layout` and colours nodes by Louvain communities that
+`e.algo.graph.community` computes in the gallery itself (modularity 0.42, as
+NetworkX reports for its Louvain partition); node area grows with degree, and
+the instructor and administrator whose split the dataset records are labelled.
+
+The layered preview draws twelve chart and foundation modules with
+`layered_layout`, linked by their direct dependencies in `docs/modules.json`:
+longest-path rows put every module below what it builds on, and four
+alternating barycentre sweeps order each row against crossings. Unlike the
+boxed `dependency_graph` diagram, it places points for a caller-drawn graph of
+any size.
 
 These previews come from `examples/chart_gallery.e`. From the repository
 root on Windows, refresh them with:
