@@ -841,12 +841,14 @@ refused, while zero-count individual cells retain empty slots.
 
 | Family | Charts |
 |---|---|
-| Cartesian series | scatter, line, points+line, step/stairs, lollipop, dot/dumbbell, rug, stem-and-leaf (basic), area, range/interval (basic), error bars, confidence bands |
-| Bars and composition | bar, column, grouped, dodged, stacked, 100% stacked, diverging, waterfall/bridge (basic), bullet (basic), Pareto (basic), funnel, population pyramid |
+| Cartesian series | scatter, line, points+line, step/stairs, lollipop, dot/dumbbell, rug, stem-and-leaf (basic), area, range/interval (basic), error bars, confidence bands, bubble, confidence ellipse, fitted curve/regression overlay, combo/secondary-axis |
+| Bars and composition | bar, column, grouped, dodged, stacked, 100% stacked, diverging, waterfall/bridge (basic), bullet (basic), Pareto (basic), funnel, population pyramid, ribbon/rank-over-time, gauge, KPI/target-status |
 | Distributions | histogram, frequency polygon, binned dot plot, density/KDE, ridgeline, box-and-whisker, violin, boxen, beeswarm, strip/jitter, ECDF, QQ, PP, probability plot (normal/exponential) |
 | Matrix and categorical | heatmap, tile, correlation matrix, mosaic, spine (count-based), fourfold, association, parallel coordinates, scatterplot matrix/pairs |
-| Composition and hierarchy | pie, donut, ring, waffle, treemap, sunburst/icicle, circle packing, Sankey, alluvial, chord, streamgraph |
+| Composition and hierarchy | pie, donut, ring, waffle, treemap, sunburst/icicle, circle packing, Sankey, alluvial, chord, streamgraph, mekko/marimekko, Venn/Euler, word/tag cloud |
 | Time and calendars | sparkline, calendar heatmap, horizon, seasonal, fan/forecast, decomposition, control/run chart, event timeline, state timeline, status history |
+| Reporting compositions | in-cell data bars, in-cell sparklines, cross-tab/matrix report bands |
+| Geographic | choropleth, proportional-symbol map |
 
 ### Statistical, quality, medical and scientific diagrams
 
@@ -857,7 +859,12 @@ EWMA, capability sixpack, Pareto, fishbone/Ishikawa, cause-and-effect tree,
 Weibull, OC curve, Gage R&R, multi-vari, main-effects, interaction, cube,
 contour, filled contour, 3-D surface, wireframe,
 polar/radar, rose/wind, spectrogram, waterfall spectra, Bode/Nyquist,
-correlogram/ACF/PACF and empirical variogram.
+correlogram/ACF/PACF and empirical variogram,
+3-D scatter, 3-D histogram, 3-D density surface, ANOM,
+Laney P-prime/U-prime, rare-event G/T, Hotelling T-squared,
+generalized variance, multivariate EWMA,
+process capability normal/nonnormal/attribute/batch,
+Gage bias/linearity, attribute agreement and Gage run chart.
 
 ### Operations, finance and network diagrams
 
@@ -866,7 +873,45 @@ resource histogram, risk matrix, Kanban, PERT/CPM/network, process map/VSM,
 SIPOC, decision tree, org chart, dependency graph, flowchart, state machine,
 sequence diagram, entity-relationship diagram, cohort retention triangle,
 cap table/waterfall, tornado/sensitivity, football field, yield curve, candlestick,
-OHLC, volume, drawdown, returns/volatility and Monte-Carlo histogram/CDF.
+OHLC, volume, drawdown, returns/volatility, Monte-Carlo histogram/CDF
+and aggregate decomposition tree.
+
+### Vendor comparison additions (L068-L075, planning only)
+
+The comparison with Minitab, SigmaXL, SAS, SPSS Statistics, Excel, Power BI,
+Qlik, Grafana and paginated-reporting bands (SSRS/Report Builder, Jaspersoft,
+BIRT) adds explicit entries and acceptance work to the existing L061/L062
+architecture.
+It does not claim full product parity or advance delivered scores. Catalogue
+counts treat slash-separated variants as one entry, exclude guides/interaction,
+and deduplicate repeated Funnel and Pareto entries.
+The expanded catalogue contains 155 distinct grouped entries (22 additions to
+the prior 133), including delivered and planned charts and diagrams.
+
+| Backlog | Missing capability and acceptance gate |
+|---|---|
+| L068 | Bubble size mapping; confidence ellipses; fitted regression/smoothing curves with confidence/prediction bands; mixed-mark combo plots with explicit secondary axes; aligned axis tables. Reuse existing marks, statistical calculations, text and guides. Check size-to-area semantics, singular covariance, curve/band reference values, layer alignment, independent axis domains, missing values, capacity refusals and scene/SVG output. |
+| L069 | 3-D scatter, bivariate histograms and density surfaces over existing mesh/scene and statistical modules. Check bin counts/KDE against numeric references, camera/projection transforms, clipping/depth, non-finite data, degenerate domains and caller storage. This specifies the corresponding 3-D part of L062. |
+| L070 | Choropleth and proportional-symbol maps; projections, region-key joins, geographic legends, missing regions, polygon holes, antimeridian handling and clipping. Reuse e.algo.geo and the common scene backend. Check projection reference points, area-scaled symbols, region matching and rendered geometry; accept caller-provided boundaries rather than requiring a map service. This specifies the geographic part of L062. |
+| L071 | ANOM; Laney P-prime/U-prime; rare-event G/T; Hotelling T-squared, generalized variance and MEWMA; normal/nonnormal/attribute/batch capability plots; Gage bias/linearity, attribute agreement and Gage run charts. Keep calculations in the owning statistics module, including subgroup/phase rules, limit estimation, special-cause flags and applicable intervals. Require published numeric reference fixtures, invalid/small-sample cases, singular-covariance handling and shared-mark previews. Existing basic SPC, capability sixpack and Gage R&R entries stay in the plan. |
+| L072 | Ribbon/rank-over-time geometry, gauge and KPI/target-status compositions, aggregate decomposition trees, and reusable cross-filter/drill events over L062 selection. Reuse chart marks, collection controls and existing table aggregation; validate ties, changing/missing categories, target semantics, child totals, selection identity and accessible labels. Applications bind filters and navigation; this adds no dashboard framework, AI ranking service or Power BI runtime dependency. |
+| L073 | Mekko/marimekko areas, Venn/Euler overlap areas and word/tag-cloud layouts over existing rectangle, set and text marks. Validate frequency-proportional areas, overlap semantics, token weighting, stop-word/exclusion policy, small-token legibility, empty-input refusal, caller-storage bounds and scene/SVG output with accessible labels. |
+| L074 | State-timeline and status-history bands for categorical-over-time data over existing segment marks and time scales; distinct from control/run charts. Validate abutting-interval coalescing, gap/missing-data rendering, legend identity, out-of-order input refusal and scene/SVG output. Flame/traces stay with `e.gfx.trace` profiling; no log-agent dependency. |
+| L075 | Paginated reporting compositions: in-cell data bars, in-cell sparklines and cross-tab/matrix report bands over existing bar/line marks and table aggregation. Validate per-row normalization scope, null handling, header/total bands and scene output; page layout and print drivers stay with host services. |
+
+Comparison sources (official documentation):
+
+- Minitab graphs: https://support.minitab.com/en-us/minitab/help-and-how-to/graphs/graphs-in-minitab/
+- Minitab multivariate charts: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/supporting-topics/understanding-multivariate-control-charts/multivariate-control-charts-in-minitab/
+- Minitab Laney charts: https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/control-charts/how-to/attributes-charts/laney-p-chart/before-you-start/overview/
+- SigmaXL graphical, quality and measurement tools: https://www.sigmaxl.com/SigmaXL_Features.html
+- SAS statistical graphics: https://support.sas.com/documentation/prod-p/grstat/9.4/en/PDF/odsbasicg.pdf
+- SAS/QC: https://support.sas.com/documentation/onlinedoc/qc/indexproc.html
+- SPSS chart gallery: https://www.ibm.com/docs/en/spss-statistics/30.0.0?topic=charts-chart-types
+- SPSS built-in visualizations: https://www.ibm.com/docs/en/spss-statistics/32.0.0?topic=visualizations-available-built-in-visualization-types
+- Excel chart catalogue: https://support.microsoft.com/en-us/excel/available-chart-types-in-office
+- Power BI built-in and custom visuals: https://learn.microsoft.com/en-us/power-bi/visuals/power-bi-visualizations-overview
+- Qlik Sense visualizations: https://help.qlik.com/en-US/sense/May2026/Subsystems/Hub/Content/Sense_Hub/Visualizations/visualizations-visualizing-data.htm
 
 ## Delivery order and gates
 

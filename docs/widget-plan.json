@@ -6,7 +6,8 @@
     "e.ui.control",
     "e.ui.collection",
     "e.ui.overlay",
-    "e.ui.navigation"
+    "e.ui.navigation",
+    "e.ui.code_editor"
   ],
   "resolved_blockers": [
     "native-shell-api",
@@ -1565,6 +1566,408 @@
             "ReducedMotionPolicy",
             "AnimationFrameStats",
             "HandRolledMotionMigration"
+          ],
+          "delivered": []
+        }
+      ]
+    },
+    {
+      "id": "P7",
+      "name": "Complete native code editor (docs/code-editor-plan.md)",
+      "release": "next",
+      "blocked_by": [
+        "P5",
+        "next-release"
+      ],
+      "items": [
+        {
+          "id": "P7-01",
+          "name": "Document and transaction model",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeDocument",
+            "CodeBalancedStorage",
+            "CodeLineIndex",
+            "CodeSnapshots",
+            "CodeAtomicTransactions",
+            "CodeChangeMapping",
+            "CodePositionEncoding",
+            "CodeStorageReclamation",
+            "CodeDocumentLifetimes",
+            "CodeCapacityFailureAtomicity"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-02",
+          "name": "Native editing input and accessibility",
+          "module": "e.ui.input",
+          "components": [
+            "CodePhysicalLogicalKeys",
+            "CodeDeadKeys",
+            "CodeCompositionLifecycle",
+            "CodeCompositionCandidateRect",
+            "CodePointerDevices",
+            "CodeNativeTextRanges",
+            "CodeNativeSelectionActions",
+            "CodeNativeInputMatrix"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-03",
+          "name": "Selections and editing commands",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeGraphemeNavigation",
+            "CodeWordSubwordNavigation",
+            "CodeVisualBidiNavigation",
+            "CodePreferredColumn",
+            "CodeLinePageDocumentNavigation",
+            "CodeMultipleSelections",
+            "CodeRectangularSelections",
+            "CodePointerSelection",
+            "CodeDragDropEditing",
+            "CodeMultiRangeClipboard",
+            "CodePrimarySelection",
+            "CodeReadOnlyRegions",
+            "CodeSelectionNormalization"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-04",
+          "name": "History and saved state",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeUndoRedo",
+            "CodeSelectionHistory",
+            "CodeTypingCoalescing",
+            "CodeHistoryGroups",
+            "CodeInverseEdits",
+            "CodeSavedRevision",
+            "CodeHistoryLimits",
+            "CodeHistorySerialization"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-05",
+          "name": "Virtualized editor view",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeEditorRuntimeIntegration",
+            "CodeVirtualRows",
+            "CodeLayoutCache",
+            "CodeScrollAnchoring",
+            "CodeEditorScrollbars",
+            "CodeSoftWrapping",
+            "CodeTabStops",
+            "CodeCaretAndDropCursor",
+            "CodeGeometryQueries",
+            "CodeFontZoomDpi",
+            "CodeLongLineLayout",
+            "CodeFullBidiLayout",
+            "CodeComplexScriptShaping",
+            "CodeTouchSelectionHandles"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-06",
+          "name": "Decorations and gutters",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeMappedRangeSets",
+            "CodeInlineDecorations",
+            "CodeLineDecorations",
+            "CodeBlockWidgets",
+            "CodeReplacementDecorations",
+            "CodeAtomicRanges",
+            "CodeCustomLayers",
+            "CodeGutterProviders",
+            "CodeLineNumbers",
+            "CodeActiveLineGutter",
+            "CodeBookmarkSlots",
+            "CodeDiagnosticGutter",
+            "CodeChangeGutter",
+            "CodeWhitespaceMarkers",
+            "CodeIndentGuidesAndRulers"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-07",
+          "name": "Language and syntax engine",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeLanguageRegistry",
+            "CodeLazyLanguageLoading",
+            "CodeLanguageHotSwitch",
+            "CodeIncrementalTokenizer",
+            "CodeIncrementalParseRegions",
+            "CodeMixedLanguages",
+            "CodeParseBudgets",
+            "CodeSyntaxRecovery",
+            "CodeSemanticHighlightOverlay",
+            "CodeTokenThemeRoles",
+            "CodeLanguageCapabilityMetadata"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-08",
+          "name": "Complete JustCode and TIOBE top-30 language packs",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeWebLanguages",
+            "CodeTypedWebLanguages",
+            "CodeProseLanguages",
+            "CodeSystemsLanguages",
+            "CodeManagedLanguages",
+            "CodeScientificLanguages",
+            "CodeDataLanguages",
+            "CodeSqlDialects",
+            "CodeScriptLanguages",
+            "CodeNeperPascalAssembly",
+            "CodeVisualBasicNet",
+            "CodeFortranLanguage",
+            "CodePhpLanguage",
+            "CodeScratchProjects",
+            "CodeAdaLanguage",
+            "CodeObjectiveCLanguage",
+            "CodeCobolLanguage",
+            "CodeJuliaLanguage",
+            "CodeRubyLanguage",
+            "CodePerlLanguage",
+            "CodeSasLanguage",
+            "CodeClassicVisualBasic",
+            "CodeMatlabLanguage",
+            "CodeCamlLanguage",
+            "CodePrologLanguage",
+            "CodeGmlLanguage"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-09",
+          "name": "Structural editing",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeAutoIndent",
+            "CodeIndentSelection",
+            "CodeSmartNewline",
+            "CodeBracketQuotePairs",
+            "CodeBracketMatching",
+            "CodeTagClosingMatching",
+            "CodeSmartCommentToggle",
+            "CodeFoldRangesAndGutter",
+            "CodeFoldCommandsAndPlaceholders",
+            "CodeStructuralSelection",
+            "CodeLineTransforms",
+            "CodeTransposeCommands",
+            "CodeCaseAndSortTransforms",
+            "CodeGuidInsertionHook"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-10",
+          "name": "Search and replacement",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeLiteralSearch",
+            "CodeRegexSearch",
+            "CodeCaseWholeWordSearch",
+            "CodeSelectionScopedSearch",
+            "CodeSearchNavigation",
+            "CodeSearchMatchHighlight",
+            "CodeSelectMatches",
+            "CodeSearchMatchCounter",
+            "CodeReplaceNextAll",
+            "CodeReplacementCaptures",
+            "CodeSearchCancellation",
+            "CodeSearchQueryPersistence",
+            "CodeSearchPanel"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-11",
+          "name": "Completion and snippets",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeCompletionSources",
+            "CodeCompletionTriggers",
+            "CodeCompletionRanking",
+            "CodeCompletionSections",
+            "CodeCompletionDocumentation",
+            "CodeAsyncCompletionLifecycle",
+            "CodeCompletionCacheValidity",
+            "CodeCompletionResolve",
+            "CodeCompletionEditAcceptance",
+            "CodeCompletionCommitCharacters",
+            "CodeSnippetTabstops",
+            "CodeSnippetMirrorsChoices",
+            "CodeSnippetVariablesTransforms",
+            "CodeMultiCursorSnippets",
+            "CodeInlineCompletion"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-12",
+          "name": "Diagnostics and spelling",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeRevisionedDiagnostics",
+            "CodeDiagnosticMetadata",
+            "CodeDiagnosticSquiggles",
+            "CodeDiagnosticTooltips",
+            "CodeProblemsPanelNavigation",
+            "CodeDiagnosticSourceCounts",
+            "CodeQuickFixes",
+            "CodeSpellDictionaries",
+            "CodeSpellSuggestions",
+            "CodeSpellIgnoreAndExclusions",
+            "CodeDiagnosticRefreshRetraction"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-13",
+          "name": "Language server transport",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeLspFraming",
+            "CodeLspJsonRpc",
+            "CodeLspProcessTransport",
+            "CodeLspSuppliedTransport",
+            "CodeLspLifecycleCapabilities",
+            "CodeLspDocumentSync",
+            "CodeLspPositionEncoding",
+            "CodeLspCancellationTimeouts",
+            "CodeLspProgressPartialResults",
+            "CodeLspWorkspaceConfiguration",
+            "CodeLspDynamicRegistration",
+            "CodeLspFileEvents",
+            "CodeLspRestartRecovery",
+            "CodeLspBoundedMessages"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-14",
+          "name": "Semantic language services",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeLspCompletionAdapter",
+            "CodeHover",
+            "CodeSignatureHelp",
+            "CodeDefinitionDeclaration",
+            "CodeTypeDefinitionImplementation",
+            "CodeReferencesHighlights",
+            "CodeLocalOutline",
+            "CodeDocumentWorkspaceSymbols",
+            "CodeBreadcrumbs",
+            "CodePrepareRename",
+            "CodeCodeActionsResolve",
+            "CodeFormatting",
+            "CodeSemanticTokensDelta",
+            "CodeProviderFoldingSelection",
+            "CodeDocumentLinks",
+            "CodeCodeLens",
+            "CodeInlayHints",
+            "CodeColorsAndPresentations",
+            "CodeLinkedEditing",
+            "CodeInlineValues",
+            "CodeCallTypeHierarchies",
+            "CodeMonikers",
+            "CodeWorkspaceEdits",
+            "CodeNeperToolingAdapter"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-15",
+          "name": "Configuration and extension system",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeConfigCompartments",
+            "CodeExtensionPrecedence",
+            "CodeExtensionLifecycle",
+            "CodeTransactionFilters",
+            "CodeStateEffectsAndFields",
+            "CodeUpdateListeners",
+            "CodeCommandKeymaps",
+            "CodeShortcutChords",
+            "CodePlatformKeyBindings",
+            "CodeEditorThemes",
+            "CodeAutismPalette",
+            "CodeHighContrast",
+            "CodeFontLigatureOptions",
+            "CodeBionicReading",
+            "CodeEditorLocalization",
+            "CodeAccessibleEditorPopups"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-16",
+          "name": "Diff and extended editor views",
+          "module": "e.ui.code_editor",
+          "components": [
+            "CodeSideBySideDiff",
+            "CodeUnifiedDiff",
+            "CodeThreeWayMerge",
+            "CodeConflictHunkActions",
+            "CodeDiffAlignmentFolds",
+            "CodeMinimap",
+            "CodeOverviewRuler",
+            "CodeStickyContext",
+            "CodeBreakpointExecutionHooks",
+            "CodeCollaborativeTransactions",
+            "CodeRemotePresence",
+            "CodeCollaborativeLocalUndo"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-17",
+          "name": "Application integration",
+          "module": "e.ui.navigation",
+          "components": [
+            "CodeSharedDocumentViews",
+            "CodeTabSplitIntegration",
+            "CodeSessionRestore",
+            "CodeFocusedPaneStatus",
+            "CodeContextCommandMenus",
+            "CodeEncodingEolRoundTrip",
+            "CodeSaveReloadConflicts",
+            "CodePreviewRunHooks",
+            "CodeTerminalExplorerHooks",
+            "CodeRecentFilesAssociationHooks",
+            "CodePrintExport",
+            "CodeJustCodeParityExample"
+          ],
+          "delivered": []
+        },
+        {
+          "id": "P7-18",
+          "name": "Verification and documentation",
+          "module": "e.ui.testing",
+          "components": [
+            "CodeEditorParityTraces",
+            "CodeEditorFailureInjection",
+            "CodeEditorFuzzChecks",
+            "CodeEditorNativeAccessibilityChecks",
+            "CodeEditorNativeImeChecks",
+            "CodeEditorKeyboardLayoutChecks",
+            "CodeEditorPlatformMatrix",
+            "CodeEditorPerformanceBudgets",
+            "CodeEditorMemoryBenchmarks",
+            "CodeEditorSceneSamples",
+            "CodeEditorApiDocumentation"
           ],
           "delivered": []
         }

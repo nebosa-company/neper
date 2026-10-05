@@ -33043,6 +33043,29 @@ of marks. Violin mirrors the KDE estimate into a filled caller-owned outline.
 Q-Q gets a small separate fixture because the combined fixture exceeds the
 current self-host compiler arena.
 
+## D1795 — Plan a native complete code editor against JustCode and CodeMirror 6
+
+JustCode 0.4.6 uses CodeMirror 6, as verified in its editor imports, language
+registry and package lock. `docs/code-editor-plan.md` records source-to-feature
+coverage, all 35 language IDs, native input/text prerequisites, ownership,
+transaction invariants, provider/LSP contracts and acceptance checks. P7 in
+`docs/widget-plan.json` retains every required capability in 18 ordered work
+packages, all undelivered, under candidate module `e.ui.code_editor` and existing
+input/navigation/testing owners. P7 uses the next-release convention and depends
+on P5's UI contracts; it has no technical dependency on P6's motion catalogue.
+The existing serial picker still visits P6 first.
+
+The native editor reuses the UI/text/scene services, with a dedicated runtime
+integration for focus, editing, virtualization and text-range semantics. Its
+UTF-8 document and atomic revisioned transactions are separate from each view's
+selection, folds and scrolling. The current mutable rope, absent host IME,
+two-level text layout and limited shaping must be evaluated or extended rather
+than assumed sufficient. LSP, semantic completion/navigation, diff/merge and
+collaborative provider support are required planned extensions beyond JustCode's
+installed editor path. Application terminal/explorer/run/file policies use host
+hooks and existing shell owners. Planning does not advance the active chart
+capability or claim that any editor component has shipped.
+
 ## D1796 — Keep matrix values separate from palette and panel layout
 
 `chart.heatmap` maps row-major numeric values to caller-owned tiles, while
@@ -33170,6 +33193,16 @@ and independent-segment branches; no binning or painter code is duplicated.
 Windows and Linux. The gallery adds a PNG/SVG pair for each chart. Rug guides
 omit a meaningless y-grid; richer density-plus-rug composition remains planned.
 
+## D1807 — Track the complete code editor in the serial backlog
+
+L065 appends the native code editor plan to `docs/work-queue.json` at score 0.
+It covers all 18 P7 work packages and 231 components, with the detailed contract
+in `docs/code-editor-plan.md`. Its score is the fraction of P7 components
+delivered with evidence; score 1 additionally requires every package acceptance
+check. The existing queue head retains its priority. The generated backlog in
+`docs/progress.html` now includes L065 through the existing renderer, without a
+separate readiness source or hand-edited HTML.
+
 ## D1808 — Compose point-line charts and jittered strips from existing marks
 
 `PointLine` combines the existing scatter and line layouts under the same
@@ -33180,6 +33213,19 @@ collision avoidance; beeswarm packing is a separate planned chart. Both use
 caller-owned storage and existing mark adapters. `gfx_chart_distribution`
 checks geometry, capacity and adapter output on Windows and Linux, and the
 gallery adds a PNG/SVG pair for each.
+
+## D1809 — Require JustCode coverage plus the TIOBE top 30
+
+The latest TIOBE index published when checked on 2026-10-02 is September 2026.
+`docs/code-editor-plan.md` maps its top 30 to mandatory language support while
+retaining every JustCode language. Sixteen missing entries become individual
+P7-08 components, taking P7 from 231 to 247 components and the language scope to
+51 modes/adapters. Java and C# were already included; PHP is now explicit.
+Scratch requires an editable structured project adapter with lossless archive
+round trips, not a text-file association. C/C++, VB.NET/classic VB and ambiguous
+suffixes retain explicit dialect choices. L065 remains at score 0, its denominator
+and evidence reflect the expanded scope, and the progress page is regenerated.
+The source snapshot is refreshed before release without dropping promised packs.
 
 ## D1810 — Pack beeswarm dots and stack histogram observations
 
@@ -33205,6 +33251,34 @@ guard and passes with it on both hosts. This conservatively costs the scroll
 shortcut for scenes with fixed paint; tracking its exact repaint bounds is the
 later optimization. The gallery's existing PNGs re-render without guide ghosts.
 
+## D1812 — Adopt JustCode extras at their reusable library or tooling boundary
+
+L066 plans a generic safe Markdown UI viewer over the existing Markdown parser
+and text controls. L067 plans a refresh-stable file-tree adapter over the existing
+stable-key trees and numeric collation, with host-specific path identity. These
+fit the UI standard library without duplicating its current primitives.
+
+T033 plans project source metrics and snapshot deltas; T034 plans a reattachable
+harness journal panel; T035 plans resource/translation/command consistency audits.
+Project traversal/report policy, harness schemas/actions and repository validation
+belong to tooling. Reusable journal presentation composes existing UI controls;
+a pure metrics helper is extracted only when a second consumer needs it. No
+Perpetum, .harness or application resource policy becomes a runtime dependency.
+All five records append at score 0 with acceptance checks and JustCode source
+anchors. They preserve the active queue head and the P7 editor count; generic
+viewer/tree work can be consumed by P7 rather than implemented twice.
+
+## D1813 — Show numbered unfinished work by category in generated progress
+
+`scripts/render_progress.py` emits four native `details` sections for unfinished
+compiler, tooling, module and library work. Each summary includes its item count;
+rows include a number and the existing task ID or module name. Queue categories
+retain pickup order and omit score-1 work. Module rows list actual absent fenced
+declarations and selected algorithms from the same source/seed calculation as
+the module meter, rather than treating every `partial` module as unimplemented.
+The controls work by keyboard without JavaScript, and empty categories explicitly
+report no unfinished items. The HTML remains generated from repository sources.
+
 ## D1814 — Derive waterfall bars and connectors from cumulative levels
 
 `chart.waterfall` treats the first value as an absolute opening amount and
@@ -33215,6 +33289,26 @@ connectors; no separate mark grammar is needed. Zero-height steps remain
 level connectors. The focused composition fixture checks signed geometry,
 capacity and scene/SVG emission on Windows and Linux. Step colours and
 category labels remain a gallery/guide composition concern.
+
+## D1816 — Queue vendor chart gaps on the existing chart architecture
+
+The comparison with Minitab, SigmaXL, SAS, SPSS Statistics, Excel and Power BI
+adds L068-L072 at score 0: common marks/overlays/compositions and axis tables;
+3-D scatter/distributions; geographic charts; advanced quality/measurement
+variants; and reusable business visuals/filter/drill events. The chart catalogue
+names each addition, and its vendor-comparison table defines acceptance gates
+and official source links. New groups append after existing work; L061 remains
+the active partial capability with its current evidence and score.
+
+L068/L071/L072 extend the L061 grammar and existing domain calculations.
+L069/L070 specify parts of L062's existing 3-D/geographic scope rather than
+introducing parallel renderers. Guides, axis tables and interactions are not
+counted as chart types; slash variants count once and repeated catalogue names
+are deduplicated. Caller-provided geography, aggregate trees and application
+event bindings preserve the standard-library boundary and D1785's dashboard
+framework non-goal. Statistical limits and fitted intervals need numeric
+reference evidence, not just plausible pictures. Planning adds no delivery
+credit; docs/progress.html is regenerated from the queue and chart plan.
 
 ## D1815 — Export chart rasters before opening arena-backed PNG writers
 
@@ -33227,6 +33321,28 @@ rasterization from encoding preserves this contract without another PNG codec
 or a dedicated device owner. `gfx_chart_png` decodes a transparent round trip
 on Windows and Linux; the gallery now uses the same path for all 34 PNGs.
 
+## D1817 — Queue top-50 BI remainder as L073-L075, keep AI/service visuals out
+
+**Decision.** The top-50 BI/statistical/reporting comparison against
+`docs/charting-engine-plan.md` leaves three plannable gaps, queued at score 0:
+L073 mekko/marimekko, Venn/Euler and word/tag-cloud layouts; L074 operational
+state-timeline and status-history bands (flame/traces stay with `e.gfx.trace`
+profiling); L075 paginated reporting compositions (in-cell data bars,
+in-cell sparklines, cross-tab/matrix bands; page layout and print drivers stay
+with host services). Ribbon, combo/secondary-axis, gauge/KPI, choropleth and
+decomposition-tree gaps were already covered by L068, L070 and L072 and are not
+duplicated. AI ranking/explanation visuals (Key Influencers, Q&A,
+Spotter/Genie/Copilot) and hosted custom-visual runtimes (Power Apps embed,
+Domo bricks, R/Python visual hosts) remain non-goals per D1785 and L072: the
+plannable geometry already has deterministic counterparts (fitted overlays in
+L068, aggregate decomposition trees in L072). Numbered D1817 because D1816 is
+referenced by in-progress L072 evidence; D1815's duplicate numbering is left
+untouched.
+
+**Evidence.** Catalogue rows and L073-L075 acceptance gates in
+`docs/charting-engine-plan.md`; orders 171-173 in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
+
 ## D1818 — Compose bullet charts from existing bar and rule layers
 
 `chart.bullet` returns widest-to-narrowest qualitative bands, a thinner actual
@@ -33236,6 +33352,25 @@ paint code. Thresholds must be strictly ascending and both values within the
 last threshold. `gfx_chart_composition` checks geometry, capacity, invalid
 domains and adapter commands on Windows and Linux, and the gallery adds a
 PNG/SVG pair. Multi-row labels and palette defaults remain guide work.
+
+## D1819 — Queue testable Delphi-RTL gaps as L076-L086, defer radio/push/sensors
+
+**Decision.** The Delphi RTL comparison (`rtl/` 465 units plus soap/xml/Indy/data
+siblings, against 360 planned `e.*` modules) queues eleven deterministically
+testable gaps at score 0: pure-tier L076 filename masks, L077 unit registry,
+L078 TOTP/HOTP, L079 NTP codec, L080 SOAP codec, L081 XSD/XSLT; loopback-tier
+L082 SMTP, L083 IMAP/POP3, L084 FTP/FTPS, L085 LDAP, L086 mDNS/DNS-SD, reusing
+the existing 127.0.0.1 fixtures (net, net_http, net_tls). Bluetooth/BLE, push
+notifications and sensor/location surfaces are deferred, not queued: no harness
+can test them without radios, vendor credentials or hardware. Their
+unit-testable slices (PDU parsing, JWT/payload codecs) may ride as codec-first
+items behind host services later. L045 keeps JOSE/OIDC/SAML/SCIM; L085 adds the
+LDAP half. Platform imports (Winapi, iOSapi/Androidapi), COM/VCL/FMX and the
+router-framework question stay answered by `e.os`+`extern`, extension packages
+and the D1785 hand-build rule.
+
+**Evidence.** Orders 174-184 in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
 
 ## D1820 — Keep Pareto counts and cumulative share as separate layers
 
@@ -33247,6 +33382,24 @@ negative/non-finite input and short storage are refused. A quadratic insertion
 sort is the present ceiling; replace it with caller-scratch mergesort for large
 category sets. `gfx_chart_composition` checks geometry and scene/SVG adapters
 on Windows and Linux, and the gallery adds a paired preview.
+
+## D1821 — Queue VCL/FCL control gaps as L087-L089
+
+**Decision.** The VCL-vs-widget-plan comparison (50 units inventoried from
+`D:\delphi.112.source-code\vcl` against P0–P5 delivered 341/341) queues three
+items at score 0: L087 ribbon-style command UI (no equivalent; Vcl.Ribbon units
+are absent from this snapshot too), L088 custom title-bar panel (verified
+missing: only an incidental local in `navigation.e`; host keeps real chrome),
+L089 banded report designer engine over `e.db`/L032 with phase-4 print jobs
+(L075 covers chart-side compositions only; PDF export waits on a writer).
+FCL is ~95% non-visual and otherwise covered (fcl-db → `e.db`, fcl-web client
+→ `e.net.http`, XPath verified in `e.fmt.xml`); its gaps rode L081/L085/L046 or
+stay open (BMP/GIF/TIFF decoders, gettext catalogs). Media player, web view
+and OLE containers stay phase-5 extension packages with no backlog items, per
+the user's ruling; DB-aware controls stay a binding-adapter policy.
+
+**Evidence.** Orders 185-187 in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
 
 ## D1822 — Compose pie and donut slices as Area polygons
 
@@ -33271,6 +33424,24 @@ trapezoids, tapering each stage to the next. It represents conversion stages,
 not a statistical funnel plot. Both keep geometry caller-owned and reuse scene
 and SVG adapters. `gfx_chart_funnel_grid` checks geometry and refusals on
 Windows and Linux; the gallery adds two paired previews.
+
+## D1824 — Queue Celvyx visual gaps as L090-L099
+
+**Decision.** The Celvyx visual inventory (~70 native chart types, ~708 dialogs,
+~90 hand-rolled painters, zero third-party display deps) against the widget and
+chart plans queues ten items at score 0: L090 spreadsheet grid (visual half of
+queued L026-L029/L032), L091 flow/node-graph editor (diagrams alone do not
+edit), L092 ML-diagnostics (PDP/ICE, silhouette, missingness), L093 2.5D chart
+effects, L094 pieOfPie/barOfPie, L095 bioassay plots (fits ride L015), L096 ROC
+extensions, L097 QC/agreement extensions, L098 equation rendering, L099 ink
+canvas. Print preview rides L089 with no separate item; Copilot/AI panes and
+dashboard shells stay non-goals per D1785/D1817; QAT/keytips ride L087 and the
+formula bar rides L026 plus Autocomplete. Everything else mapped onto delivered
+or already-queued work (SPC/survival/finance/Gantt/Kanban/SPC, sparklines,
+slicers, pivots, task panes, print shells).
+
+**Evidence.** Orders 188-197 in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
 
 ## D1825 — Map bubble values to circle area on scatter scales
 
@@ -33593,6 +33764,18 @@ threshold, with a sorted-sweep upgrade path if large grids demand it. The
 existing Area, Rug and Line adapters render all three previews. Numeric and
 scene/SVG checks run in `gfx_chart_binary_curves` on Windows and Linux.
 
+## D1852 — Queue XLSX worksheet encode as L100 for grid/report export
+
+**Decision.** The DevExpress comparison showed L044 covers XLSX decode only:
+queue L100 (order 198, Formats, score 0) for worksheet encode — values, shared
+strings, basic styles, column widths and merges over the `e.fmt.xlsx` read model
+— serving DataGrid and L089 report export (cxExportGrid4Link parity).
+Round-trip fixtures through L044 decode plus Excel-compat bounds; charts,
+pivots and PDF export stay out. L044 itself is untouched.
+
+**Evidence.** Order 198 in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
+
 ## D1853 — Derive OLS influence values once, then reuse existing marks
 
 `e.algo.stat.regression_diagnostics` streams the existing bivariate moments once
@@ -33849,6 +34032,27 @@ the gallery adds a PNG/SVG pair. Automatic scaling, missing gaps and grouped
 multi-series layout remain planned. Reference: latticeExtra `horizonplot` and
 ggHoriPlot `geom_horizon` documentation.
 
+## D1873 — Queue PyPI top-50 gaps as L101-L111, AWS excluded
+
+**Decision.** The top-50 PyPI validation (Sept–Oct 2026 rankings, every uncertain
+match grepped, not asserted) queues eleven items at score 0, skipping the AWS
+SDK/S3 item per the user's ruling: L101 gRPC over `e.fmt.protobuf`; L102
+process/system counters (verified absent); L103 RRULE plus lenient date parsing;
+L104 terminal progress/rich tables with Windows VT enable; L105 platform
+directories (verified absent); L106 env-file loading (reading exists, parsing
+does not); L107 HTTP keep-alive pooling (no pool surface found); L108 PEP 440
+specifiers over `e.fmt.semver`; L109 trust-root provisioning (no store readers
+or bundle found); L110 statistical legacy-charset detection (BOM/UTF heuristics
+only); L111 JSON-path queries — `e.algo.query` holds Mo/Hilbert range ordering,
+not document queries. L076 gains gitwildmatch (`**`, dir-only) as a follow-on.
+Covered outright (~30, incl. portable `file_lock` on both hosts), already queued
+(pydantic→L031, pandas→L032/L064, Pygments→L065, openpyxl→L044/L100, OAuth→L045),
+or non-goals (web frameworks, model stacks, packaging toolchain, typing
+backports) stay out.
+
+**Evidence.** Orders 199-209 in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
+
 ## D1874 — Seasonal subseries compose line traces and mean rules
 
 `seasonal_subseries` groups a numeric sequence by caller-selected period,
@@ -33886,6 +34090,23 @@ Windows and Linux; the gallery adds a PNG/SVG pair. Multiplicative and STL
 decomposition, missing observations and date labels remain planned. Reference:
 R `stats::decompose` and forecast `autoplot.decomposed.ts` documentation.
 
+## D1877 — Queue Go-library gaps as L112-L123, cloud and frameworks out
+
+**Decision.** The top-Go-library validation (import corpus plus star rankings;
+every uncertain match grepped) queues twelve items at score 0: L112 ORM layer,
+L113 SQL migration runner, L114 Redis/Mongo/Elastic clients, L115 NATS client
+(Kafka/AMQP deferred), L116 Prometheus exposition plus OTLP export, L117
+password-hashing KDFs (verified absent: no bcrypt/argon2/scrypt), L118
+mock/stub framework (verified absent from `e.test`), L119 virtual FS, L120
+RAR/7Z decoders, L121 SOCKS5, L122 seeded fakers, L123 layered config with
+watch. S3-compatible storage stays out per the cloud ruling; web frameworks
+stay under the hand-build rule; L101 keeps its scope (classic-H2 note recorded
+but not acted on) as does L048. TUI frameworks, VCS ops, WebAuthn and
+blockchain codecs stay scope questions, not items.
+
+**Evidence.** Orders 210-221 in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
+
 ## D1878 — Correlogram shares Rug strokes across ACF and PACF
 
 `correlogram` computes mean-centered, lag-zero-normalized sample ACF and
@@ -33921,6 +34142,27 @@ weight. Its filled sectors reuse the existing pie/share renderer. The
 refusals and scene/SVG output on Windows and Linux; two PNG/SVG previews are
 added. Raw-angle binning, curved text and polar axis interaction remain planned.
 References: R `fmsb::radarchart`, `circular::rose.diag` and ggplot2 `coord_radial`.
+
+## D1881 — Queue Rust-crate gaps as L124-L135 plus six backlog follow-ons
+
+**Decision.** The top-Rust-crate validation (import corpus plus star rankings;
+every uncertain match grepped) queues twelve items at score 0: L124 extended
+image decoders plus EXIF, L125 SVG document rendering, L126 D-Bus codec and
+client (verified: only a forward reference plus hand-rolled AT-SPI calls),
+L127 object-store abstraction (vendor clouds out), L128 snapshot testing, L129
+in-language bench harness, L130 diagnostic report rendering, L131
+parser-combinator kit, L132 HTML sanitizer, L133 terminal line editor, L134
+shell completions plus man pages, L135 micro-slivers bundle. Six follow-ons
+amend existing items instead of new ones: humantime durations into L103,
+interactive prompts into L104, classic H2 into L101, consul/vault/etcd/docker
+scope into L048, cargo ranges into L108, IPv6 CIDR into L019. Verified
+non-gaps along the way: RSA verification plus ECDSA P-256 in `x509`/`sign`,
+BLAKE3, urlencoded forms, portable `file_lock`. Frameworks, derive macros,
+training stacks, TUI frameworks, VCS ops, WebAuthn and blockchain codecs stay
+out by design or as open scope questions.
+
+**Evidence.** Orders 222-233 in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
 
 ## D1882 — Ternary diagrams close three parts into reusable Scatter/Rug marks
 
@@ -34010,6 +34252,56 @@ flat data, refusals and scene/SVG adapters on Windows and Linux; the gallery
 adds two PNG/SVG pairs. References: R PerformanceAnalytics `Return.calculate`
 and `roll::roll_sd` documentation.
 
+## D1889 — Queue Zig gaps as L136-L137 plus two backlog follow-ons
+
+**Decision.** The Zig validation (ecosystem inventory plus targeted greps for
+pty, SFTP, Gemini/gopher/DHCP/SNMP/QR) queues two items at score 0: L136
+terminal emulator engine (pty, VT parser, cell grid; verified absent) and L137
+micro-slivers II (DHCP, SNMP, Gemini/gopher/finger, QR). Two follow-ons amend
+existing items: SFTP into L048 behind its queued SSH transport, image
+write-side into L124. Zig's stdlib maps onto delivered Neper core almost 1:1;
+known-folders rides L105, totp/jwt/uuid/semver have direct counterparts, zls
+rides P7-13, Mach and training stacks stay out by design, TUI frameworks and
+the Wayland client stay open questions.
+
+**Evidence.** Orders 234-235 in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
+
+## D1890 — Queue .NET gaps as L138-L152 plus five backlog follow-ons
+
+**Decision.** The .NET validation (NuGet top-downloads plus the enterprise set;
+image ops, calendars, resilience policies and CLI trees all grepped) queues
+fifteen items at score 0: L138 mediator, L139 object mapper, L140 background
+jobs, L141 virtual actors, L142 BDD runner, L143 mutation testing, L144
+architecture-rule testing, L145 PDF generation (fills the hole L089 names),
+L146 Word generation, L147 document plus event store, L148 scheduler control,
+L149 crash-report upload, L150 NodaTime-style dates (TZif present, non-ISO
+calendars absent), L151 industrial protocols Modbus-first, L152 micro-slivers
+III. Five follow-ons amend existing items: image-processing ops into L124,
+Dapper-family notes into L112, JWKS rotation into L045, anonymous fixtures
+into L122, Humanizer dates into L104. Frameworks, browser automation,
+commercial vendors, training stacks and legacy controls stay out by standing
+rules.
+
+**Evidence.** Orders 236-250 in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
+
+## D1891 — Queue Java gaps as L153-L161 plus nine backlog follow-ons
+
+**Decision.** The Java validation (Maven rankings plus the enterprise set; GSS,
+matcher, ZeroMQ, Tika and symbolic greps all closed) queues nine items at score
+0: L153 extraction facade, L154 symbolic CAS, L155 graph formats, L156
+ZeroMQ/NNG, L157 expression languages, L158 object pool, L159 test matchers,
+L160 micro-slivers IV, L161 Rete rules engine. Nine follow-ons amend existing
+items: EventBus/Vert.x into L138, Cucumber/Spock/Serenity into L142, MapStruct
+into L139, LaTeX/MathML into L098, ar/cpio into L120, Pulsar/RocketMQ/Artemis
+into the L115 deferred list, BACnet/KNX into L151, JMX beans into L116, Spring
+Batch/Quartz into L140. Frameworks, browser automation, commercial vendors,
+legacy protocols, training stacks, TUI and VCS stay out by standing rules.
+
+**Evidence.** Orders 251-259 in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
+
 ## D1892 — Gantt progress composes two Bar layers on a shared time axis
 
 `gantt` accepts caller-owned tasks with f64 start/end times, categorical rows
@@ -34075,6 +34367,20 @@ checks overlap and gap loads, over-capacity geometry, invalid/caller-storage
 paths and scene/SVG output on Windows and Linux. The gallery adds a PNG/SVG
 pair. Microsoft Project's Resource Graph documents workload bars and a maximum
 units comparison: https://support.microsoft.com/en-us/project/view-resource-workloads-and-availability-in-project-desktop
+
+## D1898 — Queue LLMx harness gaps as T036-T038 plus six backlog follow-ons
+
+**Decision.** The OpenCode-harness audit queues three tooling items at score 0:
+T036 OpenCode skill plus agent routing, T037 lang-stats harness split with
+honest free-tier pricing, T038 agent-ingestible queue and decision digests.
+Six follow-ons amend existing items: card repair (mojibake plus traps) into
+T026, the bootstrap-deletion LLMx lever into C088, OpenCode-row coverage into
+T028 and T029, a parallel-session claim protocol into T034, an OpenCode arm
+into T027. E2 measurement stays the gate before further LLMx features earn
+trust.
+
+**Evidence.** Orders 36-38 in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
 
 ## D1899 — Swimlane flows cross role partitions without claiming BPMN conformance
 
@@ -34168,6 +34474,19 @@ consume the same Bar/Rug geometry. Windows/Linux fixtures check numerical
 references, invalid probabilities/parents/cycles, capacity and adapters. The
 gallery adds a PNG/SVG pair. Risk preferences, influence diagrams, utility
 functions and decision DAGs remain follow-on work.
+
+## D1904 — Record the three-harness snapshot in T026 and T028
+
+**Decision.** The 2026-10-03 lang-stats snapshot (14 days, --harness split)
+lands in T026 and T028 evidence without touching scores: Claude improved on
+cost and first-fix (ctx 388, script 19%, $/KB 0.442, 1-edit 54.3%) but slipped
+on turns and first-ok; Codex shows heavier iteration with repeat at 70.0;
+DeepSeek has zero rows so the dsh split measures nothing. 1-edit parity across
+harnesses (54.3/53.5) confirms landed fixes transfer while recurrence does not,
+keeping cross-run fingerprints the stuck point.
+
+**Evidence.** T026/T028 evidence in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
 
 ## D1908 — Org charts use leaf-weighted hierarchy geometry
 
@@ -34787,6 +35106,21 @@ Use measurement minus reference for signed bias. Require at least five distinct,
 
 References: https://www.itl.nist.gov/div898/handbook/mpc/section4/mpc452.htm ; https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/gage-linearity-and-bias-study/methods-and-formulas/gage-bias/
 
+## D1954 — Queue best-LLM-language work after charts: T2 slices, demand order, E2 gate
+
+**Decision.** The best-LLM-language details land as backlog with explicit
+post-chart pickup: T039 T2.0 foundations, T040 T2.1 understand and check, T041
+T2.2 edit and test evidence, T042 trusted host with verified receipts and
+durable tasks, T043 demand-ranked breadth order from agent measurements, plus
+an E2 full-gate follow-on in T027 (the precursor's ten pilot tasks are the
+rehearsal, not the claim). Repair-loop, context and honesty gaps already have
+items (T028/T029, T026/T036-T038, C088); verbosity is arbitrated by the E2
+source-token metric, not by loosening. Serial pickup mechanics stay with the
+session owner — this records intent, not a file reorder.
+
+**Evidence.** Orders 39-43 in `docs/work-queue.json`;
+`python scripts/render_progress.py` regenerated `docs/progress.html`.
+
 ## D1955 — Finish chart work before other unfinished capabilities
 
 **Decision.** Keep active chart and visualization capabilities at the front of
@@ -34885,6 +35219,28 @@ scene/SVG adapters paint the control cues. This is a design comparison rather
 than an operational simulator; inventory, transport, branching and capacity
 balancing remain separate planned work. The Windows/Linux fixture tests
 arithmetic, placement and refusal paths; the gallery adds a paired preview.
+
+## D1963 — PK/PD mathematics in e.math.pkpd
+
+`e.math.pkpd` adds non-compartmental analysis and two saturating
+dose-response fits over the existing optimisers (catalog entry 2265). The
+areas are the linear trapezoid (`auc_linear`), the linear-up/log-down
+trapezoid (`auc_log_linear`) and the first-moment area (`aumc_linear`);
+`peak` answers the largest concentration and the first time it is reached.
+`terminal_rate` fits `ln` concentration on time over the caller's terminal
+window (strictly positive and ordered there) and `half_life` inverts the
+rate; `nca` fills a whole `Nca` record and extrapolates the last interval to
+infinity. `emax`, `hill` and `mm_rate` are the models; `emax_hill` and
+`michaelis_menten` minimise `emax_hill_sse` and `michaelis_menten_sse` over
+`e.math.opt`'s Nelder-Mead, with `[E0, Emax, EC50, h]` (or `[Vmax, Km]`) as
+an in-place initial guess, because a derivative-free simplex needs no
+analytic gradient for a saturating curve. The borrowed profile and the
+residual objectives take a `Data` context of read-only dose and response
+slices. A window below two samples is `TooFew`; a non-positive terminal
+sample, an unordered window or a parameter slice of the wrong length is
+`Invalid`. The `math_pkpd` fixture checks the areas against their closed
+forms, the fits against parameters recovered from clean data, and every
+refusal, on both hosts.
 
 ## D1964 — Separate exact cap-table share counts from percentage geometry
 
@@ -35073,6 +35429,134 @@ each point in a focusable fragment link whose target is the mark index and whose
 selection outline without script. The PNG is a selected-state snapshot; widget
 events, cross-filter state and zoom-aware interaction are still L062 work.
 
+## D1979 — VAR(p) and structural time-series in e.algo.timeseries (L059)
+
+`var_fit` estimates VAR(p) equation by equation by ordinary least squares over
+a private Gauss-Jordan `solve_normal` (relative pivot floor, so collinear
+designs refuse instead of returning garbage); `var_forecast` recurses caller
+history through future steps. `var_companion` builds the companion transition
+and observation matrices so a fitted VAR plugs directly into
+`e.math.filter`'s Kalman (pinned by stepping one predict in the fixture), and
+`level_filter`/`trend_filter` run the local-level and local-linear-trend
+structural models through that same Kalman. Series are row-major `n × k`;
+scratch budgets are documented closed forms. `algo_timeseries_var` recovers a
+VAR(1) from simulation, checks forecasts/companion forms/filter tracking by
+hand, and pins every refusal.
+
+## D1980 — ARIMA and inventory extensions in e.algo.timeseries (L017)
+
+`arima_difference` (repeated first differences answering the effective
+length), OLS `ar_fit`, conditional-SSQ `arma_css` with the Nelder-Mead
+`arma_fit` refinement, and `arma_forecast` with zero future shocks cover
+ARIMA with the integration order handled outside the ARMA core. The inventory
+half is pure: `eoq`/`eoq_total` and `newsvendor_ratio`/`newsvendor_discrete`
+(the smallest candidate demand whose CDF reaches the critical ratio).
+`algo_timeseries_arima` recovers AR(1)/ARMA(1,1) from simulation, checks the
+EOQ closed form with its minimum, and pins every refusal.
+
+## D1981 — Safety-signal detection in e.algo.stat.safety (L016)
+
+`ror`/`prr` with Woolf logit intervals and their signal rules (lower bound
+above one; the Evans estimate, chi-square and count gates over
+`chi_square_2x2`), the BCPNN information component (`ic`, Noren 2006 unit
+priors) with its credibility signal, and Apriori frequent-itemset plus
+association-rule mining (`apriori`, `apriori_rules` with support, confidence
+and lift) over `u64` comedication masks. Zero cells where a ratio needs them
+are `Invalid` (no silent continuity correction); mining answers into caller
+storage with a twenty-item cap on rule duty. `algo_stat_safety` pins reference
+values, seven frequent sets/rules on a hand-worked panel, and every refusal.
+
+## D1982 — Random-slopes LMM in e.algo.stat.mixed
+
+`lmm_slopes` extends the random-intercept fit with a caller-built `z` design:
+log-Cholesky REML over `rs_objective`, per-group-Cholesky GLS through
+`rs_fit_given`, model covariances and per-subject BLUPs through `rs_blups`.
+The objective initially omitted its residual solve (`rwr` stuck at zero), so
+Nelder-Mead dived to zero within variance; the fixture caught it and the
+accumulation now mirrors the GLS pass. Near-singular designs refuse through
+the Cholesky rather than returning amplified garbage.
+
+## D1983 — Binomial/Poisson GLMM by PQL in e.algo.stat.mixed
+
+`glmm_pql` runs IRLS outer rounds (logit/log links with clamped means,
+dispersion weights `V(mu) g'(mu)^2`) over the random-slopes Gaussian
+machinery, warm-starting each Nelder-Mead at the previous round; a shared
+`rs_build_v` carries the weights (`RsCtx.w`, empty meaning unweighted, so the
+Gaussian path is byte-identical). Verified behavior: fixed effects and the
+slope variance recover in both families and the full covariance at informative
+counts; sparse-binary intercept variance carries PQL's documented small-cluster
+bias, so the fixture pins recovery where the estimator is strong and
+positivity bounds where it is known-weak.
+
+## D1984 — Hypergeometric probabilities in e.algo.stat (L001)
+
+`hypergeometric_pmf`/`cdf`/`sf` over `u64` population counts with the
+choose-terms in `lgamma` log space (`log_binomial`), stable past `u64` range
+where the multiplicative form overflows, beside the existing large-lot
+`binomial_acceptance_probability` whose comment names this gap. Out-of-support
+counts answer exact `0`/`1` (never a tail sum that drifts); inconsistent
+populations are `Invalid`. `algo_stat_hyper` pins poker-hand and opening-hand
+values against exact integer combinatorics plus the CDF/SF complement
+identity.
+
+## D1985 — Survival-analysis extensions in e.algo.stat.survival (L005)
+
+Nelson-Aalen cumulative hazard with Aalen variance, Aalen-Johansen cumulative
+incidence over `u8` cause codes (zero censors, any other nonzero code
+competes), RMST with Greenwood standard error from a two-pass area split, and
+Breslow/Tarone-Ware/Peto-Peto/Fleming-Harrington log-ranks sharing one
+pooled-time sweep beside Mantel-Cox. RMST returns zero variance only through
+the same second pass (an early return past `tau` once skipped it); the plain
+weight is pinned exactly equal to `survival_trial.log_rank`, and G(0, 0) to
+the same. `algo_stat_survival` pins hand sums, a CIF panel, and every
+refusal.
+
+## D1986 — Diagnostic-test statistics in e.algo.stat.diagnostic (L008)
+
+The eight 2x2 metrics with exact Clopper-Pearson intervals for the
+proportions (via a local beta-quantile bisection on `special.beta_i`, reusing
+no parent-module surface) and log-method intervals for the likelihood ratios
+and the diagnostic odds ratio. Empty denominators and boundary
+sensitivities/specificities refuse as `Invalid` rather than taking silent
+continuity corrections, matching the safety module's zero-cell policy.
+`algo_stat_diagnostic` pins a 90/20/10/80 table against independent references
+plus every refusal.
+
+## D1987 — Meta-analysis core in e.algo.stat.meta (L006)
+
+Log odds-ratio, log risk-ratio, Cohen-d, Hedges-g and Fisher-z effects with
+sampling variances, inverse-variance fixed and DerSimonian-Laird random
+pooling, Cochran's Q, I-squared, DerSimonian-Laird tau-squared,
+between-subgroup Q, and weighted-least-squares meta-regression over a
+caller-built design with its own Gauss-Jordan solver. The first meta-regression
+draft reduced the system without augmenting an identity, so the covariance
+copied ones; the solver now answers coefficients and inverse columns off one
+accumulation. `algo_stat_meta` pins hand arithmetic, a dose regression against
+its normal equations, and every refusal.
+
+## D1988 — Robust total-least-squares line fitting in e.gfx.vision (L002)
+
+`fit_line_tls` returns centroid plus the principal axis of the 2x2 scatter by
+closed-form eigendecomposition (vertical-safe, unlike slope/intercept), with
+an exact-zero branch for axis-aligned clouds and `Invalid` only for coincident
+points; `fit_line_tls_robust` adds the single outlier-rejection pass over
+`tls_distance` into caller flags. A tuple-return call needs its binding first
+(`ret` of a call result is E-TYPE-0003). `gfx_vision_tls` pins an exact slope,
+a vertical line, the diagonal recovered from eight inliers plus an outlier,
+and every refusal.
+
+## D1989 — Generalized regression extensions in e.algo.stat.regression (L007)
+
+Poisson rates with exposures by IRLS, negative-binomial rates by IRLS inside a
+golden-section dispersion search (lgamma profile likelihood, no polygamma
+needed), conditional logistic for 1:M sets by Newton (each member adds
+1/members of its stratum term, sidestepping `continue`, which has no lib
+precedent), and proportional-odds ordinal logistic by Nelder-Mead over
+log-gap thresholds with a numeric covariance. Two bugs caught: Gauss-Jordan
+solves in place, so Newton loops now solve on copies and keep a pristine
+Hessian for the covariance; and the numeric Hessian stencil aliased its own
+diagonal. Fixture assertions name slope/intercept in the module's
+intercept-last order.
 ## D2101 — Chart palettes guarantee contrast on the written bytes
 
 `accessible_palette` returns six qualitative series colors for an opaque

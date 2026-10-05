@@ -4,6 +4,160 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. Finish active chart and visualization items before non-chart work, preserving their relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
+      "id": "L068",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 166,
+      "title": "Chart parity: bubbles, ellipses, fitted curves, combo axes and axis tables",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1816). Missing vendor-comparison capabilities: bubble size-to-area mapping; confidence ellipses; fitted regression/smoothing overlays with confidence/prediction bands; mixed-mark combo plots with explicit secondary axes; aligned axis tables. Extend L061 through existing e.gfx.chart marks, statistics, text and guides. Require numeric references, singular covariance and invalid-data checks, independent-axis/layer alignment, bounded caller storage and scene/SVG parity. Full acceptance gates and official sources: docs/charting-engine-plan.md, vendor comparison additions L068-L075."
+    },
+    {
+      "id": "L069",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 167,
+      "title": "Chart parity: 3-D scatter, histograms and density surfaces",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1816). Specify the missing 3-D part of L062: scatter points, bivariate histogram columns and density surfaces over existing e.gfx.mesh/scene and statistics. Require count/KDE reference fixtures, projection/camera and clipping/depth checks, non-finite and degenerate-domain refusal, caller-storage bounds and rendered examples. Share the planned 3-D adapter with existing surface/wireframe work. Full acceptance gates and official sources: docs/charting-engine-plan.md, vendor comparison additions L068-L075."
+    },
+    {
+      "id": "L070",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 168,
+      "title": "Chart parity: choropleth and proportional-symbol maps",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1816). Specify the missing geographic part of L062: choropleth and proportional-symbol maps, projections, region-key joins and geographic legends. Reuse e.algo.geo and the common scene backend with caller-provided boundary data. Require projection reference fixtures, area-scaled symbols, missing-region behavior, polygon holes, antimeridian and clipping checks plus previews. No mandatory remote map service. Full acceptance gates and official sources: docs/charting-engine-plan.md, vendor comparison additions L068-L075."
+    },
+    {
+      "id": "L071",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 169,
+      "title": "Chart parity: advanced SPC, ANOM, capability and measurement-system variants",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1816). Missing variants: ANOM; Laney P-prime/U-prime; rare-event G/T; Hotelling T-squared, generalized variance and multivariate EWMA; normal/nonnormal/attribute/batch capability; Gage bias/linearity, attribute agreement and Gage run charts. Extend existing planned SPC, capability sixpack and Gage R&R without duplicating them. Keep statistical estimators and subgroup/phase rules outside the painter. Require published numeric fixtures for limits/intervals and special-cause flags, small/invalid-sample cases, singular covariance and common-mark previews. Full acceptance gates and official sources: docs/charting-engine-plan.md, vendor comparison additions L068-L075."
+    },
+    {
+      "id": "L072",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 170,
+      "title": "Chart parity: ribbons, gauges, KPIs, decomposition trees and filter/drill events",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1816). Missing reusable business visuals: ribbon/rank-over-time, gauge and KPI/target-status compositions and aggregate decomposition trees. Build cross-filter/drill events over L062 selection and reuse chart marks, e.ui collection controls and existing table aggregation. Require tie/missing-category cases, target semantics, child totals, selection identity and accessible labels with rendered examples. Applications bind filters/navigation; preserve D1785's dashboard-framework non-goal and require no AI or Power BI service. Full acceptance gates and official sources: docs/charting-engine-plan.md, vendor comparison additions L068-L075."
+    },
+    {
+      "id": "L073",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 171,
+      "title": "Chart parity: mekko, Venn/Euler and word/tag clouds",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1817). Missing top-50 BI composition layouts: mekko/marimekko areas, Venn/Euler overlap areas and word/tag-cloud layouts over existing rectangle, set and text marks. Require frequency-proportional areas, overlap semantics, token weighting, stop-word/exclusion policy, small-token legibility, empty-input refusal, caller-storage bounds and scene/SVG output with accessible labels. Full acceptance gates and official sources: docs/charting-engine-plan.md, vendor comparison additions L068-L075."
+    },
+    {
+      "id": "L074",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 172,
+      "title": "Chart parity: operational state timelines and status histories",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1817). Missing Grafana-style categorical-over-time bands: state timelines and status histories over existing segment marks and time scales, distinct from control/run charts. Require abutting-interval coalescing, gap/missing-data rendering, legend identity, out-of-order input refusal and scene/SVG output. Flame/traces stay with e.gfx.trace profiling; no log-agent dependency. Full acceptance gates and official sources: docs/charting-engine-plan.md, vendor comparison additions L068-L075."
+    },
+    {
+      "id": "L075",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 173,
+      "title": "Chart parity: paginated reporting compositions",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1817). Missing paginated-reporting compositions: in-cell data bars, in-cell sparklines and cross-tab/matrix report bands over existing bar/line marks and table aggregation. Require per-row normalization scope, null handling, header/total bands and scene output; page layout and print drivers stay with host services. Full acceptance gates and official sources: docs/charting-engine-plan.md, vendor comparison additions L068-L075."
+    },
+    {
+      "id": "L092",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 190,
+      "title": "ML-diagnostics plots: PDP/ICE, silhouette, missingness maps",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1824). Celvyx datasci parity gap: partial-dependence/ICE curves, silhouette plots and missingness maps over existing line/scatter/matrix marks and e.ml statistics; residuals, lift/gain, calibration and confusion matrix are already planned. Fixtures against reference values plus empty-cluster and all-missing refusal paths."
+    },
+    {
+      "id": "L093",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 191,
+      "title": "2.5D chart styling: 3-D-effect columns, bars and pies",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1824). Excel-style 2.5D effect variants (rotation/walls/bevel on 2-D bar/column/pie geometry) are distinct from true 3-D in L069 and unplanned. Minor eye-candy: reuse D1822/D1823 area and rectangle marks with fixed projection parameters. Fixtures for geometry and scene/SVG parity."
+    },
+    {
+      "id": "L094",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 192,
+      "title": "Compound pie charts: pieOfPie and barOfPie",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1824). Excel compound parity missing: pieOfPie/barOfPie callouts composing the D1822 pie slices with a secondary stacked-bar breakout. Fold into composition work; fixtures for slice-to-breakout totals, connector geometry and small-slice grouping."
+    },
+    {
+      "id": "L095",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 193,
+      "title": "Bioassay plots: Schild, parallel-line, potency, standard curves",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1824). Celvyx medical parity gap: Schild plots, parallel-line assays, relative-potency and standard-curve layouts over existing fitted-curve marks; the fits ride queued L015 (Emax/Hill, Michaelis-Menten) but the plot geometries are unplanned. Fixtures against reference bioassay values."
+    },
+    {
+      "id": "L096",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 194,
+      "title": "ROC extensions: decision curves, partial AUC, Youden index",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1824). Small add-on to planned ROC/PR: net-benefit decision curves, partial-AUC regions and Youden-index markers over the ROC geometry with numeric reference fixtures. No new mark types."
+    },
+    {
+      "id": "L097",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 195,
+      "title": "QC/agreement extensions: Levey-Jennings, Lin CCC, symmetry, Box-Cox",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1824). Small add-ons to SPC/diagnostic plans: Levey-Jennings clinical QC charts, Lin concordance correlation, symmetry plots and Box-Cox transformation plots over existing control-chart and distribution marks, with reference fixtures and small-sample refusals."
+    },
+    {
       "id": "C092",
       "category": "compiler",
       "group": "Back end",
@@ -78,7 +232,7 @@
       "score": 0,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "bootstrap/neper.c still builds stage 0"
+      "evidence": "bootstrap/neper.c still builds stage 0. Follow-on (D1898): deletion is also the biggest LLMx lever â€” until it lands, agents write M1 per the docs and compile neper-0 plus quirks, and failures like T021's look like agent error."
     },
     {
       "id": "T004",
@@ -166,7 +320,7 @@
       "score": 0,
       "model": "opus",
       "thinking": "high",
-      "evidence": "The tools exist (context-file C053/D361, tools/patch D1455, plan-*-file C052) and nothing routes agents to them: scripts/lang-stats.py on every transcript to 2026-09-26 puts the median context at a turn that lands Neper code at 515K tokens against Dart's 235K, while context-file answers in 1.2K-5K (D948); 39% of landed Neper source arrived inside Python patch scripts and heredocs at 5x the cost per byte of a direct edit, and 5.0% of edit applications failed, almost all of them heredoc scripts. Done when the AGENTS.md rule and a card section route both paths and lang-stats.py's ctx Ktk and script% move on new sessions; the two numbers are the score. The same routing gap holds for the language card: 19 of 161 Neper sessions in 2026-09-20..27 ever named docs/llm-neper-card.md, AGENTS.md carries no language guidance, and the card lists the keywords but not the traps that ended most builds -- `target` (D31), `Vec` and `i8` as reserved names, D66's rule that a local may not reuse a module-scope function, use qualifier or builtin, the string escape set (`\\u000F` was written for `\\x0F`), and the bootstrap-only rules until C088. A traps section in the card, pointed to from AGENTS.md, is part of this item. Measured on Claude alone (lang-stats.py --harness claude, 2026-08-28..09-27), context is the one gap left against Dart: 513K tokens at a turn that lands Neper code against 210K, with 5.7 turns per edit against 3.9; correctness is level (1st-ok% 96.4 vs 95.0, selfcor% 14.4 vs 15.2, fail% 4.9 vs 3.8), and the 35% cost gap ($0.691 vs $0.513 per KB) is the script share alone (38% vs 17%; direct $/KB 0.198 vs 0.263). Over the last 7 days of it the script share fell to 22% and context to 422K after tools/patch replaced Python patches of src/ on 2026-09-26 (254 and 326 such scripts a day on 09-20 and 09-21, one on 09-27), while 448 patch scripts named dNNNN.py still reached test fixtures, most on 09-25 and 09-26. The score is read from --harness claude: ctx Ktk toward Dart's ~200K and script% toward its 6-17%. Codex on Neper (10% of its code) reads 16 bytes per byte landed and repeats the previous error code 78% of the time, so the traps section serves it too."
+      "evidence": "The tools exist (context-file C053/D361, tools/patch D1455, plan-*-file C052) and nothing routes agents to them: scripts/lang-stats.py on every transcript to 2026-09-26 puts the median context at a turn that lands Neper code at 515K tokens against Dart's 235K, while context-file answers in 1.2K-5K (D948); 39% of landed Neper source arrived inside Python patch scripts and heredocs at 5x the cost per byte of a direct edit, and 5.0% of edit applications failed, almost all of them heredoc scripts. Done when the AGENTS.md rule and a card section route both paths and lang-stats.py's ctx Ktk and script% move on new sessions; the two numbers are the score. The same routing gap holds for the language card: 19 of 161 Neper sessions in 2026-09-20..27 ever named docs/llm-neper-card.md, AGENTS.md carries no language guidance, and the card lists the keywords but not the traps that ended most builds -- `target` (D31), `Vec` and `i8` as reserved names, D66's rule that a local may not reuse a module-scope function, use qualifier or builtin, the string escape set (`\\u000F` was written for `\\x0F`), and the bootstrap-only rules until C088. A traps section in the card, pointed to from AGENTS.md, is part of this item. Follow-on (D1898): fix the render_card.py mojibake in the normative refs and land the traps section (target, Vec/i8, D66, escapes, bootstrap-only); T036 routes agents to read the repaired card first. Measured on Claude alone (lang-stats.py --harness claude, 2026-08-28..09-27), context is the one gap left against Dart: 513K tokens at a turn that lands Neper code against 210K, with 5.7 turns per edit against 3.9; correctness is level (1st-ok% 96.4 vs 95.0, selfcor% 14.4 vs 15.2, fail% 4.9 vs 3.8), and the 35% cost gap ($0.691 vs $0.513 per KB) is the script share alone (38% vs 17%; direct $/KB 0.198 vs 0.263). Over the last 7 days of it the script share fell to 22% and context to 422K after tools/patch replaced Python patches of src/ on 2026-09-26 (254 and 326 such scripts a day on 09-20 and 09-21, one on 09-27), while 448 patch scripts named dNNNN.py still reached test fixtures, most on 09-25 and 09-26. The score is read from --harness claude: ctx Ktk toward Dart's ~200K and script% toward its 6-17%. Codex on Neper (10% of its code) reads 16 bytes per byte landed and repeats the previous error code 78% of the time, so the traps section serves it too. Snapshot 2026-10-03 (14d, --harness): Claude ctx 388 Ktk (was 422), script 19% (was 22%), $/KB 0.442 (was 0.691, under Dart's 0.468), turns/ed 6.0 (was 5.7), 1st-ok 94.0% (was 96.4). Codex: 3.4 MB landed, script 0% via native apply_patch, ctx 166 Ktk but 15.8 read/KB, turns/ed 7.0, 1st-ok 89.0%, fail 7.2%, 2.7x think per byte. DeepSeek (dsh): zero rows in 14d â€” the split currently measures nothing (D1904)."
     },
     {
       "id": "T027",
@@ -177,7 +331,7 @@
       "score": 0,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "post-m2-llm-hardening.md section 15 specifies the only evidence that can support a superiority claim -- correctness first, then total interaction tokens per verified success, repair turns and source-token pressure, 20 seeds per case, Neper's own tools against each baseline's native ones, rank first or statistically tied or expand rather than assert -- and nothing in this queue schedules it. benchmarks/llm_edit/neper_advantage_matrix.md and benchmarks/llm_gen are smoke runs by their own READMEs. Done when ten held-out tasks in two model families run under the acceptance rule with the harness, prompts, cards and baseline results frozen and the report versioned."
+      "evidence": "post-m2-llm-hardening.md section 15 specifies the only evidence that can support a superiority claim -- correctness first, then total interaction tokens per verified success, repair turns and source-token pressure, 20 seeds per case, Neper's own tools against each baseline's native ones, rank first or statistically tied or expand rather than assert -- and nothing in this queue schedules it. benchmarks/llm_edit/neper_advantage_matrix.md and benchmarks/llm_gen are smoke runs by their own READMEs. Follow-on (D1898): include an OpenCode-harness arm in the held-out design, or LLMx fixes are measured everywhere except where agents actually run. Done when ten held-out tasks in two model families run under the acceptance rule with the harness, prompts, cards and baseline results frozen and the report versioned. Follow-on (D1954): full E2 comparative gate after this pilot â€” broad plus registered cohorts with frozen weights, oracles and statistical rules; the ten pilot tasks above are the rehearsal, not the claim."
     },
     {
       "id": "T028",
@@ -188,7 +342,7 @@
       "score": 0.85,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Over 198 observed repairs in the transcripts (lang-stats.py, REPAIR table), a compile diagnostic is fixed in the next reply but only 15.7% of repairs took one edit, and 61.5% of consecutive failed builds repeat an error code from the failure before -- E-TYPE-0002 and the other kind-level codes cannot tell a second site from an unfixed first one. H31's cross-run fingerprints are T2; the v1 precursor is a fixture per recurring code that pins what the message must name (the span, the expected and found types, the binding) so a model can act on it once, tracked by lang-stats.py's repeat% and 1-edit%. Transcripts 2026-09-20..27 name the first fixtures: 134 builds failed on a compile code and 24 of 42 consecutive ones repeated a code. E-TYPE-9999 (29) printed an internal error name for its message -- `type checking failed: check.UnknownCallable`, `.ArgumentCount`, `.InvalidOperator`, `.Unsupported`, `.InvalidType`, `.MissingContext` -- naming no callee, count or operator; E-LEX-0003 (21) said `invalid token` for a malformed escape without naming the escape or the legal set (src/main.e print_parse_failure); E-NAME-9999 (8) said `unknown value name` without the name; E-TYPE-0003 (9) said `ret gives a different number of values` without the two counts; E-SYNTAX-9999 (9) said `unexpected ==` without what was expected. Each of those messages names its subject, the check.* names get codes of their own, and a fixture pins each. D1679 does that: ArgumentCount is E-TYPE-0005 (`take` takes 1 argument and this call gives 0) or E-TYPE-0007 (results discarded), UnknownCallable E-NAME-0004 with the callee, InvalidOperator E-TYPE-0006 with the operator and its expression, MissingContext E-TYPE-0001, InvalidType and Unsupported E-TYPE-0008/0009 quoting the statement; the unknown name, both ret counts, the bad escape with the legal set (and an unclosed literal, a control byte, a tab, a non-UTF-8 byte), and `; expected X` after `unexpected` where the parser knows X. The C bootstrap says the two messages its neper-0 fixtures pin, so self-host parity stays byte-equal. Pinned: seven check fixtures by text in both suites, the conformance and tools goldens, byte-equal on Linux. E-TYPE-0009 is reached by reject/not_supported, an assignment to an array range quoted by its first line (D1706, both suites). Not yet: lang-stats.py's repeat% and 1-edit% over transcripts written after D1679."
+      "evidence": "Over 198 observed repairs in the transcripts (lang-stats.py, REPAIR table), a compile diagnostic is fixed in the next reply but only 15.7% of repairs took one edit, and 61.5% of consecutive failed builds repeat an error code from the failure before -- E-TYPE-0002 and the other kind-level codes cannot tell a second site from an unfixed first one. H31's cross-run fingerprints are T2; the v1 precursor is a fixture per recurring code that pins what the message must name (the span, the expected and found types, the binding) so a model can act on it once, tracked by lang-stats.py's repeat% and 1-edit%. Follow-on (D1898): the repeat metrics must cover OpenCode rows once the T037 harness split lands, or agent-visible progress stays Claude-only. Transcripts 2026-09-20..27 name the first fixtures: 134 builds failed on a compile code and 24 of 42 consecutive ones repeated a code. E-TYPE-9999 (29) printed an internal error name for its message -- `type checking failed: check.UnknownCallable`, `.ArgumentCount`, `.InvalidOperator`, `.Unsupported`, `.InvalidType`, `.MissingContext` -- naming no callee, count or operator; E-LEX-0003 (21) said `invalid token` for a malformed escape without naming the escape or the legal set (src/main.e print_parse_failure); E-NAME-9999 (8) said `unknown value name` without the name; E-TYPE-0003 (9) said `ret gives a different number of values` without the two counts; E-SYNTAX-9999 (9) said `unexpected ==` without what was expected. Each of those messages names its subject, the check.* names get codes of their own, and a fixture pins each. D1679 does that: ArgumentCount is E-TYPE-0005 (`take` takes 1 argument and this call gives 0) or E-TYPE-0007 (results discarded), UnknownCallable E-NAME-0004 with the callee, InvalidOperator E-TYPE-0006 with the operator and its expression, MissingContext E-TYPE-0001, InvalidType and Unsupported E-TYPE-0008/0009 quoting the statement; the unknown name, both ret counts, the bad escape with the legal set (and an unclosed literal, a control byte, a tab, a non-UTF-8 byte), and `; expected X` after `unexpected` where the parser knows X. The C bootstrap says the two messages its neper-0 fixtures pin, so self-host parity stays byte-equal. Pinned: seven check fixtures by text in both suites, the conformance and tools goldens, byte-equal on Linux. E-TYPE-0009 is reached by reject/not_supported, an assignment to an array range quoted by its first line (D1706, both suites). Not yet: lang-stats.py's repeat% and 1-edit% over transcripts written after D1679. Snapshot 2026-10-03 (14d): repeat% Claude 59.5 (was 61.5), Codex 70.0; 1-edit% identical across harnesses (54.3/53.5), so landed fixes transfer but recurrence does not; DeepSeek empty. Cross-run fingerprints remain the stuck point on both measured harnesses (D1904)."
     },
     {
       "id": "T029",
@@ -199,7 +353,7 @@
       "score": 0.85,
       "model": "opus",
       "thinking": "high",
-      "evidence": "E-NAME-0003 ended 35 of the 134 builds that failed on a compile code in 2026-09-20..27, the most of any code: common nouns that large modules use as functions (`text`, `level`, `row`, `placeholder`, `at`, `cell`, `icon`), `use` qualifiers (`source`, `bytes`, `check`) and the reserved `target`, `Vec` and `i8`. D66's no-shadowing rule stays; what is missing is a fifth fix kind beside the four in src/main.e's diagnostic writer that proposes a free name for the local and every use of it in its scope, so D948's repair loop applies it without a model turn. Done when a fixture per collision kind (module function, qualifier, builtin, reserved) carries a machine-applicable rename and lang-stats.py shows E-NAME-0003 no longer the top repeated code. Fix kind 5 (D1678) does the first half: on ModuleShadow, ReservedLocal and DuplicateLocal the diagnostic carries a `maybe` fix renaming the local and every use in its scope, one edit per site under one SHA-256 precondition, to the first free `name_value`/`name_value2`..`9`. Uses are found lexically to the end of the block (`let`/`var`) or of the body a parameter, `for` name or capture heads; members, field labels, calls of the colliding function, qualified paths through the colliding qualifier and type positions of a colliding builtin are left alone. Fixtures reject/rename_function, rename_qualifier, rename_builtin and rename_duplicate, and reserved_local's golden now carries its fix: byte-equal under stage 1, stage 2 and on Linux, and each applied fix checks clean. Not yet: lang-stats.py over transcripts written after D1678 showing E-NAME-0003 no longer the top repeated code."
+      "evidence": "E-NAME-0003 ended 35 of the 134 builds that failed on a compile code in 2026-09-20..27, the most of any code: common nouns that large modules use as functions (`text`, `level`, `row`, `placeholder`, `at`, `cell`, `icon`), `use` qualifiers (`source`, `bytes`, `check`) and the reserved `target`, `Vec` and `i8`. D66's no-shadowing rule stays; what is missing is a fifth fix kind beside the four in src/main.e's diagnostic writer that proposes a free name for the local and every use of it in its scope, so D948's repair loop applies it without a model turn. Done when a fixture per collision kind (module function, qualifier, builtin, reserved) carries a machine-applicable rename and lang-stats.py shows E-NAME-0003 no longer the top repeated code. Fix kind 5 (D1678) does the first half: on ModuleShadow, ReservedLocal and DuplicateLocal the diagnostic carries a `maybe` fix renaming the local and every use in its scope, one edit per site under one SHA-256 precondition, to the first free `name_value`/`name_value2`..`9`. Uses are found lexically to the end of the block (`let`/`var`) or of the body a parameter, `for` name or capture heads; members, field labels, calls of the colliding function, qualified paths through the colliding qualifier and type positions of a colliding builtin are left alone. Fixtures reject/rename_function, rename_qualifier, rename_builtin and rename_duplicate, and reserved_local's golden now carries its fix: byte-equal under stage 1, stage 2 and on Linux, and each applied fix checks clean. Not yet: lang-stats.py over transcripts written after D1678 showing E-NAME-0003 no longer the top repeated code. Follow-on (D1898): same measurement must include OpenCode rows; a Claude-only reading cannot close a harness-wide top-code claim."
     },
     {
       "id": "C082",
@@ -224,28 +378,6 @@
       "evidence": "e.crypto.aead's AES-GCM is portable Neper, a bitsliced AES (BearSSL's aes_ct64) and a GHASH from masked integer products (ghash_ctmul64), D1645. Measured 2026-09-28 on the Core i5-12500H, sealing one TLS record: 11.6 us for 100 bytes and 702 us for 16 KB (23 MB/s), against OpenSSL's 0.73 us and 3.19 us (5.1 GB/s, through Python's cryptography 48, whose call overhead is included): 16 times slower on small records and 220 times on large ones. It bounds every TLS user: x.microsoft.tds scans SQL Server at 28-35% of the fastest language (D1643), where OpenSSL, Go and rustls run AES-NI and PCLMULQDQ. Closing the gap needs the back end to emit AESENC/AESENCLAST and PCLMULQDQ (x64) behind a CPU check with the portable path as the fallback, as SHA-256 and CRC-32C already are in the link (D336), then a GCM that keeps its expanded key and H powers across records (e.net.tls expands the key for every record today) and runs four to eight blocks in flight. Until then, the portable path's own lever is codegen: the same bitsliced rounds run at about 130 cycles a byte, several times BearSSL's in C."
     },
     {
-      "id": "L001",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 99,
-      "title": "Hypergeometric probabilities in e.algo.stat",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Both MTG Studio implementations need the same finite-population draw calculation: `mtg.studio.web/js/domain/draw-probability.js` provides exact, at-least, and at-most probabilities, while `mtg.studio.src/shared/lib/helpers/math.helper.dart` provides the hypergeometric distribution. Neper has binomial coefficients in `e.algo.combin` and broad continuous/discrete statistics, but no hypergeometric PMF or tail API. Implement with validated inputs and stable multiplicative or log-space arithmetic rather than copying the small-deck floating-point choose formula. The catalog entry is 2251."
-    },
-    {
-      "id": "L002",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 100,
-      "title": "Robust total-least-squares line fitting in e.gfx.vision",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "The MTG scanner refines detected card edges with an orthogonal total-least-squares line fit and one outlier-rejection pass in `mtg.studio.web/js/domain/scan-rectify.js` and `mtg.studio.src/scan-spike/lib/rectify.dart`. Neper already has the surrounding computer-vision primitives, including homography, RANSAC, bilinear sampling, and connected components, but no reusable 2D TLS line-fit API. Keep this as a small `e.gfx.vision.fit_line_tls` candidate; do not move the card-specific detector or rectifier. The catalog entry is 2252."
-    },
-    {
       "id": "L003",
       "category": "library",
       "group": "Algorithms",
@@ -268,72 +400,6 @@
       "evidence": "Chit-chat uses the Padme ceiling in `protocol/lib/src/crypto/crypto_session.dart` to collapse encrypted frame lengths into logarithmic size classes while keeping padding overhead bounded. Neper has privacy and framing code but no reusable Padme size-bucket helper. Keep the candidate to a pure `padme_ceil` operation with boundary tests; do not import chit-chat's encrypted-frame format or cover-traffic policy. The catalog entry is 2254."
     },
     {
-      "id": "L005",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 103,
-      "title": "Survival-analysis extensions in e.algo.stat",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Celvyx implements Nelson-Aalen cumulative hazard, Aalen-Johansen competing-risks cumulative incidence, restricted mean survival time, and weighted log-rank tests in `src/lib/core/medical/nelson_aalen.dart`, `competing_risks.dart`, `rmst.dart`, and `weighted_logrank.dart`. Neper has general distributions and hypothesis tests but no matching survival-analysis surface. Keep the reusable estimators and tests; exclude the labelled spreadsheet grids. The catalog entry is 2255."
-    },
-    {
-      "id": "L006",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 104,
-      "title": "Meta-analysis core in e.algo.stat",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Celvyx provides odds-ratio, risk-ratio, Cohen-d, Hedges-g, and Fisher-z effect sizes plus fixed/random-effects heterogeneity, Q, I-squared, tau-squared, subgroup analysis, and meta-regression in `src/lib/core/medical/meta_effect_size.dart`, `meta_heterogeneity.dart`, and `meta_regression.dart`. Neper has resampling and ordinary regression but no meta-analysis API. Add the numerical core, not medical report formatting. The catalog entry is 2256."
-    },
-    {
-      "id": "L007",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 105,
-      "title": "Generalized regression extensions in e.algo.stat",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Celvyx covers Poisson rate regression with exposure offsets, negative-binomial regression, conditional logistic regression for matched sets, and ordinal logistic regression in `src/lib/core/medical/clinical_poisson.dart`, `negative_binomial.dart`, `conditional_logistic.dart`, and `ordinal_logistic.dart`. Neper already has binary logistic regression in `e.ml.linear`, so this is an extension rather than a duplicate. Keep model fitting and diagnostics; exclude clinical presentation wrappers. The catalog entry is 2257."
-    },
-    {
-      "id": "L008",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 106,
-      "title": "Diagnostic-test statistics in e.algo.stat",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Celvyx implements 2x2 diagnostic-table sensitivity, specificity, accuracy, predictive values, likelihood ratios, diagnostic odds ratio, and exact confidence intervals in `src/lib/core/medical/diagnostic.dart`. Neper has contingency-table tests but no diagnostic-metric API. Keep this as a small generic binary-classification/statistics module; exclude medical report grids. The catalog entry is 2258."
-    },
-    {
-      "id": "L015",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 113,
-      "title": "PK/PD mathematics in e.math",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "`e.math.ode` steps Euler, RK4, RKF45, velocity Verlet, leapfrog, Yoshida, and Euler-Maruyama, and `e.math.opt` minimizes by gradient descent, conjugate gradient, BFGS, L-BFGS, Nelder-Mead, and dense simplex, but there is no non-compartmental analysis (trapezoidal AUC/Cmax), no Emax/Hill dose-response fit, and no Michaelis-Menten enzyme-kinetics fit. Keep NCA plus the two saturating-curve fits over the existing optimizers; exclude population-PK suites (NONMEM) and whole-body simulators (Simcyp PBPK). The catalog entry is 2265."
-    },
-    {
-      "id": "L016",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 114,
-      "title": "Safety-signal detection in e.algo.stat",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Pharmacovigilance mines FAERS-style tables with disproportionality scores (reporting odds ratio, proportional reporting ratio, BCPNN information component) and comedication patterns with frequent-itemset rules (Apriori/FP-growth) for drug-drug interactions. Neper has binomial proportion intervals and chi-squared/Fisher contingency tests in `e.algo.stat` and `e.algo.stat.test`, but no disproportionality or frequent-itemset surface. Keep the scores and rule mining with caller storage; exclude case-report workflows and MedDRA coding products. The catalog entry is 2266."
-    },
-    {
       "id": "L018",
       "category": "library",
       "group": "Algorithms",
@@ -353,7 +419,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Petcow src/interp.rs cidrsubnet/cidrhost/cidrsubnets is pure IPv4 prefix arithmetic with Terraform-compatible semantics; neper e.net has no CIDR surface. Port with fixtures from petcow tests plus edges: hostnum out of range, prefix lengths 0 and 32, multi-subnet allocation. Plan: docs/petcow.md A1."
+      "evidence": "Petcow src/interp.rs cidrsubnet/cidrhost/cidrsubnets is pure IPv4 prefix arithmetic with Terraform-compatible semantics; neper e.net has no CIDR surface. Port with fixtures from petcow tests plus edges: hostnum out of range, prefix lengths 0 and 32, multi-subnet allocation. Plan: docs/petcow.md A1. Follow-on (D1881): IPv6 prefix arithmetic to match."
     },
     {
       "id": "L020",
@@ -639,7 +705,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Appdor src/identity/jose.js (BigInt RS256 verify refusing PSS/EC; neper jwt.e has HS/EdDSA only), oidc.js (discovery parse, PKCE S256), saml.js plus xml.js (8-step validate, anti-wrap, exclusive C14N subset), scim-protocol.js (filter/PATCH grammar, envelopes). Zero npm. Port pure logic; host I/O rides on e.net.http/tls/dns."
+      "evidence": "Appdor src/identity/jose.js (BigInt RS256 verify refusing PSS/EC; neper jwt.e has HS/EdDSA only), oidc.js (discovery parse, PKCE S256), saml.js plus xml.js (8-step validate, anti-wrap, exclusive C14N subset), scim-protocol.js (filter/PATCH grammar, envelopes). Zero npm. Port pure logic; host I/O rides on e.net.http/tls/dns. Follow-on (D1890): JWKS rotation and OP server-side flows to confirm at implementation."
     },
     {
       "id": "L046",
@@ -672,7 +738,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Petcow k8s provider (petcow.io/managed labels must never be renamed), aws CloudControl uniform CRUD with s3/ec2/iam subset plus lightsail non-uniform gap, transport/ssh.rs with the Transport trait and lazy per-host PerHostTransport. Land as x.cloud.aws, x.cloud.k8s, x.ssh; local stays e.proc/e.os.shell, ssm/winrm stay cloud- and platform-specific. Plan: docs/petcow.md D3/D4."
+      "evidence": "Petcow k8s provider (petcow.io/managed labels must never be renamed), aws CloudControl uniform CRUD with s3/ec2/iam subset plus lightsail non-uniform gap, transport/ssh.rs with the Transport trait and lazy per-host PerHostTransport. Land as x.cloud.aws, x.cloud.k8s, x.ssh; local stays e.proc/e.os.shell, ssm/winrm stay cloud- and platform-specific. Plan: docs/petcow.md D3/D4. Follow-on (D1881): consul/vault/etcd/docker client scope (service discovery, secrets, registries). Follow-on (D1889): SFTP subsystem client once the queued SSH transport lands."
     },
     {
       "id": "L049",
@@ -838,6 +904,1040 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "L032 covers filter/sort/group/summarize/pivot and lib/e/db/query.e covers nested-loop/hash/sort-merge/semi/anti joins plus a cost-based optimizer, with e.fmt.csv/parquet/arrow and e.db.storage underneath -- the dplyr/tidyr/pandas gap on top is mutate/select/relocate with tidy-select semantics, joins reused from e.db.query, pivot wider/longer, window functions and missing-value verbs. Build on L032 without re-implementing its filter/sort/group/pivot. Plan: docs/stats-coverage.md rows L064 (D1785)."
+    },
+    {
+      "id": "L065",
+      "category": "library",
+      "group": "UI",
+      "order": 163,
+      "title": "Complete native code editor in e.ui.code_editor (CodeMirror 6 / JustCode parity)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Planning only: docs/code-editor-plan.md defines 18 ordered work packages and 247 undelivered capabilities in docs/widget-plan.json phase P7, including all 35 JustCode language modes and the September 2026 TIOBE top 30: 51 required modes/adapters in total. C# and Java remain required; 16 additions include PHP, Visual Basic .NET/classic, Fortran, Scratch project support, Ada, Objective-C, COBOL, Julia, Ruby, Perl, SAS, MATLAB, Caml, Prolog and GML. Reuse existing UI/text/scene services and shell owners. Not yet: document storage and atomic transactions; native input/IME/accessibility; Unicode/multicursor editing and history; virtualized layout; syntax and semantic highlighting; gutters/decorations/bookmarks/folding; complete language packs; search/replace; completion/snippets/inline suggestions; diagnostics/spelling; LSP and navigation/refactoring; themes/extensions/keymaps; diff/merge/minimap/collaboration; tab/split/file/host integration; parity, platform and performance evidence. P7 remains next-release work; its prerequisites and acceptance checks are in the plan. Score is the fraction of P7's 247 components delivered with evidence; full completion also requires every package acceptance check. D1807 records this backlog entry; D1809 adds TIOBE coverage."
+    },
+    {
+      "id": "L066",
+      "category": "library",
+      "group": "UI",
+      "order": 164,
+      "title": "Safe structured Markdown viewer over e.fmt.markdown and e.ui.control",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1812). Reference: JustCode src/replytext.js and its unit cases. e.fmt.markdown already provides caller-storage block/inline parsing; e.ui.control has text/rich-text primitives. Reuse these for a generic native viewer with headings, paragraphs, lists, quotes, rules, fenced/inline code, emphasis and selectable text. Not yet: the integrated viewer, explicit display-only versus host-activated link policy, accessible structure, bounded parsing/layout, literal raw-HTML and unknown-syntax fallback, and deterministic layout/input checks for malicious markup, links and code containing Markdown. Render source as data; no script execution, implicit network loads or hidden harness dependencies. P7 hover/docs and T034 may consume this viewer without duplicating parsers."
+    },
+    {
+      "id": "L067",
+      "category": "library",
+      "group": "UI",
+      "order": 165,
+      "title": "Refresh-stable explorer tree adapter over e.ui.collection",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1812). Reference: JustCode src/filetree.js, src/explorer.js and their unit cases. e.ui.collection already has TreeSource stable keys, expanded/selected key lists and virtual tree views; e.text.collate already offers numeric ordering. Reuse them for a generic file-tree adapter with folders-first natural ordering and expansion/selection/scroll retention across refresh, rename and removal. Not yet: integrated filesystem snapshots, collision-safe stable identities, loading/error rows, explicit locale comparator and path-identity policy, and deterministic refresh/rename/delete/large-tree fixtures. Preserve case-sensitive host distinctions; never copy JustCode's unconditional path lowercasing to Linux. Enumeration, path resolution, mutation authorization and recursive-copy containment belong to host filesystem services. No second tree widget or bespoke natural-sort implementation. P7-17's explorer hook consumes this adapter."
+    },
+    {
+      "id": "T033",
+      "category": "tooling",
+      "group": "Project tools",
+      "order": 33,
+      "title": "Project source metrics by language with snapshot deltas",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1812). Reference: JustCode src/metrics.js and project_metrics in src-tauri/src/lib.rs. Not yet: a bounded, cancellable project scan counting code/comment/blank lines by language; language-registry/comment metadata reuse; configured ignore, binary/encoding and symlink policies; persisted snapshot comparison and machine-readable/human reports; string/comment/dialect and changed/deleted-file fixtures. Reports must not count themselves, and mixed-language or heuristic classification must disclose its limits. e.metrics is runtime telemetry, not this source-analysis command. Keep traversal, snapshot filenames and reports in tooling; extract a pure source-count helper into an existing text module only when another consumer actually needs it. No editor or project policy in the runtime standard library."
+    },
+    {
+      "id": "T034",
+      "category": "tooling",
+      "group": "Project tools",
+      "order": 34,
+      "title": "Reattachable harness journal and work-status panel",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1812). Reference: JustCode src/perp.js. Not yet: a tooling panel composed from existing collection/overlay controls and L066's safe viewer, reading persistent journal/status through a supplied adapter; timeline/detail/filter views, follow-tail, path-specific watcher refresh with bounded fallback, absent-harness handling and close/reopen reattachment. Work lifecycle stays in the harness, so closing the panel cannot stop work and reopening cannot lose it. Validate truncated/partial records, journal rotation, stale refresh replies and bounded large-journal reads. Harness discovery, binding validation and typed run/pause/message actions stay outside e.ui; the panel must not invent a second task scheduler. Follow-on (D1898): parallel harnesses also need a claim protocol â€” queue-item checkout plus D-number reservation â€” after two live collisions between sessions sharing one JSON queue. Use generic library view primitives without baking Perpetum or .harness schemas into the standard library."
+    },
+    {
+      "id": "T035",
+      "category": "tooling",
+      "group": "Validation",
+      "order": 35,
+      "title": "UI resource and command consistency audits",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Planning only (D1812). Reference: JustCode tests/consistency.test.js. Not yet: extend existing Neper validation tools to check icon/resource references, translation-key coverage and duplicate keys, locale placeholder agreement, command/menu callback contracts and mnemonic conflicts. Consume actual resource/command registries and generated manifests; do not claim arbitrary dynamic source references can be proven by regex. Include small malformed-registry cases proving each check fails and wire checks into the existing build/test entry point with actionable locations. Keep repository-specific manifests, rules and CI wiring in scripts/tests; add no runtime validation framework or standard-library dependency."
+    },
+    {
+      "id": "L076",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 174,
+      "title": "Filename-mask matching (TMask parity) in e.text",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1819). Delphi TMask parity: `*?[]` sets/ranges with escaping over caller storage, no filesystem coupling (e.fs consumes separately). Pure table fixtures incl. character sets, ranges, negation, escaping and invalid patterns. Ranked pure-testable: zero I/O. Follow-on (D1873): pathspec gitwildmatch (`**`, dir-only markers) for ignore-file parity."
+    },
+    {
+      "id": "L077",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 175,
+      "title": "Dimensioned unit-conversion registry in e.math",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1819). ConvUtils/StdConvs parity: dimension registry plus standard length/mass/time/temperature/data families over e.math factors. Pure table fixtures against known conversions. Out of scope: live currency rates. Ranked pure-testable."
+    },
+    {
+      "id": "L078",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 176,
+      "title": "TOTP/HOTP one-time codes in e.crypto",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1819). OATH parity missing from e.crypto: HOTP/TOTP generation plus verification-window helper over the existing HMAC-SHA1/SHA256, byte-exact against RFC 4226/6238 vectors. No secret-storage policy (host boundary). Ranked pure-testable."
+    },
+    {
+      "id": "L079",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 177,
+      "title": "NTP/SNTP packet codec in e.time.sync",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1819). Clock-sync algorithms exist (Marzullo/Berkeley/Cristian) but no wire codec: RFC 5905 48-byte NTP encode/decode with pure packet fixtures. Transport stays caller-driven UDP via e.net. Ranked pure-testable."
+    },
+    {
+      "id": "L080",
+      "category": "library",
+      "group": "Formats",
+      "order": 178,
+      "title": "SOAP envelope and WSDL-type codec in e.fmt",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1819). Enterprise doc glue missing: SOAP 1.1/1.2 envelope build/parse and WSDL/XSD-type mapping over e.fmt.xml and e.net.http, faults as typed errors. Canned-XML fixtures, no server side. Ranked pure-testable."
+    },
+    {
+      "id": "L081",
+      "category": "library",
+      "group": "Formats",
+      "order": 179,
+      "title": "XSD validation and XSLT core for e.fmt.xml",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1819). e.fmt.xml parses but cannot validate or transform: XSD built-in datatypes plus structural validation, and XSLT 1.0 core templates without extension functions, against W3C fixtures. Ranked pure-testable."
+    },
+    {
+      "id": "L082",
+      "category": "library",
+      "group": "Drivers",
+      "order": 180,
+      "title": "SMTP send transport in e.net",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1819). e.fmt.mail parses only: SMTP send (EHLO, AUTH PLAIN/LOGIN, DATA, TLS via e.net.tls) with loopback fake-server fixtures asserting bytes sent. No mailbox storage. Ranked loopback-testable; harnesses exist (net, net_http, net_tls)."
+    },
+    {
+      "id": "L083",
+      "category": "library",
+      "group": "Drivers",
+      "order": 181,
+      "title": "IMAP/POP3 fetch in e.net",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1819). Mailbox fetch missing: IMAP SELECT/FETCH and POP3 RETR over canned-transcript plus loopback fixtures, reusing the e.fmt.mail parser. No local store. Ranked loopback-testable."
+    },
+    {
+      "id": "L084",
+      "category": "library",
+      "group": "Drivers",
+      "order": 182,
+      "title": "FTP/FTPS client in e.net",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1819). File-transfer client missing: FTP control-channel codec with loopback data-connection fixtures, FTPS via e.net.tls. No server side. Ranked loopback-testable."
+    },
+    {
+      "id": "L085",
+      "category": "library",
+      "group": "Drivers",
+      "order": 183,
+      "title": "LDAP bind/search codec and client in e.net",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1819). Directory access missing: LDAP bind/search over e.fmt.asn1 BER with loopback fixtures; complements queued L045 (JOSE/OIDC/SAML/SCIM). Ranked loopback-testable."
+    },
+    {
+      "id": "L086",
+      "category": "library",
+      "group": "Drivers",
+      "order": 184,
+      "title": "mDNS/DNS-SD discovery in e.net",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1819). LAN discovery missing: mDNS packet codec plus browser/responder with multicast loopback fixtures; pairs with e.dist for the sync half (Tethering discovery parity). Ranked loopback-testable."
+    },
+    {
+      "id": "L087",
+      "category": "library",
+      "group": "UI",
+      "order": 185,
+      "title": "Ribbon-style command UI in e.ui.navigation",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1821). Office-ribbon parity missing with no equivalent planned: contextual tabs, groups, galleries and quick-access bar over the existing command/action model, tabs and collections, with collapsed mode, keyboard traversal and accessible roles. Vcl.Ribbon units are absent from this snapshot too; no third-party dependency. Fixtures for tab switching, gallery layout, collapse and semantics."
+    },
+    {
+      "id": "L088",
+      "category": "library",
+      "group": "UI",
+      "order": 186,
+      "title": "Custom title-bar panel in e.ui.window",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1821). TTitleBarPanel parity missing (verified: only an incidental local in navigation.e): app-rendered caption with title, caption buttons, drag region and maximized/fullscreen states, per-capability button order, with the host still owning real chrome unless frameless is granted. Fixtures for layout, caption hit regions, platform button order and accessibility roles."
+    },
+    {
+      "id": "L089",
+      "category": "library",
+      "group": "UI",
+      "order": 187,
+      "title": "Banded report designer engine in e.ui",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1821). QuickReport/FPReport parity missing at engine level: header/detail/footer/group bands over e.db and L032 aggregation, text layout, pagination and phase-4 print jobs; L075 covers chart-side compositions only. PDF export waits on a PDF writer (none in e.fmt). Designer canvas stays app-side on e.ui primitives; engine first with band-layout and pagination fixtures."
+    },
+    {
+      "id": "L090",
+      "category": "library",
+      "group": "UI",
+      "order": 188,
+      "title": "Spreadsheet grid control in e.ui.collection",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1824). Celvyx parity missing the visual half: virtualized grid with merged cells, in-cell editing, charts-in-cells and fill/border styling over e.ui.collection virtualization, complementing queued L026-L029 (formula) and L032 (table query) with no grid of their own. Fixtures for windowing, merges, edit commit/cancel and embedded content bounds."
+    },
+    {
+      "id": "L091",
+      "category": "library",
+      "group": "UI",
+      "order": 189,
+      "title": "Flow/node-graph editor widget in e.ui.collection",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1824). Celvyx ETL-canvas parity missing: interactive node-graph editor (canvas, palette, inspector, lint strip) over the planned flowchart/network diagram geometry plus e.ui selection and drag. Diagrams alone do not edit. Fixtures for node move/connect, palette drop, inspector binding and lint markers."
+    },
+    {
+      "id": "L098",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 196,
+      "title": "Equation (math typesetting) rendering in e.text",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1824). Office-equation parity missing: math-zone layout (fractions, scripts, roots, matrices, operators) over e.text.layout shaping into caller-owned glyph runs for scene/SVG adapters. Display layout first; interactive equation editing stays app-side. Fixtures for nesting, baseline alignment and refusal paths. Follow-on (D1891): LaTeX-math and MathML input formats ride the same layout."
+    },
+    {
+      "id": "L099",
+      "category": "library",
+      "group": "UI",
+      "order": 197,
+      "title": "Ink canvas: stroke capture and replay in e.ui.widget",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1824). Signature/draw parity missing: ink stroke capture, pressure-aware polyline storage and timed replay over the existing pointer/pen gesture stream; pen input exists but ink storage does not. Minor. Fixtures for stroke bounds, replay timing and capacity refusal."
+    },
+    {
+      "id": "L100",
+      "category": "library",
+      "group": "Formats",
+      "order": 198,
+      "title": "XLSX worksheet encode for grid and report export",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1852). L044 covers XLSX decode only, leaving the cxExportGrid4Link parity gap: worksheet encode (values, shared strings, basic styles, column widths, merges) over the e.fmt.xlsx read model for DataGrid and L089 report export. Round-trip fixtures through L044 decode plus Excel-compat bounds; charts, pivots and PDF export stay out."
+    },
+    {
+      "id": "L101",
+      "category": "library",
+      "group": "Drivers",
+      "order": 199,
+      "title": "gRPC transport and stubs over e.fmt.protobuf",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1873). grpcio parity missing: HTTP/2-framed unary and streaming RPC over e.net.http3/quic and e.fmt.protobuf, with stub generation from .proto descriptors. Fixtures against grpcio reference transcripts on loopback; deadlines, trailers and status codes included. No service mesh. Follow-on (D1881): classic H2C/H2-TLS transport for grpc-go interop, not just H2 over QUIC."
+    },
+    {
+      "id": "L102",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 200,
+      "title": "Process and system info (psutil parity) in e.proc",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1873). psutil parity missing (verified: no cpu/mem/disk/net counters anywhere): process listing, cpu times, memory, disk usage, network addresses and boot time over e.proc with per-OS readers. Fixtures assert shape and self-consistency on both hosts, not live values."
+    },
+    {
+      "id": "L103",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 201,
+      "title": "Recurrence rules and flexible date parsing in e.time",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1873). dateutil parity gap (verified: no RRULE or fuzzy parsing): RFC 5545 recurrence expansion over e.time.calendar plus a strict-then-lenient date parser with explicit format fallback order. e.time.cron covers a different use. Fixtures against python-dateutil vectors. Follow-on (D1881): humantime-style duration strings (`15m30s`) as an additional parser entry."
+    },
+    {
+      "id": "L104",
+      "category": "library",
+      "group": "UI",
+      "order": 202,
+      "title": "Terminal kit: progress meters and rich text tables",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1873). tqdm/rich/colorama parity missing on the terminal side (GUI ProgressBar exists): stderr progress meters with ETA, rich tables and markup for CLI apps, plus Windows VT-mode enable behind e.os. Pure layout fixtures plus golden byte streams; no GUI dependency. Follow-on (D1881): interactive prompts and selection lists (survey/inquire parity) as a second slice. Follow-on (D1890): Humanizer-style relative dates and quantities as display formatting."
+    },
+    {
+      "id": "L105",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 203,
+      "title": "Platform directories (platformdirs parity) in e.path",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1873). platformdirs parity missing (verified: no XDG/known-folder lookup): user data, config, cache and log directories per OS over e.path with per-host fixtures. No directory creation policy; callers create."
+    },
+    {
+      "id": "L106",
+      "category": "library",
+      "group": "Formats",
+      "order": 204,
+      "title": "Env-file loader (python-dotenv parity) in e.fmt",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1873). dotenv parity missing (verified: env-var reading exists, file parsing does not): KEY=value parsing with quoting, comments and interpolation over caller storage. Pure fixtures; no implicit process-env mutation, callers apply."
+    },
+    {
+      "id": "L107",
+      "category": "library",
+      "group": "Drivers",
+      "order": 205,
+      "title": "HTTP keep-alive connection pooling in e.net.http",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1873). urllib3-pool parity missing (verified: no pool surface in http.e): keep-alive connection reuse with per-host limits and idle eviction under caller storage. Loopback fixtures assert socket reuse counts; TLS session reuse follows."
+    },
+    {
+      "id": "L108",
+      "category": "library",
+      "group": "Formats",
+      "order": 206,
+      "title": "PEP 440 specifiers and requirements for e.fmt.semver",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1873). packaging parity gap: semver parses/compares only, with no ~=, ===, pre/post/dev ordering or requirement-line parsing for pacman. Pure fixtures against packaging vectors; version type itself unchanged. Follow-on (D1881): cargo caret/tilde/range requirements alongside PEP 440."
+    },
+    {
+      "id": "L109",
+      "category": "library",
+      "group": "Drivers",
+      "order": 207,
+      "title": "TLS trust-root provisioning for e.net.tls",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1873). certifi parity gap (verified: no store readers or bundle found): OS trust-store readers per host plus an optional bundled Mozilla set feeding the existing caller-roots config. Fixtures assert chain building against test roots, never live trust contents."
+    },
+    {
+      "id": "L110",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 208,
+      "title": "Statistical legacy-charset detection in e.text.encoding",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1873). chardet parity gap: detect() covers BOM plus zero-byte/UTF-8 heuristics only, with no statistical disambiguation of legacy 8-bit encodings. Add frequency-table scoring with confidence calibration over the existing Guess type. Fixtures on multilingual corpora."
+    },
+    {
+      "id": "L111",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 209,
+      "title": "JSON-path queries (jmespath parity) in e.algo.query",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1873). e.algo.query holds offline range-query ordering (Mo/Hilbert), not document queries: jmespath-style field navigation, filters, projections and functions over e.fmt.json values. Pure fixtures against jmespath vectors; no query planning."
+    },
+    {
+      "id": "L112",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 210,
+      "title": "ORM layer over e.db: struct mapping, relations, hooks",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1877). gorm/ent parity missing: struct-to-row mapping via e.meta, belongs-to/has-many relations with preloading, lifecycle hooks and auto-migrate DDL over e.db.query. L032/L064 cover relational ops, not the model layer. Fixtures on sqlite with relation graphs and hook ordering. Follow-on (D1890): Dapper/RepoDb/PetaPoco-style micro-mapping and Linq2Db expression notes ride the struct-mapping half; bulk-copy protocols stay driver detail."
+    },
+    {
+      "id": "L113",
+      "category": "library",
+      "group": "Drivers",
+      "order": 211,
+      "title": "SQL migration runner over e.db",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1877). goose/migrate parity missing: ordered versioned migrations with checksums, up/down transactions and a dialect-aware journal table over e.db. Fixtures for ordering, checksum mismatch refusal and failed-migration locking on sqlite."
+    },
+    {
+      "id": "L114",
+      "category": "library",
+      "group": "Drivers",
+      "order": 212,
+      "title": "NoSQL wire clients: Redis, MongoDB, Elasticsearch",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1877). go-redis/mongo-driver/elastic parity missing (verified: only false positives found): RESP, OP_MSG and ES REST codecs with loopback fixtures. S3-compatible storage stays out per the cloud ruling. Client-side only; cluster failover follows."
+    },
+    {
+      "id": "L115",
+      "category": "library",
+      "group": "Drivers",
+      "order": 213,
+      "title": "NATS client in e.net",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1877). Messaging-client gap, NATS first: text-protocol codec with pub/sub, request-reply and queue groups over e.net, loopback fixtures against scripted servers. Kafka and AMQP stay deferred as heavier protocols; MQTT already exists. Follow-on (D1891): Pulsar, RocketMQ and Artemis share the deferred slot."
+    },
+    {
+      "id": "L116",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 214,
+      "title": "Prometheus exposition and OTLP export for e.metrics/e.trace",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1877). Observability-export gap (verified: no exposition surface): OpenMetrics text exposition with a scrape handler plus OTLP/HTTP metric and span export over e.net.http. Registries and sampling stay in e.metrics/e.trace. Golden-body fixtures; no collector dependency. Follow-on (D1891): JMX-style management beans (attributes/operations) as a second slice."
+    },
+    {
+      "id": "L117",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 215,
+      "title": "Password-hashing KDFs in e.crypto: bcrypt, argon2, scrypt",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1877). Auth-critical gap (verified absent): memory-hard password hashing with BKDF-style cost parameters and constant-time verification against reference vectors. e.crypto.kdf covers key derivation, not password storage. Side-channel and parameter-validation fixtures included."
+    },
+    {
+      "id": "L118",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 216,
+      "title": "Mock and stub framework for e.test",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1877). testify-mock/gomock parity missing (verified: no mock surface in e.test): scripted call expectations with argument matchers and ordered verification over comptime interfaces. e.test.sim covers simulation, not doubles. Fixtures for expectation failure diagnostics."
+    },
+    {
+      "id": "L119",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 217,
+      "title": "Virtual filesystem: memory, overlay and union mounts",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1877). afero parity missing (verified: no virtual FS found): in-memory, overlay and union filesystems behind the e.fs surface with copy-up semantics. Pairs the fsspec note; remote backends ride their own clients. Fixtures for layering, whiteouts and path isolation."
+    },
+    {
+      "id": "L120",
+      "category": "library",
+      "group": "Formats",
+      "order": 218,
+      "title": "RAR and 7z archive decoders in e.fmt",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1877). Archiver parity gap: tar/zip exist, RAR and 7z do not. Decode-only with bounded allocation and hostile-archive fixtures (quines, overflows, solid-block limits). No multi-volume spanning in the first cut. Follow-on (D1891): ar/cpio ride the same archive item as legacy formats."
+    },
+    {
+      "id": "L121",
+      "category": "library",
+      "group": "Drivers",
+      "order": 219,
+      "title": "SOCKS5 client in e.net",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1877). Proxy-protocol gap (verified absent): SOCKS5 handshake with no-auth and username/password methods plus UDP ASSOCIATE, over e.net with loopback fixtures. HTTP CONNECT rides L046 policy helpers; Tor pluggable transports stay out."
+    },
+    {
+      "id": "L122",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 220,
+      "title": "Seeded fake-data generators in e.algo.rand",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1877). gofakeit parity missing: e.algo.rand.dist covers distributions, not names/addresses/IDs/lorem fakers. Deterministic seeded lookup tables with locale overlays. Fixtures pin exact streams per seed; no network data sources. Follow-on (D1890): AutoFixture-style anonymous object graphs via e.meta."
+    },
+    {
+      "id": "L123",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 221,
+      "title": "Layered configuration with watch in e.cli",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1877). viper parity gap: ordered defaults, file, env and flag layers with precedence plus reload watch over e.fmt codecs, e.cli flags and e.fs.watch. Individual sources exist; layering and live reload do not. Fixtures for precedence and watch coalescing."
+    },
+    {
+      "id": "L124",
+      "category": "library",
+      "group": "Formats",
+      "order": 222,
+      "title": "Extended image decoders: BMP, GIF, TIFF, QOI plus EXIF",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1881). image-crate parity gap (verified: png/jpeg/webp only): BMP, GIF (incl. animation frames), TIFF and QOI decoders plus an EXIF reader over e.gfx.image. Bounded-allocation fixtures incl. hostile files; encode stays out except where e.gfx.image already writes. Follow-on (D1889): extend encode to BMP/GIF/QOI/TIFF write for zigimg write parity. Follow-on (D1890): image-processing ops (resize, rotate, flip, blur) verified absent â€” only Porter-Duff compositing exists."
+    },
+    {
+      "id": "L125",
+      "category": "library",
+      "group": "Formats",
+      "order": 223,
+      "title": "SVG document rendering in e.gfx",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1881). resvg parity gap (verified: SVG output exists, render does not): SVG path/shape/text document rendering into the scene backend over e.gfx.geometry and text layout. Fixtures against reference rasters with tolerance bounds; filters and scripting stay out."
+    },
+    {
+      "id": "L126",
+      "category": "library",
+      "group": "Drivers",
+      "order": 224,
+      "title": "D-Bus message codec and client for Linux desktop",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1881). zbus parity gap (verified: e.dbus is only a forward reference; AT-SPI calls are hand-rolled): D-Bus wire codec plus session/system bus client behind e.os, unlocking Linux notification, portal and tray backends. Loopback bus fixtures; no service implementations."
+    },
+    {
+      "id": "L127",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 225,
+      "title": "Object-store abstraction over fs, http and memory",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1881). opendal parity at the portable layer: unified put/get/list/delete over L119 virtual FS, e.net.http clients and memory backends. Vendor clouds stay out per the cloud ruling. Fixtures run every backend through one conformance script."
+    },
+    {
+      "id": "L128",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 226,
+      "title": "Snapshot testing in e.test",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1881). insta parity missing (verified: no snapshot surface): golden value snapshots with review-and-accept workflow over e.test and e.fmt.pretty. Fixtures for new-snapshot refusal in CI versus accept mode; binary snapshots stay out."
+    },
+    {
+      "id": "L129",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 227,
+      "title": "Statistical bench harness in e.test",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1881). criterion parity missing in-language (external measure.py exists): criterion-style benchmark runner with warmup, outlier rejection and comparison reports over e.time. Fixtures pin report schema, not timings; CI thresholds stay caller policy."
+    },
+    {
+      "id": "L130",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 228,
+      "title": "Diagnostic report rendering for applications",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1881). miette parity missing as a library (the compiler owns an internal writer): labeled spans with source snippets and notes over e.text.layout for application diagnostics. Fixtures pin golden rendering; no new diagnostic codes."
+    },
+    {
+      "id": "L131",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 229,
+      "title": "Parser-combinator kit in e.parse",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1881). nom parity gap in style (ll/lr exist): zero-copy combinators (sequence, choice, repeat, delimited) over caller slices with explicit error offsets. Fixtures on expression grammars; macro-derived parsers stay out, e.meta covers generation."
+    },
+    {
+      "id": "L132",
+      "category": "library",
+      "group": "Formats",
+      "order": 230,
+      "title": "HTML sanitizer in e.fmt.html",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1881). ammonia parity missing: allowlist-based HTML sanitization with URL-scheme policy over the e.fmt.html parser. Complements L066 safe-viewer work on the viewer side. Fixtures incl. event-handler, style and nesting attacks."
+    },
+    {
+      "id": "L133",
+      "category": "library",
+      "group": "UI",
+      "order": 231,
+      "title": "Terminal line editor with history and completion",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1881). reedline parity missing (P7 editor is GUI-only): line editing with history, completion callbacks and hints for CLI REPLs over e.cli. Fixtures replay key sequences into state assertions; validators stay caller-side."
+    },
+    {
+      "id": "L134",
+      "category": "library",
+      "group": "UI",
+      "order": 232,
+      "title": "Shell completions and man pages for e.cli",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1881). clap_complete/mangen parity missing: bash/zsh/fish completion scripts plus man-page generation from e.cli command specs. Golden fixtures per shell; installation stays host policy."
+    },
+    {
+      "id": "L135",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 233,
+      "title": "Micro-slivers: s2, bincode-style codec, magic sniff, shell words, host lookups, signals, byte-unit, rational",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1881). One small-completions item for individually tiny gaps: s2 block codec beside snappy, a bincode-style compact binary codec, magic-number sniff DB over mime sniffing, shell word-splitting, tilde expansion, hostname/users/locale/tz lookups, SIGINT/SIGTERM hooks, byte-unit parse/format and an exact rational type. Each lands with table fixtures; split out any that grows."
+    },
+    {
+      "id": "L136",
+      "category": "library",
+      "group": "UI",
+      "order": 234,
+      "title": "Terminal emulator engine in e.ui",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1889). ghostty/wezterm/kitty parity gap (verified: only false-positive matches anywhere): pty ownership, VT/ECMA-48 parser and cell grid with scrollback over e.ui.collection virtualization and text layout. Fixtures replay byte streams into grid assertions; shell integration and GPU rendering stay out."
+    },
+    {
+      "id": "L137",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 235,
+      "title": "Micro-slivers II: DHCP, SNMP, Gemini, gopher, finger, QR",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1889). Second small-completions item (all verified absent): DHCP client, SNMP codec, Gemini/gopher/finger clients and QR encode/decode. Each lands with table or loopback fixtures; split out any that grows, mirroring L135."
+    },
+    {
+      "id": "L138",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 236,
+      "title": "Mediator: requests, notifications and pipeline behaviors",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). MediatR parity missing: in-process request/response with handler registry, notification fan-out and pipeline behaviors (validation, logging, retry) over e.task. No broker dependency; distributed messaging stays with L115. Fixtures for handler resolution, behavior ordering and error paths. Follow-on (D1891): Guava EventBus and Vert.x event-bus ride the notification fan-out."
+    },
+    {
+      "id": "L139",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 237,
+      "title": "Object-object mapper with conventions and projections",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). AutoMapper/Mapster parity missing: convention-based member mapping with flattening, null substitution and queryable projections over e.meta field reflection. Runtime mapper first; comptime specialization follows. Fixtures against mapping matrices incl. nested flattening. Follow-on (D1891): MapStruct-style compile-time generation rides the comptime-follow."
+    },
+    {
+      "id": "L140",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 238,
+      "title": "Persistent background jobs with retries and cron triggers",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). Hangfire/Quartz parity missing: durable job queues with at-least-once retries, cron triggers over e.time.cron and recurring schedules over e.db storage. Dashboards stay app-side per D1785. Fixtures for retry backoff, trigger firing and poison-message quarantine. Follow-on (D1891): Spring Batch-style chunk processing and Quartz enterprise triggers ride the same queues."
+    },
+    {
+      "id": "L141",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 239,
+      "title": "Virtual-actor framework over e.dist",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). Orleans/Akka parity missing: virtual actors with lifecycle, timers, reminders and persisted state over e.dist placement plus e.db storage. e.task covers tasks, not grains. Fixtures for activation, timer firing, reminder durability and reentrancy refusal."
+    },
+    {
+      "id": "L142",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 240,
+      "title": "BDD/Gherkin runner with e.meta step binding",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). SpecFlow/Reqnroll/Gauge parity missing: feature-file parsing with step-definition binding via e.meta over the e.test runner. Fixtures for tag filtering, table arguments and pending-step reporting; living-doc output stays app-side. Follow-on (D1891): Cucumber-JVM, Spock and Serenity ride the same runner."
+    },
+    {
+      "id": "L143",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 241,
+      "title": "Mutation testing in e.test",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). Stryker parity missing: source mutants (operator, constant, branch) with suite kill/survive scoring over e.test. Fixtures pin mutant counts and score math on a sample module; equivalent-mutant detection stays out."
+    },
+    {
+      "id": "L144",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 242,
+      "title": "Architecture-rule testing over module dependencies",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). ArchUnitNET parity missing as a library (repo scripts validate the plan, not library code): layer, naming and dependency rules over the module graph for suite assertions. Fixtures with intentional violations; rule DSL stays minimal."
+    },
+    {
+      "id": "L145",
+      "category": "library",
+      "group": "Formats",
+      "order": 243,
+      "title": "PDF document generation in e.fmt",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). QuestPDF/PdfSharp parity missing: fills the hole L089 itself names (no PDF writer in e.fmt). Page model with text layout, tables and vector drawing over e.text.layout. Fixtures byte-check minimal documents; extraction is a second slice."
+    },
+    {
+      "id": "L146",
+      "category": "library",
+      "group": "Formats",
+      "order": 244,
+      "title": "Word document generation over OOXML",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). DocX parity missing: friendly .docx generation (paragraphs, tables, styles, images) over the zip writer. L044/L100 cover spreadsheets only. Fixtures round-trip through document inspection; tracked changes stay out."
+    },
+    {
+      "id": "L147",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 245,
+      "title": "Embedded document and event store",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). LiteDB/Marten parity missing: single-file document collections plus an append-only event journal with projections and subscriptions over e.db.storage. Fixtures for journal replay, projection rebuild and subscription catch-up; clustering stays with e.dist."
+    },
+    {
+      "id": "L148",
+      "category": "library",
+      "group": "UI",
+      "order": 246,
+      "title": "Scheduler control: day, week and agenda views",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). DevExpress-style scheduler parity missing (pickers exist, no appointment surface): day/week/agenda views with drag-create and recurrence display over e.time.calendar plus L103 rules. Fixtures for layout, overlap columns and accessibility roles."
+    },
+    {
+      "id": "L149",
+      "category": "library",
+      "group": "Drivers",
+      "order": 247,
+      "title": "Crash and error report upload client",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). Sentry-envelope parity missing: crash/error capture with envelope upload over e.net.http, batching and offline queue. Vendor APM SDKs stay hand-built; server-side stores are app-side. Fixtures against envelope schema with fixture DSNs."
+    },
+    {
+      "id": "L150",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 248,
+      "title": "NodaTime-style dates: non-ISO calendars, patterns, maps",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). NodaTime parity gap (verified: TZif parsing present, non-ISO calendars absent): Japanese/Islamic/Hebrew calendar arithmetic over e.time.calendar, pattern-based text parsing/formatting and a Windows to IANA zone map. Fixtures against reference conversions."
+    },
+    {
+      "id": "L151",
+      "category": "library",
+      "group": "Drivers",
+      "order": 249,
+      "title": "Industrial protocols: Modbus first, OPC UA and S7 follow",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). Factory-automation parity missing: Modbus TCP/RTU client with register modeling first; OPC UA and Siemens S7 as follow-on slices. Follow-on (D1891): BACnet and KNX building automation as further slices. Loopback fixtures against scripted slaves; device discovery stays with L086."
+    },
+    {
+      "id": "L152",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 250,
+      "title": "Micro-slivers III: CMS signing, json5, TFTP, singleflight, host lookups, log rotation",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1890). Third small-completions item: CMS/PKCS#7 signing for S/MIME, json5 codec, TFTP client, singleflight call-dedup, MAC/hostname lookups and file-sink log rotation. Each lands with table or loopback fixtures; split out any that grows, mirroring L135."
+    },
+    {
+      "id": "L153",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 251,
+      "title": "Unified document text-extraction facade for search",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1891). Tika parity missing: unified detect, parse and text/metadata extraction over the e.fmt codecs, feeding the L034 indexing pipeline. Fixtures assert extracted text per format on a corpus sample; OCR and handwriting stay out."
+    },
+    {
+      "id": "L154",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 252,
+      "title": "Symbolic math: expression trees, diff, integrate, solve",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1891). SymPy/Symja parity missing: symbolic expression trees with differentiation, integration and equation solving over e.math numerics. Numeric solvers exist; nothing is symbolic. Fixtures against reference derivations; simplification heuristics stay minimal."
+    },
+    {
+      "id": "L155",
+      "category": "library",
+      "group": "Formats",
+      "order": 253,
+      "title": "Graph interchange formats: GraphML, GEXF, GML",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1891). Gephi/JGraphT-IO parity missing: GraphML, GEXF and GML read/write over e.data.graph with attribute round-trips. Fixtures on reference files incl. nested graphs; hypergraphs stay out."
+    },
+    {
+      "id": "L156",
+      "category": "library",
+      "group": "Drivers",
+      "order": 254,
+      "title": "Brokerless messaging patterns: ZeroMQ and NNG",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1891). ZeroMQ/NNG parity missing (verified: no matches): pub/sub, push/pull, router/dealer and survey patterns over TCP via e.net, with ZMTP-style framing. No broker; brokered transports stay with L115. Loopback fixtures against scripted peers."
+    },
+    {
+      "id": "L157",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 255,
+      "title": "Expression languages: JEXL, SpEL and MVEL parity",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1891). JEXL/SpEL/MVEL parity missing: property navigation, method calls and operators over caller objects with sandboxed evaluation. L026 covers cell formulas, a different shape. Fixtures against reference evaluations; compilation to bytecode stays out."
+    },
+    {
+      "id": "L158",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 256,
+      "title": "Generic object pool with eviction",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1891). commons-pool2 parity missing (db.pool is DB-specific): generic borrow/return pools with idle eviction and exhaustion policy over e.mem arenas. Fixtures for contention, eviction timing and leak detection; no JMX exposure (see L116 note)."
+    },
+    {
+      "id": "L159",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 257,
+      "title": "Composable test matcher library",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1891). Hamcrest parity missing (verified: no matcher surface in e.test): composable value matchers with mismatch descriptions over e.test assertions. Assertion style itself exists; matchers do not. Fixtures for description quality on failure."
+    },
+    {
+      "id": "L160",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 258,
+      "title": "Micro-slivers IV: robots, sitemap, test polling, fixed-width, keystores",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1891). Fourth small-completions item: robots.txt and sitemap parsing, Awaitility-style async test-condition polling, FileHelpers-style fixed-width record mapping and PKCS#12/JKS keystores. Each lands with table fixtures; split out any that grows, mirroring L135."
+    },
+    {
+      "id": "L161",
+      "category": "library",
+      "group": "Algorithms",
+      "order": 259,
+      "title": "Rules engine: Rete plus decision tables",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Planning only (D1891). Drools parity missing (L025 is a predicate subset): Rete network with decision tables and a rule DSL over e.algo.logic. Fixtures on classic rulesets with conflict-resolution order; server and workbench UIs stay out."
+    },
+    {
+      "id": "T036",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 36,
+      "title": "OpenCode harness skill and agent routing",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Planning only (D1898). No .opencode skill, no AGENTS.md route to the card or context-file (patch.exe only): OpenCode agents land without the context-file-before-reads and card-first discipline T026 requires elsewhere. Add the skill, the AGENTS.md pointers and a first-run smoke check that an agent reaches context-file, patch and check-fixture without full-file reads."
+    },
+    {
+      "id": "T037",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 37,
+      "title": "lang-stats: OpenCode harness split and honest pricing",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Planning only (D1898). lang-stats pools opencode-database rows under DeepSeek with no opencode split and prices everything at Opus rates, so free-model harness work is invisible and mispriced. Split the harness, read model identity where recorded, and price free tiers at zero before any ctx-cost claim is trusted."
+    },
+    {
+      "id": "T038",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 38,
+      "title": "Agent-ingestible queue and decision digests",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Planning only (D1898). decisions.md is 2.4 MB and queue evidence runs to KBs per item: nothing is ingestible whole and routine greps overflow tool caps. Emit a compact machine index (ids, scores, one-line status) plus an evidence-length budget in the renderer, keeping render_tasks.py per-item files as the deep layer."
+    },
+    {
+      "id": "T039",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 39,
+      "title": "T2.0 foundations: snapshots, cache identities, bounded transport",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Planning only (D1954). post-m2-llm-hardening T2.0 slice missing from the queue: immutable snapshots, complete cache identities, bounded request/result storage, cancellation, compact transport and hardened artifact publication (H15/H16/H18/H24). Pickup immediately after the chart cluster (L061, L068-L075). Versioned schema from the start; later slices extend it only by capability."
+    },
+    {
+      "id": "T040",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 40,
+      "title": "T2.1 understand and check: context, queries, provenance, diagnostics",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Planning only (D1954). T2.1 slice missing: compiler-derived context, reusable semantic queries, generated provenance, compiled guidance, unsafe enumeration, tiered checks, optimization explanations and causal/recoverable diagnostics. Pickup immediately after the chart cluster. Freeze latency/startup/resource budgets before implementation."
+    },
+    {
+      "id": "T041",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 41,
+      "title": "T2.2 edit and test evidence: plans, contracts, structured tests",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Planning only (D1954). T2.2 slice missing: transactional semantic plans, structured tests, change contracts, flaky-test semantics, runtime failures and compatibility diffs. Terminal state without T2.3 trust evidence is incomplete, never verified. Pickup immediately after the chart cluster."
+    },
+    {
+      "id": "T042",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 42,
+      "title": "T2.3+T2.4 trusted host: policy, verified receipts, durable tasks",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Planning only (D1954). Reference host tools/neper-agent-host/ missing: policy and sandbox mediation, environment identity, scoped verified receipts (one exact change contract per receipt), isolated parallel change bundles and durable authorized tasks across reconnect and approval. First slice allowed to emit verified. Pickup immediately after the chart cluster; compiler declares facts, host owns authority."
+    },
+    {
+      "id": "T043",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 43,
+      "title": "Demand-ranked library breadth order from agent measurements",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Planning only (D1954). 155 library items stand open at combined 0.96 with no demand order: rank breadth work by what agents actually hand-roll, from lang-stats script evidence and repair clusters, as a generated ranked view. Re-rank on new measurements; never reorder the serial head by hand. Pickup immediately after the chart cluster."
     },
     {
       "id": "L162",
