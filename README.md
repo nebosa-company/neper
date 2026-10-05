@@ -49,7 +49,7 @@ leaving the deterministic Neper toolchain.
     <img src="docs/gtm/neper-capabilities-poster.png" alt="Watch the Neper capabilities demo" width="720">
   </a>
   <br>
-  <sub>▶ <a href="https://neper.dev/#demo">Watch the demo</a> · <a href="https://youtu.be/S5dMLUpOtRg">watch on YouTube</a></sub>
+  <sub>▶ <a href="https://neper.dev/#demo">Watch the demo</a> · <a href="https://youtu.be/S5dMLUpOtRg">watch on YouTube</a> · <a href="https://youtu.be/iZI3FmttYn4">30-second trailer</a></sub>
 </p>
 
 ## Everything between prompt and binary is optimized
