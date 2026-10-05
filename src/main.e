@@ -7,16 +7,19 @@ use binary
 use check
 use decimal
 use codegen_x64
+use codegen_a64
 use em
 use em_link
 use layout
 use error_table
 use emit_x64
+use emit_a64
 use graph
 use lookup
 use stats
 use lex
 use link_elf
+use link_elf_a64
 use link_pe
 use lower
 use nir
@@ -764,6 +767,7 @@ fn self_test() -> err {
     try nir.discard_module_self_test()
     try regalloc.self_test()
     try emit_x64.self_test()
+    try emit_a64.self_test()
     try codegen_x64.self_test()
     try object_coff.self_test()
     try object_elf.self_test()
@@ -7013,7 +7017,7 @@ fn settle_hot(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, triple: str, mo
 fn link_artifact_image(a: *mem.Arena, program: *em_link.Program, is_windows: bool) -> ([]u8, err) {
     let empty: []u8 = zero
     let table_at = program.machine.count
-    let symbols_error = codegen_x64.append_symbol_table(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, program.lines, program.line_count)
+    let symbols_error = codegen_x64.append_symbol_table(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, program.lines, program.line_count, false)
     if symbols_error != ok { ret (empty, symbols_error) }
     let (storage, storage_error) = mem.alloc[u8](a, program.machine.count + 65536usize + link_elf.debug_bound(&program.builder, program.lines[..program.line_count]))
     if storage_error != ok { ret (empty, storage_error) }
@@ -10017,7 +10021,9 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
     var function_at = first
     while function_at < builder.function_count {
         if report.timing { report.regalloc_ns = report.regalloc_ns -% nptest_now() }
-        let (stack_slots, allocation_error) = regalloc.allocate(builder, function_at, codegen_x64.register_pool_count(), context.ranges, context.allocations, a)
+        var pool = codegen_x64.register_pool_count()
+        if context.abi == .Aapcs64 { pool = codegen_a64.register_pool_count() }
+        let (stack_slots, allocation_error) = regalloc.allocate(builder, function_at, pool, context.ranges, context.allocations, a)
         if report.timing { report.regalloc_ns = report.regalloc_ns +% nptest_now() }
         if allocation_error != ok { ret allocation_error }
         // Register pressure (D450, H20): counted on the builder, summed for `--stats`.
@@ -10045,7 +10051,12 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
                 builder.debug.var_count = var_start
             }
             if report.timing { report.codegen_ns = report.codegen_ns -% nptest_now() }
-            let codegen_error = codegen_x64.function(builder, function_at, stack_slots, context)
+            var codegen_error: err = ok
+            if context.abi == .Aapcs64 {
+                codegen_error = codegen_a64.function(builder, function_at, stack_slots, context)
+            } else {
+                codegen_error = codegen_x64.function(builder, function_at, stack_slots, context)
+            }
             if report.timing { report.codegen_ns = report.codegen_ns +% nptest_now() }
             // A worker's arena run dry in selection is the worker's, not the program's
             // (D1527): the generous worker does the module over (D325).
@@ -10301,6 +10312,7 @@ fn note_emission(w: *LowerWorker, a: *mem.Arena, first: usize) -> err {
 }
 
 fn machine_abi_of(args: []str) -> codegen_x64.Abi {
+    if same(args[4usize], "aarch64") { ret .Aapcs64 }
     if same(args[5usize], "windows") { ret .Windows }
     ret .SystemV
 }
@@ -14259,7 +14271,11 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 try io.print("compiled modules written\n")
                 ret ok
             }
-            try codegen_x64.resolve_calls(&builder, code.function_offsets, code.relocations, code.relocation_count, &code.machine)
+            if same(args[4usize], "aarch64") {
+                try codegen_a64.resolve_calls(&builder, code.function_offsets, code.relocations, code.relocation_count, &code.machine)
+            } else {
+                try codegen_x64.resolve_calls(&builder, code.function_offsets, code.relocations, code.relocation_count, &code.machine)
+            }
             if disassemble {
                 if report.map_stale {
                     try finish_report(&report)
@@ -14287,7 +14303,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 // (D306): sized before it, a mebibyte of slack covered the table of a small
                 // program and not the twenty of a large one.
                 let table_at = code.machine.count
-                try codegen_x64.append_symbol_table(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines, code.line_count)
+                try codegen_x64.append_symbol_table(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines, code.line_count, same(args[4usize], "aarch64"))
                 let executable_capacity = code.machine.count + 1048576usize + link_elf.debug_bound(&builder, code.lines[..code.line_count])
                 let (executable_storage, executable_storage_error) = mem.alloc[u8](a, executable_capacity)
                 if executable_storage_error != ok { ret executable_storage_error }
@@ -14297,7 +14313,11 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 if machine_abi_of(args) == .Windows {
                     try link_pe.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                 } else {
-                    try link_elf.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
+                    if machine_abi_of(args) == .Aapcs64 {
+                        try link_elf_a64.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
+                    } else {
+                        try link_elf.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
+                    }
                 }
                 report.arena_used = mem.stats(a).used
                 try report_phase(&report, "link")

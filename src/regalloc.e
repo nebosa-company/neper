@@ -694,7 +694,7 @@ fn heap_pop(heaps: []usize, counts: []usize, capacity: usize, register: usize) {
 // the length of the call.
 fn allocate(builder: *nir.Builder, function_index: usize, register_count: usize, ranges: []LiveRange, allocations: []Allocation, a: *mem.Arena) -> (usize, err) {
     if register_count == 0usize { ret (0usize, NoRegisters) }
-    if register_count > 10usize { ret (0usize, Capacity) }
+    if register_count > 16usize { ret (0usize, Capacity) }
     if function_index >= builder.function_count { ret (0usize, InvalidIR) }
     let function = builder.functions[function_index]
     if function.value_count > allocations.len { ret (0usize, Capacity) }
@@ -729,7 +729,10 @@ fn allocate_with(builder: *nir.Builder, function: nir.Function, register_count: 
         // one of those it needs no save and restore around each call, only the one the
         // function's entry and returns make. Any other value keeps the lowest free one.
         var start = 0usize
-        if ranges[value_at].crosses_call && CALLER_SAVED < register_count { start = CALLER_SAVED }
+        // aarch64's pool of sixteen (`codegen_a64`) starts with six the calls clobber.
+        var caller_saved = CALLER_SAVED
+        if register_count == 16usize { caller_saved = 6usize }
+        if ranges[value_at].crosses_call && caller_saved < register_count { start = caller_saved }
         var tried = 0usize
         while tried < register_count {
             register = (start + tried) % register_count

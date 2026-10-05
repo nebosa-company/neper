@@ -36288,3 +36288,81 @@ than by loosening it: `e.thread.pool` imports `e.thread`, `e.sync` and
 imports `e.fmt.json`, so it is layer 6 like it; and `e.gfx.chart` signs
 `time.Date` in its date axes, so it lists `e.time` and moves to layer 4, the
 lowest layer that may import it. Nothing below those layers depends on them.
+
+## D2123 — The aarch64 back end: AAPCS64 over the x64 selector's shape
+
+`--target aarch64-linux` selects `codegen_a64`, a second instruction selector over the
+same allocated NIR, `FunctionContext`, relocations, line table and trap protocol as
+`codegen_x64`, and `emit_a64`, an A64 encoder writing one little-endian word per
+instruction into the same byte buffer. `codegen_x64.Abi` gains `Aapcs64`, which is
+what routes a function, the allocator's pool and call resolution to it.
+
+Registers. The allocator gets sixteen: x9-x14, which calls clobber, then x19-x28, which
+they keep (`regalloc` steers a value live across a call past the first six). None is an
+argument register, so a call writes x0-x7 directly with nothing to park, and every fixed
+sequence -- division, shifts, copies, bounds and slice checks -- works in registers no
+value lives in: x0-x8 and x15-x17. The x64 selector's save-around-fixed-sequence
+machinery is therefore needed only around calls. x18 is left alone. Floats stay in
+general registers as bits, as on x64, and borrow v16 and v17.
+
+Frames. Every function keeps an x29/x30 frame record and its slots below x29; the trap
+walk reads the record chain exactly as x64 reads rbp's. Calls are AAPCS64 for Neper's
+own functions and foreign ones alike: integers in x0-x7, floats in v0-v7, a pair of
+results in x0 and x1.
+
+Addressing. Anything a function addresses inside itself -- an inline string, a trap
+record -- is ADR, which moves with the function when it is folded or reused. Every
+relocation is an ADRP pair (or a BL), patched by `emit_a64.patch_relative`, which reads
+the form from the word itself, so a relocation needs no kind of its own. A page delta
+computed between buffer offsets is the delta between addresses only when the code starts
+on a page, so the aarch64 image puts its code on one: up to a page of padding per image,
+which x64 dropped in D149.
+
+Semantics that come for free here: FCVTZS and FCVTZU saturate and send NaN to zero,
+which is section 4's release cast at 64 bits (a narrower target clamps); UCVTF converts
+a u64 whole; the read-modify-write atomics are single ARMv8.1 LSE instructions with
+acquire and release; and an unordered FCMP fails EQ, MI, LS, GT and GE and passes NE,
+IEEE's answers. One thing does not: memory is weakly ordered, so every fence is a DMB.
+
+The runtime (`src/runtime_elf_a64.s`, embedded by `scripts/embed-elf-runtime.ps1 -Arch
+a64`) is the x64 one's functions in the same order, with the entry stub first and always
+kept. `e.os` names its system calls by their x86-64 numbers, flags and structures, and
+`neper_os_syscall` translates them rather than the library growing per-architecture
+source: a number table, the open-flag bits aarch64 numbers differently, x86-64's
+`struct stat` rebuilt from aarch64's, epoll's packed events, and fork, dup2, poll and
+epoll_wait as clone, dup3, ppoll and epoll_pwait.
+
+An `@import` makes a dynamic image as on x64 (`link_elf_a64.write_dynamic`): the same
+loader metadata ahead of the code with `/lib/ld-linux-aarch64.so.1`, every slot an
+`R_AARCH64_GLOB_DAT` bound at once, no PLT, and an imported call `adrp x16, slot; ldr x16,
+[x16, #lo]; blr x16`. The code's end decides where the slots go, so the code is placed,
+measured, and placed again with their addresses. A function longer than 30,000 NIR
+instructions branches to its blocks on the opposite condition over an unconditional B,
+since B.cond, CBZ and CBNZ reach only a megabyte.
+
+`Vec[T, N]`'s lane-wise operators (`VectorBinary`) are Advanced SIMD over the operand's
+16, 8, 4 or 2 bytes in v16 and v17: integer add, subtract and multiply, the bitwise
+three, `~` as NOT (EOR with ones on a mask's 0-or-1 bytes), float lanes with section 11's
+canonical NaN lane by lane (FCMEQ of the result with itself, BIF of a duplicated NaN),
+and shifts as the immediate forms or DUP of a checked, masked count into USHL or SSHL --
+a right shift by the negated count. NEON has no 64-bit-lane multiply, so `*%` there is
+done lane by lane in general registers.
+
+The image carries the x64 image's section headers, symbols and DWARF 4 (D1581) with
+aarch64's frame description: the return address in x30, the CFA the stack pointer at
+entry, 16 above it with x29 and x30 saved after the STP, x29 plus 16 after `mov x29,
+sp`. `gdb-multiarch` through QEMU's gdbstub breaks on `module.function`, shows the source
+line and walks the frames.
+
+The encoder is checked twice in `self-test`: 110 forms against the words GNU as
+(binutils 2.42, -march=armv8.2-a) assembles for them, including the patcher, and a sweep
+of 63,354 encodings over registers, immediates, widths, conditions and vector
+arrangements, folded into one hash that `scripts/a64_encoding_sweep.py` computes from GNU
+as for the same grid.
+
+The compiler itself built for aarch64 (7.1 MB) passes `self-test` under `qemu-aarch64`
+and is a fixed point with the x64 one: from the same source, operands and directory,
+each builds the compiler for aarch64 and for x64 into byte-identical images (9-10 s under
+QEMU against 2-3 s natively), and its 42 `.em` artifacts differ from the x64-hosted ones
+only in the writing compiler's CRC identity (D398) and the one digest over it -- which is
+the point of that field.

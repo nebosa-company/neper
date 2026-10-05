@@ -25,7 +25,8 @@ import re, sys, os
 RULES = [
     ('else-if', re.compile(r'\belse\s+if\b'), "`else if` is not bootstrap syntax; nest the `if` in the `else` block"),
     ('minus-assign', re.compile(r'(?<![-<>=!])-=(?!=)'), "`-=` has no bootstrap lowering; write `x = x - y`"),
-    ('const-compare-brace', re.compile(r'[<>]=?\s+[A-Z][A-Z0-9_]{2,}\s*\{'), "`> CONST {` is read as an aggregate literal; bind the constant to a local first"),
+    ('const-compare-brace', re.compile(r'(?:[<>]=?|[=!]=)\s+[A-Z][A-Z0-9_]{2,}\s*\{'), "`> CONST {` (and `== CONST {`, `!= CONST {`) is read as an aggregate literal; bind the constant to a local first"),
+    ('ret-paren-operator', re.compile(r'^\s*ret\s+\([^()]*\)\s*(?:[<>]=?|[=!]=|\|\||&&|[-+*/%&|^])'), "`ret (a) op b` reads as a tuple; bind the value to a local first"),
     ('reserved-local', re.compile(r'\b(?:let|var)\s+(?:target|shared|when)\b'), "`target`, `shared` and `when` are reserved names"),
     ('instance-scan', re.compile(r'\b(?:var|let)\s+\w+\s*=\s*(?:c|checker)\.signature_function_count\s*$|\b\w+\s*=\s*(?:c|checker)\.signature_function_count\s*\}|\bwhile\s+\w+\s*>\s*(?:c|checker)\.signature_function_count\b|\.function_count\s*-\s*\S*\.signature_function_count\b'), "an instance scan starts at `check.own_rows` (D1671): a crew worker's own rows follow the other workers' windows"),
 ]

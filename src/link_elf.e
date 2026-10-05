@@ -521,7 +521,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     try patch_little_u64(output, 88usize + 56usize * 4usize, dynamic_address)
     try patch_little_u64(output, 96usize + 56usize * 4usize, dynamic_size)
     try patch_little_u64(output, 104usize + 56usize * 4usize, dynamic_size)
-    try append_debug(builder, output, machine, machine_start, function_offsets, lines, table_at, code_offset, table_file)
+    try append_debug(builder, output, machine, machine_start, function_offsets, lines, table_at, code_offset, table_file, false)
     ret ok
 }
 
@@ -693,7 +693,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
             global_at += 1usize
         }
     }
-    try append_debug(builder, output, machine, machine_start, function_offsets, lines, table_at, code_offset, table_file)
+    try append_debug(builder, output, machine, machine_start, function_offsets, lines, table_at, code_offset, table_file, false)
     ret ok
 }
 
@@ -1203,7 +1203,7 @@ fn function_name(output: *emit_x64.Buffer, placed: nir.Function) -> err {
 
 // `text_end` is where the code and the runtime end, and the `.nepersym` table starts
 // (D1586).
-fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_x64.Buffer, machine_start: usize, function_offsets: []usize, lines: []codegen_x64.LineEntry, table_at: usize, text_start: usize, text_end: usize) -> err {
+fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_x64.Buffer, machine_start: usize, function_offsets: []usize, lines: []codegen_x64.LineEntry, table_at: usize, text_start: usize, text_end: usize, a64: bool) -> err {
     let base = 4194304usize
     let code_address = base + machine_start
     let (main_index, main_error) = find_main(builder)
@@ -1249,7 +1249,7 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, machine: *emit_
         at += 1usize
     }
     var dwarf: DwarfSections = zero
-    try write_dwarf(builder, output, function_offsets, lines, table_at, code_address, main_index, 1usize, &dwarf)
+    try write_dwarf(builder, output, function_offsets, lines, table_at, code_address, main_index, 1usize, a64, &dwarf)
     let names_offset = output.count
     try append_blob(output, "\x00.text\x00.nepersym\x00.symtab\x00.strtab\x00.debug_abbrev\x00.debug_info\x00.debug_line\x00.shstrtab\x00.debug_loc\x00.debug_frame\x00")
     let names_end = output.count
@@ -1297,7 +1297,7 @@ fn pad_aligned(output: *emit_x64.Buffer, alignment: usize) -> err {
 // its entries, the line program and the frame description -- each section starting on
 // a multiple of `alignment` (a PE image's file alignment; one for ELF). `code_address`
 // is where the machine buffer's first byte is loaded.
-fn write_dwarf(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets: []usize, lines: []codegen_x64.LineEntry, table_at: usize, code_address: usize, main_index: usize, alignment: usize, sections: *DwarfSections) -> err {
+fn write_dwarf(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets: []usize, lines: []codegen_x64.LineEntry, table_at: usize, code_address: usize, main_index: usize, alignment: usize, a64: bool, sections: *DwarfSections) -> err {
     var at = 0usize
     var placed_max = 0usize
     try pad_aligned(output, alignment)
@@ -1576,7 +1576,14 @@ fn write_dwarf(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets
     try pad_aligned(output, alignment)
     let frame_offset = output.count
     sections.frame = frame_offset
-    try append_blob(output, "\x14\x00\x00\x00\xff\xff\xff\xff\x01\x00\x01\x78\x10\x0c\x07\x08\x90\x01\x00\x00\x00\x00\x00\x00")
+    // aarch64's (D2123): the return address in x30 and the CFA the stack pointer at entry;
+    // after `stp x29, x30, [sp, #-16]!` the CFA is 16 above it with x29 and x30 below it,
+    // after `mov x29, sp` the CFA is x29 plus 16.
+    if a64 {
+        try append_blob(output, "\x14\x00\x00\x00\xff\xff\xff\xff\x01\x00\x01\x78\x1e\x0c\x1f\x00\x00\x00\x00\x00\x00\x00\x00\x00")
+    } else {
+        try append_blob(output, "\x14\x00\x00\x00\xff\xff\xff\xff\x01\x00\x01\x78\x10\x0c\x07\x08\x90\x01\x00\x00\x00\x00\x00\x00")
+    }
     at = 0usize
     placed_max = 0usize
     while at < builder.function_count {
@@ -1588,7 +1595,7 @@ fn write_dwarf(builder: *nir.Builder, output: *emit_x64.Buffer, function_offsets
             try emit_x64.little_u32(output, 0usize)
             try emit_x64.little_u64(output, code_address + function_offsets[at])
             try emit_x64.little_u64(output, end - function_offsets[at])
-            try append_blob(output, "\x41\x0e\x10\x86\x02\x43\x0d\x06")
+            if a64 { try append_blob(output, "\x44\x0e\x10\x9d\x02\x9e\x01\x44\x0d\x1d") } else { try append_blob(output, "\x41\x0e\x10\x86\x02\x43\x0d\x06") }
             let (vars_first, vars_count) = debug_vars_of(builder, function_offsets[at])
             var saved_at = vars_first
             while saved_at < vars_first + vars_count {

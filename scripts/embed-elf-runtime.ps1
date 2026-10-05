@@ -1,8 +1,13 @@
+# -Arch a64 embeds the aarch64 runtime (D2123) with the cross binutils.
+param([ValidateSet('x64', 'a64')][string]$Arch = 'x64')
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent $PSScriptRoot
-$source = Join-Path $repo 'src\runtime_elf_x64.s'
-$output = Join-Path $repo 'src\runtime_elf_x64.e'
+$source = Join-Path $repo "src\runtime_elf_$Arch.s"
+$output = Join-Path $repo "src\runtime_elf_$Arch.e"
+$tools = if ($Arch -eq 'a64') { 'aarch64-linux-gnu-' } else { '' }
+$assemble = if ($Arch -eq 'a64') { @('aarch64-linux-gnu-as', '-march=armv8.2-a') } else { @('as', '--64') }
+$machine = if ($Arch -eq 'a64') { 'aarch64' } else { 'x86-64' }
 $build = Join-Path $repo 'build\windows\runtime-embed'
 New-Item -ItemType Directory -Force -Path $build | Out-Null
 
@@ -12,21 +17,21 @@ function Convert-ToWslPath([string]$Path) {
     return '/mnt/' + $drive + $full.Substring(2).Replace('\', '/')
 }
 
-$object = Join-Path $build 'runtime_elf_x64.o'
-$binary = Join-Path $build 'runtime_elf_x64.bin'
+$object = Join-Path $build "runtime_elf_$Arch.o"
+$binary = Join-Path $build "runtime_elf_$Arch.bin"
 $sourceWsl = Convert-ToWslPath $source
 $objectWsl = Convert-ToWslPath $object
 $binaryWsl = Convert-ToWslPath $binary
-& wsl -d Ubuntu-24.04 -- as --64 $sourceWsl -o $objectWsl
+& wsl -d Ubuntu-24.04 -- $assemble $sourceWsl -o $objectWsl
 if ($LASTEXITCODE -ne 0) { throw 'assembling the ELF runtime failed' }
-& wsl -d Ubuntu-24.04 -- objcopy -O binary --only-section=.text $objectWsl $binaryWsl
+& wsl -d Ubuntu-24.04 -- "${tools}objcopy" -O binary --only-section=.text $objectWsl $binaryWsl
 if ($LASTEXITCODE -ne 0) { throw 'extracting the ELF runtime failed' }
-$symbols = & wsl -d Ubuntu-24.04 -- nm -n --defined-only $objectWsl
+$symbols = & wsl -d Ubuntu-24.04 -- "${tools}nm" -n --defined-only $objectWsl
 if ($LASTEXITCODE -ne 0) { throw 'reading ELF runtime symbols failed' }
 
 $bytes = [IO.File]::ReadAllBytes($binary)
 $builder = [Text.StringBuilder]::new()
-[void]$builder.AppendLine('// Generated x86-64 Linux syscall runtime. Source: runtime_elf_x64.s.')
+[void]$builder.AppendLine("// Generated $machine Linux syscall runtime. Source: runtime_elf_$Arch.s.")
 [void]$builder.AppendLine()
 [void]$builder.AppendLine('use check')
 [void]$builder.AppendLine('use emit_x64')

@@ -516,7 +516,7 @@ fn append_debug(builder: *nir.Builder, output: *emit_x64.Buffer, function_offset
     let text_address = 4096usize
     let code_address = 5368709120usize + text_address + machine_file - headers_size
     var dwarf: link_elf.DwarfSections = zero
-    try link_elf.write_dwarf(builder, output, function_offsets, lines, table_at, code_address, main_index, 512usize, &dwarf)
+    try link_elf.write_dwarf(builder, output, function_offsets, lines, table_at, code_address, main_index, 512usize, false, &dwarf)
     let (raw_end, raw_end_error) = align_up(output.count, 512usize)
     if raw_end_error != ok { ret raw_end_error }
     try pad_to(output, raw_end)

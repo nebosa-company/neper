@@ -6,6 +6,7 @@ use binary
 use graph
 use check
 use codegen_x64
+use codegen_a64
 use em
 use emit_x64
 use lookup
@@ -1108,7 +1109,16 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
     // Without a `main` nothing was walked, and the references resolve by name as
     // before, so that the missing entry is the error reported, not a missing callee.
     program.builder.targets_preset = rooted
-    try codegen_x64.resolve_calls(&program.builder, program.function_offsets, program.relocations, program.relocation_count, &program.machine)
+    // aarch64 artifacts carry its words, patched by their own forms (D2123).
+    let (root_target, root_target_error) = em.artifact_target_index(artifacts[0usize].bytes)
+    if root_target_error != ok { ret root_target_error }
+    let (aarch64, aarch64_error) = em.string_matches(artifacts[0usize].bytes, root_target, "aarch64-linux")
+    if aarch64_error != ok { ret aarch64_error }
+    if aarch64 {
+        try codegen_a64.resolve_calls(&program.builder, program.function_offsets, program.relocations, program.relocation_count, &program.machine)
+    } else {
+        try codegen_x64.resolve_calls(&program.builder, program.function_offsets, program.relocations, program.relocation_count, &program.machine)
+    }
     var relocation_at = 0usize
     while relocation_at < program.relocation_count {
         if !program.relocations[relocation_at].resolved && !program.relocations[relocation_at].global {

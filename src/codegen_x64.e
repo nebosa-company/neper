@@ -5,6 +5,7 @@ use e.os
 use check
 use lookup
 use emit_x64
+use emit_a64
 use lex
 use nir
 use regalloc
@@ -15,9 +16,11 @@ error InvalidStoreWidth
 error InvalidLoadWidth
 error InvalidFieldAddress
 
+// `Aapcs64` is not this selector's: it routes a function to `codegen_a64` (D2123).
 type Abi = enum u8 {
     SystemV,
     Windows,
+    Aapcs64,
 }
 
 type Fixup = struct {
@@ -1598,7 +1601,7 @@ fn path_tables() -> (PathTables, err) {
     ret (tables, ok)
 }
 
-fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []Relocation, relocation_count: usize, lines: []LineEntry, line_count: usize) -> err {
+fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []Relocation, relocation_count: usize, lines: []LineEntry, line_count: usize, a64: bool) -> err {
     let table_start = machine.count
     var emitted = 0usize
     var at = 0usize
@@ -1747,7 +1750,8 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
     while relocation_at < relocation_count {
         let relocation = relocations[relocation_at]
         if !relocation.global && !relocation.resolved && relocation.function_ref < builder.function_ref_count && check.same(builder.function_refs[relocation.function_ref].name, "neper_symbols") {
-            try emit_x64.patch_relative32(machine, relocation.displacement_at, table_start)
+            // An aarch64 reference is an ADRP pair (D2123).
+            if a64 { try emit_a64.patch_relative(machine, relocation.displacement_at, table_start) } else { try emit_x64.patch_relative32(machine, relocation.displacement_at, table_start) }
             relocations[relocation_at].resolved = true
         }
         relocation_at += 1usize
