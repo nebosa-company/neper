@@ -37,8 +37,8 @@ class ProgressTests(unittest.TestCase):
         section = self.sections["queue"]
         actual = re.findall(r'<tr><td>(\d+)</td><td><code>(.*?)</code>', section)
         self.assertEqual(actual, [(str(i), task) for i, task in enumerate(expected, 1)])
-        # Chart work is picked up first (D1955) while any of it remains.
-        self.assertTrue(re.fullmatch(r"L0(6[1-2]|6[8-9]|7[0-5]|9[2-7])", expected[0]), expected[0])
+        # The NeperOS stage is picked up first (D2119), then chart work (D1955) while any remains.
+        self.assertTrue(re.fullmatch(r"C099|L0(6[1-2]|6[8-9]|7[0-5]|9[2-7])", expected[0]), expected[0])
         self.assertIn(f"{len(expected)} unfinished</summary>", section)
         self.assertNotIn("<details open", section)
 
@@ -48,9 +48,11 @@ class ProgressTests(unittest.TestCase):
             f"L{i:03}" for i in range(92, 98)
         }
         actual = [item["id"] for item in queue["items"]]
+        if actual[:1] == ["C099"]:  # ahead of chart work by the user's priority (D2119)
+            actual = actual[1:]
         active_chart_ids = chart_ids & set(actual)
         self.assertEqual(set(actual[:len(active_chart_ids)]), active_chart_ids)
-        self.assertIn("with chart work first", self.page)
+        self.assertIn("then chart work", self.page)
 
     def test_release_labels_match_the_cpu_release_gate(self):
         queue = json.loads((ROOT / "docs/work-queue.json").read_text(encoding="utf-8"))

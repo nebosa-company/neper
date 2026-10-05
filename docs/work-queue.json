@@ -1,8 +1,19 @@
 {
   "schema": "neper-work-queue-v1",
   "version": 1,
-  "policy": "The first item is the only capability eligible for the next serial feature session. Finish active chart and visualization items before non-chart work, preserving their relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
+  "policy": "The first item is the only capability eligible for the next serial feature session. C099, the first NeperOS stage, comes first by the user's priority (D2119); after it, finish active chart and visualization items before non-chart work, preserving their relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
+    {
+      "id": "C099",
+      "category": "compiler",
+      "group": "Back end",
+      "order": 99,
+      "title": "M4-01: aarch64 emitter for Linux, the first NeperOS stage",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Planning only (D2119). NeperOS, a capability microkernel written in Neper for Google Pixel phones, starts here, and this is the roadmap's M4 aarch64 emitter pulled forward. `aarch64` is already a valid target spelling (`src/project.e`) and the spec fixes its calling convention (AAPCS64, spec §13), but there is no aarch64 code generator: `codegen_x64.e`, `emit_x64.e` and `runtime_elf_x64` are x64 only. Acceptance: `--target aarch64-linux` builds a freestanding static ELF (EM_AARCH64, no libc) through an aarch64 instruction selector and A64 encoder over the existing NIR and register allocator; the Linux fixture suite passes under `qemu-aarch64` in WSL with the same expected output as x64; the encoder agrees with `aarch64-linux-gnu-objdump` on a disassembly sweep; and neper-self built for aarch64 runs under `qemu-aarch64` and emits a byte-identical `.em`. Tools: QEMU 11.1.0 for Windows at `D:\\tools\\qemu` (system emulation only, on the user PATH); in WSL, `qemu-user` 8.2.2 with binfmt, `gdb-multiarch` 15.1 and `binutils-aarch64-linux-gnu` 2.42 (a hand-written 132-byte exit-42 ELF runs, disassembles and steps under them; keep test binaries under `/mnt/d`, WSL clears `/tmp`). Not yet: the aarch64 instruction selector and A64 encoder, and AAPCS64 calls and frames, and the ELF64 aarch64 writer and its relocations, and the aarch64 Linux runtime, and the fixture suite under `qemu-aarch64`, and the neper-self fixed point under emulation."
+    },
     {
       "id": "L068",
       "category": "library",

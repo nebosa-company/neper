@@ -36174,3 +36174,48 @@ O(n * edges), fine for the hundreds of nodes a readable hierarchy has.
 Barnes-Hut repulsion for `network_layout` is not done: the all-pairs O(n^2)
 step lays out a few thousand nodes, beyond which a node-link drawing is no
 longer readable anyway.
+
+## D2119 — NeperOS: a Neper microkernel for Pixel phones, staged from an aarch64 back end
+
+NeperOS is a capability microkernel written in Neper for Google Pixel phones.
+It is built in four stages. Each stage is queued only when the one before it
+closes, and each stays useful if the project stops there:
+
+0. The aarch64 emitter for Linux (C099), the roadmap's M4 bullet, moved ahead
+   of the chart items by the user's priority. It is tested under
+   `qemu-aarch64` in WSL.
+1. The microkernel on QEMU's aarch64 `virt` machine: exception vectors, MMU,
+   GICv3, timer, PSCI, capabilities and IPC, a serial console and virtio. The
+   language first needs system-register access (`msr`/`mrs`), an exception
+   vector table, volatile MMIO, and an image with no runtime prefix (OS
+   `none`, already a valid spelling).
+2. The same kernel as an Android Virtualization Framework guest on a Pixel.
+   crosvm boots it with the Linux arm64 boot protocol: the device tree comes
+   in `x0`, with GICv3, PSCI 1.0, ns16550 serial, and virtio console, block
+   and vsock over PCI. According to AOSP source (not yet tried on a device),
+   adb shell's `vm run` starts a custom kernel on a retail Pixel without root,
+   but only as a non-protected VM, because pvmfw admits only kernels signed
+   with its built-in key. Stage 2 therefore proves bring-up on real hardware;
+   it does not isolate NeperOS from Android.
+3. Bare metal, Pixel 6 (gs101) first. Mainline Linux describes that board.
+   Its bootloader leaves a `simple-framebuffer` (`cont_splash_mem` at
+   0xfac00000, 1080x2400 a8r8g8b8 with stride 4320 on oriole) and crashes
+   without bootargs. A USB-C SBU cable gives a 1.8 V UART after
+   `fastboot oem uart enable` on an unlocked bootloader. Relocking with a
+   custom verified-boot key is untested, and Pixel 7-10 are unverified.
+
+Two rules hold from stage 1. Device addresses are read from the device tree,
+never hard-coded, because `virt` and crosvm lay memory out differently. Virtio
+over PCI is preferred, so one driver set serves both. Out of scope: the modem,
+GPU, camera, Titan M2 and TrustZone firmware stay vendor code, and NeperOS runs
+no Android apps. GrapheneOS remains the hardened-Android answer. NeperOS's claim
+is a small trusted computing base written in Neper.
+
+The test tools were installed on 2026-10-05: QEMU 11.1.0 for Windows at
+`D:\tools\qemu` (on the user PATH, system emulation only), and in WSL
+`qemu-user` 8.2.2 with binfmt, `gdb-multiarch` 15.1 and
+`binutils-aarch64-linux-gnu` 2.42. A hand-written 132-byte aarch64 ELF exits
+42 under `qemu-aarch64` and directly through binfmt, disassembles under
+`aarch64-linux-gnu-objdump`, and steps under `gdb-multiarch` through QEMU's
+gdbstub. WSL clears `/tmp` between sessions, so test binaries stay under
+`/mnt/d`.

@@ -373,7 +373,7 @@ chart_section = (
     '<a href="charts.md">Charting-engine details</a>.</p></section>'
     '<section class="tools" aria-label="Unfinished work queue">'
     '<h2>Unfinished work</h2><p>{count} queued capabilities in planned pickup order, '
-    'with chart work first across all categories; the first row is next. '
+    'with the NeperOS stage first (D2119), then chart work, across all categories; the first row is next. '
     '{required_count} release-required '
     'and {enhancement_count} enhancements. Release required means needed for the '
     '<a href="roadmap.md">first stable CPU compiler release</a> under the M2 and '
