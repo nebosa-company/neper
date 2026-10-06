@@ -7,9 +7,9 @@ use e.os
 use a64
 use vm
 
-const MAX_THREADS: usize = 16usize
+const MAX_THREADS: usize = 24usize
 // No thread is current: the kernel is idle, or the last one exited.
-const NONE: usize = 16usize
+const NONE: usize = 24usize
 
 const FREE: u8 = 0u8
 const READY: u8 = 1u8
@@ -49,7 +49,7 @@ const ENDPOINTS: usize = 8usize
 const EP_EMPTY: u8 = 0u8
 const EP_SENDERS: u8 = 1u8
 const EP_RECEIVERS: u8 = 2u8
-type Endpoint = struct { kind: u8, waiters: [16]usize, count: usize }
+type Endpoint = struct { kind: u8, waiters: [24]usize, count: usize }
 // Endpoints 0 to 3 are the ones the kernel binds at boot; retype hands out the rest.
 const FIRST_RETYPED_ENDPOINT: usize = 4usize
 
@@ -58,12 +58,12 @@ const FIRST_RETYPED_ENDPOINT: usize = 4usize
 // waiting on it wakes with the pending bits. Unlike an endpoint it does not block the
 // signaller -- an interrupt cannot wait.
 const NOTIFICATIONS: usize = 2usize
-type Notification = struct { pending: usize, waiters: [16]usize, count: usize }
+type Notification = struct { pending: usize, waiters: [24]usize, count: usize }
 
-var threads: [16]Thread = zero
+var threads: [24]Thread = zero
 var endpoints: [8]Endpoint = zero
 var notifications: [2]Notification = zero
-var current: usize = 16usize
+var current: usize = 24usize
 // The next boot-reserved endpoint retype will hand out.
 var next_endpoint: usize = 4usize
 var live: usize = 0usize

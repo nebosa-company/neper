@@ -36859,3 +36859,35 @@ Still ahead to close C103: migrate block and console the same way (now mechanica
 the shared transport and the mapping all exist), an explicit negative isolation prober (a server
 that faults touching an un-granted device), and a console-receive path. Moving entropy out
 replaced the `Y` prober of D2137, which this subsumes.
+
+## D2139 — NeperOS stage 1d: all three virtio drivers are EL0 user-mode servers
+
+Block and console follow entropy (D2138) out of the kernel: all three virtio drivers now run at
+EL0 as capability-confined user-mode servers, and nothing virtio is driven in the kernel. The
+per-driver kernel setup is one function, `start_driver_server(..., want_type, name)`: it finds the
+device of `want_type`, discovers it (assigning its BAR from a threaded cursor so the three windows
+are disjoint), maps the BAR region (Device) and a fresh 128 KB identity DMA pool (Normal) into the
+server with `map_range_el0`, leaves the addresses in the aux area, and adds the thread under
+`name` with a console capability; it returns the MMIO cursor past this BAR. The kernel's PCI
+block no longer drives anything -- it enumerates, and the thread section starts `E` (entropy),
+`F` (block) and `O` (console) threading the cursor `mmio -> E -> F -> O`. `drive_entropy`,
+`drive_block` and `drive_console` are gone. `MAX_THREADS` rose from 16 to 24 (with the endpoint
+and notification waiter arrays) since init now runs A–U, Z, and the three servers.
+
+The servers share one transport and one aux layout. `init.e` gained `read_device` (reads the
+common/notify/notify-multiplier and points the DMA pool at the mapped region) and `say_bytes_line`
+(a prefix and N bytes written in ONE `os.write`): `E` calls `virtio.read_entropy` and prints
+`el0 entropy 8 bytes: ...`, `F` calls `virtio.block_rw` and prints `el0 block rw ok sector 0: 11
+36 5b 80`, `O` calls `virtio.write_console` and prints `el0 console tx ok`. The single-write line
+matters because the timer preempts between writes -- the first attempt interleaved the servers'
+output (`el0 block rw ok sector 0:el0 console tx ok`) and broke the marks; one write per line,
+like the demo's round printer, keeps each contiguous. Both suites assert all three `el0` marks and
+that the console line reached the chardev file. Verified by rebuilding `neper-self` and booting
+under QEMU: the three servers run, the disk round-trips, the console transmits, all threads finish
+and the kernel powers off with no fault.
+
+Each server holds only its device's BAR and DMA pool with EL0 access; every other gigabyte is
+privileged in its space, the confinement the `X` and `W` threads demonstrate. Still ahead to close
+C103: an explicit negative isolation prober (a server that faults touching a device it was not
+given), making the drivers notification-driven on their interrupt capability rather than polling
+the used ring (the "and interrupt" of the acceptance), and a console-receive path (the "echo").

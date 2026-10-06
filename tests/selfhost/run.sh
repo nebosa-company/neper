@@ -8807,7 +8807,7 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
     # (U), the three enumerated modern virtio devices, the block driver's sector-0 round-trip
     # (D2132: the pattern written and read back is 11 36 5b 80 ...), and the console driver's
     # transmit (D2133) each leave their mark.
-    for neperos_mark in 'H got console' 'console server up' 'U retype ok' 'virtio entropy at pci slot 1' 'virtio block at pci slot 2' 'virtio console at pci slot 3' 'block rw ok sector 0: 11 36 5b 80' 'console tx ok' 'Z mem ok'; do
+    for neperos_mark in 'H got console' 'console server up' 'U retype ok' 'virtio entropy at pci slot 1' 'virtio block at pci slot 2' 'virtio console at pci slot 3' 'el0 block rw ok sector 0: 11 36 5b 80' 'el0 console tx ok' 'Z mem ok'; do
         case "$neperos_boot" in
             *"$neperos_mark"*) ;;
             *) printf '%s\n' "NeperOS capability behaviour missing ($neperos_mark): $neperos_boot" >&2; exit 1 ;;

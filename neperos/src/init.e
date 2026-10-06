@@ -65,6 +65,48 @@ fn say_hex(value: u8) {
     say(pair[0usize..2usize])
 }
 
+// A whole line -- a prefix, then `count` bytes from `data` as " XX", then a newline -- built in
+// one buffer and written once (D2139), so a timer preemption never splits it and interleaves it
+// with another thread's output, the way the round printer writes once a round.
+fn say_bytes_line(prefix: str, data: usize, count: usize) {
+    var line: [96]u8 = zero
+    var at = 0usize
+    var p = 0usize
+    while p < prefix.len {
+        line[at] = prefix[p]
+        at += 1usize
+        p += 1usize
+    }
+    var i = 0usize
+    while i < count {
+        line[at] = 32u8
+        at += 1usize
+        let value = os.load8(data + i)
+        let high = (value >> 4u8) & 15u8
+        let low = value & 15u8
+        if high < 10u8 { line[at] = high + 48u8 } else { line[at] = high + 87u8 }
+        at += 1usize
+        if low < 10u8 { line[at] = low + 48u8 } else { line[at] = low + 87u8 }
+        at += 1usize
+        i += 1usize
+    }
+    line[at] = 10u8
+    at += 1usize
+    say(line[0usize..at])
+}
+
+// The device a driver server drives, from the aux area the kernel filled (D2138, D2139): the
+// common-config, notify and notify-multiplier the kernel discovered, and the identity DMA pool
+// it mapped. Reading it also points the transport's pool at that region.
+fn read_device() -> virtio.Device {
+    var device: virtio.Device = zero
+    device.common = usize(os.load64(AUX))
+    device.notify = usize(os.load64(AUX + 8usize))
+    device.notify_multiplier = u32(os.load64(AUX + 16usize))
+    virtio.pool_set(usize(os.load64(AUX + 24usize)), usize(os.load64(AUX + 32usize)))
+    ret device
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 0usize { ret mem.Exhausted }
     let name = args[0usize]
@@ -177,31 +219,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     if one_char(name) == 69u8 {
-        // E is the entropy driver as a real EL0 user-mode server (D2138): the kernel discovered
-        // the device, mapped its BAR (Device) and an identity DMA pool (Normal) into E's space,
-        // and left the addresses in the aux area. E runs the SAME transport the kernel does and
-        // holds only its device's frames, so it is confined. aux: 0 common, 1 notify, 2 notify
-        // multiplier, 3 pool base, 4 pool size.
-        var device: virtio.Device = zero
-        device.common = usize(os.load64(AUX))
-        device.notify = usize(os.load64(AUX + 8usize))
-        device.notify_multiplier = u32(os.load64(AUX + 16usize))
-        virtio.pool_set(usize(os.load64(AUX + 24usize)), usize(os.load64(AUX + 32usize)))
+        // E is the entropy driver as a real EL0 user-mode server (D2138): the kernel mapped its
+        // BAR (Device) and an identity DMA pool (Normal) into E's space and left the addresses in
+        // the aux area. E runs the SAME transport the kernel does and holds only its device's
+        // frames, so it is confined.
+        let device = read_device()
         let (buffer, written, read_error) = virtio.read_entropy(device, 8usize)
         if read_error != ok {
             say("el0 entropy failed\n")
             ret ok
         }
-        say("el0 entropy ")
-        say_decimal(written)
-        say(" bytes:")
-        var at = 0usize
-        while at < written && at < 8usize {
-            say(" ")
-            say_hex(os.load8(buffer + at))
-            at += 1usize
+        say_bytes_line("el0 entropy 8 bytes:", buffer, 8usize)
+        ret ok
+    }
+    if one_char(name) == 70u8 {
+        // F is the block driver as an EL0 user-mode server (D2139): it writes a pattern to
+        // sector 0 and reads it back over the virtqueue, all at EL0, and prints the first bytes.
+        let device = read_device()
+        let (data, rw_error) = virtio.block_rw(device, 0u64)
+        if rw_error != ok {
+            say("el0 block rw failed\n")
+            ret ok
         }
-        say("\n")
+        say_bytes_line("el0 block rw ok sector 0:", data, 4usize)
+        ret ok
+    }
+    if one_char(name) == 79u8 {
+        // O is the console driver as an EL0 user-mode server (D2139): it transmits a line over
+        // the virtio console (which QEMU forwards to the chardev) and marks success on the UART.
+        let device = read_device()
+        let write_error = virtio.write_console(device, "hello from the neper virtio console\n")
+        if write_error != ok {
+            say("el0 console tx failed\n")
+            ret ok
+        }
+        say("el0 console tx ok\n")
         ret ok
     }
     if one_char(name) == 90u8 {
