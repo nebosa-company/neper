@@ -19,6 +19,7 @@ const VIRTIO_NET: usize = 1usize
 const VIRTIO_BLOCK: usize = 2usize
 const VIRTIO_CONSOLE: usize = 3usize
 const VIRTIO_ENTROPY: usize = 4usize
+const VIRTIO_VSOCK: usize = 19usize
 
 // The configuration base, whether its addressing is CAM (true) or ECAM (false), and the 32-bit
 // MMIO window the host forwards to devices -- where BAR assignment places the virtio registers,

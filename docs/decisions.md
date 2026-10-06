@@ -37138,3 +37138,22 @@ written in Neper in place of QuickJS. The authenticator is a TOTP/HOTP app; Micr
 Authenticator's push approval depends on Microsoft's service and is not part of it, nor is its
 name. Steps counts from the accelerometer, so it needs no step-counter sensor. The NeperOS items
 stay ahead of the chart work in the queue (D2125); the queue policy and the progress test say so.
+
+## D2149 — a virtio-vsock driver: a NeperOS guest opens a STREAM connection to an AVF host
+
+Stage 2's last device (D2119): virtio-vsock, the socket transport an AVF guest uses to reach
+Android. The shared transport (D2131, D2146) gains `vsock_connect`: negotiate, set up the three
+virtqueues (receive 0, transmit 1, event 2), read the 64-bit guest CID from device config, post a
+receive buffer, transmit a 44-byte STREAM REQUEST header to the host (CID 2) at a port, and wait
+for the device to deliver the reply. The host answers RESPONSE when a listener accepted and RST
+when none did; either exercises the transmit and receive paths and the device. It runs as the EL0
+user-mode server `T`, like the other drivers; the kernel passes the device-config address in a new
+aux slot (5) since the CID lives there, not in the common configuration -- the one field a driver
+needs that the earlier aux layout did not carry, and the first bug hit (the config address was
+zero, so the CID read faulted at 0). Verified on the AWS a1.metal box under crosvm with its
+`--vsock cid=3` device over the host's /dev/vhost-vsock: with no host listener the guest read its
+CID 3 and received op 3 (RST); with a Python AF_VSOCK listener on port 1234 it received op 2
+(RESPONSE) and the listener logged the accept from (3, 1024) -- the guest CID and source port the
+driver sent, a full round trip. QEMU's virt has no vsock device, so the server is skipped there and
+stage 1 is unchanged. This completes C104's device list (console, block, vsock over PCI under
+crosvm); the remaining stage-2 step is the same kernel on a retail Pixel via `adb shell vm run`.

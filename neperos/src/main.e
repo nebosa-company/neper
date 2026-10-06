@@ -313,7 +313,8 @@ fn start_thread(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize,
 // the addresses in the aux area, and adds the thread under `name` with a console capability. The
 // server runs the same transport at EL0, holding only its device's frames -- every other
 // gigabyte stays privileged in its space, so a stray access faults. Aux: 0 common, 1 notify,
-// 2 notify multiplier, 3 pool base, 4 pool size. The MMIO cursor past this BAR comes back so the
+// 2 notify multiplier, 3 pool base, 4 pool size, 5 device config (the vsock CID lives there,
+// D2149). The MMIO cursor past this BAR comes back so the
 // next server gets a disjoint window. A device that is absent is skipped, cursor unchanged.
 fn start_driver_server(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize, host: pci.Host, bar: usize, want_type: usize, name: str) -> (usize, err) {
     var slot = 0usize
@@ -340,6 +341,7 @@ fn start_driver_server(a: *mem.Arena, image_addr: usize, image_len: usize, asid:
     vm.put_aux(space, 2usize, usize(device.notify_multiplier))
     vm.put_aux(space, 3usize, pool)
     vm.put_aux(space, 4usize, 131072usize)
+    vm.put_aux(space, 5usize, device.config)
     let (arg_table, arg_count) = setup_args(space, name, 0usize, false)
     let index = thread.add(space, name, arg_table, arg_count)
     if index == thread.MAX_THREADS { ret (bar, vm.NoSpace) }
@@ -561,6 +563,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if block_error != ok { ret block_error }
         let (bar_after_o, console_error) = start_driver_server(a, image_addr, image_len, 18usize, pci_host, bar_after_f, pci.VIRTIO_CONSOLE, "O")
         if console_error != ok { ret console_error }
+        // T is the vsock driver server (D2149): it opens a STREAM connection to a host port and
+        // reports the guest CID and the host's reply. Absent a vsock device it is skipped.
+        let (bar_after_t, vsock_error) = start_driver_server(a, image_addr, image_len, 20usize, pci_host, bar_after_o, pci.VIRTIO_VSOCK, "T")
+        if vsock_error != ok { ret vsock_error }
         // Q proves the servers' confinement from the other side (D2140): it is handed the PCI
         // ECAM base -- device memory no driver granted it -- and tries to read it at EL0. That
         // gigabyte is privileged in Q's space, so the read faults and the kernel kills Q before

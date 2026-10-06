@@ -48,6 +48,20 @@ const VIRTIO_BLK_T_IN: u32 = 0u32
 const VIRTIO_BLK_T_OUT: u32 = 1u32
 const SECTOR: usize = 512usize
 
+// virtio-vsock (virtio 1.x 5.10): three virtqueues -- receive (0), transmit (1) and event (2) --
+// a 44-byte packet header, and a 64-bit guest CID in device config. The host is always CID 2. A
+// STREAM connection opens with a REQUEST the host answers RESPONSE (a listener) or RST (none).
+const VSOCK_RX: u16 = 0u16
+const VSOCK_TX: u16 = 1u16
+const VSOCK_EVENT: u16 = 2u16
+const VSOCK_HDR: usize = 44usize
+const VSOCK_TYPE_STREAM: u16 = 1u16
+const VSOCK_OP_REQUEST: u16 = 1u16
+const VSOCK_OP_RESPONSE: u16 = 2u16
+const VSOCK_OP_RST: u16 = 3u16
+const VSOCK_OP_RW: u16 = 5u16
+const VSOCK_HOST_CID: u64 = 2u64
+
 const PAGE: usize = 4096usize
 
 // The DMA pool: one contiguous, identity-mapped region the driver carves its rings and buffers
@@ -399,4 +413,54 @@ fn console_echo(device: Device, prompt: str) -> (usize, usize, err) {
     let echo_error = one_buffer(tx_ring, 1u16, line, received, false)
     if echo_error != ok { ret (line, received, echo_error) }
     ret (line, received, ok)
+}
+
+// Write a virtio-vsock packet header (virtio 1.x 5.10.6) into `buf`: 44 bytes of source and
+// destination CID and port, payload length, STREAM type, operation, flags, the receive-buffer
+// credit the peer may fill, and the forwarded-byte count.
+fn vsock_header(buf: usize, src_cid: u64, dst_cid: u64, src_port: u32, dst_port: u32, length: u32, op: u16, buf_alloc: u32) {
+    os.store64(buf + 0usize, src_cid)
+    os.store64(buf + 8usize, dst_cid)
+    os.store32(buf + 16usize, src_port)
+    os.store32(buf + 20usize, dst_port)
+    os.store32(buf + 24usize, length)
+    os.store16(buf + 28usize, VSOCK_TYPE_STREAM)
+    os.store16(buf + 30usize, op)
+    os.store32(buf + 32usize, 0u32)
+    os.store32(buf + 36usize, buf_alloc)
+    os.store32(buf + 40usize, 0u32)
+}
+
+// Open a STREAM connection to a host port over virtio-vsock (D2149): negotiate, set up the three
+// queues, read the guest CID from device config, post a receive buffer, transmit a REQUEST to the
+// host (CID 2) at `dst_port`, and wait for the device to deliver the reply into the receive buffer.
+// The guest CID and the reply's operation come back -- RESPONSE when a host listener accepted,
+// RST when none did; either proves the transmit and receive paths and the device itself. The TX
+// descriptor is device-readable (the packet goes out); the RX descriptor device-writable.
+fn vsock_connect(device: Device, src_port: u32, dst_port: u32) -> (u64, u16, err) {
+    let negotiate_error = negotiate(device)
+    if negotiate_error != ok { ret (0u64, 0u16, negotiate_error) }
+    let (rx_ring, rx_ring_error) = setup_queue(device, VSOCK_RX)
+    if rx_ring_error != ok { ret (0u64, 0u16, rx_ring_error) }
+    let (tx_ring, tx_ring_error) = setup_queue(device, VSOCK_TX)
+    if tx_ring_error != ok { ret (0u64, 0u16, tx_ring_error) }
+    let (event_ring, event_ring_error) = setup_queue(device, VSOCK_EVENT)
+    if event_ring_error != ok { ret (0u64, 0u16, event_ring_error) }
+    status_add(device, STATUS_DRIVER_OK)
+    let guest_cid = os.load64(device.config)
+    let (rx_buf, rx_buf_error) = dma_region(VSOCK_HDR + 64usize)
+    if rx_buf_error != ok { ret (guest_cid, 0u16, rx_buf_error) }
+    os.store64(rx_ring.desc, u64(rx_buf))
+    os.store32(rx_ring.desc + 8usize, u32(VSOCK_HDR + 64usize))
+    os.store16(rx_ring.desc + 12usize, DESC_WRITE)
+    os.store16(rx_ring.desc + 14usize, 0u16)
+    ring_submit(rx_ring, 0u16)
+    let (tx_buf, tx_buf_error) = dma_region(VSOCK_HDR)
+    if tx_buf_error != ok { ret (guest_cid, 0u16, tx_buf_error) }
+    vsock_header(tx_buf, guest_cid, VSOCK_HOST_CID, src_port, dst_port, 0u32, VSOCK_OP_REQUEST, 65536u32)
+    let send_error = one_buffer(tx_ring, 0u16, tx_buf, VSOCK_HDR, false)
+    if send_error != ok { ret (guest_cid, 0u16, send_error) }
+    let poll_error = ring_poll(rx_ring, 0u16)
+    if poll_error != ok { ret (guest_cid, 0u16, poll_error) }
+    ret (guest_cid, os.load16(rx_buf + 30usize), ok)
 }

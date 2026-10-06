@@ -105,6 +105,7 @@ fn read_device() -> virtio.Device {
     device.notify = usize(os.load64(AUX + 8usize))
     device.notify_multiplier = u32(os.load64(AUX + 16usize))
     virtio.pool_set(usize(os.load64(AUX + 24usize)), usize(os.load64(AUX + 32usize)))
+    device.config = usize(os.load64(AUX + 40usize))
     ret device
 }
 
@@ -264,6 +265,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         say("el0 console tx ok\n")
+        ret ok
+    }
+    if one_char(name) == 84u8 {
+        // T is the vsock driver as an EL0 user-mode server (D2149): it opens a STREAM connection to
+        // a host port and reports the guest CID the device assigned and the host's reply -- op 2 is
+        // RESPONSE (a listener accepted), op 3 is RST (no listener); either proves the vsock path.
+        let device = read_device()
+        let (cid, op, vsock_error) = virtio.vsock_connect(device, 1024u32, 1234u32)
+        if vsock_error != ok {
+            say("el0 vsock failed\n")
+            ret ok
+        }
+        say("el0 vsock cid=")
+        say_decimal(usize(cid))
+        say(" op=")
+        say_decimal(usize(op))
+        say("\n")
         ret ok
     }
     if one_char(name) == 90u8 {
