@@ -55,8 +55,8 @@ class ProgressTests(unittest.TestCase):
         expected = [item["id"] for item in self.queue["items"] if float(item["score"]) < 1]
         actual = re.findall(r'<tr><td><code class="id-\w+">(.*?)</code>', self.backlog)
         self.assertEqual(actual, expected)
-        # A NeperOS stage is picked up first (D2119, D2125: C100-C104 so far), then chart work.
-        self.assertTrue(re.fullmatch(r"C10[0-4]|L0(6[1-2]|6[8-9]|7[0-5]|9[2-7])", expected[0]), expected[0])
+        # A NeperOS item is picked up first (D2119, D2125, D2148: C100-C114 so far), then chart work.
+        self.assertTrue(re.fullmatch(r"C1(0[0-9]|1[0-4])|L0(6[1-2]|6[8-9]|7[0-5]|9[2-7])", expected[0]), expected[0])
         self.assertIn("Backlog — %d pending" % len(expected), self.backlog)
 
     def test_backlog_ids_carry_their_group_colour(self):
@@ -73,9 +73,7 @@ class ProgressTests(unittest.TestCase):
         chart_ids = {"L061", "L062"} | {f"L{i:03}" for i in range(68, 76)} | {
             f"L{i:03}" for i in range(92, 98)
         }
-        actual = [item["id"] for item in self.queue["items"]]
-        while actual[:1] and actual[0] in {"C100", "C101", "C102", "C103", "C104"}:  # NeperOS first (D2125)
-            actual = actual[1:]
+        actual = [item["id"] for item in self.queue["items"] if item["group"] != "NeperOS"]  # NeperOS first (D2125, D2148)
         active_chart_ids = chart_ids & set(actual)
         self.assertEqual(set(actual[:len(active_chart_ids)]), active_chart_ids)
         self.assertIn("then chart work", self.page)

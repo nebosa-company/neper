@@ -1,7 +1,7 @@
 {
   "schema": "neper-work-queue-v1",
   "version": 1,
-  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable item is the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
+  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
       "id": "C104",
@@ -13,6 +13,116 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened by D2143 when C103 closed D2119 stage 1. Acceptance (D2119 stage 2): the same microkernel boots as an Android Virtualization Framework guest that crosvm starts with the Linux arm64 boot protocol -- device tree in x0, GICv3, PSCI 1.0, an ns16550 serial console, and virtio console, block and vsock over PCI -- first under crosvm, then on a retail Pixel via `adb shell vm run` as a non-protected VM. Device addresses are read from the device tree, never hard-coded; the virtio-pci transport already serves both. Done (D2144): the ns16550/8250 console -- neperos/src/ns16550.e drives the 8250 (THR at 0, LSR at 5 bit 5), the kernel picks it vs PL011 from the stdout uart node's `compatible` (ns16550a for crosvm, arm,pl011 for virt), base and reg-shift from the device tree; console_write and the console server's device_write dispatch by a boot-set flag. Written to crosvm's actual source (aarch64/src/fdt.rs: compatible ns16550a, reg=<addr size>, no reg-shift => shift 0) and regression-verified under QEMU virt (the tree selects PL011, all stage-1 marks pass, ns16550 path inert). Also extracted crosvm's aarch64 memory map from source (RAM 0x80000000, GIC/PCI bases). BLOCKER confirmed (D2144): crosvm is built and runs in this WSL but is KVM-only with no CPU emulation, and the host is x86-64, so it cannot run the aarch64 kernel (rejected as a bad bzImage). Verifying the crosvm/AVF boot -- and the remaining pieces, a virtio-vsock driver and the crosvm memory-map boot -- needs an aarch64 host (a Pixel via adb, or an aarch64 Linux box with KVM); surfaced to the user as a resource decision. Advanced (D2145): the EL0 user window moved to the top of the 39-bit space (index 511, VA 0x7FC0000000) so it no longer collides with crosvm's RAM at 0x80000000, which would otherwise have unmapped the kernel from every user space on the first trap; QEMU-verified -- kernel boots, every EL0 server runs, isolation holds (thread W faults at 0x7FC0040000, X at kernel RAM 0x40000000, Q at ECAM 0x4010000000). The chosen aarch64 host is an AWS Graviton bare-metal instance (only *.metal exposes /dev/kvm for crosvm's KVM backend); the account's configured AWS credentials are invalid and await refresh. The kernel image already carries a valid arm64 Image header. VERIFIED ON REAL HARDWARE (D2146, AWS a1.metal Graviton bare-metal with /dev/kvm): the kernel boots under crosvm/KVM, reads crosvm's DTB (RAM 0x80000000, GICv3, ns16550 at 0x3f8), turns the MMU on and runs the whole EL0/capability suite -- D2145 confirmed, thread W faults at the relocated window 0x7FC0040000. Two crosvm-vs-QEMU gaps found and fixed: crosvm's PCI host is CAM (pci-host-cam-generic, shifts bus<<16/slot<<11/fn<<8) not ECAM, now detected by compatible with a cam flag in pci.Host; and a virtio device's BAR is the one its capabilities name (BAR0 on crosvm, pre-assigned; BAR4 on QEMU, guest-assigned), now discovered and mapped at its real size instead of a hard-coded BAR4/64KB. All three drivers then run under crosvm: entropy returns 8 bytes, block reads/writes sector 0, console writes a virtio-console port; QEMU's ECAM path unchanged (stage-1 boot still green). D2147 then closed the last crosvm functional gap: the EL0 page mappings were global (missing the nG bit), so on a real Cortex-A72 (not QEMU's interpreter) a thread's USER_BASE TLB entry served another thread after the ASID-only context switch, making the console-server client read a neighbour's 0xCD poison and a round-printer re-run. Marking the EL0 leaf descriptors non-global fixed it; the WHOLE stage-2 demo now runs clean under crosvm/KVM on AWS a1.metal -- all three virtio drivers, the capability/isolation threads, `console server up` over the P->K server, `all threads done` and a PSCI power-off with exit 0 -- and QEMU's stage-1 boot is byte-unchanged. Remaining before score 1: virtio-vsock and the Pixel `adb shell vm run` path. NeperOS stages 3 (bare-metal Pixel 6) and 4 follow (D2119)."
+    },
+    {
+      "id": "C105",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 105,
+      "title": "NeperOS shell 1: processes loaded from the initrd",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Queued by D2148 (phone shell, path A). Acceptance: the kernel loads separately built `aarch64 neperos` images from an initrd archive into their own address spaces and capability spaces; spawn, exit and wait system calls; init spawns two programs from the initrd, waits for both and prints their exit codes; a fault in one program does not stop the other. Runs on QEMU virt and needs no crosvm."
+    },
+    {
+      "id": "C106",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 106,
+      "title": "NeperOS shell 2: a filesystem server on virtio-block",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Queued by D2148. Acceptance: an EL0 filesystem server that alone holds the block driver's capability, serving open, read, write, close, list, mkdir and remove over IPC; the on-disk format is decided in its own D-row; a QEMU fixture writes a file, reboots on the same disk image and reads it back byte for byte; a client without the filesystem capability is refused."
+    },
+    {
+      "id": "C107",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 107,
+      "title": "NeperOS shell 3: the e.os surface on NeperOS (os.neperos.e)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Queued by D2148. Acceptance: an `os` variant for target `aarch64 neperos` over NeperOS system calls -- memory from untyped/frame capabilities, threads, monotonic time from the counter and wall time from the RTC the device tree names (PL031 on virt), file I/O through the C106 server, stdout and stderr through the console server; e.io, e.fs, e.time, e.thread and e.fmt compile unchanged for NeperOS, and their existing fixtures that need no network pass under QEMU."
+    },
+    {
+      "id": "C108",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 108,
+      "title": "NeperOS shell 4: a virtio-gpu display server",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Queued by D2148. Acceptance: a virtio-gpu 2D driver (resource create, attach backing, set scanout, transfer and flush of a damaged rectangle) running as an EL0 server that alone holds the scanout; the display mode is read from the device; a QEMU fixture draws a test pattern and the monitor's screendump matches a golden hash."
+    },
+    {
+      "id": "C109",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 109,
+      "title": "NeperOS shell 5: touch and key input over virtio-input",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Queued by D2148. Acceptance: a virtio-input driver for an absolute pointer or multitouch device and a keyboard, as an EL0 server that delivers events over IPC with a notification; a QEMU fixture injects taps and keys through the monitor's input-send-event and asserts the event stream a client receives."
+    },
+    {
+      "id": "C110",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 110,
+      "title": "NeperOS shell 6: a compositor and the e.ui backend for NeperOS",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Queued by D2148. Acceptance: app surfaces in shared frames, damage-only flush to the C108 display server, input from C109 routed to the focused surface; an e.ui window backend over it drawing with the existing CPU rasterizer (gfx/scene) and fonts read from the filesystem; an existing e.ui sample renders on NeperOS with the same pixel hash as its host render at the same size."
+    },
+    {
+      "id": "C111",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 111,
+      "title": "NeperOS shell 7: system status services",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued by D2148. Acceptance: one status protocol with subscription for battery (level, charging), Wi-Fi and cellular signal and type (5G/LTE), wall clock and notification count, plus a notification service that apps post to; QEMU providers answer what virt has (no battery, no radio) and say so rather than inventing values; the D2148 Android bridge later supplies the real ones behind the same protocol."
+    },
+    {
+      "id": "C112",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 112,
+      "title": "NeperOS shell 8: the launcher -- wallpaper, 8x5 icon grid, top bar",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued by D2148. Acceptance: a launcher process the init program starts after boot; a PNG wallpaper from the filesystem scaled to cover; an 8-row by 5-column grid of app icons with labels, paged when there are more than 40; a top bar showing battery, Wi-Fi, 5G, clock and notification count from C111; a tap launches the app as a process and Home returns to the launcher; QEMU screendump golden plus a launch-and-return round trip."
+    },
+    {
+      "id": "C113",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 113,
+      "title": "NeperOS shell 9: the Clock and Calculator apps",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Queued by D2148. Acceptance: Clock (time and date, alarms that post a notification, stopwatch, timer) and Calculator (arithmetic with operator precedence, percent, memory, history) as e.ui apps on NeperOS, launched from the C112 grid; each has a QEMU fixture that drives it by injected taps and checks a screendump hash."
+    },
+    {
+      "id": "C114",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 114,
+      "title": "NeperOS shell 10: the Tasks and Settings apps; the shell milestone closes",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Queued by D2148. Acceptance: Tasks (lists, due dates, done state) persisted in the filesystem; Settings (wallpaper, 12/24-hour clock, about this device) in a settings store that survives a reboot; QEMU fixtures as for C113. Closing this item closes the D2148 shell milestone and queues the next D2148 phase (the Android bridge over vsock)."
     },
     {
       "id": "L069",

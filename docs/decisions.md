@@ -37101,3 +37101,40 @@ was found by tracing P's descriptor each iteration (valid, then 0xCD) while a ke
 same region through the identity map still showed valid data: the physical memory was right and
 only the EL0 view was wrong, which is a TLB, not a memory, fault. Remaining for C104: virtio-vsock
 and the Pixel `adb shell vm run` path.
+
+## D2148 — NeperOS phone shell: path A, a guest on the Pixel with an Android bridge for the radios
+
+The goal is a phone that boots NeperOS into a user space with a wallpaper, an 8-row by 5-column
+icon grid and a top bar showing battery, Wi-Fi, 5G, clock and the notification count. It ships
+Clock, Tasks, Translate, Camera, Photos, Maps, Steps, Calculator, an authenticator, Settings,
+Compass, Recorder, Calendar, Phone, Messages and a browser (Vaper rewritten in Neper). It uses the
+SIM, accelerometer, GPS, compass, temperature sensors, memory and disk.
+
+Three paths were weighed. Bare metal on a Pixel 6 (D2119 stage 3) would need ports of the gs101
+modem driver with its Samsung IPC protocol (whose user-space RIL is proprietary), the always-on
+compute core that owns the sensors (proprietary firmware), BCM4389 Wi-Fi, the BCM4775 GPS and the
+camera pipeline, whose ISP and tuning live in a proprietary HAL -- years of work, with the camera
+reachable only as raw sensor capture plus a software ISP after reverse engineering. Open hardware
+of the PinePhone Pro kind is realistic on bare metal but is LTE, not 5G, and not a Pixel. Chosen
+is path A: NeperOS stays the AVF guest of C104, and a small Android bridge app relays the hardware
+over vsock -- telephony (SIM, calls, SMS), location, sensors, battery and connectivity, and camera
+frames -- each as a NeperOS service whose protocol does not change if a native driver replaces the
+bridge later. Bare metal stays the long-term stage 3; nothing here closes it.
+
+One fact is unverified and gates the on-device part: whether `vm run` gives a custom kernel a
+display and touch input. If it does not, the bridge app shows the guest's framebuffer in an
+Android activity and forwards touch over the same vsock, so the shell and the apps are unchanged
+either way.
+
+Only the first milestone is queued now, because it runs entirely on QEMU virt and so does not
+wait on C104's test environment: C105-C114 -- processes from the initrd, a filesystem server on
+virtio-block, the `e.os` surface on NeperOS (so the existing library compiles unchanged), a
+virtio-gpu display server, virtio-input, a compositor with the `e.ui` backend over the CPU
+rasterizer, the status services, the launcher, and the Clock, Calculator, Tasks and Settings apps.
+Later phases are queued as each closes, as D2119 does for its stages: the Android bridge over
+vsock and the device services behind it; a TCP/IP stack with virtio-net (the existing DNS, TLS and
+HTTP sit on top); the remaining apps; and the browser, whose Vaper port needs a JavaScript engine
+written in Neper in place of QuickJS. The authenticator is a TOTP/HOTP app; Microsoft
+Authenticator's push approval depends on Microsoft's service and is not part of it, nor is its
+name. Steps counts from the accelerometer, so it needs no step-counter sensor. The NeperOS items
+stay ahead of the chart work in the queue (D2125); the queue policy and the progress test say so.
