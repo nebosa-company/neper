@@ -20,10 +20,10 @@
       "group": "NeperOS",
       "order": 106,
       "title": "NeperOS shell 2: a filesystem server on virtio-block",
-      "score": 0,
+      "score": 0.4,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Queued by D2148. Acceptance: an EL0 filesystem server that alone holds the block driver's capability, serving open, read, write, close, list, mkdir and remove over IPC; the on-disk format is decided in its own D-row; a QEMU fixture writes a file, reboots on the same disk image and reads it back byte for byte; a client without the filesystem capability is refused."
+      "evidence": "Queued by D2148. Acceptance: an EL0 filesystem server that alone holds the block driver's capability, serving open, read, write, close, list, mkdir and remove over IPC; the on-disk format is decided in its own D-row; a QEMU fixture writes a file, reboots on the same disk image and reads it back byte for byte; a client without the filesystem capability is refused. Foundation done (D2152), verified on QEMU: a many-operation block layer (virtio.block_open/read/write, reused buffers + free-running ring index); the on-disk format (fs.e -- block 0 superblock with magic + bump allocator, block 1 flat root dir of 16 32-byte entries, single-block files) with format/is_formatted/create/write/read; and an fswrite/fsread boot (fs_test.e started as the sole block-device holder) that formats+writes then, on a reboot on the SAME disk image, reads the file back -- `fs wrote greeting` then `fs read: hello neperos fs`, the persistence acceptance. Default A-Z and C105 shell boots unchanged. Remaining: list/mkdir/remove + directories beyond the flat root; the EL0 IPC filesystem SERVER (clients send open/read/write/close/list/mkdir/remove over an endpoint, server alone holds the block cap, a client without the server endpoint is refused); and the suite fixture."
     },
     {
       "id": "C107",

@@ -340,6 +340,78 @@ fn block_rw(device: Device, sector: u64) -> (usize, err) {
     ret (data, ok)
 }
 
+// (D2152, C106) A block device opened for many reads and writes, for the filesystem server. One
+// request is in flight at a time; `header`, `data` (one sector) and `status` are allocated once and
+// reused, so the DMA pool does not grow per operation. The caller reads from and writes to `data`.
+type Block = struct { ring: Ring, header: usize, data: usize, status: usize }
+
+// The free-running request index: the virtqueue's available and used indices count operations
+// across the whole run, and a slot is index-mod-size. One device at a time holds the block, so a
+// single counter serves.
+var block_seq: u16 = 0u16
+
+// Negotiate the block device, set up its queue, and allocate the reused header, sector and status
+// buffers. The opened block comes back for `block_read`/`block_write`.
+fn block_open(device: Device) -> (Block, err) {
+    let negotiate_error = negotiate(device)
+    if negotiate_error != ok { ret (zero, negotiate_error) }
+    let (ring, ring_error) = setup_queue(device, 0u16)
+    if ring_error != ok { ret (zero, ring_error) }
+    status_add(device, STATUS_DRIVER_OK)
+    let (header, header_error) = dma_region(16usize)
+    if header_error != ok { ret (zero, header_error) }
+    let (data, data_error) = dma_region(SECTOR)
+    if data_error != ok { ret (zero, data_error) }
+    let (status, status_error) = dma_region(1usize)
+    if status_error != ok { ret (zero, status_error) }
+    ret (Block { ring: ring, header: header, data: data, status: status }, ok)
+}
+
+// One block request: the three-descriptor chain (header the device reads, the sector, the status
+// the device writes), submitted at the running slot, the available index bumped, the device
+// notified, and a bounded spin until the used index reaches it. `write` sends `blk.data` to the
+// sector; a read fills `blk.data` from it. The descriptors are reused each call.
+fn block_io(blk: Block, sector: u64, write: bool) -> err {
+    if write { os.store32(blk.header, VIRTIO_BLK_T_OUT) } else { os.store32(blk.header, VIRTIO_BLK_T_IN) }
+    os.store32(blk.header + 4usize, 0u32)
+    os.store64(blk.header + 8usize, sector)
+    os.store8(blk.status, 255u8)
+    os.store64(blk.ring.desc, u64(blk.header))
+    os.store32(blk.ring.desc + 8usize, 16u32)
+    os.store16(blk.ring.desc + 12usize, DESC_NEXT)
+    os.store16(blk.ring.desc + 14usize, 1u16)
+    os.store64(blk.ring.desc + 16usize, u64(blk.data))
+    os.store32(blk.ring.desc + 24usize, u32(SECTOR))
+    if write { os.store16(blk.ring.desc + 28usize, DESC_NEXT) } else { os.store16(blk.ring.desc + 28usize, DESC_NEXT | DESC_WRITE) }
+    os.store16(blk.ring.desc + 30usize, 2u16)
+    os.store64(blk.ring.desc + 32usize, u64(blk.status))
+    os.store32(blk.ring.desc + 40usize, 1u32)
+    os.store16(blk.ring.desc + 44usize, DESC_WRITE)
+    os.store16(blk.ring.desc + 46usize, 0u16)
+    let slot = block_seq % u16(blk.ring.size)
+    os.store16(blk.ring.avail + 4usize + 2usize * usize(slot), 0u16)
+    os.barrier()
+    block_seq += 1u16
+    os.store16(blk.ring.avail + 2usize, block_seq)
+    os.barrier()
+    os.store16(blk.ring.notify, blk.ring.index)
+    var spins = 0usize
+    while os.load16(blk.ring.used + 2usize) != block_seq && spins < 200000000usize { spins += 1usize }
+    if os.load16(blk.ring.used + 2usize) != block_seq { ret NoData }
+    if os.load8(blk.status) != 0u8 { ret BlockStatus }
+    ret ok
+}
+
+// Read `sector` into `blk.data`.
+fn block_read(blk: Block, sector: u64) -> err {
+    ret block_io(blk, sector, false)
+}
+
+// Write `blk.data` to `sector`.
+fn block_write(blk: Block, sector: u64) -> err {
+    ret block_io(blk, sector, true)
+}
+
 // Write `text` to the console device's transmit queue (port 0's transmitq is queue 1). We do not
 // negotiate MULTIPORT, so the device runs single-port and queue 1 reaches the chardev directly.
 // The buffer is one device-readable descriptor; the notify value is the queue index (1).

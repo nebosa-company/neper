@@ -37198,3 +37198,24 @@ loading from the archive, the three system calls, and a fault in one process not
 all shown at once. The launch system call needs the arena, so the kernel keeps it in a module var
 (`*mem.Arena = zero`, set at boot). Added to both suite runners as a second NeperOS boot alongside
 the default one; the default A-Z boot is byte-for-byte unchanged. C105 is complete.
+
+## D2152 — C106 foundation: a persistent filesystem on virtio-block
+
+The block and filesystem layers C106 needs, on QEMU virt, verified to persist across a reboot;
+the IPC server, the rest of the operations, and capability gating follow. The block transport gains
+a many-operation layer (virtio.block_open/block_read/block_write): the header, one sector and the
+status descriptor are allocated once and reused, and a free-running request index drives the
+available and used rings mod the queue size, so a filesystem doing many reads and writes does not
+grow the DMA pool. The on-disk format (fs.e) is 512-byte blocks: block 0 a superblock (magic,
+then the next free block as a bump allocator), block 1 the root directory of sixteen 32-byte
+entries (20-byte name, kind, data block, size), blocks 2+ handed out for file data; files are a
+single block (<= 512 bytes) and the directory is flat for now. fs.e serves format, is_formatted,
+create, write and read. The kernel gains an `fswrite`/`fsread` boot (the initrd is the test
+program fs_test.e, started as the sole holder of the block device via start_driver_server): fswrite
+formats a blank disk, creates `greeting` and writes a line; fsread reads it back. Booting fswrite
+then fsread on the same QEMU disk image shows `fs wrote greeting` then `fs read: hello neperos fs`
+-- the file survived the reboot, which is C106's persistence acceptance. The default A-Z and the
+C105 shell boots are unchanged. (Trap learned: a module-scope `const X: str = "..."` fails type
+checking -- no lib module has one; use a local.) Still to come for C106: list, mkdir and remove;
+directories beyond the flat root; and the filesystem as an EL0 IPC server that alone holds the
+block capability, with clients refused unless they hold the server's endpoint.

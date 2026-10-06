@@ -597,7 +597,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (shell_init, shell_init_error) = start_process(archive_base + archive_offset[0usize], archive_length[0usize], "init")
         if shell_init_error != ok { ret shell_init_error }
     }
-    if !shell_mode {
+    // (D2152, C106) The filesystem boot (`-append fswrite` / `fsread`): the initrd is the fs test
+    // program, started as the sole holder of the block device. `fswrite` formats (if the disk is
+    // blank) and writes a file; `fsread` reads it back, so a reboot on the same disk image proves
+    // the filesystem persists.
+    let fs_mode = bootargs_error == ok && (has_word(bootargs, "fswrite") || has_word(bootargs, "fsread"))
+    if fs_mode {
+        if pci_host_error != ok { ret NoInitrd }
+        var fs_name = "fsread"
+        if has_word(bootargs, "fswrite") { fs_name = "fswrite" }
+        let (fs_bar, fs_error) = start_driver_server(a, image_addr, image_len, 1usize, pci_host, pci_host.mmio, pci.VIRTIO_BLOCK, fs_name)
+        if fs_error != ok { ret fs_error }
+    }
+    if !shell_mode && !fs_mode {
     // A and B interleave under the timer, and X is handed a reference to kernel RAM --
     // mapped into its space without EL0 access -- so its read faults and it alone is killed.
     // The RAM base is as good a kernel address as any. S and R rendezvous over endpoint 0
