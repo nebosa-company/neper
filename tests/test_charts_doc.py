@@ -31,15 +31,11 @@ class ChartGuideTests(unittest.TestCase):
         self.assertEqual([png for _, png, _ in rows], [path.name for path in pngs])
         self.assertEqual([svg for _, _, svg in rows], [path.with_suffix(".svg").name for path in pngs])
 
-    def test_progress_links_to_guide_without_embedding_gallery_or_plan(self):
+    def test_guide_keeps_the_gallery_and_plan_out_of_the_readiness_page(self):
+        # The readiness page no longer carries a charting section; the guide holds the
+        # gallery and the plan, and links back to the readiness page.
         progress = (DOCS / "progress.html").read_text(encoding="utf-8")
         guide = (DOCS / "charts.md").read_text(encoding="utf-8")
-        rendered = len(tracked_pngs())
-        planned = sum(bool(line and not line.startswith("#")) for line in
-                      (DOCS / "chart-preview-backlog.txt").read_text(
-                          encoding="utf-8").splitlines())
-        self.assertIn('href="charts.md"', progress)
-        self.assertIn(f"Rendered previews ({rendered}/{rendered + planned})", progress)
         self.assertNotIn('<div class="previews">', progress)
         self.assertNotIn('<pre class="plan">', progress)
         self.assertIn("## Preview descriptions", guide)
@@ -63,7 +59,6 @@ class ChartGuideTests(unittest.TestCase):
         if any(path.stem == "interactive_selection" for path in pngs):
             self.assertIn('href="chart-previews/interactive_selection.svg">Select in SVG</a>', page)
         self.assertLess(len(page), 100_000)
-        self.assertIn('href="charts.html"', (DOCS / "progress.html").read_text(encoding="utf-8"))
 
     def test_interactive_selection_has_focusable_source_row_targets(self):
         svg = ET.parse(DOCS / "chart-previews" / "interactive_selection.svg").getroot()

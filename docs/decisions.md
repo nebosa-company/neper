@@ -36604,3 +36604,24 @@ entropy device and a 1 MB block disk and check the two lines. Still ahead for C1
 virtio-pci transport (the capability list, the BARs, feature negotiation and a virtqueue),
 and the console, block and entropy drivers as EL0 servers with a fixture that reads and writes
 the disk and echoes the console.
+
+## D2130 — The readiness page is four colored group cards and one backlog
+
+`progress.html` is reorganised around the work the project tracks (user request). It is now
+four readiness cards, each a group in its own colour from the UX theme's data-series tokens,
+over a single Backlog. Compiler is the compiler work that is not NeperOS; NeperOS is the
+capability microkernel (D2119-D2129); Tooling is the tool work; and Library -- e.lib is the
+one blended readiness of its three parts -- module declarations, UI controls and library
+capabilities -- averaged so the mostly-planned library capabilities are not washed out by the
+near-complete module declarations. Each card keeps a score. Below them, the Backlog is the
+sorted list of everything still pending in pickup order (the NeperOS stage first, then chart
+work), which the Unfinished-work queue was. The five colours are `data-1` (Compiler),
+`data-3` (Library), `data-5` (Tooling), `data-4` (NeperOS) and `data-2` (Backlog).
+
+Everything else the page used to carry is gone: the five KPI meter tiles, the charting-engine
+section, and the long tools and measurement tables. The charting guide and gallery stay as
+`docs/charts.md` and `docs/charts.html`, which `render_progress.py` still writes and which
+link back to the readiness page; the page no longer links to them. The generation stamp --
+the commit and its date and time -- stays in the footer. `tests/test_progress.py` checks the
+four cards, their scores and colours, and the backlog's order; `tests/test_charts_doc.py` no
+longer expects the page to carry the chart links.

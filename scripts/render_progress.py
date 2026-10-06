@@ -68,8 +68,10 @@ compiler, tooling, library = load_work_rows()
 # Stamp the last commit that touched what this page measures, not HEAD. Stamping
 # HEAD would make the page differ from itself the moment it is committed, so every
 # later run would show a spurious diff. Taking that commit's own date as well keeps
-# the output a pure function of its inputs.
-INPUTS = ['src', 'lib', 'docs/module-apis.md', 'docs/widget-plan.json', 'docs/algos.md']
+# the output a pure function of its inputs. The work queue and the completed ledger are
+# inputs too: a score change there is the progress this page reports, so it moves the stamp.
+INPUTS = ['src', 'lib', 'docs/module-apis.md', 'docs/widget-plan.json', 'docs/algos.md',
+          'docs/work-queue.json', 'docs/work-done.jsonl']
 stamp = subprocess.run(['git', 'log', '-1', '--format=%h %ct', '--'] + INPUTS,
                        capture_output=True, text=True).stdout.split()
 rev, seconds = (stamp + ['unknown', ''])[:2]
@@ -167,46 +169,53 @@ C, M, W, T, L = (100 * c_sum / c_n, 100 * dgot / dtot,
                  100 * l_sum / l_n if l_n else 100.0)
 
 
-def previous_percentages(path):
-    """Read the last generated KPI values and their displayed deltas."""
-    if not path.exists():
-        return {}
-    text = path.read_text(encoding='utf-8')
-    pairs = re.findall(
-        r'<div class="tile"[^>]*><div class="lab">([^<]+)</div>'
-        r'<div class="val">([0-9]+(?:\.[0-9]+)?)<span class="pc">%</span>'
-        r'(?:<span class="delta [^"]+"[^>]*>([+-][0-9]+(?:\.[0-9]+)?) pp</span>)?',
-        text,
-    )
-    return {label: (float(value), float(delta or 0.0))
-            for label, value, delta in pairs}
-
-
 progress_path = Path('docs/progress.html')
-previous = previous_percentages(progress_path)
+
+# The four readiness groups the page cards show (D2130). Compiler is the compiler work
+# that is not NeperOS; NeperOS is the capability microkernel (D2119); Tooling is the tool
+# work; Library -- e.lib blends the module-declaration, UI-control and library-capability
+# readiness into one. Each groups both queued and delivered rows, so the score is true
+# readiness, not just what is left.
+neperos_rows = compiler.get('NeperOS', [])
+compiler_rows = [row for group, rows in compiler.items() if group != 'NeperOS' for row in rows]
 
 
-def meter(label, pct, sub):
-    old_pct, old_delta = previous.get(label, (pct, 0.0))
-    delta = old_delta if round(pct, 2) == round(old_pct, 2) else pct - old_pct
-    if abs(delta) < 0.005:
-        delta = 0.0
-    delta_class = 'up' if delta > 0.004 else 'down' if delta < -0.004 else 'flat'
-    return ('<div class="tile"><div class="lab">' + label + '</div>'
-            '<div class="val">' + ('%.2f' % pct) + '<span class="pc">%</span>'
-            '<span class="delta ' + delta_class + '">' + ('%+.2f pp' % delta)
-            + '</span></div><div class="track" role="img" aria-label="' + label
-            + ': ' + ('%.2f' % pct) + ' percent complete"><i style="width:'
-            + ('%.1f' % pct) + '%"></i></div><div class="sub">' + sub + '</div></div>')
+def group_score(rows):
+    """Mean capability score as a percentage, with the delivered sum and the count."""
+    if not rows:
+        return 100.0, 0.0, 0
+    delivered = sum(score for _, score, _ in rows)
+    return 100.0 * delivered / len(rows), delivered, len(rows)
 
 
-kpi = '\n'.join([
-    meter('Compiler', C, '%.2f of %d capabilities' % (c_sum, c_n)),
-    meter('Modules', M, '%d of %d declarations, %d of %d selected algorithms' % (dgot, dtot, algos_total - algos_missing, algos_total)),
-    meter('UI and host integration', W, '%d of %d capabilities' % (wgot, wtot)),
-    meter('Tooling', T, '%.2f of %d capabilities' % (t_sum, t_n)),
-    meter('Library', L, '%.2f of %d capabilities' % (l_sum, l_n)),
-])
+COMPILER_PCT, compiler_sum, compiler_n = group_score(compiler_rows)
+NEPEROS_PCT, neperos_sum, neperos_n = group_score(neperos_rows)
+# Library -- e.lib is the one blended readiness of its three parts, each weighted equally so
+# the mostly-planned library capabilities are not washed out by the near-complete module
+# declarations: the mean of the Modules, UI-and-host and Library percentages.
+ELIB_PCT = (M + W + L) / 3.0
+
+GROUP_CARDS = [
+    ('Compiler', 'compiler', COMPILER_PCT,
+     '%.2f of %d capabilities' % (compiler_sum, compiler_n)),
+    ('Library – e.lib', 'lib', ELIB_PCT,
+     '%d of %d declarations · %d of %d UI controls · %.2f of %d library capabilities'
+     % (dgot, dtot, wgot, wtot, l_sum, l_n)),
+    ('Tooling', 'tooling', T, '%.2f of %d capabilities' % (t_sum, t_n)),
+    ('NeperOS', 'neperos', NEPEROS_PCT,
+     '%.2f of %d capabilities' % (neperos_sum, neperos_n)),
+]
+
+
+def group_card(label, key, pct, sub):
+    return ('<section class="card ' + key + '"><div class="lab">' + html.escape(label)
+            + '</div><div class="val">' + ('%.2f' % pct) + '<span class="pc">%</span></div>'
+            '<div class="track" role="img" aria-label="' + html.escape(label) + ': '
+            + ('%.2f' % pct) + ' percent complete"><i style="width:' + ('%.1f' % pct)
+            + '%"></i></div><div class="sub">' + sub + '</div></section>')
+
+
+cards = '\n'.join(group_card(label, key, pct, sub) for label, key, pct, sub in GROUP_CARDS)
 
 # Keep the chart catalogue in its maintained Markdown source. The readiness
 # page links to a generated chart guide and shows the unfinished queue.
@@ -254,22 +263,17 @@ def unfinished_details(label, rows):
         '<tbody>' + body + '</tbody></table></div>'
         if rows else '<p>No unfinished items.</p>'
     )
-    return ('<details id="unfinished-' + label.lower() + '"><summary>'
-            + label + ' — ' + str(len(rows)) + ' unfinished</summary>'
+    return ('<details id="unfinished-' + label.lower() + '" open><summary>'
+            + label + ' — ' + str(len(rows)) + ' pending</summary>'
             + content + '</details>')
 
 
-backlog = unfinished_details('Queue', [
+backlog = unfinished_details('Backlog', [
     (item['id'], item['title'] + ' (' + format(float(item['score']), '.0%') + ')',
      'See docs/charts.md for the engine, delivery evidence and previews.'
      if item['id'] == 'L061' else item['evidence'],
      item['id'] in RELEASE_REQUIRED_IDS)
     for item in queue_items if float(item['score']) < 1
-])
-backlog += unfinished_details('Modules', [
-    (mod, str(len(missing)) + ' missing declarations / selected algorithms',
-     ', '.join(sorted(missing)), mod in core_modules)
-    for mod, missing in sorted(module_missing.items())
 ])
 release_required_count = sum(item['id'] in RELEASE_REQUIRED_IDS for item in queue_items)
 module_required_count = sum(mod in core_modules for mod in module_missing)
@@ -364,29 +368,15 @@ figcaption{display:flex;justify-content:space-between;gap:1rem;align-items:basel
 Path('docs/charts.html').write_text(charts_html, encoding='utf-8', newline='\n')
 if CHARTS_ONLY:
     raise SystemExit(0)
-chart_section = (
-    '<section class="tools" aria-label="Charting engine readiness">'
-    '<h2>Charting engine</h2>'
-    '<p>Chart capability <code>L061</code>: {score:.0%} complete. '
-    'Rendered previews ({preview_count}/{chart_total}). '
-    '<a href="charts.html">Browse chart previews</a> · '
-    '<a href="charts.md">Charting-engine details</a>.</p></section>'
-    '<section class="tools" aria-label="Unfinished work queue">'
-    '<h2>Unfinished work</h2><p>{count} queued capabilities in planned pickup order, '
-    'with the NeperOS stage first (D2119), then chart work, across all categories; the first row is next. '
-    '{required_count} release-required '
-    'and {enhancement_count} enhancements. Release required means needed for the '
-    '<a href="roadmap.md">first stable CPU compiler release</a> under the M2 and '
-    'tool-complete gates; later GPU, extended-library and optional-tooling work is '
-    'an enhancement for that release. {module_count} modules with missing '
-    'declarations or selected algorithms appear separately as inventory gaps, not '
-    'queued tasks; {module_required_count} are core release requirements.</p>'
+backlog_section = (
+    '<section class="backlog" aria-label="Backlog">'
+    '<h2>Backlog</h2>'
+    '<p class="sub">{count} pending capabilities in pickup order — the NeperOS stage '
+    'first (D2119), then chart work, across all categories; the first row is next. '
+    '{required_count} are release-required for the '
+    '<a href="roadmap.md">first stable CPU compiler release</a>.</p>'
     '{backlog}</section>'
-).format(score=float(chart_item['score']), preview_count=len(preview_paths), chart_total=chart_total,
-         count=len(queue_items), required_count=release_required_count,
-         enhancement_count=len(queue_items) - release_required_count,
-         module_count=len(module_missing), module_required_count=module_required_count,
-         backlog=backlog)
+).format(count=len(queue_items), required_count=release_required_count, backlog=backlog)
 
 page_html = """<!doctype html>
 <html lang="en">
@@ -395,83 +385,41 @@ page_html = """<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>neper readiness</title>
 <style>
-:root{color-scheme:light dark;--bg:#fff;--panel:#f5f7fa;--ink:#111827;--muted:#667085;--track:#d8e1ee;--fill:#245aa8;--rule:#e4e7ec}
-@media(prefers-color-scheme:dark){:root{--bg:#0f1319;--panel:#171d26;--ink:#e8edf4;--muted:#9aa7b5;--track:#293444;--fill:#8fb0e6;--rule:#29313d}}
+:root{color-scheme:light dark;--bg:#fff;--panel:#f5f7fa;--ink:#111827;--muted:#667085;--track:#d8e1ee;--rule:#e4e7ec;--c-compiler:#007dbc;--c-lib:#00885b;--c-tooling:#93731f;--c-neperos:#8269ba;--c-backlog:#b36137}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1319;--panel:#171d26;--ink:#e8edf4;--muted:#9aa7b5;--track:#293444;--rule:#29313d;--c-compiler:#5cb8ff;--c-lib:#50c591;--c-tooling:#d2ab57;--c-neperos:#bea2f8;--c-backlog:#f59a6d}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
 main{max-width:64rem;margin:auto;padding:clamp(2rem,6vw,5rem) 1.25rem}header{margin-bottom:2rem}.eyebrow,.sub,footer{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace}
 .eyebrow{margin:0 0 .5rem;color:var(--muted);font-size:.75rem;letter-spacing:.14em;text-transform:uppercase}h1{margin:0;font-size:clamp(2rem,5vw,3.5rem);line-height:1.1}
-.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:1rem}.tile{padding:1.25rem;border:1px solid var(--rule);border-radius:.75rem;background:var(--panel)}
-.lab{color:var(--muted);font-size:.85rem;font-weight:600}.val{margin:.35rem 0;font-size:2.65rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}.pc{font-size:1.2rem;color:var(--muted)}
-.delta{margin-left:.5rem;font:600 .72rem ui-monospace,"Cascadia Mono",Consolas,monospace}.delta.up{color:#168052}.delta.down{color:#c4322b}.delta.flat{color:var(--muted)}
-.track{height:.5rem;margin:.8rem 0;background:var(--track);border-radius:1rem;overflow:hidden}.track i{display:block;height:100%;background:var(--fill);border-radius:inherit}.sub{color:var(--muted);font-size:.75rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:1rem}
+.card{padding:1.25rem;border:1px solid var(--rule);border-left:.4rem solid var(--accent);border-radius:.75rem;background:var(--panel)}
+.card.compiler{--accent:var(--c-compiler)}.card.lib{--accent:var(--c-lib)}.card.tooling{--accent:var(--c-tooling)}.card.neperos{--accent:var(--c-neperos)}
+.lab{color:var(--accent);font-size:.85rem;font-weight:700;letter-spacing:.02em}.val{margin:.35rem 0;font-size:2.65rem;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}.pc{font-size:1.2rem;color:var(--muted)}
+.track{height:.5rem;margin:.8rem 0;background:var(--track);border-radius:1rem;overflow:hidden}.track i{display:block;height:100%;background:var(--accent);border-radius:inherit}.sub{color:var(--muted);font-size:.75rem}
 footer{color:var(--muted);font-size:.8rem;margin-top:2rem;padding-top:1rem;border-top:1px solid var(--rule)}
-.tools{margin-top:2.5rem}.tools h2{margin:0 0 .25rem;font-size:1.5rem}.tools h3{margin:1.5rem 0 .5rem;font-size:1rem}
-.tools table{width:100%;border-collapse:collapse;font-size:.85rem}.tools td{padding:.45rem .6rem;border-top:1px solid var(--rule);vertical-align:top}
-.tools td:first-child{width:45%;overflow-wrap:anywhere}.tools code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.8rem}
-.tools th{text-align:left;padding:.45rem .6rem}.tools details{margin:1rem 0}.tools summary{cursor:pointer;font-weight:600}
-.tools ol{padding-left:1.5rem}.tools li{margin:.3rem 0}
-.table-scroll{overflow-x:auto}.table-scroll table{min-width:48rem}.table-scroll td:first-child{width:auto}.table-scroll td{overflow-wrap:anywhere}
-.release-status{display:inline-block;white-space:nowrap;padding:.1rem .4rem;border:1px solid var(--rule);border-radius:.3rem;font-size:.75rem}.release-status.required{font-weight:700}
-@media(max-width:40rem){.tools td{display:block;width:auto}.tools td:first-child{width:auto;border-top:1px solid var(--rule);padding-bottom:0}.tools td+td{border-top:0}}
+.backlog{--accent:var(--c-backlog);margin-top:2.5rem;padding:1.25rem 1.25rem 1.5rem;border:1px solid var(--rule);border-left:.4rem solid var(--accent);border-radius:.75rem;background:var(--panel)}
+.backlog h2{margin:0 0 .25rem;font-size:1.5rem;color:var(--accent)}.backlog p{margin:.25rem 0 1rem}
+.backlog table{width:100%;border-collapse:collapse;font-size:.85rem}.backlog td{padding:.45rem .6rem;border-top:1px solid var(--rule);vertical-align:top}
+.backlog th{text-align:left;padding:.45rem .6rem}.backlog code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.8rem}
+.backlog details{margin:0}.backlog summary{cursor:pointer;font-weight:600;color:var(--accent)}
+.table-scroll{overflow-x:auto}.table-scroll table{min-width:48rem}.table-scroll td{overflow-wrap:anywhere}
+.release-status{display:inline-block;white-space:nowrap;padding:.1rem .4rem;border:1px solid var(--rule);border-radius:.3rem;font-size:.75rem}.release-status.required{font-weight:700;border-color:var(--accent);color:var(--accent)}
+@media(max-width:40rem){.backlog td{display:block;width:auto}.backlog td:first-child{border-top:1px solid var(--rule);padding-bottom:0}.backlog td+td{border-top:0}}
 </style>
 </head>
 <body>
 <main>
 <header><p class="eyebrow">neper</p><h1>Readiness</h1></header>
-<section class="kpi" aria-label="Project readiness metrics">
-__KPI__
+<section class="cards" aria-label="Readiness by group">
+__CARDS__
 </section>
-__CHART_SECTION__
-<section class="tools" aria-label="How to run the tools">
-<h2>Tools</h2>
-<p class="sub">From the repository root. PowerShell on Windows, Bash on Linux and macOS.</p>
-<h3>Build and test the compiler</h3>
-<table>
-<tr><td><code>scripts/build-bootstrap.ps1</code> / <code>scripts/build-bootstrap.sh</code></td><td>Build the C bootstrap compiler into <code>build/windows</code> or <code>build/linux</code>.</td></tr>
-<tr><td><code>scripts/build-selfhost.ps1</code> / <code>scripts/build-selfhost.sh</code></td><td>Build the self-hosted compiler (<code>neper-self</code>) with the bootstrap.</td></tr>
-<tr><td><code>pwsh tests/selfhost/run.ps1</code> / <code>bash tests/selfhost/run.sh</code></td><td>The full self-host suite: fixed point (stage 2 equals stage 3), every link, check and conformance fixture, tool goldens.</td></tr>
-<tr><td><code>bash scripts/check-fixture.sh NAME [--keep]</code></td><td>Build and run one link fixture with the self-hosted compiler.</td></tr>
-<tr><td><code>python -m unittest discover -s tests -p "test_*.py"</code></td><td>The Python unit tests: module plan, module surfaces, widget plan, GPU contracts, LLM edit benchmark scoring. Run one with <code>python tests/test_module_surfaces.py</code>.</td></tr>
-<tr><td><code>python scripts/lint_bootstrap.py src</code></td><td>Find source the C bootstrap cannot compile before building it.</td></tr>
-<tr><td><code>build/windows/patch.exe SPEC</code></td><td>Apply a multi-site edit spec (<code>@@@</code> file, <code>&lt;&lt;&lt;</code> old, <code>===</code>, new <code>&gt;&gt;&gt;</code>); source in <code>tools/patch</code>.</td></tr>
-</table>
-<h3>Check the plans and goldens</h3>
-<table>
-<tr><td><code>python scripts/check_module_surfaces.py [--compiler PATH --os TARGET]</code></td><td>Every module fence in <code>docs/module-apis.md</code> against the declarations in <code>lib/e</code>.</td></tr>
-<tr><td><code>python scripts/check_module_plan.py</code> / <code>python scripts/check_widget_plan.py</code></td><td>Validate <code>docs/modules.json</code> and <code>docs/widget-plan.json</code>.</td></tr>
-<tr><td><code>python scripts/library_fixtures.py [--write]</code></td><td>Check, or regenerate, <code>docs/library-fixtures.json</code>.</td></tr>
-<tr><td><code>python scripts/validate_stream.py [PATH ...]</code></td><td>Validate the committed <code>.jsonl</code> goldens and <code>docs/modules.json</code> against the v1 stream schema.</td></tr>
-<tr><td><code>python scripts/card_examples.py COMPILER ROOT ARCH OS OUTDIR</code></td><td>Check every example in the language card with the compiler.</td></tr>
-</table>
-<h3>Regenerate documents</h3>
-<table>
-<tr><td><code>python scripts/render_progress.py</code></td><td>This readiness page and <code>docs/charts.md</code>, from the work queue, chart plan, preview inventory, completion ledger, module and widget plans and committed source.</td></tr>
-<tr><td><code>python scripts/render_tasks.py</code></td><td>One task file per unfinished feature under <code>docs/tasks</code>.</td></tr>
-<tr><td><code>python scripts/render_card.py [--check]</code></td><td>The LLM language card from the grammar and the diagnostic registry.</td></tr>
-<tr><td><code>python scripts/render_ux_theme.py [--check]</code></td><td>The UI theme block in <code>lib/e/ui/style.e</code> from <code>docs/ux/tokens.json</code>.</td></tr>
-<tr><td><code>scripts/build-docs-pdf.ps1</code> / <code>scripts/build-docs-pdf.sh</code></td><td>The documentation PDF, <code>docs/neper.pdf</code>; the wrappers make <code>.venv-docs-pdf</code> and install the pinned dependencies. Direct: <code>python scripts/build-docs-pdf.py [--out docs/neper.pdf] [--quiet]</code>.</td></tr>
-<tr><td><code>python scripts/render_module_apis.py [--output PATH]</code></td><td>The module API catalogue PDF (default <code>output/pdf/module-apis.pdf</code>); needs <code>reportlab</code>.</td></tr>
-</table>
-<h3>Website</h3>
-<table>
-<tr><td><code>python -m http.server 8000 -d docs</code></td><td>Preview the landing page, <code>docs/index.html</code>, at <code>http://localhost:8000</code>. It is a static GitHub Pages site with no build step.</td></tr>
-<tr><td><code>docs/landing-page-maintenance.md</code></td><td>Where each number on the page comes from, the one-line recounts for modules, signatures, algorithms and controls, and how to refresh compile time and executable size.</td></tr>
-</table>
-<h3>Measure</h3>
-<table>
-<tr><td><code>python scripts/lang-stats.py [--days N] [--harness] [--color] [--help]</code></td><td>What it costs an LLM to write Neper against Dart, Rust, JS, TS and Python, from local agent transcripts; <code>--help</code> explains every column.</td></tr>
-<tr><td><code>python benchmarks/baseline/measure.py --compiler PATH --repo ROOT --host windows|linux</code></td><td>Cold and warm build times, peak memory and image size on the compiler and the scale workloads.</td></tr>
-<tr><td><code>python scripts/check_batch_snapshots.py COMPILER ROOT ARCH OS WORKDIR [CYCLES]</code></td><td>Batch-session snapshot soak.</td></tr>
-<tr><td><code>scripts/embed-pe-runtime.ps1</code> / <code>scripts/embed-elf-runtime.ps1</code></td><td>Regenerate the embedded runtimes after a runtime source change.</td></tr>
-</table>
-</section>
+__BACKLOG__
 <footer>Generated by <code>scripts/render_progress.py</code> at
 <code>__REV__</code> (__DATE__).</footer>
 </main>
 </body>
 </html>
 """
-page_html = page_html.replace('__KPI__', kpi).replace('__CHART_SECTION__', chart_section).replace('__REV__', rev).replace('__DATE__', when)
+page_html = page_html.replace('__CARDS__', cards).replace('__BACKLOG__', backlog_section).replace('__REV__', rev).replace('__DATE__', when)
 progress_path.write_text(page_html, encoding='utf-8', newline='\n')
 print('wrote docs/progress.html')
 print('compiler %.2f  modules %.2f  ui-host %.2f  tooling %.2f  library %.2f' % (C, M, W, T, L))
