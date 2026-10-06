@@ -36758,3 +36758,20 @@ all the stage 1a-1d marks. (The byte-identical stage2==stage3 check and the Linu
 full suite, which needs a host that completes the Linux self-host build.) Next: `vm.map_range_el0`
 to map a device's BAR and an identity DMA pool into an EL0 server, then the entropy driver as the
 first such server.
+
+## D2135 — NeperOS stage 1d: the virtio transport's DMA is location-agnostic
+
+The transport allocated its virtqueue rings and buffers straight from a `*mem.Arena` with
+`mem.alloc`. In the kernel that arena is identity-mapped RAM, so a ring's address is the physical
+address the device DMAs to -- but an EL0 server's arena is mapped non-identity at `USER_BASE`, so
+its addresses would be wrong for DMA. To let the same transport run in the kernel or in an EL0
+server unchanged, the DMA allocation is now a module-level bump pool over one identity-mapped
+region: `pool_set(base, size)` points it at the region and resets it, and `dma_region(bytes)`
+carves a zeroed, page-aligned chunk. The kernel allocates one 128 KB pool from its arena and calls
+`pool_set` before each driver; an EL0 server (next) will be handed an identity DMA pool the kernel
+maps into it and call `pool_set` with that. `read_entropy`, `block_rw`, `write_console` and
+`setup_queue` drop their arena parameter; `virtio.e` no longer imports `e.mem`. One request is in
+flight at a time, so the bump needs no free. Behaviour is unchanged -- entropy, the block
+round-trip and the console transmit all still pass, verified by rebuilding and booting under QEMU.
+Next: `vm.map_range_el0` to map a device BAR (Device) and an identity DMA pool (Normal) into an EL0
+server's space, then the entropy driver as that server.

@@ -4,7 +4,6 @@
 // configuration, the notify region and the ISR, negotiates VIRTIO_F_VERSION_1, builds one
 // split virtqueue in its own RAM (identity-mapped, so a virtual address is the physical one
 // the device DMAs to), and drives it. The entropy device fills a buffer with random bytes.
-use e.mem
 use e.os
 use pci
 
@@ -14,6 +13,7 @@ error FeaturesRejected
 error NoData
 error BlockStatus
 error BlockMismatch
+error PoolExhausted
 
 // Common-configuration field offsets (virtio 1.x 4.1.4.3).
 const DEVICE_FEATURE_SELECT: usize = 0usize
@@ -50,6 +50,13 @@ const SECTOR: usize = 512usize
 
 const PAGE: usize = 4096usize
 
+// The DMA pool: one contiguous, identity-mapped region the driver carves its rings and buffers
+// from, set by `pool_set` before a driver runs. In the kernel it is a slice of the kernel's own
+// RAM; in an EL0 user-mode server it is the pool the kernel maps into the server identity
+// (D2134+). Either way a region's virtual address is the physical address the device DMAs to.
+var pool_next: usize = 0usize
+var pool_end: usize = 0usize
+
 type Device = struct { common: usize, notify: usize, notify_multiplier: u32, isr: usize, config: usize }
 
 // One enabled split virtqueue: the three rings in identity-mapped RAM, the notify register the
@@ -57,12 +64,20 @@ type Device = struct { common: usize, notify: usize, notify_multiplier: u32, isr
 // ring length.
 type Ring = struct { desc: usize, avail: usize, used: usize, notify: usize, index: u16, size: usize }
 
-// A zeroed, page-aligned region whose virtual address is its physical one (identity map), so
-// the device can DMA to it.
-fn dma_region(a: *mem.Arena, bytes: usize) -> (usize, err) {
-    let (storage, storage_error) = mem.alloc[u8](a, bytes + PAGE)
-    if storage_error != ok { ret (0usize, storage_error) }
-    let at = (mem.address_of(&storage[0usize]) + PAGE - 1usize) & ~(PAGE - 1usize)
+// Point the DMA pool at `[base, base+size)`, an identity-mapped region, and reset it. Called
+// before each driver runs; one driver's abandoned rings are reclaimed by the next.
+fn pool_set(base: usize, size: usize) {
+    pool_next = base
+    pool_end = base + size
+}
+
+// A zeroed, page-aligned region carved from the pool, whose virtual address is its physical one
+// (identity), so the device can DMA to it. One request is in flight at a time, so a page-aligned
+// bump suffices; the pool refuses rather than overrun.
+fn dma_region(bytes: usize) -> (usize, err) {
+    let at = (pool_next + PAGE - 1usize) & ~(PAGE - 1usize)
+    if at + bytes > pool_end { ret (0usize, PoolExhausted) }
+    pool_next = at + bytes
     var i = 0usize
     while i < bytes {
         os.store8(at + i, 0u8)
@@ -123,15 +138,15 @@ fn negotiate(device: Device) -> err {
 // identity-mapped RAM, hand the device their addresses, enable it, and resolve the notify
 // register. The avail ring is {flags:u16, idx:u16, ring:[u16;size]}; the used ring is
 // {flags:u16, idx:u16, ring:[{id:u32, len:u32};size]}.
-fn setup_queue(a: *mem.Arena, device: Device, selector: u16) -> (Ring, err) {
+fn setup_queue(device: Device, selector: u16) -> (Ring, err) {
     os.store16(device.common + QUEUE_SELECT, selector)
     let size = usize(os.load16(device.common + QUEUE_SIZE))
     if size == 0usize { ret (zero, NoQueue) }
-    let (desc, desc_error) = dma_region(a, 16usize * size)
+    let (desc, desc_error) = dma_region(16usize * size)
     if desc_error != ok { ret (zero, desc_error) }
-    let (avail, avail_error) = dma_region(a, 6usize + 2usize * size)
+    let (avail, avail_error) = dma_region(6usize + 2usize * size)
     if avail_error != ok { ret (zero, avail_error) }
-    let (used, used_error) = dma_region(a, 6usize + 8usize * size)
+    let (used, used_error) = dma_region(6usize + 8usize * size)
     if used_error != ok { ret (zero, used_error) }
     os.store64(device.common + QUEUE_DESC, u64(desc))
     os.store64(device.common + QUEUE_DRIVER, u64(avail))
@@ -159,12 +174,12 @@ fn ring_wait(ring: Ring, nth: u16) -> err {
 // One device-writable buffer of `want` bytes submitted on queue 0, filled by the device, the
 // buffer's address and the byte count returned. The rings and the buffer are the driver's own
 // pages; the device DMAs to their physical (identity) addresses.
-fn read_entropy(a: *mem.Arena, device: Device, want: usize) -> (usize, usize, err) {
+fn read_entropy(device: Device, want: usize) -> (usize, usize, err) {
     let negotiate_error = negotiate(device)
     if negotiate_error != ok { ret (0usize, 0usize, negotiate_error) }
-    let (ring, ring_error) = setup_queue(a, device, 0u16)
+    let (ring, ring_error) = setup_queue(device, 0u16)
     if ring_error != ok { ret (0usize, 0usize, ring_error) }
-    let (buffer, buffer_error) = dma_region(a, want)
+    let (buffer, buffer_error) = dma_region(want)
     if buffer_error != ok { ret (0usize, 0usize, buffer_error) }
     status_add(device, STATUS_DRIVER_OK)
     // Descriptor 0: the device writes `want` bytes into the buffer.
@@ -190,17 +205,17 @@ fn pattern(i: usize) -> u8 {
 // sector:u64}), the 512-byte data buffer, and a one-byte status the device writes. Descriptors
 // 0-2 are reused for both the write and the read; only descriptor 1's direction flag and the
 // header's type change. The read buffer's address comes back.
-fn block_rw(a: *mem.Arena, device: Device, sector: u64) -> (usize, err) {
+fn block_rw(device: Device, sector: u64) -> (usize, err) {
     let negotiate_error = negotiate(device)
     if negotiate_error != ok { ret (0usize, negotiate_error) }
-    let (ring, ring_error) = setup_queue(a, device, 0u16)
+    let (ring, ring_error) = setup_queue(device, 0u16)
     if ring_error != ok { ret (0usize, ring_error) }
     status_add(device, STATUS_DRIVER_OK)
-    let (header, header_error) = dma_region(a, 16usize)
+    let (header, header_error) = dma_region(16usize)
     if header_error != ok { ret (0usize, header_error) }
-    let (data, data_error) = dma_region(a, SECTOR)
+    let (data, data_error) = dma_region(SECTOR)
     if data_error != ok { ret (0usize, data_error) }
-    let (status, status_error) = dma_region(a, 1usize)
+    let (status, status_error) = dma_region(1usize)
     if status_error != ok { ret (0usize, status_error) }
     // The parts of the chain that never change: desc0 -> desc1 -> desc2, desc2 the status byte.
     os.store64(ring.desc, u64(header))
@@ -252,13 +267,13 @@ fn block_rw(a: *mem.Arena, device: Device, sector: u64) -> (usize, err) {
 // Write `text` to the console device's transmit queue (port 0's transmitq is queue 1). We do not
 // negotiate MULTIPORT, so the device runs single-port and queue 1 reaches the chardev directly.
 // The buffer is one device-readable descriptor; the notify value is the queue index (1).
-fn write_console(a: *mem.Arena, device: Device, text: str) -> err {
+fn write_console(device: Device, text: str) -> err {
     let negotiate_error = negotiate(device)
     if negotiate_error != ok { ret negotiate_error }
-    let (ring, ring_error) = setup_queue(a, device, 1u16)
+    let (ring, ring_error) = setup_queue(device, 1u16)
     if ring_error != ok { ret ring_error }
     status_add(device, STATUS_DRIVER_OK)
-    let (buffer, buffer_error) = dma_region(a, text.len)
+    let (buffer, buffer_error) = dma_region(text.len)
     if buffer_error != ok { ret buffer_error }
     var i = 0usize
     while i < text.len {

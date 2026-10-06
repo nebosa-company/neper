@@ -294,7 +294,7 @@ fn hex_byte(value: u8) {
 // The entropy device driven through the modern virtio-pci transport: its BAR assigned, the
 // device negotiated, a buffer filled with random bytes over one virtqueue, the bytes printed.
 // The MMIO cursor past its BAR comes back, so the next device gets a disjoint window.
-fn drive_entropy(a: *mem.Arena, host: pci.Host) -> usize {
+fn drive_entropy(host: pci.Host, pool: usize, pool_size: usize) -> usize {
     var slot = 0usize
     while slot < 32usize {
         let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
@@ -304,7 +304,8 @@ fn drive_entropy(a: *mem.Arena, host: pci.Host) -> usize {
                 console_write("virtio entropy: discover failed\n")
                 ret host.mmio
             }
-            let (buffer, written, read_error) = virtio.read_entropy(a, device, 8usize)
+            virtio.pool_set(pool, pool_size)
+            let (buffer, written, read_error) = virtio.read_entropy(device, 8usize)
             if read_error != ok {
                 console_write("virtio entropy: read failed\n")
                 ret cursor
@@ -330,7 +331,7 @@ fn drive_entropy(a: *mem.Arena, host: pci.Host) -> usize {
 // collide with the entropy device's window: a known pattern written to `sector` and read back,
 // the first bytes printed to show the round-trip through the virtqueue. The MMIO cursor past its
 // BAR comes back for the next device.
-fn drive_block(a: *mem.Arena, host: pci.Host, base: usize) -> usize {
+fn drive_block(host: pci.Host, base: usize, pool: usize, pool_size: usize) -> usize {
     var slot = 0usize
     while slot < 32usize {
         let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
@@ -340,7 +341,8 @@ fn drive_block(a: *mem.Arena, host: pci.Host, base: usize) -> usize {
                 console_write("virtio block: discover failed\n")
                 ret base
             }
-            let (data, rw_error) = virtio.block_rw(a, device, 0u64)
+            virtio.pool_set(pool, pool_size)
+            let (data, rw_error) = virtio.block_rw(device, 0u64)
             if rw_error != ok {
                 console_write("virtio block: rw failed\n")
                 ret cursor
@@ -362,7 +364,7 @@ fn drive_block(a: *mem.Arena, host: pci.Host, base: usize) -> usize {
 
 // The console device driven over the same transport, its BAR assigned from `base`: a line
 // written to port 0's transmit queue, which QEMU forwards to the chardev the port is backed by.
-fn drive_console(a: *mem.Arena, host: pci.Host, base: usize) {
+fn drive_console(host: pci.Host, base: usize, pool: usize, pool_size: usize) {
     var slot = 0usize
     while slot < 32usize {
         let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
@@ -372,7 +374,8 @@ fn drive_console(a: *mem.Arena, host: pci.Host, base: usize) {
                 console_write("virtio console: discover failed\n")
                 ret
             }
-            let write_error = virtio.write_console(a, device, "hello from the neper virtio console\n")
+            virtio.pool_set(pool, pool_size)
+            let write_error = virtio.write_console(device, "hello from the neper virtio console\n")
             if write_error != ok {
                 console_write("virtio console: write failed\n")
                 ret
@@ -481,9 +484,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     enumerate_pci(tree)
     let (pci_host, pci_host_error) = pci.find(tree)
     if pci_host_error == ok {
-        let after_entropy = drive_entropy(a, pci_host)
-        let after_block = drive_block(a, pci_host, after_entropy)
-        drive_console(a, pci_host, after_block)
+        // One identity-mapped DMA pool the drivers carve their rings and buffers from; each
+        // resets it, so the abandoned rings of the previous driver are reclaimed. 128 KB holds
+        // the largest queue (256 descriptors) and its buffers several times over.
+        let (pool_storage, pool_error) = mem.alloc[u8](a, 131072usize + 4096usize)
+        if pool_error == ok {
+            let pool = (mem.address_of(&pool_storage[0usize]) + 4095usize) & ~4095usize
+            let after_entropy = drive_entropy(pci_host, pool, 131072usize)
+            let after_block = drive_block(pci_host, after_entropy, pool, 131072usize)
+            drive_console(pci_host, after_block, pool, 131072usize)
+        }
     }
     // The interrupt controller and the timer: enable the controller, let this core take the
     // virtual-timer PPI, and arm it. Each firing preempts whatever runs.
