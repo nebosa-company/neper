@@ -8891,6 +8891,18 @@ greeting"
     esac
     case "$neperos_fsread" in *'fs server formatted'*) printf '%s\n' "NeperOS reformatted an already-written disk, losing persistence: $neperos_fsread" >&2; exit 1 ;; esac
     case "$neperos_fsread" in *"$fs_listed"*) printf '%s\n' "the removed file was still listed: $neperos_fsread" >&2; exit 1 ;; esac
+    # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
+    # + a Writer) rather than the console primitive, so e.io and the e.os variant os.neperos.e run
+    # unchanged on NeperOS. Started as program 0 of a one-program archive on the shell boot.
+    io_test_img="$test_build/io_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/io_test.e" "$repo" aarch64 neperos "$io_test_img")" = 'executable written' ]
+    io_archive="$test_build/io-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$io_archive" "$io_test_img"
+    neperos_io=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$io_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_io" in
+        *'hello from e.io on neperos'*'e.io writer runs at EL0'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.io did not run through the portable surface: $neperos_io" >&2; exit 1 ;;
+    esac
 fi
 
 printf '%s\n' 'selfhost tests passed'

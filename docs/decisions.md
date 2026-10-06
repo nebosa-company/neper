@@ -37251,3 +37251,27 @@ across the reboot through the server -- then remove ok and an empty `list /docs`
 orders the denied client against the real client differently between hosts, so the suite fixtures
 (run.ps1, run.sh) assert each line independently rather than one fixed order. The default A-Z, the
 C105 shell and the D2152 fswrite/fsread boots are unchanged.
+
+## D2154 — C107 begins: the e.os NeperOS variant, with e.io running on it
+
+C107 wants an `os` variant for `aarch64 neperos` so the portable library (e.io, e.fs, e.time,
+e.thread, e.fmt) compiles and runs unchanged on NeperOS. This increment lays the variant down and
+carries e.io across; e.time, e.thread, e.fs and e.fmt breadth follow in later increments. The e.os
+surface is intrinsic-based: the compiler seeds open/read/write/close/seek/stdout/stderr/exit/the
+threads/the clock into module e.os (src/resolve.e), and the per-target variant file (os.linux.e,
+os.windows.e) adds the higher-level helpers on top -- there was no NeperOS variant, so a NeperOS
+target fell back to the types-only os.e. New lib/e/os.neperos.e is that variant: `project.
+select_source` picks it for a `neperos` os the way it picks the others (a variant is the WHOLE
+module, so it carries the full type block copied from os.e plus ErrorKind/ErrorDetail and
+NATIVE_SEPARATOR). It adds the thin surface e.io reaches that is not seeded -- read_detail and
+write_detail -- as wrappers over the seeded read/write primitives (NeperOS has no errno, so a
+failed primitive is classified `Other`); the seeded intrinsics resolve unqualified inside the
+variant, as they do in the Linux and Windows files. Swapping os.e -> os.neperos.e for NeperOS does
+not disturb the existing programs (init, the shell and filesystem servers): they use only seeded
+intrinsics and the base types, which the variant also carries. Verified on QEMU virt on both hosts:
+neperos/src/io_test.e, started as program 0 of a one-program archive on the shell boot, reaches the
+portable e.io surface -- `os.stdout()` and a `Writer` over it via `io.print` -- not the console
+primitive directly, and prints `hello from e.io on neperos` then `e.io writer runs at EL0` and
+powers off with exit 0. Suite fixtures added to run.ps1 and run.sh. (Only os.write/os.stdout have to
+lower for NeperOS on this path; os.read/os.seek are referenced by e.io functions the print path does
+not reach, so dead-function elimination drops them until a later increment needs them.)

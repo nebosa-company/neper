@@ -9036,6 +9036,18 @@ if ($neperosQemu) {
     if ($fsReadBoot -match 'fs server formatted') { throw "NeperOS reformatted an already-written disk, losing persistence: $fsReadBoot" }
     if ($fsReadBoot -notmatch "fs client list /docs:\s*fs server done") { throw "the removed file was still listed: $fsReadBoot" }
     if ($fsReadBoot -match 'fs denied leaked') { throw "the capability gate leaked on the read boot: $fsReadBoot" }
+    # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
+    # and a Writer over it) rather than the console primitive directly, so e.io -- and the e.os
+    # variant os.neperos.e it compiles against -- run unchanged on NeperOS. Started as program 0 of a
+    # one-program archive on the shell boot; it prints two lines through e.io and powers off.
+    $ioTest = Join-Path $testBuild 'io_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\io_test.e') $repo aarch64 neperos $ioTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.io program did not build' }
+    $ioArchive = Join-Path $testBuild 'io-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $ioArchive $ioTest
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.io archive did not assemble' }
+    $ioBoot = Invoke-NeperOS $neperosImage @('-initrd', $ioArchive, '-append', 'shell')
+    if ($ioBoot -notmatch '(?s)hello from e\.io on neperos.*e\.io writer runs at EL0.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.io did not run through the portable surface: $ioBoot" }
 }
 
 Write-Output 'selfhost tests passed'
