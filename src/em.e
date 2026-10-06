@@ -861,6 +861,8 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     if same(name, "neper_os_cap_revoke") { ret ("cap_revoke", true) }
     if same(name, "neper_os_frame_protect") { ret ("frame_protect", true) }
     if same(name, "neper_os_notify_wait") { ret ("notify_wait", true) }
+    if same(name, "neper_os_device_write") { ret ("device_write", true) }
+    if same(name, "neper_os_retype") { ret ("retype", true) }
     if same(name, "neper_os_hvc") { ret ("hvc", true) }
     if same(name, "neper_os_smc") { ret ("smc", true) }
     if same(name, "neper_os_mrs") { ret ("mrs", true) }

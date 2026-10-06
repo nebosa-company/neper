@@ -1,19 +1,8 @@
 {
   "schema": "neper-work-queue-v1",
   "version": 1,
-  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 (C102-C103) comes first by the user's priority (D2119, D2125); after it, finish active chart and visualization items before non-chart work, preserving their relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
+  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 (C103) comes first by the user's priority (D2119, D2125); after it, finish active chart and visualization items before non-chart work, preserving their relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
-    {
-      "id": "C102",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 102,
-      "title": "NeperOS 1c: capabilities and synchronous IPC",
-      "score": 0.8,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Queued by D2125 after C101; in progress in D2128. Acceptance: every kernel object (untyped memory, thread, address space, endpoint, notification, IRQ handler, device frame) is reached only through a capability in the caller's capability space; untyped memory retypes into objects so the kernel allocates nothing after boot; endpoints carry synchronous IPC with capability transfer, notifications deliver interrupts to user drivers; capabilities derive with reduced rights and revoke recursively. The console moves to a user-mode server, and a QEMU fixture checks that a thread without the console capability cannot print, that a derived read-only frame cannot be written, and that revocation reaches every derived capability. Done (D2128): each thread has a capability space (eight slots in its control block); endpoint, console and frame objects are reached only through a capability with the right bits. Synchronous IPC over endpoint capabilities -- `send`/`recv` block and rendezvous, a new BLOCKED scheduler state the round-robin skips, the kernel idling when a block leaves nothing runnable. The console `write` is refused without a console capability; `cap_derive` copies with rights cleared and a parent link; `cap_revoke` nulls every capability derived from a slot through the chain; `frame_protect` walks the thread's own tables and flips a page's AP[1] by the frame capability's write right. All three fixture checks pass on both hosts under `-M virt,gic-version=3`: N (no console capability) is refused and prints nothing; V derives a two-link chain, revokes the root, and a receive on the revoked capability fails; W writes through a writable frame capability, derives a read-only copy, re-protects and faults on the next write (killed at 0x80040000). S and R rendezvous and R prints the words (R7 R8 R9), all alongside the stage 1b A/B/X threads; both suites check every expected line appears and none of the four boundary-crossing lines does. New `aarch64-neperos` intrinsics `os.send`/`recv`/`cap_derive`/`cap_revoke`/`frame_protect`/`notify_wait` (svc 3-8). IPC also transfers a capability: `send` names a slot to grant and `recv` a slot to receive it into, transferred on the rendezvous when the endpoint capability has the grant right -- G grants its console capability to H, which held none and only then prints (`H got console`). And a notification hands an interrupt to a user driver: the timer handler signals notification 0 before it switches, so the waiting driver D wakes three times and prints (`D0 D1 D2`), the signaller never blocking. Not yet (why it stays in the queue): untyped memory retype (endpoints, notifications and the capability tables are fixed kernel arrays), and the console as a user-mode server rather than a capability-gated, grantable kernel call."
-    },
     {
       "id": "C103",
       "category": "compiler",

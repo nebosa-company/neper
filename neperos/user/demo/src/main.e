@@ -77,6 +77,47 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         ret ok
     }
+    if one_char(name) == 75u8 {
+        // K is the console server: it holds the UART device capability (slot 4) and prints
+        // for clients. It receives a line a byte at a time until a zero, then writes the
+        // whole line to the device in one call -- no other thread reaches the UART.
+        var line: [64]u8 = zero
+        var length = 0usize
+        var open = true
+        while open {
+            let byte = os.recv(CHANNEL, NO_SLOT)
+            if byte == 0usize { open = false } else {
+                if length < 64usize {
+                    line[length] = u8(byte)
+                    length += 1usize
+                }
+            }
+        }
+        let written = os.device_write(4usize, mem.address_of(&line[0usize]), length)
+        ret ok
+    }
+    if one_char(name) == 80u8 {
+        // P has no console capability; it asks the server to print by sending a line byte by
+        // byte over the endpoint, then a zero to end it.
+        let message = "console server up\n"
+        var at = 0usize
+        while at < message.len {
+            let sent = os.send(CHANNEL, usize(message[at]), NO_SLOT)
+            at += 1usize
+        }
+        let done = os.send(CHANNEL, 0usize, NO_SLOT)
+        ret ok
+    }
+    if one_char(name) == 85u8 {
+        // U retypes endpoints from its untyped capability (slot 5, budget two): the first two
+        // succeed and the third is refused, since the kernel allocates nothing beyond the
+        // budget.
+        let first = os.retype(5usize, 1usize, 6usize)
+        let second = os.retype(5usize, 1usize, 7usize)
+        let third = os.retype(5usize, 1usize, 3usize)
+        if first == 0usize && second == 0usize && third == 18446744073709551615usize { say("U retype ok\n") } else { say("U retype wrong\n") }
+        ret ok
+    }
     if one_char(name) == 78u8 {
         // No console capability: this write is refused by the kernel.
         say("N should not print\n")

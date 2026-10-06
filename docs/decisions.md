@@ -36571,7 +36571,16 @@ thread waits on a notification capability, and the timer handler signals notific
 before it switches, so the driver D wakes three times on the timer interrupt and prints,
 without the signaller ever blocking.
 
-Not yet, and why C102 stays in the queue: untyped memory does not retype into objects (the
-endpoints, notifications and the capability tables are fixed kernel arrays, not carved from
-untyped), and the console, though gated by a capability and grantable, is still a kernel
-call rather than a user-mode server. These are the remaining stage 1c depth.
+The console then moves to a user-mode server. K holds the one device capability for the UART
+-- its `object` the MMIO base -- and no other thread reaches the console device; clients send
+it bytes over an endpoint, and K writes the line with `device_write`, which the kernel
+performs under the capability (a raw EL0 store to the device would be dropped as a dead store
+without a volatile the language does not have, so the kernel does the poke). The write is one
+call with interrupts masked, so a client's line is never split. P, with no console access,
+sends K a line and it appears. Finally, untyped memory retypes into objects: an untyped
+capability carries a budget, and `retype` assigns one of the object slots the kernel reserved
+at boot and capabilities it, so the kernel allocates nothing afterward; U retypes two
+endpoints and the third, over budget, is refused. With these, C102 is complete: every kernel
+object -- endpoint, notification, frame, console, device, untyped -- is reached only through a
+capability, and the six capability behaviours and the four isolation boundaries all run
+together under the timer and are checked on both hosts.

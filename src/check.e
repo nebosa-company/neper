@@ -4967,6 +4967,20 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
         let (notify_index, notify_error) = add_seeded_function(c, os_module, "notify_wait", usize_type, false)
         if notify_error != ok { ret notify_error }
         try add_seeded_parameter(c, notify_index, "slot", usize_type)
+        // (D2128) `device_write(slot, address, length) -> status` writes a run of bytes to
+        // the device a device capability names; the console server drives the UART with it.
+        let (write_index, write_error) = add_seeded_function(c, os_module, "device_write", usize_type, false)
+        if write_error != ok { ret write_error }
+        try add_seeded_parameter(c, write_index, "slot", usize_type)
+        try add_seeded_parameter(c, write_index, "address", usize_type)
+        try add_seeded_parameter(c, write_index, "length", usize_type)
+        // (D2128) `retype(untyped, kind, dest) -> status` carves an object from untyped
+        // memory and capabilities it into a slot.
+        let (retype_index, retype_error) = add_seeded_function(c, os_module, "retype", usize_type, false)
+        if retype_error != ok { ret retype_error }
+        try add_seeded_parameter(c, retype_index, "untyped", usize_type)
+        try add_seeded_parameter(c, retype_index, "kind", usize_type)
+        try add_seeded_parameter(c, retype_index, "dest", usize_type)
     }
     let (str_module, has_str) = graph.find_module(g, "e.str")
     if has_str { try seed_str_signatures(c, str_module) }

@@ -8758,10 +8758,12 @@ esac
 # capability, is refused; V derives a chain and revokes it, so a revoked capability no longer
 # works; W derives a read-only frame capability, re-protects its page and faults on the next
 # write; G grants its console capability to H over a grant endpoint, so H (which held none)
-# prints; and D, a user driver, waits on a notification the timer interrupt signals and wakes
-# three times. Booted with `trap` from 2 MB higher -- `text_offset` set to 4 MB, so nothing
-# in it may be an absolute address -- a failed bounds check is reported with its backtrace and
-# ends the kernel with 134. The machine intrinsics are unknown names on any other target.
+# prints; D, a user driver, waits on a notification the timer interrupt signals and wakes
+# three times; K, the user-mode console server, prints a line for client P over the UART it
+# alone holds a device capability for; and U retypes endpoints from an untyped capability
+# until its budget is spent. Booted with `trap` from 2 MB higher -- `text_offset` set to 4 MB,
+# so nothing in it may be an absolute address -- a failed bounds check is reported with its
+# backtrace and ends the kernel with 134. The machine intrinsics are unknown names elsewhere.
 neperos_image="$test_build/neperos.img"
 [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/main.e" "$repo" aarch64 none "$neperos_image")" = 'executable written' ]
 [ "$(od -An -c -j56 -N4 "$neperos_image" | tr -d ' ')" = 'ARMd' ] || { printf '%s\n' 'the NeperOS image has no arm64 Image magic' >&2; exit 1; }
@@ -8787,12 +8789,15 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
             *) printf '%s\n' "NeperOS thread output missing $neperos_token: $neperos_boot" >&2; exit 1 ;;
         esac
     done
-    # Capability transfer: H holds no console capability until G grants it one.
-    case "$neperos_boot" in
-        *'H got console'*) ;;
-        *) printf '%s\n' "the granted console capability did not reach H: $neperos_boot" >&2; exit 1 ;;
-    esac
-    for neperos_leak in 'read protected memory' 'N should not print' 'V revoke leaked' 'W wrote after protect'; do
+    # Capability transfer (H), the user-mode console server (K prints for P), and untyped
+    # retype (U) each leave their mark.
+    for neperos_mark in 'H got console' 'console server up' 'U retype ok'; do
+        case "$neperos_boot" in
+            *"$neperos_mark"*) ;;
+            *) printf '%s\n' "NeperOS capability behaviour missing ($neperos_mark): $neperos_boot" >&2; exit 1 ;;
+        esac
+    done
+    for neperos_leak in 'read protected memory' 'N should not print' 'V revoke leaked' 'W wrote after protect' 'U retype wrong'; do
         case "$neperos_boot" in
             *"$neperos_leak"*) printf '%s\n' "capability boundary leaked ($neperos_leak): $neperos_boot" >&2; exit 1 ;;
             *) ;;

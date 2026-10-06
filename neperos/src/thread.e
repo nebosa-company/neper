@@ -7,9 +7,9 @@ use e.os
 use a64
 use vm
 
-const MAX_THREADS: usize = 12usize
+const MAX_THREADS: usize = 16usize
 // No thread is current: the kernel is idle, or the last one exited.
-const NONE: usize = 12usize
+const NONE: usize = 16usize
 
 const FREE: u8 = 0u8
 const READY: u8 = 1u8
@@ -28,6 +28,13 @@ const CAP_ENDPOINT: u8 = 1u8
 const CAP_CONSOLE: u8 = 2u8
 const CAP_FRAME: u8 = 3u8
 const CAP_NOTIFICATION: u8 = 4u8
+// A device: its `object` is the device's MMIO base. The console server holds the one for
+// the UART, and reaches it only through the capability (D2128).
+const CAP_DEVICE: u8 = 5u8
+// Untyped memory: its `object` is how many more objects its holder may retype from it. The
+// kernel reserves the object pools at boot and allocates no memory afterward; retype assigns
+// a pre-reserved slot and caps it, and an exhausted untyped refuses (D2128).
+const CAP_UNTYPED: u8 = 6u8
 const RIGHT_SEND: u8 = 1u8
 const RIGHT_RECV: u8 = 2u8
 const RIGHT_WRITE: u8 = 4u8
@@ -38,23 +45,27 @@ type Thread = struct { state: u8, name: str, ttbr: usize, caps: [8]Cap, frame: a
 
 // A synchronous IPC endpoint: a queue of threads blocked on it, all senders or all
 // receivers, since a sender and a receiver rendezvous rather than both waiting.
-const ENDPOINTS: usize = 4usize
+const ENDPOINTS: usize = 8usize
 const EP_EMPTY: u8 = 0u8
 const EP_SENDERS: u8 = 1u8
 const EP_RECEIVERS: u8 = 2u8
-type Endpoint = struct { kind: u8, waiters: [12]usize, count: usize }
+type Endpoint = struct { kind: u8, waiters: [16]usize, count: usize }
+// Endpoints 0 to 3 are the ones the kernel binds at boot; retype hands out the rest.
+const FIRST_RETYPED_ENDPOINT: usize = 4usize
 
 // A notification carries asynchronous signals, the kernel's way of handing an interrupt to
 // a user-mode driver (D2128): the handler of a bound interrupt signals it, and a thread
 // waiting on it wakes with the pending bits. Unlike an endpoint it does not block the
 // signaller -- an interrupt cannot wait.
 const NOTIFICATIONS: usize = 2usize
-type Notification = struct { pending: usize, waiters: [12]usize, count: usize }
+type Notification = struct { pending: usize, waiters: [16]usize, count: usize }
 
-var threads: [12]Thread = zero
-var endpoints: [4]Endpoint = zero
+var threads: [16]Thread = zero
+var endpoints: [8]Endpoint = zero
 var notifications: [2]Notification = zero
-var current: usize = 12usize
+var current: usize = 16usize
+// The next boot-reserved endpoint retype will hand out.
+var next_endpoint: usize = 4usize
 var live: usize = 0usize
 // The kernel's own context, captured when the first timer tick leaves the idle loop, so the
 // last thread to finish returns the kernel there rather than nowhere.
@@ -95,6 +106,15 @@ fn add(space: vm.Space, name: str, arg_table: usize, arg_count: usize) -> usize 
 // parent). `object` is the endpoint index for an endpoint, the page's user VA for a frame.
 fn grant(thread_index: usize, cap_slot: usize, kind: u8, rights: u8, object: usize) {
     threads[thread_index].caps[cap_slot] = Cap { kind: kind, rights: rights, object: object, parent: NONE }
+}
+
+// The device base the current thread's capability in `cap_slot` names, if it is a device
+// capability with the write right.
+fn device_base(cap_slot: usize) -> (usize, bool) {
+    if current == NONE || cap_slot >= CAPS { ret (0usize, false) }
+    let cap = threads[current].caps[cap_slot]
+    if cap.kind != CAP_DEVICE || (cap.rights & RIGHT_WRITE) == 0u8 { ret (0usize, false) }
+    ret (cap.object, true)
 }
 
 // Whether the current thread holds a capability of `kind` with `right` in its space.
@@ -262,6 +282,35 @@ fn ipc_recv(frame: *a64.Frame) {
     }
     ep_enqueue(ep_id, current, false)
     block_current(frame)
+}
+
+// Retype memory from an untyped capability (slot x0) into an object of kind x1, capability
+// into slot x2. The untyped's remaining budget bounds how many; each retype assigns one of
+// the object slots the kernel reserved at boot, so nothing is allocated now. x0 is 0, or
+// all-ones when the untyped is empty, the kind is unsupported, or no slot is left. Only
+// endpoints are retypeable here.
+fn retype(frame: *a64.Frame) {
+    let untyped_slot = usize(frame.x[0usize])
+    let kind = u8(frame.x[1usize])
+    let dest = usize(frame.x[2usize])
+    if current == NONE || untyped_slot >= CAPS || dest >= CAPS {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    if threads[current].caps[untyped_slot].kind != CAP_UNTYPED || threads[current].caps[untyped_slot].object == 0usize {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    if kind != CAP_ENDPOINT || next_endpoint >= ENDPOINTS {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    let ep = next_endpoint
+    next_endpoint += 1usize
+    endpoints[ep] = Endpoint { kind: EP_EMPTY, waiters: zero, count: 0usize }
+    threads[current].caps[dest] = Cap { kind: CAP_ENDPOINT, rights: RIGHT_SEND | RIGHT_RECV, object: ep, parent: NONE }
+    threads[current].caps[untyped_slot].object -= 1usize
+    frame.x[0usize] = 0u64
 }
 
 // Re-protect the page a frame capability (slot x0) names according to its write right: with

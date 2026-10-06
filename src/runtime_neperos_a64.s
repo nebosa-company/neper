@@ -352,6 +352,21 @@ neper_os_notify_wait:
     svc #0
     ret
 
+// os.device_write(slot, address, length) -> usize: write a run of bytes to the device the
+// capability names.
+.global neper_os_device_write
+neper_os_device_write:
+    mov x8, #9
+    svc #0
+    ret
+
+// os.retype(untyped, kind, dest) -> usize: carve an object from untyped memory.
+.global neper_os_retype
+neper_os_retype:
+    mov x8, #10
+    svc #0
+    ret
+
 // A ULEB128 at x28 into x0, x28 past it; x9 and x10 are used (D1586).
 np_trap_uleb:
     mov x0, #0

@@ -8920,10 +8920,12 @@ if ($LASTEXITCODE -ne 1 -or ($cycleOutput -join "`n") -notmatch
 # capability, is refused; V derives a chain and revokes it, so a revoked capability no longer
 # works; W derives a read-only frame capability, re-protects its page and faults on the next
 # write; G grants its console capability to H over a grant endpoint, so H (which held none)
-# prints; and D, a user driver, waits on a notification the timer interrupt signals and wakes
-# three times. Booted with `trap` from 2 MB higher -- `text_offset` set to 4 MB, so nothing
-# in it may be an absolute address -- a failed bounds check is reported with its backtrace and
-# ends the kernel with 134. The machine intrinsics are unknown names on any other target.
+# prints; D, a user driver, waits on a notification the timer interrupt signals and wakes
+# three times; K, the user-mode console server, prints a line for client P over the UART it
+# alone holds a device capability for; and U retypes endpoints from an untyped capability
+# until its budget is spent. Booted with `trap` from 2 MB higher -- `text_offset` set to 4 MB,
+# so nothing in it may be an absolute address -- a failed bounds check is reported with its
+# backtrace and ends the kernel with 134. The machine intrinsics are unknown names elsewhere.
 $neperosImage = Join-Path $testBuild 'neperos.img'
 $neperosWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\main.e') $repo aarch64 none $neperosImage
 if ($LASTEXITCODE -ne 0 -or $neperosWritten -ne 'executable written') { throw 'NeperOS did not build' }
@@ -8948,8 +8950,10 @@ if ($neperosQemu) {
     foreach ($neperosToken in @('A0', 'A1', 'A2', 'B0', 'B1', 'B2', 'X0', 'X1', 'X2', 'R7', 'R8', 'R9', 'D0', 'D1', 'D2')) {
         if ($neperosBoot -notmatch [regex]::Escape("$neperosToken ")) { throw "NeperOS thread output missing ${neperosToken}: $neperosBoot" }
     }
-    if ($neperosBoot -notmatch 'H got console') { throw "the granted console capability did not reach H: $neperosBoot" }
-    foreach ($neperosLeak in @('read protected memory', 'N should not print', 'V revoke leaked', 'W wrote after protect')) {
+    foreach ($neperosMark in @('H got console', 'console server up', 'U retype ok')) {
+        if ($neperosBoot -notmatch [regex]::Escape($neperosMark)) { throw "NeperOS capability behaviour missing (${neperosMark}): $neperosBoot" }
+    }
+    foreach ($neperosLeak in @('read protected memory', 'N should not print', 'V revoke leaked', 'W wrote after protect', 'U retype wrong')) {
         if ($neperosBoot -match [regex]::Escape($neperosLeak)) { throw "capability boundary leaked (${neperosLeak}): $neperosBoot" }
     }
     $neperosMoved = Join-Path $testBuild 'neperos-moved.img'

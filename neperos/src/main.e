@@ -133,6 +133,34 @@ fn syscall(frame: *a64.Frame) {
         thread.notify_wait(frame)
         ret
     }
+    if number == 9u64 {
+        device_write(frame)
+        ret
+    }
+    if number == 10u64 {
+        thread.retype(frame)
+        ret
+    }
+}
+
+// The console server's bytes to its device (call 9): the run at (x1, x2) in the server's own
+// region written to the UART, only when the thread holds a device capability for it. This is
+// how the console moves to a user-mode server -- the server owns the device capability and no
+// other thread reaches the UART. The run is written whole with interrupts masked (an
+// exception handler runs so), so the server's output is never split by a preemption.
+fn device_write(frame: *a64.Frame) {
+    let (uart, allowed) = thread.device_base(usize(frame.x[0usize]))
+    let ptr = usize(frame.x[1usize])
+    let len = usize(frame.x[2usize])
+    frame.x[0usize] = 18446744073709551615u64
+    if !allowed { ret }
+    if ptr < vm.USER_BASE || ptr + len > vm.USER_BASE + vm.USER_SIZE { ret }
+    var i = 0usize
+    while i < len {
+        pl011.put(uart, os.load8(ptr + i))
+        i += 1usize
+    }
+    frame.x[0usize] = 0u64
 }
 
 fn exception(raw: *void) {
@@ -214,7 +242,7 @@ fn setup_args(space: vm.Space, name: str, kernel_pointer: usize, hostile: bool) 
 // capability space granted: a console capability in slot 0 when `console`, and an endpoint
 // capability on endpoint 0 in slot 1 with `endpoint_rights` (none, send or receive). A
 // thread granted no console capability cannot print.
-fn start_thread(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize, name: str, kernel_pointer: usize, hostile: bool, may_print: bool, endpoint_rights: u8, endpoint_object: usize, frame_cap: bool, notification: bool) -> err {
+fn start_thread(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize, name: str, kernel_pointer: usize, hostile: bool, may_print: bool, endpoint_rights: u8, endpoint_object: usize, frame_cap: bool, notification: bool, device: bool, untyped_budget: usize) -> err {
     let (space, space_error) = vm.create(a, image_addr, image_len, asid)
     if space_error != ok { ret space_error }
     let (arg_table, arg_count) = setup_args(space, name, kernel_pointer, hostile)
@@ -227,6 +255,11 @@ fn start_thread(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize,
     if frame_cap { thread.grant(index, 2usize, thread.CAP_FRAME, thread.RIGHT_WRITE, space.arena_addr) }
     // A notification capability on notification 0, which the timer interrupt signals.
     if notification { thread.grant(index, 3usize, thread.CAP_NOTIFICATION, thread.RIGHT_RECV, 0usize) }
+    // The device capability for the UART: the console server's alone, so it is the only
+    // thread that reaches the console device.
+    if device { thread.grant(index, 4usize, thread.CAP_DEVICE, thread.RIGHT_WRITE, console) }
+    // An untyped-memory capability with a budget of objects to retype.
+    if untyped_budget != 0usize { thread.grant(index, 5usize, thread.CAP_UNTYPED, thread.RIGHT_WRITE, untyped_budget) }
     ret ok
 }
 
@@ -323,26 +356,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let send_right = thread.RIGHT_SEND
     let recv_right = thread.RIGHT_RECV
     let grant_send = thread.RIGHT_SEND | thread.RIGHT_GRANT
-    try start_thread(a, image_addr, image_len, 1usize, "A", 0usize, false, true, 0u8, 0usize, false, false)
-    try start_thread(a, image_addr, image_len, 2usize, "B", 0usize, false, true, 0u8, 0usize, false, false)
-    try start_thread(a, image_addr, image_len, 3usize, "X", protected_pointer, true, true, 0u8, 0usize, false, false)
-    try start_thread(a, image_addr, image_len, 4usize, "S", 0usize, false, false, send_right, 0usize, false, false)
-    try start_thread(a, image_addr, image_len, 5usize, "R", 0usize, false, true, recv_right, 0usize, false, false)
+    try start_thread(a, image_addr, image_len, 1usize, "A", 0usize, false, true, 0u8, 0usize, false, false, false, 0usize)
+    try start_thread(a, image_addr, image_len, 2usize, "B", 0usize, false, true, 0u8, 0usize, false, false, false, 0usize)
+    try start_thread(a, image_addr, image_len, 3usize, "X", protected_pointer, true, true, 0u8, 0usize, false, false, false, 0usize)
+    try start_thread(a, image_addr, image_len, 4usize, "S", 0usize, false, false, send_right, 0usize, false, false, false, 0usize)
+    try start_thread(a, image_addr, image_len, 5usize, "R", 0usize, false, true, recv_right, 0usize, false, false, false, 0usize)
     // N holds no console capability: its write is refused, which it is meant to prove.
-    try start_thread(a, image_addr, image_len, 6usize, "N", 0usize, false, false, 0u8, 0usize, false, false)
+    try start_thread(a, image_addr, image_len, 6usize, "N", 0usize, false, false, 0u8, 0usize, false, false, false, 0usize)
     // V derives a chain from its endpoint capability and revokes it, proving the
     // derivations are gone.
-    try start_thread(a, image_addr, image_len, 7usize, "V", 0usize, false, true, recv_right, 0usize, false, false)
+    try start_thread(a, image_addr, image_len, 7usize, "V", 0usize, false, true, recv_right, 0usize, false, false, false, 0usize)
     // W holds a writable frame capability over its arena; it derives a read-only copy,
     // re-protects through it, and the next write faults, so it is killed.
-    try start_thread(a, image_addr, image_len, 8usize, "W", 0usize, false, true, 0u8, 0usize, true, false)
+    try start_thread(a, image_addr, image_len, 8usize, "W", 0usize, false, true, 0u8, 0usize, true, false, false, 0usize)
     // G holds a console capability and a grant-bearing endpoint on endpoint 2; it grants its
     // console capability to H, which holds none until then and only then may print.
-    try start_thread(a, image_addr, image_len, 9usize, "G", 0usize, false, true, grant_send, 2usize, false, false)
-    try start_thread(a, image_addr, image_len, 10usize, "H", 0usize, false, false, recv_right, 2usize, false, false)
+    try start_thread(a, image_addr, image_len, 9usize, "G", 0usize, false, true, grant_send, 2usize, false, false, false, 0usize)
+    try start_thread(a, image_addr, image_len, 10usize, "H", 0usize, false, false, recv_right, 2usize, false, false, false, 0usize)
     // D is a user driver: it waits on a notification the timer interrupt signals, so a
     // hardware interrupt reaches an EL0 thread.
-    try start_thread(a, image_addr, image_len, 11usize, "D", 0usize, false, true, 0u8, 0usize, false, true)
+    try start_thread(a, image_addr, image_len, 11usize, "D", 0usize, false, true, 0u8, 0usize, false, true, false, 0usize)
+    // K is the user-mode console server: it alone holds the UART device capability, and P, a
+    // client with no console access, sends it a line to print over endpoint 3.
+    try start_thread(a, image_addr, image_len, 12usize, "K", 0usize, false, false, recv_right, 3usize, false, false, true, 0usize)
+    try start_thread(a, image_addr, image_len, 13usize, "P", 0usize, false, false, send_right, 3usize, false, false, false, 0usize)
+    // U retypes endpoints from an untyped capability with a budget of two, and the third
+    // retype is refused -- the kernel allocates nothing, the budget bounds it.
+    try start_thread(a, image_addr, image_len, 14usize, "U", 0usize, false, true, 0u8, 0usize, false, false, false, 2usize)
     console_write("scheduling\n")
     // The scheduler runs from here: the first timer tick leaves this loop for a thread, and
     // the last thread to finish returns the kernel here with nothing left to run.
