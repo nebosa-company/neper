@@ -7,9 +7,9 @@ use e.os
 use a64
 use vm
 
-const MAX_THREADS: usize = 8usize
+const MAX_THREADS: usize = 12usize
 // No thread is current: the kernel is idle, or the last one exited.
-const NONE: usize = 8usize
+const NONE: usize = 12usize
 
 const FREE: u8 = 0u8
 const READY: u8 = 1u8
@@ -27,6 +27,7 @@ const CAP_NULL: u8 = 0u8
 const CAP_ENDPOINT: u8 = 1u8
 const CAP_CONSOLE: u8 = 2u8
 const CAP_FRAME: u8 = 3u8
+const CAP_NOTIFICATION: u8 = 4u8
 const RIGHT_SEND: u8 = 1u8
 const RIGHT_RECV: u8 = 2u8
 const RIGHT_WRITE: u8 = 4u8
@@ -41,11 +42,19 @@ const ENDPOINTS: usize = 4usize
 const EP_EMPTY: u8 = 0u8
 const EP_SENDERS: u8 = 1u8
 const EP_RECEIVERS: u8 = 2u8
-type Endpoint = struct { kind: u8, waiters: [8]usize, count: usize }
+type Endpoint = struct { kind: u8, waiters: [12]usize, count: usize }
 
-var threads: [8]Thread = zero
+// A notification carries asynchronous signals, the kernel's way of handing an interrupt to
+// a user-mode driver (D2128): the handler of a bound interrupt signals it, and a thread
+// waiting on it wakes with the pending bits. Unlike an endpoint it does not block the
+// signaller -- an interrupt cannot wait.
+const NOTIFICATIONS: usize = 2usize
+type Notification = struct { pending: usize, waiters: [12]usize, count: usize }
+
+var threads: [12]Thread = zero
 var endpoints: [4]Endpoint = zero
-var current: usize = 8usize
+var notifications: [2]Notification = zero
+var current: usize = 12usize
 var live: usize = 0usize
 // The kernel's own context, captured when the first timer tick leaves the idle loop, so the
 // last thread to finish returns the kernel there rather than nowhere.
@@ -196,12 +205,26 @@ fn resolve_endpoint(cap_slot: usize, right: u8) -> (usize, bool) {
     ret (cap.object, true)
 }
 
-// Synchronous send of one word (x1) over the endpoint capability in slot x0. A waiting
-// receiver takes it and both run on; otherwise the sender blocks with the word in its saved
-// frame until a receiver arrives. x0 becomes 0 on success, or all-ones without a send
-// capability.
+// Transfer a capability from a sender to a receiver's destination slot, if the sender's
+// endpoint capability (in `sender_ep_slot`) has the grant right, the grant slot holds a
+// capability, and the destination slot is valid. The copy is a fresh root in the receiver's
+// space (no parent), so the receiver's revoke of it does not reach the sender.
+fn transfer_cap(sender: usize, sender_ep_slot: usize, sender_grant_slot: usize, receiver: usize, receiver_dest_slot: usize) {
+    if sender_ep_slot >= CAPS || sender_grant_slot >= CAPS || receiver_dest_slot >= CAPS { ret }
+    if (threads[sender].caps[sender_ep_slot].rights & RIGHT_GRANT) == 0u8 { ret }
+    let granted = threads[sender].caps[sender_grant_slot]
+    if granted.kind == CAP_NULL { ret }
+    threads[receiver].caps[receiver_dest_slot] = Cap { kind: granted.kind, rights: granted.rights, object: granted.object, parent: NONE }
+}
+
+// Synchronous send of one word (x1) over the endpoint capability in slot x0, optionally
+// granting the capability in slot x2 when the endpoint capability has the grant right. A
+// waiting receiver takes the word and the granted capability and both run on; otherwise the
+// sender blocks with them in its saved frame until a receiver arrives. x0 becomes 0, or
+// all-ones without a send capability.
 fn ipc_send(frame: *a64.Frame) {
-    let (ep_id, allowed) = resolve_endpoint(usize(frame.x[0usize]), RIGHT_SEND)
+    let ep_slot = usize(frame.x[0usize])
+    let (ep_id, allowed) = resolve_endpoint(ep_slot, RIGHT_SEND)
     if !allowed {
         frame.x[0usize] = 18446744073709551615u64
         ret
@@ -209,6 +232,7 @@ fn ipc_send(frame: *a64.Frame) {
     if endpoints[ep_id].kind == EP_RECEIVERS && endpoints[ep_id].count != 0usize {
         let receiver = ep_dequeue(ep_id)
         threads[receiver].frame.x[0usize] = frame.x[1usize]
+        transfer_cap(current, ep_slot, usize(frame.x[2usize]), receiver, usize(threads[receiver].frame.x[1usize]))
         threads[receiver].state = READY
         frame.x[0usize] = 0u64
         ret
@@ -217,18 +241,21 @@ fn ipc_send(frame: *a64.Frame) {
     block_current(frame)
 }
 
-// Synchronous receive over the endpoint capability in slot x0, into x0. A waiting sender's
-// word is taken and the sender runs on; otherwise the receiver blocks until a sender
-// arrives. Without a receive capability, x0 is all-ones.
+// Synchronous receive over the endpoint capability in slot x0, into x0, with any granted
+// capability placed in slot x1. A waiting sender's word and grant are taken and the sender
+// runs on; otherwise the receiver blocks until a sender arrives. Without a receive
+// capability, x0 is all-ones.
 fn ipc_recv(frame: *a64.Frame) {
     let (ep_id, allowed) = resolve_endpoint(usize(frame.x[0usize]), RIGHT_RECV)
     if !allowed {
         frame.x[0usize] = 18446744073709551615u64
         ret
     }
+    let dest = usize(frame.x[1usize])
     if endpoints[ep_id].kind == EP_SENDERS && endpoints[ep_id].count != 0usize {
         let sender = ep_dequeue(ep_id)
         frame.x[0usize] = threads[sender].frame.x[1usize]
+        transfer_cap(sender, usize(threads[sender].frame.x[0usize]), usize(threads[sender].frame.x[2usize]), current, dest)
         threads[sender].frame.x[0usize] = 0u64
         threads[sender].state = READY
         ret
@@ -253,6 +280,49 @@ fn frame_protect(frame: *a64.Frame) {
     }
     vm.protect(threads[current].ttbr, cap.object, (cap.rights & RIGHT_WRITE) != 0u8)
     frame.x[0usize] = 0u64
+}
+
+// Signal a notification (an interrupt arriving): set its pending bits and wake every thread
+// waiting on it with those bits. The signaller never blocks. Called from the kernel's
+// interrupt handler, so it touches no `current`.
+fn signal_notification(nid: usize, bits: usize) {
+    if nid >= NOTIFICATIONS { ret }
+    notifications[nid].pending = notifications[nid].pending | bits
+    if notifications[nid].count == 0usize { ret }
+    var i = 0usize
+    while i < notifications[nid].count {
+        let waiter = notifications[nid].waiters[i]
+        threads[waiter].frame.x[0usize] = u64(notifications[nid].pending)
+        threads[waiter].state = READY
+        i += 1usize
+    }
+    notifications[nid].count = 0usize
+    notifications[nid].pending = 0usize
+}
+
+// Wait on the notification capability in slot x0 for its next signal, returning the pending
+// bits in x0. Pending bits already set return at once; otherwise the thread blocks. Without
+// a notification capability bearing the receive right, x0 is all-ones.
+fn notify_wait(frame: *a64.Frame) {
+    let slot = usize(frame.x[0usize])
+    if current == NONE || slot >= CAPS {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    let cap = threads[current].caps[slot]
+    if cap.kind != CAP_NOTIFICATION || (cap.rights & RIGHT_RECV) == 0u8 || cap.object >= NOTIFICATIONS {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    let nid = cap.object
+    if notifications[nid].pending != 0usize {
+        frame.x[0usize] = u64(notifications[nid].pending)
+        notifications[nid].pending = 0usize
+        ret
+    }
+    notifications[nid].waiters[notifications[nid].count] = current
+    notifications[nid].count += 1usize
+    block_current(frame)
 }
 
 // Is the capability in `slot` derived, directly or through a chain, from `ancestor`? The

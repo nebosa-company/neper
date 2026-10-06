@@ -36562,8 +36562,16 @@ faults on the next write. S and R rendezvous over an endpoint capability, R prin
 words. All of it runs under the timer with the stage 1b threads, and both suites check that
 every expected line appears and none of the four boundary-crossing lines does.
 
+IPC also carries a capability: `send` names a slot to grant and `recv` a slot to receive it
+into, and the transfer happens on the rendezvous when the sender's endpoint capability has
+the grant right, as a fresh root in the receiver's space. G, holding a console capability and
+a grant-bearing endpoint, grants its console capability to H, which held none and only then
+prints. And a notification is the kernel's way of handing an interrupt to a user driver: a
+thread waits on a notification capability, and the timer handler signals notification 0
+before it switches, so the driver D wakes three times on the timer interrupt and prints,
+without the signaller ever blocking.
+
 Not yet, and why C102 stays in the queue: untyped memory does not retype into objects (the
-endpoints and the capability table are fixed kernel arrays, not carved from untyped); IPC
-carries a word but not a capability; interrupts are not delivered to user drivers as
-notifications; and the console, though gated by a capability, is still a kernel call rather
-than a user-mode server. These are the remaining stage 1c depth.
+endpoints, notifications and the capability tables are fixed kernel arrays, not carved from
+untyped), and the console, though gated by a capability and grantable, is still a kernel
+call rather than a user-mode server. These are the remaining stage 1c depth.

@@ -466,6 +466,7 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
         try seed(r, g, "e.os", "cap_derive", .Value, .Intrinsic)
         try seed(r, g, "e.os", "cap_revoke", .Value, .Intrinsic)
         try seed(r, g, "e.os", "frame_protect", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "notify_wait", .Value, .Intrinsic)
     }
     // (D2126) A kernel's machine, on aarch64-none alone in the same way.
     if same(g.os, "none") && same(g.arch, "aarch64") {

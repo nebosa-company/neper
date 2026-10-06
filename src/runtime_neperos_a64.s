@@ -344,6 +344,14 @@ neper_os_frame_protect:
     svc #0
     ret
 
+// os.notify_wait(slot) -> usize: block until the notification is signalled, the pending
+// bits back in x0.
+.global neper_os_notify_wait
+neper_os_notify_wait:
+    mov x8, #8
+    svc #0
+    ret
+
 // A ULEB128 at x28 into x0, x28 past it; x9 and x10 are used (D1586).
 np_trap_uleb:
     mov x0, #0

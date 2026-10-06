@@ -12,6 +12,11 @@ use e.os
 const SPIN: usize = 30000000usize
 // The capability slot holding the endpoint the sender and receiver rendezvous on.
 const CHANNEL: usize = 1usize
+// A slot index past the capability space: "no capability to grant" or "nowhere to receive
+// one". Also the console-capability slot G grants and the slot H receives it into.
+const NO_SLOT: usize = 99usize
+const CONSOLE_SLOT: usize = 0usize
+const RECEIVED_SLOT: usize = 5usize
 
 fn say(text: str) {
     let (written, write_error) = os.write(os.stdout(), text)
@@ -22,11 +27,11 @@ fn one_char(name: str) -> u8 {
     ret name[0usize]
 }
 
-// "R" followed by a one-digit word and a space, in one write.
-fn say_word(word: usize) {
+// A tag byte, a one-digit number and a space, in one write.
+fn say_tag(tag: u8, number: usize) {
     var line: [3]u8 = zero
-    line[0usize] = 82u8
-    line[1usize] = u8(word) + 48u8
+    line[0usize] = tag
+    line[1usize] = u8(number) + 48u8
     line[2usize] = 32u8
     say(line[0usize..3usize])
 }
@@ -37,7 +42,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if one_char(name) == 83u8 {
         var word = 7usize
         while word < 10usize {
-            let status = os.send(CHANNEL, word)
+            let status = os.send(CHANNEL, word, NO_SLOT)
             word += 1usize
         }
         ret ok
@@ -45,8 +50,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if one_char(name) == 82u8 {
         var taken = 0usize
         while taken < 3usize {
-            say_word(os.recv(CHANNEL))
+            say_tag(82u8, os.recv(CHANNEL, NO_SLOT))
             taken += 1usize
+        }
+        ret ok
+    }
+    if one_char(name) == 71u8 {
+        // G grants its console capability (slot 0) to H over the grant endpoint.
+        let status = os.send(CHANNEL, 0usize, CONSOLE_SLOT)
+        ret ok
+    }
+    if one_char(name) == 72u8 {
+        // H holds no console capability until it receives one from G; only then may it print.
+        let got = os.recv(CHANNEL, RECEIVED_SLOT)
+        say("H got console\n")
+        ret ok
+    }
+    if one_char(name) == 68u8 {
+        // D is a driver: three times it waits on the notification the timer signals and
+        // prints, so a hardware interrupt drives an EL0 thread.
+        var seen = 0usize
+        while seen < 3usize {
+            let bits = os.notify_wait(3usize)
+            say_tag(68u8, seen)
+            seen += 1usize
         }
         ret ok
     }
@@ -75,7 +102,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let d1 = os.cap_derive(1usize, 2usize, 0usize)
         let d2 = os.cap_derive(2usize, 3usize, 0usize)
         let revoked = os.cap_revoke(1usize)
-        let after = os.recv(2usize)
+        let after = os.recv(2usize, NO_SLOT)
         if after == 18446744073709551615usize { say("V revoke ok\n") } else { say("V revoke leaked\n") }
         ret ok
     }

@@ -4943,9 +4943,11 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
         if send_error != ok { ret send_error }
         try add_seeded_parameter(c, send_index, "endpoint", usize_type)
         try add_seeded_parameter(c, send_index, "word", usize_type)
+        try add_seeded_parameter(c, send_index, "grant", usize_type)
         let (recv_index, recv_error) = add_seeded_function(c, os_module, "recv", usize_type, false)
         if recv_error != ok { ret recv_error }
         try add_seeded_parameter(c, recv_index, "endpoint", usize_type)
+        try add_seeded_parameter(c, recv_index, "dest", usize_type)
         // (D2128) `cap_derive(source, dest, drop_rights) -> status` copies a capability with
         // rights reduced; `cap_revoke(slot) -> status` drops its derivations.
         let (derive_index, derive_error) = add_seeded_function(c, os_module, "cap_derive", usize_type, false)
@@ -4961,6 +4963,10 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
         let (protect_index, protect_error) = add_seeded_function(c, os_module, "frame_protect", usize_type, false)
         if protect_error != ok { ret protect_error }
         try add_seeded_parameter(c, protect_index, "slot", usize_type)
+        // (D2128) `notify_wait(slot) -> bits` blocks until the notification is signalled.
+        let (notify_index, notify_error) = add_seeded_function(c, os_module, "notify_wait", usize_type, false)
+        if notify_error != ok { ret notify_error }
+        try add_seeded_parameter(c, notify_index, "slot", usize_type)
     }
     let (str_module, has_str) = graph.find_module(g, "e.str")
     if has_str { try seed_str_signatures(c, str_module) }

@@ -8757,9 +8757,11 @@ esac
 # S and R rendezvous over an endpoint capability (R prints the words); N, with no console
 # capability, is refused; V derives a chain and revokes it, so a revoked capability no longer
 # works; W derives a read-only frame capability, re-protects its page and faults on the next
-# write. Booted with `trap` from 2 MB higher -- `text_offset` set to 4 MB, so nothing in it
-# may be an absolute address -- a failed bounds check is reported with its backtrace and ends
-# the kernel with 134. The machine intrinsics are unknown names on any other target.
+# write; G grants its console capability to H over a grant endpoint, so H (which held none)
+# prints; and D, a user driver, waits on a notification the timer interrupt signals and wakes
+# three times. Booted with `trap` from 2 MB higher -- `text_offset` set to 4 MB, so nothing
+# in it may be an absolute address -- a failed bounds check is reported with its backtrace and
+# ends the kernel with 134. The machine intrinsics are unknown names on any other target.
 neperos_image="$test_build/neperos.img"
 [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/main.e" "$repo" aarch64 none "$neperos_image")" = 'executable written' ]
 [ "$(od -An -c -j56 -N4 "$neperos_image" | tr -d ' ')" = 'ARMd' ] || { printf '%s\n' 'the NeperOS image has no arm64 Image magic' >&2; exit 1; }
@@ -8779,12 +8781,17 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
         *'Welcome to NeperOS'*'mmu on'*'fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned'*'scheduling'*'thread N denied console'*'V revoke ok'*'thread W killed, el0 fault at 0x0000000080040000'*'thread X killed, el0 fault at 0x0000000040000000'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS did not schedule its threads: $neperos_boot" >&2; exit 1 ;;
     esac
-    for neperos_token in A0 A1 A2 B0 B1 B2 X0 X1 X2 R7 R8 R9; do
+    for neperos_token in A0 A1 A2 B0 B1 B2 X0 X1 X2 R7 R8 R9 D0 D1 D2; do
         case "$neperos_boot" in
             *"$neperos_token "*) ;;
             *) printf '%s\n' "NeperOS thread output missing $neperos_token: $neperos_boot" >&2; exit 1 ;;
         esac
     done
+    # Capability transfer: H holds no console capability until G grants it one.
+    case "$neperos_boot" in
+        *'H got console'*) ;;
+        *) printf '%s\n' "the granted console capability did not reach H: $neperos_boot" >&2; exit 1 ;;
+    esac
     for neperos_leak in 'read protected memory' 'N should not print' 'V revoke leaked' 'W wrote after protect'; do
         case "$neperos_boot" in
             *"$neperos_leak"*) printf '%s\n' "capability boundary leaked ($neperos_leak): $neperos_boot" >&2; exit 1 ;;

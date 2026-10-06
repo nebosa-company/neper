@@ -129,6 +129,10 @@ fn syscall(frame: *a64.Frame) {
         thread.frame_protect(frame)
         ret
     }
+    if number == 8u64 {
+        thread.notify_wait(frame)
+        ret
+    }
 }
 
 fn exception(raw: *void) {
@@ -139,6 +143,9 @@ fn exception(raw: *void) {
             if intid == timer.INTID {
                 timer.rearm(TICKS_PER_SECOND)
                 ticks += 1usize
+                // The timer interrupt is delivered to a user driver too (D2128): notification
+                // 0 is signalled, waking any thread waiting on it before the switch.
+                thread.signal_notification(0usize, 1usize)
                 thread.on_timer(frame)
             }
             gic.finish(intid)
@@ -207,17 +214,19 @@ fn setup_args(space: vm.Space, name: str, kernel_pointer: usize, hostile: bool) 
 // capability space granted: a console capability in slot 0 when `console`, and an endpoint
 // capability on endpoint 0 in slot 1 with `endpoint_rights` (none, send or receive). A
 // thread granted no console capability cannot print.
-fn start_thread(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize, name: str, kernel_pointer: usize, hostile: bool, may_print: bool, endpoint_rights: u8, frame_cap: bool) -> err {
+fn start_thread(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize, name: str, kernel_pointer: usize, hostile: bool, may_print: bool, endpoint_rights: u8, endpoint_object: usize, frame_cap: bool, notification: bool) -> err {
     let (space, space_error) = vm.create(a, image_addr, image_len, asid)
     if space_error != ok { ret space_error }
     let (arg_table, arg_count) = setup_args(space, name, kernel_pointer, hostile)
     let index = thread.add(space, name, arg_table, arg_count)
     if index == thread.MAX_THREADS { ret vm.NoSpace }
     if may_print { thread.grant(index, 0usize, thread.CAP_CONSOLE, thread.RIGHT_WRITE, 0usize) }
-    if endpoint_rights != 0u8 { thread.grant(index, 1usize, thread.CAP_ENDPOINT, endpoint_rights, 0usize) }
+    if endpoint_rights != 0u8 { thread.grant(index, 1usize, thread.CAP_ENDPOINT, endpoint_rights, endpoint_object) }
     // A frame capability over the thread's own arena page, writable; a thread may derive a
     // read-only copy and re-protect through it.
     if frame_cap { thread.grant(index, 2usize, thread.CAP_FRAME, thread.RIGHT_WRITE, space.arena_addr) }
+    // A notification capability on notification 0, which the timer interrupt signals.
+    if notification { thread.grant(index, 3usize, thread.CAP_NOTIFICATION, thread.RIGHT_RECV, 0usize) }
     ret ok
 }
 
@@ -311,19 +320,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // The RAM base is as good a kernel address as any. S and R rendezvous over endpoint 0
     // (D2128): S sends three words and R prints each, interleaved with the rest.
     let protected_pointer = usize(ram_start)
-    try start_thread(a, image_addr, image_len, 1usize, "A", 0usize, false, true, 0u8, false)
-    try start_thread(a, image_addr, image_len, 2usize, "B", 0usize, false, true, 0u8, false)
-    try start_thread(a, image_addr, image_len, 3usize, "X", protected_pointer, true, true, 0u8, false)
-    try start_thread(a, image_addr, image_len, 4usize, "S", 0usize, false, false, thread.RIGHT_SEND, false)
-    try start_thread(a, image_addr, image_len, 5usize, "R", 0usize, false, true, thread.RIGHT_RECV, false)
+    let send_right = thread.RIGHT_SEND
+    let recv_right = thread.RIGHT_RECV
+    let grant_send = thread.RIGHT_SEND | thread.RIGHT_GRANT
+    try start_thread(a, image_addr, image_len, 1usize, "A", 0usize, false, true, 0u8, 0usize, false, false)
+    try start_thread(a, image_addr, image_len, 2usize, "B", 0usize, false, true, 0u8, 0usize, false, false)
+    try start_thread(a, image_addr, image_len, 3usize, "X", protected_pointer, true, true, 0u8, 0usize, false, false)
+    try start_thread(a, image_addr, image_len, 4usize, "S", 0usize, false, false, send_right, 0usize, false, false)
+    try start_thread(a, image_addr, image_len, 5usize, "R", 0usize, false, true, recv_right, 0usize, false, false)
     // N holds no console capability: its write is refused, which it is meant to prove.
-    try start_thread(a, image_addr, image_len, 6usize, "N", 0usize, false, false, 0u8, false)
+    try start_thread(a, image_addr, image_len, 6usize, "N", 0usize, false, false, 0u8, 0usize, false, false)
     // V derives a chain from its endpoint capability and revokes it, proving the
     // derivations are gone.
-    try start_thread(a, image_addr, image_len, 7usize, "V", 0usize, false, true, thread.RIGHT_RECV, false)
+    try start_thread(a, image_addr, image_len, 7usize, "V", 0usize, false, true, recv_right, 0usize, false, false)
     // W holds a writable frame capability over its arena; it derives a read-only copy,
     // re-protects through it, and the next write faults, so it is killed.
-    try start_thread(a, image_addr, image_len, 8usize, "W", 0usize, false, true, 0u8, true)
+    try start_thread(a, image_addr, image_len, 8usize, "W", 0usize, false, true, 0u8, 0usize, true, false)
+    // G holds a console capability and a grant-bearing endpoint on endpoint 2; it grants its
+    // console capability to H, which holds none until then and only then may print.
+    try start_thread(a, image_addr, image_len, 9usize, "G", 0usize, false, true, grant_send, 2usize, false, false)
+    try start_thread(a, image_addr, image_len, 10usize, "H", 0usize, false, false, recv_right, 2usize, false, false)
+    // D is a user driver: it waits on a notification the timer interrupt signals, so a
+    // hardware interrupt reaches an EL0 thread.
+    try start_thread(a, image_addr, image_len, 11usize, "D", 0usize, false, true, 0u8, 0usize, false, true)
     console_write("scheduling\n")
     // The scheduler runs from here: the first timer tick leaves this loop for a thread, and
     // the last thread to finish returns the kernel here with nothing left to run.

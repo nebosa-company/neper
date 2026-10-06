@@ -929,6 +929,7 @@ fn intrinsic_symbol(name: str) -> (str, err) {
     if check.same(name, "cap_derive") { ret ("neper_os_cap_derive", ok) }
     if check.same(name, "cap_revoke") { ret ("neper_os_cap_revoke", ok) }
     if check.same(name, "frame_protect") { ret ("neper_os_frame_protect", ok) }
+    if check.same(name, "notify_wait") { ret ("neper_os_notify_wait", ok) }
     if check.same(name, "hvc") { ret ("neper_os_hvc", ok) }
     if check.same(name, "smc") { ret ("neper_os_smc", ok) }
     if check.same(name, "mrs") { ret ("neper_os_mrs", ok) }
