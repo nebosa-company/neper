@@ -53,11 +53,21 @@ class ProgressTests(unittest.TestCase):
 
     def test_backlog_follows_pickup_order_across_categories(self):
         expected = [item["id"] for item in self.queue["items"] if float(item["score"]) < 1]
-        actual = re.findall(r'<tr><td>(\d+)</td><td><code>(.*?)</code>', self.backlog)
+        actual = re.findall(r'<tr><td>(\d+)</td><td><code class="id-\w+">(.*?)</code>', self.backlog)
         self.assertEqual(actual, [(str(i), task) for i, task in enumerate(expected, 1)])
         # NeperOS stage 1 is picked up first (D2119, D2125), then chart work (D1955).
         self.assertTrue(re.fullmatch(r"C10[0-3]|L0(6[1-2]|6[8-9]|7[0-5]|9[2-7])", expected[0]), expected[0])
         self.assertIn("Backlog — %d pending" % len(expected), self.backlog)
+
+    def test_backlog_ids_carry_their_group_colour(self):
+        key = self.render["group_key"]
+        actual = re.findall(r'<code class="id-(\w+)">([CTL]\d{3})</code>', self.backlog)
+        self.assertEqual(actual, [(key(item), item["id"])
+                                  for item in self.queue["items"] if float(item["score"]) < 1])
+        for name in ("compiler", "lib", "tooling", "neperos"):
+            self.assertIn("code.id-%s{color:var(--c-%s)}" % (name, name), self.page)
+        # The release-status column is gone.
+        self.assertNotIn("release-status", self.page)
 
     def test_chart_work_stays_a_prefix_of_the_pickup_queue(self):
         chart_ids = {"L061", "L062"} | {f"L{i:03}" for i in range(68, 76)} | {
@@ -70,29 +80,21 @@ class ProgressTests(unittest.TestCase):
         self.assertEqual(set(actual[:len(active_chart_ids)]), active_chart_ids)
         self.assertIn("then chart work", self.page)
 
-    def test_release_labels_match_the_cpu_release_gate(self):
+    def test_release_required_count_matches_the_cpu_release_gate(self):
         expected_ids = self.render["RELEASE_REQUIRED_IDS"]
         self.assertEqual(expected_ids,
                          {"C082", "C088", "T004", "T012", "T016", "T023"})
-        actual = re.findall(
-            r'<code>([CTL]\d{3})</code></td><td>.*?</td>'
-            r'<td><span class="release-status (required|enhancement)">',
-            self.backlog)
-        self.assertEqual(actual, [
-            (item["id"], "required" if item["id"] in expected_ids else "enhancement")
-            for item in self.queue["items"] if float(item["score"]) < 1
-        ])
         active_required = len(expected_ids & {item["id"] for item in self.queue["items"]})
         self.assertIn("%d are release-required" % active_required, self.page)
 
     def test_empty_section_and_untrusted_text(self):
         render = self.render["unfinished_details"]
         self.assertIn("No unfinished items.", render("Library", []))
-        result = render("Library", [("L001", '<script>alert("x")</script>', "a & b", False)])
+        result = render("Library", [("L001", '<script>alert("x")</script>', "a & b", "lib")])
         self.assertNotIn("<script>", result)
         self.assertIn("&lt;script&gt;", result)
         self.assertIn("a &amp; b", result)
-        self.assertIn('<tr><td>1</td><td><code>L001</code>', result)
+        self.assertIn('<tr><td>1</td><td><code class="id-lib">L001</code>', result)
 
 
 if __name__ == "__main__":

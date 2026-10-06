@@ -36625,3 +36625,9 @@ link back to the readiness page; the page no longer links to them. The generatio
 the commit and its date and time -- stays in the footer. `tests/test_progress.py` checks the
 four cards, their scores and colours, and the backlog's order; `tests/test_charts_doc.py` no
 longer expects the page to carry the chart links.
+
+The backlog table is then trimmed to what it is for (user request): the release-status column
+is gone, the Work-and-progress column is widened, and each row's ID carries its group's colour
+-- a compiler task in the Compiler blue, a NeperOS task in the NeperOS purple, a tooling task
+in the Tooling amber, a library task in the Library green -- so a glance down the list shows
+which area each item belongs to.

@@ -245,20 +245,17 @@ if chart_item is None:
 if chart_item is None:
     raise SystemExit('L061 missing from work queue and completion ledger')
 def unfinished_details(label, rows):
+    # Each row is (id, title, evidence, group-colour key); the ID carries its group's colour.
     body = ''.join(
-        '<tr><td>{number}</td><td><code>{id}</code></td><td>{title}</td>'
-        '<td><span class="release-status {status_class}">{status}</span></td>'
-        '<td>{evidence}</td></tr>'.format(
-            number=number, id=html.escape(item_id), title=html.escape(title),
-            status_class='required' if required else 'enhancement',
-            status='Release required' if required else 'Enhancement',
-            evidence=html.escape(evidence))
-        for number, (item_id, title, evidence, required) in enumerate(rows, 1)
+        '<tr><td>{number}</td><td><code class="id-{key}">{id}</code></td>'
+        '<td class="work">{title}</td><td>{evidence}</td></tr>'.format(
+            number=number, key=html.escape(key), id=html.escape(item_id),
+            title=html.escape(title), evidence=html.escape(evidence))
+        for number, (item_id, title, evidence, key) in enumerate(rows, 1)
     )
     content = (
         '<div class="table-scroll"><table><thead><tr><th scope="col">#</th>'
-        '<th scope="col">ID / module</th><th scope="col">Work and progress</th>'
-        '<th scope="col">Release status</th>'
+        '<th scope="col">ID</th><th scope="col" class="work">Work and progress</th>'
         '<th scope="col">Evidence and remaining work</th></tr></thead>'
         '<tbody>' + body + '</tbody></table></div>'
         if rows else '<p>No unfinished items.</p>'
@@ -268,11 +265,20 @@ def unfinished_details(label, rows):
             + content + '</details>')
 
 
+def group_key(item):
+    """The colour group a work item belongs to, matching the readiness cards."""
+    if item['category'] == 'compiler':
+        return 'neperos' if item['group'] == 'NeperOS' else 'compiler'
+    if item['category'] == 'tooling':
+        return 'tooling'
+    return 'lib'
+
+
 backlog = unfinished_details('Backlog', [
     (item['id'], item['title'] + ' (' + format(float(item['score']), '.0%') + ')',
      'See docs/charts.md for the engine, delivery evidence and previews.'
      if item['id'] == 'L061' else item['evidence'],
-     item['id'] in RELEASE_REQUIRED_IDS)
+     group_key(item))
     for item in queue_items if float(item['score']) < 1
 ])
 release_required_count = sum(item['id'] in RELEASE_REQUIRED_IDS for item in queue_items)
@@ -399,11 +405,12 @@ footer{color:var(--muted);font-size:.8rem;margin-top:2rem;padding-top:1rem;borde
 .backlog{--accent:var(--c-backlog);margin-top:2.5rem;padding:1.25rem 1.25rem 1.5rem;border:1px solid var(--rule);border-left:.4rem solid var(--accent);border-radius:.75rem;background:var(--panel)}
 .backlog h2{margin:0 0 .25rem;font-size:1.5rem;color:var(--accent)}.backlog p{margin:.25rem 0 1rem}
 .backlog table{width:100%;border-collapse:collapse;font-size:.85rem}.backlog td{padding:.45rem .6rem;border-top:1px solid var(--rule);vertical-align:top}
-.backlog th{text-align:left;padding:.45rem .6rem}.backlog code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.8rem}
+.backlog th{text-align:left;padding:.45rem .6rem}.backlog code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.8rem;font-weight:700}
+.backlog td:nth-child(2){white-space:nowrap}.backlog .work{width:40%}
+.backlog code.id-compiler{color:var(--c-compiler)}.backlog code.id-lib{color:var(--c-lib)}.backlog code.id-tooling{color:var(--c-tooling)}.backlog code.id-neperos{color:var(--c-neperos)}
 .backlog details{margin:0}.backlog summary{cursor:pointer;font-weight:600;color:var(--accent)}
-.table-scroll{overflow-x:auto}.table-scroll table{min-width:48rem}.table-scroll td{overflow-wrap:anywhere}
-.release-status{display:inline-block;white-space:nowrap;padding:.1rem .4rem;border:1px solid var(--rule);border-radius:.3rem;font-size:.75rem}.release-status.required{font-weight:700;border-color:var(--accent);color:var(--accent)}
-@media(max-width:40rem){.backlog td{display:block;width:auto}.backlog td:first-child{border-top:1px solid var(--rule);padding-bottom:0}.backlog td+td{border-top:0}}
+.table-scroll{overflow-x:auto}.table-scroll table{min-width:44rem}.table-scroll td{overflow-wrap:anywhere}
+@media(max-width:40rem){.backlog td{display:block;width:auto}.backlog td:nth-child(2){white-space:normal}.backlog td:first-child{border-top:1px solid var(--rule);padding-bottom:0}.backlog td+td{border-top:0}}
 </style>
 </head>
 <body>
