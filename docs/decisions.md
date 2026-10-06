@@ -36970,3 +36970,28 @@ the disk read and written, the console echoed. C103 moves to work-done at score 
 AVF guest on a Pixel) is next. Block and console still poll their rings (they hold the interrupt
 capability and their interrupts are handled; blocking on it as the entropy server does is a later
 refinement, not required by the acceptance).
+
+## D2143 — NeperOS stage 2 opens (C104), and is blocked on a test environment
+
+With stage 1 closed (D2142), D2119's rule queues the next stage, so stage 2 is now `C104`: the
+same microkernel as an Android Virtualization Framework guest that crosvm boots with the Linux
+arm64 boot protocol (device tree in x0 -- already how the runtime hands `main` its tree -- GICv3,
+PSCI 1.0, an ns16550 serial console, and virtio console, block and vsock over PCI). The transport
+work carries over: device addresses already come from the device tree, never hard-coded, and the
+virtio-pci transport already serves both `virt` and crosvm, so most of stage 1 is reusable
+unchanged.
+
+Stage 2 is bring-up on a different virtual platform, and it cannot be implemented with
+verification on this machine: it needs crosvm (a Linux VMM, not installed here -- building it
+from AOSP source is a heavy, uncertain WSL task) or a retail Pixel with `adb shell vm run`, and
+neither is available. Crucially, the pieces that differ from stage 1 are device-specific and
+cannot be guessed: crosvm's ns16550 register layout (reg-shift and reg-io-width), its memory map,
+and the vsock CID are only knowable from a crosvm device tree or a running instance. Writing that
+code blind would be speculation, not engineering, and would land untested on the shared tree, so
+stage 2 stays at 0 until the environment is provisioned. The codeable-then-verifiable pieces are
+recorded on the C104 queue item: an ns16550/8250 console chosen by the uart node's `compatible`
+versus `arm,pl011`, device-tree-driven; a virtio-vsock driver; and confirming the crosvm memory
+map boots the position-independent image. This is surfaced to the user as a resource decision --
+provision crosvm/a Pixel to pursue stage 2, or take the queued chart work (L069) meanwhile.
+Stage 1 remains a complete, useful deliverable on its own (D2119: each stage stays useful if the
+project stops there).

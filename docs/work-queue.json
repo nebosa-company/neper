@@ -1,8 +1,19 @@
 {
   "schema": "neper-work-queue-v1",
   "version": 1,
-  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142; stage 2, the AVF guest on a Pixel, is the next NeperOS item when queued per D2119/D2125); meanwhile finish active chart and visualization items before non-chart work, preserving their relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
+  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable item is the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
+    {
+      "id": "C104",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 104,
+      "title": "NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Opened by D2143 when C103 closed D2119 stage 1. Acceptance (D2119 stage 2): the same microkernel boots as an Android Virtualization Framework guest that crosvm starts with the Linux arm64 boot protocol -- device tree in x0, GICv3, PSCI 1.0, an ns16550 serial console, and virtio console, block and vsock over PCI -- first under crosvm, then on a retail Pixel via `adb shell vm run` as a non-protected VM. Device addresses are read from the device tree, never hard-coded, because virt and crosvm lay memory out differently (already the rule since stage 1); the virtio-pci transport already serves both. PREREQUISITE / BLOCKER: this stage needs a crosvm (a Linux VMM, not installed in this WSL -- building it from AOSP source is heavy) or a Pixel with adb; neither is available on this machine, and crosvm's exact device layout (ns16550 reg-shift and reg-io-width, the memory map, the vsock CID) cannot be determined or verified without one. The codeable pieces that await that environment: an ns16550/8250 console driver chosen by the uart node's `compatible` (crosvm) vs arm,pl011 (QEMU virt), device-tree-driven reg-shift/io-width; a virtio-vsock driver (a new virtio device type) for host communication; and confirming the crosvm memory map boots the position-independent image. Until the environment is provisioned this stays at 0. NeperOS stages 3 (bare-metal Pixel 6) and 4 follow (D2119)."
+    },
     {
       "id": "L069",
       "category": "library",
