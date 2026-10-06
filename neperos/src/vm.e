@@ -11,7 +11,13 @@ use a64
 error NoSpace
 
 // The user gigabyte and the layout inside it. 512 KB is 128 4 KB pages, one L3 table.
-const USER_BASE: usize = 2147483648usize
+// USER_BASE is the top gigabyte of the 39-bit space (index 511): the identity map puts
+// physical RAM wherever the device tree says it is -- gigabyte 1 (0x40000000) under QEMU's
+// virt, gigabyte 2 (0x80000000) under crosvm -- and `create` overwrites the user gigabyte's
+// level-1 entry, so the user VA must never land on a gigabyte that holds RAM or the kernel's
+// own code would vanish from the space. 0x7FC0000000 holds neither RAM nor a device on any
+// target (no such machine has 508 GB of RAM), so it is safe everywhere.
+const USER_BASE: usize = 548682072064usize
 const USER_PAGES: usize = 128usize
 const USER_SIZE: usize = 524288usize
 const PAGE: usize = 4096usize
@@ -22,10 +28,11 @@ const ARG_OFF: usize = 327680usize
 const ARG_SIZE: usize = 131072usize
 const STACK_TOP: usize = 524288usize
 
-// The user gigabyte's level-1 index (VA bits 38:30) and the page bits a leaf carries:
-// a valid page, Normal memory (MAIR index 2), EL0-and-EL1 read/write, inner shareable,
-// the access flag, and privileged-execute-never so the kernel never runs user code.
-const L1_USER_INDEX: usize = 2usize
+// The user gigabyte's level-1 index (VA bits 38:30), derived from USER_BASE so the two can
+// never drift, and the page bits a leaf carries: a valid page, Normal memory (MAIR index 2),
+// EL0-and-EL1 read/write, inner shareable, the access flag, and privileged-execute-never so
+// the kernel never runs user code.
+const L1_USER_INDEX: usize = USER_BASE >> 30usize
 const TABLE: usize = 3usize
 const PAGE_VALID: usize = 3usize
 const ATTR_NORMAL: usize = 8usize

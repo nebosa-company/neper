@@ -13,8 +13,9 @@ use virtio
 
 // Spins long enough to span several 10 ms timer slices under QEMU.
 const SPIN: usize = 30000000usize
-// (D2138) The aux area the kernel fills for a driver thread, at USER_BASE + vm.AUX_OFF.
-const AUX: usize = 2147745728usize
+// (D2138) The aux area the kernel fills for a driver thread, at USER_BASE + vm.AUX_OFF
+// (0x7FC0000000 + 0x3FFC0): USER_BASE is the top gigabyte of the 39-bit space (vm.e).
+const AUX: usize = 548682334144usize
 // The capability slot holding the endpoint the sender and receiver rendezvous on.
 const CHANNEL: usize = 1usize
 // A slot index past the capability space: "no capability to grant" or "nowhere to receive

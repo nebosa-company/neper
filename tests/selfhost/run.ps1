@@ -8965,7 +8965,7 @@ if ($neperosQemu) {
     # so this checks the transmit alone.
     $neperosVirtio = @('-device', 'virtio-rng-pci,disable-legacy=on', '-drive', "file=$neperosDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0', '-device', 'virtio-serial-pci,disable-legacy=on', '-chardev', "file,id=vcon,path=$neperosConsole", '-device', 'virtconsole,chardev=vcon')
     $neperosBoot = Invoke-NeperOS $neperosImage (@('-initrd', $neperosDemo) + $neperosVirtio)
-    if ($neperosBoot -notmatch '(?s)Welcome to NeperOS.*mmu on.*fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned.*scheduling.*thread N denied console.*V revoke ok.*thread W killed, el0 fault at 0x0000000080040000.*thread X killed, el0 fault at 0x0000000040000000.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS did not schedule its threads: $neperosBoot" }
+    if ($neperosBoot -notmatch '(?s)Welcome to NeperOS.*mmu on.*fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned.*scheduling.*thread N denied console.*V revoke ok.*thread W killed, el0 fault at 0x0000007fc0040000.*thread X killed, el0 fault at 0x0000000040000000.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS did not schedule its threads: $neperosBoot" }
     foreach ($neperosToken in @('A0', 'A1', 'A2', 'B0', 'B1', 'B2', 'X0', 'X1', 'X2', 'R7', 'R8', 'R9', 'D0', 'D1', 'D2')) {
         if ($neperosBoot -notmatch [regex]::Escape("$neperosToken ")) { throw "NeperOS thread output missing ${neperosToken}: $neperosBoot" }
     }

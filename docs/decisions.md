@@ -37023,3 +37023,25 @@ its execution and the rest of stage-2 bring-up (the crosvm memory map -- RAM at 
 and PCI bases read from `aarch64/src/lib.rs` -- and a virtio-vsock driver) wait on an aarch64
 host. This is surfaced to the user as a resource decision. C104 stays low; stage 1 stands on its
 own.
+
+## D2145 — the EL0 user window moves to the top of the address space, off the RAM gigabyte
+
+Stage 2's crosvm places guest RAM at 0x80000000; QEMU's virt places it at 0x40000000 (D2126
+reads both from the device tree). `vm.create` (D2127) builds a user address space by copying the
+kernel's identity-mapped level-1 table and then overwriting one entry with the user gigabyte --
+and that entry was index 2, the VA 0x80000000. On QEMU that gigabyte is empty device space, so
+overwriting it costs nothing; on crosvm it is the gigabyte holding the kernel's own code, stack
+and arena, so the copy would unmap the kernel from every user space and the first trap into the
+kernel would fault. The fix puts the user window where no machine ever has RAM: the top gigabyte
+of the 39-bit space, index 511 (USER_BASE 0x7FC0000000), with the level-1 index derived from
+USER_BASE so the two cannot drift, and the init program's aux-area constant moved to match.
+Under QEMU the kernel still boots, every EL0 server runs and isolation still holds -- thread W
+now faults at 0x7FC0040000 (its re-protected arena page) rather than 0x80040000, thread X still
+at the kernel-RAM pointer 0x40000000, thread Q at the ECAM base 0x4010000000. This removes a
+crosvm boot blocker without an aarch64 host, verified on QEMU; the remaining stage-2 pieces (the
+crosvm boot itself, the memory-map and device bases read from a dumped crosvm device tree, a
+virtio-vsock driver) still need one. The chosen host is an AWS Graviton bare-metal instance
+(only *.metal exposes /dev/kvm for crosvm's KVM backend); the account's configured credentials
+are currently invalid and await refresh. Separately, the kernel image already carries a valid
+arm64 Image header (D2127), so crosvm's earlier "bad kernel header signature" was not a malformed
+header.
