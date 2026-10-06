@@ -1,8 +1,10 @@
-// PCI over the ECAM window (D2129): the generic ECAM host the device tree names at /pcie,
-// its configuration space one 4 KB page per function, addressed
-// `base + (bus << 20) + (slot << 15) + (function << 12) + offset`. NeperOS enumerates bus 0
-// to find the virtio devices QEMU attaches; a modern virtio-pci function has vendor 0x1af4
-// and a device id of 0x1040 plus the virtio device type.
+// PCI over a generic host the device tree names by its `compatible` (D2129, D2145): QEMU's `virt`
+// gives an ECAM host (`pci-host-ecam-generic`), one 4 KB page of configuration space per function,
+// addressed `base + (bus << 20) + (slot << 15) + (function << 12) + offset`; crosvm gives a CAM
+// host (`pci-host-cam-generic`), 256 bytes per function, addressed `base + (bus << 16) +
+// (slot << 11) + (function << 8) + offset`. The two differ only in those shifts, so one code path
+// serves both with a flag. NeperOS enumerates bus 0 to find the virtio devices the VMM attaches; a
+// modern virtio-pci function has vendor 0x1af4 and a device id of 0x1040 plus the virtio type.
 use e.os
 use fdt
 
@@ -18,9 +20,10 @@ const VIRTIO_BLOCK: usize = 2usize
 const VIRTIO_CONSOLE: usize = 3usize
 const VIRTIO_ENTROPY: usize = 4usize
 
-// The ECAM configuration base, and the 32-bit MMIO window the host forwards to devices --
-// where BAR assignment places the virtio registers, within the kernel's identity map.
-type Host = struct { ecam: usize, mmio: usize, mmio_size: usize }
+// The configuration base, whether its addressing is CAM (true) or ECAM (false), and the 32-bit
+// MMIO window the host forwards to devices -- where BAR assignment places the virtio registers,
+// within the kernel's identity map. `ecam` names the config base for either addressing.
+type Host = struct { ecam: usize, mmio: usize, mmio_size: usize, cam: bool }
 
 // A PCI range is seven cells: child flags, child address (2), parent address (2), size (2).
 // The 32-bit memory window has `0x02000000` in the flags' top byte.
@@ -38,17 +41,30 @@ fn mmio_window(t: fdt.Tree, node: usize) -> (usize, usize, err) {
     ret (0usize, 0usize, NoHost)
 }
 
-fn find(t: fdt.Tree) -> (Host, err) {
-    let (node, node_error) = fdt.find_path(t, "/pcie")
-    if node_error != ok { ret (zero, NoHost) }
+fn build_host(t: fdt.Tree, node: usize, cam: bool) -> (Host, err) {
     let (base, size, region_error) = fdt.region(t, node)
     if region_error != ok { ret (zero, region_error) }
     let (mmio, mmio_size, mmio_error) = mmio_window(t, node)
     if mmio_error != ok { ret (zero, mmio_error) }
-    ret (Host { ecam: usize(base), mmio: mmio, mmio_size: mmio_size }, ok)
+    ret (Host { ecam: usize(base), mmio: mmio, mmio_size: mmio_size, cam: cam }, ok)
+}
+
+fn find(t: fdt.Tree) -> (Host, err) {
+    let (ecam_node, ecam_error) = fdt.find_compatible(t, "pci-host-ecam-generic")
+    if ecam_error == ok {
+        let (host, host_error) = build_host(t, ecam_node, false)
+        ret (host, host_error)
+    }
+    let (cam_node, cam_error) = fdt.find_compatible(t, "pci-host-cam-generic")
+    if cam_error == ok {
+        let (host, host_error) = build_host(t, cam_node, true)
+        ret (host, host_error)
+    }
+    ret (zero, NoHost)
 }
 
 fn config_address(host: Host, bus: usize, slot: usize, function: usize, offset: usize) -> usize {
+    if host.cam { ret host.ecam + (bus << 16usize) + (slot << 11usize) + (function << 8usize) + offset }
     ret host.ecam + (bus << 20usize) + (slot << 15usize) + (function << 12usize) + offset
 }
 
@@ -82,6 +98,19 @@ fn bar_base(host: Host, slot: usize, bar: usize) -> usize {
         base = base | (usize(high) << 32usize)
     }
     ret base
+}
+
+// The size a memory BAR decodes: write all-ones, read back the writable (size) bits, restore the
+// original base. A device's BAR is mapped into its EL0 server at exactly this size so the window
+// holds that device's registers and nothing of a neighbour's (D2146). The low 32 bits suffice for
+// the small BARs virtio uses.
+fn bar_size(host: Host, slot: usize, bar: usize) -> usize {
+    let original = config_read32(host, 0usize, slot, 0usize, 16usize + bar * 4usize)
+    config_write32(host, slot, 16usize + bar * 4usize, 4294967295u32)
+    let probe = config_read32(host, 0usize, slot, 0usize, 16usize + bar * 4usize)
+    config_write32(host, slot, 16usize + bar * 4usize, original)
+    if (probe & 4294967280u32) == 0u32 { ret 0usize }
+    ret usize((~(probe & 4294967280u32)) + 1u32)
 }
 
 // Enable a device's memory space and bus-mastering (DMA): the command register's bits 1 and 2;

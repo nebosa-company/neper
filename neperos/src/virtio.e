@@ -57,7 +57,7 @@ const PAGE: usize = 4096usize
 var pool_next: usize = 0usize
 var pool_end: usize = 0usize
 
-type Device = struct { common: usize, notify: usize, notify_multiplier: u32, isr: usize, config: usize }
+type Device = struct { common: usize, notify: usize, notify_multiplier: u32, isr: usize, config: usize, bar: usize, bar_size: usize }
 
 // One enabled split virtqueue: the three rings in identity-mapped RAM, the notify register the
 // device watches, the value to write there (the queue index, absent NOTIFICATION_DATA), and the
@@ -90,13 +90,35 @@ fn status_add(device: Device, bits: u8) {
     os.store8(device.common + DEVICE_STATUS, os.load8(device.common + DEVICE_STATUS) | bits)
 }
 
-// The device at `slot` set up: its BAR assigned from `next` in the MMIO window, enabled, and
-// its capability structures located. The updated MMIO cursor comes back too.
+// The device at `slot` set up: the BAR its capabilities name assigned if the VMM left it unset
+// (QEMU's virt leaves it for the guest; crosvm pre-assigns one), the device enabled, and its
+// capability structures located. A virtio device keeps all its structures in one BAR, so that BAR
+// -- its base and decoded size -- comes back in the Device for the kernel to map into the EL0
+// server (D2146); QEMU names BAR 4, crosvm BAR 0, so the index is read from the capability, never
+// assumed. The updated MMIO cursor comes back too.
 fn discover(host: pci.Host, slot: usize, next: usize) -> (Device, usize, err) {
-    let cursor = pci.assign_bar(host, slot, 4usize, next)
-    pci.enable_device(host, slot)
     var device: Device = zero
-    if (pci.config_read16(host, 0usize, slot, 0usize, 6usize) & 16u16) == 0u16 { ret (device, cursor, NoCapabilities) }
+    if (pci.config_read16(host, 0usize, slot, 0usize, 6usize) & 16u16) == 0u16 { ret (device, next, NoCapabilities) }
+    // First pass: the BAR index the common-configuration capability names.
+    var cfg_bar = 0usize
+    var found_cfg = false
+    var scout = usize(pci.config_read8(host, 0usize, slot, 0usize, 52usize))
+    var scout_guard = 0usize
+    while scout != 0usize && scout_guard < 48usize {
+        if pci.config_read8(host, 0usize, slot, 0usize, scout) == 9u8 && pci.config_read8(host, 0usize, slot, 0usize, scout + 3usize) == CAP_COMMON {
+            cfg_bar = usize(pci.config_read8(host, 0usize, slot, 0usize, scout + 4usize))
+            found_cfg = true
+        }
+        scout = usize(pci.config_read8(host, 0usize, slot, 0usize, scout + 1usize))
+        scout_guard += 1usize
+    }
+    if !found_cfg { ret (device, next, NoCapabilities) }
+    var cursor = next
+    if pci.bar_base(host, slot, cfg_bar) == 0usize { cursor = pci.assign_bar(host, slot, cfg_bar, next) }
+    pci.enable_device(host, slot)
+    device.bar = pci.bar_base(host, slot, cfg_bar)
+    device.bar_size = pci.bar_size(host, slot, cfg_bar)
+    // Second pass: locate each structure at its capability's BAR + offset.
     var pointer = usize(pci.config_read8(host, 0usize, slot, 0usize, 52usize))
     var guard = 0usize
     while pointer != 0usize && guard < 48usize {

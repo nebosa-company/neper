@@ -136,6 +136,37 @@ fn find_path(t: Tree, path: str) -> (usize, err) {
     ret (0usize, Missing)
 }
 
+// Whether node `node`'s `compatible` property lists `want` as one of its NUL-separated entries.
+fn compatible_has(t: Tree, node: usize, want: str) -> bool {
+    let (value, value_error) = property(t, node, "compatible")
+    if value_error != ok { ret false }
+    var start = 0usize
+    var at = 0usize
+    while at < value.len {
+        if value[at] == 0u8 {
+            if same(value[start..at], want) { ret true }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    ret start < value.len && same(value[start..value.len], want)
+}
+
+// The first node anywhere in the tree whose `compatible` lists `want`. Device addresses differ
+// between machines (D2119), so a host is found by what it is, not where it sits or its node name:
+// QEMU's `virt` names the PCI host `pcie@...` compatible `pci-host-ecam-generic`, crosvm names it
+// `pci@...` compatible `pci-host-cam-generic`.
+fn find_compatible(t: Tree, want: str) -> (usize, err) {
+    var at = t.structure
+    while at < t.structure_end {
+        let (after, token) = next_token(t, at)
+        if token == FDT_END { ret (0usize, Missing) }
+        if token == FDT_BEGIN_NODE && compatible_has(t, at, want) { ret (at, ok) }
+        at = after
+    }
+    ret (0usize, Missing)
+}
+
 // A property of the node at `node`, its own and not a child's.
 fn property(t: Tree, node: usize, name: str) -> (str, err) {
     if be32(t.bytes, node) != FDT_BEGIN_NODE { ret (t.bytes[0usize..0usize], BadTree) }

@@ -326,10 +326,9 @@ fn start_driver_server(a: *mem.Arena, image_addr: usize, image_len: usize, asid:
     if found == 32usize { ret (bar, ok) }
     let (device, cursor, discover_error) = virtio.discover(host, found, bar)
     if discover_error != ok { ret (bar, ok) }
-    let bar_base = pci.bar_base(host, found, 4usize)
     let (space, space_error) = vm.create(a, image_addr, image_len, asid)
     if space_error != ok { ret (bar, space_error) }
-    let map_bar_error = vm.map_range_el0(a, space.ttbr, bar_base, 65536usize, true)
+    let map_bar_error = vm.map_range_el0(a, space.ttbr, device.bar, device.bar_size, true)
     if map_bar_error != ok { ret (bar, map_bar_error) }
     let (pool_storage, pool_error) = mem.alloc[u8](a, 131072usize + 4096usize)
     if pool_error != ok { ret (bar, pool_error) }

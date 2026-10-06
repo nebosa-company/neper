@@ -37045,3 +37045,36 @@ virtio-vsock driver) still need one. The chosen host is an AWS Graviton bare-met
 are currently invalid and await refresh. Separately, the kernel image already carries a valid
 arm64 Image header (D2127), so crosvm's earlier "bad kernel header signature" was not a malformed
 header.
+
+## D2146 — PCI over CAM as well as ECAM, and each virtio BAR mapped by the capability that names it
+
+Verified on an AWS a1.metal Graviton bare-metal instance (the aarch64 host with /dev/kvm that D2145
+called for): the kernel boots under crosvm with KVM and, with D2145, turns the MMU on over crosvm's
+RAM at 0x80000000 and runs the whole EL0/capability suite -- thread W faults at the relocated user
+window 0x7FC0040000, confirming the fix on real hardware. Two crosvm/QEMU differences then stopped
+the virtio drivers, both now fixed.
+
+First, the PCI host. QEMU's virt gives an ECAM host (compatible `pci-host-ecam-generic`, config
+space `base + (bus<<20) + (slot<<15) + (fn<<12) + off`); crosvm gives a CAM host
+(`pci-host-cam-generic`, `base + (bus<<16) + (slot<<11) + (fn<<8) + off`) at a different node name.
+The old code found the host by the path `/pcie` and hard-coded ECAM shifts, so under crosvm it
+reported "no pci". Now `fdt.find_compatible` locates the host by its `compatible` (never its name or
+place, per D2119), `pci.Host` carries a `cam` flag, and `config_address` branches on it. ECAM is
+tried first, then CAM.
+
+Second, the virtio BAR. A modern virtio-pci device keeps its structures in one BAR that its
+capabilities name -- BAR 4 under QEMU (which the guest assigns), BAR 0 under crosvm (which crosvm
+pre-assigns). `discover` had assigned BAR 4 unconditionally and the kernel mapped BAR 4 into the EL0
+server, but crosvm's device lives in BAR 0, so the driver faulted on its own registers at
+0x2000014. Now `discover` reads the common-configuration capability's BAR index, assigns that BAR
+only if the VMM left it unset, and returns its base and decoded size in the Device; the kernel maps
+exactly that (`pci.bar_size` added to probe it). The size matters: crosvm packs the three devices'
+BARs 0x8000 apart, so the old fixed 64 KB map would have overlapped a neighbour and broken
+confinement. With both fixes all three drivers run under crosvm -- entropy returns 8 random bytes,
+block reads and writes sector 0, the console writes to a virtio-console port -- and QEMU's ECAM path
+is byte-for-byte unchanged (full stage-1 boot still green).
+
+Still open on crosvm (not the transport): the console-server client thread P faults at a poison
+pointer and a spin thread loops, so the demo times out rather than powering off cleanly; and
+virtio-vsock and the Pixel `adb shell vm run` path remain. The a1.metal box is stopped (not
+terminated) so crosvm need not be rebuilt for that bring-up.
