@@ -36584,3 +36584,23 @@ endpoints and the third, over budget, is refused. With these, C102 is complete: 
 object -- endpoint, notification, frame, console, device, untyped -- is reached only through a
 capability, and the six capability behaviours and the four isolation boundaries all run
 together under the timer and are checked on both hosts.
+
+## D2129 — NeperOS stage 1d begins: the PCI ECAM enumerated for virtio devices
+
+C103 closes stage 1 with virtio over PCI; it begins here with the host and the enumeration.
+The device tree's `/pcie` node names a generic ECAM host, its configuration space one 4 KB
+page per function at `base + (bus << 20) + (slot << 15) + (function << 12) + offset`, the
+base the node's `reg` (0x40_1000_0000 on `virt`). The window sits in gigabyte 256, which the
+kernel's identity map already covers as Device memory, so `pci.config_read32` reads it with
+the `os.load32` the kernel has. `pci` finds the host and reads a function's vendor and device
+ids; a modern virtio-pci function has vendor 0x1af4 and a device id of 0x1040 plus the virtio
+type, so the kernel scans bus 0 and reports each virtio device by type and slot.
+
+QEMU attaches virtio devices legacy by default (device id 0x1000 plus a per-type number), so
+the fixture forces the modern transport with `disable-legacy=on`: the entropy device is then
+0x1044 at slot 1 and the block device 0x1042 at slot 2, both of which the kernel enumerates
+(`virtio entropy at pci slot 1`, `virtio block at pci slot 2`). Both suites now attach an
+entropy device and a 1 MB block disk and check the two lines. Still ahead for C103: the modern
+virtio-pci transport (the capability list, the BARs, feature negotiation and a virtqueue),
+and the console, block and entropy drivers as EL0 servers with a fixture that reads and writes
+the disk and echoes the console.

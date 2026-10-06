@@ -8778,7 +8778,12 @@ case "$kernel_refuse_output" in
     *) printf '%s\n' "os.mrs was not refused where it is written: $kernel_refuse_output" >&2; exit 1 ;;
 esac
 if command -v qemu-system-aarch64 >/dev/null 2>&1; then
-    neperos_boot=$(timeout 90 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$neperos_demo" < /dev/null 2>&1 | tr -d '\r')
+    # (D2129) Modern virtio-pci devices for the kernel to enumerate: entropy and a 1 MB block
+    # disk, both forced modern so their device ids are 0x1040 plus the virtio type.
+    neperos_disk="$test_build/virtio-disk.img"
+    dd if=/dev/zero of="$neperos_disk" bs=1024 count=1024 > /dev/null 2>&1
+    neperos_virtio="-device virtio-rng-pci,disable-legacy=on -drive file=$neperos_disk,format=raw,if=none,id=blk0 -device virtio-blk-pci,disable-legacy=on,drive=blk0"
+    neperos_boot=$(timeout 90 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$neperos_demo" $neperos_virtio < /dev/null 2>&1 | tr -d '\r')
     case "$neperos_boot" in
         *'Welcome to NeperOS'*'mmu on'*'fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned'*'scheduling'*'thread N denied console'*'V revoke ok'*'thread W killed, el0 fault at 0x0000000080040000'*'thread X killed, el0 fault at 0x0000000040000000'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS did not schedule its threads: $neperos_boot" >&2; exit 1 ;;
@@ -8789,9 +8794,9 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
             *) printf '%s\n' "NeperOS thread output missing $neperos_token: $neperos_boot" >&2; exit 1 ;;
         esac
     done
-    # Capability transfer (H), the user-mode console server (K prints for P), and untyped
-    # retype (U) each leave their mark.
-    for neperos_mark in 'H got console' 'console server up' 'U retype ok'; do
+    # Capability transfer (H), the user-mode console server (K prints for P), untyped retype
+    # (U), and the enumerated modern virtio devices each leave their mark.
+    for neperos_mark in 'H got console' 'console server up' 'U retype ok' 'virtio entropy at pci slot 1' 'virtio block at pci slot 2'; do
         case "$neperos_boot" in
             *"$neperos_mark"*) ;;
             *) printf '%s\n' "NeperOS capability behaviour missing ($neperos_mark): $neperos_boot" >&2; exit 1 ;;

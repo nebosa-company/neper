@@ -9,6 +9,7 @@ use a64
 use fdt
 use gic
 use mmu
+use pci
 use pl011
 use psci
 use thread
@@ -263,6 +264,49 @@ fn start_thread(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize,
     ret ok
 }
 
+fn decimal(value: usize) {
+    var digits: [20]u8 = zero
+    var at = 20usize
+    var rest = value
+    var open = true
+    while open {
+        at -= 1usize
+        digits[at] = u8(rest % 10usize) + 48u8
+        rest = rest / 10usize
+        if rest == 0usize { open = false }
+    }
+    console_write(digits[at..20usize])
+}
+
+fn virtio_name(device_type: usize) -> str {
+    if device_type == pci.VIRTIO_BLOCK { ret "block" }
+    if device_type == pci.VIRTIO_CONSOLE { ret "console" }
+    if device_type == pci.VIRTIO_ENTROPY { ret "entropy" }
+    if device_type == pci.VIRTIO_NET { ret "net" }
+    ret "other"
+}
+
+// Bus 0 of the ECAM scanned for virtio functions, each reported with its type and slot.
+fn enumerate_pci(tree: fdt.Tree) {
+    let (host, host_error) = pci.find(tree)
+    if host_error != ok {
+        console_write("no pci\n")
+        ret
+    }
+    var slot = 0usize
+    while slot < 32usize {
+        let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
+        if is_virtio {
+            console_write("virtio ")
+            console_write(virtio_name(device_type))
+            console_write(" at pci slot ")
+            decimal(slot)
+            console_write("\n")
+        }
+        slot += 1usize
+    }
+}
+
 fn has_word(text: str, word: str) -> bool {
     var at = 0usize
     while at + word.len <= text.len {
@@ -328,6 +372,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let index = args.len + 1usize
         console_write(args[index])
     }
+    enumerate_pci(tree)
     // The interrupt controller and the timer: enable the controller, let this core take the
     // virtual-timer PPI, and arm it. Each firing preempts whatever runs.
     let (found, controller_error) = gic.find(tree)
