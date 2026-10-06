@@ -8965,7 +8965,7 @@ if ($neperosQemu) {
     foreach ($neperosToken in @('A0', 'A1', 'A2', 'B0', 'B1', 'B2', 'X0', 'X1', 'X2', 'R7', 'R8', 'R9', 'D0', 'D1', 'D2')) {
         if ($neperosBoot -notmatch [regex]::Escape("$neperosToken ")) { throw "NeperOS thread output missing ${neperosToken}: $neperosBoot" }
     }
-    foreach ($neperosMark in @('H got console', 'console server up', 'U retype ok', 'virtio entropy at pci slot 1', 'virtio block at pci slot 2', 'virtio console at pci slot 3', 'el0 block rw ok sector 0: 11 36 5b 80', 'el0 console tx ok', 'Z mem ok')) {
+    foreach ($neperosMark in @('H got console', 'console server up', 'U retype ok', 'virtio entropy at pci slot 1', 'virtio block at pci slot 2', 'virtio console at pci slot 3', 'el0 block rw ok sector 0: 11 36 5b 80', 'el0 console tx ok', 'Z mem ok', 'thread Q killed, el0 fault at 0x0000004010000000')) {
         if ($neperosBoot -notmatch [regex]::Escape($neperosMark)) { throw "NeperOS capability behaviour missing (${neperosMark}): $neperosBoot" }
     }
     if ($neperosBoot -notmatch 'el0 entropy 8 bytes:( [0-9a-f][0-9a-f]){8}') { throw "the EL0 entropy server returned no bytes: $neperosBoot" }

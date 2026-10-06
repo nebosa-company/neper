@@ -36891,3 +36891,19 @@ privileged in its space, the confinement the `X` and `W` threads demonstrate. St
 C103: an explicit negative isolation prober (a server that faults touching a device it was not
 given), making the drivers notification-driven on their interrupt capability rather than polling
 the used ring (the "and interrupt" of the acceptance), and a console-receive path (the "echo").
+
+## D2140 — NeperOS stage 1d: a negative prober shows the drivers' confinement from outside
+
+The EL0 driver servers (D2138, D2139) hold only their own device's frames; D2140 proves that
+confinement directly. A thread `Q` is handed the PCI ECAM base -- device memory in gigabyte 256
+that no driver granted it -- through the same hostile-argument path the `X` isolation thread uses,
+and reads a byte of it at EL0. That gigabyte is a privileged device block in `Q`'s address space
+(copied from the kernel's level-1 table, never given EL0 access), so the read faults, the
+exception handler reports `thread Q killed, el0 fault at 0x0000004010000000`, and the kernel ends
+`Q` before its post-read line prints -- exactly what happens if a driver reaches past the BAR and
+pool it was mapped. Where `X` shows a thread cannot read kernel RAM, `Q` shows it cannot read
+device MMIO it was not given, which is the property that makes a user-mode driver safe. Both
+suites assert the kill line, and the existing check that `read protected memory` never prints
+covers `Q` too. Verified under QEMU alongside the three servers; `MAX_THREADS` (24) already had
+room. Still ahead to close C103: notification-driven (interrupt) drivers and a console-receive
+path.

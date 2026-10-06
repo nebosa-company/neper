@@ -500,6 +500,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if block_error != ok { ret block_error }
         let (bar_after_o, console_error) = start_driver_server(a, image_addr, image_len, 18usize, pci_host, bar_after_f, pci.VIRTIO_CONSOLE, "O")
         if console_error != ok { ret console_error }
+        // Q proves the servers' confinement from the other side (D2140): it is handed the PCI
+        // ECAM base -- device memory no driver granted it -- and tries to read it at EL0. That
+        // gigabyte is privileged in Q's space, so the read faults and the kernel kills Q before
+        // its post-read line prints, exactly as a driver reaching past its own frames would fault.
+        try start_thread(a, image_addr, image_len, 19usize, "Q", pci_host.ecam, true, true, 0u8, 0usize, false, false, false, 0usize)
     }
     console_write("scheduling\n")
     // The scheduler runs from here: the first timer tick leaves this loop for a thread, and
