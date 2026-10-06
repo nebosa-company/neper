@@ -36941,3 +36941,32 @@ Verified by rebuilding `neper-self` and booting under QEMU: `virtio irq ok` prin
 three `el0` driver marks, `Q`'s isolation kill, all threads finishing and exit 0 -- no hang, no
 interrupt storm. Still ahead to close C103: a virtio-console receive/echo path (the acceptance's
 "echo"); converting block and console to block on their interrupt too is optional polish.
+
+## D2142 — NeperOS stage 1d closes: the console server echoes, so C103 is done
+
+The last clause of C103's acceptance, echoing the virtio console, is in: the console server now
+runs full duplex. `virtio.console_echo` sets up both of port 0's queues over one negotiation --
+the receiveq (queue 0) and the transmitq (queue 1) -- transmits the prompt, posts a
+device-writable buffer on the receiveq, waits a bounded while for the host to fill it, and
+transmits the bytes it received back out. The receive is best-effort: if no input arrives (a host
+whose chardev cannot feed one) the transmit still counts as done, so the driver never fails for
+lack of input. `one_buffer` is the shared helper for a single device-readable or device-writable
+descriptor submitted and waited for.
+
+The fixtures feed and check the echo where they can. `run.sh` attaches the `virtconsole`'s file
+chardev with `input-path` (a Linux-QEMU feature) pointing at a file holding `echo-me`, and asserts
+both the prompt and `echo-me` appear in the output file -- the echo round-trip, input through the
+receiveq and back out the transmitq. `run.ps1` omits `input-path` (Windows QEMU rejects it), so
+with no input the receive times out gracefully and it asserts the prompt alone; the echo is
+covered on Linux. Verified on both: WSL QEMU echoes `echo-me`, Windows QEMU transmits the prompt
+and the server still finishes (boot ~2.5 s, the bounded receive wait is negligible).
+
+With this, **C103 is complete and NeperOS D2119 stage 1 is done**: the kernel boots on QEMU virt,
+turns on the MMU, takes the GIC and timer, runs preemptive isolated EL0 threads, draws capability
+boundaries with synchronous IPC, enumerates PCI, and drives the entropy, block and console virtio
+devices as EL0 user-mode servers that hold only their own device's frames and interrupt -- the
+entropy server notification-driven, all three confined (a stray device access kills the offender),
+the disk read and written, the console echoed. C103 moves to work-done at score 1; stage 2 (the
+AVF guest on a Pixel) is next. Block and console still poll their rings (they hold the interrupt
+capability and their interrupts are handled; blocking on it as the entropy server does is a later
+refinement, not required by the acceptance).

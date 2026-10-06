@@ -252,11 +252,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     if one_char(name) == 79u8 {
-        // O is the console driver as an EL0 user-mode server (D2139): it transmits a line over
-        // the virtio console (which QEMU forwards to the chardev) and marks success on the UART.
+        // O is the console driver as an EL0 user-mode server (D2139, D2142): it transmits a line
+        // over the virtio console, then RECEIVES a line from the device's input and echoes it back
+        // -- the acceptance's full-duplex console. QEMU feeds the input from the chardev's
+        // input-path and takes the output, so the echoed bytes land where the fixture checks.
         let device = read_device()
-        let write_error = virtio.write_console(device, "hello from the neper virtio console\n")
-        if write_error != ok {
+        let (line, received, echo_error) = virtio.console_echo(device, "hello from the neper virtio console\n")
+        if echo_error != ok {
             say("el0 console tx failed\n")
             ret ok
         }

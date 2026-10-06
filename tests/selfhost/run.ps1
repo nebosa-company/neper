@@ -8959,6 +8959,10 @@ if ($neperosQemu) {
     $neperosDiskStream = [IO.File]::Create($neperosDisk); $neperosDiskStream.SetLength(1MB); $neperosDiskStream.Close()
     $neperosConsole = Join-Path $testBuild 'virtio-console.out'
     if (Test-Path $neperosConsole) { Remove-Item $neperosConsole }
+    # No `input-path` here: a file chardev's input-path is a Linux-QEMU feature (Windows QEMU
+    # rejects it). The console server's receive/echo (D2142) is exercised with fed input in
+    # run.sh; here, with no input, the server's receive times out gracefully and still transmits,
+    # so this checks the transmit alone.
     $neperosVirtio = @('-device', 'virtio-rng-pci,disable-legacy=on', '-drive', "file=$neperosDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0', '-device', 'virtio-serial-pci,disable-legacy=on', '-chardev', "file,id=vcon,path=$neperosConsole", '-device', 'virtconsole,chardev=vcon')
     $neperosBoot = Invoke-NeperOS $neperosImage (@('-initrd', $neperosDemo) + $neperosVirtio)
     if ($neperosBoot -notmatch '(?s)Welcome to NeperOS.*mmu on.*fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned.*scheduling.*thread N denied console.*V revoke ok.*thread W killed, el0 fault at 0x0000000080040000.*thread X killed, el0 fault at 0x0000000040000000.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS did not schedule its threads: $neperosBoot" }

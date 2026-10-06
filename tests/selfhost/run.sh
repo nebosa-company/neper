@@ -8791,7 +8791,11 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
     dd if=/dev/zero of="$neperos_disk" bs=1024 count=1024 > /dev/null 2>&1
     neperos_console="$test_build/virtio-console.out"
     rm -f "$neperos_console"
-    neperos_virtio="-device virtio-rng-pci,disable-legacy=on -drive file=$neperos_disk,format=raw,if=none,id=blk0 -device virtio-blk-pci,disable-legacy=on,drive=blk0 -device virtio-serial-pci,disable-legacy=on -chardev file,id=vcon,path=$neperos_console -device virtconsole,chardev=vcon"
+    # The console server echoes its input (D2142): feed a known line in, expect it echoed out.
+    # `input-path` on a file chardev is a Linux-QEMU feature; run.ps1 omits it (see there).
+    neperos_console_in="$test_build/virtio-console.in"
+    printf 'echo-me\n' > "$neperos_console_in"
+    neperos_virtio="-device virtio-rng-pci,disable-legacy=on -drive file=$neperos_disk,format=raw,if=none,id=blk0 -device virtio-blk-pci,disable-legacy=on,drive=blk0 -device virtio-serial-pci,disable-legacy=on -chardev file,id=vcon,path=$neperos_console,input-path=$neperos_console_in -device virtconsole,chardev=vcon"
     neperos_boot=$(timeout 90 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$neperos_demo" $neperos_virtio < /dev/null 2>&1 | tr -d '\r')
     case "$neperos_boot" in
         *'Welcome to NeperOS'*'mmu on'*'fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned'*'scheduling'*'thread N denied console'*'V revoke ok'*'thread W killed, el0 fault at 0x0000000080040000'*'thread X killed, el0 fault at 0x0000000040000000'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
@@ -8820,6 +8824,9 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
     # The console driver's transmit reached QEMU's chardev: the line is in the backing file (D2133).
     grep -q 'hello from the neper virtio console' "$neperos_console" || {
         printf '%s\n' "the virtio console driver wrote nothing to its chardev: $(cat "$neperos_console" 2>/dev/null)" >&2; exit 1; }
+    # The console server received the fed line over the receive queue and echoed it back (D2142).
+    grep -q 'echo-me' "$neperos_console" || {
+        printf '%s\n' "the virtio console driver did not echo its input: $(cat "$neperos_console" 2>/dev/null)" >&2; exit 1; }
     for neperos_leak in 'read protected memory' 'N should not print' 'V revoke leaked' 'W wrote after protect' 'U retype wrong'; do
         case "$neperos_boot" in
             *"$neperos_leak"*) printf '%s\n' "capability boundary leaked ($neperos_leak): $neperos_boot" >&2; exit 1 ;;

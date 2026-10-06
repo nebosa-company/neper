@@ -326,3 +326,55 @@ fn write_console(device: Device, text: str) -> err {
     os.store16(ring.desc + 14usize, 0u16)
     ret ring_wait(ring, 0u16)
 }
+
+// One descriptor-0 request on `ring` at available slot `nth`: a buffer of `len` bytes, device
+// readable (the driver's data goes out) or writable (the device fills it in), submitted and
+// waited for (D2142). Used by the console server for its transmit and receive.
+fn one_buffer(ring: Ring, nth: u16, buffer: usize, len: usize, writable: bool) -> err {
+    os.store64(ring.desc, u64(buffer))
+    os.store32(ring.desc + 8usize, u32(len))
+    if writable { os.store16(ring.desc + 12usize, DESC_WRITE) } else { os.store16(ring.desc + 12usize, 0u16) }
+    os.store16(ring.desc + 14usize, 0u16)
+    ret ring_wait(ring, nth)
+}
+
+// The console server's full duplex (D2142): transmit `prompt`, receive a line into a buffer the
+// device fills from its input, and echo that line back out. Port 0's receiveq is queue 0 and its
+// transmitq queue 1; both set up over one negotiation. The received buffer and its length come
+// back. QEMU feeds the receiveq from the chardev's input-path and takes the transmitq to its
+// output path, so the echoed bytes appear where the fixture can check them.
+fn console_echo(device: Device, prompt: str) -> (usize, usize, err) {
+    let negotiate_error = negotiate(device)
+    if negotiate_error != ok { ret (0usize, 0usize, negotiate_error) }
+    let (rx_ring, rx_ring_error) = setup_queue(device, 0u16)
+    if rx_ring_error != ok { ret (0usize, 0usize, rx_ring_error) }
+    let (tx_ring, tx_ring_error) = setup_queue(device, 1u16)
+    if tx_ring_error != ok { ret (0usize, 0usize, tx_ring_error) }
+    status_add(device, STATUS_DRIVER_OK)
+    let (prompt_buffer, prompt_error) = dma_region(prompt.len)
+    if prompt_error != ok { ret (0usize, 0usize, prompt_error) }
+    var i = 0usize
+    while i < prompt.len {
+        os.store8(prompt_buffer + i, prompt[i])
+        i += 1usize
+    }
+    let (line, line_error) = dma_region(64usize)
+    if line_error != ok { ret (0usize, 0usize, line_error) }
+    let send_error = one_buffer(tx_ring, 0u16, prompt_buffer, prompt.len, false)
+    if send_error != ok { ret (0usize, 0usize, send_error) }
+    // Receive a line, best-effort: post a device-writable buffer and wait a bounded while. Input
+    // is echoed when it arrives (the host fed the chardev); when none comes the transmit still
+    // counts as done, so a host whose chardev cannot feed input does not fail the driver.
+    os.store64(rx_ring.desc, u64(line))
+    os.store32(rx_ring.desc + 8usize, 64u32)
+    os.store16(rx_ring.desc + 12usize, DESC_WRITE)
+    os.store16(rx_ring.desc + 14usize, 0u16)
+    ring_submit(rx_ring, 0u16)
+    var spins = 0usize
+    while os.load16(rx_ring.used + 2usize) == 0u16 && spins < 30000000usize { spins += 1usize }
+    if os.load16(rx_ring.used + 2usize) == 0u16 { ret (line, 0usize, ok) }
+    let received = usize(os.load32(rx_ring.used + 8usize))
+    let echo_error = one_buffer(tx_ring, 1u16, line, received, false)
+    if echo_error != ok { ret (line, received, echo_error) }
+    ret (line, received, ok)
+}
