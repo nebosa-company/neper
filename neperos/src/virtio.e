@@ -53,8 +53,9 @@ const PAGE: usize = 4096usize
 type Device = struct { common: usize, notify: usize, notify_multiplier: u32, isr: usize, config: usize }
 
 // One enabled split virtqueue: the three rings in identity-mapped RAM, the notify register the
-// device watches, and the ring length.
-type Ring = struct { desc: usize, avail: usize, used: usize, notify: usize, size: usize }
+// device watches, the value to write there (the queue index, absent NOTIFICATION_DATA), and the
+// ring length.
+type Ring = struct { desc: usize, avail: usize, used: usize, notify: usize, index: u16, size: usize }
 
 // A zeroed, page-aligned region whose virtual address is its physical one (identity map), so
 // the device can DMA to it.
@@ -137,7 +138,7 @@ fn setup_queue(a: *mem.Arena, device: Device, selector: u16) -> (Ring, err) {
     os.store64(device.common + QUEUE_DEVICE, u64(used))
     os.store16(device.common + QUEUE_ENABLE, 1u16)
     let notify_offset = usize(os.load16(device.common + QUEUE_NOTIFY_OFF))
-    ret (Ring { desc: desc, avail: avail, used: used, notify: device.notify + notify_offset * usize(device.notify_multiplier), size: size }, ok)
+    ret (Ring { desc: desc, avail: avail, used: used, notify: device.notify + notify_offset * usize(device.notify_multiplier), index: selector, size: size }, ok)
 }
 
 // Offer descriptor-chain head 0 in the `nth` available slot (0-based) and spin until the device
@@ -148,7 +149,7 @@ fn ring_wait(ring: Ring, nth: u16) -> err {
     os.barrier()
     os.store16(ring.avail + 2usize, nth + 1u16)
     os.barrier()
-    os.store16(ring.notify, 0u16)
+    os.store16(ring.notify, ring.index)
     var spins = 0usize
     while os.load16(ring.used + 2usize) != nth + 1u16 && spins < 200000000usize { spins += 1usize }
     if os.load16(ring.used + 2usize) != nth + 1u16 { ret NoData }
@@ -246,4 +247,27 @@ fn block_rw(a: *mem.Arena, device: Device, sector: u64) -> (usize, err) {
         i += 1usize
     }
     ret (data, ok)
+}
+
+// Write `text` to the console device's transmit queue (port 0's transmitq is queue 1). We do not
+// negotiate MULTIPORT, so the device runs single-port and queue 1 reaches the chardev directly.
+// The buffer is one device-readable descriptor; the notify value is the queue index (1).
+fn write_console(a: *mem.Arena, device: Device, text: str) -> err {
+    let negotiate_error = negotiate(device)
+    if negotiate_error != ok { ret negotiate_error }
+    let (ring, ring_error) = setup_queue(a, device, 1u16)
+    if ring_error != ok { ret ring_error }
+    status_add(device, STATUS_DRIVER_OK)
+    let (buffer, buffer_error) = dma_region(a, text.len)
+    if buffer_error != ok { ret buffer_error }
+    var i = 0usize
+    while i < text.len {
+        os.store8(buffer + i, text[i])
+        i += 1usize
+    }
+    os.store64(ring.desc, u64(buffer))
+    os.store32(ring.desc + 8usize, u32(text.len))
+    os.store16(ring.desc + 12usize, 0u16)
+    os.store16(ring.desc + 14usize, 0u16)
+    ret ring_wait(ring, 0u16)
 }

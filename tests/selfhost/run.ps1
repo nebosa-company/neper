@@ -8945,20 +8945,24 @@ if ($neperosQemu) {
         if (-not $run.WaitForExit(90000)) { $run.Kill(); throw 'NeperOS did not power off in time' }
         return ((Get-Content -Raw $transcript) -replace "`r", '')
     }
-    # (D2129) Modern virtio-pci devices for the kernel to enumerate: entropy and a 1 MB block
-    # disk, both forced modern so their device ids are 0x1040 plus the virtio type.
+    # (D2129) Modern virtio-pci devices for the kernel to enumerate: entropy, a 1 MB block disk,
+    # and a console port whose transmit chardev is a file (D2133), all forced modern so their
+    # device ids are 0x1040 plus the virtio type.
     $neperosDisk = Join-Path $testBuild 'virtio-disk.img'
     $neperosDiskStream = [IO.File]::Create($neperosDisk); $neperosDiskStream.SetLength(1MB); $neperosDiskStream.Close()
-    $neperosVirtio = @('-device', 'virtio-rng-pci,disable-legacy=on', '-drive', "file=$neperosDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $neperosConsole = Join-Path $testBuild 'virtio-console.out'
+    if (Test-Path $neperosConsole) { Remove-Item $neperosConsole }
+    $neperosVirtio = @('-device', 'virtio-rng-pci,disable-legacy=on', '-drive', "file=$neperosDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0', '-device', 'virtio-serial-pci,disable-legacy=on', '-chardev', "file,id=vcon,path=$neperosConsole", '-device', 'virtconsole,chardev=vcon')
     $neperosBoot = Invoke-NeperOS $neperosImage (@('-initrd', $neperosDemo) + $neperosVirtio)
     if ($neperosBoot -notmatch '(?s)Welcome to NeperOS.*mmu on.*fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned.*scheduling.*thread N denied console.*V revoke ok.*thread W killed, el0 fault at 0x0000000080040000.*thread X killed, el0 fault at 0x0000000040000000.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS did not schedule its threads: $neperosBoot" }
     foreach ($neperosToken in @('A0', 'A1', 'A2', 'B0', 'B1', 'B2', 'X0', 'X1', 'X2', 'R7', 'R8', 'R9', 'D0', 'D1', 'D2')) {
         if ($neperosBoot -notmatch [regex]::Escape("$neperosToken ")) { throw "NeperOS thread output missing ${neperosToken}: $neperosBoot" }
     }
-    foreach ($neperosMark in @('H got console', 'console server up', 'U retype ok', 'virtio entropy at pci slot 1', 'virtio block at pci slot 2', 'block rw ok sector 0: 11 36 5b 80')) {
+    foreach ($neperosMark in @('H got console', 'console server up', 'U retype ok', 'virtio entropy at pci slot 1', 'virtio block at pci slot 2', 'virtio console at pci slot 3', 'block rw ok sector 0: 11 36 5b 80', 'console tx ok')) {
         if ($neperosBoot -notmatch [regex]::Escape($neperosMark)) { throw "NeperOS capability behaviour missing (${neperosMark}): $neperosBoot" }
     }
     if ($neperosBoot -notmatch 'entropy 8 bytes:( [0-9a-f][0-9a-f]){8}') { throw "the virtio entropy driver returned no bytes: $neperosBoot" }
+    if ((Get-Content -Raw $neperosConsole) -notmatch 'hello from the neper virtio console') { throw "the virtio console driver wrote nothing to its chardev: $(Get-Content -Raw $neperosConsole)" }
     foreach ($neperosLeak in @('read protected memory', 'N should not print', 'V revoke leaked', 'W wrote after protect', 'U retype wrong')) {
         if ($neperosBoot -match [regex]::Escape($neperosLeak)) { throw "capability boundary leaked (${neperosLeak}): $neperosBoot" }
     }

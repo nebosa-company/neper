@@ -36696,3 +36696,32 @@ The kernel prints `block rw ok sector 0: 11 36 5b 80` (the pattern's first four 
 suites assert that exact line, so a silent miscompare cannot pass. Verified on both hosts under
 QEMU with `virtio-blk-pci` forced modern over a fresh 1 MB disk image. Still ahead for C103: the
 console driver (echo), and moving all three drivers into EL0 user-mode servers.
+
+## D2133 — NeperOS stage 1d: the virtio-console driver transmits over port 0
+
+The third driver (`virtio.write_console`) drives a virtio-console (virtio device type 3, the
+`virtio-serial-pci` function QEMU presents) over the same transport. A console device's port 0
+has a receive queue (0) and a transmit queue (1). The driver does **not** negotiate
+VIRTIO_CONSOLE_F_MULTIPORT, so the device runs single-port and queue 1 reaches the backing
+chardev directly, with no control-queue handshake -- QEMU forwards port-0 transmit data to the
+chardev whether or not the guest has acknowledged multiport. `write_console` sets up queue 1
+(the first non-zero selector any driver has used), copies the text into a device-readable
+descriptor, and submits it.
+
+This made the transport's notify value matter for the first time. Absent VIRTIO_F_NOTIFICATION_
+DATA, a modern device wants the virtqueue index written to its notify register; `read_entropy`
+and `block_rw` only ever used queue 0, so writing a literal 0 was accidentally correct. `Ring`
+now carries its queue index and `ring_wait` writes that, so queue 1 is notified as 1.
+
+The kernel's `drive_console` writes `hello from the neper virtio console\n` to the port and prints
+`console tx ok`. Both suites attach `virtio-serial-pci` with a `virtconsole` whose chardev is a
+file, assert the `console tx ok` and `virtio console at pci slot 3` marks, and assert the line
+appears in the chardev file -- so the bytes are checked where they left QEMU, not just where the
+kernel claims to have sent them. Each driver's BAR is assigned from the cursor the previous
+driver's `discover` returned (`drive_entropy` -> `drive_block` -> `drive_console`), so the three
+devices' MMIO windows stay disjoint. Verified on both hosts under QEMU.
+
+Still ahead for C103, to close D2119 stage 1: moving all three drivers out of the kernel into EL0
+user-mode servers that hold only their device's frame and interrupt capabilities, and a
+console-receive path. The transport still runs in the kernel and polls the used ring rather than
+waiting on the ISR capability.

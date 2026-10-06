@@ -8778,11 +8778,14 @@ case "$kernel_refuse_output" in
     *) printf '%s\n' "os.mrs was not refused where it is written: $kernel_refuse_output" >&2; exit 1 ;;
 esac
 if command -v qemu-system-aarch64 >/dev/null 2>&1; then
-    # (D2129) Modern virtio-pci devices for the kernel to enumerate: entropy and a 1 MB block
-    # disk, both forced modern so their device ids are 0x1040 plus the virtio type.
+    # (D2129) Modern virtio-pci devices for the kernel to enumerate: entropy, a 1 MB block disk,
+    # and a console port whose transmit chardev is a file (D2133), all forced modern so their
+    # device ids are 0x1040 plus the virtio type.
     neperos_disk="$test_build/virtio-disk.img"
     dd if=/dev/zero of="$neperos_disk" bs=1024 count=1024 > /dev/null 2>&1
-    neperos_virtio="-device virtio-rng-pci,disable-legacy=on -drive file=$neperos_disk,format=raw,if=none,id=blk0 -device virtio-blk-pci,disable-legacy=on,drive=blk0"
+    neperos_console="$test_build/virtio-console.out"
+    rm -f "$neperos_console"
+    neperos_virtio="-device virtio-rng-pci,disable-legacy=on -drive file=$neperos_disk,format=raw,if=none,id=blk0 -device virtio-blk-pci,disable-legacy=on,drive=blk0 -device virtio-serial-pci,disable-legacy=on -chardev file,id=vcon,path=$neperos_console -device virtconsole,chardev=vcon"
     neperos_boot=$(timeout 90 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$neperos_demo" $neperos_virtio < /dev/null 2>&1 | tr -d '\r')
     case "$neperos_boot" in
         *'Welcome to NeperOS'*'mmu on'*'fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned'*'scheduling'*'thread N denied console'*'V revoke ok'*'thread W killed, el0 fault at 0x0000000080040000'*'thread X killed, el0 fault at 0x0000000040000000'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
@@ -8795,9 +8798,10 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
         esac
     done
     # Capability transfer (H), the user-mode console server (K prints for P), untyped retype
-    # (U), the enumerated modern virtio devices, and the block driver's sector-0 round-trip
-    # (D2132: the pattern written and read back is 11 36 5b 80 ...) each leave their mark.
-    for neperos_mark in 'H got console' 'console server up' 'U retype ok' 'virtio entropy at pci slot 1' 'virtio block at pci slot 2' 'block rw ok sector 0: 11 36 5b 80'; do
+    # (U), the three enumerated modern virtio devices, the block driver's sector-0 round-trip
+    # (D2132: the pattern written and read back is 11 36 5b 80 ...), and the console driver's
+    # transmit (D2133) each leave their mark.
+    for neperos_mark in 'H got console' 'console server up' 'U retype ok' 'virtio entropy at pci slot 1' 'virtio block at pci slot 2' 'virtio console at pci slot 3' 'block rw ok sector 0: 11 36 5b 80' 'console tx ok'; do
         case "$neperos_boot" in
             *"$neperos_mark"*) ;;
             *) printf '%s\n' "NeperOS capability behaviour missing ($neperos_mark): $neperos_boot" >&2; exit 1 ;;
@@ -8807,6 +8811,9 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
     # bytes (D2131).
     printf '%s\n' "$neperos_boot" | grep -qE 'entropy 8 bytes:( [0-9a-f][0-9a-f]){8}' || {
         printf '%s\n' "the virtio entropy driver returned no bytes: $neperos_boot" >&2; exit 1; }
+    # The console driver's transmit reached QEMU's chardev: the line is in the backing file (D2133).
+    grep -q 'hello from the neper virtio console' "$neperos_console" || {
+        printf '%s\n' "the virtio console driver wrote nothing to its chardev: $(cat "$neperos_console" 2>/dev/null)" >&2; exit 1; }
     for neperos_leak in 'read protected memory' 'N should not print' 'V revoke leaked' 'W wrote after protect' 'U retype wrong'; do
         case "$neperos_boot" in
             *"$neperos_leak"*) printf '%s\n' "capability boundary leaked ($neperos_leak): $neperos_boot" >&2; exit 1 ;;

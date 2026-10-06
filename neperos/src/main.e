@@ -328,8 +328,9 @@ fn drive_entropy(a: *mem.Arena, host: pci.Host) -> usize {
 
 // The block device driven over the same transport, its BAR assigned from `base` so it does not
 // collide with the entropy device's window: a known pattern written to `sector` and read back,
-// the first bytes printed to show the round-trip through the virtqueue.
-fn drive_block(a: *mem.Arena, host: pci.Host, base: usize) {
+// the first bytes printed to show the round-trip through the virtqueue. The MMIO cursor past its
+// BAR comes back for the next device.
+fn drive_block(a: *mem.Arena, host: pci.Host, base: usize) -> usize {
     var slot = 0usize
     while slot < 32usize {
         let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
@@ -337,12 +338,12 @@ fn drive_block(a: *mem.Arena, host: pci.Host, base: usize) {
             let (device, cursor, discover_error) = virtio.discover(host, slot, base)
             if discover_error != ok {
                 console_write("virtio block: discover failed\n")
-                ret
+                ret base
             }
             let (data, rw_error) = virtio.block_rw(a, device, 0u64)
             if rw_error != ok {
                 console_write("virtio block: rw failed\n")
-                ret
+                ret cursor
             }
             console_write("block rw ok sector 0:")
             var i = 0usize
@@ -352,6 +353,31 @@ fn drive_block(a: *mem.Arena, host: pci.Host, base: usize) {
                 i += 1usize
             }
             console_write("\n")
+            ret cursor
+        }
+        slot += 1usize
+    }
+    ret base
+}
+
+// The console device driven over the same transport, its BAR assigned from `base`: a line
+// written to port 0's transmit queue, which QEMU forwards to the chardev the port is backed by.
+fn drive_console(a: *mem.Arena, host: pci.Host, base: usize) {
+    var slot = 0usize
+    while slot < 32usize {
+        let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
+        if is_virtio && device_type == pci.VIRTIO_CONSOLE {
+            let (device, cursor, discover_error) = virtio.discover(host, slot, base)
+            if discover_error != ok {
+                console_write("virtio console: discover failed\n")
+                ret
+            }
+            let write_error = virtio.write_console(a, device, "hello from the neper virtio console\n")
+            if write_error != ok {
+                console_write("virtio console: write failed\n")
+                ret
+            }
+            console_write("console tx ok\n")
             ret
         }
         slot += 1usize
@@ -455,8 +481,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     enumerate_pci(tree)
     let (pci_host, pci_host_error) = pci.find(tree)
     if pci_host_error == ok {
-        let next_bar = drive_entropy(a, pci_host)
-        drive_block(a, pci_host, next_bar)
+        let after_entropy = drive_entropy(a, pci_host)
+        let after_block = drive_block(a, pci_host, after_entropy)
+        drive_console(a, pci_host, after_block)
     }
     // The interrupt controller and the timer: enable the controller, let this core take the
     // virtual-timer PPI, and arm it. Each firing preempts whatever runs.
