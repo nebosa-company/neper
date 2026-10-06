@@ -37294,3 +37294,16 @@ neperos/src/time_test.e takes two monotonic readings around a busy spin and prin
 nanoseconds (~16-21 ms), then reads wall time and prints the seconds (1791327770 -- a 2026 Unix
 timestamp from QEMU's RTC), and powers off with exit 0. Suite fixtures added to run.ps1 and run.sh.
 This is the second C107 increment (after D2154's variant + e.io); e.thread, e.fs and e.fmt follow.
+
+## D2156 — C107: e.fmt on NeperOS (the json codec, over an e.io writer)
+
+e.fmt runs on NeperOS. The format codecs under lib/e/fmt (45 of them) are pure over e.mem, e.str,
+e.meta and e.io and touch no os primitive directly (the one `os.` match in the tree is bytes inside
+a brotli dictionary string), so with the e.os variant (D2154) and e.io already carried across, they
+need nothing new -- the proof is only to build and run one. neperos/src/fmt_test.e reflects a struct
+with e.fmt.json's `encode[T](writer, value)` and streams it to an e.io Writer over stdout: on QEMU
+virt on both hosts it prints `fmt json: {"x":3,"y":7,"label":"neperos"}` and powers off with exit 0,
+so the generic reflection (e.meta), the string formatting (e.str) and the Writer path (e.io ->
+os.write) all run on NeperOS. Suite fixtures added to run.ps1 and run.sh. Third C107 increment
+(after D2154 e.io and D2155 e.time); e.thread (a same-address-space thread-spawn system call) and
+e.fs (the path/dir/stat surface over the C106 server) remain.
