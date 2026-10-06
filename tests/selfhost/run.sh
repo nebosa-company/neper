@@ -8774,7 +8774,7 @@ neperos_image="$test_build/neperos.img"
 [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/main.e" "$repo" aarch64 none "$neperos_image")" = 'executable written' ]
 [ "$(od -An -c -j56 -N4 "$neperos_image" | tr -d ' ')" = 'ARMd' ] || { printf '%s\n' 'the NeperOS image has no arm64 Image magic' >&2; exit 1; }
 neperos_demo="$test_build/demo.img"
-[ "$("$test_build/neper-self" emit-executable "$repo/neperos/user/demo/src/main.e" "$repo" aarch64 neperos "$neperos_demo")" = 'executable written' ]
+[ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/init.e" "$repo" aarch64 neperos "$neperos_demo")" = 'executable written' ]
 if kernel_refuse_output=$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/kernel_refuse/src/main.e" "$repo" x64 linux "$test_build/kernel-refuse" 2>&1); then
     printf '%s\n' 'os.mrs compiled for x64-linux' >&2
     exit 1
@@ -8807,16 +8807,16 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
     # (U), the three enumerated modern virtio devices, the block driver's sector-0 round-trip
     # (D2132: the pattern written and read back is 11 36 5b 80 ...), and the console driver's
     # transmit (D2133) each leave their mark.
-    for neperos_mark in 'H got console' 'console server up' 'U retype ok' 'virtio entropy at pci slot 1' 'virtio block at pci slot 2' 'virtio console at pci slot 3' 'block rw ok sector 0: 11 36 5b 80' 'console tx ok' 'Z mem ok' 'probe vendor ok'; do
+    for neperos_mark in 'H got console' 'console server up' 'U retype ok' 'virtio entropy at pci slot 1' 'virtio block at pci slot 2' 'virtio console at pci slot 3' 'block rw ok sector 0: 11 36 5b 80' 'console tx ok' 'Z mem ok'; do
         case "$neperos_boot" in
             *"$neperos_mark"*) ;;
             *) printf '%s\n' "NeperOS capability behaviour missing ($neperos_mark): $neperos_boot" >&2; exit 1 ;;
         esac
     done
-    # The entropy device, driven through the modern virtio-pci transport, returns eight random
-    # bytes (D2131).
-    printf '%s\n' "$neperos_boot" | grep -qE 'entropy 8 bytes:( [0-9a-f][0-9a-f]){8}' || {
-        printf '%s\n' "the virtio entropy driver returned no bytes: $neperos_boot" >&2; exit 1; }
+    # The entropy driver runs as an EL0 user-mode server (D2138): it drives the device from EL0
+    # over the BAR and DMA pool the kernel mapped into its space, and returns eight random bytes.
+    printf '%s\n' "$neperos_boot" | grep -qE 'el0 entropy 8 bytes:( [0-9a-f][0-9a-f]){8}' || {
+        printf '%s\n' "the EL0 entropy server returned no bytes: $neperos_boot" >&2; exit 1; }
     # The console driver's transmit reached QEMU's chardev: the line is in the backing file (D2133).
     grep -q 'hello from the neper virtio console' "$neperos_console" || {
         printf '%s\n' "the virtio console driver wrote nothing to its chardev: $(cat "$neperos_console" 2>/dev/null)" >&2; exit 1; }

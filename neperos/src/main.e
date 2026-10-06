@@ -265,26 +265,39 @@ fn start_thread(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize,
     ret ok
 }
 
-// A device prober at EL0 (D2137): the kernel maps the entropy device's one PCI configuration
-// page into the thread's space and leaves its address in the aux area; the thread reads the
-// vendor id directly, the access a user-mode driver makes to its own device's MMIO. It holds
-// only that one device page -- every other gigabyte stays privileged in its space, so a stray
-// device access would fault.
-fn start_prober(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize, host: pci.Host) -> err {
+// The entropy driver as a real EL0 user-mode server (D2138): the kernel discovers the device
+// (assigning its BAR from `bar`, past the in-kernel block and console windows), then maps the
+// BAR region (Device) and a fresh 128 KB identity DMA pool (Normal) into the server's space with
+// `map_range_el0` and leaves the addresses in the aux area. The server (`E` in init.e) runs the
+// same transport at EL0, holding only its device's frames -- every other gigabyte stays
+// privileged in its space, so a stray access faults. Aux: 0 common, 1 notify, 2 notify
+// multiplier, 3 pool base, 4 pool size.
+fn start_entropy_server(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize, host: pci.Host, bar: usize) -> err {
     var slot = 0usize
-    var ecam = 0usize
+    var found = 32usize
     while slot < 32usize {
         let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
-        if is_virtio && device_type == pci.VIRTIO_ENTROPY { ecam = host.ecam + (slot << 15usize) }
+        if is_virtio && device_type == pci.VIRTIO_ENTROPY { found = slot }
         slot += 1usize
     }
-    if ecam == 0usize { ret ok }
+    if found == 32usize { ret ok }
+    let (device, cursor, discover_error) = virtio.discover(host, found, bar)
+    if discover_error != ok { ret ok }
+    let bar_base = pci.bar_base(host, found, 4usize)
     let (space, space_error) = vm.create(a, image_addr, image_len, asid)
     if space_error != ok { ret space_error }
-    try vm.map_range_el0(a, space.ttbr, ecam & ~4095usize, 4096usize, true)
-    vm.put_aux(space, 0usize, ecam)
-    let (arg_table, arg_count) = setup_args(space, "Y", 0usize, false)
-    let index = thread.add(space, "Y", arg_table, arg_count)
+    try vm.map_range_el0(a, space.ttbr, bar_base, 65536usize, true)
+    let (pool_storage, pool_error) = mem.alloc[u8](a, 131072usize + 4096usize)
+    if pool_error != ok { ret pool_error }
+    let pool = (mem.address_of(&pool_storage[0usize]) + 4095usize) & ~4095usize
+    try vm.map_range_el0(a, space.ttbr, pool, 131072usize, false)
+    vm.put_aux(space, 0usize, device.common)
+    vm.put_aux(space, 1usize, device.notify)
+    vm.put_aux(space, 2usize, usize(device.notify_multiplier))
+    vm.put_aux(space, 3usize, pool)
+    vm.put_aux(space, 4usize, 131072usize)
+    let (arg_table, arg_count) = setup_args(space, "E", 0usize, false)
+    let index = thread.add(space, "E", arg_table, arg_count)
     if index == thread.MAX_THREADS { ret vm.NoSpace }
     thread.grant(index, 0usize, thread.CAP_CONSOLE, thread.RIGHT_WRITE, 0usize)
     ret ok
@@ -314,42 +327,6 @@ fn hex_byte(value: u8) {
     pair[0usize] = hex_digit((value >> 4u8) & 15u8)
     pair[1usize] = hex_digit(value & 15u8)
     console_write(pair[..])
-}
-
-// The entropy device driven through the modern virtio-pci transport: its BAR assigned, the
-// device negotiated, a buffer filled with random bytes over one virtqueue, the bytes printed.
-// The MMIO cursor past its BAR comes back, so the next device gets a disjoint window.
-fn drive_entropy(host: pci.Host, pool: usize, pool_size: usize) -> usize {
-    var slot = 0usize
-    while slot < 32usize {
-        let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
-        if is_virtio && device_type == pci.VIRTIO_ENTROPY {
-            let (device, cursor, discover_error) = virtio.discover(host, slot, host.mmio)
-            if discover_error != ok {
-                console_write("virtio entropy: discover failed\n")
-                ret host.mmio
-            }
-            virtio.pool_set(pool, pool_size)
-            let (buffer, written, read_error) = virtio.read_entropy(device, 8usize)
-            if read_error != ok {
-                console_write("virtio entropy: read failed\n")
-                ret cursor
-            }
-            console_write("entropy ")
-            decimal(written)
-            console_write(" bytes:")
-            var i = 0usize
-            while i < written && i < 8usize {
-                console_write(" ")
-                hex_byte(os.load8(buffer + i))
-                i += 1usize
-            }
-            console_write("\n")
-            ret cursor
-        }
-        slot += 1usize
-    }
-    ret host.mmio
 }
 
 // The block device driven over the same transport, its BAR assigned from `base` so it does not
@@ -389,7 +366,7 @@ fn drive_block(host: pci.Host, base: usize, pool: usize, pool_size: usize) -> us
 
 // The console device driven over the same transport, its BAR assigned from `base`: a line
 // written to port 0's transmit queue, which QEMU forwards to the chardev the port is backed by.
-fn drive_console(host: pci.Host, base: usize, pool: usize, pool_size: usize) {
+fn drive_console(host: pci.Host, base: usize, pool: usize, pool_size: usize) -> usize {
     var slot = 0usize
     while slot < 32usize {
         let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
@@ -397,19 +374,20 @@ fn drive_console(host: pci.Host, base: usize, pool: usize, pool_size: usize) {
             let (device, cursor, discover_error) = virtio.discover(host, slot, base)
             if discover_error != ok {
                 console_write("virtio console: discover failed\n")
-                ret
+                ret base
             }
             virtio.pool_set(pool, pool_size)
             let write_error = virtio.write_console(device, "hello from the neper virtio console\n")
             if write_error != ok {
                 console_write("virtio console: write failed\n")
-                ret
+                ret cursor
             }
             console_write("console tx ok\n")
-            ret
+            ret cursor
         }
         slot += 1usize
     }
+    ret base
 }
 
 fn virtio_name(device_type: usize) -> str {
@@ -508,16 +486,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     enumerate_pci(tree)
     let (pci_host, pci_host_error) = pci.find(tree)
+    // Where the entropy device's BAR will be assigned, past the block and console BARs the
+    // kernel drives in place; the entropy driver now runs at EL0 (D2138), so the kernel only
+    // reserves its window here and hands it off when it starts the server thread.
+    var entropy_bar = 0usize
     if pci_host_error == ok {
-        // One identity-mapped DMA pool the drivers carve their rings and buffers from; each
-        // resets it, so the abandoned rings of the previous driver are reclaimed. 128 KB holds
-        // the largest queue (256 descriptors) and its buffers several times over.
+        // One identity-mapped DMA pool the in-kernel drivers carve their rings and buffers from;
+        // each resets it, so the abandoned rings of the previous driver are reclaimed. 128 KB
+        // holds the largest queue (256 descriptors) and its buffers several times over.
         let (pool_storage, pool_error) = mem.alloc[u8](a, 131072usize + 4096usize)
         if pool_error == ok {
             let pool = (mem.address_of(&pool_storage[0usize]) + 4095usize) & ~4095usize
-            let after_entropy = drive_entropy(pci_host, pool, 131072usize)
-            let after_block = drive_block(pci_host, after_entropy, pool, 131072usize)
-            drive_console(pci_host, after_block, pool, 131072usize)
+            let after_block = drive_block(pci_host, pci_host.mmio, pool, 131072usize)
+            entropy_bar = drive_console(pci_host, after_block, pool, 131072usize)
         }
     }
     // The interrupt controller and the timer: enable the controller, let this core take the
@@ -578,10 +559,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Z exercises the EL0 raw-memory intrinsics (D2134) on its own stack, the foundation for
     // moving the virtio drivers out of the kernel into EL0 user-mode servers.
     try start_thread(a, image_addr, image_len, 15usize, "Z", 0usize, false, true, 0u8, 0usize, false, false, false, 0usize)
-    // Y is a device prober (D2137): the kernel maps the entropy device's PCI config page into
-    // its space, and it reads the vendor id from EL0 -- the mapped-frame access a user-mode
-    // driver makes to its device's MMIO.
-    if pci_host_error == ok { try start_prober(a, image_addr, image_len, 16usize, pci_host) }
+    // E is the entropy driver as a real EL0 user-mode server (D2138): the kernel maps its BAR
+    // and a DMA pool into E's space and hands off the device; E drives it from EL0.
+    if pci_host_error == ok && entropy_bar != 0usize { try start_entropy_server(a, image_addr, image_len, 16usize, pci_host, entropy_bar) }
     console_write("scheduling\n")
     // The scheduler runs from here: the first timer tick leaves this loop for a thread, and
     // the last thread to finish returns the kernel here with nothing left to run.

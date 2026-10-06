@@ -8939,8 +8939,8 @@ if ($LASTEXITCODE -ne 0 -or $neperosWritten -ne 'executable written') { throw 'N
 $neperosBytes = [IO.File]::ReadAllBytes($neperosImage)
 if ([Text.Encoding]::ASCII.GetString($neperosBytes, 56, 4) -ne 'ARMd') { throw 'the NeperOS image has no arm64 Image magic' }
 $neperosDemo = Join-Path $testBuild 'demo.img'
-$neperosDemoWritten = & $compiler emit-executable (Join-Path $repo 'neperos\user\demo\src\main.e') $repo aarch64 neperos $neperosDemo
-if ($LASTEXITCODE -ne 0 -or $neperosDemoWritten -ne 'executable written') { throw 'the NeperOS demo did not build' }
+$neperosDemoWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\init.e') $repo aarch64 neperos $neperosDemo
+if ($LASTEXITCODE -ne 0 -or $neperosDemoWritten -ne 'executable written') { throw 'the NeperOS init program did not build' }
 $kernelRefuseOutput = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\kernel_refuse\src\main.e') $repo x64 windows (Join-Path $testBuild 'kernel-refuse.exe') 2>&1
 if ($LASTEXITCODE -eq 0 -or ($kernelRefuseOutput -join "`n") -notmatch 'main\.e:7:.*`os` has no member `mrs`') { throw "os.mrs was not refused where it is written: $kernelRefuseOutput" }
 $neperosQemu = Get-Command qemu-system-aarch64 -ErrorAction SilentlyContinue
@@ -8965,10 +8965,10 @@ if ($neperosQemu) {
     foreach ($neperosToken in @('A0', 'A1', 'A2', 'B0', 'B1', 'B2', 'X0', 'X1', 'X2', 'R7', 'R8', 'R9', 'D0', 'D1', 'D2')) {
         if ($neperosBoot -notmatch [regex]::Escape("$neperosToken ")) { throw "NeperOS thread output missing ${neperosToken}: $neperosBoot" }
     }
-    foreach ($neperosMark in @('H got console', 'console server up', 'U retype ok', 'virtio entropy at pci slot 1', 'virtio block at pci slot 2', 'virtio console at pci slot 3', 'block rw ok sector 0: 11 36 5b 80', 'console tx ok', 'Z mem ok', 'probe vendor ok')) {
+    foreach ($neperosMark in @('H got console', 'console server up', 'U retype ok', 'virtio entropy at pci slot 1', 'virtio block at pci slot 2', 'virtio console at pci slot 3', 'block rw ok sector 0: 11 36 5b 80', 'console tx ok', 'Z mem ok')) {
         if ($neperosBoot -notmatch [regex]::Escape($neperosMark)) { throw "NeperOS capability behaviour missing (${neperosMark}): $neperosBoot" }
     }
-    if ($neperosBoot -notmatch 'entropy 8 bytes:( [0-9a-f][0-9a-f]){8}') { throw "the virtio entropy driver returned no bytes: $neperosBoot" }
+    if ($neperosBoot -notmatch 'el0 entropy 8 bytes:( [0-9a-f][0-9a-f]){8}') { throw "the EL0 entropy server returned no bytes: $neperosBoot" }
     if ((Get-Content -Raw $neperosConsole) -notmatch 'hello from the neper virtio console') { throw "the virtio console driver wrote nothing to its chardev: $(Get-Content -Raw $neperosConsole)" }
     foreach ($neperosLeak in @('read protected memory', 'N should not print', 'V revoke leaked', 'W wrote after protect', 'U retype wrong')) {
         if ($neperosBoot -match [regex]::Escape($neperosLeak)) { throw "capability boundary leaked (${neperosLeak}): $neperosBoot" }

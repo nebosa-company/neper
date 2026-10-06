@@ -36827,3 +36827,35 @@ device prober comes with the servers. Next: the entropy driver as the first real
 server -- kernel discovers and assigns the BAR, maps the BAR region (Device) and a 128 KB identity
 DMA pool (Normal) into the server, passes the addresses through the aux area, and the server runs
 the location-agnostic transport (D2135) and reports over its console capability.
+
+## D2138 — NeperOS stage 1d: the entropy driver runs as an EL0 user-mode server
+
+The entropy driver now runs out of the kernel, at EL0, as a capability-confined user-mode server
+-- the first of stage 1d's three drivers to migrate. Two things made it possible with no
+duplicated transport. First, the loaded user program moved from `neperos/user/demo/src/main.e` to
+`neperos/src/init.e`: a project's root is the directory above its `src`/`lib`, so the demo's root
+was `neperos/user/demo` and it could not `use` the kernel's modules; under `neperos/src` its root
+is `neperos/`, the kernel's, so it imports `virtio` directly. (The kernel loads one initrd and
+runs it as every EL0 thread by name, so a server is a name branch in that program; `virtio`
+compiles for the `neperos` target because its `pci`/`fdt` dependencies use only the EL0 os
+surface, and what the server does not call is pruned.) Second, the transport was already
+location-agnostic (D2135) and the EL0 memory surface (D2134) and device mapping (D2137) were in
+place.
+
+The kernel still enumerates PCI and assigns BARs, and drives block and console in place for now,
+but hands entropy off: `start_entropy_server` discovers the device (BAR assigned past the block
+and console windows), maps the BAR region (Device) and a fresh 128 KB identity DMA pool (Normal)
+into the server's address space with `map_range_el0`, leaves the common/notify/notify-multiplier
+and pool base/size in the aux area, grants a console capability, and adds the thread. The server
+(`E` in init.e) reads the aux area, calls `virtio.pool_set` and `virtio.read_entropy` -- the same
+functions the kernel calls -- and prints `el0 entropy N bytes: ...`. It holds only its device's
+BAR and its DMA pool with EL0 access; every other gigabyte is privileged in its space, so a stray
+access faults, the confinement the `X` and `W` threads already demonstrate. Both suites now assert
+`el0 entropy 8 bytes:` with eight hex bytes, so the proof is that the hardware RNG was read from
+EL0, not in the kernel. Verified by rebuilding `neper-self` and booting under QEMU: `el0 entropy`
+prints alongside every stage-1 mark with no kernel fault.
+
+Still ahead to close C103: migrate block and console the same way (now mechanical -- the pattern,
+the shared transport and the mapping all exist), an explicit negative isolation prober (a server
+that faults touching an un-granted device), and a console-receive path. Moving entropy out
+replaced the `Y` prober of D2137, which this subsumes.

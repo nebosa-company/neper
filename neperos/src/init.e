@@ -7,9 +7,14 @@
 // the read must fault and the kernel must end the thread before this line prints.
 use e.mem
 use e.os
+// (D2138) The virtio transport, shared with the kernel now that this program lives in
+// neperos/src: the entropy server `E` drives the device from EL0 with it.
+use virtio
 
 // Spins long enough to span several 10 ms timer slices under QEMU.
 const SPIN: usize = 30000000usize
+// (D2138) The aux area the kernel fills for a driver thread, at USER_BASE + vm.AUX_OFF.
+const AUX: usize = 2147745728usize
 // The capability slot holding the endpoint the sender and receiver rendezvous on.
 const CHANNEL: usize = 1usize
 // A slot index past the capability space: "no capability to grant" or "nowhere to receive
@@ -34,6 +39,30 @@ fn say_tag(tag: u8, number: usize) {
     line[1usize] = u8(number) + 48u8
     line[2usize] = 32u8
     say(line[0usize..3usize])
+}
+
+// A decimal number and a hex byte, for the entropy server's output (D2138).
+fn say_decimal(value: usize) {
+    var digits: [20]u8 = zero
+    var at = 20usize
+    var rest = value
+    var open = true
+    while open {
+        at -= 1usize
+        digits[at] = u8(rest % 10usize) + 48u8
+        rest = rest / 10usize
+        if rest == 0usize { open = false }
+    }
+    say(digits[at..20usize])
+}
+
+fn say_hex(value: u8) {
+    var pair: [2]u8 = zero
+    let high = (value >> 4u8) & 15u8
+    let low = value & 15u8
+    if high < 10u8 { pair[0usize] = high + 48u8 } else { pair[0usize] = high + 87u8 }
+    if low < 10u8 { pair[1usize] = low + 48u8 } else { pair[1usize] = low + 87u8 }
+    say(pair[0usize..2usize])
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -147,14 +176,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if after == 18446744073709551615usize { say("V revoke ok\n") } else { say("V revoke leaked\n") }
         ret ok
     }
-    if one_char(name) == 89u8 {
-        // Y is a device prober (D2137): the kernel mapped the entropy device's PCI config page
-        // into its space and left its address at aux slot 0 (USER_BASE + vm.AUX_OFF). Y reads
-        // the vendor id directly at EL0 -- the mapped-frame access a user-mode driver makes to
-        // its device's MMIO. The virtio vendor is 0x1af4 (6900).
-        let ecam = usize(os.load64(2147745728usize))
-        let id = os.load32(ecam)
-        if (id & 65535u32) == 6900u32 { say("probe vendor ok\n") } else { say("probe vendor bad\n") }
+    if one_char(name) == 69u8 {
+        // E is the entropy driver as a real EL0 user-mode server (D2138): the kernel discovered
+        // the device, mapped its BAR (Device) and an identity DMA pool (Normal) into E's space,
+        // and left the addresses in the aux area. E runs the SAME transport the kernel does and
+        // holds only its device's frames, so it is confined. aux: 0 common, 1 notify, 2 notify
+        // multiplier, 3 pool base, 4 pool size.
+        var device: virtio.Device = zero
+        device.common = usize(os.load64(AUX))
+        device.notify = usize(os.load64(AUX + 8usize))
+        device.notify_multiplier = u32(os.load64(AUX + 16usize))
+        virtio.pool_set(usize(os.load64(AUX + 24usize)), usize(os.load64(AUX + 32usize)))
+        let (buffer, written, read_error) = virtio.read_entropy(device, 8usize)
+        if read_error != ok {
+            say("el0 entropy failed\n")
+            ret ok
+        }
+        say("el0 entropy ")
+        say_decimal(written)
+        say(" bytes:")
+        var at = 0usize
+        while at < written && at < 8usize {
+            say(" ")
+            say_hex(os.load8(buffer + at))
+            at += 1usize
+        }
+        say("\n")
         ret ok
     }
     if one_char(name) == 90u8 {
