@@ -37078,3 +37078,26 @@ Still open on crosvm (not the transport): the console-server client thread P fau
 pointer and a spin thread loops, so the demo times out rather than powering off cleanly; and
 virtio-vsock and the Pixel `adb shell vm run` path remain. The a1.metal box is stopped (not
 terminated) so crosvm need not be rebuilt for that bring-up.
+
+## D2147 — EL0 page mappings are non-global, so a thread never reads another's at USER_BASE
+
+The crosvm bring-up left two threads misbehaving (D2146): the console-server client P faulted on
+its own `message` string, which read back as the allocator's 0xCD poison, and a round-printer
+re-ran the same round. Both were one bug. The scheduler gives each address space its own ASID and
+switches by writing TTBR0 without flushing the TLB (D2127), which is correct only when a space's
+entries are non-global -- a global entry is not ASID-tagged and a TLB lookup matches it whatever
+TTBR0 holds. But `vm.user_page_bits` and the device branch of `el0_page_bits` left the nG bit
+(descriptor bit 11) clear, so every thread's USER_BASE pages were global. On a core that keeps
+global entries across a TTBR0 write -- a real Cortex-A72 under crosvm's KVM -- a stale USER_BASE
+entry from one thread served the next, so a thread read another thread's region: P read a
+neighbour's unwritten 0xCD, and the round-printer re-fetched a neighbour's state. QEMU's
+interpreter happens to drop the entries on the switch, which is why stage 1 always passed there
+and the fault appeared only on hardware. The fix sets nG on the EL0 leaf descriptors (the kernel's
+identity map stays global, since it is identical in every space). Confirmed on the AWS a1.metal
+box: the whole stage-2 demo now runs clean under crosvm -- entropy, block and console drivers, the
+capability and isolation threads, `console server up` from the P->K server path, `all threads
+done` and a PSCI power-off with exit 0 -- and QEMU's stage-1 boot is byte-for-byte unchanged. This
+was found by tracing P's descriptor each iteration (valid, then 0xCD) while a kernel read of the
+same region through the identity map still showed valid data: the physical memory was right and
+only the EL0 view was wrong, which is a TLB, not a memory, fault. Remaining for C104: virtio-vsock
+and the Pixel `adb shell vm run` path.

@@ -30,13 +30,18 @@ const STACK_TOP: usize = 524288usize
 
 // The user gigabyte's level-1 index (VA bits 38:30), derived from USER_BASE so the two can
 // never drift, and the page bits a leaf carries: a valid page, Normal memory (MAIR index 2),
-// EL0-and-EL1 read/write, inner shareable, the access flag, and privileged-execute-never so
-// the kernel never runs user code.
+// EL0-and-EL1 read/write, inner shareable, the access flag, privileged-execute-never so the
+// kernel never runs user code, and non-global (D2147) so the entry is tagged by the space's
+// ASID: the scheduler switches address spaces by ASID without flushing the TLB, which keeps a
+// thread's USER_BASE pages apart only when they are non-global. Left global, a stale USER_BASE
+// entry from one thread serves another on hardware that keeps global entries across a TTBR0
+// write (real cores; QEMU happens to hide it), so a thread reads another's memory.
 const L1_USER_INDEX: usize = USER_BASE >> 30usize
 const TABLE: usize = 3usize
 const PAGE_VALID: usize = 3usize
 const ATTR_NORMAL: usize = 8usize
 const AP_EL0_RW: usize = 64usize
+const NOT_GLOBAL: usize = 1usize << 11usize
 const SHARE_INNER: usize = 768usize
 const ACCESS_FLAG: usize = 1024usize
 const PRIVILEGED_EXECUTE_NEVER: usize = 1usize << 53usize
@@ -62,7 +67,7 @@ type Space = struct {
 }
 
 fn user_page_bits() -> usize {
-    ret PAGE_VALID | ATTR_NORMAL | AP_EL0_RW | SHARE_INNER | ACCESS_FLAG | PRIVILEGED_EXECUTE_NEVER
+    ret PAGE_VALID | ATTR_NORMAL | AP_EL0_RW | NOT_GLOBAL | SHARE_INNER | ACCESS_FLAG | PRIVILEGED_EXECUTE_NEVER
 }
 
 // A zeroed, 4 KB-aligned page. A translation table base must be aligned to its size, and
@@ -142,7 +147,7 @@ const AP_READONLY: usize = 128usize
 // The leaf bits for an identity EL0 page: Device memory (nGnRE) or Normal, read/write at EL0,
 // never executable. Device is not inner-shareable; Normal is, like the user region.
 fn el0_page_bits(device: bool) -> usize {
-    if device { ret PAGE_VALID | ATTR_DEVICE | AP_EL0_RW | ACCESS_FLAG | PRIVILEGED_EXECUTE_NEVER | USER_EXECUTE_NEVER }
+    if device { ret PAGE_VALID | ATTR_DEVICE | AP_EL0_RW | NOT_GLOBAL | ACCESS_FLAG | PRIVILEGED_EXECUTE_NEVER | USER_EXECUTE_NEVER }
     ret user_page_bits()
 }
 
