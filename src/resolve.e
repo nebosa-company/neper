@@ -457,8 +457,16 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     // Section 5: `os.syscall` exists on Linux alone, so on any other target the name is
     // an unknown name like any other rather than something that fails when called.
     if same(g.os, "linux") { try seed(r, g, "e.os", "syscall", .Value, .Intrinsic) }
-    // (D2127) A NeperOS program gives up its time slice.
-    if same(g.os, "neperos") { try seed(r, g, "e.os", "yield", .Value, .Intrinsic) }
+    // (D2127) A NeperOS program gives up its time slice; (D2128) and rendezvous over an
+    // endpoint capability.
+    if same(g.os, "neperos") {
+        try seed(r, g, "e.os", "yield", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "send", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "recv", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "cap_derive", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "cap_revoke", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "frame_protect", .Value, .Intrinsic)
+    }
     // (D2126) A kernel's machine, on aarch64-none alone in the same way.
     if same(g.os, "none") && same(g.arch, "aarch64") {
         try seed(r, g, "e.os", "set_console", .Value, .Intrinsic)

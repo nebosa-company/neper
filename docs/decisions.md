@@ -36531,3 +36531,39 @@ address, and the one reference into protected memory is the kernel's own, plante
 the hardware and the page tables stop it. Both suites build the program and the kernel and
 boot them under `qemu-system-aarch64 -M virt,gic-version=3` on both hosts; the trap boot
 still works, since the `trap` argument is handled before the controller and the initrd.
+
+## D2128 — NeperOS stage 1c: capabilities, synchronous IPC and the boundaries they draw
+
+C102 makes a kernel object reachable only through a capability. Each thread has a small
+capability space (eight slots in its control block); a capability is a kind (endpoint,
+console, frame), a rights bitset, the object it names and the slot it was derived from. A
+thread with no capability for an object cannot name it.
+
+Synchronous IPC is an endpoint and a rendezvous. `send` over an endpoint capability (with
+the send right) hands one word to a waiting receiver and both run on; with none waiting the
+sender blocks, the word in its saved frame, until a receiver arrives. `recv` is the mirror.
+A blocked thread is a new scheduler state the round-robin skips; when a rendezvous readies
+it, the kernel sets its saved `x0` and marks it ready, and it resumes where its `svc`
+returned. When a block leaves nothing runnable the kernel idles until the timer or a
+rendezvous readies someone.
+
+The console is now a capability too: `write` is refused unless the thread holds a console
+capability with the write right. `cap_derive` copies a capability into another slot with
+rights cleared and the source as its parent; `cap_revoke` nulls every capability derived
+from a slot, directly or through the chain, so a revoked endpoint capability no longer
+sends or receives. A frame capability names one of the thread's pages; `frame_protect`
+walks the thread's own three-level tables and sets or clears the page's `AP[1]` by the
+capability's write right, so a store through a read-only frame capability faults. These are
+the three boundaries the fixture proves, each by a thread that tries to cross one: N with no
+console capability is refused and prints nothing; V derives a two-link chain, revokes the
+root, and a receive on the revoked capability fails rather than blocking; W writes through
+its writable frame capability, derives a read-only copy, re-protects the page through it and
+faults on the next write. S and R rendezvous over an endpoint capability, R printing the
+words. All of it runs under the timer with the stage 1b threads, and both suites check that
+every expected line appears and none of the four boundary-crossing lines does.
+
+Not yet, and why C102 stays in the queue: untyped memory does not retype into objects (the
+endpoints and the capability table are fixed kernel arrays, not carved from untyped); IPC
+carries a word but not a capability; interrupts are not delivered to user drivers as
+notifications; and the console, though gated by a capability, is still a kernel call rather
+than a user-mode server. These are the remaining stage 1c depth.

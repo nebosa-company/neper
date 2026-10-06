@@ -60,10 +60,19 @@ fn power_off(code: i32) {
     psci.system_off(psci.Firmware { smc: firmware_smc })
 }
 
-// A thread's console write (call 0): the bytes it names, copied out of its own region a
-// chunk at a time and never from anywhere else, so a thread cannot read the kernel through
-// the kernel. The count written goes back in x0.
+// A thread's console write (call 0): refused unless the thread holds a console capability
+// with the write right (D2128), so the console is reached only through a capability. The
+// bytes it names are copied out of its own region a chunk at a time and never from anywhere
+// else, so a thread cannot read the kernel through the kernel. The count written goes back
+// in x0, or all-ones when the thread has no console capability.
 fn write_user(frame: *a64.Frame) {
+    if !thread.current_holds(thread.CAP_CONSOLE, thread.RIGHT_WRITE) {
+        console_write("neperos: thread ")
+        console_write(thread.current_name())
+        console_write(" denied console\n")
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
     let ptr = usize(frame.x[0usize])
     let len = usize(frame.x[1usize])
     frame.x[0usize] = 0u64
@@ -98,6 +107,26 @@ fn syscall(frame: *a64.Frame) {
     }
     if number == 2u64 {
         thread.on_yield(frame)
+        ret
+    }
+    if number == 3u64 {
+        thread.ipc_send(frame)
+        ret
+    }
+    if number == 4u64 {
+        thread.ipc_recv(frame)
+        ret
+    }
+    if number == 5u64 {
+        thread.cap_derive(frame)
+        ret
+    }
+    if number == 6u64 {
+        thread.cap_revoke(frame)
+        ret
+    }
+    if number == 7u64 {
+        thread.frame_protect(frame)
         ret
     }
 }
@@ -174,12 +203,22 @@ fn setup_args(space: vm.Space, name: str, kernel_pointer: usize, hostile: bool) 
     ret (vm.address(vm.ARG_OFF), count)
 }
 
-// One thread from the initrd image, its arguments set up, added to the scheduler.
-fn start_thread(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize, name: str, kernel_pointer: usize, hostile: bool) -> err {
+// One thread from the initrd image, its arguments set up, added to the scheduler, and its
+// capability space granted: a console capability in slot 0 when `console`, and an endpoint
+// capability on endpoint 0 in slot 1 with `endpoint_rights` (none, send or receive). A
+// thread granted no console capability cannot print.
+fn start_thread(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize, name: str, kernel_pointer: usize, hostile: bool, may_print: bool, endpoint_rights: u8, frame_cap: bool) -> err {
     let (space, space_error) = vm.create(a, image_addr, image_len, asid)
     if space_error != ok { ret space_error }
     let (arg_table, arg_count) = setup_args(space, name, kernel_pointer, hostile)
-    ret thread.add(space, name, arg_table, arg_count)
+    let index = thread.add(space, name, arg_table, arg_count)
+    if index == thread.MAX_THREADS { ret vm.NoSpace }
+    if may_print { thread.grant(index, 0usize, thread.CAP_CONSOLE, thread.RIGHT_WRITE, 0usize) }
+    if endpoint_rights != 0u8 { thread.grant(index, 1usize, thread.CAP_ENDPOINT, endpoint_rights, 0usize) }
+    // A frame capability over the thread's own arena page, writable; a thread may derive a
+    // read-only copy and re-protect through it.
+    if frame_cap { thread.grant(index, 2usize, thread.CAP_FRAME, thread.RIGHT_WRITE, space.arena_addr) }
+    ret ok
 }
 
 fn has_word(text: str, word: str) -> bool {
@@ -267,13 +306,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     console_write(" len ")
     hex(u64(image_len))
     console_write("\n")
-    // Three threads from the one image: A and B interleave under the timer, and X is handed
-    // a reference to kernel RAM -- mapped into its space without EL0 access -- so its read
-    // faults and it alone is killed. The RAM base is as good a kernel address as any.
+    // A and B interleave under the timer, and X is handed a reference to kernel RAM --
+    // mapped into its space without EL0 access -- so its read faults and it alone is killed.
+    // The RAM base is as good a kernel address as any. S and R rendezvous over endpoint 0
+    // (D2128): S sends three words and R prints each, interleaved with the rest.
     let protected_pointer = usize(ram_start)
-    try start_thread(a, image_addr, image_len, 1usize, "A", 0usize, false)
-    try start_thread(a, image_addr, image_len, 2usize, "B", 0usize, false)
-    try start_thread(a, image_addr, image_len, 3usize, "X", protected_pointer, true)
+    try start_thread(a, image_addr, image_len, 1usize, "A", 0usize, false, true, 0u8, false)
+    try start_thread(a, image_addr, image_len, 2usize, "B", 0usize, false, true, 0u8, false)
+    try start_thread(a, image_addr, image_len, 3usize, "X", protected_pointer, true, true, 0u8, false)
+    try start_thread(a, image_addr, image_len, 4usize, "S", 0usize, false, false, thread.RIGHT_SEND, false)
+    try start_thread(a, image_addr, image_len, 5usize, "R", 0usize, false, true, thread.RIGHT_RECV, false)
+    // N holds no console capability: its write is refused, which it is meant to prove.
+    try start_thread(a, image_addr, image_len, 6usize, "N", 0usize, false, false, 0u8, false)
+    // V derives a chain from its endpoint capability and revokes it, proving the
+    // derivations are gone.
+    try start_thread(a, image_addr, image_len, 7usize, "V", 0usize, false, true, thread.RIGHT_RECV, false)
+    // W holds a writable frame capability over its arena; it derives a read-only copy,
+    // re-protects through it, and the next write faults, so it is killed.
+    try start_thread(a, image_addr, image_len, 8usize, "W", 0usize, false, true, 0u8, true)
     console_write("scheduling\n")
     // The scheduler runs from here: the first timer tick leaves this loop for a thread, and
     // the last thread to finish returns the kernel here with nothing left to run.

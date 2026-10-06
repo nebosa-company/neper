@@ -119,3 +119,23 @@ fn put_word(space: Space, offset: usize, value: usize) {
 fn address(offset: usize) -> usize {
     ret USER_BASE + offset
 }
+
+// AP[1] in a page descriptor: with it set the page is read-only at EL0; clear, read/write.
+const AP_READONLY: usize = 128usize
+
+// Re-protect the page at user VA `va` in the address space rooted at `ttbr`: writable clears
+// AP[1], read-only sets it, so an EL0 store into a read-only page faults. The walk follows
+// the three table levels the map uses; a flush makes the change take effect.
+fn protect(ttbr: usize, va: usize, writable: bool) {
+    let l1 = ttbr & TABLE_MASK
+    let l1_entry = usize(os.load64(l1 + ((va >> 30usize) & 511usize) * 8usize))
+    let l2 = l1_entry & TABLE_MASK
+    let l2_entry = usize(os.load64(l2 + ((va >> 21usize) & 511usize) * 8usize))
+    let l3 = l2_entry & TABLE_MASK
+    let slot = l3 + ((va >> 12usize) & 511usize) * 8usize
+    var entry = usize(os.load64(slot))
+    if writable { entry = entry & ~AP_READONLY } else { entry = entry | AP_READONLY }
+    os.store64(slot, u64(entry))
+    os.barrier()
+    os.tlb_flush()
+}

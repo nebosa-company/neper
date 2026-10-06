@@ -307,6 +307,43 @@ neper_os_yield:
     svc #0
     ret
 
+// os.send(endpoint: usize, word: usize) -> usize: block until a receiver takes the word;
+// x0 the endpoint, x1 the word, x0 the status back.
+.global neper_os_send
+neper_os_send:
+    mov x8, #3
+    svc #0
+    ret
+
+// os.recv(endpoint: usize) -> usize: block until a sender's word arrives; x0 the endpoint,
+// x0 the word back.
+.global neper_os_recv
+neper_os_recv:
+    mov x8, #4
+    svc #0
+    ret
+
+// os.cap_derive(source, dest, drop_rights) -> usize.
+.global neper_os_cap_derive
+neper_os_cap_derive:
+    mov x8, #5
+    svc #0
+    ret
+
+// os.cap_revoke(slot) -> usize.
+.global neper_os_cap_revoke
+neper_os_cap_revoke:
+    mov x8, #6
+    svc #0
+    ret
+
+// os.frame_protect(slot) -> usize.
+.global neper_os_frame_protect
+neper_os_frame_protect:
+    mov x8, #7
+    svc #0
+    ret
+
 // A ULEB128 at x28 into x0, x28 past it; x9 and x10 are used (D1586).
 np_trap_uleb:
     mov x0, #0

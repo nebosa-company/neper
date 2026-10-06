@@ -8911,14 +8911,17 @@ if ($LASTEXITCODE -ne 1 -or ($cycleOutput -join "`n") -notmatch
     throw 'module import cycle rejection failed'
 }
 
-# (D2126, D2127) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image; it finds
-# its console, firmware and memory in the device tree, turns translation on, takes a fault
-# on purpose, then on GICv3 runs three EL0 threads from the initrd program under the timer.
+# (D2126, D2127, D2128) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image; it
+# finds its console, firmware and memory in the device tree, turns translation on, takes a
+# fault on purpose, then on GICv3 runs EL0 threads from the initrd program under the timer.
 # A and B interleave and finish; X, handed a reference into kernel RAM, faults on the read
-# and is killed alone (the isolation stage 1 proves). Booted with `trap` from 2 MB higher
-# -- `text_offset` set to 4 MB, so nothing in it may be an absolute address -- a failed
-# bounds check is reported with its backtrace and ends the kernel with 134. The machine
-# intrinsics are unknown names on any other target.
+# and is killed alone (the isolation stage 1 proves). Stage 1c (D2128) adds capabilities:
+# S and R rendezvous over an endpoint capability (R prints the words); N, with no console
+# capability, is refused; V derives a chain and revokes it, so a revoked capability no longer
+# works; W derives a read-only frame capability, re-protects its page and faults on the next
+# write. Booted with `trap` from 2 MB higher -- `text_offset` set to 4 MB, so nothing in it
+# may be an absolute address -- a failed bounds check is reported with its backtrace and ends
+# the kernel with 134. The machine intrinsics are unknown names on any other target.
 $neperosImage = Join-Path $testBuild 'neperos.img'
 $neperosWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\main.e') $repo aarch64 none $neperosImage
 if ($LASTEXITCODE -ne 0 -or $neperosWritten -ne 'executable written') { throw 'NeperOS did not build' }
@@ -8939,11 +8942,13 @@ if ($neperosQemu) {
         return ((Get-Content -Raw $transcript) -replace "`r", '')
     }
     $neperosBoot = Invoke-NeperOS $neperosImage @('-initrd', $neperosDemo)
-    if ($neperosBoot -notmatch '(?s)Welcome to NeperOS.*mmu on.*fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned.*scheduling.*thread X killed, el0 fault at 0x0000000040000000.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS did not schedule its threads: $neperosBoot" }
-    foreach ($neperosToken in @('A0', 'A1', 'A2', 'B0', 'B1', 'B2', 'X0', 'X1', 'X2')) {
+    if ($neperosBoot -notmatch '(?s)Welcome to NeperOS.*mmu on.*fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned.*scheduling.*thread N denied console.*V revoke ok.*thread W killed, el0 fault at 0x0000000080040000.*thread X killed, el0 fault at 0x0000000040000000.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS did not schedule its threads: $neperosBoot" }
+    foreach ($neperosToken in @('A0', 'A1', 'A2', 'B0', 'B1', 'B2', 'X0', 'X1', 'X2', 'R7', 'R8', 'R9')) {
         if ($neperosBoot -notmatch [regex]::Escape("$neperosToken ")) { throw "NeperOS thread output missing ${neperosToken}: $neperosBoot" }
     }
-    if ($neperosBoot -match 'read protected memory') { throw "a thread read protected memory: $neperosBoot" }
+    foreach ($neperosLeak in @('read protected memory', 'N should not print', 'V revoke leaked', 'W wrote after protect')) {
+        if ($neperosBoot -match [regex]::Escape($neperosLeak)) { throw "capability boundary leaked (${neperosLeak}): $neperosBoot" }
+    }
     $neperosMoved = Join-Path $testBuild 'neperos-moved.img'
     $neperosBytes[10] = 0x40
     [IO.File]::WriteAllBytes($neperosMoved, $neperosBytes)

@@ -855,6 +855,11 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     if same(name, "neper_os_wait_for_event") { ret ("wait_for_event", true) }
     if same(name, "neper_os_send_event") { ret ("send_event", true) }
     if same(name, "neper_os_yield") { ret ("yield", true) }
+    if same(name, "neper_os_send") { ret ("send", true) }
+    if same(name, "neper_os_recv") { ret ("recv", true) }
+    if same(name, "neper_os_cap_derive") { ret ("cap_derive", true) }
+    if same(name, "neper_os_cap_revoke") { ret ("cap_revoke", true) }
+    if same(name, "neper_os_frame_protect") { ret ("frame_protect", true) }
     if same(name, "neper_os_hvc") { ret ("hvc", true) }
     if same(name, "neper_os_smc") { ret ("smc", true) }
     if same(name, "neper_os_mrs") { ret ("mrs", true) }

@@ -4936,6 +4936,31 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
     if has_os && same(g.os, "neperos") {
         let (yield_index, yield_error) = add_seeded_function(c, os_module, "yield", make_type(.Void, "void", os_module), false)
         if yield_error != ok { ret yield_error }
+        // (D2128) `send(endpoint, word) -> status` and `recv(endpoint) -> word`, both over
+        // a capability index, blocking until a partner rendezvous.
+        let usize_type = make_type(.Integer, "usize", os_module)
+        let (send_index, send_error) = add_seeded_function(c, os_module, "send", usize_type, false)
+        if send_error != ok { ret send_error }
+        try add_seeded_parameter(c, send_index, "endpoint", usize_type)
+        try add_seeded_parameter(c, send_index, "word", usize_type)
+        let (recv_index, recv_error) = add_seeded_function(c, os_module, "recv", usize_type, false)
+        if recv_error != ok { ret recv_error }
+        try add_seeded_parameter(c, recv_index, "endpoint", usize_type)
+        // (D2128) `cap_derive(source, dest, drop_rights) -> status` copies a capability with
+        // rights reduced; `cap_revoke(slot) -> status` drops its derivations.
+        let (derive_index, derive_error) = add_seeded_function(c, os_module, "cap_derive", usize_type, false)
+        if derive_error != ok { ret derive_error }
+        try add_seeded_parameter(c, derive_index, "source", usize_type)
+        try add_seeded_parameter(c, derive_index, "dest", usize_type)
+        try add_seeded_parameter(c, derive_index, "drop_rights", usize_type)
+        let (revoke_index, revoke_error) = add_seeded_function(c, os_module, "cap_revoke", usize_type, false)
+        if revoke_error != ok { ret revoke_error }
+        try add_seeded_parameter(c, revoke_index, "slot", usize_type)
+        // (D2128) `frame_protect(slot) -> status` re-protects the page a frame capability
+        // names by its write right.
+        let (protect_index, protect_error) = add_seeded_function(c, os_module, "frame_protect", usize_type, false)
+        if protect_error != ok { ret protect_error }
+        try add_seeded_parameter(c, protect_index, "slot", usize_type)
     }
     let (str_module, has_str) = graph.find_module(g, "e.str")
     if has_str { try seed_str_signatures(c, str_module) }
