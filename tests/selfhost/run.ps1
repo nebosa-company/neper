@@ -9001,6 +9001,41 @@ if ($neperosQemu) {
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS shell archive did not assemble' }
     $shellBoot = Invoke-NeperOS $neperosImage @('-initrd', $shellArchive, '-append', 'shell')
     if ($shellBoot -notmatch '(?s)shell init up.*el0 prog A exit 7.*el0 prog B faulting.*thread child killed, el0 fault at 0x0000000000000000.*shell child A code 7.*shell child B killed.*shell init done.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS shell did not run its processes: $shellBoot" }
+    # (D2153, C106) The filesystem-server boot: the initrd is an archive of three programs -- an EL0
+    # filesystem server that alone holds the block device's capability, a client that drives it over
+    # IPC (open, read, write, close, list, mkdir, remove), and a client the kernel granted no
+    # endpoint. `fsserver fswrite` formats a fresh disk and writes a file; `fsserver fsread` reboots
+    # on the same disk and reads it back byte for byte, proving the filesystem persists through the
+    # server. The denied client's send is refused by the kernel -- the capability gate.
+    $fsServer = Join-Path $testBuild 'fs_server.img'
+    $fsClient = Join-Path $testBuild 'fs_client.img'
+    $fsDenied = Join-Path $testBuild 'fs_denied.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\fs_server.e') $repo aarch64 neperos $fsServer | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS filesystem server did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\fs_client.e') $repo aarch64 neperos $fsClient | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS filesystem client did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\fs_denied.e') $repo aarch64 neperos $fsDenied | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS denied client did not build' }
+    $fsArchive = Join-Path $testBuild 'fs-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $fsArchive $fsServer $fsClient $fsDenied
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS filesystem archive did not assemble' }
+    $fsServerDisk = Join-Path $testBuild 'fsserver-disk.img'
+    $fsServerStream = [IO.File]::Create($fsServerDisk); $fsServerStream.SetLength(1MB); $fsServerStream.Close()
+    $fsBlk = @('-drive', "file=$fsServerDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $fsWriteBoot = Invoke-NeperOS $neperosImage (@('-initrd', $fsArchive, '-append', '"fsserver fswrite"') + $fsBlk)
+    foreach ($fsMark in @('fs server formatted', 'fs denied', 'fs client mkdir /docs ok', 'fs client write /docs/greeting ok', 'fs client open /docs/greeting size 17', 'fs client close /docs/greeting ok', 'neperos: exit 0x0000000000000000')) {
+        if ($fsWriteBoot -notmatch [regex]::Escape($fsMark)) { throw "NeperOS filesystem write boot missing (${fsMark}): $fsWriteBoot" }
+    }
+    if ($fsWriteBoot -notmatch "fs client list /docs:\s*greeting") { throw "the filesystem server did not list the written file: $fsWriteBoot" }
+    if ($fsWriteBoot -notmatch "fs client list /:\s*docs") { throw "the filesystem server did not list the directory: $fsWriteBoot" }
+    if ($fsWriteBoot -match 'fs denied leaked') { throw "the capability gate leaked on the write boot: $fsWriteBoot" }
+    $fsReadBoot = Invoke-NeperOS $neperosImage (@('-initrd', $fsArchive, '-append', '"fsserver fsread"') + $fsBlk)
+    foreach ($fsMark in @('fs server up', 'fs denied', 'fs client read: hello neperos fs', 'fs client remove /docs/greeting ok', 'neperos: exit 0x0000000000000000')) {
+        if ($fsReadBoot -notmatch [regex]::Escape($fsMark)) { throw "NeperOS filesystem read boot missing (${fsMark}): $fsReadBoot" }
+    }
+    if ($fsReadBoot -match 'fs server formatted') { throw "NeperOS reformatted an already-written disk, losing persistence: $fsReadBoot" }
+    if ($fsReadBoot -notmatch "fs client list /docs:\s*fs server done") { throw "the removed file was still listed: $fsReadBoot" }
+    if ($fsReadBoot -match 'fs denied leaked') { throw "the capability gate leaked on the read boot: $fsReadBoot" }
 }
 
 Write-Output 'selfhost tests passed'

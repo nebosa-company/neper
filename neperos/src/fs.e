@@ -247,6 +247,49 @@ fn read(blk: virtio.Block, path: str, dst: usize, max: usize) -> (usize, err) {
     ret (count, ok)
 }
 
+// The size and kind of `path`, and whether it exists (the open/stat query).
+fn stat(blk: virtio.Block, path: str) -> (usize, u8, bool) {
+    let (parent, leaf) = parent_leaf(path)
+    let (dir_block, resolve_error) = resolve_dir(blk, parent)
+    if resolve_error != ok { ret (0usize, KIND_EMPTY, false) }
+    let (off, data_block, size, kind, found) = dir_lookup(blk, dir_block, leaf)
+    ret (size, kind, found)
+}
+
+// List the directory `path` into `dst` (up to `max` bytes) as its entries' names, each followed by
+// a newline. The entry count and the bytes written come back.
+fn list(blk: virtio.Block, path: str, dst: usize, max: usize) -> (usize, usize, err) {
+    let (dir_block, resolve_error) = resolve_dir(blk, path)
+    if resolve_error != ok { ret (0usize, 0usize, resolve_error) }
+    if virtio.block_read(blk, dir_block) != ok { ret (0usize, 0usize, NotFormatted) }
+    var count = 0usize
+    var at = 0usize
+    var i = 0usize
+    while i < ENTRIES {
+        let off = i * ENTRY_SIZE
+        if os.load8(blk.data + off + KIND_OFF) != KIND_EMPTY {
+            count += 1usize
+            var j = 0usize
+            var naming = true
+            while naming && j < NAME_MAX {
+                let c = os.load8(blk.data + off + NAME_OFF + j)
+                if c == 0u8 {
+                    naming = false
+                } else {
+                    if at < max { os.store8(dst + at, c) }
+                    at += 1usize
+                    j += 1usize
+                }
+            }
+            if at < max { os.store8(dst + at, 10u8) }
+            at += 1usize
+        }
+        i += 1usize
+    }
+    if at > max { at = max }
+    ret (count, at, ok)
+}
+
 // Remove the file or directory `path` by clearing its directory entry (its blocks are not
 // reclaimed).
 fn remove(blk: virtio.Block, path: str) -> err {

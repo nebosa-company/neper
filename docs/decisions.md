@@ -37219,3 +37219,35 @@ C105 shell boots are unchanged. (Trap learned: a module-scope `const X: str = ".
 checking -- no lib module has one; use a local.) Still to come for C106: list, mkdir and remove;
 directories beyond the flat root; and the filesystem as an EL0 IPC server that alone holds the
 block capability, with clients refused unless they hold the server's endpoint.
+
+## D2153 — C106 closes: an EL0 filesystem server, capability-gated over IPC
+
+The filesystem is now an EL0 user-mode server that alone holds the block device's capability;
+clients reach it only over IPC, and a client without the server's endpoint cannot reach it at all.
+The on-disk format gains directories: `mkdir` allocates a directory block (sixteen 32-byte entries,
+like the root) and links it into its parent with kind DIR, and a path is resolved component by
+component, each but the last a directory, so `/docs/greeting` names a file inside a made directory;
+fs.e also gains `stat` (the open/size query), `list` (a directory's entry names, newline-separated)
+and `remove` (clears the entry; blocks are not reclaimed -- an inode and a free bitmap are the
+upgrade when a file or directory outgrows a block). The IPC protocol (fsproto.e) rides thread.e's
+one-word synchronous rendezvous: a request is an op word, the path as a length-prefixed byte string
+(one byte per rendezvous), and for a write the data likewise; a reply is a result word, then for a
+read or list the payload as a byte string, for an open the size word. Op 0 is quit, so the server
+returns and, with every process exited, the kernel powers off. The `fsserver` boot assembles an
+archive of three programs: program 0 (fs_server) is started with start_driver_server so it alone
+holds the block device, then granted the request endpoint (slot 2, receive) and the reply endpoint
+(slot 3, send); program 1 (fs_client) is granted the matching endpoints (request-send slot 1,
+reply-receive slot 2) and a scenario -- `fswrite` formats a blank disk then mkdir/write/open/close/
+lists, `fsread` reads the file back and removes it; program 2 (fs_denied) is granted no endpoint,
+so its very first send is refused by the kernel with the all-ones sentinel -- the capability gate.
+The server, not any client, owns formatting: it formats only a blank disk (is_formatted), so a
+reboot keeps what was written. To keep address spaces distinct the server takes ASID 1 and the
+clients start from 2 (a single module var, last_server_index, carries the server's thread index out
+of start_driver_server so the kernel can grant it the endpoints). Verified on QEMU virt on both
+hosts, two boots on one disk image: boot 1 (fresh) prints `fs server formatted`, `fs denied`,
+mkdir/write/open size 17/close ok, `list /docs: greeting`, `list /: docs`; boot 2 (same disk) does
+NOT reformat and prints `fs client read: hello neperos fs` -- the file read back byte for byte
+across the reboot through the server -- then remove ok and an empty `list /docs`. The scheduler
+orders the denied client against the real client differently between hosts, so the suite fixtures
+(run.ps1, run.sh) assert each line independently rather than one fixed order. The default A-Z, the
+C105 shell and the D2152 fswrite/fsread boots are unchanged.

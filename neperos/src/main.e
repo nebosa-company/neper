@@ -60,6 +60,9 @@ var archive_count: usize = 0usize
 var archive_offset: [16]usize = zero
 var archive_length: [16]usize = zero
 var next_asid: usize = 0usize
+// (D2153) The thread index of the last driver server started, so the filesystem-server boot can
+// grant it the endpoint capabilities it serves clients over.
+var last_server_index: usize = 24usize
 // The four QEMU-virt PCIe INTx lines are GIC SPIs 3-6, that is INTIDs 35-38.
 const PCIE_INTX_FIRST: usize = 35usize
 const PCIE_INTX_LAST: usize = 38usize
@@ -372,6 +375,7 @@ fn start_driver_server(a: *mem.Arena, image_addr: usize, image_len: usize, asid:
     // INTx; and a notification capability (notification 1) the server waits on for its interrupt.
     record_isr(device.isr)
     thread.grant(index, 1usize, thread.CAP_NOTIFICATION, thread.RIGHT_RECV, DEVICE_NOTIFICATION)
+    last_server_index = index
     ret (cursor, ok)
 }
 
@@ -597,11 +601,40 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (shell_init, shell_init_error) = start_process(archive_base + archive_offset[0usize], archive_length[0usize], "init")
         if shell_init_error != ok { ret shell_init_error }
     }
+    // (D2153, C106) The filesystem-server boot (`-append fsserver fswrite` / `fsserver fsread`):
+    // the initrd is an archive of three programs. Program 0 is the filesystem server, started with
+    // start_driver_server so it alone holds the block device's capability; the kernel then grants
+    // it the request endpoint (slot 2, receive) and the reply endpoint (slot 3, send). Program 1 is
+    // a client, granted the matching endpoints (request-send slot 1, reply-receive slot 2) and a
+    // scenario from the boot arg -- `fswrite` writes a file, `fsread` reads it back, so writing on
+    // one boot and reading on the next over the same disk proves persistence through the server.
+    // Program 2 is a client granted no endpoints: its send is refused, the capability gate.
+    let fsserver_mode = bootargs_error == ok && has_word(bootargs, "fsserver")
+    if fsserver_mode {
+        if pci_host_error != ok { ret NoInitrd }
+        if !parse_archive(image_addr) { ret BadArchive }
+        last_server_index = thread.MAX_THREADS
+        let (srv_bar, srv_error) = start_driver_server(a, archive_base + archive_offset[0usize], archive_length[0usize], 1usize, pci_host, pci_host.mmio, pci.VIRTIO_BLOCK, "fs")
+        if srv_error != ok { ret srv_error }
+        if last_server_index == thread.MAX_THREADS { ret NoInitrd }
+        thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 0usize)
+        thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 1usize)
+        // The server took ASID 1; the clients start from 2 so no two spaces share an ASID.
+        next_asid = 1usize
+        var client_name = "read"
+        if has_word(bootargs, "fswrite") { client_name = "write" }
+        let (client, client_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], client_name)
+        if client_error != ok { ret client_error }
+        thread.grant(client, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
+        thread.grant(client, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 1usize)
+        let (denied, denied_error) = start_process(archive_base + archive_offset[2usize], archive_length[2usize], "denied")
+        if denied_error != ok { ret denied_error }
+    }
     // (D2152, C106) The filesystem boot (`-append fswrite` / `fsread`): the initrd is the fs test
     // program, started as the sole holder of the block device. `fswrite` formats (if the disk is
     // blank) and writes a file; `fsread` reads it back, so a reboot on the same disk image proves
     // the filesystem persists.
-    let fs_mode = bootargs_error == ok && (has_word(bootargs, "fswrite") || has_word(bootargs, "fsread"))
+    let fs_mode = bootargs_error == ok && !fsserver_mode && (has_word(bootargs, "fswrite") || has_word(bootargs, "fsread"))
     if fs_mode {
         if pci_host_error != ok { ret NoInitrd }
         var fs_name = "fsread"
@@ -609,7 +642,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (fs_bar, fs_error) = start_driver_server(a, image_addr, image_len, 1usize, pci_host, pci_host.mmio, pci.VIRTIO_BLOCK, fs_name)
         if fs_error != ok { ret fs_error }
     }
-    if !shell_mode && !fs_mode {
+    if !shell_mode && !fs_mode && !fsserver_mode {
     // A and B interleave under the timer, and X is handed a reference to kernel RAM --
     // mapped into its space without EL0 access -- so its read faults and it alone is killed.
     // The RAM base is as good a kernel address as any. S and R rendezvous over endpoint 0

@@ -8858,6 +8858,39 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
         *'shell init up'*'el0 prog A exit 7'*'el0 prog B faulting'*'thread child killed, el0 fault at 0x0000000000000000'*'shell child A code 7'*'shell child B killed'*'shell init done'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS shell did not run its processes: $neperos_shell" >&2; exit 1 ;;
     esac
+    # (D2153, C106) The filesystem-server boot: the initrd is an archive of three programs -- an EL0
+    # filesystem server that alone holds the block device's capability, a client that drives it over
+    # IPC (open, read, write, close, list, mkdir, remove), and a client the kernel granted no
+    # endpoint. fsserver fswrite formats a fresh disk and writes a file; fsserver fsread reboots on
+    # the same disk and reads it back byte for byte, proving the filesystem persists through the
+    # server. The denied client's send is refused -- the capability gate.
+    fs_server_img="$test_build/fs_server.img"
+    fs_client_img="$test_build/fs_client.img"
+    fs_denied_img="$test_build/fs_denied.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/fs_server.e" "$repo" aarch64 neperos "$fs_server_img")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/fs_client.e" "$repo" aarch64 neperos "$fs_client_img")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/fs_denied.e" "$repo" aarch64 neperos "$fs_denied_img")" = 'executable written' ]
+    fs_archive="$test_build/fs-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$fs_archive" "$fs_server_img" "$fs_client_img" "$fs_denied_img"
+    fs_disk="$test_build/fsserver-disk.img"
+    dd if=/dev/zero of="$fs_disk" bs=1M count=1 status=none
+    neperos_fswrite=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$fs_archive" -append "fsserver fswrite" -drive "file=$fs_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_fswrite" in
+        *'fs server formatted'*'fs client mkdir /docs ok'*'fs client write /docs/greeting ok'*'fs client open /docs/greeting size 17'*'fs client close /docs/greeting ok'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS filesystem write boot wrong: $neperos_fswrite" >&2; exit 1 ;;
+    esac
+    case "$neperos_fswrite" in *'fs denied'*) ;; *) printf '%s\n' "the capability gate did not refuse the uncapped client: $neperos_fswrite" >&2; exit 1 ;; esac
+    case "$neperos_fswrite" in *'fs denied leaked'*) printf '%s\n' "the capability gate leaked on the write boot: $neperos_fswrite" >&2; exit 1 ;; esac
+    fs_listed="fs client list /docs:
+greeting"
+    case "$neperos_fswrite" in *"$fs_listed"*) ;; *) printf '%s\n' "the server did not list the written file: $neperos_fswrite" >&2; exit 1 ;; esac
+    neperos_fsread=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$fs_archive" -append "fsserver fsread" -drive "file=$fs_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_fsread" in
+        *'fs server up'*'fs client read: hello neperos fs'*'fs client remove /docs/greeting ok'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS filesystem read boot wrong: $neperos_fsread" >&2; exit 1 ;;
+    esac
+    case "$neperos_fsread" in *'fs server formatted'*) printf '%s\n' "NeperOS reformatted an already-written disk, losing persistence: $neperos_fsread" >&2; exit 1 ;; esac
+    case "$neperos_fsread" in *"$fs_listed"*) printf '%s\n' "the removed file was still listed: $neperos_fsread" >&2; exit 1 ;; esac
 fi
 
 printf '%s\n' 'selfhost tests passed'
