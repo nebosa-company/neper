@@ -1,18 +1,20 @@
 // A minimal persistent filesystem on a virtio-block device (D2152, C106). The on-disk layout is
 // 512-byte blocks: block 0 the superblock (a magic word, then the next free block as a bump
-// allocator), block 1 the root directory, blocks 2+ handed out for file data. A directory is one
-// block of sixteen 32-byte entries -- a 20-byte NUL-padded name, a kind byte (empty, file), the
-// data block, and the size in bytes. This foundation keeps a flat root directory and single-block
-// files (<= 512 bytes); directories, larger files and reclaiming removed blocks come with the
-// server.
-// ponytail: single-block files and a flat root; an inode with block pointers and a free bitmap are
-// the upgrade when files outgrow a block or the directory outgrows sixteen names.
+// allocator), block 1 the root directory, blocks 2+ handed out for file data and subdirectories.
+// A directory is one block of sixteen 32-byte entries -- a 20-byte NUL-padded name, a kind byte
+// (empty, file, dir), the data block, and the size in bytes. Files are a single block (<= 512
+// bytes); a directory holds up to sixteen entries. Paths are resolved from the root, so mkdir,
+// write and the rest take `/dir/name`. Removed blocks are not reclaimed.
+// ponytail: single-block files, sixteen-entry one-block directories, bump allocation with no free
+// list -- an inode with block pointers and a free bitmap are the upgrade when a file or directory
+// outgrows a block.
 use e.os
 use virtio
 
 error NotFormatted
 error DirFull
 error NotFound
+error NotDirectory
 error NameTooLong
 
 const SUPER_MAGIC: u32 = 0x4653454Eu32
@@ -22,14 +24,15 @@ const ENTRY_SIZE: usize = 32usize
 const ENTRIES: usize = 16usize
 const KIND_EMPTY: u8 = 0u8
 const KIND_FILE: u8 = 1u8
+const KIND_DIR: u8 = 2u8
 const NAME_OFF: usize = 0usize
 const KIND_OFF: usize = 20usize
 const BLOCK_OFF: usize = 24usize
 const SIZE_OFF: usize = 28usize
 const NAME_MAX: usize = 20usize
 const BLOCK_SIZE: usize = 512usize
+const SLASH: u8 = 47u8
 
-// Fill the block's sector buffer with zeros, 8 bytes at a time.
 fn zero_data(blk: virtio.Block) {
     var i = 0usize
     while i < BLOCK_SIZE {
@@ -50,7 +53,6 @@ fn format(blk: virtio.Block) -> err {
     ret virtio.block_write(blk, ROOT_DIR)
 }
 
-// Whether block 0 carries the filesystem magic.
 fn is_formatted(blk: virtio.Block) -> bool {
     if virtio.block_read(blk, 0u64) != ok { ret false }
     ret u32(os.load32(blk.data)) == SUPER_MAGIC
@@ -68,7 +70,6 @@ fn alloc_block(blk: virtio.Block) -> (u64, err) {
     ret (u64(next), ok)
 }
 
-// Whether the 20-byte name at `addr` equals `name` (NUL-padded).
 fn name_eq(addr: usize, name: str) -> bool {
     if name.len > NAME_MAX { ret false }
     var i = 0usize
@@ -88,28 +89,66 @@ fn store_name(addr: usize, name: str) {
     }
 }
 
-// Find a file `name` in the root directory: its data block and size come back, found or not. The
-// root directory is left in the sector buffer.
-fn find(blk: virtio.Block, name: str) -> (u64, usize, bool) {
-    if virtio.block_read(blk, ROOT_DIR) != ok { ret (0u64, 0usize, false) }
+// Find `name` in the directory at `dir_block` (left in the sector buffer): its entry offset, data
+// block, size and kind, found or not.
+fn dir_lookup(blk: virtio.Block, dir_block: u64, name: str) -> (usize, u64, usize, u8, bool) {
+    if virtio.block_read(blk, dir_block) != ok { ret (0usize, 0u64, 0usize, KIND_EMPTY, false) }
     var i = 0usize
     while i < ENTRIES {
         let off = i * ENTRY_SIZE
-        if os.load8(blk.data + off + KIND_OFF) == KIND_FILE && name_eq(blk.data + off + NAME_OFF, name) {
-            ret (u64(os.load32(blk.data + off + BLOCK_OFF)), usize(os.load32(blk.data + off + SIZE_OFF)), true)
+        let kind = os.load8(blk.data + off + KIND_OFF)
+        if kind != KIND_EMPTY && name_eq(blk.data + off + NAME_OFF, name) {
+            ret (off, u64(os.load32(blk.data + off + BLOCK_OFF)), usize(os.load32(blk.data + off + SIZE_OFF)), kind, true)
         }
         i += 1usize
     }
-    ret (0u64, 0usize, false)
+    ret (0usize, 0u64, 0usize, KIND_EMPTY, false)
 }
 
-// Create an empty file `name` in the root directory, returning its data block. The directory is
-// full when its sixteen entries are all taken.
-fn create(blk: virtio.Block, name: str) -> (u64, err) {
+// Walk `path`'s components as directories from the root, returning the directory block they name.
+// An empty path or "/" is the root itself.
+fn resolve_dir(blk: virtio.Block, path: str) -> (u64, err) {
+    var dir = ROOT_DIR
+    var i = 0usize
+    while i < path.len {
+        if path[i] == SLASH {
+            i += 1usize
+        } else {
+            let start = i
+            while i < path.len && path[i] != SLASH { i += 1usize }
+            let (off, data_block, size, kind, found) = dir_lookup(blk, dir, path[start..i])
+            if !found { ret (0u64, NotFound) }
+            if kind != KIND_DIR { ret (0u64, NotDirectory) }
+            dir = data_block
+        }
+    }
+    ret (dir, ok)
+}
+
+// Split a path into its parent directory and leaf name: "/a/b" -> ("/a", "b"); "/x" -> ("/", "x").
+fn parent_leaf(path: str) -> (str, str) {
+    var last = 0usize
+    var i = 0usize
+    while i < path.len {
+        if path[i] == SLASH { last = i }
+        i += 1usize
+    }
+    if last == 0usize { ret ("/", path[1usize..path.len]) }
+    ret (path[0usize..last], path[last + 1usize..path.len])
+}
+
+// Add an entry `name` of `kind` to `dir_block`, allocating its data (or directory) block. A new
+// directory block is zeroed. Returns the allocated block.
+fn add_entry(blk: virtio.Block, dir_block: u64, name: str, kind: u8) -> (u64, err) {
     if name.len > NAME_MAX { ret (0u64, NameTooLong) }
     let (data_block, alloc_error) = alloc_block(blk)
     if alloc_error != ok { ret (0u64, alloc_error) }
-    if virtio.block_read(blk, ROOT_DIR) != ok { ret (0u64, NotFormatted) }
+    if kind == KIND_DIR {
+        zero_data(blk)
+        let dir_write = virtio.block_write(blk, data_block)
+        if dir_write != ok { ret (0u64, dir_write) }
+    }
+    if virtio.block_read(blk, dir_block) != ok { ret (0u64, NotFormatted) }
     var slot = ENTRIES
     var i = 0usize
     while i < ENTRIES {
@@ -123,33 +162,60 @@ fn create(blk: virtio.Block, name: str) -> (u64, err) {
     if slot == ENTRIES { ret (0u64, DirFull) }
     let off = slot * ENTRY_SIZE
     store_name(blk.data + off + NAME_OFF, name)
-    os.store8(blk.data + off + KIND_OFF, KIND_FILE)
+    os.store8(blk.data + off + KIND_OFF, kind)
     os.store32(blk.data + off + BLOCK_OFF, u32(data_block))
     os.store32(blk.data + off + SIZE_OFF, 0u32)
-    let write_error = virtio.block_write(blk, ROOT_DIR)
+    let write_error = virtio.block_write(blk, dir_block)
     if write_error != ok { ret (0u64, write_error) }
     ret (data_block, ok)
 }
 
-// Set the recorded size of `name` in the root directory.
-fn set_size(blk: virtio.Block, name: str, size: usize) -> err {
-    if virtio.block_read(blk, ROOT_DIR) != ok { ret NotFormatted }
+// Record the size of `name` in `dir_block`.
+fn set_size(blk: virtio.Block, dir_block: u64, name: str, size: usize) -> err {
+    if virtio.block_read(blk, dir_block) != ok { ret NotFormatted }
     var i = 0usize
     while i < ENTRIES {
         let off = i * ENTRY_SIZE
-        if os.load8(blk.data + off + KIND_OFF) == KIND_FILE && name_eq(blk.data + off + NAME_OFF, name) {
+        if os.load8(blk.data + off + KIND_OFF) != KIND_EMPTY && name_eq(blk.data + off + NAME_OFF, name) {
             os.store32(blk.data + off + SIZE_OFF, u32(size))
-            ret virtio.block_write(blk, ROOT_DIR)
+            ret virtio.block_write(blk, dir_block)
         }
         i += 1usize
     }
     ret NotFound
 }
 
-// Write `len` bytes from `src` to the file `name`, capped at a block, and record the size.
-fn write(blk: virtio.Block, name: str, src: usize, len: usize) -> err {
-    let (data_block, size, found) = find(blk, name)
-    if !found { ret NotFound }
+// Create an empty directory at `path`.
+fn mkdir(blk: virtio.Block, path: str) -> err {
+    let (parent, leaf) = parent_leaf(path)
+    let (dir_block, resolve_error) = resolve_dir(blk, parent)
+    if resolve_error != ok { ret resolve_error }
+    let (new_block, add_error) = add_entry(blk, dir_block, leaf, KIND_DIR)
+    ret add_error
+}
+
+// Create an empty file at `path`.
+fn create(blk: virtio.Block, path: str) -> err {
+    let (parent, leaf) = parent_leaf(path)
+    let (dir_block, resolve_error) = resolve_dir(blk, parent)
+    if resolve_error != ok { ret resolve_error }
+    let (new_block, add_error) = add_entry(blk, dir_block, leaf, KIND_FILE)
+    ret add_error
+}
+
+// Write `len` bytes from `src` to the file `path`, creating it if absent, capped at a block, and
+// record the size.
+fn write(blk: virtio.Block, path: str, src: usize, len: usize) -> err {
+    let (parent, leaf) = parent_leaf(path)
+    let (dir_block, resolve_error) = resolve_dir(blk, parent)
+    if resolve_error != ok { ret resolve_error }
+    let (off, found_block, size, kind, found) = dir_lookup(blk, dir_block, leaf)
+    var data_block = found_block
+    if !found {
+        let (new_block, add_error) = add_entry(blk, dir_block, leaf, KIND_FILE)
+        if add_error != ok { ret add_error }
+        data_block = new_block
+    }
     var count = len
     if count > BLOCK_SIZE { count = BLOCK_SIZE }
     zero_data(blk)
@@ -160,12 +226,15 @@ fn write(blk: virtio.Block, name: str, src: usize, len: usize) -> err {
     }
     let write_error = virtio.block_write(blk, data_block)
     if write_error != ok { ret write_error }
-    ret set_size(blk, name, count)
+    ret set_size(blk, dir_block, leaf, count)
 }
 
-// Read the file `name` into `dst`, up to `max` bytes; the number read comes back.
-fn read(blk: virtio.Block, name: str, dst: usize, max: usize) -> (usize, err) {
-    let (data_block, size, found) = find(blk, name)
+// Read the file `path` into `dst`, up to `max` bytes; the number read comes back.
+fn read(blk: virtio.Block, path: str, dst: usize, max: usize) -> (usize, err) {
+    let (parent, leaf) = parent_leaf(path)
+    let (dir_block, resolve_error) = resolve_dir(blk, parent)
+    if resolve_error != ok { ret (0usize, resolve_error) }
+    let (off, data_block, size, kind, found) = dir_lookup(blk, dir_block, leaf)
     if !found { ret (0usize, NotFound) }
     var count = size
     if count > max { count = max }
@@ -176,4 +245,23 @@ fn read(blk: virtio.Block, name: str, dst: usize, max: usize) -> (usize, err) {
         i += 1usize
     }
     ret (count, ok)
+}
+
+// Remove the file or directory `path` by clearing its directory entry (its blocks are not
+// reclaimed).
+fn remove(blk: virtio.Block, path: str) -> err {
+    let (parent, leaf) = parent_leaf(path)
+    let (dir_block, resolve_error) = resolve_dir(blk, parent)
+    if resolve_error != ok { ret resolve_error }
+    if virtio.block_read(blk, dir_block) != ok { ret NotFormatted }
+    var i = 0usize
+    while i < ENTRIES {
+        let off = i * ENTRY_SIZE
+        if os.load8(blk.data + off + KIND_OFF) != KIND_EMPTY && name_eq(blk.data + off + NAME_OFF, leaf) {
+            os.store8(blk.data + off + KIND_OFF, KIND_EMPTY)
+            ret virtio.block_write(blk, dir_block)
+        }
+        i += 1usize
+    }
+    ret NotFound
 }

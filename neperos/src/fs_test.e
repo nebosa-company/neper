@@ -46,9 +46,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             say("fs formatted\n")
         }
-        let (data_block, create_error) = fs.create(blk, "greeting")
-        if create_error != ok {
-            say("fs create failed\n")
+        let mkdir_error = fs.mkdir(blk, "/docs")
+        if mkdir_error != ok {
+            say("fs mkdir failed\n")
             ret ok
         }
         let greeting = "hello neperos fs\n"
@@ -59,17 +59,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
             buffer[i] = greeting[i]
             i += 1usize
         }
-        let write_error = fs.write(blk, "greeting", mem.address_of(&buffer[0usize]), greeting.len)
+        let write_error = fs.write(blk, "/docs/greeting", mem.address_of(&buffer[0usize]), greeting.len)
         if write_error != ok {
             say("fs write failed\n")
             ret ok
         }
-        say("fs wrote greeting\n")
+        say("fs wrote /docs/greeting\n")
         ret ok
     }
     let (out, out_error) = mem.alloc[u8](a, 64usize)
     if out_error != ok { ret out_error }
-    let (count, read_error) = fs.read(blk, "greeting", mem.address_of(&out[0usize]), 64usize)
+    let (count, read_error) = fs.read(blk, "/docs/greeting", mem.address_of(&out[0usize]), 64usize)
     if read_error != ok {
         say("fs read failed\n")
         ret ok
