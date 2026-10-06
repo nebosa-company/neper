@@ -189,9 +189,28 @@ fn root_cells(t: Tree) -> (usize, usize) {
 
 // The first `reg` region of a child of the root: its address and size.
 fn region(t: Tree, node: usize) -> (u64, u64, err) {
+    let (address, size, region_error) = region_n(t, node, 0usize)
+    ret (address, size, region_error)
+}
+
+// A property that holds one 32-bit or 64-bit big-endian number: `/chosen`'s initrd bounds
+// come either way depending on the loader.
+fn integer(t: Tree, node: usize, name: str) -> (u64, err) {
+    let (value, value_error) = property(t, node, name)
+    if value_error != ok { ret (0u64, value_error) }
+    if value.len == 8usize { ret (cells_at(value, 0usize, 2usize), ok) }
+    if value.len == 4usize { ret (u64(be32(value, 0usize)), ok) }
+    ret (0u64, BadTree)
+}
+
+// The `index`th `reg` region of a child of the root (the GIC names two: distributor then
+// redistributors).
+fn region_n(t: Tree, node: usize, index: usize) -> (u64, u64, err) {
     let (value, value_error) = property(t, node, "reg")
     if value_error != ok { ret (0u64, 0u64, value_error) }
     let (address_cells, size_cells) = root_cells(t)
-    if address_cells > 2usize || size_cells > 2usize || value.len < (address_cells + size_cells) * 4usize { ret (0u64, 0u64, BadTree) }
-    ret (cells_at(value, 0usize, address_cells), cells_at(value, address_cells * 4usize, size_cells), ok)
+    let stride = (address_cells + size_cells) * 4usize
+    let at = index * stride
+    if address_cells > 2usize || size_cells > 2usize || value.len < at + stride { ret (0u64, 0u64, BadTree) }
+    ret (cells_at(value, at, address_cells), cells_at(value, at + address_cells * 4usize, size_cells), ok)
 }

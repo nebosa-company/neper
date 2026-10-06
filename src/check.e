@@ -4933,6 +4933,10 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
     let (atomic_module, has_atomic) = graph.find_module(g, "e.atomic")
     if has_os { try seed_os_signatures(c, os_module, mem_module, has_memory, atomic_module, has_atomic, same(g.os, "linux")) }
     if has_os && same(g.os, "none") && same(g.arch, "aarch64") { try seed_kernel_signatures(c, os_module) }
+    if has_os && same(g.os, "neperos") {
+        let (yield_index, yield_error) = add_seeded_function(c, os_module, "yield", make_type(.Void, "void", os_module), false)
+        if yield_error != ok { ret yield_error }
+    }
     let (str_module, has_str) = graph.find_module(g, "e.str")
     if has_str { try seed_str_signatures(c, str_module) }
     ret ok

@@ -14315,9 +14315,10 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                     try link_pe.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                 } else {
                     if machine_abi_of(args) == .Aapcs64 {
-                        // aarch64-none is a kernel's Image (D2126), not an ELF.
-                        if same(args[5usize], "none") {
-                            try link_image_a64.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, table_at, &executable)
+                        // aarch64-none is a kernel's Image (D2126), not an ELF, and
+                        // aarch64-neperos the Image of a program NeperOS runs (D2127).
+                        if same(args[5usize], "none") || same(args[5usize], "neperos") {
+                            try link_image_a64.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, table_at, same(args[5usize], "neperos"), &executable)
                         } else {
                             try link_elf_a64.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
                         }

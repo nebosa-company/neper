@@ -36483,3 +36483,51 @@ steps over the load. Booted with `trap`, it fails a bounds check instead. The 36
 boots the same under QEMU 11.1 on Windows and QEMU 8.2 in WSL (`qemu-system-arm`, run with
 `-nic none` since the iPXE ROMs are not installed). Module-scope `bool` variables are
 `= zero`, as `= false` is not yet a supported global initializer.
+
+## D2127 — NeperOS stage 1b: GICv3, the timer, preemptive EL0 threads and isolation
+
+C101 adds interrupts, preemption, user threads and the isolation they rest on. The GICv3
+is found at `/intc` in the device tree -- its distributor and redistributor are the node's
+two `reg` regions, so `fdt` grew `region_n` -- and the CPU interface is reached through the
+system registers already in the runtime's table (`ICC_*`). `gic.enable` turns on affinity
+routing and group 1, wakes this core's redistributor, opens the priority mask and the group
+enable; `gic.enable_private` enables the virtual-timer PPI (INTID 27). `timer` arms the
+virtual timer a hundredth of a second ahead, and each firing is an IRQ. The handler reads
+`ICC_IAR1_EL1`, and for the timer re-arms, counts, and calls the scheduler, then writes
+`ICC_EOIR1_EL1`.
+
+A thread is the register frame the vectors already save and restore, plus the address space
+it runs in. The scheduler (`thread`) keeps no queue beyond the table: it scans from the one
+that just ran to the next ready, so the switch is a frame copy in place and a `TTBR0_EL1`
+write. Distinct ASIDs per space mean no TLB flush. The first timer tick captures the
+kernel's idle context and starts the first thread; the last thread to finish returns the
+kernel there, where the boot loop sees the live count reach zero and powers off. A thread
+reaches the kernel only by `svc`: console write (0), exit (1) and yield (2). A write is
+copied out of the thread's own region a chunk at a time, its bounds checked, so a thread
+cannot read elsewhere through the kernel.
+
+An address space (`vm`) is its own first-level table over a copy of the kernel's identity
+map -- so the kernel still runs when a trap enters it -- with one gigabyte at `0x80000000`
+mapped to the thread's own pages with EL0 access (`AP` EL0-RW, privileged-execute-never).
+The kernel's pages stay privileged-only in the copy, so an EL0 load or store into them
+faults: that is the isolation. A translation-table base must be aligned to its size and the
+arena allocator does not promise it, so the page allocator over-allocates and aligns up --
+an unaligned `TTBR0` pointed the walker at garbage and the kernel's own fetch faulted after
+the first switch, the bug that took the longest to find.
+
+The user program is a separate image, target `aarch64-neperos`: the same position-
+independent Image as a kernel, but `link_image_a64` with `program` true appends
+`runtime_neperos_a64.s` instead of the kernel runtime and sizes `image_size` to the file,
+since the kernel gives the program its stack and arena in the registers the entry reads. Its
+one extra intrinsic is `os.yield`; the console, exit and copy intrinsics become `svc`s. The
+header's first reserved word now carries the globals' file offset, so a loader could map the
+code read-only and the data writable; the kernel does not yet. QEMU loads the program with
+`-initrd`, and the kernel reads its bounds from `/chosen`'s `linux,initrd-start` and
+`-end`, copies it into each address space, and starts three threads from it: A and B
+interleave under the timer and finish, and X -- handed a second argument the kernel points
+at kernel RAM -- faults on the read and is killed alone, while A and B run on. Nothing forges
+a pointer: the kernel owns the pages and writes the program, arena and arguments into them by
+address, and the one reference into protected memory is the kernel's own, planted to prove
+the hardware and the page tables stop it. Both suites build the program and the kernel and
+boot them under `qemu-system-aarch64 -M virt,gic-version=3` on both hosts; the trap boot
+still works, since the `trap` argument is handled before the controller and the initrd.

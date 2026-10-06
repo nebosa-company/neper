@@ -8911,30 +8911,39 @@ if ($LASTEXITCODE -ne 1 -or ($cycleOutput -join "`n") -notmatch
     throw 'module import cycle rejection failed'
 }
 
-# (D2126) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image, and under
-# qemu-system-aarch64 it finds its console, firmware and memory in the device tree, turns
-# translation on, takes a fault on purpose and powers off. Booted with `trap` from 2 MB
-# higher -- `text_offset` set to 4 MB, so nothing in it may be an absolute address -- a
-# failed bounds check is reported with its backtrace and ends the kernel with 134. The
-# machine intrinsics are unknown names on any other target.
+# (D2126, D2127) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image; it finds
+# its console, firmware and memory in the device tree, turns translation on, takes a fault
+# on purpose, then on GICv3 runs three EL0 threads from the initrd program under the timer.
+# A and B interleave and finish; X, handed a reference into kernel RAM, faults on the read
+# and is killed alone (the isolation stage 1 proves). Booted with `trap` from 2 MB higher
+# -- `text_offset` set to 4 MB, so nothing in it may be an absolute address -- a failed
+# bounds check is reported with its backtrace and ends the kernel with 134. The machine
+# intrinsics are unknown names on any other target.
 $neperosImage = Join-Path $testBuild 'neperos.img'
 $neperosWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\main.e') $repo aarch64 none $neperosImage
 if ($LASTEXITCODE -ne 0 -or $neperosWritten -ne 'executable written') { throw 'NeperOS did not build' }
 $neperosBytes = [IO.File]::ReadAllBytes($neperosImage)
 if ([Text.Encoding]::ASCII.GetString($neperosBytes, 56, 4) -ne 'ARMd') { throw 'the NeperOS image has no arm64 Image magic' }
+$neperosDemo = Join-Path $testBuild 'demo.img'
+$neperosDemoWritten = & $compiler emit-executable (Join-Path $repo 'neperos\user\demo\src\main.e') $repo aarch64 neperos $neperosDemo
+if ($LASTEXITCODE -ne 0 -or $neperosDemoWritten -ne 'executable written') { throw 'the NeperOS demo did not build' }
 $kernelRefuseOutput = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\kernel_refuse\src\main.e') $repo x64 windows (Join-Path $testBuild 'kernel-refuse.exe') 2>&1
 if ($LASTEXITCODE -eq 0 -or ($kernelRefuseOutput -join "`n") -notmatch 'main\.e:7:.*`os` has no member `mrs`') { throw "os.mrs was not refused where it is written: $kernelRefuseOutput" }
 $neperosQemu = Get-Command qemu-system-aarch64 -ErrorAction SilentlyContinue
 if ($neperosQemu) {
     function Invoke-NeperOS([string]$Image, [string[]]$Extra) {
         $transcript = Join-Path $testBuild 'neperos.out'
-        $arguments = @('-M', 'virt', '-cpu', 'cortex-a76', '-m', '256M', '-nic', 'none', '-nographic', '-no-reboot', '-kernel', $Image) + $Extra
+        $arguments = @('-M', 'virt,gic-version=3', '-cpu', 'cortex-a76', '-m', '256M', '-nic', 'none', '-nographic', '-no-reboot', '-kernel', $Image) + $Extra
         $run = Start-Process -FilePath $neperosQemu.Source -ArgumentList $arguments -RedirectStandardOutput $transcript -RedirectStandardError (Join-Path $testBuild 'neperos.err') -PassThru -NoNewWindow
-        if (-not $run.WaitForExit(60000)) { $run.Kill(); throw 'NeperOS did not power off within a minute' }
+        if (-not $run.WaitForExit(90000)) { $run.Kill(); throw 'NeperOS did not power off in time' }
         return ((Get-Content -Raw $transcript) -replace "`r", '')
     }
-    $neperosBoot = Invoke-NeperOS $neperosImage @()
-    if ($neperosBoot -notmatch '(?s)Welcome to NeperOS.*mmu on.*fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned.*halting.*neperos: exit 0x0000000000000000') { throw "NeperOS did not boot: $neperosBoot" }
+    $neperosBoot = Invoke-NeperOS $neperosImage @('-initrd', $neperosDemo)
+    if ($neperosBoot -notmatch '(?s)Welcome to NeperOS.*mmu on.*fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned.*scheduling.*thread X killed, el0 fault at 0x0000000040000000.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS did not schedule its threads: $neperosBoot" }
+    foreach ($neperosToken in @('A0', 'A1', 'A2', 'B0', 'B1', 'B2', 'X0', 'X1', 'X2')) {
+        if ($neperosBoot -notmatch [regex]::Escape("$neperosToken ")) { throw "NeperOS thread output missing ${neperosToken}: $neperosBoot" }
+    }
+    if ($neperosBoot -match 'read protected memory') { throw "a thread read protected memory: $neperosBoot" }
     $neperosMoved = Join-Path $testBuild 'neperos-moved.img'
     $neperosBytes[10] = 0x40
     [IO.File]::WriteAllBytes($neperosMoved, $neperosBytes)

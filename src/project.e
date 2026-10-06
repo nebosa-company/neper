@@ -131,7 +131,7 @@ fn without_extension(path: str) -> (str, err) {
 }
 
 fn target_suffix(value: str) -> bool {
-    ret same(value, "windows") || same(value, "linux") || same(value, "macos") || same(value, "none") || same(value, "x64") || same(value, "x86") || same(value, "aarch64") || same(value, "spv") || same(value, "ptx")
+    ret same(value, "windows") || same(value, "linux") || same(value, "macos") || same(value, "none") || same(value, "neperos") || same(value, "x64") || same(value, "x86") || same(value, "aarch64") || same(value, "spv") || same(value, "ptx")
 }
 
 fn without_target_suffix(stem: str) -> str {
@@ -195,13 +195,14 @@ fn valid_arch(arch: str) -> bool {
 }
 
 fn valid_os(value: str) -> bool {
-    ret same(value, "windows") || same(value, "linux") || same(value, "macos") || same(value, "none")
+    ret same(value, "windows") || same(value, "linux") || same(value, "macos") || same(value, "none") || same(value, "neperos")
 }
 
 fn valid_target(arch: str, target_os: str) -> bool {
     if same(arch, "spv") || same(arch, "ptx") { ret same(target_os, "none") }
     // aarch64-none is a kernel image (D2126); no other CPU target runs without an OS.
-    if same(target_os, "none") { ret same(arch, "aarch64") }
+    // aarch64-neperos is a program NeperOS runs at EL0 (D2127).
+    if same(target_os, "none") || same(target_os, "neperos") { ret same(arch, "aarch64") }
     if same(arch, "x86") && same(target_os, "macos") { ret false }
     ret true
 }

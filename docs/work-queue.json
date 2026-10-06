@@ -1,19 +1,8 @@
 {
   "schema": "neper-work-queue-v1",
   "version": 1,
-  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 (C101-C103) comes first by the user's priority (D2119, D2125); after it, finish active chart and visualization items before non-chart work, preserving their relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
+  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 (C102-C103) comes first by the user's priority (D2119, D2125); after it, finish active chart and visualization items before non-chart work, preserving their relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
-    {
-      "id": "C101",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 101,
-      "title": "NeperOS 1b: interrupts, the timer and preemptive threads at EL0",
-      "score": 0,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Queued by D2125 after C100. Acceptance: the GICv3 distributor and redistributors found in the device tree, the generic timer driving a preemptive round-robin scheduler, user threads at EL0 in their own translation tables (ASIDs, no shared kernel writable mappings, PAN and execute-never set), system calls by `svc`, and a QEMU fixture that runs two EL0 threads interleaved by timer interrupts and kills one that touches kernel memory. Not started."
-    },
     {
       "id": "C102",
       "category": "compiler",

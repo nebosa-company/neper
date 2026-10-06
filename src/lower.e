@@ -922,6 +922,8 @@ fn intrinsic_symbol(name: str) -> (str, err) {
     if check.same(name, "memory_barrier") { ret ("neper_os_memory_barrier", ok) }
     if check.same(name, "wait_for_event") { ret ("neper_os_wait_for_event", ok) }
     if check.same(name, "send_event") { ret ("neper_os_send_event", ok) }
+    // (D2127) A NeperOS program's, a runtime_neperos_a64.s function.
+    if check.same(name, "yield") { ret ("neper_os_yield", ok) }
     if check.same(name, "hvc") { ret ("neper_os_hvc", ok) }
     if check.same(name, "smc") { ret ("neper_os_smc", ok) }
     if check.same(name, "mrs") { ret ("neper_os_mrs", ok) }

@@ -8749,15 +8749,19 @@ case "$cycle_output" in
     *) printf '%s\n' 'module import cycle rejection failed' >&2; exit 1 ;;
 esac
 
-# (D2126) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image, and under
-# qemu-system-aarch64 it finds its console, firmware and memory in the device tree, turns
-# translation on, takes a fault on purpose and powers off. Booted with `trap` from 2 MB
-# higher -- `text_offset` set to 4 MB, so nothing in it may be an absolute address -- a
-# failed bounds check is reported with its backtrace and ends the kernel with 134. The
-# machine intrinsics are unknown names on any other target.
+# (D2126, D2127) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image; it finds
+# its console, firmware and memory in the device tree, turns translation on, takes a fault
+# on purpose, then on GICv3 runs three EL0 threads from the initrd program under the timer.
+# A and B interleave and finish; X, handed a reference into kernel RAM, faults on the read
+# and is killed alone (the isolation stage 1 proves). Booted with `trap` from 2 MB higher
+# -- `text_offset` set to 4 MB, so nothing in it may be an absolute address -- a failed
+# bounds check is reported with its backtrace and ends the kernel with 134. The machine
+# intrinsics are unknown names on any other target.
 neperos_image="$test_build/neperos.img"
 [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/main.e" "$repo" aarch64 none "$neperos_image")" = 'executable written' ]
 [ "$(od -An -c -j56 -N4 "$neperos_image" | tr -d ' ')" = 'ARMd' ] || { printf '%s\n' 'the NeperOS image has no arm64 Image magic' >&2; exit 1; }
+neperos_demo="$test_build/demo.img"
+[ "$("$test_build/neper-self" emit-executable "$repo/neperos/user/demo/src/main.e" "$repo" aarch64 neperos "$neperos_demo")" = 'executable written' ]
 if kernel_refuse_output=$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/kernel_refuse/src/main.e" "$repo" x64 linux "$test_build/kernel-refuse" 2>&1); then
     printf '%s\n' 'os.mrs compiled for x64-linux' >&2
     exit 1
@@ -8767,15 +8771,25 @@ case "$kernel_refuse_output" in
     *) printf '%s\n' "os.mrs was not refused where it is written: $kernel_refuse_output" >&2; exit 1 ;;
 esac
 if command -v qemu-system-aarch64 >/dev/null 2>&1; then
-    neperos_boot=$(timeout 60 qemu-system-aarch64 -M virt -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" < /dev/null 2>&1 | tr -d '\r')
+    neperos_boot=$(timeout 90 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$neperos_demo" < /dev/null 2>&1 | tr -d '\r')
     case "$neperos_boot" in
-        *'Welcome to NeperOS'*'mmu on'*'fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned'*'halting'*'neperos: exit 0x0000000000000000'*) ;;
-        *) printf '%s\n' "NeperOS did not boot: $neperos_boot" >&2; exit 1 ;;
+        *'Welcome to NeperOS'*'mmu on'*'fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned'*'scheduling'*'thread X killed, el0 fault at 0x0000000040000000'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS did not schedule its threads: $neperos_boot" >&2; exit 1 ;;
+    esac
+    for neperos_token in A0 A1 A2 B0 B1 B2 X0 X1 X2; do
+        case "$neperos_boot" in
+            *"$neperos_token "*) ;;
+            *) printf '%s\n' "NeperOS thread output missing $neperos_token: $neperos_boot" >&2; exit 1 ;;
+        esac
+    done
+    case "$neperos_boot" in
+        *'read protected memory'*) printf '%s\n' "a thread read protected memory: $neperos_boot" >&2; exit 1 ;;
+        *) ;;
     esac
     neperos_moved="$test_build/neperos-moved.img"
     cp "$neperos_image" "$neperos_moved"
     printf '@' | dd of="$neperos_moved" bs=1 seek=10 conv=notrunc 2>/dev/null
-    neperos_trap=$(timeout 60 qemu-system-aarch64 -M virt -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_moved" -append trap < /dev/null 2>&1 | tr -d '\r')
+    neperos_trap=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_moved" -append trap < /dev/null 2>&1 | tr -d '\r')
     case "$neperos_trap" in
         *'trap[bounds]: index 2 out of bounds for len 1'*'  at main.main (src/main.e:'*'neperos: exit 0x0000000000000086'*) ;;
         *) printf '%s\n' "NeperOS did not report its trap: $neperos_trap" >&2; exit 1 ;;

@@ -1117,7 +1117,9 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
     if aarch64_error != ok { ret aarch64_error }
     let (kernel, kernel_error) = em.string_matches(artifacts[0usize].bytes, root_target, "aarch64-none")
     if kernel_error != ok { ret kernel_error }
-    if aarch64 || kernel {
+    let (neperos, neperos_error) = em.string_matches(artifacts[0usize].bytes, root_target, "aarch64-neperos")
+    if neperos_error != ok { ret neperos_error }
+    if aarch64 || kernel || neperos {
         try codegen_a64.resolve_calls(&program.builder, program.function_offsets, program.relocations, program.relocation_count, &program.machine)
     } else {
         try codegen_x64.resolve_calls(&program.builder, program.function_offsets, program.relocations, program.relocation_count, &program.machine)
