@@ -11,6 +11,7 @@ use gic
 use mmu
 use pci
 use pl011
+use ns16550
 use psci
 use thread
 use timer
@@ -27,6 +28,10 @@ error NoInitrd
 const TICKS_PER_SECOND: usize = 100usize
 
 var console: usize = 0usize
+// The console UART kind, chosen from the device tree (D2144): the PL011 of QEMU's virt, or the
+// ns16550/8250 of crosvm's AVF guest, whose registers are `console_shift` bytes apart.
+var console_ns16550: bool = zero
+var console_shift: usize = 0usize
 var firmware_smc: bool = zero
 // The address the deliberate fault reads, and the syndrome the handler saw for it.
 var probe: usize = 0usize
@@ -66,7 +71,8 @@ fn handle_device_irq() {
 }
 
 fn console_write(bytes: str) {
-    if console != 0usize { pl011.write(console, bytes) }
+    if console == 0usize { ret }
+    if console_ns16550 { ns16550.write(console, console_shift, bytes) } else { pl011.write(console, bytes) }
 }
 
 fn hex(value: u64) {
@@ -188,7 +194,7 @@ fn device_write(frame: *a64.Frame) {
     if ptr < vm.USER_BASE || ptr + len > vm.USER_BASE + vm.USER_SIZE { ret }
     var i = 0usize
     while i < len {
-        pl011.put(uart, os.load8(ptr + i))
+        if console_ns16550 { ns16550.put(uart, console_shift, os.load8(ptr + i)) } else { pl011.put(uart, os.load8(ptr + i)) }
         i += 1usize
     }
     frame.x[0usize] = 0u64
@@ -426,7 +432,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (uart_base, uart_size, uart_region_error) = fdt.region(tree, uart)
     if uart_region_error != ok { ret uart_region_error }
     console = usize(uart_base)
-    pl011.enable(console)
+    // Which UART: crosvm's AVF guest names it `ns16550a` (D2144), QEMU's virt `arm,pl011`. The
+    // ns16550 needs no enable and its registers are `reg-shift` bytes apart (absent means 0);
+    // the PL011 is turned on. Everything is read from the device tree, never hard-coded.
+    let (uart_compatible, uart_compatible_error) = fdt.property(tree, uart, "compatible")
+    if uart_compatible_error == ok && has_word(uart_compatible, "ns16550") {
+        console_ns16550 = true
+        let (reg_shift, reg_shift_error) = fdt.property(tree, uart, "reg-shift")
+        if reg_shift_error == ok && reg_shift.len >= 4usize { console_shift = usize(fdt.be32(reg_shift, 0usize)) }
+    } else {
+        pl011.enable(console)
+    }
     os.set_console(console_write)
     console_write("Welcome to NeperOS\n")
     let (firmware, firmware_error) = psci.find(tree)

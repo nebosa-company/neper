@@ -36995,3 +36995,31 @@ map boots the position-independent image. This is surfaced to the user as a reso
 provision crosvm/a Pixel to pursue stage 2, or take the queued chart work (L069) meanwhile.
 Stage 1 remains a complete, useful deliverable on its own (D2119: each stage stays useful if the
 project stops there).
+
+## D2144 — NeperOS stage 2: an ns16550 console, and crosvm cannot emulate aarch64 on this x86-64 host
+
+Two stage-2 (C104) findings. First, the console is now portable: crosvm's AVF guest uses an
+8250/ns16550 UART where QEMU's virt uses a PL011, so `neperos/src/ns16550.e` drives the 8250 (the
+transmit-holding register at offset 0, the line-status register at offset 5, bit 5 the
+transmit-ready flag) and the kernel picks the driver from the device tree -- the stdout UART
+node's `compatible` is `ns16550a` (crosvm) or `arm,pl011` (virt). crosvm's device tree, read from
+its source (`aarch64/src/fdt.rs`), sets `compatible = "ns16550a"` and `reg = <addr size>` with no
+`reg-shift`, so the registers are one byte apart (shift 0) and the base comes from the tree; the
+driver still reads `reg-shift` when a platform sets one. `console_write` and the console server's
+`device_write` dispatch to ns16550 or PL011 by a flag set at boot. Verified under QEMU virt: the
+device tree selects PL011, the kernel boots and all stage-1 marks pass, so the detection and
+dispatch are correct and the ns16550 path is inert where it should be.
+
+Second, the environment finding: the user chose to set up crosvm in WSL, and it builds and runs
+there (`--no-default-features -j 2` to fit 4.8 GiB of RAM; the pinned rust 1.88.0 needed a
+reinstall after an OOM-killed first build corrupted its libLLVM). But crosvm is a KVM virtual
+machine monitor with no software CPU emulation, and this WSL is x86-64, so crosvm can only run
+x86-64 guests -- it rejected the aarch64 NeperOS image as a bad bzImage. Running the aarch64
+kernel under crosvm, and so verifying the AVF boot, needs an aarch64 host: a Pixel via
+`adb shell vm run`, or an aarch64 Linux box with KVM. QEMU can emulate aarch64 on x86 through its
+interpreter, which is how stage 1 is tested, but it presents its own `virt` platform (PL011), not
+crosvm's. So the ns16550 console is written to crosvm's source and regression-safe under QEMU, but
+its execution and the rest of stage-2 bring-up (the crosvm memory map -- RAM at 0x80000000, GIC
+and PCI bases read from `aarch64/src/lib.rs` -- and a virtio-vsock driver) wait on an aarch64
+host. This is surfaced to the user as a resource decision. C104 stays low; stage 1 stands on its
+own.
