@@ -20,10 +20,10 @@
       "group": "NeperOS",
       "order": 105,
       "title": "NeperOS shell 1: processes loaded from the initrd",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Queued by D2148 (phone shell, path A). Acceptance: the kernel loads separately built `aarch64 neperos` images from an initrd archive into their own address spaces and capability spaces; spawn, exit and wait system calls; init spawns two programs from the initrd, waits for both and prints their exit codes; a fault in one program does not stop the other. Runs on QEMU virt and needs no crosvm."
+      "evidence": "Queued by D2148 (phone shell, path A). Acceptance: the kernel loads separately built `aarch64 neperos` images from an initrd archive into their own address spaces and capability spaces; spawn, exit and wait system calls; init spawns two programs from the initrd, waits for both and prints their exit codes; a fault in one program does not stop the other. Runs on QEMU virt and needs no crosvm. Begun (D2150): the system-call surface for the two new calls -- `os.launch(index) -> child` and `os.reap(child) -> code`, named apart from the existing Linux `spawn`/`wait` process intrinsics to avoid a seed/signature collision. All five compiler sites updated (resolver seed, checker signature, lower.e and em.e name maps, the svc 11/12 runtime wrappers in runtime_neperos_a64.s/.e); the compiler builds, init.e compiles unchanged, and the whole stage-1/2 QEMU boot is byte-unchanged. The calls are inert until the kernel handles svc 11/12. Remaining: the initrd archive format and loader, the kernel launch/reap/exit handlers and a process model (parent, exit code, wait that blocks on a child, fault that kills only its process), and an init plus two child programs in an archive with a QEMU fixture."
     },
     {
       "id": "C106",

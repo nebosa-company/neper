@@ -367,6 +367,22 @@ neper_os_retype:
     svc #0
     ret
 
+// os.launch(index) -> child (D2150): load program `index` of the initrd archive into its own
+// address and capability space; the child's id comes back, or all-ones on failure.
+.global neper_os_launch
+neper_os_launch:
+    mov x8, #11
+    svc #0
+    ret
+
+// os.reap(child) -> code: block until the child exits, its exit code back (a sentinel for a
+// child a fault killed).
+.global neper_os_reap
+neper_os_reap:
+    mov x8, #12
+    svc #0
+    ret
+
 // (D2134) Raw memory access from EL0, for a user-mode driver reaching its device's MMIO and
 // virtqueue rings through pages the kernel mapped into its space. Each is a plain load or
 // store -- no svc -- so it faults if the page is not mapped with EL0 access, which is how a

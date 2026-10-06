@@ -932,6 +932,8 @@ fn intrinsic_symbol(name: str) -> (str, err) {
     if check.same(name, "notify_wait") { ret ("neper_os_notify_wait", ok) }
     if check.same(name, "device_write") { ret ("neper_os_device_write", ok) }
     if check.same(name, "retype") { ret ("neper_os_retype", ok) }
+    if check.same(name, "launch") { ret ("neper_os_launch", ok) }
+    if check.same(name, "reap") { ret ("neper_os_reap", ok) }
     if check.same(name, "hvc") { ret ("neper_os_hvc", ok) }
     if check.same(name, "smc") { ret ("neper_os_smc", ok) }
     if check.same(name, "mrs") { ret ("neper_os_mrs", ok) }

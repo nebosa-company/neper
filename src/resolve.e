@@ -469,6 +469,11 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
         try seed(r, g, "e.os", "notify_wait", .Value, .Intrinsic)
         try seed(r, g, "e.os", "device_write", .Value, .Intrinsic)
         try seed(r, g, "e.os", "retype", .Value, .Intrinsic)
+        // (D2150) Processes from the initrd archive: `launch` a program into its own space, and
+        // `reap` a child that has exited for its code. Named apart from the Linux `spawn`/`wait`
+        // process intrinsics, which carry argv and stdio a NeperOS program has no use for yet.
+        try seed(r, g, "e.os", "launch", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "reap", .Value, .Intrinsic)
         // (D2134) Raw memory access, so a user-mode driver can reach its device's MMIO and
         // its virtqueue rings through the pages the kernel maps into its space.
         try seed(r, g, "e.os", "load8", .Value, .Intrinsic)

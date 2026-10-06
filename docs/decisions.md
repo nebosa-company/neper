@@ -37157,3 +37157,23 @@ CID 3 and received op 3 (RST); with a Python AF_VSOCK listener on port 1234 it r
 driver sent, a full round trip. QEMU's virt has no vsock device, so the server is skipped there and
 stage 1 is unchanged. This completes C104's device list (console, block, vsock over PCI under
 crosvm); the remaining stage-2 step is the same kernel on a retail Pixel via `adb shell vm run`.
+
+## D2150 — `os.launch` and `os.reap`: the system-call surface for NeperOS processes (C105 foundation)
+
+C105 (the phone-shell milestone, D2148) needs a kernel that loads separate programs from an initrd
+archive and spawn/exit/wait system calls. The first, lowest-risk piece is the compiler surface for
+the two new calls, done and verified apart from the kernel work that will use them. The calls are
+named `launch(index) -> child` and `reap(child) -> code`, not `spawn`/`wait`: `e.os` already seeds
+`spawn` and `wait` as the Linux/Windows process intrinsics (`spawn(a, argv, stdio) -> Process`,
+`wait -> i32`), so reusing those names made a duplicate seed and a signature clash that failed the
+whole neperos resolution with a bare "name resolution failed" -- the names are the collision, and
+the fix is to pick ones `e.os` does not already own. Adding an `os` intrinsic for the `neperos`
+target touches five places, all of which this change covers: the resolver seed (resolve.e, inside
+the `neperos` block), the checker signature (check.e), the name-to-runtime-symbol map (lower.e),
+the reverse map (em.e), and the runtime wrapper doing `svc #11`/`#12` (runtime_neperos_a64.s, then
+runtime_neperos_a64.e regenerated with embed-elf-runtime.ps1). `launch` and `reap` are inert until
+the kernel handles svc 11 and 12; the compiler builds, init.e compiles unchanged, and the whole
+stage-1/2 QEMU boot is byte-for-byte unchanged. Still to come for C105: the initrd archive format
+and loader, the kernel's launch/reap/exit handlers and a process model (parent, exit code, a wait
+that blocks on a child and a fault that kills only its own process), and an init plus two child
+programs built into an archive with a QEMU fixture.

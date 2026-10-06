@@ -4981,6 +4981,15 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
         try add_seeded_parameter(c, retype_index, "untyped", usize_type)
         try add_seeded_parameter(c, retype_index, "kind", usize_type)
         try add_seeded_parameter(c, retype_index, "dest", usize_type)
+        // (D2150) `launch(index) -> child` loads program `index` of the initrd archive into its
+        // own address and capability space and returns its id (a sentinel on failure); `reap(child)
+        // -> code` blocks until that child exits and returns its exit code (a sentinel for a fault).
+        let (launch_index, launch_error) = add_seeded_function(c, os_module, "launch", usize_type, false)
+        if launch_error != ok { ret launch_error }
+        try add_seeded_parameter(c, launch_index, "index", usize_type)
+        let (reap_index, reap_error) = add_seeded_function(c, os_module, "reap", usize_type, false)
+        if reap_error != ok { ret reap_error }
+        try add_seeded_parameter(c, reap_index, "child", usize_type)
         // (D2134) Raw memory access from EL0, the same width-at-a-time load and store the
         // kernel has, for a user-mode driver reaching its device's MMIO and virtqueue rings.
         try seed_kernel_access(c, os_module, "load8", "store8", "u8")
