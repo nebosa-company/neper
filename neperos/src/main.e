@@ -14,6 +14,7 @@ use pl011
 use psci
 use thread
 use timer
+use virtio
 use vm
 
 // The deliberate fault never reached the handler, or the load did not answer its zero.
@@ -278,6 +279,51 @@ fn decimal(value: usize) {
     console_write(digits[at..20usize])
 }
 
+fn hex_digit(value: u8) -> u8 {
+    if value < 10u8 { ret value + 48u8 }
+    ret value + 87u8
+}
+
+fn hex_byte(value: u8) {
+    var pair: [2]u8 = zero
+    pair[0usize] = hex_digit((value >> 4u8) & 15u8)
+    pair[1usize] = hex_digit(value & 15u8)
+    console_write(pair[..])
+}
+
+// The entropy device driven through the modern virtio-pci transport: its BAR assigned, the
+// device negotiated, a buffer filled with random bytes over one virtqueue, the bytes printed.
+fn drive_entropy(a: *mem.Arena, host: pci.Host) {
+    var slot = 0usize
+    while slot < 32usize {
+        let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
+        if is_virtio && device_type == pci.VIRTIO_ENTROPY {
+            let (device, cursor, discover_error) = virtio.discover(host, slot, host.mmio)
+            if discover_error != ok {
+                console_write("virtio entropy: discover failed\n")
+                ret
+            }
+            let (buffer, written, read_error) = virtio.read_entropy(a, device, 8usize)
+            if read_error != ok {
+                console_write("virtio entropy: read failed\n")
+                ret
+            }
+            console_write("entropy ")
+            decimal(written)
+            console_write(" bytes:")
+            var i = 0usize
+            while i < written && i < 8usize {
+                console_write(" ")
+                hex_byte(os.load8(buffer + i))
+                i += 1usize
+            }
+            console_write("\n")
+            ret
+        }
+        slot += 1usize
+    }
+}
+
 fn virtio_name(device_type: usize) -> str {
     if device_type == pci.VIRTIO_BLOCK { ret "block" }
     if device_type == pci.VIRTIO_CONSOLE { ret "console" }
@@ -373,6 +419,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         console_write(args[index])
     }
     enumerate_pci(tree)
+    let (pci_host, pci_host_error) = pci.find(tree)
+    if pci_host_error == ok { drive_entropy(a, pci_host) }
     // The interrupt controller and the timer: enable the controller, let this core take the
     // virtual-timer PPI, and arm it. Each firing preempts whatever runs.
     let (found, controller_error) = gic.find(tree)

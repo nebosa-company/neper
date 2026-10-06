@@ -36635,3 +36635,39 @@ which area each item belongs to. Two more trims follow (user request): the leadi
 prints the release-required count ("N are release-required for the first stable CPU release") --
 the whole backlog is always expanded, so the count added nothing. The release gate is still
 validated against the work inventories in `render_progress.py`; it is just no longer shown.
+
+## D2131 — NeperOS stage 1d: the modern virtio-pci transport and an entropy driver
+
+With the PCI ECAM enumerated (D2129), the kernel now drives a virtio device over the modern
+(virtio 1.x) PCI transport, in `neperos/src/virtio.e`. A modern virtio-pci device exposes its
+registers not through a fixed BAR layout but through a vendor-capability list: each capability
+of type 9 (`PCI_CAP_ID_VNDR`) carries a `cfg_type` byte, a BAR index and an offset into that
+BAR, naming the common-configuration block, the notify region, the ISR, or the device-specific
+config. `discover` assigns the device a BAR in the 32-bit MMIO window (QEMU's ECAM host leaves
+BARs unassigned -- D2129), enables memory space and bus-mastering, then walks the capability
+list to record each structure's address (`bar_base + offset`).
+
+`negotiate` runs the status handshake -- reset, ACKNOWLEDGE, DRIVER -- accepts exactly
+`VIRTIO_F_VERSION_1` (feature bit 32, so feature word 1 bit 0 with the rest refused), sets
+FEATURES_OK, and confirms the device kept it. `read_entropy` then builds one split virtqueue:
+the descriptor table, the available ring and the used ring are three page-aligned, zeroed
+regions in the kernel's own RAM. Because the kernel identity-maps RAM (D2126), a region's
+virtual address is the physical address the device DMAs to, so the rings and buffers need no
+separate translation. It programs QUEUE_DESC/QUEUE_DRIVER/QUEUE_DEVICE with those addresses,
+enables the queue, publishes one device-writable descriptor (DESC_WRITE) pointing at an 8-byte
+buffer, advances `avail.idx` behind a barrier, writes the queue's notify register, and spins on
+`used.idx`; the used element's length is how many bytes the entropy device wrote.
+
+The kernel calls this from `drive_entropy`: find the entropy slot, `discover`, `read_entropy`,
+and print `entropy N bytes: XX XX ...`. Both suites already attach `virtio-rng-pci` forced
+modern (`disable-legacy=on`); they now also assert the kernel prints eight random bytes
+(`entropy 8 bytes:` followed by eight hex pairs). Verified on both hosts: the Linux `neper-self`
+and the Windows `neper-self.exe` each compile the kernel and boot it under QEMU to a different
+eight-byte sequence (`8b 8c 6c 68 30 10 20 38` and `9c ab 6f 07 cc e9 0b 54`), which is the
+hardware RNG, not a fixed stub.
+
+Still ahead for C103: the block and console drivers (read and write a disk sector, echo the
+console), and moving all three drivers out of the kernel into EL0 user-mode servers that hold
+only their device's frame and interrupt capabilities -- the transport here runs in the kernel
+for now. The virtqueue poll is a bounded spin, not an interrupt wait; the ISR capability is
+located but unused until the drivers become notification-driven EL0 servers.

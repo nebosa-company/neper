@@ -8802,6 +8802,10 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
             *) printf '%s\n' "NeperOS capability behaviour missing ($neperos_mark): $neperos_boot" >&2; exit 1 ;;
         esac
     done
+    # The entropy device, driven through the modern virtio-pci transport, returns eight random
+    # bytes (D2131).
+    printf '%s\n' "$neperos_boot" | grep -qE 'entropy 8 bytes:( [0-9a-f][0-9a-f]){8}' || {
+        printf '%s\n' "the virtio entropy driver returned no bytes: $neperos_boot" >&2; exit 1; }
     for neperos_leak in 'read protected memory' 'N should not print' 'V revoke leaked' 'W wrote after protect' 'U retype wrong'; do
         case "$neperos_boot" in
             *"$neperos_leak"*) printf '%s\n' "capability boundary leaked ($neperos_leak): $neperos_boot" >&2; exit 1 ;;

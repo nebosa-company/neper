@@ -8958,6 +8958,7 @@ if ($neperosQemu) {
     foreach ($neperosMark in @('H got console', 'console server up', 'U retype ok', 'virtio entropy at pci slot 1', 'virtio block at pci slot 2')) {
         if ($neperosBoot -notmatch [regex]::Escape($neperosMark)) { throw "NeperOS capability behaviour missing (${neperosMark}): $neperosBoot" }
     }
+    if ($neperosBoot -notmatch 'entropy 8 bytes:( [0-9a-f][0-9a-f]){8}') { throw "the virtio entropy driver returned no bytes: $neperosBoot" }
     foreach ($neperosLeak in @('read protected memory', 'N should not print', 'V revoke leaked', 'W wrote after protect', 'U retype wrong')) {
         if ($neperosBoot -match [regex]::Escape($neperosLeak)) { throw "capability boundary leaked (${neperosLeak}): $neperosBoot" }
     }
