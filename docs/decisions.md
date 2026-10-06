@@ -36630,4 +36630,8 @@ The backlog table is then trimmed to what it is for (user request): the release-
 is gone, the Work-and-progress column is widened, and each row's ID carries its group's colour
 -- a compiler task in the Compiler blue, a NeperOS task in the NeperOS purple, a tooling task
 in the Tooling amber, a library task in the Library green -- so a glance down the list shows
-which area each item belongs to.
+which area each item belongs to. Two more trims follow (user request): the leading row-number
+(`#`) column is dropped so the coloured ID is the first column, and the backlog intro no longer
+prints the release-required count ("N are release-required for the first stable CPU release") --
+the whole backlog is always expanded, so the count added nothing. The release gate is still
+validated against the work inventories in `render_progress.py`; it is just no longer shown.

@@ -247,14 +247,14 @@ if chart_item is None:
 def unfinished_details(label, rows):
     # Each row is (id, title, evidence, group-colour key); the ID carries its group's colour.
     body = ''.join(
-        '<tr><td>{number}</td><td><code class="id-{key}">{id}</code></td>'
+        '<tr><td><code class="id-{key}">{id}</code></td>'
         '<td class="work">{title}</td><td>{evidence}</td></tr>'.format(
-            number=number, key=html.escape(key), id=html.escape(item_id),
+            key=html.escape(key), id=html.escape(item_id),
             title=html.escape(title), evidence=html.escape(evidence))
-        for number, (item_id, title, evidence, key) in enumerate(rows, 1)
+        for item_id, title, evidence, key in rows
     )
     content = (
-        '<div class="table-scroll"><table><thead><tr><th scope="col">#</th>'
+        '<div class="table-scroll"><table><thead><tr>'
         '<th scope="col">ID</th><th scope="col" class="work">Work and progress</th>'
         '<th scope="col">Evidence and remaining work</th></tr></thead>'
         '<tbody>' + body + '</tbody></table></div>'
@@ -281,7 +281,6 @@ backlog = unfinished_details('Backlog', [
      group_key(item))
     for item in queue_items if float(item['score']) < 1
 ])
-release_required_count = sum(item['id'] in RELEASE_REQUIRED_IDS for item in queue_items)
 module_required_count = sum(mod in core_modules for mod in module_missing)
 # A work-in-progress gallery render may exist before its chart is landed. Readiness
 # counts tracked preview pairs, not untracked files from another working session.
@@ -378,11 +377,9 @@ backlog_section = (
     '<section class="backlog" aria-label="Backlog">'
     '<h2>Backlog</h2>'
     '<p class="sub">{count} pending capabilities in pickup order — the NeperOS stage '
-    'first (D2119), then chart work, across all categories; the first row is next. '
-    '{required_count} are release-required for the '
-    '<a href="roadmap.md">first stable CPU compiler release</a>.</p>'
+    'first (D2119), then chart work, across all categories; the first row is next.</p>'
     '{backlog}</section>'
-).format(count=len(queue_items), required_count=release_required_count, backlog=backlog)
+).format(count=len(queue_items), backlog=backlog)
 
 page_html = """<!doctype html>
 <html lang="en">
@@ -406,11 +403,11 @@ footer{color:var(--muted);font-size:.8rem;margin-top:2rem;padding-top:1rem;borde
 .backlog h2{margin:0 0 .25rem;font-size:1.5rem;color:var(--accent)}.backlog p{margin:.25rem 0 1rem}
 .backlog table{width:100%;border-collapse:collapse;font-size:.85rem}.backlog td{padding:.45rem .6rem;border-top:1px solid var(--rule);vertical-align:top}
 .backlog th{text-align:left;padding:.45rem .6rem}.backlog code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.8rem;font-weight:700}
-.backlog td:nth-child(2){white-space:nowrap}.backlog .work{width:40%}
+.backlog td:first-child{white-space:nowrap}.backlog .work{width:40%}
 .backlog code.id-compiler{color:var(--c-compiler)}.backlog code.id-lib{color:var(--c-lib)}.backlog code.id-tooling{color:var(--c-tooling)}.backlog code.id-neperos{color:var(--c-neperos)}
 .backlog details{margin:0}.backlog summary{cursor:pointer;font-weight:600;color:var(--accent)}
 .table-scroll{overflow-x:auto}.table-scroll table{min-width:44rem}.table-scroll td{overflow-wrap:anywhere}
-@media(max-width:40rem){.backlog td{display:block;width:auto}.backlog td:nth-child(2){white-space:normal}.backlog td:first-child{border-top:1px solid var(--rule);padding-bottom:0}.backlog td+td{border-top:0}}
+@media(max-width:40rem){.backlog td{display:block;width:auto}.backlog td:first-child{white-space:normal;border-top:1px solid var(--rule);padding-bottom:0}.backlog td+td{border-top:0}}
 </style>
 </head>
 <body>
