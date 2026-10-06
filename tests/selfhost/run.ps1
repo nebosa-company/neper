@@ -8982,6 +8982,25 @@ if ($neperosQemu) {
     [IO.File]::WriteAllBytes($neperosMoved, $neperosBytes)
     $neperosTrap = Invoke-NeperOS $neperosMoved @('-append', 'trap')
     if ($neperosTrap -notmatch '(?s)trap\[bounds\]: index 2 out of bounds for len 1.*  at main\.main \(src/main\.e:.*neperos: exit 0x0000000000000086') { throw "NeperOS did not report its trap: $neperosTrap" }
+    # (D2151, C105) The shell boot: the initrd is a program archive, not a single image. The kernel
+    # loads program 0 as `init`, which launches the other two programs with the launch/reap/exit
+    # system calls, reaps both and reports their codes -- A exits 7, B is killed by a fault, which
+    # does not stop A. The archive is assembled by scripts/build-shell-archive.py from three
+    # separately built `aarch64 neperos` images.
+    $shellInit = Join-Path $testBuild 'shell_init.img'
+    $shellA = Join-Path $testBuild 'shell_a.img'
+    $shellB = Join-Path $testBuild 'shell_b.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\shell_init.e') $repo aarch64 neperos $shellInit | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS shell init did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\shell_a.e') $repo aarch64 neperos $shellA | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS shell program A did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\shell_b.e') $repo aarch64 neperos $shellB | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS shell program B did not build' }
+    $shellArchive = Join-Path $testBuild 'shell-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $shellArchive $shellInit $shellA $shellB
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS shell archive did not assemble' }
+    $shellBoot = Invoke-NeperOS $neperosImage @('-initrd', $shellArchive, '-append', 'shell')
+    if ($shellBoot -notmatch '(?s)shell init up.*el0 prog A exit 7.*el0 prog B faulting.*thread child killed, el0 fault at 0x0000000000000000.*shell child A code 7.*shell child B killed.*shell init done.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS shell did not run its processes: $shellBoot" }
 }
 
 Write-Output 'selfhost tests passed'

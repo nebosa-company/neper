@@ -8841,6 +8841,23 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
         *'trap[bounds]: index 2 out of bounds for len 1'*'  at main.main (src/main.e:'*'neperos: exit 0x0000000000000086'*) ;;
         *) printf '%s\n' "NeperOS did not report its trap: $neperos_trap" >&2; exit 1 ;;
     esac
+    # (D2151, C105) The shell boot: the initrd is a program archive, not a single image. The kernel
+    # loads program 0 as init, which launches the other two programs with the launch/reap/exit
+    # system calls, reaps both and reports their codes -- A exits 7, B is killed by a fault, which
+    # does not stop A. The archive is assembled by scripts/build-shell-archive.py.
+    shell_init="$test_build/shell_init.img"
+    shell_a="$test_build/shell_a.img"
+    shell_b="$test_build/shell_b.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/shell_init.e" "$repo" aarch64 neperos "$shell_init")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/shell_a.e" "$repo" aarch64 neperos "$shell_a")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/shell_b.e" "$repo" aarch64 neperos "$shell_b")" = 'executable written' ]
+    shell_archive="$test_build/shell-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$shell_archive" "$shell_init" "$shell_a" "$shell_b"
+    neperos_shell=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$shell_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_shell" in
+        *'shell init up'*'el0 prog A exit 7'*'el0 prog B faulting'*'thread child killed, el0 fault at 0x0000000000000000'*'shell child A code 7'*'shell child B killed'*'shell init done'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS shell did not run its processes: $neperos_shell" >&2; exit 1 ;;
+    esac
 fi
 
 printf '%s\n' 'selfhost tests passed'

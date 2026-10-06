@@ -22,6 +22,8 @@ use vm
 error FaultNotTaken
 // The device tree carried no initrd, so there is no user program to run.
 error NoInitrd
+// The initrd the shell boot was handed is not a program archive (D2151).
+error BadArchive
 
 // Ten preemptions a second: a QEMU timer slice short enough for threads to interleave
 // visibly, long enough that the switch is a sliver of each slice.
@@ -46,6 +48,18 @@ var ticks: usize = 0usize
 var virtio_isrs: [8]usize = zero
 var virtio_isr_count: usize = 0usize
 var device_irqs: usize = 0usize
+// (D2151) The C105 shell's initrd archive -- base, program count, and each program's offset and
+// length within it -- parsed when `-append shell` selects the shell boot; and the arena the
+// kernel allocates from, kept so the `launch` system call can build a new process's space, with
+// a running ASID so each process's TLB entries stay its own.
+const ARCHIVE_MAGIC: u32 = 0x4E455041u32
+const MAX_ARCHIVE: usize = 16usize
+var kernel_arena: *mem.Arena = zero
+var archive_base: usize = 0usize
+var archive_count: usize = 0usize
+var archive_offset: [16]usize = zero
+var archive_length: [16]usize = zero
+var next_asid: usize = 0usize
 // The four QEMU-virt PCIe INTx lines are GIC SPIs 3-6, that is INTIDs 35-38.
 const PCIE_INTX_FIRST: usize = 35usize
 const PCIE_INTX_LAST: usize = 38usize
@@ -139,7 +153,7 @@ fn syscall(frame: *a64.Frame) {
         ret
     }
     if number == 1u64 {
-        let more = thread.finish_current(frame)
+        let more = thread.finish_current(frame, usize(frame.x[0usize]))
         ret
     }
     if number == 2u64 {
@@ -176,6 +190,14 @@ fn syscall(frame: *a64.Frame) {
     }
     if number == 10u64 {
         thread.retype(frame)
+        ret
+    }
+    if number == 11u64 {
+        launch(frame)
+        ret
+    }
+    if number == 12u64 {
+        thread.reap(frame)
         ret
     }
 }
@@ -238,7 +260,7 @@ fn exception(raw: *void) {
             console_write(" killed, el0 fault at ")
             hex(frame.far)
             console_write("\n")
-            let more = thread.finish_current(frame)
+            let more = thread.finish_current(frame, thread.FAULT_CODE)
             ret
         }
     }
@@ -417,8 +439,60 @@ fn has_word(text: str, word: str) -> bool {
     ret false
 }
 
+// (D2151) Parse the initrd as a program archive: a 4-byte magic, a program count, then each
+// program's 8-byte offset and length within the archive. False when the magic is wrong.
+fn parse_archive(base: usize) -> bool {
+    if u32(os.load32(base)) != ARCHIVE_MAGIC { ret false }
+    archive_base = base
+    var count = usize(os.load32(base + 4usize))
+    if count > MAX_ARCHIVE { count = MAX_ARCHIVE }
+    archive_count = count
+    var i = 0usize
+    while i < count {
+        archive_offset[i] = usize(os.load64(base + 8usize + i * 16usize))
+        archive_length[i] = usize(os.load64(base + 16usize + i * 16usize))
+        i += 1usize
+    }
+    ret true
+}
+
+// (D2151) A process from an image at [image_addr, image_addr+image_len): a fresh address space
+// over the image, an empty capability space but for a console capability so it can print, and a
+// scheduler entry. Its parent is whatever thread is current -- none at boot (the shell `init`),
+// the launcher under the `launch` system call. The thread index comes back.
+fn start_process(image_addr: usize, image_len: usize, name: str) -> (usize, err) {
+    next_asid += 1usize
+    let (space, space_error) = vm.create(kernel_arena, image_addr, image_len, next_asid)
+    if space_error != ok { ret (0usize, space_error) }
+    let (arg_table, arg_count) = setup_args(space, name, 0usize, false)
+    let child = thread.add(space, name, arg_table, arg_count)
+    if child == thread.MAX_THREADS { ret (0usize, vm.NoSpace) }
+    thread.grant(child, 0usize, thread.CAP_CONSOLE, thread.RIGHT_WRITE, 0usize)
+    ret (child, ok)
+}
+
+// (D2151) `launch(index) -> child` (system call 11): build a new process from program `index` of
+// the initrd archive and return its id, the current thread recorded as its parent so a later
+// `reap` collects it. An index past the archive, or a space or table that will not take it, gives
+// the all-ones sentinel.
+fn launch(frame: *a64.Frame) {
+    let index = usize(frame.x[0usize])
+    if index >= archive_count {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    let (child, child_error) = start_process(archive_base + archive_offset[index], archive_length[index], "child")
+    if child_error != ok {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    frame.x[0usize] = u64(child)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     os.set_exit(power_off)
+    // (D2151) Keep the arena for the `launch` system call, which builds a new process's space.
+    kernel_arena = a
     if args.len == 0usize { ret fdt.BadTree }
     let (tree, tree_error) = fdt.open(args[0usize])
     if tree_error != ok { ret tree_error }
@@ -514,6 +588,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     console_write(" len ")
     hex(u64(image_len))
     console_write("\n")
+    // (D2151, C105) The shell boot (`-append shell`): the initrd is a program archive, not a
+    // single image. Parse it and start program 0 as `init`; init launches the rest with the
+    // `launch`/`reap` system calls. The capability demo (A-Z) runs on the default boot instead.
+    let shell_mode = bootargs_error == ok && has_word(bootargs, "shell")
+    if shell_mode {
+        if !parse_archive(image_addr) { ret BadArchive }
+        let (shell_init, shell_init_error) = start_process(archive_base + archive_offset[0usize], archive_length[0usize], "init")
+        if shell_init_error != ok { ret shell_init_error }
+    }
+    if !shell_mode {
     // A and B interleave under the timer, and X is handed a reference to kernel RAM --
     // mapped into its space without EL0 access -- so its read faults and it alone is killed.
     // The RAM base is as good a kernel address as any. S and R rendezvous over endpoint 0
@@ -572,6 +656,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // gigabyte is privileged in Q's space, so the read faults and the kernel kills Q before
         // its post-read line prints, exactly as a driver reaching past its own frames would fault.
         try start_thread(a, image_addr, image_len, 19usize, "Q", pci_host.ecam, true, true, 0u8, 0usize, false, false, false, 0usize)
+    }
     }
     console_write("scheduling\n")
     // The scheduler runs from here: the first timer tick leaves this loop for a thread, and

@@ -41,7 +41,13 @@ const RIGHT_WRITE: u8 = 4u8
 const RIGHT_GRANT: u8 = 8u8
 type Cap = struct { kind: u8, rights: u8, object: usize, parent: usize }
 
-type Thread = struct { state: u8, name: str, ttbr: usize, caps: [8]Cap, frame: a64.Frame }
+// (D2151) A process (C105) is a thread with a parent that may reap it: `parent` is the thread
+// that launched it (NONE for a boot thread), `exit_code` what it passed to exit or the fault
+// sentinel, and `waiting_child` the child it is blocked reaping (NONE otherwise).
+type Thread = struct { state: u8, name: str, ttbr: usize, caps: [8]Cap, frame: a64.Frame, parent: usize, exit_code: usize, waiting_child: usize }
+
+// The exit code of a process the kernel killed for a fault, which its parent's reap returns.
+const FAULT_CODE: usize = 18446744073709551615usize
 
 // A synchronous IPC endpoint: a queue of threads blocked on it, all senders or all
 // receivers, since a sender and a receiver rendezvous rather than both waiting.
@@ -97,7 +103,9 @@ fn add(space: vm.Space, name: str, arg_table: usize, arg_count: usize) -> usize 
     frame.elr = u64(space.entry)
     frame.spsr = 0u64
     var empty: [8]Cap = zero
-    threads[slot] = Thread { state: READY, name: name, ttbr: space.ttbr, caps: empty, frame: frame }
+    // The parent is whatever thread is current: none at boot (where `current` is NONE), the
+    // launcher under the `launch` system call, so a later `reap` on this child finds its parent.
+    threads[slot] = Thread { state: READY, name: name, ttbr: space.ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE }
     live += 1usize
     ret slot
 }
@@ -173,17 +181,54 @@ fn on_yield(frame: *a64.Frame) {
     let switched = run_next(current, frame)
 }
 
-// The current thread ended (it exited, or it was killed for a fault). The next ready thread
-// is run; when none is left the kernel returns to its idle context, where the boot loop
-// sees `running()` reach zero and powers off. True when a thread runs next.
-fn finish_current(frame: *a64.Frame) -> bool {
+// The current thread ended (it exited with `code`, or was killed for a fault with FAULT_CODE).
+// Its code is recorded; a parent blocked reaping it is handed the code and made ready, and the
+// finished slot freed (D2151). The next ready thread is run; when none is left the kernel returns
+// to its idle context, where the boot loop sees `running()` reach zero and powers off. True when
+// a thread runs next.
+fn finish_current(frame: *a64.Frame, code: usize) -> bool {
     let gone = current
+    threads[gone].exit_code = code
     threads[gone].state = EXITED
     if live != 0usize { live -= 1usize }
+    wake_reaper(gone)
     if run_next(gone, frame) { ret true }
     *frame = idle_frame
     current = NONE
     ret false
+}
+
+// (D2151) If a thread is blocked reaping the just-finished `child`, hand it the child's exit
+// code in x0, make it ready, and free the child's slot -- the child has been reaped. A finished
+// child whose parent is not yet waiting stays EXITED until a later reap collects it.
+fn wake_reaper(child: usize) {
+    let parent = threads[child].parent
+    if parent >= MAX_THREADS { ret }
+    if threads[parent].state == BLOCKED && threads[parent].waiting_child == child {
+        threads[parent].frame.x[0usize] = u64(threads[child].exit_code)
+        threads[parent].waiting_child = NONE
+        threads[parent].state = READY
+        threads[child].state = FREE
+    }
+}
+
+// (D2151) `reap(child) -> code` (system call 12): block until the launched `child` exits and
+// return its exit code. A child already exited is collected at once and its slot freed; one not
+// yet exited blocks the caller until it does. An index that is not the caller's child gives the
+// all-ones sentinel.
+fn reap(frame: *a64.Frame) {
+    let child = usize(frame.x[0usize])
+    if current == NONE || child >= MAX_THREADS || threads[child].parent != current {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    if threads[child].state == EXITED {
+        frame.x[0usize] = u64(threads[child].exit_code)
+        threads[child].state = FREE
+        ret
+    }
+    threads[current].waiting_child = child
+    block_current(frame)
 }
 
 // The current thread is set blocked and the next ready one run; with none ready the kernel

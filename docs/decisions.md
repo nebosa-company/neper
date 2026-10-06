@@ -37177,3 +37177,24 @@ stage-1/2 QEMU boot is byte-for-byte unchanged. Still to come for C105: the init
 and loader, the kernel's launch/reap/exit handlers and a process model (parent, exit code, a wait
 that blocks on a child and a fault that kills only its own process), and an init plus two child
 programs built into an archive with a QEMU fixture.
+
+## D2151 — C105 closes: processes from an initrd archive, with launch/reap/exit
+
+The rest of C105, on QEMU virt. The initrd becomes a program archive, chosen by a `shell` boot
+argument so the capability demo (A-Z) stays the default boot and the suite's stage-1/2 checks are
+untouched. The archive is a 4-byte magic (0x4E455041), a program count, then each program's 8-byte
+offset and length, then the programs 8-byte aligned; scripts/build-shell-archive.py assembles it
+from separately built `aarch64 neperos` images. On `-append shell` the kernel parses it and starts
+program 0 as `init` with its own address space, capability space and a console capability. A
+process is a thread with a parent (the thread current when it was added -- none at boot, the
+launcher under `launch`), an exit code, and the child it is blocked reaping. `launch(index)` (svc
+11) builds a process from archive program `index`, parented to the caller; `reap(child)` (svc 12)
+returns an already-exited child's code at once or blocks until it exits; exit (svc 1) records the
+code `os.exit` passed, and a fault records the all-ones sentinel -- either wakes a parent blocked
+reaping that child and frees the child's slot. The shell init launches programs 1 and 2, reaps
+both and reports their codes: A prints a line and exits 7, B prints a line then stores to address 0
+and is killed, so init reports `A code 7` and `B killed` and the kernel powers off with exit 0 --
+loading from the archive, the three system calls, and a fault in one process not stopping another,
+all shown at once. The launch system call needs the arena, so the kernel keeps it in a module var
+(`*mem.Arena = zero`, set at boot). Added to both suite runners as a second NeperOS boot alongside
+the default one; the default A-Z boot is byte-for-byte unchanged. C105 is complete.
