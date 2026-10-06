@@ -265,6 +265,31 @@ fn start_thread(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize,
     ret ok
 }
 
+// A device prober at EL0 (D2137): the kernel maps the entropy device's one PCI configuration
+// page into the thread's space and leaves its address in the aux area; the thread reads the
+// vendor id directly, the access a user-mode driver makes to its own device's MMIO. It holds
+// only that one device page -- every other gigabyte stays privileged in its space, so a stray
+// device access would fault.
+fn start_prober(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize, host: pci.Host) -> err {
+    var slot = 0usize
+    var ecam = 0usize
+    while slot < 32usize {
+        let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
+        if is_virtio && device_type == pci.VIRTIO_ENTROPY { ecam = host.ecam + (slot << 15usize) }
+        slot += 1usize
+    }
+    if ecam == 0usize { ret ok }
+    let (space, space_error) = vm.create(a, image_addr, image_len, asid)
+    if space_error != ok { ret space_error }
+    try vm.map_range_el0(a, space.ttbr, ecam & ~4095usize, 4096usize, true)
+    vm.put_aux(space, 0usize, ecam)
+    let (arg_table, arg_count) = setup_args(space, "Y", 0usize, false)
+    let index = thread.add(space, "Y", arg_table, arg_count)
+    if index == thread.MAX_THREADS { ret vm.NoSpace }
+    thread.grant(index, 0usize, thread.CAP_CONSOLE, thread.RIGHT_WRITE, 0usize)
+    ret ok
+}
+
 fn decimal(value: usize) {
     var digits: [20]u8 = zero
     var at = 20usize
@@ -553,6 +578,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Z exercises the EL0 raw-memory intrinsics (D2134) on its own stack, the foundation for
     // moving the virtio drivers out of the kernel into EL0 user-mode servers.
     try start_thread(a, image_addr, image_len, 15usize, "Z", 0usize, false, true, 0u8, 0usize, false, false, false, 0usize)
+    // Y is a device prober (D2137): the kernel maps the entropy device's PCI config page into
+    // its space, and it reads the vendor id from EL0 -- the mapped-frame access a user-mode
+    // driver makes to its device's MMIO.
+    if pci_host_error == ok { try start_prober(a, image_addr, image_len, 16usize, pci_host) }
     console_write("scheduling\n")
     // The scheduler runs from here: the first timer tick leaves this loop for a thread, and
     // the last thread to finish returns the kernel here with nothing left to run.

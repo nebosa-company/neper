@@ -36799,3 +36799,31 @@ type that slips past the checker, records against the global's token as well. A 
 `tests/selfhost/fixtures/link/global_bool`, wired into `run.ps1` and `run.sh`, declares a
 `bool` global at `true` and one at `false`, reads each before any assignment, and checks the
 read sees the declared value and not a zero fill.
+
+## D2137 — NeperOS stage 1d: mapping a device's MMIO into an EL0 driver
+
+`vm.map_range_el0(a, ttbr, pa, len, device)` maps a physical range into an EL0 address space at
+identity virtual addresses, read/write at EL0, as Device or Normal memory -- how a user-mode
+driver is handed its device's MMIO (and, next, an identity DMA pool) and nothing else. The
+address space `vm.create` builds copies the kernel's level-1 table, whose device gigabytes are
+1 GB blocks and whose RAM gigabytes point at the kernel's shared level-2 tables; neither may be
+written in place. So mapping splits into fresh tables this space owns: `clone_l2` makes a level-2
+for the gigabyte (copying an existing table, or synthesising 512 identity 2 MB blocks that carry
+the original block's attributes), `clone_l3` makes a level-3 for a 2 MB block the same way, and
+the range's 4 KB pages are then set to EL0 device/normal leaves. The untouched remainder keeps the
+kernel's privileged mapping, so a page the driver was not given still faults at EL0 -- the
+confinement. Splitting always clones from the current mapping, so a second call in the same
+gigabyte preserves the first's pages. The range must lie within one gigabyte (a BAR or a DMA pool
+is far smaller). The kernel leaves a driver's addresses in an aux area (`put_aux`) the program
+reads at `USER_BASE + AUX_OFF`.
+
+Proven by a prober thread `Y`: the kernel maps the entropy device's one PCI configuration page
+(in gigabyte 256, a device L1 block, so the block-split path) into `Y` and leaves its address in
+the aux area; `Y` reads the vendor id with `os.load32` at EL0 and prints `probe vendor ok` when it
+is virtio's 0x1af4. Booted under QEMU, `probe vendor ok` prints alongside every other stage-1
+mark and no kernel fault follows the page-table surgery. Isolation is the same mechanism the `X`
+and `W` threads already show (a fault on un-granted memory kills the thread); an explicit negative
+device prober comes with the servers. Next: the entropy driver as the first real EL0 user-mode
+server -- kernel discovers and assigns the BAR, maps the BAR region (Device) and a 128 KB identity
+DMA pool (Normal) into the server, passes the addresses through the aux area, and the server runs
+the location-agnostic transport (D2135) and reports over its console capability.

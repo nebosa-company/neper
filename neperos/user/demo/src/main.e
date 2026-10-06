@@ -147,6 +147,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if after == 18446744073709551615usize { say("V revoke ok\n") } else { say("V revoke leaked\n") }
         ret ok
     }
+    if one_char(name) == 89u8 {
+        // Y is a device prober (D2137): the kernel mapped the entropy device's PCI config page
+        // into its space and left its address at aux slot 0 (USER_BASE + vm.AUX_OFF). Y reads
+        // the vendor id directly at EL0 -- the mapped-frame access a user-mode driver makes to
+        // its device's MMIO. The virtio vendor is 0x1af4 (6900).
+        let ecam = usize(os.load64(2147745728usize))
+        let id = os.load32(ecam)
+        if (id & 65535u32) == 6900u32 { say("probe vendor ok\n") } else { say("probe vendor bad\n") }
+        ret ok
+    }
     if one_char(name) == 90u8 {
         // Z proves the EL0 raw-memory intrinsics (D2134): a store, a barrier and a load on its
         // own stack round-trip at EL0, the access a user-mode driver will make to the device

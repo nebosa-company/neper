@@ -35,6 +35,15 @@ const ACCESS_FLAG: usize = 1024usize
 const PRIVILEGED_EXECUTE_NEVER: usize = 1usize << 53usize
 // The 48-bit, page-aligned table address inside TTBR0, without its ASID.
 const TABLE_MASK: usize = 281474976706560usize
+// (D2137) Device memory (MAIR index 1) and the user-execute-never bit, for mapping a device's
+// MMIO into an EL0 driver; a gigabyte and a 2 MB block, the granules a map is split through.
+const ATTR_DEVICE: usize = 1usize << 2usize
+const USER_EXECUTE_NEVER: usize = 1usize << 54usize
+const GIGABYTE: usize = 1073741824usize
+const BLOCK_2MB: usize = 2097152usize
+// A driver thread's device and DMA addresses: the kernel leaves them in a small area just below
+// the arena, which the program reads at USER_BASE + AUX_OFF (D2137).
+const AUX_OFF: usize = 262080usize
 
 type Space = struct {
     ttbr: usize,
@@ -122,6 +131,110 @@ fn address(offset: usize) -> usize {
 
 // AP[1] in a page descriptor: with it set the page is read-only at EL0; clear, read/write.
 const AP_READONLY: usize = 128usize
+
+// The leaf bits for an identity EL0 page: Device memory (nGnRE) or Normal, read/write at EL0,
+// never executable. Device is not inner-shareable; Normal is, like the user region.
+fn el0_page_bits(device: bool) -> usize {
+    if device { ret PAGE_VALID | ATTR_DEVICE | AP_EL0_RW | ACCESS_FLAG | PRIVILEGED_EXECUTE_NEVER | USER_EXECUTE_NEVER }
+    ret user_page_bits()
+}
+
+// A fresh level-2 table for gigabyte `gig`, reflecting its current mapping in `l1` so that
+// splitting it loses nothing: an existing table is copied entry for entry; a 1 GB block is
+// synthesised as 512 identity 2 MB blocks carrying the block's own attributes (so the untouched
+// remainder keeps the kernel's privileged device or RAM mapping). The kernel's own tables are
+// never written -- only this space's copy.
+fn clone_l2(a: *mem.Arena, l1: usize, gig: usize) -> (usize, err) {
+    let (l2, l2_error) = page_of(a)
+    if l2_error != ok { ret (0usize, l2_error) }
+    let entry = usize(os.load64(l1 + gig * 8usize))
+    if (entry & 3usize) == TABLE {
+        let src = entry & TABLE_MASK
+        var i = 0usize
+        while i < 512usize {
+            os.store64(l2 + i * 8usize, u64(os.load64(src + i * 8usize)))
+            i += 1usize
+        }
+    } else {
+        let attrs = entry & ~TABLE_MASK
+        let base = gig * GIGABYTE
+        var i = 0usize
+        while i < 512usize {
+            os.store64(l2 + i * 8usize, u64((base + i * BLOCK_2MB) | attrs))
+            i += 1usize
+        }
+    }
+    ret (l2, ok)
+}
+
+// A fresh level-3 table for the 2 MB block at `block_index` of level-2 table `l2`, reflecting
+// its current mapping: a table is copied; a 2 MB block is synthesised as 512 identity 4 KB pages
+// carrying the block's attributes (as pages, not blocks); an invalid block stays unmapped.
+fn clone_l3(a: *mem.Arena, l2: usize, block_index: usize) -> (usize, err) {
+    let (l3, l3_error) = page_of(a)
+    if l3_error != ok { ret (0usize, l3_error) }
+    let entry = usize(os.load64(l2 + block_index * 8usize))
+    if (entry & 1usize) == 0usize { ret (l3, ok) }
+    if (entry & 3usize) == TABLE {
+        let src = entry & TABLE_MASK
+        var i = 0usize
+        while i < 512usize {
+            os.store64(l3 + i * 8usize, u64(os.load64(src + i * 8usize)))
+            i += 1usize
+        }
+        ret (l3, ok)
+    }
+    let attrs = (entry & ~TABLE_MASK & ~3usize) | PAGE_VALID
+    let base = entry & TABLE_MASK
+    var i = 0usize
+    while i < 512usize {
+        os.store64(l3 + i * 8usize, u64((base + i * PAGE) | attrs))
+        i += 1usize
+    }
+    ret (l3, ok)
+}
+
+// Map the physical range [pa, pa+len) into the EL0 space rooted at `ttbr` at identity virtual
+// addresses, read/write at EL0, as Device or Normal memory (D2137). This is how a user-mode
+// driver is handed its device's MMIO and an identity DMA pool and nothing else: the pages it is
+// not given stay privileged, so a stray access faults. The range must lie within one gigabyte.
+// Splitting copies the current mapping into fresh tables first, so earlier EL0 mappings in the
+// same gigabyte survive and only this space's tables change.
+fn map_range_el0(a: *mem.Arena, ttbr: usize, pa: usize, len: usize, device: bool) -> err {
+    let l1 = ttbr & TABLE_MASK
+    let first = pa & ~(PAGE - 1usize)
+    let last = (pa + len - 1usize) & ~(PAGE - 1usize)
+    if (first >> 30usize) != (last >> 30usize) { ret NoSpace }
+    let gig = first >> 30usize
+    let (l2, l2_error) = clone_l2(a, l1, gig)
+    if l2_error != ok { ret l2_error }
+    os.store64(l1 + gig * 8usize, u64(l2 | TABLE))
+    let bits = el0_page_bits(device)
+    var page = first
+    var current_block = 18446744073709551615usize
+    var l3 = 0usize
+    while page <= last {
+        let block_index = (page >> 21usize) & 511usize
+        if block_index != current_block {
+            let (fresh, l3_error) = clone_l3(a, l2, block_index)
+            if l3_error != ok { ret l3_error }
+            os.store64(l2 + block_index * 8usize, u64(fresh | TABLE))
+            l3 = fresh
+            current_block = block_index
+        }
+        os.store64(l3 + ((page >> 12usize) & 511usize) * 8usize, u64(page | bits))
+        page += PAGE
+    }
+    os.barrier()
+    os.tlb_flush()
+    ret ok
+}
+
+// A word the kernel leaves for a driver thread at `slot` of its aux area, read at
+// USER_BASE + AUX_OFF + slot*8 (D2137): a device or DMA address the kernel mapped for it.
+fn put_aux(space: Space, slot: usize, value: usize) {
+    os.store64(space.region_phys + AUX_OFF + slot * 8usize, u64(value))
+}
 
 // Re-protect the page at user VA `va` in the address space rooted at `ttbr`: writable clears
 // AP[1], read-only sets it, so an EL0 store into a read-only page faults. The walk follows
