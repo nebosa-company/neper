@@ -84,10 +84,11 @@ fn bar_base(host: Host, slot: usize, bar: usize) -> usize {
     ret base
 }
 
-// Enable a device's memory space and bus-mastering (DMA): the command register's bits 1
-// and 2. The ECAM host leaves BARs unassigned and the device disabled at reset.
+// Enable a device's memory space and bus-mastering (DMA): the command register's bits 1 and 2;
+// and clear bit 10 (interrupt-disable) so the device raises its legacy INTx pin on completion
+// (D2141). The ECAM host leaves BARs unassigned and the device disabled at reset.
 fn enable_device(host: Host, slot: usize) {
-    config_write16(host, slot, 4usize, config_read16(host, 0usize, slot, 0usize, 4usize) | 6u16)
+    config_write16(host, slot, 4usize, (config_read16(host, 0usize, slot, 0usize, 4usize) | 6u16) & ~1024u16)
 }
 
 // Assign one memory BAR a base from `next` in the 32-bit MMIO window, aligned to its size,

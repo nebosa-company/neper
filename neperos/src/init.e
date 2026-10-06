@@ -219,13 +219,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     if one_char(name) == 69u8 {
-        // E is the entropy driver as a real EL0 user-mode server (D2138): the kernel mapped its
-        // BAR (Device) and an identity DMA pool (Normal) into E's space and left the addresses in
-        // the aux area. E runs the SAME transport the kernel does and holds only its device's
-        // frames, so it is confined.
+        // E is the entropy driver as a real EL0 user-mode server (D2138), now notification-driven
+        // (D2141): the kernel mapped its BAR and DMA pool into E's space and granted it a
+        // notification capability (slot 1) bound to the device's interrupt. E submits a request,
+        // blocks on its interrupt, then collects -- the collect's bounded spin is a fallback, so a
+        // missing interrupt still completes. It holds only its device's frames, so it is confined.
         let device = read_device()
-        let (buffer, written, read_error) = virtio.read_entropy(device, 8usize)
-        if read_error != ok {
+        let (buffer, ring, begin_error) = virtio.entropy_begin(device, 8usize)
+        if begin_error != ok {
+            say("el0 entropy failed\n")
+            ret ok
+        }
+        let bits = os.notify_wait(1usize)
+        let (written, collect_error) = virtio.collect_written(ring, 0u16)
+        if collect_error != ok {
             say("el0 entropy failed\n")
             ret ok
         }

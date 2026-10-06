@@ -35,6 +35,35 @@ var probe_esr: u64 = 0u64
 // The interrupt controller, and how many timer interrupts have arrived.
 var controller: gic.Controller = zero
 var ticks: usize = 0usize
+// The ISR-status registers of the enumerated virtio devices, and how many device interrupts the
+// kernel has taken (D2141). On a PCIe INTx the handler reads each ISR to acknowledge the line
+// and signals notification 1, which a driver server waits on instead of polling.
+var virtio_isrs: [8]usize = zero
+var virtio_isr_count: usize = 0usize
+var device_irqs: usize = 0usize
+// The four QEMU-virt PCIe INTx lines are GIC SPIs 3-6, that is INTIDs 35-38.
+const PCIE_INTX_FIRST: usize = 35usize
+const PCIE_INTX_LAST: usize = 38usize
+const DEVICE_NOTIFICATION: usize = 1usize
+
+fn record_isr(isr: usize) {
+    if virtio_isr_count < 8usize {
+        virtio_isrs[virtio_isr_count] = isr
+        virtio_isr_count += 1usize
+    }
+}
+
+// A PCIe INTx: acknowledge every virtio device's line by reading its ISR-status register (read
+// clears it), count it, and wake the driver servers waiting on the device notification (D2141).
+fn handle_device_irq() {
+    var i = 0usize
+    while i < virtio_isr_count {
+        let status = os.load8(virtio_isrs[i])
+        i += 1usize
+    }
+    device_irqs += 1usize
+    thread.signal_notification(DEVICE_NOTIFICATION, 1usize)
+}
 
 fn console_write(bytes: str) {
     if console != 0usize { pl011.write(console, bytes) }
@@ -176,8 +205,15 @@ fn exception(raw: *void) {
                 // The timer interrupt is delivered to a user driver too (D2128): notification
                 // 0 is signalled, waking any thread waiting on it before the switch.
                 thread.signal_notification(0usize, 1usize)
+                // And the device notification as a wake-up safety net (D2141): a driver server
+                // blocked on its interrupt wakes at the next tick even if the device interrupt
+                // never arrives, then confirms completion by polling -- so it can never hang on a
+                // mis-routed interrupt, while `device_irqs` still records whether the real one came.
+                thread.signal_notification(DEVICE_NOTIFICATION, 1usize)
                 thread.on_timer(frame)
             }
+            // A virtio device's completion interrupt (D2141): acknowledge it and wake its server.
+            if intid >= PCIE_INTX_FIRST && intid <= PCIE_INTX_LAST { handle_device_irq() }
             gic.finish(intid)
         }
         ret
@@ -303,6 +339,10 @@ fn start_driver_server(a: *mem.Arena, image_addr: usize, image_len: usize, asid:
     let index = thread.add(space, name, arg_table, arg_count)
     if index == thread.MAX_THREADS { ret (bar, vm.NoSpace) }
     thread.grant(index, 0usize, thread.CAP_CONSOLE, thread.RIGHT_WRITE, 0usize)
+    // The device's ISR register, so the kernel's interrupt handler can acknowledge this device's
+    // INTx; and a notification capability (notification 1) the server waits on for its interrupt.
+    record_isr(device.isr)
+    thread.grant(index, 1usize, thread.CAP_NOTIFICATION, thread.RIGHT_RECV, DEVICE_NOTIFICATION)
     ret (cursor, ok)
 }
 
@@ -438,6 +478,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     controller = found
     gic.enable(controller)
     gic.enable_private(controller, timer.INTID)
+    // The four PCIe INTx lines, so a virtio device's completion wakes its driver server (D2141).
+    var intx = PCIE_INTX_FIRST
+    while intx <= PCIE_INTX_LAST {
+        gic.enable_spi(controller, intx)
+        intx += 1usize
+    }
     timer.arm(TICKS_PER_SECOND)
     // The user program the loader placed in memory: `/chosen` names its bounds.
     let (initrd_start, initrd_start_error) = fdt.integer(tree, chosen, "linux,initrd-start")
@@ -513,6 +559,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while thread.running() != 0usize { os.wait_for_interrupt() }
     a64.disable_irq()
     timer.stop()
+    // Whether any virtio device raised its completion interrupt (D2141): if so the entropy server
+    // woke on its notification rather than only the fallback spin, so the interrupt path works.
+    if device_irqs != 0usize { console_write("virtio irq ok\n") }
     console_write("all threads done\n")
     ret ok
 }

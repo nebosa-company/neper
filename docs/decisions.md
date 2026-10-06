@@ -36907,3 +36907,37 @@ suites assert the kill line, and the existing check that `read protected memory`
 covers `Q` too. Verified under QEMU alongside the three servers; `MAX_THREADS` (24) already had
 room. Still ahead to close C103: notification-driven (interrupt) drivers and a console-receive
 path.
+
+## D2141 — NeperOS stage 1d: the drivers hold their interrupt, and the entropy server waits on it
+
+The driver servers now hold their device's interrupt, not only its frames (D2139), and the
+entropy server is notification-driven rather than polling -- the acceptance's "and interrupt".
+QEMU's virtio-pci devices, with no MSI-X set up, raise their legacy INTx pin on completion; on
+QEMU virt the four PCIe INTx lines are GIC SPIs 3-6 (INTIDs 35-38). The path: `pci.enable_device`
+now also clears the command register's interrupt-disable bit (bit 10) so the pin is live;
+`gic.enable_spi` enables each of the four SPIs in the distributor (group 1, priority, routed to
+this core through GICD_IROUTER) alongside the timer PPI; and the exception handler, on an INTID
+in 35-38, calls `handle_device_irq`, which reads every enumerated virtio device's ISR-status
+register (a read clears it, deasserting INTx -- so the line cannot storm), counts the interrupt,
+and signals notification 1. Each driver server is granted a notification capability on
+notification 1 (cap slot 1) when it is started, and its device's ISR address is recorded for the
+handler.
+
+The transport's wait was split so a server can block between submitting and collecting -- a
+module-level function value is not supported in the language (E-TYPE-0009), and `os.notify_wait`
+is EL0-only so it cannot live in the shared transport, so `ring_wait` became `ring_submit` +
+`ring_poll`, and `entropy_begin` submits without waiting while `collect_written` polls and returns
+the length. The entropy server `E` now calls `entropy_begin`, `os.notify_wait(1)`, then
+`collect_written`. Two things keep this from ever hanging on a mis-routed interrupt: the timer
+tick also signals notification 1 as a wake-up safety net, so `E` wakes within a tick regardless,
+and `collect_written`'s bounded spin confirms completion by polling the used ring. `device_irqs`
+counts real device interrupts, and the kernel prints `virtio irq ok` when it is non-zero -- so the
+mark proves the device interrupt actually fired and woke the server, not that the safety net did.
+Block and console still poll (they hold the notification capability but do not block on it yet);
+their completions still raise INTx, which the handler acknowledges. `read_entropy` is now unused
+(the server uses the split path) and pruned.
+
+Verified by rebuilding `neper-self` and booting under QEMU: `virtio irq ok` prints alongside the
+three `el0` driver marks, `Q`'s isolation kill, all threads finishing and exit 0 -- no hang, no
+interrupt storm. Still ahead to close C103: a virtio-console receive/echo path (the acceptance's
+"echo"); converting block and console to block on their interrupt too is optional polish.

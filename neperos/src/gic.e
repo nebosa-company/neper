@@ -15,6 +15,8 @@ const GICD_CTLR: usize = 0usize
 const GICD_IGROUPR: usize = 128usize
 const GICD_ISENABLER: usize = 256usize
 const GICD_IPRIORITYR: usize = 1024usize
+// GICD_IROUTER (0x6000): one 64-bit affinity per SPI, for GICv3 routing (D2141).
+const GICD_IROUTER: usize = 24576usize
 // GICD_CTLR: affinity routing for the non-secure state, and group 1 non-secure enabled.
 const GICD_ARE_NS: u32 = 16u32
 const GICD_ENABLE_G1NS: u32 = 2u32
@@ -80,6 +82,20 @@ fn enable_private(gic: Controller, intid: usize) {
     let priority_at = sgi + GICR_IPRIORITYR + intid
     os.store8(priority_at, u8(PRIORITY))
     os.store32(sgi + GICR_ISENABLER0, u32(1usize << intid))
+    os.barrier()
+}
+
+// A shared interrupt (an SPI, INTID 32 and up) enabled in the distributor and routed to this
+// core (affinity 0.0.0.0, IRM clear), as group 1 at the common priority (D2141). The byte and
+// bit registers are the distributor's; IROUTER is one 64-bit entry per SPI.
+fn enable_spi(gic: Controller, intid: usize) {
+    let d = gic.distributor
+    let word = intid / 32usize
+    let bit = intid % 32usize
+    os.store32(d + GICD_IGROUPR + word * 4usize, os.load32(d + GICD_IGROUPR + word * 4usize) | u32(1usize << bit))
+    os.store8(d + GICD_IPRIORITYR + intid, u8(PRIORITY))
+    os.store64(d + GICD_IROUTER + intid * 8usize, 0u64)
+    os.store32(d + GICD_ISENABLER + word * 4usize, u32(1usize << bit))
     os.barrier()
 }
 

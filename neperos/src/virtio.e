@@ -156,19 +156,59 @@ fn setup_queue(device: Device, selector: u16) -> (Ring, err) {
     ret (Ring { desc: desc, avail: avail, used: used, notify: device.notify + notify_offset * usize(device.notify_multiplier), index: selector, size: size }, ok)
 }
 
-// Offer descriptor-chain head 0 in the `nth` available slot (0-based) and spin until the device
-// has completed `nth + 1` buffers. One request is in flight at a time, so the used index rising
-// to `nth + 1` is this request finishing.
-fn ring_wait(ring: Ring, nth: u16) -> err {
+// Offer descriptor-chain head 0 in the `nth` available slot (0-based) and notify the device
+// (D2141). The wait is a separate step so a user-mode server can block on its interrupt between
+// submitting and collecting.
+fn ring_submit(ring: Ring, nth: u16) {
     os.store16(ring.avail + 4usize + 2usize * usize(nth), 0u16)
     os.barrier()
     os.store16(ring.avail + 2usize, nth + 1u16)
     os.barrier()
     os.store16(ring.notify, ring.index)
+}
+
+// Spin, bounded, until the device has completed `nth + 1` buffers. A driver that first waited on
+// its interrupt finds this already satisfied; one that did not, or whose interrupt never arrived,
+// still completes here -- so a missing or mis-routed interrupt degrades to polling, never a hang.
+fn ring_poll(ring: Ring, nth: u16) -> err {
     var spins = 0usize
     while os.load16(ring.used + 2usize) != nth + 1u16 && spins < 200000000usize { spins += 1usize }
     if os.load16(ring.used + 2usize) != nth + 1u16 { ret NoData }
     ret ok
+}
+
+// One request in flight at a time, so the used index rising to `nth + 1` is this request
+// finishing. Submit and poll together, for the in-kernel path and the poll-only drivers.
+fn ring_wait(ring: Ring, nth: u16) -> err {
+    ring_submit(ring, nth)
+    ret ring_poll(ring, nth)
+}
+
+// Set up the entropy device and submit one device-writable buffer WITHOUT waiting (D2141), for a
+// notification-driven user-mode server that blocks on its interrupt and then collects. The buffer
+// and the ring come back; the caller polls the ring after its wait.
+fn entropy_begin(device: Device, want: usize) -> (usize, Ring, err) {
+    let negotiate_error = negotiate(device)
+    if negotiate_error != ok { ret (0usize, zero, negotiate_error) }
+    let (ring, ring_error) = setup_queue(device, 0u16)
+    if ring_error != ok { ret (0usize, zero, ring_error) }
+    let (buffer, buffer_error) = dma_region(want)
+    if buffer_error != ok { ret (0usize, zero, buffer_error) }
+    status_add(device, STATUS_DRIVER_OK)
+    os.store64(ring.desc, u64(buffer))
+    os.store32(ring.desc + 8usize, u32(want))
+    os.store16(ring.desc + 12usize, DESC_WRITE)
+    os.store16(ring.desc + 14usize, 0u16)
+    ring_submit(ring, 0u16)
+    ret (buffer, ring, ok)
+}
+
+// Collect a completed request begun with `entropy_begin`: poll the ring (the bounded fallback)
+// and return the byte count the device wrote (used.ring[0].len at used + 8).
+fn collect_written(ring: Ring, nth: u16) -> (usize, err) {
+    let poll_error = ring_poll(ring, nth)
+    if poll_error != ok { ret (0usize, poll_error) }
+    ret (usize(os.load32(ring.used + 8usize)), ok)
 }
 
 // One device-writable buffer of `want` bytes submitted on queue 0, filled by the device, the
