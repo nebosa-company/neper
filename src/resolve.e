@@ -469,6 +469,17 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
         try seed(r, g, "e.os", "notify_wait", .Value, .Intrinsic)
         try seed(r, g, "e.os", "device_write", .Value, .Intrinsic)
         try seed(r, g, "e.os", "retype", .Value, .Intrinsic)
+        // (D2134) Raw memory access, so a user-mode driver can reach its device's MMIO and
+        // its virtqueue rings through the pages the kernel maps into its space.
+        try seed(r, g, "e.os", "load8", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "load16", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "load32", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "load64", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "store8", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "store16", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "store32", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "store64", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "barrier", .Value, .Intrinsic)
     }
     // (D2126) A kernel's machine, on aarch64-none alone in the same way.
     if same(g.os, "none") && same(g.arch, "aarch64") {

@@ -147,6 +147,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if after == 18446744073709551615usize { say("V revoke ok\n") } else { say("V revoke leaked\n") }
         ret ok
     }
+    if one_char(name) == 90u8 {
+        // Z proves the EL0 raw-memory intrinsics (D2134): a store, a barrier and a load on its
+        // own stack round-trip at EL0, the access a user-mode driver will make to the device
+        // MMIO and virtqueue rings the kernel maps into its space.
+        var cell: [2]u32 = zero
+        let addr = mem.address_of(&cell[0usize])
+        os.store32(addr, 1515870810u32)
+        os.barrier()
+        if os.load32(addr) == 1515870810u32 { say("Z mem ok\n") } else { say("Z mem bad\n") }
+        ret ok
+    }
     var round = 0usize
     while round < 3usize {
         // One write a round, so a token is never split across a preemption: the name, the

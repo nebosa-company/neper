@@ -36725,3 +36725,36 @@ Still ahead for C103, to close D2119 stage 1: moving all three drivers out of th
 user-mode servers that hold only their device's frame and interrupt capabilities, and a
 console-receive path. The transport still runs in the kernel and polls the used ring rather than
 waiting on the ISR capability.
+
+## D2134 — NeperOS stage 1d: EL0 raw-memory intrinsics, the floor for user-mode drivers
+
+Moving the virtio drivers out of the kernel into EL0 user-mode servers begins with the surface a
+driver needs at EL0: to touch its device's MMIO registers and its virtqueue rings, through pages
+the kernel maps into its space, it needs `os.load8/16/32/64`, `os.store8/16/32/64` and
+`os.barrier` -- the same width-at-a-time machine access the kernel (`none` target) already has.
+These were not available to the `neperos` (EL0) target, which had only the svc wrappers
+(`send`/`recv`/`device_write`/...); an EL0 program using `os.load32` failed to resolve. The
+distinction matters: the console server reaches the UART through a `device_write` svc the kernel
+performs, but a virtio driver makes far too many MMIO accesses and does ring DMA for a per-access
+svc, so it must touch mapped memory directly.
+
+These intrinsics are compiler-provided, not library code, and gated per target in `src/`: the
+`none`+aarch64 kernel branch seeds the machine surface, the `neperos` branch the svc wrappers.
+This adds the nine memory intrinsics to the `neperos` branch in `resolve.e` (seed) and `check.e`
+(signatures, reusing `seed_kernel_access`), and their bodies to `runtime_neperos_a64.s` -- plain
+`ldrb`/`ldrh`/`ldr`/`strb`/`strh`/`str` and a `dsb sy; isb`, identical to the kernel runtime and
+with no svc, so a store faults if the page is not mapped with EL0 access (which is how a driver
+stays confined to its own device's frames). `lower.e` already maps the names to the runtime
+symbols by name, target-agnostic, so it needed nothing. The runtime `.e` was regenerated from the
+`.s` with `scripts/embed-elf-runtime.ps1 -Arch neperos`.
+
+The change is fixed-point-safe: the new seeds fire only when `g.os` is `neperos`, so compiling the
+compiler itself (x64/windows or linux) runs none of them and its self-compilation is unchanged.
+The bootstrap builds the modified compiler; the module-surface gate (windows) and the bootstrap
+lint both pass. Proven by a demo thread `Z`, granted a console capability: it does a
+store/barrier/load round-trip on its own stack at EL0 and prints `Z mem ok`. Verified by rebuilding
+`neper-self` (on Windows, ~15 s) and booting the kernel under QEMU -- `Z mem ok` prints alongside
+all the stage 1a-1d marks. (The byte-identical stage2==stage3 check and the Linux boot run in the
+full suite, which needs a host that completes the Linux self-host build.) Next: `vm.map_range_el0`
+to map a device's BAR and an identity DMA pool into an EL0 server, then the entropy driver as the
+first such server.

@@ -367,6 +367,58 @@ neper_os_retype:
     svc #0
     ret
 
+// (D2134) Raw memory access from EL0, for a user-mode driver reaching its device's MMIO and
+// virtqueue rings through pages the kernel mapped into its space. Each is a plain load or
+// store -- no svc -- so it faults if the page is not mapped with EL0 access, which is how a
+// driver is confined to its own device's frames. Identical bodies to runtime_none_a64.s.
+.global neper_os_load8
+neper_os_load8:
+    ldrb w0, [x0]
+    ret
+
+.global neper_os_load16
+neper_os_load16:
+    ldrh w0, [x0]
+    ret
+
+.global neper_os_load32
+neper_os_load32:
+    ldr w0, [x0]
+    ret
+
+.global neper_os_load64
+neper_os_load64:
+    ldr x0, [x0]
+    ret
+
+.global neper_os_store8
+neper_os_store8:
+    strb w1, [x0]
+    ret
+
+.global neper_os_store16
+neper_os_store16:
+    strh w1, [x0]
+    ret
+
+.global neper_os_store32
+neper_os_store32:
+    str w1, [x0]
+    ret
+
+.global neper_os_store64
+neper_os_store64:
+    str x1, [x0]
+    ret
+
+// A full barrier, as runtime_none_a64.s: every access before it completes, instructions
+// refetched -- ordering a driver's ring writes before it notifies the device.
+.global neper_os_barrier
+neper_os_barrier:
+    dsb sy
+    isb
+    ret
+
 // A ULEB128 at x28 into x0, x28 past it; x9 and x10 are used (D1586).
 np_trap_uleb:
     mov x0, #0

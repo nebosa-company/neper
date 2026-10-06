@@ -540,6 +540,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // U retypes endpoints from an untyped capability with a budget of two, and the third
     // retype is refused -- the kernel allocates nothing, the budget bounds it.
     try start_thread(a, image_addr, image_len, 14usize, "U", 0usize, false, true, 0u8, 0usize, false, false, false, 2usize)
+    // Z exercises the EL0 raw-memory intrinsics (D2134) on its own stack, the foundation for
+    // moving the virtio drivers out of the kernel into EL0 user-mode servers.
+    try start_thread(a, image_addr, image_len, 15usize, "Z", 0usize, false, true, 0u8, 0usize, false, false, false, 0usize)
     console_write("scheduling\n")
     // The scheduler runs from here: the first timer tick leaves this loop for a thread, and
     // the last thread to finish returns the kernel here with nothing left to run.

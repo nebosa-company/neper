@@ -4981,6 +4981,14 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
         try add_seeded_parameter(c, retype_index, "untyped", usize_type)
         try add_seeded_parameter(c, retype_index, "kind", usize_type)
         try add_seeded_parameter(c, retype_index, "dest", usize_type)
+        // (D2134) Raw memory access from EL0, the same width-at-a-time load and store the
+        // kernel has, for a user-mode driver reaching its device's MMIO and virtqueue rings.
+        try seed_kernel_access(c, os_module, "load8", "store8", "u8")
+        try seed_kernel_access(c, os_module, "load16", "store16", "u16")
+        try seed_kernel_access(c, os_module, "load32", "store32", "u32")
+        try seed_kernel_access(c, os_module, "load64", "store64", "u64")
+        let (barrier_index, barrier_error) = add_seeded_function(c, os_module, "barrier", make_type(.Void, "void", os_module), false)
+        if barrier_error != ok { ret barrier_error }
     }
     let (str_module, has_str) = graph.find_module(g, "e.str")
     if has_str { try seed_str_signatures(c, str_module) }
