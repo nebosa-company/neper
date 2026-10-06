@@ -457,6 +457,30 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     // Section 5: `os.syscall` exists on Linux alone, so on any other target the name is
     // an unknown name like any other rather than something that fails when called.
     if same(g.os, "linux") { try seed(r, g, "e.os", "syscall", .Value, .Intrinsic) }
+    // (D2126) A kernel's machine, on aarch64-none alone in the same way.
+    if same(g.os, "none") && same(g.arch, "aarch64") {
+        try seed(r, g, "e.os", "set_console", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "set_exit", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "set_exception", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "load8", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "load16", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "load32", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "load64", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "store8", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "store16", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "store32", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "store64", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "barrier", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "tlb_flush", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "wait_for_interrupt", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "memory_barrier", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "wait_for_event", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "send_event", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "hvc", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "smc", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "mrs", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "msr", .Value, .Intrinsic)
+    }
     try seed(r, g, "e.os", "wait_u32", .Value, .Intrinsic)
     try seed(r, g, "e.os", "wake_one_u32", .Value, .Intrinsic)
     try seed(r, g, "e.os", "wake_all_u32", .Value, .Intrinsic)

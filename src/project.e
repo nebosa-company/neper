@@ -200,7 +200,8 @@ fn valid_os(value: str) -> bool {
 
 fn valid_target(arch: str, target_os: str) -> bool {
     if same(arch, "spv") || same(arch, "ptx") { ret same(target_os, "none") }
-    if same(target_os, "none") { ret false }
+    // aarch64-none is a kernel image (D2126); no other CPU target runs without an OS.
+    if same(target_os, "none") { ret same(arch, "aarch64") }
     if same(arch, "x86") && same(target_os, "macos") { ret false }
     ret true
 }

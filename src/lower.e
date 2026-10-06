@@ -904,6 +904,28 @@ fn intrinsic_symbol(name: str) -> (str, err) {
     if check.same(name, "wait_u32") { ret ("neper_os_wait_u32", ok) }
     if check.same(name, "wake_one_u32") { ret ("neper_os_wake_one_u32", ok) }
     if check.same(name, "wake_all_u32") { ret ("neper_os_wake_all_u32", ok) }
+    // (D2126) aarch64-none's machine, each a runtime_none_a64.s function.
+    if check.same(name, "set_console") { ret ("neper_os_set_console", ok) }
+    if check.same(name, "set_exit") { ret ("neper_os_set_exit", ok) }
+    if check.same(name, "set_exception") { ret ("neper_os_set_exception", ok) }
+    if check.same(name, "load8") { ret ("neper_os_load8", ok) }
+    if check.same(name, "load16") { ret ("neper_os_load16", ok) }
+    if check.same(name, "load32") { ret ("neper_os_load32", ok) }
+    if check.same(name, "load64") { ret ("neper_os_load64", ok) }
+    if check.same(name, "store8") { ret ("neper_os_store8", ok) }
+    if check.same(name, "store16") { ret ("neper_os_store16", ok) }
+    if check.same(name, "store32") { ret ("neper_os_store32", ok) }
+    if check.same(name, "store64") { ret ("neper_os_store64", ok) }
+    if check.same(name, "barrier") { ret ("neper_os_barrier", ok) }
+    if check.same(name, "tlb_flush") { ret ("neper_os_tlb_flush", ok) }
+    if check.same(name, "wait_for_interrupt") { ret ("neper_os_wait_for_interrupt", ok) }
+    if check.same(name, "memory_barrier") { ret ("neper_os_memory_barrier", ok) }
+    if check.same(name, "wait_for_event") { ret ("neper_os_wait_for_event", ok) }
+    if check.same(name, "send_event") { ret ("neper_os_send_event", ok) }
+    if check.same(name, "hvc") { ret ("neper_os_hvc", ok) }
+    if check.same(name, "smc") { ret ("neper_os_smc", ok) }
+    if check.same(name, "mrs") { ret ("neper_os_mrs", ok) }
+    if check.same(name, "msr") { ret ("neper_os_msr", ok) }
     ret ("", check.UnknownCallable)
 }
 

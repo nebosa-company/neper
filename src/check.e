@@ -4932,9 +4932,86 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
     let (os_module, has_os) = graph.find_module(g, "e.os")
     let (atomic_module, has_atomic) = graph.find_module(g, "e.atomic")
     if has_os { try seed_os_signatures(c, os_module, mem_module, has_memory, atomic_module, has_atomic, same(g.os, "linux")) }
+    if has_os && same(g.os, "none") && same(g.arch, "aarch64") { try seed_kernel_signatures(c, os_module) }
     let (str_module, has_str) = graph.find_module(g, "e.str")
     if has_str { try seed_str_signatures(c, str_module) }
     ret ok
+}
+
+// (D2126) The machine on aarch64-none, a kernel's and nobody else's: the runtime's three
+// hooks, device memory a width at a time, the barrier, the TLB, the wait for an interrupt,
+// firmware calls, and the system registers by their `op0:op1:CRn:CRm:op2` number. Each is
+// a call into runtime_none_a64.s.
+fn seed_kernel_signatures(c: *Checker, os_module: usize) -> err {
+    let void_type = make_type(.Void, "void", os_module)
+    let usize_type = make_type(.Integer, "usize", os_module)
+    let (void_pointer, void_pointer_error) = seeded_composite_type(c, .Pointer, void_type, false, os_module)
+    if void_pointer_error != ok { ret void_pointer_error }
+    var hook_parameters: [1]Type = zero
+    hook_parameters[0usize] = make_type(.String, "str", os_module)
+    try seed_kernel_hook(c, os_module, "set_console", hook_parameters[..])
+    hook_parameters[0usize] = make_type(.Integer, "i32", os_module)
+    try seed_kernel_hook(c, os_module, "set_exit", hook_parameters[..])
+    hook_parameters[0usize] = void_pointer
+    try seed_kernel_hook(c, os_module, "set_exception", hook_parameters[..])
+    try seed_kernel_access(c, os_module, "load8", "store8", "u8")
+    try seed_kernel_access(c, os_module, "load16", "store16", "u16")
+    try seed_kernel_access(c, os_module, "load32", "store32", "u32")
+    try seed_kernel_access(c, os_module, "load64", "store64", "u64")
+    let (barrier_index, barrier_error) = add_seeded_function(c, os_module, "barrier", void_type, false)
+    if barrier_error != ok { ret barrier_error }
+    let (flush_index, flush_error) = add_seeded_function(c, os_module, "tlb_flush", void_type, false)
+    if flush_error != ok { ret flush_error }
+    let (wait_index, wait_error) = add_seeded_function(c, os_module, "wait_for_interrupt", void_type, false)
+    if wait_error != ok { ret wait_error }
+    let (memory_barrier_index, memory_barrier_error) = add_seeded_function(c, os_module, "memory_barrier", void_type, false)
+    if memory_barrier_error != ok { ret memory_barrier_error }
+    let (wait_event_index, wait_event_error) = add_seeded_function(c, os_module, "wait_for_event", void_type, false)
+    if wait_event_error != ok { ret wait_event_error }
+    let (send_event_index, send_event_error) = add_seeded_function(c, os_module, "send_event", void_type, false)
+    if send_event_error != ok { ret send_event_error }
+    try seed_kernel_firmware(c, os_module, "hvc")
+    try seed_kernel_firmware(c, os_module, "smc")
+    let (mrs_index, mrs_error) = add_seeded_function(c, os_module, "mrs", usize_type, false)
+    if mrs_error != ok { ret mrs_error }
+    try add_seeded_parameter(c, mrs_index, "register", usize_type)
+    let (msr_index, msr_error) = add_seeded_function(c, os_module, "msr", void_type, false)
+    if msr_error != ok { ret msr_error }
+    try add_seeded_parameter(c, msr_index, "register", usize_type)
+    ret add_seeded_parameter(c, msr_index, "value", usize_type)
+}
+
+// `name(f: fn(parameters))`: the hook's slot set to `f`.
+fn seed_kernel_hook(c: *Checker, os_module: usize, name: str, parameters: []const Type) -> err {
+    let (hook_type, hook_error) = build_function_type(c, parameters, parameters[0usize..0usize], os_module)
+    if hook_error != ok { ret hook_error }
+    let (index, index_error) = add_seeded_function(c, os_module, name, make_type(.Void, "void", os_module), false)
+    if index_error != ok { ret index_error }
+    ret add_seeded_parameter(c, index, "f", hook_type)
+}
+
+// `load(address) -> width` and `store(address, value: width)`, one access each.
+fn seed_kernel_access(c: *Checker, os_module: usize, load: str, store: str, width: str) -> err {
+    let usize_type = make_type(.Integer, "usize", os_module)
+    let value_type = make_type(.Integer, width, os_module)
+    let (load_index, load_error) = add_seeded_function(c, os_module, load, value_type, false)
+    if load_error != ok { ret load_error }
+    try add_seeded_parameter(c, load_index, "address", usize_type)
+    let (store_index, store_error) = add_seeded_function(c, os_module, store, make_type(.Void, "void", os_module), false)
+    if store_error != ok { ret store_error }
+    try add_seeded_parameter(c, store_index, "address", usize_type)
+    ret add_seeded_parameter(c, store_index, "value", value_type)
+}
+
+// An SMC Calling Convention call: the function's number and three arguments, x0 back.
+fn seed_kernel_firmware(c: *Checker, os_module: usize, name: str) -> err {
+    let usize_type = make_type(.Integer, "usize", os_module)
+    let (index, index_error) = add_seeded_function(c, os_module, name, usize_type, false)
+    if index_error != ok { ret index_error }
+    try add_seeded_parameter(c, index, "function", usize_type)
+    try add_seeded_parameter(c, index, "a1", usize_type)
+    try add_seeded_parameter(c, index, "a2", usize_type)
+    ret add_seeded_parameter(c, index, "a3", usize_type)
 }
 
 // The compiler-origin declarations whose owning modules otherwise have a complete

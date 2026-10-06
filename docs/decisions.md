@@ -36417,3 +36417,69 @@ position-independent: the back end already reaches code, globals and the runtime
 table -- holds them relative to the image start under `none`. The writable globals follow
 the code inside the file, so a page delta between two file offsets is the one between
 their addresses wherever the image lands.
+
+## D2126 — aarch64-none: a kernel image, a runtime of hooks, and the machine as runtime calls
+
+`--target aarch64-none` (C100) builds a kernel. `project.valid_target` now admits `none`
+with `aarch64` as well as with the device targets. `link_image_a64` writes the Linux arm64
+`Image` chosen in D2125. The 64-byte header holds a branch to the entry, `text_offset` 0,
+`image_size`, and flags for little-endian, 4 KB pages and placement anywhere. The magic
+`ARM\x64` closes it. The code starts on the next page, then comes the runtime, 2 KB
+aligned for its vectors, then the symbol table and the globals on a page. Every reference
+is an `adr`, `adrp` or `bl` patched between file offsets, and the symbol table is rebased
+to the image start; the trap takes the image's own address off each return address before
+the lookup. The suites prove it by booting a copy whose `text_offset` is 4 MB, which QEMU
+loads 2 MB higher, and the trap's backtrace still names `main.main` at its line.
+`em_link` also chose the aarch64 resolver by the exact triple `aarch64-linux`, so a
+kernel's artifacts were patched as x64 words; it now takes `aarch64-none` too.
+
+`runtime_none_a64.s` is the whole runtime. The entry receives the device tree in x0 with
+the MMU off. It clears the hook slots, sets the stack and enables floating point and SIMD
+(CPACR_EL1.FPEN); without that, the back end's first `fmov` would trap. It then installs
+the vectors and calls `main(&arena, &args)`. The stack and the arena sit in a bss after
+the file that `image_size` covers, so no loader puts the device tree there. `args` holds
+one argument, the device tree's bytes. The runtime knows no device. The kernel hands it
+three functions:
+
+- `os.set_console(fn(str))` receives every byte that `os.write` and a trap print.
+- `os.set_exit(fn(i32))` ends the program. NeperOS powers off through PSCI there.
+- `os.set_exception(fn(*void))` gets each exception's frame: x0-x30, SP_EL0, ELR, SPSR,
+  ESR, FAR and the vector's number. The handler may rewrite any of it before the `eret`,
+  which is all a context switch will need (C101).
+
+Without a hook, the text is dropped, an exit waits for an interrupt forever, and an
+exception is reported and exits 135. With the MMU off every access is to Device memory, so
+the runtime's literals are 8-byte aligned; an unaligned one was the first fault the boot
+took. The runtime must also reach its own symbols by local labels: a reference to a global
+symbol assembles as a relocation that the embedding leaves unapplied, so
+`adr x20, neper_start` pointed at itself. `scripts/embed-elf-runtime.ps1` (`-Arch none`)
+now refuses an object with any relocation.
+
+The machine is a set of `e.os` intrinsics seeded only for aarch64-none. On any other
+target the names are unknown, refused where they are written, as `os.syscall` is off
+Linux. Each lowers to a runtime call, so NIR gains no opcode and no pass can merge,
+split, reorder or drop one:
+
+- `load8/16/32/64` and `store8/16/32/64` reach device memory;
+- `barrier` is `dsb sy; isb`, and `memory_barrier` is `dmb sy`;
+- `tlb_flush`, and `wait_for_interrupt`, `wait_for_event` and `send_event` (`wfi`, `wfe`,
+  `sev`);
+- `hvc` and `smc` take an SMCCC function and three arguments;
+- `mrs(register)` and `msr(register, value)`.
+
+A system register is named by its `op0:op1:CRn:CRm:op2` number. The runtime finds it in a
+table of the 45 registers stages 1a-1d need and runs that entry's own `mrs` or `msr`. A
+number outside the table is reported and exits 136, so the table is also the list of
+registers a kernel can touch. ponytail: a call and a table scan per register access; an
+inline NIR form when a hot path, the IRQ acknowledge, measures it.
+
+NeperOS itself is `neperos/src`. `fdt` handles paths, properties, and `reg` by the root's
+cells. Then come `pl011`, `psci` (the conduit from `/psci`'s `method`), and `mmu`, an
+identity map of the 39-bit space: Device gigabytes, and 2 MB Normal write-back blocks
+where the tree's RAM is, never executable at EL0. `main` finds the console through
+`/chosen`'s `stdout-path` and turns translation on. It proves the exception path by reading
+past the 39-bit space; the handler checks the fault address and class, answers zero and
+steps over the load. Booted with `trap`, it fails a bounds check instead. The 36 KB image
+boots the same under QEMU 11.1 on Windows and QEMU 8.2 in WSL (`qemu-system-arm`, run with
+`-nic none` since the iPXE ROMs are not installed). Module-scope `bool` variables are
+`= zero`, as `= false` is not yet a supported global initializer.

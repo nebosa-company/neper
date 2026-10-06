@@ -1109,12 +1109,15 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
     // Without a `main` nothing was walked, and the references resolve by name as
     // before, so that the missing entry is the error reported, not a missing callee.
     program.builder.targets_preset = rooted
-    // aarch64 artifacts carry its words, patched by their own forms (D2123).
+    // aarch64 artifacts carry its words, patched by their own forms (D2123), a kernel's
+    // as well (D2126).
     let (root_target, root_target_error) = em.artifact_target_index(artifacts[0usize].bytes)
     if root_target_error != ok { ret root_target_error }
     let (aarch64, aarch64_error) = em.string_matches(artifacts[0usize].bytes, root_target, "aarch64-linux")
     if aarch64_error != ok { ret aarch64_error }
-    if aarch64 {
+    let (kernel, kernel_error) = em.string_matches(artifacts[0usize].bytes, root_target, "aarch64-none")
+    if kernel_error != ok { ret kernel_error }
+    if aarch64 || kernel {
         try codegen_a64.resolve_calls(&program.builder, program.function_offsets, program.relocations, program.relocation_count, &program.machine)
     } else {
         try codegen_x64.resolve_calls(&program.builder, program.function_offsets, program.relocations, program.relocation_count, &program.machine)

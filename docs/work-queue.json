@@ -1,19 +1,8 @@
 {
   "schema": "neper-work-queue-v1",
   "version": 1,
-  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 (C100-C103) comes first by the user's priority (D2119, D2125); after it, finish active chart and visualization items before non-chart work, preserving their relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
+  "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 (C101-C103) comes first by the user's priority (D2119, D2125); after it, finish active chart and visualization items before non-chart work, preserving their relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
-    {
-      "id": "C100",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 100,
-      "title": "NeperOS 1a: an aarch64-none kernel image that boots on QEMU virt",
-      "score": 0,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Queued by D2125 when C099 closed; stage 1 of D2119. Acceptance: `--target aarch64-none` writes a raw image with the Linux arm64 Image header (magic `ARM\\x64`, `text_offset`, `image_size` covering what the kernel zeroes) that `qemu-system-aarch64 -M virt -cpu cortex-a76 -kernel` loads and enters at EL1 with the device tree in `x0`, position-independent wherever the loader places it; no Linux runtime, only a boot stub that sets the stack, clears what the image does not carry and calls `main` with an arena carved from memory after the image; Neper reaches system registers (`mrs`/`msr`), barriers (`dsb`/`dmb`/`isb`), `wfi`/`wfe`, `hvc`/`smc` and volatile MMIO loads and stores through intrinsics that any other target refuses at check time; an exception vector table (sixteen entries, 2 KB aligned) saves the interrupted registers into a frame and calls a Neper handler; a kernel reads its memory and PL011 base from the device tree, turns on the MMU and caches with an identity map, writes to the PL011, and powers off through PSCI `SYSTEM_OFF` by the conduit the tree names. A fixture boots under QEMU on both hosts, checks the serial transcript, and takes a deliberate synchronous fault whose ESR and FAR the handler reports. A trap (bounds, overflow) reports its message and position on the console and powers off with a non-zero status. Not started."
-    },
     {
       "id": "C101",
       "category": "compiler",

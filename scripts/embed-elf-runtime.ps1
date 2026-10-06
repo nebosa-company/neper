@@ -1,13 +1,17 @@
-# -Arch a64 embeds the aarch64 runtime (D2123) with the cross binutils.
-param([ValidateSet('x64', 'a64')][string]$Arch = 'x64')
+# -Arch a64 embeds the aarch64 runtime (D2123) with the cross binutils; -Arch none the
+# aarch64 kernel runtime (D2126).
+param([ValidateSet('x64', 'a64', 'none')][string]$Arch = 'x64')
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent $PSScriptRoot
-$source = Join-Path $repo "src\runtime_elf_$Arch.s"
-$output = Join-Path $repo "src\runtime_elf_$Arch.e"
-$tools = if ($Arch -eq 'a64') { 'aarch64-linux-gnu-' } else { '' }
-$assemble = if ($Arch -eq 'a64') { @('aarch64-linux-gnu-as', '-march=armv8.2-a') } else { @('as', '--64') }
-$machine = if ($Arch -eq 'a64') { 'aarch64' } else { 'x86-64' }
+$stem = if ($Arch -eq 'none') { 'runtime_none_a64' } else { "runtime_elf_$Arch" }
+$source = Join-Path $repo "src\$stem.s"
+$output = Join-Path $repo "src\$stem.e"
+$arm = $Arch -ne 'x64'
+$tools = if ($arm) { 'aarch64-linux-gnu-' } else { '' }
+$assemble = if ($arm) { @('aarch64-linux-gnu-as', '-march=armv8.2-a') } else { @('as', '--64') }
+$machine = if ($arm) { 'aarch64' } else { 'x86-64' }
+$kind = if ($Arch -eq 'none') { 'kernel' } else { 'Linux syscall' }
 $build = Join-Path $repo 'build\windows\runtime-embed'
 New-Item -ItemType Directory -Force -Path $build | Out-Null
 
@@ -17,13 +21,17 @@ function Convert-ToWslPath([string]$Path) {
     return '/mnt/' + $drive + $full.Substring(2).Replace('\', '/')
 }
 
-$object = Join-Path $build "runtime_elf_$Arch.o"
-$binary = Join-Path $build "runtime_elf_$Arch.bin"
+$object = Join-Path $build "$stem.o"
+$binary = Join-Path $build "$stem.bin"
 $sourceWsl = Convert-ToWslPath $source
 $objectWsl = Convert-ToWslPath $object
 $binaryWsl = Convert-ToWslPath $binary
 & wsl -d Ubuntu-24.04 -- $assemble $sourceWsl -o $objectWsl
 if ($LASTEXITCODE -ne 0) { throw 'assembling the ELF runtime failed' }
+# The blob is copied as it is, so a relocation -- a reference to a global symbol -- would
+# be left unapplied, its instruction pointing at itself (D2126).
+$relocations = & wsl -d Ubuntu-24.04 -- "${tools}objdump" -r $objectWsl
+if ($relocations -match 'R_(AARCH64|X86_64)_') { throw "the runtime has relocations; reference a local label instead:`n$($relocations -join "`n")" }
 & wsl -d Ubuntu-24.04 -- "${tools}objcopy" -O binary --only-section=.text $objectWsl $binaryWsl
 if ($LASTEXITCODE -ne 0) { throw 'extracting the ELF runtime failed' }
 $symbols = & wsl -d Ubuntu-24.04 -- "${tools}nm" -n --defined-only $objectWsl
@@ -31,7 +39,7 @@ if ($LASTEXITCODE -ne 0) { throw 'reading ELF runtime symbols failed' }
 
 $bytes = [IO.File]::ReadAllBytes($binary)
 $builder = [Text.StringBuilder]::new()
-[void]$builder.AppendLine("// Generated $machine Linux syscall runtime. Source: runtime_elf_$Arch.s.")
+[void]$builder.AppendLine("// Generated $machine $kind runtime. Source: $stem.s.")
 [void]$builder.AppendLine()
 [void]$builder.AppendLine('use check')
 [void]$builder.AppendLine('use emit_x64')

@@ -8911,6 +8911,37 @@ if ($LASTEXITCODE -ne 1 -or ($cycleOutput -join "`n") -notmatch
     throw 'module import cycle rejection failed'
 }
 
+# (D2126) NeperOS: aarch64-none writes the kernel as a Linux arm64 Image, and under
+# qemu-system-aarch64 it finds its console, firmware and memory in the device tree, turns
+# translation on, takes a fault on purpose and powers off. Booted with `trap` from 2 MB
+# higher -- `text_offset` set to 4 MB, so nothing in it may be an absolute address -- a
+# failed bounds check is reported with its backtrace and ends the kernel with 134. The
+# machine intrinsics are unknown names on any other target.
+$neperosImage = Join-Path $testBuild 'neperos.img'
+$neperosWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\main.e') $repo aarch64 none $neperosImage
+if ($LASTEXITCODE -ne 0 -or $neperosWritten -ne 'executable written') { throw 'NeperOS did not build' }
+$neperosBytes = [IO.File]::ReadAllBytes($neperosImage)
+if ([Text.Encoding]::ASCII.GetString($neperosBytes, 56, 4) -ne 'ARMd') { throw 'the NeperOS image has no arm64 Image magic' }
+$kernelRefuseOutput = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\kernel_refuse\src\main.e') $repo x64 windows (Join-Path $testBuild 'kernel-refuse.exe') 2>&1
+if ($LASTEXITCODE -eq 0 -or ($kernelRefuseOutput -join "`n") -notmatch 'main\.e:7:.*`os` has no member `mrs`') { throw "os.mrs was not refused where it is written: $kernelRefuseOutput" }
+$neperosQemu = Get-Command qemu-system-aarch64 -ErrorAction SilentlyContinue
+if ($neperosQemu) {
+    function Invoke-NeperOS([string]$Image, [string[]]$Extra) {
+        $transcript = Join-Path $testBuild 'neperos.out'
+        $arguments = @('-M', 'virt', '-cpu', 'cortex-a76', '-m', '256M', '-nic', 'none', '-nographic', '-no-reboot', '-kernel', $Image) + $Extra
+        $run = Start-Process -FilePath $neperosQemu.Source -ArgumentList $arguments -RedirectStandardOutput $transcript -RedirectStandardError (Join-Path $testBuild 'neperos.err') -PassThru -NoNewWindow
+        if (-not $run.WaitForExit(60000)) { $run.Kill(); throw 'NeperOS did not power off within a minute' }
+        return ((Get-Content -Raw $transcript) -replace "`r", '')
+    }
+    $neperosBoot = Invoke-NeperOS $neperosImage @()
+    if ($neperosBoot -notmatch '(?s)Welcome to NeperOS.*mmu on.*fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned.*halting.*neperos: exit 0x0000000000000000') { throw "NeperOS did not boot: $neperosBoot" }
+    $neperosMoved = Join-Path $testBuild 'neperos-moved.img'
+    $neperosBytes[10] = 0x40
+    [IO.File]::WriteAllBytes($neperosMoved, $neperosBytes)
+    $neperosTrap = Invoke-NeperOS $neperosMoved @('-append', 'trap')
+    if ($neperosTrap -notmatch '(?s)trap\[bounds\]: index 2 out of bounds for len 1.*  at main\.main \(src/main\.e:.*neperos: exit 0x0000000000000086') { throw "NeperOS did not report its trap: $neperosTrap" }
+}
+
 Write-Output 'selfhost tests passed'
 # The last native command above is an expected-failure case, so $LASTEXITCODE is
 # still 1 here. Report the suite's own result instead of inheriting that.

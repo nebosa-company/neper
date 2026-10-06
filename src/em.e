@@ -836,6 +836,28 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     if same(name, "neper_os_thread_create") { ret ("", false) }
     if same(name, "neper_os_thread_join") { ret ("thread_join", true) }
     if same(name, "neper_os_thread_detach") { ret ("thread_detach", true) }
+    // (D2126) aarch64-none's machine.
+    if same(name, "neper_os_set_console") { ret ("set_console", true) }
+    if same(name, "neper_os_set_exit") { ret ("set_exit", true) }
+    if same(name, "neper_os_set_exception") { ret ("set_exception", true) }
+    if same(name, "neper_os_load8") { ret ("load8", true) }
+    if same(name, "neper_os_load16") { ret ("load16", true) }
+    if same(name, "neper_os_load32") { ret ("load32", true) }
+    if same(name, "neper_os_load64") { ret ("load64", true) }
+    if same(name, "neper_os_store8") { ret ("store8", true) }
+    if same(name, "neper_os_store16") { ret ("store16", true) }
+    if same(name, "neper_os_store32") { ret ("store32", true) }
+    if same(name, "neper_os_store64") { ret ("store64", true) }
+    if same(name, "neper_os_barrier") { ret ("barrier", true) }
+    if same(name, "neper_os_tlb_flush") { ret ("tlb_flush", true) }
+    if same(name, "neper_os_wait_for_interrupt") { ret ("wait_for_interrupt", true) }
+    if same(name, "neper_os_memory_barrier") { ret ("memory_barrier", true) }
+    if same(name, "neper_os_wait_for_event") { ret ("wait_for_event", true) }
+    if same(name, "neper_os_send_event") { ret ("send_event", true) }
+    if same(name, "neper_os_hvc") { ret ("hvc", true) }
+    if same(name, "neper_os_smc") { ret ("smc", true) }
+    if same(name, "neper_os_mrs") { ret ("mrs", true) }
+    if same(name, "neper_os_msr") { ret ("msr", true) }
     // A kernel's `K$frame` and `K$shared` (D780, D781) are generated beside the
     // kernel and have no declaration of their own: the dependency they stand for
     // is the kernel's.
