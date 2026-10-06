@@ -389,6 +389,12 @@ sequence_cmp_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$sequence_cmp_written" = 'executable written' ]
 chmod +x "$test_build/sequence-cmp-selfhost"
 "$test_build/sequence-cmp-selfhost"
+# A module-scope `var bool = true`/`false` carries its folded bit as an integer global
+# does, so a read before any assignment sees the declared value and not a zero fill.
+global_bool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/global_bool/src/main.e" "$repo" x64 linux "$test_build/global-bool-selfhost")
+[ "$global_bool_written" = 'executable written' ]
+chmod +x "$test_build/global-bool-selfhost"
+"$test_build/global-bool-selfhost"
 # An element whose own module declares `fn <t>_cmp` is compared by calling it. The
 # fixture's `tag_cmp` reverses deliberately, so any comparison that did not reach the
 # declaration would order the other way, and the call has to carry a dependency edge.

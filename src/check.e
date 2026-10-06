@@ -5285,17 +5285,21 @@ fn global_initial_bits(c: *Checker, global_index: usize) -> (usize, err) {
     if global_index >= c.global_count { ret (0usize, InvalidConstant) }
     let item = c.globals[global_index]
     if !item.has_expression { ret (0usize, ok) }
-    // The interpreter this goes through evaluates integers, so an integer initialiser is what is
-    // carried. Anything else -- a `bool`, a struct, an array -- is `Unsupported` rather than
-    // quietly zero, and the spelling that works for all of them is to leave the initialiser off:
-    // section 5 zero-initialises then, which is what `false` and an empty aggregate already are.
-    if item.ty.kind != .Integer {
-        record_failure(c, item.module_index, zero, .NotAType, item.name, "")
+    // The interpreter folds integers and bools, so an integer or `bool` initialiser is carried
+    // as its bits -- `true`/`false` as 1/0, the way an integer folds, and any constant-foldable
+    // bool with it (D2136). A float, struct or array stays `Unsupported` rather than quietly
+    // zero; leaving the initialiser off zero-fills (section 5), which is what an empty aggregate
+    // already is. The declaration's own token gives the refusal a location, not a placeless code.
+    if item.ty.kind != .Integer && item.ty.kind != .Bool {
+        record_failure_token(c, item.module_index, item.token, .NotSupported, item.name, "")
         ret (0usize, Unsupported)
     }
     let (value, value_type, value_error) = evaluate_constant_expr(c, item.expression, item.ty)
     if value_error != ok { ret (0usize, value_error) }
-    let width = integer_width(item.ty)
+    // A `bool` occupies one byte and only ever holds 0 or 1, so the width is the byte's and the
+    // sign extension `integer_bits` does for an integer never applies.
+    var width = integer_width(item.ty)
+    if item.ty.kind == .Bool { width = 8usize }
     if width == 0usize { ret (0usize, InvalidType) }
     ret (integer_bits(value, width), ok)
 }
@@ -8319,7 +8323,13 @@ fn collect_global_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph
     var copied_expression = 0usize
     if has_expression {
         let (copied, expression_error) = copy_constant_expr(c, g, tree, module_index, expression_index)
-        if expression_error != ok { ret expression_error }
+        if expression_error != ok {
+            // An initialiser the constant interpreter cannot carry -- a struct, a float, an
+            // enum member -- is refused at its own declaration (D2136), not placelessly: the
+            // `var` node's token locates the message instead of the file's first column.
+            record_failure(c, module_index, node, .NotSupported, name, "")
+            ret expression_error
+        }
         copied_expression = copied
     }
     c.globals[c.global_count] = Global { name: name, module_index: module_index, ty: declared_type, expression: copied_expression, has_expression: has_expression, token: c.tokens[usize(node.token_start)], nir_index: 0usize }

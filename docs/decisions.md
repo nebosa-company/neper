@@ -36775,3 +36775,27 @@ flight at a time, so the bump needs no free. Behaviour is unchanged -- entropy, 
 round-trip and the console transmit all still pass, verified by rebuilding and booting under QEMU.
 Next: `vm.map_range_el0` to map a device BAR (Device) and an identity DMA pool (Normal) into an EL0
 server's space, then the entropy driver as that server.
+
+## D2136 — A module-scope `var` initialised to a bool folds like an integer one
+
+A module-scope `var` stores one folded value in the image (`nir` globals carry an
+`initial: usize`, written by `link_elf.append_globals` and its PE twin). `global_initial_bits`
+turned that fold, and it accepted only `.Integer`: a `bool` global with an initialiser --
+`var flag: bool = false`, or any constant-foldable bool such as `var ready: bool = N == 3` --
+passed the checker (the constant interpreter already folds `true`/`false`, `!`, `&&`/`||`
+and comparisons to a 0/1 `bool`) and then failed in lowering with a placeless
+`E-TYPE-0009`. `.Bool` is now carried beside `.Integer`: the interpreter's 0/1 is the
+global's byte (a `bool` is one byte and never negative, so the width is the byte's and the
+sign extension `integer_bits` does for an integer never applies), the same path integers
+take. `= zero`, `= undef` and no initialiser were already fine (section 5 zero-fills).
+
+The refusals that remain carry the declaration's own token instead of being placeless. An
+initialiser the constant interpreter cannot carry -- a struct literal, a float, an enum
+member -- is refused in `collect_global_declaration` where `copy_constant_expr` fails,
+recorded against the `var` node, so it reads `foo.e:5:1: error[E-TYPE-0009]: `origin` uses
+something the checker does not support here` rather than the file's first column with a bare
+"type checking failed"; and `global_initial_bits`' own fallback, now reachable only for a
+type that slips past the checker, records against the global's token as well. A fixture,
+`tests/selfhost/fixtures/link/global_bool`, wired into `run.ps1` and `run.sh`, declares a
+`bool` global at `true` and one at `false`, reads each before any assignment, and checks the
+read sees the declared value and not a zero fill.

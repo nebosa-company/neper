@@ -348,6 +348,13 @@ $sequenceCmpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $sequenceCmpWritten -ne 'executable written') { throw 'sequence cmp executable emission failed' }
 & $sequenceCmpPath
 if ($LASTEXITCODE -ne 0) { throw 'the supplied cmp for an array, slice or str is wrong' }
+# A module-scope `var bool = true`/`false` carries its folded bit as an integer global
+# does, so a read before any assignment sees the declared value and not a zero fill.
+$globalBoolPath = Join-Path $testBuild 'global-bool-selfhost.exe'
+$globalBoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\global_bool\src\main.e') $repo 'x64' 'windows' $globalBoolPath
+if ($LASTEXITCODE -ne 0 -or $globalBoolWritten -ne 'executable written') { throw 'bool global executable emission failed' }
+& $globalBoolPath
+if ($LASTEXITCODE -ne 0) { throw 'a module-scope bool global did not carry its true/false initializer' }
 # An element whose own module declares `fn <t>_cmp` is compared by calling it. The
 # fixture's `tag_cmp` reverses deliberately, so any comparison that did not reach the
 # declaration would order the other way, and the call has to carry a dependency edge.
