@@ -37275,3 +37275,22 @@ primitive directly, and prints `hello from e.io on neperos` then `e.io writer ru
 powers off with exit 0. Suite fixtures added to run.ps1 and run.sh. (Only os.write/os.stdout have to
 lower for NeperOS on this path; os.read/os.seek are referenced by e.io functions the print path does
 not reach, so dead-function elimination drops them until a later increment needs them.)
+
+## D2155 — C107: e.time on NeperOS, over a clock system call
+
+e.time now runs on NeperOS: it reaches the portable `os.clock(kind) -> (i64, err)` intrinsic, which
+already lowered to the `neper_os_clock` symbol for every target (src/lower.e, em.e) -- what was
+missing was the NeperOS backing. Added: a `neper_os_clock` wrapper in runtime_neperos_a64.s (svc
+#13, the kernel answering nanoseconds in x0 and ok in x1; runtime_neperos_a64.e regenerated), and a
+system-call 13 handler in the kernel (neperos/src/main.e `clock`). Monotonic is the virtual counter
+converted to nanoseconds by its frequency, split as whole*1e9 + frac*1e9/freq so neither multiply
+overflows 64 bits (CNTVCT_EL0 and CNTFRQ_EL0 are read at EL1, so an EL0 program needs no counter
+access of its own). Wall reads the PL031 RTC the device tree names -- the kernel finds it at boot by
+compatible `arm,pl031` (fdt.find_compatible, already there from D2146) and keeps its base in a module
+var; the data register holds the seconds since the epoch, and wall falls back to the monotonic
+counter when no RTC is present. The RTC's MMIO sits in the peripheral gigabyte the kernel identity-
+maps as Device memory, so the kernel reads it directly. Verified on QEMU virt on both hosts:
+neperos/src/time_test.e takes two monotonic readings around a busy spin and prints the elapsed
+nanoseconds (~16-21 ms), then reads wall time and prints the seconds (1791327770 -- a 2026 Unix
+timestamp from QEMU's RTC), and powers off with exit 0. Suite fixtures added to run.ps1 and run.sh.
+This is the second C107 increment (after D2154's variant + e.io); e.thread, e.fs and e.fmt follow.

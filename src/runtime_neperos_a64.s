@@ -383,6 +383,14 @@ neper_os_reap:
     svc #0
     ret
 
+// os.clock(kind) -> (i64, err) (D2155): the time in nanoseconds, kind 0 wall and 1 monotonic; the
+// kernel reads the counter or the RTC and answers in x0, ok in x1.
+.global neper_os_clock
+neper_os_clock:
+    mov x8, #13
+    svc #0
+    ret
+
 // (D2134) Raw memory access from EL0, for a user-mode driver reaching its device's MMIO and
 // virtqueue rings through pages the kernel mapped into its space. Each is a plain load or
 // store -- no svc -- so it faults if the page is not mapped with EL0 access, which is how a

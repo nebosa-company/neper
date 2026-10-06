@@ -63,6 +63,9 @@ var next_asid: usize = 0usize
 // (D2153) The thread index of the last driver server started, so the filesystem-server boot can
 // grant it the endpoint capabilities it serves clients over.
 var last_server_index: usize = 24usize
+// (D2155) The PL031 real-time clock's base address from the device tree, for the wall-clock system
+// call; zero when the machine names no RTC, where wall time falls back to the monotonic counter.
+var rtc_base: usize = 0usize
 // The four QEMU-virt PCIe INTx lines are GIC SPIs 3-6, that is INTIDs 35-38.
 const PCIE_INTX_FIRST: usize = 35usize
 const PCIE_INTX_LAST: usize = 38usize
@@ -203,6 +206,35 @@ fn syscall(frame: *a64.Frame) {
         thread.reap(frame)
         ret
     }
+    if number == 13u64 {
+        clock(frame)
+        ret
+    }
+}
+
+// (D2155, C107) `os.clock(kind) -> (i64, err)` (system call 13): the time in nanoseconds, kind 0
+// wall and 1 monotonic. Monotonic is the virtual counter converted to nanoseconds by its frequency
+// (split so neither multiply overflows 64 bits). Wall reads the PL031 RTC the device tree named --
+// its data register holds the seconds since the epoch -- and falls back to the monotonic counter
+// when no RTC was found. The counter and the RTC are read here at EL1, so an EL0 program needs no
+// access to either.
+fn clock(frame: *a64.Frame) {
+    let kind = frame.x[0usize]
+    var nanos: u64 = 0u64
+    if kind == 0u64 && rtc_base != 0usize {
+        let seconds = u64(os.load32(rtc_base))
+        nanos = seconds * 1000000000u64
+    } else {
+        let count = u64(os.mrs(a64.CNTVCT_EL0))
+        let freq = u64(os.mrs(a64.CNTFRQ_EL0))
+        if freq != 0u64 {
+            let whole = count / freq
+            let frac = count % freq
+            nanos = whole * 1000000000u64 + frac * 1000000000u64 / freq
+        }
+    }
+    frame.x[0usize] = nanos
+    frame.x[1usize] = 0u64
 }
 
 // The console server's bytes to its device (call 9): the run at (x1, x2) in the server's own
@@ -580,6 +612,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
         intx += 1usize
     }
     timer.arm(TICKS_PER_SECOND)
+    // (D2155, C107) The real-time clock the device tree names (PL031 on QEMU virt), for the
+    // wall-clock system call. Absent one, wall time falls back to the monotonic counter.
+    let (rtc_node, rtc_node_error) = fdt.find_compatible(tree, "arm,pl031")
+    if rtc_node_error == ok {
+        let (rtc_addr, rtc_size, rtc_region_error) = fdt.region(tree, rtc_node)
+        if rtc_region_error == ok { rtc_base = usize(rtc_addr) }
+    }
     // The user program the loader placed in memory: `/chosen` names its bounds.
     let (initrd_start, initrd_start_error) = fdt.integer(tree, chosen, "linux,initrd-start")
     if initrd_start_error != ok { ret NoInitrd }
