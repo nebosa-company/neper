@@ -293,7 +293,8 @@ fn hex_byte(value: u8) {
 
 // The entropy device driven through the modern virtio-pci transport: its BAR assigned, the
 // device negotiated, a buffer filled with random bytes over one virtqueue, the bytes printed.
-fn drive_entropy(a: *mem.Arena, host: pci.Host) {
+// The MMIO cursor past its BAR comes back, so the next device gets a disjoint window.
+fn drive_entropy(a: *mem.Arena, host: pci.Host) -> usize {
     var slot = 0usize
     while slot < 32usize {
         let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
@@ -301,12 +302,12 @@ fn drive_entropy(a: *mem.Arena, host: pci.Host) {
             let (device, cursor, discover_error) = virtio.discover(host, slot, host.mmio)
             if discover_error != ok {
                 console_write("virtio entropy: discover failed\n")
-                ret
+                ret host.mmio
             }
             let (buffer, written, read_error) = virtio.read_entropy(a, device, 8usize)
             if read_error != ok {
                 console_write("virtio entropy: read failed\n")
-                ret
+                ret cursor
             }
             console_write("entropy ")
             decimal(written)
@@ -315,6 +316,39 @@ fn drive_entropy(a: *mem.Arena, host: pci.Host) {
             while i < written && i < 8usize {
                 console_write(" ")
                 hex_byte(os.load8(buffer + i))
+                i += 1usize
+            }
+            console_write("\n")
+            ret cursor
+        }
+        slot += 1usize
+    }
+    ret host.mmio
+}
+
+// The block device driven over the same transport, its BAR assigned from `base` so it does not
+// collide with the entropy device's window: a known pattern written to `sector` and read back,
+// the first bytes printed to show the round-trip through the virtqueue.
+fn drive_block(a: *mem.Arena, host: pci.Host, base: usize) {
+    var slot = 0usize
+    while slot < 32usize {
+        let (device_type, is_virtio) = pci.virtio_type(host, 0usize, slot, 0usize)
+        if is_virtio && device_type == pci.VIRTIO_BLOCK {
+            let (device, cursor, discover_error) = virtio.discover(host, slot, base)
+            if discover_error != ok {
+                console_write("virtio block: discover failed\n")
+                ret
+            }
+            let (data, rw_error) = virtio.block_rw(a, device, 0u64)
+            if rw_error != ok {
+                console_write("virtio block: rw failed\n")
+                ret
+            }
+            console_write("block rw ok sector 0:")
+            var i = 0usize
+            while i < 4usize {
+                console_write(" ")
+                hex_byte(os.load8(data + i))
                 i += 1usize
             }
             console_write("\n")
@@ -420,7 +454,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     enumerate_pci(tree)
     let (pci_host, pci_host_error) = pci.find(tree)
-    if pci_host_error == ok { drive_entropy(a, pci_host) }
+    if pci_host_error == ok {
+        let next_bar = drive_entropy(a, pci_host)
+        drive_block(a, pci_host, next_bar)
+    }
     // The interrupt controller and the timer: enable the controller, let this core take the
     // virtual-timer PPI, and arm it. Each firing preempts whatever runs.
     let (found, controller_error) = gic.find(tree)

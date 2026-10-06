@@ -36671,3 +36671,28 @@ console), and moving all three drivers out of the kernel into EL0 user-mode serv
 only their device's frame and interrupt capabilities -- the transport here runs in the kernel
 for now. The virtqueue poll is a bounded spin, not an interrupt wait; the ISR capability is
 located but unused until the drivers become notification-driven EL0 servers.
+
+## D2132 — NeperOS stage 1d: the virtio-blk driver reads and writes a disk sector
+
+The block driver (`virtio.block_rw`) reuses the same transport (D2131) to prove a disk
+read-write round-trip. virtio-blk is a three-descriptor chain: descriptor 0 is a 16-byte request
+header the device reads (`{type: u32, reserved: u32, sector: u64}`), descriptor 1 is the
+512-byte data buffer, and descriptor 2 is a one-byte status the device writes; they are joined
+with the NEXT flag. `block_rw` writes a deterministic pattern (`(i*37 + 17) & 255`) to sector 0
+with `VIRTIO_BLK_T_OUT` -- descriptor 1 device-readable -- then clears the buffer, flips the
+header to `VIRTIO_BLK_T_IN` and descriptor 1 to device-writable (`DESC_NEXT | DESC_WRITE`), reads
+the same sector back, and checks every byte. The status byte is 0 on success for both requests.
+
+The queue plumbing that was inline in `read_entropy` is now `setup_queue` (select the queue,
+allocate the three rings in identity-mapped RAM, hand the device their addresses, enable, resolve
+the notify register) and `ring_wait` (offer descriptor head 0 in the nth available slot, notify,
+spin until the used index reaches n+1); the entropy and block drivers share both. One request is
+in flight at a time, so the two block requests take available slots 0 and 1 and wait for used
+indices 1 and 2. The block device's BAR is assigned from the cursor the entropy device's
+`discover` returned, so the two devices' MMIO windows do not overlap -- `drive_entropy` now
+returns that cursor and `main` threads it into `drive_block`.
+
+The kernel prints `block rw ok sector 0: 11 36 5b 80` (the pattern's first four bytes); both
+suites assert that exact line, so a silent miscompare cannot pass. Verified on both hosts under
+QEMU with `virtio-blk-pci` forced modern over a fresh 1 MB disk image. Still ahead for C103: the
+console driver (echo), and moving all three drivers into EL0 user-mode servers.
