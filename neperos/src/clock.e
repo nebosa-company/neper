@@ -366,18 +366,6 @@ fn pad_key(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces,
     ret ok
 }
 
-// An on/off switch.
-fn toggle_switch(a: *mem.Arena, builder: *scene.Builder, s: *State, id: usize, x: f32, y: f32, on: bool) -> err {
-    var track = grey()
-    if on { track = amber() }
-    try card(a, builder, x, y, 56.0, 30.0, 15.0, track)
-    var knob_x = x + 3.0
-    if on { knob_x = x + 29.0 }
-    try card(a, builder, knob_x, y + 3.0, 24.0, 24.0, 12.0, white())
-    hit(s, id, x - 8.0, y - 8.0, 72.0, 46.0)
-    ret ok
-}
-
 fn tab_name(tab: usize) -> str {
     if tab == 0usize { ret "Alarm" }
     if tab == 1usize { ret "Clock" }
@@ -412,45 +400,123 @@ fn chrome(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -
     ret ok
 }
 
+// ---- the light screens (D2209): Android's look for every tab -- a light ground, white rounded rows, a
+// blue accent, round buttons, and the bottom navigation bar (draw_nav, with the stopwatch's helpers).
+
+fn panel() -> paint.Color {
+    ret paint.Color { red: 0.995, green: 0.995, blue: 1.0, alpha: 1.0 }
+}
+
+fn soft() -> paint.Color {
+    ret paint.Color { red: 0.90, green: 0.91, blue: 0.95, alpha: 1.0 }
+}
+
+fn gray_text() -> paint.Color {
+    ret paint.Color { red: 0.45, green: 0.47, blue: 0.5, alpha: 1.0 }
+}
+
+fn blue() -> paint.Color {
+    ret paint.Color { red: 0.0, green: 0.40, blue: 1.0, alpha: 1.0 }
+}
+
+fn title(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, line: str) -> err {
+    ret put(a, builder, faces.jost_bold, 34.0, line, 24.0, 40.0, ink())
+}
+
+// A round button with a label in its middle.
+fn round_button(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, id: usize, cx: f32, cy: f32, radius: f32, label: str, fill: paint.Color, ink_color: paint.Color, size: f32) -> err {
+    try disc(a, builder, cx, cy, radius, fill)
+    try centred(a, builder, faces.jost, size, label, cx, cy - size * 0.62, ink_color)
+    hit(s, id, cx - radius, cy - radius, radius * 2.0, radius * 2.0)
+    ret ok
+}
+
+// A wide pill button.
+fn pill(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, id: usize, x: f32, y: f32, w: f32, h: f32, label: str, fill: paint.Color, ink_color: paint.Color, size: f32) -> err {
+    try card(a, builder, x, y, w, h, h / 2.0, fill)
+    try centred(a, builder, faces.jost, size, label, x + w / 2.0, y + h / 2.0 - size * 0.62, ink_color)
+    hit(s, id, x, y, w, h)
+    ret ok
+}
+
+// The blue round button: a plus, a play triangle, or pause bars.
+fn fab(a: *mem.Arena, builder: *scene.Builder, s: *State, id: usize, cx: f32, cy: f32, radius: f32, kind: usize) -> err {
+    try disc(a, builder, cx, cy, radius, blue())
+    if kind == 0usize {
+        try card(a, builder, cx - 11.0, cy - 2.0, 22.0, 4.0, 2.0, white())
+        try card(a, builder, cx - 2.0, cy - 11.0, 4.0, 22.0, 2.0, white())
+    } else if kind == 1usize {
+        let (play_builder, play_error) = geometry.path_builder(a, 4usize, 3usize)
+        if play_error != ok { ret play_error }
+        var play = play_builder
+        try geometry.move_to(&play, geometry.Point { x: cx - 8.0, y: cy - 14.0 })
+        try geometry.line_to(&play, geometry.Point { x: cx + 13.0, y: cy })
+        try geometry.line_to(&play, geometry.Point { x: cx - 8.0, y: cy + 14.0 })
+        try geometry.close_path(&play)
+        try scene.push(builder, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&play), brush: paint.Brush { Solid: white() } } })
+    } else {
+        try card(a, builder, cx - 10.0, cy - 12.0, 7.0, 24.0, 2.0, white())
+        try card(a, builder, cx + 3.0, cy - 12.0, 7.0, 24.0, 2.0, white())
+    }
+    hit(s, id, cx - radius, cy - radius, radius * 2.0, radius * 2.0)
+    ret ok
+}
+
+// An on/off switch, blue when on.
+fn toggle_switch(a: *mem.Arena, builder: *scene.Builder, s: *State, id: usize, x: f32, y: f32, on: bool) -> err {
+    var track = paint.Color { red: 0.78, green: 0.79, blue: 0.83, alpha: 1.0 }
+    if on { track = blue() }
+    try card(a, builder, x, y, 56.0, 32.0, 16.0, track)
+    var knob_x = x + 4.0
+    if on { knob_x = x + 28.0 }
+    try card(a, builder, knob_x, y + 4.0, 24.0, 24.0, 12.0, white())
+    hit(s, id, x - 8.0, y - 8.0, 72.0, 48.0)
+    ret ok
+}
+
 // ---- the clock tab
 
 fn draw_clock(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *State) -> err {
     let now = utc_seconds(s)
     if s.picker {
-        try put(a, builder, faces.sora, 18.0, "Choose cities", 40.0, 172.0, ink())
+        try title(a, builder, faces, "Choose cities")
         var city = 0usize
         while city < city_count() {
-            let x = 36.0 + f32(city % 2usize) * 172.0
-            let y = 206.0 + f32(city / 2usize) * 52.0
+            let x = 16.0 + f32(city % 2usize) * 194.0
+            let y = 100.0 + f32(city / 2usize) * 60.0
             var chosen = false
             var i = 0usize
             while i < s.city_total {
                 if s.cities[i] == city { chosen = true }
                 i += 1usize
             }
-            var fill = white()
-            if chosen { fill = amber() }
-            try card(a, builder, x, y, 168.0, 44.0, 12.0, fill)
-            try put(a, builder, faces.jost, 17.0, city_name(city), x + 14.0, y + 11.0, ink())
-            hit(s, 220usize + city, x, y, 168.0, 44.0)
+            var fill = panel()
+            var label_color = ink()
+            if chosen {
+                fill = blue()
+                label_color = white()
+            }
+            try card(a, builder, x, y, 186.0, 50.0, 25.0, fill)
+            try centred(a, builder, faces.jost, 17.0, city_name(city), x + 93.0, y + 14.0, label_color)
+            hit(s, 220usize + city, x, y, 186.0, 50.0)
             city += 1usize
         }
-        try button(a, builder, s, faces, 230usize, 36.0, 640.0, 340.0, 50.0, "Done", amber(), 18.0)
+        try pill(a, builder, s, faces, 230usize, 56.0, 700.0, 300.0, 56.0, "Done", blue(), white(), 18.0)
         ret ok
     }
     // The time and the date.
     let day = now / 86400usize
     let (month, date) = lunar.month_day(now)
-    try centred(a, builder, faces.jost_bold, 64.0, hhmm(a, minutes_of_day(now)), 206.0, 170.0, ink())
-    try centred(a, builder, faces.grotesk, 16.0, join(a, ":", two(a, now % 60usize), " UTC"), 206.0, 252.0, muted())
-    try centred(a, builder, faces.jost, 18.0, join(a, weekday_name(weekday_of(now)), ", ", join(a, lunar.month_name(month), " ", number(a, date))), 206.0, 280.0, ink())
+    try centred(a, builder, faces.jost_bold, 68.0, hhmm(a, minutes_of_day(now)), 206.0, 46.0, ink())
+    try centred(a, builder, faces.grotesk, 15.0, join(a, ":", two(a, now % 60usize), " UTC"), 206.0, 132.0, gray_text())
+    try centred(a, builder, faces.jost, 19.0, join(a, weekday_name(weekday_of(now)), ", ", join(a, lunar.month_name(month), " ", number(a, date))), 206.0, 156.0, ink())
     // The cities.
     var row = 0usize
     while row < s.city_total {
         let city = s.cities[row]
-        let y = 322.0 + f32(row) * 62.0
-        try card(a, builder, 36.0, y, 340.0, 54.0, 12.0, white())
-        try put(a, builder, faces.jost, 18.0, city_name(city), 52.0, y + 7.0, ink())
+        let y = 202.0 + f32(row) * 74.0
+        try card(a, builder, 16.0, y, 380.0, 66.0, 20.0, panel())
+        try put(a, builder, faces.jost, 20.0, city_name(city), 32.0, y + 9.0, ink())
         // The offset from UTC, and whether it is another day there.
         let local = i64(now) + city_offset(city) * 60i64
         var relative = "Today"
@@ -466,14 +532,11 @@ fn draw_clock(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *Sta
             shown_offset = 0i64 - offset
         }
         let detail = join(a, relative, ", ", join(a, sign, number(a, usize(shown_offset / 60i64)), join(a, "h", two(a, usize(shown_offset % 60i64)), "")))
-        try put(a, builder, faces.grotesk, 12.0, detail, 52.0, y + 31.0, muted())
-        try right(a, builder, faces.jost, 28.0, hhmm(a, usize(local / 60i64 % 1440i64)), 360.0, y + 10.0, ink())
+        try put(a, builder, faces.grotesk, 12.0, detail, 32.0, y + 38.0, gray_text())
+        try right(a, builder, faces.jost, 30.0, hhmm(a, usize(local / 60i64 % 1440i64)), 380.0, y + 14.0, ink())
         row += 1usize
     }
-    if s.city_total < 6usize || true {
-        try button(a, builder, s, faces, 210usize, 36.0, 770.0, 150.0, 44.0, "+ Add city", grey(), 16.0)
-    }
-    try put(a, builder, faces.exo, 12.0, "Standard time, no daylight saving", 196.0, 784.0, muted())
+    try fab(a, builder, s, 210usize, 206.0, 764.0, 30.0, 0usize)
     ret ok
 }
 
@@ -490,54 +553,59 @@ fn days_text(days: usize) -> str {
 fn draw_alarm(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *State) -> err {
     if s.ringing != NONE {
         let alarm = s.alarms[s.ringing]
-        try card(a, builder, 36.0, 176.0, 340.0, 560.0, 16.0, white())
-        try centred(a, builder, faces.sora, 20.0, "Alarm", 206.0, 220.0, muted())
-        try centred(a, builder, faces.jost_bold, 84.0, hhmm(a, alarm.minutes), 206.0, 270.0, ink())
-        try centred(a, builder, faces.exo, 16.0, days_text(alarm.days), 206.0, 390.0, muted())
-        try button(a, builder, s, faces, 350usize, 66.0, 470.0, 280.0, 56.0, "Snooze 5 min", grey(), 20.0)
-        try button(a, builder, s, faces, 351usize, 66.0, 546.0, 280.0, 56.0, "Dismiss", amber(), 20.0)
+        try card(a, builder, 16.0, 120.0, 380.0, 560.0, 32.0, panel())
+        try centred(a, builder, faces.jost, 22.0, "Alarm", 206.0, 170.0, gray_text())
+        try centred(a, builder, faces.jost_bold, 92.0, hhmm(a, alarm.minutes), 206.0, 230.0, ink())
+        try centred(a, builder, faces.exo, 17.0, days_text(alarm.days), 206.0, 366.0, gray_text())
+        try pill(a, builder, s, faces, 350usize, 56.0, 470.0, 300.0, 60.0, "Snooze 5 min", soft(), ink(), 20.0)
+        try pill(a, builder, s, faces, 351usize, 56.0, 548.0, 300.0, 60.0, "Dismiss", blue(), white(), 20.0)
         ret ok
     }
     if s.editing != NONE {
-        try card(a, builder, 36.0, 172.0, 340.0, 480.0, 16.0, white())
-        try centred(a, builder, faces.jost_bold, 64.0, hhmm(a, s.edit.minutes), 206.0, 196.0, ink())
+        try title(a, builder, faces, "Edit alarm")
+        try card(a, builder, 16.0, 96.0, 380.0, 640.0, 32.0, panel())
+        try centred(a, builder, faces.jost_bold, 72.0, hhmm(a, s.edit.minutes), 206.0, 118.0, ink())
         // Hour and minute steppers.
-        try button(a, builder, s, faces, 330usize, 60.0, 286.0, 64.0, 52.0, "-", grey(), 26.0)
-        try centred(a, builder, faces.grotesk, 13.0, "hour", 124.0 + 30.0, 302.0, muted())
-        try button(a, builder, s, faces, 331usize, 220.0, 286.0, 64.0, 52.0, "+", grey(), 26.0)
-        try button(a, builder, s, faces, 332usize, 60.0, 350.0, 64.0, 52.0, "-", grey(), 26.0)
-        try centred(a, builder, faces.grotesk, 13.0, "minute", 124.0 + 30.0, 366.0, muted())
-        try button(a, builder, s, faces, 333usize, 220.0, 350.0, 64.0, 52.0, "+", grey(), 26.0)
+        try round_button(a, builder, s, faces, 330usize, 70.0, 258.0, 30.0, "-", soft(), ink(), 28.0)
+        try centred(a, builder, faces.grotesk, 14.0, "hour", 206.0, 249.0, gray_text())
+        try round_button(a, builder, s, faces, 331usize, 342.0, 258.0, 30.0, "+", soft(), ink(), 28.0)
+        try round_button(a, builder, s, faces, 332usize, 70.0, 344.0, 30.0, "-", soft(), ink(), 28.0)
+        try centred(a, builder, faces.grotesk, 14.0, "minute", 206.0, 335.0, gray_text())
+        try round_button(a, builder, s, faces, 333usize, 342.0, 344.0, 30.0, "+", soft(), ink(), 28.0)
         // The days.
+        try put(a, builder, faces.exo, 14.0, "Repeat", 40.0, 420.0, gray_text())
         var day = 0usize
         while day < 7usize {
-            let x = 54.0 + f32(day) * 44.0
-            var fill = grey()
-            if (s.edit.days >> day) & 1usize == 1usize { fill = amber() }
-            try card(a, builder, x, 430.0, 36.0, 36.0, 18.0, fill)
-            try centred(a, builder, faces.jost, 16.0, day_letter(day), x + 18.0, 438.0, ink())
-            hit(s, 334usize + day, x, 430.0, 36.0, 36.0)
+            let cx = 54.0 + f32(day) * 50.0
+            var fill = soft()
+            var letter_color = ink()
+            if (s.edit.days >> day) & 1usize == 1usize {
+                fill = blue()
+                letter_color = white()
+            }
+            try disc(a, builder, cx, 474.0, 20.0, fill)
+            try centred(a, builder, faces.jost, 16.0, day_letter(day), cx, 464.0, letter_color)
+            hit(s, 334usize + day, cx - 20.0, 454.0, 40.0, 40.0)
             day += 1usize
         }
-        try button(a, builder, s, faces, 341usize, 54.0, 500.0, 120.0, 48.0, "Save", amber(), 18.0)
-        try button(a, builder, s, faces, 342usize, 188.0, 500.0, 120.0, 48.0, "Delete", grey(), 18.0)
-        try button(a, builder, s, faces, 343usize, 54.0, 566.0, 254.0, 44.0, "Cancel", grey(), 16.0)
+        try pill(a, builder, s, faces, 341usize, 40.0, 540.0, 150.0, 54.0, "Save", blue(), white(), 18.0)
+        try pill(a, builder, s, faces, 342usize, 222.0, 540.0, 150.0, 54.0, "Delete", soft(), ink(), 18.0)
+        try pill(a, builder, s, faces, 343usize, 40.0, 612.0, 332.0, 50.0, "Cancel", soft(), ink(), 16.0)
         ret ok
     }
+    try title(a, builder, faces, "Alarm")
     var i = 0usize
     while i < s.alarm_total {
         let alarm = s.alarms[i]
-        let y = 176.0 + f32(i) * 92.0
-        try card(a, builder, 36.0, y, 340.0, 84.0, 14.0, white())
-        try put(a, builder, faces.jost, 44.0, hhmm(a, alarm.minutes), 52.0, y + 8.0, ink())
-        hit(s, 310usize + i, 36.0, y, 220.0, 84.0)
-        try put(a, builder, faces.exo, 14.0, days_text(alarm.days), 54.0, y + 58.0, muted())
-        try toggle_switch(a, builder, s, 300usize + i, 300.0, y + 27.0, alarm.on)
+        let y = 100.0 + f32(i) * 108.0
+        try card(a, builder, 16.0, y, 380.0, 98.0, 24.0, panel())
+        try put(a, builder, faces.jost, 46.0, hhmm(a, alarm.minutes), 32.0, y + 12.0, ink())
+        hit(s, 310usize + i, 16.0, y, 270.0, 98.0)
+        try put(a, builder, faces.exo, 14.0, days_text(alarm.days), 34.0, y + 68.0, gray_text())
+        try toggle_switch(a, builder, s, 300usize + i, 324.0, y + 33.0, alarm.on)
         i += 1usize
     }
-    if s.alarm_total < 5usize {
-        try button(a, builder, s, faces, 320usize, 36.0, 176.0 + f32(s.alarm_total) * 92.0, 160.0, 46.0, "+ Add alarm", grey(), 16.0)
-    }
+    if s.alarm_total < 5usize { try fab(a, builder, s, 320usize, 206.0, 764.0, 30.0, 0usize) }
     ret ok
 }
 
@@ -579,54 +647,73 @@ fn typed_text(a: *mem.Arena, s: *State) -> str {
     ret buffer[0usize..8usize]
 }
 
+// A numeric key of the timer.
+fn timer_key(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, id: usize, x: f32, y: f32, label: str, fill: paint.Color) -> err {
+    try card(a, builder, x, y, 116.0, 72.0, 26.0, fill)
+    try centred(a, builder, faces.grotesk, 28.0, label, x + 58.0, y + 36.0 - 17.0, ink())
+    hit(s, id, x, y, 116.0, 72.0)
+    ret ok
+}
+
 fn draw_timer(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *State) -> err {
     if s.timer_done {
-        try card(a, builder, 36.0, 176.0, 340.0, 400.0, 16.0, white())
-        try centred(a, builder, faces.sora, 22.0, "Time's up", 206.0, 250.0, muted())
-        try centred(a, builder, faces.jost_bold, 80.0, timer_text(a, s.timer_total_ms), 206.0, 320.0, ink())
-        try button(a, builder, s, faces, 414usize, 66.0, 470.0, 280.0, 56.0, "Dismiss", amber(), 20.0)
+        try centred(a, builder, faces.jost_bold, 33.0, "Time's up", 206.0, 160.0, ink())
+        try centred(a, builder, faces.jost_bold, 84.0, timer_text(a, s.timer_total_ms), 206.0, 230.0, blue())
+        try pill(a, builder, s, faces, 414usize, 56.0, 470.0, 300.0, 60.0, "Dismiss", blue(), white(), 20.0)
         ret ok
     }
     if s.timer_running || s.timer_paused {
         let left = timer_remaining_ms(s)
-        try card(a, builder, 36.0, 176.0, 340.0, 220.0, 16.0, white())
-        try centred(a, builder, faces.jost_bold, 76.0, timer_text(a, left), 206.0, 220.0, ink())
-        // A bar of what is left.
-        try card(a, builder, 60.0, 340.0, 292.0, 10.0, 5.0, grey())
+        // The ring: what is left of the time, clockwise from the top.
+        try disc(a, builder, 206.0, 280.0, 138.0, paint.Color { red: 0.86, green: 0.89, blue: 0.97, alpha: 0.5 })
+        try disc(a, builder, 206.0, 280.0, 126.0, panel())
         var fraction = 0.0f32
         if s.timer_total_ms > 0i64 { fraction = f32(left) / f32(s.timer_total_ms) }
         if fraction < 0.0 { fraction = 0.0 }
         if fraction > 1.0 { fraction = 1.0 }
-        if fraction > 0.02 { try card(a, builder, 60.0, 340.0, 292.0 * fraction, 10.0, 5.0, amber()) }
-        var toggle = "Pause"
-        if s.timer_paused { toggle = "Resume" }
-        try button(a, builder, s, faces, 411usize, 36.0, 420.0, 164.0, 56.0, toggle, amber(), 20.0)
-        try button(a, builder, s, faces, 412usize, 212.0, 420.0, 164.0, 56.0, "Reset", grey(), 20.0)
-        try button(a, builder, s, faces, 413usize, 36.0, 496.0, 340.0, 50.0, "+ 1:00", grey(), 18.0)
+        let (arc_builder, arc_error) = geometry.path_builder(a, 80usize, 80usize)
+        if arc_error != ok { ret arc_error }
+        var arc = arc_builder
+        var step = 0usize
+        let steps = 72usize
+        while step <= steps {
+            let t = fraction * f32(step) / f32(steps)
+            if step == 0usize {
+                try geometry.move_to(&arc, on_dial(206.0, 280.0, 126.0, t))
+            } else {
+                try geometry.line_to(&arc, on_dial(206.0, 280.0, 126.0, t))
+            }
+            step += 1usize
+        }
+        if fraction > 0.004 {
+            try scene.push(builder, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&arc), brush: paint.Brush { Solid: blue() }, stroke: paint.Stroke { width: 9.0, cap: paint.StrokeCap.Round, join: paint.StrokeJoin.Round, miter_limit: 4.0 } } })
+        }
+        try centred(a, builder, faces.jost_bold, 56.0, timer_text(a, left), 206.0, 250.0, ink())
+        try round_button(a, builder, s, faces, 412usize, 90.0, 520.0, 30.0, "Reset", soft(), ink(), 13.0)
+        var kind = 2usize
+        if s.timer_paused { kind = 1usize }
+        try fab(a, builder, s, 411usize, 206.0, 520.0, 38.0, kind)
+        try round_button(a, builder, s, faces, 413usize, 322.0, 520.0, 30.0, "+1:00", soft(), ink(), 13.0)
         ret ok
     }
-    try card(a, builder, 36.0, 172.0, 340.0, 96.0, 14.0, white())
-    try centred(a, builder, faces.jost_bold, 58.0, typed_text(a, s), 206.0, 190.0, ink())
-    var k = 0usize
-    while k < 9usize {
-        let x = 36.0 + f32(k % 3usize) * 116.0
-        let y = 284.0 + f32(k / 3usize) * 68.0
-        try pad_key(a, builder, s, faces, 401usize + k, x, y, 108.0, 58.0, number(a, k + 1usize), white())
-        k += 1usize
-    }
-    try pad_key(a, builder, s, faces, 400usize, 152.0, 488.0, 108.0, 58.0, "0", white())
-    try pad_key(a, builder, s, faces, 410usize, 268.0, 488.0, 108.0, 58.0, "DEL", grey())
-    try button(a, builder, s, faces, 411usize, 36.0, 566.0, 340.0, 56.0, "Start", amber(), 20.0)
-    try put(a, builder, faces.exo, 13.0, "Presets", 40.0, 640.0, muted())
+    try centred(a, builder, faces.jost_bold, 58.0, typed_text(a, s), 206.0, 50.0, ink())
     var preset = 0usize
     while preset < 4usize {
         var label = "1:00"
         if preset == 1usize { label = "5:00" }
         if preset == 2usize { label = "10:00" }
         if preset == 3usize { label = "15:00" }
-        try button(a, builder, s, faces, 420usize + preset, 36.0 + f32(preset) * 87.0, 664.0, 79.0, 40.0, label, grey(), 15.0)
+        try pill(a, builder, s, faces, 420usize + preset, 20.0 + f32(preset) * 94.0, 138.0, 86.0, 38.0, label, soft(), ink(), 15.0)
         preset += 1usize
     }
+    var k = 0usize
+    while k < 9usize {
+        try timer_key(a, builder, s, faces, 401usize + k, 20.0 + f32(k % 3usize) * 128.0, 200.0 + f32(k / 3usize) * 84.0, number(a, k + 1usize), panel())
+        k += 1usize
+    }
+    try timer_key(a, builder, s, faces, 400usize, 148.0, 452.0, "0", panel())
+    try timer_key(a, builder, s, faces, 410usize, 276.0, 452.0, "DEL", soft())
+    try fab(a, builder, s, 411usize, 206.0, 650.0, 40.0, 1usize)
     ret ok
 }
 
@@ -742,7 +829,7 @@ fn draw_stopwatch(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: 
     let ms = stopwatch_ms(s)
     let cx: f32 = 206.0
     let cy: f32 = 251.0
-    let blue = sw_blue()
+    let accent = blue()
     let dark = paint.Color { red: 0.1, green: 0.1, blue: 0.12, alpha: 1.0 }
     let tick_grey = paint.Color { red: 0.55, green: 0.56, blue: 0.6, alpha: 1.0 }
     // The dial: a soft glow, then the face.
@@ -770,22 +857,22 @@ fn draw_stopwatch(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: 
         try centred(a, builder, faces.jost, 9.0, label, at.x, at.y - 5.5, dark)
         sub += 1usize
     }
-    // The time over the dial: minutes dark, seconds and hundredths blue.
+    // The time over the dial: minutes dark, seconds and hundredths accent.
     let minutes_text = join(a, two(a, usize(ms / 60000i64) % 100usize), ":", "")
     let seconds_text = join(a, two(a, usize(ms / 1000i64) % 60usize), ".", two(a, usize(ms / 10i64) % 100usize))
-    let wm = text.measure(a, faces.jost_bold, 36.0, minutes_text)
-    let ws = text.measure(a, faces.jost_bold, 36.0, seconds_text)
+    let wm = text.measure(a, faces.jost_bold, 33.0, minutes_text)
+    let ws = text.measure(a, faces.jost_bold, 33.0, seconds_text)
     let left = cx - (wm + ws) / 2.0
-    try put(a, builder, faces.jost_bold, 36.0, minutes_text, left, 175.0, dark)
-    try put(a, builder, faces.jost_bold, 36.0, seconds_text, left + wm, 175.0, blue)
+    try put(a, builder, faces.jost_bold, 33.0, minutes_text, left, 175.0, dark)
+    try put(a, builder, faces.jost_bold, 33.0, seconds_text, left + wm, 175.0, accent)
     // The sub-dial's hand (one turn in thirty minutes), the seconds hand, and the hub.
     let minute_turns = f32(ms % 1800000i64) / 1800000.0
     try hand(a, builder, geometry.Point { x: sx, y: sy }, on_dial(sx, sy, 24.0, minute_turns), 2.4, dark)
     try disc(a, builder, sx, sy, 3.5, dark)
     let second_turns = f32(ms % 60000i64) / 60000.0
-    try hand(a, builder, on_dial(cx, cy, 0.0 - 14.0, second_turns), on_dial(cx, cy, 116.0, second_turns), 3.2, blue)
+    try hand(a, builder, on_dial(cx, cy, 0.0 - 14.0, second_turns), on_dial(cx, cy, 116.0, second_turns), 3.2, accent)
     try disc(a, builder, cx, cy, 11.0, dark)
-    try disc(a, builder, cx, cy, 4.0, blue)
+    try disc(a, builder, cx, cy, 4.0, accent)
     // The laps, newest first, when there are any.
     var lap = 0usize
     while lap < s.lap_total && lap < 5usize {
@@ -799,7 +886,7 @@ fn draw_stopwatch(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: 
         lap += 1usize
     }
     // The buttons: a round play (or pause) button, with Lap and Reset beside it once there is time on it.
-    try disc(a, builder, cx, 774.0, 32.0, blue)
+    try disc(a, builder, cx, 774.0, 32.0, accent)
     if s.sw_running {
         try card(a, builder, cx - 10.0, 762.0, 7.0, 24.0, 2.0, white())
         try card(a, builder, cx + 3.0, 762.0, 7.0, 24.0, 2.0, white())
@@ -830,32 +917,33 @@ fn draw_stopwatch(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: 
 fn draw_bedtime(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *State) -> err {
     let sleep_minutes = s.sleep_half_hours * 30usize
     let bed = (s.wake_minutes + 1440usize - sleep_minutes % 1440usize) % 1440usize
-    try card(a, builder, 36.0, 172.0, 340.0, 150.0, 16.0, white())
-    try centred(a, builder, faces.exo, 14.0, "GO TO BED AT", 206.0, 190.0, muted())
-    try centred(a, builder, faces.jost_bold, 72.0, hhmm(a, bed), 206.0, 212.0, ink())
+    try title(a, builder, faces, "Bedtime")
+    try card(a, builder, 16.0, 96.0, 380.0, 190.0, 28.0, panel())
+    try centred(a, builder, faces.exo, 15.0, "Go to bed at", 206.0, 116.0, gray_text())
+    try centred(a, builder, faces.jost_bold, 84.0, hhmm(a, bed), 206.0, 142.0, ink())
     // In how long.
     let now_minutes = minutes_of_day(utc_seconds(s))
     let wait = (bed + 1440usize - now_minutes) % 1440usize
-    try centred(a, builder, faces.grotesk, 14.0, join(a, "in ", number(a, wait / 60usize), join(a, "h ", number(a, wait % 60usize), "m")), 206.0, 298.0, muted())
+    try centred(a, builder, faces.grotesk, 15.0, join(a, "in ", number(a, wait / 60usize), join(a, "h ", number(a, wait % 60usize), "m")), 206.0, 248.0, blue())
     // Wake-up time.
-    try card(a, builder, 36.0, 340.0, 340.0, 110.0, 14.0, white())
-    try put(a, builder, faces.exo, 14.0, "WAKE UP", 52.0, 352.0, muted())
-    try centred(a, builder, faces.jost, 36.0, hhmm(a, s.wake_minutes), 206.0, 372.0, ink())
-    try button(a, builder, s, faces, 600usize, 52.0, 392.0, 48.0, 44.0, "-", grey(), 22.0)
-    try button(a, builder, s, faces, 601usize, 312.0, 392.0, 48.0, 44.0, "+", grey(), 22.0)
+    try card(a, builder, 16.0, 304.0, 380.0, 120.0, 24.0, panel())
+    try put(a, builder, faces.exo, 14.0, "Wake up", 36.0, 318.0, gray_text())
+    try centred(a, builder, faces.jost, 42.0, hhmm(a, s.wake_minutes), 206.0, 346.0, ink())
+    try round_button(a, builder, s, faces, 600usize, 70.0, 380.0, 26.0, "-", soft(), ink(), 26.0)
+    try round_button(a, builder, s, faces, 601usize, 342.0, 380.0, 26.0, "+", soft(), ink(), 26.0)
     // Sleep wanted.
-    try card(a, builder, 36.0, 466.0, 340.0, 110.0, 14.0, white())
-    try put(a, builder, faces.exo, 14.0, "SLEEP GOAL", 52.0, 478.0, muted())
+    try card(a, builder, 16.0, 440.0, 380.0, 120.0, 24.0, panel())
+    try put(a, builder, faces.exo, 14.0, "Sleep goal", 36.0, 454.0, gray_text())
     let hours = s.sleep_half_hours / 2usize
     var half = "h"
     if s.sleep_half_hours % 2usize == 1usize { half = ".5 h" }
-    try centred(a, builder, faces.jost, 36.0, join(a, number(a, hours), half, ""), 206.0, 498.0, ink())
-    try button(a, builder, s, faces, 604usize, 52.0, 518.0, 48.0, 44.0, "-", grey(), 22.0)
-    try button(a, builder, s, faces, 605usize, 312.0, 518.0, 48.0, 44.0, "+", grey(), 22.0)
+    try centred(a, builder, faces.jost, 42.0, join(a, number(a, hours), half, ""), 206.0, 482.0, ink())
+    try round_button(a, builder, s, faces, 604usize, 70.0, 516.0, 26.0, "-", soft(), ink(), 26.0)
+    try round_button(a, builder, s, faces, 605usize, 342.0, 516.0, 26.0, "+", soft(), ink(), 26.0)
     // The reminder.
-    try card(a, builder, 36.0, 592.0, 340.0, 70.0, 14.0, white())
-    try put(a, builder, faces.jost, 18.0, "Bedtime reminder", 52.0, 614.0, ink())
-    try toggle_switch(a, builder, s, 606usize, 308.0, 612.0, s.bedtime_on)
+    try card(a, builder, 16.0, 576.0, 380.0, 84.0, 24.0, panel())
+    try put(a, builder, faces.jost, 20.0, "Bedtime reminder", 36.0, 604.0, ink())
+    try toggle_switch(a, builder, s, 606usize, 324.0, 602.0, s.bedtime_on)
     ret ok
 }
 
@@ -864,24 +952,22 @@ fn draw_bedtime(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *S
 fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> err {
     s.hit_total = 0usize
     let faces = kit.faces
-    if s.tab == STOPWATCH_TAB {
-        // The stopwatch is a light full screen with its own navigation bar; the other tabs sit on cards.
-        try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, kit.logical_h), brush: paint.Brush { Solid: paint.Color { red: 0.953, green: 0.957, blue: 0.969, alpha: 1.0 - f32(kit.frame % 2usize) * 0.002 } } } })
-        try draw_stopwatch(a, builder, faces, s)
-        try draw_nav(a, builder, faces, s)
-        try card(a, builder, 156.0, 906.0, 100.0, 5.0, 2.5, paint.Color { red: 0.15, green: 0.15, blue: 0.17, alpha: 0.8 })
-        ret ok
-    }
-    try chrome(a, builder, kit, s)
+    // The light ground; its alpha alternates by 0.2% a frame (invisible): the renderer's incremental
+    // redraw left changed text without the shapes under it, so each frame must differ in its first command.
+    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, kit.logical_h), brush: paint.Brush { Solid: paint.Color { red: 0.953, green: 0.957, blue: 0.969, alpha: 1.0 - f32(kit.frame % 2usize) * 0.002 } } } })
     if s.tab == ALARM_TAB {
         try draw_alarm(a, builder, faces, s)
     } else if s.tab == CLOCK_TAB {
         try draw_clock(a, builder, faces, s)
     } else if s.tab == TIMER_TAB {
         try draw_timer(a, builder, faces, s)
+    } else if s.tab == STOPWATCH_TAB {
+        try draw_stopwatch(a, builder, faces, s)
     } else {
         try draw_bedtime(a, builder, faces, s)
     }
+    try draw_nav(a, builder, faces, s)
+    try card(a, builder, 156.0, 906.0, 100.0, 5.0, 2.5, paint.Color { red: 0.15, green: 0.15, blue: 0.17, alpha: 0.8 })
     ret ok
 }
 
@@ -1128,8 +1214,7 @@ fn say_hhmm(minutes: usize) {
 
 // The y from which a tap leaves the app: the bottom bar of the cards, or below the stopwatch's navigation.
 fn exit_y(s: *State) -> f32 {
-    if s.tab == STOPWATCH_TAB { ret 896.0 }
-    ret 850.0
+    ret 896.0
 }
 
 fn hit_at(s: *State, x: f32, y: f32) -> usize {
