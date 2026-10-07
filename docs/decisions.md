@@ -37677,3 +37677,25 @@ composited flushed` / `launcher done` / clean power-off. This is the launcher's 
 piece of the acceptance -- a visible launcher on the real display. Remaining for C112: a real PNG
 wallpaper from the filesystem scaled to cover, labels and real app icons, the live C111 status in the
 top bar, and a tap launching an app with Home returning to the launcher. C112 -> 0.4.
+
+## D2174 — C112: a PNG wallpaper read from the filesystem, scaled to cover
+
+The launcher's wallpaper now comes from a PNG in the filesystem. neperos/src/ui_wall.e builds a small
+image, encodes it to PNG (e.fmt.png over e.algo.deflate, io.slice_writer into a buffer), stores it in
+the C106 server through e.fs (fs.write_file), reads the PNG bytes back (fs.read_file), decodes them
+(png.decode over io.slice_reader), uploads the decoded image to the scene renderer and draws it with
+a DrawImage whose destination is the whole 256x256 surface -- scaled to cover -- then the top bar and
+the 8x5 grid over it. It folds the frame to a hash 3999367205, identical on QEMU 8.2 (WSL) and 11.1
+(Windows); `ui wall from fs` and `ui wall encoded 136` confirm the PNG made the round trip through the
+filesystem. Program 1 of an fsserver archive, it quits the server at the end.
+
+Two constraints shaped it. First, deflate overflowed the 128 KB EL0 stack -- png.encode faulted at a
+function prologue (an unknown-reason exception, EC 0, at a `stp`/`sub sp` sequence) because its lz77
+window and tables are stack-heavy; the EL0 stack (vm.STACK_SIZE) grew to 512 KB, which the window
+still fits under the 2 MB level-3 reach. The rendered goldens do not depend on stack size, so the
+C108 gpu (d505a446), compositor (1e78b507) and D2167 scene (2632735557) fixtures and the base demo
+(W's arena-page fault, X's kernel fault, clean exit) are byte-for-byte unchanged, re-verified on both
+hosts. Second, a C106 file is a single 512-byte block, so the wallpaper source is 4x4 and its PNG is
+136 bytes; DrawImage scales it to cover, which is what a real photo wallpaper needs anyway. Remaining
+for C112: labels and real app icons, the live C111 status in the top bar, and tap-to-launch with
+Home. C112 -> 0.6.

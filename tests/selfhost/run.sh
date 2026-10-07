@@ -8910,6 +8910,21 @@ greeting"
         *'ui font from fs'*'ui font hash 173685445'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS did not render text from a filesystem font: $uifont_boot" >&2; exit 1 ;;
     esac
+    # (D2174, C112) The launcher's PNG wallpaper from the filesystem: ui_wall encodes a small image to
+    # PNG, stores it in the C106 server, reads it back and decodes it (e.fmt.png), and draws the
+    # texture scaled to cover the 256x256 surface as the wallpaper under the top bar and 8x5 grid. The
+    # PNG is 136 bytes (one C106 block); the frame hash is identical on QEMU 8.2 and 11.1.
+    ui_wall_img="$test_build/ui_wall.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_wall.e" "$repo" aarch64 neperos "$ui_wall_img")" = 'executable written' ]
+    uiwall_archive="$test_build/uiwall-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$uiwall_archive" "$fs_server_img" "$ui_wall_img" "$fs_denied_img"
+    uiwall_disk="$test_build/uiwall-disk.img"
+    dd if=/dev/zero of="$uiwall_disk" bs=1M count=1 status=none
+    uiwall_boot=$(timeout 90 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$uiwall_archive" -append "fsserver bigarena" -drive "file=$uiwall_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$uiwall_boot" in
+        *'ui wall from fs'*'ui wall hash 3999367205'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS did not render a PNG wallpaper from the filesystem: $uiwall_boot" >&2; exit 1 ;;
+    esac
     # (D2171, C111) The system status service: the status server serves one protocol over a request
     # and reply endpoint; the client subscribes, reports each field, posts a notification through the
     # service and reports the count rising 0 -> 1. QEMU virt has no battery or radio, so those report

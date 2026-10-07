@@ -27,7 +27,7 @@ const PAGE: usize = 4096usize
 // reach (L3_PAGES), which also leaves the entries above it for thread stacks (map_stack).
 const ARENA_SIZE: usize = 65536usize
 const ARG_SIZE: usize = 131072usize
-const STACK_SIZE: usize = 131072usize
+const STACK_SIZE: usize = 524288usize
 const L3_PAGES: usize = 512usize
 
 // The user gigabyte's level-1 index (VA bits 38:30), derived from USER_BASE so the two can

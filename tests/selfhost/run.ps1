@@ -9056,6 +9056,21 @@ if ($neperosQemu) {
     $uiFontBlk = @('-drive', "file=$uiFontDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
     $uiFontBoot = Invoke-NeperOS $neperosImage (@('-initrd', $uiFontArchive, '-append', '"fsserver bigarena"') + $uiFontBlk)
     if ($uiFontBoot -notmatch '(?s)ui font from fs.*ui font hash 173685445.*neperos: exit 0x0000000000000000') { throw "NeperOS did not render text from a filesystem font: $uiFontBoot" }
+    # (D2174, C112) The launcher's PNG wallpaper from the filesystem: ui_wall encodes a small image to
+    # PNG, stores it in the C106 server, reads it back and decodes it (e.fmt.png), and draws the
+    # texture scaled to cover the 256x256 surface as the wallpaper under the top bar and 8x5 grid. The
+    # PNG is 136 bytes (one C106 block); the frame hash is identical on QEMU 8.2 and 11.1.
+    $uiWall = Join-Path $testBuild 'ui_wall.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_wall.e') $repo aarch64 neperos $uiWall | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS wallpaper program did not build' }
+    $uiWallArchive = Join-Path $testBuild 'uiwall-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $uiWallArchive $fsServer $uiWall $fsDenied
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS wallpaper archive did not assemble' }
+    $uiWallDisk = Join-Path $testBuild 'uiwall-disk.img'
+    $uiWallStream = [IO.File]::Create($uiWallDisk); $uiWallStream.SetLength(1MB); $uiWallStream.Close()
+    $uiWallBlk = @('-drive', "file=$uiWallDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $uiWallBoot = Invoke-NeperOS $neperosImage (@('-initrd', $uiWallArchive, '-append', '"fsserver bigarena"') + $uiWallBlk)
+    if ($uiWallBoot -notmatch '(?s)ui wall from fs.*ui wall hash 3999367205.*neperos: exit 0x0000000000000000') { throw "NeperOS did not render a PNG wallpaper from the filesystem: $uiWallBoot" }
     # (D2171, C111) The system status service: the status server (program 0) serves one protocol over
     # a request and a reply endpoint; the client (program 1) subscribes, reports each field, posts a
     # notification through the service and reports the count rising from 0 to 1. On QEMU virt there is
