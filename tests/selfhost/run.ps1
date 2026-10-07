@@ -9428,6 +9428,9 @@ if ($neperosQemu) {
     $messagesImage = Join-Path $testBuild 'messages.img'
     $stocksImage = Join-Path $testBuild 'stocks.img'
     $weatherImage = Join-Path $testBuild 'weather.img'
+    $sshImage = Join-Path $testBuild 'ssh.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ssh.e') $repo aarch64 neperos $sshImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'SSH did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\weather.e') $repo aarch64 neperos $weatherImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Weather did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\stocks.e') $repo aarch64 neperos $stocksImage | Out-Null
@@ -9441,7 +9444,7 @@ if ($neperosQemu) {
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
@@ -9477,6 +9480,9 @@ if ($neperosQemu) {
     # (D2214) Weather: choose Cairo, switch to Fahrenheit and leave.
     $weatherBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-weather.serial') 55144 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,25668;12408,1462;28313,7914;16384,32259' 2>&1) -join "`n"
     if ($weatherBoot -notmatch '(?s)weather shown.*weather place Cairo.*weather unit F.*weather home') { throw "NeperOS Weather did not change place and unit: $weatherBoot" }
+    # (D2215) SSH: connect to web-01, run ls, go back and leave.
+    $sshBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-ssh.serial') 55145 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;20480,25668;15906,5205;28472,22816;7317,22816;27758,26951;3181,1569;16384,32259' 2>&1) -join "`n"
+    if ($sshBoot -notmatch '(?s)ssh shown.*ssh connected web-01.*ssh command ls.*ssh closed.*ssh home') { throw "NeperOS SSH did not connect and run a command: $sshBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }

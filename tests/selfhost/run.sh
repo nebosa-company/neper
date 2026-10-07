@@ -9299,6 +9299,8 @@ greeting"
     messages_img="$test_build/messages.img"
     stocks_img="$test_build/stocks.img"
     weather_img="$test_build/weather.img"
+    ssh_img="$test_build/ssh.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ssh.e" "$repo" aarch64 neperos "$ssh_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/weather.e" "$repo" aarch64 neperos "$weather_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/stocks.e" "$repo" aarch64 neperos "$stocks_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/messages.e" "$repo" aarch64 neperos "$messages_img")" = 'executable written' ]
@@ -9306,7 +9308,7 @@ greeting"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/clock.e" "$repo" aarch64 neperos "$clock_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/calc.e" "$repo" aarch64 neperos "$calc_img")" = 'executable written' ]
     crater_archive="$test_build/shell-crater-archive.img"
-    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "$calc_img" "$clock_img" "$tasks_img" "$messages_img" "$stocks_img" "$weather_img"
+    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "$calc_img" "$clock_img" "$tasks_img" "$messages_img" "$stocks_img" "$weather_img" "$ssh_img"
     crater_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" keyboard "$test_build/shell-crater.serial" 55136 "compositor bigarena unified" 'shell app code 5' - 2 2>&1)
     case "$crater_boot" in
         *'shell wallpaper from fs'*) printf '%s
@@ -9375,6 +9377,12 @@ greeting"
         *'weather shown'*'weather place Cairo'*'weather unit F'*'weather home'*) ;;
         *) printf '%s
 ' "NeperOS Weather did not change place and unit: $weather_boot" >&2; exit 1 ;;
+    esac
+    ssh_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-ssh.serial" 55145 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;20480,25668;15906,5205;28472,22816;7317,22816;27758,26951;3181,1569;16384,32259' 2>&1)
+    case "$ssh_boot" in
+        *'ssh shown'*'ssh connected web-01'*'ssh command ls'*'ssh closed'*'ssh home'*) ;;
+        *) printf '%s
+' "NeperOS SSH did not connect and run a command: $ssh_boot" >&2; exit 1 ;;
     esac
     unset NEPEROS_TAP_DELAY
     unset NEPEROS_MEM NEPEROS_GPU
