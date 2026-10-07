@@ -37849,3 +37849,20 @@ the grown compiler, `neper build src/main.e` crashes the WSL2 VM, and the Window
 compositor rendering) are unverifiable until the C114 line lands on master or a matching toolchain is
 restored -- a branch/toolchain coordination state, not a code defect in this worktree. See
 [[neper-private-verify-recipe]].
+
+## D2185 — e.thread group spawn on NeperOS (shell boot verifiable), and the miscompile is narrow
+
+`neperos/src/thread_test.e` now also exercises `thread.spawn_all`/`join_all`: three workers started
+together over three contexts, reclaimed by one `join_all`, with each worker's write checked after the
+barrier (a 0 means that worker never ran). Serial reads `thread group of 3 joined`; identical on both
+QEMU hosts (8.2 WSL, 11.1 Windows). This covers the group path of e.thread beyond the D2157 single
+spawn+join, within C107's acceptance.
+
+It also sharpens the gpu-boot diagnosis (D2184): the toolchain miscompile is NARROW, not a blanket
+failure of low-level kernel code. `thread_test` -- which drives `os.thread_create` and `vm.map_stack`
+(page-table manipulation of the same family as the faulting `vm.map_range_el0`) -- builds and runs
+correctly under the shell boot with the same worktree-local neper-self that produces the faulting
+driver boot. So the fault is confined to the device-MMIO driver-boot path (`map_range_el0` / the
+start_driver_server setup), while the rest of the e.os surface (e.io/e.time/e.fmt/e.thread spawn+join+
+group) is compiled correctly and stays verifiable on the shell boot. C107 holds at 0.9; the gpu/driver
+-boot fixtures remain unverifiable here (toolchain), and the flat-C106 Unsupported ops remain.

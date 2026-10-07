@@ -9201,8 +9201,9 @@ if ($neperosQemu) {
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $threadArchive $threadTest
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.thread archive did not assemble' }
     $threadBoot = Invoke-NeperOS $neperosImage @('-initrd', $threadArchive, '-append', 'shell')
-    if ($threadBoot -notmatch '(?s)thread box = 99.*thread wrote 99 via shared memory.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.thread did not spawn and join: $threadBoot" }
+    if ($threadBoot -notmatch '(?s)thread box = 99.*thread wrote 99 via shared memory.*thread group of 3 joined.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.thread did not spawn, join and group-join: $threadBoot" }
     if ($threadBoot -match 'thread value wrong') { throw "NeperOS e.thread join did not block (the worker's write raced the read): $threadBoot" }
+    if ($threadBoot -match 'thread group incomplete' -or $threadBoot -match 'thread group spawn failed') { throw "NeperOS e.thread group spawn did not run all workers: $threadBoot" }
     # (D2158, C107) e.fs on NeperOS: fs_efs writes and reads a file through fs.write_file /
     # fs.read_file, which the e.os variant routes to the C106 filesystem server over IPC. Booted as
     # the filesystem-server boot's client (program 1 of the archive, with the server's endpoint caps).

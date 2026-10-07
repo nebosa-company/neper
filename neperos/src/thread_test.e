@@ -46,5 +46,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     } else {
         say("thread value wrong\n")
     }
+    // Group spawn (D2185): three workers over three contexts, started together and reclaimed by one
+    // join_all -- the barrier makes every worker's write visible, so a 0 means that worker never ran.
+    var ctxs: [3]Box = [3]Box{ Box { value: 0i64 }, Box { value: 0i64 }, Box { value: 0i64 } }
+    let (group, group_error) = thread.spawn_all[Box](a, worker, ctxs[0usize..], 65536usize)
+    if group_error != ok {
+        say("thread group spawn failed\n")
+        ret ok
+    }
+    let join_all_error = thread.join_all(group)
+    var all_ran = true
+    var gi = 0usize
+    while gi < 3usize {
+        if ctxs[gi].value != 99i64 { all_ran = false }
+        gi += 1usize
+    }
+    if all_ran {
+        say("thread group of 3 joined\n")
+    } else {
+        say("thread group incomplete\n")
+    }
     ret ok
 }

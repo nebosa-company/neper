@@ -9050,10 +9050,11 @@ greeting"
     python3 "$repo/scripts/build-shell-archive.py" "$thread_archive" "$thread_test_img"
     neperos_thread=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$thread_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
     case "$neperos_thread" in
-        *'thread box = 99'*'thread wrote 99 via shared memory'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
-        *) printf '%s\n' "NeperOS e.thread did not spawn and join: $neperos_thread" >&2; exit 1 ;;
+        *'thread box = 99'*'thread wrote 99 via shared memory'*'thread group of 3 joined'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.thread did not spawn, join and group-join: $neperos_thread" >&2; exit 1 ;;
     esac
     case "$neperos_thread" in *'thread value wrong'*) printf '%s\n' "NeperOS e.thread join did not block: $neperos_thread" >&2; exit 1 ;; esac
+    case "$neperos_thread" in *'thread group incomplete'*|*'thread group spawn failed'*) printf '%s\n' "NeperOS e.thread group spawn did not run all workers: $neperos_thread" >&2; exit 1 ;; esac
     # (D2158, C107) e.fs on NeperOS: fs_efs writes and reads a file through fs.write_file /
     # fs.read_file, routed to the C106 filesystem server over IPC; booted as the server boot's client.
     fs_efs_img="$test_build/fs_efs.img"
