@@ -160,3 +160,43 @@ fn iban(s: str) -> bool {
     let (tail, tail_ok) = mod97(body, d[..4usize])
     ret tail_ok && tail == 1u32
 }
+
+// Card networks by the number's prefix and length (the check digit is `luhn`'s business): the answer
+// is one of the BRAND_ constants. Separators between digits are ignored.
+const BRAND_UNKNOWN: usize = 0usize
+const BRAND_VISA: usize = 1usize
+const BRAND_MASTERCARD: usize = 2usize
+const BRAND_AMEX: usize = 3usize
+const BRAND_DISCOVER: usize = 4usize
+const BRAND_DINERS: usize = 5usize
+const BRAND_JCB: usize = 6usize
+const BRAND_UNIONPAY: usize = 7usize
+
+fn card_brand(s: str) -> usize {
+    var d: [24]u8 = zero
+    let n = digits(s, d[..])
+    if n < 12usize || n > 19usize { ret BRAND_UNKNOWN }
+    let p1 = usize(d[0usize])
+    let p2 = p1 * 10usize + usize(d[1usize])
+    let p3 = p2 * 10usize + usize(d[2usize])
+    let p4 = p3 * 10usize + usize(d[3usize])
+    if p1 == 4usize && (n == 13usize || n == 16usize || n == 19usize) { ret BRAND_VISA }
+    if ((p2 >= 51usize && p2 <= 55usize) || (p4 >= 2221usize && p4 <= 2720usize)) && n == 16usize { ret BRAND_MASTERCARD }
+    if (p2 == 34usize || p2 == 37usize) && n == 15usize { ret BRAND_AMEX }
+    if (p4 == 6011usize || p2 == 65usize || (p3 >= 644usize && p3 <= 649usize)) && n >= 16usize { ret BRAND_DISCOVER }
+    if ((p3 >= 300usize && p3 <= 305usize) || p2 == 36usize || p2 == 38usize || p2 == 39usize) && n >= 14usize { ret BRAND_DINERS }
+    if p4 >= 3528usize && p4 <= 3589usize && n >= 16usize { ret BRAND_JCB }
+    if p2 == 62usize && n >= 16usize { ret BRAND_UNIONPAY }
+    ret BRAND_UNKNOWN
+}
+
+fn card_brand_name(brand: usize) -> str {
+    if brand == BRAND_VISA { ret "Visa" }
+    if brand == BRAND_MASTERCARD { ret "Mastercard" }
+    if brand == BRAND_AMEX { ret "American Express" }
+    if brand == BRAND_DISCOVER { ret "Discover" }
+    if brand == BRAND_DINERS { ret "Diners Club" }
+    if brand == BRAND_JCB { ret "JCB" }
+    if brand == BRAND_UNIONPAY { ret "UnionPay" }
+    ret "Card"
+}
