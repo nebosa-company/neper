@@ -37919,3 +37919,16 @@ with the clock, the fixture asserts the serial time pattern (`clock live [0-2][0
 rather than a host==neperos golden, so clock_app leaves the deterministic app-face loop (calc/tasks/
 settings stay) for its own fixture in both runners. C113 -> 0.65: the clock is live (real time); the
 calculator's input interactivity and hosting the apps in the unified shell still wait on C112.
+
+## D2189 — the Calculator actually computes (not a fixed "42" face)
+
+`calc_app` had hard-coded "42" in its display. It now carries a small calculator engine: a fixed
+press sequence `7 * 6 + 9 =` is processed left-to-right (basic-calculator semantics, no precedence)
+through an accumulator + pending-operator state machine, and the COMPUTED result (51) is rendered
+right-aligned by extracting its digits, plus printed as `calc result 51`. Booted raw on `gpu bigarena`
+it reported `calc result 51`, hash 1192592031, identical to the x64 host build (host==neperos), on both
+QEMU hosts (8.2 WSL, 11.1 Windows). calc_app stays in the deterministic app-face hash loop (the loop
+recomputes the host hash, so no golden churn), and the loop now also asserts the literal
+`calc result 51` for calc so a wrong-but-consistent engine is caught (host==neperos alone only proves
+consistency). C113 -> 0.7: the clock is live (D2188) and the calculator computes; live tap input and
+hosting the apps in the unified shell still wait on C112's prodshell.

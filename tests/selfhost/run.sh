@@ -9002,6 +9002,12 @@ greeting"
             *"$app_tag hash $app_hash"*'neperos: exit 0x0000000000000000'*) ;;
             *) printf '%s\n' "NeperOS $app_src did not match the host hash $app_hash: $app_boot" >&2; exit 1 ;;
         esac
+        # (D2189, C113) The calculator actually computes: its engine runs a fixed press sequence
+        # "7 * 6 + 9 =" left-to-right and must report the computed result 51 (host==neperos above
+        # only proves consistency; this pins correctness).
+        if [ "$app_src" = calc_app ]; then
+            case "$app_boot" in *'calc result 51'*) ;; *) printf '%s\n' "NeperOS calc_app did not compute 51: $app_boot" >&2; exit 1 ;; esac
+        fi
     done
     # (D2188, C113) The Clock app shows the LIVE time: clock_app reads the wall clock through e.time
     # (os.clock -> PL031 RTC) and renders the current HH:MM, then prints `clock live HH:MM`. The frame

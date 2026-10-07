@@ -9152,6 +9152,9 @@ if ($neperosQemu) {
         $appHash = $Matches[1]
         $appBoot = Invoke-NeperOS $neperosImage @('-initrd', $appImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
         if ($appBoot -notmatch "(?s)$appTag hash $appHash.*neperos: exit 0x0000000000000000") { throw "NeperOS $appSrc did not match the host hash ${appHash}: $appBoot" }
+        # (D2189, C113) The calculator actually computes: its engine runs "7 * 6 + 9 =" left-to-right
+        # and must report 51 (host==neperos only proves consistency; this pins correctness).
+        if ($appSrc -eq 'calc_app' -and $appBoot -notmatch 'calc result 51') { throw "NeperOS calc_app did not compute 51: $appBoot" }
     }
     # (D2188, C113) The Clock app shows the LIVE time: clock_app reads the wall clock through e.time
     # (os.clock -> PL031 RTC) and renders the current HH:MM, then prints `clock live HH:MM`. The frame

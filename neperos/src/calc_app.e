@@ -1,9 +1,10 @@
-// The NeperOS Calculator app's face (C113, D2180): a result display and a 4x4 button grid rendered
-// through e.gfx.scene over the e.gpu CPU backend into a 256x256 surface. Digit buttons show their
-// digit in the built-in 3x5 bitmap font; operator buttons (/ * - + = C) show a small rect-composed
-// symbol on a tinted tile. The display shows a fixed result ("42") so the frame is deterministic --
-// the arithmetic itself is ordinary e.* integer code, not the point of this render. It folds the
-// frame to a hash a host run reproduces. Needs the large arena (`bigarena`).
+// The NeperOS Calculator app (C113, D2180 face; D2189 compute): a result display and a 4x4 button
+// grid rendered through e.gfx.scene over the e.gpu CPU backend into a 256x256 surface. Digit buttons
+// show their digit in the built-in 3x5 bitmap font; operator buttons (/ * - + = C) show a small
+// rect-composed symbol on a tinted tile. The display shows a COMPUTED result: a small calculator
+// engine processes a fixed press sequence ("7 * 6 + 9 =") left-to-right and renders the computed
+// value (51) right-aligned, and prints `calc result 51`. Deterministic, so the frame folds to a hash
+// a host run reproduces (host==neperos). Needs the large arena (`bigarena`).
 use e.mem
 use e.os
 use e.gpu
@@ -110,10 +111,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if builder_error != ok { ret builder_error }
     var builder = builder_value
     fill(&builder, 0.0, 0.0, 256.0, 256.0, 0.08, 0.09, 0.12)
-    // The result display "42".
+    // The calculator engine (D2189): process a fixed press sequence "7 * 6 + 9 =" left-to-right (no
+    // precedence, as a basic calculator), so the displayed number is COMPUTED, not a fixed face.
+    let presses: [6]u8 = [6]u8{ 7u8, 11u8, 6u8, 13u8, 9u8, 14u8 }
+    var acc = 0usize
+    var cur = 0usize
+    var op = 0usize
+    var pi = 0usize
+    while pi < 6usize {
+        let kp = usize(presses[pi])
+        if kp < 10usize {
+            cur = cur * 10usize + kp
+        } else {
+            if op == 0usize {
+                acc = cur
+            } else {
+                if op == 11usize { acc = acc * cur }
+                if op == 13usize { acc = acc + cur }
+                if op == 12usize { acc = acc - cur }
+            }
+            cur = 0usize
+            if kp != 14usize { op = kp }
+        }
+        pi += 1usize
+    }
+    let result = acc
+    // The result display, showing the computed value right-aligned.
     fill(&builder, 16.0, 12.0, 224.0, 40.0, 0.14, 0.16, 0.2)
-    draw_digit(&builder, font[0usize..], 180.0, 20.0, 4usize, 5.0)
-    draw_digit(&builder, font[0usize..], 200.0, 20.0, 2usize, 5.0)
+    var rtmp = result
+    var rx: f32 = 212.0
+    if result == 0usize {
+        draw_digit(&builder, font[0usize..], rx, 20.0, 0usize, 5.0)
+    } else {
+        while rtmp > 0usize {
+            draw_digit(&builder, font[0usize..], rx, 20.0, rtmp % 10usize, 5.0)
+            rtmp = rtmp / 10usize
+            rx -= 20.0
+        }
+    }
     // The 4x4 keypad below the display.
     var r = 0usize
     while r < 4usize {
@@ -162,6 +197,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         hash = ((hash ^ usize(pixels[i])) * 16777619usize) & 4294967295usize
         i += 1usize
     }
+    say("calc result ")
+    say_num(result)
+    say("\n")
     say("calc app hash ")
     say_num(hash)
     say("\n")
