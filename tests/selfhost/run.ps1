@@ -9056,6 +9056,24 @@ if ($neperosQemu) {
     $uiFontBlk = @('-drive', "file=$uiFontDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
     $uiFontBoot = Invoke-NeperOS $neperosImage (@('-initrd', $uiFontArchive, '-append', '"fsserver bigarena"') + $uiFontBlk)
     if ($uiFontBoot -notmatch '(?s)ui font from fs.*ui font hash 173685445.*neperos: exit 0x0000000000000000') { throw "NeperOS did not render text from a filesystem font: $uiFontBoot" }
+    # (D2171, C111) The system status service: the status server (program 0) serves one protocol over
+    # a request and a reply endpoint; the client (program 1) subscribes, reports each field, posts a
+    # notification through the service and reports the count rising from 0 to 1. On QEMU virt there is
+    # no battery or radio, so those report unavailable rather than invented values; the wall clock is
+    # real (its value varies, so only the line's presence is asserted).
+    $statusServer = Join-Path $testBuild 'status_server.img'
+    $statusClient = Join-Path $testBuild 'status_client.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\status_server.e') $repo aarch64 neperos $statusServer | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS status server did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\status_client.e') $repo aarch64 neperos $statusClient | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS status client did not build' }
+    $statusArchive = Join-Path $testBuild 'status-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $statusArchive $statusServer $statusClient
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS status archive did not assemble' }
+    $statusBoot = Invoke-NeperOS $neperosImage @('-initrd', $statusArchive, '-append', 'statussvc')
+    foreach ($statusMark in @('status server up', 'status battery unavailable', 'status wifi unavailable', 'status cellular unavailable', 'status clock ', 'status notifications 0', 'status notifications 1', 'status client done', 'neperos: exit 0x0000000000000000')) {
+        if ($statusBoot -notmatch [regex]::Escape($statusMark)) { throw "NeperOS status service missing (${statusMark}): $statusBoot" }
+    }
     # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
     # and a Writer over it) rather than the console primitive directly, so e.io -- and the e.os
     # variant os.neperos.e it compiles against -- run unchanged on NeperOS. Started as program 0 of a

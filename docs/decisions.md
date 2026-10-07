@@ -37625,3 +37625,26 @@ damage-only flush to the C108 display server (D2164), input from C109 routed to 
 (D2163), the e.ui window backend drawing with the CPU rasterizer over the compositor (D2168 renders,
 D2169 presents over the compositor) and with fonts read from the filesystem (D2170), and an existing
 e.ui sample rendering on NeperOS with the same pixel hash as its host render (D2168). C110 -> 1.0.
+
+## D2171 — C111: the system status service
+
+NeperOS shell-7, the system status service, in one increment. neperos/src/status_server.e is an EL0
+user-mode server that holds the system status -- battery, Wi-Fi, cellular, the wall clock and a
+notification count -- and serves one protocol over two endpoints: a request endpoint (op words:
+subscribe, query, post, quit) and a reply endpoint carrying a five-word snapshot (battery, Wi-Fi,
+cellular, wall-clock nanoseconds, notification count). Each provider's word has a present bit; on
+QEMU virt there is no battery and no radio, so those three are zero -- a client reads the present bit
+clear and reports them unavailable rather than inventing a level or a signal. The wall clock is the
+one live provider, read fresh from os.clock(.Wall) on each snapshot. The snapshot layout keeps room
+for real values (battery level and charging, Wi-Fi signal, cellular signal and type LTE/5G), so the
+D2148 Android bridge later fills them behind the same protocol without a client change.
+
+The notification service is the post op: an app posts, the count rises, and the server pushes a fresh
+snapshot to the subscriber -- subscription is the subscribe op plus push-on-change, and on QEMU the
+notification count is the one field that changes (the clock rides along in every snapshot). The boot
+`-append statussvc` runs an archive of the server (program 0, granted the request-receive and
+reply-send endpoints) and a client (program 1, granted request-send and reply-receive); it needs no
+device and no disk. neperos/src/status_client.e subscribes, reports each field, posts a notification
+and reports the count rising from 0 to 1, then tells the server to quit. Verified on QEMU virt on
+both hosts (the clock line's value varies, so the fixtures assert its presence, not its value); the
+earlier neperos fixtures are unchanged (the status boot is a new, self-contained mode). C111 -> 1.0.

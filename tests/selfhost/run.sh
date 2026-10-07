@@ -8910,6 +8910,20 @@ greeting"
         *'ui font from fs'*'ui font hash 173685445'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS did not render text from a filesystem font: $uifont_boot" >&2; exit 1 ;;
     esac
+    # (D2171, C111) The system status service: the status server serves one protocol over a request
+    # and reply endpoint; the client subscribes, reports each field, posts a notification through the
+    # service and reports the count rising 0 -> 1. QEMU virt has no battery or radio, so those report
+    # unavailable rather than invented values; the wall clock is real (value varies, presence only).
+    status_server_img="$test_build/status_server.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/status_server.e" "$repo" aarch64 neperos "$status_server_img")" = 'executable written' ]
+    status_client_img="$test_build/status_client.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/status_client.e" "$repo" aarch64 neperos "$status_client_img")" = 'executable written' ]
+    status_archive="$test_build/status-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$status_archive" "$status_server_img" "$status_client_img"
+    status_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$status_archive" -append statussvc < /dev/null 2>&1 | tr -d '\r')
+    for status_mark in 'status server up' 'status battery unavailable' 'status wifi unavailable' 'status cellular unavailable' 'status clock ' 'status notifications 0' 'status notifications 1' 'status client done' 'neperos: exit 0x0000000000000000'; do
+        case "$status_boot" in *"$status_mark"*) ;; *) printf '%s\n' "NeperOS status service missing ($status_mark): $status_boot" >&2; exit 1 ;; esac
+    done
     # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
     # + a Writer) rather than the console primitive, so e.io and the e.os variant os.neperos.e run
     # unchanged on NeperOS. Started as program 0 of a one-program archive on the shell boot.

@@ -838,7 +838,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
         thread.grant(comp_app, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
         if input_present { thread.grant(comp_app, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 2usize) }
     }
-    if !shell_mode && !fs_mode && !fsserver_mode && !gpu_mode && !input_mode && !compositor_mode {
+    // (D2171, C111) The status-service boot (`-append statussvc`): the initrd is an archive of the
+    // status server (program 0) and a client (program 1), no device and no disk. The server holds the
+    // system status and serves one protocol over two endpoints (0 request, 1 reply); the client
+    // subscribes, reports each field, posts a notification and reports the raised count. On QEMU virt
+    // the clock is the only live provider; battery and radio report absent.
+    let status_mode = bootargs_error == ok && has_word(bootargs, "statussvc")
+    if status_mode {
+        if !parse_archive(image_addr) { ret BadArchive }
+        next_asid = 0usize
+        let (status_server, status_server_error) = start_process(archive_base + archive_offset[0usize], archive_length[0usize], "status")
+        if status_server_error != ok { ret status_server_error }
+        thread.grant(status_server, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 0usize)
+        thread.grant(status_server, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 1usize)
+        let (status_client, status_client_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "app")
+        if status_client_error != ok { ret status_client_error }
+        thread.grant(status_client, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
+        thread.grant(status_client, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 1usize)
+    }
+    if !shell_mode && !fs_mode && !fsserver_mode && !gpu_mode && !input_mode && !compositor_mode && !status_mode {
     // A and B interleave under the timer, and X is handed a reference to kernel RAM --
     // mapped into its space without EL0 access -- so its read faults and it alone is killed.
     // The RAM base is as good a kernel address as any. S and R rendezvous over endpoint 0
