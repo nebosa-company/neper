@@ -9426,6 +9426,9 @@ if ($neperosQemu) {
     $clockImage = Join-Path $testBuild 'clock.img'
     $tasksImage = Join-Path $testBuild 'tasks.img'
     $messagesImage = Join-Path $testBuild 'messages.img'
+    $stocksImage = Join-Path $testBuild 'stocks.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\stocks.e') $repo aarch64 neperos $stocksImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Stocks did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\messages.e') $repo aarch64 neperos $messagesImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Messages did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\tasks.e') $repo aarch64 neperos $tasksImage | Out-Null
@@ -9435,7 +9438,7 @@ if ($neperosQemu) {
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
@@ -9465,6 +9468,9 @@ if ($neperosQemu) {
     # (D2212) Messages: open the first conversation, open the keyboard, type "Hi", send, go back and leave.
     $messagesBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-messages.serial') 55142 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,3565;15906,4920;11930,30374;19405,22816;23939,20748;29586,16328;3181,1782;16384,32259' 2>&1) -join "`n"
     if ($messagesBoot -notmatch '(?s)messages shown.*messages opened.*messages sent.*messages count 12.*messages home') { throw "NeperOS Messages did not open a conversation and send: $messagesBoot" }
+    # (D2213) Stocks: open AAPL, choose the 2M range, go back and leave.
+    $stocksBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-stocks.serial') 55143 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,25668;15906,5633;17655,7771;3181,1782;16384,32259' 2>&1) -join "`n"
+    if ($stocksBoot -notmatch '(?s)stocks shown.*stocks opened AAPL.*stocks range 60.*stocks back.*stocks home') { throw "NeperOS Stocks did not open a stock and change range: $stocksBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }

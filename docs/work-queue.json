@@ -26,6 +26,28 @@
       "evidence": "Queued by the user (2026-10-08). The Secure app (home icon 'Secure', index 18, the shield with a keyhole) keeps both passwords and MFA codes in one place. Acceptance: (1) a list of entries, each a login (site, user name, password, copy and reveal) or an MFA entry (a TOTP secret showing the current six-digit code with a countdown ring), searchable and in the cream, amber and dark look of Calc, Clock, Tasks and Messages; (2) add, edit and delete an entry on the app's own on-screen keyboard; (3) TOTP computed from the secret with HMAC-SHA1 over the wall clock (RFC 6238; e.crypto has the pieces), checked against the RFC test vectors; (4) entries encrypted at rest under a key derived from a master password, which unlocks the app; storage waits on the filesystem server; (5) a fixture on QEMU that adds a login and an MFA entry and reads the code back. Not queued here: sync, autofill into other apps, passkeys."
     },
     {
+      "id": "C117",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 117,
+      "title": "NeperOS networking: a virtio-net driver, TCP/IP, DNS and TLS for the apps",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Queued by the user (2026-10-08). NeperOS runs with `-nic none` and has no network, so every app that needs the internet is blocked: Stocks live data (C118), Weather, the AI chat app, Mail, Browser. Acceptance: (1) a virtio-net driver server on the QEMU virt machine (user-mode networking), (2) IPv4 with ARP, DHCP, ICMP echo, UDP and TCP, (3) a DNS resolver, (4) TLS 1.3 client with certificate validation against a bundled root set (e.crypto has the primitives), (5) a socket-like capability for apps (connect, send, receive, close) under the capability model, (6) a fixture on QEMU that resolves a name and fetches an HTTPS page from the host through user-mode networking. Not queued here: IPv6, a server side, Wi-Fi or cellular drivers."
+    },
+    {
+      "id": "C118",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 118,
+      "title": "NeperOS Stocks live data: Stooq daily prices, bring-your-own-key providers, crypto",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued by the user (2026-10-08). The Stocks app (D2213) ships on a bundled sample data set; this item replaces the sample source once C117 (networking) and C116 (Secure) exist. Acceptance, in order: (1) a keyless source: Stooq's CSV download (no account; daily prices for most exchanges; delayed and daily, not real time), parsed into the watchlist, the chart and the day change, with the sample data as the offline fallback and a visible 'delayed' label; (2) bring-your-own-key providers for better data (Finnhub, Twelve Data, Alpha Vantage or Polygon; the key is entered in the app and stored in Secure; real-time quotes are usually paid or rate-limited, so real time is not promised); (3) crypto from Coinbase's public price endpoint (no key), if wanted; (4) add and remove tickers and search. Yahoo's unofficial endpoints are excluded: they break without notice and their terms do not allow it. Fixtures run against recorded responses, not the live internet."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
