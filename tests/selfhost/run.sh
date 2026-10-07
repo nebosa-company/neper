@@ -9281,16 +9281,22 @@ greeting"
             esac ;;
         *) printf '%s\n' "NeperOS unified shell did not host the launcher, show status and launch an app on a tap: $shell_boot" >&2; exit 1 ;;
     esac
-    # (D2202) The Neper crater wallpaper: an eighth archive entry, the PNG resampled offline to the panel
-    # (scripts/make_wallpaper.py). The kernel maps it into the shell, which reads it as args[1], decodes
-    # it and draws it 1:1; the filesystem loader and server are not started for this archive.
+    # (D2202, D2204) The lunar shell: entry 7 is the Neper crater wallpaper (a PNG resampled offline to
+    # the panel, scripts/make_wallpaper.py) and entries 8-12 the fonts (scripts/make_fonts.py: Jost
+    # Bold, Jost Regular, Sora Medium, Space Grotesk Regular, Exo 2 Regular). The kernel maps them
+    # into the shell, which reads them as args[1..6]; the filesystem loader and server are not started.
+    # Two key presses: the first unlocks the lock screen to the home screen (the compositor takes the
+    # second frame), the second launches an app.
+    assets="$repo/neperos/assets"
     crater_archive="$test_build/shell-crater-archive.img"
-    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$repo/neperos/assets/wallpaper/neper-crater.png"
-    crater_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" keyboard "$test_build/shell-crater.serial" 55136 "compositor bigarena unified" 'shell home' 2>&1)
+    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf"
+    crater_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" keyboard "$test_build/shell-crater.serial" 55136 "compositor bigarena unified" 'shell app code 5' - 2 2>&1)
     case "$crater_boot" in
-        *'shell wallpaper from fs'*) printf '%s\n' "the crater boot took the filesystem wallpaper: $crater_boot" >&2; exit 1 ;;
-        *'shell wallpaper bytes 1841605'*'shell presented'*'comp composited flushed'*'shell tap'*'shell app code 5'*'shell home'*) ;;
-        *) printf '%s\n' "NeperOS shell did not show the crater wallpaper: $crater_boot" >&2; exit 1 ;;
+        *'shell wallpaper from fs'*) printf '%s
+' "the lunar shell took the filesystem wallpaper: $crater_boot" >&2; exit 1 ;;
+        *'shell fonts ok'*'shell wallpaper bytes 1841605'*'shell wallpaper from initrd'*'shell lock presented'*'shell moon '*'comp composited flushed'*'shell unlocked'*'comp composited again'*'shell tap'*'shell app code 5'*) ;;
+        *) printf '%s
+' "NeperOS lunar shell did not lock, unlock and launch: $crater_boot" >&2; exit 1 ;;
     esac
     unset NEPEROS_MEM NEPEROS_GPU
 fi

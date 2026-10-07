@@ -1,30 +1,37 @@
-// The NeperOS unified shell (C112, D2192): one process that IS the launcher, rendered over the real
-// compositor AND interactive. It opens an e.ui.window (the compositor's shared surface), renders the
-// launcher layout (wallpaper, top bar, 8x5 icon grid) through e.gfx.scene over the e.gpu CPU backend,
-// and presents it (window.request_frame -> os.window_present: blit + signal, the compositor
-// composites it to the display). Then it listens for input the compositor routes to it (slot 2, the
-// C109 path); on the first key-down -- a tap on an icon -- it launches an app as a process
-// (os.launch), waits for it (os.reap), and returns Home. This hosts the launcher on the display with
-// LIVE tap input. The top bar shows the C111 status service's snapshot (D2195): the shell subscribes
-// over endpoints 3 (request) and 4 (reply), posts one notification and draws a tick per provider and
-// per notification, with the clock from the snapshot. (The earlier "AUX heisenbug" that kept the
-// status service out was a boot-word collision, fixed in D2194.)
-// The wallpaper comes from the C106 filesystem through wall_loader.e (D2196), received on slot 5.
-// Archive layout: [comp=0, shell=1, input=2, app=3, status=4, fs server=5, wall loader=6]. Boot
-// `compositor bigarena unified` with a virtio-blk disk.
+// The NeperOS unified shell (C112, D2192; C115, D2204): one process that IS the lock screen and the
+// launcher, rendered over the real compositor AND interactive. It opens an e.ui.window (the
+// compositor's shared surface -- the whole 1280x2856 panel), lays everything out in dp (412 wide; the
+// scene's base transform scales dp to pixels) and draws through e.gfx.scene over the e.gpu CPU backend.
+//
+// It shows the lunar lock screen first -- the clock in Jost Bold, the date, a Moon-phase card and a
+// notification card (Sora, Space Grotesk, Exo 2), and a dock -- over the wallpaper, then on the first
+// key (a tap on the panel) the home screen: a status bar, and the app icons with their names under
+// them. A second key launches an app as a process (os.launch), waits for it (os.reap) and returns
+// Home. The top bar shows the C111 status service's snapshot over endpoints 3 (request) and 4
+// (reply); the Moon phase and the date come from the same wall-clock reading (lunar.e).
+//
+// What it is handed (the kernel's initrd arguments): args[1] the wallpaper PNG, args[2..6] the fonts
+// -- Jost Bold, Jost Regular, Sora Medium, Space Grotesk Regular, Exo 2 Regular -- each read in place.
+// Without the fonts it skips the lock screen and draws the home screen without names; without the
+// wallpaper it takes a 4x4 gradient the filesystem loader streams over slot 5, else a flat fill.
+// Archive layout: [comp=0, shell=1, input=2, app=3, status=4, fs server=5, wall loader=6, wallpaper=7,
+// fonts=8..12]. Boot `compositor bigarena unified` on the 1 GB display kernel.
 use e.mem
 use e.os
-use e.time
 use e.gpu
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 use e.gfx.image
+use e.gfx.svg
 use e.io
 use e.fmt.png
-use e.gfx.svg
-use icons
+use e.text.layout
+use e.text.shape
 use e.ui.window
+use icons
+use text
+use lunar
 
 const ROUTED: usize = 2usize
 const NO_SLOT: usize = 99usize
@@ -41,8 +48,10 @@ const OP_POST: usize = 2usize
 const OP_SUBSCRIBE: usize = 3usize
 const PRESENT: usize = 2147483648usize
 
-fn say(text: str) {
-    let (written, write_error) = os.write(os.stdout(), text)
+type Faces = struct { jost_bold: shape.Font, jost: shape.Font, sora: shape.Font, grotesk: shape.Font, exo: shape.Font }
+
+fn say(line: str) {
+    let (written, write_error) = os.write(os.stdout(), line)
 }
 
 fn say_num(value: usize) {
@@ -59,56 +68,185 @@ fn say_num(value: usize) {
     say(digits[at..20usize])
 }
 
-fn say2(value: usize) {
-    var two: [2]u8 = zero
-    two[0usize] = u8(value / 10usize) + 48u8
-    two[1usize] = u8(value % 10usize) + 48u8
-    say(two[0usize..2usize])
+// A number as text, two digits at least ("07"), in the arena.
+fn two_digits(a: *mem.Arena, value: usize) -> str {
+    let (buffer, buffer_error) = mem.alloc[u8](a, 2usize)
+    if buffer_error != ok { ret "00" }
+    buffer[0usize] = u8(value / 10usize % 10usize) + 48u8
+    buffer[1usize] = u8(value % 10usize) + 48u8
+    ret buffer[0usize..2usize]
 }
 
-fn fill(builder: *scene.Builder, x: f32, y: f32, w: f32, h: f32, red: f32, green: f32, blue: f32) {
-    let pushed = scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y, w, h), brush: paint.Brush { Solid: paint.Color { red: red, green: green, blue: blue, alpha: 1.0 } } } })
-}
-
-fn draw_digit(builder: *scene.Builder, font: []const u8, px: f32, py: f32, d: usize, s: f32) {
-    var row = 0usize
-    while row < 5usize {
-        let bits = usize(font[d * 5usize + row])
-        var col = 0usize
-        while col < 3usize {
-            if ((bits >> (2usize - col)) & 1usize) == 1usize {
-                fill(builder, px + f32(col) * s, py + f32(row) * s, s, s, 0.85, 0.88, 0.95)
-            }
-            col += 1usize
-        }
-        row += 1usize
+fn number_text(a: *mem.Arena, value: usize) -> str {
+    var digits: [20]u8 = zero
+    var at = 20usize
+    var rest = value
+    var open = true
+    while open {
+        at -= 1usize
+        digits[at] = u8(rest % 10usize) + 48u8
+        rest = rest / 10usize
+        if rest == 0usize { open = false }
     }
+    let (buffer, buffer_error) = mem.alloc[u8](a, 20usize - at)
+    if buffer_error != ok { ret "0" }
+    var i = 0usize
+    while at + i < 20usize {
+        buffer[i] = digits[at + i]
+        i += 1usize
+    }
+    ret buffer[0usize..20usize - at]
 }
 
-// The launcher's chrome, in logical dp (412 wide; the scene's base transform scales dp to the
-// panel's pixels): the top-bar strip, then a four-column grid of the app icons (icons.e, drawn
-// through e.gfx.svg) with room for more rows than there are apps.
-fn draw_launcher(a: *mem.Arena, builder: *scene.Builder) -> err {
-    fill(builder, 0.0, 0.0, 412.0, 30.0, 0.04, 0.05, 0.07)
-    let ink = paint.Color { red: 0.91, green: 0.92, blue: 0.94, alpha: 1.0 }
-    var idx = 0usize
-    while idx < icons.APP_COUNT {
-        let col = idx % 4usize
-        let row = idx / 4usize
-        let x = 20.5 + f32(col) * 94.0
-        let y = 96.0 + f32(row) * 108.0
-        try svg.draw(a, builder, icons.app(idx), geometry.rect(x, y, 66.0, 66.0), ink)
-        idx += 1usize
+fn join3(a: *mem.Arena, first: str, second: str, third: str) -> str {
+    let (buffer, buffer_error) = mem.alloc[u8](a, first.len + second.len + third.len)
+    if buffer_error != ok { ret first }
+    var n = 0usize
+    var i = 0usize
+    while i < first.len {
+        buffer[n] = first[i]
+        n += 1usize
+        i += 1usize
     }
+    i = 0usize
+    while i < second.len {
+        buffer[n] = second[i]
+        n += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < third.len {
+        buffer[n] = third[i]
+        n += 1usize
+        i += 1usize
+    }
+    ret buffer[0usize..n]
+}
+
+fn fill(builder: *scene.Builder, x: f32, y: f32, w: f32, h: f32, c: paint.Color) -> err {
+    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y, w, h), brush: paint.Brush { Solid: c } } })
+    ret ok
+}
+
+// A rounded rectangle (a card), filled.
+fn card(a: *mem.Arena, builder: *scene.Builder, x: f32, y: f32, w: f32, h: f32, radius: f32, c: paint.Color) -> err {
+    let (path, path_error) = svg.rect_path(a, x, y, w, h, radius, radius)
+    if path_error != ok { ret path_error }
+    try scene.push(builder, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: c } } })
+    ret ok
+}
+
+// Text centred on `cx`.
+fn centred(a: *mem.Arena, builder: *scene.Builder, font: shape.Font, size: f32, line: str, cx: f32, y: f32, c: paint.Color) -> err {
+    let width = text.measure(a, font, size, line)
+    let (box, draw_error) = text.draw(a, builder, font, size, line, cx - width / 2.0, y, 0.0, 0u32, layout.Align.Start, c)
+    if draw_error != ok { ret draw_error }
     ret ok
 }
 
 // One status glyph in the top bar (icons.bar): bright when `on`, dim when the provider is absent.
 fn status_glyph(a: *mem.Arena, builder: *scene.Builder, which: usize, x: f32, on: bool, lit: paint.Color) -> err {
-    var c = paint.Color { red: 0.32, green: 0.33, blue: 0.37, alpha: 1.0 }
+    var c = paint.Color { red: 0.5, green: 0.52, blue: 0.56, alpha: 1.0 }
     if on { c = lit }
     try svg.draw(a, builder, icons.bar(which), geometry.rect(x, 7.0, 16.0, 16.0), c)
     ret ok
+}
+
+// The status bar of the home screen: the time at the left, the provider glyphs at the right.
+fn status_bar(a: *mem.Arena, builder: *scene.Builder, faces: Faces, has_fonts: bool, clock: str, snap: [5]usize) -> err {
+    try fill(builder, 0.0, 0.0, 412.0, 30.0, paint.Color { red: 0.03, green: 0.04, blue: 0.06, alpha: 0.78 })
+    let bright = paint.Color { red: 0.91, green: 0.92, blue: 0.94, alpha: 1.0 }
+    let amber = paint.Color { red: 0.88, green: 0.70, blue: 0.42, alpha: 1.0 }
+    if has_fonts {
+        let (box, draw_error) = text.draw(a, builder, faces.jost, 16.0, clock, 16.0, 4.0, 0.0, 0u32, layout.Align.Start, bright)
+        if draw_error != ok { ret draw_error }
+    }
+    // Glyph order in icons.bar: battery 0, bell 1, cell 2, moon 3, wifi 4.
+    try status_glyph(a, builder, 0usize, 380.0, (snap[0usize] & PRESENT) != 0usize, bright)
+    try status_glyph(a, builder, 4usize, 358.0, (snap[1usize] & PRESENT) != 0usize, bright)
+    try status_glyph(a, builder, 2usize, 336.0, (snap[2usize] & PRESENT) != 0usize, bright)
+    try status_glyph(a, builder, 1usize, 314.0, snap[4usize] > 0usize, amber)
+    ret ok
+}
+
+// The wallpaper, drawn across the whole logical screen.
+fn wallpaper_layer(builder: *scene.Builder, texture: scene.TextureId, width: f32, height: f32, logical_h: f32) -> err {
+    try scene.push(builder, scene.Command { Image: scene.DrawImage { texture: texture, source: geometry.rect(0.0, 0.0, width, height), destination: geometry.rect(0.0, 0.0, 412.0, logical_h), opacity: 1.0 } })
+    ret ok
+}
+
+// The lock screen: clock, date, the Moon-phase card, a notification card and the dock.
+fn draw_lock(a: *mem.Arena, builder: *scene.Builder, faces: Faces, hour: usize, minute: usize, seconds: usize) -> err {
+    let white = paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }
+    let soft = paint.Color { red: 0.86, green: 0.87, blue: 0.9, alpha: 1.0 }
+    let glass = paint.Color { red: 0.1, green: 0.1, blue: 0.11, alpha: 0.62 }
+    let clock = join3(a, two_digits(a, hour), ":", two_digits(a, minute))
+    try centred(a, builder, faces.jost_bold, 104.0, clock, 206.0, 28.0, white)
+    let (month, day) = lunar.month_day(seconds)
+    let date_text = join3(a, lunar.month_name(month), " ", number_text(a, day))
+    try centred(a, builder, faces.jost, 30.0, date_text, 206.0, 150.0, white)
+    // The Moon phase and illumination, from the wall clock.
+    let age = lunar.moon_age(seconds)
+    try card(a, builder, 20.0, 232.0, 372.0, 82.0, 14.0, glass)
+    let (t1, e1) = text.draw(a, builder, faces.sora, 18.0, join3(a, "Moon Phase: ", lunar.moon_phase(age), ""), 36.0, 244.0, 340.0, 1u32, layout.Align.Start, white)
+    if e1 != ok { ret e1 }
+    let (t2, e2) = text.draw(a, builder, faces.grotesk, 15.0, join3(a, number_text(a, lunar.moon_percent(age)), "% illuminated", ""), 36.0, 276.0, 340.0, 1u32, layout.Align.Start, soft)
+    if e2 != ok { ret e2 }
+    // A notification.
+    try card(a, builder, 20.0, 324.0, 372.0, 112.0, 14.0, glass)
+    let (t3, e3) = text.draw(a, builder, faces.sora, 18.0, "NASA Artemis Mission Update", 36.0, 336.0, 340.0, 1u32, layout.Align.Start, white)
+    if e3 != ok { ret e3 }
+    let (t4, e4) = text.draw(a, builder, faces.exo, 15.0, "Orion Crew Module successfully tests communication from the Moon\xE2\x80\x99s far side", 36.0, 366.0, 340.0, 3u32, layout.Align.Start, soft)
+    if e4 != ok { ret e4 }
+    // The dock: camera, settings, files, photos (the icon indexes in icons.e).
+    try card(a, builder, 10.0, 756.0, 392.0, 118.0, 28.0, glass)
+    var d = 0usize
+    while d < 4usize {
+        var which = 4usize
+        if d == 1usize { which = 19usize }
+        if d == 2usize { which = 11usize }
+        if d == 3usize { which = 5usize }
+        let cx = 51.5 + f32(d) * 103.0
+        try svg.draw(a, builder, icons.app(which), geometry.rect(cx - 32.0, 770.0, 64.0, 64.0), white)
+        try centred(a, builder, faces.jost, 13.0, icons.app_label(which), cx, 842.0, white)
+        d += 1usize
+    }
+    ret ok
+}
+
+// The home screen: the status bar and every app icon with its name under it.
+fn draw_home(a: *mem.Arena, builder: *scene.Builder, faces: Faces, has_fonts: bool, clock: str, snap: [5]usize) -> err {
+    try status_bar(a, builder, faces, has_fonts, clock, snap)
+    let white = paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }
+    var idx = 0usize
+    while idx < icons.APP_COUNT {
+        let col = idx % 4usize
+        let row = idx / 4usize
+        let cx = 51.5 + f32(col) * 103.0
+        let y = 70.0 + f32(row) * 124.0
+        try svg.draw(a, builder, icons.app(idx), geometry.rect(cx - 30.0, y, 60.0, 60.0), white)
+        if has_fonts {
+            // A soft dark shadow under the name keeps it readable on bright terrain.
+            try centred(a, builder, faces.jost, 12.0, icons.app_label(idx), cx + 0.7, y + 66.8, paint.Color { red: 0.0, green: 0.0, blue: 0.0, alpha: 0.7 })
+            try centred(a, builder, faces.jost, 12.0, icons.app_label(idx), cx, y + 66.0, white)
+        }
+        idx += 1usize
+    }
+    ret ok
+}
+
+// Decode a PNG and upload it as a texture; its size comes back with it.
+fn load_wallpaper(a: *mem.Arena, renderer: *scene.Renderer, bytes: []const u8) -> (scene.TextureId, f32, f32, bool) {
+    var reader_state: io.SliceReader = zero
+    reader_state.data = bytes
+    reader_state.off = 0usize
+    let (decoded, decode_error) = png.decode(a, io.slice_reader(&reader_state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
+    if decode_error != ok { ret (zero, 0.0, 0.0, false) }
+    let (view, view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
+    if view_error != ok { ret (zero, 0.0, 0.0, false) }
+    let (texture, upload_error) = scene.upload_image(renderer, view)
+    if upload_error != ok { ret (zero, 0.0, 0.0, false) }
+    ret (texture, f32(decoded.width), f32(decoded.height), true)
 }
 
 // Read the five-word snapshot: battery, Wi-Fi, cellular, wall-clock nanoseconds, notification count.
@@ -122,19 +260,22 @@ fn read_snapshot(into: *[5]usize) {
     *into = words
 }
 
-// Decode a PNG and push it as the full-screen wallpaper (covering the logical width and height).
-fn place_wallpaper(a: *mem.Arena, renderer: *scene.Renderer, builder: *scene.Builder, bytes: []const u8, logical_h: f32) -> bool {
-    var reader_state: io.SliceReader = zero
-    reader_state.data = bytes
-    reader_state.off = 0usize
-    let (decoded, decode_error) = png.decode(a, io.slice_reader(&reader_state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
-    if decode_error != ok { ret false }
-    let (view, view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
-    if view_error != ok { ret false }
-    let (texture, upload_error) = scene.upload_image(renderer, view)
-    if upload_error != ok { ret false }
-    let pushed = scene.push(builder, scene.Command { Image: scene.DrawImage { texture: texture, source: geometry.rect(0.0, 0.0, f32(decoded.width), f32(decoded.height)), destination: geometry.rect(0.0, 0.0, 412.0, logical_h), opacity: 1.0 } })
-    ret pushed == ok
+// Compile `list` as a scene of its own and draw it into the window, then present it.
+fn show(renderer: *scene.Renderer, w: *window.Window, drawable: scene.Target, list: scene.DisplayList) -> bool {
+    let (scene_id, compile_error) = scene.compile(renderer, list)
+    if compile_error != ok {
+        say("shell compile failed\n")
+        ret false
+    }
+    if scene.render(renderer, scene_id, drawable, geometry.Size { width: f32(os.SURFACE_W), height: f32(os.SURFACE_H) }) != ok {
+        say("shell render failed\n")
+        ret false
+    }
+    if window.request_frame(w) != ok {
+        say("shell present failed\n")
+        ret false
+    }
+    ret true
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -159,32 +300,43 @@ fn main(a: *mem.Arena, args: []str) -> err {
         say("shell queue failed\n")
         ret ok
     }
-    let (renderer_value, renderer_error) = scene.renderer(a, device, q, 1u32, 1u32)
+    let (renderer_value, renderer_error) = scene.renderer(a, device, q, 2u32, 1u32)
     if renderer_error != ok {
         say("shell renderer failed\n")
         ret ok
     }
     var renderer = renderer_value
-    let (builder_value, builder_error) = scene.builder(a, 4096usize)
-    if builder_error != ok { ret builder_error }
-    var builder = builder_value
-    // Everything below is laid out in dp: 412 across, the panel's 1280 pixels (a 3.1x density).
-    let scale = f32(os.SURFACE_W) / 412.0
-    let logical_h = f32(os.SURFACE_H) / scale
-    let save: scene.Command = .Save
-    try scene.push(&builder, save)
-    try scene.push(&builder, scene.Command { Transform: geometry.transform_scale(scale, scale) })
-    // The wallpaper: the loader process read a PNG from the C106 filesystem and sends it here (a
-    // length word, then a word per byte). It is decoded and drawn scaled to cover; with no wallpaper
-    // (an absent or failed loader answers with a length no PNG reaches) the backdrop is a solid fill.
+    // The fonts, handed in as args[2..6].
+    var faces: Faces = zero
+    var has_fonts = false
+    if args.len >= 7usize {
+        let (f1, r1) = text.register(&renderer, 1u32, args[2usize])
+        let (f2, r2) = text.register(&renderer, 2u32, args[3usize])
+        let (f3, r3) = text.register(&renderer, 3u32, args[4usize])
+        let (f4, r4) = text.register(&renderer, 4u32, args[5usize])
+        let (f5, r5) = text.register(&renderer, 5u32, args[6usize])
+        if r1 == ok && r2 == ok && r3 == ok && r4 == ok && r5 == ok {
+            faces = Faces { jost_bold: f1, jost: f2, sora: f3, grotesk: f4, exo: f5 }
+            has_fonts = true
+        }
+    }
+    say("shell fonts ")
+    if has_fonts { say("ok\n") } else { say("absent\n") }
+    // The wallpaper: args[1] if the kernel handed one, else a PNG the filesystem loader streams over
+    // slot 5 (a length word, then a word per byte), else nothing.
     var wallpapered = false
-    // From an initrd entry the kernel mapped in (args[1], read in place), else from the filesystem
-    // loader, which streams a small PNG over slot 5.
+    var wall_texture: scene.TextureId = zero
+    var wall_w = 0.0f32
+    var wall_h = 0.0f32
     if args.len >= 2usize {
         say("shell wallpaper bytes ")
         say_num(args[1usize].len)
         say("\n")
-        wallpapered = place_wallpaper(a, &renderer, &builder, args[1usize], logical_h)
+        let (texture, tw, th, loaded) = load_wallpaper(a, &renderer, args[1usize])
+        wall_texture = texture
+        wall_w = tw
+        wall_h = th
+        wallpapered = loaded
     } else {
         let wall_len = os.recv(WALL_FROM, NO_SLOT)
         if wall_len > 0usize && wall_len <= 4096usize {
@@ -195,10 +347,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 wall_bytes[got] = u8(os.recv(WALL_FROM, NO_SLOT))
                 got += 1usize
             }
-            wallpapered = place_wallpaper(a, &renderer, &builder, wall_bytes, logical_h)
+            let (texture, tw, th, loaded) = load_wallpaper(a, &renderer, wall_bytes)
+            wall_texture = texture
+            wall_w = tw
+            wall_h = th
+            wallpapered = loaded
         }
     }
-    if !wallpapered { fill(&builder, 0.0, 0.0, 412.0, logical_h, 0.09, 0.11, 0.18) }
     say("shell wallpaper ")
     if wallpapered && args.len >= 2usize {
         say("from initrd\n")
@@ -207,64 +362,85 @@ fn main(a: *mem.Arena, args: []str) -> err {
     } else {
         say("fallback\n")
     }
-    try draw_launcher(a, &builder)
-    // Live status in the top bar, from the C111 status service: subscribe, post a notification, read
-    // the snapshot, then stop the service (this shell is its only client).
+    // Live status, from the C111 status service: subscribe, post a notification, read the snapshot,
+    // then stop the service (this shell is its only client).
     var snap: [5]usize = zero
     let subscribed = os.send(STATUS_REQ, OP_SUBSCRIBE, NO_SLOT)
     read_snapshot(&snap)
     let posted = os.send(STATUS_REQ, OP_POST, NO_SLOT)
     read_snapshot(&snap)
     let stopped = os.send(STATUS_REQ, OP_QUIT, NO_SLOT)
-    let bright = paint.Color { red: 0.91, green: 0.92, blue: 0.94, alpha: 1.0 }
-    let amber = paint.Color { red: 0.88, green: 0.70, blue: 0.42, alpha: 1.0 }
-    // Glyph order in icons.bar: battery 0, bell 1, cell 2, moon 3, wifi 4.
-    try status_glyph(a, &builder, 0usize, 380.0, (snap[0usize] & PRESENT) != 0usize, bright)
-    try status_glyph(a, &builder, 4usize, 358.0, (snap[1usize] & PRESENT) != 0usize, bright)
-    try status_glyph(a, &builder, 2usize, 336.0, (snap[2usize] & PRESENT) != 0usize, bright)
-    try status_glyph(a, &builder, 1usize, 314.0, snap[4usize] > 0usize, amber)
+    var seconds = 0usize
     var hour = 0usize
     var minute = 0usize
     if snap[3usize] > 0usize {
-        let day = (snap[3usize] / 1000000000usize) % 86400usize
+        seconds = snap[3usize] / 1000000000usize
+        let day = seconds % 86400usize
         hour = day / 3600usize
         minute = (day % 3600usize) / 60usize
     }
-    let font: [50]u8 = [50]u8{ 7u8, 5u8, 5u8, 5u8, 7u8, 2u8, 6u8, 2u8, 2u8, 7u8, 7u8, 1u8, 7u8, 4u8, 7u8, 7u8, 1u8, 7u8, 1u8, 7u8, 5u8, 5u8, 7u8, 1u8, 1u8, 7u8, 4u8, 7u8, 1u8, 7u8, 7u8, 4u8, 7u8, 5u8, 7u8, 7u8, 1u8, 2u8, 2u8, 2u8, 7u8, 5u8, 7u8, 5u8, 7u8, 7u8, 5u8, 7u8, 1u8, 7u8 }
-    draw_digit(&builder, font[0usize..], 16.0, 7.0, hour / 10usize, 3.0)
-    draw_digit(&builder, font[0usize..], 28.0, 7.0, hour % 10usize, 3.0)
-    fill(&builder, 40.0, 11.0, 3.0, 3.0, 0.85, 0.88, 0.95)
-    fill(&builder, 40.0, 17.0, 3.0, 3.0, 0.85, 0.88, 0.95)
-    draw_digit(&builder, font[0usize..], 46.0, 7.0, minute / 10usize, 3.0)
-    draw_digit(&builder, font[0usize..], 58.0, 7.0, minute % 10usize, 3.0)
-    let restore: scene.Command = .Restore
-    try scene.push(&builder, restore)
-    let list = scene.finish(&builder)
-    let (scene_id, compile_error) = scene.compile(&renderer, list)
-    if compile_error != ok {
-        say("shell compile failed\n")
-        ret ok
+    let clock = join3(a, two_digits(a, hour), ":", two_digits(a, minute))
+    let scale = f32(os.SURFACE_W) / 412.0
+    let logical_h = f32(os.SURFACE_H) / scale
+    let ground = paint.Color { red: 0.09, green: 0.11, blue: 0.18, alpha: 1.0 }
+
+    // Tell the compositor this app answers every routed event with a frame signal or a 0, so it can
+    // take later frames after it starts routing input (value 2 on the frame endpoint).
+    let announced = os.send(1usize, 2usize, NO_SLOT)
+
+    // The lock screen, when there are fonts to draw it with.
+    var locked = false
+    if has_fonts {
+        let (builder_value, builder_error) = scene.builder(a, 4096usize)
+        if builder_error != ok { ret builder_error }
+        var builder = builder_value
+        let save: scene.Command = .Save
+        try scene.push(&builder, save)
+        try scene.push(&builder, scene.Command { Transform: geometry.transform_scale(scale, scale) })
+        if wallpapered { try wallpaper_layer(&builder, wall_texture, wall_w, wall_h, logical_h) } else { try fill(&builder, 0.0, 0.0, 412.0, logical_h, ground) }
+        try draw_lock(a, &builder, faces, hour, minute, seconds)
+        let restore: scene.Command = .Restore
+        try scene.push(&builder, restore)
+        if !show(&renderer, &w, drawable, scene.finish(&builder)) { ret ok }
+        locked = true
+        say("shell lock presented\n")
+        let age = lunar.moon_age(seconds)
+        say("shell moon ")
+        say(lunar.moon_phase(age))
+        say(" ")
+        say_num(lunar.moon_percent(age))
+        say("\n")
     }
-    let render_error = scene.render(&renderer, scene_id, drawable, geometry.Size { width: f32(os.SURFACE_W), height: f32(os.SURFACE_H) })
-    if render_error != ok {
-        say("shell render failed\n")
-        ret ok
-    }
-    if window.request_frame(&w) != ok {
-        say("shell present failed\n")
-        ret ok
-    }
-    say("shell presented\n")
     say("shell status ")
-    say2(hour)
+    say_num(hour)
     say(":")
-    say2(minute)
+    say_num(minute)
     say("\n")
     say("shell status service notes ")
     say_num(snap[4usize])
     say("\n")
-    // Live input: the compositor routes each event here (slot 2). The first key-down is a tap on an
-    // icon -- launch an app as a process, reap it, and return Home. Keep reading to the sentinel.
+
+    // The home screen, drawn at once when there is no lock screen, else on the first key.
+    var home_shown = false
+    if !locked {
+        let (builder_value, builder_error) = scene.builder(a, 4096usize)
+        if builder_error != ok { ret builder_error }
+        var builder = builder_value
+        let save: scene.Command = .Save
+        try scene.push(&builder, save)
+        try scene.push(&builder, scene.Command { Transform: geometry.transform_scale(scale, scale) })
+        if wallpapered { try wallpaper_layer(&builder, wall_texture, wall_w, wall_h, logical_h) } else { try fill(&builder, 0.0, 0.0, 412.0, logical_h, ground) }
+        try draw_home(a, &builder, faces, has_fonts, clock, snap)
+        let restore: scene.Command = .Restore
+        try scene.push(&builder, restore)
+        if !show(&renderer, &w, drawable, scene.finish(&builder)) { ret ok }
+        home_shown = true
+        say("shell presented\n")
+    }
+
+    // Live input: the compositor routes each event here (slot 2). A key-down is a tap: on the lock
+    // screen it unlocks to the home screen; on the home screen it launches an app as a process,
+    // reaps it, and returns Home. Keep reading to the sentinel.
     var launched = false
     var listening = true
     while listening {
@@ -274,17 +450,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
             listening = false
         } else {
             let value = word & LOW32
-            if etype == EV_KEY && value == 1usize && !launched {
-                launched = true
-                say("shell tap\n")
-                let child = os.launch(APP_INDEX)
-                say("shell launched app\n")
-                let code = os.reap(child)
-                say("shell app code ")
-                say_num(code)
-                say("\n")
-                say("shell home\n")
+            var framed = false
+            if etype == EV_KEY && value == 1usize {
+                if !home_shown {
+                    let (builder_value, builder_error) = scene.builder(a, 4096usize)
+                    if builder_error != ok { ret builder_error }
+                    var builder = builder_value
+                    let save: scene.Command = .Save
+                    try scene.push(&builder, save)
+                    try scene.push(&builder, scene.Command { Transform: geometry.transform_scale(scale, scale) })
+                    if wallpapered { try wallpaper_layer(&builder, wall_texture, wall_w, wall_h, logical_h) } else { try fill(&builder, 0.0, 0.0, 412.0, logical_h, ground) }
+                    try draw_home(a, &builder, faces, has_fonts, clock, snap)
+                    let restore: scene.Command = .Restore
+                    try scene.push(&builder, restore)
+                    if !show(&renderer, &w, drawable, scene.finish(&builder)) { ret ok }
+                    home_shown = true
+                    framed = true
+                    say("shell unlocked\n")
+                    say("shell home presented\n")
+                } else if !launched {
+                    launched = true
+                    say("shell tap\n")
+                    let child = os.launch(APP_INDEX)
+                    say("shell launched app\n")
+                    let code = os.reap(child)
+                    say("shell app code ")
+                    say_num(code)
+                    say("\n")
+                    say("shell home\n")
+                }
             }
+            // The compositor waits for one answer per routed event (lockstep, announced above): the
+            // frame signal if this event drew a frame, else a 0.
+            if !framed { let answered = os.send(1usize, 0usize, NO_SLOT) }
         }
     }
     say("shell done\n")

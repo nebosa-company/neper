@@ -92,7 +92,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     say("comp ready\n")
-    let frame = os.recv(APP, NO_SLOT)
+    // An app that answers every routed event (the shell, D2204) first sends 2 on its frame endpoint;
+    // after that the compositor takes one frame signal or 0 per event it forwards, so frames after
+    // the first are composited too. Any other app sends 1 and gets the single-frame behaviour.
+    var lockstep = false
+    var frame = os.recv(APP, NO_SLOT)
+    if frame == 2usize {
+        lockstep = true
+        frame = os.recv(APP, NO_SLOT)
+    }
     composite(gpu.fb, gpu.width, gpu.height, SURFACE_X, SURFACE_Y)
     // Flush only the app's surface rectangle -- the damage -- not the whole display.
     let present_error = virtio.gpu_present_rect(gpu, SURFACE_X, SURFACE_Y, SURFACE_W, SURFACE_H)
@@ -107,7 +115,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while routing {
         let event = os.recv(INPUT, NO_SLOT)
         let forwarded = os.send(FOCUS, event, NO_SLOT)
-        if (event >> 48usize) == SENTINEL { routing = false }
+        if (event >> 48usize) == SENTINEL {
+            routing = false
+        } else if lockstep {
+            let answer = os.recv(APP, NO_SLOT)
+            if answer == 1usize {
+                composite(gpu.fb, gpu.width, gpu.height, SURFACE_X, SURFACE_Y)
+                let next_error = virtio.gpu_present_rect(gpu, SURFACE_X, SURFACE_Y, SURFACE_W, SURFACE_H)
+                if next_error == ok { say("comp composited again\n") }
+            }
+        }
     }
     say("comp routed input\n")
     // Hold the composited scanout up so a screendump catches it before the kernel powers off.

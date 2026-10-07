@@ -9409,15 +9409,18 @@ if ($neperosQemu) {
     $shellDiskStream = [IO.File]::Create($shellDisk); $shellDiskStream.SetLength(1MB); $shellDiskStream.Close()
     $shellBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $shellArchive keyboard (Join-Path $testBuild 'shell.serial') 55135 'compositor bigarena unified' 'shell home' $shellDisk 2>&1) -join "`n"
     if ($shellBoot -notmatch '(?s)shell wallpaper from fs.*shell presented.*shell status .*shell status service notes 1.*comp composited flushed.*shell tap.*shell launched app.*shell app code 5.*shell home' -or $shellBoot -notmatch 'tap app ran' -or $shellBoot -notmatch 'status server done' -or $shellBoot -notmatch 'wall loader from fs' -or $shellBoot -notmatch 'fs server done') { throw "NeperOS unified shell did not host the launcher, show status and launch an app on a tap: $shellBoot" }
-    # (D2202) The Neper crater wallpaper: an eighth archive entry, the PNG resampled offline to the panel
-    # (scripts/make_wallpaper.py). The kernel maps it into the shell, which reads it as args[1], decodes
-    # it and draws it 1:1; the filesystem loader and server are not started for this archive.
-    $wallpaperPng = Join-Path $repo 'neperos\assets\wallpaper\neper-crater.png'
+    # (D2202, D2204) The lunar shell: entry 7 is the Neper crater wallpaper (a PNG resampled offline to
+    # the panel, scripts/make_wallpaper.py) and entries 8-12 the fonts (scripts/make_fonts.py: Jost
+    # Bold, Jost Regular, Sora Medium, Space Grotesk Regular, Exo 2 Regular). The kernel maps them
+    # into the shell, which reads them as args[1..6]; the filesystem loader and server are not started.
+    # Two key presses: the first unlocks the lock screen to the home screen (the compositor takes the
+    # second frame), the second launches an app.
+    $assets = Join-Path $repo 'neperos\assets'
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader $wallpaperPng
-    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS crater-wallpaper archive did not assemble' }
-    $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell home' 2>&1) -join "`n"
-    if ($craterBoot -notmatch '(?s)shell wallpaper bytes 1841605.*shell presented.*comp composited flushed.*shell tap.*shell app code 5.*shell home' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS shell did not show the crater wallpaper: $craterBoot" }
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf')
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
+    $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
+    if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }
 

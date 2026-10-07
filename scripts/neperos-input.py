@@ -69,7 +69,7 @@ def main():
         args[args.index("-device"):args.index("-device")] = ["-device", os.environ.get("NEPEROS_GPU", "virtio-gpu-pci")]
     # An optional raw disk image (argv[9]) behind a virtio-blk device, for the unified shell's
     # filesystem wallpaper (D2196).
-    if len(sys.argv) > 9:
+    if len(sys.argv) > 9 and sys.argv[9] != "-":
         args += ["-drive", "file=%s,format=raw,if=none,id=blk0" % sys.argv[9],
                  "-device", "virtio-blk-pci,disable-legacy=on,drive=blk0"]
     proc = subprocess.Popen(args)
@@ -88,10 +88,13 @@ def main():
         if not wait_for(serial, "input ready", 60):
             raise SystemExit("input server not ready")
         if device == "keyboard":
-            qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
-                {"type": "key", "data": {"down": True, "key": {"type": "qcode", "data": "a"}}}]}})
-            qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
-                {"type": "key", "data": {"down": False, "key": {"type": "qcode", "data": "a"}}}]}})
+            # argv[10]: how many key presses to send (default 1); the unified shell takes two, one to
+            # unlock the lock screen and one to launch an app (D2204).
+            for press in range(int(sys.argv[10]) if len(sys.argv) > 10 else 1):
+                qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
+                    {"type": "key", "data": {"down": True, "key": {"type": "qcode", "data": "a"}}}]}})
+                qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
+                    {"type": "key", "data": {"down": False, "key": {"type": "qcode", "data": "a"}}}]}})
         else:
             qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
                 {"type": "abs", "data": {"axis": "x", "value": 16384}},
@@ -99,7 +102,7 @@ def main():
                 {"type": "btn", "data": {"down": True, "button": "left"}}]}})
             qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
                 {"type": "btn", "data": {"down": False, "button": "left"}}]}})
-        wait_for(serial, done_needle, 20)
+        wait_for(serial, done_needle, 120)
         sys.stdout.write(serial_text(serial))
         try:
             qmp(sock, {"execute": "quit"})

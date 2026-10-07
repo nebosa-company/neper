@@ -15,6 +15,10 @@ out_path = os.path.join(root, "neperos", "src", "icons.e")
 APP_ORDER = ["phone", "messages", "mail", "browser", "camera", "gallery", "maps", "compass", "clock", "calculator", "tasks", "files", "chat", "meet", "recorder", "translate", "steps", "lunatris", "mfa", "settings"]
 
 
+# The name each app shows under its icon (the file name where it is not the right word).
+LABELS = {"gallery": "Photos", "mfa": "Secure"}
+
+
 def load(kind):
     items = []
     folder = os.path.join(assets, kind)
@@ -56,5 +60,12 @@ for kind, prefix in (("apps", "APP"), ("topbar", "BAR")):
     lines.append('    ret ""')
     lines.append("}")
     lines.append("")
+    if kind == "apps":
+        lines.append("fn app_label(index: usize) -> str {")
+        for i, (name, _) in enumerate(items):
+            lines.append('    if index == %dusize { ret "%s" }' % (i, LABELS.get(name, name.capitalize())))
+        lines.append('    ret ""')
+        lines.append("}")
+        lines.append("")
 open(out_path, "w", encoding="utf-8", newline="\n").write("\n".join(lines))
 print("wrote", out_path, len(lines), "lines")

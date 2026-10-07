@@ -73,12 +73,13 @@ var driver_pool_bytes: usize = 131072usize
 // a non-zero value maps a separate EL0 region of that size and points the program's arena at it,
 // for the e.ui/e.gpu stack whose allocations dwarf 64 KB. Set before a start, reset to 0 after.
 var driver_arena_bytes: usize = 0usize
-// (D2202) An initrd file handed to the next process started: its physical address and length. The
-// kernel maps those pages into the process and passes them as its second argument (args[1] is the
-// file's bytes, read in place); zero length means nothing to hand over. (The aux area is no use for
-// this: it sits at a fixed offset that a large program image would cover.)
-var aux_extra_pa: usize = 0usize
-var aux_extra_len: usize = 0usize
+// (D2202, D2204) Initrd files handed to the next process started: archive entries extra_first ..
+// extra_first + extra_count - 1. The kernel maps those pages into the process and passes each as an
+// argument after its name (args[1] is the first file's bytes, read in place); zero means nothing to
+// hand over. (The aux area is no use for this: it sits at a fixed offset that a large program image
+// would cover.)
+var extra_first: usize = 0usize
+var extra_count: usize = 0usize
 
 // (D2166) Give `space` a large arena in its own mapped EL0 region (identity VA=PA) when
 // driver_arena_bytes is set; otherwise leave vm.create's in-window arena. The updated space comes
@@ -407,6 +408,35 @@ fn setup_args(space: vm.Space, name: str, kernel_pointer: usize, hostile: bool) 
     ret (vm.address(arg_off), count)
 }
 
+// The arguments of a process handed initrd files: its name, then each file as an argument whose
+// "string" is the file itself (its physical address and length), with the file's pages mapped
+// into the process at that address.
+fn setup_args_files(space: vm.Space, name: str) -> (usize, usize, err) {
+    let count = 1usize + extra_count
+    let arg_off = space.arg_off
+    let strings = arg_off + count * 16usize
+    var i = 0usize
+    while i < name.len {
+        vm.put_byte(space, strings + i, name[i])
+        i += 1usize
+    }
+    vm.put_word(space, arg_off, vm.address(strings))
+    vm.put_word(space, arg_off + 8usize, name.len)
+    var file = 0usize
+    while file < extra_count {
+        let pa = archive_base + archive_offset[extra_first + file]
+        let len = archive_length[extra_first + file]
+        vm.put_word(space, arg_off + (1usize + file) * 16usize, pa)
+        vm.put_word(space, arg_off + (1usize + file) * 16usize + 8usize, len)
+        let first_page = pa & ~4095usize
+        let last_page = (pa + len + 4095usize) & ~4095usize
+        let map_error = vm.map_range_el0(kernel_arena, space.ttbr, first_page, last_page - first_page, false)
+        if map_error != ok { ret (0usize, 0usize, map_error) }
+        file += 1usize
+    }
+    ret (vm.address(arg_off), count, ok)
+}
+
 // One thread from the initrd image, its arguments set up, added to the scheduler, and its
 // capability space granted: a console capability in slot 0 when `console`, and an endpoint
 // capability on endpoint 0 in slot 1 with `endpoint_rights` (none, send or receive). A
@@ -578,21 +608,15 @@ fn start_process(image_addr: usize, image_len: usize, name: str) -> (usize, err)
     if arena_error != ok { ret (0usize, arena_error) }
     var arg_table = 0usize
     var arg_count = 0usize
-    if aux_extra_len == 0usize {
+    if extra_count == 0usize {
         let (table, count) = setup_args(space, name, 0usize, false)
         arg_table = table
         arg_count = count
     } else {
-        // A second argument whose "string" is the file itself (its physical address and length), so
-        // the process reads it as args[1] with no copy.
-        let (table, count) = setup_args(space, name, aux_extra_pa, true)
+        let (table, count, files_error) = setup_args_files(space, name)
+        if files_error != ok { ret (0usize, files_error) }
         arg_table = table
         arg_count = count
-        vm.put_word(space, space.arg_off + 24usize, aux_extra_len)
-        let first_page = aux_extra_pa & ~4095usize
-        let last_page = (aux_extra_pa + aux_extra_len + 4095usize) & ~4095usize
-        let map_extra_error = vm.map_range_el0(kernel_arena, space.ttbr, first_page, last_page - first_page, false)
-        if map_extra_error != ok { ret (0usize, map_extra_error) }
     }
     let child = thread.add(space, name, arg_table, arg_count)
     if child == thread.MAX_THREADS { ret (0usize, vm.NoSpace) }
@@ -874,11 +898,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // (D2202) An eighth archive entry is the wallpaper (a PNG): the shell gets it mapped, with
         // it as args[1].
         if has_word(bootargs, "unified") && archive_count >= 8usize {
-            aux_extra_pa = archive_base + archive_offset[7usize]
-            aux_extra_len = archive_length[7usize]
+            extra_first = 7usize
+            extra_count = archive_count - 7usize
         }
         let (comp_app, comp_app_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "app")
-        aux_extra_len = 0usize
+        extra_count = 0usize
         driver_arena_bytes = 0usize
         if comp_app_error != ok { ret comp_app_error }
         try vm.map_shared(a, thread.ttbr_of(comp_app), shared_phys, vm.SHARED_FRAME_PAGES)
