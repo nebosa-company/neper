@@ -37662,3 +37662,18 @@ wallpaper from the filesystem scaled to cover, labels and real app icons, the li
 top bar, presentation over the compositor, and tap-to-launch with Home. A module-scope `const X: f32`
 tripped the location-less E-TYPE-9999 the way a module-scope str or bool const does, so the layout
 constants are inline literals. C112 -> 0.2.
+
+## D2173 — C112: the launcher presented over the compositor
+
+The launcher reaches the display. neperos/src/launcher.e opens an e.ui.window -- the compositor's
+shared surface on NeperOS (D2169) -- renders the launcher's layout (the wallpaper, the top bar with
+status ticks and the 8x5 icon grid, the same scene as the D2172 offscreen fixture) through
+e.gfx.scene over the e.gpu CPU backend into the window, and presents it with window.request_frame,
+which hands the frame to os.window_present: a blit into the shared surface and a signal to the
+compositor. Wired as the app of a compositor boot, the compositor composites the launcher's surface
+and flushes it; the composited display matches a screendump golden 132a969b..., identical on QEMU
+8.2 (WSL) and 11.1 (Windows), and the serial shows `comp ready` / `launcher presented` / `comp
+composited flushed` / `launcher done` / clean power-off. This is the launcher's screendump-golden
+piece of the acceptance -- a visible launcher on the real display. Remaining for C112: a real PNG
+wallpaper from the filesystem scaled to cover, labels and real app icons, the live C111 status in the
+top bar, and a tap launching an app with Home returning to the launcher. C112 -> 0.4.

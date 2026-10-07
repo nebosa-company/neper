@@ -9249,6 +9249,19 @@ if ($neperosQemu) {
     $uiWinGolden = '08af9c12ba6349aee0402983945e112eb6283d45b218b7307fb5c8fb1b2de18f'
     $uiWinDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $uiWinArchive (Join-Path $testBuild 'uiwin.ppm') 55130 'compositor bigarena' 2>&1) -join "`n"
     if ($uiWinDump -notmatch "sha256 $uiWinGolden") { throw "NeperOS e.ui window over the compositor did not match the golden: $uiWinDump" }
+    # (D2173, C112) The launcher presented over the compositor: launcher.e opens an e.ui window (the
+    # shared surface), renders the launcher layout (wallpaper, top bar, 8x5 grid) and presents it; the
+    # compositor composites it to the display. The composited screendump matches a golden identical on
+    # QEMU 8.2 and 11.1 -- the launcher on the real display.
+    $launcherDisp = Join-Path $testBuild 'launcher.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\launcher.e') $repo aarch64 neperos $launcherDisp | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS launcher display app did not build' }
+    $launcherDispArchive = Join-Path $testBuild 'launcher-disp.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $launcherDispArchive $comp $launcherDisp
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS launcher display archive did not assemble' }
+    $launcherDispGolden = '132a969b792c6b9f8935c316e3f3fe58481f857fe1dba954b44cbd01b4d97f0f'
+    $launcherDispDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $launcherDispArchive (Join-Path $testBuild 'launcher-disp.ppm') 55132 'compositor bigarena' 2>&1) -join "`n"
+    if ($launcherDispDump -notmatch "sha256 $launcherDispGolden") { throw "NeperOS launcher over the compositor did not match the golden: $launcherDispDump" }
     # (D2160, C109) virtio-input over IPC: the input server alone holds the device and pushes each
     # event to a client over an endpoint, woken by the device's notification. The fixture injects a
     # key (keyboard) and a tap (tablet) through QMP and asserts the stream the client receives.

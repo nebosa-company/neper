@@ -9103,6 +9103,19 @@ greeting"
         *"sha256 $uiwin_golden"*) ;;
         *) printf '%s\n' "NeperOS e.ui window over the compositor did not match the golden: $uiwin_dump" >&2; exit 1 ;;
     esac
+    # (D2173, C112) The launcher presented over the compositor: launcher.e opens an e.ui window (the
+    # shared surface), renders the launcher layout (wallpaper, top bar, 8x5 grid) and presents it; the
+    # compositor composites it to the display. Screendump golden identical on QEMU 8.2 and 11.1.
+    launcher_disp_img="$test_build/launcher.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/launcher.e" "$repo" aarch64 neperos "$launcher_disp_img")" = 'executable written' ]
+    launcher_disp_archive="$test_build/launcher-disp.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$launcher_disp_archive" "$comp_img" "$launcher_disp_img"
+    launcher_disp_golden='132a969b792c6b9f8935c316e3f3fe58481f857fe1dba954b44cbd01b4d97f0f'
+    launcher_disp_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_image" "$launcher_disp_archive" "$test_build/launcher-disp.ppm" 55132 'compositor bigarena' 2>&1)
+    case "$launcher_disp_dump" in
+        *"sha256 $launcher_disp_golden"*) ;;
+        *) printf '%s\n' "NeperOS launcher over the compositor did not match the golden: $launcher_disp_dump" >&2; exit 1 ;;
+    esac
     # (D2160, C109) virtio-input over IPC: the input server pushes each event to a client over an
     # endpoint, woken by the device notification; the fixture injects a key and a tap and asserts
     # the stream the client receives.
