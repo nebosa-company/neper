@@ -665,6 +665,34 @@ fn gpu_begin(device: Device) -> (Gpu, err) {
     ret (Gpu { ring: ring, cmd: cmd, resp: resp, fb: fb, width: width, height: height }, ok)
 }
 
+// Transfer and flush only a damaged rectangle (D2163): the sub-rect [x,y,w,h] of the framebuffer,
+// its backing offset the rect's first pixel, so a small change costs a small transfer. The rows are
+// read with the resource's full width as stride, so the rect lands where it belongs on the screen.
+fn gpu_present_rect(gpu: Gpu, x: usize, y: usize, w: usize, h: usize) -> err {
+    gpu_zero(gpu.cmd, 56usize)
+    os.store32(gpu.cmd, GPU_CMD_TRANSFER_TO_HOST_2D)
+    os.store32(gpu.cmd + 24usize, u32(x))
+    os.store32(gpu.cmd + 28usize, u32(y))
+    os.store32(gpu.cmd + 32usize, u32(w))
+    os.store32(gpu.cmd + 36usize, u32(h))
+    os.store64(gpu.cmd + 40usize, u64((y * gpu.width + x) * 4usize))
+    os.store32(gpu.cmd + 48usize, GPU_RESOURCE)
+    let transfer_error = gpu_cmd(gpu.ring, gpu.cmd, gpu.resp, 56usize, 24usize)
+    if transfer_error != ok { ret transfer_error }
+    if os.load32(gpu.resp) != GPU_RESP_OK_NODATA { ret GpuError }
+    gpu_zero(gpu.cmd, 48usize)
+    os.store32(gpu.cmd, GPU_CMD_RESOURCE_FLUSH)
+    os.store32(gpu.cmd + 24usize, u32(x))
+    os.store32(gpu.cmd + 28usize, u32(y))
+    os.store32(gpu.cmd + 32usize, u32(w))
+    os.store32(gpu.cmd + 36usize, u32(h))
+    os.store32(gpu.cmd + 40usize, GPU_RESOURCE)
+    let flush_error = gpu_cmd(gpu.ring, gpu.cmd, gpu.resp, 48usize, 24usize)
+    if flush_error != ok { ret flush_error }
+    if os.load32(gpu.resp) != GPU_RESP_OK_NODATA { ret GpuError }
+    ret ok
+}
+
 // Transfer the painted framebuffer to the host resource and flush it to the screen (D2161).
 fn gpu_present(gpu: Gpu) -> err {
     gpu_zero(gpu.cmd, 56usize)

@@ -18,6 +18,9 @@ const INPUT: usize = 3usize
 const FOCUS: usize = 4usize
 const NO_SLOT: usize = 99usize
 const SENTINEL: usize = 65535usize
+// The app surface's position on the display, where it is composited and damage-flushed.
+const SURFACE_X: usize = 400usize
+const SURFACE_Y: usize = 200usize
 
 fn say(text: str) {
     let (written, write_error) = os.write(os.stdout(), text)
@@ -75,10 +78,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     fill_rect(gpu.fb, gpu.width, 0usize, 0usize, gpu.width, gpu.height, 30u8, 30u8, 45u8)
+    // Present the background once in full, then every surface update is a damage-only flush.
+    let background_error = virtio.gpu_present(gpu)
+    if background_error != ok {
+        say("comp present failed\n")
+        ret ok
+    }
     say("comp ready\n")
     let frame = os.recv(APP, NO_SLOT)
-    composite(gpu.fb, gpu.width, 400usize, 200usize)
-    let present_error = virtio.gpu_present(gpu)
+    composite(gpu.fb, gpu.width, SURFACE_X, SURFACE_Y)
+    // Flush only the app's surface rectangle -- the damage -- not the whole display.
+    let present_error = virtio.gpu_present_rect(gpu, SURFACE_X, SURFACE_Y, SURFACE_W, SURFACE_H)
     if present_error != ok {
         say("comp present failed\n")
         ret ok
@@ -93,5 +103,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if (event >> 48usize) == SENTINEL { routing = false }
     }
     say("comp routed input\n")
+    // Hold the composited scanout up so a screendump catches it before the kernel powers off.
+    var hold = 0usize
+    while hold < 2000000000usize { hold += 1usize }
     ret ok
 }

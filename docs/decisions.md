@@ -37465,3 +37465,21 @@ added to run.ps1 and run.sh. Remaining for C110: damage-only flush (a sub-rect r
 display), and the e.ui window backend over e.gfx.scene with fonts from the filesystem plus an e.ui
 sample matching its host render -- the large part, needing e.gpu's CPU backend, e.gfx.scene and e.ui
 on NeperOS.
+
+## D2164 — C110: damage-only flush, and an optional input server
+
+The compositor now flushes only the damaged rectangle. virtio.gpu_present_rect transfers and flushes
+a sub-rect [x,y,w,h] of the framebuffer -- the backing offset is the rect's first pixel and the rows
+are read with the resource's full width as stride, so a small change costs a small transfer. The
+compositor presents the background once in full (gpu_present), then every surface update is a
+gpu_present_rect of just the app's 256x256 rectangle; the final image is identical, so the C110
+compositor screendump golden (1e78b507...) is unchanged, now delivered through the damage path. Two
+robustness fixes made the one compositor binary serve both the screendump boot (no input) and the
+routing boot: the input server is optional -- started only when the archive has a third program and
+a virtio-input device is present, and the compositor's input/route endpoints are granted only then,
+so without input its ungranted receive returns the all-ones sentinel and it simply does not route;
+and the compositor holds the scanout up after flushing so the screendump catches it before the
+kernel powers off (the routing boot's harness quits earlier, so the hold is invisible there). Both
+verified on QEMU virt on both hosts. Remaining for C110: the e.ui window backend over e.gfx.scene
+with fonts from the filesystem and an e.ui sample matching its host render -- the large part needing
+e.gpu's CPU backend, e.gfx.scene and e.ui compiled for NeperOS.
