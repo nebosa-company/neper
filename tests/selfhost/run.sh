@@ -8965,6 +8965,24 @@ greeting"
         *"ui launcher hash $launcher_hash"*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS launcher layout did not match the host hash $launcher_hash: $launcher_boot" >&2; exit 1 ;;
     esac
+    # (D2177, C112) The launcher pages past 40 icons: ui_pages renders a 45-app launcher -- page 0
+    # shows icons 1..40, page 1 shows 41..45, each with a page-dot row. The two pages fold to two
+    # different hashes; the host renders the same pair, so the host hashes are the check.
+    pages_img="$test_build/ui_pages.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_pages.e" "$repo" aarch64 neperos "$pages_img")" = 'executable written' ]
+    pages_host="$test_build/pages_host"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_pages.e" "$repo" x64 linux "$pages_host")" = 'executable written' ]
+    chmod +x "$pages_host"
+    pages_host_out=$("$pages_host")
+    page0_hash=$(printf '%s\n' "$pages_host_out" | sed -n 's/^ui pages page 0 hash \([0-9]*\)$/\1/p')
+    page1_hash=$(printf '%s\n' "$pages_host_out" | sed -n 's/^ui pages page 1 hash \([0-9]*\)$/\1/p')
+    [ -n "$page0_hash" ] && [ -n "$page1_hash" ] || { printf '%s\n' 'host launcher paging printed no hashes' >&2; exit 1; }
+    [ "$page0_hash" != "$page1_hash" ] || { printf '%s\n' 'the launcher two pages rendered the same' >&2; exit 1; }
+    pages_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$pages_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+    case "$pages_boot" in
+        *"ui pages page 0 hash $page0_hash"*"ui pages page 1 hash $page1_hash"*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS launcher paging did not match the host hashes: $pages_boot" >&2; exit 1 ;;
+    esac
     # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
     # + a Writer) rather than the console primitive, so e.io and the e.os variant os.neperos.e run
     # unchanged on NeperOS. Started as program 0 of a one-program archive on the shell boot.

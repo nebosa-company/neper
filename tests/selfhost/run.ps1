@@ -9117,6 +9117,23 @@ if ($neperosQemu) {
     $launcherHash = $Matches[1]
     $launcherBoot = Invoke-NeperOS $neperosImage @('-initrd', $launcherImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
     if ($launcherBoot -notmatch "(?s)ui launcher hash $launcherHash.*neperos: exit 0x0000000000000000") { throw "NeperOS launcher layout did not match the host hash ${launcherHash}: $launcherBoot" }
+    # (D2177, C112) The launcher pages past 40 icons: ui_pages renders a 45-app launcher -- page 0
+    # shows icons 1..40, page 1 shows 41..45, each with a page-dot row. The two pages fold to two
+    # different hashes; the host renders the same pair, so the host hashes are the check.
+    $pagesImg = Join-Path $testBuild 'ui_pages.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_pages.e') $repo aarch64 neperos $pagesImg | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS launcher paging program did not build' }
+    $pagesHost = Join-Path $testBuild 'pages_host.exe'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_pages.e') $repo x64 windows $pagesHost | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the host launcher paging program did not build' }
+    $pagesHostOut = (& $pagesHost 2>&1) -join "`n"
+    if ($pagesHostOut -notmatch 'ui pages page 0 hash (\d+)') { throw "host launcher paging printed no page 0 hash: $pagesHostOut" }
+    $page0Hash = $Matches[1]
+    if ($pagesHostOut -notmatch 'ui pages page 1 hash (\d+)') { throw "host launcher paging printed no page 1 hash: $pagesHostOut" }
+    $page1Hash = $Matches[1]
+    if ($page0Hash -eq $page1Hash) { throw "the launcher's two pages rendered the same: $pagesHostOut" }
+    $pagesBoot = Invoke-NeperOS $neperosImage @('-initrd', $pagesImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+    if ($pagesBoot -notmatch "(?s)ui pages page 0 hash $page0Hash.*ui pages page 1 hash $page1Hash.*neperos: exit 0x0000000000000000") { throw "NeperOS launcher paging did not match the host hashes: $pagesBoot" }
     # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
     # and a Writer over it) rather than the console primitive directly, so e.io -- and the e.os
     # variant os.neperos.e it compiles against -- run unchanged on NeperOS. Started as program 0 of a

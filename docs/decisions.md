@@ -37734,3 +37734,14 @@ multi-block C106 files (server contiguous-block storage plus a client that strea
 512-byte handle buffer in os.neperos.e), which also unblocks the C113/C114 app text; the index labels
 render the label path correctly in the meantime. Remaining for C112: real-name labels over that font
 work, paging beyond 40 icons, and tap-to-launch with Home. C112 -> 0.85.
+
+## D2177 — C112: the launcher pages past 40 icons
+
+The 8x5 grid holds 40 icons; with more apps than that the launcher pages. neperos/src/ui_pages.e
+renders a 45-app launcher: page 0 shows icons 1..40, page 1 shows icons 41..45, each with a page-dot
+row at the bottom whose current dot is lit. It renders both pages through e.gfx.scene over the e.gpu
+CPU backend and folds each to a hash; the two differ (page 1 has five icons where page 0 has forty),
+and both are identical on the host and on NeperOS (QEMU 8.2 and 11.1), so the host's pair is the
+check. The page is chosen by which global indices (page * 40 + slot) fall below the app count, and
+the dot row draws ceil(count / 40) dots. C112 -> 0.9. Remaining: tap-to-launch with Home (the
+launch-and-return round trip) and the init program starting the launcher after boot.
