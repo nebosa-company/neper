@@ -9134,11 +9134,11 @@ if ($neperosQemu) {
     if ($page0Hash -eq $page1Hash) { throw "the launcher's two pages rendered the same: $pagesHostOut" }
     $pagesBoot = Invoke-NeperOS $neperosImage @('-initrd', $pagesImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
     if ($pagesBoot -notmatch "(?s)ui pages page 0 hash $page0Hash.*ui pages page 1 hash $page1Hash.*neperos: exit 0x0000000000000000") { throw "NeperOS launcher paging did not match the host hashes: $pagesBoot" }
-    # (D2179/D2180, C113; D2181/D2182, C114) The shell app faces: Clock (digital time on a card),
-    # Calculator (result display + 4x4 keypad), Tasks (a checklist with checkboxes) and Settings (rows
-    # with toggle switches) each render their UI through e.gfx.scene over the e.gpu CPU backend and
-    # fold the frame to a hash the host reproduces.
-    foreach ($appPair in @(@('clock_app', 'clock app'), @('calc_app', 'calc app'), @('tasks_app', 'tasks app'), @('settings_app', 'settings app'))) {
+    # (D2180, C113; D2181/D2182, C114) The shell app faces: Calculator (result display + 4x4 keypad),
+    # Tasks (a checklist with checkboxes) and Settings (rows with toggle switches) each render their UI
+    # through e.gfx.scene over the e.gpu CPU backend and fold the frame to a hash the host reproduces.
+    # (Clock is now live -- D2188 below -- so it is asserted on its serial, not a frame golden.)
+    foreach ($appPair in @(@('calc_app', 'calc app'), @('tasks_app', 'tasks app'), @('settings_app', 'settings app'))) {
         $appSrc = $appPair[0]
         $appTag = $appPair[1]
         $appImg = Join-Path $testBuild "$appSrc.img"
@@ -9153,6 +9153,14 @@ if ($neperosQemu) {
         $appBoot = Invoke-NeperOS $neperosImage @('-initrd', $appImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
         if ($appBoot -notmatch "(?s)$appTag hash $appHash.*neperos: exit 0x0000000000000000") { throw "NeperOS $appSrc did not match the host hash ${appHash}: $appBoot" }
     }
+    # (D2188, C113) The Clock app shows the LIVE time: clock_app reads the wall clock through e.time
+    # (os.clock -> PL031 RTC) and renders the current HH:MM, then prints `clock live HH:MM`. The frame
+    # varies with the clock, so it is asserted on the serial (a valid 24h time) rather than a golden.
+    $clockImg = Join-Path $testBuild 'clock_app.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\clock_app.e') $repo aarch64 neperos $clockImg | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS clock_app did not build' }
+    $clockBoot = Invoke-NeperOS $neperosImage @('-initrd', $clockImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+    if ($clockBoot -notmatch '(?s)clock live [0-2][0-9]:[0-5][0-9].*clock app hash .*neperos: exit 0x0000000000000000') { throw "NeperOS clock_app did not render a live time: $clockBoot" }
     # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
     # and a Writer over it) rather than the console primitive directly, so e.io -- and the e.os
     # variant os.neperos.e it compiles against -- run unchanged on NeperOS. Started as program 0 of a

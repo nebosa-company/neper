@@ -8983,11 +8983,11 @@ greeting"
         *"ui pages page 0 hash $page0_hash"*"ui pages page 1 hash $page1_hash"*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS launcher paging did not match the host hashes: $pages_boot" >&2; exit 1 ;;
     esac
-    # (D2179/D2180, C113; D2181/D2182, C114) The shell app faces: Clock (digital time on a card),
-    # Calculator (result display + 4x4 keypad), Tasks (a checklist with checkboxes) and Settings (rows
-    # with toggle switches) each render their UI through e.gfx.scene over the e.gpu CPU backend and
-    # fold the frame to a hash the host reproduces.
-    for app_pair in "clock_app:clock app" "calc_app:calc app" "tasks_app:tasks app" "settings_app:settings app"; do
+    # (D2180, C113; D2181/D2182, C114) The shell app faces: Calculator (result display + 4x4 keypad),
+    # Tasks (a checklist with checkboxes) and Settings (rows with toggle switches) each render their UI
+    # through e.gfx.scene over the e.gpu CPU backend and fold the frame to a hash the host reproduces.
+    # (Clock is now live -- D2188 below -- so it is asserted on its serial, not a frame golden.)
+    for app_pair in "calc_app:calc app" "tasks_app:tasks app" "settings_app:settings app"; do
         app_src="${app_pair%%:*}"
         app_tag="${app_pair##*:}"
         app_img="$test_build/$app_src.img"
@@ -9003,6 +9003,16 @@ greeting"
             *) printf '%s\n' "NeperOS $app_src did not match the host hash $app_hash: $app_boot" >&2; exit 1 ;;
         esac
     done
+    # (D2188, C113) The Clock app shows the LIVE time: clock_app reads the wall clock through e.time
+    # (os.clock -> PL031 RTC) and renders the current HH:MM, then prints `clock live HH:MM`. The frame
+    # varies with the clock, so it is asserted on the serial (a valid 24h time) rather than a golden.
+    clock_img="$test_build/clock_app.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/clock_app.e" "$repo" aarch64 neperos "$clock_img")" = 'executable written' ]
+    clock_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$clock_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+    case "$clock_boot" in
+        *'clock live '[0-2][0-9]':'[0-5][0-9]*'clock app hash '*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS clock_app did not render a live time: $clock_boot" >&2; exit 1 ;;
+    esac
     # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
     # + a Writer) rather than the console primitive, so e.io and the e.os variant os.neperos.e run
     # unchanged on NeperOS. Started as program 0 of a one-program archive on the shell boot.

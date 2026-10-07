@@ -37894,3 +37894,28 @@ four modules the shell boot can reach; e.fs's remaining ops are the flat-C106 Un
 driver-boot fixtures need a matching toolchain (D2185/D2186). C107 holds at its ~0.9 ceiling here:
 what is left is Unsupported-by-design or toolchain-gated, so further shell-boot breadth adds coverage
 without moving the score.
+
+## D2188 — the Clock app shows the live time; and the "toolchain wall" was a test-harness error
+
+Two things. First, a correction that retracts D2184-D2187's "gpu-boot is unverifiable here" claim: it
+was a TEST-HARNESS error of mine, not a toolchain or source defect. Single-program driver/app boots
+(`-append gpu` / `gpu bigarena`, the app faces) take the initrd as a RAW `.img`; I had been wrapping
+those images in a shell archive, so the kernel executed the archive HEADER as the entry and faulted
+(`far 0x10000000000`, exit 0x87). Booted raw -- as the real run.sh/run.ps1 fixtures already do
+(`-initrd <prog>.img`) -- `gpu_test` prints `gpu 1280x800 test pattern flushed` and `calc_app` prints
+`calc app hash 558372214`, exit 0. Both the shared C103-line compiler and a clean compiler built
+in-session from the branch-neutral frozen bootstrap (`zig cc bootstrap/neper.c` + MSVC link via
+vswhere on PATH) produce kernels whose driver boots work -- so it was never the toolchain. The gpu/
+driver boots and the C113/C114 app-face rendering are verifiable here; only C104 (physical Pixel) is a
+true external blocker. (Memory note [[neper-private-verify-recipe]] corrected; RULE: archive only
+multi-program boots -- shell/fsserver/input/compositor/statussvc/prodshell -- never a single-program
+driver/app image.)
+
+Second, the increment: `clock_app` now reads the wall clock through `time.now()` (os.clock -> the
+PL031 RTC) and renders the CURRENT time in HH:MM, instead of the fixed "12:34" face -- a real clock.
+It prints `clock live HH:MM` + the epoch seconds; booted raw on `gpu bigarena` it rendered
+`clock live 09:51` on both QEMU hosts (8.2 WSL, 11.1 Windows), exit 0. Because the frame now varies
+with the clock, the fixture asserts the serial time pattern (`clock live [0-2][0-9]:[0-5][0-9]`)
+rather than a host==neperos golden, so clock_app leaves the deterministic app-face loop (calc/tasks/
+settings stay) for its own fixture in both runners. C113 -> 0.65: the clock is live (real time); the
+calculator's input interactivity and hosting the apps in the unified shell still wait on C112.

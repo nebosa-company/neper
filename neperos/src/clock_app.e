@@ -1,11 +1,14 @@
-// The NeperOS Clock app's face (C113, D2179): a digital clock rendered through e.gfx.scene over the
-// e.gpu CPU backend into a 256x256 surface -- a dark card on a wallpaper, the time "12:34" in large
-// digits with a blinking-style colon, drawn with the built-in 3x5 bitmap digit font. A fixed time is
-// used so the frame is deterministic (the live time comes from os.clock, proven in C107/C111); this
-// is the app's visual, which the shell hosts once the unified launcher lands. It folds the frame to
-// a hash; a host run renders the same face to the same hash. Needs the large arena (`bigarena`).
+// The NeperOS Clock app (C113, D2179 face; D2188 live): a digital clock rendered through e.gfx.scene
+// over the e.gpu CPU backend into a 256x256 surface -- a dark card on a wallpaper, the CURRENT time
+// in HH:MM in large digits with a colon, drawn with the built-in 3x5 bitmap digit font. The time is
+// read live from the wall clock through e.time (os.clock -> the PL031 RTC the device tree names), so
+// the app is a real clock, not a fixed face. It prints the time it read and rendered (`clock live
+// HH:MM`) and the epoch seconds, so a boot asserts a live reading without a frame golden (the frame
+// varies with the clock). Started as the single raw program of the `gpu bigarena` boot; needs the
+// large arena.
 use e.mem
 use e.os
+use e.time
 use e.gpu
 use e.gfx.geometry
 use e.gfx.paint
@@ -29,6 +32,13 @@ fn say_num(value: usize) {
         if rest == 0usize { open = false }
     }
     say(digits[at..20usize])
+}
+
+fn say2(value: usize) {
+    var two: [2]u8 = zero
+    two[0usize] = u8(value / 10usize) + 48u8
+    two[1usize] = u8(value % 10usize) + 48u8
+    say(two[0usize..2usize])
 }
 
 fn fill(builder: *scene.Builder, x: f32, y: f32, w: f32, h: f32, red: f32, green: f32, blue: f32) {
@@ -84,14 +94,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Wallpaper and a clock card.
     fill(&builder, 0.0, 0.0, 256.0, 256.0, 0.08, 0.10, 0.16)
     fill(&builder, 28.0, 88.0, 200.0, 80.0, 0.14, 0.16, 0.24)
-    // The time "12:34" in large digits with a colon. Digit cells 24 wide (scale 8), 12 px apart.
+    // The LIVE time in HH:MM, read from the wall clock through e.time (os.clock -> the PL031 RTC):
+    // seconds since the epoch folded to time of day. A real clock, not a fixed face (D2188).
+    var hour = 0usize
+    var minute = 0usize
+    var epoch = 0usize
+    let (wall, wall_error) = time.now()
+    if wall_error == ok && wall.nanos > 0i64 {
+        epoch = usize(wall.nanos / 1000000000i64)
+        let day = epoch % 86400usize
+        hour = day / 3600usize
+        minute = (day % 3600usize) / 60usize
+    }
+    // Large digits with a colon. Digit cells 24 wide (scale 8), 12 px apart.
     let s: f32 = 8.0
-    draw_digit(&builder, font[0usize..], 48.0, 108.0, 1usize, s)
-    draw_digit(&builder, font[0usize..], 80.0, 108.0, 2usize, s)
+    draw_digit(&builder, font[0usize..], 48.0, 108.0, hour / 10usize, s)
+    draw_digit(&builder, font[0usize..], 80.0, 108.0, hour % 10usize, s)
     fill(&builder, 120.0, 124.0, 8.0, 8.0, 0.92, 0.96, 1.0)
     fill(&builder, 120.0, 148.0, 8.0, 8.0, 0.92, 0.96, 1.0)
-    draw_digit(&builder, font[0usize..], 140.0, 108.0, 3usize, s)
-    draw_digit(&builder, font[0usize..], 172.0, 108.0, 4usize, s)
+    draw_digit(&builder, font[0usize..], 140.0, 108.0, minute / 10usize, s)
+    draw_digit(&builder, font[0usize..], 172.0, 108.0, minute % 10usize, s)
     let list = scene.finish(&builder)
     let (scene_id, compile_error) = scene.compile(&renderer, list)
     if compile_error != ok {
@@ -120,6 +142,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         hash = ((hash ^ usize(pixels[i])) * 16777619usize) & 4294967295usize
         i += 1usize
     }
+    say("clock live ")
+    say2(hour)
+    say(":")
+    say2(minute)
+    say("\n")
+    say("clock epoch ")
+    say_num(epoch)
+    say("\n")
     say("clock app hash ")
     say_num(hash)
     say("\n")
