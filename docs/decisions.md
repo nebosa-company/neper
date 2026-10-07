@@ -37715,3 +37715,22 @@ client the 16 MB arena on `bigarena` (the plain reporting client of D2171 keeps 
 the D2171 status fixture is unchanged, re-verified with the C108 gpu golden). This is the launcher
 wiring the C108/C110 display path to the C111 status service -- two NeperOS subsystems meeting in the
 shell. Remaining for C112: app-icon labels and tap-to-launch with Home. C112 -> 0.8.
+
+## D2176 — C112: app-icon labels via a built-in bitmap digit font
+
+The launcher's icons now carry labels. neperos/src/ui_launcher.e gained a built-in 3x5 bitmap digit
+font (five rows per digit, three bits each, the high bit the left column) and draws each icon's
+1-based index (1..40) centred on its tile, each lit pixel a small scene FillRect. The frame hash
+moves from 3700568229 to 3820471609, identical on the host and on NeperOS (QEMU 8.2 and 11.1); the
+D2172 fixture reads the host hash and requires the NeperOS run to match, so it covers the labelled
+layout without a hardcoded golden. The builder's command budget grew to 1536 to hold the ~1000 label
+pixels over the 47 layout rectangles.
+
+Why a digit font rather than real app names: a readable multi-glyph font is tens of kilobytes, and a
+C106 file is a single 512-byte block, so a real TTF cannot be stored in the filesystem yet; there is
+no reusable bitmap font in the tree (e.debug.builtin is C++ demangling), and e.asset embedding needs
+a project build the direct emit-executable path does not run. Real app-name labels therefore wait on
+multi-block C106 files (server contiguous-block storage plus a client that streams past the fixed
+512-byte handle buffer in os.neperos.e), which also unblocks the C113/C114 app text; the index labels
+render the label path correctly in the meantime. Remaining for C112: real-name labels over that font
+work, paging beyond 40 icons, and tap-to-launch with Home. C112 -> 0.85.

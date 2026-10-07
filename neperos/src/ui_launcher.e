@@ -38,7 +38,35 @@ fn fill(builder: *scene.Builder, x: f32, y: f32, w: f32, h: f32, red: f32, green
     let pushed = scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y, w, h), brush: paint.Brush { Solid: paint.Color { red: red, green: green, blue: blue, alpha: 1.0 } } } })
 }
 
+// A built-in 3x5 bitmap digit font: five rows per digit, each row three bits (the high bit is the
+// left column). Real app-name labels need a multi-glyph font read from the filesystem, which waits
+// on multi-block C106 files; until then an icon's label is its index, drawn with this font.
+fn draw_digit(builder: *scene.Builder, font: []const u8, px: f32, py: f32, d: usize, s: f32) {
+    var row = 0usize
+    while row < 5usize {
+        let bits = usize(font[d * 5usize + row])
+        var col = 0usize
+        while col < 3usize {
+            if ((bits >> (2usize - col)) & 1usize) == 1usize {
+                fill(builder, px + f32(col) * s, py + f32(row) * s, s, s, 0.95, 0.95, 0.95)
+            }
+            col += 1usize
+        }
+        row += 1usize
+    }
+}
+
+fn draw_label(builder: *scene.Builder, font: []const u8, px: f32, py: f32, n: usize, s: f32) {
+    if n >= 10usize {
+        draw_digit(builder, font, px, py, n / 10usize, s)
+        draw_digit(builder, font, px + 4.0 * s, py, n % 10usize, s)
+    } else {
+        draw_digit(builder, font, px + 2.0 * s, py, n, s)
+    }
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    let font: [50]u8 = [50]u8{ 7u8, 5u8, 5u8, 5u8, 7u8, 2u8, 6u8, 2u8, 2u8, 7u8, 7u8, 1u8, 7u8, 4u8, 7u8, 7u8, 1u8, 7u8, 1u8, 7u8, 5u8, 5u8, 7u8, 1u8, 1u8, 7u8, 4u8, 7u8, 1u8, 7u8, 7u8, 4u8, 7u8, 5u8, 7u8, 7u8, 1u8, 2u8, 2u8, 2u8, 7u8, 5u8, 7u8, 5u8, 7u8, 7u8, 5u8, 7u8, 1u8, 7u8 }
     let (device, open_error) = gpu.open(a, gpu.Backend.Cpu, 0u32)
     if open_error != ok {
         say("ui launcher gpu failed\n")
@@ -65,7 +93,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var renderer = renderer_value
-    let (builder_value, builder_error) = scene.builder(a, 64usize)
+    let (builder_value, builder_error) = scene.builder(a, 1536usize)
     if builder_error != ok { ret builder_error }
     var builder = builder_value
     // Wallpaper: a cover fill (a real PNG from the filesystem replaces this later).
@@ -88,6 +116,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let idx = r * COLS + c
             let shade = f32(idx) / f32(ROWS * COLS)
             fill(&builder, cx + 6.0, cy + 4.0, 48.0 - 12.0, 28.0 - 8.0, 0.3 + shade * 0.5, 0.5, 0.85 - shade * 0.4)
+            // The icon's label: its 1-based index in the 3x5 font, centred on the tile.
+            draw_label(&builder, font[0usize..], cx + 15.0, cy + 8.0, idx + 1usize, 2.0)
             c += 1usize
         }
         r += 1usize
