@@ -8986,6 +8986,20 @@ greeting"
         *'gpu cpu open ok'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS e.gpu CPU backend did not open: $gpu_cpu_boot" >&2; exit 1 ;;
     esac
+    # (D2167, C110) e.gfx.scene renders through the CPU backend on NeperOS: scene_test builds a
+    # two-rectangle scene and folds the read-back pixels to a hash. The same source renders the same
+    # hash on the host (the rasterizer is pure), so the host hash is the determinism check.
+    scene_img="$test_build/scene_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/scene_test.e" "$repo" aarch64 neperos "$scene_img")" = 'executable written' ]
+    scene_host="$test_build/scene_host"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/scene_test.e" "$repo" x64 linux "$scene_host")" = 'executable written' ]
+    scene_hash=$(chmod +x "$scene_host"; "$scene_host" | sed -n 's/^scene hash \([0-9]*\)$/\1/p')
+    [ -n "$scene_hash" ] || { printf '%s\n' 'host e.gfx.scene render printed no hash' >&2; exit 1; }
+    scene_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$scene_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+    case "$scene_boot" in
+        *"scene hash $scene_hash"*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.gfx.scene render did not match the host hash $scene_hash: $scene_boot" >&2; exit 1 ;;
+    esac
     # (D2162, C110) The compositor over shared frames: an app draws a surface into a frame shared
     # with the compositor and signals it; the compositor composites it into the display and flushes.
     comp_img="$test_build/comp.img"

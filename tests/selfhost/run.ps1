@@ -9127,6 +9127,20 @@ if ($neperosQemu) {
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.gpu CPU program did not build' }
     $gpuCpuBoot = Invoke-NeperOS $neperosImage @('-initrd', $gpuCpu, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
     if ($gpuCpuBoot -notmatch '(?s)gpu cpu open ok.*neperos: exit 0x0000000000000000') { throw "NeperOS e.gpu CPU backend did not open: $gpuCpuBoot" }
+    # (D2167, C110) e.gfx.scene renders through the CPU backend on NeperOS: scene_test builds a
+    # two-rectangle scene and folds the read-back pixels to a hash. The same source renders the same
+    # hash on the host (the rasterizer is pure), so the host hash below is the determinism check.
+    $sceneImg = Join-Path $testBuild 'scene_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\scene_test.e') $repo aarch64 neperos $sceneImg | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.gfx.scene program did not build' }
+    $sceneHost = Join-Path $testBuild 'scene_host.exe'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\scene_test.e') $repo x64 windows $sceneHost | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the host e.gfx.scene program did not build' }
+    $sceneHostOut = (& $sceneHost 2>&1) -join "`n"
+    if ($sceneHostOut -notmatch 'scene hash (\d+)') { throw "host e.gfx.scene render printed no hash: $sceneHostOut" }
+    $sceneHash = $Matches[1]
+    $sceneBoot = Invoke-NeperOS $neperosImage @('-initrd', $sceneImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+    if ($sceneBoot -notmatch "(?s)scene hash $sceneHash.*neperos: exit 0x0000000000000000") { throw "NeperOS e.gfx.scene render did not match the host hash ${sceneHash}: $sceneBoot" }
     # (D2162, C110) The compositor over shared frames: an app draws a surface into a frame shared
     # with the compositor and signals it; the compositor composites it into the display and flushes.
     $comp = Join-Path $testBuild 'comp.img'

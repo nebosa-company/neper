@@ -357,7 +357,11 @@ fn dlclose(l: own Lib) -> err { ret ok }
 // Unsupported. NeperOS has no dynamic symbols, so it always answers not-found; the modules that use
 // dlsym (e.gpu's Vulkan backend) only run their CPU backend here, where this path is pruned.
 fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) { ret (0usize, Unsupported) }
-fn current_thread_id() -> usize { ret 0usize }
+// A NeperOS program runs on one thread here, so a fixed non-zero id identifies it. Non-zero
+// matters: a zero reads as "no owner" to a reentrant lock (e.gpu's device lock), which would then
+// re-lock a mutex it already holds on the same thread and deadlock. (A real per-thread id would be
+// a kernel query, for when a program's own threads each take the lock.)
+fn current_thread_id() -> usize { ret 1usize }
 fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy: ResolvePolicy) -> (File, err) { ret (File { raw: 0usize }, Unsupported) }
 fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err { ret Unsupported }
 fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path: str, overwrite: bool, durable: bool) -> err { ret Unsupported }

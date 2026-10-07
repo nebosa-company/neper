@@ -37521,3 +37521,21 @@ other neperos fixtures are byte-for-byte unchanged after the kernel-arena and co
 is the runtime foundation for the e.ui backend; remaining for C110: build an e.gfx.scene renderer
 over the CPU backend, bind the e.ui window backend to the compositor's shared surface with fonts from
 the filesystem, and render an e.ui sample matching its host pixel hash.
+
+## D2167 — C110: e.gfx.scene renders through the CPU backend on NeperOS
+
+e.ui's full drawing path now runs on NeperOS: e.gfx.scene compiled to a display list, rendered by
+e.gpu's CPU backend into an offscreen target. neperos/src/scene_test.e opens the CPU device and an
+offscreen Bgra8 target, builds a two-rectangle scene (background fill plus a panel), compiles and
+renders it, reads the pixels back and folds them to a hash. On NeperOS and on the host the hash is
+the same (2632735557) — the rasterizer is pure, so identical pixels are the determinism proof, and
+the suite bakes it in by rendering the same source on the host, reading its hash, and requiring the
+QEMU run to print that hash. The blocker was e.gpu's reentrant device mutex: it re-enters only when
+`current_thread_id()` returns the owning thread, but os.neperos.e stubbed it to 0, which the lock
+reads as "no owner", so a nested device lock on the one thread re-locked a held mutex and hung
+(the futex is a no-op spin here). A NeperOS program runs on one thread, so current_thread_id now
+returns a fixed non-zero id, which the lock keys on; a real per-thread id would be a kernel query,
+for when a program's own threads each take the lock. Verified on both hosts with a clean power-off;
+the C108 gpu golden d505a446 and the other neperos fixtures are byte-for-byte unchanged. Remaining
+for C110: bind the e.ui window backend to the compositor's shared surface with fonts from e.fs, and
+render an e.ui sample matching its host pixel hash.
