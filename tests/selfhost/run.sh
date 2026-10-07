@@ -9293,10 +9293,10 @@ greeting"
     # Two key presses: the first unlocks the lock screen to the home screen (the compositor takes the
     # second frame), the second launches an app.
     assets="$repo/neperos/assets"
-    lunar_calc_img="$test_build/lunar_calc.img"
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/lunar_calc.e" "$repo" aarch64 neperos "$lunar_calc_img")" = 'executable written' ]
+    calc_img="$test_build/calc.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/calc.e" "$repo" aarch64 neperos "$calc_img")" = 'executable written' ]
     crater_archive="$test_build/shell-crater-archive.img"
-    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "$lunar_calc_img"
+    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "$calc_img"
     crater_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" keyboard "$test_build/shell-crater.serial" 55136 "compositor bigarena unified" 'shell app code 5' - 2 2>&1)
     case "$crater_boot" in
         *'shell wallpaper from fs'*) printf '%s
@@ -9305,16 +9305,33 @@ greeting"
         *) printf '%s
 ' "NeperOS lunar shell did not lock, unlock and launch: $crater_boot" >&2; exit 1 ;;
     esac
-    # (D2205) Taps on a tablet: unlock, tap the Calculator icon, key in 7 x 6 + 9 = on Lunar Calc and tap
+    # (D2205) Taps on a tablet: unlock, tap the Calculator icon, key in 7 x 6 + 9 = on Calc and tap
     # the home bar. The tablet's 0..32767 axes map onto the 412 x 919 dp screen; the shell hit-tests the
-    # icon, the kernel starts Lunar Calc with the frame and input endpoints, and the app answers the
+    # icon, the kernel starts Calc with the frame and input endpoints, and the app answers the
     # compositor per event.
     calc_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-calc.serial" 55137 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12288,12405;5886,14650;26882,14650;19883,17502;26882,20354;19883,14650;26882,23205;16384,31368' 2>&1)
     case "$calc_boot" in
         *'shell unlocked'*'shell tap Calculator'*'shell launching Calculator'*'calc shown'*'calc shows 7'*'calc shows 42'*'calc shows 51'*'calc home'*'shell app code 0'*) ;;
         *) printf '%s
-' "NeperOS Lunar Calc did not launch from its icon and compute 51: $calc_boot" >&2; exit 1 ;;
+' "NeperOS Calc did not launch from its icon and compute 51: $calc_boot" >&2; exit 1 ;;
     esac
+    # (D2206) Calc's scientific and convert tabs. The taps are paced (NEPEROS_TAP_DELAY, seconds): the
+    # virtio-input queue drops events a slow app has not consumed. Scientific: sqrt 9 = 3, sin 30 = 0.5
+    # (degrees), 2 x^y 10 = 1024. Convert: 100 in Celsius is 212 in Fahrenheit.
+    export NEPEROS_TAP_DELAY=4
+    sci_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-sci.serial" 55138 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12288,12405;16384,4955;19883,18856;19883,16005;5886,16005;19883,24560;5886,27411;5886,11228;5886,16005;12885,24560;26882,13438;5886,24560;5886,27411;26882,27411;16384,31368' 2>&1)
+    case "$sci_boot" in
+        *'calc scientific 3'*'calc scientific 0.5'*'calc scientific 1024'*'calc home'*) ;;
+        *) printf '%s
+' "NeperOS Calc scientific tab did not compute: $sci_boot" >&2; exit 1 ;;
+    esac
+    conv_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-conv.serial" 55139 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12288,12405;25610,4955;27439,6487;5886,22635;5886,25487;5886,25487;16384,31368' 2>&1)
+    case "$conv_boot" in
+        *'calc converts 100 '*' = 212 '*) ;;
+        *) printf '%s
+' "NeperOS Calc did not convert 100 Celsius to Fahrenheit: $conv_boot" >&2; exit 1 ;;
+    esac
+    unset NEPEROS_TAP_DELAY
     unset NEPEROS_MEM NEPEROS_GPU
 fi
 

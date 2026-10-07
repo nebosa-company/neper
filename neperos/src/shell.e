@@ -318,7 +318,7 @@ fn icon_at(x: f32, y: f32) -> usize {
 }
 
 // The archive program an icon starts, or 0 when its app is not written yet (the archive's apps
-// follow the wallpaper and the five fonts: entry 13 is Lunar Calc).
+// follow the wallpaper and the five fonts: entry 13 is Calc).
 fn program_of(icon: usize) -> usize {
     if icon == 9usize { ret 13usize }
     ret 0usize

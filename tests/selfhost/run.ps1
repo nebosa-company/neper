@@ -9422,20 +9422,29 @@ if ($neperosQemu) {
     # Two key presses: the first unlocks the lock screen to the home screen (the compositor takes the
     # second frame), the second launches an app.
     $assets = Join-Path $repo 'neperos\assets'
-    $lunarCalc = Join-Path $testBuild 'lunar_calc.img'
-    & $compiler emit-executable (Join-Path $repo 'neperos\src\lunar_calc.e') $repo aarch64 neperos $lunarCalc | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Lunar Calc did not build' }
+    $calcImage = Join-Path $testBuild 'calc.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $lunarCalc
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
-    # (D2205) Taps on a tablet: unlock, tap the Calculator icon, key in 7 x 6 + 9 = on Lunar Calc and tap
+    # (D2205) Taps on a tablet: unlock, tap the Calculator icon, key in 7 x 6 + 9 = on Calc and tap
     # the home bar. The tablet's 0..32767 axes map onto the 412 x 919 dp screen; the shell hit-tests the
-    # icon, the kernel starts Lunar Calc with the frame and input endpoints, and the app answers the
+    # icon, the kernel starts Calc with the frame and input endpoints, and the app answers the
     # compositor per event.
     $calcBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-calc.serial') 55137 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,12405;5886,14650;26882,14650;19883,17502;26882,20354;19883,14650;26882,23205;16384,31368' 2>&1) -join "`n"
-    if ($calcBoot -notmatch '(?s)shell unlocked.*shell tap Calculator.*shell launching Calculator.*calc shown.*calc shows 7.*calc shows 42.*calc shows 51.*calc home.*shell app code 0') { throw "NeperOS Lunar Calc did not launch from its icon and compute 51: $calcBoot" }
+    if ($calcBoot -notmatch '(?s)shell unlocked.*shell tap Calculator.*shell launching Calculator.*calc shown.*calc shows 7.*calc shows 42.*calc shows 51.*calc home.*shell app code 0') { throw "NeperOS Calc did not launch from its icon and compute 51: $calcBoot" }
+    # (D2206) Calc's scientific and convert tabs. The taps are paced (NEPEROS_TAP_DELAY, seconds): the
+    # virtio-input queue drops events a slow app has not consumed. Scientific: sqrt 9 = 3, sin 30 = 0.5
+    # (degrees), 2 x^y 10 = 1024. Convert: 100 in Celsius is 212 in Fahrenheit.
+    $env:NEPEROS_TAP_DELAY = '4'
+    $sciBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-sci.serial') 55138 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,12405;16384,4955;19883,18856;19883,16005;5886,16005;19883,24560;5886,27411;5886,11228;5886,16005;12885,24560;26882,13438;5886,24560;5886,27411;26882,27411;16384,31368' 2>&1) -join "`n"
+    if ($sciBoot -notmatch '(?s)calc scientific 3.*calc scientific 0.5.*calc scientific 1024.*calc home') { throw "NeperOS Calc scientific tab did not compute: $sciBoot" }
+    $convBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-conv.serial') 55139 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,12405;25610,4955;27439,6487;5886,22635;5886,25487;5886,25487;16384,31368' 2>&1) -join "`n"
+    if ($convBoot -notmatch 'calc converts 100 [^ ]* = 212') { throw "NeperOS Calc did not convert 100 Celsius to Fahrenheit: $convBoot" }
+    Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }
 

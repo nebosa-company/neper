@@ -107,6 +107,9 @@ def main():
                     {"type": "btn", "data": {"down": True, "button": "left"}}]}})
                 qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
                     {"type": "btn", "data": {"down": False, "button": "left"}}]}})
+                # The virtio-input queue holds a few events and drops the rest, and an app redraws
+                # a full frame per tap, so a long script paces its taps (seconds, NEPEROS_TAP_DELAY).
+                time.sleep(float(os.environ.get("NEPEROS_TAP_DELAY", "0")))
         wait_for(serial, done_needle, 120)
         sys.stdout.write(serial_text(serial))
         try:

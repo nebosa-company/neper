@@ -732,7 +732,7 @@ fn gpu_bringup(device: Device) -> (usize, usize, err) {
 // fits without re-posting.
 const INPUT_EVENTS: usize = 64usize
 
-type Input = struct { ring: Ring, buffers: usize, count: usize, seen: u16 }
+type Input = struct { ring: Ring, buffers: usize, count: usize, seen: u16, posted: u16 }
 
 // Set up the input device: negotiate, enable the event queue, post `count` device-writable 8-byte
 // event buffers, and notify. The device writes an event into the next buffer as input arrives.
@@ -757,7 +757,7 @@ fn input_open(device: Device, count: usize) -> (Input, err) {
     os.store16(ring.avail + 2usize, u16(count))
     os.barrier()
     os.store16(ring.notify, ring.index)
-    ret (Input { ring: ring, buffers: buffers, count: count, seen: 0u16 }, ok)
+    ret (Input { ring: ring, buffers: buffers, count: count, seen: 0u16, posted: u16(count) }, ok)
 }
 
 // The next event the device has written, if any: (type, code, value, true), or (0, 0, 0, false)
@@ -771,5 +771,14 @@ fn input_next(input: *Input) -> (u16, u16, u32, bool) {
     let ecode = os.load16(event + 2usize)
     let evalue = os.load32(event + 4usize)
     input.seen += 1u16
+    // Give the buffer back to the device (D2206): without it the device ran out after `count` events
+    // and dropped the rest, which a long session of taps reached.
+    let slot = usize(input.posted) % input.ring.size
+    os.store16(input.ring.avail + 4usize + 2usize * slot, u16(id))
+    input.posted += 1u16
+    os.barrier()
+    os.store16(input.ring.avail + 2usize, input.posted)
+    os.barrier()
+    os.store16(input.ring.notify, input.ring.index)
     ret (etype, ecode, evalue, true)
 }
