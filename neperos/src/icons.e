@@ -26,8 +26,9 @@ fn app_settings() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox=
 fn app_stocks() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#2c4a3c'/><path d='M18 70 V26 M18 70 H80' fill='none' stroke='#9db4a6' stroke-width='3.5' stroke-linecap='round'/><path d='M24 60 L40 44 L50 53 L74 28' fill='none' stroke='#e8ebf0' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/><path d='M60 28 H74 V42' fill='none' stroke='#e0b36a' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/></svg>" }
 fn app_weather() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#33506a'/><circle cx='60' cy='36' r='15' fill='#e0b36a'/><g stroke='#e0b36a' stroke-width='4' stroke-linecap='round'><path d='M60 11 v5 M82 20 l-3.5 3.5 M85 36 h-5 M38 20 l3.5 3.5'/></g><path d='M30 74 a14 14 0 0 1 -1 -28 a19 19 0 0 1 36 4 a12 12 0 0 1 1 24 z' fill='#e8ebf0'/></svg>" }
 fn app_ssh() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#26292f'/><rect x='14' y='22' width='68' height='52' rx='8' fill='#14161a' stroke='#e8ebf0' stroke-width='4'/><path d='M26 40 L38 49 L26 58' fill='none' stroke='#e0b36a' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/><path d='M46 59 H64' fill='none' stroke='#e8ebf0' stroke-width='5' stroke-linecap='round'/></svg>" }
+fn app_ai() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#3a3550'/><path d='M44 16 C46 36 54 44 74 46 C54 48 46 56 44 76 C42 56 34 48 14 46 C34 44 42 36 44 16 Z' fill='#e8ebf0'/><path d='M72 14 C73 22 76 25 84 26 C76 27 73 30 72 38 C71 30 68 27 60 26 C68 25 71 22 72 14 Z' fill='#e0b36a'/><path d='M68 62 C69 68 71 70 77 71 C71 72 69 74 68 80 C67 74 65 72 59 71 C65 70 67 68 68 62 Z' fill='#e0b36a'/></svg>" }
 
-const APP_COUNT: usize = 23usize
+const APP_COUNT: usize = 24usize
 
 fn app(index: usize) -> str {
     if index == 0usize { ret app_phone() }
@@ -53,6 +54,7 @@ fn app(index: usize) -> str {
     if index == 20usize { ret app_stocks() }
     if index == 21usize { ret app_weather() }
     if index == 22usize { ret app_ssh() }
+    if index == 23usize { ret app_ai() }
     ret ""
 }
 
@@ -80,6 +82,7 @@ fn app_name(index: usize) -> str {
     if index == 20usize { ret "stocks" }
     if index == 21usize { ret "weather" }
     if index == 22usize { ret "ssh" }
+    if index == 23usize { ret "ai" }
     ret ""
 }
 
@@ -107,6 +110,7 @@ fn app_label(index: usize) -> str {
     if index == 20usize { ret "Stocks" }
     if index == 21usize { ret "Weather" }
     if index == 22usize { ret "SSH" }
+    if index == 23usize { ret "AI" }
     ret ""
 }
 
