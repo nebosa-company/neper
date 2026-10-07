@@ -31,10 +31,10 @@
       "group": "NeperOS",
       "order": 112,
       "title": "NeperOS shell 8: the launcher -- wallpaper, 8x5 icon grid, top bar",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Queued by D2148. Acceptance: a launcher process the init program starts after boot; a PNG wallpaper from the filesystem scaled to cover; an 8-row by 5-column grid of app icons with labels, paged when there are more than 40; a top bar showing battery, Wi-Fi, 5G, clock and notification count from C111; a tap launches the app as a process and Home returns to the launcher; QEMU screendump golden plus a launch-and-return round trip."
+      "evidence": "Queued by D2148. Acceptance: a launcher process the init program starts after boot; a PNG wallpaper from the filesystem scaled to cover; an 8-row by 5-column grid of app icons with labels, paged when there are more than 40; a top bar showing battery, Wi-Fi, 5G, clock and notification count from C111; a tap launches the app as a process and Home returns to the launcher; QEMU screendump golden plus a launch-and-return round trip. BEGUN D2172: neperos/src/ui_launcher.e renders the launcher's visual skeleton -- a cover wallpaper fill, a top bar with five status ticks, and the 8x5 icon grid (one shaded tile per cell) -- through e.gfx.scene over the e.gpu CPU backend into a 256x256 surface; frame hash 3700568229 identical host==neperos (QEMU 8.2+11.1), suite reads the host hash and requires the neperos run to print it. (module-scope `const X: f32` trips the location-less E-TYPE-9999, so layout constants are inline.) Not yet: a PNG wallpaper from the filesystem scaled to cover; labels and real app icons; the live C111 status in the top bar; presentation over the compositor; a tap launching an app as a process and Home returning to the launcher; the screendump golden and launch-and-return round trip."
     },
     {
       "id": "C113",

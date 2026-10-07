@@ -9074,6 +9074,20 @@ if ($neperosQemu) {
     foreach ($statusMark in @('status server up', 'status battery unavailable', 'status wifi unavailable', 'status cellular unavailable', 'status clock ', 'status notifications 0', 'status notifications 1', 'status client done', 'neperos: exit 0x0000000000000000')) {
         if ($statusBoot -notmatch [regex]::Escape($statusMark)) { throw "NeperOS status service missing (${statusMark}): $statusBoot" }
     }
+    # (D2172, C112) The launcher's layout skeleton: the wallpaper, the top bar with status ticks, and
+    # the 8x5 icon grid rendered through e.gfx.scene over the e.gpu CPU backend into a 256x256 surface.
+    # Same source, same hash on the host (the rasterizer is pure), so the host hash is the check.
+    $launcherImg = Join-Path $testBuild 'ui_launcher.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_launcher.e') $repo aarch64 neperos $launcherImg | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS launcher did not build' }
+    $launcherHost = Join-Path $testBuild 'launcher_host.exe'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_launcher.e') $repo x64 windows $launcherHost | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the host launcher did not build' }
+    $launcherHostOut = (& $launcherHost 2>&1) -join "`n"
+    if ($launcherHostOut -notmatch 'ui launcher hash (\d+)') { throw "host launcher printed no hash: $launcherHostOut" }
+    $launcherHash = $Matches[1]
+    $launcherBoot = Invoke-NeperOS $neperosImage @('-initrd', $launcherImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+    if ($launcherBoot -notmatch "(?s)ui launcher hash $launcherHash.*neperos: exit 0x0000000000000000") { throw "NeperOS launcher layout did not match the host hash ${launcherHash}: $launcherBoot" }
     # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
     # and a Writer over it) rather than the console primitive directly, so e.io -- and the e.os
     # variant os.neperos.e it compiles against -- run unchanged on NeperOS. Started as program 0 of a

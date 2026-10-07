@@ -8924,6 +8924,20 @@ greeting"
     for status_mark in 'status server up' 'status battery unavailable' 'status wifi unavailable' 'status cellular unavailable' 'status clock ' 'status notifications 0' 'status notifications 1' 'status client done' 'neperos: exit 0x0000000000000000'; do
         case "$status_boot" in *"$status_mark"*) ;; *) printf '%s\n' "NeperOS status service missing ($status_mark): $status_boot" >&2; exit 1 ;; esac
     done
+    # (D2172, C112) The launcher's layout skeleton: the wallpaper, the top bar with status ticks, and
+    # the 8x5 icon grid rendered through e.gfx.scene over the e.gpu CPU backend into a 256x256 surface.
+    # Same source renders the same hash on the host, so the host hash is the determinism check.
+    launcher_img="$test_build/ui_launcher.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_launcher.e" "$repo" aarch64 neperos "$launcher_img")" = 'executable written' ]
+    launcher_host="$test_build/launcher_host"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_launcher.e" "$repo" x64 linux "$launcher_host")" = 'executable written' ]
+    launcher_hash=$(chmod +x "$launcher_host"; "$launcher_host" | sed -n 's/^ui launcher hash \([0-9]*\)$/\1/p')
+    [ -n "$launcher_hash" ] || { printf '%s\n' 'host launcher printed no hash' >&2; exit 1; }
+    launcher_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$launcher_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+    case "$launcher_boot" in
+        *"ui launcher hash $launcher_hash"*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS launcher layout did not match the host hash $launcher_hash: $launcher_boot" >&2; exit 1 ;;
+    esac
     # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
     # + a Writer) rather than the console primitive, so e.io and the e.os variant os.neperos.e run
     # unchanged on NeperOS. Started as program 0 of a one-program archive on the shell boot.

@@ -37648,3 +37648,17 @@ device and no disk. neperos/src/status_client.e subscribes, reports each field, 
 and reports the count rising from 0 to 1, then tells the server to quit. Verified on QEMU virt on
 both hosts (the clock line's value varies, so the fixtures assert its presence, not its value); the
 earlier neperos fixtures are unchanged (the status boot is a new, self-contained mode). C111 -> 1.0.
+
+## D2172 — C112: the launcher's layout skeleton
+
+NeperOS shell-8, the launcher, begun. neperos/src/ui_launcher.e renders the launcher's visual
+skeleton -- a cover wallpaper fill, a top bar with five status ticks (battery, Wi-Fi, 5G, clock,
+notifications), and the 8-row by 5-column icon grid, one shaded tile per cell -- through e.gfx.scene
+over the e.gpu CPU backend into a 256x256 surface (the compositor's surface size). It folds the frame
+to a hash, 3700568229, identical on the host and on NeperOS (QEMU 8.2 and 11.1), since the rasterizer
+is pure; the suite renders the same source on the host, reads its hash, and requires the NeperOS run
+to print it. This is the launcher's spatial layout, the frame the rest of C112 fills in: a real PNG
+wallpaper from the filesystem scaled to cover, labels and real app icons, the live C111 status in the
+top bar, presentation over the compositor, and tap-to-launch with Home. A module-scope `const X: f32`
+tripped the location-less E-TYPE-9999 the way a module-scope str or bool const does, so the layout
+constants are inline literals. C112 -> 0.2.
