@@ -8,6 +8,7 @@ use e.os
 use e.io
 use e.fmt.json
 use e.fmt.csv
+use e.fmt.ini
 
 type Point = struct { x: i64, y: i64, label: str }
 
@@ -31,5 +32,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     data_row.fields = data_fields[0usize..]
     let data_error = csv.write_row(&writer, data_row, csv.csv())
     if data_error != ok { ret data_error }
+    // e.fmt.ini breadth: the same struct through a third pure codec.
+    let ini_intro = io.print("\nfmt ini:\n")
+    let ini_error = ini.encode[Point](&writer, &point)
+    if ini_error != ok { ret ini_error }
     ret ok
 }

@@ -9030,16 +9030,16 @@ greeting"
         *'time monotonic stuck'*|*'time monotonic failed'*|*'time wall absent'*) printf '%s\n' "NeperOS e.time misread the clock: $neperos_time" >&2; exit 1 ;;
     esac
     # (D2156, C107) e.fmt on NeperOS: fmt_test reflects a struct with e.fmt.json's encode[T] and
-    # streams it to an e.io Writer over stdout, then writes two rows through e.fmt.csv (D2183) -- the
-    # codecs are pure, so the e.os variant and e.io already carry more than one of them.
+    # streams it to an e.io Writer over stdout, then two rows through e.fmt.csv (D2183) and the struct
+    # through e.fmt.ini (D2184) -- the codecs are pure, so the e.os variant and e.io carry several.
     fmt_test_img="$test_build/fmt_test.img"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/fmt_test.e" "$repo" aarch64 neperos "$fmt_test_img")" = 'executable written' ]
     fmt_archive="$test_build/fmt-archive.img"
     python3 "$repo/scripts/build-shell-archive.py" "$fmt_archive" "$fmt_test_img"
     neperos_fmt=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$fmt_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
     case "$neperos_fmt" in
-        *'fmt json: {"x":3,"y":7,"label":"neperos"}'*'fmt csv: x,y,label'*'3,7,neperos'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
-        *) printf '%s\n' "NeperOS e.fmt did not encode JSON and CSV: $neperos_fmt" >&2; exit 1 ;;
+        *'fmt json: {"x":3,"y":7,"label":"neperos"}'*'fmt csv: x,y,label'*'3,7,neperos'*'fmt ini:'*'x=3'*'y=7'*'label=neperos'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.fmt did not encode JSON, CSV and INI: $neperos_fmt" >&2; exit 1 ;;
     esac
     # (D2157, C107) e.thread on NeperOS: thread_test spawns a worker in the same address space on a
     # kernel-mapped stack; the worker writes a sentinel through a pointer into the spawner's memory

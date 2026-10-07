@@ -37826,3 +37826,26 @@ seeded `write` unconditionally and rejected `os.neperos.e`'s `write`. Rebuilding
 when the shared one is swapped is the standing remedy (D1593); no shared file was written. C107 holds
 at 0.9: the flat C106 server's intentionally-Unsupported path/dir ops and porting further lib-module
 fixtures to NeperOS remain.
+
+## D2184 — e.fmt breadth on NeperOS: a third codec (ini), and the gpu-boot toolchain wall
+
+`neperos/src/fmt_test.e` now also encodes the same struct through e.fmt.ini after json and csv, so the
+serial reads `fmt ini:` then `x=3` / `y=7` / `label=neperos` (ini.encode[T] writes flat key=value for a
+flat struct). Three pure e.fmt codecs now run unchanged on NeperOS through the e.os variant + e.io.
+Verified identical on both QEMU hosts (8.2 WSL, 11.1 Windows) with the worktree-local neper-self.
+
+Boundary of what is verifiable here: only the SHELL boot. The gpu/driver boot cannot be verified in
+this environment. Every driver-boot program -- the unmodified, previously-green `gpu_test` (D2159),
+`calc_app` and the HEAD static `clock_app` -- faults at the program's first instruction (`unexpected
+exception 0x08 esr 0x02000000 far 0x10000000000 elr 0x7fc0000000`, exit 0x87), while the same binaries
+run `main` correctly under the shell boot (calc_app printed `calc gpu failed` and exited 0; fmt_test is
+byte-exact). The cause is NOT a source regression and NOT a random codegen bug: two independent
+compilers -- the C-bootstrap-descended `c103b.exe` (10 MB self-host, rebuilt today by the concurrent
+session) and `build/windows/neper.exe` -- produce the IDENTICAL driver-boot fault, and both belong to
+the divergent C103/master line whose builds overwrote this worktree's shared `build/`. No fa07c7d0-line
+compiler is available, and one cannot be synthesised here: the frozen bootstrap (C088) cannot compile
+the grown compiler, `neper build src/main.e` crashes the WSL2 VM, and the Windows bootstrap needs MSVC
+(absent; only `zig cc` is present). So the gpu-boot NeperOS features (the C112-C114 app faces and the
+compositor rendering) are unverifiable until the C114 line lands on master or a matching toolchain is
+restored -- a branch/toolchain coordination state, not a code defect in this worktree. See
+[[neper-private-verify-recipe]].
