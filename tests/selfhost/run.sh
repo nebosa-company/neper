@@ -8977,6 +8977,20 @@ greeting"
         *"sha256 $ui_golden"*) ;;
         *) printf '%s\n' "NeperOS CPU-rasterizer scene did not match the golden: $ui_dump" >&2; exit 1 ;;
     esac
+    # (D2162, C110) The compositor over shared frames: an app draws a surface into a frame shared
+    # with the compositor and signals it; the compositor composites it into the display and flushes.
+    comp_img="$test_build/comp.img"
+    comp_app_img="$test_build/comp_app.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/comp.e" "$repo" aarch64 neperos "$comp_img")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/comp_app.e" "$repo" aarch64 neperos "$comp_app_img")" = 'executable written' ]
+    comp_archive="$test_build/comp-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$comp_archive" "$comp_img" "$comp_app_img"
+    comp_golden=1e78b507c7bc0df83765c521d923a7e57df4d754293505e85aab706fe34b3e51
+    comp_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_image" "$comp_archive" "$test_build/comp.ppm" 55128 compositor 2>&1)
+    case "$comp_dump" in
+        *"sha256 $comp_golden"*) ;;
+        *) printf '%s\n' "NeperOS compositor screendump did not match the golden: $comp_dump" >&2; exit 1 ;;
+    esac
     # (D2160, C109) virtio-input over IPC: the input server pushes each event to a client over an
     # endpoint, woken by the device notification; the fixture injects a key and a tap and asserts
     # the stream the client receives.

@@ -9120,6 +9120,20 @@ if ($neperosQemu) {
     $uiGolden = '172a747560e4f73a0de393838fb20f3a8d750cb77e6b9a65328d657fa4cbd86c'
     $uiDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $uiScene (Join-Path $testBuild 'ui.ppm') 55127 2>&1) -join "`n"
     if ($uiDump -notmatch "sha256 $uiGolden") { throw "NeperOS CPU-rasterizer scene did not match the golden: $uiDump" }
+    # (D2162, C110) The compositor over shared frames: an app draws a surface into a frame shared
+    # with the compositor and signals it; the compositor composites it into the display and flushes.
+    $comp = Join-Path $testBuild 'comp.img'
+    $compApp = Join-Path $testBuild 'comp_app.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\comp.e') $repo aarch64 neperos $comp | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS compositor did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\comp_app.e') $repo aarch64 neperos $compApp | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS compositor app did not build' }
+    $compArchive = Join-Path $testBuild 'comp-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $compArchive $comp $compApp
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS compositor archive did not assemble' }
+    $compGolden = '1e78b507c7bc0df83765c521d923a7e57df4d754293505e85aab706fe34b3e51'
+    $compDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $compArchive (Join-Path $testBuild 'comp.ppm') 55128 compositor 2>&1) -join "`n"
+    if ($compDump -notmatch "sha256 $compGolden") { throw "NeperOS compositor screendump did not match the golden: $compDump" }
     # (D2160, C109) virtio-input over IPC: the input server alone holds the device and pushes each
     # event to a client over an endpoint, woken by the device's notification. The fixture injects a
     # key (keyboard) and a tap (tablet) through QMP and asserts the stream the client receives.

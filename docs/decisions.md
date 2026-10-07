@@ -37426,3 +37426,24 @@ generic `flushed` marker so it serves both the test pattern and a scene. Remaini
 compositor (app surfaces in shared frames, damage-only flush, input from C109 routed to the focused
 surface), the e.ui window backend over e.gfx.scene with fonts from the filesystem, and an existing
 e.ui sample matching its host render.
+
+## D2162 — C110: a compositor over shared surface frames
+
+The compositor now composites an app's surface from a frame SHARED with it. Shared frames are the
+new kernel capability: vm.map_phys_at maps the same physical pages into two address spaces at a
+fixed window near the top of the user gigabyte's level-3 table (vm.SHARED_FRAME_VA = USER_BASE +
+0x1C0000, 64 pages = a 256x256 BGRA surface), above the 512 KB program window and the thread-stack
+region, so an app and the compositor read and write one surface. thread.ttbr_of exposes a thread's
+address space so the boot can map the frame into both. The `-append compositor` boot assembles an
+archive of two programs: comp.e (program 0) is started on the virtio-gpu display via
+start_driver_server and granted the shared frame plus a receive endpoint; comp_app.e (program 1) is
+granted the same shared frame and a send endpoint. The app draws a scene into the shared surface
+with the e.gfx.paint CPU rasterizer (a background, a panel and an anti-aliased triangle) and signals
+the compositor over the endpoint; the compositor fills the screen background, waits for that signal,
+composites the surface into the display framebuffer at the app's position and flushes. Verified on
+QEMU virt on both hosts: `comp ready`, `comp composited flushed`, screendump golden
+1e78b507c7bc0df83765c521d923a7e57df4d754293505e85aab706fe34b3e51 identical on QEMU 8.2 and 11.1. The
+screendump harness gained an append argument so it serves the gpu, ui and compositor boots. Remaining
+for C110: damage-only flush (a sub-rect rather than the whole display), input from C109 routed to the
+focused surface, and the e.ui window backend over e.gfx.scene with fonts from the filesystem plus an
+e.ui sample matching its host render.

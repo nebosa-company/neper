@@ -119,6 +119,13 @@ fn current_ttbr() -> usize {
     ret threads[current].ttbr
 }
 
+// (D2162) A thread's address space, so the compositor boot can map a shared surface frame into both
+// the compositor's and an app's space.
+fn ttbr_of(index: usize) -> usize {
+    if index >= MAX_THREADS { ret 0usize }
+    ret threads[index].ttbr
+}
+
 // (D2157) A new thread in an existing address space (`ttbr`), for os.thread_create: it enters at
 // `elr` with `arg0`/`arg1` in x0/x1 on the stack ending at `stack_top`, its parent the caller so a
 // join reaps it. An empty capability space -- a spawned thread prints nothing of its own. The

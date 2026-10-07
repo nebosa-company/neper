@@ -35,6 +35,7 @@ def qmp(sock, cmd):
 def main():
     qemu, kernel, initrd, out_ppm = sys.argv[1:5]
     port = int(sys.argv[5]) if len(sys.argv) > 5 else 55123
+    append = sys.argv[6] if len(sys.argv) > 6 else "gpu"
     serial = out_ppm + ".serial"
     for stale in (serial, out_ppm):
         if os.path.exists(stale):
@@ -42,7 +43,7 @@ def main():
     args = [
         qemu, "-M", "virt,gic-version=3", "-cpu", "cortex-a76", "-m", "256M",
         "-nic", "none", "-no-reboot", "-display", "none",
-        "-kernel", kernel, "-initrd", initrd, "-append", "gpu",
+        "-kernel", kernel, "-initrd", initrd, "-append", append,
         "-device", "virtio-gpu-pci",
         "-serial", "file:" + serial,
         "-qmp", "tcp:127.0.0.1:%d,server,nowait" % port,

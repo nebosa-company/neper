@@ -248,6 +248,31 @@ fn put_aux(space: Space, slot: usize, value: usize) {
     os.store64(space.region_phys + AUX_OFF + slot * 8usize, u64(value))
 }
 
+// (D2162, C110) A shared surface frame: a fixed window near the top of the user gigabyte's level-3
+// table (above the 512 KB program window and the thread-stack region), mapped to the SAME physical
+// pages in two spaces so an app and the compositor share one surface. 256 KB = a 256x256 BGRA frame.
+const SHARED_FRAME_OFFSET: usize = 1835008usize
+const SHARED_FRAME_PAGES: usize = 64usize
+const SHARED_FRAME_VA: usize = USER_BASE + SHARED_FRAME_OFFSET
+
+// Map `pages` physical pages at `phys` into the address space `ttbr` at the shared-frame VA,
+// EL0-RW. Mapping the same `phys` into two spaces gives them a shared surface at SHARED_FRAME_VA.
+fn map_phys_at(ttbr: usize, phys: usize, pages: usize) -> err {
+    let l1 = ttbr & TABLE_MASK
+    let l2 = usize(os.load64(l1 + L1_USER_INDEX * 8usize)) & TABLE_MASK
+    let l3 = usize(os.load64(l2)) & TABLE_MASK
+    let first = SHARED_FRAME_OFFSET >> 12usize
+    let bits = user_page_bits()
+    var i = 0usize
+    while i < pages {
+        os.store64(l3 + (first + i) * 8usize, u64((phys + i * PAGE) | bits))
+        i += 1usize
+    }
+    os.barrier()
+    os.tlb_flush()
+    ret ok
+}
+
 // (D2157) A fresh stack of `pages` pages in the address space `ttbr`, for a thread of
 // os.thread_create. The user gigabyte's single level-3 table maps the 512 KB program window at its
 // first USER_PAGES entries; the entries above are free (the window sits in a 2 MB level-3 reach),

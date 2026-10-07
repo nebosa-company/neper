@@ -753,7 +753,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if input_client_error != ok { ret input_client_error }
         thread.grant(input_client, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 0usize)
     }
-    if !shell_mode && !fs_mode && !fsserver_mode && !gpu_mode && !input_mode {
+    // (D2162, C110) The compositor boot (`-append compositor`): the initrd is an archive of two
+    // programs. The compositor (program 0) alone holds the virtio-gpu display; an app (program 1)
+    // draws a surface into a frame SHARED with the compositor (the same physical pages mapped into
+    // both at vm.SHARED_FRAME_VA) and signals it ready over endpoint 0; the compositor composites
+    // the surface into the display and flushes. A QEMU screendump is checked against a golden.
+    let compositor_mode = bootargs_error == ok && has_word(bootargs, "compositor")
+    if compositor_mode {
+        if pci_host_error != ok { ret NoInitrd }
+        if !parse_archive(image_addr) { ret BadArchive }
+        let (shared_storage, shared_error) = mem.alloc[u8](a, vm.SHARED_FRAME_PAGES * 4096usize + 4096usize)
+        if shared_error != ok { ret shared_error }
+        let shared_phys = (mem.address_of(&shared_storage[0usize]) + 4095usize) & ~4095usize
+        driver_pool_bytes = 4194304usize
+        last_server_index = thread.MAX_THREADS
+        let (comp_bar, comp_error) = start_driver_server(a, archive_base + archive_offset[0usize], archive_length[0usize], 1usize, pci_host, pci_host.mmio, pci.VIRTIO_GPU, "comp")
+        if comp_error != ok { ret comp_error }
+        if last_server_index == thread.MAX_THREADS { ret NoInitrd }
+        let compositor = last_server_index
+        try vm.map_phys_at(thread.ttbr_of(compositor), shared_phys, vm.SHARED_FRAME_PAGES)
+        thread.grant(compositor, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 0usize)
+        next_asid = 1usize
+        let (comp_app, comp_app_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "app")
+        if comp_app_error != ok { ret comp_app_error }
+        try vm.map_phys_at(thread.ttbr_of(comp_app), shared_phys, vm.SHARED_FRAME_PAGES)
+        thread.grant(comp_app, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
+    }
+    if !shell_mode && !fs_mode && !fsserver_mode && !gpu_mode && !input_mode && !compositor_mode {
     // A and B interleave under the timer, and X is handed a reference to kernel RAM --
     // mapped into its space without EL0 access -- so its read faults and it alone is killed.
     // The RAM base is as good a kernel address as any. S and R rendezvous over endpoint 0
