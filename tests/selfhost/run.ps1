@@ -8965,7 +8965,10 @@ if ($neperosQemu) {
     # so this checks the transmit alone.
     $neperosVirtio = @('-device', 'virtio-rng-pci,disable-legacy=on', '-drive', "file=$neperosDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0', '-device', 'virtio-serial-pci,disable-legacy=on', '-chardev', "file,id=vcon,path=$neperosConsole", '-device', 'virtconsole,chardev=vcon')
     $neperosBoot = Invoke-NeperOS $neperosImage (@('-initrd', $neperosDemo) + $neperosVirtio)
-    if ($neperosBoot -notmatch '(?s)Welcome to NeperOS.*mmu on.*fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned.*scheduling.*thread N denied console.*V revoke ok.*thread W killed, el0 fault at 0x0000007fc0040000.*thread X killed, el0 fault at 0x0000000040000000.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS did not schedule its threads: $neperosBoot" }
+    # W's isolation fault is at its arena page, which sits right after the program image now the EL0
+    # window is sized to it (D2168), so its exact offset tracks the demo's size -- match the user
+    # gigabyte prefix, not a fixed offset. X and Q fault at absolute kernel addresses (still exact).
+    if ($neperosBoot -notmatch '(?s)Welcome to NeperOS.*mmu on.*fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned.*scheduling.*thread N denied console.*V revoke ok.*thread W killed, el0 fault at 0x0000007fc0[0-9a-f]{6}.*thread X killed, el0 fault at 0x0000000040000000.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS did not schedule its threads: $neperosBoot" }
     foreach ($neperosToken in @('A0', 'A1', 'A2', 'B0', 'B1', 'B2', 'X0', 'X1', 'X2', 'R7', 'R8', 'R9', 'D0', 'D1', 'D2')) {
         if ($neperosBoot -notmatch [regex]::Escape("$neperosToken ")) { throw "NeperOS thread output missing ${neperosToken}: $neperosBoot" }
     }
@@ -9001,6 +9004,397 @@ if ($neperosQemu) {
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS shell archive did not assemble' }
     $shellBoot = Invoke-NeperOS $neperosImage @('-initrd', $shellArchive, '-append', 'shell')
     if ($shellBoot -notmatch '(?s)shell init up.*el0 prog A exit 7.*el0 prog B faulting.*thread child killed, el0 fault at 0x0000000000000000.*shell child A code 7.*shell child B killed.*shell init done.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS shell did not run its processes: $shellBoot" }
+    # (D2153, C106) The filesystem-server boot: the initrd is an archive of three programs -- an EL0
+    # filesystem server that alone holds the block device's capability, a client that drives it over
+    # IPC (open, read, write, close, list, mkdir, remove), and a client the kernel granted no
+    # endpoint. `fsserver fswrite` formats a fresh disk and writes a file; `fsserver fsread` reboots
+    # on the same disk and reads it back byte for byte, proving the filesystem persists through the
+    # server. The denied client's send is refused by the kernel -- the capability gate.
+    $fsServer = Join-Path $testBuild 'fs_server.img'
+    $fsClient = Join-Path $testBuild 'fs_client.img'
+    $fsDenied = Join-Path $testBuild 'fs_denied.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\fs_server.e') $repo aarch64 neperos $fsServer | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS filesystem server did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\fs_client.e') $repo aarch64 neperos $fsClient | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS filesystem client did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\fs_denied.e') $repo aarch64 neperos $fsDenied | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS denied client did not build' }
+    $fsArchive = Join-Path $testBuild 'fs-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $fsArchive $fsServer $fsClient $fsDenied
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS filesystem archive did not assemble' }
+    $fsServerDisk = Join-Path $testBuild 'fsserver-disk.img'
+    $fsServerStream = [IO.File]::Create($fsServerDisk); $fsServerStream.SetLength(1MB); $fsServerStream.Close()
+    $fsBlk = @('-drive', "file=$fsServerDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $fsWriteBoot = Invoke-NeperOS $neperosImage (@('-initrd', $fsArchive, '-append', '"fsserver fswrite"') + $fsBlk)
+    foreach ($fsMark in @('fs server formatted', 'fs denied', 'fs client mkdir /docs ok', 'fs client write /docs/greeting ok', 'fs client open /docs/greeting size 17', 'fs client close /docs/greeting ok', 'neperos: exit 0x0000000000000000')) {
+        if ($fsWriteBoot -notmatch [regex]::Escape($fsMark)) { throw "NeperOS filesystem write boot missing (${fsMark}): $fsWriteBoot" }
+    }
+    if ($fsWriteBoot -notmatch "fs client list /docs:\s*greeting") { throw "the filesystem server did not list the written file: $fsWriteBoot" }
+    if ($fsWriteBoot -notmatch "fs client list /:\s*docs") { throw "the filesystem server did not list the directory: $fsWriteBoot" }
+    if ($fsWriteBoot -match 'fs denied leaked') { throw "the capability gate leaked on the write boot: $fsWriteBoot" }
+    $fsReadBoot = Invoke-NeperOS $neperosImage (@('-initrd', $fsArchive, '-append', '"fsserver fsread"') + $fsBlk)
+    foreach ($fsMark in @('fs server up', 'fs denied', 'fs client read: hello neperos fs', 'fs client remove /docs/greeting ok', 'neperos: exit 0x0000000000000000')) {
+        if ($fsReadBoot -notmatch [regex]::Escape($fsMark)) { throw "NeperOS filesystem read boot missing (${fsMark}): $fsReadBoot" }
+    }
+    if ($fsReadBoot -match 'fs server formatted') { throw "NeperOS reformatted an already-written disk, losing persistence: $fsReadBoot" }
+    if ($fsReadBoot -notmatch "fs client list /docs:\s*fs server done") { throw "the removed file was still listed: $fsReadBoot" }
+    if ($fsReadBoot -match 'fs denied leaked') { throw "the capability gate leaked on the read boot: $fsReadBoot" }
+    # (D2170, C110) Fonts read from the filesystem: ui_font (program 1 of an fsserver archive) stores a
+    # synthetic TrueType font in the C106 server through e.fs, reads the bytes back, and renders a
+    # glyph from the reloaded font through e.gfx.scene's DrawText over the e.gpu CPU backend -- the
+    # e.ui text path fed by a font the filesystem handed back. `bigarena` gives the client e.gpu's
+    # arena. The frame folds to a hash identical on QEMU 8.2 and 11.1, and `ui font from fs` proves the
+    # round trip -- so the e.ui drawing path reads its fonts from the filesystem.
+    $uiFont = Join-Path $testBuild 'ui_font.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_font.e') $repo aarch64 neperos $uiFont | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.ui font program did not build' }
+    $uiFontArchive = Join-Path $testBuild 'uifont-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $uiFontArchive $fsServer $uiFont $fsDenied
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.ui font archive did not assemble' }
+    $uiFontDisk = Join-Path $testBuild 'uifont-disk.img'
+    $uiFontStream = [IO.File]::Create($uiFontDisk); $uiFontStream.SetLength(1MB); $uiFontStream.Close()
+    $uiFontBlk = @('-drive', "file=$uiFontDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $uiFontBoot = Invoke-NeperOS $neperosImage (@('-initrd', $uiFontArchive, '-append', '"fsserver bigarena"') + $uiFontBlk)
+    if ($uiFontBoot -notmatch '(?s)ui font from fs.*ui font hash 173685445.*neperos: exit 0x0000000000000000') { throw "NeperOS did not render text from a filesystem font: $uiFontBoot" }
+    # (D2174, C112) The launcher's PNG wallpaper from the filesystem: ui_wall encodes a small image to
+    # PNG, stores it in the C106 server, reads it back and decodes it (e.fmt.png), and draws the
+    # texture scaled to cover the 256x256 surface as the wallpaper under the top bar and 8x5 grid. The
+    # PNG is 136 bytes (one C106 block); the frame hash is identical on QEMU 8.2 and 11.1.
+    $uiWall = Join-Path $testBuild 'ui_wall.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_wall.e') $repo aarch64 neperos $uiWall | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS wallpaper program did not build' }
+    $uiWallArchive = Join-Path $testBuild 'uiwall-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $uiWallArchive $fsServer $uiWall $fsDenied
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS wallpaper archive did not assemble' }
+    $uiWallDisk = Join-Path $testBuild 'uiwall-disk.img'
+    $uiWallStream = [IO.File]::Create($uiWallDisk); $uiWallStream.SetLength(1MB); $uiWallStream.Close()
+    $uiWallBlk = @('-drive', "file=$uiWallDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $uiWallBoot = Invoke-NeperOS $neperosImage (@('-initrd', $uiWallArchive, '-append', '"fsserver bigarena"') + $uiWallBlk)
+    if ($uiWallBoot -notmatch '(?s)ui wall from fs.*ui wall hash 3999367205.*neperos: exit 0x0000000000000000') { throw "NeperOS did not render a PNG wallpaper from the filesystem: $uiWallBoot" }
+    # (D2171, C111) The system status service: the status server (program 0) serves one protocol over
+    # a request and a reply endpoint; the client (program 1) subscribes, reports each field, posts a
+    # notification through the service and reports the count rising from 0 to 1. On QEMU virt there is
+    # no battery or radio, so those report unavailable rather than invented values; the wall clock is
+    # real (its value varies, so only the line's presence is asserted).
+    $statusServer = Join-Path $testBuild 'status_server.img'
+    $statusClient = Join-Path $testBuild 'status_client.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\status_server.e') $repo aarch64 neperos $statusServer | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS status server did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\status_client.e') $repo aarch64 neperos $statusClient | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS status client did not build' }
+    $statusArchive = Join-Path $testBuild 'status-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $statusArchive $statusServer $statusClient
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS status archive did not assemble' }
+    $statusBoot = Invoke-NeperOS $neperosImage @('-initrd', $statusArchive, '-append', 'statussvc')
+    foreach ($statusMark in @('status server up', 'status battery unavailable', 'status wifi unavailable', 'status cellular unavailable', 'status clock ', 'status notifications 0', 'status notifications 1', 'status client done', 'neperos: exit 0x0000000000000000')) {
+        if ($statusBoot -notmatch [regex]::Escape($statusMark)) { throw "NeperOS status service missing (${statusMark}): $statusBoot" }
+    }
+    # (D2175, C112) The launcher's top bar driven by the live C111 status: launcher_status subscribes
+    # to the status server, posts a notification, and renders the top bar with a tick per provider
+    # (dim because battery/Wi-Fi/cellular are absent on virt) and a lit tick per notification. It
+    # reports what it read; the frame hash (clock not drawn) is identical on QEMU 8.2 and 11.1.
+    $lStatus = Join-Path $testBuild 'launcher_status.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\launcher_status.e') $repo aarch64 neperos $lStatus | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS launcher-status program did not build' }
+    $lStatusArchive = Join-Path $testBuild 'lstatus-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $lStatusArchive $statusServer $lStatus
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS launcher-status archive did not assemble' }
+    $lStatusBoot = Invoke-NeperOS $neperosImage @('-initrd', $lStatusArchive, '-append', '"statussvc bigarena"')
+    foreach ($lStatusMark in @('launcher status battery absent', 'launcher status wifi absent', 'launcher status cellular absent', 'launcher status notifications 1', 'launcher status hash 155713317', 'neperos: exit 0x0000000000000000')) {
+        if ($lStatusBoot -notmatch [regex]::Escape($lStatusMark)) { throw "NeperOS launcher status bar missing (${lStatusMark}): $lStatusBoot" }
+    }
+    # (D2172, C112) The launcher's layout skeleton: the wallpaper, the top bar with status ticks, and
+    # the 8x5 icon grid rendered through e.gfx.scene over the e.gpu CPU backend into a 256x256 surface.
+    # Same source, same hash on the host (the rasterizer is pure), so the host hash is the check.
+    $launcherImg = Join-Path $testBuild 'ui_launcher.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_launcher.e') $repo aarch64 neperos $launcherImg | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS launcher did not build' }
+    $launcherHost = Join-Path $testBuild 'launcher_host.exe'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_launcher.e') $repo x64 windows $launcherHost | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the host launcher did not build' }
+    $launcherHostOut = (& $launcherHost 2>&1) -join "`n"
+    if ($launcherHostOut -notmatch 'ui launcher hash (\d+)') { throw "host launcher printed no hash: $launcherHostOut" }
+    $launcherHash = $Matches[1]
+    $launcherBoot = Invoke-NeperOS $neperosImage @('-initrd', $launcherImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+    if ($launcherBoot -notmatch "(?s)ui launcher hash $launcherHash.*neperos: exit 0x0000000000000000") { throw "NeperOS launcher layout did not match the host hash ${launcherHash}: $launcherBoot" }
+    # (D2177, C112) The launcher pages past 40 icons: ui_pages renders a 45-app launcher -- page 0
+    # shows icons 1..40, page 1 shows 41..45, each with a page-dot row. The two pages fold to two
+    # different hashes; the host renders the same pair, so the host hashes are the check.
+    $pagesImg = Join-Path $testBuild 'ui_pages.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_pages.e') $repo aarch64 neperos $pagesImg | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS launcher paging program did not build' }
+    $pagesHost = Join-Path $testBuild 'pages_host.exe'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_pages.e') $repo x64 windows $pagesHost | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the host launcher paging program did not build' }
+    $pagesHostOut = (& $pagesHost 2>&1) -join "`n"
+    if ($pagesHostOut -notmatch 'ui pages page 0 hash (\d+)') { throw "host launcher paging printed no page 0 hash: $pagesHostOut" }
+    $page0Hash = $Matches[1]
+    if ($pagesHostOut -notmatch 'ui pages page 1 hash (\d+)') { throw "host launcher paging printed no page 1 hash: $pagesHostOut" }
+    $page1Hash = $Matches[1]
+    if ($page0Hash -eq $page1Hash) { throw "the launcher's two pages rendered the same: $pagesHostOut" }
+    $pagesBoot = Invoke-NeperOS $neperosImage @('-initrd', $pagesImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+    if ($pagesBoot -notmatch "(?s)ui pages page 0 hash $page0Hash.*ui pages page 1 hash $page1Hash.*neperos: exit 0x0000000000000000") { throw "NeperOS launcher paging did not match the host hashes: $pagesBoot" }
+    # (D2180, C113; D2181/D2182, C114) The shell app faces: Calculator (result display + 4x4 keypad),
+    # Tasks (a checklist with checkboxes) and Settings (rows with toggle switches) each render their UI
+    # through e.gfx.scene over the e.gpu CPU backend and fold the frame to a hash the host reproduces.
+    # (Clock is now live -- D2188 below -- so it is asserted on its serial, not a frame golden.)
+    foreach ($appPair in @(@('calc_app', 'calc app'), @('tasks_app', 'tasks app'), @('settings_app', 'settings app'))) {
+        $appSrc = $appPair[0]
+        $appTag = $appPair[1]
+        $appImg = Join-Path $testBuild "$appSrc.img"
+        & $compiler emit-executable (Join-Path $repo "neperos\src\$appSrc.e") $repo aarch64 neperos $appImg | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "the NeperOS $appSrc did not build" }
+        $appHostExe = Join-Path $testBuild "$appSrc-host.exe"
+        & $compiler emit-executable (Join-Path $repo "neperos\src\$appSrc.e") $repo x64 windows $appHostExe | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "the host $appSrc did not build" }
+        $appHostOut = (& $appHostExe 2>&1) -join "`n"
+        if ($appHostOut -notmatch "$appTag hash (\d+)") { throw "host $appSrc printed no hash: $appHostOut" }
+        $appHash = $Matches[1]
+        $appBoot = Invoke-NeperOS $neperosImage @('-initrd', $appImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+        if ($appBoot -notmatch "(?s)$appTag hash $appHash.*neperos: exit 0x0000000000000000") { throw "NeperOS $appSrc did not match the host hash ${appHash}: $appBoot" }
+        # (D2189, C113) The calculator actually computes: its engine runs "7 * 6 + 9 =" left-to-right
+        # and must report 51 (host==neperos only proves consistency; this pins correctness).
+        if ($appSrc -eq 'calc_app' -and $appBoot -notmatch 'calc result 51') { throw "NeperOS calc_app did not compute 51: $appBoot" }
+        # (D2190, C114) The Tasks toggle engine: initial 3 done, check tasks 3 and 5 -> 5 done.
+        if ($appSrc -eq 'tasks_app' -and $appBoot -notmatch 'tasks done 5') { throw "NeperOS tasks_app toggle engine did not count 5 done: $appBoot" }
+        # (D2191, C114) The Settings toggle engine: initial 3 on, flip settings 2 and 5 -> 5 on.
+        if ($appSrc -eq 'settings_app' -and $appBoot -notmatch 'settings on 5') { throw "NeperOS settings_app toggle engine did not count 5 on: $appBoot" }
+    }
+    # (D2188, C113) The Clock app shows the LIVE time: clock_app reads the wall clock through e.time
+    # (os.clock -> PL031 RTC) and renders the current HH:MM, then prints `clock live HH:MM`. The frame
+    # varies with the clock, so it is asserted on the serial (a valid 24h time) rather than a golden.
+    $clockImg = Join-Path $testBuild 'clock_app.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\clock_app.e') $repo aarch64 neperos $clockImg | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS clock_app did not build' }
+    $clockBoot = Invoke-NeperOS $neperosImage @('-initrd', $clockImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+    if ($clockBoot -notmatch '(?s)clock live [0-2][0-9]:[0-5][0-9].*clock app hash .*neperos: exit 0x0000000000000000') { throw "NeperOS clock_app did not render a live time: $clockBoot" }
+    # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
+    # and a Writer over it) rather than the console primitive directly, so e.io -- and the e.os
+    # variant os.neperos.e it compiles against -- run unchanged on NeperOS. Started as program 0 of a
+    # one-program archive on the shell boot; it prints two lines through e.io and powers off.
+    $ioTest = Join-Path $testBuild 'io_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\io_test.e') $repo aarch64 neperos $ioTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.io program did not build' }
+    $ioArchive = Join-Path $testBuild 'io-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $ioArchive $ioTest
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.io archive did not assemble' }
+    $ioBoot = Invoke-NeperOS $neperosImage @('-initrd', $ioArchive, '-append', 'shell')
+    if ($ioBoot -notmatch '(?s)hello from e\.io on neperos.*e\.io writer runs at EL0.*io roundtrip ok.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.io did not run the portable surface and buffer round-trip: $ioBoot" }
+    # (D2155, C107) e.time on NeperOS: time_test reads os.clock through e.time -- two monotonic
+    # readings around a busy spin (the virtual counter) and the wall clock (the PL031 RTC) -- lowered
+    # to the kernel's clock system call. Started as program 0 of a one-program archive.
+    $timeTest = Join-Path $testBuild 'time_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\time_test.e') $repo aarch64 neperos $timeTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.time program did not build' }
+    $timeArchive = Join-Path $testBuild 'time-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $timeArchive $timeTest
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.time archive did not assemble' }
+    $timeBoot = Invoke-NeperOS $neperosImage @('-initrd', $timeArchive, '-append', 'shell')
+    if ($timeBoot -notmatch '(?s)time monotonic advanced \d+ ns.*time wall seconds \d+.*time date 20\d\d-.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.time did not read the clock and civil date: $timeBoot" }
+    foreach ($timeLeak in @('time monotonic stuck', 'time monotonic failed', 'time wall absent')) {
+        if ($timeBoot -match [regex]::Escape($timeLeak)) { throw "NeperOS e.time misread the clock (${timeLeak}): $timeBoot" }
+    }
+    # (D2156, C107) e.fmt on NeperOS: fmt_test reflects a struct with e.fmt.json's encode[T] and
+    # streams it to an e.io Writer over stdout, then two rows through e.fmt.csv (D2183) and the struct
+    # through e.fmt.ini (D2184) -- the codecs are pure, so the e.os variant and e.io carry several.
+    # Started as program 0 of a one-program archive.
+    $fmtTest = Join-Path $testBuild 'fmt_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\fmt_test.e') $repo aarch64 neperos $fmtTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.fmt program did not build' }
+    $fmtArchive = Join-Path $testBuild 'fmt-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $fmtArchive $fmtTest
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.fmt archive did not assemble' }
+    $fmtBoot = Invoke-NeperOS $neperosImage @('-initrd', $fmtArchive, '-append', 'shell')
+    if ($fmtBoot -notmatch '(?s)fmt json: \{"x":3,"y":7,"label":"neperos"\}.*fmt csv: x,y,label.*3,7,neperos.*fmt ini:.*x=3.*y=7.*label=neperos.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.fmt did not encode JSON, CSV and INI: $fmtBoot" }
+    # (D2157, C107) e.thread on NeperOS: thread_test spawns a worker in the same address space on a
+    # kernel-mapped stack; the worker writes a sentinel through a pointer into the spawner's memory
+    # and the join (which must block) makes the write visible before the read. Started as program 0.
+    $threadTest = Join-Path $testBuild 'thread_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\thread_test.e') $repo aarch64 neperos $threadTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.thread program did not build' }
+    $threadArchive = Join-Path $testBuild 'thread-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $threadArchive $threadTest
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.thread archive did not assemble' }
+    $threadBoot = Invoke-NeperOS $neperosImage @('-initrd', $threadArchive, '-append', 'shell')
+    if ($threadBoot -notmatch '(?s)thread box = 99.*thread wrote 99 via shared memory.*thread group of 3 joined.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.thread did not spawn, join and group-join: $threadBoot" }
+    if ($threadBoot -match 'thread value wrong') { throw "NeperOS e.thread join did not block (the worker's write raced the read): $threadBoot" }
+    if ($threadBoot -match 'thread group incomplete' -or $threadBoot -match 'thread group spawn failed') { throw "NeperOS e.thread group spawn did not run all workers: $threadBoot" }
+    # (D2158, C107) e.fs on NeperOS: fs_efs writes and reads a file through fs.write_file /
+    # fs.read_file, which the e.os variant routes to the C106 filesystem server over IPC. Booted as
+    # the filesystem-server boot's client (program 1 of the archive, with the server's endpoint caps).
+    $fsEfs = Join-Path $testBuild 'fs_efs.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\fs_efs.e') $repo aarch64 neperos $fsEfs | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.fs program did not build' }
+    $efsArchive = Join-Path $testBuild 'efs-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $efsArchive $fsServer $fsEfs $fsDenied
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.fs archive did not assemble' }
+    $efsDisk = Join-Path $testBuild 'efs-disk.img'
+    $efsStream = [IO.File]::Create($efsDisk); $efsStream.SetLength(1MB); $efsStream.Close()
+    $efsBlk = @('-drive', "file=$efsDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $efsBoot = Invoke-NeperOS $neperosImage (@('-initrd', $efsArchive, '-append', '"fsserver fswrite"') + $efsBlk)
+    if ($efsBoot -notmatch '(?s)fs write_file ok.*fs read_file: e\.fs on neperos.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.fs did not read back what it wrote through the server: $efsBoot" }
+    foreach ($efsLeak in @('fs write_file failed', 'fs read_file failed')) {
+        if ($efsBoot -match [regex]::Escape($efsLeak)) { throw "NeperOS e.fs failed (${efsLeak}): $efsBoot" }
+    }
+    # (D2159, C108) virtio-gpu display server: gpu_test, started as the sole holder of the scanout,
+    # reads the mode, draws a test pattern and flushes it; the harness screendumps the display over
+    # QMP and the SHA-256 of the screendump must match the golden (identical on QEMU 8.2 and 11.1).
+    $gpuTest = Join-Path $testBuild 'gpu_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\gpu_test.e') $repo aarch64 neperos $gpuTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS virtio-gpu program did not build' }
+    $gpuGolden = 'd505a446eda5a1fcd82529d0167bcf6f4784f91c91cb00825b96bb2ba60aa1be'
+    $gpuDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $gpuTest (Join-Path $testBuild 'gpu.ppm') 55123 2>&1) -join "`n"
+    if ($gpuDump -notmatch "sha256 $gpuGolden") { throw "NeperOS virtio-gpu screendump did not match the golden: $gpuDump" }
+    # (D2161, C110) The CPU rasterizer on NeperOS: ui_scene draws a scene with e.gfx.paint (the
+    # rasterizer e.gfx.scene uses) and flushes it to the display; the screendump golden is identical
+    # on QEMU 8.2 and 11.1, so the NeperOS pixels equal a host render of the same scene.
+    $uiScene = Join-Path $testBuild 'ui_scene.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_scene.e') $repo aarch64 neperos $uiScene | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS ui_scene program did not build' }
+    $uiGolden = '172a747560e4f73a0de393838fb20f3a8d750cb77e6b9a65328d657fa4cbd86c'
+    $uiDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $uiScene (Join-Path $testBuild 'ui.ppm') 55127 2>&1) -join "`n"
+    if ($uiDump -notmatch "sha256 $uiGolden") { throw "NeperOS CPU-rasterizer scene did not match the golden: $uiDump" }
+    # (D2166, C110) e.gpu's CPU backend runs on NeperOS: gpu_cpu opens the CPU device, which needs
+    # the large program arena (the `gpu bigarena` boot) -- e.ui renders through e.gfx.scene over it.
+    $gpuCpu = Join-Path $testBuild 'gpu_cpu.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\gpu_cpu.e') $repo aarch64 neperos $gpuCpu | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.gpu CPU program did not build' }
+    $gpuCpuBoot = Invoke-NeperOS $neperosImage @('-initrd', $gpuCpu, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+    if ($gpuCpuBoot -notmatch '(?s)gpu cpu open ok.*neperos: exit 0x0000000000000000') { throw "NeperOS e.gpu CPU backend did not open: $gpuCpuBoot" }
+    # (D2167, C110) e.gfx.scene renders through the CPU backend on NeperOS: scene_test builds a
+    # two-rectangle scene and folds the read-back pixels to a hash. The same source renders the same
+    # hash on the host (the rasterizer is pure), so the host hash below is the determinism check.
+    $sceneImg = Join-Path $testBuild 'scene_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\scene_test.e') $repo aarch64 neperos $sceneImg | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.gfx.scene program did not build' }
+    $sceneHost = Join-Path $testBuild 'scene_host.exe'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\scene_test.e') $repo x64 windows $sceneHost | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the host e.gfx.scene program did not build' }
+    $sceneHostOut = (& $sceneHost 2>&1) -join "`n"
+    if ($sceneHostOut -notmatch 'scene hash (\d+)') { throw "host e.gfx.scene render printed no hash: $sceneHostOut" }
+    $sceneHash = $Matches[1]
+    $sceneBoot = Invoke-NeperOS $neperosImage @('-initrd', $sceneImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+    if ($sceneBoot -notmatch "(?s)scene hash $sceneHash.*neperos: exit 0x0000000000000000") { throw "NeperOS e.gfx.scene render did not match the host hash ${sceneHash}: $sceneBoot" }
+    # (D2168, C110) The e.ui stack renders on NeperOS: ui_test is the host ui_testing fixture ported
+    # verbatim -- e.ui.testing drives e.ui.widget over e.gfx.scene / the e.gpu CPU backend, with a
+    # fold of the snapshot printed. It needs the large EL0 window (D2168 sized vm.create to the image;
+    # the old fixed 512 KB region overran into the kernel for a program this size). Same source, same
+    # hash on the host, so the host hash is the determinism check.
+    $uiImg = Join-Path $testBuild 'ui_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_test.e') $repo aarch64 neperos $uiImg | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.ui program did not build' }
+    $uiHost = Join-Path $testBuild 'ui_host.exe'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_test.e') $repo x64 windows $uiHost | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the host e.ui program did not build' }
+    $uiHostOut = (& $uiHost 2>&1) -join "`n"
+    if ($uiHostOut -notmatch 'ui hash (\d+)') { throw "host e.ui render printed no hash: $uiHostOut" }
+    if ($uiHostOut -notmatch 'ui testing ok') { throw "host e.ui sample failed: $uiHostOut" }
+    $uiHash = $Matches[1]
+    $uiBoot = Invoke-NeperOS $neperosImage @('-initrd', $uiImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+    if ($uiBoot -notmatch "(?s)ui hash $uiHash.*ui testing ok.*neperos: exit 0x0000000000000000") { throw "NeperOS e.ui render did not match the host hash ${uiHash}: $uiBoot" }
+    # (D2162, C110) The compositor over shared frames: an app draws a surface into a frame shared
+    # with the compositor and signals it; the compositor composites it into the display and flushes.
+    $comp = Join-Path $testBuild 'comp.img'
+    $compApp = Join-Path $testBuild 'comp_app.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\comp.e') $repo aarch64 neperos $comp | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS compositor did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\comp_app.e') $repo aarch64 neperos $compApp | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS compositor app did not build' }
+    $compArchive = Join-Path $testBuild 'comp-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $compArchive $comp $compApp
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS compositor archive did not assemble' }
+    $compGolden = '1e78b507c7bc0df83765c521d923a7e57df4d754293505e85aab706fe34b3e51'
+    $compDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $compArchive (Join-Path $testBuild 'comp.ppm') 55128 compositor 2>&1) -join "`n"
+    if ($compDump -notmatch "sha256 $compGolden") { throw "NeperOS compositor screendump did not match the golden: $compDump" }
+    # (D2163, C110) Input routed to the focused surface: the C109 input server + the compositor +
+    # the app; a QMP key injection travels keyboard -> input server -> compositor -> focused app.
+    $routeInputServer = Join-Path $testBuild 'input_server.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\input_server.e') $repo aarch64 neperos $routeInputServer | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS input server did not build (route)' }
+    $routeArchive = Join-Path $testBuild 'route-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $routeArchive $comp $compApp $routeInputServer
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS compositor-route archive did not assemble' }
+    $route = (& python (Join-Path $repo 'scripts\neperos-input.py') $neperosQemu.Source $neperosImage $routeArchive keyboard (Join-Path $testBuild 'route.serial') 55129 compositor 2>&1) -join "`n"
+    if ($route -notmatch '(?s)comp composited flushed.*app input ev 1 30 1.*app done') { throw "NeperOS compositor did not route input to the focused surface: $route" }
+    # (D2169, C110) The e.ui window backend presents over the compositor: ui_window opens an e.ui
+    # window (which on NeperOS is the compositor's shared surface), renders a scene through
+    # e.gfx.scene / the e.gpu CPU backend into it, and presents via window.request_frame ->
+    # os.window_present, which blits into the shared frame and signals the compositor. `-append
+    # "compositor bigarena"` gives the app the large arena e.gpu needs. The composited display matches
+    # a golden identical on QEMU 8.2 and 11.1.
+    $uiWindow = Join-Path $testBuild 'ui_window.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_window.e') $repo aarch64 neperos $uiWindow | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.ui window app did not build' }
+    $uiWinArchive = Join-Path $testBuild 'uiwin-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $uiWinArchive $comp $uiWindow
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.ui window archive did not assemble' }
+    $uiWinGolden = '08af9c12ba6349aee0402983945e112eb6283d45b218b7307fb5c8fb1b2de18f'
+    $uiWinDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $uiWinArchive (Join-Path $testBuild 'uiwin.ppm') 55130 'compositor bigarena' 2>&1) -join "`n"
+    if ($uiWinDump -notmatch "sha256 $uiWinGolden") { throw "NeperOS e.ui window over the compositor did not match the golden: $uiWinDump" }
+    # (D2173, C112) The launcher presented over the compositor: launcher.e opens an e.ui window (the
+    # shared surface), renders the launcher layout (wallpaper, top bar, 8x5 grid) and presents it; the
+    # compositor composites it to the display. The composited screendump matches a golden identical on
+    # QEMU 8.2 and 11.1 -- the launcher on the real display.
+    $launcherDisp = Join-Path $testBuild 'launcher.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\launcher.e') $repo aarch64 neperos $launcherDisp | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS launcher display app did not build' }
+    $launcherDispArchive = Join-Path $testBuild 'launcher-disp.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $launcherDispArchive $comp $launcherDisp
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS launcher display archive did not assemble' }
+    $launcherDispGolden = '132a969b792c6b9f8935c316e3f3fe58481f857fe1dba954b44cbd01b4d97f0f'
+    $launcherDispDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $launcherDispArchive (Join-Path $testBuild 'launcher-disp.ppm') 55132 'compositor bigarena' 2>&1) -join "`n"
+    if ($launcherDispDump -notmatch "sha256 $launcherDispGolden") { throw "NeperOS launcher over the compositor did not match the golden: $launcherDispDump" }
+    # (D2160, C109) virtio-input over IPC: the input server alone holds the device and pushes each
+    # event to a client over an endpoint, woken by the device's notification. The fixture injects a
+    # key (keyboard) and a tap (tablet) through QMP and asserts the stream the client receives.
+    $inputServer = Join-Path $testBuild 'input_server.img'
+    $inputClient = Join-Path $testBuild 'input_client.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\input_server.e') $repo aarch64 neperos $inputServer | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS input server did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\input_client.e') $repo aarch64 neperos $inputClient | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS input client did not build' }
+    $inputArchive = Join-Path $testBuild 'input-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $inputArchive $inputServer $inputClient
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS input archive did not assemble' }
+    $inputScript = Join-Path $repo 'scripts\neperos-input.py'
+    $kbd = (& python $inputScript $neperosQemu.Source $neperosImage $inputArchive keyboard (Join-Path $testBuild 'input-kbd.serial') 55125 2>&1) -join "`n"
+    if ($kbd -notmatch '(?s)input ev 1 30 1.*input ev 1 30 0.*input client done') { throw "NeperOS input did not deliver the key over IPC: $kbd" }
+    $tab = (& python $inputScript $neperosQemu.Source $neperosImage $inputArchive tablet (Join-Path $testBuild 'input-tab.serial') 55126 2>&1) -join "`n"
+    if ($tab -notmatch '(?s)input ev 3 0 16384.*input ev 3 1 16384.*input ev 1 272 1.*input client done') { throw "NeperOS input did not deliver the tap over IPC: $tab" }
+    # (D2178, C112) The launcher's tap-to-launch and Home round trip: the input boot's archive is the
+    # input server (0), the launcher (1) and an app (2). A key injected through QMP reaches the
+    # launcher, which launches the app as a process (os.launch), reaps it (os.reap) and returns Home.
+    $tapLauncher = Join-Path $testBuild 'tap_launcher.img'
+    $tapApp = Join-Path $testBuild 'tap_app.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\tap_launcher.e') $repo aarch64 neperos $tapLauncher | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS tap launcher did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\tap_app.e') $repo aarch64 neperos $tapApp | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS tap app did not build' }
+    $tapArchive = Join-Path $testBuild 'tap-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $tapArchive $inputServer $tapLauncher $tapApp
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS tap-launch archive did not assemble' }
+    $tap = (& python $inputScript $neperosQemu.Source $neperosImage $tapArchive keyboard (Join-Path $testBuild 'tap.serial') 55134 input 'launcher home' 2>&1) -join "`n"
+    if ($tap -notmatch '(?s)launcher tap.*launcher launched app.*tap app ran.*launcher app code 5.*launcher home') { throw "NeperOS launcher did not launch an app and return Home on a tap: $tap" }
+    # (D2192, C112) The UNIFIED SHELL: the launcher hosted over the real compositor with live tap
+    # input. Archive [comp(0), shell(1), input(2), app(3)]: the `compositor bigarena` boot runs
+    # comp+shell+input; shell renders the launcher over the compositor (composited to the display) and
+    # on a live key os.launches the app (program 3), reaps it and returns Home. One process beside
+    # comp+input -- the proven compositor-input topology -- so it sidesteps the prodshell AUX heisenbug.
+    $shell = Join-Path $testBuild 'shell.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\shell.e') $repo aarch64 neperos $shell | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS unified shell did not build' }
+    $wallLoader = Join-Path $testBuild 'wall_loader.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\wall_loader.e') $repo aarch64 neperos $wallLoader | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS wallpaper loader did not build' }
+    $shellArchive = Join-Path $testBuild 'shell-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $shellArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS unified-shell archive did not assemble' }
+    # (D2196) The wallpaper is read from the C106 filesystem: program 5 is the fs server on a blank disk,
+    # program 6 the loader that writes and reads /wall.png and sends it to the shell.
+    $shellDisk = Join-Path $testBuild 'shell-disk.img'
+    $shellDiskStream = [IO.File]::Create($shellDisk); $shellDiskStream.SetLength(1MB); $shellDiskStream.Close()
+    $shellBoot = (& python $inputScript $neperosQemu.Source $neperosImage $shellArchive keyboard (Join-Path $testBuild 'shell.serial') 55135 'compositor bigarena unified' 'shell home' $shellDisk 2>&1) -join "`n"
+    if ($shellBoot -notmatch '(?s)shell wallpaper from fs.*shell presented.*shell status .*shell status service notes 1.*comp composited flushed.*shell tap.*shell launched app.*shell app code 5.*shell home' -or $shellBoot -notmatch 'tap app ran' -or $shellBoot -notmatch 'status server done' -or $shellBoot -notmatch 'wall loader from fs' -or $shellBoot -notmatch 'fs server done') { throw "NeperOS unified shell did not host the launcher, show status and launch an app on a tap: $shellBoot" }
 }
 
 Write-Output 'selfhost tests passed'

@@ -44,7 +44,9 @@ type Cap = struct { kind: u8, rights: u8, object: usize, parent: usize }
 // (D2151) A process (C105) is a thread with a parent that may reap it: `parent` is the thread
 // that launched it (NONE for a boot thread), `exit_code` what it passed to exit or the fault
 // sentinel, and `waiting_child` the child it is blocked reaping (NONE otherwise).
-type Thread = struct { state: u8, name: str, ttbr: usize, caps: [8]Cap, frame: a64.Frame, parent: usize, exit_code: usize, waiting_child: usize }
+// (D2157) `detached` marks a thread (from os.thread_detach) whose slot is freed the moment it
+// exits rather than kept for a join -- a thread nobody will reap.
+type Thread = struct { state: u8, name: str, ttbr: usize, caps: [8]Cap, frame: a64.Frame, parent: usize, exit_code: usize, waiting_child: usize, detached: usize, window: usize }
 
 // The exit code of a process the kernel killed for a fault, which its parent's reap returns.
 const FAULT_CODE: usize = 18446744073709551615usize
@@ -105,9 +107,70 @@ fn add(space: vm.Space, name: str, arg_table: usize, arg_count: usize) -> usize 
     var empty: [8]Cap = zero
     // The parent is whatever thread is current: none at boot (where `current` is NONE), the
     // launcher under the `launch` system call, so a later `reap` on this child finds its parent.
-    threads[slot] = Thread { state: READY, name: name, ttbr: space.ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE }
+    threads[slot] = Thread { state: READY, name: name, ttbr: space.ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: space.size }
     live += 1usize
     ret slot
+}
+
+// (D2157) The current thread's address space (its TTBR0), so a new thread of os.thread_create can
+// be built in the same space.
+fn current_ttbr() -> usize {
+    if current == NONE { ret 0usize }
+    ret threads[current].ttbr
+}
+
+// (D2168) The current thread's EL0 window size in bytes, so a syscall that reads a user slice can
+// bound the pointer to what is actually mapped (the window is sized to the program, not fixed).
+fn current_window() -> usize {
+    if current == NONE { ret 0usize }
+    ret threads[current].window
+}
+
+// (D2162) A thread's address space, so the compositor boot can map a shared surface frame into both
+// the compositor's and an app's space.
+fn ttbr_of(index: usize) -> usize {
+    if index >= MAX_THREADS { ret 0usize }
+    ret threads[index].ttbr
+}
+
+// (D2157) A new thread in an existing address space (`ttbr`), for os.thread_create: it enters at
+// `elr` with `arg0`/`arg1` in x0/x1 on the stack ending at `stack_top`, its parent the caller so a
+// join reaps it. An empty capability space -- a spawned thread prints nothing of its own. The
+// index comes back, or MAX_THREADS when the table is full.
+fn add_in_space(ttbr: usize, name: str, elr: usize, arg0: usize, arg1: usize, stack_top: usize) -> usize {
+    var slot = 0usize
+    while slot < MAX_THREADS && threads[slot].state != FREE { slot += 1usize }
+    if slot == MAX_THREADS { ret MAX_THREADS }
+    var frame: a64.Frame = zero
+    frame.x[0usize] = u64(arg0)
+    frame.x[1usize] = u64(arg1)
+    frame.sp_el0 = u64(stack_top)
+    frame.elr = u64(elr)
+    frame.spsr = 0u64
+    var empty: [8]Cap = zero
+    // A spawned thread shares the creating thread's address space, so it shares its window size too.
+    var inherited = 0usize
+    if current != NONE { inherited = threads[current].window }
+    threads[slot] = Thread { state: READY, name: name, ttbr: ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: inherited }
+    live += 1usize
+    ret slot
+}
+
+// (D2157) `detach(t)` (system call 15): give up the right to join thread `t`. A thread already
+// exited is freed now; one still running is marked so it frees itself on exit. x0 is 0, or all-ones
+// for a thread that is not the caller's.
+fn detach(frame: *a64.Frame) {
+    let t = usize(frame.x[0usize])
+    if current == NONE || t >= MAX_THREADS || threads[t].parent != current {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    if threads[t].state == EXITED {
+        threads[t].state = FREE
+    } else {
+        threads[t].detached = 1usize
+    }
+    frame.x[0usize] = 0u64
 }
 
 // A capability placed in a thread's space by the kernel (the root of a derivation: no
@@ -191,7 +254,13 @@ fn finish_current(frame: *a64.Frame, code: usize) -> bool {
     threads[gone].exit_code = code
     threads[gone].state = EXITED
     if live != 0usize { live -= 1usize }
-    wake_reaper(gone)
+    // (D2157) A detached thread is reaped by no one, so free its slot at once; otherwise record the
+    // code and wake a parent blocked joining it.
+    if threads[gone].detached != 0usize {
+        threads[gone].state = FREE
+    } else {
+        wake_reaper(gone)
+    }
     if run_next(gone, frame) { ret true }
     *frame = idle_frame
     current = NONE

@@ -37219,3 +37219,792 @@ C105 shell boots are unchanged. (Trap learned: a module-scope `const X: str = ".
 checking -- no lib module has one; use a local.) Still to come for C106: list, mkdir and remove;
 directories beyond the flat root; and the filesystem as an EL0 IPC server that alone holds the
 block capability, with clients refused unless they hold the server's endpoint.
+
+## D2153 — C106 closes: an EL0 filesystem server, capability-gated over IPC
+
+The filesystem is now an EL0 user-mode server that alone holds the block device's capability;
+clients reach it only over IPC, and a client without the server's endpoint cannot reach it at all.
+The on-disk format gains directories: `mkdir` allocates a directory block (sixteen 32-byte entries,
+like the root) and links it into its parent with kind DIR, and a path is resolved component by
+component, each but the last a directory, so `/docs/greeting` names a file inside a made directory;
+fs.e also gains `stat` (the open/size query), `list` (a directory's entry names, newline-separated)
+and `remove` (clears the entry; blocks are not reclaimed -- an inode and a free bitmap are the
+upgrade when a file or directory outgrows a block). The IPC protocol (fsproto.e) rides thread.e's
+one-word synchronous rendezvous: a request is an op word, the path as a length-prefixed byte string
+(one byte per rendezvous), and for a write the data likewise; a reply is a result word, then for a
+read or list the payload as a byte string, for an open the size word. Op 0 is quit, so the server
+returns and, with every process exited, the kernel powers off. The `fsserver` boot assembles an
+archive of three programs: program 0 (fs_server) is started with start_driver_server so it alone
+holds the block device, then granted the request endpoint (slot 2, receive) and the reply endpoint
+(slot 3, send); program 1 (fs_client) is granted the matching endpoints (request-send slot 1,
+reply-receive slot 2) and a scenario -- `fswrite` formats a blank disk then mkdir/write/open/close/
+lists, `fsread` reads the file back and removes it; program 2 (fs_denied) is granted no endpoint,
+so its very first send is refused by the kernel with the all-ones sentinel -- the capability gate.
+The server, not any client, owns formatting: it formats only a blank disk (is_formatted), so a
+reboot keeps what was written. To keep address spaces distinct the server takes ASID 1 and the
+clients start from 2 (a single module var, last_server_index, carries the server's thread index out
+of start_driver_server so the kernel can grant it the endpoints). Verified on QEMU virt on both
+hosts, two boots on one disk image: boot 1 (fresh) prints `fs server formatted`, `fs denied`,
+mkdir/write/open size 17/close ok, `list /docs: greeting`, `list /: docs`; boot 2 (same disk) does
+NOT reformat and prints `fs client read: hello neperos fs` -- the file read back byte for byte
+across the reboot through the server -- then remove ok and an empty `list /docs`. The scheduler
+orders the denied client against the real client differently between hosts, so the suite fixtures
+(run.ps1, run.sh) assert each line independently rather than one fixed order. The default A-Z, the
+C105 shell and the D2152 fswrite/fsread boots are unchanged.
+
+## D2154 — C107 begins: the e.os NeperOS variant, with e.io running on it
+
+C107 wants an `os` variant for `aarch64 neperos` so the portable library (e.io, e.fs, e.time,
+e.thread, e.fmt) compiles and runs unchanged on NeperOS. This increment lays the variant down and
+carries e.io across; e.time, e.thread, e.fs and e.fmt breadth follow in later increments. The e.os
+surface is intrinsic-based: the compiler seeds open/read/write/close/seek/stdout/stderr/exit/the
+threads/the clock into module e.os (src/resolve.e), and the per-target variant file (os.linux.e,
+os.windows.e) adds the higher-level helpers on top -- there was no NeperOS variant, so a NeperOS
+target fell back to the types-only os.e. New lib/e/os.neperos.e is that variant: `project.
+select_source` picks it for a `neperos` os the way it picks the others (a variant is the WHOLE
+module, so it carries the full type block copied from os.e plus ErrorKind/ErrorDetail and
+NATIVE_SEPARATOR). It adds the thin surface e.io reaches that is not seeded -- read_detail and
+write_detail -- as wrappers over the seeded read/write primitives (NeperOS has no errno, so a
+failed primitive is classified `Other`); the seeded intrinsics resolve unqualified inside the
+variant, as they do in the Linux and Windows files. Swapping os.e -> os.neperos.e for NeperOS does
+not disturb the existing programs (init, the shell and filesystem servers): they use only seeded
+intrinsics and the base types, which the variant also carries. Verified on QEMU virt on both hosts:
+neperos/src/io_test.e, started as program 0 of a one-program archive on the shell boot, reaches the
+portable e.io surface -- `os.stdout()` and a `Writer` over it via `io.print` -- not the console
+primitive directly, and prints `hello from e.io on neperos` then `e.io writer runs at EL0` and
+powers off with exit 0. Suite fixtures added to run.ps1 and run.sh. (Only os.write/os.stdout have to
+lower for NeperOS on this path; os.read/os.seek are referenced by e.io functions the print path does
+not reach, so dead-function elimination drops them until a later increment needs them.)
+
+## D2155 — C107: e.time on NeperOS, over a clock system call
+
+e.time now runs on NeperOS: it reaches the portable `os.clock(kind) -> (i64, err)` intrinsic, which
+already lowered to the `neper_os_clock` symbol for every target (src/lower.e, em.e) -- what was
+missing was the NeperOS backing. Added: a `neper_os_clock` wrapper in runtime_neperos_a64.s (svc
+#13, the kernel answering nanoseconds in x0 and ok in x1; runtime_neperos_a64.e regenerated), and a
+system-call 13 handler in the kernel (neperos/src/main.e `clock`). Monotonic is the virtual counter
+converted to nanoseconds by its frequency, split as whole*1e9 + frac*1e9/freq so neither multiply
+overflows 64 bits (CNTVCT_EL0 and CNTFRQ_EL0 are read at EL1, so an EL0 program needs no counter
+access of its own). Wall reads the PL031 RTC the device tree names -- the kernel finds it at boot by
+compatible `arm,pl031` (fdt.find_compatible, already there from D2146) and keeps its base in a module
+var; the data register holds the seconds since the epoch, and wall falls back to the monotonic
+counter when no RTC is present. The RTC's MMIO sits in the peripheral gigabyte the kernel identity-
+maps as Device memory, so the kernel reads it directly. Verified on QEMU virt on both hosts:
+neperos/src/time_test.e takes two monotonic readings around a busy spin and prints the elapsed
+nanoseconds (~16-21 ms), then reads wall time and prints the seconds (1791327770 -- a 2026 Unix
+timestamp from QEMU's RTC), and powers off with exit 0. Suite fixtures added to run.ps1 and run.sh.
+This is the second C107 increment (after D2154's variant + e.io); e.thread, e.fs and e.fmt follow.
+
+## D2156 — C107: e.fmt on NeperOS (the json codec, over an e.io writer)
+
+e.fmt runs on NeperOS. The format codecs under lib/e/fmt (45 of them) are pure over e.mem, e.str,
+e.meta and e.io and touch no os primitive directly (the one `os.` match in the tree is bytes inside
+a brotli dictionary string), so with the e.os variant (D2154) and e.io already carried across, they
+need nothing new -- the proof is only to build and run one. neperos/src/fmt_test.e reflects a struct
+with e.fmt.json's `encode[T](writer, value)` and streams it to an e.io Writer over stdout: on QEMU
+virt on both hosts it prints `fmt json: {"x":3,"y":7,"label":"neperos"}` and powers off with exit 0,
+so the generic reflection (e.meta), the string formatting (e.str) and the Writer path (e.io ->
+os.write) all run on NeperOS. Suite fixtures added to run.ps1 and run.sh. Third C107 increment
+(after D2154 e.io and D2155 e.time); e.thread (a same-address-space thread-spawn system call) and
+e.fs (the path/dir/stat surface over the C106 server) remain.
+
+## D2157 — C107: e.thread on NeperOS, threads in a shared address space
+
+e.thread runs on NeperOS: a program spawns a thread that runs in the same address space on its own
+kernel-mapped stack, and joins or detaches it. os.thread_create (a generic, compiler-intercepted
+intrinsic) already lowered to `neper_os_thread_create` for every target; os.thread_join and
+os.thread_detach likewise. The NeperOS backing: three runtime wrappers in runtime_neperos_a64.s and
+two kernel pieces. thread_create's wrapper calls system call 14 with a trampoline (np_thread_start,
+defined before the creator so the runtime cut keeps it) plus the user entry, its context and the
+stack size; the kernel allocates a stack and starts a thread at the trampoline, which calls
+entry(ctx) then exits. The stacks live in the spare level-3 entries above the 512 KB program window
+(the window sits in a 2 MB level-3 reach, so ~1.5 MB is free): vm.map_stack walks the current
+space's level-3 table, finds a run of free entries at or above USER_PAGES, backs them with fresh
+physical pages mapped EL0-RW, and returns the top VA. The kernel's thread table gained add_in_space
+(a thread sharing a TTBR, parented to the caller) and a `detached` flag; thread_join reuses the reap
+system call (12), thread_detach is call 15 (free the slot on exit rather than keep it for a join).
+Trap found and fixed by kernel tracing: os.thread_join/detach take the Thread BY POINTER (x0 = &t,
+as the Linux wrapper's `ldr x9,[x0]` shows), so the first wrapper passed a stack pointer to reap as
+the child index -- reap saw a huge number, returned the sentinel, and never blocked, so the join was
+a no-op and the worker's write raced the parent's read: box read 99 on Windows QEMU but 0 on Linux
+QEMU from the SAME image. Dereferencing the pointer to the thread id fixed it; join now blocks
+deterministically (5/5 on each host). neperos/src/thread_test.e: a worker writes a sentinel through
+a pointer into the spawner's memory, and after the join the spawner reads `99` back -- verified on
+QEMU virt on both hosts. Suite fixtures added to run.ps1 and run.sh. Fourth C107 increment; only e.fs
+(the path/dir/stat surface over the C106 filesystem server) remains.
+
+## D2158 — C107: e.fs on NeperOS, file I/O through the C106 server
+
+e.fs runs on NeperOS: a program writes and reads a file through fs.write_file / fs.read_file, which
+reach os.open/read/write/close/stat, and the e.os NeperOS variant routes those to the C106
+filesystem server over IPC. The file primitives are intrinsics seeded as asm wrappers on every other
+target, impractical for the server's multi-step byte protocol; so open/read/write/close/seek/readdir
+are UN-seeded for a `neperos` os (guards in src/resolve.e and src/check.e's seed_os_signatures) and
+WRITTEN in lib/e/os.neperos.e as ordinary Neper functions, while a new `console_write` intrinsic
+(seeded for neperos, a runtime asm wrapper = the old console write) keeps stdout and stderr going to
+the console. The variant now carries the whole e.fs-facing surface: the types (FileInfo, Dir,
+ResolvePolicy), the open/read/write/close/seek primitives, stat/mkdir/remove over the server's IPC
+(fsproto, reimplemented over the seeded send/recv since a lib module cannot import neperos/src), and
+Unsupported stubs for what a single flat server does not do (symlink, rename, working directory,
+environment, directory handles and the *_at family). The server is path-based and whole-file, so a
+File is a CLIENT-SIDE handle (a module table in the variant): open records the path, read loads the
+whole file once and serves from an offset, write buffers, close flushes a dirty buffer with an
+OP_WRITE; File.raw is FILE_BASE+index so a file is told from the console file ids 1/2. A program
+using e.fs is booted as the filesystem-server boot's client (request endpoint slot 1, reply slot 2,
+the caps C106 grants a client). Traps hit on the way: a `;` statement separator is an invalid token
+(newline-separate); `ret f(...)` of a tuple-returning call must destructure first; File is a linear
+type, so open_detail must consume the file on every return path (mirror os.linux.e's two-ret shape).
+Verified on QEMU virt on both hosts: neperos/src/fs_efs.e writes `/hello` and reads it back through
+the server -- `fs write_file ok` then `fs read_file: e.fs on neperos` -- and powers off with exit 0.
+The console path is unchanged: io_test and the whole A-Z capability demo still print through
+console_write (os.write is now the variant's function, not an intrinsic). Suite fixtures added to
+run.ps1 and run.sh. Fifth C107 increment: e.io, e.time, e.fmt, e.thread and e.fs all now compile and
+run on NeperOS. (Kept for later: stdout through the EL0 console server rather than the kernel's
+console write; the Unsupported fs operations the single flat C106 server cannot serve; and porting
+the lib modules' existing fixtures to run on NeperOS, beyond the representative one per module here.)
+
+## D2159 — C108 closes: a virtio-gpu 2D display server
+
+NeperOS has a display. A virtio-gpu 2D driver runs as an EL0 user-mode server that alone holds the
+scanout: the kernel maps the device's BAR and a framebuffer-sized DMA pool into it (the `-append
+gpu` boot) and hands it off. The driver (virtio.gpu_* in neperos/src/virtio.e) speaks the control
+queue -- a 24-byte control header then the command's fields, the device answering OK_NODATA or
+OK_DISPLAY_INFO -- to read the display mode (GET_DISPLAY_INFO: 1280x800 on QEMU), create a BGRA
+resource the display's size (RESOURCE_CREATE_2D), attach a framebuffer as its backing
+(RESOURCE_ATTACH_BACKING), paint a deterministic pattern, make the resource the scanout
+(SET_SCANOUT), copy the backing to the host resource (TRANSFER_TO_HOST_2D) and flush it to the
+screen (RESOURCE_FLUSH). The commands reuse a two-descriptor chain (the command the device reads,
+the response it writes) like the block driver. A framebuffer is 1280*800*4 ~ 4 MB, far past the
+128 KB pool the other driver servers get, so start_driver_server's pool size became a module var
+(driver_pool_bytes) the GPU boot raises to 4 MB; pci.VIRTIO_GPU is device type 16. A QEMU fixture
+proves it: scripts/neperos-screendump.py boots with a virtio-gpu-pci device and a QMP socket, waits
+on the serial for the driver's flush line, takes a QMP screendump of the scanout and prints its
+SHA-256; the suite checks that against the golden
+d505a446eda5a1fcd82529d0167bcf6f4784f91c91cb00825b96bb2ba60aa1be, which is identical on QEMU 8.2
+(WSL) and 11.1 (Windows) because the pattern, the BGRA->RGB conversion and the PPM framing are all
+deterministic. gpu_test.e holds the scanout up with a bounded spin after the flush so the capture
+wins before the kernel powers off. Trap: the pattern's u8(x), u8(x+y) overflow for x,y past 255
+(the narrow-conversion check traps), so each channel is masked `& 255`. Fixtures added to run.ps1
+and run.sh. The default A-Z, shell, fs and other boots are unchanged.
+
+## D2160 — C109 closes: touch and key input over virtio-input
+
+NeperOS takes input. A virtio-input driver runs as an EL0 user-mode server (input_server.e) that
+alone holds the device and the notification the kernel bound to its interrupt (start_driver_server,
+pci.VIRTIO_INPUT = 18). It posts device-writable 8-byte event buffers on the event queue (0), blocks
+on the notification until input arrives (interrupt-driven, not a spin), then drains the burst and
+pushes each event to a client over endpoint 0 as one packed word -- type<<48 | code<<32 | value --
+so, with several single-word rendezvous rather than a multi-word message, nothing interleaves; a
+sentinel word (type 0xFFFF) ends the stream. The event shape is the Linux input_event
+{type:u16, code:u16, value:u32}, so the same driver serves a keyboard and an absolute-pointer
+tablet. The client (input_client.e) holds only the receive end of the endpoint (slot 1), unpacks
+each word and prints it. The `-append input` boot assembles an archive of the two, starts the server
+on the device, grants it the send endpoint (slot 2) and the client the receive endpoint (slot 1).
+scripts/neperos-input.py boots with a virtio-keyboard-pci or virtio-tablet-pci device and a QMP
+socket, waits for the server, injects through input-send-event and prints the client's transcript.
+Verified on QEMU virt on both hosts: a key 'a' arrives as EV_KEY code 30 down (1 30 1), EV_SYN, up
+(1 30 0); a tap arrives as EV_ABS x and y (3 0 16384, 3 1 16384), EV_KEY BTN_LEFT down (1 272 1),
+EV_SYN, up -- all over IPC, both device kinds. Fixtures added to run.ps1 and run.sh. The default
+A-Z, shell, fs, gpu and other boots are unchanged.
+
+## D2161 — C110 begins: the CPU rasterizer draws on NeperOS
+
+C110 wants a compositor and the e.ui backend; this increment lays the drawing foundation -- the
+existing CPU rasterizer painting a scene to the display -- and de-risks the acceptance's pixel-hash
+match. The virtio-gpu pipeline (C108) was split so a program can draw its own pixels: virtio.gpu_begin
+reads the mode, creates the resource, attaches a framebuffer and sets the scanout, returning the Gpu
+(ring, buffers, framebuffer, size); the caller paints the framebuffer; virtio.gpu_present transfers
+and flushes it. gpu_bringup is now gpu_begin + the test pattern + gpu_present, so C108's golden is
+byte-unchanged. neperos/src/ui_scene.e draws with e.gfx.paint -- the same CPU rasterizer e.gfx.scene
+uses, pure over e.gfx.geometry and e.math, so it compiles for NeperOS with nothing new: it fills a
+background and a panel, builds a triangle path, rasterizes it to an anti-aliased coverage mask (in
+the program's own arena) and composites it into the framebuffer, then flushes. A QEMU screendump is
+checked against the golden 172a747560e4f73a0de393838fb20f3a8d750cb77e6b9a65328d657fa4cbd86c, which is
+identical on QEMU 8.2 (WSL) and 11.1 (Windows) -- the rasterizer is pure, so NeperOS pixels equal a
+host render of the same scene, the heart of the acceptance. The screendump harness now waits on a
+generic `flushed` marker so it serves both the test pattern and a scene. Remaining for C110: a
+compositor (app surfaces in shared frames, damage-only flush, input from C109 routed to the focused
+surface), the e.ui window backend over e.gfx.scene with fonts from the filesystem, and an existing
+e.ui sample matching its host render.
+
+## D2162 — C110: a compositor over shared surface frames
+
+The compositor now composites an app's surface from a frame SHARED with it. Shared frames are the
+new kernel capability: vm.map_phys_at maps the same physical pages into two address spaces at a
+fixed window near the top of the user gigabyte's level-3 table (vm.SHARED_FRAME_VA = USER_BASE +
+0x1C0000, 64 pages = a 256x256 BGRA surface), above the 512 KB program window and the thread-stack
+region, so an app and the compositor read and write one surface. thread.ttbr_of exposes a thread's
+address space so the boot can map the frame into both. The `-append compositor` boot assembles an
+archive of two programs: comp.e (program 0) is started on the virtio-gpu display via
+start_driver_server and granted the shared frame plus a receive endpoint; comp_app.e (program 1) is
+granted the same shared frame and a send endpoint. The app draws a scene into the shared surface
+with the e.gfx.paint CPU rasterizer (a background, a panel and an anti-aliased triangle) and signals
+the compositor over the endpoint; the compositor fills the screen background, waits for that signal,
+composites the surface into the display framebuffer at the app's position and flushes. Verified on
+QEMU virt on both hosts: `comp ready`, `comp composited flushed`, screendump golden
+1e78b507c7bc0df83765c521d923a7e57df4d754293505e85aab706fe34b3e51 identical on QEMU 8.2 and 11.1. The
+screendump harness gained an append argument so it serves the gpu, ui and compositor boots. Remaining
+for C110: damage-only flush (a sub-rect rather than the whole display), input from C109 routed to the
+focused surface, and the e.ui window backend over e.gfx.scene with fonts from the filesystem plus an
+e.ui sample matching its host render.
+
+## D2163 — C110: input from C109 routed to the focused surface
+
+The compositor now routes input to the focused app. The `-append compositor` boot grows to three
+programs -- comp.e (the virtio-gpu display and the router), comp_app.e (the app), and the C109
+input_server unchanged -- on two virtio devices, the input server's MMIO window threaded past the
+compositor's BAR (comp_bar) so the two do not collide. Three endpoints wire them: endpoint 0 the app
+signalling a ready frame to the compositor, endpoint 1 the input server pushing events to the
+compositor, endpoint 2 the compositor routing them to the focused app. After compositing the app's
+surface, the compositor loops receiving input events and forwarding each to the app until the
+sentinel; the app, after drawing, receives the routed events and prints them. Verified on QEMU virt
+on both hosts: a QMP-injected key 'a' travels virtio-keyboard -> input_server -> compositor -> app,
+which prints `app input ev 1 30 1` (EV_KEY, KEY_A, down) and the rest, then `app done`. The input
+harness gained an append argument and adds the display device for the compositor boot. Fixtures
+added to run.ps1 and run.sh. Remaining for C110: damage-only flush (a sub-rect rather than the whole
+display), and the e.ui window backend over e.gfx.scene with fonts from the filesystem plus an e.ui
+sample matching its host render -- the large part, needing e.gpu's CPU backend, e.gfx.scene and e.ui
+on NeperOS.
+
+## D2164 — C110: damage-only flush, and an optional input server
+
+The compositor now flushes only the damaged rectangle. virtio.gpu_present_rect transfers and flushes
+a sub-rect [x,y,w,h] of the framebuffer -- the backing offset is the rect's first pixel and the rows
+are read with the resource's full width as stride, so a small change costs a small transfer. The
+compositor presents the background once in full (gpu_present), then every surface update is a
+gpu_present_rect of just the app's 256x256 rectangle; the final image is identical, so the C110
+compositor screendump golden (1e78b507...) is unchanged, now delivered through the damage path. Two
+robustness fixes made the one compositor binary serve both the screendump boot (no input) and the
+routing boot: the input server is optional -- started only when the archive has a third program and
+a virtio-input device is present, and the compositor's input/route endpoints are granted only then,
+so without input its ungranted receive returns the all-ones sentinel and it simply does not route;
+and the compositor holds the scanout up after flushing so the screendump catches it before the
+kernel powers off (the routing boot's harness quits earlier, so the hold is invisible there). Both
+verified on QEMU virt on both hosts. Remaining for C110: the e.ui window backend over e.gfx.scene
+with fonts from the filesystem and an e.ui sample matching its host render -- the large part needing
+e.gpu's CPU backend, e.gfx.scene and e.ui compiled for NeperOS.
+
+## D2165 — C110: e.gpu's CPU backend compiles and links for NeperOS
+
+Toward the e.ui backend (e.ui draws through e.gfx.scene, which renders through e.gpu's CPU backend),
+the first wall was getting e.gpu to build for NeperOS at all. Two gaps closed in os.neperos.e and the
+runtime, both found by probing (a tiny program opening the CPU device): e.gpu uses e.gpu.vulkan,
+whose `os.dlsym[fn ...]` is intercepted onto an os-variant `dl_lookup` (without it the checker
+reports dlsym Unsupported, surfaced as E-TYPE-0009) -- added os.Lib, dlopen, dlclose, dl_lookup
+(Unsupported: NeperOS has no shared libraries; the Vulkan path is pruned under the CPU backend) and
+current_thread_id; and e.sync's lock compiles in the futex os.wait_u32/wake_one_u32/wake_all_u32,
+which had no NeperOS runtime symbol (link_image_a64 answered KernelRuntime) -- added stubs to
+runtime_neperos_a64.s (a waiter returns at once, a wake is a no-op: NeperOS schedules cooperatively
+on one core, so a lock degrades to a correct spin). With these, e.gpu's CPU backend compiles and
+LINKS for `aarch64 neperos`. It does not yet RUN: `gpu.open(.Cpu)` fails because the program arena is
+64 KB (vm.e ARENA_SIZE) while e.gpu's device, queue and a render target need far more -- so the next
+prerequisite for the e.ui backend is a large program arena, a user-address-space change. Existing
+programs are unaffected (the new os functions are unused and pruned; the futex stubs are dead code;
+the C108 gpu golden d505a446 and the other neperos fixtures are byte-for-byte unchanged). Remaining
+for C110: the large arena, then e.gfx.scene and e.ui atop it, the window backend bound to the
+compositor's shared surface with fonts from the filesystem, and an e.ui sample matching its host
+pixel hash.
+
+## D2166 — C110: e.gpu's CPU backend runs on NeperOS over a large program arena
+
+e.gpu's CPU backend now opens on NeperOS. The blocker after it linked (D2165) was the arena:
+vm.create lays down a 64 KB in-window arena, while e.gpu's device, queue and buffers need far more.
+A program can now be given a large arena in its own mapped EL0 region: a driver_arena_bytes module
+var and with_big_arena (map a region via map_range_el0, point the space's arena_addr/size at it),
+applied in both start_driver_server and start_process. The kernel's own arena grew from 16 MB to
+64 MB (link_image_a64.A64_KERNEL_ARENA) so it can carve a 16 MB program arena plus the 4 MB display
+pool and the spaces and still sit well below the initrd on a 256 MB machine. The `-append gpu
+bigarena` boot sets a 16 MB program arena; neperos/src/gpu_cpu.e opens e.gpu's CPU device there and
+prints `gpu cpu open ok`, verified on QEMU virt on both hosts with a clean power-off. The small-arena
+boots are untouched (driver_arena_bytes defaults to zero), and the C108 gpu golden d505a446 and the
+other neperos fixtures are byte-for-byte unchanged after the kernel-arena and compiler rebuild. This
+is the runtime foundation for the e.ui backend; remaining for C110: build an e.gfx.scene renderer
+over the CPU backend, bind the e.ui window backend to the compositor's shared surface with fonts from
+the filesystem, and render an e.ui sample matching its host pixel hash.
+
+## D2167 — C110: e.gfx.scene renders through the CPU backend on NeperOS
+
+e.ui's full drawing path now runs on NeperOS: e.gfx.scene compiled to a display list, rendered by
+e.gpu's CPU backend into an offscreen target. neperos/src/scene_test.e opens the CPU device and an
+offscreen Bgra8 target, builds a two-rectangle scene (background fill plus a panel), compiles and
+renders it, reads the pixels back and folds them to a hash. On NeperOS and on the host the hash is
+the same (2632735557) — the rasterizer is pure, so identical pixels are the determinism proof, and
+the suite bakes it in by rendering the same source on the host, reading its hash, and requiring the
+QEMU run to print that hash. The blocker was e.gpu's reentrant device mutex: it re-enters only when
+`current_thread_id()` returns the owning thread, but os.neperos.e stubbed it to 0, which the lock
+reads as "no owner", so a nested device lock on the one thread re-locked a held mutex and hung
+(the futex is a no-op spin here). A NeperOS program runs on one thread, so current_thread_id now
+returns a fixed non-zero id, which the lock keys on; a real per-thread id would be a kernel query,
+for when a program's own threads each take the lock. Verified on both hosts with a clean power-off;
+the C108 gpu golden d505a446 and the other neperos fixtures are byte-for-byte unchanged. Remaining
+for C110: bind the e.ui window backend to the compositor's shared surface with fonts from e.fs, and
+render an e.ui sample matching its host pixel hash.
+
+## D2168 — C110: the e.ui stack renders on NeperOS, matching its host pixel hash
+
+An existing e.ui sample now renders on NeperOS with the same pixels as the host. neperos/src/ui_test.e
+is tests/selfhost/fixtures/link/ui_testing ported verbatim: e.ui.testing drives e.ui.widget over
+e.gfx.scene and the e.gpu CPU backend with no window -- a two-element tree (a box and a button)
+pumped, found by key and by text, a pointer press dispatched to the button's action, the frame
+snapshotted and compared against itself and a golden that differs by one channel, plus the
+e.ui.animation curves. The whole snapshot folds to one hash, 2725760869, identical on NeperOS and the
+host because the rasterizer is pure; the suite renders the same source on the host, reads its hash,
+and requires the QEMU run to print it and `ui testing ok`. Verified on both hosts with a clean
+power-off.
+
+Two things had to be built. First, the e.os surface e.ui compiles against but a headless program
+never calls: os.neperos.e gained the native-window, window-event, clipboard, monitor and
+accessibility-bridge types and functions (window.e, input.e and accessibility.e all reach for them),
+every one Unsupported -- e.ui draws into the compositor's shared surface and the test harness uses an
+offscreen target, so the window path is pruned, but the types must exist for those modules to
+type-check.
+
+Second, and the real bug: the EL0 window was a fixed 512 KB region with the arena at 256 KB, the
+args at 320 KB and the stack at the top. A program over ~256 KB clobbered the arena, and vm.create's
+image copy had no bound, so one over 512 KB (this e.ui program is ~740 KB) overran the region into
+the kernel's own memory and the kernel later jumped into the overwritten area and faulted at a wild
+address. vm.create now lays the window out from the page-aligned image -- image | arena | args |
+stack -- and sizes the whole region and the page mapping to it, refusing (NoSpace) a window past one
+level-3 table's 2 MB reach rather than overrunning. The arena offset, arg offset and window size
+move into the Space; setup_args reads the arg offset from it; the console/device-write syscalls bound
+a user pointer by the current thread's window size (carried in the Thread now) instead of the old
+constant; map_stack scans the level-3 table skipping the mapped window, so it is size-agnostic. One
+visible effect: thread W's isolation fault in the A-Z demo (a write through a re-protected frame
+capability over its arena page) now reports its arena's address, which sits right after the image, so
+the suite matches the user-gigabyte prefix there rather than the old fixed offset. The C108 gpu
+golden d505a446, the ui_scene (172a7475) and compositor (1e78b507) screendump goldens, the fsserver
+persistence boot and the D2167 scene hash are all byte-for-byte unchanged on both hosts. Remaining
+for C110: bind the e.ui window backend to the compositor's shared surface (present through it rather
+than the headless offscreen target) and a text-bearing sample with fonts read from e.fs.
+
+## D2169 — C110: the e.ui window backend presents over the compositor
+
+D2168 proved the e.ui stack renders correctly on NeperOS through the headless testing harness (an
+offscreen target). This wires the other half: the e.ui window backend presenting through the
+compositor's shared surface, so an e.ui window actually reaches the display. On NeperOS a window IS
+the compositor's shared surface, so os.neperos.e's window surface stopped being Unsupported stubs:
+window_open/metrics/title/visible/cursor answer ok, window_metrics reports the 256x256 surface, and
+window_present blits the app's rendered pixels (Bgra8 packed into u32, which is exactly the shared
+frame's byte order on little-endian) into vm.SHARED_FRAME_VA and signals the compositor on endpoint
+slot 1 -- the same contract a hand-written compositor app follows. window_poll answers ok with no
+event (a NeperOS app's input arrives over the compositor's routed endpoint, not here) rather than
+Unsupported, which the e.ui app loop would read as a failure.
+
+neperos/src/ui_window.e opens an e.ui.window at 256x256, renders a three-rectangle scene through
+e.gfx.scene and the e.gpu CPU backend into the window's own drawable (window.draw_target), and
+presents with window.request_frame, which reads the frame back and hands it to os.window_present. It
+is wired as the app (program 1) of a compositor-boot archive; the compositor composites its surface
+and flushes. The composited display matches a golden, 08af9c12…, identical on QEMU 8.2 (WSL) and
+11.1 (Windows), and the serial shows `comp ready` / `ui window presented` / `comp composited flushed`
+/ `ui window done` / clean power-off. An e.ui app needs e.gpu's large arena, so the compositor boot
+now gives its app the 16 MB arena when the boot arg carries `bigarena` (the gpu boot's mechanism);
+without it the app keeps the in-window arena, so the existing compositor golden (1e78b507) boot is
+byte-for-byte unchanged, re-verified along with the C108 gpu, ui_scene and base-demo boots. One
+quietly reassuring result: the CPU backend renders a scene from a renderer on one queue into a target
+created on the window's own queue, so no queue-sharing accessor was needed. Remaining for C110: a
+text-bearing e.ui sample with fonts read from e.fs.
+
+## D2170 — C110: e.ui text renders from a font read from the filesystem, closing C110
+
+The last piece of C110: the e.ui drawing path rendering text from a font the filesystem hands back.
+neperos/src/ui_font.e builds a synthetic TrueType font (one square glyph, the e.gfx.scene fixture's
+font), stores it in the C106 filesystem server through e.fs (fs.write_file to /font.ttf), reads the
+bytes back (fs.read_file), registers the reloaded font with the scene renderer, and renders a glyph
+through e.gfx.scene's DrawText over the e.gpu CPU backend into an offscreen target. The frame folds
+to a hash, 173685445, identical on QEMU 8.2 (WSL) and 11.1 (Windows); `ui font from fs` confirms the
+bytes made the round trip. It runs as program 1 of an fsserver archive (server, ui_font, denied
+client), so os.open/write/read/close route to the server over IPC exactly as e.fs expects, and the
+fsserver boot now gives program 1 the 16 MB arena on `bigarena` (the server and denied client keep
+their small arenas), since the renderer needs it. The program is not built for the host -- its quit
+signal (os.send to the server) is a NeperOS IPC primitive absent on a host build -- so determinism is
+the QEMU-8.2-vs-11.1 agreement, the same proof the display goldens use; the render path itself is the
+one the host e.gfx.scene fixture already verifies pixel for pixel.
+
+This closes C110. Its acceptance is met across D2161–D2170: app surfaces in shared frames (D2162),
+damage-only flush to the C108 display server (D2164), input from C109 routed to the focused surface
+(D2163), the e.ui window backend drawing with the CPU rasterizer over the compositor (D2168 renders,
+D2169 presents over the compositor) and with fonts read from the filesystem (D2170), and an existing
+e.ui sample rendering on NeperOS with the same pixel hash as its host render (D2168). C110 -> 1.0.
+
+## D2171 — C111: the system status service
+
+NeperOS shell-7, the system status service, in one increment. neperos/src/status_server.e is an EL0
+user-mode server that holds the system status -- battery, Wi-Fi, cellular, the wall clock and a
+notification count -- and serves one protocol over two endpoints: a request endpoint (op words:
+subscribe, query, post, quit) and a reply endpoint carrying a five-word snapshot (battery, Wi-Fi,
+cellular, wall-clock nanoseconds, notification count). Each provider's word has a present bit; on
+QEMU virt there is no battery and no radio, so those three are zero -- a client reads the present bit
+clear and reports them unavailable rather than inventing a level or a signal. The wall clock is the
+one live provider, read fresh from os.clock(.Wall) on each snapshot. The snapshot layout keeps room
+for real values (battery level and charging, Wi-Fi signal, cellular signal and type LTE/5G), so the
+D2148 Android bridge later fills them behind the same protocol without a client change.
+
+The notification service is the post op: an app posts, the count rises, and the server pushes a fresh
+snapshot to the subscriber -- subscription is the subscribe op plus push-on-change, and on QEMU the
+notification count is the one field that changes (the clock rides along in every snapshot). The boot
+`-append statussvc` runs an archive of the server (program 0, granted the request-receive and
+reply-send endpoints) and a client (program 1, granted request-send and reply-receive); it needs no
+device and no disk. neperos/src/status_client.e subscribes, reports each field, posts a notification
+and reports the count rising from 0 to 1, then tells the server to quit. Verified on QEMU virt on
+both hosts (the clock line's value varies, so the fixtures assert its presence, not its value); the
+earlier neperos fixtures are unchanged (the status boot is a new, self-contained mode). C111 -> 1.0.
+
+## D2172 — C112: the launcher's layout skeleton
+
+NeperOS shell-8, the launcher, begun. neperos/src/ui_launcher.e renders the launcher's visual
+skeleton -- a cover wallpaper fill, a top bar with five status ticks (battery, Wi-Fi, 5G, clock,
+notifications), and the 8-row by 5-column icon grid, one shaded tile per cell -- through e.gfx.scene
+over the e.gpu CPU backend into a 256x256 surface (the compositor's surface size). It folds the frame
+to a hash, 3700568229, identical on the host and on NeperOS (QEMU 8.2 and 11.1), since the rasterizer
+is pure; the suite renders the same source on the host, reads its hash, and requires the NeperOS run
+to print it. This is the launcher's spatial layout, the frame the rest of C112 fills in: a real PNG
+wallpaper from the filesystem scaled to cover, labels and real app icons, the live C111 status in the
+top bar, presentation over the compositor, and tap-to-launch with Home. A module-scope `const X: f32`
+tripped the location-less E-TYPE-9999 the way a module-scope str or bool const does, so the layout
+constants are inline literals. C112 -> 0.2.
+
+## D2173 — C112: the launcher presented over the compositor
+
+The launcher reaches the display. neperos/src/launcher.e opens an e.ui.window -- the compositor's
+shared surface on NeperOS (D2169) -- renders the launcher's layout (the wallpaper, the top bar with
+status ticks and the 8x5 icon grid, the same scene as the D2172 offscreen fixture) through
+e.gfx.scene over the e.gpu CPU backend into the window, and presents it with window.request_frame,
+which hands the frame to os.window_present: a blit into the shared surface and a signal to the
+compositor. Wired as the app of a compositor boot, the compositor composites the launcher's surface
+and flushes it; the composited display matches a screendump golden 132a969b..., identical on QEMU
+8.2 (WSL) and 11.1 (Windows), and the serial shows `comp ready` / `launcher presented` / `comp
+composited flushed` / `launcher done` / clean power-off. This is the launcher's screendump-golden
+piece of the acceptance -- a visible launcher on the real display. Remaining for C112: a real PNG
+wallpaper from the filesystem scaled to cover, labels and real app icons, the live C111 status in the
+top bar, and a tap launching an app with Home returning to the launcher. C112 -> 0.4.
+
+## D2174 — C112: a PNG wallpaper read from the filesystem, scaled to cover
+
+The launcher's wallpaper now comes from a PNG in the filesystem. neperos/src/ui_wall.e builds a small
+image, encodes it to PNG (e.fmt.png over e.algo.deflate, io.slice_writer into a buffer), stores it in
+the C106 server through e.fs (fs.write_file), reads the PNG bytes back (fs.read_file), decodes them
+(png.decode over io.slice_reader), uploads the decoded image to the scene renderer and draws it with
+a DrawImage whose destination is the whole 256x256 surface -- scaled to cover -- then the top bar and
+the 8x5 grid over it. It folds the frame to a hash 3999367205, identical on QEMU 8.2 (WSL) and 11.1
+(Windows); `ui wall from fs` and `ui wall encoded 136` confirm the PNG made the round trip through the
+filesystem. Program 1 of an fsserver archive, it quits the server at the end.
+
+Two constraints shaped it. First, deflate overflowed the 128 KB EL0 stack -- png.encode faulted at a
+function prologue (an unknown-reason exception, EC 0, at a `stp`/`sub sp` sequence) because its lz77
+window and tables are stack-heavy; the EL0 stack (vm.STACK_SIZE) grew to 512 KB, which the window
+still fits under the 2 MB level-3 reach. The rendered goldens do not depend on stack size, so the
+C108 gpu (d505a446), compositor (1e78b507) and D2167 scene (2632735557) fixtures and the base demo
+(W's arena-page fault, X's kernel fault, clean exit) are byte-for-byte unchanged, re-verified on both
+hosts. Second, a C106 file is a single 512-byte block, so the wallpaper source is 4x4 and its PNG is
+136 bytes; DrawImage scales it to cover, which is what a real photo wallpaper needs anyway. Remaining
+for C112: labels and real app icons, the live C111 status in the top bar, and tap-to-launch with
+Home. C112 -> 0.6.
+
+## D2175 — C112: the launcher's top bar driven by the live C111 status
+
+The launcher's top bar now shows the live C111 status. neperos/src/launcher_status.e subscribes to
+the C111 status service, reads the snapshot, posts a notification through the service (so the count
+rises to 1) and reads it again, then renders the launcher with the top bar's indicators driven by
+what the service reported: a tick per provider, bright when present and dim when absent -- battery,
+Wi-Fi and cellular are all absent on QEMU virt, so all three are dim, honestly -- and a lit tick per
+notification (one, after the post). It reports each field it read (`launcher status battery absent`,
+... `notifications 1`) so the fixture can confirm the launcher read the real values, and folds the
+frame to a hash 155713317, identical on QEMU 8.2 (WSL) and 11.1 (Windows); the clock is not drawn, so
+the hash is deterministic. It runs as program 1 of a status boot, which now grants its rendering
+client the 16 MB arena on `bigarena` (the plain reporting client of D2171 keeps the small arena, so
+the D2171 status fixture is unchanged, re-verified with the C108 gpu golden). This is the launcher
+wiring the C108/C110 display path to the C111 status service -- two NeperOS subsystems meeting in the
+shell. Remaining for C112: app-icon labels and tap-to-launch with Home. C112 -> 0.8.
+
+## D2176 — C112: app-icon labels via a built-in bitmap digit font
+
+The launcher's icons now carry labels. neperos/src/ui_launcher.e gained a built-in 3x5 bitmap digit
+font (five rows per digit, three bits each, the high bit the left column) and draws each icon's
+1-based index (1..40) centred on its tile, each lit pixel a small scene FillRect. The frame hash
+moves from 3700568229 to 3820471609, identical on the host and on NeperOS (QEMU 8.2 and 11.1); the
+D2172 fixture reads the host hash and requires the NeperOS run to match, so it covers the labelled
+layout without a hardcoded golden. The builder's command budget grew to 1536 to hold the ~1000 label
+pixels over the 47 layout rectangles.
+
+Why a digit font rather than real app names: a readable multi-glyph font is tens of kilobytes, and a
+C106 file is a single 512-byte block, so a real TTF cannot be stored in the filesystem yet; there is
+no reusable bitmap font in the tree (e.debug.builtin is C++ demangling), and e.asset embedding needs
+a project build the direct emit-executable path does not run. Real app-name labels therefore wait on
+multi-block C106 files (server contiguous-block storage plus a client that streams past the fixed
+512-byte handle buffer in os.neperos.e), which also unblocks the C113/C114 app text; the index labels
+render the label path correctly in the meantime. Remaining for C112: real-name labels over that font
+work, paging beyond 40 icons, and tap-to-launch with Home. C112 -> 0.85.
+
+## D2177 — C112: the launcher pages past 40 icons
+
+The 8x5 grid holds 40 icons; with more apps than that the launcher pages. neperos/src/ui_pages.e
+renders a 45-app launcher: page 0 shows icons 1..40, page 1 shows icons 41..45, each with a page-dot
+row at the bottom whose current dot is lit. It renders both pages through e.gfx.scene over the e.gpu
+CPU backend and folds each to a hash; the two differ (page 1 has five icons where page 0 has forty),
+and both are identical on the host and on NeperOS (QEMU 8.2 and 11.1), so the host's pair is the
+check. The page is chosen by which global indices (page * 40 + slot) fall below the app count, and
+the dot row draws ceil(count / 40) dots. C112 -> 0.9. Remaining: tap-to-launch with Home (the
+launch-and-return round trip) and the init program starting the launcher after boot.
+
+## D2178 — C112: the launcher's tap-to-launch and Home round trip
+
+The launcher now launches an app on a tap and returns Home. neperos/src/tap_launcher.e is program 1
+of the input boot's archive (the C109 input server is program 0, an app program 2). The input server
+forwards each event to the launcher over its endpoint (slot 1); on the first key-down -- a tap on an
+icon -- the launcher launches the app as a process (os.launch of archive index 2), waits for it
+(os.reap), and reports Home, back at the launcher. neperos/src/tap_app.e prints a line and exits with
+code 5. A key injected through QMP drives the whole round trip: the serial shows `launcher tap` /
+`launcher launched app` / `tap app ran` / `launcher app code 5` / `launcher home`, identical on QEMU
+8.2 (WSL) and 11.1 (Windows). No kernel change -- the input boot already starts programs 0 and 1 and
+os.launch starts program 2 on demand; neperos-input.py gained an optional done-marker argument so the
+harness waits for `launcher home` rather than the input client's line. This is the launch-and-return
+round trip the C112 acceptance names.
+
+C112 -> 0.95. All of C112's feature clauses are now demonstrated on NeperOS -- the launcher layout
+(D2172), presentation over the compositor (D2173), a PNG wallpaper from the filesystem (D2174), the
+live C111 top-bar status (D2175), app-icon labels (D2176), paging past 40 icons (D2177) and
+tap-to-launch with Home (D2178). Remaining: a single launcher binary that wires the filesystem,
+status, compositor and input servers together in one boot (the production shell), rather than the
+focused per-feature programs that prove each capability.
+
+## D2179 — C113: the Clock app face
+
+NeperOS shell-9 begun: the Clock app. neperos/src/clock_app.e renders a digital clock -- a dark card
+on a wallpaper, the time "12:34" in large digits with a colon, drawn with the built-in 3x5 bitmap
+digit font (D2176) scaled up -- through e.gfx.scene over the e.gpu CPU backend into a 256x256
+surface, and folds the frame to a hash 733107141, identical on the host and on NeperOS (QEMU 8.2 and
+11.1). A fixed time keeps the frame deterministic; the live clock is os.clock (C107/C111). This is
+the app's visual, which the shell hosts once the unified launcher lands.
+
+## D2180 — C113: the Calculator app face
+
+The Calculator app. neperos/src/calc_app.e renders a result display ("42") and a 4x4 keypad: digit
+buttons show their digit in the bitmap font, operator buttons (/ * - + = C) a small rect-composed
+symbol on a tinted tile, through e.gfx.scene over the e.gpu CPU backend. The frame hash is 558372214,
+identical on the host and on NeperOS. Both C113 app faces now render; the arithmetic and the live
+clock are ordinary e.* code, and hosting the apps in the shell with tap input waits on the unified
+launcher (C112's blocked prodshell integration). C113 -> 0.6.
+
+## D2181 — C114: the Tasks app face
+
+NeperOS shell-10 begun: the Tasks app. neperos/src/tasks_app.e renders a checklist -- a header, then
+six task rows, each with a checkbox (filled green when done), the task's number in the built-in 3x5
+bitmap digit font, and a bar standing in for its title -- through e.gfx.scene over the e.gpu CPU
+backend into a 256x256 surface, folding the frame to a hash 3422317813 identical on the host and on
+NeperOS (QEMU 8.2 and 11.1). Fixed task data keeps it deterministic.
+
+## D2182 — C114: the Settings app face
+
+The Settings app. neperos/src/settings_app.e renders a settings list -- a header and five rows, each
+a label bar and a toggle switch (a track and a knob, green with the knob right when on, grey with the
+knob left when off) -- through e.gfx.scene over the e.gpu CPU backend; frame hash 385502117, identical
+on both hosts. Both C114 app faces now render; interactive behavior (toggling, editing tasks) and
+hosting the apps in the shell wait on C112's unified launcher. C114 -> 0.6.
+
+With C113 and C114 begun, every NeperOS shell app face (launcher, clock, calculator, tasks, settings)
+and every subsystem (processes, filesystem, e.os surface, display, input, compositor, e.ui, status)
+now runs and renders on NeperOS, verified on both hosts. The one remaining integration is the unified
+production-shell boot that hosts the apps together (blocked on the prodshell compositor-AUX runtime
+anomaly, under gdb investigation), plus the hardware-only C104 Pixel bring-up.
+
+## D2183 — e.fmt breadth on NeperOS: the fmt fixture encodes a second codec
+
+C107's remaining band named "e.fmt breadth" -- the one-per-module fixture only exercised e.fmt.json.
+`neperos/src/fmt_test.e` now also writes two rows through e.fmt.csv (a header and a data row, the
+default comma/LF dialect) straight to the same e.io Writer after the json encode, so the serial reads
+`fmt csv: x,y,label` then `3,7,neperos`. This proves more than one e.fmt codec compiles and runs
+unchanged on NeperOS: the codecs are pure over e.mem/e.str/e.meta/e.io and touch no os primitive, so
+the e.os variant and e.io already carry them. Frame output (plain text) is identical on both QEMU
+hosts (8.2 under WSL, 11.1 on Windows).
+
+Built and verified with a worktree-local `neper-self` (from this worktree's own `src/`, ~17 s via the
+Windows bootstrap into a private directory), because the shared `build/.../neper-self` had been swapped
+by a concurrent session on a divergent line that lacks this worktree's D2158 guard
+(`src/resolve.e:436` `if !same(g.os, "neperos")`, which keeps open/read/write/close/seek out of the
+seeded intrinsics for the neperos target so the e.os variant can define them) -- the swapped binary
+seeded `write` unconditionally and rejected `os.neperos.e`'s `write`. Rebuilding one's own compiler
+when the shared one is swapped is the standing remedy (D1593); no shared file was written. C107 holds
+at 0.9: the flat C106 server's intentionally-Unsupported path/dir ops and porting further lib-module
+fixtures to NeperOS remain.
+
+## D2184 — e.fmt breadth on NeperOS: a third codec (ini), and the gpu-boot toolchain wall
+
+`neperos/src/fmt_test.e` now also encodes the same struct through e.fmt.ini after json and csv, so the
+serial reads `fmt ini:` then `x=3` / `y=7` / `label=neperos` (ini.encode[T] writes flat key=value for a
+flat struct). Three pure e.fmt codecs now run unchanged on NeperOS through the e.os variant + e.io.
+Verified identical on both QEMU hosts (8.2 WSL, 11.1 Windows) with the worktree-local neper-self.
+
+Boundary of what is verifiable here: only the SHELL boot. The gpu/driver boot cannot be verified in
+this environment. Every driver-boot program -- the unmodified, previously-green `gpu_test` (D2159),
+`calc_app` and the HEAD static `clock_app` -- faults at the program's first instruction (`unexpected
+exception 0x08 esr 0x02000000 far 0x10000000000 elr 0x7fc0000000`, exit 0x87), while the same binaries
+run `main` correctly under the shell boot (calc_app printed `calc gpu failed` and exited 0; fmt_test is
+byte-exact). The cause is NOT a source regression and NOT a random codegen bug: two independent
+compilers -- the C-bootstrap-descended `c103b.exe` (10 MB self-host, rebuilt today by the concurrent
+session) and `build/windows/neper.exe` -- produce the IDENTICAL driver-boot fault, and both belong to
+the divergent C103/master line whose builds overwrote this worktree's shared `build/`. No fa07c7d0-line
+compiler is available, and one cannot be synthesised here: the frozen bootstrap (C088) cannot compile
+the grown compiler, `neper build src/main.e` crashes the WSL2 VM, and the Windows bootstrap needs MSVC
+(absent; only `zig cc` is present). So the gpu-boot NeperOS features (the C112-C114 app faces and the
+compositor rendering) are unverifiable until the C114 line lands on master or a matching toolchain is
+restored -- a branch/toolchain coordination state, not a code defect in this worktree. See
+[[neper-private-verify-recipe]].
+
+## D2185 — e.thread group spawn on NeperOS (shell boot verifiable), and the miscompile is narrow
+
+`neperos/src/thread_test.e` now also exercises `thread.spawn_all`/`join_all`: three workers started
+together over three contexts, reclaimed by one `join_all`, with each worker's write checked after the
+barrier (a 0 means that worker never ran). Serial reads `thread group of 3 joined`; identical on both
+QEMU hosts (8.2 WSL, 11.1 Windows). This covers the group path of e.thread beyond the D2157 single
+spawn+join, within C107's acceptance.
+
+It also sharpens the gpu-boot diagnosis (D2184): the toolchain miscompile is NARROW, not a blanket
+failure of low-level kernel code. `thread_test` -- which drives `os.thread_create` and `vm.map_stack`
+(page-table manipulation of the same family as the faulting `vm.map_range_el0`) -- builds and runs
+correctly under the shell boot with the same worktree-local neper-self that produces the faulting
+driver boot. So the fault is confined to the device-MMIO driver-boot path (`map_range_el0` / the
+start_driver_server setup), while the rest of the e.os surface (e.io/e.time/e.fmt/e.thread spawn+join+
+group) is compiled correctly and stays verifiable on the shell boot. C107 holds at 0.9; the gpu/driver
+-boot fixtures remain unverifiable here (toolchain), and the flat-C106 Unsupported ops remain.
+
+## D2186 — e.time calendar breadth on NeperOS: a civil date, not just a raw clock read
+
+`neperos/src/time_test.e` now converts the wall timestamp to a civil date with `time.to_date`
+(e.time's `days_from_civil`/`civil_from_days` floor-division math) and prints `time date 2026-10-7`,
+proving the calendar path runs on NeperOS beyond the raw `os.clock` read. The RTC gives a real
+21st-century date; the fixtures assert a `time date 20xx-` pattern (not an exact date, which varies).
+Verified on both QEMU hosts (8.2 WSL, 11.1 Windows). Shell boot, so unaffected by the device-MMIO
+driver-boot toolchain miscompile (D2185). C107 holds at 0.9.
+
+Also confirmed why the C113/C114 app faces stay unverifiable: they render with e.gpu's CPU backend
+(no real GPU needed) but require the 16 MB out-of-window arena, and both the gpu driver boot and the
+`start_process` bigarena path get that arena through `vm.map_range_el0` (main.e:85) -- the one
+miscompiled function -- while the 2 MB in-window arena cap is far too small for the backend. So the
+faces are sound but can only be verified with a matching toolchain, not worked around here.
+
+## D2187 — e.io buffer round-trip on NeperOS: the fifth e.os-surface module gets shell-boot breadth
+
+`neperos/src/io_test.e` now, after the two stdout prints, does an in-memory round-trip: it writes
+seven bytes through an `io.SliceWriter` into a buffer and reads them back through an `io.SliceReader`
+over the written portion, checking the bytes and both byte counts; serial reads `io roundtrip ok`.
+This exercises e.io's buffer `Writer`/`Reader` (not just the stdout path) on NeperOS, verified on both
+QEMU hosts. With this, the verifiable e.os surface -- e.io (stdout + buffer round-trip), e.time (clocks
++ civil date), e.fmt (json/csv/ini), e.thread (spawn+join+group) -- has shell-boot breadth across all
+four modules the shell boot can reach; e.fs's remaining ops are the flat-C106 Unsupported set and its
+driver-boot fixtures need a matching toolchain (D2185/D2186). C107 holds at its ~0.9 ceiling here:
+what is left is Unsupported-by-design or toolchain-gated, so further shell-boot breadth adds coverage
+without moving the score.
+
+## D2188 — the Clock app shows the live time; and the "toolchain wall" was a test-harness error
+
+Two things. First, a correction that retracts D2184-D2187's "gpu-boot is unverifiable here" claim: it
+was a TEST-HARNESS error of mine, not a toolchain or source defect. Single-program driver/app boots
+(`-append gpu` / `gpu bigarena`, the app faces) take the initrd as a RAW `.img`; I had been wrapping
+those images in a shell archive, so the kernel executed the archive HEADER as the entry and faulted
+(`far 0x10000000000`, exit 0x87). Booted raw -- as the real run.sh/run.ps1 fixtures already do
+(`-initrd <prog>.img`) -- `gpu_test` prints `gpu 1280x800 test pattern flushed` and `calc_app` prints
+`calc app hash 558372214`, exit 0. Both the shared C103-line compiler and a clean compiler built
+in-session from the branch-neutral frozen bootstrap (`zig cc bootstrap/neper.c` + MSVC link via
+vswhere on PATH) produce kernels whose driver boots work -- so it was never the toolchain. The gpu/
+driver boots and the C113/C114 app-face rendering are verifiable here; only C104 (physical Pixel) is a
+true external blocker. (Memory note [[neper-private-verify-recipe]] corrected; RULE: archive only
+multi-program boots -- shell/fsserver/input/compositor/statussvc/prodshell -- never a single-program
+driver/app image.)
+
+Second, the increment: `clock_app` now reads the wall clock through `time.now()` (os.clock -> the
+PL031 RTC) and renders the CURRENT time in HH:MM, instead of the fixed "12:34" face -- a real clock.
+It prints `clock live HH:MM` + the epoch seconds; booted raw on `gpu bigarena` it rendered
+`clock live 09:51` on both QEMU hosts (8.2 WSL, 11.1 Windows), exit 0. Because the frame now varies
+with the clock, the fixture asserts the serial time pattern (`clock live [0-2][0-9]:[0-5][0-9]`)
+rather than a host==neperos golden, so clock_app leaves the deterministic app-face loop (calc/tasks/
+settings stay) for its own fixture in both runners. C113 -> 0.65: the clock is live (real time); the
+calculator's input interactivity and hosting the apps in the unified shell still wait on C112.
+
+## D2189 — the Calculator actually computes (not a fixed "42" face)
+
+`calc_app` had hard-coded "42" in its display. It now carries a small calculator engine: a fixed
+press sequence `7 * 6 + 9 =` is processed left-to-right (basic-calculator semantics, no precedence)
+through an accumulator + pending-operator state machine, and the COMPUTED result (51) is rendered
+right-aligned by extracting its digits, plus printed as `calc result 51`. Booted raw on `gpu bigarena`
+it reported `calc result 51`, hash 1192592031, identical to the x64 host build (host==neperos), on both
+QEMU hosts (8.2 WSL, 11.1 Windows). calc_app stays in the deterministic app-face hash loop (the loop
+recomputes the host hash, so no golden churn), and the loop now also asserts the literal
+`calc result 51` for calc so a wrong-but-consistent engine is caught (host==neperos alone only proves
+consistency). C113 -> 0.7: the clock is live (D2188) and the calculator computes; live tap input and
+hosting the apps in the unified shell still wait on C112's prodshell.
+
+## D2190 — the Tasks app computes its done-state through a toggle engine
+
+`tasks_app` had a fixed `done` array. It now starts from an initial state (3 of 6 done) and applies a
+fixed sequence of toggle inputs (check tasks 3 and 5) through a toggle engine that flips each named
+task's flag, then counts the result and renders the computed checkboxes, printing `tasks done 5`.
+Booted raw on `gpu bigarena` it reported `tasks done 5`, hash 394791925, identical to the x64 host
+(host==neperos), on both QEMU hosts. tasks_app stays in the deterministic app-face loop (auto-adapts),
+and the loop now also asserts the literal `tasks done 5` so a wrong toggle engine is caught. C114 ->
+0.65: the Tasks toggle logic computes from input; the Settings toggles, live tap input, and hosting
+the apps in the unified shell still wait on C112's prodshell. (Pattern mirrors D2188 live clock / D2189
+calc engine: demonstrate each app's real logic on a fixed input sequence, standalone, without needing
+C112's unified launcher.)
+
+## D2191 — the Settings app computes its on-state through a toggle engine
+
+`settings_app` had a fixed `on` array. It now starts from an initial state (3 of 5 on) and applies a
+fixed sequence of toggle inputs (flip settings 2 and 5) through a toggle engine, counts the result and
+renders the computed switches, printing `settings on 5`. Booted raw on `gpu bigarena` it reported
+`settings on 5`, hash 3605923141, identical to the x64 host (host==neperos), both QEMU hosts; the
+app-face loop asserts the literal `settings on 5`. C114 -> 0.7: both C114 apps (Tasks D2190, Settings)
+now compute their state from a fixed input sequence. With D2188-D2191, all four shell apps run their
+real logic (clock reads the RTC; calculator computes; tasks and settings toggle) standalone and
+verified host==neperos. What remains for C113/C114 -> 1.0 is LIVE tap input and hosting the apps in
+the unified shell -- both gated on the one C112 prodshell fix (the AUX heisenbug). C104 stays
+hardware-capped (physical Pixel).
+
+## D2192 — the unified shell: launcher hosted over the compositor with live tap input (sidesteps the heisenbug)
+
+The prodshell AUX heisenbug (compositor reads 0xCD poison) only fires with compositor + TWO
+start_process programs. The compositor-INPUT topology (comp-driver + input-driver + ONE start_process)
+is proven working (D2163) -- the compositor reads its AUX fine there. So the unified shell is built on
+THAT topology instead of fighting the heisenbug. New `neperos/src/shell.e` is one binary that IS the
+launcher: it opens an e.ui.window (the compositor's shared surface), renders the launcher layout
+through e.gfx.scene (the compositor composites it to the display), then listens for input the
+compositor routes to it (slot 2, the C109 path) and on the first key-down os.launches an app (program
+3 of the archive), reaps it and returns Home. Archive [comp(0), shell(1), input(2), app(3)]; the
+`compositor bigarena` boot runs comp+shell+input (one process -> no heisenbug), and the app is created
+at runtime by os.launch, AFTER the compositor already read its AUX. Verified end to end via
+scripts/neperos-input.py (a QMP key injection): serial `comp ready` / `shell presented` / `comp
+composited flushed` / `shell tap` / `shell launched app` / `tap app ran` / `shell app code 5` /
+`shell home`. Fixtures in run.sh and run.ps1; neperos-input.py now matches `compositor` as a word in
+the append so `compositor bigarena` gets the virtio-gpu device (it exact-matched `compositor` before).
+C112 -> 0.98: a single launcher binary hosts apps over the compositor with LIVE tap input -- the hard
+part of the gap clause, with the heisenbug sidestepped. Remaining for 1.0: wiring the fs wallpaper and
+the C111 status SERVICE into the same binary (the status service is a second start_process, which is
+exactly what triggers the heisenbug -- so full closure needs either the heisenbug fix or a decision
+that direct status reads + a baked/fs wallpaper satisfy the clause). This also proves the C113/C114
+shell-hosting mechanism (the shell launches apps on live taps); wiring the specific app faces in is
+what remains for those.
+
+## D2193 — the unified shell shows live status (the clock) in its top bar
+
+`shell.e` now reads the wall clock directly through e.time (os.clock -> the PL031 RTC) and renders the
+current HH:MM in its top bar with the 3x5 bitmap digit font, printing `shell status HH:MM` (observed
+`shell status 10:49`). This wires STATUS into the unified shell -- kept as a DIRECT read inside the
+one shell process, deliberately NOT a separate C111 status-server process (that second start_process
+is exactly what trips the prodshell AUX heisenbug; the direct read stays on the safe comp+input+one-
+process topology). So the single shell binary now wires compositor + input + status (+ app-launch).
+Verified via neperos-input.py on the `compositor bigarena` boot; fixtures in run.sh+run.ps1 now also
+assert `shell status`. C112 -> 0.99. The one remaining gap-clause item is the fs WALLPAPER (the shell
+draws a baked wallpaper fill, not one read from the C106 filesystem): reading it needs the fs server,
+a second start_process = the heisenbug trigger -- so strict 1.0 needs the heisenbug fix, or a decision
+that a baked/direct wallpaper + direct status reads satisfy "fs+status" in the gap clause.
+
+## D2194 — Boot words match whole words; the "AUX heisenbug" was `prodshell` containing `shell`
+
+`has_word` in `neperos/src/main.e` matched substrings, so the boot argument `prodshell` also set `shell_mode` (`shell` inside it). The kernel then started `archive[0]` (the compositor image) as the shell `init` with no AUX page, which read the 0xCD alloc fill and tripped the narrow trap at `comp.read_device`. The compositor driver thread's own AUX was correct throughout: a kernel read through its live translation equalled the table walk (0x10000000 and 0x4). There was no translation or TLB fault. `has_word` now requires a space or string edge on both sides. Verified on QEMU 11.1: compositor plus two `start_process` programs prints `comp ready`; shell, statussvc, fsserver fswrite/fsread, input, compositor routing and the unified shell fixtures pass unchanged. C112's last gap (status service as a second process) is not blocked by a kernel bug; it needs a boot word that is not a superstring of another.
+
+## D2195 — The unified shell reads the C111 status service as a second process
+
+With D2194 the "AUX heisenbug" is gone, so `shell.e` now takes its top-bar status from the C111 service instead of reading the clock directly. Boot `compositor bigarena unified`, archive `[comp, shell, input, app, status]`: the compositor block starts program 4 as a second `start_process` beside the shell, wired over endpoints 3 (request, the shell sends) and 4 (reply, the shell receives). The shell subscribes, posts one notification, reads the five-word snapshot, then sends QUIT; it draws a tick per provider (dim, none exist on virt), a lit notification tick, and the clock from the snapshot. The status process must not share an ASID: the input server holds 3, so `next_asid` is set to 3 before the start (reusing 3 faulted the status server at address 0). Fixtures in `run.ps1` and `run.sh` assert `shell status service notes 1`, `status server done` and `tap app ran`; the order of `tap app ran` against `shell launched app` is a race and is no longer asserted. C112 stays 0.99: the wallpaper read from the C106 filesystem inside the shell (a third process and a disk) is what remains.
+
+## D2196 — The unified shell's wallpaper is read from the C106 filesystem; C112 closes at 1.0
+
+The shell cannot be the filesystem client itself: `e.fs` fixes the request and reply endpoints at slots 1 and 2, and in the shell slot 1 is the compositor frame signal and slot 2 the routed input. So a separate loader process does it. `boot compositor bigarena unified` now starts seven programs: comp, shell, input, app, status, the fs server (program 5, a driver server and sole holder of the virtio-blk disk, ASID 5, endpoints 6 request and 7 reply) and `wall_loader.e` (program 6, ASID 6 via `next_asid = 5`). The loader writes and reads `/wall.png` (136 bytes, one C106 block) and sends the length and then a word per byte to the shell over endpoint 5; the shell decodes the PNG (`e.fmt.png`) and draws it scaled to cover under the top bar and grid. A length above 4096 (the loader's give-up value, or an ungranted slot's sentinel) leaves the solid backdrop. The MMIO cursor is now chained (`next_bar`) so the block device's BAR does not overlap the input device's. `neperos-input.py` and `neperos-screendump.py` take an optional disk image; the fixtures in `run.ps1` and `run.sh` give the shell a blank 1 MB disk and assert `shell wallpaper from fs`, `wall loader from fs`, `fs server done`. C112 moves to `work-done.jsonl` at 1.0.

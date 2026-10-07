@@ -231,7 +231,8 @@ neper_os_exit:
     b np_exit
 
 // os.write(file: *File, bytes: *[]const u8) -> (usize, err): the bytes to the console,
-// whichever file.
+// whichever file. Kept for the other targets' shape; on NeperOS os.write is written in the e.os
+// variant and this is no longer the write path -- console_write below is.
 .global neper_os_write
 neper_os_write:
     ldr x2, [x1, #8]
@@ -241,6 +242,19 @@ neper_os_write:
     mov x8, #0
     svc #0
     mov x1, #0
+    ret
+
+// os.console_write(buf: str) -> usize (D2158): the bytes of the slice `buf` (passed by pointer in
+// x0) to the console; the count written comes back. The e.os variant's `write` calls this for
+// stdout and stderr, and sends file writes to the filesystem server instead.
+.global neper_os_console_write
+neper_os_console_write:
+    ldr x2, [x0, #8]
+    ldr x1, [x0]
+    mov x0, x1
+    mov x1, x2
+    mov x8, #0
+    svc #0
     ret
 
 // os.copy_bytes(dst: *[]u8, src: *[]const u8) (D329): the shorter length's worth of
@@ -381,6 +395,87 @@ neper_os_launch:
 neper_os_reap:
     mov x8, #12
     svc #0
+    ret
+
+// os.clock(kind) -> (i64, err) (D2155): the time in nanoseconds, kind 0 wall and 1 monotonic; the
+// kernel reads the counter or the RTC and answers in x0, ok in x1.
+.global neper_os_clock
+neper_os_clock:
+    mov x8, #13
+    svc #0
+    ret
+
+// (D2165) The futex: os.wait_u32(addr, expected, timeout) and os.wake_one/all_u32(addr), which
+// e.sync's lock compiles in. NeperOS schedules cooperatively on one core, so a waiter returns at
+// once and the lock degrades to a spin -- correct, since the holder runs when the spinner yields or
+// is preempted -- and a wake is a no-op. Real blocking futexes can replace these if contention
+// ever costs.
+.global neper_os_wait_u32
+neper_os_wait_u32:
+    mov x0, #0
+    ret
+
+.global neper_os_wake_one_u32
+neper_os_wake_one_u32:
+    mov x0, #0
+    ret
+
+.global neper_os_wake_all_u32
+neper_os_wake_all_u32:
+    mov x0, #0
+    ret
+
+// (D2157) A spawned thread's entry trampoline: the kernel starts the new thread here with the user
+// entry in x0 and its context in x1. Call entry(ctx), then exit the thread. Defined before
+// neper_os_thread_create so the runtime cut that keeps the creator keeps this too.
+np_thread_start:
+    mov x9, x0
+    mov x0, x1
+    blr x9
+    mov x0, #0
+    mov x8, #1
+    svc #0
+
+// os.thread_create(result, entry, ctx, size) (D2157): ask the kernel (call 14) to spawn a thread in
+// this address space running entry(ctx) on a fresh stack of `size` bytes, entered through the
+// trampoline. The thread id lands in result.raw with ok, or result is cleared with an error when
+// the kernel has no room.
+.global neper_os_thread_create
+neper_os_thread_create:
+    mov x4, x0
+    adr x0, np_thread_start
+    mov x8, #14
+    svc #0
+    cmn x0, #1
+    b.eq .Lthread_create_fail
+    str x0, [x4]
+    str wzr, [x4, #8]
+    ret
+.Lthread_create_fail:
+    str xzr, [x4]
+    movz w9, #0x623a
+    movk w9, #0x8f63, lsl #16
+    str w9, [x4, #8]
+    ret
+
+// os.thread_join(t) -> err (D2157): `t` is passed by pointer, so load its thread id, reap it (call
+// 12), then answer ok -- a thread is joined once, and its slot is freed by the reap.
+.global neper_os_thread_join
+neper_os_thread_join:
+    ldr x0, [x0]
+    mov x8, #12
+    svc #0
+    mov x0, #0
+    ret
+
+// os.thread_detach(t) -> err (D2157): load the thread id from the pointer and give up the join
+// (call 15); the thread frees itself on exit.
+.global neper_os_thread_detach
+neper_os_thread_detach:
+    ldr x0, [x0]
+    mov x8, #15
+    svc #0
+    mov x0, #0
     ret
 
 // (D2134) Raw memory access from EL0, for a user-mode driver reaching its device's MMIO and

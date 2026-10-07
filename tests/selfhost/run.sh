@@ -8797,8 +8797,11 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
     printf 'echo-me\n' > "$neperos_console_in"
     neperos_virtio="-device virtio-rng-pci,disable-legacy=on -drive file=$neperos_disk,format=raw,if=none,id=blk0 -device virtio-blk-pci,disable-legacy=on,drive=blk0 -device virtio-serial-pci,disable-legacy=on -chardev file,id=vcon,path=$neperos_console,input-path=$neperos_console_in -device virtconsole,chardev=vcon"
     neperos_boot=$(timeout 90 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$neperos_demo" $neperos_virtio < /dev/null 2>&1 | tr -d '\r')
+    # W's isolation fault is at its arena page, which sits right after the program image now the EL0
+    # window is sized to it (D2168), so match the user gigabyte prefix 0x0000007fc0, not a fixed
+    # offset. X faults at an absolute kernel address (still matched exactly).
     case "$neperos_boot" in
-        *'Welcome to NeperOS'*'mmu on'*'fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned'*'scheduling'*'thread N denied console'*'V revoke ok'*'thread W killed, el0 fault at 0x0000007fc0040000'*'thread X killed, el0 fault at 0x0000000040000000'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *'Welcome to NeperOS'*'mmu on'*'fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned'*'scheduling'*'thread N denied console'*'V revoke ok'*'thread W killed, el0 fault at 0x0000007fc0'*'thread X killed, el0 fault at 0x0000000040000000'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS did not schedule its threads: $neperos_boot" >&2; exit 1 ;;
     esac
     for neperos_token in A0 A1 A2 B0 B1 B2 X0 X1 X2 R7 R8 R9 D0 D1 D2; do
@@ -8857,6 +8860,415 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
     case "$neperos_shell" in
         *'shell init up'*'el0 prog A exit 7'*'el0 prog B faulting'*'thread child killed, el0 fault at 0x0000000000000000'*'shell child A code 7'*'shell child B killed'*'shell init done'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS shell did not run its processes: $neperos_shell" >&2; exit 1 ;;
+    esac
+    # (D2153, C106) The filesystem-server boot: the initrd is an archive of three programs -- an EL0
+    # filesystem server that alone holds the block device's capability, a client that drives it over
+    # IPC (open, read, write, close, list, mkdir, remove), and a client the kernel granted no
+    # endpoint. fsserver fswrite formats a fresh disk and writes a file; fsserver fsread reboots on
+    # the same disk and reads it back byte for byte, proving the filesystem persists through the
+    # server. The denied client's send is refused -- the capability gate.
+    fs_server_img="$test_build/fs_server.img"
+    fs_client_img="$test_build/fs_client.img"
+    fs_denied_img="$test_build/fs_denied.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/fs_server.e" "$repo" aarch64 neperos "$fs_server_img")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/fs_client.e" "$repo" aarch64 neperos "$fs_client_img")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/fs_denied.e" "$repo" aarch64 neperos "$fs_denied_img")" = 'executable written' ]
+    fs_archive="$test_build/fs-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$fs_archive" "$fs_server_img" "$fs_client_img" "$fs_denied_img"
+    fs_disk="$test_build/fsserver-disk.img"
+    dd if=/dev/zero of="$fs_disk" bs=1M count=1 status=none
+    neperos_fswrite=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$fs_archive" -append "fsserver fswrite" -drive "file=$fs_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_fswrite" in
+        *'fs server formatted'*'fs client mkdir /docs ok'*'fs client write /docs/greeting ok'*'fs client open /docs/greeting size 17'*'fs client close /docs/greeting ok'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS filesystem write boot wrong: $neperos_fswrite" >&2; exit 1 ;;
+    esac
+    case "$neperos_fswrite" in *'fs denied'*) ;; *) printf '%s\n' "the capability gate did not refuse the uncapped client: $neperos_fswrite" >&2; exit 1 ;; esac
+    case "$neperos_fswrite" in *'fs denied leaked'*) printf '%s\n' "the capability gate leaked on the write boot: $neperos_fswrite" >&2; exit 1 ;; esac
+    fs_listed="fs client list /docs:
+greeting"
+    case "$neperos_fswrite" in *"$fs_listed"*) ;; *) printf '%s\n' "the server did not list the written file: $neperos_fswrite" >&2; exit 1 ;; esac
+    neperos_fsread=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$fs_archive" -append "fsserver fsread" -drive "file=$fs_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_fsread" in
+        *'fs server up'*'fs client read: hello neperos fs'*'fs client remove /docs/greeting ok'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS filesystem read boot wrong: $neperos_fsread" >&2; exit 1 ;;
+    esac
+    case "$neperos_fsread" in *'fs server formatted'*) printf '%s\n' "NeperOS reformatted an already-written disk, losing persistence: $neperos_fsread" >&2; exit 1 ;; esac
+    case "$neperos_fsread" in *"$fs_listed"*) printf '%s\n' "the removed file was still listed: $neperos_fsread" >&2; exit 1 ;; esac
+    # (D2170, C110) Fonts read from the filesystem: ui_font (program 1 of an fsserver archive) stores a
+    # synthetic TrueType font in the C106 server through e.fs, reads it back, and renders a glyph from
+    # the reloaded font through e.gfx.scene's DrawText over the e.gpu CPU backend. `bigarena` gives the
+    # client e.gpu's arena; the frame folds to a hash identical on QEMU 8.2 and 11.1, and `ui font from
+    # fs` proves the round trip -- the e.ui drawing path reads its fonts from the filesystem.
+    ui_font_img="$test_build/ui_font.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_font.e" "$repo" aarch64 neperos "$ui_font_img")" = 'executable written' ]
+    uifont_archive="$test_build/uifont-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$uifont_archive" "$fs_server_img" "$ui_font_img" "$fs_denied_img"
+    uifont_disk="$test_build/uifont-disk.img"
+    dd if=/dev/zero of="$uifont_disk" bs=1M count=1 status=none
+    uifont_boot=$(timeout 90 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$uifont_archive" -append "fsserver bigarena" -drive "file=$uifont_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$uifont_boot" in
+        *'ui font from fs'*'ui font hash 173685445'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS did not render text from a filesystem font: $uifont_boot" >&2; exit 1 ;;
+    esac
+    # (D2174, C112) The launcher's PNG wallpaper from the filesystem: ui_wall encodes a small image to
+    # PNG, stores it in the C106 server, reads it back and decodes it (e.fmt.png), and draws the
+    # texture scaled to cover the 256x256 surface as the wallpaper under the top bar and 8x5 grid. The
+    # PNG is 136 bytes (one C106 block); the frame hash is identical on QEMU 8.2 and 11.1.
+    ui_wall_img="$test_build/ui_wall.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_wall.e" "$repo" aarch64 neperos "$ui_wall_img")" = 'executable written' ]
+    uiwall_archive="$test_build/uiwall-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$uiwall_archive" "$fs_server_img" "$ui_wall_img" "$fs_denied_img"
+    uiwall_disk="$test_build/uiwall-disk.img"
+    dd if=/dev/zero of="$uiwall_disk" bs=1M count=1 status=none
+    uiwall_boot=$(timeout 90 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$uiwall_archive" -append "fsserver bigarena" -drive "file=$uiwall_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$uiwall_boot" in
+        *'ui wall from fs'*'ui wall hash 3999367205'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS did not render a PNG wallpaper from the filesystem: $uiwall_boot" >&2; exit 1 ;;
+    esac
+    # (D2171, C111) The system status service: the status server serves one protocol over a request
+    # and reply endpoint; the client subscribes, reports each field, posts a notification through the
+    # service and reports the count rising 0 -> 1. QEMU virt has no battery or radio, so those report
+    # unavailable rather than invented values; the wall clock is real (value varies, presence only).
+    status_server_img="$test_build/status_server.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/status_server.e" "$repo" aarch64 neperos "$status_server_img")" = 'executable written' ]
+    status_client_img="$test_build/status_client.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/status_client.e" "$repo" aarch64 neperos "$status_client_img")" = 'executable written' ]
+    status_archive="$test_build/status-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$status_archive" "$status_server_img" "$status_client_img"
+    status_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$status_archive" -append statussvc < /dev/null 2>&1 | tr -d '\r')
+    for status_mark in 'status server up' 'status battery unavailable' 'status wifi unavailable' 'status cellular unavailable' 'status clock ' 'status notifications 0' 'status notifications 1' 'status client done' 'neperos: exit 0x0000000000000000'; do
+        case "$status_boot" in *"$status_mark"*) ;; *) printf '%s\n' "NeperOS status service missing ($status_mark): $status_boot" >&2; exit 1 ;; esac
+    done
+    # (D2175, C112) The launcher's top bar driven by the live C111 status: launcher_status subscribes,
+    # posts a notification, and renders the top bar with a tick per provider (dim since battery/Wi-Fi/
+    # cellular are absent on virt) and a lit tick per notification. It reports what it read; the frame
+    # hash (clock not drawn) is identical on QEMU 8.2 and 11.1.
+    lstatus_img="$test_build/launcher_status.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/launcher_status.e" "$repo" aarch64 neperos "$lstatus_img")" = 'executable written' ]
+    lstatus_archive="$test_build/lstatus-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$lstatus_archive" "$status_server_img" "$lstatus_img"
+    lstatus_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$lstatus_archive" -append "statussvc bigarena" < /dev/null 2>&1 | tr -d '\r')
+    for lstatus_mark in 'launcher status battery absent' 'launcher status wifi absent' 'launcher status cellular absent' 'launcher status notifications 1' 'launcher status hash 155713317' 'neperos: exit 0x0000000000000000'; do
+        case "$lstatus_boot" in *"$lstatus_mark"*) ;; *) printf '%s\n' "NeperOS launcher status bar missing ($lstatus_mark): $lstatus_boot" >&2; exit 1 ;; esac
+    done
+    # (D2172, C112) The launcher's layout skeleton: the wallpaper, the top bar with status ticks, and
+    # the 8x5 icon grid rendered through e.gfx.scene over the e.gpu CPU backend into a 256x256 surface.
+    # Same source renders the same hash on the host, so the host hash is the determinism check.
+    launcher_img="$test_build/ui_launcher.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_launcher.e" "$repo" aarch64 neperos "$launcher_img")" = 'executable written' ]
+    launcher_host="$test_build/launcher_host"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_launcher.e" "$repo" x64 linux "$launcher_host")" = 'executable written' ]
+    launcher_hash=$(chmod +x "$launcher_host"; "$launcher_host" | sed -n 's/^ui launcher hash \([0-9]*\)$/\1/p')
+    [ -n "$launcher_hash" ] || { printf '%s\n' 'host launcher printed no hash' >&2; exit 1; }
+    launcher_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$launcher_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+    case "$launcher_boot" in
+        *"ui launcher hash $launcher_hash"*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS launcher layout did not match the host hash $launcher_hash: $launcher_boot" >&2; exit 1 ;;
+    esac
+    # (D2177, C112) The launcher pages past 40 icons: ui_pages renders a 45-app launcher -- page 0
+    # shows icons 1..40, page 1 shows 41..45, each with a page-dot row. The two pages fold to two
+    # different hashes; the host renders the same pair, so the host hashes are the check.
+    pages_img="$test_build/ui_pages.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_pages.e" "$repo" aarch64 neperos "$pages_img")" = 'executable written' ]
+    pages_host="$test_build/pages_host"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_pages.e" "$repo" x64 linux "$pages_host")" = 'executable written' ]
+    chmod +x "$pages_host"
+    pages_host_out=$("$pages_host")
+    page0_hash=$(printf '%s\n' "$pages_host_out" | sed -n 's/^ui pages page 0 hash \([0-9]*\)$/\1/p')
+    page1_hash=$(printf '%s\n' "$pages_host_out" | sed -n 's/^ui pages page 1 hash \([0-9]*\)$/\1/p')
+    [ -n "$page0_hash" ] && [ -n "$page1_hash" ] || { printf '%s\n' 'host launcher paging printed no hashes' >&2; exit 1; }
+    [ "$page0_hash" != "$page1_hash" ] || { printf '%s\n' 'the launcher two pages rendered the same' >&2; exit 1; }
+    pages_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$pages_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+    case "$pages_boot" in
+        *"ui pages page 0 hash $page0_hash"*"ui pages page 1 hash $page1_hash"*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS launcher paging did not match the host hashes: $pages_boot" >&2; exit 1 ;;
+    esac
+    # (D2180, C113; D2181/D2182, C114) The shell app faces: Calculator (result display + 4x4 keypad),
+    # Tasks (a checklist with checkboxes) and Settings (rows with toggle switches) each render their UI
+    # through e.gfx.scene over the e.gpu CPU backend and fold the frame to a hash the host reproduces.
+    # (Clock is now live -- D2188 below -- so it is asserted on its serial, not a frame golden.)
+    for app_pair in "calc_app:calc app" "tasks_app:tasks app" "settings_app:settings app"; do
+        app_src="${app_pair%%:*}"
+        app_tag="${app_pair##*:}"
+        app_img="$test_build/$app_src.img"
+        [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/$app_src.e" "$repo" aarch64 neperos "$app_img")" = 'executable written' ]
+        app_host="$test_build/$app_src-host"
+        [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/$app_src.e" "$repo" x64 linux "$app_host")" = 'executable written' ]
+        chmod +x "$app_host"
+        app_hash=$("$app_host" | sed -n "s/^$app_tag hash \([0-9]*\)\$/\1/p")
+        [ -n "$app_hash" ] || { printf '%s\n' "host $app_src printed no hash" >&2; exit 1; }
+        app_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$app_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+        case "$app_boot" in
+            *"$app_tag hash $app_hash"*'neperos: exit 0x0000000000000000'*) ;;
+            *) printf '%s\n' "NeperOS $app_src did not match the host hash $app_hash: $app_boot" >&2; exit 1 ;;
+        esac
+        # (D2189, C113) The calculator actually computes: its engine runs a fixed press sequence
+        # "7 * 6 + 9 =" left-to-right and must report the computed result 51 (host==neperos above
+        # only proves consistency; this pins correctness).
+        if [ "$app_src" = calc_app ]; then
+            case "$app_boot" in *'calc result 51'*) ;; *) printf '%s\n' "NeperOS calc_app did not compute 51: $app_boot" >&2; exit 1 ;; esac
+        fi
+        # (D2190, C114) The Tasks app's toggle engine: initial 3 done, check tasks 3 and 5, so the
+        # computed done count must be 5.
+        if [ "$app_src" = tasks_app ]; then
+            case "$app_boot" in *'tasks done 5'*) ;; *) printf '%s\n' "NeperOS tasks_app toggle engine did not count 5 done: $app_boot" >&2; exit 1 ;; esac
+        fi
+        # (D2191, C114) The Settings toggle engine: initial 3 on, flip settings 2 and 5 -> 5 on.
+        if [ "$app_src" = settings_app ]; then
+            case "$app_boot" in *'settings on 5'*) ;; *) printf '%s\n' "NeperOS settings_app toggle engine did not count 5 on: $app_boot" >&2; exit 1 ;; esac
+        fi
+    done
+    # (D2188, C113) The Clock app shows the LIVE time: clock_app reads the wall clock through e.time
+    # (os.clock -> PL031 RTC) and renders the current HH:MM, then prints `clock live HH:MM`. The frame
+    # varies with the clock, so it is asserted on the serial (a valid 24h time) rather than a golden.
+    clock_img="$test_build/clock_app.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/clock_app.e" "$repo" aarch64 neperos "$clock_img")" = 'executable written' ]
+    clock_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$clock_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+    case "$clock_boot" in
+        *'clock live '[0-2][0-9]':'[0-5][0-9]*'clock app hash '*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS clock_app did not render a live time: $clock_boot" >&2; exit 1 ;;
+    esac
+    # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
+    # + a Writer) rather than the console primitive, so e.io and the e.os variant os.neperos.e run
+    # unchanged on NeperOS. Started as program 0 of a one-program archive on the shell boot.
+    io_test_img="$test_build/io_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/io_test.e" "$repo" aarch64 neperos "$io_test_img")" = 'executable written' ]
+    io_archive="$test_build/io-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$io_archive" "$io_test_img"
+    neperos_io=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$io_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_io" in
+        *'hello from e.io on neperos'*'e.io writer runs at EL0'*'io roundtrip ok'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.io did not run the portable surface and buffer round-trip: $neperos_io" >&2; exit 1 ;;
+    esac
+    # (D2155, C107) e.time on NeperOS: time_test reads os.clock through e.time -- monotonic (the
+    # virtual counter) and wall (the PL031 RTC) -- lowered to the kernel's clock system call.
+    time_test_img="$test_build/time_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/time_test.e" "$repo" aarch64 neperos "$time_test_img")" = 'executable written' ]
+    time_archive="$test_build/time-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$time_archive" "$time_test_img"
+    neperos_time=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$time_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_time" in
+        *'time monotonic advanced '*' ns'*'time wall seconds '*'time date 20'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.time did not read the clock and civil date: $neperos_time" >&2; exit 1 ;;
+    esac
+    case "$neperos_time" in
+        *'time monotonic stuck'*|*'time monotonic failed'*|*'time wall absent'*) printf '%s\n' "NeperOS e.time misread the clock: $neperos_time" >&2; exit 1 ;;
+    esac
+    # (D2156, C107) e.fmt on NeperOS: fmt_test reflects a struct with e.fmt.json's encode[T] and
+    # streams it to an e.io Writer over stdout, then two rows through e.fmt.csv (D2183) and the struct
+    # through e.fmt.ini (D2184) -- the codecs are pure, so the e.os variant and e.io carry several.
+    fmt_test_img="$test_build/fmt_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/fmt_test.e" "$repo" aarch64 neperos "$fmt_test_img")" = 'executable written' ]
+    fmt_archive="$test_build/fmt-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$fmt_archive" "$fmt_test_img"
+    neperos_fmt=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$fmt_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_fmt" in
+        *'fmt json: {"x":3,"y":7,"label":"neperos"}'*'fmt csv: x,y,label'*'3,7,neperos'*'fmt ini:'*'x=3'*'y=7'*'label=neperos'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.fmt did not encode JSON, CSV and INI: $neperos_fmt" >&2; exit 1 ;;
+    esac
+    # (D2157, C107) e.thread on NeperOS: thread_test spawns a worker in the same address space on a
+    # kernel-mapped stack; the worker writes a sentinel through a pointer into the spawner's memory
+    # and the blocking join makes it visible before the read.
+    thread_test_img="$test_build/thread_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/thread_test.e" "$repo" aarch64 neperos "$thread_test_img")" = 'executable written' ]
+    thread_archive="$test_build/thread-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$thread_archive" "$thread_test_img"
+    neperos_thread=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$thread_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_thread" in
+        *'thread box = 99'*'thread wrote 99 via shared memory'*'thread group of 3 joined'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.thread did not spawn, join and group-join: $neperos_thread" >&2; exit 1 ;;
+    esac
+    case "$neperos_thread" in *'thread value wrong'*) printf '%s\n' "NeperOS e.thread join did not block: $neperos_thread" >&2; exit 1 ;; esac
+    case "$neperos_thread" in *'thread group incomplete'*|*'thread group spawn failed'*) printf '%s\n' "NeperOS e.thread group spawn did not run all workers: $neperos_thread" >&2; exit 1 ;; esac
+    # (D2158, C107) e.fs on NeperOS: fs_efs writes and reads a file through fs.write_file /
+    # fs.read_file, routed to the C106 filesystem server over IPC; booted as the server boot's client.
+    fs_efs_img="$test_build/fs_efs.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/fs_efs.e" "$repo" aarch64 neperos "$fs_efs_img")" = 'executable written' ]
+    efs_archive="$test_build/efs-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$efs_archive" "$fs_server_img" "$fs_efs_img" "$fs_denied_img"
+    efs_disk="$test_build/efs-disk.img"
+    dd if=/dev/zero of="$efs_disk" bs=1M count=1 status=none
+    neperos_efs=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$efs_archive" -append "fsserver fswrite" -drive "file=$efs_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_efs" in
+        *'fs write_file ok'*'fs read_file: e.fs on neperos'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.fs did not read back what it wrote through the server: $neperos_efs" >&2; exit 1 ;;
+    esac
+    case "$neperos_efs" in *'fs write_file failed'*|*'fs read_file failed'*) printf '%s\n' "NeperOS e.fs failed: $neperos_efs" >&2; exit 1 ;; esac
+    # (D2159, C108) virtio-gpu display server: gpu_test draws a test pattern and flushes it; the
+    # harness screendumps the scanout over QMP and the SHA-256 must match the golden (identical on
+    # QEMU 8.2 and 11.1).
+    gpu_test_img="$test_build/gpu_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/gpu_test.e" "$repo" aarch64 neperos "$gpu_test_img")" = 'executable written' ]
+    gpu_golden=d505a446eda5a1fcd82529d0167bcf6f4784f91c91cb00825b96bb2ba60aa1be
+    gpu_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_image" "$gpu_test_img" "$test_build/gpu.ppm" 55124 2>&1)
+    case "$gpu_dump" in
+        *"sha256 $gpu_golden"*) ;;
+        *) printf '%s\n' "NeperOS virtio-gpu screendump did not match the golden: $gpu_dump" >&2; exit 1 ;;
+    esac
+    # (D2161, C110) The CPU rasterizer on NeperOS: ui_scene draws a scene with e.gfx.paint and
+    # flushes it; the golden is identical on QEMU 8.2 and 11.1, so NeperOS pixels equal a host render.
+    ui_scene_img="$test_build/ui_scene.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_scene.e" "$repo" aarch64 neperos "$ui_scene_img")" = 'executable written' ]
+    ui_golden=172a747560e4f73a0de393838fb20f3a8d750cb77e6b9a65328d657fa4cbd86c
+    ui_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_image" "$ui_scene_img" "$test_build/ui.ppm" 55127 2>&1)
+    case "$ui_dump" in
+        *"sha256 $ui_golden"*) ;;
+        *) printf '%s\n' "NeperOS CPU-rasterizer scene did not match the golden: $ui_dump" >&2; exit 1 ;;
+    esac
+    # (D2166, C110) e.gpu's CPU backend runs on NeperOS: gpu_cpu opens the CPU device, which needs
+    # the large program arena (the `gpu bigarena` boot) -- e.ui renders through e.gfx.scene over it.
+    gpu_cpu_img="$test_build/gpu_cpu.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/gpu_cpu.e" "$repo" aarch64 neperos "$gpu_cpu_img")" = 'executable written' ]
+    gpu_cpu_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$gpu_cpu_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+    case "$gpu_cpu_boot" in
+        *'gpu cpu open ok'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.gpu CPU backend did not open: $gpu_cpu_boot" >&2; exit 1 ;;
+    esac
+    # (D2167, C110) e.gfx.scene renders through the CPU backend on NeperOS: scene_test builds a
+    # two-rectangle scene and folds the read-back pixels to a hash. The same source renders the same
+    # hash on the host (the rasterizer is pure), so the host hash is the determinism check.
+    scene_img="$test_build/scene_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/scene_test.e" "$repo" aarch64 neperos "$scene_img")" = 'executable written' ]
+    scene_host="$test_build/scene_host"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/scene_test.e" "$repo" x64 linux "$scene_host")" = 'executable written' ]
+    scene_hash=$(chmod +x "$scene_host"; "$scene_host" | sed -n 's/^scene hash \([0-9]*\)$/\1/p')
+    [ -n "$scene_hash" ] || { printf '%s\n' 'host e.gfx.scene render printed no hash' >&2; exit 1; }
+    scene_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$scene_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+    case "$scene_boot" in
+        *"scene hash $scene_hash"*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.gfx.scene render did not match the host hash $scene_hash: $scene_boot" >&2; exit 1 ;;
+    esac
+    # (D2168, C110) The e.ui stack renders on NeperOS: ui_test is the host ui_testing fixture ported
+    # verbatim -- e.ui.testing drives e.ui.widget over e.gfx.scene / the e.gpu CPU backend, with a
+    # fold of the snapshot printed. It needs the large EL0 window (D2168 sized vm.create to the image;
+    # the old fixed region overran into the kernel for a program this size). Same source, same hash.
+    ui_img="$test_build/ui_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_test.e" "$repo" aarch64 neperos "$ui_img")" = 'executable written' ]
+    ui_host="$test_build/ui_host"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_test.e" "$repo" x64 linux "$ui_host")" = 'executable written' ]
+    ui_host_out=$(chmod +x "$ui_host"; "$ui_host")
+    ui_hash=$(printf '%s\n' "$ui_host_out" | sed -n 's/^ui hash \([0-9]*\)$/\1/p')
+    [ -n "$ui_hash" ] || { printf '%s\n' 'host e.ui render printed no hash' >&2; exit 1; }
+    case "$ui_host_out" in *'ui testing ok'*) ;; *) printf '%s\n' "host e.ui sample failed: $ui_host_out" >&2; exit 1 ;; esac
+    ui_boot=$(timeout 90 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$ui_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+    case "$ui_boot" in
+        *"ui hash $ui_hash"*'ui testing ok'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.ui render did not match the host hash $ui_hash: $ui_boot" >&2; exit 1 ;;
+    esac
+    # (D2162, C110) The compositor over shared frames: an app draws a surface into a frame shared
+    # with the compositor and signals it; the compositor composites it into the display and flushes.
+    comp_img="$test_build/comp.img"
+    comp_app_img="$test_build/comp_app.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/comp.e" "$repo" aarch64 neperos "$comp_img")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/comp_app.e" "$repo" aarch64 neperos "$comp_app_img")" = 'executable written' ]
+    comp_archive="$test_build/comp-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$comp_archive" "$comp_img" "$comp_app_img"
+    comp_golden=1e78b507c7bc0df83765c521d923a7e57df4d754293505e85aab706fe34b3e51
+    comp_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_image" "$comp_archive" "$test_build/comp.ppm" 55128 compositor 2>&1)
+    case "$comp_dump" in
+        *"sha256 $comp_golden"*) ;;
+        *) printf '%s\n' "NeperOS compositor screendump did not match the golden: $comp_dump" >&2; exit 1 ;;
+    esac
+    # (D2163, C110) Input routed to the focused surface: the C109 input server + the compositor +
+    # the app; a QMP key injection travels keyboard -> input server -> compositor -> focused app.
+    route_input_server="$test_build/input_server.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/input_server.e" "$repo" aarch64 neperos "$route_input_server")" = 'executable written' ]
+    route_archive="$test_build/route-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$route_archive" "$comp_img" "$comp_app_img" "$route_input_server"
+    route=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$route_archive" keyboard "$test_build/route.serial" 55129 compositor 2>&1)
+    case "$route" in
+        *'comp composited flushed'*'app input ev 1 30 1'*'app done'*) ;;
+        *) printf '%s\n' "NeperOS compositor did not route input to the focused surface: $route" >&2; exit 1 ;;
+    esac
+    # (D2169, C110) The e.ui window backend presents over the compositor: ui_window opens an e.ui
+    # window (the compositor's shared surface on NeperOS), renders a scene through e.gfx.scene / the
+    # e.gpu CPU backend and presents via window.request_frame -> os.window_present, which blits into
+    # the shared frame and signals the compositor. `compositor bigarena` gives it the large arena.
+    ui_window_img="$test_build/ui_window.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_window.e" "$repo" aarch64 neperos "$ui_window_img")" = 'executable written' ]
+    uiwin_archive="$test_build/uiwin-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$uiwin_archive" "$comp_img" "$ui_window_img"
+    uiwin_golden='08af9c12ba6349aee0402983945e112eb6283d45b218b7307fb5c8fb1b2de18f'
+    uiwin_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_image" "$uiwin_archive" "$test_build/uiwin.ppm" 55130 'compositor bigarena' 2>&1)
+    case "$uiwin_dump" in
+        *"sha256 $uiwin_golden"*) ;;
+        *) printf '%s\n' "NeperOS e.ui window over the compositor did not match the golden: $uiwin_dump" >&2; exit 1 ;;
+    esac
+    # (D2173, C112) The launcher presented over the compositor: launcher.e opens an e.ui window (the
+    # shared surface), renders the launcher layout (wallpaper, top bar, 8x5 grid) and presents it; the
+    # compositor composites it to the display. Screendump golden identical on QEMU 8.2 and 11.1.
+    launcher_disp_img="$test_build/launcher.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/launcher.e" "$repo" aarch64 neperos "$launcher_disp_img")" = 'executable written' ]
+    launcher_disp_archive="$test_build/launcher-disp.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$launcher_disp_archive" "$comp_img" "$launcher_disp_img"
+    launcher_disp_golden='132a969b792c6b9f8935c316e3f3fe58481f857fe1dba954b44cbd01b4d97f0f'
+    launcher_disp_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_image" "$launcher_disp_archive" "$test_build/launcher-disp.ppm" 55132 'compositor bigarena' 2>&1)
+    case "$launcher_disp_dump" in
+        *"sha256 $launcher_disp_golden"*) ;;
+        *) printf '%s\n' "NeperOS launcher over the compositor did not match the golden: $launcher_disp_dump" >&2; exit 1 ;;
+    esac
+    # (D2160, C109) virtio-input over IPC: the input server pushes each event to a client over an
+    # endpoint, woken by the device notification; the fixture injects a key and a tap and asserts
+    # the stream the client receives.
+    input_server_img="$test_build/input_server.img"
+    input_client_img="$test_build/input_client.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/input_server.e" "$repo" aarch64 neperos "$input_server_img")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/input_client.e" "$repo" aarch64 neperos "$input_client_img")" = 'executable written' ]
+    input_archive="$test_build/input-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$input_archive" "$input_server_img" "$input_client_img"
+    input_kbd=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$input_archive" keyboard "$test_build/input-kbd.serial" 55125 2>&1)
+    case "$input_kbd" in
+        *'input ev 1 30 1'*'input ev 1 30 0'*'input client done'*) ;;
+        *) printf '%s\n' "NeperOS input did not deliver the key over IPC: $input_kbd" >&2; exit 1 ;;
+    esac
+    input_tab=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$input_archive" tablet "$test_build/input-tab.serial" 55126 2>&1)
+    case "$input_tab" in
+        *'input ev 3 0 16384'*'input ev 3 1 16384'*'input ev 1 272 1'*'input client done'*) ;;
+        *) printf '%s\n' "NeperOS input did not deliver the tap over IPC: $input_tab" >&2; exit 1 ;;
+    esac
+    # (D2178, C112) The launcher's tap-to-launch and Home round trip: the input boot's archive is the
+    # input server (0), the launcher (1) and an app (2). A key injected through QMP reaches the
+    # launcher, which launches the app as a process (os.launch), reaps it (os.reap) and returns Home.
+    tap_launcher_img="$test_build/tap_launcher.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/tap_launcher.e" "$repo" aarch64 neperos "$tap_launcher_img")" = 'executable written' ]
+    tap_app_img="$test_build/tap_app.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/tap_app.e" "$repo" aarch64 neperos "$tap_app_img")" = 'executable written' ]
+    tap_archive="$test_build/tap-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$tap_archive" "$input_server_img" "$tap_launcher_img" "$tap_app_img"
+    tap_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$tap_archive" keyboard "$test_build/tap.serial" 55134 input 'launcher home' 2>&1)
+    case "$tap_boot" in
+        *'launcher tap'*'launcher launched app'*'tap app ran'*'launcher app code 5'*'launcher home'*) ;;
+        *) printf '%s\n' "NeperOS launcher did not launch an app and return Home on a tap: $tap_boot" >&2; exit 1 ;;
+    esac
+    # (D2192, C112) The UNIFIED SHELL: the launcher hosted over the real compositor with live tap
+    # input. Archive [comp(0), shell(1), input(2), app(3)]: the `compositor bigarena` boot runs
+    # comp+shell+input; shell renders the launcher over the compositor (composited to the display),
+    # and on a live key (the C109 path the compositor routes to it) os.launches the app (program 3),
+    # reaps it and returns Home. One process (shell) beside comp+input, so it uses the proven
+    # compositor-input topology and sidesteps the prodshell AUX heisenbug (comp reads its AUX at boot,
+    # before any runtime os.launch).
+    shell_img="$test_build/shell.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/shell.e" "$repo" aarch64 neperos "$shell_img")" = 'executable written' ]
+    wall_loader_img="$test_build/wall_loader.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/wall_loader.e" "$repo" aarch64 neperos "$wall_loader_img")" = 'executable written' ]
+    shell_archive="$test_build/shell-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$shell_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img"
+    # (D2196) The wallpaper is read from the C106 filesystem: program 5 is the fs server on a blank
+    # disk, program 6 the loader that writes and reads /wall.png and sends it to the shell.
+    shell_disk="$test_build/shell-disk.img"
+    truncate -s 1M "$shell_disk"
+    shell_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$shell_archive" keyboard "$test_build/shell.serial" 55135 "compositor bigarena unified" 'shell home' "$shell_disk" 2>&1)
+    case "$shell_boot" in
+        *'shell wallpaper from fs'*'shell presented'*'shell status '*'shell status service notes 1'*'comp composited flushed'*'shell tap'*'shell launched app'*'shell app code 5'*'shell home'*)
+            case "$shell_boot" in
+                *'tap app ran'*) ;;
+                *) printf '%s\n' "unified shell: the app did not run: $shell_boot" >&2; exit 1 ;;
+            esac
+            case "$shell_boot" in
+                *'status server done'*) ;;
+                *) printf '%s\n' "unified shell: the status server did not finish: $shell_boot" >&2; exit 1 ;;
+            esac ;;
+        *) printf '%s\n' "NeperOS unified shell did not host the launcher, show status and launch an app on a tap: $shell_boot" >&2; exit 1 ;;
     esac
 fi
 

@@ -4747,7 +4747,7 @@ fn seed_memory_signatures(c: *Checker, module_index: usize) -> err {
     ret ok
 }
 
-fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memory: bool, atomic_module: usize, has_atomic: bool, linux_target: bool) -> err {
+fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memory: bool, atomic_module: usize, has_atomic: bool, linux_target: bool, neperos_target: bool) -> err {
     let file = make_type(.Named, "File", os_module)
     let process = make_type(.Named, "Proc", os_module)
     let clock = make_type(.Named, "Clock", os_module)
@@ -4801,23 +4801,27 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
     try add_seeded_parameter(c, touch_index, "p", const_byte_pointer)
     try add_seeded_parameter(c, touch_index, "n", usize_type)
 
-    let (read_index, read_error) = add_seeded_function(c, os_module, "read", usize_type, true)
-    if read_error != ok { ret read_error }
-    try add_seeded_parameter(c, read_index, "f", file)
-    try add_seeded_parameter(c, read_index, "buf", bytes)
-    let (write_index, write_error) = add_seeded_function(c, os_module, "write", usize_type, true)
-    if write_error != ok { ret write_error }
-    try add_seeded_parameter(c, write_index, "f", file)
-    try add_seeded_parameter(c, write_index, "buf", string_type)
-    let (close_index, close_error) = add_seeded_function(c, os_module, "close", error_type, false)
-    if close_error != ok { ret close_error }
-    try add_seeded_parameter(c, close_index, "f", file)
-    let seek_whence = make_type(.Named, "SeekWhence", os_module)
-    let (seek_index, seek_error) = add_seeded_function(c, os_module, "seek", make_type(.Integer, "u64", os_module), true)
-    if seek_error != ok { ret seek_error }
-    try add_seeded_parameter(c, seek_index, "f", file)
-    try add_seeded_parameter(c, seek_index, "off", i64_type)
-    try add_seeded_parameter(c, seek_index, "whence", seek_whence)
+    // (D2158, C107) NeperOS writes these in its e.os variant over the filesystem server, so their
+    // signatures are not seeded for that target -- the variant's own declarations stand instead.
+    if !neperos_target {
+        let (read_index, read_error) = add_seeded_function(c, os_module, "read", usize_type, true)
+        if read_error != ok { ret read_error }
+        try add_seeded_parameter(c, read_index, "f", file)
+        try add_seeded_parameter(c, read_index, "buf", bytes)
+        let (write_index, write_error) = add_seeded_function(c, os_module, "write", usize_type, true)
+        if write_error != ok { ret write_error }
+        try add_seeded_parameter(c, write_index, "f", file)
+        try add_seeded_parameter(c, write_index, "buf", string_type)
+        let (close_index, close_error) = add_seeded_function(c, os_module, "close", error_type, false)
+        if close_error != ok { ret close_error }
+        try add_seeded_parameter(c, close_index, "f", file)
+        let seek_whence = make_type(.Named, "SeekWhence", os_module)
+        let (seek_index, seek_error) = add_seeded_function(c, os_module, "seek", make_type(.Integer, "u64", os_module), true)
+        if seek_error != ok { ret seek_error }
+        try add_seeded_parameter(c, seek_index, "f", file)
+        try add_seeded_parameter(c, seek_index, "off", i64_type)
+        try add_seeded_parameter(c, seek_index, "whence", seek_whence)
+    }
     // `thread_create` is generic and intercepted at the call; these two are ordinary.
     let thread = make_type(.Named, "Thread", os_module)
     let (thread_join_index, thread_join_error) = add_seeded_function(c, os_module, "thread_join", error_type, false)
@@ -4890,15 +4894,18 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
         let arena = make_type(.Named, "Arena", mem_module)
         let (arena_pointer, arena_pointer_error) = seeded_composite_type(c, .Pointer, arena, false, os_module)
         if arena_pointer_error != ok { ret arena_pointer_error }
-        let (open_index, open_error) = add_seeded_function(c, os_module, "open", file, true)
-        if open_error != ok { ret open_error }
-        try add_seeded_parameter(c, open_index, "a", arena_pointer)
-        try add_seeded_parameter(c, open_index, "path", string_type)
-        try add_seeded_parameter(c, open_index, "flags", flags)
-        let (readdir_index, readdir_error) = add_seeded_function(c, os_module, "readdir", entries, true)
-        if readdir_error != ok { ret readdir_error }
-        try add_seeded_parameter(c, readdir_index, "a", arena_pointer)
-        try add_seeded_parameter(c, readdir_index, "path", string_type)
+        // (D2158, C107) open and readdir, likewise, come from the NeperOS e.os variant.
+        if !neperos_target {
+            let (open_index, open_error) = add_seeded_function(c, os_module, "open", file, true)
+            if open_error != ok { ret open_error }
+            try add_seeded_parameter(c, open_index, "a", arena_pointer)
+            try add_seeded_parameter(c, open_index, "path", string_type)
+            try add_seeded_parameter(c, open_index, "flags", flags)
+            let (readdir_index, readdir_error) = add_seeded_function(c, os_module, "readdir", entries, true)
+            if readdir_error != ok { ret readdir_error }
+            try add_seeded_parameter(c, readdir_index, "a", arena_pointer)
+            try add_seeded_parameter(c, readdir_index, "path", string_type)
+        }
         let (spawn_index, spawn_error) = add_seeded_function(c, os_module, "spawn", process, true)
         if spawn_error != ok { ret spawn_error }
         try add_seeded_parameter(c, spawn_index, "a", arena_pointer)
@@ -4931,7 +4938,7 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
     if has_memory { try seed_memory_signatures(c, mem_module) }
     let (os_module, has_os) = graph.find_module(g, "e.os")
     let (atomic_module, has_atomic) = graph.find_module(g, "e.atomic")
-    if has_os { try seed_os_signatures(c, os_module, mem_module, has_memory, atomic_module, has_atomic, same(g.os, "linux")) }
+    if has_os { try seed_os_signatures(c, os_module, mem_module, has_memory, atomic_module, has_atomic, same(g.os, "linux"), same(g.os, "neperos")) }
     if has_os && same(g.os, "none") && same(g.arch, "aarch64") { try seed_kernel_signatures(c, os_module) }
     if has_os && same(g.os, "neperos") {
         let (yield_index, yield_error) = add_seeded_function(c, os_module, "yield", make_type(.Void, "void", os_module), false)
@@ -4939,6 +4946,11 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
         // (D2128) `send(endpoint, word) -> status` and `recv(endpoint) -> word`, both over
         // a capability index, blocking until a partner rendezvous.
         let usize_type = make_type(.Integer, "usize", os_module)
+        // (D2158) `console_write(buf) -> usize`: the bytes written to the console, the primitive the
+        // e.os variant's `write` uses for stdout and stderr.
+        let (console_index, console_error) = add_seeded_function(c, os_module, "console_write", usize_type, false)
+        if console_error != ok { ret console_error }
+        try add_seeded_parameter(c, console_index, "buf", make_type(.String, "str", os_module))
         let (send_index, send_error) = add_seeded_function(c, os_module, "send", usize_type, false)
         if send_error != ok { ret send_error }
         try add_seeded_parameter(c, send_index, "endpoint", usize_type)

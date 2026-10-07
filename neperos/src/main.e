@@ -60,6 +60,35 @@ var archive_count: usize = 0usize
 var archive_offset: [16]usize = zero
 var archive_length: [16]usize = zero
 var next_asid: usize = 0usize
+// (D2153) The thread index of the last driver server started, so the filesystem-server boot can
+// grant it the endpoint capabilities it serves clients over.
+var last_server_index: usize = 24usize
+// (D2155) The PL031 real-time clock's base address from the device tree, for the wall-clock system
+// call; zero when the machine names no RTC, where wall time falls back to the monotonic counter.
+var rtc_base: usize = 0usize
+// (D2159, C108) The DMA pool size start_driver_server maps into a driver server. 128 KB suits the
+// small-buffer drivers; the GPU server needs its display's framebuffer, so its boot raises this.
+var driver_pool_bytes: usize = 131072usize
+// (D2166, C110) The program arena size. Zero means the 64 KB in-window arena vm.create lays down;
+// a non-zero value maps a separate EL0 region of that size and points the program's arena at it,
+// for the e.ui/e.gpu stack whose allocations dwarf 64 KB. Set before a start, reset to 0 after.
+var driver_arena_bytes: usize = 0usize
+
+// (D2166) Give `space` a large arena in its own mapped EL0 region (identity VA=PA) when
+// driver_arena_bytes is set; otherwise leave vm.create's in-window arena. The updated space comes
+// back.
+fn with_big_arena(space: vm.Space) -> (vm.Space, err) {
+    if driver_arena_bytes == 0usize { ret (space, ok) }
+    let (arena_storage, arena_error) = mem.alloc[u8](kernel_arena, driver_arena_bytes + 4096usize)
+    if arena_error != ok { ret (space, arena_error) }
+    let region = (mem.address_of(&arena_storage[0usize]) + 4095usize) & ~4095usize
+    let map_error = vm.map_range_el0(kernel_arena, space.ttbr, region, driver_arena_bytes, false)
+    if map_error != ok { ret (space, map_error) }
+    var updated = space
+    updated.arena_addr = region
+    updated.arena_size = driver_arena_bytes
+    ret (updated, ok)
+}
 // The four QEMU-virt PCIe INTx lines are GIC SPIs 3-6, that is INTIDs 35-38.
 const PCIE_INTX_FIRST: usize = 35usize
 const PCIE_INTX_LAST: usize = 38usize
@@ -127,7 +156,7 @@ fn write_user(frame: *a64.Frame) {
     let ptr = usize(frame.x[0usize])
     let len = usize(frame.x[1usize])
     frame.x[0usize] = 0u64
-    if ptr < vm.USER_BASE || ptr + len > vm.USER_BASE + vm.USER_SIZE { ret }
+    if ptr < vm.USER_BASE || ptr + len > vm.USER_BASE + thread.current_window() { ret }
     var buffer: [256]u8 = zero
     var done = 0usize
     while done < len {
@@ -200,6 +229,73 @@ fn syscall(frame: *a64.Frame) {
         thread.reap(frame)
         ret
     }
+    if number == 13u64 {
+        clock(frame)
+        ret
+    }
+    if number == 14u64 {
+        thread_spawn(frame)
+        ret
+    }
+    if number == 15u64 {
+        thread.detach(frame)
+        ret
+    }
+}
+
+// (D2157, C107) `os.thread_create` system call (14): spawn a thread in the CURRENT address space
+// running at `trampoline` (x0) with the user entry (x1) and its context (x2) in x0/x1, on a fresh
+// stack of x3 bytes the kernel maps into the space. The thread's id comes back, or all-ones when
+// the space has no room for the stack or the thread table is full. The caller is the parent, so a
+// later os.thread_join reaps it (the reap system call) and os.thread_detach frees it on exit.
+fn thread_spawn(frame: *a64.Frame) {
+    let trampoline = usize(frame.x[0usize])
+    let entry = usize(frame.x[1usize])
+    let ctx = usize(frame.x[2usize])
+    var bytes = usize(frame.x[3usize])
+    if bytes == 0usize { bytes = 65536usize }
+    let pages = (bytes + 4095usize) / 4096usize
+    let ttbr = thread.current_ttbr()
+    if ttbr == 0usize {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    let (stack_va, stack_top, map_error) = vm.map_stack(kernel_arena, ttbr, pages)
+    if map_error != ok {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    let index = thread.add_in_space(ttbr, "thread", trampoline, entry, ctx, stack_top)
+    if index == thread.MAX_THREADS {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    frame.x[0usize] = u64(index)
+}
+
+// (D2155, C107) `os.clock(kind) -> (i64, err)` (system call 13): the time in nanoseconds, kind 0
+// wall and 1 monotonic. Monotonic is the virtual counter converted to nanoseconds by its frequency
+// (split so neither multiply overflows 64 bits). Wall reads the PL031 RTC the device tree named --
+// its data register holds the seconds since the epoch -- and falls back to the monotonic counter
+// when no RTC was found. The counter and the RTC are read here at EL1, so an EL0 program needs no
+// access to either.
+fn clock(frame: *a64.Frame) {
+    let kind = frame.x[0usize]
+    var nanos: u64 = 0u64
+    if kind == 0u64 && rtc_base != 0usize {
+        let seconds = u64(os.load32(rtc_base))
+        nanos = seconds * 1000000000u64
+    } else {
+        let count = u64(os.mrs(a64.CNTVCT_EL0))
+        let freq = u64(os.mrs(a64.CNTFRQ_EL0))
+        if freq != 0u64 {
+            let whole = count / freq
+            let frac = count % freq
+            nanos = whole * 1000000000u64 + frac * 1000000000u64 / freq
+        }
+    }
+    frame.x[0usize] = nanos
+    frame.x[1usize] = 0u64
 }
 
 // The console server's bytes to its device (call 9): the run at (x1, x2) in the server's own
@@ -213,7 +309,7 @@ fn device_write(frame: *a64.Frame) {
     let len = usize(frame.x[2usize])
     frame.x[0usize] = 18446744073709551615u64
     if !allowed { ret }
-    if ptr < vm.USER_BASE || ptr + len > vm.USER_BASE + vm.USER_SIZE { ret }
+    if ptr < vm.USER_BASE || ptr + len > vm.USER_BASE + thread.current_window() { ret }
     var i = 0usize
     while i < len {
         if console_ns16550 { ns16550.put(uart, console_shift, os.load8(ptr + i)) } else { pl011.put(uart, os.load8(ptr + i)) }
@@ -289,19 +385,20 @@ fn exception(raw: *void) {
 fn setup_args(space: vm.Space, name: str, kernel_pointer: usize, hostile: bool) -> (usize, usize) {
     var count = 1usize
     if hostile { count = 2usize }
-    let strings = vm.ARG_OFF + count * 16usize
+    let arg_off = space.arg_off
+    let strings = arg_off + count * 16usize
     var i = 0usize
     while i < name.len {
         vm.put_byte(space, strings + i, name[i])
         i += 1usize
     }
-    vm.put_word(space, vm.ARG_OFF, vm.address(strings))
-    vm.put_word(space, vm.ARG_OFF + 8usize, name.len)
+    vm.put_word(space, arg_off, vm.address(strings))
+    vm.put_word(space, arg_off + 8usize, name.len)
     if hostile {
-        vm.put_word(space, vm.ARG_OFF + 16usize, kernel_pointer)
-        vm.put_word(space, vm.ARG_OFF + 24usize, 8usize)
+        vm.put_word(space, arg_off + 16usize, kernel_pointer)
+        vm.put_word(space, arg_off + 24usize, 8usize)
     }
-    ret (vm.address(vm.ARG_OFF), count)
+    ret (vm.address(arg_off), count)
 }
 
 // One thread from the initrd image, its arguments set up, added to the scheduler, and its
@@ -349,20 +446,23 @@ fn start_driver_server(a: *mem.Arena, image_addr: usize, image_len: usize, asid:
     if found == 32usize { ret (bar, ok) }
     let (device, cursor, discover_error) = virtio.discover(host, found, bar)
     if discover_error != ok { ret (bar, ok) }
-    let (space, space_error) = vm.create(a, image_addr, image_len, asid)
+    let (space_base, space_error) = vm.create(a, image_addr, image_len, asid)
     if space_error != ok { ret (bar, space_error) }
+    let (space, arena_error) = with_big_arena(space_base)
+    if arena_error != ok { ret (bar, arena_error) }
     let map_bar_error = vm.map_range_el0(a, space.ttbr, device.bar, device.bar_size, true)
     if map_bar_error != ok { ret (bar, map_bar_error) }
-    let (pool_storage, pool_error) = mem.alloc[u8](a, 131072usize + 4096usize)
+    let pool_bytes = driver_pool_bytes
+    let (pool_storage, pool_error) = mem.alloc[u8](a, pool_bytes + 4096usize)
     if pool_error != ok { ret (bar, pool_error) }
     let pool = (mem.address_of(&pool_storage[0usize]) + 4095usize) & ~4095usize
-    let map_pool_error = vm.map_range_el0(a, space.ttbr, pool, 131072usize, false)
+    let map_pool_error = vm.map_range_el0(a, space.ttbr, pool, pool_bytes, false)
     if map_pool_error != ok { ret (bar, map_pool_error) }
     vm.put_aux(space, 0usize, device.common)
     vm.put_aux(space, 1usize, device.notify)
     vm.put_aux(space, 2usize, usize(device.notify_multiplier))
     vm.put_aux(space, 3usize, pool)
-    vm.put_aux(space, 4usize, 131072usize)
+    vm.put_aux(space, 4usize, pool_bytes)
     vm.put_aux(space, 5usize, device.config)
     let (arg_table, arg_count) = setup_args(space, name, 0usize, false)
     let index = thread.add(space, name, arg_table, arg_count)
@@ -372,6 +472,7 @@ fn start_driver_server(a: *mem.Arena, image_addr: usize, image_len: usize, asid:
     // INTx; and a notification capability (notification 1) the server waits on for its interrupt.
     record_isr(device.isr)
     thread.grant(index, 1usize, thread.CAP_NOTIFICATION, thread.RIGHT_RECV, DEVICE_NOTIFICATION)
+    last_server_index = index
     ret (cursor, ok)
 }
 
@@ -433,7 +534,10 @@ fn enumerate_pci(tree: fdt.Tree) {
 fn has_word(text: str, word: str) -> bool {
     var at = 0usize
     while at + word.len <= text.len {
-        if fdt.same(text[at..at + word.len], word) { ret true }
+        // A whole word: `prodshell` must not match `shell` (that started the shell init beside the compositor).
+        let starts = at == 0usize || text[at - 1usize] == 32u8
+        let ends = at + word.len == text.len || text[at + word.len] == 32u8
+        if starts && ends && fdt.same(text[at..at + word.len], word) { ret true }
         at += 1usize
     }
     ret false
@@ -462,8 +566,10 @@ fn parse_archive(base: usize) -> bool {
 // the launcher under the `launch` system call. The thread index comes back.
 fn start_process(image_addr: usize, image_len: usize, name: str) -> (usize, err) {
     next_asid += 1usize
-    let (space, space_error) = vm.create(kernel_arena, image_addr, image_len, next_asid)
+    let (space_base, space_error) = vm.create(kernel_arena, image_addr, image_len, next_asid)
     if space_error != ok { ret (0usize, space_error) }
+    let (space, arena_error) = with_big_arena(space_base)
+    if arena_error != ok { ret (0usize, arena_error) }
     let (arg_table, arg_count) = setup_args(space, name, 0usize, false)
     let child = thread.add(space, name, arg_table, arg_count)
     if child == thread.MAX_THREADS { ret (0usize, vm.NoSpace) }
@@ -576,6 +682,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
         intx += 1usize
     }
     timer.arm(TICKS_PER_SECOND)
+    // (D2155, C107) The real-time clock the device tree names (PL031 on QEMU virt), for the
+    // wall-clock system call. Absent one, wall time falls back to the monotonic counter.
+    let (rtc_node, rtc_node_error) = fdt.find_compatible(tree, "arm,pl031")
+    if rtc_node_error == ok {
+        let (rtc_addr, rtc_size, rtc_region_error) = fdt.region(tree, rtc_node)
+        if rtc_region_error == ok { rtc_base = usize(rtc_addr) }
+    }
     // The user program the loader placed in memory: `/chosen` names its bounds.
     let (initrd_start, initrd_start_error) = fdt.integer(tree, chosen, "linux,initrd-start")
     if initrd_start_error != ok { ret NoInitrd }
@@ -597,11 +710,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (shell_init, shell_init_error) = start_process(archive_base + archive_offset[0usize], archive_length[0usize], "init")
         if shell_init_error != ok { ret shell_init_error }
     }
+    // (D2153, C106) The filesystem-server boot (`-append fsserver fswrite` / `fsserver fsread`):
+    // the initrd is an archive of three programs. Program 0 is the filesystem server, started with
+    // start_driver_server so it alone holds the block device's capability; the kernel then grants
+    // it the request endpoint (slot 2, receive) and the reply endpoint (slot 3, send). Program 1 is
+    // a client, granted the matching endpoints (request-send slot 1, reply-receive slot 2) and a
+    // scenario from the boot arg -- `fswrite` writes a file, `fsread` reads it back, so writing on
+    // one boot and reading on the next over the same disk proves persistence through the server.
+    // Program 2 is a client granted no endpoints: its send is refused, the capability gate.
+    let fsserver_mode = bootargs_error == ok && has_word(bootargs, "fsserver")
+    if fsserver_mode {
+        if pci_host_error != ok { ret NoInitrd }
+        if !parse_archive(image_addr) { ret BadArchive }
+        last_server_index = thread.MAX_THREADS
+        let (srv_bar, srv_error) = start_driver_server(a, archive_base + archive_offset[0usize], archive_length[0usize], 1usize, pci_host, pci_host.mmio, pci.VIRTIO_BLOCK, "fs")
+        if srv_error != ok { ret srv_error }
+        if last_server_index == thread.MAX_THREADS { ret NoInitrd }
+        thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 0usize)
+        thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 1usize)
+        // The server took ASID 1; the clients start from 2 so no two spaces share an ASID.
+        next_asid = 1usize
+        var client_name = "read"
+        if has_word(bootargs, "fswrite") { client_name = "write" }
+        // A client that renders (e.gpu/e.ui) needs the large arena, like the gpu boot. `bigarena`
+        // gives program 1 the 16 MB arena; the server and denied client keep their small arenas.
+        if has_word(bootargs, "bigarena") { driver_arena_bytes = 16777216usize }
+        let (client, client_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], client_name)
+        driver_arena_bytes = 0usize
+        if client_error != ok { ret client_error }
+        thread.grant(client, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
+        thread.grant(client, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 1usize)
+        let (denied, denied_error) = start_process(archive_base + archive_offset[2usize], archive_length[2usize], "denied")
+        if denied_error != ok { ret denied_error }
+    }
     // (D2152, C106) The filesystem boot (`-append fswrite` / `fsread`): the initrd is the fs test
     // program, started as the sole holder of the block device. `fswrite` formats (if the disk is
     // blank) and writes a file; `fsread` reads it back, so a reboot on the same disk image proves
     // the filesystem persists.
-    let fs_mode = bootargs_error == ok && (has_word(bootargs, "fswrite") || has_word(bootargs, "fsread"))
+    let fs_mode = bootargs_error == ok && !fsserver_mode && (has_word(bootargs, "fswrite") || has_word(bootargs, "fsread"))
     if fs_mode {
         if pci_host_error != ok { ret NoInitrd }
         var fs_name = "fsread"
@@ -609,7 +755,149 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (fs_bar, fs_error) = start_driver_server(a, image_addr, image_len, 1usize, pci_host, pci_host.mmio, pci.VIRTIO_BLOCK, fs_name)
         if fs_error != ok { ret fs_error }
     }
-    if !shell_mode && !fs_mode {
+    // (D2159, C108) The display boot (`-append gpu`): the initrd is the GPU driver program, started
+    // as the sole holder of the virtio-gpu scanout via start_driver_server, with a pool large enough
+    // for the display's framebuffer. It reads the mode, draws a test pattern and flushes it; a QEMU
+    // screendump of the result is checked against a golden hash.
+    let gpu_mode = bootargs_error == ok && has_word(bootargs, "gpu")
+    if gpu_mode {
+        if pci_host_error != ok { ret NoInitrd }
+        driver_pool_bytes = 4194304usize
+        // A large arena when the program asks for it (`-append gpu bigarena`), for the e.gpu/e.ui
+        // stack; the plain test pattern and gfx.paint scenes keep the small in-window arena.
+        if has_word(bootargs, "bigarena") { driver_arena_bytes = 16777216usize }
+        let (gpu_bar, gpu_error) = start_driver_server(a, image_addr, image_len, 1usize, pci_host, pci_host.mmio, pci.VIRTIO_GPU, "gpu")
+        if gpu_error != ok { ret gpu_error }
+        driver_arena_bytes = 0usize
+    }
+    // (D2160, C109) The input boot (`-append input`): the initrd is an archive of two programs. The
+    // input server (program 0) alone holds the virtio-input device and the notification bound to its
+    // interrupt, and pushes each event to the client over endpoint 0 (send, slot 2). The client
+    // (program 1) holds only that endpoint (receive, slot 1) and prints the events. A QEMU fixture
+    // injects taps and keys through the monitor and asserts the stream the client receives.
+    let input_mode = bootargs_error == ok && has_word(bootargs, "input")
+    if input_mode {
+        if pci_host_error != ok { ret NoInitrd }
+        if !parse_archive(image_addr) { ret BadArchive }
+        last_server_index = thread.MAX_THREADS
+        let (input_bar, input_error) = start_driver_server(a, archive_base + archive_offset[0usize], archive_length[0usize], 1usize, pci_host, pci_host.mmio, pci.VIRTIO_INPUT, "input")
+        if input_error != ok { ret input_error }
+        if last_server_index == thread.MAX_THREADS { ret NoInitrd }
+        thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
+        next_asid = 1usize
+        let (input_client, input_client_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "client")
+        if input_client_error != ok { ret input_client_error }
+        thread.grant(input_client, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 0usize)
+    }
+    // (D2162, C110) The compositor boot (`-append compositor`): the initrd is an archive of two
+    // programs. The compositor (program 0) alone holds the virtio-gpu display; an app (program 1)
+    // draws a surface into a frame SHARED with the compositor (the same physical pages mapped into
+    // both at vm.SHARED_FRAME_VA) and signals it ready over endpoint 0; the compositor composites
+    // the surface into the display and flushes. A QEMU screendump is checked against a golden.
+    let compositor_mode = bootargs_error == ok && has_word(bootargs, "compositor")
+    if compositor_mode {
+        if pci_host_error != ok { ret NoInitrd }
+        if !parse_archive(image_addr) { ret BadArchive }
+        let (shared_storage, shared_error) = mem.alloc[u8](a, vm.SHARED_FRAME_PAGES * 4096usize + 4096usize)
+        if shared_error != ok { ret shared_error }
+        let shared_phys = (mem.address_of(&shared_storage[0usize]) + 4095usize) & ~4095usize
+        driver_pool_bytes = 4194304usize
+        last_server_index = thread.MAX_THREADS
+        let (comp_bar, comp_error) = start_driver_server(a, archive_base + archive_offset[0usize], archive_length[0usize], 1usize, pci_host, pci_host.mmio, pci.VIRTIO_GPU, "comp")
+        if comp_error != ok { ret comp_error }
+        if last_server_index == thread.MAX_THREADS { ret NoInitrd }
+        let compositor = last_server_index
+        try vm.map_phys_at(thread.ttbr_of(compositor), shared_phys, vm.SHARED_FRAME_PAGES)
+        // endpoint 0: the app signals a ready frame (app sends, compositor receives).
+        thread.grant(compositor, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 0usize)
+        // The input server is optional: a third archive program and a virtio-input device wire input
+        // routing (endpoint 1 input->compositor, endpoint 2 compositor->app). Without it the
+        // compositor's ungranted input receive returns the sentinel at once, so it simply does not
+        // route -- the display path alone still works (and its screendump needs no input device).
+        var input_present = false
+        // The MMIO cursor past the servers started so far, so the next device gets a disjoint window.
+        var next_bar = comp_bar
+        if archive_count >= 3usize {
+            driver_pool_bytes = 131072usize
+            last_server_index = thread.MAX_THREADS
+            let (input_bar, input_error) = start_driver_server(a, archive_base + archive_offset[2usize], archive_length[2usize], 3usize, pci_host, comp_bar, pci.VIRTIO_INPUT, "input")
+            if input_error != ok { ret input_error }
+            next_bar = input_bar
+            if last_server_index != thread.MAX_THREADS {
+                input_present = true
+                thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 1usize)
+                thread.grant(compositor, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 1usize)
+                thread.grant(compositor, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 2usize)
+            }
+        }
+        next_asid = 1usize
+        // An e.ui app (the window backend over e.gpu) needs the large arena, like the gpu boot; a
+        // paint-only app does not. `-append "compositor bigarena"` gives the app 16 MB (the input
+        // server above is already started, so it keeps its small arena). Reset after, so nothing else
+        // inherits it. Without bigarena the app gets the in-window arena and the comp golden is
+        // byte-unchanged.
+        if has_word(bootargs, "bigarena") { driver_arena_bytes = 16777216usize }
+        let (comp_app, comp_app_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "app")
+        driver_arena_bytes = 0usize
+        if comp_app_error != ok { ret comp_app_error }
+        try vm.map_phys_at(thread.ttbr_of(comp_app), shared_phys, vm.SHARED_FRAME_PAGES)
+        thread.grant(comp_app, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
+        if input_present { thread.grant(comp_app, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 2usize) }
+        // (D2195) The unified shell's status service: program 4, a second process beside the shell. It
+        // serves over endpoints 3 (request, the shell sends) and 4 (reply, the shell receives).
+        if has_word(bootargs, "unified") {
+            // The input server holds ASID 3, so the status process starts above it.
+            next_asid = 3usize
+            let (unified_status, unified_status_error) = start_process(archive_base + archive_offset[4usize], archive_length[4usize], "status")
+            if unified_status_error != ok { ret unified_status_error }
+            thread.grant(unified_status, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 3usize)
+            thread.grant(unified_status, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 4usize)
+            thread.grant(comp_app, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 3usize)
+            thread.grant(comp_app, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 4usize)
+            // (D2196) The wallpaper from the C106 filesystem: program 5 is the fs server, the sole
+            // holder of the block device (ASID 5), serving endpoints 6 (request) and 7 (reply); program
+            // 6 is its client, which reads /wall.png and sends it to the shell over endpoint 5.
+            last_server_index = thread.MAX_THREADS
+            let (unified_fs_bar, unified_fs_error) = start_driver_server(a, archive_base + archive_offset[5usize], archive_length[5usize], 5usize, pci_host, next_bar, pci.VIRTIO_BLOCK, "fs")
+            if unified_fs_error != ok { ret unified_fs_error }
+            if last_server_index != thread.MAX_THREADS {
+                thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 6usize)
+                thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 7usize)
+                next_asid = 5usize
+                driver_arena_bytes = 16777216usize
+                let (loader, loader_error) = start_process(archive_base + archive_offset[6usize], archive_length[6usize], "wall")
+                driver_arena_bytes = 0usize
+                if loader_error != ok { ret loader_error }
+                thread.grant(loader, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
+                thread.grant(loader, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
+                thread.grant(loader, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 5usize)
+                thread.grant(comp_app, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 5usize)
+            }
+        }
+    }
+    // (D2171, C111) The status-service boot (`-append statussvc`): the initrd is an archive of the
+    // status server (program 0) and a client (program 1), no device and no disk. The server holds the
+    // system status and serves one protocol over two endpoints (0 request, 1 reply); the client
+    // subscribes, reports each field, posts a notification and reports the raised count. On QEMU virt
+    // the clock is the only live provider; battery and radio report absent.
+    let status_mode = bootargs_error == ok && has_word(bootargs, "statussvc")
+    if status_mode {
+        if !parse_archive(image_addr) { ret BadArchive }
+        next_asid = 0usize
+        let (status_server, status_server_error) = start_process(archive_base + archive_offset[0usize], archive_length[0usize], "status")
+        if status_server_error != ok { ret status_server_error }
+        thread.grant(status_server, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 0usize)
+        thread.grant(status_server, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 1usize)
+        // A status client that renders (the launcher reading the top-bar status) needs the large
+        // arena; a plain reporting client does not. `bigarena` gives program 1 the 16 MB arena.
+        if has_word(bootargs, "bigarena") { driver_arena_bytes = 16777216usize }
+        let (status_client, status_client_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "app")
+        driver_arena_bytes = 0usize
+        if status_client_error != ok { ret status_client_error }
+        thread.grant(status_client, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
+        thread.grant(status_client, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 1usize)
+    }
+    if !shell_mode && !fs_mode && !fsserver_mode && !gpu_mode && !input_mode && !compositor_mode && !status_mode {
     // A and B interleave under the timer, and X is handed a reference to kernel RAM --
     // mapped into its space without EL0 access -- so its read faults and it alone is killed.
     // The RAM base is as good a kernel address as any. S and R rendezvous over endpoint 0

@@ -14,6 +14,7 @@ error NoData
 error BlockStatus
 error BlockMismatch
 error PoolExhausted
+error GpuError
 
 // Common-configuration field offsets (virtio 1.x 4.1.4.3).
 const DEVICE_FEATURE_SELECT: usize = 0usize
@@ -535,4 +536,240 @@ fn vsock_connect(device: Device, src_port: u32, dst_port: u32) -> (u64, u16, err
     let poll_error = ring_poll(rx_ring, 0u16)
     if poll_error != ok { ret (guest_cid, 0u16, poll_error) }
     ret (guest_cid, os.load16(rx_buf + 30usize), ok)
+}
+
+// virtio-gpu 2D (virtio 1.x 5.7, C108): the control queue (0) carries a 24-byte control header
+// (type, flags, fence_id, ctx_id, padding) followed by the command's own fields; the device
+// answers with a header whose type is OK_NODATA or OK_DISPLAY_INFO. The driver reads the display
+// mode, creates a BGRA resource the display's size, attaches a framebuffer as its backing, paints
+// a pattern, makes the resource the scanout, transfers the backing to the host and flushes it.
+const GPU_CMD_GET_DISPLAY_INFO: u32 = 256u32
+const GPU_CMD_RESOURCE_CREATE_2D: u32 = 257u32
+const GPU_CMD_SET_SCANOUT: u32 = 259u32
+const GPU_CMD_RESOURCE_FLUSH: u32 = 260u32
+const GPU_CMD_TRANSFER_TO_HOST_2D: u32 = 261u32
+const GPU_CMD_RESOURCE_ATTACH_BACKING: u32 = 262u32
+const GPU_RESP_OK_NODATA: u32 = 4352u32
+const GPU_RESP_OK_DISPLAY_INFO: u32 = 4353u32
+const GPU_FORMAT_BGRA: u32 = 1u32
+const GPU_RESOURCE: u32 = 1u32
+
+var gpu_seq: u16 = 0u16
+
+fn gpu_zero(cmd: usize, bytes: usize) {
+    var i = 0usize
+    while i < bytes {
+        os.store64(cmd + i, 0u64)
+        i += 8usize
+    }
+}
+
+// Submit the 2-descriptor control request (the command the device reads, then the response it
+// writes) on queue 0 and spin, bounded, until it completes. The descriptors are reused each call.
+fn gpu_cmd(ring: Ring, cmd: usize, resp: usize, cmd_len: usize, resp_len: usize) -> err {
+    os.store64(ring.desc, u64(cmd))
+    os.store32(ring.desc + 8usize, u32(cmd_len))
+    os.store16(ring.desc + 12usize, DESC_NEXT)
+    os.store16(ring.desc + 14usize, 1u16)
+    os.store64(ring.desc + 16usize, u64(resp))
+    os.store32(ring.desc + 24usize, u32(resp_len))
+    os.store16(ring.desc + 28usize, DESC_WRITE)
+    os.store16(ring.desc + 30usize, 0u16)
+    let slot = gpu_seq % u16(ring.size)
+    os.store16(ring.avail + 4usize + 2usize * usize(slot), 0u16)
+    os.barrier()
+    gpu_seq += 1u16
+    os.store16(ring.avail + 2usize, gpu_seq)
+    os.barrier()
+    os.store16(ring.notify, ring.index)
+    var spins = 0usize
+    while os.load16(ring.used + 2usize) != gpu_seq && spins < 200000000usize { spins += 1usize }
+    if os.load16(ring.used + 2usize) != gpu_seq { ret NoData }
+    ret ok
+}
+
+// A deterministic test pattern into the BGRA framebuffer: blue rises with x, green with y, red
+// with x+y -- varied enough that a screendump of it has a distinctive hash, and reproducible so
+// that hash is a golden.
+fn gpu_paint(fb: usize, width: usize, height: usize) {
+    var y = 0usize
+    while y < height {
+        var x = 0usize
+        while x < width {
+            let p = fb + (y * width + x) * 4usize
+            os.store8(p, u8(x & 255usize))
+            os.store8(p + 1usize, u8(y & 255usize))
+            os.store8(p + 2usize, u8((x + y) & 255usize))
+            os.store8(p + 3usize, 255u8)
+            x += 1usize
+        }
+        y += 1usize
+    }
+}
+
+// An opened display: the control ring, its command and response buffers, the framebuffer and the
+// display size. The caller paints the framebuffer, then gpu_present transfers and flushes it.
+type Gpu = struct { ring: Ring, cmd: usize, resp: usize, fb: usize, width: usize, height: usize }
+
+// Bring the display up (D2161): read the mode, create a BGRA resource the display's size, attach a
+// framebuffer as its backing and make it the scanout. The framebuffer (in the DMA pool) is returned
+// ready to paint; gpu_present shows it. The pool must hold width*height*4 bytes.
+fn gpu_begin(device: Device) -> (Gpu, err) {
+    let negotiate_error = negotiate(device)
+    if negotiate_error != ok { ret (zero, negotiate_error) }
+    let (ring, ring_error) = setup_queue(device, 0u16)
+    if ring_error != ok { ret (zero, ring_error) }
+    status_add(device, STATUS_DRIVER_OK)
+    let (cmd, cmd_error) = dma_region(256usize)
+    if cmd_error != ok { ret (zero, cmd_error) }
+    let (resp, resp_error) = dma_region(512usize)
+    if resp_error != ok { ret (zero, resp_error) }
+    gpu_zero(cmd, 24usize)
+    os.store32(cmd, GPU_CMD_GET_DISPLAY_INFO)
+    let info_error = gpu_cmd(ring, cmd, resp, 24usize, 408usize)
+    if info_error != ok { ret (zero, info_error) }
+    if os.load32(resp) != GPU_RESP_OK_DISPLAY_INFO { ret (zero, GpuError) }
+    let width = usize(os.load32(resp + 32usize))
+    let height = usize(os.load32(resp + 36usize))
+    if width == 0usize || height == 0usize { ret (zero, GpuError) }
+    let fb_bytes = width * height * 4usize
+    let (fb, fb_error) = dma_region(fb_bytes)
+    if fb_error != ok { ret (zero, fb_error) }
+    gpu_zero(cmd, 40usize)
+    os.store32(cmd, GPU_CMD_RESOURCE_CREATE_2D)
+    os.store32(cmd + 24usize, GPU_RESOURCE)
+    os.store32(cmd + 28usize, GPU_FORMAT_BGRA)
+    os.store32(cmd + 32usize, u32(width))
+    os.store32(cmd + 36usize, u32(height))
+    let create_error = gpu_cmd(ring, cmd, resp, 40usize, 24usize)
+    if create_error != ok { ret (zero, create_error) }
+    if os.load32(resp) != GPU_RESP_OK_NODATA { ret (zero, GpuError) }
+    gpu_zero(cmd, 48usize)
+    os.store32(cmd, GPU_CMD_RESOURCE_ATTACH_BACKING)
+    os.store32(cmd + 24usize, GPU_RESOURCE)
+    os.store32(cmd + 28usize, 1u32)
+    os.store64(cmd + 32usize, u64(fb))
+    os.store32(cmd + 40usize, u32(fb_bytes))
+    let attach_error = gpu_cmd(ring, cmd, resp, 48usize, 24usize)
+    if attach_error != ok { ret (zero, attach_error) }
+    if os.load32(resp) != GPU_RESP_OK_NODATA { ret (zero, GpuError) }
+    gpu_zero(cmd, 48usize)
+    os.store32(cmd, GPU_CMD_SET_SCANOUT)
+    os.store32(cmd + 32usize, u32(width))
+    os.store32(cmd + 36usize, u32(height))
+    os.store32(cmd + 40usize, 0u32)
+    os.store32(cmd + 44usize, GPU_RESOURCE)
+    let scanout_error = gpu_cmd(ring, cmd, resp, 48usize, 24usize)
+    if scanout_error != ok { ret (zero, scanout_error) }
+    if os.load32(resp) != GPU_RESP_OK_NODATA { ret (zero, GpuError) }
+    ret (Gpu { ring: ring, cmd: cmd, resp: resp, fb: fb, width: width, height: height }, ok)
+}
+
+// Transfer and flush only a damaged rectangle (D2163): the sub-rect [x,y,w,h] of the framebuffer,
+// its backing offset the rect's first pixel, so a small change costs a small transfer. The rows are
+// read with the resource's full width as stride, so the rect lands where it belongs on the screen.
+fn gpu_present_rect(gpu: Gpu, x: usize, y: usize, w: usize, h: usize) -> err {
+    gpu_zero(gpu.cmd, 56usize)
+    os.store32(gpu.cmd, GPU_CMD_TRANSFER_TO_HOST_2D)
+    os.store32(gpu.cmd + 24usize, u32(x))
+    os.store32(gpu.cmd + 28usize, u32(y))
+    os.store32(gpu.cmd + 32usize, u32(w))
+    os.store32(gpu.cmd + 36usize, u32(h))
+    os.store64(gpu.cmd + 40usize, u64((y * gpu.width + x) * 4usize))
+    os.store32(gpu.cmd + 48usize, GPU_RESOURCE)
+    let transfer_error = gpu_cmd(gpu.ring, gpu.cmd, gpu.resp, 56usize, 24usize)
+    if transfer_error != ok { ret transfer_error }
+    if os.load32(gpu.resp) != GPU_RESP_OK_NODATA { ret GpuError }
+    gpu_zero(gpu.cmd, 48usize)
+    os.store32(gpu.cmd, GPU_CMD_RESOURCE_FLUSH)
+    os.store32(gpu.cmd + 24usize, u32(x))
+    os.store32(gpu.cmd + 28usize, u32(y))
+    os.store32(gpu.cmd + 32usize, u32(w))
+    os.store32(gpu.cmd + 36usize, u32(h))
+    os.store32(gpu.cmd + 40usize, GPU_RESOURCE)
+    let flush_error = gpu_cmd(gpu.ring, gpu.cmd, gpu.resp, 48usize, 24usize)
+    if flush_error != ok { ret flush_error }
+    if os.load32(gpu.resp) != GPU_RESP_OK_NODATA { ret GpuError }
+    ret ok
+}
+
+// Transfer the painted framebuffer to the host resource and flush it to the screen (D2161).
+fn gpu_present(gpu: Gpu) -> err {
+    gpu_zero(gpu.cmd, 56usize)
+    os.store32(gpu.cmd, GPU_CMD_TRANSFER_TO_HOST_2D)
+    os.store32(gpu.cmd + 32usize, u32(gpu.width))
+    os.store32(gpu.cmd + 36usize, u32(gpu.height))
+    os.store64(gpu.cmd + 40usize, 0u64)
+    os.store32(gpu.cmd + 48usize, GPU_RESOURCE)
+    let transfer_error = gpu_cmd(gpu.ring, gpu.cmd, gpu.resp, 56usize, 24usize)
+    if transfer_error != ok { ret transfer_error }
+    if os.load32(gpu.resp) != GPU_RESP_OK_NODATA { ret GpuError }
+    gpu_zero(gpu.cmd, 48usize)
+    os.store32(gpu.cmd, GPU_CMD_RESOURCE_FLUSH)
+    os.store32(gpu.cmd + 32usize, u32(gpu.width))
+    os.store32(gpu.cmd + 36usize, u32(gpu.height))
+    os.store32(gpu.cmd + 40usize, GPU_RESOURCE)
+    let flush_error = gpu_cmd(gpu.ring, gpu.cmd, gpu.resp, 48usize, 24usize)
+    if flush_error != ok { ret flush_error }
+    if os.load32(gpu.resp) != GPU_RESP_OK_NODATA { ret GpuError }
+    ret ok
+}
+
+// Bring the display up and paint the test pattern (C108); the display's width and height come back.
+fn gpu_bringup(device: Device) -> (usize, usize, err) {
+    let (gpu, begin_error) = gpu_begin(device)
+    if begin_error != ok { ret (0usize, 0usize, begin_error) }
+    gpu_paint(gpu.fb, gpu.width, gpu.height)
+    let present_error = gpu_present(gpu)
+    if present_error != ok { ret (gpu.width, gpu.height, present_error) }
+    ret (gpu.width, gpu.height, ok)
+}
+
+// virtio-input (virtio 1.x 5.8, C109): the event queue (0) carries 8-byte events the device writes
+// as input arrives -- virtio_input_event {type: u16, code: u16, value: u32}, the Linux input_event
+// shape (EV_SYN 0, EV_KEY 1, EV_ABS 3). The driver posts device-writable buffers and reads the used
+// ring as the device fills them. One batch of buffers is posted at open; a bounded run of events
+// fits without re-posting.
+const INPUT_EVENTS: usize = 64usize
+
+type Input = struct { ring: Ring, buffers: usize, count: usize, seen: u16 }
+
+// Set up the input device: negotiate, enable the event queue, post `count` device-writable 8-byte
+// event buffers, and notify. The device writes an event into the next buffer as input arrives.
+fn input_open(device: Device, count: usize) -> (Input, err) {
+    let negotiate_error = negotiate(device)
+    if negotiate_error != ok { ret (zero, negotiate_error) }
+    let (ring, ring_error) = setup_queue(device, 0u16)
+    if ring_error != ok { ret (zero, ring_error) }
+    status_add(device, STATUS_DRIVER_OK)
+    let (buffers, buffers_error) = dma_region(count * 8usize)
+    if buffers_error != ok { ret (zero, buffers_error) }
+    var i = 0usize
+    while i < count {
+        os.store64(ring.desc + i * 16usize, u64(buffers + i * 8usize))
+        os.store32(ring.desc + i * 16usize + 8usize, 8u32)
+        os.store16(ring.desc + i * 16usize + 12usize, DESC_WRITE)
+        os.store16(ring.desc + i * 16usize + 14usize, 0u16)
+        os.store16(ring.avail + 4usize + 2usize * i, u16(i))
+        i += 1usize
+    }
+    os.barrier()
+    os.store16(ring.avail + 2usize, u16(count))
+    os.barrier()
+    os.store16(ring.notify, ring.index)
+    ret (Input { ring: ring, buffers: buffers, count: count, seen: 0u16 }, ok)
+}
+
+// The next event the device has written, if any: (type, code, value, true), or (0, 0, 0, false)
+// when none is pending. The used ring names which buffer the device filled; events arrive in order.
+fn input_next(input: *Input) -> (u16, u16, u32, bool) {
+    if os.load16(input.ring.used + 2usize) == input.seen { ret (0u16, 0u16, 0u32, false) }
+    let j = usize(input.seen) % input.ring.size
+    let id = usize(os.load32(input.ring.used + 4usize + j * 8usize))
+    let event = input.buffers + id * 8usize
+    let etype = os.load16(event)
+    let ecode = os.load16(event + 2usize)
+    let evalue = os.load32(event + 4usize)
+    input.seen += 1u16
+    ret (etype, ecode, evalue, true)
 }
