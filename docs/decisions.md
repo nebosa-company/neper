@@ -37699,3 +37699,19 @@ hosts. Second, a C106 file is a single 512-byte block, so the wallpaper source i
 136 bytes; DrawImage scales it to cover, which is what a real photo wallpaper needs anyway. Remaining
 for C112: labels and real app icons, the live C111 status in the top bar, and tap-to-launch with
 Home. C112 -> 0.6.
+
+## D2175 — C112: the launcher's top bar driven by the live C111 status
+
+The launcher's top bar now shows the live C111 status. neperos/src/launcher_status.e subscribes to
+the C111 status service, reads the snapshot, posts a notification through the service (so the count
+rises to 1) and reads it again, then renders the launcher with the top bar's indicators driven by
+what the service reported: a tick per provider, bright when present and dim when absent -- battery,
+Wi-Fi and cellular are all absent on QEMU virt, so all three are dim, honestly -- and a lit tick per
+notification (one, after the post). It reports each field it read (`launcher status battery absent`,
+... `notifications 1`) so the fixture can confirm the launcher read the real values, and folds the
+frame to a hash 155713317, identical on QEMU 8.2 (WSL) and 11.1 (Windows); the clock is not drawn, so
+the hash is deterministic. It runs as program 1 of a status boot, which now grants its rendering
+client the 16 MB arena on `bigarena` (the plain reporting client of D2171 keeps the small arena, so
+the D2171 status fixture is unchanged, re-verified with the C108 gpu golden). This is the launcher
+wiring the C108/C110 display path to the C111 status service -- two NeperOS subsystems meeting in the
+shell. Remaining for C112: app-icon labels and tap-to-launch with Home. C112 -> 0.8.

@@ -851,7 +851,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if status_server_error != ok { ret status_server_error }
         thread.grant(status_server, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 0usize)
         thread.grant(status_server, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 1usize)
+        // A status client that renders (the launcher reading the top-bar status) needs the large
+        // arena; a plain reporting client does not. `bigarena` gives program 1 the 16 MB arena.
+        if has_word(bootargs, "bigarena") { driver_arena_bytes = 16777216usize }
         let (status_client, status_client_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "app")
+        driver_arena_bytes = 0usize
         if status_client_error != ok { ret status_client_error }
         thread.grant(status_client, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
         thread.grant(status_client, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 1usize)

@@ -9089,6 +9089,20 @@ if ($neperosQemu) {
     foreach ($statusMark in @('status server up', 'status battery unavailable', 'status wifi unavailable', 'status cellular unavailable', 'status clock ', 'status notifications 0', 'status notifications 1', 'status client done', 'neperos: exit 0x0000000000000000')) {
         if ($statusBoot -notmatch [regex]::Escape($statusMark)) { throw "NeperOS status service missing (${statusMark}): $statusBoot" }
     }
+    # (D2175, C112) The launcher's top bar driven by the live C111 status: launcher_status subscribes
+    # to the status server, posts a notification, and renders the top bar with a tick per provider
+    # (dim because battery/Wi-Fi/cellular are absent on virt) and a lit tick per notification. It
+    # reports what it read; the frame hash (clock not drawn) is identical on QEMU 8.2 and 11.1.
+    $lStatus = Join-Path $testBuild 'launcher_status.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\launcher_status.e') $repo aarch64 neperos $lStatus | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS launcher-status program did not build' }
+    $lStatusArchive = Join-Path $testBuild 'lstatus-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $lStatusArchive $statusServer $lStatus
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS launcher-status archive did not assemble' }
+    $lStatusBoot = Invoke-NeperOS $neperosImage @('-initrd', $lStatusArchive, '-append', '"statussvc bigarena"')
+    foreach ($lStatusMark in @('launcher status battery absent', 'launcher status wifi absent', 'launcher status cellular absent', 'launcher status notifications 1', 'launcher status hash 155713317', 'neperos: exit 0x0000000000000000')) {
+        if ($lStatusBoot -notmatch [regex]::Escape($lStatusMark)) { throw "NeperOS launcher status bar missing (${lStatusMark}): $lStatusBoot" }
+    }
     # (D2172, C112) The launcher's layout skeleton: the wallpaper, the top bar with status ticks, and
     # the 8x5 icon grid rendered through e.gfx.scene over the e.gpu CPU backend into a 256x256 surface.
     # Same source, same hash on the host (the rasterizer is pure), so the host hash is the check.
