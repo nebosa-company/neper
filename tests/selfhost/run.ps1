@@ -2176,6 +2176,12 @@ $gfxCurveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $gfxCurveWritten -ne 'executable written') { throw 'gfx_curve emission failed' }
 & $gfxCurvePath
 if ($LASTEXITCODE -ne 0) { throw "a gfx_curve check failed: exit $LASTEXITCODE" }
+# `e.gfx.svg`: an SVG subset (shapes, relative and arc paths, transforms, currentColor, style declarations, opacity) drawn through e.gfx.scene and probed pixel by pixel (D2198).
+$gfxSvgPath = Join-Path $testBuild 'gfx-svg-selfhost.exe'
+$gfxSvgWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg\src\main.e') $repo 'x64' 'windows' $gfxSvgPath
+if ($LASTEXITCODE -ne 0 -or $gfxSvgWritten -ne 'executable written') { throw 'gfx_svg emission failed' }
+& $gfxSvgPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_svg check failed: exit $LASTEXITCODE" }
 # `e.robot.kinematics`: odometry over 100 tick pairs, planar and six-axis forward kinematics, transpose and damped-least-squares IK against numpy (D866).
 $robotKinematicsPath = Join-Path $testBuild 'robot-kinematics-selfhost.exe'
 $robotKinematicsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\robot_kinematics\src\main.e') $repo 'x64' 'windows' $robotKinematicsPath

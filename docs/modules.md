@@ -278,6 +278,7 @@ in `e.time`, not `e.debug`.
   row readers; concrete drivers remain owner-qualified packages.
 - `e.gpu.tensor`: explicit GPU tensor operations over pure `e.algo.linalg.tensor` views.
 - `e.gfx.scene`: renderer-neutral display lists, retained scenes and GPU composition.
+- `e.gfx.svg`: a documented SVG 1.1 subset (shapes, paths with arcs, transforms, solid paint, `currentColor`) drawn into an `e.gfx.scene` builder, so one `.svg` icon renders the same on every target.
 - `e.ui.asset`: deterministic scale/theme/locale variant selection, fonts and bounded
   decoded-image/GPU texture caching over `e.asset`.
 - `e.ui.window`, `e.ui.input`, `e.ui.widget`, `e.ui.animation`, `e.ui.accessibility`,

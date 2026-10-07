@@ -9583,6 +9583,21 @@ does not discover drivers or allocate hidden connection pools.
 
 ## 8. Declarative GPU UI
 
+### `e.gfx.svg`
+
+```neper
+error BadSvg
+error TooComplex
+
+fn size(text: str) -> (f32, f32, bool)
+fn draw(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color) -> err
+```
+
+`draw` fits the document's viewBox (meet, centred) into `dest` and pushes balanced
+`Save`/`Transform`/`FillPath`/`StrokePath`/`Restore` commands; `current` is `currentColor`.
+Colours are display values (a byte over 255), written as the renderer receives them. Gradients,
+clip paths, masks, text, `use` and CSS sheets are not drawn.
+
 ### `e.gfx.curve`
 
 ```neper

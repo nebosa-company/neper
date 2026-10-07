@@ -4,6 +4,17 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
+      "id": "C115",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 115,
+      "title": "NeperOS shell 11: the Pixel 9 Pro screen, the Neper crater wallpaper, SVG icons and the lunar look",
+      "score": 0.2,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Queued by the user (2026-10-07). Acceptance: (1) the display is the Pixel 9 Pro's 1280x2856 (20:9): the compositor, virtio-gpu scanout and pool, shared frame, window region and renderer arena are sized for it and refuse a surface they cannot hold with a message; (2) the wallpaper is the Desktop neper-crater image, resampled offline to the panel and shipped as an initrd archive entry that a loader reads through a kernel call (research: docs/neperos-display-research.md; the C106 file is one 512-byte block), decoded once and drawn 1:1 as a static layer; (3) e.gfx.svg, a documented SVG subset drawn into e.gfx.scene, with a pixel-probing fixture on every host; (4) rectangular app icons and top-bar icons authored as .svg files and drawn through it; (5) the look follows the lunar theme specs (Desktop pixel_9_pro_lunar_theme_typography_specs.md): Jost for the clock, date and launcher labels, Sora for notification headers and widget titles, Space Grotesk for system status, Exo 2 for notification bodies, all OFL, with the mock-up's layout (clock, date, moon-phase card, notification card, dock). DONE: e.gfx.svg (D2198): shapes, paths with arcs, transforms, currentColor, style declarations, opacity; fixture gfx_svg passes on Windows x64 and Linux x64 (WSL); modules.json, modules.md and module-apis.md updated. Research note written (D2199). Not yet: the 1280x2856 display path, the wallpaper pipeline, the icons, the fonts and the lunar layout."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
