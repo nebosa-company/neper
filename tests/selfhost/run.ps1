@@ -9120,6 +9120,13 @@ if ($neperosQemu) {
     $uiGolden = '172a747560e4f73a0de393838fb20f3a8d750cb77e6b9a65328d657fa4cbd86c'
     $uiDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $uiScene (Join-Path $testBuild 'ui.ppm') 55127 2>&1) -join "`n"
     if ($uiDump -notmatch "sha256 $uiGolden") { throw "NeperOS CPU-rasterizer scene did not match the golden: $uiDump" }
+    # (D2166, C110) e.gpu's CPU backend runs on NeperOS: gpu_cpu opens the CPU device, which needs
+    # the large program arena (the `gpu bigarena` boot) -- e.ui renders through e.gfx.scene over it.
+    $gpuCpu = Join-Path $testBuild 'gpu_cpu.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\gpu_cpu.e') $repo aarch64 neperos $gpuCpu | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.gpu CPU program did not build' }
+    $gpuCpuBoot = Invoke-NeperOS $neperosImage @('-initrd', $gpuCpu, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+    if ($gpuCpuBoot -notmatch '(?s)gpu cpu open ok.*neperos: exit 0x0000000000000000') { throw "NeperOS e.gpu CPU backend did not open: $gpuCpuBoot" }
     # (D2162, C110) The compositor over shared frames: an app draws a surface into a frame shared
     # with the compositor and signals it; the compositor composites it into the display and flushes.
     $comp = Join-Path $testBuild 'comp.img'

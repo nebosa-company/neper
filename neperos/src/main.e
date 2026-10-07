@@ -69,6 +69,26 @@ var rtc_base: usize = 0usize
 // (D2159, C108) The DMA pool size start_driver_server maps into a driver server. 128 KB suits the
 // small-buffer drivers; the GPU server needs its display's framebuffer, so its boot raises this.
 var driver_pool_bytes: usize = 131072usize
+// (D2166, C110) The program arena size. Zero means the 64 KB in-window arena vm.create lays down;
+// a non-zero value maps a separate EL0 region of that size and points the program's arena at it,
+// for the e.ui/e.gpu stack whose allocations dwarf 64 KB. Set before a start, reset to 0 after.
+var driver_arena_bytes: usize = 0usize
+
+// (D2166) Give `space` a large arena in its own mapped EL0 region (identity VA=PA) when
+// driver_arena_bytes is set; otherwise leave vm.create's in-window arena. The updated space comes
+// back.
+fn with_big_arena(space: vm.Space) -> (vm.Space, err) {
+    if driver_arena_bytes == 0usize { ret (space, ok) }
+    let (arena_storage, arena_error) = mem.alloc[u8](kernel_arena, driver_arena_bytes + 4096usize)
+    if arena_error != ok { ret (space, arena_error) }
+    let region = (mem.address_of(&arena_storage[0usize]) + 4095usize) & ~4095usize
+    let map_error = vm.map_range_el0(kernel_arena, space.ttbr, region, driver_arena_bytes, false)
+    if map_error != ok { ret (space, map_error) }
+    var updated = space
+    updated.arena_addr = region
+    updated.arena_size = driver_arena_bytes
+    ret (updated, ok)
+}
 // The four QEMU-virt PCIe INTx lines are GIC SPIs 3-6, that is INTIDs 35-38.
 const PCIE_INTX_FIRST: usize = 35usize
 const PCIE_INTX_LAST: usize = 38usize
@@ -425,8 +445,10 @@ fn start_driver_server(a: *mem.Arena, image_addr: usize, image_len: usize, asid:
     if found == 32usize { ret (bar, ok) }
     let (device, cursor, discover_error) = virtio.discover(host, found, bar)
     if discover_error != ok { ret (bar, ok) }
-    let (space, space_error) = vm.create(a, image_addr, image_len, asid)
+    let (space_base, space_error) = vm.create(a, image_addr, image_len, asid)
     if space_error != ok { ret (bar, space_error) }
+    let (space, arena_error) = with_big_arena(space_base)
+    if arena_error != ok { ret (bar, arena_error) }
     let map_bar_error = vm.map_range_el0(a, space.ttbr, device.bar, device.bar_size, true)
     if map_bar_error != ok { ret (bar, map_bar_error) }
     let pool_bytes = driver_pool_bytes
@@ -540,8 +562,10 @@ fn parse_archive(base: usize) -> bool {
 // the launcher under the `launch` system call. The thread index comes back.
 fn start_process(image_addr: usize, image_len: usize, name: str) -> (usize, err) {
     next_asid += 1usize
-    let (space, space_error) = vm.create(kernel_arena, image_addr, image_len, next_asid)
+    let (space_base, space_error) = vm.create(kernel_arena, image_addr, image_len, next_asid)
     if space_error != ok { ret (0usize, space_error) }
+    let (space, arena_error) = with_big_arena(space_base)
+    if arena_error != ok { ret (0usize, arena_error) }
     let (arg_table, arg_count) = setup_args(space, name, 0usize, false)
     let child = thread.add(space, name, arg_table, arg_count)
     if child == thread.MAX_THREADS { ret (0usize, vm.NoSpace) }
@@ -731,8 +755,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if gpu_mode {
         if pci_host_error != ok { ret NoInitrd }
         driver_pool_bytes = 4194304usize
+        // A large arena when the program asks for it (`-append gpu bigarena`), for the e.gpu/e.ui
+        // stack; the plain test pattern and gfx.paint scenes keep the small in-window arena.
+        if has_word(bootargs, "bigarena") { driver_arena_bytes = 16777216usize }
         let (gpu_bar, gpu_error) = start_driver_server(a, image_addr, image_len, 1usize, pci_host, pci_host.mmio, pci.VIRTIO_GPU, "gpu")
         if gpu_error != ok { ret gpu_error }
+        driver_arena_bytes = 0usize
     }
     // (D2160, C109) The input boot (`-append input`): the initrd is an archive of two programs. The
     // input server (program 0) alone holds the virtio-input device and the notification bound to its

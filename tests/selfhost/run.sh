@@ -8977,6 +8977,15 @@ greeting"
         *"sha256 $ui_golden"*) ;;
         *) printf '%s\n' "NeperOS CPU-rasterizer scene did not match the golden: $ui_dump" >&2; exit 1 ;;
     esac
+    # (D2166, C110) e.gpu's CPU backend runs on NeperOS: gpu_cpu opens the CPU device, which needs
+    # the large program arena (the `gpu bigarena` boot) -- e.ui renders through e.gfx.scene over it.
+    gpu_cpu_img="$test_build/gpu_cpu.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/gpu_cpu.e" "$repo" aarch64 neperos "$gpu_cpu_img")" = 'executable written' ]
+    gpu_cpu_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$gpu_cpu_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+    case "$gpu_cpu_boot" in
+        *'gpu cpu open ok'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.gpu CPU backend did not open: $gpu_cpu_boot" >&2; exit 1 ;;
+    esac
     # (D2162, C110) The compositor over shared frames: an app draws a surface into a frame shared
     # with the compositor and signals it; the compositor composites it into the display and flushes.
     comp_img="$test_build/comp.img"

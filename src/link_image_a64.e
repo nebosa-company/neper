@@ -28,8 +28,10 @@ error KernelRuntime
 const A64_KERNEL_PAGE: usize = 4096usize
 const A64_KERNEL_HOOKS: usize = 32usize
 const A64_KERNEL_STACK: usize = 262144usize
-// The arena when the build names none: sixteen megabytes.
-const A64_KERNEL_ARENA: usize = 16777216usize
+// The arena when the build names none (D2166): sixty-four megabytes, so the kernel can carve a
+// program the large arena the e.ui/e.gpu stack needs (plus its pools and spaces) and still fit a
+// 256 MB machine well below the initrd.
+const A64_KERNEL_ARENA: usize = 67108864usize
 
 // The two runtimes' generated tables, by the image's kind.
 fn runtime_symbol(program: bool, name: str) -> (usize, bool) {

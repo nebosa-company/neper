@@ -37504,3 +37504,20 @@ the C108 gpu golden d505a446 and the other neperos fixtures are byte-for-byte un
 for C110: the large arena, then e.gfx.scene and e.ui atop it, the window backend bound to the
 compositor's shared surface with fonts from the filesystem, and an e.ui sample matching its host
 pixel hash.
+
+## D2166 — C110: e.gpu's CPU backend runs on NeperOS over a large program arena
+
+e.gpu's CPU backend now opens on NeperOS. The blocker after it linked (D2165) was the arena:
+vm.create lays down a 64 KB in-window arena, while e.gpu's device, queue and buffers need far more.
+A program can now be given a large arena in its own mapped EL0 region: a driver_arena_bytes module
+var and with_big_arena (map a region via map_range_el0, point the space's arena_addr/size at it),
+applied in both start_driver_server and start_process. The kernel's own arena grew from 16 MB to
+64 MB (link_image_a64.A64_KERNEL_ARENA) so it can carve a 16 MB program arena plus the 4 MB display
+pool and the spaces and still sit well below the initrd on a 256 MB machine. The `-append gpu
+bigarena` boot sets a 16 MB program arena; neperos/src/gpu_cpu.e opens e.gpu's CPU device there and
+prints `gpu cpu open ok`, verified on QEMU virt on both hosts with a clean power-off. The small-arena
+boots are untouched (driver_arena_bytes defaults to zero), and the C108 gpu golden d505a446 and the
+other neperos fixtures are byte-for-byte unchanged after the kernel-arena and compiler rebuild. This
+is the runtime foundation for the e.ui backend; remaining for C110: build an e.gfx.scene renderer
+over the CPU backend, bind the e.ui window backend to the compositor's shared surface with fonts from
+the filesystem, and render an e.ui sample matching its host pixel hash.
