@@ -815,11 +815,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // compositor's ungranted input receive returns the sentinel at once, so it simply does not
         // route -- the display path alone still works (and its screendump needs no input device).
         var input_present = false
+        // The MMIO cursor past the servers started so far, so the next device gets a disjoint window.
+        var next_bar = comp_bar
         if archive_count >= 3usize {
             driver_pool_bytes = 131072usize
             last_server_index = thread.MAX_THREADS
             let (input_bar, input_error) = start_driver_server(a, archive_base + archive_offset[2usize], archive_length[2usize], 3usize, pci_host, comp_bar, pci.VIRTIO_INPUT, "input")
             if input_error != ok { ret input_error }
+            next_bar = input_bar
             if last_server_index != thread.MAX_THREADS {
                 input_present = true
                 thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 1usize)
@@ -851,6 +854,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
             thread.grant(unified_status, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 4usize)
             thread.grant(comp_app, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 3usize)
             thread.grant(comp_app, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 4usize)
+            // (D2196) The wallpaper from the C106 filesystem: program 5 is the fs server, the sole
+            // holder of the block device (ASID 5), serving endpoints 6 (request) and 7 (reply); program
+            // 6 is its client, which reads /wall.png and sends it to the shell over endpoint 5.
+            last_server_index = thread.MAX_THREADS
+            let (unified_fs_bar, unified_fs_error) = start_driver_server(a, archive_base + archive_offset[5usize], archive_length[5usize], 5usize, pci_host, next_bar, pci.VIRTIO_BLOCK, "fs")
+            if unified_fs_error != ok { ret unified_fs_error }
+            if last_server_index != thread.MAX_THREADS {
+                thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 6usize)
+                thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 7usize)
+                next_asid = 5usize
+                driver_arena_bytes = 16777216usize
+                let (loader, loader_error) = start_process(archive_base + archive_offset[6usize], archive_length[6usize], "wall")
+                driver_arena_bytes = 0usize
+                if loader_error != ok { ret loader_error }
+                thread.grant(loader, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
+                thread.grant(loader, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
+                thread.grant(loader, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 5usize)
+                thread.grant(comp_app, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 5usize)
+            }
         }
     }
     // (D2171, C111) The status-service boot (`-append statussvc`): the initrd is an archive of the

@@ -48,6 +48,10 @@ def main():
         "-serial", "file:" + serial,
         "-qmp", "tcp:127.0.0.1:%d,server,nowait" % port,
     ]
+    # An optional raw disk image (argv[7]) behind a virtio-blk device (the unified shell, D2196).
+    if len(sys.argv) > 7:
+        args += ["-drive", "file=%s,format=raw,if=none,id=blk0" % sys.argv[7],
+                 "-device", "virtio-blk-pci,disable-legacy=on,drive=blk0"]
     proc = subprocess.Popen(args)
     try:
         sock = None

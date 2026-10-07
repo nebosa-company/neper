@@ -9,7 +9,9 @@
 // over endpoints 3 (request) and 4 (reply), posts one notification and draws a tick per provider and
 // per notification, with the clock from the snapshot. (The earlier "AUX heisenbug" that kept the
 // status service out was a boot-word collision, fixed in D2194.)
-// Archive layout: [comp=0, shell=1, input=2, app=3, status=4]. Boot `compositor bigarena unified`.
+// The wallpaper comes from the C106 filesystem through wall_loader.e (D2196), received on slot 5.
+// Archive layout: [comp=0, shell=1, input=2, app=3, status=4, fs server=5, wall loader=6]. Boot
+// `compositor bigarena unified` with a virtio-blk disk.
 use e.mem
 use e.os
 use e.time
@@ -17,6 +19,9 @@ use e.gpu
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
+use e.gfx.image
+use e.io
+use e.fmt.png
 use e.ui.window
 
 const ROUTED: usize = 2usize
@@ -26,6 +31,7 @@ const LOW16: usize = 65535usize
 const LOW32: usize = 4294967295usize
 const EV_KEY: usize = 1usize
 const APP_INDEX: usize = 3usize
+const WALL_FROM: usize = 5usize
 const STATUS_REQ: usize = 3usize
 const STATUS_REPLY: usize = 4usize
 const OP_QUIT: usize = 0usize
@@ -78,7 +84,6 @@ fn draw_digit(builder: *scene.Builder, font: []const u8, px: f32, py: f32, d: us
 }
 
 fn draw_launcher(builder: *scene.Builder) {
-    fill(builder, 0.0, 0.0, 256.0, 256.0, 0.09, 0.11, 0.18)
     fill(builder, 0.0, 0.0, 256.0, 18.0, 0.05, 0.06, 0.10)
     var tick = 0usize
     while tick < 5usize {
@@ -152,6 +157,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (builder_value, builder_error) = scene.builder(a, 256usize)
     if builder_error != ok { ret builder_error }
     var builder = builder_value
+    // The wallpaper: the loader process read a PNG from the C106 filesystem and sends it here (a
+    // length word, then a word per byte). It is decoded and drawn scaled to cover; with no wallpaper
+    // (an absent or failed loader answers with a length no PNG reaches) the backdrop is a solid fill.
+    var wallpapered = false
+    let wall_len = os.recv(WALL_FROM, NO_SLOT)
+    if wall_len > 0usize && wall_len <= 4096usize {
+        let (wall_bytes, wall_alloc_error) = mem.alloc[u8](a, wall_len)
+        if wall_alloc_error != ok { ret wall_alloc_error }
+        var got = 0usize
+        while got < wall_len {
+            wall_bytes[got] = u8(os.recv(WALL_FROM, NO_SLOT))
+            got += 1usize
+        }
+        var reader_state: io.SliceReader = zero
+        reader_state.data = wall_bytes[0usize..wall_len]
+        reader_state.off = 0usize
+        let (decoded, decode_error) = png.decode(a, io.slice_reader(&reader_state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
+        if decode_error == ok {
+            let (wall_view, wall_view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
+            if wall_view_error == ok {
+                let (texture, upload_error) = scene.upload_image(&renderer, wall_view)
+                if upload_error == ok {
+                    let wallpaper = scene.push(&builder, scene.Command { Image: scene.DrawImage { texture: texture, source: geometry.rect(0.0, 0.0, f32(decoded.width), f32(decoded.height)), destination: geometry.rect(0.0, 0.0, 256.0, 256.0), opacity: 1.0 } })
+                    wallpapered = true
+                }
+            }
+        }
+    }
+    if !wallpapered { fill(&builder, 0.0, 0.0, 256.0, 256.0, 0.09, 0.11, 0.18) }
+    say("shell wallpaper ")
+    if wallpapered { say("from fs\n") } else { say("fallback\n") }
     draw_launcher(&builder)
     // Live status in the top bar, from the C111 status service: subscribe, post a notification, read
     // the snapshot, then stop the service (this shell is its only client).

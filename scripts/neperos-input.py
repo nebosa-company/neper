@@ -67,6 +67,11 @@ def main():
     ]
     if "compositor" in append.split():
         args[args.index("-device"):args.index("-device")] = ["-device", "virtio-gpu-pci"]
+    # An optional raw disk image (argv[9]) behind a virtio-blk device, for the unified shell's
+    # filesystem wallpaper (D2196).
+    if len(sys.argv) > 9:
+        args += ["-drive", "file=%s,format=raw,if=none,id=blk0" % sys.argv[9],
+                 "-device", "virtio-blk-pci,disable-legacy=on,drive=blk0"]
     proc = subprocess.Popen(args)
     try:
         sock = None

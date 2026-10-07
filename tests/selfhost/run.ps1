@@ -9383,11 +9383,18 @@ if ($neperosQemu) {
     $shell = Join-Path $testBuild 'shell.img'
     & $compiler emit-executable (Join-Path $repo 'neperos\src\shell.e') $repo aarch64 neperos $shell | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS unified shell did not build' }
+    $wallLoader = Join-Path $testBuild 'wall_loader.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\wall_loader.e') $repo aarch64 neperos $wallLoader | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS wallpaper loader did not build' }
     $shellArchive = Join-Path $testBuild 'shell-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $shellArchive $comp $shell $inputServer $tapApp $statusServer
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $shellArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS unified-shell archive did not assemble' }
-    $shellBoot = (& python $inputScript $neperosQemu.Source $neperosImage $shellArchive keyboard (Join-Path $testBuild 'shell.serial') 55135 'compositor bigarena unified' 'shell home' 2>&1) -join "`n"
-    if ($shellBoot -notmatch '(?s)shell presented.*shell status .*shell status service notes 1.*comp composited flushed.*shell tap.*shell launched app.*shell app code 5.*shell home' -or $shellBoot -notmatch 'tap app ran' -or $shellBoot -notmatch 'status server done') { throw "NeperOS unified shell did not host the launcher, show status and launch an app on a tap: $shellBoot" }
+    # (D2196) The wallpaper is read from the C106 filesystem: program 5 is the fs server on a blank disk,
+    # program 6 the loader that writes and reads /wall.png and sends it to the shell.
+    $shellDisk = Join-Path $testBuild 'shell-disk.img'
+    $shellDiskStream = [IO.File]::Create($shellDisk); $shellDiskStream.SetLength(1MB); $shellDiskStream.Close()
+    $shellBoot = (& python $inputScript $neperosQemu.Source $neperosImage $shellArchive keyboard (Join-Path $testBuild 'shell.serial') 55135 'compositor bigarena unified' 'shell home' $shellDisk 2>&1) -join "`n"
+    if ($shellBoot -notmatch '(?s)shell wallpaper from fs.*shell presented.*shell status .*shell status service notes 1.*comp composited flushed.*shell tap.*shell launched app.*shell app code 5.*shell home' -or $shellBoot -notmatch 'tap app ran' -or $shellBoot -notmatch 'status server done' -or $shellBoot -notmatch 'wall loader from fs' -or $shellBoot -notmatch 'fs server done') { throw "NeperOS unified shell did not host the launcher, show status and launch an app on a tap: $shellBoot" }
 }
 
 Write-Output 'selfhost tests passed'
