@@ -37996,3 +37996,7 @@ assert `shell status`. C112 -> 0.99. The one remaining gap-clause item is the fs
 draws a baked wallpaper fill, not one read from the C106 filesystem): reading it needs the fs server,
 a second start_process = the heisenbug trigger -- so strict 1.0 needs the heisenbug fix, or a decision
 that a baked/direct wallpaper + direct status reads satisfy "fs+status" in the gap clause.
+
+## D2194 — Boot words match whole words; the "AUX heisenbug" was `prodshell` containing `shell`
+
+`has_word` in `neperos/src/main.e` matched substrings, so the boot argument `prodshell` also set `shell_mode` (`shell` inside it). The kernel then started `archive[0]` (the compositor image) as the shell `init` with no AUX page, which read the 0xCD alloc fill and tripped the narrow trap at `comp.read_device`. The compositor driver thread's own AUX was correct throughout: a kernel read through its live translation equalled the table walk (0x10000000 and 0x4). There was no translation or TLB fault. `has_word` now requires a space or string edge on both sides. Verified on QEMU 11.1: compositor plus two `start_process` programs prints `comp ready`; shell, statussvc, fsserver fswrite/fsread, input, compositor routing and the unified shell fixtures pass unchanged. C112's last gap (status service as a second process) is not blocked by a kernel bug; it needs a boot word that is not a superstring of another.

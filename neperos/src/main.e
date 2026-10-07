@@ -534,7 +534,10 @@ fn enumerate_pci(tree: fdt.Tree) {
 fn has_word(text: str, word: str) -> bool {
     var at = 0usize
     while at + word.len <= text.len {
-        if fdt.same(text[at..at + word.len], word) { ret true }
+        // A whole word: `prodshell` must not match `shell` (that started the shell init beside the compositor).
+        let starts = at == 0usize || text[at - 1usize] == 32u8
+        let ends = at + word.len == text.len || text[at + word.len] == 32u8
+        if starts && ends && fdt.same(text[at..at + word.len], word) { ret true }
         at += 1usize
     }
     ret false
