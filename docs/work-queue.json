@@ -48,6 +48,17 @@
       "evidence": "Queued by the user (2026-10-08). The Stocks app (D2213) ships on a bundled sample data set; this item replaces the sample source once C117 (networking) and C116 (Secure) exist. Acceptance, in order: (1) a keyless source: Stooq's CSV download (no account; daily prices for most exchanges; delayed and daily, not real time), parsed into the watchlist, the chart and the day change, with the sample data as the offline fallback and a visible 'delayed' label; (2) bring-your-own-key providers for better data (Finnhub, Twelve Data, Alpha Vantage or Polygon; the key is entered in the app and stored in Secure; real-time quotes are usually paid or rate-limited, so real time is not promised); (3) crypto from Coinbase's public price endpoint (no key), if wanted; (4) add and remove tickers and search. Yahoo's unofficial endpoints are excluded: they break without notice and their terms do not allow it. Fixtures run against recorded responses, not the live internet."
     },
     {
+      "id": "C119",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 119,
+      "title": "NeperOS Weather live data: a keyless forecast source, places and units",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued by the user (2026-10-08). The Weather app (D2214) ships on a seeded sample forecast; this item replaces it once C117 (networking) exists. Acceptance: (1) a keyless forecast source (Open-Meteo or the Norwegian MET API; no account) giving the current temperature and condition, the hourly strip, seven days, humidity, wind and UV, with the sample data as the offline fallback and a visible 'updated' time; (2) places: search by name, add and remove, the current location by the user's choice, kept in storage; (3) units (C and F, km/h and mph) remembered; (4) sunrise and sunset, precipitation chance and alerts. Fixtures run against recorded responses, not the live internet."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
