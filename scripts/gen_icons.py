@@ -16,7 +16,7 @@ APP_ORDER = ["phone", "messages", "mail", "browser", "camera", "gallery", "maps"
 
 
 # The name each app shows under its icon (the file name where it is not the right word).
-LABELS = {"gallery": "Photos", "mfa": "Secure", "ssh": "SSH", "ai": "AI"}
+LABELS = {"phone": "Call", "gallery": "Photos", "mfa": "Secure", "ssh": "SSH", "ai": "AI"}
 
 
 def load(kind):
