@@ -65,7 +65,7 @@ type Floats = struct { data: []f32, len: usize }
 // The state a Save pushes: the transform, the scissor, the mask in use and whether
 // this entry opened an opacity layer.
 type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32, layer_x0: usize, layer_y0: usize, layer_x1: usize, layer_y1: usize }
-type RendererState = struct { arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool }
+type RendererState = struct { arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [16]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool }
 type TargetState = struct { target: *gpu.Target }
 
 // ------------------------------------------------------------------ the builder
@@ -1124,7 +1124,11 @@ fn resolve_coverage(s: *RendererState, out: []f32) {
     var y = s.box_y0
     while y < s.box_y1 {
         var sum: f32 = 0.0
-        var x = s.box_x0
+        var x = s.acc_x0
+        while x < s.box_x0 {
+            sum = sum + s.acc[y * stride + x]
+            x += 1usize
+        }
         while x < s.box_x1 {
             sum = sum + s.acc[y * stride + x]
             var c = sum
@@ -1176,7 +1180,9 @@ fn edge_box(s: *RendererState) {
     if y1 < f32(s.height) { s.box_y1 = usize(math.ceil[f32](y1)) }
     if s.box_x0 > s.width { s.box_x0 = s.width }
     if s.box_y0 > s.height { s.box_y0 = s.height }
-    // Nothing outside the frame's damage is painted, so nothing there is resolved.
+    // Nothing outside the frame's damage is painted, so nothing there is resolved --
+    // but the row's running sum starts where the edges do, left of the damage.
+    s.acc_x0 = s.box_x0
     if s.box_x0 < s.dx0 { s.box_x0 = s.dx0 }
     if s.box_y0 < s.dy0 { s.box_y0 = s.dy0 }
     if s.box_x1 > s.dx1 { s.box_x1 = s.dx1 }

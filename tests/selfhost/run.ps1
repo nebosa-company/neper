@@ -2182,6 +2182,12 @@ $gfxSvgWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $gfxSvgWritten -ne 'executable written') { throw 'gfx_svg emission failed' }
 & $gfxSvgPath
 if ($LASTEXITCODE -ne 0) { throw "a gfx_svg check failed: exit $LASTEXITCODE" }
+# `e.gfx.scene` incremental redraw: a big path under a damage box whose left edge lies outside it is still painted (D2206).
+$gfxSceneDamagePath = Join-Path $testBuild 'gfx-scene-damage-selfhost.exe'
+$gfxSceneDamageWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_scene_damage\src\main.e') $repo 'x64' 'windows' $gfxSceneDamagePath
+if ($LASTEXITCODE -ne 0 -or $gfxSceneDamageWritten -ne 'executable written') { throw 'gfx_scene_damage emission failed' }
+& $gfxSceneDamagePath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_scene_damage check failed: exit $LASTEXITCODE" }
 # `e.robot.kinematics`: odometry over 100 tick pairs, planar and six-axis forward kinematics, transpose and damped-least-squares IK against numpy (D866).
 $robotKinematicsPath = Join-Path $testBuild 'robot-kinematics-selfhost.exe'
 $robotKinematicsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\robot_kinematics\src\main.e') $repo 'x64' 'windows' $robotKinematicsPath

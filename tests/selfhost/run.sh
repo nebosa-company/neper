@@ -1959,6 +1959,11 @@ gfx_svg_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$gfx_svg_written" = 'executable written' ]
 chmod +x "$test_build/gfx-svg-selfhost"
 "$test_build/gfx-svg-selfhost"
+# `e.gfx.scene` incremental redraw: a big path under a damage box whose left edge lies outside it is still painted (D2206).
+gfx_scene_damage_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_scene_damage/src/main.e" "$repo" x64 linux "$test_build/gfx-scene-damage-selfhost")
+[ "$gfx_scene_damage_written" = 'executable written' ]
+chmod +x "$test_build/gfx-scene-damage-selfhost"
+"$test_build/gfx-scene-damage-selfhost"
 # `e.robot.kinematics`: odometry over 100 tick pairs, planar and six-axis forward kinematics, transpose and damped-least-squares IK against numpy (D866).
 robot_kinematics_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/robot_kinematics/src/main.e" "$repo" x64 linux "$test_build/robot-kinematics-selfhost")
 [ "$robot_kinematics_written" = 'executable written' ]
