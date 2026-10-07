@@ -9250,10 +9250,18 @@ greeting"
     shell_img="$test_build/shell.img"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/shell.e" "$repo" aarch64 neperos "$shell_img")" = 'executable written' ]
     shell_archive="$test_build/shell-archive.img"
-    python3 "$repo/scripts/build-shell-archive.py" "$shell_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img"
-    shell_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$shell_archive" keyboard "$test_build/shell.serial" 55135 "compositor bigarena" 'shell home' 2>&1)
+    python3 "$repo/scripts/build-shell-archive.py" "$shell_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img"
+    shell_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$shell_archive" keyboard "$test_build/shell.serial" 55135 "compositor bigarena unified" 'shell home' 2>&1)
     case "$shell_boot" in
-        *'shell presented'*'shell status '*'comp composited flushed'*'shell tap'*'shell launched app'*'tap app ran'*'shell app code 5'*'shell home'*) ;;
+        *'shell presented'*'shell status '*'shell status service notes 1'*'comp composited flushed'*'shell tap'*'shell launched app'*'shell app code 5'*'shell home'*)
+            case "$shell_boot" in
+                *'tap app ran'*) ;;
+                *) printf '%s\n' "unified shell: the app did not run: $shell_boot" >&2; exit 1 ;;
+            esac
+            case "$shell_boot" in
+                *'status server done'*) ;;
+                *) printf '%s\n' "unified shell: the status server did not finish: $shell_boot" >&2; exit 1 ;;
+            esac ;;
         *) printf '%s\n' "NeperOS unified shell did not host the launcher, show status and launch an app on a tap: $shell_boot" >&2; exit 1 ;;
     esac
 fi

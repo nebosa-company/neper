@@ -840,6 +840,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try vm.map_phys_at(thread.ttbr_of(comp_app), shared_phys, vm.SHARED_FRAME_PAGES)
         thread.grant(comp_app, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
         if input_present { thread.grant(comp_app, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 2usize) }
+        // (D2195) The unified shell's status service: program 4, a second process beside the shell. It
+        // serves over endpoints 3 (request, the shell sends) and 4 (reply, the shell receives).
+        if has_word(bootargs, "unified") {
+            // The input server holds ASID 3, so the status process starts above it.
+            next_asid = 3usize
+            let (unified_status, unified_status_error) = start_process(archive_base + archive_offset[4usize], archive_length[4usize], "status")
+            if unified_status_error != ok { ret unified_status_error }
+            thread.grant(unified_status, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 3usize)
+            thread.grant(unified_status, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 4usize)
+            thread.grant(comp_app, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 3usize)
+            thread.grant(comp_app, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 4usize)
+        }
     }
     // (D2171, C111) The status-service boot (`-append statussvc`): the initrd is an archive of the
     // status server (program 0) and a client (program 1), no device and no disk. The server holds the

@@ -5,9 +5,11 @@
 // composites it to the display). Then it listens for input the compositor routes to it (slot 2, the
 // C109 path); on the first key-down -- a tap on an icon -- it launches an app as a process
 // (os.launch), waits for it (os.reap), and returns Home. This hosts the launcher on the display with
-// LIVE tap input, built on the proven comp+input+app topology (one start_process, so it sidesteps the
-// prodshell AUX heisenbug: the compositor reads its AUX at boot, before any runtime os.launch).
-// Archive layout: [comp=0, shell=1, input=2, app=3]. Needs the large arena (`compositor bigarena`).
+// LIVE tap input. The top bar shows the C111 status service's snapshot (D2195): the shell subscribes
+// over endpoints 3 (request) and 4 (reply), posts one notification and draws a tick per provider and
+// per notification, with the clock from the snapshot. (The earlier "AUX heisenbug" that kept the
+// status service out was a boot-word collision, fixed in D2194.)
+// Archive layout: [comp=0, shell=1, input=2, app=3, status=4]. Boot `compositor bigarena unified`.
 use e.mem
 use e.os
 use e.time
@@ -24,6 +26,12 @@ const LOW16: usize = 65535usize
 const LOW32: usize = 4294967295usize
 const EV_KEY: usize = 1usize
 const APP_INDEX: usize = 3usize
+const STATUS_REQ: usize = 3usize
+const STATUS_REPLY: usize = 4usize
+const OP_QUIT: usize = 0usize
+const OP_POST: usize = 2usize
+const OP_SUBSCRIBE: usize = 3usize
+const PRESENT: usize = 2147483648usize
 
 fn say(text: str) {
     let (written, write_error) = os.write(os.stdout(), text)
@@ -93,6 +101,26 @@ fn draw_launcher(builder: *scene.Builder) {
     }
 }
 
+// One provider's tick in the top bar: bright when the status service reports it present, else dim.
+fn provider_tick(builder: *scene.Builder, x: f32, word: usize) {
+    if (word & PRESENT) == 0usize {
+        fill(builder, x, 5.0, 8.0, 8.0, 0.3, 0.3, 0.33)
+    } else {
+        fill(builder, x, 5.0, 8.0, 8.0, 0.6, 0.85, 0.7)
+    }
+}
+
+// Read the five-word snapshot: battery, Wi-Fi, cellular, wall-clock nanoseconds, notification count.
+fn read_snapshot(into: *[5]usize) {
+    var words: [5]usize = zero
+    var i = 0usize
+    while i < 5usize {
+        words[i] = os.recv(STATUS_REPLY, NO_SLOT)
+        i += 1usize
+    }
+    *into = words
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, gpu.Backend.Cpu, 0u32)
     if open_error != ok {
@@ -125,14 +153,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if builder_error != ok { ret builder_error }
     var builder = builder_value
     draw_launcher(&builder)
-    // Live status in the top bar: the current time, read directly from the wall clock through e.time
-    // (os.clock -> the PL031 RTC) -- the status the shell shows, kept single-process (no separate
-    // C111 status-server, which would be a second start_process and trip the AUX heisenbug).
+    // Live status in the top bar, from the C111 status service: subscribe, post a notification, read
+    // the snapshot, then stop the service (this shell is its only client).
+    var snap: [5]usize = zero
+    let subscribed = os.send(STATUS_REQ, OP_SUBSCRIBE, NO_SLOT)
+    read_snapshot(&snap)
+    let posted = os.send(STATUS_REQ, OP_POST, NO_SLOT)
+    read_snapshot(&snap)
+    let stopped = os.send(STATUS_REQ, OP_QUIT, NO_SLOT)
+    provider_tick(&builder, 246.0, snap[0usize])
+    provider_tick(&builder, 234.0, snap[1usize])
+    provider_tick(&builder, 222.0, snap[2usize])
+    if snap[4usize] > 0usize { fill(&builder, 210.0, 5.0, 8.0, 8.0, 0.95, 0.8, 0.3) }
     var hour = 0usize
     var minute = 0usize
-    let (wall, wall_error) = time.now()
-    if wall_error == ok && wall.nanos > 0i64 {
-        let day = usize(wall.nanos / 1000000000i64) % 86400usize
+    if snap[3usize] > 0usize {
+        let day = (snap[3usize] / 1000000000usize) % 86400usize
         hour = day / 3600usize
         minute = (day % 3600usize) / 60usize
     }
@@ -163,6 +199,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     say2(hour)
     say(":")
     say2(minute)
+    say("\n")
+    say("shell status service notes ")
+    say_num(snap[4usize])
     say("\n")
     // Live input: the compositor routes each event here (slot 2). The first key-down is a tap on an
     // icon -- launch an app as a process, reap it, and return Home. Keep reading to the sentinel.
