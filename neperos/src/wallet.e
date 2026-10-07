@@ -38,7 +38,7 @@ const LOYALTY: usize = 4usize
 const TRANSIT: usize = 5usize
 const BANK: usize = 6usize
 const DOC: usize = 7usize
-const DOC_TYPES: usize = 11usize
+const DOC_TYPES: usize = 12usize
 
 fn say(line: str) {
     let (written, write_error) = os.write(os.stdout(), line)
@@ -266,7 +266,8 @@ fn doc_name(index: usize) -> str {
     if index == 7usize { ret "Tax number certificate" }
     if index == 8usize { ret "Address certificate" }
     if index == 9usize { ret "Employment contract" }
-    ret "Non-disclosure agreement"
+    if index == 10usize { ret "Non-disclosure agreement" }
+    ret "Vehicle registration"
 }
 
 fn detail_label(kind: usize, slot: usize) -> str {
@@ -1088,6 +1089,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let c9 = add_card(&s, doc_card(0usize, "Sam Rivera", "X1234567", "Passport Office", "Mar 2031", 8usize, 19usize))
     let c10 = add_card(&s, doc_card(1usize, "Sam Rivera", "V-884201", "Consulate General", "Dec 2027", 9usize, 20usize))
     let c11 = add_card(&s, doc_card(2usize, "Sam Rivera", "D 5530 1207", "Motor Vehicles", "Jun 2029", 2usize, 21usize))
+    let c12 = add_card(&s, doc_card(11usize, "Sam Rivera", "KX 21 NTR", "Motor Vehicles", "Aug 2027", 6usize, 22usize))
     if !show(a, &kit, &s) {
         say("wallet present failed\n")
         ret ok
