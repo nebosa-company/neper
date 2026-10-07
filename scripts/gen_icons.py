@@ -11,12 +11,17 @@ assets = os.path.join(root, "neperos", "assets", "icons")
 out_path = os.path.join(root, "neperos", "src", "icons.e")
 
 
+# The launcher's grid order (four columns, so five rows of four); files not listed follow, sorted.
+APP_ORDER = ["phone", "messages", "mail", "browser", "camera", "gallery", "maps", "compass", "clock", "calculator", "tasks", "files", "chat", "meet", "recorder", "translate", "steps", "lunatris", "mfa", "settings"]
+
+
 def load(kind):
     items = []
     folder = os.path.join(assets, kind)
-    for name in sorted(os.listdir(folder)):
-        if not name.endswith(".svg"):
-            continue
+    names = sorted(n for n in os.listdir(folder) if n.endswith(".svg"))
+    if kind == "apps":
+        names.sort(key=lambda n: (APP_ORDER.index(n[:-4]) if n[:-4] in APP_ORDER else len(APP_ORDER), n))
+    for name in names:
         text = open(os.path.join(folder, name), encoding="utf-8").read()
         text = re.sub(r"\s+", " ", text).strip().replace("> <", "><").replace('"', "'")
         assert "\\" not in text
