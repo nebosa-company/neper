@@ -10,6 +10,7 @@ use e.gpu
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
+use appview
 
 const SIDE: usize = 256usize
 
@@ -135,5 +136,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     say("settings app hash ")
     say_num(hash)
     say("\n")
+    appview.show(a, device, list, args)
     ret ok
 }
