@@ -9073,6 +9073,18 @@ if ($neperosQemu) {
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.fmt archive did not assemble' }
     $fmtBoot = Invoke-NeperOS $neperosImage @('-initrd', $fmtArchive, '-append', 'shell')
     if ($fmtBoot -notmatch '(?s)fmt json: \{"x":3,"y":7,"label":"neperos"\}.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.fmt did not encode JSON: $fmtBoot" }
+    # (D2157, C107) e.thread on NeperOS: thread_test spawns a worker in the same address space on a
+    # kernel-mapped stack; the worker writes a sentinel through a pointer into the spawner's memory
+    # and the join (which must block) makes the write visible before the read. Started as program 0.
+    $threadTest = Join-Path $testBuild 'thread_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\thread_test.e') $repo aarch64 neperos $threadTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.thread program did not build' }
+    $threadArchive = Join-Path $testBuild 'thread-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $threadArchive $threadTest
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.thread archive did not assemble' }
+    $threadBoot = Invoke-NeperOS $neperosImage @('-initrd', $threadArchive, '-append', 'shell')
+    if ($threadBoot -notmatch '(?s)thread box = 99.*thread wrote 99 via shared memory.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.thread did not spawn and join: $threadBoot" }
+    if ($threadBoot -match 'thread value wrong') { throw "NeperOS e.thread join did not block (the worker's write raced the read): $threadBoot" }
 }
 
 Write-Output 'selfhost tests passed'

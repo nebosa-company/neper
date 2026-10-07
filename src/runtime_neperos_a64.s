@@ -391,6 +391,59 @@ neper_os_clock:
     svc #0
     ret
 
+// (D2157) A spawned thread's entry trampoline: the kernel starts the new thread here with the user
+// entry in x0 and its context in x1. Call entry(ctx), then exit the thread. Defined before
+// neper_os_thread_create so the runtime cut that keeps the creator keeps this too.
+np_thread_start:
+    mov x9, x0
+    mov x0, x1
+    blr x9
+    mov x0, #0
+    mov x8, #1
+    svc #0
+
+// os.thread_create(result, entry, ctx, size) (D2157): ask the kernel (call 14) to spawn a thread in
+// this address space running entry(ctx) on a fresh stack of `size` bytes, entered through the
+// trampoline. The thread id lands in result.raw with ok, or result is cleared with an error when
+// the kernel has no room.
+.global neper_os_thread_create
+neper_os_thread_create:
+    mov x4, x0
+    adr x0, np_thread_start
+    mov x8, #14
+    svc #0
+    cmn x0, #1
+    b.eq .Lthread_create_fail
+    str x0, [x4]
+    str wzr, [x4, #8]
+    ret
+.Lthread_create_fail:
+    str xzr, [x4]
+    movz w9, #0x623a
+    movk w9, #0x8f63, lsl #16
+    str w9, [x4, #8]
+    ret
+
+// os.thread_join(t) -> err (D2157): `t` is passed by pointer, so load its thread id, reap it (call
+// 12), then answer ok -- a thread is joined once, and its slot is freed by the reap.
+.global neper_os_thread_join
+neper_os_thread_join:
+    ldr x0, [x0]
+    mov x8, #12
+    svc #0
+    mov x0, #0
+    ret
+
+// os.thread_detach(t) -> err (D2157): load the thread id from the pointer and give up the join
+// (call 15); the thread frees itself on exit.
+.global neper_os_thread_detach
+neper_os_thread_detach:
+    ldr x0, [x0]
+    mov x8, #15
+    svc #0
+    mov x0, #0
+    ret
+
 // (D2134) Raw memory access from EL0, for a user-mode driver reaching its device's MMIO and
 // virtqueue rings through pages the kernel mapped into its space. Each is a plain load or
 // store -- no svc -- so it faults if the page is not mapped with EL0 access, which is how a

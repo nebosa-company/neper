@@ -210,6 +210,44 @@ fn syscall(frame: *a64.Frame) {
         clock(frame)
         ret
     }
+    if number == 14u64 {
+        thread_spawn(frame)
+        ret
+    }
+    if number == 15u64 {
+        thread.detach(frame)
+        ret
+    }
+}
+
+// (D2157, C107) `os.thread_create` system call (14): spawn a thread in the CURRENT address space
+// running at `trampoline` (x0) with the user entry (x1) and its context (x2) in x0/x1, on a fresh
+// stack of x3 bytes the kernel maps into the space. The thread's id comes back, or all-ones when
+// the space has no room for the stack or the thread table is full. The caller is the parent, so a
+// later os.thread_join reaps it (the reap system call) and os.thread_detach frees it on exit.
+fn thread_spawn(frame: *a64.Frame) {
+    let trampoline = usize(frame.x[0usize])
+    let entry = usize(frame.x[1usize])
+    let ctx = usize(frame.x[2usize])
+    var bytes = usize(frame.x[3usize])
+    if bytes == 0usize { bytes = 65536usize }
+    let pages = (bytes + 4095usize) / 4096usize
+    let ttbr = thread.current_ttbr()
+    if ttbr == 0usize {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    let (stack_va, stack_top, map_error) = vm.map_stack(kernel_arena, ttbr, pages)
+    if map_error != ok {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    let index = thread.add_in_space(ttbr, "thread", trampoline, entry, ctx, stack_top)
+    if index == thread.MAX_THREADS {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
+    frame.x[0usize] = u64(index)
 }
 
 // (D2155, C107) `os.clock(kind) -> (i64, err)` (system call 13): the time in nanoseconds, kind 0

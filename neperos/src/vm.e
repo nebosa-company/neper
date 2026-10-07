@@ -248,6 +248,45 @@ fn put_aux(space: Space, slot: usize, value: usize) {
     os.store64(space.region_phys + AUX_OFF + slot * 8usize, u64(value))
 }
 
+// (D2157) A fresh stack of `pages` pages in the address space `ttbr`, for a thread of
+// os.thread_create. The user gigabyte's single level-3 table maps the 512 KB program window at its
+// first USER_PAGES entries; the entries above are free (the window sits in a 2 MB level-3 reach),
+// so a run of `pages` of them is backed by new physical pages mapped EL0-RW and the stack's top VA
+// comes back. NoSpace when no run that long is free. The stack grows down from the top.
+fn map_stack(a: *mem.Arena, ttbr: usize, pages: usize) -> (usize, usize, err) {
+    let l1 = ttbr & TABLE_MASK
+    let l2 = usize(os.load64(l1 + L1_USER_INDEX * 8usize)) & TABLE_MASK
+    let l3 = usize(os.load64(l2)) & TABLE_MASK
+    var found = 512usize
+    var run_start = USER_PAGES
+    var run = 0usize
+    var scan = USER_PAGES
+    while scan < 512usize && found == 512usize {
+        if usize(os.load64(l3 + scan * 8usize)) == 0usize {
+            if run == 0usize { run_start = scan }
+            run += 1usize
+            if run == pages { found = run_start }
+        } else {
+            run = 0usize
+        }
+        scan += 1usize
+    }
+    if found == 512usize { ret (0usize, 0usize, NoSpace) }
+    let (bytes, bytes_error) = mem.alloc[u8](a, pages * PAGE + PAGE)
+    if bytes_error != ok { ret (0usize, 0usize, bytes_error) }
+    let base = (mem.address_of(&bytes[0usize]) + PAGE - 1usize) & ~(PAGE - 1usize)
+    let bits = user_page_bits()
+    var i = 0usize
+    while i < pages {
+        os.store64(l3 + (found + i) * 8usize, u64((base + i * PAGE) | bits))
+        i += 1usize
+    }
+    os.barrier()
+    os.tlb_flush()
+    let stack_va = USER_BASE + found * PAGE
+    ret (stack_va, stack_va + pages * PAGE, ok)
+}
+
 // Re-protect the page at user VA `va` in the address space rooted at `ttbr`: writable clears
 // AP[1], read-only sets it, so an EL0 store into a read-only page faults. The walk follows
 // the three table levels the map uses; a flush makes the change take effect.

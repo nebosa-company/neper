@@ -37307,3 +37307,28 @@ so the generic reflection (e.meta), the string formatting (e.str) and the Writer
 os.write) all run on NeperOS. Suite fixtures added to run.ps1 and run.sh. Third C107 increment
 (after D2154 e.io and D2155 e.time); e.thread (a same-address-space thread-spawn system call) and
 e.fs (the path/dir/stat surface over the C106 server) remain.
+
+## D2157 — C107: e.thread on NeperOS, threads in a shared address space
+
+e.thread runs on NeperOS: a program spawns a thread that runs in the same address space on its own
+kernel-mapped stack, and joins or detaches it. os.thread_create (a generic, compiler-intercepted
+intrinsic) already lowered to `neper_os_thread_create` for every target; os.thread_join and
+os.thread_detach likewise. The NeperOS backing: three runtime wrappers in runtime_neperos_a64.s and
+two kernel pieces. thread_create's wrapper calls system call 14 with a trampoline (np_thread_start,
+defined before the creator so the runtime cut keeps it) plus the user entry, its context and the
+stack size; the kernel allocates a stack and starts a thread at the trampoline, which calls
+entry(ctx) then exits. The stacks live in the spare level-3 entries above the 512 KB program window
+(the window sits in a 2 MB level-3 reach, so ~1.5 MB is free): vm.map_stack walks the current
+space's level-3 table, finds a run of free entries at or above USER_PAGES, backs them with fresh
+physical pages mapped EL0-RW, and returns the top VA. The kernel's thread table gained add_in_space
+(a thread sharing a TTBR, parented to the caller) and a `detached` flag; thread_join reuses the reap
+system call (12), thread_detach is call 15 (free the slot on exit rather than keep it for a join).
+Trap found and fixed by kernel tracing: os.thread_join/detach take the Thread BY POINTER (x0 = &t,
+as the Linux wrapper's `ldr x9,[x0]` shows), so the first wrapper passed a stack pointer to reap as
+the child index -- reap saw a huge number, returned the sentinel, and never blocked, so the join was
+a no-op and the worker's write raced the parent's read: box read 99 on Windows QEMU but 0 on Linux
+QEMU from the SAME image. Dereferencing the pointer to the thread id fixed it; join now blocks
+deterministically (5/5 on each host). neperos/src/thread_test.e: a worker writes a sentinel through
+a pointer into the spawner's memory, and after the join the spawner reads `99` back -- verified on
+QEMU virt on both hosts. Suite fixtures added to run.ps1 and run.sh. Fourth C107 increment; only e.fs
+(the path/dir/stat surface over the C106 filesystem server) remains.
