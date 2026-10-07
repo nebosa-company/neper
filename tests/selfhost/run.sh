@@ -8983,6 +8983,25 @@ greeting"
         *"ui pages page 0 hash $page0_hash"*"ui pages page 1 hash $page1_hash"*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS launcher paging did not match the host hashes: $pages_boot" >&2; exit 1 ;;
     esac
+    # (D2179/D2180, C113) The Clock and Calculator app faces: each renders its UI (clock_app a digital
+    # time on a card, calc_app a result display and a 4x4 keypad) through e.gfx.scene over the e.gpu
+    # CPU backend and folds the frame to a hash the host reproduces.
+    for app_pair in "clock_app:clock app" "calc_app:calc app"; do
+        app_src="${app_pair%%:*}"
+        app_tag="${app_pair##*:}"
+        app_img="$test_build/$app_src.img"
+        [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/$app_src.e" "$repo" aarch64 neperos "$app_img")" = 'executable written' ]
+        app_host="$test_build/$app_src-host"
+        [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/$app_src.e" "$repo" x64 linux "$app_host")" = 'executable written' ]
+        chmod +x "$app_host"
+        app_hash=$("$app_host" | sed -n "s/^$app_tag hash \([0-9]*\)\$/\1/p")
+        [ -n "$app_hash" ] || { printf '%s\n' "host $app_src printed no hash" >&2; exit 1; }
+        app_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$app_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+        case "$app_boot" in
+            *"$app_tag hash $app_hash"*'neperos: exit 0x0000000000000000'*) ;;
+            *) printf '%s\n' "NeperOS $app_src did not match the host hash $app_hash: $app_boot" >&2; exit 1 ;;
+        esac
+    done
     # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
     # + a Writer) rather than the console primitive, so e.io and the e.os variant os.neperos.e run
     # unchanged on NeperOS. Started as program 0 of a one-program archive on the shell boot.

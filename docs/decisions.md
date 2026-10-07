@@ -37766,3 +37766,21 @@ live C111 top-bar status (D2175), app-icon labels (D2176), paging past 40 icons 
 tap-to-launch with Home (D2178). Remaining: a single launcher binary that wires the filesystem,
 status, compositor and input servers together in one boot (the production shell), rather than the
 focused per-feature programs that prove each capability.
+
+## D2179 — C113: the Clock app face
+
+NeperOS shell-9 begun: the Clock app. neperos/src/clock_app.e renders a digital clock -- a dark card
+on a wallpaper, the time "12:34" in large digits with a colon, drawn with the built-in 3x5 bitmap
+digit font (D2176) scaled up -- through e.gfx.scene over the e.gpu CPU backend into a 256x256
+surface, and folds the frame to a hash 733107141, identical on the host and on NeperOS (QEMU 8.2 and
+11.1). A fixed time keeps the frame deterministic; the live clock is os.clock (C107/C111). This is
+the app's visual, which the shell hosts once the unified launcher lands.
+
+## D2180 — C113: the Calculator app face
+
+The Calculator app. neperos/src/calc_app.e renders a result display ("42") and a 4x4 keypad: digit
+buttons show their digit in the bitmap font, operator buttons (/ * - + = C) a small rect-composed
+symbol on a tinted tile, through e.gfx.scene over the e.gpu CPU backend. The frame hash is 558372214,
+identical on the host and on NeperOS. Both C113 app faces now render; the arithmetic and the live
+clock are ordinary e.* code, and hosting the apps in the shell with tap input waits on the unified
+launcher (C112's blocked prodshell integration). C113 -> 0.6.

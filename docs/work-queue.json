@@ -42,10 +42,10 @@
       "group": "NeperOS",
       "order": 113,
       "title": "NeperOS shell 9: the Clock and Calculator apps",
-      "score": 0,
+      "score": 0.6,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Queued by D2148. Acceptance: Clock (time and date, alarms that post a notification, stopwatch, timer) and Calculator (arithmetic with operator precedence, percent, memory, history) as e.ui apps on NeperOS, launched from the C112 grid; each has a QEMU fixture that drives it by injected taps and checks a screendump hash."
+      "evidence": "Queued by D2148. Acceptance: Clock (time and date, alarms that post a notification, stopwatch, timer) and Calculator (arithmetic with operator precedence, percent, memory, history) as e.ui apps on NeperOS, launched from the C112 grid; each has a QEMU fixture that drives it by injected taps and checks a screendump hash. BEGUN D2179/D2180: both C113 app FACES render through e.gfx.scene over the e.gpu CPU backend, host==neperos both QEMU -- clock_app.e a digital clock (card + \"12:34\" in the 3x5 bitmap digit font + colon, hash 733107141), calc_app.e a result display + 4x4 keypad (digit glyphs + rect-composed operator symbols / * - + = C, hash 558372214). Not yet: live/interactive behavior (clock ticking, calculator button taps computing) and hosting the apps in the shell with tap input, which waits on C112's unified launcher (blocked prodshell)."
     },
     {
       "id": "C114",

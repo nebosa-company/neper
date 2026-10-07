@@ -9134,6 +9134,24 @@ if ($neperosQemu) {
     if ($page0Hash -eq $page1Hash) { throw "the launcher's two pages rendered the same: $pagesHostOut" }
     $pagesBoot = Invoke-NeperOS $neperosImage @('-initrd', $pagesImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
     if ($pagesBoot -notmatch "(?s)ui pages page 0 hash $page0Hash.*ui pages page 1 hash $page1Hash.*neperos: exit 0x0000000000000000") { throw "NeperOS launcher paging did not match the host hashes: $pagesBoot" }
+    # (D2179/D2180, C113) The Clock and Calculator app faces: each renders its UI (clock_app a digital
+    # time on a card, calc_app a result display and a 4x4 keypad) through e.gfx.scene over the e.gpu
+    # CPU backend and folds the frame to a hash the host reproduces.
+    foreach ($appPair in @(@('clock_app', 'clock app'), @('calc_app', 'calc app'))) {
+        $appSrc = $appPair[0]
+        $appTag = $appPair[1]
+        $appImg = Join-Path $testBuild "$appSrc.img"
+        & $compiler emit-executable (Join-Path $repo "neperos\src\$appSrc.e") $repo aarch64 neperos $appImg | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "the NeperOS $appSrc did not build" }
+        $appHostExe = Join-Path $testBuild "$appSrc-host.exe"
+        & $compiler emit-executable (Join-Path $repo "neperos\src\$appSrc.e") $repo x64 windows $appHostExe | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "the host $appSrc did not build" }
+        $appHostOut = (& $appHostExe 2>&1) -join "`n"
+        if ($appHostOut -notmatch "$appTag hash (\d+)") { throw "host $appSrc printed no hash: $appHostOut" }
+        $appHash = $Matches[1]
+        $appBoot = Invoke-NeperOS $neperosImage @('-initrd', $appImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+        if ($appBoot -notmatch "(?s)$appTag hash $appHash.*neperos: exit 0x0000000000000000") { throw "NeperOS $appSrc did not match the host hash ${appHash}: $appBoot" }
+    }
     # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
     # and a Writer over it) rather than the console primitive directly, so e.io -- and the e.os
     # variant os.neperos.e it compiles against -- run unchanged on NeperOS. Started as program 0 of a
