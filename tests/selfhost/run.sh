@@ -9294,9 +9294,11 @@ greeting"
     # second frame), the second launches an app.
     assets="$repo/neperos/assets"
     calc_img="$test_build/calc.img"
+    clock_img="$test_build/clock.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/clock.e" "$repo" aarch64 neperos "$clock_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/calc.e" "$repo" aarch64 neperos "$calc_img")" = 'executable written' ]
     crater_archive="$test_build/shell-crater-archive.img"
-    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "$calc_img"
+    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "$calc_img" "$clock_img"
     crater_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" keyboard "$test_build/shell-crater.serial" 55136 "compositor bigarena unified" 'shell app code 5' - 2 2>&1)
     case "$crater_boot" in
         *'shell wallpaper from fs'*) printf '%s
@@ -9330,6 +9332,16 @@ greeting"
         *'calc converts 100 '*' = 212 '*) ;;
         *) printf '%s
 ' "NeperOS Calc did not convert 100 Celsius to Fahrenheit: $conv_boot" >&2; exit 1 ;;
+    esac
+    # (D2207) Clock: the Stopwatch runs and stops, a two-second Timer finishes (a tick finds it done),
+    # an alarm is added and saved, and the home bar leaves. The input server's 500 ms ticks drive the
+    # running displays; a full frame takes seconds under emulation, so the taps are eight seconds apart.
+    export NEPEROS_TAP_DELAY=8
+    clock_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-clock.serial" 55140 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;4096,12405;21912,4919;16384,12333;16384,12333;16384,4919;16384,11157;16384,21173;16384,17751;5369,4919;9226,13652;9067,18678;16384,31368' 2>&1)
+    case "$clock_boot" in
+        *'clock shown'*'clock stopwatch started'*'clock stopwatch stopped '*'clock timer started'*'clock timer done'*'clock alarm saved 07:00'*'clock home'*) ;;
+        *) printf '%s
+' "NeperOS Clock did not run its stopwatch, timer and alarm: $clock_boot" >&2; exit 1 ;;
     esac
     unset NEPEROS_TAP_DELAY
     unset NEPEROS_MEM NEPEROS_GPU

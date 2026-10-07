@@ -7,6 +7,7 @@
 // absolute-pointer tablet alike, since the event shape is the same.
 use e.mem
 use e.os
+use e.time
 use virtio
 
 const AUX: usize = 548682334144usize
@@ -14,6 +15,11 @@ const CLIENT: usize = 2usize
 const NOTIFY: usize = 1usize
 const NO_SLOT: usize = 99usize
 const SENTINEL: usize = 65535usize
+// (D2207) With the tick flag (aux slot 6, set for the unified shell's boot) the server also sends a tick
+// event -- type 0xF1, the monotonic milliseconds in the low 32 bits -- every 500 ms, so apps that
+// animate (a stopwatch, a timer) get a clock without a thread of their own.
+const TICK_TYPE: usize = 241usize
+const TICK_MS: i64 = 500i64
 
 fn say(text: str) {
     let (written, write_error) = os.write(os.stdout(), text)
@@ -40,7 +46,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     say("input ready\n")
     // Wake on the device's interrupt (the notification the kernel bound), then drain the burst with
     // a bounded poll and forward each event. The notification is what makes this interrupt-driven.
-    let bits = os.notify_wait(NOTIFY)
+    let ticks = usize(os.load64(AUX + 48usize)) != 0usize
+    // With ticks the server runs from the start; without, it sleeps until the first input.
+    if !ticks { let bits = os.notify_wait(NOTIFY) }
+    var next_tick = 0i64
     var iterations = 0usize
     var forwarded = 0usize
     while iterations < 40000000000usize && forwarded < 600usize {
@@ -49,6 +58,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let word = (usize(etype) << 48usize) | (usize(ecode) << 32usize) | usize(evalue)
             let sent = os.send(CLIENT, word, NO_SLOT)
             forwarded += 1usize
+        }
+        // The clock is a system call, so it is read every few thousand polls.
+        if ticks && iterations % 4000usize == 0usize {
+            let (now, now_error) = time.monotonic()
+            if now_error == ok {
+                let ms = now.nanos / 1000000i64
+                if ms >= next_tick {
+                    next_tick = ms + TICK_MS
+                    let tick = os.send(CLIENT, (TICK_TYPE << 48usize) | (usize(ms) & 4294967295usize), NO_SLOT)
+                }
+            }
         }
         iterations += 1usize
     }

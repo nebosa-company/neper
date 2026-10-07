@@ -1203,6 +1203,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let tap = appkit.next_tap(&kit)
         if tap.ended {
             running = false
+        } else if tap.tick {
+            appkit.answer(appkit.ANSWER_NONE)
         } else if tap.y >= 850.0 {
             say("calc home\n")
             appkit.leave()

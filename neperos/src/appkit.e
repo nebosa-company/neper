@@ -23,6 +23,7 @@ const LOW16: usize = 65535usize
 const LOW32: usize = 4294967295usize
 const EV_KEY: usize = 1usize
 const EV_ABS: usize = 3usize
+const EV_TICK: usize = 241usize
 const BTN_LEFT: usize = 272usize
 const ABS_X: usize = 0usize
 const ABS_Y: usize = 1usize
@@ -34,7 +35,9 @@ const ANSWER_LATER: usize = 4usize
 type Kit = struct { device: *gpu.Device, win: window.Window, drawable: scene.Target, renderer: scene.Renderer, faces: text.Faces, has_fonts: bool, scale: f32, logical_h: f32, previous: scene.SceneId, has_previous: bool, x: usize, y: usize, frame: usize }
 
 // A tap, in dp, or the end of the event stream.
-type Tap = struct { x: f32, y: f32, ended: bool }
+// A tick (type 0xF1, every 500 ms when the input server has ticks on) carries the monotonic
+// milliseconds. The caller answers a tick like a tap: a frame if the screen changed, else `answer(ANSWER_NONE)`.
+type Tap = struct { x: f32, y: f32, ended: bool, tick: bool, ms: usize }
 
 fn open(a: *mem.Arena, args: []str, first_font: usize, title: str) -> (Kit, err) {
     var kit: Kit = zero
@@ -114,17 +117,18 @@ fn next_tap(kit: *Kit) -> Tap {
     while true {
         let word = os.recv(ROUTED, NO_SLOT)
         let etype = (word >> 48usize) & LOW16
-        if etype == SENTINEL { ret Tap { x: 0.0, y: 0.0, ended: true } }
+        if etype == SENTINEL { ret Tap { x: 0.0, y: 0.0, ended: true, tick: false, ms: 0usize } }
         let code = (word >> 32usize) & LOW16
         let value = word & LOW32
+        if etype == EV_TICK { ret Tap { x: 0.0, y: 0.0, ended: false, tick: true, ms: value } }
         if etype == EV_ABS && code == ABS_X { kit.x = value }
         if etype == EV_ABS && code == ABS_Y { kit.y = value }
         if etype == EV_KEY && code == BTN_LEFT && value == 1usize {
-            ret Tap { x: f32(kit.x) * 412.0 / 32768.0, y: f32(kit.y) * kit.logical_h / 32768.0, ended: false }
+            ret Tap { x: f32(kit.x) * 412.0 / 32768.0, y: f32(kit.y) * kit.logical_h / 32768.0, ended: false, tick: false, ms: 0usize }
         }
         answer(ANSWER_NONE)
     }
-    ret Tap { x: 0.0, y: 0.0, ended: true }
+    ret Tap { x: 0.0, y: 0.0, ended: true, tick: false, ms: 0usize }
 }
 
 // Leave the app: tell the compositor a frame will follow (the shell redraws Home once this process

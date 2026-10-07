@@ -9423,10 +9423,13 @@ if ($neperosQemu) {
     # second frame), the second launches an app.
     $assets = Join-Path $repo 'neperos\assets'
     $calcImage = Join-Path $testBuild 'calc.img'
+    $clockImage = Join-Path $testBuild 'clock.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\clock.e') $repo aarch64 neperos $clockImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Clock did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
@@ -9444,6 +9447,12 @@ if ($neperosQemu) {
     if ($sciBoot -notmatch '(?s)calc scientific 3.*calc scientific 0.5.*calc scientific 1024.*calc home') { throw "NeperOS Calc scientific tab did not compute: $sciBoot" }
     $convBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-conv.serial') 55139 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,12405;25610,4955;27439,6487;5886,22635;5886,25487;5886,25487;16384,31368' 2>&1) -join "`n"
     if ($convBoot -notmatch 'calc converts 100 [^ ]* = 212') { throw "NeperOS Calc did not convert 100 Celsius to Fahrenheit: $convBoot" }
+    # (D2207) Clock: the Stopwatch runs and stops, a two-second Timer finishes (a tick finds it done),
+    # an alarm is added and saved, and the home bar leaves. The input server's 500 ms ticks drive the
+    # running displays; a full frame takes seconds under emulation, so the taps are eight seconds apart.
+    $env:NEPEROS_TAP_DELAY = '8'
+    $clockBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-clock.serial') 55140 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,12405;21912,4919;16384,12333;16384,12333;16384,4919;16384,11157;16384,21173;16384,17751;5369,4919;9226,13652;9067,18678;16384,31368' 2>&1) -join "`n"
+    if ($clockBoot -notmatch '(?s)clock shown.*clock stopwatch started.*clock stopwatch stopped (\d\d+).*clock timer started.*clock timer done.*clock alarm saved 07:00.*clock home') { throw "NeperOS Clock did not run its stopwatch, timer and alarm: $clockBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }

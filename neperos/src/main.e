@@ -73,6 +73,8 @@ var driver_pool_bytes: usize = 131072usize
 // a non-zero value maps a separate EL0 region of that size and points the program's arena at it,
 // for the e.ui/e.gpu stack whose allocations dwarf 64 KB. Set before a start, reset to 0 after.
 var driver_arena_bytes: usize = 0usize
+// (D2207) Whether the input server started next sends 500 ms tick events (the unified shell's boot).
+var input_ticks: usize = 0usize
 // (D2202, D2204) Initrd files handed to the next process started: archive entries extra_first ..
 // extra_first + extra_count - 1. The kernel maps those pages into the process and passes each as an
 // argument after its name (args[1] is the first file's bytes, read in place); zero means nothing to
@@ -504,6 +506,7 @@ fn start_driver_server(a: *mem.Arena, image_addr: usize, image_len: usize, asid:
     vm.put_aux(space, 3usize, pool)
     vm.put_aux(space, 4usize, pool_bytes)
     vm.put_aux(space, 5usize, device.config)
+    vm.put_aux(space, 6usize, input_ticks)
     let (arg_table, arg_count) = setup_args(space, name, 0usize, false)
     let index = thread.add(space, name, arg_table, arg_count)
     if index == thread.MAX_THREADS { ret (bar, vm.NoSpace) }
@@ -882,6 +885,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // The display framebuffer (the whole screen, BGRA) plus the virtio queues and slack.
         driver_pool_bytes = vm.SHARED_FRAME_BYTES + 2097152usize
         last_server_index = thread.MAX_THREADS
+        if has_word(bootargs, "unified") { input_ticks = 1usize }
         let (comp_bar, comp_error) = start_driver_server(a, archive_base + archive_offset[0usize], archive_length[0usize], 1usize, pci_host, pci_host.mmio, pci.VIRTIO_GPU, "comp")
         if comp_error != ok { ret comp_error }
         if last_server_index == thread.MAX_THREADS { ret NoInitrd }

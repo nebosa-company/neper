@@ -1,0 +1,1079 @@
+// Clock (D2207): the app behind the Clock icon, with the parts of Android's Clock: Alarm, Clock (the
+// world clock), Timer, Stopwatch and Bedtime, on the same cream cards as Calc (appkit.e, taps from
+// the compositor, the five fonts as args[1..5]). A tap on the bar at the bottom leaves the app.
+//
+// The input server sends a tick every 500 ms in the unified boot, so a running stopwatch or timer, the
+// seconds of the world clock and a ringing alarm update without a thread of the app's own.
+//   Alarm      up to five alarms: a time, the days it repeats, an on/off switch; tap a time to edit it
+//              (steppers, days, Save, Delete); a ringing alarm shows Snooze (5 min) and Dismiss.
+//   Clock      the time in UTC, the date, and up to six cities with their standard-time offsets.
+//   Timer      type hours, minutes and seconds (or a preset), Start, Pause, Reset, +1:00.
+//   Stopwatch  Start, Stop, Lap, Reset, with a list of laps.
+//   Bedtime    the wake-up time and the hours of sleep wanted give the time to go to bed.
+// ponytail: the machine has one clock and no time zone setting, so "local" time is UTC and the cities
+// are fixed offsets without daylight saving; the alarms live in this process (no storage and no
+// background ringer yet), so one rings only while the app is open.
+use e.mem
+use e.os
+use e.time
+use e.gfx.geometry
+use e.gfx.paint
+use e.gfx.scene
+use e.gfx.svg
+use e.text.layout
+use e.text.shape
+use appkit
+use text
+use lunar
+
+const ALARM_TAB: usize = 0usize
+const CLOCK_TAB: usize = 1usize
+const TIMER_TAB: usize = 2usize
+const STOPWATCH_TAB: usize = 3usize
+const BEDTIME_TAB: usize = 4usize
+const NONE: usize = 99usize
+const MAX_HITS: usize = 96usize
+
+fn say(line: str) {
+    let (written, write_error) = os.write(os.stdout(), line)
+}
+
+// Print a string that lives in the arena (the console call reads the program's own window only).
+fn say_text(value: str) {
+    var buffer: [48]u8 = zero
+    var n = 0usize
+    while n < value.len && n < 48usize {
+        buffer[n] = value[n]
+        n += 1usize
+    }
+    say(buffer[0usize..n])
+}
+
+fn say_num(value: usize) {
+    var digits: [20]u8 = zero
+    var at = 20usize
+    var rest = value
+    var open = true
+    while open {
+        at -= 1usize
+        digits[at] = u8(rest % 10usize) + 48u8
+        rest = rest / 10usize
+        if rest == 0usize { open = false }
+    }
+    say(digits[at..20usize])
+}
+
+// ----------------------------------------------------------------------------------------------
+// Text helpers.
+
+fn two(a: *mem.Arena, value: usize) -> str {
+    let (buffer, buffer_error) = mem.alloc[u8](a, 2usize)
+    if buffer_error != ok { ret "00" }
+    buffer[0usize] = u8(value / 10usize % 10usize) + 48u8
+    buffer[1usize] = u8(value % 10usize) + 48u8
+    ret buffer[0usize..2usize]
+}
+
+fn number(a: *mem.Arena, value: usize) -> str {
+    var digits: [20]u8 = zero
+    var at = 20usize
+    var rest = value
+    var open = true
+    while open {
+        at -= 1usize
+        digits[at] = u8(rest % 10usize) + 48u8
+        rest = rest / 10usize
+        if rest == 0usize { open = false }
+    }
+    let (buffer, buffer_error) = mem.alloc[u8](a, 20usize - at)
+    if buffer_error != ok { ret "0" }
+    var i = 0usize
+    while at + i < 20usize {
+        buffer[i] = digits[at + i]
+        i += 1usize
+    }
+    ret buffer[0usize..20usize - at]
+}
+
+fn join(a: *mem.Arena, first: str, second: str, third: str) -> str {
+    let (buffer, buffer_error) = mem.alloc[u8](a, first.len + second.len + third.len)
+    if buffer_error != ok { ret first }
+    var n = 0usize
+    var i = 0usize
+    while i < first.len {
+        buffer[n] = first[i]
+        n += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < second.len {
+        buffer[n] = second[i]
+        n += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < third.len {
+        buffer[n] = third[i]
+        n += 1usize
+        i += 1usize
+    }
+    ret buffer[0usize..n]
+}
+
+// "HH:MM" of a count of minutes into the day.
+fn hhmm(a: *mem.Arena, minutes: usize) -> str {
+    ret join(a, two(a, minutes / 60usize % 24usize), ":", two(a, minutes % 60usize))
+}
+
+fn weekday_name(day: usize) -> str {
+    if day == 0usize { ret "Monday" }
+    if day == 1usize { ret "Tuesday" }
+    if day == 2usize { ret "Wednesday" }
+    if day == 3usize { ret "Thursday" }
+    if day == 4usize { ret "Friday" }
+    if day == 5usize { ret "Saturday" }
+    ret "Sunday"
+}
+
+fn day_letter(day: usize) -> str {
+    if day == 0usize { ret "M" }
+    if day == 1usize { ret "T" }
+    if day == 2usize { ret "W" }
+    if day == 3usize { ret "T" }
+    if day == 4usize { ret "F" }
+    if day == 5usize { ret "S" }
+    ret "S"
+}
+
+// ----------------------------------------------------------------------------------------------
+// The cities of the world clock: standard-time offsets from UTC, in minutes.
+
+fn city_count() -> usize {
+    ret 16usize
+}
+
+fn city_name(city: usize) -> str {
+    if city == 0usize { ret "UTC" }
+    if city == 1usize { ret "London" }
+    if city == 2usize { ret "Paris" }
+    if city == 3usize { ret "Cairo" }
+    if city == 4usize { ret "Moscow" }
+    if city == 5usize { ret "Dubai" }
+    if city == 6usize { ret "Mumbai" }
+    if city == 7usize { ret "Singapore" }
+    if city == 8usize { ret "Tokyo" }
+    if city == 9usize { ret "Sydney" }
+    if city == 10usize { ret "Auckland" }
+    if city == 11usize { ret "Honolulu" }
+    if city == 12usize { ret "Los Angeles" }
+    if city == 13usize { ret "Chicago" }
+    if city == 14usize { ret "New York" }
+    ret "Sao Paulo"
+}
+
+fn city_offset(city: usize) -> i64 {
+    if city == 0usize { ret 0i64 }
+    if city == 1usize { ret 0i64 }
+    if city == 2usize { ret 60i64 }
+    if city == 3usize { ret 120i64 }
+    if city == 4usize { ret 180i64 }
+    if city == 5usize { ret 240i64 }
+    if city == 6usize { ret 330i64 }
+    if city == 7usize { ret 480i64 }
+    if city == 8usize { ret 540i64 }
+    if city == 9usize { ret 600i64 }
+    if city == 10usize { ret 720i64 }
+    if city == 11usize { ret 0i64 - 600i64 }
+    if city == 12usize { ret 0i64 - 480i64 }
+    if city == 13usize { ret 0i64 - 360i64 }
+    if city == 14usize { ret 0i64 - 300i64 }
+    ret 0i64 - 180i64
+}
+
+// ----------------------------------------------------------------------------------------------
+// State.
+
+type Alarm = struct { minutes: usize, on: bool, days: usize }
+type Hit = struct { id: usize, x: f32, y: f32, w: f32, h: f32 }
+
+type State = struct {
+    tab: usize,
+    // The clock.
+    wall0: i64,
+    mono0: i64,
+    now_ms: i64,
+    cities: [6]usize,
+    city_total: usize,
+    picker: bool,
+    // The alarms.
+    alarms: [5]Alarm,
+    alarm_total: usize,
+    editing: usize,
+    edit: Alarm,
+    ringing: usize,
+    fired: usize,
+    // The timer.
+    timer_digits: [6]u8,
+    timer_typed: usize,
+    timer_total_ms: i64,
+    timer_end_ms: i64,
+    timer_left_ms: i64,
+    timer_running: bool,
+    timer_paused: bool,
+    timer_done: bool,
+    // The stopwatch.
+    sw_running: bool,
+    sw_start_ms: i64,
+    sw_acc_ms: i64,
+    laps: [8]i64,
+    lap_total: usize,
+    // Bedtime.
+    wake_minutes: usize,
+    sleep_half_hours: usize,
+    bedtime_on: bool,
+    // What the last frame showed, to redraw only when the display changed.
+    shown: i64,
+    hits: [96]Hit,
+    hit_total: usize,
+}
+
+// The time now in UTC seconds, from the wall clock read at start and the monotonic clock since.
+fn utc_seconds(s: *State) -> usize {
+    let value = s.wall0 + (s.now_ms - s.mono0) / 1000i64
+    if value < 0i64 { ret 0usize }
+    ret usize(value)
+}
+
+fn refresh(s: *State) {
+    let (now, now_error) = time.monotonic()
+    if now_error == ok { s.now_ms = now.nanos / 1000000i64 }
+}
+
+fn minutes_of_day(seconds: usize) -> usize {
+    ret seconds % 86400usize / 60usize
+}
+
+// Monday = 0.
+fn weekday_of(seconds: usize) -> usize {
+    ret (seconds / 86400usize + 3usize) % 7usize
+}
+
+fn timer_value_ms(s: *State) -> i64 {
+    var digits = 0usize
+    var n = 0usize
+    while n < s.timer_typed {
+        digits = digits * 10usize + usize(s.timer_digits[n] - 48u8)
+        n += 1usize
+    }
+    let seconds = digits % 100usize
+    let minutes = digits / 100usize % 100usize
+    let hours = digits / 10000usize
+    ret (i64(hours) * 3600i64 + i64(minutes) * 60i64 + i64(seconds)) * 1000i64
+}
+
+fn stopwatch_ms(s: *State) -> i64 {
+    if s.sw_running { ret s.sw_acc_ms + (s.now_ms - s.sw_start_ms) }
+    ret s.sw_acc_ms
+}
+
+fn timer_remaining_ms(s: *State) -> i64 {
+    if s.timer_running { ret s.timer_end_ms - s.now_ms }
+    ret s.timer_left_ms
+}
+
+// A number that changes exactly when something on the shown tab does, so a tick that would redraw
+// the same frame answers "nothing to show" instead.
+fn display_key(s: *State) -> i64 {
+    var key = i64(s.tab) * 1000000000000i64 + i64(s.ringing) * 100000000000i64
+    if s.tab == CLOCK_TAB { key = key + i64(utc_seconds(s)) }
+    if s.tab == BEDTIME_TAB { key = key + i64(utc_seconds(s) / 60usize) }
+    if s.tab == STOPWATCH_TAB { key = key + stopwatch_ms(s) / 100i64 }
+    if s.tab == TIMER_TAB { key = key + (timer_remaining_ms(s) + 999i64) / 1000i64 }
+    ret key
+}
+
+// ----------------------------------------------------------------------------------------------
+// Drawing.
+
+fn cream(alpha: f32) -> paint.Color {
+    ret paint.Color { red: 0.92, green: 0.90, blue: 0.86, alpha: alpha }
+}
+
+fn white() -> paint.Color {
+    ret paint.Color { red: 0.97, green: 0.96, blue: 0.94, alpha: 1.0 }
+}
+
+fn ink() -> paint.Color {
+    ret paint.Color { red: 0.13, green: 0.13, blue: 0.14, alpha: 1.0 }
+}
+
+fn muted() -> paint.Color {
+    ret paint.Color { red: 0.36, green: 0.35, blue: 0.34, alpha: 1.0 }
+}
+
+fn amber() -> paint.Color {
+    ret paint.Color { red: 0.88, green: 0.70, blue: 0.42, alpha: 1.0 }
+}
+
+fn grey() -> paint.Color {
+    ret paint.Color { red: 0.80, green: 0.79, blue: 0.77, alpha: 1.0 }
+}
+
+fn card(a: *mem.Arena, builder: *scene.Builder, x: f32, y: f32, w: f32, h: f32, radius: f32, c: paint.Color) -> err {
+    let (path, path_error) = svg.rect_path(a, x, y, w, h, radius, radius)
+    if path_error != ok { ret path_error }
+    try scene.push(builder, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: c } } })
+    ret ok
+}
+
+// A hit rectangle for the tap handler, registered as the thing is drawn.
+fn hit(s: *State, id: usize, x: f32, y: f32, w: f32, h: f32) {
+    if s.hit_total < MAX_HITS {
+        s.hits[s.hit_total] = Hit { id: id, x: x, y: y, w: w, h: h }
+        s.hit_total += 1usize
+    }
+}
+
+fn put(a: *mem.Arena, builder: *scene.Builder, font: shape.Font, size: f32, line: str, x: f32, y: f32, c: paint.Color) -> err {
+    let (box, draw_error) = text.draw(a, builder, font, size, line, x, y, 0.0, 0u32, layout.Align.Start, c)
+    if draw_error != ok { ret draw_error }
+    ret ok
+}
+
+fn centred(a: *mem.Arena, builder: *scene.Builder, font: shape.Font, size: f32, line: str, cx: f32, y: f32, c: paint.Color) -> err {
+    ret put(a, builder, font, size, line, cx - text.measure(a, font, size, line) / 2.0, y, c)
+}
+
+fn right(a: *mem.Arena, builder: *scene.Builder, font: shape.Font, size: f32, line: str, edge: f32, y: f32, c: paint.Color) -> err {
+    ret put(a, builder, font, size, line, edge - text.measure(a, font, size, line), y, c)
+}
+
+// A button: the cap, its label centred, and its hit rectangle.
+fn button(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, id: usize, x: f32, y: f32, w: f32, h: f32, label: str, fill: paint.Color, size: f32) -> err {
+    try card(a, builder, x, y, w, h, h / 2.0, fill)
+    try centred(a, builder, faces.jost, size, label, x + w / 2.0, y + h / 2.0 - size * 0.62, ink())
+    hit(s, id, x, y, w, h)
+    ret ok
+}
+
+// A square key (the timer's keypad).
+fn pad_key(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, id: usize, x: f32, y: f32, w: f32, h: f32, label: str, fill: paint.Color) -> err {
+    try card(a, builder, x, y + 3.0, w, h, 12.0, paint.Color { red: 0.25, green: 0.24, blue: 0.22, alpha: 0.28 })
+    try card(a, builder, x, y, w, h, 12.0, fill)
+    try centred(a, builder, faces.grotesk, 24.0, label, x + w / 2.0, y + h / 2.0 - 15.0, ink())
+    hit(s, id, x, y, w, h)
+    ret ok
+}
+
+// An on/off switch.
+fn toggle_switch(a: *mem.Arena, builder: *scene.Builder, s: *State, id: usize, x: f32, y: f32, on: bool) -> err {
+    var track = grey()
+    if on { track = amber() }
+    try card(a, builder, x, y, 56.0, 30.0, 15.0, track)
+    var knob_x = x + 3.0
+    if on { knob_x = x + 29.0 }
+    try card(a, builder, knob_x, y + 3.0, 24.0, 24.0, 12.0, white())
+    hit(s, id, x - 8.0, y - 8.0, 72.0, 46.0)
+    ret ok
+}
+
+fn tab_name(tab: usize) -> str {
+    if tab == 0usize { ret "Alarm" }
+    if tab == 1usize { ret "Clock" }
+    if tab == 2usize { ret "Timer" }
+    if tab == 3usize { ret "Stopwatch" }
+    ret "Bedtime"
+}
+
+fn chrome(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> err {
+    let faces = kit.faces
+    // The backdrop alternates its alpha by 0.2% a frame (invisible): the renderer's incremental redraw
+    // left changed text without the cards under it, so each frame must differ in its first command.
+    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, kit.logical_h), brush: paint.Brush { Solid: paint.Color { red: 0.08, green: 0.09, blue: 0.11, alpha: 1.0 - f32(kit.frame % 2usize) * 0.002 } } } })
+    try card(a, builder, 20.0, 40.0, 372.0, 56.0, 14.0, cream(0.96))
+    try put(a, builder, faces.sora, 22.0, "CLOCK", 36.0, 53.0, ink())
+    try card(a, builder, 20.0, 108.0, 372.0, 730.0, 16.0, cream(0.92))
+    var tab = 0usize
+    while tab < 5usize {
+        let x = 36.0 + f32(tab) * 69.5
+        var fill = grey()
+        var c = muted()
+        if tab == s.tab {
+            fill = ink()
+            c = paint.Color { red: 0.95, green: 0.94, blue: 0.92, alpha: 1.0 }
+        }
+        try card(a, builder, x, 122.0, 62.0, 32.0, 16.0, fill)
+        try centred(a, builder, faces.jost, 12.0, tab_name(tab), x + 31.0, 130.0, c)
+        hit(s, 100usize + tab, x, 122.0, 62.0, 32.0)
+        tab += 1usize
+    }
+    try card(a, builder, 156.0, 876.0, 100.0, 6.0, 3.0, paint.Color { red: 0.9, green: 0.9, blue: 0.92, alpha: 0.85 })
+    ret ok
+}
+
+// ---- the clock tab
+
+fn draw_clock(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *State) -> err {
+    let now = utc_seconds(s)
+    if s.picker {
+        try put(a, builder, faces.sora, 18.0, "Choose cities", 40.0, 172.0, ink())
+        var city = 0usize
+        while city < city_count() {
+            let x = 36.0 + f32(city % 2usize) * 172.0
+            let y = 206.0 + f32(city / 2usize) * 52.0
+            var chosen = false
+            var i = 0usize
+            while i < s.city_total {
+                if s.cities[i] == city { chosen = true }
+                i += 1usize
+            }
+            var fill = white()
+            if chosen { fill = amber() }
+            try card(a, builder, x, y, 168.0, 44.0, 12.0, fill)
+            try put(a, builder, faces.jost, 17.0, city_name(city), x + 14.0, y + 11.0, ink())
+            hit(s, 220usize + city, x, y, 168.0, 44.0)
+            city += 1usize
+        }
+        try button(a, builder, s, faces, 230usize, 36.0, 640.0, 340.0, 50.0, "Done", amber(), 18.0)
+        ret ok
+    }
+    // The time and the date.
+    let day = now / 86400usize
+    let (month, date) = lunar.month_day(now)
+    try centred(a, builder, faces.jost_bold, 64.0, hhmm(a, minutes_of_day(now)), 206.0, 170.0, ink())
+    try centred(a, builder, faces.grotesk, 16.0, join(a, ":", two(a, now % 60usize), " UTC"), 206.0, 252.0, muted())
+    try centred(a, builder, faces.jost, 18.0, join(a, weekday_name(weekday_of(now)), ", ", join(a, lunar.month_name(month), " ", number(a, date))), 206.0, 280.0, ink())
+    // The cities.
+    var row = 0usize
+    while row < s.city_total {
+        let city = s.cities[row]
+        let y = 322.0 + f32(row) * 62.0
+        try card(a, builder, 36.0, y, 340.0, 54.0, 12.0, white())
+        try put(a, builder, faces.jost, 18.0, city_name(city), 52.0, y + 7.0, ink())
+        // The offset from UTC, and whether it is another day there.
+        let local = i64(now) + city_offset(city) * 60i64
+        var relative = "Today"
+        let local_day = (local + 864000000i64) / 86400i64 - 10000i64
+        let utc_day = i64(day)
+        if local_day > utc_day { relative = "Tomorrow" }
+        if local_day < utc_day { relative = "Yesterday" }
+        let offset = city_offset(city)
+        var sign = "+"
+        var shown_offset = offset
+        if offset < 0i64 {
+            sign = "-"
+            shown_offset = 0i64 - offset
+        }
+        let detail = join(a, relative, ", ", join(a, sign, number(a, usize(shown_offset / 60i64)), join(a, "h", two(a, usize(shown_offset % 60i64)), "")))
+        try put(a, builder, faces.grotesk, 12.0, detail, 52.0, y + 31.0, muted())
+        try right(a, builder, faces.jost, 28.0, hhmm(a, usize(local / 60i64 % 1440i64)), 360.0, y + 10.0, ink())
+        row += 1usize
+    }
+    if s.city_total < 6usize || true {
+        try button(a, builder, s, faces, 210usize, 36.0, 770.0, 150.0, 44.0, "+ Add city", grey(), 16.0)
+    }
+    try put(a, builder, faces.exo, 12.0, "Standard time, no daylight saving", 196.0, 784.0, muted())
+    ret ok
+}
+
+// ---- the alarm tab
+
+fn days_text(days: usize) -> str {
+    if days == 127usize { ret "Every day" }
+    if days == 31usize { ret "Weekdays" }
+    if days == 96usize { ret "Weekends" }
+    if days == 0usize { ret "Once" }
+    ret "Custom days"
+}
+
+fn draw_alarm(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *State) -> err {
+    if s.ringing != NONE {
+        let alarm = s.alarms[s.ringing]
+        try card(a, builder, 36.0, 176.0, 340.0, 560.0, 16.0, white())
+        try centred(a, builder, faces.sora, 20.0, "Alarm", 206.0, 220.0, muted())
+        try centred(a, builder, faces.jost_bold, 84.0, hhmm(a, alarm.minutes), 206.0, 270.0, ink())
+        try centred(a, builder, faces.exo, 16.0, days_text(alarm.days), 206.0, 390.0, muted())
+        try button(a, builder, s, faces, 350usize, 66.0, 470.0, 280.0, 56.0, "Snooze 5 min", grey(), 20.0)
+        try button(a, builder, s, faces, 351usize, 66.0, 546.0, 280.0, 56.0, "Dismiss", amber(), 20.0)
+        ret ok
+    }
+    if s.editing != NONE {
+        try card(a, builder, 36.0, 172.0, 340.0, 480.0, 16.0, white())
+        try centred(a, builder, faces.jost_bold, 64.0, hhmm(a, s.edit.minutes), 206.0, 196.0, ink())
+        // Hour and minute steppers.
+        try button(a, builder, s, faces, 330usize, 60.0, 286.0, 64.0, 52.0, "-", grey(), 26.0)
+        try centred(a, builder, faces.grotesk, 13.0, "hour", 124.0 + 30.0, 302.0, muted())
+        try button(a, builder, s, faces, 331usize, 220.0, 286.0, 64.0, 52.0, "+", grey(), 26.0)
+        try button(a, builder, s, faces, 332usize, 60.0, 350.0, 64.0, 52.0, "-", grey(), 26.0)
+        try centred(a, builder, faces.grotesk, 13.0, "minute", 124.0 + 30.0, 366.0, muted())
+        try button(a, builder, s, faces, 333usize, 220.0, 350.0, 64.0, 52.0, "+", grey(), 26.0)
+        // The days.
+        var day = 0usize
+        while day < 7usize {
+            let x = 54.0 + f32(day) * 44.0
+            var fill = grey()
+            if (s.edit.days >> day) & 1usize == 1usize { fill = amber() }
+            try card(a, builder, x, 430.0, 36.0, 36.0, 18.0, fill)
+            try centred(a, builder, faces.jost, 16.0, day_letter(day), x + 18.0, 438.0, ink())
+            hit(s, 334usize + day, x, 430.0, 36.0, 36.0)
+            day += 1usize
+        }
+        try button(a, builder, s, faces, 341usize, 54.0, 500.0, 120.0, 48.0, "Save", amber(), 18.0)
+        try button(a, builder, s, faces, 342usize, 188.0, 500.0, 120.0, 48.0, "Delete", grey(), 18.0)
+        try button(a, builder, s, faces, 343usize, 54.0, 566.0, 254.0, 44.0, "Cancel", grey(), 16.0)
+        ret ok
+    }
+    var i = 0usize
+    while i < s.alarm_total {
+        let alarm = s.alarms[i]
+        let y = 176.0 + f32(i) * 92.0
+        try card(a, builder, 36.0, y, 340.0, 84.0, 14.0, white())
+        try put(a, builder, faces.jost, 44.0, hhmm(a, alarm.minutes), 52.0, y + 8.0, ink())
+        hit(s, 310usize + i, 36.0, y, 220.0, 84.0)
+        try put(a, builder, faces.exo, 14.0, days_text(alarm.days), 54.0, y + 58.0, muted())
+        try toggle_switch(a, builder, s, 300usize + i, 300.0, y + 27.0, alarm.on)
+        i += 1usize
+    }
+    if s.alarm_total < 5usize {
+        try button(a, builder, s, faces, 320usize, 36.0, 176.0 + f32(s.alarm_total) * 92.0, 160.0, 46.0, "+ Add alarm", grey(), 16.0)
+    }
+    ret ok
+}
+
+// ---- the timer tab
+
+fn timer_text(a: *mem.Arena, ms: i64) -> str {
+    var left = ms
+    if left < 0i64 { left = 0i64 }
+    let total = usize((left + 999i64) / 1000i64)
+    if total >= 3600usize {
+        ret join(a, two(a, total / 3600usize), ":", join(a, two(a, total / 60usize % 60usize), ":", two(a, total % 60usize)))
+    }
+    ret join(a, two(a, total / 60usize), ":", two(a, total % 60usize))
+}
+
+// The typed digits as HH:MM:SS (right-aligned, like Android's timer).
+fn typed_text(a: *mem.Arena, s: *State) -> str {
+    var padded: [6]u8 = zero
+    var i = 0usize
+    while i < 6usize {
+        padded[i] = 48u8
+        i += 1usize
+    }
+    var n = 0usize
+    while n < s.timer_typed {
+        padded[6usize - s.timer_typed + n] = s.timer_digits[n]
+        n += 1usize
+    }
+    let (buffer, buffer_error) = mem.alloc[u8](a, 8usize)
+    if buffer_error != ok { ret "00:00:00" }
+    buffer[0usize] = padded[0usize]
+    buffer[1usize] = padded[1usize]
+    buffer[2usize] = 58u8
+    buffer[3usize] = padded[2usize]
+    buffer[4usize] = padded[3usize]
+    buffer[5usize] = 58u8
+    buffer[6usize] = padded[4usize]
+    buffer[7usize] = padded[5usize]
+    ret buffer[0usize..8usize]
+}
+
+fn draw_timer(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *State) -> err {
+    if s.timer_done {
+        try card(a, builder, 36.0, 176.0, 340.0, 400.0, 16.0, white())
+        try centred(a, builder, faces.sora, 22.0, "Time's up", 206.0, 250.0, muted())
+        try centred(a, builder, faces.jost_bold, 80.0, timer_text(a, s.timer_total_ms), 206.0, 320.0, ink())
+        try button(a, builder, s, faces, 414usize, 66.0, 470.0, 280.0, 56.0, "Dismiss", amber(), 20.0)
+        ret ok
+    }
+    if s.timer_running || s.timer_paused {
+        let left = timer_remaining_ms(s)
+        try card(a, builder, 36.0, 176.0, 340.0, 220.0, 16.0, white())
+        try centred(a, builder, faces.jost_bold, 76.0, timer_text(a, left), 206.0, 220.0, ink())
+        // A bar of what is left.
+        try card(a, builder, 60.0, 340.0, 292.0, 10.0, 5.0, grey())
+        var fraction = 0.0f32
+        if s.timer_total_ms > 0i64 { fraction = f32(left) / f32(s.timer_total_ms) }
+        if fraction < 0.0 { fraction = 0.0 }
+        if fraction > 1.0 { fraction = 1.0 }
+        if fraction > 0.02 { try card(a, builder, 60.0, 340.0, 292.0 * fraction, 10.0, 5.0, amber()) }
+        var toggle = "Pause"
+        if s.timer_paused { toggle = "Resume" }
+        try button(a, builder, s, faces, 411usize, 36.0, 420.0, 164.0, 56.0, toggle, amber(), 20.0)
+        try button(a, builder, s, faces, 412usize, 212.0, 420.0, 164.0, 56.0, "Reset", grey(), 20.0)
+        try button(a, builder, s, faces, 413usize, 36.0, 496.0, 340.0, 50.0, "+ 1:00", grey(), 18.0)
+        ret ok
+    }
+    try card(a, builder, 36.0, 172.0, 340.0, 96.0, 14.0, white())
+    try centred(a, builder, faces.jost_bold, 58.0, typed_text(a, s), 206.0, 190.0, ink())
+    var k = 0usize
+    while k < 9usize {
+        let x = 36.0 + f32(k % 3usize) * 116.0
+        let y = 284.0 + f32(k / 3usize) * 68.0
+        try pad_key(a, builder, s, faces, 401usize + k, x, y, 108.0, 58.0, number(a, k + 1usize), white())
+        k += 1usize
+    }
+    try pad_key(a, builder, s, faces, 400usize, 152.0, 488.0, 108.0, 58.0, "0", white())
+    try pad_key(a, builder, s, faces, 410usize, 268.0, 488.0, 108.0, 58.0, "DEL", grey())
+    try button(a, builder, s, faces, 411usize, 36.0, 566.0, 340.0, 56.0, "Start", amber(), 20.0)
+    try put(a, builder, faces.exo, 13.0, "Presets", 40.0, 640.0, muted())
+    var preset = 0usize
+    while preset < 4usize {
+        var label = "1:00"
+        if preset == 1usize { label = "5:00" }
+        if preset == 2usize { label = "10:00" }
+        if preset == 3usize { label = "15:00" }
+        try button(a, builder, s, faces, 420usize + preset, 36.0 + f32(preset) * 87.0, 664.0, 79.0, 40.0, label, grey(), 15.0)
+        preset += 1usize
+    }
+    ret ok
+}
+
+// ---- the stopwatch tab
+
+fn stopwatch_text(a: *mem.Arena, ms: i64) -> str {
+    let total_tenths = usize(ms / 100i64)
+    let tenths = total_tenths % 10usize
+    let seconds = total_tenths / 10usize % 60usize
+    let minutes = total_tenths / 600usize
+    ret join(a, two(a, minutes), ":", join(a, two(a, seconds), ".", number(a, tenths)))
+}
+
+fn draw_stopwatch(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *State) -> err {
+    try card(a, builder, 36.0, 172.0, 340.0, 130.0, 16.0, white())
+    try centred(a, builder, faces.jost_bold, 66.0, stopwatch_text(a, stopwatch_ms(s)), 206.0, 202.0, ink())
+    var main_label = "Start"
+    if s.sw_running { main_label = "Stop" }
+    try button(a, builder, s, faces, 501usize, 36.0, 320.0, 108.0, 52.0, "Lap", grey(), 18.0)
+    try button(a, builder, s, faces, 500usize, 152.0, 320.0, 108.0, 52.0, main_label, amber(), 18.0)
+    try button(a, builder, s, faces, 502usize, 268.0, 320.0, 108.0, 52.0, "Reset", grey(), 18.0)
+    var lap = 0usize
+    while lap < s.lap_total {
+        // Newest first.
+        let index = s.lap_total - 1usize - lap
+        var split = s.laps[index]
+        if index > 0usize { split = s.laps[index] - s.laps[index - 1usize] }
+        let y = 392.0 + f32(lap) * 52.0
+        try card(a, builder, 36.0, y, 340.0, 44.0, 12.0, white())
+        try put(a, builder, faces.grotesk, 14.0, join(a, "Lap ", number(a, index + 1usize), ""), 52.0, y + 13.0, muted())
+        try centred(a, builder, faces.jost, 20.0, stopwatch_text(a, split), 216.0, y + 8.0, ink())
+        try right(a, builder, faces.grotesk, 13.0, stopwatch_text(a, s.laps[index]), 360.0, y + 14.0, muted())
+        lap += 1usize
+    }
+    ret ok
+}
+
+// ---- the bedtime tab
+
+fn draw_bedtime(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *State) -> err {
+    let sleep_minutes = s.sleep_half_hours * 30usize
+    let bed = (s.wake_minutes + 1440usize - sleep_minutes % 1440usize) % 1440usize
+    try card(a, builder, 36.0, 172.0, 340.0, 150.0, 16.0, white())
+    try centred(a, builder, faces.exo, 14.0, "GO TO BED AT", 206.0, 190.0, muted())
+    try centred(a, builder, faces.jost_bold, 72.0, hhmm(a, bed), 206.0, 212.0, ink())
+    // In how long.
+    let now_minutes = minutes_of_day(utc_seconds(s))
+    let wait = (bed + 1440usize - now_minutes) % 1440usize
+    try centred(a, builder, faces.grotesk, 14.0, join(a, "in ", number(a, wait / 60usize), join(a, "h ", number(a, wait % 60usize), "m")), 206.0, 298.0, muted())
+    // Wake-up time.
+    try card(a, builder, 36.0, 340.0, 340.0, 110.0, 14.0, white())
+    try put(a, builder, faces.exo, 14.0, "WAKE UP", 52.0, 352.0, muted())
+    try centred(a, builder, faces.jost, 36.0, hhmm(a, s.wake_minutes), 206.0, 372.0, ink())
+    try button(a, builder, s, faces, 600usize, 52.0, 392.0, 48.0, 44.0, "-", grey(), 22.0)
+    try button(a, builder, s, faces, 601usize, 312.0, 392.0, 48.0, 44.0, "+", grey(), 22.0)
+    // Sleep wanted.
+    try card(a, builder, 36.0, 466.0, 340.0, 110.0, 14.0, white())
+    try put(a, builder, faces.exo, 14.0, "SLEEP GOAL", 52.0, 478.0, muted())
+    let hours = s.sleep_half_hours / 2usize
+    var half = "h"
+    if s.sleep_half_hours % 2usize == 1usize { half = ".5 h" }
+    try centred(a, builder, faces.jost, 36.0, join(a, number(a, hours), half, ""), 206.0, 498.0, ink())
+    try button(a, builder, s, faces, 604usize, 52.0, 518.0, 48.0, 44.0, "-", grey(), 22.0)
+    try button(a, builder, s, faces, 605usize, 312.0, 518.0, 48.0, 44.0, "+", grey(), 22.0)
+    // The reminder.
+    try card(a, builder, 36.0, 592.0, 340.0, 70.0, 14.0, white())
+    try put(a, builder, faces.jost, 18.0, "Bedtime reminder", 52.0, 614.0, ink())
+    try toggle_switch(a, builder, s, 606usize, 308.0, 612.0, s.bedtime_on)
+    ret ok
+}
+
+// ----------------------------------------------------------------------------------------------
+
+fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> err {
+    s.hit_total = 0usize
+    try chrome(a, builder, kit, s)
+    let faces = kit.faces
+    if s.tab == ALARM_TAB {
+        try draw_alarm(a, builder, faces, s)
+    } else if s.tab == CLOCK_TAB {
+        try draw_clock(a, builder, faces, s)
+    } else if s.tab == TIMER_TAB {
+        try draw_timer(a, builder, faces, s)
+    } else if s.tab == STOPWATCH_TAB {
+        try draw_stopwatch(a, builder, faces, s)
+    } else {
+        try draw_bedtime(a, builder, faces, s)
+    }
+    ret ok
+}
+
+fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
+    let (next, next_error) = appkit.begin(a, kit)
+    if next_error != ok { ret false }
+    var builder = next
+    if draw(a, &builder, kit, s) != ok { ret false }
+    s.shown = display_key(s)
+    ret appkit.present(kit, &builder)
+}
+
+// ----------------------------------------------------------------------------------------------
+// Behaviour.
+
+fn start_timer(s: *State) {
+    let value = timer_value_ms(s)
+    if value <= 0i64 { ret }
+    s.timer_total_ms = value
+    s.timer_end_ms = s.now_ms + value
+    s.timer_running = true
+    s.timer_paused = false
+    s.timer_done = false
+    say("clock timer started\n")
+}
+
+// What a tap on button `id` did: true when the screen changed.
+fn act(s: *State, id: usize) -> bool {
+    if id >= 100usize && id < 105usize {
+        s.tab = id - 100usize
+        s.picker = false
+        ret true
+    }
+    // The clock's cities.
+    if id == 210usize {
+        s.picker = true
+        ret true
+    }
+    if id == 230usize {
+        s.picker = false
+        ret true
+    }
+    if id >= 220usize && id < 236usize && id != 230usize {
+        let city = id - 220usize
+        var at = NONE
+        var i = 0usize
+        while i < s.city_total {
+            if s.cities[i] == city { at = i }
+            i += 1usize
+        }
+        if at != NONE {
+            while at + 1usize < s.city_total {
+                s.cities[at] = s.cities[at + 1usize]
+                at += 1usize
+            }
+            s.city_total -= 1usize
+        } else if s.city_total < 6usize {
+            s.cities[s.city_total] = city
+            s.city_total += 1usize
+        }
+        ret true
+    }
+    // The alarms.
+    if id >= 300usize && id < 305usize {
+        s.alarms[id - 300usize].on = !s.alarms[id - 300usize].on
+        ret true
+    }
+    if id >= 310usize && id < 315usize {
+        s.editing = id - 310usize
+        s.edit = s.alarms[s.editing]
+        ret true
+    }
+    if id == 320usize {
+        s.alarms[s.alarm_total] = Alarm { minutes: 420usize, on: true, days: 127usize }
+        s.editing = s.alarm_total
+        s.alarm_total += 1usize
+        s.edit = s.alarms[s.editing]
+        ret true
+    }
+    if id == 330usize { s.edit.minutes = (s.edit.minutes + 1440usize - 60usize) % 1440usize
+        ret true }
+    if id == 331usize { s.edit.minutes = (s.edit.minutes + 60usize) % 1440usize
+        ret true }
+    if id == 332usize { s.edit.minutes = (s.edit.minutes + 1440usize - 5usize) % 1440usize
+        ret true }
+    if id == 333usize { s.edit.minutes = (s.edit.minutes + 5usize) % 1440usize
+        ret true }
+    if id >= 334usize && id < 341usize {
+        s.edit.days = s.edit.days ^ (1usize << (id - 334usize))
+        ret true
+    }
+    if id == 341usize {
+        s.alarms[s.editing] = s.edit
+        s.alarms[s.editing].on = true
+        s.editing = NONE
+        say("clock alarm saved ")
+        say_hhmm(s.alarms[s.alarm_total - 1usize].minutes)
+        say("\n")
+        ret true
+    }
+    if id == 342usize || id == 343usize {
+        if id == 342usize || s.editing + 1usize == s.alarm_total && s.alarms[s.editing].minutes == s.edit.minutes && false {
+            var i = s.editing
+            while i + 1usize < s.alarm_total {
+                s.alarms[i] = s.alarms[i + 1usize]
+                i += 1usize
+            }
+            if s.alarm_total > 0usize { s.alarm_total -= 1usize }
+        }
+        s.editing = NONE
+        ret true
+    }
+    if id == 350usize {
+        // Snooze: five minutes later.
+        let alarm = s.alarms[s.ringing]
+        s.alarms[s.ringing].minutes = (alarm.minutes + 5usize) % 1440usize
+        s.alarms[s.ringing].on = true
+        s.ringing = NONE
+        ret true
+    }
+    if id == 351usize {
+        s.ringing = NONE
+        ret true
+    }
+    // The timer.
+    if id >= 400usize && id < 410usize {
+        if s.timer_typed < 6usize && !(s.timer_typed == 0usize && id == 400usize) {
+            s.timer_digits[s.timer_typed] = u8(48usize + id - 400usize)
+            s.timer_typed += 1usize
+        }
+        ret true
+    }
+    if id == 410usize {
+        if s.timer_typed > 0usize { s.timer_typed -= 1usize }
+        ret true
+    }
+    if id == 411usize {
+        if s.timer_running {
+            s.timer_left_ms = s.timer_end_ms - s.now_ms
+            s.timer_running = false
+            s.timer_paused = true
+        } else if s.timer_paused {
+            s.timer_end_ms = s.now_ms + s.timer_left_ms
+            s.timer_running = true
+            s.timer_paused = false
+        } else {
+            start_timer(s)
+        }
+        ret true
+    }
+    if id == 412usize {
+        s.timer_running = false
+        s.timer_paused = false
+        s.timer_done = false
+        ret true
+    }
+    if id == 413usize {
+        if s.timer_running { s.timer_end_ms += 60000i64 }
+        if s.timer_paused { s.timer_left_ms += 60000i64 }
+        s.timer_total_ms += 60000i64
+        ret true
+    }
+    if id == 414usize {
+        s.timer_done = false
+        ret true
+    }
+    if id >= 420usize && id < 424usize {
+        var minutes = 1usize
+        if id == 421usize { minutes = 5usize }
+        if id == 422usize { minutes = 10usize }
+        if id == 423usize { minutes = 15usize }
+        s.timer_digits[0usize] = u8(48usize + minutes / 10usize)
+        s.timer_digits[1usize] = u8(48usize + minutes % 10usize)
+        s.timer_digits[2usize] = 48u8
+        s.timer_digits[3usize] = 48u8
+        s.timer_typed = 4usize
+        if minutes < 10usize {
+            s.timer_digits[0usize] = u8(48usize + minutes)
+            s.timer_digits[1usize] = 48u8
+            s.timer_digits[2usize] = 48u8
+            s.timer_typed = 3usize
+        }
+        ret true
+    }
+    // The stopwatch.
+    if id == 500usize {
+        if s.sw_running {
+            s.sw_acc_ms += s.now_ms - s.sw_start_ms
+            s.sw_running = false
+            say("clock stopwatch stopped ")
+            say_num(usize(s.sw_acc_ms / 100i64))
+            say("\n")
+        } else {
+            s.sw_start_ms = s.now_ms
+            s.sw_running = true
+            say("clock stopwatch started\n")
+        }
+        ret true
+    }
+    if id == 501usize {
+        if (s.sw_running || s.sw_acc_ms > 0i64) && s.lap_total < 8usize {
+            s.laps[s.lap_total] = stopwatch_ms(s)
+            s.lap_total += 1usize
+            say("clock stopwatch lap\n")
+        }
+        ret true
+    }
+    if id == 502usize {
+        s.sw_running = false
+        s.sw_acc_ms = 0i64
+        s.lap_total = 0usize
+        ret true
+    }
+    // Bedtime.
+    if id == 600usize { s.wake_minutes = (s.wake_minutes + 1440usize - 15usize) % 1440usize
+        ret true }
+    if id == 601usize { s.wake_minutes = (s.wake_minutes + 15usize) % 1440usize
+        ret true }
+    if id == 604usize {
+        if s.sleep_half_hours > 8usize { s.sleep_half_hours -= 1usize }
+        ret true
+    }
+    if id == 605usize {
+        if s.sleep_half_hours < 24usize { s.sleep_half_hours += 1usize }
+        ret true
+    }
+    if id == 606usize {
+        s.bedtime_on = !s.bedtime_on
+        ret true
+    }
+    ret false
+}
+
+// "HH:MM" to the console, through a buffer on the stack.
+fn say_hhmm(minutes: usize) {
+    var buffer: [5]u8 = zero
+    buffer[0usize] = u8(minutes / 60usize % 24usize / 10usize) + 48u8
+    buffer[1usize] = u8(minutes / 60usize % 24usize % 10usize) + 48u8
+    buffer[2usize] = 58u8
+    buffer[3usize] = u8(minutes % 60usize / 10usize) + 48u8
+    buffer[4usize] = u8(minutes % 60usize % 10usize) + 48u8
+    say(buffer[0usize..5usize])
+}
+
+fn hit_at(s: *State, x: f32, y: f32) -> usize {
+    var i = s.hit_total
+    while i > 0usize {
+        i -= 1usize
+        let h = s.hits[i]
+        if x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h { ret h.id }
+    }
+    ret NONE
+}
+
+// On a tick: the timer reaching zero and an alarm's minute arriving. True when something changed.
+fn on_tick(s: *State) -> bool {
+    var changed = false
+    if s.timer_running && s.timer_end_ms - s.now_ms <= 0i64 {
+        s.timer_running = false
+        s.timer_done = true
+        s.timer_left_ms = 0i64
+        s.tab = TIMER_TAB
+        say("clock timer done\n")
+        changed = true
+    }
+    if s.ringing == NONE {
+        let now = utc_seconds(s)
+        let minute = minutes_of_day(now)
+        let day = weekday_of(now)
+        var i = 0usize
+        while i < s.alarm_total {
+            let alarm = s.alarms[i]
+            let today = alarm.days == 0usize || (alarm.days >> day) & 1usize == 1usize
+            let stamp = now / 60usize
+            if alarm.on && today && alarm.minutes == minute && s.fired != stamp {
+                s.fired = stamp
+                s.ringing = i
+                s.tab = ALARM_TAB
+                s.editing = NONE
+                say("clock alarm ringing ")
+                say_hhmm(alarm.minutes)
+                say("\n")
+                changed = true
+            }
+            i += 1usize
+        }
+    }
+    ret changed
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let (kit_value, kit_error) = appkit.open(a, args, 1usize, "clock")
+    if kit_error != ok {
+        say("clock open failed\n")
+        ret ok
+    }
+    var kit = kit_value
+    if !kit.has_fonts {
+        say("clock fonts absent\n")
+        ret ok
+    }
+    var s: State = zero
+    let (wall, wall_error) = time.now()
+    if wall_error == ok { s.wall0 = wall.nanos / 1000000000i64 }
+    refresh(&s)
+    s.mono0 = s.now_ms
+    s.tab = CLOCK_TAB
+    // Six cities to start with.
+    s.cities[0usize] = 14usize
+    s.cities[1usize] = 1usize
+    s.cities[2usize] = 5usize
+    s.cities[3usize] = 8usize
+    s.cities[4usize] = 9usize
+    s.cities[5usize] = 12usize
+    s.city_total = 6usize
+    // Two alarms to start with.
+    s.alarms[0usize] = Alarm { minutes: 390usize, on: true, days: 31usize }
+    s.alarms[1usize] = Alarm { minutes: 480usize, on: false, days: 96usize }
+    s.alarm_total = 2usize
+    s.editing = NONE
+    s.ringing = NONE
+    s.fired = 0usize
+    s.wake_minutes = 420usize
+    s.sleep_half_hours = 16usize
+    if !show(a, &kit, &s) {
+        say("clock present failed\n")
+        ret ok
+    }
+    say("clock shown\n")
+    var running = true
+    while running {
+        let tap = appkit.next_tap(&kit)
+        refresh(&s)
+        if tap.ended {
+            running = false
+        } else if tap.tick {
+            let alarmed = on_tick(&s)
+            if (alarmed || display_key(&s) != s.shown) && show(a, &kit, &s) {
+                var unused = 0usize
+            } else {
+                appkit.answer(appkit.ANSWER_NONE)
+            }
+        } else if tap.y >= 850.0 {
+            say("clock home\n")
+            appkit.leave()
+            running = false
+        } else {
+            let id = hit_at(&s, tap.x, tap.y)
+            if id != NONE && act(&s, id) {
+                if !show(a, &kit, &s) {
+                    say("clock present failed\n")
+                    appkit.answer(appkit.ANSWER_NONE)
+                }
+                say("clock tab ")
+                say_text(tab_name(s.tab))
+                say("\n")
+            } else {
+                appkit.answer(appkit.ANSWER_NONE)
+            }
+        }
+    }
+    ret ok
+}
