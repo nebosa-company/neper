@@ -228,9 +228,12 @@ fn draw_home(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, has_font
         if has_fonts {
             // A dark pill under the name keeps it readable on bright terrain.
             let label = icons.app_label(idx)
-            let label_width = text.measure(a, faces.jost, 13.0, label)
-            try card(a, builder, cx - label_width / 2.0 - 8.0, y + 63.0, label_width + 16.0, 21.0, 10.5, paint.Color { red: 0.0, green: 0.0, blue: 0.0, alpha: 0.6 })
-            try centred(a, builder, faces.jost, 13.0, label, cx, y + 66.0, white)
+            let label_width = text.measure(a, faces.jost, 14.5, label)
+            var label_height: f32 = 17.0
+            let (label_layout, label_error) = text.lay_out(a, faces.jost, 14.5, label, 0.0, 0u32, layout.Align.Start)
+            if label_error == ok { label_height = label_layout.bounds.height }
+            try card(a, builder, cx - label_width / 2.0 - 9.0, y + 63.0, label_width + 18.0, 24.0, 12.0, paint.Color { red: 0.0, green: 0.0, blue: 0.0, alpha: 0.6 })
+            try centred(a, builder, faces.jost, 14.5, label, cx, y + 63.0 + (24.0 - label_height) / 2.0, white)
         }
         idx += 1usize
     }
