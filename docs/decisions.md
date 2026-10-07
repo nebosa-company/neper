@@ -37784,3 +37784,25 @@ symbol on a tinted tile, through e.gfx.scene over the e.gpu CPU backend. The fra
 identical on the host and on NeperOS. Both C113 app faces now render; the arithmetic and the live
 clock are ordinary e.* code, and hosting the apps in the shell with tap input waits on the unified
 launcher (C112's blocked prodshell integration). C113 -> 0.6.
+
+## D2181 — C114: the Tasks app face
+
+NeperOS shell-10 begun: the Tasks app. neperos/src/tasks_app.e renders a checklist -- a header, then
+six task rows, each with a checkbox (filled green when done), the task's number in the built-in 3x5
+bitmap digit font, and a bar standing in for its title -- through e.gfx.scene over the e.gpu CPU
+backend into a 256x256 surface, folding the frame to a hash 3422317813 identical on the host and on
+NeperOS (QEMU 8.2 and 11.1). Fixed task data keeps it deterministic.
+
+## D2182 — C114: the Settings app face
+
+The Settings app. neperos/src/settings_app.e renders a settings list -- a header and five rows, each
+a label bar and a toggle switch (a track and a knob, green with the knob right when on, grey with the
+knob left when off) -- through e.gfx.scene over the e.gpu CPU backend; frame hash 385502117, identical
+on both hosts. Both C114 app faces now render; interactive behavior (toggling, editing tasks) and
+hosting the apps in the shell wait on C112's unified launcher. C114 -> 0.6.
+
+With C113 and C114 begun, every NeperOS shell app face (launcher, clock, calculator, tasks, settings)
+and every subsystem (processes, filesystem, e.os surface, display, input, compositor, e.ui, status)
+now runs and renders on NeperOS, verified on both hosts. The one remaining integration is the unified
+production-shell boot that hosts the apps together (blocked on the prodshell compositor-AUX runtime
+anomaly, under gdb investigation), plus the hardware-only C104 Pixel bring-up.

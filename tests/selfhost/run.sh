@@ -8983,10 +8983,11 @@ greeting"
         *"ui pages page 0 hash $page0_hash"*"ui pages page 1 hash $page1_hash"*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS launcher paging did not match the host hashes: $pages_boot" >&2; exit 1 ;;
     esac
-    # (D2179/D2180, C113) The Clock and Calculator app faces: each renders its UI (clock_app a digital
-    # time on a card, calc_app a result display and a 4x4 keypad) through e.gfx.scene over the e.gpu
-    # CPU backend and folds the frame to a hash the host reproduces.
-    for app_pair in "clock_app:clock app" "calc_app:calc app"; do
+    # (D2179/D2180, C113; D2181/D2182, C114) The shell app faces: Clock (digital time on a card),
+    # Calculator (result display + 4x4 keypad), Tasks (a checklist with checkboxes) and Settings (rows
+    # with toggle switches) each render their UI through e.gfx.scene over the e.gpu CPU backend and
+    # fold the frame to a hash the host reproduces.
+    for app_pair in "clock_app:clock app" "calc_app:calc app" "tasks_app:tasks app" "settings_app:settings app"; do
         app_src="${app_pair%%:*}"
         app_tag="${app_pair##*:}"
         app_img="$test_build/$app_src.img"

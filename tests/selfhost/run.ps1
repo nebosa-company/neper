@@ -9134,10 +9134,11 @@ if ($neperosQemu) {
     if ($page0Hash -eq $page1Hash) { throw "the launcher's two pages rendered the same: $pagesHostOut" }
     $pagesBoot = Invoke-NeperOS $neperosImage @('-initrd', $pagesImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
     if ($pagesBoot -notmatch "(?s)ui pages page 0 hash $page0Hash.*ui pages page 1 hash $page1Hash.*neperos: exit 0x0000000000000000") { throw "NeperOS launcher paging did not match the host hashes: $pagesBoot" }
-    # (D2179/D2180, C113) The Clock and Calculator app faces: each renders its UI (clock_app a digital
-    # time on a card, calc_app a result display and a 4x4 keypad) through e.gfx.scene over the e.gpu
-    # CPU backend and folds the frame to a hash the host reproduces.
-    foreach ($appPair in @(@('clock_app', 'clock app'), @('calc_app', 'calc app'))) {
+    # (D2179/D2180, C113; D2181/D2182, C114) The shell app faces: Clock (digital time on a card),
+    # Calculator (result display + 4x4 keypad), Tasks (a checklist with checkboxes) and Settings (rows
+    # with toggle switches) each render their UI through e.gfx.scene over the e.gpu CPU backend and
+    # fold the frame to a hash the host reproduces.
+    foreach ($appPair in @(@('clock_app', 'clock app'), @('calc_app', 'calc app'), @('tasks_app', 'tasks app'), @('settings_app', 'settings app'))) {
         $appSrc = $appPair[0]
         $appTag = $appPair[1]
         $appImg = Join-Path $testBuild "$appSrc.img"
