@@ -8967,6 +8967,25 @@ greeting"
         *"sha256 $gpu_golden"*) ;;
         *) printf '%s\n' "NeperOS virtio-gpu screendump did not match the golden: $gpu_dump" >&2; exit 1 ;;
     esac
+    # (D2160, C109) virtio-input over IPC: the input server pushes each event to a client over an
+    # endpoint, woken by the device notification; the fixture injects a key and a tap and asserts
+    # the stream the client receives.
+    input_server_img="$test_build/input_server.img"
+    input_client_img="$test_build/input_client.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/input_server.e" "$repo" aarch64 neperos "$input_server_img")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/input_client.e" "$repo" aarch64 neperos "$input_client_img")" = 'executable written' ]
+    input_archive="$test_build/input-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$input_archive" "$input_server_img" "$input_client_img"
+    input_kbd=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$input_archive" keyboard "$test_build/input-kbd.serial" 55125 2>&1)
+    case "$input_kbd" in
+        *'input ev 1 30 1'*'input ev 1 30 0'*'input client done'*) ;;
+        *) printf '%s\n' "NeperOS input did not deliver the key over IPC: $input_kbd" >&2; exit 1 ;;
+    esac
+    input_tab=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$input_archive" tablet "$test_build/input-tab.serial" 55126 2>&1)
+    case "$input_tab" in
+        *'input ev 3 0 16384'*'input ev 3 1 16384'*'input ev 1 272 1'*'input client done'*) ;;
+        *) printf '%s\n' "NeperOS input did not deliver the tap over IPC: $input_tab" >&2; exit 1 ;;
+    esac
 fi
 
 printf '%s\n' 'selfhost tests passed'

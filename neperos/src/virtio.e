@@ -677,3 +677,52 @@ fn gpu_bringup(device: Device) -> (usize, usize, err) {
     if os.load32(resp) != GPU_RESP_OK_NODATA { ret (width, height, GpuError) }
     ret (width, height, ok)
 }
+
+// virtio-input (virtio 1.x 5.8, C109): the event queue (0) carries 8-byte events the device writes
+// as input arrives -- virtio_input_event {type: u16, code: u16, value: u32}, the Linux input_event
+// shape (EV_SYN 0, EV_KEY 1, EV_ABS 3). The driver posts device-writable buffers and reads the used
+// ring as the device fills them. One batch of buffers is posted at open; a bounded run of events
+// fits without re-posting.
+const INPUT_EVENTS: usize = 64usize
+
+type Input = struct { ring: Ring, buffers: usize, count: usize, seen: u16 }
+
+// Set up the input device: negotiate, enable the event queue, post `count` device-writable 8-byte
+// event buffers, and notify. The device writes an event into the next buffer as input arrives.
+fn input_open(device: Device, count: usize) -> (Input, err) {
+    let negotiate_error = negotiate(device)
+    if negotiate_error != ok { ret (zero, negotiate_error) }
+    let (ring, ring_error) = setup_queue(device, 0u16)
+    if ring_error != ok { ret (zero, ring_error) }
+    status_add(device, STATUS_DRIVER_OK)
+    let (buffers, buffers_error) = dma_region(count * 8usize)
+    if buffers_error != ok { ret (zero, buffers_error) }
+    var i = 0usize
+    while i < count {
+        os.store64(ring.desc + i * 16usize, u64(buffers + i * 8usize))
+        os.store32(ring.desc + i * 16usize + 8usize, 8u32)
+        os.store16(ring.desc + i * 16usize + 12usize, DESC_WRITE)
+        os.store16(ring.desc + i * 16usize + 14usize, 0u16)
+        os.store16(ring.avail + 4usize + 2usize * i, u16(i))
+        i += 1usize
+    }
+    os.barrier()
+    os.store16(ring.avail + 2usize, u16(count))
+    os.barrier()
+    os.store16(ring.notify, ring.index)
+    ret (Input { ring: ring, buffers: buffers, count: count, seen: 0u16 }, ok)
+}
+
+// The next event the device has written, if any: (type, code, value, true), or (0, 0, 0, false)
+// when none is pending. The used ring names which buffer the device filled; events arrive in order.
+fn input_next(input: *Input) -> (u16, u16, u32, bool) {
+    if os.load16(input.ring.used + 2usize) == input.seen { ret (0u16, 0u16, 0u32, false) }
+    let j = usize(input.seen) % input.ring.size
+    let id = usize(os.load32(input.ring.used + 4usize + j * 8usize))
+    let event = input.buffers + id * 8usize
+    let etype = os.load16(event)
+    let ecode = os.load16(event + 2usize)
+    let evalue = os.load32(event + 4usize)
+    input.seen += 1u16
+    ret (etype, ecode, evalue, true)
+}

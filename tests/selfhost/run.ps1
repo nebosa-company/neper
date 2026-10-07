@@ -9111,6 +9111,23 @@ if ($neperosQemu) {
     $gpuGolden = 'd505a446eda5a1fcd82529d0167bcf6f4784f91c91cb00825b96bb2ba60aa1be'
     $gpuDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $gpuTest (Join-Path $testBuild 'gpu.ppm') 55123 2>&1) -join "`n"
     if ($gpuDump -notmatch "sha256 $gpuGolden") { throw "NeperOS virtio-gpu screendump did not match the golden: $gpuDump" }
+    # (D2160, C109) virtio-input over IPC: the input server alone holds the device and pushes each
+    # event to a client over an endpoint, woken by the device's notification. The fixture injects a
+    # key (keyboard) and a tap (tablet) through QMP and asserts the stream the client receives.
+    $inputServer = Join-Path $testBuild 'input_server.img'
+    $inputClient = Join-Path $testBuild 'input_client.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\input_server.e') $repo aarch64 neperos $inputServer | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS input server did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\input_client.e') $repo aarch64 neperos $inputClient | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS input client did not build' }
+    $inputArchive = Join-Path $testBuild 'input-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $inputArchive $inputServer $inputClient
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS input archive did not assemble' }
+    $inputScript = Join-Path $repo 'scripts\neperos-input.py'
+    $kbd = (& python $inputScript $neperosQemu.Source $neperosImage $inputArchive keyboard (Join-Path $testBuild 'input-kbd.serial') 55125 2>&1) -join "`n"
+    if ($kbd -notmatch '(?s)input ev 1 30 1.*input ev 1 30 0.*input client done') { throw "NeperOS input did not deliver the key over IPC: $kbd" }
+    $tab = (& python $inputScript $neperosQemu.Source $neperosImage $inputArchive tablet (Join-Path $testBuild 'input-tab.serial') 55126 2>&1) -join "`n"
+    if ($tab -notmatch '(?s)input ev 3 0 16384.*input ev 3 1 16384.*input ev 1 272 1.*input client done') { throw "NeperOS input did not deliver the tap over IPC: $tab" }
 }
 
 Write-Output 'selfhost tests passed'

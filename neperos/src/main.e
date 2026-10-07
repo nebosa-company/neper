@@ -734,7 +734,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (gpu_bar, gpu_error) = start_driver_server(a, image_addr, image_len, 1usize, pci_host, pci_host.mmio, pci.VIRTIO_GPU, "gpu")
         if gpu_error != ok { ret gpu_error }
     }
-    if !shell_mode && !fs_mode && !fsserver_mode && !gpu_mode {
+    // (D2160, C109) The input boot (`-append input`): the initrd is an archive of two programs. The
+    // input server (program 0) alone holds the virtio-input device and the notification bound to its
+    // interrupt, and pushes each event to the client over endpoint 0 (send, slot 2). The client
+    // (program 1) holds only that endpoint (receive, slot 1) and prints the events. A QEMU fixture
+    // injects taps and keys through the monitor and asserts the stream the client receives.
+    let input_mode = bootargs_error == ok && has_word(bootargs, "input")
+    if input_mode {
+        if pci_host_error != ok { ret NoInitrd }
+        if !parse_archive(image_addr) { ret BadArchive }
+        last_server_index = thread.MAX_THREADS
+        let (input_bar, input_error) = start_driver_server(a, archive_base + archive_offset[0usize], archive_length[0usize], 1usize, pci_host, pci_host.mmio, pci.VIRTIO_INPUT, "input")
+        if input_error != ok { ret input_error }
+        if last_server_index == thread.MAX_THREADS { ret NoInitrd }
+        thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
+        next_asid = 1usize
+        let (input_client, input_client_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "client")
+        if input_client_error != ok { ret input_client_error }
+        thread.grant(input_client, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 0usize)
+    }
+    if !shell_mode && !fs_mode && !fsserver_mode && !gpu_mode && !input_mode {
     // A and B interleave under the timer, and X is handed a reference to kernel RAM --
     // mapped into its space without EL0 access -- so its read faults and it alone is killed.
     // The RAM base is as good a kernel address as any. S and R rendezvous over endpoint 0

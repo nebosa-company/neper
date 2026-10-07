@@ -37386,3 +37386,23 @@ deterministic. gpu_test.e holds the scanout up with a bounded spin after the flu
 wins before the kernel powers off. Trap: the pattern's u8(x), u8(x+y) overflow for x,y past 255
 (the narrow-conversion check traps), so each channel is masked `& 255`. Fixtures added to run.ps1
 and run.sh. The default A-Z, shell, fs and other boots are unchanged.
+
+## D2160 — C109 closes: touch and key input over virtio-input
+
+NeperOS takes input. A virtio-input driver runs as an EL0 user-mode server (input_server.e) that
+alone holds the device and the notification the kernel bound to its interrupt (start_driver_server,
+pci.VIRTIO_INPUT = 18). It posts device-writable 8-byte event buffers on the event queue (0), blocks
+on the notification until input arrives (interrupt-driven, not a spin), then drains the burst and
+pushes each event to a client over endpoint 0 as one packed word -- type<<48 | code<<32 | value --
+so, with several single-word rendezvous rather than a multi-word message, nothing interleaves; a
+sentinel word (type 0xFFFF) ends the stream. The event shape is the Linux input_event
+{type:u16, code:u16, value:u32}, so the same driver serves a keyboard and an absolute-pointer
+tablet. The client (input_client.e) holds only the receive end of the endpoint (slot 1), unpacks
+each word and prints it. The `-append input` boot assembles an archive of the two, starts the server
+on the device, grants it the send endpoint (slot 2) and the client the receive endpoint (slot 1).
+scripts/neperos-input.py boots with a virtio-keyboard-pci or virtio-tablet-pci device and a QMP
+socket, waits for the server, injects through input-send-event and prints the client's transcript.
+Verified on QEMU virt on both hosts: a key 'a' arrives as EV_KEY code 30 down (1 30 1), EV_SYN, up
+(1 30 0); a tap arrives as EV_ABS x and y (3 0 16384, 3 1 16384), EV_KEY BTN_LEFT down (1 272 1),
+EV_SYN, up -- all over IPC, both device kinds. Fixtures added to run.ps1 and run.sh. The default
+A-Z, shell, fs, gpu and other boots are unchanged.
