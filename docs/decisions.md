@@ -37881,3 +37881,16 @@ Also confirmed why the C113/C114 app faces stay unverifiable: they render with e
 `start_process` bigarena path get that arena through `vm.map_range_el0` (main.e:85) -- the one
 miscompiled function -- while the 2 MB in-window arena cap is far too small for the backend. So the
 faces are sound but can only be verified with a matching toolchain, not worked around here.
+
+## D2187 — e.io buffer round-trip on NeperOS: the fifth e.os-surface module gets shell-boot breadth
+
+`neperos/src/io_test.e` now, after the two stdout prints, does an in-memory round-trip: it writes
+seven bytes through an `io.SliceWriter` into a buffer and reads them back through an `io.SliceReader`
+over the written portion, checking the bytes and both byte counts; serial reads `io roundtrip ok`.
+This exercises e.io's buffer `Writer`/`Reader` (not just the stdout path) on NeperOS, verified on both
+QEMU hosts. With this, the verifiable e.os surface -- e.io (stdout + buffer round-trip), e.time (clocks
++ civil date), e.fmt (json/csv/ini), e.thread (spawn+join+group) -- has shell-boot breadth across all
+four modules the shell boot can reach; e.fs's remaining ops are the flat-C106 Unsupported set and its
+driver-boot fixtures need a matching toolchain (D2185/D2186). C107 holds at its ~0.9 ceiling here:
+what is left is Unsupported-by-design or toolchain-gated, so further shell-boot breadth adds coverage
+without moving the score.

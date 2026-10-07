@@ -9012,8 +9012,8 @@ greeting"
     python3 "$repo/scripts/build-shell-archive.py" "$io_archive" "$io_test_img"
     neperos_io=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$io_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
     case "$neperos_io" in
-        *'hello from e.io on neperos'*'e.io writer runs at EL0'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
-        *) printf '%s\n' "NeperOS e.io did not run through the portable surface: $neperos_io" >&2; exit 1 ;;
+        *'hello from e.io on neperos'*'e.io writer runs at EL0'*'io roundtrip ok'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.io did not run the portable surface and buffer round-trip: $neperos_io" >&2; exit 1 ;;
     esac
     # (D2155, C107) e.time on NeperOS: time_test reads os.clock through e.time -- monotonic (the
     # virtual counter) and wall (the PL031 RTC) -- lowered to the kernel's clock system call.

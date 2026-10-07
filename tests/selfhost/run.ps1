@@ -9164,7 +9164,7 @@ if ($neperosQemu) {
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $ioArchive $ioTest
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.io archive did not assemble' }
     $ioBoot = Invoke-NeperOS $neperosImage @('-initrd', $ioArchive, '-append', 'shell')
-    if ($ioBoot -notmatch '(?s)hello from e\.io on neperos.*e\.io writer runs at EL0.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.io did not run through the portable surface: $ioBoot" }
+    if ($ioBoot -notmatch '(?s)hello from e\.io on neperos.*e\.io writer runs at EL0.*io roundtrip ok.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.io did not run the portable surface and buffer round-trip: $ioBoot" }
     # (D2155, C107) e.time on NeperOS: time_test reads os.clock through e.time -- two monotonic
     # readings around a busy spin (the virtual counter) and the wall clock (the PL031 RTC) -- lowered
     # to the kernel's clock system call. Started as program 0 of a one-program archive.
