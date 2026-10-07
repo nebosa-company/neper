@@ -9111,6 +9111,15 @@ if ($neperosQemu) {
     $gpuGolden = 'd505a446eda5a1fcd82529d0167bcf6f4784f91c91cb00825b96bb2ba60aa1be'
     $gpuDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $gpuTest (Join-Path $testBuild 'gpu.ppm') 55123 2>&1) -join "`n"
     if ($gpuDump -notmatch "sha256 $gpuGolden") { throw "NeperOS virtio-gpu screendump did not match the golden: $gpuDump" }
+    # (D2161, C110) The CPU rasterizer on NeperOS: ui_scene draws a scene with e.gfx.paint (the
+    # rasterizer e.gfx.scene uses) and flushes it to the display; the screendump golden is identical
+    # on QEMU 8.2 and 11.1, so the NeperOS pixels equal a host render of the same scene.
+    $uiScene = Join-Path $testBuild 'ui_scene.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_scene.e') $repo aarch64 neperos $uiScene | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS ui_scene program did not build' }
+    $uiGolden = '172a747560e4f73a0de393838fb20f3a8d750cb77e6b9a65328d657fa4cbd86c'
+    $uiDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $uiScene (Join-Path $testBuild 'ui.ppm') 55127 2>&1) -join "`n"
+    if ($uiDump -notmatch "sha256 $uiGolden") { throw "NeperOS CPU-rasterizer scene did not match the golden: $uiDump" }
     # (D2160, C109) virtio-input over IPC: the input server alone holds the device and pushes each
     # event to a client over an endpoint, woken by the device's notification. The fixture injects a
     # key (keyboard) and a tap (tablet) through QMP and asserts the stream the client receives.

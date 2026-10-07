@@ -65,7 +65,7 @@ def main():
         while time.time() < deadline and not seen:
             if os.path.exists(serial):
                 with open(serial, "rb") as f:
-                    if b"test pattern flushed" in f.read():
+                    if b"flushed" in f.read():
                         seen = True
             if not seen:
                 time.sleep(0.2)

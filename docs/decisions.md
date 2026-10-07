@@ -37406,3 +37406,23 @@ Verified on QEMU virt on both hosts: a key 'a' arrives as EV_KEY code 30 down (1
 (1 30 0); a tap arrives as EV_ABS x and y (3 0 16384, 3 1 16384), EV_KEY BTN_LEFT down (1 272 1),
 EV_SYN, up -- all over IPC, both device kinds. Fixtures added to run.ps1 and run.sh. The default
 A-Z, shell, fs, gpu and other boots are unchanged.
+
+## D2161 — C110 begins: the CPU rasterizer draws on NeperOS
+
+C110 wants a compositor and the e.ui backend; this increment lays the drawing foundation -- the
+existing CPU rasterizer painting a scene to the display -- and de-risks the acceptance's pixel-hash
+match. The virtio-gpu pipeline (C108) was split so a program can draw its own pixels: virtio.gpu_begin
+reads the mode, creates the resource, attaches a framebuffer and sets the scanout, returning the Gpu
+(ring, buffers, framebuffer, size); the caller paints the framebuffer; virtio.gpu_present transfers
+and flushes it. gpu_bringup is now gpu_begin + the test pattern + gpu_present, so C108's golden is
+byte-unchanged. neperos/src/ui_scene.e draws with e.gfx.paint -- the same CPU rasterizer e.gfx.scene
+uses, pure over e.gfx.geometry and e.math, so it compiles for NeperOS with nothing new: it fills a
+background and a panel, builds a triangle path, rasterizes it to an anti-aliased coverage mask (in
+the program's own arena) and composites it into the framebuffer, then flushes. A QEMU screendump is
+checked against the golden 172a747560e4f73a0de393838fb20f3a8d750cb77e6b9a65328d657fa4cbd86c, which is
+identical on QEMU 8.2 (WSL) and 11.1 (Windows) -- the rasterizer is pure, so NeperOS pixels equal a
+host render of the same scene, the heart of the acceptance. The screendump harness now waits on a
+generic `flushed` marker so it serves both the test pattern and a scene. Remaining for C110: a
+compositor (app surfaces in shared frames, damage-only flush, input from C109 routed to the focused
+surface), the e.ui window backend over e.gfx.scene with fonts from the filesystem, and an existing
+e.ui sample matching its host render.

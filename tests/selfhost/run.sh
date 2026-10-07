@@ -8967,6 +8967,16 @@ greeting"
         *"sha256 $gpu_golden"*) ;;
         *) printf '%s\n' "NeperOS virtio-gpu screendump did not match the golden: $gpu_dump" >&2; exit 1 ;;
     esac
+    # (D2161, C110) The CPU rasterizer on NeperOS: ui_scene draws a scene with e.gfx.paint and
+    # flushes it; the golden is identical on QEMU 8.2 and 11.1, so NeperOS pixels equal a host render.
+    ui_scene_img="$test_build/ui_scene.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_scene.e" "$repo" aarch64 neperos "$ui_scene_img")" = 'executable written' ]
+    ui_golden=172a747560e4f73a0de393838fb20f3a8d750cb77e6b9a65328d657fa4cbd86c
+    ui_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_image" "$ui_scene_img" "$test_build/ui.ppm" 55127 2>&1)
+    case "$ui_dump" in
+        *"sha256 $ui_golden"*) ;;
+        *) printf '%s\n' "NeperOS CPU-rasterizer scene did not match the golden: $ui_dump" >&2; exit 1 ;;
+    esac
     # (D2160, C109) virtio-input over IPC: the input server pushes each event to a client over an
     # endpoint, woken by the device notification; the fixture injects a key and a tap and asserts
     # the stream the client receives.

@@ -607,29 +607,34 @@ fn gpu_paint(fb: usize, width: usize, height: usize) {
     }
 }
 
-// Bring the display up and paint the test pattern; the display's width and height come back. The
-// framebuffer is carved from the DMA pool, so the pool must hold width*height*4 bytes.
-fn gpu_bringup(device: Device) -> (usize, usize, err) {
+// An opened display: the control ring, its command and response buffers, the framebuffer and the
+// display size. The caller paints the framebuffer, then gpu_present transfers and flushes it.
+type Gpu = struct { ring: Ring, cmd: usize, resp: usize, fb: usize, width: usize, height: usize }
+
+// Bring the display up (D2161): read the mode, create a BGRA resource the display's size, attach a
+// framebuffer as its backing and make it the scanout. The framebuffer (in the DMA pool) is returned
+// ready to paint; gpu_present shows it. The pool must hold width*height*4 bytes.
+fn gpu_begin(device: Device) -> (Gpu, err) {
     let negotiate_error = negotiate(device)
-    if negotiate_error != ok { ret (0usize, 0usize, negotiate_error) }
+    if negotiate_error != ok { ret (zero, negotiate_error) }
     let (ring, ring_error) = setup_queue(device, 0u16)
-    if ring_error != ok { ret (0usize, 0usize, ring_error) }
+    if ring_error != ok { ret (zero, ring_error) }
     status_add(device, STATUS_DRIVER_OK)
     let (cmd, cmd_error) = dma_region(256usize)
-    if cmd_error != ok { ret (0usize, 0usize, cmd_error) }
+    if cmd_error != ok { ret (zero, cmd_error) }
     let (resp, resp_error) = dma_region(512usize)
-    if resp_error != ok { ret (0usize, 0usize, resp_error) }
+    if resp_error != ok { ret (zero, resp_error) }
     gpu_zero(cmd, 24usize)
     os.store32(cmd, GPU_CMD_GET_DISPLAY_INFO)
     let info_error = gpu_cmd(ring, cmd, resp, 24usize, 408usize)
-    if info_error != ok { ret (0usize, 0usize, info_error) }
-    if os.load32(resp) != GPU_RESP_OK_DISPLAY_INFO { ret (0usize, 0usize, GpuError) }
+    if info_error != ok { ret (zero, info_error) }
+    if os.load32(resp) != GPU_RESP_OK_DISPLAY_INFO { ret (zero, GpuError) }
     let width = usize(os.load32(resp + 32usize))
     let height = usize(os.load32(resp + 36usize))
-    if width == 0usize || height == 0usize { ret (0usize, 0usize, GpuError) }
+    if width == 0usize || height == 0usize { ret (zero, GpuError) }
     let fb_bytes = width * height * 4usize
     let (fb, fb_error) = dma_region(fb_bytes)
-    if fb_error != ok { ret (width, height, fb_error) }
+    if fb_error != ok { ret (zero, fb_error) }
     gpu_zero(cmd, 40usize)
     os.store32(cmd, GPU_CMD_RESOURCE_CREATE_2D)
     os.store32(cmd + 24usize, GPU_RESOURCE)
@@ -637,8 +642,8 @@ fn gpu_bringup(device: Device) -> (usize, usize, err) {
     os.store32(cmd + 32usize, u32(width))
     os.store32(cmd + 36usize, u32(height))
     let create_error = gpu_cmd(ring, cmd, resp, 40usize, 24usize)
-    if create_error != ok { ret (width, height, create_error) }
-    if os.load32(resp) != GPU_RESP_OK_NODATA { ret (width, height, GpuError) }
+    if create_error != ok { ret (zero, create_error) }
+    if os.load32(resp) != GPU_RESP_OK_NODATA { ret (zero, GpuError) }
     gpu_zero(cmd, 48usize)
     os.store32(cmd, GPU_CMD_RESOURCE_ATTACH_BACKING)
     os.store32(cmd + 24usize, GPU_RESOURCE)
@@ -646,9 +651,8 @@ fn gpu_bringup(device: Device) -> (usize, usize, err) {
     os.store64(cmd + 32usize, u64(fb))
     os.store32(cmd + 40usize, u32(fb_bytes))
     let attach_error = gpu_cmd(ring, cmd, resp, 48usize, 24usize)
-    if attach_error != ok { ret (width, height, attach_error) }
-    if os.load32(resp) != GPU_RESP_OK_NODATA { ret (width, height, GpuError) }
-    gpu_paint(fb, width, height)
+    if attach_error != ok { ret (zero, attach_error) }
+    if os.load32(resp) != GPU_RESP_OK_NODATA { ret (zero, GpuError) }
     gpu_zero(cmd, 48usize)
     os.store32(cmd, GPU_CMD_SET_SCANOUT)
     os.store32(cmd + 32usize, u32(width))
@@ -656,26 +660,41 @@ fn gpu_bringup(device: Device) -> (usize, usize, err) {
     os.store32(cmd + 40usize, 0u32)
     os.store32(cmd + 44usize, GPU_RESOURCE)
     let scanout_error = gpu_cmd(ring, cmd, resp, 48usize, 24usize)
-    if scanout_error != ok { ret (width, height, scanout_error) }
-    if os.load32(resp) != GPU_RESP_OK_NODATA { ret (width, height, GpuError) }
-    gpu_zero(cmd, 56usize)
-    os.store32(cmd, GPU_CMD_TRANSFER_TO_HOST_2D)
-    os.store32(cmd + 32usize, u32(width))
-    os.store32(cmd + 36usize, u32(height))
-    os.store64(cmd + 40usize, 0u64)
-    os.store32(cmd + 48usize, GPU_RESOURCE)
-    let transfer_error = gpu_cmd(ring, cmd, resp, 56usize, 24usize)
-    if transfer_error != ok { ret (width, height, transfer_error) }
-    if os.load32(resp) != GPU_RESP_OK_NODATA { ret (width, height, GpuError) }
-    gpu_zero(cmd, 48usize)
-    os.store32(cmd, GPU_CMD_RESOURCE_FLUSH)
-    os.store32(cmd + 32usize, u32(width))
-    os.store32(cmd + 36usize, u32(height))
-    os.store32(cmd + 40usize, GPU_RESOURCE)
-    let flush_error = gpu_cmd(ring, cmd, resp, 48usize, 24usize)
-    if flush_error != ok { ret (width, height, flush_error) }
-    if os.load32(resp) != GPU_RESP_OK_NODATA { ret (width, height, GpuError) }
-    ret (width, height, ok)
+    if scanout_error != ok { ret (zero, scanout_error) }
+    if os.load32(resp) != GPU_RESP_OK_NODATA { ret (zero, GpuError) }
+    ret (Gpu { ring: ring, cmd: cmd, resp: resp, fb: fb, width: width, height: height }, ok)
+}
+
+// Transfer the painted framebuffer to the host resource and flush it to the screen (D2161).
+fn gpu_present(gpu: Gpu) -> err {
+    gpu_zero(gpu.cmd, 56usize)
+    os.store32(gpu.cmd, GPU_CMD_TRANSFER_TO_HOST_2D)
+    os.store32(gpu.cmd + 32usize, u32(gpu.width))
+    os.store32(gpu.cmd + 36usize, u32(gpu.height))
+    os.store64(gpu.cmd + 40usize, 0u64)
+    os.store32(gpu.cmd + 48usize, GPU_RESOURCE)
+    let transfer_error = gpu_cmd(gpu.ring, gpu.cmd, gpu.resp, 56usize, 24usize)
+    if transfer_error != ok { ret transfer_error }
+    if os.load32(gpu.resp) != GPU_RESP_OK_NODATA { ret GpuError }
+    gpu_zero(gpu.cmd, 48usize)
+    os.store32(gpu.cmd, GPU_CMD_RESOURCE_FLUSH)
+    os.store32(gpu.cmd + 32usize, u32(gpu.width))
+    os.store32(gpu.cmd + 36usize, u32(gpu.height))
+    os.store32(gpu.cmd + 40usize, GPU_RESOURCE)
+    let flush_error = gpu_cmd(gpu.ring, gpu.cmd, gpu.resp, 48usize, 24usize)
+    if flush_error != ok { ret flush_error }
+    if os.load32(gpu.resp) != GPU_RESP_OK_NODATA { ret GpuError }
+    ret ok
+}
+
+// Bring the display up and paint the test pattern (C108); the display's width and height come back.
+fn gpu_bringup(device: Device) -> (usize, usize, err) {
+    let (gpu, begin_error) = gpu_begin(device)
+    if begin_error != ok { ret (0usize, 0usize, begin_error) }
+    gpu_paint(gpu.fb, gpu.width, gpu.height)
+    let present_error = gpu_present(gpu)
+    if present_error != ok { ret (gpu.width, gpu.height, present_error) }
+    ret (gpu.width, gpu.height, ok)
 }
 
 // virtio-input (virtio 1.x 5.8, C109): the event queue (0) carries 8-byte events the device writes
