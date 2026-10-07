@@ -9102,6 +9102,15 @@ if ($neperosQemu) {
     foreach ($efsLeak in @('fs write_file failed', 'fs read_file failed')) {
         if ($efsBoot -match [regex]::Escape($efsLeak)) { throw "NeperOS e.fs failed (${efsLeak}): $efsBoot" }
     }
+    # (D2159, C108) virtio-gpu display server: gpu_test, started as the sole holder of the scanout,
+    # reads the mode, draws a test pattern and flushes it; the harness screendumps the display over
+    # QMP and the SHA-256 of the screendump must match the golden (identical on QEMU 8.2 and 11.1).
+    $gpuTest = Join-Path $testBuild 'gpu_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\gpu_test.e') $repo aarch64 neperos $gpuTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS virtio-gpu program did not build' }
+    $gpuGolden = 'd505a446eda5a1fcd82529d0167bcf6f4784f91c91cb00825b96bb2ba60aa1be'
+    $gpuDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $gpuTest (Join-Path $testBuild 'gpu.ppm') 55123 2>&1) -join "`n"
+    if ($gpuDump -notmatch "sha256 $gpuGolden") { throw "NeperOS virtio-gpu screendump did not match the golden: $gpuDump" }
 }
 
 Write-Output 'selfhost tests passed'

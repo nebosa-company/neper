@@ -66,6 +66,9 @@ var last_server_index: usize = 24usize
 // (D2155) The PL031 real-time clock's base address from the device tree, for the wall-clock system
 // call; zero when the machine names no RTC, where wall time falls back to the monotonic counter.
 var rtc_base: usize = 0usize
+// (D2159, C108) The DMA pool size start_driver_server maps into a driver server. 128 KB suits the
+// small-buffer drivers; the GPU server needs its display's framebuffer, so its boot raises this.
+var driver_pool_bytes: usize = 131072usize
 // The four QEMU-virt PCIe INTx lines are GIC SPIs 3-6, that is INTIDs 35-38.
 const PCIE_INTX_FIRST: usize = 35usize
 const PCIE_INTX_LAST: usize = 38usize
@@ -426,16 +429,17 @@ fn start_driver_server(a: *mem.Arena, image_addr: usize, image_len: usize, asid:
     if space_error != ok { ret (bar, space_error) }
     let map_bar_error = vm.map_range_el0(a, space.ttbr, device.bar, device.bar_size, true)
     if map_bar_error != ok { ret (bar, map_bar_error) }
-    let (pool_storage, pool_error) = mem.alloc[u8](a, 131072usize + 4096usize)
+    let pool_bytes = driver_pool_bytes
+    let (pool_storage, pool_error) = mem.alloc[u8](a, pool_bytes + 4096usize)
     if pool_error != ok { ret (bar, pool_error) }
     let pool = (mem.address_of(&pool_storage[0usize]) + 4095usize) & ~4095usize
-    let map_pool_error = vm.map_range_el0(a, space.ttbr, pool, 131072usize, false)
+    let map_pool_error = vm.map_range_el0(a, space.ttbr, pool, pool_bytes, false)
     if map_pool_error != ok { ret (bar, map_pool_error) }
     vm.put_aux(space, 0usize, device.common)
     vm.put_aux(space, 1usize, device.notify)
     vm.put_aux(space, 2usize, usize(device.notify_multiplier))
     vm.put_aux(space, 3usize, pool)
-    vm.put_aux(space, 4usize, 131072usize)
+    vm.put_aux(space, 4usize, pool_bytes)
     vm.put_aux(space, 5usize, device.config)
     let (arg_table, arg_count) = setup_args(space, name, 0usize, false)
     let index = thread.add(space, name, arg_table, arg_count)
@@ -719,7 +723,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (fs_bar, fs_error) = start_driver_server(a, image_addr, image_len, 1usize, pci_host, pci_host.mmio, pci.VIRTIO_BLOCK, fs_name)
         if fs_error != ok { ret fs_error }
     }
-    if !shell_mode && !fs_mode && !fsserver_mode {
+    // (D2159, C108) The display boot (`-append gpu`): the initrd is the GPU driver program, started
+    // as the sole holder of the virtio-gpu scanout via start_driver_server, with a pool large enough
+    // for the display's framebuffer. It reads the mode, draws a test pattern and flushes it; a QEMU
+    // screendump of the result is checked against a golden hash.
+    let gpu_mode = bootargs_error == ok && has_word(bootargs, "gpu")
+    if gpu_mode {
+        if pci_host_error != ok { ret NoInitrd }
+        driver_pool_bytes = 4194304usize
+        let (gpu_bar, gpu_error) = start_driver_server(a, image_addr, image_len, 1usize, pci_host, pci_host.mmio, pci.VIRTIO_GPU, "gpu")
+        if gpu_error != ok { ret gpu_error }
+    }
+    if !shell_mode && !fs_mode && !fsserver_mode && !gpu_mode {
     // A and B interleave under the timer, and X is handed a reference to kernel RAM --
     // mapped into its space without EL0 access -- so its read faults and it alone is killed.
     // The RAM base is as good a kernel address as any. S and R rendezvous over endpoint 0

@@ -37362,3 +37362,27 @@ run.ps1 and run.sh. Fifth C107 increment: e.io, e.time, e.fmt, e.thread and e.fs
 run on NeperOS. (Kept for later: stdout through the EL0 console server rather than the kernel's
 console write; the Unsupported fs operations the single flat C106 server cannot serve; and porting
 the lib modules' existing fixtures to run on NeperOS, beyond the representative one per module here.)
+
+## D2159 — C108 closes: a virtio-gpu 2D display server
+
+NeperOS has a display. A virtio-gpu 2D driver runs as an EL0 user-mode server that alone holds the
+scanout: the kernel maps the device's BAR and a framebuffer-sized DMA pool into it (the `-append
+gpu` boot) and hands it off. The driver (virtio.gpu_* in neperos/src/virtio.e) speaks the control
+queue -- a 24-byte control header then the command's fields, the device answering OK_NODATA or
+OK_DISPLAY_INFO -- to read the display mode (GET_DISPLAY_INFO: 1280x800 on QEMU), create a BGRA
+resource the display's size (RESOURCE_CREATE_2D), attach a framebuffer as its backing
+(RESOURCE_ATTACH_BACKING), paint a deterministic pattern, make the resource the scanout
+(SET_SCANOUT), copy the backing to the host resource (TRANSFER_TO_HOST_2D) and flush it to the
+screen (RESOURCE_FLUSH). The commands reuse a two-descriptor chain (the command the device reads,
+the response it writes) like the block driver. A framebuffer is 1280*800*4 ~ 4 MB, far past the
+128 KB pool the other driver servers get, so start_driver_server's pool size became a module var
+(driver_pool_bytes) the GPU boot raises to 4 MB; pci.VIRTIO_GPU is device type 16. A QEMU fixture
+proves it: scripts/neperos-screendump.py boots with a virtio-gpu-pci device and a QMP socket, waits
+on the serial for the driver's flush line, takes a QMP screendump of the scanout and prints its
+SHA-256; the suite checks that against the golden
+d505a446eda5a1fcd82529d0167bcf6f4784f91c91cb00825b96bb2ba60aa1be, which is identical on QEMU 8.2
+(WSL) and 11.1 (Windows) because the pattern, the BGRA->RGB conversion and the PPM framing are all
+deterministic. gpu_test.e holds the scanout up with a bounded spin after the flush so the capture
+wins before the kernel powers off. Trap: the pattern's u8(x), u8(x+y) overflow for x,y past 255
+(the narrow-conversion check traps), so each channel is masked `& 255`. Fixtures added to run.ps1
+and run.sh. The default A-Z, shell, fs and other boots are unchanged.

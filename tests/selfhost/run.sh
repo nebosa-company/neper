@@ -8956,6 +8956,17 @@ greeting"
         *) printf '%s\n' "NeperOS e.fs did not read back what it wrote through the server: $neperos_efs" >&2; exit 1 ;;
     esac
     case "$neperos_efs" in *'fs write_file failed'*|*'fs read_file failed'*) printf '%s\n' "NeperOS e.fs failed: $neperos_efs" >&2; exit 1 ;; esac
+    # (D2159, C108) virtio-gpu display server: gpu_test draws a test pattern and flushes it; the
+    # harness screendumps the scanout over QMP and the SHA-256 must match the golden (identical on
+    # QEMU 8.2 and 11.1).
+    gpu_test_img="$test_build/gpu_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/gpu_test.e" "$repo" aarch64 neperos "$gpu_test_img")" = 'executable written' ]
+    gpu_golden=d505a446eda5a1fcd82529d0167bcf6f4784f91c91cb00825b96bb2ba60aa1be
+    gpu_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_image" "$gpu_test_img" "$test_build/gpu.ppm" 55124 2>&1)
+    case "$gpu_dump" in
+        *"sha256 $gpu_golden"*) ;;
+        *) printf '%s\n' "NeperOS virtio-gpu screendump did not match the golden: $gpu_dump" >&2; exit 1 ;;
+    esac
 fi
 
 printf '%s\n' 'selfhost tests passed'
