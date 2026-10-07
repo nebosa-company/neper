@@ -346,6 +346,18 @@ fn random(buffer: []u8) -> err { ret Unsupported }
 // compiles against them; a program that needs them gets Unsupported rather than wrong behaviour.
 fn dir_open(a: *mem.Arena, path: str) -> (Dir, err) { ret (Dir { raw: 0usize }, Unsupported) }
 fn dir_close(dir: own Dir) -> err { ret ok }
+
+// (D2165, C110) Dynamic linking and the thread id: NeperOS has no shared libraries, so dlopen is
+// Unsupported (the modules that reach for it -- e.gpu's Vulkan backend -- only use the CPU backend
+// here, where that path is pruned). current_thread_id is a single value for a NeperOS program.
+type Lib = resource(dlclose) struct { raw: usize }
+fn dlopen(a: *mem.Arena, name: str) -> (Lib, err) { ret (Lib { raw: 0usize }, Unsupported) }
+fn dlclose(l: own Lib) -> err { ret ok }
+// The symbol lookup `os.dlsym[fn ...]` is intercepted onto: without it the checker reports dlsym as
+// Unsupported. NeperOS has no dynamic symbols, so it always answers not-found; the modules that use
+// dlsym (e.gpu's Vulkan backend) only run their CPU backend here, where this path is pruned.
+fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) { ret (0usize, Unsupported) }
+fn current_thread_id() -> usize { ret 0usize }
 fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy: ResolvePolicy) -> (File, err) { ret (File { raw: 0usize }, Unsupported) }
 fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err { ret Unsupported }
 fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path: str, overwrite: bool, durable: bool) -> err { ret Unsupported }

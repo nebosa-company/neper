@@ -405,6 +405,26 @@ neper_os_clock:
     svc #0
     ret
 
+// (D2165) The futex: os.wait_u32(addr, expected, timeout) and os.wake_one/all_u32(addr), which
+// e.sync's lock compiles in. NeperOS schedules cooperatively on one core, so a waiter returns at
+// once and the lock degrades to a spin -- correct, since the holder runs when the spinner yields or
+// is preempted -- and a wake is a no-op. Real blocking futexes can replace these if contention
+// ever costs.
+.global neper_os_wait_u32
+neper_os_wait_u32:
+    mov x0, #0
+    ret
+
+.global neper_os_wake_one_u32
+neper_os_wake_one_u32:
+    mov x0, #0
+    ret
+
+.global neper_os_wake_all_u32
+neper_os_wake_all_u32:
+    mov x0, #0
+    ret
+
 // (D2157) A spawned thread's entry trampoline: the kernel starts the new thread here with the user
 // entry in x0 and its context in x1. Call entry(ctx), then exit the thread. Defined before
 // neper_os_thread_create so the runtime cut that keeps the creator keeps this too.

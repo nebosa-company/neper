@@ -37483,3 +37483,24 @@ kernel powers off (the routing boot's harness quits earlier, so the hold is invi
 verified on QEMU virt on both hosts. Remaining for C110: the e.ui window backend over e.gfx.scene
 with fonts from the filesystem and an e.ui sample matching its host render -- the large part needing
 e.gpu's CPU backend, e.gfx.scene and e.ui compiled for NeperOS.
+
+## D2165 — C110: e.gpu's CPU backend compiles and links for NeperOS
+
+Toward the e.ui backend (e.ui draws through e.gfx.scene, which renders through e.gpu's CPU backend),
+the first wall was getting e.gpu to build for NeperOS at all. Two gaps closed in os.neperos.e and the
+runtime, both found by probing (a tiny program opening the CPU device): e.gpu uses e.gpu.vulkan,
+whose `os.dlsym[fn ...]` is intercepted onto an os-variant `dl_lookup` (without it the checker
+reports dlsym Unsupported, surfaced as E-TYPE-0009) -- added os.Lib, dlopen, dlclose, dl_lookup
+(Unsupported: NeperOS has no shared libraries; the Vulkan path is pruned under the CPU backend) and
+current_thread_id; and e.sync's lock compiles in the futex os.wait_u32/wake_one_u32/wake_all_u32,
+which had no NeperOS runtime symbol (link_image_a64 answered KernelRuntime) -- added stubs to
+runtime_neperos_a64.s (a waiter returns at once, a wake is a no-op: NeperOS schedules cooperatively
+on one core, so a lock degrades to a correct spin). With these, e.gpu's CPU backend compiles and
+LINKS for `aarch64 neperos`. It does not yet RUN: `gpu.open(.Cpu)` fails because the program arena is
+64 KB (vm.e ARENA_SIZE) while e.gpu's device, queue and a render target need far more -- so the next
+prerequisite for the e.ui backend is a large program arena, a user-address-space change. Existing
+programs are unaffected (the new os functions are unused and pruned; the futex stubs are dead code;
+the C108 gpu golden d505a446 and the other neperos fixtures are byte-for-byte unchanged). Remaining
+for C110: the large arena, then e.gfx.scene and e.ui atop it, the window backend bound to the
+compositor's shared surface with fonts from the filesystem, and an e.ui sample matching its host
+pixel hash.
