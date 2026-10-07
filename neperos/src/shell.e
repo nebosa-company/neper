@@ -122,6 +122,21 @@ fn read_snapshot(into: *[5]usize) {
     *into = words
 }
 
+// Decode a PNG and push it as the full-screen wallpaper (covering the logical width and height).
+fn place_wallpaper(a: *mem.Arena, renderer: *scene.Renderer, builder: *scene.Builder, bytes: []const u8, logical_h: f32) -> bool {
+    var reader_state: io.SliceReader = zero
+    reader_state.data = bytes
+    reader_state.off = 0usize
+    let (decoded, decode_error) = png.decode(a, io.slice_reader(&reader_state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
+    if decode_error != ok { ret false }
+    let (view, view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
+    if view_error != ok { ret false }
+    let (texture, upload_error) = scene.upload_image(renderer, view)
+    if upload_error != ok { ret false }
+    let pushed = scene.push(builder, scene.Command { Image: scene.DrawImage { texture: texture, source: geometry.rect(0.0, 0.0, f32(decoded.width), f32(decoded.height)), destination: geometry.rect(0.0, 0.0, 412.0, logical_h), opacity: 1.0 } })
+    ret pushed == ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, gpu.Backend.Cpu, 0u32)
     if open_error != ok {
@@ -163,33 +178,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // length word, then a word per byte). It is decoded and drawn scaled to cover; with no wallpaper
     // (an absent or failed loader answers with a length no PNG reaches) the backdrop is a solid fill.
     var wallpapered = false
-    let wall_len = os.recv(WALL_FROM, NO_SLOT)
-    if wall_len > 0usize && wall_len <= 4096usize {
-        let (wall_bytes, wall_alloc_error) = mem.alloc[u8](a, wall_len)
-        if wall_alloc_error != ok { ret wall_alloc_error }
-        var got = 0usize
-        while got < wall_len {
-            wall_bytes[got] = u8(os.recv(WALL_FROM, NO_SLOT))
-            got += 1usize
-        }
-        var reader_state: io.SliceReader = zero
-        reader_state.data = wall_bytes[0usize..wall_len]
-        reader_state.off = 0usize
-        let (decoded, decode_error) = png.decode(a, io.slice_reader(&reader_state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
-        if decode_error == ok {
-            let (wall_view, wall_view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
-            if wall_view_error == ok {
-                let (texture, upload_error) = scene.upload_image(&renderer, wall_view)
-                if upload_error == ok {
-                    let wallpaper = scene.push(&builder, scene.Command { Image: scene.DrawImage { texture: texture, source: geometry.rect(0.0, 0.0, f32(decoded.width), f32(decoded.height)), destination: geometry.rect(0.0, 0.0, 412.0, logical_h), opacity: 1.0 } })
-                    wallpapered = true
-                }
+    // From an initrd entry the kernel mapped in (args[1], read in place), else from the filesystem
+    // loader, which streams a small PNG over slot 5.
+    if args.len >= 2usize {
+        say("shell wallpaper bytes ")
+        say_num(args[1usize].len)
+        say("\n")
+        wallpapered = place_wallpaper(a, &renderer, &builder, args[1usize], logical_h)
+    } else {
+        let wall_len = os.recv(WALL_FROM, NO_SLOT)
+        if wall_len > 0usize && wall_len <= 4096usize {
+            let (wall_bytes, wall_alloc_error) = mem.alloc[u8](a, wall_len)
+            if wall_alloc_error != ok { ret wall_alloc_error }
+            var got = 0usize
+            while got < wall_len {
+                wall_bytes[got] = u8(os.recv(WALL_FROM, NO_SLOT))
+                got += 1usize
             }
+            wallpapered = place_wallpaper(a, &renderer, &builder, wall_bytes, logical_h)
         }
     }
     if !wallpapered { fill(&builder, 0.0, 0.0, 412.0, logical_h, 0.09, 0.11, 0.18) }
     say("shell wallpaper ")
-    if wallpapered { say("from fs\n") } else { say("fallback\n") }
+    if wallpapered && args.len >= 2usize {
+        say("from initrd\n")
+    } else if wallpapered {
+        say("from fs\n")
+    } else {
+        say("fallback\n")
+    }
     try draw_launcher(a, &builder)
     // Live status in the top bar, from the C111 status service: subscribe, post a notification, read
     // the snapshot, then stop the service (this shell is its only client).

@@ -73,6 +73,12 @@ var driver_pool_bytes: usize = 131072usize
 // a non-zero value maps a separate EL0 region of that size and points the program's arena at it,
 // for the e.ui/e.gpu stack whose allocations dwarf 64 KB. Set before a start, reset to 0 after.
 var driver_arena_bytes: usize = 0usize
+// (D2202) An initrd file handed to the next process started: its physical address and length. The
+// kernel maps those pages into the process and passes them as its second argument (args[1] is the
+// file's bytes, read in place); zero length means nothing to hand over. (The aux area is no use for
+// this: it sits at a fixed offset that a large program image would cover.)
+var aux_extra_pa: usize = 0usize
+var aux_extra_len: usize = 0usize
 
 // (D2166) Give `space` a large arena in its own mapped EL0 region (identity VA=PA) when
 // driver_arena_bytes is set; otherwise leave vm.create's in-window arena. The updated space comes
@@ -570,7 +576,24 @@ fn start_process(image_addr: usize, image_len: usize, name: str) -> (usize, err)
     if space_error != ok { ret (0usize, space_error) }
     let (space, arena_error) = with_big_arena(space_base)
     if arena_error != ok { ret (0usize, arena_error) }
-    let (arg_table, arg_count) = setup_args(space, name, 0usize, false)
+    var arg_table = 0usize
+    var arg_count = 0usize
+    if aux_extra_len == 0usize {
+        let (table, count) = setup_args(space, name, 0usize, false)
+        arg_table = table
+        arg_count = count
+    } else {
+        // A second argument whose "string" is the file itself (its physical address and length), so
+        // the process reads it as args[1] with no copy.
+        let (table, count) = setup_args(space, name, aux_extra_pa, true)
+        arg_table = table
+        arg_count = count
+        vm.put_word(space, space.arg_off + 24usize, aux_extra_len)
+        let first_page = aux_extra_pa & ~4095usize
+        let last_page = (aux_extra_pa + aux_extra_len + 4095usize) & ~4095usize
+        let map_extra_error = vm.map_range_el0(kernel_arena, space.ttbr, first_page, last_page - first_page, false)
+        if map_extra_error != ok { ret (0usize, map_extra_error) }
+    }
     let child = thread.add(space, name, arg_table, arg_count)
     if child == thread.MAX_THREADS { ret (0usize, vm.NoSpace) }
     thread.grant(child, 0usize, thread.CAP_CONSOLE, thread.RIGHT_WRITE, 0usize)
@@ -847,8 +870,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // A full-screen window's renderer holds several frame-sized buffers (about 12 bytes a pixel
         // plus the target and its scratch), so the app's arena is sized from the screen: 160 MB at
         // 1280x2856.
-        if has_word(bootargs, "bigarena") { driver_arena_bytes = vm.SHARED_FRAME_BYTES * 11usize }
+        if has_word(bootargs, "bigarena") { driver_arena_bytes = vm.SHARED_FRAME_BYTES * 16usize }
+        // (D2202) An eighth archive entry is the wallpaper (a PNG): the shell gets it mapped, with
+        // it as args[1].
+        if has_word(bootargs, "unified") && archive_count >= 8usize {
+            aux_extra_pa = archive_base + archive_offset[7usize]
+            aux_extra_len = archive_length[7usize]
+        }
         let (comp_app, comp_app_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "app")
+        aux_extra_len = 0usize
         driver_arena_bytes = 0usize
         if comp_app_error != ok { ret comp_app_error }
         try vm.map_shared(a, thread.ttbr_of(comp_app), shared_phys, vm.SHARED_FRAME_PAGES)
@@ -868,6 +898,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // (D2196) The wallpaper from the C106 filesystem: program 5 is the fs server, the sole
             // holder of the block device (ASID 5), serving endpoints 6 (request) and 7 (reply); program
             // 6 is its client, which reads /wall.png and sends it to the shell over endpoint 5.
+            if archive_count < 8usize {
             last_server_index = thread.MAX_THREADS
             let (unified_fs_bar, unified_fs_error) = start_driver_server(a, archive_base + archive_offset[5usize], archive_length[5usize], 5usize, pci_host, next_bar, pci.VIRTIO_BLOCK, "fs")
             if unified_fs_error != ok { ret unified_fs_error }
@@ -883,6 +914,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 thread.grant(loader, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
                 thread.grant(loader, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 5usize)
                 thread.grant(comp_app, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 5usize)
+            }
             }
         }
     }
