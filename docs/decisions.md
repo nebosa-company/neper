@@ -37576,3 +37576,30 @@ golden d505a446, the ui_scene (172a7475) and compositor (1e78b507) screendump go
 persistence boot and the D2167 scene hash are all byte-for-byte unchanged on both hosts. Remaining
 for C110: bind the e.ui window backend to the compositor's shared surface (present through it rather
 than the headless offscreen target) and a text-bearing sample with fonts read from e.fs.
+
+## D2169 — C110: the e.ui window backend presents over the compositor
+
+D2168 proved the e.ui stack renders correctly on NeperOS through the headless testing harness (an
+offscreen target). This wires the other half: the e.ui window backend presenting through the
+compositor's shared surface, so an e.ui window actually reaches the display. On NeperOS a window IS
+the compositor's shared surface, so os.neperos.e's window surface stopped being Unsupported stubs:
+window_open/metrics/title/visible/cursor answer ok, window_metrics reports the 256x256 surface, and
+window_present blits the app's rendered pixels (Bgra8 packed into u32, which is exactly the shared
+frame's byte order on little-endian) into vm.SHARED_FRAME_VA and signals the compositor on endpoint
+slot 1 -- the same contract a hand-written compositor app follows. window_poll answers ok with no
+event (a NeperOS app's input arrives over the compositor's routed endpoint, not here) rather than
+Unsupported, which the e.ui app loop would read as a failure.
+
+neperos/src/ui_window.e opens an e.ui.window at 256x256, renders a three-rectangle scene through
+e.gfx.scene and the e.gpu CPU backend into the window's own drawable (window.draw_target), and
+presents with window.request_frame, which reads the frame back and hands it to os.window_present. It
+is wired as the app (program 1) of a compositor-boot archive; the compositor composites its surface
+and flushes. The composited display matches a golden, 08af9c12…, identical on QEMU 8.2 (WSL) and
+11.1 (Windows), and the serial shows `comp ready` / `ui window presented` / `comp composited flushed`
+/ `ui window done` / clean power-off. An e.ui app needs e.gpu's large arena, so the compositor boot
+now gives its app the 16 MB arena when the boot arg carries `bigarena` (the gpu boot's mechanism);
+without it the app keeps the in-window arena, so the existing compositor golden (1e78b507) boot is
+byte-for-byte unchanged, re-verified along with the C108 gpu, ui_scene and base-demo boots. One
+quietly reassuring result: the CPU backend renders a scene from a renderer on one queue into a target
+created on the window's own queue, so no queue-sharing accessor was needed. Remaining for C110: a
+text-bearing e.ui sample with fonts read from e.fs.

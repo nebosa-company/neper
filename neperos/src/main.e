@@ -821,7 +821,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
         }
         next_asid = 1usize
+        // An e.ui app (the window backend over e.gpu) needs the large arena, like the gpu boot; a
+        // paint-only app does not. `-append "compositor bigarena"` gives the app 16 MB (the input
+        // server above is already started, so it keeps its small arena). Reset after, so nothing else
+        // inherits it. Without bigarena the app gets the in-window arena and the comp golden is
+        // byte-unchanged.
+        if has_word(bootargs, "bigarena") { driver_arena_bytes = 16777216usize }
         let (comp_app, comp_app_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "app")
+        driver_arena_bytes = 0usize
         if comp_app_error != ok { ret comp_app_error }
         try vm.map_phys_at(thread.ttbr_of(comp_app), shared_phys, vm.SHARED_FRAME_PAGES)
         thread.grant(comp_app, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)

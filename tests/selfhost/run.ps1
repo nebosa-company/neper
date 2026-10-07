@@ -9185,6 +9185,21 @@ if ($neperosQemu) {
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS compositor-route archive did not assemble' }
     $route = (& python (Join-Path $repo 'scripts\neperos-input.py') $neperosQemu.Source $neperosImage $routeArchive keyboard (Join-Path $testBuild 'route.serial') 55129 compositor 2>&1) -join "`n"
     if ($route -notmatch '(?s)comp composited flushed.*app input ev 1 30 1.*app done') { throw "NeperOS compositor did not route input to the focused surface: $route" }
+    # (D2169, C110) The e.ui window backend presents over the compositor: ui_window opens an e.ui
+    # window (which on NeperOS is the compositor's shared surface), renders a scene through
+    # e.gfx.scene / the e.gpu CPU backend into it, and presents via window.request_frame ->
+    # os.window_present, which blits into the shared frame and signals the compositor. `-append
+    # "compositor bigarena"` gives the app the large arena e.gpu needs. The composited display matches
+    # a golden identical on QEMU 8.2 and 11.1.
+    $uiWindow = Join-Path $testBuild 'ui_window.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_window.e') $repo aarch64 neperos $uiWindow | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.ui window app did not build' }
+    $uiWinArchive = Join-Path $testBuild 'uiwin-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $uiWinArchive $comp $uiWindow
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.ui window archive did not assemble' }
+    $uiWinGolden = '08af9c12ba6349aee0402983945e112eb6283d45b218b7307fb5c8fb1b2de18f'
+    $uiWinDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $uiWinArchive (Join-Path $testBuild 'uiwin.ppm') 55130 'compositor bigarena' 2>&1) -join "`n"
+    if ($uiWinDump -notmatch "sha256 $uiWinGolden") { throw "NeperOS e.ui window over the compositor did not match the golden: $uiWinDump" }
     # (D2160, C109) virtio-input over IPC: the input server alone holds the device and pushes each
     # event to a client over an endpoint, woken by the device's notification. The fixture injects a
     # key (keyboard) and a tap (tablet) through QMP and asserts the stream the client receives.

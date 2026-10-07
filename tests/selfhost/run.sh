@@ -9045,6 +9045,20 @@ greeting"
         *'comp composited flushed'*'app input ev 1 30 1'*'app done'*) ;;
         *) printf '%s\n' "NeperOS compositor did not route input to the focused surface: $route" >&2; exit 1 ;;
     esac
+    # (D2169, C110) The e.ui window backend presents over the compositor: ui_window opens an e.ui
+    # window (the compositor's shared surface on NeperOS), renders a scene through e.gfx.scene / the
+    # e.gpu CPU backend and presents via window.request_frame -> os.window_present, which blits into
+    # the shared frame and signals the compositor. `compositor bigarena` gives it the large arena.
+    ui_window_img="$test_build/ui_window.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_window.e" "$repo" aarch64 neperos "$ui_window_img")" = 'executable written' ]
+    uiwin_archive="$test_build/uiwin-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$uiwin_archive" "$comp_img" "$ui_window_img"
+    uiwin_golden='08af9c12ba6349aee0402983945e112eb6283d45b218b7307fb5c8fb1b2de18f'
+    uiwin_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_image" "$uiwin_archive" "$test_build/uiwin.ppm" 55130 'compositor bigarena' 2>&1)
+    case "$uiwin_dump" in
+        *"sha256 $uiwin_golden"*) ;;
+        *) printf '%s\n' "NeperOS e.ui window over the compositor did not match the golden: $uiwin_dump" >&2; exit 1 ;;
+    esac
     # (D2160, C109) virtio-input over IPC: the input server pushes each event to a client over an
     # endpoint, woken by the device notification; the fixture injects a key and a tap and asserts
     # the stream the client receives.
