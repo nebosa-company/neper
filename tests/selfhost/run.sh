@@ -9253,8 +9253,8 @@ greeting"
     python3 "$repo/scripts/build-shell-archive.py" "$shell_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img"
     shell_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$shell_archive" keyboard "$test_build/shell.serial" 55135 "compositor bigarena" 'shell home' 2>&1)
     case "$shell_boot" in
-        *'shell presented'*'comp composited flushed'*'shell tap'*'shell launched app'*'tap app ran'*'shell app code 5'*'shell home'*) ;;
-        *) printf '%s\n' "NeperOS unified shell did not host the launcher and launch an app on a tap: $shell_boot" >&2; exit 1 ;;
+        *'shell presented'*'shell status '*'comp composited flushed'*'shell tap'*'shell launched app'*'tap app ran'*'shell app code 5'*'shell home'*) ;;
+        *) printf '%s\n' "NeperOS unified shell did not host the launcher, show status and launch an app on a tap: $shell_boot" >&2; exit 1 ;;
     esac
 fi
 

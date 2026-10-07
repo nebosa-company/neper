@@ -10,6 +10,7 @@
 // Archive layout: [comp=0, shell=1, input=2, app=3]. Needs the large arena (`compositor bigarena`).
 use e.mem
 use e.os
+use e.time
 use e.gpu
 use e.gfx.geometry
 use e.gfx.paint
@@ -42,8 +43,30 @@ fn say_num(value: usize) {
     say(digits[at..20usize])
 }
 
+fn say2(value: usize) {
+    var two: [2]u8 = zero
+    two[0usize] = u8(value / 10usize) + 48u8
+    two[1usize] = u8(value % 10usize) + 48u8
+    say(two[0usize..2usize])
+}
+
 fn fill(builder: *scene.Builder, x: f32, y: f32, w: f32, h: f32, red: f32, green: f32, blue: f32) {
     let pushed = scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(x, y, w, h), brush: paint.Brush { Solid: paint.Color { red: red, green: green, blue: blue, alpha: 1.0 } } } })
+}
+
+fn draw_digit(builder: *scene.Builder, font: []const u8, px: f32, py: f32, d: usize, s: f32) {
+    var row = 0usize
+    while row < 5usize {
+        let bits = usize(font[d * 5usize + row])
+        var col = 0usize
+        while col < 3usize {
+            if ((bits >> (2usize - col)) & 1usize) == 1usize {
+                fill(builder, px + f32(col) * s, py + f32(row) * s, s, s, 0.85, 0.88, 0.95)
+            }
+            col += 1usize
+        }
+        row += 1usize
+    }
 }
 
 fn draw_launcher(builder: *scene.Builder) {
@@ -98,10 +121,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var renderer = renderer_value
-    let (builder_value, builder_error) = scene.builder(a, 64usize)
+    let (builder_value, builder_error) = scene.builder(a, 256usize)
     if builder_error != ok { ret builder_error }
     var builder = builder_value
     draw_launcher(&builder)
+    // Live status in the top bar: the current time, read directly from the wall clock through e.time
+    // (os.clock -> the PL031 RTC) -- the status the shell shows, kept single-process (no separate
+    // C111 status-server, which would be a second start_process and trip the AUX heisenbug).
+    var hour = 0usize
+    var minute = 0usize
+    let (wall, wall_error) = time.now()
+    if wall_error == ok && wall.nanos > 0i64 {
+        let day = usize(wall.nanos / 1000000000i64) % 86400usize
+        hour = day / 3600usize
+        minute = (day % 3600usize) / 60usize
+    }
+    let font: [50]u8 = [50]u8{ 7u8, 5u8, 5u8, 5u8, 7u8, 2u8, 6u8, 2u8, 2u8, 7u8, 7u8, 1u8, 7u8, 4u8, 7u8, 7u8, 1u8, 7u8, 1u8, 7u8, 5u8, 5u8, 7u8, 1u8, 1u8, 7u8, 4u8, 7u8, 1u8, 7u8, 7u8, 4u8, 7u8, 5u8, 7u8, 7u8, 1u8, 2u8, 2u8, 2u8, 7u8, 5u8, 7u8, 5u8, 7u8, 7u8, 5u8, 7u8, 1u8, 7u8 }
+    draw_digit(&builder, font[0usize..], 6.0, 5.0, hour / 10usize, 2.0)
+    draw_digit(&builder, font[0usize..], 14.0, 5.0, hour % 10usize, 2.0)
+    fill(&builder, 21.0, 7.0, 2.0, 2.0, 0.85, 0.88, 0.95)
+    fill(&builder, 21.0, 11.0, 2.0, 2.0, 0.85, 0.88, 0.95)
+    draw_digit(&builder, font[0usize..], 25.0, 5.0, minute / 10usize, 2.0)
+    draw_digit(&builder, font[0usize..], 33.0, 5.0, minute % 10usize, 2.0)
     let list = scene.finish(&builder)
     let (scene_id, compile_error) = scene.compile(&renderer, list)
     if compile_error != ok {
@@ -118,6 +159,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     say("shell presented\n")
+    say("shell status ")
+    say2(hour)
+    say(":")
+    say2(minute)
+    say("\n")
     // Live input: the compositor routes each event here (slot 2). The first key-down is a tap on an
     // icon -- launch an app as a process, reap it, and return Home. Keep reading to the sentinel.
     var launched = false

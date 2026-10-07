@@ -9387,7 +9387,7 @@ if ($neperosQemu) {
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $shellArchive $comp $shell $inputServer $tapApp
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS unified-shell archive did not assemble' }
     $shellBoot = (& python $inputScript $neperosQemu.Source $neperosImage $shellArchive keyboard (Join-Path $testBuild 'shell.serial') 55135 'compositor bigarena' 'shell home' 2>&1) -join "`n"
-    if ($shellBoot -notmatch '(?s)shell presented.*comp composited flushed.*shell tap.*shell launched app.*tap app ran.*shell app code 5.*shell home') { throw "NeperOS unified shell did not host the launcher and launch an app on a tap: $shellBoot" }
+    if ($shellBoot -notmatch '(?s)shell presented.*shell status .*comp composited flushed.*shell tap.*shell launched app.*tap app ran.*shell app code 5.*shell home') { throw "NeperOS unified shell did not host the launcher, show status and launch an app on a tap: $shellBoot" }
 }
 
 Write-Output 'selfhost tests passed'

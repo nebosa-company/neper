@@ -37982,3 +37982,17 @@ exactly what triggers the heisenbug -- so full closure needs either the heisenbu
 that direct status reads + a baked/fs wallpaper satisfy the clause). This also proves the C113/C114
 shell-hosting mechanism (the shell launches apps on live taps); wiring the specific app faces in is
 what remains for those.
+
+## D2193 — the unified shell shows live status (the clock) in its top bar
+
+`shell.e` now reads the wall clock directly through e.time (os.clock -> the PL031 RTC) and renders the
+current HH:MM in its top bar with the 3x5 bitmap digit font, printing `shell status HH:MM` (observed
+`shell status 10:49`). This wires STATUS into the unified shell -- kept as a DIRECT read inside the
+one shell process, deliberately NOT a separate C111 status-server process (that second start_process
+is exactly what trips the prodshell AUX heisenbug; the direct read stays on the safe comp+input+one-
+process topology). So the single shell binary now wires compositor + input + status (+ app-launch).
+Verified via neperos-input.py on the `compositor bigarena` boot; fixtures in run.sh+run.ps1 now also
+assert `shell status`. C112 -> 0.99. The one remaining gap-clause item is the fs WALLPAPER (the shell
+draws a baked wallpaper fill, not one read from the C106 filesystem): reading it needs the fs server,
+a second start_process = the heisenbug trigger -- so strict 1.0 needs the heisenbug fix, or a decision
+that a baked/direct wallpaper + direct status reads satisfy "fs+status" in the gap clause.
