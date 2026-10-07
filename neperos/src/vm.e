@@ -18,15 +18,17 @@ error NoSpace
 // own code would vanish from the space. 0x7FC0000000 holds neither RAM nor a device on any
 // target (no such machine has 508 GB of RAM), so it is safe everywhere.
 const USER_BASE: usize = 548682072064usize
-const USER_PAGES: usize = 128usize
-const USER_SIZE: usize = 524288usize
 const PAGE: usize = 4096usize
-// The arena the program allocates from, then the argument area, then the stack at the top.
-const ARENA_OFF: usize = 262144usize
+// (D2168) The EL0 window is laid out around the program image, not at fixed offsets: the image
+// (page-aligned) sits at the bottom, then the in-window arena, the argument area, and the stack at
+// the top, each sized by the constants below. A 512 KB program used to clobber the arena and a
+// larger one overran the region into kernel memory; now `create` sizes the whole window to the
+// image so e.ui programs (hundreds of KB) fit. The window stays within one level-3 table's 2 MB
+// reach (L3_PAGES), which also leaves the entries above it for thread stacks (map_stack).
 const ARENA_SIZE: usize = 65536usize
-const ARG_OFF: usize = 327680usize
 const ARG_SIZE: usize = 131072usize
-const STACK_TOP: usize = 524288usize
+const STACK_SIZE: usize = 131072usize
+const L3_PAGES: usize = 512usize
 
 // The user gigabyte's level-1 index (VA bits 38:30), derived from USER_BASE so the two can
 // never drift, and the page bits a leaf carries: a valid page, Normal memory (MAIR index 2),
@@ -64,6 +66,8 @@ type Space = struct {
     region_phys: usize,
     arena_addr: usize,
     arena_size: usize,
+    arg_off: usize,
+    size: usize,
 }
 
 fn user_page_bits() -> usize {
@@ -89,7 +93,17 @@ fn page_of(a: *mem.Arena) -> (usize, err) {
 // copied into them by address. `asid` tags its TLB entries so no flush is needed when the
 // scheduler switches to it.
 fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (Space, err) {
-    let (region, region_error) = mem.alloc[u8](a, USER_SIZE + PAGE)
+    // The window, laid out from the page-aligned image: image | arena | args | stack. The stack
+    // grows down from the top, so stack_top is the whole window size. A window past one level-3
+    // table's 2 MB reach is refused (NoSpace) rather than silently overrun as the old fixed region
+    // was -- that overrun scribbled over kernel memory for any program above ~256 KB (D2168).
+    let image_bytes = (image_len + PAGE - 1usize) & ~(PAGE - 1usize)
+    let arena_off = image_bytes
+    let arg_off = arena_off + ARENA_SIZE
+    let window = arg_off + ARG_SIZE + STACK_SIZE
+    let pages = window / PAGE
+    if pages > L3_PAGES { ret (zero, NoSpace) }
+    let (region, region_error) = mem.alloc[u8](a, window + PAGE)
     if region_error != ok { ret (zero, region_error) }
     let region_phys = (mem.address_of(&region[0usize]) + PAGE - 1usize) & ~(PAGE - 1usize)
     let (l1, l1_error) = page_of(a)
@@ -108,7 +122,7 @@ fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (S
     os.store64(l2, u64(l3 | TABLE))
     let bits = user_page_bits()
     var page_at = 0usize
-    while page_at < USER_PAGES {
+    while page_at < pages {
         os.store64(l3 + page_at * 8usize, u64((region_phys + page_at * PAGE) | bits))
         page_at += 1usize
     }
@@ -120,10 +134,12 @@ fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (S
     ret (Space {
         ttbr: l1 | (asid << 48usize),
         entry: USER_BASE,
-        stack_top: USER_BASE + STACK_TOP,
+        stack_top: USER_BASE + window,
         region_phys: region_phys,
-        arena_addr: USER_BASE + ARENA_OFF,
+        arena_addr: USER_BASE + arena_off,
         arena_size: ARENA_SIZE,
+        arg_off: arg_off,
+        size: window,
     }, ok)
 }
 
@@ -274,18 +290,19 @@ fn map_phys_at(ttbr: usize, phys: usize, pages: usize) -> err {
 }
 
 // (D2157) A fresh stack of `pages` pages in the address space `ttbr`, for a thread of
-// os.thread_create. The user gigabyte's single level-3 table maps the 512 KB program window at its
-// first USER_PAGES entries; the entries above are free (the window sits in a 2 MB level-3 reach),
-// so a run of `pages` of them is backed by new physical pages mapped EL0-RW and the stack's top VA
-// comes back. NoSpace when no run that long is free. The stack grows down from the top.
+// os.thread_create. The program window fills the level-3 table's low entries (D2168: a variable
+// number now, sized to the image); the free entries above it sit in the same 2 MB reach, so a run
+// of `pages` of them is backed by new physical pages mapped EL0-RW and the stack's top VA comes
+// back. The scan skips the mapped window (non-zero entries), so it works whatever the window size.
+// NoSpace when no run that long is free. The stack grows down from the top.
 fn map_stack(a: *mem.Arena, ttbr: usize, pages: usize) -> (usize, usize, err) {
     let l1 = ttbr & TABLE_MASK
     let l2 = usize(os.load64(l1 + L1_USER_INDEX * 8usize)) & TABLE_MASK
     let l3 = usize(os.load64(l2)) & TABLE_MASK
     var found = 512usize
-    var run_start = USER_PAGES
+    var run_start = 0usize
     var run = 0usize
-    var scan = USER_PAGES
+    var scan = 0usize
     while scan < 512usize && found == 512usize {
         if usize(os.load64(l3 + scan * 8usize)) == 0usize {
             if run == 0usize { run_start = scan }

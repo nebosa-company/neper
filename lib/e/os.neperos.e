@@ -365,3 +365,44 @@ fn current_thread_id() -> usize { ret 1usize }
 fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy: ResolvePolicy) -> (File, err) { ret (File { raw: 0usize }, Unsupported) }
 fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err { ret Unsupported }
 fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path: str, overwrite: bool, durable: bool) -> err { ret Unsupported }
+
+// (D2168, C110) The native-window surface e.ui.window compiles against. NeperOS has no window
+// manager -- e.ui draws into the compositor's shared surface, and the headless testing harness uses
+// an offscreen target with no window at all -- so every function here is Unsupported and the window
+// path is pruned. The types must exist for window.e (and accessibility.e) to type-check.
+type Window = struct { raw: usize }
+type WindowMode = enum u8 { Windowed, Maximized, Fullscreen }
+type WindowOptions = struct { title: str, width: u32, height: u32, resizable: bool, visible: bool, mode: WindowMode }
+type WindowMetrics = struct { width: u32, height: u32, scale_percent: u32, focused: bool, visible: bool }
+type CursorShape = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
+type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, work_x: i32, work_y: i32, work_width: u32, work_height: u32, scale_percent: u32, primary: bool }
+type AccessibleNode = struct { id: u32, generation: u32, parent: u32, parent_generation: u32, has_parent: bool, role: u8, label: str, value: str, hint: str, flags: u16, actions: u32, sort: u8, live: u8, row: u32, column: u32, row_count: u32, column_count: u32, level: u8, selection_start: usize, selection_end: usize, labelled_by: u32, labelled_by_generation: u32, described_by: u32, described_by_generation: u32, error_by: u32, error_by_generation: u32, controls: u32, controls_generation: u32, active: u32, active_generation: u32, relation_flags: u8, x: f32, y: f32, width: f32, height: f32 }
+fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) { ret (Window { raw: 0usize }, Unsupported) }
+fn window_close(w: Window) -> err { ret ok }
+fn window_metrics(w: Window) -> (WindowMetrics, err) { ret (WindowMetrics { width: 0u32, height: 0u32, scale_percent: 100u32, focused: false, visible: false }, Unsupported) }
+fn window_title(w: Window, value: str) -> err { ret Unsupported }
+fn window_visible(w: Window, value: bool) -> err { ret Unsupported }
+fn window_cursor(w: Window, shape: CursorShape) -> err { ret Unsupported }
+fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err { ret Unsupported }
+fn monitors(a: *mem.Arena, limit: usize) -> ([]const MonitorInfo, err) {
+    var none: []const MonitorInfo = zero
+    ret (none, Unsupported)
+}
+fn clipboard_text(a: *mem.Arena) -> (str, err) { ret ("", Unsupported) }
+fn set_clipboard_text(value: str) -> err { ret Unsupported }
+// The window event surface e.ui.input compiles against -- no window, so no events are ever polled.
+type WindowEventKind = enum u8 { Close, Resize, Focus, Blur, PointerMove, PointerDown, PointerUp, Scroll, KeyDown, KeyUp, Text, Paint }
+type WindowEvent = struct { kind: WindowEventKind, window: Window, x: i32, y: i32, width: u32, height: u32, button: u8, key: u32, modifiers: u8, delta: i32, codepoint: u32, repeat: bool }
+fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
+    var event: WindowEvent = zero
+    ret (event, false, Unsupported)
+}
+fn window_capture(w: Window, on: bool) -> err { ret Unsupported }
+// The accessibility-bridge surface e.ui.accessibility compiles against -- no window, no AT client.
+type AccessibleRequest = struct { id: u32, generation: u32, action: u8, value: str }
+fn accessibility_listening(w: Window) -> bool { ret false }
+fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err { ret Unsupported }
+fn accessibility_take(w: Window) -> (AccessibleRequest, bool) {
+    var request: AccessibleRequest = zero
+    ret (request, false)
+}

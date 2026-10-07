@@ -8965,7 +8965,10 @@ if ($neperosQemu) {
     # so this checks the transmit alone.
     $neperosVirtio = @('-device', 'virtio-rng-pci,disable-legacy=on', '-drive', "file=$neperosDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0', '-device', 'virtio-serial-pci,disable-legacy=on', '-chardev', "file,id=vcon,path=$neperosConsole", '-device', 'virtconsole,chardev=vcon')
     $neperosBoot = Invoke-NeperOS $neperosImage (@('-initrd', $neperosDemo) + $neperosVirtio)
-    if ($neperosBoot -notmatch '(?s)Welcome to NeperOS.*mmu on.*fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned.*scheduling.*thread N denied console.*V revoke ok.*thread W killed, el0 fault at 0x0000007fc0040000.*thread X killed, el0 fault at 0x0000000040000000.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS did not schedule its threads: $neperosBoot" }
+    # W's isolation fault is at its arena page, which sits right after the program image now the EL0
+    # window is sized to it (D2168), so its exact offset tracks the demo's size -- match the user
+    # gigabyte prefix, not a fixed offset. X and Q fault at absolute kernel addresses (still exact).
+    if ($neperosBoot -notmatch '(?s)Welcome to NeperOS.*mmu on.*fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned.*scheduling.*thread N denied console.*V revoke ok.*thread W killed, el0 fault at 0x0000007fc0[0-9a-f]{6}.*thread X killed, el0 fault at 0x0000000040000000.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS did not schedule its threads: $neperosBoot" }
     foreach ($neperosToken in @('A0', 'A1', 'A2', 'B0', 'B1', 'B2', 'X0', 'X1', 'X2', 'R7', 'R8', 'R9', 'D0', 'D1', 'D2')) {
         if ($neperosBoot -notmatch [regex]::Escape("$neperosToken ")) { throw "NeperOS thread output missing ${neperosToken}: $neperosBoot" }
     }
@@ -9141,6 +9144,23 @@ if ($neperosQemu) {
     $sceneHash = $Matches[1]
     $sceneBoot = Invoke-NeperOS $neperosImage @('-initrd', $sceneImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
     if ($sceneBoot -notmatch "(?s)scene hash $sceneHash.*neperos: exit 0x0000000000000000") { throw "NeperOS e.gfx.scene render did not match the host hash ${sceneHash}: $sceneBoot" }
+    # (D2168, C110) The e.ui stack renders on NeperOS: ui_test is the host ui_testing fixture ported
+    # verbatim -- e.ui.testing drives e.ui.widget over e.gfx.scene / the e.gpu CPU backend, with a
+    # fold of the snapshot printed. It needs the large EL0 window (D2168 sized vm.create to the image;
+    # the old fixed 512 KB region overran into the kernel for a program this size). Same source, same
+    # hash on the host, so the host hash is the determinism check.
+    $uiImg = Join-Path $testBuild 'ui_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_test.e') $repo aarch64 neperos $uiImg | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.ui program did not build' }
+    $uiHost = Join-Path $testBuild 'ui_host.exe'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_test.e') $repo x64 windows $uiHost | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the host e.ui program did not build' }
+    $uiHostOut = (& $uiHost 2>&1) -join "`n"
+    if ($uiHostOut -notmatch 'ui hash (\d+)') { throw "host e.ui render printed no hash: $uiHostOut" }
+    if ($uiHostOut -notmatch 'ui testing ok') { throw "host e.ui sample failed: $uiHostOut" }
+    $uiHash = $Matches[1]
+    $uiBoot = Invoke-NeperOS $neperosImage @('-initrd', $uiImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
+    if ($uiBoot -notmatch "(?s)ui hash $uiHash.*ui testing ok.*neperos: exit 0x0000000000000000") { throw "NeperOS e.ui render did not match the host hash ${uiHash}: $uiBoot" }
     # (D2162, C110) The compositor over shared frames: an app draws a surface into a frame shared
     # with the compositor and signals it; the compositor composites it into the display and flushes.
     $comp = Join-Path $testBuild 'comp.img'

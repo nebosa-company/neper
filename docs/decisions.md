@@ -37539,3 +37539,40 @@ for when a program's own threads each take the lock. Verified on both hosts with
 the C108 gpu golden d505a446 and the other neperos fixtures are byte-for-byte unchanged. Remaining
 for C110: bind the e.ui window backend to the compositor's shared surface with fonts from e.fs, and
 render an e.ui sample matching its host pixel hash.
+
+## D2168 — C110: the e.ui stack renders on NeperOS, matching its host pixel hash
+
+An existing e.ui sample now renders on NeperOS with the same pixels as the host. neperos/src/ui_test.e
+is tests/selfhost/fixtures/link/ui_testing ported verbatim: e.ui.testing drives e.ui.widget over
+e.gfx.scene and the e.gpu CPU backend with no window -- a two-element tree (a box and a button)
+pumped, found by key and by text, a pointer press dispatched to the button's action, the frame
+snapshotted and compared against itself and a golden that differs by one channel, plus the
+e.ui.animation curves. The whole snapshot folds to one hash, 2725760869, identical on NeperOS and the
+host because the rasterizer is pure; the suite renders the same source on the host, reads its hash,
+and requires the QEMU run to print it and `ui testing ok`. Verified on both hosts with a clean
+power-off.
+
+Two things had to be built. First, the e.os surface e.ui compiles against but a headless program
+never calls: os.neperos.e gained the native-window, window-event, clipboard, monitor and
+accessibility-bridge types and functions (window.e, input.e and accessibility.e all reach for them),
+every one Unsupported -- e.ui draws into the compositor's shared surface and the test harness uses an
+offscreen target, so the window path is pruned, but the types must exist for those modules to
+type-check.
+
+Second, and the real bug: the EL0 window was a fixed 512 KB region with the arena at 256 KB, the
+args at 320 KB and the stack at the top. A program over ~256 KB clobbered the arena, and vm.create's
+image copy had no bound, so one over 512 KB (this e.ui program is ~740 KB) overran the region into
+the kernel's own memory and the kernel later jumped into the overwritten area and faulted at a wild
+address. vm.create now lays the window out from the page-aligned image -- image | arena | args |
+stack -- and sizes the whole region and the page mapping to it, refusing (NoSpace) a window past one
+level-3 table's 2 MB reach rather than overrunning. The arena offset, arg offset and window size
+move into the Space; setup_args reads the arg offset from it; the console/device-write syscalls bound
+a user pointer by the current thread's window size (carried in the Thread now) instead of the old
+constant; map_stack scans the level-3 table skipping the mapped window, so it is size-agnostic. One
+visible effect: thread W's isolation fault in the A-Z demo (a write through a re-protected frame
+capability over its arena page) now reports its arena's address, which sits right after the image, so
+the suite matches the user-gigabyte prefix there rather than the old fixed offset. The C108 gpu
+golden d505a446, the ui_scene (172a7475) and compositor (1e78b507) screendump goldens, the fsserver
+persistence boot and the D2167 scene hash are all byte-for-byte unchanged on both hosts. Remaining
+for C110: bind the e.ui window backend to the compositor's shared surface (present through it rather
+than the headless offscreen target) and a text-bearing sample with fonts read from e.fs.

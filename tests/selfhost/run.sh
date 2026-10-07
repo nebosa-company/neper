@@ -8797,8 +8797,11 @@ if command -v qemu-system-aarch64 >/dev/null 2>&1; then
     printf 'echo-me\n' > "$neperos_console_in"
     neperos_virtio="-device virtio-rng-pci,disable-legacy=on -drive file=$neperos_disk,format=raw,if=none,id=blk0 -device virtio-blk-pci,disable-legacy=on,drive=blk0 -device virtio-serial-pci,disable-legacy=on -chardev file,id=vcon,path=$neperos_console,input-path=$neperos_console_in -device virtconsole,chardev=vcon"
     neperos_boot=$(timeout 90 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$neperos_demo" $neperos_virtio < /dev/null 2>&1 | tr -d '\r')
+    # W's isolation fault is at its arena page, which sits right after the program image now the EL0
+    # window is sized to it (D2168), so match the user gigabyte prefix 0x0000007fc0, not a fixed
+    # offset. X faults at an absolute kernel address (still matched exactly).
     case "$neperos_boot" in
-        *'Welcome to NeperOS'*'mmu on'*'fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned'*'scheduling'*'thread N denied console'*'V revoke ok'*'thread W killed, el0 fault at 0x0000007fc0040000'*'thread X killed, el0 fault at 0x0000000040000000'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *'Welcome to NeperOS'*'mmu on'*'fault at 0x0000010000000000 esr 0x0000000096000004 taken and returned'*'scheduling'*'thread N denied console'*'V revoke ok'*'thread W killed, el0 fault at 0x0000007fc0'*'thread X killed, el0 fault at 0x0000000040000000'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS did not schedule its threads: $neperos_boot" >&2; exit 1 ;;
     esac
     for neperos_token in A0 A1 A2 B0 B1 B2 X0 X1 X2 R7 R8 R9 D0 D1 D2; do
@@ -8999,6 +9002,23 @@ greeting"
     case "$scene_boot" in
         *"scene hash $scene_hash"*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS e.gfx.scene render did not match the host hash $scene_hash: $scene_boot" >&2; exit 1 ;;
+    esac
+    # (D2168, C110) The e.ui stack renders on NeperOS: ui_test is the host ui_testing fixture ported
+    # verbatim -- e.ui.testing drives e.ui.widget over e.gfx.scene / the e.gpu CPU backend, with a
+    # fold of the snapshot printed. It needs the large EL0 window (D2168 sized vm.create to the image;
+    # the old fixed region overran into the kernel for a program this size). Same source, same hash.
+    ui_img="$test_build/ui_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_test.e" "$repo" aarch64 neperos "$ui_img")" = 'executable written' ]
+    ui_host="$test_build/ui_host"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_test.e" "$repo" x64 linux "$ui_host")" = 'executable written' ]
+    ui_host_out=$(chmod +x "$ui_host"; "$ui_host")
+    ui_hash=$(printf '%s\n' "$ui_host_out" | sed -n 's/^ui hash \([0-9]*\)$/\1/p')
+    [ -n "$ui_hash" ] || { printf '%s\n' 'host e.ui render printed no hash' >&2; exit 1; }
+    case "$ui_host_out" in *'ui testing ok'*) ;; *) printf '%s\n' "host e.ui sample failed: $ui_host_out" >&2; exit 1 ;; esac
+    ui_boot=$(timeout 90 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$ui_img" -append "gpu bigarena" -device virtio-gpu-pci < /dev/null 2>&1 | tr -d '\r')
+    case "$ui_boot" in
+        *"ui hash $ui_hash"*'ui testing ok'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.ui render did not match the host hash $ui_hash: $ui_boot" >&2; exit 1 ;;
     esac
     # (D2162, C110) The compositor over shared frames: an app draws a surface into a frame shared
     # with the compositor and signals it; the compositor composites it into the display and flushes.

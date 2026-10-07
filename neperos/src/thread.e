@@ -46,7 +46,7 @@ type Cap = struct { kind: u8, rights: u8, object: usize, parent: usize }
 // sentinel, and `waiting_child` the child it is blocked reaping (NONE otherwise).
 // (D2157) `detached` marks a thread (from os.thread_detach) whose slot is freed the moment it
 // exits rather than kept for a join -- a thread nobody will reap.
-type Thread = struct { state: u8, name: str, ttbr: usize, caps: [8]Cap, frame: a64.Frame, parent: usize, exit_code: usize, waiting_child: usize, detached: usize }
+type Thread = struct { state: u8, name: str, ttbr: usize, caps: [8]Cap, frame: a64.Frame, parent: usize, exit_code: usize, waiting_child: usize, detached: usize, window: usize }
 
 // The exit code of a process the kernel killed for a fault, which its parent's reap returns.
 const FAULT_CODE: usize = 18446744073709551615usize
@@ -107,7 +107,7 @@ fn add(space: vm.Space, name: str, arg_table: usize, arg_count: usize) -> usize 
     var empty: [8]Cap = zero
     // The parent is whatever thread is current: none at boot (where `current` is NONE), the
     // launcher under the `launch` system call, so a later `reap` on this child finds its parent.
-    threads[slot] = Thread { state: READY, name: name, ttbr: space.ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize }
+    threads[slot] = Thread { state: READY, name: name, ttbr: space.ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: space.size }
     live += 1usize
     ret slot
 }
@@ -117,6 +117,13 @@ fn add(space: vm.Space, name: str, arg_table: usize, arg_count: usize) -> usize 
 fn current_ttbr() -> usize {
     if current == NONE { ret 0usize }
     ret threads[current].ttbr
+}
+
+// (D2168) The current thread's EL0 window size in bytes, so a syscall that reads a user slice can
+// bound the pointer to what is actually mapped (the window is sized to the program, not fixed).
+fn current_window() -> usize {
+    if current == NONE { ret 0usize }
+    ret threads[current].window
 }
 
 // (D2162) A thread's address space, so the compositor boot can map a shared surface frame into both
@@ -141,7 +148,10 @@ fn add_in_space(ttbr: usize, name: str, elr: usize, arg0: usize, arg1: usize, st
     frame.elr = u64(elr)
     frame.spsr = 0u64
     var empty: [8]Cap = zero
-    threads[slot] = Thread { state: READY, name: name, ttbr: ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize }
+    // A spawned thread shares the creating thread's address space, so it shares its window size too.
+    var inherited = 0usize
+    if current != NONE { inherited = threads[current].window }
+    threads[slot] = Thread { state: READY, name: name, ttbr: ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: inherited }
     live += 1usize
     ret slot
 }

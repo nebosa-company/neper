@@ -156,7 +156,7 @@ fn write_user(frame: *a64.Frame) {
     let ptr = usize(frame.x[0usize])
     let len = usize(frame.x[1usize])
     frame.x[0usize] = 0u64
-    if ptr < vm.USER_BASE || ptr + len > vm.USER_BASE + vm.USER_SIZE { ret }
+    if ptr < vm.USER_BASE || ptr + len > vm.USER_BASE + thread.current_window() { ret }
     var buffer: [256]u8 = zero
     var done = 0usize
     while done < len {
@@ -309,7 +309,7 @@ fn device_write(frame: *a64.Frame) {
     let len = usize(frame.x[2usize])
     frame.x[0usize] = 18446744073709551615u64
     if !allowed { ret }
-    if ptr < vm.USER_BASE || ptr + len > vm.USER_BASE + vm.USER_SIZE { ret }
+    if ptr < vm.USER_BASE || ptr + len > vm.USER_BASE + thread.current_window() { ret }
     var i = 0usize
     while i < len {
         if console_ns16550 { ns16550.put(uart, console_shift, os.load8(ptr + i)) } else { pl011.put(uart, os.load8(ptr + i)) }
@@ -385,19 +385,20 @@ fn exception(raw: *void) {
 fn setup_args(space: vm.Space, name: str, kernel_pointer: usize, hostile: bool) -> (usize, usize) {
     var count = 1usize
     if hostile { count = 2usize }
-    let strings = vm.ARG_OFF + count * 16usize
+    let arg_off = space.arg_off
+    let strings = arg_off + count * 16usize
     var i = 0usize
     while i < name.len {
         vm.put_byte(space, strings + i, name[i])
         i += 1usize
     }
-    vm.put_word(space, vm.ARG_OFF, vm.address(strings))
-    vm.put_word(space, vm.ARG_OFF + 8usize, name.len)
+    vm.put_word(space, arg_off, vm.address(strings))
+    vm.put_word(space, arg_off + 8usize, name.len)
     if hostile {
-        vm.put_word(space, vm.ARG_OFF + 16usize, kernel_pointer)
-        vm.put_word(space, vm.ARG_OFF + 24usize, 8usize)
+        vm.put_word(space, arg_off + 16usize, kernel_pointer)
+        vm.put_word(space, arg_off + 24usize, 8usize)
     }
-    ret (vm.address(vm.ARG_OFF), count)
+    ret (vm.address(arg_off), count)
 }
 
 // One thread from the initrd image, its arguments set up, added to the scheduler, and its
