@@ -8894,6 +8894,22 @@ greeting"
     esac
     case "$neperos_fsread" in *'fs server formatted'*) printf '%s\n' "NeperOS reformatted an already-written disk, losing persistence: $neperos_fsread" >&2; exit 1 ;; esac
     case "$neperos_fsread" in *"$fs_listed"*) printf '%s\n' "the removed file was still listed: $neperos_fsread" >&2; exit 1 ;; esac
+    # (D2170, C110) Fonts read from the filesystem: ui_font (program 1 of an fsserver archive) stores a
+    # synthetic TrueType font in the C106 server through e.fs, reads it back, and renders a glyph from
+    # the reloaded font through e.gfx.scene's DrawText over the e.gpu CPU backend. `bigarena` gives the
+    # client e.gpu's arena; the frame folds to a hash identical on QEMU 8.2 and 11.1, and `ui font from
+    # fs` proves the round trip -- the e.ui drawing path reads its fonts from the filesystem.
+    ui_font_img="$test_build/ui_font.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_font.e" "$repo" aarch64 neperos "$ui_font_img")" = 'executable written' ]
+    uifont_archive="$test_build/uifont-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$uifont_archive" "$fs_server_img" "$ui_font_img" "$fs_denied_img"
+    uifont_disk="$test_build/uifont-disk.img"
+    dd if=/dev/zero of="$uifont_disk" bs=1M count=1 status=none
+    uifont_boot=$(timeout 90 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$uifont_archive" -append "fsserver bigarena" -drive "file=$uifont_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$uifont_boot" in
+        *'ui font from fs'*'ui font hash 173685445'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS did not render text from a filesystem font: $uifont_boot" >&2; exit 1 ;;
+    esac
     # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
     # + a Writer) rather than the console primitive, so e.io and the e.os variant os.neperos.e run
     # unchanged on NeperOS. Started as program 0 of a one-program archive on the shell boot.

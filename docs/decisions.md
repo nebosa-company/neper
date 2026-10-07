@@ -37603,3 +37603,25 @@ byte-for-byte unchanged, re-verified along with the C108 gpu, ui_scene and base-
 quietly reassuring result: the CPU backend renders a scene from a renderer on one queue into a target
 created on the window's own queue, so no queue-sharing accessor was needed. Remaining for C110: a
 text-bearing e.ui sample with fonts read from e.fs.
+
+## D2170 — C110: e.ui text renders from a font read from the filesystem, closing C110
+
+The last piece of C110: the e.ui drawing path rendering text from a font the filesystem hands back.
+neperos/src/ui_font.e builds a synthetic TrueType font (one square glyph, the e.gfx.scene fixture's
+font), stores it in the C106 filesystem server through e.fs (fs.write_file to /font.ttf), reads the
+bytes back (fs.read_file), registers the reloaded font with the scene renderer, and renders a glyph
+through e.gfx.scene's DrawText over the e.gpu CPU backend into an offscreen target. The frame folds
+to a hash, 173685445, identical on QEMU 8.2 (WSL) and 11.1 (Windows); `ui font from fs` confirms the
+bytes made the round trip. It runs as program 1 of an fsserver archive (server, ui_font, denied
+client), so os.open/write/read/close route to the server over IPC exactly as e.fs expects, and the
+fsserver boot now gives program 1 the 16 MB arena on `bigarena` (the server and denied client keep
+their small arenas), since the renderer needs it. The program is not built for the host -- its quit
+signal (os.send to the server) is a NeperOS IPC primitive absent on a host build -- so determinism is
+the QEMU-8.2-vs-11.1 agreement, the same proof the display goldens use; the render path itself is the
+one the host e.gfx.scene fixture already verifies pixel for pixel.
+
+This closes C110. Its acceptance is met across D2161–D2170: app surfaces in shared frames (D2162),
+damage-only flush to the C108 display server (D2164), input from C109 routed to the focused surface
+(D2163), the e.ui window backend drawing with the CPU rasterizer over the compositor (D2168 renders,
+D2169 presents over the compositor) and with fonts read from the filesystem (D2170), and an existing
+e.ui sample rendering on NeperOS with the same pixel hash as its host render (D2168). C110 -> 1.0.

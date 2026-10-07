@@ -9039,6 +9039,23 @@ if ($neperosQemu) {
     if ($fsReadBoot -match 'fs server formatted') { throw "NeperOS reformatted an already-written disk, losing persistence: $fsReadBoot" }
     if ($fsReadBoot -notmatch "fs client list /docs:\s*fs server done") { throw "the removed file was still listed: $fsReadBoot" }
     if ($fsReadBoot -match 'fs denied leaked') { throw "the capability gate leaked on the read boot: $fsReadBoot" }
+    # (D2170, C110) Fonts read from the filesystem: ui_font (program 1 of an fsserver archive) stores a
+    # synthetic TrueType font in the C106 server through e.fs, reads the bytes back, and renders a
+    # glyph from the reloaded font through e.gfx.scene's DrawText over the e.gpu CPU backend -- the
+    # e.ui text path fed by a font the filesystem handed back. `bigarena` gives the client e.gpu's
+    # arena. The frame folds to a hash identical on QEMU 8.2 and 11.1, and `ui font from fs` proves the
+    # round trip -- so the e.ui drawing path reads its fonts from the filesystem.
+    $uiFont = Join-Path $testBuild 'ui_font.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\ui_font.e') $repo aarch64 neperos $uiFont | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.ui font program did not build' }
+    $uiFontArchive = Join-Path $testBuild 'uifont-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $uiFontArchive $fsServer $uiFont $fsDenied
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.ui font archive did not assemble' }
+    $uiFontDisk = Join-Path $testBuild 'uifont-disk.img'
+    $uiFontStream = [IO.File]::Create($uiFontDisk); $uiFontStream.SetLength(1MB); $uiFontStream.Close()
+    $uiFontBlk = @('-drive', "file=$uiFontDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $uiFontBoot = Invoke-NeperOS $neperosImage (@('-initrd', $uiFontArchive, '-append', '"fsserver bigarena"') + $uiFontBlk)
+    if ($uiFontBoot -notmatch '(?s)ui font from fs.*ui font hash 173685445.*neperos: exit 0x0000000000000000') { throw "NeperOS did not render text from a filesystem font: $uiFontBoot" }
     # (D2154, C107) The e.os NeperOS variant: io_test reaches the portable e.io surface (os.stdout()
     # and a Writer over it) rather than the console primitive directly, so e.io -- and the e.os
     # variant os.neperos.e it compiles against -- run unchanged on NeperOS. Started as program 0 of a

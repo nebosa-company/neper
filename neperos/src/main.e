@@ -729,7 +729,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         next_asid = 1usize
         var client_name = "read"
         if has_word(bootargs, "fswrite") { client_name = "write" }
+        // A client that renders (e.gpu/e.ui) needs the large arena, like the gpu boot. `bigarena`
+        // gives program 1 the 16 MB arena; the server and denied client keep their small arenas.
+        if has_word(bootargs, "bigarena") { driver_arena_bytes = 16777216usize }
         let (client, client_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], client_name)
+        driver_arena_bytes = 0usize
         if client_error != ok { ret client_error }
         thread.grant(client, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
         thread.grant(client, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 1usize)
