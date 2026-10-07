@@ -8,19 +8,19 @@ use e.os
 use virtio
 
 const AUX: usize = 548682334144usize
-// The shared surface frame (vm.SHARED_FRAME_VA): a 256x256 BGRA surface the app and the compositor
-// both map.
-const SHARED: usize = 548683907072usize
-const SURFACE_W: usize = 256usize
-const SURFACE_H: usize = 256usize
+// The shared surface frame (vm.SHARED_FRAME_VA): the whole screen, a 1280x2856 BGRA surface the app and
+// the compositor both map (vm.SHARED_FRAME_W and _H; keep equal).
+const SHARED: usize = 548684169216usize
+const SURFACE_W: usize = 1280usize
+const SURFACE_H: usize = 2856usize
 const APP: usize = 2usize
 const INPUT: usize = 3usize
 const FOCUS: usize = 4usize
 const NO_SLOT: usize = 99usize
 const SENTINEL: usize = 65535usize
 // The app surface's position on the display, where it is composited and damage-flushed.
-const SURFACE_X: usize = 400usize
-const SURFACE_Y: usize = 200usize
+const SURFACE_X: usize = 0usize
+const SURFACE_Y: usize = 0usize
 
 fn say(text: str) {
     let (written, write_error) = os.write(os.stdout(), text)
@@ -53,18 +53,25 @@ fn fill_rect(fb: usize, stride: usize, x0: usize, y0: usize, w: usize, h: usize,
 }
 
 // Copy the shared surface into the display framebuffer at (ox, oy).
-fn composite(fb: usize, stride: usize, ox: usize, oy: usize) {
+// Two pixels at a time (the surface is an even number of pixels wide), alpha forced opaque. The
+// display's own size bounds the copy, so a smaller display shows the top-left of the surface.
+const OPAQUE_PAIR: u64 = 18374686483949813760u64
+
+fn composite(fb: usize, stride: usize, height: usize, ox: usize, oy: usize) {
+    var rows = SURFACE_H
+    if oy + rows > height { rows = height - oy }
+    var cols = SURFACE_W
+    if ox + cols > stride { cols = stride - ox }
     var y = 0usize
-    while y < SURFACE_H {
+    while y < rows {
+        var s = SHARED + y * SURFACE_W * 4usize
+        var d = fb + ((oy + y) * stride + ox) * 4usize
         var x = 0usize
-        while x < SURFACE_W {
-            let s = SHARED + (y * SURFACE_W + x) * 4usize
-            let d = fb + ((oy + y) * stride + (ox + x)) * 4usize
-            os.store8(d, os.load8(s))
-            os.store8(d + 1usize, os.load8(s + 1usize))
-            os.store8(d + 2usize, os.load8(s + 2usize))
-            os.store8(d + 3usize, 255u8)
-            x += 1usize
+        while x + 1usize < cols {
+            os.store64(d, u64(os.load64(s)) | OPAQUE_PAIR)
+            s += 8usize
+            d += 8usize
+            x += 2usize
         }
         y += 1usize
     }
@@ -86,7 +93,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     say("comp ready\n")
     let frame = os.recv(APP, NO_SLOT)
-    composite(gpu.fb, gpu.width, SURFACE_X, SURFACE_Y)
+    composite(gpu.fb, gpu.width, gpu.height, SURFACE_X, SURFACE_Y)
     // Flush only the app's surface rectangle -- the damage -- not the whole display.
     let present_error = virtio.gpu_present_rect(gpu, SURFACE_X, SURFACE_Y, SURFACE_W, SURFACE_H)
     if present_error != ok {

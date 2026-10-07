@@ -8942,6 +8942,12 @@ if ($LASTEXITCODE -ne 1 -or ($cycleOutput -join "`n") -notmatch
 $neperosImage = Join-Path $testBuild 'neperos.img'
 $neperosWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\main.e') $repo aarch64 none $neperosImage
 if ($LASTEXITCODE -ne 0 -or $neperosWritten -ne 'executable written') { throw 'NeperOS did not build' }
+# (D2201) The display kernel: the compositor's 1280x2856 frames and the shell's full-screen renderer
+# need a 400 MB arena, so the compositor-group boots use this image on a 1 GB machine with a 1280x2856
+# scanout (NEPEROS_MEM and NEPEROS_GPU, read by the screendump and input scripts).
+$neperosDisplayImage = Join-Path $testBuild 'neperos-display.img'
+$neperosDisplayWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\main.e') $repo aarch64 none $neperosDisplayImage --arena 400m
+if ($LASTEXITCODE -ne 0 -or $neperosDisplayWritten -ne 'executable written') { throw 'the NeperOS display kernel did not build' }
 $neperosBytes = [IO.File]::ReadAllBytes($neperosImage)
 if ([Text.Encoding]::ASCII.GetString($neperosBytes, 56, 4) -ne 'ARMd') { throw 'the NeperOS image has no arm64 Image magic' }
 $neperosDemo = Join-Path $testBuild 'demo.img'
@@ -9298,6 +9304,8 @@ if ($neperosQemu) {
     $uiHash = $Matches[1]
     $uiBoot = Invoke-NeperOS $neperosImage @('-initrd', $uiImg, '-append', '"gpu bigarena"', '-device', 'virtio-gpu-pci')
     if ($uiBoot -notmatch "(?s)ui hash $uiHash.*ui testing ok.*neperos: exit 0x0000000000000000") { throw "NeperOS e.ui render did not match the host hash ${uiHash}: $uiBoot" }
+    $env:NEPEROS_MEM = '1G'
+    $env:NEPEROS_GPU = 'virtio-gpu-pci,xres=1280,yres=2856'
     # (D2162, C110) The compositor over shared frames: an app draws a surface into a frame shared
     # with the compositor and signals it; the compositor composites it into the display and flushes.
     $comp = Join-Path $testBuild 'comp.img'
@@ -9309,8 +9317,8 @@ if ($neperosQemu) {
     $compArchive = Join-Path $testBuild 'comp-archive.img'
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $compArchive $comp $compApp
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS compositor archive did not assemble' }
-    $compGolden = '1e78b507c7bc0df83765c521d923a7e57df4d754293505e85aab706fe34b3e51'
-    $compDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $compArchive (Join-Path $testBuild 'comp.ppm') 55128 compositor 2>&1) -join "`n"
+    $compGolden = 'ff7780741e0ec5ad4d157c6b1cf746bebd12269ea0ba04159eedf76f454c78d2'
+    $compDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosDisplayImage $compArchive (Join-Path $testBuild 'comp.ppm') 55128 compositor 2>&1) -join "`n"
     if ($compDump -notmatch "sha256 $compGolden") { throw "NeperOS compositor screendump did not match the golden: $compDump" }
     # (D2163, C110) Input routed to the focused surface: the C109 input server + the compositor +
     # the app; a QMP key injection travels keyboard -> input server -> compositor -> focused app.
@@ -9320,7 +9328,7 @@ if ($neperosQemu) {
     $routeArchive = Join-Path $testBuild 'route-archive.img'
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $routeArchive $comp $compApp $routeInputServer
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS compositor-route archive did not assemble' }
-    $route = (& python (Join-Path $repo 'scripts\neperos-input.py') $neperosQemu.Source $neperosImage $routeArchive keyboard (Join-Path $testBuild 'route.serial') 55129 compositor 2>&1) -join "`n"
+    $route = (& python (Join-Path $repo 'scripts\neperos-input.py') $neperosQemu.Source $neperosDisplayImage $routeArchive keyboard (Join-Path $testBuild 'route.serial') 55129 compositor 2>&1) -join "`n"
     if ($route -notmatch '(?s)comp composited flushed.*app input ev 1 30 1.*app done') { throw "NeperOS compositor did not route input to the focused surface: $route" }
     # (D2169, C110) The e.ui window backend presents over the compositor: ui_window opens an e.ui
     # window (which on NeperOS is the compositor's shared surface), renders a scene through
@@ -9334,8 +9342,8 @@ if ($neperosQemu) {
     $uiWinArchive = Join-Path $testBuild 'uiwin-archive.img'
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $uiWinArchive $comp $uiWindow
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.ui window archive did not assemble' }
-    $uiWinGolden = '08af9c12ba6349aee0402983945e112eb6283d45b218b7307fb5c8fb1b2de18f'
-    $uiWinDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $uiWinArchive (Join-Path $testBuild 'uiwin.ppm') 55130 'compositor bigarena' 2>&1) -join "`n"
+    $uiWinGolden = 'b55a1e891132278b9a0faef90891538a1c9a3e828e26cb68d708414775406059'
+    $uiWinDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosDisplayImage $uiWinArchive (Join-Path $testBuild 'uiwin.ppm') 55130 'compositor bigarena' 2>&1) -join "`n"
     if ($uiWinDump -notmatch "sha256 $uiWinGolden") { throw "NeperOS e.ui window over the compositor did not match the golden: $uiWinDump" }
     # (D2173, C112) The launcher presented over the compositor: launcher.e opens an e.ui window (the
     # shared surface), renders the launcher layout (wallpaper, top bar, 8x5 grid) and presents it; the
@@ -9347,8 +9355,8 @@ if ($neperosQemu) {
     $launcherDispArchive = Join-Path $testBuild 'launcher-disp.img'
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $launcherDispArchive $comp $launcherDisp
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS launcher display archive did not assemble' }
-    $launcherDispGolden = '132a969b792c6b9f8935c316e3f3fe58481f857fe1dba954b44cbd01b4d97f0f'
-    $launcherDispDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $launcherDispArchive (Join-Path $testBuild 'launcher-disp.ppm') 55132 'compositor bigarena' 2>&1) -join "`n"
+    $launcherDispGolden = 'd7372f001745d03ccd5f72524d06134742a1dad02590d850cf4367f5249b813e'
+    $launcherDispDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosDisplayImage $launcherDispArchive (Join-Path $testBuild 'launcher-disp.ppm') 55132 'compositor bigarena' 2>&1) -join "`n"
     if ($launcherDispDump -notmatch "sha256 $launcherDispGolden") { throw "NeperOS launcher over the compositor did not match the golden: $launcherDispDump" }
     # (D2160, C109) virtio-input over IPC: the input server alone holds the device and pushes each
     # event to a client over an endpoint, woken by the device's notification. The fixture injects a
@@ -9399,8 +9407,9 @@ if ($neperosQemu) {
     # program 6 the loader that writes and reads /wall.png and sends it to the shell.
     $shellDisk = Join-Path $testBuild 'shell-disk.img'
     $shellDiskStream = [IO.File]::Create($shellDisk); $shellDiskStream.SetLength(1MB); $shellDiskStream.Close()
-    $shellBoot = (& python $inputScript $neperosQemu.Source $neperosImage $shellArchive keyboard (Join-Path $testBuild 'shell.serial') 55135 'compositor bigarena unified' 'shell home' $shellDisk 2>&1) -join "`n"
+    $shellBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $shellArchive keyboard (Join-Path $testBuild 'shell.serial') 55135 'compositor bigarena unified' 'shell home' $shellDisk 2>&1) -join "`n"
     if ($shellBoot -notmatch '(?s)shell wallpaper from fs.*shell presented.*shell status .*shell status service notes 1.*comp composited flushed.*shell tap.*shell launched app.*shell app code 5.*shell home' -or $shellBoot -notmatch 'tap app ran' -or $shellBoot -notmatch 'status server done' -or $shellBoot -notmatch 'wall loader from fs' -or $shellBoot -notmatch 'fs server done') { throw "NeperOS unified shell did not host the launcher, show status and launch an app on a tap: $shellBoot" }
+    Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }
 
 Write-Output 'selfhost tests passed'

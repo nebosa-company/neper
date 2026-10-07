@@ -367,13 +367,15 @@ fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> er
 fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path: str, overwrite: bool, durable: bool) -> err { ret Unsupported }
 
 // (D2168/D2169, C110) The native-window surface e.ui.window compiles against. NeperOS has no window
-// manager: a window IS the compositor's shared surface (vm.SHARED_FRAME_VA, a fixed 256x256 BGRA
+// manager: a window IS the compositor's shared surface (vm.SHARED_FRAME_VA, the whole screen: a 1280x2856 BGRA
 // frame the kernel maps into a windowed app's space in a compositor boot). window_present copies the
 // app's rendered pixels into that frame and signals the compositor on endpoint slot 1, exactly as a
 // hand-written compositor app does; window_poll reports no event (neperos input reaches an app over
 // the compositor's routed endpoint, not here). The headless testing harness touches none of these.
-const SHARED_FRAME_VA: usize = 548683907072usize
-const SURFACE_SIDE: usize = 256usize
+// SURFACE_W, SURFACE_H and SHARED_FRAME_VA mirror vm.SHARED_FRAME_W, _H and _VA (USER_BASE + 2 MB); keep equal.
+const SHARED_FRAME_VA: usize = 548684169216usize
+const SURFACE_W: usize = 1280usize
+const SURFACE_H: usize = 2856usize
 const COMP_ENDPOINT: usize = 1usize
 const FRAME_READY: usize = 1usize
 type Window = struct { raw: usize }
@@ -385,18 +387,18 @@ type MonitorInfo = struct { x: i32, y: i32, width: u32, height: u32, work_x: i32
 type AccessibleNode = struct { id: u32, generation: u32, parent: u32, parent_generation: u32, has_parent: bool, role: u8, label: str, value: str, hint: str, flags: u16, actions: u32, sort: u8, live: u8, row: u32, column: u32, row_count: u32, column_count: u32, level: u8, selection_start: usize, selection_end: usize, labelled_by: u32, labelled_by_generation: u32, described_by: u32, described_by_generation: u32, error_by: u32, error_by_generation: u32, controls: u32, controls_generation: u32, active: u32, active_generation: u32, relation_flags: u8, x: f32, y: f32, width: f32, height: f32 }
 fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err) { ret (Window { raw: 1usize }, ok) }
 fn window_close(w: Window) -> err { ret ok }
-fn window_metrics(w: Window) -> (WindowMetrics, err) { ret (WindowMetrics { width: u32(SURFACE_SIDE), height: u32(SURFACE_SIDE), scale_percent: 100u32, focused: true, visible: true }, ok) }
+fn window_metrics(w: Window) -> (WindowMetrics, err) { ret (WindowMetrics { width: u32(SURFACE_W), height: u32(SURFACE_H), scale_percent: 100u32, focused: true, visible: true }, ok) }
 fn window_title(w: Window, value: str) -> err { ret ok }
 fn window_visible(w: Window, value: bool) -> err { ret ok }
 fn window_cursor(w: Window, shape: CursorShape) -> err { ret ok }
-// Blit the rendered pixels (Bgra8 packed into u32) into the shared surface at its 256-stride, then
+// Blit the rendered pixels (Bgra8 packed into u32) into the shared surface at the surface stride, then
 // signal the compositor that the frame is ready. A pixel outside the surface is dropped.
 fn window_present(w: Window, pixels: []const u32, width: u32, height: u32) -> err {
     var y = 0usize
-    while y < usize(height) && y < SURFACE_SIDE {
+    while y < usize(height) && y < SURFACE_H {
         var x = 0usize
-        while x < usize(width) && x < SURFACE_SIDE {
-            store32(SHARED_FRAME_VA + (y * SURFACE_SIDE + x) * 4usize, u32(pixels[y * usize(width) + x]))
+        while x < usize(width) && x < SURFACE_W {
+            store32(SHARED_FRAME_VA + (y * SURFACE_W + x) * 4usize, u32(pixels[y * usize(width) + x]))
             x += 1usize
         }
         y += 1usize

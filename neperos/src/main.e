@@ -801,13 +801,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (shared_storage, shared_error) = mem.alloc[u8](a, vm.SHARED_FRAME_PAGES * 4096usize + 4096usize)
         if shared_error != ok { ret shared_error }
         let shared_phys = (mem.address_of(&shared_storage[0usize]) + 4095usize) & ~4095usize
-        driver_pool_bytes = 4194304usize
+        // The frame starts as the compositor's dark ground (B 30, G 30, R 45, opaque), two pixels a
+        // store, so what an app has not drawn is not allocator fill.
+        var shared_at = 0usize
+        while shared_at < vm.SHARED_FRAME_BYTES {
+            os.store64(shared_phys + shared_at, 18387385972102602270u64)
+            shared_at += 8usize
+        }
+        // The display framebuffer (the whole screen, BGRA) plus the virtio queues and slack.
+        driver_pool_bytes = vm.SHARED_FRAME_BYTES + 2097152usize
         last_server_index = thread.MAX_THREADS
         let (comp_bar, comp_error) = start_driver_server(a, archive_base + archive_offset[0usize], archive_length[0usize], 1usize, pci_host, pci_host.mmio, pci.VIRTIO_GPU, "comp")
         if comp_error != ok { ret comp_error }
         if last_server_index == thread.MAX_THREADS { ret NoInitrd }
         let compositor = last_server_index
-        try vm.map_phys_at(thread.ttbr_of(compositor), shared_phys, vm.SHARED_FRAME_PAGES)
+        try vm.map_shared(a, thread.ttbr_of(compositor), shared_phys, vm.SHARED_FRAME_PAGES)
         // endpoint 0: the app signals a ready frame (app sends, compositor receives).
         thread.grant(compositor, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 0usize)
         // The input server is optional: a third archive program and a virtio-input device wire input
@@ -836,11 +844,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // server above is already started, so it keeps its small arena). Reset after, so nothing else
         // inherits it. Without bigarena the app gets the in-window arena and the comp golden is
         // byte-unchanged.
-        if has_word(bootargs, "bigarena") { driver_arena_bytes = 16777216usize }
+        // A full-screen window's renderer holds several frame-sized buffers (about 12 bytes a pixel
+        // plus the target and its scratch), so the app's arena is sized from the screen: 160 MB at
+        // 1280x2856.
+        if has_word(bootargs, "bigarena") { driver_arena_bytes = vm.SHARED_FRAME_BYTES * 11usize }
         let (comp_app, comp_app_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "app")
         driver_arena_bytes = 0usize
         if comp_app_error != ok { ret comp_app_error }
-        try vm.map_phys_at(thread.ttbr_of(comp_app), shared_phys, vm.SHARED_FRAME_PAGES)
+        try vm.map_shared(a, thread.ttbr_of(comp_app), shared_phys, vm.SHARED_FRAME_PAGES)
         thread.grant(comp_app, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
         if input_present { thread.grant(comp_app, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 2usize) }
         // (D2195) The unified shell's status service: program 4, a second process beside the shell. It

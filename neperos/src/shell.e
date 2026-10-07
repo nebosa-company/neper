@@ -85,24 +85,20 @@ fn draw_digit(builder: *scene.Builder, font: []const u8, px: f32, py: f32, d: us
     }
 }
 
-// The launcher's chrome: the top-bar strip, then the 8x5 grid. The eight app icons (icons.e, drawn
-// through e.gfx.svg) fill the first cells; the rest stay empty until more apps exist.
+// The launcher's chrome, in logical dp (412 wide; the scene's base transform scales dp to the
+// panel's pixels): the top-bar strip, then a four-column grid of the app icons (icons.e, drawn
+// through e.gfx.svg) with room for more rows than there are apps.
 fn draw_launcher(a: *mem.Arena, builder: *scene.Builder) -> err {
-    fill(builder, 0.0, 0.0, 256.0, 18.0, 0.05, 0.06, 0.10)
+    fill(builder, 0.0, 0.0, 412.0, 30.0, 0.04, 0.05, 0.07)
     let ink = paint.Color { red: 0.91, green: 0.92, blue: 0.94, alpha: 1.0 }
-    var r = 0usize
-    while r < 8usize {
-        var c = 0usize
-        while c < 5usize {
-            let cx = 8.0 + f32(c) * 48.0
-            let cy = 28.0 + f32(r) * 28.0
-            let idx = r * 5usize + c
-            if idx < icons.APP_COUNT {
-                try svg.draw(a, builder, icons.app(idx), geometry.rect(cx + 12.0, cy + 2.0, 24.0, 24.0), ink)
-            }
-            c += 1usize
-        }
-        r += 1usize
+    var idx = 0usize
+    while idx < icons.APP_COUNT {
+        let col = idx % 4usize
+        let row = idx / 4usize
+        let x = 20.5 + f32(col) * 94.0
+        let y = 96.0 + f32(row) * 108.0
+        try svg.draw(a, builder, icons.app(idx), geometry.rect(x, y, 66.0, 66.0), ink)
+        idx += 1usize
     }
     ret ok
 }
@@ -111,7 +107,7 @@ fn draw_launcher(a: *mem.Arena, builder: *scene.Builder) -> err {
 fn status_glyph(a: *mem.Arena, builder: *scene.Builder, which: usize, x: f32, on: bool, lit: paint.Color) -> err {
     var c = paint.Color { red: 0.32, green: 0.33, blue: 0.37, alpha: 1.0 }
     if on { c = lit }
-    try svg.draw(a, builder, icons.bar(which), geometry.rect(x, 3.0, 12.0, 12.0), c)
+    try svg.draw(a, builder, icons.bar(which), geometry.rect(x, 7.0, 16.0, 16.0), c)
     ret ok
 }
 
@@ -132,7 +128,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         say("shell gpu failed\n")
         ret ok
     }
-    let (win, win_error) = window.open(a, device, window.Options { title: "shell", width: 256u32, height: 256u32, min_width: 0u32, min_height: 0u32, resizable: false, transparent: false, mode: window.Mode.Windowed })
+    let (win, win_error) = window.open(a, device, window.Options { title: "shell", width: u32(os.SURFACE_W), height: u32(os.SURFACE_H), min_width: 0u32, min_height: 0u32, resizable: false, transparent: false, mode: window.Mode.Windowed })
     if win_error != ok {
         say("shell window failed\n")
         ret ok
@@ -157,6 +153,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (builder_value, builder_error) = scene.builder(a, 4096usize)
     if builder_error != ok { ret builder_error }
     var builder = builder_value
+    // Everything below is laid out in dp: 412 across, the panel's 1280 pixels (a 3.1x density).
+    let scale = f32(os.SURFACE_W) / 412.0
+    let logical_h = f32(os.SURFACE_H) / scale
+    let save: scene.Command = .Save
+    try scene.push(&builder, save)
+    try scene.push(&builder, scene.Command { Transform: geometry.transform_scale(scale, scale) })
     // The wallpaper: the loader process read a PNG from the C106 filesystem and sends it here (a
     // length word, then a word per byte). It is decoded and drawn scaled to cover; with no wallpaper
     // (an absent or failed loader answers with a length no PNG reaches) the backdrop is a solid fill.
@@ -179,13 +181,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if wall_view_error == ok {
                 let (texture, upload_error) = scene.upload_image(&renderer, wall_view)
                 if upload_error == ok {
-                    let wallpaper = scene.push(&builder, scene.Command { Image: scene.DrawImage { texture: texture, source: geometry.rect(0.0, 0.0, f32(decoded.width), f32(decoded.height)), destination: geometry.rect(0.0, 0.0, 256.0, 256.0), opacity: 1.0 } })
+                    let wallpaper = scene.push(&builder, scene.Command { Image: scene.DrawImage { texture: texture, source: geometry.rect(0.0, 0.0, f32(decoded.width), f32(decoded.height)), destination: geometry.rect(0.0, 0.0, 412.0, logical_h), opacity: 1.0 } })
                     wallpapered = true
                 }
             }
         }
     }
-    if !wallpapered { fill(&builder, 0.0, 0.0, 256.0, 256.0, 0.09, 0.11, 0.18) }
+    if !wallpapered { fill(&builder, 0.0, 0.0, 412.0, logical_h, 0.09, 0.11, 0.18) }
     say("shell wallpaper ")
     if wallpapered { say("from fs\n") } else { say("fallback\n") }
     try draw_launcher(a, &builder)
@@ -200,10 +202,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let bright = paint.Color { red: 0.91, green: 0.92, blue: 0.94, alpha: 1.0 }
     let amber = paint.Color { red: 0.88, green: 0.70, blue: 0.42, alpha: 1.0 }
     // Glyph order in icons.bar: battery 0, bell 1, cell 2, moon 3, wifi 4.
-    try status_glyph(a, &builder, 0usize, 242.0, (snap[0usize] & PRESENT) != 0usize, bright)
-    try status_glyph(a, &builder, 4usize, 228.0, (snap[1usize] & PRESENT) != 0usize, bright)
-    try status_glyph(a, &builder, 2usize, 214.0, (snap[2usize] & PRESENT) != 0usize, bright)
-    try status_glyph(a, &builder, 1usize, 200.0, snap[4usize] > 0usize, amber)
+    try status_glyph(a, &builder, 0usize, 380.0, (snap[0usize] & PRESENT) != 0usize, bright)
+    try status_glyph(a, &builder, 4usize, 358.0, (snap[1usize] & PRESENT) != 0usize, bright)
+    try status_glyph(a, &builder, 2usize, 336.0, (snap[2usize] & PRESENT) != 0usize, bright)
+    try status_glyph(a, &builder, 1usize, 314.0, snap[4usize] > 0usize, amber)
     var hour = 0usize
     var minute = 0usize
     if snap[3usize] > 0usize {
@@ -212,19 +214,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
         minute = (day % 3600usize) / 60usize
     }
     let font: [50]u8 = [50]u8{ 7u8, 5u8, 5u8, 5u8, 7u8, 2u8, 6u8, 2u8, 2u8, 7u8, 7u8, 1u8, 7u8, 4u8, 7u8, 7u8, 1u8, 7u8, 1u8, 7u8, 5u8, 5u8, 7u8, 1u8, 1u8, 7u8, 4u8, 7u8, 1u8, 7u8, 7u8, 4u8, 7u8, 5u8, 7u8, 7u8, 1u8, 2u8, 2u8, 2u8, 7u8, 5u8, 7u8, 5u8, 7u8, 7u8, 5u8, 7u8, 1u8, 7u8 }
-    draw_digit(&builder, font[0usize..], 6.0, 5.0, hour / 10usize, 2.0)
-    draw_digit(&builder, font[0usize..], 14.0, 5.0, hour % 10usize, 2.0)
-    fill(&builder, 21.0, 7.0, 2.0, 2.0, 0.85, 0.88, 0.95)
-    fill(&builder, 21.0, 11.0, 2.0, 2.0, 0.85, 0.88, 0.95)
-    draw_digit(&builder, font[0usize..], 25.0, 5.0, minute / 10usize, 2.0)
-    draw_digit(&builder, font[0usize..], 33.0, 5.0, minute % 10usize, 2.0)
+    draw_digit(&builder, font[0usize..], 16.0, 7.0, hour / 10usize, 3.0)
+    draw_digit(&builder, font[0usize..], 28.0, 7.0, hour % 10usize, 3.0)
+    fill(&builder, 40.0, 11.0, 3.0, 3.0, 0.85, 0.88, 0.95)
+    fill(&builder, 40.0, 17.0, 3.0, 3.0, 0.85, 0.88, 0.95)
+    draw_digit(&builder, font[0usize..], 46.0, 7.0, minute / 10usize, 3.0)
+    draw_digit(&builder, font[0usize..], 58.0, 7.0, minute % 10usize, 3.0)
+    let restore: scene.Command = .Restore
+    try scene.push(&builder, restore)
     let list = scene.finish(&builder)
     let (scene_id, compile_error) = scene.compile(&renderer, list)
     if compile_error != ok {
         say("shell compile failed\n")
         ret ok
     }
-    let render_error = scene.render(&renderer, scene_id, drawable, geometry.Size { width: 256.0, height: 256.0 })
+    let render_error = scene.render(&renderer, scene_id, drawable, geometry.Size { width: f32(os.SURFACE_W), height: f32(os.SURFACE_H) })
     if render_error != ok {
         say("shell render failed\n")
         ret ok

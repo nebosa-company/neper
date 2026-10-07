@@ -8777,6 +8777,11 @@ esac
 # backtrace and ends the kernel with 134. The machine intrinsics are unknown names elsewhere.
 neperos_image="$test_build/neperos.img"
 [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/main.e" "$repo" aarch64 none "$neperos_image")" = 'executable written' ]
+# (D2201) The display kernel: the compositor's 1280x2856 frames and the shell's full-screen renderer need
+# a 400 MB arena, so the compositor-group boots use this image on a 1 GB machine with a 1280x2856
+# scanout (NEPEROS_MEM and NEPEROS_GPU, read by the screendump and input scripts).
+neperos_display_image="$test_build/neperos-display.img"
+[ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/main.e" "$repo" aarch64 none "$neperos_display_image" --arena 400m)" = 'executable written' ]
 [ "$(od -An -c -j56 -N4 "$neperos_image" | tr -d ' ')" = 'ARMd' ] || { printf '%s\n' 'the NeperOS image has no arm64 Image magic' >&2; exit 1; }
 neperos_demo="$test_build/demo.img"
 [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/init.e" "$repo" aarch64 neperos "$neperos_demo")" = 'executable written' ]
@@ -9160,6 +9165,7 @@ greeting"
         *"ui hash $ui_hash"*'ui testing ok'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS e.ui render did not match the host hash $ui_hash: $ui_boot" >&2; exit 1 ;;
     esac
+    export NEPEROS_MEM=1G NEPEROS_GPU=virtio-gpu-pci,xres=1280,yres=2856
     # (D2162, C110) The compositor over shared frames: an app draws a surface into a frame shared
     # with the compositor and signals it; the compositor composites it into the display and flushes.
     comp_img="$test_build/comp.img"
@@ -9168,8 +9174,8 @@ greeting"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/comp_app.e" "$repo" aarch64 neperos "$comp_app_img")" = 'executable written' ]
     comp_archive="$test_build/comp-archive.img"
     python3 "$repo/scripts/build-shell-archive.py" "$comp_archive" "$comp_img" "$comp_app_img"
-    comp_golden=1e78b507c7bc0df83765c521d923a7e57df4d754293505e85aab706fe34b3e51
-    comp_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_image" "$comp_archive" "$test_build/comp.ppm" 55128 compositor 2>&1)
+    comp_golden=ff7780741e0ec5ad4d157c6b1cf746bebd12269ea0ba04159eedf76f454c78d2
+    comp_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_display_image" "$comp_archive" "$test_build/comp.ppm" 55128 compositor 2>&1)
     case "$comp_dump" in
         *"sha256 $comp_golden"*) ;;
         *) printf '%s\n' "NeperOS compositor screendump did not match the golden: $comp_dump" >&2; exit 1 ;;
@@ -9180,7 +9186,7 @@ greeting"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/input_server.e" "$repo" aarch64 neperos "$route_input_server")" = 'executable written' ]
     route_archive="$test_build/route-archive.img"
     python3 "$repo/scripts/build-shell-archive.py" "$route_archive" "$comp_img" "$comp_app_img" "$route_input_server"
-    route=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$route_archive" keyboard "$test_build/route.serial" 55129 compositor 2>&1)
+    route=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$route_archive" keyboard "$test_build/route.serial" 55129 compositor 2>&1)
     case "$route" in
         *'comp composited flushed'*'app input ev 1 30 1'*'app done'*) ;;
         *) printf '%s\n' "NeperOS compositor did not route input to the focused surface: $route" >&2; exit 1 ;;
@@ -9193,8 +9199,8 @@ greeting"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ui_window.e" "$repo" aarch64 neperos "$ui_window_img")" = 'executable written' ]
     uiwin_archive="$test_build/uiwin-archive.img"
     python3 "$repo/scripts/build-shell-archive.py" "$uiwin_archive" "$comp_img" "$ui_window_img"
-    uiwin_golden='08af9c12ba6349aee0402983945e112eb6283d45b218b7307fb5c8fb1b2de18f'
-    uiwin_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_image" "$uiwin_archive" "$test_build/uiwin.ppm" 55130 'compositor bigarena' 2>&1)
+    uiwin_golden='b55a1e891132278b9a0faef90891538a1c9a3e828e26cb68d708414775406059'
+    uiwin_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_display_image" "$uiwin_archive" "$test_build/uiwin.ppm" 55130 'compositor bigarena' 2>&1)
     case "$uiwin_dump" in
         *"sha256 $uiwin_golden"*) ;;
         *) printf '%s\n' "NeperOS e.ui window over the compositor did not match the golden: $uiwin_dump" >&2; exit 1 ;;
@@ -9206,8 +9212,8 @@ greeting"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/launcher.e" "$repo" aarch64 neperos "$launcher_disp_img")" = 'executable written' ]
     launcher_disp_archive="$test_build/launcher-disp.img"
     python3 "$repo/scripts/build-shell-archive.py" "$launcher_disp_archive" "$comp_img" "$launcher_disp_img"
-    launcher_disp_golden='132a969b792c6b9f8935c316e3f3fe58481f857fe1dba954b44cbd01b4d97f0f'
-    launcher_disp_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_image" "$launcher_disp_archive" "$test_build/launcher-disp.ppm" 55132 'compositor bigarena' 2>&1)
+    launcher_disp_golden='d7372f001745d03ccd5f72524d06134742a1dad02590d850cf4367f5249b813e'
+    launcher_disp_dump=$(python3 "$repo/scripts/neperos-screendump.py" qemu-system-aarch64 "$neperos_display_image" "$launcher_disp_archive" "$test_build/launcher-disp.ppm" 55132 'compositor bigarena' 2>&1)
     case "$launcher_disp_dump" in
         *"sha256 $launcher_disp_golden"*) ;;
         *) printf '%s\n' "NeperOS launcher over the compositor did not match the golden: $launcher_disp_dump" >&2; exit 1 ;;
@@ -9262,7 +9268,7 @@ greeting"
     # disk, program 6 the loader that writes and reads /wall.png and sends it to the shell.
     shell_disk="$test_build/shell-disk.img"
     truncate -s 1M "$shell_disk"
-    shell_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$shell_archive" keyboard "$test_build/shell.serial" 55135 "compositor bigarena unified" 'shell home' "$shell_disk" 2>&1)
+    shell_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$shell_archive" keyboard "$test_build/shell.serial" 55135 "compositor bigarena unified" 'shell home' "$shell_disk" 2>&1)
     case "$shell_boot" in
         *'shell wallpaper from fs'*'shell presented'*'shell status '*'shell status service notes 1'*'comp composited flushed'*'shell tap'*'shell launched app'*'shell app code 5'*'shell home'*)
             case "$shell_boot" in
@@ -9275,6 +9281,7 @@ greeting"
             esac ;;
         *) printf '%s\n' "NeperOS unified shell did not host the launcher, show status and launch an app on a tap: $shell_boot" >&2; exit 1 ;;
     esac
+    unset NEPEROS_MEM NEPEROS_GPU
 fi
 
 printf '%s\n' 'selfhost tests passed'

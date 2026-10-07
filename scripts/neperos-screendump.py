@@ -41,10 +41,10 @@ def main():
         if os.path.exists(stale):
             os.remove(stale)
     args = [
-        qemu, "-M", "virt,gic-version=3", "-cpu", "cortex-a76", "-m", "256M",
+        qemu, "-M", "virt,gic-version=3", "-cpu", "cortex-a76", "-m", os.environ.get("NEPEROS_MEM", "256M"),
         "-nic", "none", "-no-reboot", "-display", "none",
         "-kernel", kernel, "-initrd", initrd, "-append", append,
-        "-device", "virtio-gpu-pci",
+        "-device", os.environ.get("NEPEROS_GPU", "virtio-gpu-pci"),
         "-serial", "file:" + serial,
         "-qmp", "tcp:127.0.0.1:%d,server,nowait" % port,
     ]

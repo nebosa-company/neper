@@ -264,25 +264,37 @@ fn put_aux(space: Space, slot: usize, value: usize) {
     os.store64(space.region_phys + AUX_OFF + slot * 8usize, u64(value))
 }
 
-// (D2162, C110) A shared surface frame: a fixed window near the top of the user gigabyte's level-3
-// table (above the 512 KB program window and the thread-stack region), mapped to the SAME physical
-// pages in two spaces so an app and the compositor share one surface. 256 KB = a 256x256 BGRA frame.
-const SHARED_FRAME_OFFSET: usize = 1835008usize
-const SHARED_FRAME_PAGES: usize = 64usize
+// (D2162, C110; resized D2201) A shared surface frame: the whole screen, mapped to the SAME physical
+// pages in two spaces so an app and the compositor share one surface. It starts at the 2 MB boundary
+// above the program window (the first level-3 table covers exactly 2 MB), and each further 2 MB of
+// it takes the next level-2 slot with a level-3 table of its own. The Pixel 9 Pro's 1280x2856 BGRA
+// frame is 14.6 MB = 3570 pages = seven tables. The size is also written in lib/e/os.neperos.e
+// (SURFACE_W, SURFACE_H, SHARED_FRAME_VA) for the EL0 side, and in the compositor; keep them equal.
+const SHARED_FRAME_OFFSET: usize = 2097152usize
+const SHARED_FRAME_W: usize = 1280usize
+const SHARED_FRAME_H: usize = 2856usize
+const SHARED_FRAME_BYTES: usize = SHARED_FRAME_W * SHARED_FRAME_H * 4usize
+const SHARED_FRAME_PAGES: usize = (SHARED_FRAME_BYTES + 4095usize) / 4096usize
 const SHARED_FRAME_VA: usize = USER_BASE + SHARED_FRAME_OFFSET
 
 // Map `pages` physical pages at `phys` into the address space `ttbr` at the shared-frame VA,
 // EL0-RW. Mapping the same `phys` into two spaces gives them a shared surface at SHARED_FRAME_VA.
-fn map_phys_at(ttbr: usize, phys: usize, pages: usize) -> err {
+fn map_shared(a: *mem.Arena, ttbr: usize, phys: usize, pages: usize) -> err {
     let l1 = ttbr & TABLE_MASK
     let l2 = usize(os.load64(l1 + L1_USER_INDEX * 8usize)) & TABLE_MASK
-    let l3 = usize(os.load64(l2)) & TABLE_MASK
-    let first = SHARED_FRAME_OFFSET >> 12usize
     let bits = user_page_bits()
-    var i = 0usize
-    while i < pages {
-        os.store64(l3 + (first + i) * 8usize, u64((phys + i * PAGE) | bits))
-        i += 1usize
+    let first_slot = SHARED_FRAME_OFFSET >> 21usize
+    var page = 0usize
+    while page < pages {
+        let (l3, l3_error) = page_of(a)
+        if l3_error != ok { ret l3_error }
+        var entry = 0usize
+        while entry < 512usize && page < pages {
+            os.store64(l3 + entry * 8usize, u64((phys + page * PAGE) | bits))
+            entry += 1usize
+            page += 1usize
+        }
+        os.store64(l2 + (first_slot + (page - 1usize) / 512usize) * 8usize, u64(l3 | TABLE))
     }
     os.barrier()
     os.tlb_flush()

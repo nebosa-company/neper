@@ -8,7 +8,9 @@ use e.os
 use e.gfx.geometry
 use e.gfx.paint
 
-const SHARED: usize = 548683907072usize
+const SHARED: usize = 548684169216usize
+// The shared frame is the whole screen (1280 pixels a row); this app draws a 256x256 patch of it at the top-left.
+const STRIDE: usize = 1280usize
 const SURFACE_W: usize = 256usize
 const SURFACE_H: usize = 256usize
 const COMP: usize = 1usize
@@ -42,7 +44,7 @@ fn fill_rect(x0: usize, y0: usize, w: usize, h: usize, b: u8, g: u8, r: u8) {
     while y < h {
         var x = 0usize
         while x < w {
-            let p = SHARED + ((y0 + y) * SURFACE_W + (x0 + x)) * 4usize
+            let p = SHARED + ((y0 + y) * STRIDE + (x0 + x)) * 4usize
             os.store8(p, b)
             os.store8(p + 1usize, g)
             os.store8(p + 2usize, r)
@@ -65,7 +67,7 @@ fn blit(ox: usize, oy: usize, coverage: []f32, b: u8, g: u8, r: u8) {
         while x < TILE {
             let cov = coverage[y * TILE + x]
             if cov > 0.0 {
-                let p = SHARED + ((oy + y) * SURFACE_W + (ox + x)) * 4usize
+                let p = SHARED + ((oy + y) * STRIDE + (ox + x)) * 4usize
                 os.store8(p, blend(os.load8(p), b, cov))
                 os.store8(p + 1usize, blend(os.load8(p + 1usize), g, cov))
                 os.store8(p + 2usize, blend(os.load8(p + 2usize), r, cov))

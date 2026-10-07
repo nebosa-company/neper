@@ -58,7 +58,7 @@ def main():
         os.remove(serial)
     dev = "virtio-keyboard-pci" if device == "keyboard" else "virtio-tablet-pci"
     args = [
-        qemu, "-M", "virt,gic-version=3", "-cpu", "cortex-a76", "-m", "256M",
+        qemu, "-M", "virt,gic-version=3", "-cpu", "cortex-a76", "-m", os.environ.get("NEPEROS_MEM", "256M"),
         "-nic", "none", "-no-reboot", "-display", "none",
         "-kernel", kernel, "-initrd", archive, "-append", append,
         "-device", dev,
@@ -66,7 +66,7 @@ def main():
         "-qmp", "tcp:127.0.0.1:%d,server,nowait" % port,
     ]
     if "compositor" in append.split():
-        args[args.index("-device"):args.index("-device")] = ["-device", "virtio-gpu-pci"]
+        args[args.index("-device"):args.index("-device")] = ["-device", os.environ.get("NEPEROS_GPU", "virtio-gpu-pci")]
     # An optional raw disk image (argv[9]) behind a virtio-blk device, for the unified shell's
     # filesystem wallpaper (D2196).
     if len(sys.argv) > 9:
