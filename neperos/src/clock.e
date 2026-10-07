@@ -15,6 +15,7 @@
 // background ringer yet), so one rings only while the app is open.
 use e.mem
 use e.os
+use e.math
 use e.time
 use e.gfx.geometry
 use e.gfx.paint
@@ -629,8 +630,10 @@ fn draw_timer(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *Sta
     ret ok
 }
 
-// ---- the stopwatch tab
+// ---- the stopwatch tab: an analogue dial (after Android's), the digital time over it, a seconds hand,
+// a thirty-minute sub-dial, a round play button, and a navigation bar at the bottom.
 
+// "MM:SS.t" of a count of milliseconds (the lap list).
 fn stopwatch_text(a: *mem.Arena, ms: i64) -> str {
     let total_tenths = usize(ms / 100i64)
     let tenths = total_tenths % 10usize
@@ -639,26 +642,185 @@ fn stopwatch_text(a: *mem.Arena, ms: i64) -> str {
     ret join(a, two(a, minutes), ":", join(a, two(a, seconds), ".", number(a, tenths)))
 }
 
+fn sw_blue() -> paint.Color {
+    ret paint.Color { red: 0.0, green: 0.40, blue: 1.0, alpha: 1.0 }
+}
+
+// The point at `radius` from (cx, cy) at `turns` of a full turn clockwise from straight up.
+fn on_dial(cx: f32, cy: f32, radius: f32, turns: f32) -> geometry.Point {
+    let angle = turns * 6.2831855
+    ret geometry.Point { x: cx + radius * math.sin[f32](angle), y: cy - radius * math.cos[f32](angle) }
+}
+
+// A ring of ticks around a dial: `count` of them from `outer` to `inner`, every `every`th one long
+// (to `long_inner`) when `every` is not zero.
+fn ticks(a: *mem.Arena, builder: *scene.Builder, cx: f32, cy: f32, outer: f32, inner: f32, long_inner: f32, count: usize, every: usize, width: f32, long_width: f32, c: paint.Color) -> err {
+    let (minor_builder, minor_error) = geometry.path_builder(a, count * 2usize + 2usize, count * 2usize + 2usize)
+    if minor_error != ok { ret minor_error }
+    var minor = minor_builder
+    let (major_builder, major_error) = geometry.path_builder(a, count * 2usize + 2usize, count * 2usize + 2usize)
+    if major_error != ok { ret major_error }
+    var major = major_builder
+    var i = 0usize
+    while i < count {
+        let turns = f32(i) / f32(count)
+        if every != 0usize && i % every == 0usize {
+            try geometry.move_to(&major, on_dial(cx, cy, outer, turns))
+            try geometry.line_to(&major, on_dial(cx, cy, long_inner, turns))
+        } else {
+            try geometry.move_to(&minor, on_dial(cx, cy, outer, turns))
+            try geometry.line_to(&minor, on_dial(cx, cy, inner, turns))
+        }
+        i += 1usize
+    }
+    try scene.push(builder, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&minor), brush: paint.Brush { Solid: c }, stroke: paint.Stroke { width: width, cap: paint.StrokeCap.Round, join: paint.StrokeJoin.Round, miter_limit: 4.0 } } })
+    try scene.push(builder, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&major), brush: paint.Brush { Solid: c }, stroke: paint.Stroke { width: long_width, cap: paint.StrokeCap.Round, join: paint.StrokeJoin.Round, miter_limit: 4.0 } } })
+    ret ok
+}
+
+fn hand(a: *mem.Arena, builder: *scene.Builder, from: geometry.Point, to: geometry.Point, width: f32, c: paint.Color) -> err {
+    let (path_builder, path_error) = geometry.path_builder(a, 2usize, 2usize)
+    if path_error != ok { ret path_error }
+    var line = path_builder
+    try geometry.move_to(&line, from)
+    try geometry.line_to(&line, to)
+    try scene.push(builder, scene.Command { StrokePath: scene.StrokePath { path: geometry.finish(&line), brush: paint.Brush { Solid: c }, stroke: paint.Stroke { width: width, cap: paint.StrokeCap.Round, join: paint.StrokeJoin.Round, miter_limit: 4.0 } } })
+    ret ok
+}
+
+fn disc(a: *mem.Arena, builder: *scene.Builder, cx: f32, cy: f32, radius: f32, c: paint.Color) -> err {
+    let (path, path_error) = svg.ellipse_path(a, cx, cy, radius, radius)
+    if path_error != ok { ret path_error }
+    try scene.push(builder, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: c } } })
+    ret ok
+}
+
+// The navigation icons (24 x 24, drawn in the colour given): alarm clock, globe, stopwatch, hourglass,
+// moon.
+fn nav_icon(tab: usize) -> str {
+    if tab == 0usize { ret "<svg viewBox='0 0 24 24'><g fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='13.5' r='7.5'/><path d='M12 9.5v4.2l2.6 1.8M3.6 6.2 7 3.4M20.4 6.2 17 3.4'/></g></svg>" }
+    if tab == 1usize { ret "<svg viewBox='0 0 24 24'><g fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='12' cy='12' r='9'/><ellipse cx='12' cy='12' rx='4' ry='9'/><path d='M3.4 9.4h17.2M3.4 14.6h17.2'/></g></svg>" }
+    if tab == 2usize { ret "<svg viewBox='0 0 24 24'><g fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6.5 3h11M6.5 21h11M7.5 3c0 4.6 3 6 4.5 9-1.5 3-4.5 4.4-4.5 9M16.5 3c0 4.6-3 6-4.5 9 1.5 3 4.5 4.4 4.5 9'/></g></svg>" }
+    if tab == 3usize { ret "<svg viewBox='0 0 24 24'><g fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'><circle cx='12' cy='14' r='7.6'/><path d='M9.5 2.6h5M12 2.6v3.8M12 14l3-3'/></g></svg>" }
+    ret "<svg viewBox='0 0 24 24'><path d='M15.5 3a9.2 9.2 0 1 0 5.5 13.6A7.4 7.4 0 0 1 15.5 3z' fill='none' stroke='currentColor' stroke-width='2' stroke-linejoin='round'/></svg>"
+}
+
+fn nav_name(tab: usize) -> str {
+    if tab == 0usize { ret "Alarm" }
+    if tab == 1usize { ret "World clock" }
+    if tab == 2usize { ret "Timer" }
+    if tab == 3usize { ret "Stopwatch" }
+    ret "Bedtime"
+}
+
+// The bottom navigation of the light screens: an icon and a name for each tab.
+fn draw_nav(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *State) -> err {
+    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 826.0, 412.0, 93.0), brush: paint.Brush { Solid: paint.Color { red: 0.985, green: 0.985, blue: 0.99, alpha: 1.0 } } } })
+    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 826.0, 412.0, 0.6), brush: paint.Brush { Solid: paint.Color { red: 0.86, green: 0.87, blue: 0.9, alpha: 1.0 } } } })
+    var slot = 0usize
+    while slot < 5usize {
+        // Android's order: Alarm, World clock, Stopwatch, Timer, then Bedtime.
+        var tab = slot
+        if slot == 2usize { tab = STOPWATCH_TAB }
+        if slot == 3usize { tab = TIMER_TAB }
+        let cx = 41.2 + f32(slot) * 82.4
+        var c = paint.Color { red: 0.45, green: 0.47, blue: 0.5, alpha: 1.0 }
+        if tab == s.tab { c = paint.Color { red: 0.1, green: 0.1, blue: 0.12, alpha: 1.0 } }
+        var icon = tab
+        if tab == STOPWATCH_TAB { icon = 3usize }
+        if tab == TIMER_TAB { icon = 2usize }
+        if tab == BEDTIME_TAB { icon = 4usize }
+        try svg.draw(a, builder, nav_icon(icon), geometry.rect(cx - 13.0, 836.0, 26.0, 26.0), c)
+        try centred(a, builder, faces.jost, 12.0, nav_name(tab), cx, 866.0, c)
+        hit(s, 100usize + tab, cx - 41.0, 826.0, 82.0, 64.0)
+        slot += 1usize
+    }
+    ret ok
+}
+
 fn draw_stopwatch(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *State) -> err {
-    try card(a, builder, 36.0, 172.0, 340.0, 130.0, 16.0, white())
-    try centred(a, builder, faces.jost_bold, 66.0, stopwatch_text(a, stopwatch_ms(s)), 206.0, 202.0, ink())
-    var main_label = "Start"
-    if s.sw_running { main_label = "Stop" }
-    try button(a, builder, s, faces, 501usize, 36.0, 320.0, 108.0, 52.0, "Lap", grey(), 18.0)
-    try button(a, builder, s, faces, 500usize, 152.0, 320.0, 108.0, 52.0, main_label, amber(), 18.0)
-    try button(a, builder, s, faces, 502usize, 268.0, 320.0, 108.0, 52.0, "Reset", grey(), 18.0)
+    let ms = stopwatch_ms(s)
+    let cx: f32 = 206.0
+    let cy: f32 = 251.0
+    let blue = sw_blue()
+    let dark = paint.Color { red: 0.1, green: 0.1, blue: 0.12, alpha: 1.0 }
+    let tick_grey = paint.Color { red: 0.55, green: 0.56, blue: 0.6, alpha: 1.0 }
+    // The dial: a soft glow, then the face.
+    try disc(a, builder, cx, cy, 154.0, paint.Color { red: 0.86, green: 0.89, blue: 0.97, alpha: 0.55 })
+    try disc(a, builder, cx, cy, 149.0, paint.Color { red: 0.965, green: 0.965, blue: 0.972, alpha: 1.0 })
+    try ticks(a, builder, cx, cy, 142.0, 135.0, 128.0, 60usize, 5usize, 1.4, 3.6, tick_grey)
+    // The numbers every five seconds, "60" at the top.
+    var mark = 0usize
+    while mark < 12usize {
+        var label = "60"
+        if mark != 0usize { label = number(a, mark * 5usize) }
+        let at = on_dial(cx, cy, 106.0, f32(mark) / 12.0)
+        try centred(a, builder, faces.jost, 17.0, label, at.x, at.y - 10.0, dark)
+        mark += 1usize
+    }
+    // The sub-dial: thirty minutes round.
+    let sx: f32 = 206.0
+    let sy: f32 = 302.0
+    try ticks(a, builder, sx, sy, 35.0, 31.0, 28.0, 30usize, 5usize, 0.8, 1.6, tick_grey)
+    var sub = 0usize
+    while sub < 6usize {
+        var label = "30"
+        if sub != 0usize { label = number(a, sub * 5usize) }
+        let at = on_dial(sx, sy, 22.0, f32(sub) / 6.0)
+        try centred(a, builder, faces.jost, 9.0, label, at.x, at.y - 5.5, dark)
+        sub += 1usize
+    }
+    // The time over the dial: minutes dark, seconds and hundredths blue.
+    let minutes_text = join(a, two(a, usize(ms / 60000i64) % 100usize), ":", "")
+    let seconds_text = join(a, two(a, usize(ms / 1000i64) % 60usize), ".", two(a, usize(ms / 10i64) % 100usize))
+    let wm = text.measure(a, faces.jost_bold, 36.0, minutes_text)
+    let ws = text.measure(a, faces.jost_bold, 36.0, seconds_text)
+    let left = cx - (wm + ws) / 2.0
+    try put(a, builder, faces.jost_bold, 36.0, minutes_text, left, 175.0, dark)
+    try put(a, builder, faces.jost_bold, 36.0, seconds_text, left + wm, 175.0, blue)
+    // The sub-dial's hand (one turn in thirty minutes), the seconds hand, and the hub.
+    let minute_turns = f32(ms % 1800000i64) / 1800000.0
+    try hand(a, builder, geometry.Point { x: sx, y: sy }, on_dial(sx, sy, 24.0, minute_turns), 2.4, dark)
+    try disc(a, builder, sx, sy, 3.5, dark)
+    let second_turns = f32(ms % 60000i64) / 60000.0
+    try hand(a, builder, on_dial(cx, cy, 0.0 - 14.0, second_turns), on_dial(cx, cy, 116.0, second_turns), 3.2, blue)
+    try disc(a, builder, cx, cy, 11.0, dark)
+    try disc(a, builder, cx, cy, 4.0, blue)
+    // The laps, newest first, when there are any.
     var lap = 0usize
-    while lap < s.lap_total {
-        // Newest first.
+    while lap < s.lap_total && lap < 5usize {
         let index = s.lap_total - 1usize - lap
         var split = s.laps[index]
         if index > 0usize { split = s.laps[index] - s.laps[index - 1usize] }
-        let y = 392.0 + f32(lap) * 52.0
-        try card(a, builder, 36.0, y, 340.0, 44.0, 12.0, white())
-        try put(a, builder, faces.grotesk, 14.0, join(a, "Lap ", number(a, index + 1usize), ""), 52.0, y + 13.0, muted())
-        try centred(a, builder, faces.jost, 20.0, stopwatch_text(a, split), 216.0, y + 8.0, ink())
-        try right(a, builder, faces.grotesk, 13.0, stopwatch_text(a, s.laps[index]), 360.0, y + 14.0, muted())
+        let y = 424.0 + f32(lap) * 44.0
+        try put(a, builder, faces.jost, 16.0, join(a, "Lap ", number(a, index + 1usize), ""), 40.0, y, tick_grey)
+        try centred(a, builder, faces.jost, 20.0, stopwatch_text(a, split), 206.0, y - 3.0, dark)
+        try right(a, builder, faces.jost, 16.0, stopwatch_text(a, s.laps[index]), 372.0, y, tick_grey)
         lap += 1usize
+    }
+    // The buttons: a round play (or pause) button, with Lap and Reset beside it once there is time on it.
+    try disc(a, builder, cx, 774.0, 32.0, blue)
+    if s.sw_running {
+        try card(a, builder, cx - 10.0, 762.0, 7.0, 24.0, 2.0, white())
+        try card(a, builder, cx + 3.0, 762.0, 7.0, 24.0, 2.0, white())
+    } else {
+        let (play_builder, play_error) = geometry.path_builder(a, 4usize, 3usize)
+        if play_error != ok { ret play_error }
+        var play = play_builder
+        try geometry.move_to(&play, geometry.Point { x: cx - 8.0, y: 760.0 })
+        try geometry.line_to(&play, geometry.Point { x: cx + 13.0, y: 774.0 })
+        try geometry.line_to(&play, geometry.Point { x: cx - 8.0, y: 788.0 })
+        try geometry.close_path(&play)
+        try scene.push(builder, scene.Command { FillPath: scene.FillPath { path: geometry.finish(&play), brush: paint.Brush { Solid: white() } } })
+    }
+    hit(s, 500usize, cx - 36.0, 738.0, 72.0, 72.0)
+    if s.sw_running || s.sw_acc_ms > 0i64 {
+        try disc(a, builder, 100.0, 774.0, 26.0, paint.Color { red: 0.9, green: 0.91, blue: 0.95, alpha: 1.0 })
+        try centred(a, builder, faces.jost, 14.0, "Lap", 100.0, 765.0, dark)
+        hit(s, 501usize, 70.0, 744.0, 60.0, 60.0)
+        try disc(a, builder, 312.0, 774.0, 26.0, paint.Color { red: 0.9, green: 0.91, blue: 0.95, alpha: 1.0 })
+        try centred(a, builder, faces.jost, 14.0, "Reset", 312.0, 765.0, dark)
+        hit(s, 502usize, 282.0, 744.0, 60.0, 60.0)
     }
     ret ok
 }
@@ -701,16 +863,22 @@ fn draw_bedtime(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *S
 
 fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> err {
     s.hit_total = 0usize
-    try chrome(a, builder, kit, s)
     let faces = kit.faces
+    if s.tab == STOPWATCH_TAB {
+        // The stopwatch is a light full screen with its own navigation bar; the other tabs sit on cards.
+        try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, kit.logical_h), brush: paint.Brush { Solid: paint.Color { red: 0.953, green: 0.957, blue: 0.969, alpha: 1.0 - f32(kit.frame % 2usize) * 0.002 } } } })
+        try draw_stopwatch(a, builder, faces, s)
+        try draw_nav(a, builder, faces, s)
+        try card(a, builder, 156.0, 906.0, 100.0, 5.0, 2.5, paint.Color { red: 0.15, green: 0.15, blue: 0.17, alpha: 0.8 })
+        ret ok
+    }
+    try chrome(a, builder, kit, s)
     if s.tab == ALARM_TAB {
         try draw_alarm(a, builder, faces, s)
     } else if s.tab == CLOCK_TAB {
         try draw_clock(a, builder, faces, s)
     } else if s.tab == TIMER_TAB {
         try draw_timer(a, builder, faces, s)
-    } else if s.tab == STOPWATCH_TAB {
-        try draw_stopwatch(a, builder, faces, s)
     } else {
         try draw_bedtime(a, builder, faces, s)
     }
@@ -958,6 +1126,12 @@ fn say_hhmm(minutes: usize) {
     say(buffer[0usize..5usize])
 }
 
+// The y from which a tap leaves the app: the bottom bar of the cards, or below the stopwatch's navigation.
+fn exit_y(s: *State) -> f32 {
+    if s.tab == STOPWATCH_TAB { ret 896.0 }
+    ret 850.0
+}
+
 fn hit_at(s: *State, x: f32, y: f32) -> usize {
     var i = s.hit_total
     while i > 0usize {
@@ -1056,7 +1230,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             } else {
                 appkit.answer(appkit.ANSWER_NONE)
             }
-        } else if tap.y >= 850.0 {
+        } else if tap.y >= exit_y(&s) {
             say("clock home\n")
             appkit.leave()
             running = false

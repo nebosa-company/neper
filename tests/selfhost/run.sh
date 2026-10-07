@@ -9337,7 +9337,7 @@ greeting"
     # an alarm is added and saved, and the home bar leaves. The input server's 500 ms ticks drive the
     # running displays; a full frame takes seconds under emulation, so the taps are eight seconds apart.
     export NEPEROS_TAP_DELAY=8
-    clock_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-clock.serial" 55140 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;4096,12405;21912,4919;16384,12333;16384,12333;16384,4919;16384,11157;16384,21173;16384,17751;5369,4919;9226,13652;9067,18678;16384,31368' 2>&1)
+    clock_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-clock.serial" 55140 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;4096,12405;21912,4919;16384,27590;16384,27590;22906,30655;16384,11157;16384,21173;16384,17751;5369,4919;9226,13652;9067,18678;16384,31368' 2>&1)
     case "$clock_boot" in
         *'clock shown'*'clock stopwatch started'*'clock stopwatch stopped '*'clock timer started'*'clock timer done'*'clock alarm saved 07:00'*'clock home'*) ;;
         *) printf '%s
