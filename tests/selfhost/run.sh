@@ -9180,6 +9180,20 @@ greeting"
         *'input ev 3 0 16384'*'input ev 3 1 16384'*'input ev 1 272 1'*'input client done'*) ;;
         *) printf '%s\n' "NeperOS input did not deliver the tap over IPC: $input_tab" >&2; exit 1 ;;
     esac
+    # (D2178, C112) The launcher's tap-to-launch and Home round trip: the input boot's archive is the
+    # input server (0), the launcher (1) and an app (2). A key injected through QMP reaches the
+    # launcher, which launches the app as a process (os.launch), reaps it (os.reap) and returns Home.
+    tap_launcher_img="$test_build/tap_launcher.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/tap_launcher.e" "$repo" aarch64 neperos "$tap_launcher_img")" = 'executable written' ]
+    tap_app_img="$test_build/tap_app.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/tap_app.e" "$repo" aarch64 neperos "$tap_app_img")" = 'executable written' ]
+    tap_archive="$test_build/tap-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$tap_archive" "$input_server_img" "$tap_launcher_img" "$tap_app_img"
+    tap_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$tap_archive" keyboard "$test_build/tap.serial" 55134 input 'launcher home' 2>&1)
+    case "$tap_boot" in
+        *'launcher tap'*'launcher launched app'*'tap app ran'*'launcher app code 5'*'launcher home'*) ;;
+        *) printf '%s\n' "NeperOS launcher did not launch an app and return Home on a tap: $tap_boot" >&2; exit 1 ;;
+    esac
 fi
 
 printf '%s\n' 'selfhost tests passed'

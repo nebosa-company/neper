@@ -37745,3 +37745,24 @@ and both are identical on the host and on NeperOS (QEMU 8.2 and 11.1), so the ho
 check. The page is chosen by which global indices (page * 40 + slot) fall below the app count, and
 the dot row draws ceil(count / 40) dots. C112 -> 0.9. Remaining: tap-to-launch with Home (the
 launch-and-return round trip) and the init program starting the launcher after boot.
+
+## D2178 — C112: the launcher's tap-to-launch and Home round trip
+
+The launcher now launches an app on a tap and returns Home. neperos/src/tap_launcher.e is program 1
+of the input boot's archive (the C109 input server is program 0, an app program 2). The input server
+forwards each event to the launcher over its endpoint (slot 1); on the first key-down -- a tap on an
+icon -- the launcher launches the app as a process (os.launch of archive index 2), waits for it
+(os.reap), and reports Home, back at the launcher. neperos/src/tap_app.e prints a line and exits with
+code 5. A key injected through QMP drives the whole round trip: the serial shows `launcher tap` /
+`launcher launched app` / `tap app ran` / `launcher app code 5` / `launcher home`, identical on QEMU
+8.2 (WSL) and 11.1 (Windows). No kernel change -- the input boot already starts programs 0 and 1 and
+os.launch starts program 2 on demand; neperos-input.py gained an optional done-marker argument so the
+harness waits for `launcher home` rather than the input client's line. This is the launch-and-return
+round trip the C112 acceptance names.
+
+C112 -> 0.95. All of C112's feature clauses are now demonstrated on NeperOS -- the launcher layout
+(D2172), presentation over the compositor (D2173), a PNG wallpaper from the filesystem (D2174), the
+live C111 top-bar status (D2175), app-icon labels (D2176), paging past 40 icons (D2177) and
+tap-to-launch with Home (D2178). Remaining: a single launcher binary that wires the filesystem,
+status, compositor and input servers together in one boot (the production shell), rather than the
+focused per-feature programs that prove each capability.

@@ -51,6 +51,9 @@ def main():
     # The boot mode: `input` (the input server + client, C109) or `compositor` (the compositor routes
     # input to the focused app, C110), which also needs the display device.
     append = sys.argv[7] if len(sys.argv) > 7 else "input"
+    # The serial line that marks the run complete (default per boot mode); a caller whose client
+    # prints something else (e.g. the tap-launch launcher) passes its own.
+    done_needle = sys.argv[8] if len(sys.argv) > 8 else ("app done" if append == "compositor" else "input client done")
     if os.path.exists(serial):
         os.remove(serial)
     dev = "virtio-keyboard-pci" if device == "keyboard" else "virtio-tablet-pci"
@@ -91,7 +94,7 @@ def main():
                 {"type": "btn", "data": {"down": True, "button": "left"}}]}})
             qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
                 {"type": "btn", "data": {"down": False, "button": "left"}}]}})
-        wait_for(serial, "app done", 20) if append == "compositor" else wait_for(serial, "input client done", 20)
+        wait_for(serial, done_needle, 20)
         sys.stdout.write(serial_text(serial))
         try:
             qmp(sock, {"execute": "quit"})

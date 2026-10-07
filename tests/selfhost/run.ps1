@@ -9325,6 +9325,20 @@ if ($neperosQemu) {
     if ($kbd -notmatch '(?s)input ev 1 30 1.*input ev 1 30 0.*input client done') { throw "NeperOS input did not deliver the key over IPC: $kbd" }
     $tab = (& python $inputScript $neperosQemu.Source $neperosImage $inputArchive tablet (Join-Path $testBuild 'input-tab.serial') 55126 2>&1) -join "`n"
     if ($tab -notmatch '(?s)input ev 3 0 16384.*input ev 3 1 16384.*input ev 1 272 1.*input client done') { throw "NeperOS input did not deliver the tap over IPC: $tab" }
+    # (D2178, C112) The launcher's tap-to-launch and Home round trip: the input boot's archive is the
+    # input server (0), the launcher (1) and an app (2). A key injected through QMP reaches the
+    # launcher, which launches the app as a process (os.launch), reaps it (os.reap) and returns Home.
+    $tapLauncher = Join-Path $testBuild 'tap_launcher.img'
+    $tapApp = Join-Path $testBuild 'tap_app.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\tap_launcher.e') $repo aarch64 neperos $tapLauncher | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS tap launcher did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\tap_app.e') $repo aarch64 neperos $tapApp | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS tap app did not build' }
+    $tapArchive = Join-Path $testBuild 'tap-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $tapArchive $inputServer $tapLauncher $tapApp
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS tap-launch archive did not assemble' }
+    $tap = (& python $inputScript $neperosQemu.Source $neperosImage $tapArchive keyboard (Join-Path $testBuild 'tap.serial') 55134 input 'launcher home' 2>&1) -join "`n"
+    if ($tap -notmatch '(?s)launcher tap.*launcher launched app.*tap app ran.*launcher app code 5.*launcher home') { throw "NeperOS launcher did not launch an app and return Home on a tap: $tap" }
 }
 
 Write-Output 'selfhost tests passed'
