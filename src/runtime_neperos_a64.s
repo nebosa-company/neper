@@ -231,7 +231,8 @@ neper_os_exit:
     b np_exit
 
 // os.write(file: *File, bytes: *[]const u8) -> (usize, err): the bytes to the console,
-// whichever file.
+// whichever file. Kept for the other targets' shape; on NeperOS os.write is written in the e.os
+// variant and this is no longer the write path -- console_write below is.
 .global neper_os_write
 neper_os_write:
     ldr x2, [x1, #8]
@@ -241,6 +242,19 @@ neper_os_write:
     mov x8, #0
     svc #0
     mov x1, #0
+    ret
+
+// os.console_write(buf: str) -> usize (D2158): the bytes of the slice `buf` (passed by pointer in
+// x0) to the console; the count written comes back. The e.os variant's `write` calls this for
+// stdout and stderr, and sends file writes to the filesystem server instead.
+.global neper_os_console_write
+neper_os_console_write:
+    ldr x2, [x0, #8]
+    ldr x1, [x0]
+    mov x0, x1
+    mov x1, x2
+    mov x8, #0
+    svc #0
     ret
 
 // os.copy_bytes(dst: *[]u8, src: *[]const u8) (D329): the shorter length's worth of

@@ -11,6 +11,8 @@
 // compiler and must not be declared again here. The larger surface (e.fs, e.time wall clock,
 // e.thread) lands in later C107 increments.
 
+use e.mem
+
 // The separator this target's paths are written with (e.path asks the host nothing, so a portable
 // module learns the convention only from the per-target os file). NeperOS uses '/'.
 const NATIVE_SEPARATOR: u8 = 47u8
@@ -30,6 +32,11 @@ type Stdio = struct { stdin: File, stdout: File, stderr: File, inherit: []const 
 // compiles unchanged. NeperOS classifies little for now: a failed primitive is `Other`.
 type ErrorKind = enum u8 { NotFound, Denied, Exists, Interrupted, OutOfMemory, Timeout, WouldBlock, Unsupported, Invalid, Other }
 type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
+// The same shapes the other os variants expose, so e.fs's `os.FileInfo`/`os.Dir`/`os.ResolvePolicy`
+// compile unchanged. NeperOS fills only what its server reports (kind and size).
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, link_count: u64 }
+type Dir = resource(dir_close) struct { raw: usize }
+type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 
 // Read into `buffer`, recording a detail on failure. A wrapper over the seeded `read` primitive;
 // NeperOS has no errno, so the detail carries only the operation.
@@ -39,9 +46,306 @@ fn read_detail(f: File, buffer: []u8, detail: *ErrorDetail) -> (usize, err) {
     ret (count, read_error)
 }
 
-// Write `buffer`, recording a detail on failure. A wrapper over the seeded `write` primitive.
+// Write `buffer`, recording a detail on failure. A wrapper over `write`.
 fn write_detail(f: File, buffer: []const u8, detail: *ErrorDetail) -> (usize, err) {
     let (count, write_error) = write(f, buffer)
     if write_error != ok { *detail = ErrorDetail { kind: ErrorKind.Other, native_code: 0i32, operation: "write", subject: "" } }
     ret (count, write_error)
 }
+
+// (D2158, C107) The file surface, written here rather than seeded as intrinsics (the other targets
+// seed the primitives). stdout and stderr -- file 1 and 2 -- go to the console through the
+// `console_write` primitive; a file goes to the C106 filesystem server over IPC. The server is
+// path-based and whole-file, so a File is a client-side handle: open records the path, read loads
+// the whole file once and serves from an offset, write buffers, and close flushes a dirty buffer.
+// The program must hold the server's request endpoint in slot 1 (send) and its reply endpoint in
+// slot 2 (receive), as the filesystem-server boot grants a client (C106).
+
+// The filesystem IPC protocol, matching neperos/src/fsproto.e. One word per rendezvous: a request
+// is an op word then the path as a length-prefixed byte string (and for a write the data likewise);
+// a reply is a result word, then for a read a length-prefixed byte string, for an open a size word.
+const FS_REQ: usize = 1usize
+const FS_REP: usize = 2usize
+const FS_NO_SLOT: usize = 99usize
+const FS_HANDLES: usize = 8usize
+const FS_BLOCK: usize = 512usize
+const FS_NAME: usize = 64usize
+// A File's raw is this base plus a handle index, so a file is told apart from the console file ids.
+const FILE_BASE: usize = 16usize
+const OP_QUIT: usize = 0usize
+const OP_MKDIR: usize = 1usize
+const OP_WRITE: usize = 2usize
+const OP_READ: usize = 3usize
+const OP_LIST: usize = 4usize
+const OP_OPEN: usize = 5usize
+const OP_CLOSE: usize = 6usize
+const OP_REMOVE: usize = 7usize
+const FS_RESULT_OK: usize = 0usize
+
+type FsHandle = struct { used: bool, name: [64]u8, name_len: usize, offset: usize, size: usize, loaded: bool, dirty: bool, data: [512]u8 }
+var fs_handles: [8]FsHandle = zero
+
+fn fs_send_word(word: usize) {
+    let status = send(FS_REQ, word, FS_NO_SLOT)
+}
+
+fn fs_send_str(s: str) {
+    let header = send(FS_REQ, s.len, FS_NO_SLOT)
+    var i = 0usize
+    while i < s.len {
+        let sent = send(FS_REQ, usize(s[i]), FS_NO_SLOT)
+        i += 1usize
+    }
+}
+
+fn fs_send_handle_data(slot: usize, len: usize) {
+    let header = send(FS_REQ, len, FS_NO_SLOT)
+    var i = 0usize
+    while i < len {
+        let sent = send(FS_REQ, usize(fs_handles[slot].data[i]), FS_NO_SLOT)
+        i += 1usize
+    }
+}
+
+fn fs_recv_word() -> usize {
+    ret recv(FS_REP, FS_NO_SLOT)
+}
+
+// Receive a reply's length-prefixed byte string into handle `slot`'s buffer; the stored count (at
+// most FS_BLOCK) comes back, every word consumed so the stream stays in step.
+fn fs_recv_handle_data(slot: usize) -> usize {
+    let len = recv(FS_REP, FS_NO_SLOT)
+    var i = 0usize
+    while i < len {
+        let b = recv(FS_REP, FS_NO_SLOT)
+        if i < FS_BLOCK { fs_handles[slot].data[i] = u8(b) }
+        i += 1usize
+    }
+    if len < FS_BLOCK { ret len }
+    ret FS_BLOCK
+}
+
+fn fs_name_str(slot: usize) -> str {
+    ret fs_handles[slot].name[0usize..fs_handles[slot].name_len]
+}
+
+fn write(f: File, buf: str) -> (usize, err) {
+    if f.raw < FILE_BASE {
+        if f.raw <= 2usize { ret (console_write(buf), ok) }
+        ret (0usize, Unsupported)
+    }
+    let slot = f.raw - FILE_BASE
+    if slot >= FS_HANDLES || !fs_handles[slot].used { ret (0usize, Unsupported) }
+    var n = 0usize
+    while n < buf.len && fs_handles[slot].offset + n < FS_BLOCK {
+        fs_handles[slot].data[fs_handles[slot].offset + n] = buf[n]
+        n += 1usize
+    }
+    fs_handles[slot].offset += n
+    if fs_handles[slot].offset > fs_handles[slot].size { fs_handles[slot].size = fs_handles[slot].offset }
+    fs_handles[slot].dirty = true
+    ret (n, ok)
+}
+
+fn read(f: File, buffer: []u8) -> (usize, err) {
+    if f.raw < FILE_BASE { ret (0usize, ok) }
+    let slot = f.raw - FILE_BASE
+    if slot >= FS_HANDLES || !fs_handles[slot].used { ret (0usize, Unsupported) }
+    if !fs_handles[slot].loaded {
+        fs_send_word(OP_READ)
+        fs_send_str(fs_name_str(slot))
+        let result = fs_recv_word()
+        let count = fs_recv_handle_data(slot)
+        if result != FS_RESULT_OK { ret (0usize, NotFound) }
+        fs_handles[slot].size = count
+        fs_handles[slot].loaded = true
+    }
+    var n = 0usize
+    while n < buffer.len && fs_handles[slot].offset + n < fs_handles[slot].size {
+        buffer[n] = fs_handles[slot].data[fs_handles[slot].offset + n]
+        n += 1usize
+    }
+    fs_handles[slot].offset += n
+    ret (n, ok)
+}
+
+fn open(a: *mem.Arena, path: str, flags: OpenFlags) -> (File, err) {
+    if path.len > FS_NAME { ret (File { raw: 0usize }, Unsupported) }
+    var slot = FS_HANDLES
+    var i = 0usize
+    while i < FS_HANDLES {
+        if !fs_handles[i].used {
+            slot = i
+            i = FS_HANDLES
+        } else {
+            i += 1usize
+        }
+    }
+    if slot == FS_HANDLES { ret (File { raw: 0usize }, OutOfMemory) }
+    fs_handles[slot].used = true
+    fs_handles[slot].name_len = path.len
+    var j = 0usize
+    while j < path.len {
+        fs_handles[slot].name[j] = path[j]
+        j += 1usize
+    }
+    fs_handles[slot].offset = 0usize
+    fs_handles[slot].size = 0usize
+    fs_handles[slot].loaded = false
+    fs_handles[slot].dirty = false
+    // Opened to write: start from an empty, dirty buffer, so a truncating create writes even nothing.
+    if flags.write {
+        fs_handles[slot].loaded = true
+        fs_handles[slot].dirty = true
+    }
+    ret (File { raw: FILE_BASE + slot }, ok)
+}
+
+fn close(f: File) -> err {
+    if f.raw < FILE_BASE { ret ok }
+    let slot = f.raw - FILE_BASE
+    if slot >= FS_HANDLES || !fs_handles[slot].used { ret ok }
+    if fs_handles[slot].dirty {
+        fs_send_word(OP_WRITE)
+        fs_send_str(fs_name_str(slot))
+        fs_send_handle_data(slot, fs_handles[slot].size)
+        let result = fs_recv_word()
+    }
+    fs_handles[slot].used = false
+    ret ok
+}
+
+fn seek(f: File, off: i64, whence: SeekWhence) -> (u64, err) {
+    if f.raw < FILE_BASE { ret (0u64, Unsupported) }
+    let slot = f.raw - FILE_BASE
+    if slot >= FS_HANDLES || !fs_handles[slot].used { ret (0u64, Unsupported) }
+    var pos = fs_handles[slot].offset
+    if whence == SeekWhence.Start {
+        pos = usize(off)
+    } else {
+        if whence == SeekWhence.Current { pos = fs_handles[slot].offset + usize(off) } else { pos = fs_handles[slot].size + usize(off) }
+    }
+    fs_handles[slot].offset = pos
+    ret (u64(pos), ok)
+}
+
+fn readdir(a: *mem.Arena, path: str) -> ([]DirEntry, err) {
+    var empty: []DirEntry = zero
+    ret (empty, Unsupported)
+}
+
+// The size and kind of `path`, over the server's open query (which reports existence and size). A
+// file that is not there is NotFound; a directory the server cannot distinguish, so a present entry
+// is reported as a file.
+fn stat(a: *mem.Arena, path: str) -> (FileInfo, err) {
+    var info: FileInfo = zero
+    fs_send_word(OP_OPEN)
+    fs_send_str(path)
+    let result = fs_recv_word()
+    let size = fs_recv_word()
+    if result != FS_RESULT_OK { ret (info, NotFound) }
+    info.kind = EntryKind.File
+    info.size = u64(size)
+    info.created_ns = -1i64
+    ret (info, ok)
+}
+
+fn lstat(a: *mem.Arena, path: str) -> (FileInfo, err) {
+    let (info, stat_error) = stat(a, path)
+    ret (info, stat_error)
+}
+
+fn mkdir(a: *mem.Arena, path: str) -> err {
+    fs_send_word(OP_MKDIR)
+    fs_send_str(path)
+    let result = fs_recv_word()
+    if result != FS_RESULT_OK { ret Exists }
+    ret ok
+}
+
+fn remove_file(a: *mem.Arena, path: str) -> err {
+    fs_send_word(OP_REMOVE)
+    fs_send_str(path)
+    let result = fs_recv_word()
+    if result != FS_RESULT_OK { ret NotFound }
+    ret ok
+}
+
+fn remove_dir(a: *mem.Arena, path: str) -> err {
+    ret remove_file(a, path)
+}
+
+// The detail-bearing forms, over the plain ones: NeperOS has no errno, so the detail carries only
+// the operation on failure.
+fn stat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err) {
+    let (info, stat_error) = stat(a, path)
+    if stat_error != ok { *detail = ErrorDetail { kind: ErrorKind.NotFound, native_code: 0i32, operation: "stat", subject: path } }
+    ret (info, stat_error)
+}
+
+fn lstat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err) {
+    let (info, stat_error) = stat_detail(a, path, detail)
+    ret (info, stat_error)
+}
+
+fn open_detail(a: *mem.Arena, path: str, flags: OpenFlags, detail: *ErrorDetail) -> (File, err) {
+    let (file, open_error) = open(a, path, flags)
+    if open_error != ok {
+        *detail = ErrorDetail { kind: ErrorKind.Other, native_code: 0i32, operation: "open", subject: path }
+        ret (file, open_error)
+    }
+    ret (file, ok)
+}
+
+fn mkdir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
+    let mkdir_error = mkdir(a, path)
+    if mkdir_error != ok { *detail = ErrorDetail { kind: ErrorKind.Exists, native_code: 0i32, operation: "mkdir", subject: path } }
+    ret mkdir_error
+}
+
+fn remove_file_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
+    let remove_error = remove_file(a, path)
+    if remove_error != ok { *detail = ErrorDetail { kind: ErrorKind.NotFound, native_code: 0i32, operation: "remove", subject: path } }
+    ret remove_error
+}
+
+fn remove_dir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
+    ret remove_file_detail(a, path, detail)
+}
+
+fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
+    ret ErrorDetail { kind: ErrorKind.Other, native_code: 0i32, operation: operation, subject: subject }
+}
+
+// The rest of the path surface NeperOS does not serve yet: a single filesystem server, no symlinks,
+// no working directory, no environment. e.fs compiles against these; they answer Unsupported.
+fn rename(a: *mem.Arena, src: str, dst: str) -> err { ret Unsupported }
+fn rename_detail(a: *mem.Arena, src: str, dst: str, detail: *ErrorDetail) -> err { ret Unsupported }
+fn replace(a: *mem.Arena, src: str, dst: str, overwrite: bool, durable: bool) -> err { ret Unsupported }
+fn canonical(a: *mem.Arena, path: str) -> (str, err) { ret (path, ok) }
+fn canonical_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) { ret (path, ok) }
+fn read_link(a: *mem.Arena, path: str) -> (str, err) { ret ("", Unsupported) }
+fn read_link_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) { ret ("", Unsupported) }
+fn symlink(a: *mem.Arena, target_path: str, link: str) -> err { ret Unsupported }
+fn set_mode(a: *mem.Arena, path: str, mode: u32) -> err { ret Unsupported }
+fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err { ret Unsupported }
+fn create_new(a: *mem.Arena, path: str) -> (File, err) {
+    var flags: OpenFlags = zero
+    flags.write = true
+    flags.create = true
+    let (file, open_error) = open(a, path, flags)
+    ret (file, open_error)
+}
+fn current_dir(a: *mem.Arena) -> (str, err) { ret ("/", ok) }
+fn set_current_dir(a: *mem.Arena, path: str) -> err { ret Unsupported }
+fn env(a: *mem.Arena, name: str) -> (str, err) { ret ("", NotFound) }
+fn executable_path(a: *mem.Arena) -> (str, err) { ret ("/init", ok) }
+fn random(buffer: []u8) -> err { ret Unsupported }
+
+// Directory handles and the *_at family: a single flat server, so these are not served. e.fs
+// compiles against them; a program that needs them gets Unsupported rather than wrong behaviour.
+fn dir_open(a: *mem.Arena, path: str) -> (Dir, err) { ret (Dir { raw: 0usize }, Unsupported) }
+fn dir_close(dir: own Dir) -> err { ret ok }
+fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy: ResolvePolicy) -> (File, err) { ret (File { raw: 0usize }, Unsupported) }
+fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err { ret Unsupported }
+fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path: str, overwrite: bool, durable: bool) -> err { ret Unsupported }

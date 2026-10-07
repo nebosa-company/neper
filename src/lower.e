@@ -924,6 +924,7 @@ fn intrinsic_symbol(name: str) -> (str, err) {
     if check.same(name, "send_event") { ret ("neper_os_send_event", ok) }
     // (D2127, D2128) A NeperOS program's, a runtime_neperos_a64.s function.
     if check.same(name, "yield") { ret ("neper_os_yield", ok) }
+    if check.same(name, "console_write") { ret ("neper_os_console_write", ok) }
     if check.same(name, "send") { ret ("neper_os_send", ok) }
     if check.same(name, "recv") { ret ("neper_os_recv", ok) }
     if check.same(name, "cap_derive") { ret ("neper_os_cap_derive", ok) }

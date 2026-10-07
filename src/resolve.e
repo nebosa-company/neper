@@ -430,12 +430,17 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.mem", "stats", .Value, .Intrinsic)
     try seed(r, g, "e.mem", "Exhausted", .Value, .Error)
     try seed(r, g, "e.mem", "Stats", .Type, .Type)
-    try seed(r, g, "e.os", "open", .Value, .Intrinsic)
+    // (D2158, C107) NeperOS has no host file primitive: open/read/write/close/seek are written in
+    // the e.os NeperOS variant over the filesystem server's IPC (and console_write for stdout), so
+    // they are not seeded as intrinsics for that target. Every other target keeps them.
+    if !same(g.os, "neperos") {
+        try seed(r, g, "e.os", "open", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "read", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "write", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "close", .Value, .Intrinsic)
+        try seed(r, g, "e.os", "seek", .Value, .Intrinsic)
+    }
     try seed(r, g, "e.math", "sqrt", .Value, .Intrinsic)
-    try seed(r, g, "e.os", "read", .Value, .Intrinsic)
-    try seed(r, g, "e.os", "write", .Value, .Intrinsic)
-    try seed(r, g, "e.os", "close", .Value, .Intrinsic)
-    try seed(r, g, "e.os", "seek", .Value, .Intrinsic)
     try seed(r, g, "e.os", "copy_bytes", .Value, .Intrinsic)
     try seed(r, g, "e.os", "touch", .Value, .Intrinsic)
     try seed(r, g, "e.os", "sha256_blocks", .Value, .Intrinsic)
@@ -445,7 +450,7 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.os", "thread_detach", .Value, .Intrinsic)
     try seed(r, g, "e.os", "stdout", .Value, .Intrinsic)
     try seed(r, g, "e.os", "stderr", .Value, .Intrinsic)
-    try seed(r, g, "e.os", "readdir", .Value, .Intrinsic)
+    if !same(g.os, "neperos") { try seed(r, g, "e.os", "readdir", .Value, .Intrinsic) }
     try seed(r, g, "e.os", "spawn", .Value, .Intrinsic)
     try seed(r, g, "e.os", "dlsym", .Value, .Intrinsic)
     try seed(r, g, "e.os", "wait", .Value, .Intrinsic)
@@ -461,6 +466,9 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     // endpoint capability.
     if same(g.os, "neperos") {
         try seed(r, g, "e.os", "yield", .Value, .Intrinsic)
+        // (D2158) The console primitive the e.os variant's `write` calls for stdout and stderr; file
+        // writes go to the filesystem server instead.
+        try seed(r, g, "e.os", "console_write", .Value, .Intrinsic)
         try seed(r, g, "e.os", "send", .Value, .Intrinsic)
         try seed(r, g, "e.os", "recv", .Value, .Intrinsic)
         try seed(r, g, "e.os", "cap_derive", .Value, .Intrinsic)

@@ -37332,3 +37332,33 @@ deterministically (5/5 on each host). neperos/src/thread_test.e: a worker writes
 a pointer into the spawner's memory, and after the join the spawner reads `99` back -- verified on
 QEMU virt on both hosts. Suite fixtures added to run.ps1 and run.sh. Fourth C107 increment; only e.fs
 (the path/dir/stat surface over the C106 filesystem server) remains.
+
+## D2158 — C107: e.fs on NeperOS, file I/O through the C106 server
+
+e.fs runs on NeperOS: a program writes and reads a file through fs.write_file / fs.read_file, which
+reach os.open/read/write/close/stat, and the e.os NeperOS variant routes those to the C106
+filesystem server over IPC. The file primitives are intrinsics seeded as asm wrappers on every other
+target, impractical for the server's multi-step byte protocol; so open/read/write/close/seek/readdir
+are UN-seeded for a `neperos` os (guards in src/resolve.e and src/check.e's seed_os_signatures) and
+WRITTEN in lib/e/os.neperos.e as ordinary Neper functions, while a new `console_write` intrinsic
+(seeded for neperos, a runtime asm wrapper = the old console write) keeps stdout and stderr going to
+the console. The variant now carries the whole e.fs-facing surface: the types (FileInfo, Dir,
+ResolvePolicy), the open/read/write/close/seek primitives, stat/mkdir/remove over the server's IPC
+(fsproto, reimplemented over the seeded send/recv since a lib module cannot import neperos/src), and
+Unsupported stubs for what a single flat server does not do (symlink, rename, working directory,
+environment, directory handles and the *_at family). The server is path-based and whole-file, so a
+File is a CLIENT-SIDE handle (a module table in the variant): open records the path, read loads the
+whole file once and serves from an offset, write buffers, close flushes a dirty buffer with an
+OP_WRITE; File.raw is FILE_BASE+index so a file is told from the console file ids 1/2. A program
+using e.fs is booted as the filesystem-server boot's client (request endpoint slot 1, reply slot 2,
+the caps C106 grants a client). Traps hit on the way: a `;` statement separator is an invalid token
+(newline-separate); `ret f(...)` of a tuple-returning call must destructure first; File is a linear
+type, so open_detail must consume the file on every return path (mirror os.linux.e's two-ret shape).
+Verified on QEMU virt on both hosts: neperos/src/fs_efs.e writes `/hello` and reads it back through
+the server -- `fs write_file ok` then `fs read_file: e.fs on neperos` -- and powers off with exit 0.
+The console path is unchanged: io_test and the whole A-Z capability demo still print through
+console_write (os.write is now the variant's function, not an intrinsic). Suite fixtures added to
+run.ps1 and run.sh. Fifth C107 increment: e.io, e.time, e.fmt, e.thread and e.fs all now compile and
+run on NeperOS. (Kept for later: stdout through the EL0 console server rather than the kernel's
+console write; the Unsupported fs operations the single flat C106 server cannot serve; and porting
+the lib modules' existing fixtures to run on NeperOS, beyond the representative one per module here.)

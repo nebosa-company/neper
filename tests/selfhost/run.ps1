@@ -9085,6 +9085,23 @@ if ($neperosQemu) {
     $threadBoot = Invoke-NeperOS $neperosImage @('-initrd', $threadArchive, '-append', 'shell')
     if ($threadBoot -notmatch '(?s)thread box = 99.*thread wrote 99 via shared memory.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.thread did not spawn and join: $threadBoot" }
     if ($threadBoot -match 'thread value wrong') { throw "NeperOS e.thread join did not block (the worker's write raced the read): $threadBoot" }
+    # (D2158, C107) e.fs on NeperOS: fs_efs writes and reads a file through fs.write_file /
+    # fs.read_file, which the e.os variant routes to the C106 filesystem server over IPC. Booted as
+    # the filesystem-server boot's client (program 1 of the archive, with the server's endpoint caps).
+    $fsEfs = Join-Path $testBuild 'fs_efs.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\fs_efs.e') $repo aarch64 neperos $fsEfs | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.fs program did not build' }
+    $efsArchive = Join-Path $testBuild 'efs-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $efsArchive $fsServer $fsEfs $fsDenied
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.fs archive did not assemble' }
+    $efsDisk = Join-Path $testBuild 'efs-disk.img'
+    $efsStream = [IO.File]::Create($efsDisk); $efsStream.SetLength(1MB); $efsStream.Close()
+    $efsBlk = @('-drive', "file=$efsDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $efsBoot = Invoke-NeperOS $neperosImage (@('-initrd', $efsArchive, '-append', '"fsserver fswrite"') + $efsBlk)
+    if ($efsBoot -notmatch '(?s)fs write_file ok.*fs read_file: e\.fs on neperos.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.fs did not read back what it wrote through the server: $efsBoot" }
+    foreach ($efsLeak in @('fs write_file failed', 'fs read_file failed')) {
+        if ($efsBoot -match [regex]::Escape($efsLeak)) { throw "NeperOS e.fs failed (${efsLeak}): $efsBoot" }
+    }
 }
 
 Write-Output 'selfhost tests passed'

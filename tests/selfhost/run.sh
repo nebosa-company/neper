@@ -8942,6 +8942,20 @@ greeting"
         *) printf '%s\n' "NeperOS e.thread did not spawn and join: $neperos_thread" >&2; exit 1 ;;
     esac
     case "$neperos_thread" in *'thread value wrong'*) printf '%s\n' "NeperOS e.thread join did not block: $neperos_thread" >&2; exit 1 ;; esac
+    # (D2158, C107) e.fs on NeperOS: fs_efs writes and reads a file through fs.write_file /
+    # fs.read_file, routed to the C106 filesystem server over IPC; booted as the server boot's client.
+    fs_efs_img="$test_build/fs_efs.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/fs_efs.e" "$repo" aarch64 neperos "$fs_efs_img")" = 'executable written' ]
+    efs_archive="$test_build/efs-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$efs_archive" "$fs_server_img" "$fs_efs_img" "$fs_denied_img"
+    efs_disk="$test_build/efs-disk.img"
+    dd if=/dev/zero of="$efs_disk" bs=1M count=1 status=none
+    neperos_efs=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$efs_archive" -append "fsserver fswrite" -drive "file=$efs_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_efs" in
+        *'fs write_file ok'*'fs read_file: e.fs on neperos'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.fs did not read back what it wrote through the server: $neperos_efs" >&2; exit 1 ;;
+    esac
+    case "$neperos_efs" in *'fs write_file failed'*|*'fs read_file failed'*) printf '%s\n' "NeperOS e.fs failed: $neperos_efs" >&2; exit 1 ;; esac
 fi
 
 printf '%s\n' 'selfhost tests passed'
