@@ -27,8 +27,9 @@ fn app_stocks() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0
 fn app_weather() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#33506a'/><circle cx='60' cy='36' r='15' fill='#e0b36a'/><g stroke='#e0b36a' stroke-width='4' stroke-linecap='round'><path d='M60 11 v5 M82 20 l-3.5 3.5 M85 36 h-5 M38 20 l3.5 3.5'/></g><path d='M30 74 a14 14 0 0 1 -1 -28 a19 19 0 0 1 36 4 a12 12 0 0 1 1 24 z' fill='#e8ebf0'/></svg>" }
 fn app_ssh() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#26292f'/><rect x='14' y='22' width='68' height='52' rx='8' fill='#14161a' stroke='#e8ebf0' stroke-width='4'/><path d='M26 40 L38 49 L26 58' fill='none' stroke='#e0b36a' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/><path d='M46 59 H64' fill='none' stroke='#e8ebf0' stroke-width='5' stroke-linecap='round'/></svg>" }
 fn app_ai() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#3a3550'/><path d='M46 20 C40 13 24 14 18 25 C9 29 9 44 15 50 C13 61 22 73 34 72 C41 74 46 70 46 66 Z' fill='#e8ebf0'/><g fill='none' stroke='#3a3550' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M21 29 C27 24 33 31 40 25 M15 41 C23 36 29 45 38 38 M20 53 C27 47 33 56 41 49 M27 66 C32 59 37 66 42 60'/></g><path d='M50 20 C56 13 72 14 78 25 C87 29 87 44 81 50 C83 61 74 73 62 72 C55 74 50 70 50 66 Z' fill='#e0b36a'/><g fill='#e0b36a'><rect x='82' y='33' width='8' height='3.2' rx='1.6'/><rect x='84' y='41' width='8' height='3.2' rx='1.6'/><rect x='82' y='49' width='8' height='3.2' rx='1.6'/></g><g fill='none' stroke='#3a3550' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M55 28 H68 V37 H60 V45 H75 M54 58 H66 V65 H72 M54 41 H58'/></g><g fill='#3a3550'><circle cx='55' cy='28' r='2.6'/><circle cx='75' cy='45' r='2.6'/><circle cx='54' cy='58' r='2.6'/><circle cx='72' cy='65' r='2.6'/><circle cx='54' cy='41' r='2.6'/></g></svg>" }
+fn app_wallet() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#2f4658'/><rect x='22' y='20' width='52' height='22' rx='5' fill='#e0b36a' transform='rotate(-8 48 31)'/><rect x='16' y='32' width='64' height='44' rx='9' fill='#e8ebf0'/><path d='M16 44 H80' stroke='#2f4658' stroke-width='3' opacity='0.35'/><rect x='56' y='48' width='24' height='18' rx='6' fill='#2f4658'/><circle cx='64' cy='57' r='3.4' fill='#e0b36a'/></svg>" }
 
-const APP_COUNT: usize = 24usize
+const APP_COUNT: usize = 25usize
 
 fn app(index: usize) -> str {
     if index == 0usize { ret app_phone() }
@@ -55,6 +56,7 @@ fn app(index: usize) -> str {
     if index == 21usize { ret app_weather() }
     if index == 22usize { ret app_ssh() }
     if index == 23usize { ret app_ai() }
+    if index == 24usize { ret app_wallet() }
     ret ""
 }
 
@@ -83,6 +85,7 @@ fn app_name(index: usize) -> str {
     if index == 21usize { ret "weather" }
     if index == 22usize { ret "ssh" }
     if index == 23usize { ret "ai" }
+    if index == 24usize { ret "wallet" }
     ret ""
 }
 
@@ -111,6 +114,7 @@ fn app_label(index: usize) -> str {
     if index == 21usize { ret "Weather" }
     if index == 22usize { ret "SSH" }
     if index == 23usize { ret "AI" }
+    if index == 24usize { ret "Wallet" }
     ret ""
 }
 
