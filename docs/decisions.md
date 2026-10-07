@@ -37806,3 +37806,23 @@ and every subsystem (processes, filesystem, e.os surface, display, input, compos
 now runs and renders on NeperOS, verified on both hosts. The one remaining integration is the unified
 production-shell boot that hosts the apps together (blocked on the prodshell compositor-AUX runtime
 anomaly, under gdb investigation), plus the hardware-only C104 Pixel bring-up.
+
+## D2183 — e.fmt breadth on NeperOS: the fmt fixture encodes a second codec
+
+C107's remaining band named "e.fmt breadth" -- the one-per-module fixture only exercised e.fmt.json.
+`neperos/src/fmt_test.e` now also writes two rows through e.fmt.csv (a header and a data row, the
+default comma/LF dialect) straight to the same e.io Writer after the json encode, so the serial reads
+`fmt csv: x,y,label` then `3,7,neperos`. This proves more than one e.fmt codec compiles and runs
+unchanged on NeperOS: the codecs are pure over e.mem/e.str/e.meta/e.io and touch no os primitive, so
+the e.os variant and e.io already carry them. Frame output (plain text) is identical on both QEMU
+hosts (8.2 under WSL, 11.1 on Windows).
+
+Built and verified with a worktree-local `neper-self` (from this worktree's own `src/`, ~17 s via the
+Windows bootstrap into a private directory), because the shared `build/.../neper-self` had been swapped
+by a concurrent session on a divergent line that lacks this worktree's D2158 guard
+(`src/resolve.e:436` `if !same(g.os, "neperos")`, which keeps open/read/write/close/seek out of the
+seeded intrinsics for the neperos target so the e.os variant can define them) -- the swapped binary
+seeded `write` unconditionally and rejected `os.neperos.e`'s `write`. Rebuilding one's own compiler
+when the shared one is swapped is the standing remedy (D1593); no shared file was written. C107 holds
+at 0.9: the flat C106 server's intentionally-Unsupported path/dir ops and porting further lib-module
+fixtures to NeperOS remain.

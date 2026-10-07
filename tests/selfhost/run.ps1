@@ -9180,8 +9180,9 @@ if ($neperosQemu) {
         if ($timeBoot -match [regex]::Escape($timeLeak)) { throw "NeperOS e.time misread the clock (${timeLeak}): $timeBoot" }
     }
     # (D2156, C107) e.fmt on NeperOS: fmt_test reflects a struct with e.fmt.json's encode[T] and
-    # streams it to an e.io Writer over stdout -- the codec is pure, so the e.os variant and e.io
-    # already carry it. Started as program 0 of a one-program archive.
+    # streams it to an e.io Writer over stdout, then writes two rows through e.fmt.csv (D2183) -- the
+    # codecs are pure, so the e.os variant and e.io already carry more than one of them. Started as
+    # program 0 of a one-program archive.
     $fmtTest = Join-Path $testBuild 'fmt_test.img'
     & $compiler emit-executable (Join-Path $repo 'neperos\src\fmt_test.e') $repo aarch64 neperos $fmtTest | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.fmt program did not build' }
@@ -9189,7 +9190,7 @@ if ($neperosQemu) {
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $fmtArchive $fmtTest
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.fmt archive did not assemble' }
     $fmtBoot = Invoke-NeperOS $neperosImage @('-initrd', $fmtArchive, '-append', 'shell')
-    if ($fmtBoot -notmatch '(?s)fmt json: \{"x":3,"y":7,"label":"neperos"\}.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.fmt did not encode JSON: $fmtBoot" }
+    if ($fmtBoot -notmatch '(?s)fmt json: \{"x":3,"y":7,"label":"neperos"\}.*fmt csv: x,y,label.*3,7,neperos.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.fmt did not encode JSON and CSV: $fmtBoot" }
     # (D2157, C107) e.thread on NeperOS: thread_test spawns a worker in the same address space on a
     # kernel-mapped stack; the worker writes a sentinel through a pointer into the spawner's memory
     # and the join (which must block) makes the write visible before the read. Started as program 0.
