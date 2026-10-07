@@ -37932,3 +37932,16 @@ recomputes the host hash, so no golden churn), and the loop now also asserts the
 `calc result 51` for calc so a wrong-but-consistent engine is caught (host==neperos alone only proves
 consistency). C113 -> 0.7: the clock is live (D2188) and the calculator computes; live tap input and
 hosting the apps in the unified shell still wait on C112's prodshell.
+
+## D2190 — the Tasks app computes its done-state through a toggle engine
+
+`tasks_app` had a fixed `done` array. It now starts from an initial state (3 of 6 done) and applies a
+fixed sequence of toggle inputs (check tasks 3 and 5) through a toggle engine that flips each named
+task's flag, then counts the result and renders the computed checkboxes, printing `tasks done 5`.
+Booted raw on `gpu bigarena` it reported `tasks done 5`, hash 394791925, identical to the x64 host
+(host==neperos), on both QEMU hosts. tasks_app stays in the deterministic app-face loop (auto-adapts),
+and the loop now also asserts the literal `tasks done 5` so a wrong toggle engine is caught. C114 ->
+0.65: the Tasks toggle logic computes from input; the Settings toggles, live tap input, and hosting
+the apps in the unified shell still wait on C112's prodshell. (Pattern mirrors D2188 live clock / D2189
+calc engine: demonstrate each app's real logic on a fixed input sequence, standalone, without needing
+C112's unified launcher.)

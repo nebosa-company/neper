@@ -9155,6 +9155,8 @@ if ($neperosQemu) {
         # (D2189, C113) The calculator actually computes: its engine runs "7 * 6 + 9 =" left-to-right
         # and must report 51 (host==neperos only proves consistency; this pins correctness).
         if ($appSrc -eq 'calc_app' -and $appBoot -notmatch 'calc result 51') { throw "NeperOS calc_app did not compute 51: $appBoot" }
+        # (D2190, C114) The Tasks toggle engine: initial 3 done, check tasks 3 and 5 -> 5 done.
+        if ($appSrc -eq 'tasks_app' -and $appBoot -notmatch 'tasks done 5') { throw "NeperOS tasks_app toggle engine did not count 5 done: $appBoot" }
     }
     # (D2188, C113) The Clock app shows the LIVE time: clock_app reads the wall clock through e.time
     # (os.clock -> PL031 RTC) and renders the current HH:MM, then prints `clock live HH:MM`. The frame

@@ -1,8 +1,9 @@
-// The NeperOS Tasks app's face (C114, D2181): a checklist rendered through e.gfx.scene over the
-// e.gpu CPU backend into a 256x256 surface -- a header, then task rows, each with a checkbox (filled
-// when done), the task's number in the built-in 3x5 bitmap digit font, and a bar standing in for its
-// title. Fixed task data keeps the frame deterministic; a host run folds it to the same hash. Needs
-// the large arena (`bigarena`).
+// The NeperOS Tasks app (C114, D2181 face; D2190 toggle engine): a checklist rendered through
+// e.gfx.scene over the e.gpu CPU backend into a 256x256 surface -- a header, then task rows, each with
+// a checkbox (filled when done), the task's number in the built-in 3x5 bitmap digit font, and a bar
+// for its title. The done-state is COMPUTED: an initial state plus a fixed sequence of toggle inputs
+// (check tasks 3 and 5) applied through a toggle engine, and it prints the resulting `tasks done N`.
+// Deterministic, so a host run folds to the same hash. Needs the large arena (`bigarena`).
 use e.mem
 use e.os
 use e.gpu
@@ -51,9 +52,25 @@ fn draw_digit(builder: *scene.Builder, font: []const u8, px: f32, py: f32, d: us
 
 fn main(a: *mem.Arena, args: []str) -> err {
     let font: [50]u8 = [50]u8{ 7u8, 5u8, 5u8, 5u8, 7u8, 2u8, 6u8, 2u8, 2u8, 7u8, 7u8, 1u8, 7u8, 4u8, 7u8, 7u8, 1u8, 7u8, 1u8, 7u8, 5u8, 5u8, 7u8, 1u8, 1u8, 7u8, 4u8, 7u8, 1u8, 7u8, 7u8, 4u8, 7u8, 5u8, 7u8, 7u8, 1u8, 2u8, 2u8, 2u8, 7u8, 5u8, 7u8, 5u8, 7u8, 7u8, 5u8, 7u8, 1u8, 7u8 }
-    // Six tasks: a done flag and a title width per row (fixed data).
-    let done: [6]u8 = [6]u8{ 1u8, 1u8, 0u8, 1u8, 0u8, 0u8 }
+    // Six tasks: a done flag and a title width per row. The initial done-state, then a fixed sequence
+    // of toggle inputs applied through the toggle engine (D2190) -- so the rendered checkboxes and the
+    // done count are COMPUTED from input, not a fixed face.
+    var done: [6]u8 = [6]u8{ 1u8, 1u8, 0u8, 1u8, 0u8, 0u8 }
     let widths: [6]u8 = [6]u8{ 120u8, 90u8, 150u8, 70u8, 110u8, 140u8 }
+    // Toggle inputs: the user checks tasks 3 and 5 (0-based 2 and 4); each flips that task's flag.
+    let toggles: [2]u8 = [2]u8{ 2u8, 4u8 }
+    var ti = 0usize
+    while ti < 2usize {
+        let t = usize(toggles[ti])
+        if usize(done[t]) == 1usize { done[t] = 0u8 } else { done[t] = 1u8 }
+        ti += 1usize
+    }
+    var done_count = 0usize
+    var dci = 0usize
+    while dci < 6usize {
+        if usize(done[dci]) == 1usize { done_count += 1usize }
+        dci += 1usize
+    }
     let (device, open_error) = gpu.open(a, gpu.Backend.Cpu, 0u32)
     if open_error != ok {
         say("tasks gpu failed\n")
@@ -129,6 +146,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         hash = ((hash ^ usize(pixels[i2])) * 16777619usize) & 4294967295usize
         i2 += 1usize
     }
+    say("tasks done ")
+    say_num(done_count)
+    say("\n")
     say("tasks app hash ")
     say_num(hash)
     say("\n")

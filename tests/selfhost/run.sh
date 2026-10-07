@@ -9008,6 +9008,11 @@ greeting"
         if [ "$app_src" = calc_app ]; then
             case "$app_boot" in *'calc result 51'*) ;; *) printf '%s\n' "NeperOS calc_app did not compute 51: $app_boot" >&2; exit 1 ;; esac
         fi
+        # (D2190, C114) The Tasks app's toggle engine: initial 3 done, check tasks 3 and 5, so the
+        # computed done count must be 5.
+        if [ "$app_src" = tasks_app ]; then
+            case "$app_boot" in *'tasks done 5'*) ;; *) printf '%s\n' "NeperOS tasks_app toggle engine did not count 5 done: $app_boot" >&2; exit 1 ;; esac
+        fi
     done
     # (D2188, C113) The Clock app shows the LIVE time: clock_app reads the wall clock through e.time
     # (os.clock -> PL031 RTC) and renders the current HH:MM, then prints `clock live HH:MM`. The frame
