@@ -9430,6 +9430,9 @@ if ($neperosQemu) {
     $weatherImage = Join-Path $testBuild 'weather.img'
     $sshImage = Join-Path $testBuild 'ssh.img'
     $walletImage = Join-Path $testBuild 'wallet.img'
+    $cameraImage = Join-Path $testBuild 'camera.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\camera.e') $repo aarch64 neperos $cameraImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Camera did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\wallet.e') $repo aarch64 neperos $walletImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Wallet did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\ssh.e') $repo aarch64 neperos $sshImage | Out-Null
@@ -9447,7 +9450,7 @@ if ($neperosQemu) {
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
@@ -9489,6 +9492,9 @@ if ($neperosQemu) {
     # (D2216) Wallet: the network of the sample cards (e.valid), the Bank filter, a bank account whose IBAN checks, back, leave.
     $walletBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-wallet.serial') 55146 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,30091;19644,3315;15906,7130;3181,1569;16384,32259' 2>&1) -join "`n"
     if ($walletBoot -notmatch '(?s)wallet brand Visa.*wallet brand Mastercard.*wallet shown.*wallet filter Bank.*wallet opened Neper Bank.*wallet iban valid.*wallet back.*wallet home') { throw "NeperOS Wallet did not open a bank account: $walletBoot" }
+    # (D2217) Camera: a photo, the front camera, Scan mode and a scan, the review of the two captures, back, leave.
+    $cameraBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-camera.serial') 55147 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,7986;16384,28164;29585,28164;22427,24099;16384,28164;4135,28164;3181,1569;16384,32259' 2>&1) -join "`n"
+    if ($cameraBoot -notmatch '(?s)camera shown.*camera photo 1.*camera flip front.*camera mode Scan.*camera scan 2.*camera review 2.*camera back.*camera home') { throw "NeperOS Camera did not take a photo and a scan: $cameraBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }
