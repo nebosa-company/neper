@@ -9013,6 +9013,10 @@ greeting"
         if [ "$app_src" = tasks_app ]; then
             case "$app_boot" in *'tasks done 5'*) ;; *) printf '%s\n' "NeperOS tasks_app toggle engine did not count 5 done: $app_boot" >&2; exit 1 ;; esac
         fi
+        # (D2191, C114) The Settings toggle engine: initial 3 on, flip settings 2 and 5 -> 5 on.
+        if [ "$app_src" = settings_app ]; then
+            case "$app_boot" in *'settings on 5'*) ;; *) printf '%s\n' "NeperOS settings_app toggle engine did not count 5 on: $app_boot" >&2; exit 1 ;; esac
+        fi
     done
     # (D2188, C113) The Clock app shows the LIVE time: clock_app reads the wall clock through e.time
     # (os.clock -> PL031 RTC) and renders the current HH:MM, then prints `clock live HH:MM`. The frame

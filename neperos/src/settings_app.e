@@ -1,8 +1,9 @@
-// The NeperOS Settings app's face (C114, D2182): a settings list rendered through e.gfx.scene over
-// the e.gpu CPU backend into a 256x256 surface -- a header, then rows each with a label bar and a
-// toggle switch (a track and a knob, green with the knob right when on, grey with the knob left when
-// off). Fixed settings keep the frame deterministic; a host run folds it to the same hash. Needs the
-// large arena (`bigarena`).
+// The NeperOS Settings app (C114, D2182 face; D2191 toggle engine): a settings list rendered through
+// e.gfx.scene over the e.gpu CPU backend into a 256x256 surface -- a header, then rows each with a
+// label bar and a toggle switch (a track and a knob, green knob-right when on, grey knob-left off).
+// The on-state is COMPUTED: an initial state plus a fixed sequence of toggle inputs (flip settings 2
+// and 5) applied through a toggle engine, and it prints the resulting `settings on N`. Deterministic,
+// so a host run folds to the same hash. Needs the large arena (`bigarena`).
 use e.mem
 use e.os
 use e.gpu
@@ -35,9 +36,25 @@ fn fill(builder: *scene.Builder, x: f32, y: f32, w: f32, h: f32, red: f32, green
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    // Five settings: an on flag and a label-bar width per row (fixed).
-    let on: [5]u8 = [5]u8{ 1u8, 0u8, 1u8, 1u8, 0u8 }
+    // Five settings: an on flag and a label-bar width per row. The initial on-state, then a fixed
+    // sequence of toggle inputs applied through the toggle engine (D2191) -- so the rendered switches
+    // and the on count are COMPUTED from input, not a fixed face.
+    var on: [5]u8 = [5]u8{ 1u8, 0u8, 1u8, 1u8, 0u8 }
     let widths: [5]u8 = [5]u8{ 90u8, 120u8, 70u8, 140u8, 100u8 }
+    // Toggle inputs: the user flips settings 2 and 5 (0-based 1 and 4); each flips that switch.
+    let flips: [2]u8 = [2]u8{ 1u8, 4u8 }
+    var fi = 0usize
+    while fi < 2usize {
+        let s = usize(flips[fi])
+        if usize(on[s]) == 1usize { on[s] = 0u8 } else { on[s] = 1u8 }
+        fi += 1usize
+    }
+    var on_count = 0usize
+    var oci = 0usize
+    while oci < 5usize {
+        if usize(on[oci]) == 1usize { on_count += 1usize }
+        oci += 1usize
+    }
     let (device, open_error) = gpu.open(a, gpu.Backend.Cpu, 0u32)
     if open_error != ok {
         say("settings gpu failed\n")
@@ -112,6 +129,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         hash = ((hash ^ usize(pixels[i2])) * 16777619usize) & 4294967295usize
         i2 += 1usize
     }
+    say("settings on ")
+    say_num(on_count)
+    say("\n")
     say("settings app hash ")
     say_num(hash)
     say("\n")

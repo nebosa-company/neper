@@ -37945,3 +37945,16 @@ and the loop now also asserts the literal `tasks done 5` so a wrong toggle engin
 the apps in the unified shell still wait on C112's prodshell. (Pattern mirrors D2188 live clock / D2189
 calc engine: demonstrate each app's real logic on a fixed input sequence, standalone, without needing
 C112's unified launcher.)
+
+## D2191 — the Settings app computes its on-state through a toggle engine
+
+`settings_app` had a fixed `on` array. It now starts from an initial state (3 of 5 on) and applies a
+fixed sequence of toggle inputs (flip settings 2 and 5) through a toggle engine, counts the result and
+renders the computed switches, printing `settings on 5`. Booted raw on `gpu bigarena` it reported
+`settings on 5`, hash 3605923141, identical to the x64 host (host==neperos), both QEMU hosts; the
+app-face loop asserts the literal `settings on 5`. C114 -> 0.7: both C114 apps (Tasks D2190, Settings)
+now compute their state from a fixed input sequence. With D2188-D2191, all four shell apps run their
+real logic (clock reads the RTC; calculator computes; tasks and settings toggle) standalone and
+verified host==neperos. What remains for C113/C114 -> 1.0 is LIVE tap input and hosting the apps in
+the unified shell -- both gated on the one C112 prodshell fix (the AUX heisenbug). C104 stays
+hardware-capped (physical Pixel).
