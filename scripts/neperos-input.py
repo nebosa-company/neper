@@ -53,7 +53,7 @@ def main():
     append = sys.argv[7] if len(sys.argv) > 7 else "input"
     # The serial line that marks the run complete (default per boot mode); a caller whose client
     # prints something else (e.g. the tap-launch launcher) passes its own.
-    done_needle = sys.argv[8] if len(sys.argv) > 8 else ("app done" if append == "compositor" else "input client done")
+    done_needle = sys.argv[8] if len(sys.argv) > 8 else ("app done" if "compositor" in append.split() else "input client done")
     if os.path.exists(serial):
         os.remove(serial)
     dev = "virtio-keyboard-pci" if device == "keyboard" else "virtio-tablet-pci"
@@ -65,7 +65,7 @@ def main():
         "-serial", "file:" + serial,
         "-qmp", "tcp:127.0.0.1:%d,server,nowait" % port,
     ]
-    if append == "compositor":
+    if "compositor" in append.split():
         args[args.index("-device"):args.index("-device")] = ["-device", "virtio-gpu-pci"]
     proc = subprocess.Popen(args)
     try:

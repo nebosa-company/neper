@@ -9240,6 +9240,22 @@ greeting"
         *'launcher tap'*'launcher launched app'*'tap app ran'*'launcher app code 5'*'launcher home'*) ;;
         *) printf '%s\n' "NeperOS launcher did not launch an app and return Home on a tap: $tap_boot" >&2; exit 1 ;;
     esac
+    # (D2192, C112) The UNIFIED SHELL: the launcher hosted over the real compositor with live tap
+    # input. Archive [comp(0), shell(1), input(2), app(3)]: the `compositor bigarena` boot runs
+    # comp+shell+input; shell renders the launcher over the compositor (composited to the display),
+    # and on a live key (the C109 path the compositor routes to it) os.launches the app (program 3),
+    # reaps it and returns Home. One process (shell) beside comp+input, so it uses the proven
+    # compositor-input topology and sidesteps the prodshell AUX heisenbug (comp reads its AUX at boot,
+    # before any runtime os.launch).
+    shell_img="$test_build/shell.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/shell.e" "$repo" aarch64 neperos "$shell_img")" = 'executable written' ]
+    shell_archive="$test_build/shell-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$shell_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img"
+    shell_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$shell_archive" keyboard "$test_build/shell.serial" 55135 "compositor bigarena" 'shell home' 2>&1)
+    case "$shell_boot" in
+        *'shell presented'*'comp composited flushed'*'shell tap'*'shell launched app'*'tap app ran'*'shell app code 5'*'shell home'*) ;;
+        *) printf '%s\n' "NeperOS unified shell did not host the launcher and launch an app on a tap: $shell_boot" >&2; exit 1 ;;
+    esac
 fi
 
 printf '%s\n' 'selfhost tests passed'

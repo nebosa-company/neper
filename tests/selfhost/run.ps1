@@ -9375,6 +9375,19 @@ if ($neperosQemu) {
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS tap-launch archive did not assemble' }
     $tap = (& python $inputScript $neperosQemu.Source $neperosImage $tapArchive keyboard (Join-Path $testBuild 'tap.serial') 55134 input 'launcher home' 2>&1) -join "`n"
     if ($tap -notmatch '(?s)launcher tap.*launcher launched app.*tap app ran.*launcher app code 5.*launcher home') { throw "NeperOS launcher did not launch an app and return Home on a tap: $tap" }
+    # (D2192, C112) The UNIFIED SHELL: the launcher hosted over the real compositor with live tap
+    # input. Archive [comp(0), shell(1), input(2), app(3)]: the `compositor bigarena` boot runs
+    # comp+shell+input; shell renders the launcher over the compositor (composited to the display) and
+    # on a live key os.launches the app (program 3), reaps it and returns Home. One process beside
+    # comp+input -- the proven compositor-input topology -- so it sidesteps the prodshell AUX heisenbug.
+    $shell = Join-Path $testBuild 'shell.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\shell.e') $repo aarch64 neperos $shell | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS unified shell did not build' }
+    $shellArchive = Join-Path $testBuild 'shell-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $shellArchive $comp $shell $inputServer $tapApp
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS unified-shell archive did not assemble' }
+    $shellBoot = (& python $inputScript $neperosQemu.Source $neperosImage $shellArchive keyboard (Join-Path $testBuild 'shell.serial') 55135 'compositor bigarena' 'shell home' 2>&1) -join "`n"
+    if ($shellBoot -notmatch '(?s)shell presented.*comp composited flushed.*shell tap.*shell launched app.*tap app ran.*shell app code 5.*shell home') { throw "NeperOS unified shell did not host the launcher and launch an app on a tap: $shellBoot" }
 }
 
 Write-Output 'selfhost tests passed'

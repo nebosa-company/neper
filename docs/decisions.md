@@ -37958,3 +37958,27 @@ real logic (clock reads the RTC; calculator computes; tasks and settings toggle)
 verified host==neperos. What remains for C113/C114 -> 1.0 is LIVE tap input and hosting the apps in
 the unified shell -- both gated on the one C112 prodshell fix (the AUX heisenbug). C104 stays
 hardware-capped (physical Pixel).
+
+## D2192 — the unified shell: launcher hosted over the compositor with live tap input (sidesteps the heisenbug)
+
+The prodshell AUX heisenbug (compositor reads 0xCD poison) only fires with compositor + TWO
+start_process programs. The compositor-INPUT topology (comp-driver + input-driver + ONE start_process)
+is proven working (D2163) -- the compositor reads its AUX fine there. So the unified shell is built on
+THAT topology instead of fighting the heisenbug. New `neperos/src/shell.e` is one binary that IS the
+launcher: it opens an e.ui.window (the compositor's shared surface), renders the launcher layout
+through e.gfx.scene (the compositor composites it to the display), then listens for input the
+compositor routes to it (slot 2, the C109 path) and on the first key-down os.launches an app (program
+3 of the archive), reaps it and returns Home. Archive [comp(0), shell(1), input(2), app(3)]; the
+`compositor bigarena` boot runs comp+shell+input (one process -> no heisenbug), and the app is created
+at runtime by os.launch, AFTER the compositor already read its AUX. Verified end to end via
+scripts/neperos-input.py (a QMP key injection): serial `comp ready` / `shell presented` / `comp
+composited flushed` / `shell tap` / `shell launched app` / `tap app ran` / `shell app code 5` /
+`shell home`. Fixtures in run.sh and run.ps1; neperos-input.py now matches `compositor` as a word in
+the append so `compositor bigarena` gets the virtio-gpu device (it exact-matched `compositor` before).
+C112 -> 0.98: a single launcher binary hosts apps over the compositor with LIVE tap input -- the hard
+part of the gap clause, with the heisenbug sidestepped. Remaining for 1.0: wiring the fs wallpaper and
+the C111 status SERVICE into the same binary (the status service is a second start_process, which is
+exactly what triggers the heisenbug -- so full closure needs either the heisenbug fix or a decision
+that direct status reads + a baked/fs wallpaper satisfy the clause). This also proves the C113/C114
+shell-hosting mechanism (the shell launches apps on live taps); wiring the specific app faces in is
+what remains for those.
