@@ -80,6 +80,10 @@ var driver_arena_bytes: usize = 0usize
 // would cover.)
 var extra_first: usize = 0usize
 var extra_count: usize = 0usize
+// (D2205) The compositor's shared frame, once it exists: a process launched from the shell that is a
+// full-screen app (an archive entry from 13 on) gets it mapped, a frame endpoint to send on and the
+// routed-input endpoint to receive on, and the five fonts as its arguments.
+var shared_frame_phys: usize = 0usize
 
 // (D2166) Give `space` a large arena in its own mapped EL0 region (identity VA=PA) when
 // driver_arena_bytes is set; otherwise leave vm.create's in-window arena. The updated space comes
@@ -634,10 +638,29 @@ fn launch(frame: *a64.Frame) {
         frame.x[0usize] = 18446744073709551615u64
         ret
     }
+    // A full-screen app (D2205): a big arena for its renderer, the fonts as arguments, then the
+    // shared frame and the two endpoints once it exists.
+    let screen_app = shared_frame_phys != 0usize && index >= 13usize
+    if screen_app {
+        driver_arena_bytes = vm.SHARED_FRAME_BYTES * 14usize
+        extra_first = 8usize
+        extra_count = 5usize
+    }
     let (child, child_error) = start_process(archive_base + archive_offset[index], archive_length[index], "child")
+    driver_arena_bytes = 0usize
+    extra_count = 0usize
     if child_error != ok {
         frame.x[0usize] = 18446744073709551615u64
         ret
+    }
+    if screen_app {
+        let map_error = vm.map_shared(kernel_arena, thread.ttbr_of(child), shared_frame_phys, vm.SHARED_FRAME_PAGES)
+        if map_error != ok {
+            frame.x[0usize] = 18446744073709551615u64
+            ret
+        }
+        thread.grant(child, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
+        thread.grant(child, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 2usize)
     }
     frame.x[0usize] = u64(child)
 }
@@ -848,6 +871,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (shared_storage, shared_error) = mem.alloc[u8](a, vm.SHARED_FRAME_PAGES * 4096usize + 4096usize)
         if shared_error != ok { ret shared_error }
         let shared_phys = (mem.address_of(&shared_storage[0usize]) + 4095usize) & ~4095usize
+        shared_frame_phys = shared_phys
         // The frame starts as the compositor's dark ground (B 30, G 30, R 45, opaque), two pixels a
         // store, so what an app has not drawn is not allocator fill.
         var shared_at = 0usize
@@ -900,6 +924,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if has_word(bootargs, "unified") && archive_count >= 8usize {
             extra_first = 7usize
             extra_count = archive_count - 7usize
+            // The wallpaper and the five fonts; anything after is an app, launched on demand.
+            if extra_count > 6usize { extra_count = 6usize }
         }
         let (comp_app, comp_app_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "app")
         extra_count = 0usize

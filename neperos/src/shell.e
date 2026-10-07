@@ -39,6 +39,8 @@ const SENTINEL: usize = 65535usize
 const LOW16: usize = 65535usize
 const LOW32: usize = 4294967295usize
 const EV_KEY: usize = 1usize
+const EV_ABS: usize = 3usize
+const BTN_LEFT: usize = 272usize
 const APP_INDEX: usize = 3usize
 const WALL_FROM: usize = 5usize
 const STATUS_REQ: usize = 3usize
@@ -47,8 +49,6 @@ const OP_QUIT: usize = 0usize
 const OP_POST: usize = 2usize
 const OP_SUBSCRIBE: usize = 3usize
 const PRESENT: usize = 2147483648usize
-
-type Faces = struct { jost_bold: shape.Font, jost: shape.Font, sora: shape.Font, grotesk: shape.Font, exo: shape.Font }
 
 fn say(line: str) {
     let (written, write_error) = os.write(os.stdout(), line)
@@ -153,7 +153,7 @@ fn status_glyph(a: *mem.Arena, builder: *scene.Builder, which: usize, x: f32, on
 }
 
 // The status bar of the home screen: the time at the left, the provider glyphs at the right.
-fn status_bar(a: *mem.Arena, builder: *scene.Builder, faces: Faces, has_fonts: bool, clock: str, snap: [5]usize) -> err {
+fn status_bar(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, has_fonts: bool, clock: str, snap: [5]usize) -> err {
     try fill(builder, 0.0, 0.0, 412.0, 30.0, paint.Color { red: 0.03, green: 0.04, blue: 0.06, alpha: 0.78 })
     let bright = paint.Color { red: 0.91, green: 0.92, blue: 0.94, alpha: 1.0 }
     let amber = paint.Color { red: 0.88, green: 0.70, blue: 0.42, alpha: 1.0 }
@@ -176,7 +176,7 @@ fn wallpaper_layer(builder: *scene.Builder, texture: scene.TextureId, width: f32
 }
 
 // The lock screen: clock, date, the Moon-phase card, a notification card and the dock.
-fn draw_lock(a: *mem.Arena, builder: *scene.Builder, faces: Faces, hour: usize, minute: usize, seconds: usize) -> err {
+fn draw_lock(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, hour: usize, minute: usize, seconds: usize) -> err {
     let white = paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }
     let soft = paint.Color { red: 0.86, green: 0.87, blue: 0.9, alpha: 1.0 }
     let glass = paint.Color { red: 0.1, green: 0.1, blue: 0.11, alpha: 0.62 }
@@ -215,7 +215,7 @@ fn draw_lock(a: *mem.Arena, builder: *scene.Builder, faces: Faces, hour: usize, 
 }
 
 // The home screen: the status bar and every app icon with its name under it.
-fn draw_home(a: *mem.Arena, builder: *scene.Builder, faces: Faces, has_fonts: bool, clock: str, snap: [5]usize) -> err {
+fn draw_home(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, has_fonts: bool, clock: str, snap: [5]usize) -> err {
     try status_bar(a, builder, faces, has_fonts, clock, snap)
     let white = paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }
     var idx = 0usize
@@ -261,7 +261,15 @@ fn read_snapshot(into: *[5]usize) {
 }
 
 // Compile `list` as a scene of its own and draw it into the window, then present it.
+var last_scene: scene.SceneId = zero
+var has_last_scene: bool = false
+
 fn show(renderer: *scene.Renderer, w: *window.Window, drawable: scene.Target, list: scene.DisplayList) -> bool {
+    // The renderer holds a few scenes; the one drawn before this is released first.
+    if has_last_scene {
+        let released = scene.release_scene(renderer, last_scene)
+        has_last_scene = false
+    }
     let (scene_id, compile_error) = scene.compile(renderer, list)
     if compile_error != ok {
         say("shell compile failed\n")
@@ -271,11 +279,49 @@ fn show(renderer: *scene.Renderer, w: *window.Window, drawable: scene.Target, li
         say("shell render failed\n")
         ret false
     }
+    last_scene = scene_id
+    has_last_scene = true
     if window.request_frame(w) != ok {
         say("shell present failed\n")
         ret false
     }
     ret true
+}
+
+// Build the home screen as a scene of its own and show it.
+fn show_home(a: *mem.Arena, renderer: *scene.Renderer, w: *window.Window, drawable: scene.Target, faces: text.Faces, has_fonts: bool, clock: str, snap: [5]usize, wallpapered: bool, wall_texture: scene.TextureId, wall_w: f32, wall_h: f32, logical_h: f32, scale: f32) -> bool {
+    let (builder_value, builder_error) = scene.builder(a, 4096usize)
+    if builder_error != ok { ret false }
+    var builder = builder_value
+    let save: scene.Command = .Save
+    if scene.push(&builder, save) != ok { ret false }
+    if scene.push(&builder, scene.Command { Transform: geometry.transform_scale(scale, scale) }) != ok { ret false }
+    if wallpapered {
+        if wallpaper_layer(&builder, wall_texture, wall_w, wall_h, logical_h) != ok { ret false }
+    } else {
+        if fill(&builder, 0.0, 0.0, 412.0, logical_h, paint.Color { red: 0.09, green: 0.11, blue: 0.18, alpha: 1.0 }) != ok { ret false }
+    }
+    if draw_home(a, &builder, faces, has_fonts, clock, snap) != ok { ret false }
+    let restore: scene.Command = .Restore
+    if scene.push(&builder, restore) != ok { ret false }
+    ret show(renderer, w, drawable, scene.finish(&builder))
+}
+
+// The icon under a tap (dp) on the home screen, or 99 outside every icon and its name.
+fn icon_at(x: f32, y: f32) -> usize {
+    if y < 70.0 || x < 0.0 || x >= 412.0 { ret 99usize }
+    let col = usize(x / 103.0)
+    let row = usize((y - 70.0) / 124.0)
+    let within = (y - 70.0) - f32(row) * 124.0
+    if within > 86.0 || col >= 4usize { ret 99usize }
+    ret row * 4usize + col
+}
+
+// The archive program an icon starts, or 0 when its app is not written yet (the archive's apps
+// follow the wallpaper and the five fonts: entry 13 is Lunar Calc).
+fn program_of(icon: usize) -> usize {
+    if icon == 9usize { ret 13usize }
+    ret 0usize
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -307,19 +353,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var renderer = renderer_value
     // The fonts, handed in as args[2..6].
-    var faces: Faces = zero
-    var has_fonts = false
-    if args.len >= 7usize {
-        let (f1, r1) = text.register(&renderer, 1u32, args[2usize])
-        let (f2, r2) = text.register(&renderer, 2u32, args[3usize])
-        let (f3, r3) = text.register(&renderer, 3u32, args[4usize])
-        let (f4, r4) = text.register(&renderer, 4u32, args[5usize])
-        let (f5, r5) = text.register(&renderer, 5u32, args[6usize])
-        if r1 == ok && r2 == ok && r3 == ok && r4 == ok && r5 == ok {
-            faces = Faces { jost_bold: f1, jost: f2, sora: f3, grotesk: f4, exo: f5 }
-            has_fonts = true
-        }
-    }
+    let (faces, has_fonts) = text.load_faces(&renderer, args, 2usize)
     say("shell fonts ")
     if has_fonts { say("ok\n") } else { say("absent\n") }
     // The wallpaper: args[1] if the kernel handed one, else a PNG the filesystem loader streams over
@@ -438,10 +472,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         say("shell presented\n")
     }
 
-    // Live input: the compositor routes each event here (slot 2). A key-down is a tap: on the lock
-    // screen it unlocks to the home screen; on the home screen it launches an app as a process,
-    // reaps it, and returns Home. Keep reading to the sentinel.
-    var launched = false
+    // Live input: the compositor routes each event here (slot 2). A tablet sends the pointer's
+    // position (absolute axes) and then the button; the shell keeps the position and a button-down
+    // is a tap. A key-down (the keyboard fixtures) acts as a tap with no position. On the lock
+    // screen a tap unlocks to the home screen. On the home screen a tap on an icon launches that app
+    // as a process, waits for it, and redraws Home; a key launches the test app. Keep reading to the
+    // sentinel.
+    var pointer_x = 0usize
+    var pointer_y = 0usize
+    var launched_test = false
     var listening = true
     while listening {
         let word = os.recv(ROUTED, NO_SLOT)
@@ -449,35 +488,67 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if etype == SENTINEL {
             listening = false
         } else {
+            let code = (word >> 32usize) & LOW16
             let value = word & LOW32
-            var framed = false
+            if etype == EV_ABS && code == 0usize { pointer_x = value }
+            if etype == EV_ABS && code == 1usize { pointer_y = value }
+            // A tap: the pointer's button, or any key. `by_key` marks the keyboard's.
+            var tapped = false
+            var by_key = false
             if etype == EV_KEY && value == 1usize {
-                if !home_shown {
-                    let (builder_value, builder_error) = scene.builder(a, 4096usize)
-                    if builder_error != ok { ret builder_error }
-                    var builder = builder_value
-                    let save: scene.Command = .Save
-                    try scene.push(&builder, save)
-                    try scene.push(&builder, scene.Command { Transform: geometry.transform_scale(scale, scale) })
-                    if wallpapered { try wallpaper_layer(&builder, wall_texture, wall_w, wall_h, logical_h) } else { try fill(&builder, 0.0, 0.0, 412.0, logical_h, ground) }
-                    try draw_home(a, &builder, faces, has_fonts, clock, snap)
-                    let restore: scene.Command = .Restore
-                    try scene.push(&builder, restore)
-                    if !show(&renderer, &w, drawable, scene.finish(&builder)) { ret ok }
-                    home_shown = true
-                    framed = true
-                    say("shell unlocked\n")
-                    say("shell home presented\n")
-                } else if !launched {
-                    launched = true
+                tapped = true
+                if code != BTN_LEFT { by_key = true }
+            }
+            var framed = false
+            if tapped && !home_shown {
+                if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
+                home_shown = true
+                framed = true
+                say("shell unlocked\n")
+                say("shell home presented\n")
+            } else if tapped {
+                var app = 99usize
+                if by_key {
+                    if !launched_test { app = 98usize }
+                } else {
+                    let icon = icon_at(f32(pointer_x) * 412.0 / 32768.0, f32(pointer_y) * logical_h / 32768.0)
+                    if icon < icons.APP_COUNT {
+                        say("shell tap ")
+                        say(icons.app_label(icon))
+                        say("\n")
+                        app = icon
+                    }
+                }
+                if app == 98usize {
+                    // The keyboard fixtures' test app: no screen of its own.
+                    launched_test = true
                     say("shell tap\n")
                     let child = os.launch(APP_INDEX)
                     say("shell launched app\n")
-                    let code = os.reap(child)
+                    let code_test = os.reap(child)
                     say("shell app code ")
-                    say_num(code)
+                    say_num(code_test)
                     say("\n")
                     say("shell home\n")
+                } else if app < icons.APP_COUNT {
+                    let program = program_of(app)
+                    if program == 0usize {
+                        say("shell no app yet\n")
+                    } else {
+                        say("shell launching ")
+                        say(icons.app_label(app))
+                        say("\n")
+                        let child = os.launch(program)
+                        // The app presents its own frames and answers the compositor; when it
+                        // leaves it has told the compositor a frame will follow, which is Home.
+                        let code_app = os.reap(child)
+                        say("shell app code ")
+                        say_num(code_app)
+                        say("\n")
+                        if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
+                        framed = true
+                        say("shell home\n")
+                    }
                 }
             }
             // The compositor waits for one answer per routed event (lockstep, announced above): the

@@ -46,3 +46,21 @@ fn measure(a: *mem.Arena, font: shape.Font, size: f32, text: str) -> f32 {
     if place_error != ok { ret 0.0 }
     ret placed.bounds.width
 }
+
+// The five lunar faces (D2204): Jost Bold for the clock, Jost Regular for labels, Sora Medium for
+// headers, Space Grotesk Regular for technical text, Exo 2 Regular for body text.
+type Faces = struct { jost_bold: shape.Font, jost: shape.Font, sora: shape.Font, grotesk: shape.Font, exo: shape.Font }
+
+// Register the five fonts handed in as args[first .. first + 4] (the order above); false if there
+// are not five or one will not register.
+fn load_faces(renderer: *scene.Renderer, args: []str, first: usize) -> (Faces, bool) {
+    var faces: Faces = zero
+    if args.len < first + 5usize { ret (faces, false) }
+    let (f1, r1) = register(renderer, 1u32, args[first])
+    let (f2, r2) = register(renderer, 2u32, args[first + 1usize])
+    let (f3, r3) = register(renderer, 3u32, args[first + 2usize])
+    let (f4, r4) = register(renderer, 4u32, args[first + 3usize])
+    let (f5, r5) = register(renderer, 5u32, args[first + 4usize])
+    if r1 != ok || r2 != ok || r3 != ok || r4 != ok || r5 != ok { ret (faces, false) }
+    ret (Faces { jost_bold: f1, jost: f2, sora: f3, grotesk: f4, exo: f5 }, true)
+}

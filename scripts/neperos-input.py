@@ -96,12 +96,17 @@ def main():
                 qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
                     {"type": "key", "data": {"down": False, "key": {"type": "qcode", "data": "a"}}}]}})
         else:
-            qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
-                {"type": "abs", "data": {"axis": "x", "value": 16384}},
-                {"type": "abs", "data": {"axis": "y", "value": 16384}},
-                {"type": "btn", "data": {"down": True, "button": "left"}}]}})
-            qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
-                {"type": "btn", "data": {"down": False, "button": "left"}}]}})
+            # argv[11]: taps as "x,y;x,y;..." in the tablet's 0..32767 range (default one tap at the
+            # centre); the unified shell takes a tap to unlock, then a tap on an icon (D2205).
+            taps = sys.argv[11].split(";") if len(sys.argv) > 11 else ["16384,16384"]
+            for tap in taps:
+                x, y = [int(v) for v in tap.split(",")]
+                qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
+                    {"type": "abs", "data": {"axis": "x", "value": x}},
+                    {"type": "abs", "data": {"axis": "y", "value": y}},
+                    {"type": "btn", "data": {"down": True, "button": "left"}}]}})
+                qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
+                    {"type": "btn", "data": {"down": False, "button": "left"}}]}})
         wait_for(serial, done_needle, 120)
         sys.stdout.write(serial_text(serial))
         try:

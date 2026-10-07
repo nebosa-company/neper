@@ -43,7 +43,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let bits = os.notify_wait(NOTIFY)
     var iterations = 0usize
     var forwarded = 0usize
-    while iterations < 400000000usize && forwarded < 24usize {
+    while iterations < 400000000usize && forwarded < 600usize {
         let (etype, ecode, evalue, present) = virtio.input_next(&input)
         if present {
             let word = (usize(etype) << 48usize) | (usize(ecode) << 32usize) | usize(evalue)

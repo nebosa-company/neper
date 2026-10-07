@@ -118,7 +118,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if (event >> 48usize) == SENTINEL {
             routing = false
         } else if lockstep {
-            let answer = os.recv(APP, NO_SLOT)
+            var answer = os.recv(APP, NO_SLOT)
+            // 4: the app is leaving and a frame will follow from the shell; wait for that.
+            if answer == 4usize { answer = os.recv(APP, NO_SLOT) }
             if answer == 1usize {
                 composite(gpu.fb, gpu.width, gpu.height, SURFACE_X, SURFACE_Y)
                 let next_error = virtio.gpu_present_rect(gpu, SURFACE_X, SURFACE_Y, SURFACE_W, SURFACE_H)

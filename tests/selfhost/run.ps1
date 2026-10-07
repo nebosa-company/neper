@@ -8946,7 +8946,7 @@ if ($LASTEXITCODE -ne 0 -or $neperosWritten -ne 'executable written') { throw 'N
 # need a 400 MB arena, so the compositor-group boots use this image on a 1 GB machine with a 1280x2856
 # scanout (NEPEROS_MEM and NEPEROS_GPU, read by the screendump and input scripts).
 $neperosDisplayImage = Join-Path $testBuild 'neperos-display.img'
-$neperosDisplayWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\main.e') $repo aarch64 none $neperosDisplayImage --arena 400m
+$neperosDisplayWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\main.e') $repo aarch64 none $neperosDisplayImage --arena 640m
 if ($LASTEXITCODE -ne 0 -or $neperosDisplayWritten -ne 'executable written') { throw 'the NeperOS display kernel did not build' }
 $neperosBytes = [IO.File]::ReadAllBytes($neperosImage)
 if ([Text.Encoding]::ASCII.GetString($neperosBytes, 56, 4) -ne 'ARMd') { throw 'the NeperOS image has no arm64 Image magic' }
@@ -9416,11 +9416,20 @@ if ($neperosQemu) {
     # Two key presses: the first unlocks the lock screen to the home screen (the compositor takes the
     # second frame), the second launches an app.
     $assets = Join-Path $repo 'neperos\assets'
+    $lunarCalc = Join-Path $testBuild 'lunar_calc.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\lunar_calc.e') $repo aarch64 neperos $lunarCalc | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Lunar Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf')
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $lunarCalc
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
+    # (D2205) Taps on a tablet: unlock, tap the Calculator icon, key in 7 x 6 + 9 = on Lunar Calc and tap
+    # the home bar. The tablet's 0..32767 axes map onto the 412 x 919 dp screen; the shell hit-tests the
+    # icon, the kernel starts Lunar Calc with the frame and input endpoints, and the app answers the
+    # compositor per event.
+    $calcBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-calc.serial') 55137 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,12405;5886,14650;26882,14650;19883,17502;26882,20354;19883,14650;26882,23205;16384,31368' 2>&1) -join "`n"
+    if ($calcBoot -notmatch '(?s)shell unlocked.*shell tap Calculator.*shell launching Calculator.*calc shown.*calc shows 7.*calc shows 42.*calc shows 51.*calc home.*shell app code 0') { throw "NeperOS Lunar Calc did not launch from its icon and compute 51: $calcBoot" }
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }
 
