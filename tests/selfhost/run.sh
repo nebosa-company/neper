@@ -9023,8 +9023,8 @@ greeting"
     python3 "$repo/scripts/build-shell-archive.py" "$time_archive" "$time_test_img"
     neperos_time=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$time_archive" -append shell < /dev/null 2>&1 | tr -d '\r')
     case "$neperos_time" in
-        *'time monotonic advanced '*' ns'*'time wall seconds '*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
-        *) printf '%s\n' "NeperOS e.time did not read the clock: $neperos_time" >&2; exit 1 ;;
+        *'time monotonic advanced '*' ns'*'time wall seconds '*'time date 20'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS e.time did not read the clock and civil date: $neperos_time" >&2; exit 1 ;;
     esac
     case "$neperos_time" in
         *'time monotonic stuck'*|*'time monotonic failed'*|*'time wall absent'*) printf '%s\n' "NeperOS e.time misread the clock: $neperos_time" >&2; exit 1 ;;

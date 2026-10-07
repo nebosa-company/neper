@@ -9175,7 +9175,7 @@ if ($neperosQemu) {
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $timeArchive $timeTest
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS e.time archive did not assemble' }
     $timeBoot = Invoke-NeperOS $neperosImage @('-initrd', $timeArchive, '-append', 'shell')
-    if ($timeBoot -notmatch '(?s)time monotonic advanced \d+ ns.*time wall seconds \d+.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.time did not read the clock: $timeBoot" }
+    if ($timeBoot -notmatch '(?s)time monotonic advanced \d+ ns.*time wall seconds \d+.*time date 20\d\d-.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS e.time did not read the clock and civil date: $timeBoot" }
     foreach ($timeLeak in @('time monotonic stuck', 'time monotonic failed', 'time wall absent')) {
         if ($timeBoot -match [regex]::Escape($timeLeak)) { throw "NeperOS e.time misread the clock (${timeLeak}): $timeBoot" }
     }

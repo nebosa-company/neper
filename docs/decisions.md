@@ -37866,3 +37866,18 @@ driver boot. So the fault is confined to the device-MMIO driver-boot path (`map_
 start_driver_server setup), while the rest of the e.os surface (e.io/e.time/e.fmt/e.thread spawn+join+
 group) is compiled correctly and stays verifiable on the shell boot. C107 holds at 0.9; the gpu/driver
 -boot fixtures remain unverifiable here (toolchain), and the flat-C106 Unsupported ops remain.
+
+## D2186 — e.time calendar breadth on NeperOS: a civil date, not just a raw clock read
+
+`neperos/src/time_test.e` now converts the wall timestamp to a civil date with `time.to_date`
+(e.time's `days_from_civil`/`civil_from_days` floor-division math) and prints `time date 2026-10-7`,
+proving the calendar path runs on NeperOS beyond the raw `os.clock` read. The RTC gives a real
+21st-century date; the fixtures assert a `time date 20xx-` pattern (not an exact date, which varies).
+Verified on both QEMU hosts (8.2 WSL, 11.1 Windows). Shell boot, so unaffected by the device-MMIO
+driver-boot toolchain miscompile (D2185). C107 holds at 0.9.
+
+Also confirmed why the C113/C114 app faces stay unverifiable: they render with e.gpu's CPU backend
+(no real GPU needed) but require the 16 MB out-of-window arena, and both the gpu driver boot and the
+`start_process` bigarena path get that arena through `vm.map_range_el0` (main.e:85) -- the one
+miscompiled function -- while the 2 MB in-window arena cap is far too small for the backend. So the
+faces are sound but can only be verified with a matching toolchain, not worked around here.
