@@ -48,17 +48,22 @@ def wait_for(path, needle, timeout):
 def main():
     qemu, kernel, archive, device, serial = sys.argv[1:6]
     port = int(sys.argv[6]) if len(sys.argv) > 6 else 55130
+    # The boot mode: `input` (the input server + client, C109) or `compositor` (the compositor routes
+    # input to the focused app, C110), which also needs the display device.
+    append = sys.argv[7] if len(sys.argv) > 7 else "input"
     if os.path.exists(serial):
         os.remove(serial)
     dev = "virtio-keyboard-pci" if device == "keyboard" else "virtio-tablet-pci"
     args = [
         qemu, "-M", "virt,gic-version=3", "-cpu", "cortex-a76", "-m", "256M",
         "-nic", "none", "-no-reboot", "-display", "none",
-        "-kernel", kernel, "-initrd", archive, "-append", "input",
+        "-kernel", kernel, "-initrd", archive, "-append", append,
         "-device", dev,
         "-serial", "file:" + serial,
         "-qmp", "tcp:127.0.0.1:%d,server,nowait" % port,
     ]
+    if append == "compositor":
+        args[args.index("-device"):args.index("-device")] = ["-device", "virtio-gpu-pci"]
     proc = subprocess.Popen(args)
     try:
         sock = None
@@ -86,7 +91,7 @@ def main():
                 {"type": "btn", "data": {"down": True, "button": "left"}}]}})
             qmp(sock, {"execute": "input-send-event", "arguments": {"events": [
                 {"type": "btn", "data": {"down": False, "button": "left"}}]}})
-        wait_for(serial, "input client done", 20)
+        wait_for(serial, "app done", 20) if append == "compositor" else wait_for(serial, "input client done", 20)
         sys.stdout.write(serial_text(serial))
         try:
             qmp(sock, {"execute": "quit"})

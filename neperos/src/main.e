@@ -772,12 +772,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if last_server_index == thread.MAX_THREADS { ret NoInitrd }
         let compositor = last_server_index
         try vm.map_phys_at(thread.ttbr_of(compositor), shared_phys, vm.SHARED_FRAME_PAGES)
+        // endpoint 0: the app signals a ready frame (app sends, compositor receives).
         thread.grant(compositor, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 0usize)
+        // endpoint 1: the input server pushes events to the compositor; endpoint 2: the compositor
+        // routes them to the focused app.
+        thread.grant(compositor, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 1usize)
+        thread.grant(compositor, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 2usize)
+        // The input server on the virtio-input device (C109), pushing events to the compositor. Its
+        // MMIO window starts past the compositor's BAR (comp_bar) so the two devices do not collide.
+        driver_pool_bytes = 131072usize
+        last_server_index = thread.MAX_THREADS
+        let (input_bar, input_error) = start_driver_server(a, archive_base + archive_offset[2usize], archive_length[2usize], 3usize, pci_host, comp_bar, pci.VIRTIO_INPUT, "input")
+        if input_error != ok { ret input_error }
+        if last_server_index == thread.MAX_THREADS { ret NoInitrd }
+        thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 1usize)
         next_asid = 1usize
         let (comp_app, comp_app_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "app")
         if comp_app_error != ok { ret comp_app_error }
         try vm.map_phys_at(thread.ttbr_of(comp_app), shared_phys, vm.SHARED_FRAME_PAGES)
         thread.grant(comp_app, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
+        thread.grant(comp_app, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 2usize)
     }
     if !shell_mode && !fs_mode && !fsserver_mode && !gpu_mode && !input_mode && !compositor_mode {
     // A and B interleave under the timer, and X is handed a reference to kernel RAM --

@@ -12,8 +12,30 @@ const SHARED: usize = 548683907072usize
 const SURFACE_W: usize = 256usize
 const SURFACE_H: usize = 256usize
 const COMP: usize = 1usize
+const ROUTED: usize = 2usize
 const NO_SLOT: usize = 99usize
+const SENTINEL: usize = 65535usize
+const LOW16: usize = 65535usize
+const LOW32: usize = 4294967295usize
 const TILE: usize = 96usize
+
+fn say(text: str) {
+    let (written, write_error) = os.write(os.stdout(), text)
+}
+
+fn say_num(value: usize) {
+    var digits: [20]u8 = zero
+    var at = 20usize
+    var rest = value
+    var open = true
+    while open {
+        at -= 1usize
+        digits[at] = u8(rest % 10usize) + 48u8
+        rest = rest / 10usize
+        if rest == 0usize { open = false }
+    }
+    say(digits[at..20usize])
+}
 
 fn fill_rect(x0: usize, y0: usize, w: usize, h: usize, b: u8, g: u8, r: u8) {
     var y = 0usize
@@ -71,5 +93,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if raster_error != ok { ret raster_error }
     blit(80usize, 120usize, coverage, 120u8, 90u8, 220u8)
     let sent = os.send(COMP, 1usize, NO_SLOT)
+    // Receive the input events the compositor routes to this focused surface, until the sentinel.
+    var listening = true
+    while listening {
+        let event = os.recv(ROUTED, NO_SLOT)
+        let etype = (event >> 48usize) & LOW16
+        if etype == SENTINEL {
+            listening = false
+        } else {
+            say("app input ev ")
+            say_num(etype)
+            say(" ")
+            say_num((event >> 32usize) & LOW16)
+            say(" ")
+            say_num(event & LOW32)
+            say("\n")
+        }
+    }
+    say("app done\n")
     ret ok
 }

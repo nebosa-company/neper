@@ -14,7 +14,10 @@ const SHARED: usize = 548683907072usize
 const SURFACE_W: usize = 256usize
 const SURFACE_H: usize = 256usize
 const APP: usize = 2usize
+const INPUT: usize = 3usize
+const FOCUS: usize = 4usize
 const NO_SLOT: usize = 99usize
+const SENTINEL: usize = 65535usize
 
 fn say(text: str) {
     let (written, write_error) = os.write(os.stdout(), text)
@@ -81,7 +84,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     say("comp composited flushed\n")
-    var hold = 0usize
-    while hold < 2000000000usize { hold += 1usize }
+    // Route input from the input server (endpoint on slot 3) to the focused surface -- the app
+    // (endpoint on slot 4) -- until the stream ends with the sentinel (type 0xFFFF).
+    var routing = true
+    while routing {
+        let event = os.recv(INPUT, NO_SLOT)
+        let forwarded = os.send(FOCUS, event, NO_SLOT)
+        if (event >> 48usize) == SENTINEL { routing = false }
+    }
+    say("comp routed input\n")
     ret ok
 }

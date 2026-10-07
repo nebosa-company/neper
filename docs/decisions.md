@@ -37447,3 +37447,21 @@ screendump harness gained an append argument so it serves the gpu, ui and compos
 for C110: damage-only flush (a sub-rect rather than the whole display), input from C109 routed to the
 focused surface, and the e.ui window backend over e.gfx.scene with fonts from the filesystem plus an
 e.ui sample matching its host render.
+
+## D2163 — C110: input from C109 routed to the focused surface
+
+The compositor now routes input to the focused app. The `-append compositor` boot grows to three
+programs -- comp.e (the virtio-gpu display and the router), comp_app.e (the app), and the C109
+input_server unchanged -- on two virtio devices, the input server's MMIO window threaded past the
+compositor's BAR (comp_bar) so the two do not collide. Three endpoints wire them: endpoint 0 the app
+signalling a ready frame to the compositor, endpoint 1 the input server pushing events to the
+compositor, endpoint 2 the compositor routing them to the focused app. After compositing the app's
+surface, the compositor loops receiving input events and forwarding each to the app until the
+sentinel; the app, after drawing, receives the routed events and prints them. Verified on QEMU virt
+on both hosts: a QMP-injected key 'a' travels virtio-keyboard -> input_server -> compositor -> app,
+which prints `app input ev 1 30 1` (EV_KEY, KEY_A, down) and the rest, then `app done`. The input
+harness gained an append argument and adds the display device for the compositor boot. Fixtures
+added to run.ps1 and run.sh. Remaining for C110: damage-only flush (a sub-rect rather than the whole
+display), and the e.ui window backend over e.gfx.scene with fonts from the filesystem plus an e.ui
+sample matching its host render -- the large part, needing e.gpu's CPU backend, e.gfx.scene and e.ui
+on NeperOS.

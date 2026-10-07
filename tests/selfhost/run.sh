@@ -8991,6 +8991,17 @@ greeting"
         *"sha256 $comp_golden"*) ;;
         *) printf '%s\n' "NeperOS compositor screendump did not match the golden: $comp_dump" >&2; exit 1 ;;
     esac
+    # (D2163, C110) Input routed to the focused surface: the C109 input server + the compositor +
+    # the app; a QMP key injection travels keyboard -> input server -> compositor -> focused app.
+    route_input_server="$test_build/input_server.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/input_server.e" "$repo" aarch64 neperos "$route_input_server")" = 'executable written' ]
+    route_archive="$test_build/route-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$route_archive" "$comp_img" "$comp_app_img" "$route_input_server"
+    route=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$route_archive" keyboard "$test_build/route.serial" 55129 compositor 2>&1)
+    case "$route" in
+        *'comp composited flushed'*'app input ev 1 30 1'*'app done'*) ;;
+        *) printf '%s\n' "NeperOS compositor did not route input to the focused surface: $route" >&2; exit 1 ;;
+    esac
     # (D2160, C109) virtio-input over IPC: the input server pushes each event to a client over an
     # endpoint, woken by the device notification; the fixture injects a key and a tap and asserts
     # the stream the client receives.

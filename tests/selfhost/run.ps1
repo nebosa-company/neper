@@ -9134,6 +9134,16 @@ if ($neperosQemu) {
     $compGolden = '1e78b507c7bc0df83765c521d923a7e57df4d754293505e85aab706fe34b3e51'
     $compDump = (& python (Join-Path $repo 'scripts\neperos-screendump.py') $neperosQemu.Source $neperosImage $compArchive (Join-Path $testBuild 'comp.ppm') 55128 compositor 2>&1) -join "`n"
     if ($compDump -notmatch "sha256 $compGolden") { throw "NeperOS compositor screendump did not match the golden: $compDump" }
+    # (D2163, C110) Input routed to the focused surface: the C109 input server + the compositor +
+    # the app; a QMP key injection travels keyboard -> input server -> compositor -> focused app.
+    $routeInputServer = Join-Path $testBuild 'input_server.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\input_server.e') $repo aarch64 neperos $routeInputServer | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS input server did not build (route)' }
+    $routeArchive = Join-Path $testBuild 'route-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $routeArchive $comp $compApp $routeInputServer
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS compositor-route archive did not assemble' }
+    $route = (& python (Join-Path $repo 'scripts\neperos-input.py') $neperosQemu.Source $neperosImage $routeArchive keyboard (Join-Path $testBuild 'route.serial') 55129 compositor 2>&1) -join "`n"
+    if ($route -notmatch '(?s)comp composited flushed.*app input ev 1 30 1.*app done') { throw "NeperOS compositor did not route input to the focused surface: $route" }
     # (D2160, C109) virtio-input over IPC: the input server alone holds the device and pushes each
     # event to a client over an endpoint, woken by the device's notification. The fixture injects a
     # key (keyboard) and a tap (tablet) through QMP and asserts the stream the client receives.
