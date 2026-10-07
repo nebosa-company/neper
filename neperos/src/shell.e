@@ -22,6 +22,8 @@ use e.gfx.scene
 use e.gfx.image
 use e.io
 use e.fmt.png
+use e.gfx.svg
+use icons
 use e.ui.window
 
 const ROUTED: usize = 2usize
@@ -83,14 +85,11 @@ fn draw_digit(builder: *scene.Builder, font: []const u8, px: f32, py: f32, d: us
     }
 }
 
-fn draw_launcher(builder: *scene.Builder) {
+// The launcher's chrome: the top-bar strip, then the 8x5 grid. The eight app icons (icons.e, drawn
+// through e.gfx.svg) fill the first cells; the rest stay empty until more apps exist.
+fn draw_launcher(a: *mem.Arena, builder: *scene.Builder) -> err {
     fill(builder, 0.0, 0.0, 256.0, 18.0, 0.05, 0.06, 0.10)
-    var tick = 0usize
-    while tick < 5usize {
-        let tx = 256.0 - 10.0 - f32(tick) * 12.0
-        fill(builder, tx, 5.0, 8.0, 8.0, 0.7, 0.75, 0.85)
-        tick += 1usize
-    }
+    let ink = paint.Color { red: 0.91, green: 0.92, blue: 0.94, alpha: 1.0 }
     var r = 0usize
     while r < 8usize {
         var c = 0usize
@@ -98,21 +97,22 @@ fn draw_launcher(builder: *scene.Builder) {
             let cx = 8.0 + f32(c) * 48.0
             let cy = 28.0 + f32(r) * 28.0
             let idx = r * 5usize + c
-            let shade = f32(idx) / 40.0
-            fill(builder, cx + 6.0, cy + 4.0, 36.0, 20.0, 0.3 + shade * 0.5, 0.5, 0.85 - shade * 0.4)
+            if idx < icons.APP_COUNT {
+                try svg.draw(a, builder, icons.app(idx), geometry.rect(cx + 12.0, cy + 2.0, 24.0, 24.0), ink)
+            }
             c += 1usize
         }
         r += 1usize
     }
+    ret ok
 }
 
-// One provider's tick in the top bar: bright when the status service reports it present, else dim.
-fn provider_tick(builder: *scene.Builder, x: f32, word: usize) {
-    if (word & PRESENT) == 0usize {
-        fill(builder, x, 5.0, 8.0, 8.0, 0.3, 0.3, 0.33)
-    } else {
-        fill(builder, x, 5.0, 8.0, 8.0, 0.6, 0.85, 0.7)
-    }
+// One status glyph in the top bar (icons.bar): bright when `on`, dim when the provider is absent.
+fn status_glyph(a: *mem.Arena, builder: *scene.Builder, which: usize, x: f32, on: bool, lit: paint.Color) -> err {
+    var c = paint.Color { red: 0.32, green: 0.33, blue: 0.37, alpha: 1.0 }
+    if on { c = lit }
+    try svg.draw(a, builder, icons.bar(which), geometry.rect(x, 3.0, 12.0, 12.0), c)
+    ret ok
 }
 
 // Read the five-word snapshot: battery, Wi-Fi, cellular, wall-clock nanoseconds, notification count.
@@ -154,7 +154,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var renderer = renderer_value
-    let (builder_value, builder_error) = scene.builder(a, 256usize)
+    let (builder_value, builder_error) = scene.builder(a, 4096usize)
     if builder_error != ok { ret builder_error }
     var builder = builder_value
     // The wallpaper: the loader process read a PNG from the C106 filesystem and sends it here (a
@@ -188,7 +188,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !wallpapered { fill(&builder, 0.0, 0.0, 256.0, 256.0, 0.09, 0.11, 0.18) }
     say("shell wallpaper ")
     if wallpapered { say("from fs\n") } else { say("fallback\n") }
-    draw_launcher(&builder)
+    try draw_launcher(a, &builder)
     // Live status in the top bar, from the C111 status service: subscribe, post a notification, read
     // the snapshot, then stop the service (this shell is its only client).
     var snap: [5]usize = zero
@@ -197,10 +197,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let posted = os.send(STATUS_REQ, OP_POST, NO_SLOT)
     read_snapshot(&snap)
     let stopped = os.send(STATUS_REQ, OP_QUIT, NO_SLOT)
-    provider_tick(&builder, 246.0, snap[0usize])
-    provider_tick(&builder, 234.0, snap[1usize])
-    provider_tick(&builder, 222.0, snap[2usize])
-    if snap[4usize] > 0usize { fill(&builder, 210.0, 5.0, 8.0, 8.0, 0.95, 0.8, 0.3) }
+    let bright = paint.Color { red: 0.91, green: 0.92, blue: 0.94, alpha: 1.0 }
+    let amber = paint.Color { red: 0.88, green: 0.70, blue: 0.42, alpha: 1.0 }
+    // Glyph order in icons.bar: battery 0, bell 1, cell 2, moon 3, wifi 4.
+    try status_glyph(a, &builder, 0usize, 242.0, (snap[0usize] & PRESENT) != 0usize, bright)
+    try status_glyph(a, &builder, 4usize, 228.0, (snap[1usize] & PRESENT) != 0usize, bright)
+    try status_glyph(a, &builder, 2usize, 214.0, (snap[2usize] & PRESENT) != 0usize, bright)
+    try status_glyph(a, &builder, 1usize, 200.0, snap[4usize] > 0usize, amber)
     var hour = 0usize
     var minute = 0usize
     if snap[3usize] > 0usize {
