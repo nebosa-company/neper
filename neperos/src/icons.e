@@ -23,8 +23,11 @@ fn app_steps() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 
 fn app_lunatris() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#1f242b'/><g fill='#e8ebf0'><rect x='22' y='18' width='16' height='16' rx='3'/><rect x='38' y='18' width='16' height='16' rx='3'/><rect x='54' y='18' width='16' height='16' rx='3'/><rect x='38' y='34' width='16' height='16' rx='3'/></g><g fill='#8fd0a8'><rect x='22' y='54' width='16' height='16' rx='3'/><rect x='22' y='70' width='16' height='16' rx='3'/><rect x='38' y='70' width='16' height='16' rx='3'/></g><g fill='#e07a6a'><rect x='54' y='54' width='16' height='16' rx='3'/><rect x='54' y='70' width='16' height='16' rx='3'/><rect x='70' y='70' width='12' height='16' rx='3'/></g></svg>" }
 fn app_mfa() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#4a4a30'/><path d='M48 14 L77 25 V46 C77 64 65 76 48 83 C31 76 19 64 19 46 V25 Z' fill='#e8ebf0'/><circle cx='48' cy='44' r='8' fill='#4a4a30'/><polygon points='44,50 52,50 55,67 41,67' fill='#4a4a30'/><path d='M30 28 a24 24 0 0 1 36 0' fill='none' stroke='#e0b36a' stroke-width='3.5' stroke-linecap='round'/></svg>" }
 fn app_settings() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#444b57'/><g fill='#e8ebf0'><rect x='42' y='14' width='12' height='68' rx='4'/><rect x='42' y='14' width='12' height='68' rx='4' transform='rotate(45 48 48)'/><rect x='42' y='14' width='12' height='68' rx='4' transform='rotate(90 48 48)'/><rect x='42' y='14' width='12' height='68' rx='4' transform='rotate(135 48 48)'/><circle cx='48' cy='48' r='25'/></g><circle cx='48' cy='48' r='10' fill='#444b57'/><circle cx='48' cy='48' r='4' fill='#9db4d6'/></svg>" }
+fn app_stocks() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#2c4a3c'/><path d='M18 70 V26 M18 70 H80' fill='none' stroke='#9db4a6' stroke-width='3.5' stroke-linecap='round'/><path d='M24 60 L40 44 L50 53 L74 28' fill='none' stroke='#e8ebf0' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/><path d='M60 28 H74 V42' fill='none' stroke='#e0b36a' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/></svg>" }
+fn app_weather() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#33506a'/><circle cx='60' cy='36' r='15' fill='#e0b36a'/><g stroke='#e0b36a' stroke-width='4' stroke-linecap='round'><path d='M60 11 v5 M82 20 l-3.5 3.5 M85 36 h-5 M38 20 l3.5 3.5'/></g><path d='M30 74 a14 14 0 0 1 -1 -28 a19 19 0 0 1 36 4 a12 12 0 0 1 1 24 z' fill='#e8ebf0'/></svg>" }
+fn app_ssh() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#26292f'/><rect x='14' y='22' width='68' height='52' rx='8' fill='#14161a' stroke='#e8ebf0' stroke-width='4'/><path d='M26 40 L38 49 L26 58' fill='none' stroke='#e0b36a' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/><path d='M46 59 H64' fill='none' stroke='#e8ebf0' stroke-width='5' stroke-linecap='round'/></svg>" }
 
-const APP_COUNT: usize = 20usize
+const APP_COUNT: usize = 23usize
 
 fn app(index: usize) -> str {
     if index == 0usize { ret app_phone() }
@@ -47,6 +50,9 @@ fn app(index: usize) -> str {
     if index == 17usize { ret app_lunatris() }
     if index == 18usize { ret app_mfa() }
     if index == 19usize { ret app_settings() }
+    if index == 20usize { ret app_stocks() }
+    if index == 21usize { ret app_weather() }
+    if index == 22usize { ret app_ssh() }
     ret ""
 }
 
@@ -71,6 +77,9 @@ fn app_name(index: usize) -> str {
     if index == 17usize { ret "lunatris" }
     if index == 18usize { ret "mfa" }
     if index == 19usize { ret "settings" }
+    if index == 20usize { ret "stocks" }
+    if index == 21usize { ret "weather" }
+    if index == 22usize { ret "ssh" }
     ret ""
 }
 
@@ -95,6 +104,9 @@ fn app_label(index: usize) -> str {
     if index == 17usize { ret "Lunatris" }
     if index == 18usize { ret "Secure" }
     if index == 19usize { ret "Settings" }
+    if index == 20usize { ret "Stocks" }
+    if index == 21usize { ret "Weather" }
+    if index == 22usize { ret "SSH" }
     ret ""
 }
 
