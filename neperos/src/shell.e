@@ -322,6 +322,7 @@ fn icon_at(x: f32, y: f32) -> usize {
 fn program_of(icon: usize) -> usize {
     if icon == 9usize { ret 13usize }
     if icon == 8usize { ret 14usize }
+    if icon == 10usize { ret 15usize }
     ret 0usize
 }
 

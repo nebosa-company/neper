@@ -9295,10 +9295,12 @@ greeting"
     assets="$repo/neperos/assets"
     calc_img="$test_build/calc.img"
     clock_img="$test_build/clock.img"
+    tasks_img="$test_build/tasks.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/tasks.e" "$repo" aarch64 neperos "$tasks_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/clock.e" "$repo" aarch64 neperos "$clock_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/calc.e" "$repo" aarch64 neperos "$calc_img")" = 'executable written' ]
     crater_archive="$test_build/shell-crater-archive.img"
-    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "$calc_img" "$clock_img"
+    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "$calc_img" "$clock_img" "$tasks_img"
     crater_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" keyboard "$test_build/shell-crater.serial" 55136 "compositor bigarena unified" 'shell app code 5' - 2 2>&1)
     case "$crater_boot" in
         *'shell wallpaper from fs'*) printf '%s
@@ -9342,6 +9344,13 @@ greeting"
         *'clock shown'*'clock stopwatch started'*'clock stopwatch stopped '*'clock timer started'*'clock timer done'*'clock alarm saved 07:00'*'clock home'*) ;;
         *) printf '%s
 ' "NeperOS Clock did not run its stopwatch, timer and alarm: $clock_boot" >&2; exit 1 ;;
+    esac
+    # (D2211) Tasks: complete the first task, add one through the sheet (keys a and b), and leave.
+    tasks_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-tasks.serial" 55141 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;20480,12405;3661,6916;27037,28520;4295,22816;18993,24884;8668,12193;16384,32259' 2>&1)
+    case "$tasks_boot" in
+        *'tasks shown'*'tasks completed'*'tasks added'*'tasks count 7'*'tasks home'*) ;;
+        *) printf '%s
+' "NeperOS Tasks did not complete and add a task: $tasks_boot" >&2; exit 1 ;;
     esac
     unset NEPEROS_TAP_DELAY
     unset NEPEROS_MEM NEPEROS_GPU

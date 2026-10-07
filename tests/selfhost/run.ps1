@@ -9424,6 +9424,9 @@ if ($neperosQemu) {
     $assets = Join-Path $repo 'neperos\assets'
     $calcImage = Join-Path $testBuild 'calc.img'
     $clockImage = Join-Path $testBuild 'clock.img'
+    $tasksImage = Join-Path $testBuild 'tasks.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\tasks.e') $repo aarch64 neperos $tasksImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Tasks did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\clock.e') $repo aarch64 neperos $clockImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Clock did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
@@ -9453,6 +9456,9 @@ if ($neperosQemu) {
     $env:NEPEROS_TAP_DELAY = '8'
     $clockBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-clock.serial') 55140 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,12405;16384,30655;16384,27590;16384,27590;22938,30655;16384,8412;16384,23170;16384,17823;3277,30655;16384,27233;9146,20211;16384,32259' 2>&1) -join "`n"
     if ($clockBoot -notmatch '(?s)clock shown.*clock stopwatch started.*clock stopwatch stopped (\d\d+).*clock timer started.*clock timer done.*clock alarm saved 07:00.*clock home') { throw "NeperOS Clock did not run its stopwatch, timer and alarm: $clockBoot" }
+    # (D2211) Tasks: complete the first task, add one through the sheet (keys a and b), and leave.
+    $tasksBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-tasks.serial') 55141 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;20480,12405;3661,6916;27037,28520;4295,22816;18993,24884;8668,12193;16384,32259' 2>&1) -join "`n"
+    if ($tasksBoot -notmatch '(?s)tasks shown.*tasks completed.*tasks added.*tasks count 7.*tasks home') { throw "NeperOS Tasks did not complete and add a task: $tasksBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }
