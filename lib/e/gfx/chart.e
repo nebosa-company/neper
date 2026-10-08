@@ -4568,6 +4568,228 @@ fn standard_curve_readback(lower: f64, upper: f64, ec50: f64, slope: f64, signal
     ret (Layout { kind: .Rug, coords: zero, segments: guides[..used], bars: zero, x_min: f32(dose_min), x_max: f32(dose_max), y_min: f32(y_min), y_max: f32(y_max) }, read, ok)
 }
 
+type LeveyJennings = struct { trace: Layout, limits: Layout, signals: Layout, flagged: usize, y_limit: f32 }
+
+// Levey-Jennings clinical QC chart for a method with a known `mean` and `sd`: the values in
+// run order with lines at the mean and at +-1, 2 and 3 SD (seven segments, mean last
+// but one: -3, -2, -1, 0, +1, +2, +3), and the Westgard rules per point in `flags`:
+// 1 = 1-3s (beyond 3 SD), 2 = 2-2s (two in a row beyond 2 SD on one side), 4 = R-4s (consecutive
+// values beyond 2 SD on opposite sides), 8 = 4-1s (four in a row beyond 1 SD on one side),
+// 16 = 10x (ten in a row on one side of the mean). A rule flags the point that completes it.
+// The y axis spans mean +- max(4, largest |z|) SD.
+fn levey_jennings(values: []const f64, mean: f64, sd: f64, bounds: geometry.Rect, points: []Coord, trace_segments: []Segment, limit_segments: []Segment, signals: []Coord, flags: []u8) -> (LeveyJennings, err) {
+    let n = values.len
+    if n == 0usize { ret (zero, Empty) }
+    if n < 2usize || !finite64(mean) || !finite64(sd) || !(sd > 0.0f64) || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if points.len < n || trace_segments.len < n - 1usize || limit_segments.len < 7usize || signals.len < n || flags.len < n { ret (zero, TooLarge) }
+    var reach = 4.0f64
+    var i = 0usize
+    while i < n {
+        if !finite64(values[i]) { ret (zero, Invalid) }
+        var z = (values[i] - mean) / sd
+        if z < 0.0f64 { z = 0.0f64 - z }
+        if z > reach { reach = z }
+        i += 1usize
+    }
+    let bottom = bounds.y + bounds.height
+    let low = mean - reach * sd
+    let span = 2.0f64 * reach * sd
+    i = 0usize
+    while i < n {
+        points[i] = Coord { x: bounds.x + bounds.width * f32(i) / f32(n - 1usize), y: bottom - bounds.height * f32((values[i] - low) / span) }
+        if !finite(points[i].x) || !finite(points[i].y) { ret (zero, Invalid) }
+        if i > 0usize { trace_segments[i - 1usize] = Segment { from: points[i - 1usize], to: points[i] } }
+        i += 1usize
+    }
+    var level = 0usize
+    while level < 7usize {
+        let y = bottom - bounds.height * f32((f64(level) - 3.0f64 + reach) / (2.0f64 * reach))
+        limit_segments[level] = Segment { from: Coord { x: bounds.x, y: y }, to: Coord { x: bounds.x + bounds.width, y: y } }
+        level += 1usize
+    }
+    var flagged = 0usize
+    i = 0usize
+    while i < n {
+        let z = (values[i] - mean) / sd
+        var bits = 0u8
+        if z > 3.0f64 || z < -3.0f64 { bits = bits | 1u8 }
+        if i > 0usize {
+            let before = (values[i - 1usize] - mean) / sd
+            if (z > 2.0f64 && before > 2.0f64) || (z < -2.0f64 && before < -2.0f64) { bits = bits | 2u8 }
+            if (z > 2.0f64 && before < -2.0f64) || (z < -2.0f64 && before > 2.0f64) { bits = bits | 4u8 }
+        }
+        if i >= 3usize {
+            var above = true
+            var below = true
+            var k = 0usize
+            while k < 4usize {
+                let zk = (values[i - k] - mean) / sd
+                if !(zk > 1.0f64) { above = false }
+                if !(zk < -1.0f64) { below = false }
+                k += 1usize
+            }
+            if above || below { bits = bits | 8u8 }
+        }
+        if i >= 9usize {
+            var above = true
+            var below = true
+            var k = 0usize
+            while k < 10usize {
+                let zk = (values[i - k] - mean) / sd
+                if !(zk > 0.0f64) { above = false }
+                if !(zk < 0.0f64) { below = false }
+                k += 1usize
+            }
+            if above || below { bits = bits | 16u8 }
+        }
+        flags[i] = bits
+        if bits != 0u8 {
+            signals[flagged] = points[i]
+            flagged += 1usize
+        }
+        i += 1usize
+    }
+    let trace = Layout { kind: .Line, coords: points[..n], segments: trace_segments[..n - 1usize], bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: f32(low), y_max: f32(low + span) }
+    let limits = Layout { kind: .Rug, coords: zero, segments: limit_segments[..7usize], bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: f32(low), y_max: f32(low + span) }
+    let marks = Layout { kind: .Scatter, coords: signals[..flagged], segments: zero, bars: zero, x_min: 0.0, x_max: f32(n - 1usize), y_min: f32(low), y_max: f32(low + span) }
+    ret (LeveyJennings { trace: trace, limits: limits, signals: marks, flagged: flagged, y_limit: f32(reach) }, ok)
+}
+
+// Method-agreement scatter for Lin's concordance: both methods share one square domain
+// [lo, hi] covering all data, so the identity line is the exact diagonal and distance from it
+// is disagreement. Returns the points and the one diagonal segment.
+fn concordance_plot(x: []const f64, y: []const f64, bounds: geometry.Rect, points: []Coord, diagonal: []Segment) -> (Layout, err) {
+    let n = x.len
+    if n == 0usize { ret (zero, Empty) }
+    if y.len != n || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if points.len < n || diagonal.len < 1usize { ret (zero, TooLarge) }
+    var lo = x[0usize]
+    var hi = x[0usize]
+    var i = 0usize
+    while i < n {
+        if !finite64(x[i]) || !finite64(y[i]) { ret (zero, Invalid) }
+        if x[i] < lo { lo = x[i] }
+        if y[i] < lo { lo = y[i] }
+        if x[i] > hi { hi = x[i] }
+        if y[i] > hi { hi = y[i] }
+        i += 1usize
+    }
+    if !(hi > lo) { ret (zero, Invalid) }
+    let bottom = bounds.y + bounds.height
+    i = 0usize
+    while i < n {
+        points[i] = Coord { x: bounds.x + bounds.width * f32((x[i] - lo) / (hi - lo)), y: bottom - bounds.height * f32((y[i] - lo) / (hi - lo)) }
+        if !finite(points[i].x) || !finite(points[i].y) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    diagonal[0usize] = Segment { from: Coord { x: bounds.x, y: bottom }, to: Coord { x: bounds.x + bounds.width, y: bounds.y } }
+    ret (Layout { kind: .Scatter, coords: points[..n], segments: diagonal[..1usize], bars: zero, x_min: f32(lo), x_max: f32(hi), y_min: f32(lo), y_max: f32(hi) }, ok)
+}
+
+// Symmetry plot of ascending `sorted` data: pair i is (median - x_(i), x_(n+1-i) - median),
+// the i-th lower distance against the i-th upper one, from the extremes inward. A symmetric
+// distribution lies on the diagonal; points above it mean a longer upper tail. Both axes run
+// from 0 to the largest distance so the diagonal is exact. At least 4 values, not all equal.
+fn symmetry_plot(sorted: []const f64, bounds: geometry.Rect, points: []Coord, diagonal: []Segment) -> (Layout, err) {
+    let n = sorted.len
+    if n == 0usize { ret (zero, Empty) }
+    if n < 4usize || !valid_bounds(bounds) { ret (zero, Invalid) }
+    let pairs = n / 2usize
+    if points.len < pairs || diagonal.len < 1usize { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < n {
+        if !finite64(sorted[i]) || (i > 0usize && sorted[i] < sorted[i - 1usize]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    var median = sorted[n / 2usize]
+    if n % 2usize == 0usize { median = (sorted[n / 2usize - 1usize] + sorted[n / 2usize]) * 0.5f64 }
+    var reach = 0.0f64
+    i = 0usize
+    while i < pairs {
+        let lower = median - sorted[i]
+        let upper = sorted[n - 1usize - i] - median
+        if lower > reach { reach = lower }
+        if upper > reach { reach = upper }
+        i += 1usize
+    }
+    if !(reach > 0.0f64) { ret (zero, Invalid) }
+    let bottom = bounds.y + bounds.height
+    i = 0usize
+    while i < pairs {
+        points[i] = Coord { x: bounds.x + bounds.width * f32((median - sorted[i]) / reach), y: bottom - bounds.height * f32((sorted[n - 1usize - i] - median) / reach) }
+        if !finite(points[i].x) || !finite(points[i].y) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    diagonal[0usize] = Segment { from: Coord { x: bounds.x, y: bottom }, to: Coord { x: bounds.x + bounds.width, y: bounds.y } }
+    ret (Layout { kind: .Scatter, coords: points[..pairs], segments: diagonal[..1usize], bars: zero, x_min: 0.0, x_max: f32(reach), y_min: 0.0, y_max: f32(reach) }, ok)
+}
+
+type BoxCoxProfile = struct { curve: Layout, lambda_hat: f64, max_llf: f64, lower: f64, upper: f64, bracketed: bool }
+
+// Box-Cox profile log-likelihood over a caller grid of lambdas (strictly increasing, 3 or
+// more): the curve, the grid maximiser, and the lambdas where the curve falls `drop` below
+// its maximum (1.9207 is half the chi-square(1) 95% point), found by linear interpolation
+// between grid points. `bracketed` is false when either crossing lies outside the grid; the
+// bound then stays at that grid end. `llf` receives the profile in caller storage.
+fn box_cox_profile(values: []const f64, lambdas: []const f64, drop: f64, bounds: geometry.Rect, llf: []f64, points: []Coord, segments: []Segment) -> (BoxCoxProfile, err) {
+    let g = lambdas.len
+    if values.len == 0usize || g == 0usize { ret (zero, Empty) }
+    if g < 3usize || !(drop > 0.0f64) || !finite64(drop) || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if llf.len < g || points.len < g || segments.len < g - 1usize { ret (zero, TooLarge) }
+    var best = 0usize
+    var i = 0usize
+    while i < g {
+        if !finite64(lambdas[i]) || (i > 0usize && lambdas[i] <= lambdas[i - 1usize]) { ret (zero, Invalid) }
+        let (value, llf_error) = stat.box_cox_llf(values, lambdas[i])
+        if llf_error != ok { ret (zero, Invalid) }
+        llf[i] = value
+        if value > llf[best] { best = i }
+        i += 1usize
+    }
+    var low = llf[0usize]
+    var high = llf[0usize]
+    i = 0usize
+    while i < g {
+        if llf[i] < low { low = llf[i] }
+        if llf[i] > high { high = llf[i] }
+        i += 1usize
+    }
+    if !(high > low) { ret (zero, Invalid) }
+    let bottom = bounds.y + bounds.height
+    let first = lambdas[0usize]
+    let span = lambdas[g - 1usize] - first
+    i = 0usize
+    while i < g {
+        points[i] = Coord { x: bounds.x + bounds.width * f32((lambdas[i] - first) / span), y: bottom - bounds.height * f32((llf[i] - low) / (high - low)) }
+        if !finite(points[i].x) || !finite(points[i].y) { ret (zero, Invalid) }
+        if i > 0usize { segments[i - 1usize] = Segment { from: points[i - 1usize], to: points[i] } }
+        i += 1usize
+    }
+    let level = llf[best] - drop
+    var lower = lambdas[0usize]
+    var upper = lambdas[g - 1usize]
+    var has_lower = false
+    var has_upper = false
+    i = best
+    while i > 0usize && !has_lower {
+        if llf[i - 1usize] < level {
+            lower = lambdas[i - 1usize] + (lambdas[i] - lambdas[i - 1usize]) * (level - llf[i - 1usize]) / (llf[i] - llf[i - 1usize])
+            has_lower = true
+        }
+        i -= 1usize
+    }
+    i = best
+    while i + 1usize < g && !has_upper {
+        if llf[i + 1usize] < level {
+            upper = lambdas[i] + (lambdas[i + 1usize] - lambdas[i]) * (llf[i] - level) / (llf[i] - llf[i + 1usize])
+            has_upper = true
+        }
+        i += 1usize
+    }
+    let curve = Layout { kind: .Line, coords: points[..g], segments: segments[..g - 1usize], bars: zero, x_min: f32(first), x_max: f32(lambdas[g - 1usize]), y_min: f32(low), y_max: f32(high) }
+    ret (BoxCoxProfile { curve: curve, lambda_hat: lambdas[best], max_llf: llf[best], lower: lower, upper: upper, bracketed: has_lower && has_upper }, ok)
+}
+
 fn polar_point(center_x: f64, center_y: f64, radius: f64, angle: f64) -> Coord {
     ret Coord { x: f32(center_x + radius * math.cos[f64](angle)), y: f32(center_y + radius * math.sin[f64](angle)) }
 }

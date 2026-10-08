@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>levey_jennings</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="46" y="53" width="268" height="133" fill="rgb(250,252,255)"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="46" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="53" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="186" x2="314" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="186" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="314" y2="53" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="53" x2="46" y2="53" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="169.38" x2="314" y2="169.38" stroke="rgb(158,168,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="46" y1="152.75" x2="314" y2="152.75" stroke="rgb(158,168,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="46" y1="136.12" x2="314" y2="136.12" stroke="rgb(158,168,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="46" y1="119.5" x2="314" y2="119.5" stroke="rgb(158,168,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="46" y1="102.88" x2="314" y2="102.88" stroke="rgb(158,168,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="46" y1="86.25" x2="314" y2="86.25" stroke="rgb(158,168,184)" stroke-width="2" stroke-linecap="round"/>
+<line x1="46" y1="69.62" x2="314" y2="69.62" stroke="rgb(158,168,184)" stroke-width="2" stroke-linecap="round"/>
+<path d="M46 116.63 L52.87 107.95 L59.74 107.84 L66.62 116.81 L73.49 133.62 L80.36 107.95 L87.23 125.13 L94.1 110.84 L100.97 59.65 L107.85 117.92 L114.72 131.47 L121.59 127.64 L128.46 122.5 L135.33 118.51 L142.21 118.92 L149.08 132.11 L155.95 129.63 L162.82 75.44 L169.69 72.95 L176.56 127.1 L183.44 107.85 L190.31 126.58 L197.18 107.24 L204.05 132.86 L210.92 125.16 L217.79 120.7 L224.67 166.05 L231.54 133.13 L238.41 128.84 L245.28 122.92 L252.15 112.02 L259.03 109.53 L265.9 110.36 L272.77 107.86 L279.64 129.51 L286.51 106.13 L293.38 110.88 L300.26 108.36 L307.13 115.55 L314 110.03" fill="none" stroke="rgb(20,99,189)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="97.97" y="56.65" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="166.69" y="69.95" width="6" height="6" fill="rgb(209,48,56)"/>
+<text x="180" y="20" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">Levey-Jennings QC chart</text>
+<text x="180" y="36" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)">Lines at the mean and +-1, 2, 3 SD / red: a Westgard rule fired at that run</text>
+</svg>

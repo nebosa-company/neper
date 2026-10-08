@@ -1390,3 +1390,13 @@ seeded 60-sample classifier with tied scores: every `binary_curve` point against
 its McClish standardisation against `roc_auc_score(max_fpr=...)`), the Youden point,
 net-benefit decision curves, the four `binary_metric_curve` geometries, and the
 `roc_partial_region` polygon, whose area is the raw partial AUC times the box area.
+
+`levey_jennings` draws a clinical QC chart against a known mean and SD with lines at the
+mean and +-1, 2, 3 SD and the Westgard rules (1-3s, 2-2s, R-4s, 4-1s, 10x) per point;
+`concordance_plot` and `stat.concordance_cc` give the method-agreement scatter with the
+identity line and Lin's CCC with its bias correction and Fisher-z interval;
+`symmetry_plot` pairs median-centred lower and upper tail distances of ascending data;
+`box_cox_profile` plots the profile log-likelihood over a lambda grid (scipy's normalised
+form, `stat.box_cox_llf`) with its maximiser and interpolated interval.
+`gfx_chart_qc_agreement_reference` checks all of them against numpy and scipy on Windows
+and Linux; the gallery adds `levey_jennings`, `box_cox_profile`, `symmetry_plot` and `concordance`.

@@ -11847,6 +11847,165 @@ fn render_bioassay_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Tar
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+// L097: Levey-Jennings, Box-Cox profile, symmetry plot and the concordance scatter, on synthetic data.
+fn render_qc_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, which: usize) -> err {
+    var path = "docs/chart-previews/levey_jennings.png"
+    var title = "Levey-Jennings QC chart"
+    var note = "Lines at the mean and +-1, 2, 3 SD / red: a Westgard rule fired at that run"
+    if which == 1usize {
+        path = "docs/chart-previews/box_cox_profile.png"
+        title = "Box-Cox profile"
+        note = "Log-likelihood over lambda / red: the 95% interval around the maximiser"
+    }
+    if which == 2usize {
+        path = "docs/chart-previews/symmetry_plot.png"
+        title = "Symmetry plot"
+        note = "Lower against upper distance from the median / above the line: longer upper tail"
+    }
+    if which == 3usize {
+        path = "docs/chart-previews/concordance.png"
+        title = "Method agreement"
+        note = "Two methods against the identity line / Lin's CCC measures distance from it"
+    }
+    let plot = geometry.rect(46.0, 53.0, 268.0, 133.0)
+    var points: [64]chart.Coord = zero
+    var segments: [64]chart.Segment = zero
+    var limits: [7]chart.Segment = zero
+    var signals: [64]chart.Coord = zero
+    var flags: [64]u8 = zero
+    var llf: [41]f64 = zero
+    var main_marks: chart.Layout = zero
+    var rule_marks: chart.Layout = zero
+    var accent: chart.Layout = zero
+    if which == 0usize {
+        var series: [40]f64 = zero
+        var i = 0usize
+        var r = rand.pcg64(20261017u64, 3u64)
+        while i < 40usize {
+            series[i] = 100.0f64 + 2.0f64 * (rand.pcg64_f64(&r) - 0.5f64) * 1.7f64
+            i += 1usize
+        }
+        series[8usize] = 107.2f64
+        series[17usize] = 105.3f64
+        series[18usize] = 105.6f64
+        series[26usize] = 94.4f64
+        series[30usize] = 100.9f64
+        series[31usize] = 101.2f64
+        series[32usize] = 101.1f64
+        series[33usize] = 101.4f64
+        let (lj, lj_error) = chart.levey_jennings(series[..], 100.0, 2.0, plot, points[..], segments[..], limits[..], signals[..], flags[..])
+        if lj_error != ok { ret lj_error }
+        main_marks = lj.trace
+        rule_marks = lj.signals
+        accent = lj.limits
+    } else if which == 1usize {
+        var data: [30]f64 = zero
+        var i = 0usize
+        var r = rand.pcg64(7u64, 11u64)
+        while i < 30usize {
+            data[i] = math.exp[f64](1.1f64 + 0.55f64 * (rand.pcg64_f64(&r) + rand.pcg64_f64(&r) + rand.pcg64_f64(&r) - 1.5f64) * 2.0f64)
+            i += 1usize
+        }
+        var grid: [41]f64 = zero
+        i = 0usize
+        while i < 41usize {
+            grid[i] = -2.0f64 + 0.1f64 * f64(i)
+            i += 1usize
+        }
+        let (bc, bc_error) = chart.box_cox_profile(data[..], grid[..], 1.920729f64, plot, llf[..], points[..], segments[..])
+        if bc_error != ok { ret bc_error }
+        main_marks = bc.curve
+        // mark the interval ends and the maximiser as three vertical rules
+        let span = grid[40usize] - grid[0usize]
+        limits[0usize] = chart.Segment { from: chart.Coord { x: plot.x + plot.width * f32((bc.lower - grid[0usize]) / span), y: plot.y }, to: chart.Coord { x: plot.x + plot.width * f32((bc.lower - grid[0usize]) / span), y: plot.y + plot.height } }
+        limits[1usize] = chart.Segment { from: chart.Coord { x: plot.x + plot.width * f32((bc.upper - grid[0usize]) / span), y: plot.y }, to: chart.Coord { x: plot.x + plot.width * f32((bc.upper - grid[0usize]) / span), y: plot.y + plot.height } }
+        limits[2usize] = chart.Segment { from: chart.Coord { x: plot.x + plot.width * f32((bc.lambda_hat - grid[0usize]) / span), y: plot.y }, to: chart.Coord { x: plot.x + plot.width * f32((bc.lambda_hat - grid[0usize]) / span), y: plot.y + plot.height } }
+        rule_marks = chart.Layout { kind: .Rug, coords: zero, segments: limits[..3usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    } else if which == 2usize {
+        var data: [31]f64 = zero
+        var i = 0usize
+        var r = rand.pcg64(5u64, 9u64)
+        while i < 31usize {
+            data[i] = math.exp[f64](0.7f64 * (rand.pcg64_f64(&r) + rand.pcg64_f64(&r) + rand.pcg64_f64(&r) - 1.5f64) * 1.4f64)
+            i += 1usize
+        }
+        // insertion sort: the plot wants ascending data
+        i = 1usize
+        while i < 31usize {
+            let held = data[i]
+            var j = i
+            while j > 0usize && data[j - 1usize] > held {
+                data[j] = data[j - 1usize]
+                j -= 1usize
+            }
+            data[j] = held
+            i += 1usize
+        }
+        let (sym, sym_error) = chart.symmetry_plot(data[..], plot, points[..], segments[..])
+        if sym_error != ok { ret sym_error }
+        main_marks = sym
+        rule_marks = chart.Layout { kind: .Rug, coords: zero, segments: sym.segments, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    } else {
+        var x: [24]f64 = zero
+        var y: [24]f64 = zero
+        var i = 0usize
+        var r = rand.pcg64(3u64, 21u64)
+        while i < 24usize {
+            let truth = 10.0f64 + 40.0f64 * rand.pcg64_f64(&r)
+            x[i] = truth + 2.0f64 * (rand.pcg64_f64(&r) - 0.5f64)
+            y[i] = 1.06f64 * truth + 2.2f64 + 3.0f64 * (rand.pcg64_f64(&r) - 0.5f64)
+            i += 1usize
+        }
+        let (cc, cc_error) = chart.concordance_plot(x[..], y[..], plot, points[..], segments[..])
+        if cc_error != ok { ret cc_error }
+        main_marks = cc
+        rule_marks = chart.Layout { kind: .Rug, coords: zero, segments: cc.segments, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    }
+    let x_ticks = [2]chart.Tick{ chart.Tick { value: 0.0, fraction: 0.0 }, chart.Tick { value: 1.0, fraction: 1.0 } }
+    let y_ticks = [2]chart.Tick{ chart.Tick { value: 0.0, fraction: 0.0 }, chart.Tick { value: 1.0, fraction: 1.0 } }
+    var text: [2]chart.Label = zero
+    text[0usize] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center }
+    text[1usize] = chart.Label { text: note, anchor: chart.Coord { x: 180.0, y: 36.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let red = paint.rgba(0.82, 0.19, 0.22, 1.0)
+    let grey = paint.rgba(0.62, 0.66, 0.72, 1.0)
+    let grid_ink = paint.rgba(0.87, 0.91, 0.95, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    let (made, builder_error) = scene.builder(a, 512usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid_ink }, paint.Brush { Solid: dark })
+    if which == 0usize { try chart_scene.append(a, &builder, &accent, paint.Brush { Solid: grey }) }
+    if which == 2usize || which == 3usize { try chart_scene.append(a, &builder, &rule_marks, paint.Brush { Solid: grey }) }
+    try chart_scene.append(a, &builder, &main_marks, paint.Brush { Solid: blue })
+    if which == 0usize || which == 1usize { try chart_scene.append(a, &builder, &rule_marks, paint.Brush { Solid: red }) }
+    try chart_scene.append_labels(a, &builder, text[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, text[1usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid_ink, dark)
+    if which == 0usize { try chart_svg.append(&writer, &accent, grey) }
+    if which == 2usize || which == 3usize { try chart_svg.append(&writer, &rule_marks, grey) }
+    try chart_svg.append(&writer, &main_marks, blue)
+    if which == 0usize || which == 1usize { try chart_svg.append(&writer, &rule_marks, red) }
+    try chart_svg.append_labels(&writer, text[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, text[1usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, device_error) = gpu.open(a, .Cpu, 0u32)
     if device_error != ok { ret device_error }
@@ -12325,6 +12484,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_bioassay_preview(a, queue, output_target, canvas, &renderer, 0usize)
     try render_bioassay_preview(a, queue, output_target, canvas, &renderer, 1usize)
     try render_bioassay_preview(a, queue, output_target, canvas, &renderer, 2usize)
+    try render_qc_preview(a, queue, output_target, canvas, &renderer, 0usize)
+    try render_qc_preview(a, queue, output_target, canvas, &renderer, 1usize)
+    try render_qc_preview(a, queue, output_target, canvas, &renderer, 2usize)
+    try render_qc_preview(a, queue, output_target, canvas, &renderer, 3usize)
     try render_calendar_preview(a, queue, output_target, canvas, &renderer)
     try render_risk_matrix_preview(a, queue, output_target, canvas, &renderer)
     try render_resource_histogram_preview(a, queue, output_target, canvas, &renderer)

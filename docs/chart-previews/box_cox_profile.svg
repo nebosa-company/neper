@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>box_cox_profile</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="46" y="53" width="268" height="133" fill="rgb(250,252,255)"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="46" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="53" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="186" x2="314" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="186" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="314" y2="53" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="53" x2="46" y2="53" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<path d="M46 164.36 L52.7 154.64 L59.4 145.18 L66.1 136.01 L72.8 127.15 L79.5 118.62 L86.2 110.46 L92.9 102.69 L99.6 95.36 L106.3 88.48 L113 82.11 L119.7 76.27 L126.4 71 L133.1 66.35 L139.8 62.34 L146.5 59.02 L153.2 56.4 L159.9 54.52 L166.6 53.38 L173.3 53 L180 53.38 L186.7 54.52 L193.4 56.4 L200.1 59 L206.8 62.3 L213.5 66.28 L220.2 70.89 L226.9 76.12 L233.6 81.92 L240.3 88.27 L247 95.13 L253.7 102.47 L260.4 110.26 L267.1 118.48 L273.8 127.09 L280.5 136.09 L287.2 145.44 L293.9 155.12 L300.6 165.12 L307.3 175.42 L314 186" fill="none" stroke="rgb(20,99,189)" stroke-width="2" stroke-linejoin="round"/>
+<line x1="144.28" y1="53" x2="144.28" y2="186" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<line x1="202.37" y1="53" x2="202.37" y2="186" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<line x1="173.3" y1="53" x2="173.3" y2="186" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<text x="180" y="20" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">Box-Cox profile</text>
+<text x="180" y="36" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)">Log-likelihood over lambda / red: the 95% interval around the maximiser</text>
+</svg>

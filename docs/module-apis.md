@@ -3450,6 +3450,7 @@ type GageRrMeanSquares = struct { part: f64, operator: f64, interaction: f64, re
 type GageRrComponents = struct { repeatability: f64, operator: f64, interaction: f64, part: f64, gage: f64, total: f64 }
 type GageRrWork = struct { part_means: []f64, operator_means: []f64, cell_means: []f64 }
 type GageRrSummary = struct { mean_squares: GageRrMeanSquares, components: GageRrComponents, interaction_p: f64, interaction_included: bool }
+type Concordance = struct { ccc: f64, pearson: f64, bias_correction: f64, lower: f64, upper: f64 }
 fn gage_finite(value: f64) -> bool
 fn gage_rr_variance_components(parts: usize, operators: usize, repeats: usize, means: *const GageRrMeanSquares, include_interaction: bool) -> (GageRrComponents, err)
 fn gage_rr_crossed(values: []const f64, parts: usize, operators: usize, repeats: usize, alpha: f64, work: *GageRrWork) -> (GageRrSummary, err)
@@ -3459,6 +3460,9 @@ fn fit_moments(values: []const f64, distribution: Distribution) -> (Fit, err)
 fn digamma(x: f64) -> f64
 fn trigamma(x: f64) -> f64
 fn fit_mle(values: []const f64, distribution: Distribution) -> (Fit, err)
+fn concordance_cc(x: []const f64, y: []const f64, z: f64) -> (Concordance, err)
+fn box_cox_llf(values: []const f64, lambda: f64) -> (f64, err)
+fn box_cox_transform(value: f64, lambda: f64) -> f64
 ```
 
 ### `e.algo.bitset`
@@ -16410,6 +16414,10 @@ fn compound_pie(values: []const f32, tail: usize, kind: CompoundKind, bounds: ge
 fn parallel_line_assay(dose_s: []const f64, resp_s: []const f64, dose_t: []const f64, resp_t: []const f64, alpha: f64, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (ParallelLineFit, err)
 fn schild_plot(antagonist: []const f64, dose_ratio: []const f64, bounds: geometry.Rect, points: []Coord, line: []Segment) -> (SchildFit, err)
 fn standard_curve_readback(lower: f64, upper: f64, ec50: f64, slope: f64, signals: []const f64, dose_min: f64, dose_max: f64, y_min: f64, y_max: f64, bounds: geometry.Rect, concentrations: []f64, in_range: []bool, guides: []Segment) -> (Layout, usize, err)
+fn levey_jennings(values: []const f64, mean: f64, sd: f64, bounds: geometry.Rect, points: []Coord, trace_segments: []Segment, limit_segments: []Segment, signals: []Coord, flags: []u8) -> (LeveyJennings, err)
+fn concordance_plot(x: []const f64, y: []const f64, bounds: geometry.Rect, points: []Coord, diagonal: []Segment) -> (Layout, err)
+fn symmetry_plot(sorted: []const f64, bounds: geometry.Rect, points: []Coord, diagonal: []Segment) -> (Layout, err)
+fn box_cox_profile(values: []const f64, lambdas: []const f64, drop: f64, bounds: geometry.Rect, llf: []f64, points: []Coord, segments: []Segment) -> (BoxCoxProfile, err)
 fn extrude_bars(fronts: []const geometry.Rect, depth: f32, points: []Coord, tops: []Layout, sides: []Layout) -> (Extruded, err)
 fn pie_25d(values: []const f32, bounds: geometry.Rect, tilt: f32, thickness: f32, points: []Coord, tops: []Layout, walls: []Layout) -> (Extruded, err)
 fn hit_rect(rects: []const geometry.Rect, row_ids: []const usize, pointer: Coord) -> (SelectionHit, bool, err)

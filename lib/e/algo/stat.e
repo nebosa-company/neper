@@ -2500,3 +2500,96 @@ fn gage_rr_crossed(values: []const f64, parts: usize, operators: usize, repeats:
     if components_error != ok { ret (zero, components_error) }
     ret (GageRrSummary { mean_squares: means, components: components, interaction_p: interaction_p, interaction_included: include_interaction }, ok)
 }
+
+type Concordance = struct { ccc: f64, pearson: f64, bias_correction: f64, lower: f64, upper: f64 }
+
+// Lin's concordance correlation coefficient with population (1/n) moments:
+// ccc = 2 s_xy / (s_x^2 + s_y^2 + (mean_x - mean_y)^2) = r * Cb, where Cb is the bias
+// correction for location and scale shift. The interval is Lin's Fisher-z one: tanh(atanh(ccc) +- z * se)
+// with `z` the caller's normal critical value (1.96 for 95%). Needs 3 or more pairs,
+// spread in both methods and a positive Pearson r; agreement without correlation is refused.
+fn concordance_cc(x: []const f64, y: []const f64, z: f64) -> (Concordance, err) {
+    let n = x.len
+    if n < 3usize || y.len != n || !(z > 0.0f64) || z - z != 0.0f64 { ret (zero, Invalid) }
+    var mean_x = 0.0f64
+    var mean_y = 0.0f64
+    var i = 0usize
+    while i < n {
+        if x[i] - x[i] != 0.0f64 || y[i] - y[i] != 0.0f64 { ret (zero, Invalid) }
+        mean_x += x[i] / f64(n)
+        mean_y += y[i] / f64(n)
+        i += 1usize
+    }
+    var sxx = 0.0f64
+    var syy = 0.0f64
+    var sxy = 0.0f64
+    i = 0usize
+    while i < n {
+        sxx += (x[i] - mean_x) * (x[i] - mean_x) / f64(n)
+        syy += (y[i] - mean_y) * (y[i] - mean_y) / f64(n)
+        sxy += (x[i] - mean_x) * (y[i] - mean_y) / f64(n)
+        i += 1usize
+    }
+    if !(sxx > 0.0f64) || !(syy > 0.0f64) { ret (zero, Invalid) }
+    let r = sxy / math.sqrt[f64](sxx * syy)
+    if !(r > 0.0f64) { ret (zero, Invalid) }
+    let shift = mean_x - mean_y
+    let ccc = 2.0f64 * sxy / (sxx + syy + shift * shift)
+    let scale = math.sqrt[f64](sxx / syy)
+    let u = shift / math.sqrt[f64](math.sqrt[f64](sxx) * math.sqrt[f64](syy))
+    let bias = 2.0f64 / (scale + 1.0f64 / scale + u * u)
+    var lower = ccc
+    var upper = ccc
+    let denominator = 1.0f64 - ccc * ccc
+    if denominator > 1.0e-12f64 {
+        let r2 = r * r
+        let variance_z = ((1.0f64 - r2) * ccc * ccc * (1.0f64 - ccc * ccc) / (r2 * denominator * denominator) + 4.0f64 * ccc * ccc * ccc * (1.0f64 - ccc) * u * u / (r * denominator * denominator) - 2.0f64 * ccc * ccc * ccc * ccc * u * u * u * u / (r2 * denominator * denominator)) / f64(n - 2usize)
+        if !(variance_z >= 0.0f64) { ret (zero, Invalid) }
+        let centre = 0.5f64 * math.log[f64]((1.0f64 + ccc) / (1.0f64 - ccc))
+        let half = z * math.sqrt[f64](variance_z)
+        let a = math.exp[f64](2.0f64 * (centre - half))
+        let b = math.exp[f64](2.0f64 * (centre + half))
+        lower = (a - 1.0f64) / (a + 1.0f64)
+        upper = (b - 1.0f64) / (b + 1.0f64)
+    }
+    if ccc - ccc != 0.0f64 || lower - lower != 0.0f64 || upper - upper != 0.0f64 { ret (zero, Invalid) }
+    ret (Concordance { ccc: ccc, pearson: r, bias_correction: bias, lower: lower, upper: upper }, ok)
+}
+
+// Profile log-likelihood of the Box-Cox power transform at `lambda` for positive data, in
+// scipy's normalised form: (lambda - 1) sum ln y - n/2 ln(variance of the transformed
+// values), the variance taken with 1/n. lambda == 0 is the log transform. Needs 3 or more
+// positive values with some spread.
+fn box_cox_llf(values: []const f64, lambda: f64) -> (f64, err) {
+    let n = values.len
+    if n < 3usize || lambda - lambda != 0.0f64 { ret (0.0f64, Invalid) }
+    var log_sum = 0.0f64
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        if !(values[i] > 0.0f64) || values[i] - values[i] != 0.0f64 { ret (0.0f64, Invalid) }
+        log_sum += math.log[f64](values[i])
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        mean += box_cox_transform(values[i], lambda) / f64(n)
+        i += 1usize
+    }
+    var variance = 0.0f64
+    i = 0usize
+    while i < n {
+        let d = box_cox_transform(values[i], lambda) - mean
+        variance += d * d / f64(n)
+        i += 1usize
+    }
+    if !(variance > 0.0f64) || variance - variance != 0.0f64 { ret (0.0f64, Invalid) }
+    let llf = (lambda - 1.0f64) * log_sum - 0.5f64 * f64(n) * math.log[f64](variance)
+    if llf - llf != 0.0f64 { ret (0.0f64, Invalid) }
+    ret (llf, ok)
+}
+
+fn box_cox_transform(value: f64, lambda: f64) -> f64 {
+    if lambda == 0.0f64 { ret math.log[f64](value) }
+    ret (math.pow[f64](value, lambda) - 1.0f64) / lambda
+}
