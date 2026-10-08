@@ -9432,6 +9432,9 @@ if ($neperosQemu) {
     $walletImage = Join-Path $testBuild 'wallet.img'
     $cameraImage = Join-Path $testBuild 'camera.img'
     $photosImage = Join-Path $testBuild 'photos.img'
+    $filesImage = Join-Path $testBuild 'files.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\srciles.e') $repo aarch64 neperos $filesImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Files did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\photos.e') $repo aarch64 neperos $photosImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Photos did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\camera.e') $repo aarch64 neperos $cameraImage | Out-Null
@@ -9453,7 +9456,7 @@ if ($neperosQemu) {
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
@@ -9501,6 +9504,9 @@ if ($neperosQemu) {
     # (D2218) Photos: open the first picture, mark it a favorite, back, the Albums tab, the Trips album, leave.
     $photosBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-photos.serial') 55148 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,7986;4454,6060;29585,1782;3181,1569;16384,30730;24574,6096;16384,32259' 2>&1) -join "`n"
     if ($photosBoot -notmatch '(?s)photos shown.*photos opened 1.*photos favorite on.*photos back.*photos tab Albums.*photos album Trips.*photos home') { throw "NeperOS Photos did not open a picture and an album: $photosBoot" }
+    # (D2219) Files: into Documents, a file's sheet and Open, up, the Date sort, a new folder named Ab, leave.
+    $filesBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-files.serial') 55149 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;28631,12406;11930,8770;11930,6845;5965,25454;16384,27736;3181,1569;28153,1319;25768,30730;4295,22816;19008,24884;8669,7273;16384,32259' 2>&1) -join "`n"
+    if ($filesBoot -notmatch '(?s)files shown.*files folder Documents.*files file Budget.xlsx.*files open Budget.xlsx.*files up.*files sort Date.*files created Ab.*files home') { throw "NeperOS Files did not browse and create a folder: $filesBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }

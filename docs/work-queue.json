@@ -48,6 +48,17 @@
       "evidence": "Queued by the user (2026-10-08). The Stocks app (D2213) ships on a bundled sample data set; this item replaces the sample source once C117 (networking) and C116 (Secure) exist. Acceptance, in order: (1) a keyless source: Stooq's CSV download (no account; daily prices for most exchanges; delayed and daily, not real time), parsed into the watchlist, the chart and the day change, with the sample data as the offline fallback and a visible 'delayed' label; (2) bring-your-own-key providers for better data (Finnhub, Twelve Data, Alpha Vantage or Polygon; the key is entered in the app and stored in Secure; real-time quotes are usually paid or rate-limited, so real time is not promised); (3) crypto from Coinbase's public price endpoint (no key), if wanted; (4) add and remove tickers and search. Yahoo's unofficial endpoints are excluded: they break without notice and their terms do not allow it. Fixtures run against recorded responses, not the live internet."
     },
     {
+      "id": "C125",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 125,
+      "title": "NeperOS Files: real storage through the filesystem server, file hand-over between apps",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued by the user (2026-10-08). The Files app (D2219) browses a sample tree kept in the process. Acceptance: (1) the tree is the real one behind fs_server.e (a virtio-blk disk or the Pixel's storage later): list, create, rename, move, copy, delete (with a trash that empties after thirty days), file sizes and times from the filesystem, and the storage summary from the real free space and the real mix of types; (2) the capability model: an app sees only its own directory and what the user shares to it through Files; the Files app is the one that holds the whole tree; (3) hand-over: Open sends the file to the app for its type (Document C123, Photos, a media player) and Share sends it to another app; the Camera (C122), Wallet (C121) and Mail save into it; (4) search by name and by type, recent files, multi-select with copy, move and delete, a grid view with thumbnails for images (reusing e.gfx scene clipping); (5) archives: browse and extract a zip; (6) external storage: a USB disk or SD card appears as a second root; (7) a fixture on QEMU that creates, renames and deletes on a real disk image and checks the bytes after a reboot. Not queued here: cloud drives, sync, encryption of folders (Secure's job)."
+    },
+    {
       "id": "C124",
       "category": "compiler",
       "group": "NeperOS",
