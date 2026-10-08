@@ -290,6 +290,17 @@
       "evidence": "Queued (2026-10-08). The Secure app (D2235) is the vault's face with real one-time passwords (RFC 6238, checked at start) on sample logins held in memory. Acceptance: (1) the store encrypted at rest: a key from the master password with PBKDF2 or Argon2 (e.crypto.kdf) and an AEAD (e.crypto.aead) per entry, kept in Files' protected directory (C125) with a version and an integrity tag, a wrong password taking constant time, auto-lock on timeout and when the app leaves; (2) add and edit entries for logins and codes, import and export (an encrypted file, and the common authenticator formats), the otpauth:// URI from a QR scan (L137, C122), the SHA-256 and SHA-512 and eight-digit variants of TOTP, and HOTP; (3) a clipboard service with a timed clear, and autofill of a login into the Browser (C129) and other apps through a capability; (4) fingerprint and face unlock (C126 settings) with the master password as the fallback; (5) a password generator with options and a breach check by hash prefix over C117; (6) Wallet's cards and Dynamic's API keys can be kept here; (7) a fixture on QEMU that creates a vault, restarts and checks the entries decrypt, and the RFC 4226 and RFC 6238 vectors. Not queued here: sharing a vault, passkeys."
     },
     {
+      "id": "C141",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 141,
+      "title": "NeperOS AI: a real bring-your-own-key client",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The AI app (D2236) has the provider and key setup and a chat whose replies are canned. Acceptance: (1) HTTPS clients over C117 for the providers' messages APIs (Anthropic, OpenAI, Google, and a local server such as an Ollama or llama.cpp endpoint), the reply streamed into the bubble, errors (a wrong key, a rate limit, no network) shown in plain words; (2) the API key kept in Secure (C140), never in the app's memory longer than a request, never logged, and a key check on Save with a cheap call; (3) conversations kept in storage (C125) with titles, search, rename and delete, system prompts, and the model, temperature and token limits as settings; (4) images from Camera and Photos, files from Files and documents from Document (C123) as inputs, and the reply's code blocks with syntax highlighting (C123); (5) a tool use loop so a conversation can call other apps through capabilities (read the calendar, make a note) with a confirmation each time; (6) Dynamic (C124) builds on this client for writing apps; (7) a fixture against a local mock server that streams a reply and checks the text and the error paths. Not queued here: voice mode, image generation."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
