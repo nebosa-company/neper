@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>ice_pdp</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="46" y="53" width="268" height="133" fill="rgb(250,252,255)"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="46" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="53" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="186" x2="314" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="186" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="314" y2="53" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="53" x2="46" y2="53" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<path d="M46 105.41 L79.5 101.29 L113 103.34 L146.5 114.42 L180 132.53 L213.5 151.92 L247 166.14 L280.5 171.52 L314 169.13 M46 105.41 L79.5 95.31 L113 92.61 L146.5 100.73 L180 117.31 L213.5 135.41 L247 147.31 L280.5 148.6 L314 140.57 M46 105.41 L79.5 89.32 L113 81.87 L146.5 87.05 L180 102.08 L213.5 118.9 L247 128.48 L280.5 125.68 L314 112 M46 105.41 L79.5 83.34 L113 71.13 L146.5 73.36 L180 86.85 L213.5 102.39 L247 109.65 L280.5 102.76 L314 83.44 M46 105.41 L79.5 77.35 L113 60.39 L146.5 59.67 L180 71.63 L213.5 85.88 L247 90.82 L280.5 79.85 L314 54.88 M46 105.41 L79.5 89.8 L113 86.53 L146.5 101.3 L180 130.15 L213.5 161.56 L247 182.62 L280.5 186 L314 173.84 M46 105.41 L79.5 83.82 L113 75.79 L146.5 87.62 L180 114.93 L213.5 145.05 L247 163.79 L280.5 163.08 L314 145.28 M46 105.41 L79.5 93.92 L113 88.59 L146.5 92.29 L180 103.03 L213.5 115.05 L247 121.89 L280.5 119.89 L314 110.12 M46 105.41 L79.5 87.93 L113 77.85 L146.5 78.61 L180 87.8 L213.5 98.53 L247 103.06 L280.5 96.97 L314 81.56 M46 105.41 L79.5 81.95 L113 67.12 L146.5 64.92 L180 72.58 L213.5 82.02 L247 84.23 L280.5 74.05 L314 53 M46 105.41 L79.5 94.4 L113 93.26 L146.5 106.55 L180 131.11 L213.5 157.71 L247 176.03 L280.5 180.21 L314 171.95 M46 105.41 L79.5 88.41 L113 82.52 L146.5 92.86 L180 115.88 L213.5 141.19 L247 157.2 L280.5 157.29 L314 143.39 M46 105.41 L79.5 82.43 L113 71.78 L146.5 79.18 L180 100.65 L213.5 124.68 L247 138.37 L280.5 134.37 L314 114.83 M46 105.41 L79.5 76.44 L113 61.04 L146.5 65.49 L180 85.42 L213.5 108.17 L247 119.54 L280.5 111.45 L314 86.27" fill="none" stroke="rgb(140,179,224)" stroke-opacity="0.55" stroke-width="2" stroke-linejoin="round"/>
+<path d="M46 105.41 L79.5 87.55 L113 79.56 L146.5 86 L180 103.71 L213.5 123.46 L247 134.94 L280.5 132.27 L314 117.16" fill="none" stroke="rgb(209,48,56)" stroke-width="2" stroke-linejoin="round"/>
+<text x="180" y="20" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">Centred ICE and partial dependence</text>
+<text x="180" y="36" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Thin: 14 instances (c-ICE) / thick: their mean</text>
+<text x="180" y="208" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">feature value</text>
+</svg>

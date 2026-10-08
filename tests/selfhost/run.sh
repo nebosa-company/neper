@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# L092 the ML-diagnostics plots against numpy and scikit-learn
+gfx_chart_ml_diagnostics_reference_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_ml_diagnostics_reference/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-ml-diagnostics-reference-selfhost")
+[ "$gfx_chart_ml_diagnostics_reference_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-ml-diagnostics-reference-selfhost"
+gfx_chart_ml_diagnostics_reference_output=$("$test_build/gfx-chart-ml-diagnostics-reference-selfhost")
+[ "$gfx_chart_ml_diagnostics_reference_output" = 'gfx chart ml diagnostics reference ok' ]
 # L075 the paginated-report compositions against a numpy replay
 gfx_chart_report_reference_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_report_reference/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-report-reference-selfhost")
 [ "$gfx_chart_report_reference_written" = 'executable written' ]

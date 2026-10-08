@@ -15138,6 +15138,7 @@ fn birch_split(t: *Birch, node: usize) -> usize
 fn birch_insert(t: *Birch, point: []const f64, path: []usize) -> err
 fn birch_centroids(t: *const Birch, centroids: []f64, sizes: []f64) -> (usize, err)
 fn birch_fit(a: *mem.Arena, x: []const f64, n: usize, d: usize, branching: usize, threshold: f64, room: usize, path: []usize) -> (Birch, err)
+fn silhouette_samples(x: []const f64, n: usize, d: usize, labels: []const usize, k: usize, scores: []f64) -> (f64, err)
 ```
 
 `kmeans` runs Lloyd's iterations from caller centroids (`kmeans_pp_init` seeds them,
@@ -16406,6 +16407,9 @@ type SelectionHit = struct { mark_index: usize, source_row: usize, distance_squa
 fn hit_scatter(marks: *const Layout, row_ids: []const usize, pointer: Coord, radius: f32) -> (SelectionHit, bool, err)
 fn hit_rect(rects: []const geometry.Rect, row_ids: []const usize, pointer: Coord) -> (SelectionHit, bool, err)
 fn tree_subtree_mask(parents: []const usize, node: usize, mask: []bool) -> (usize, err)
+fn ice_curves(predictions: []const f64, instances: usize, grid: []const f64, center: bool, bounds: geometry.Rect, means: []f64, curve_segments: []Segment, mean_segments: []Segment) -> (IceLayout, err)
+fn silhouette_plot(scores: []const f64, labels: []const usize, k: usize, bounds: geometry.Rect, order: []usize, bars: []geometry.Rect, mean_line: []Segment) -> (Layout, err)
+fn missingness_map(present: []const bool, rows: usize, columns: usize, bounds: geometry.Rect, cells: []Cell, column_missing: []f64) -> (MatrixLayout, err)
 fn selected_point_outline(marks: *const Layout, mark_index: usize, padding: f32, storage: []geometry.Rect) -> (Layout, err)
 fn cross_tab_report(row_ids: []const usize, column_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, work: *CrossTabStorage) -> (CrossTabLayout, err)
 fn matrix_report(row_ids: []const usize, column_ids: []const usize, values: []const f64, present: []const bool, group_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, bar_scope: ReportBarScope, work: *MatrixReportStorage) -> (MatrixReportLayout, err)

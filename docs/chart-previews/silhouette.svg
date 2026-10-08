@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>silhouette</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="46" y="53" width="268" height="150" fill="rgb(250,252,255)"/>
+<rect x="180" y="53" width="100.84" height="4.41" fill="rgb(18,97,194)"/>
+<rect x="180" y="57.41" width="100.6" height="4.41" fill="rgb(18,97,194)"/>
+<rect x="180" y="61.82" width="99.51" height="4.41" fill="rgb(18,97,194)"/>
+<rect x="180" y="66.24" width="93.75" height="4.41" fill="rgb(18,97,194)"/>
+<rect x="180" y="70.65" width="89.2" height="4.41" fill="rgb(18,97,194)"/>
+<rect x="180" y="75.06" width="78.19" height="4.41" fill="rgb(18,97,194)"/>
+<rect x="180" y="79.47" width="75.24" height="4.41" fill="rgb(18,97,194)"/>
+<rect x="180" y="83.88" width="71.98" height="4.41" fill="rgb(18,97,194)"/>
+<rect x="180" y="88.29" width="32.39" height="4.41" fill="rgb(18,97,194)"/>
+<rect x="180" y="97.12" width="86.07" height="4.41" fill="rgb(219,99,43)"/>
+<rect x="180" y="101.53" width="82.87" height="4.41" fill="rgb(219,99,43)"/>
+<rect x="180" y="105.94" width="81.78" height="4.41" fill="rgb(219,99,43)"/>
+<rect x="180" y="110.35" width="80.58" height="4.41" fill="rgb(219,99,43)"/>
+<rect x="180" y="114.76" width="79.76" height="4.41" fill="rgb(219,99,43)"/>
+<rect x="180" y="119.18" width="78.51" height="4.41" fill="rgb(219,99,43)"/>
+<rect x="180" y="123.59" width="76.68" height="4.41" fill="rgb(219,99,43)"/>
+<rect x="180" y="128" width="65.61" height="4.41" fill="rgb(219,99,43)"/>
+<rect x="180" y="132.41" width="64.67" height="4.41" fill="rgb(219,99,43)"/>
+<rect x="180" y="136.82" width="61.86" height="4.41" fill="rgb(219,99,43)"/>
+<rect x="100.22" y="141.24" width="79.78" height="4.41" fill="rgb(219,99,43)"/>
+<rect x="180" y="150.06" width="103.5" height="4.41" fill="rgb(38,153,117)"/>
+<rect x="180" y="154.47" width="103.41" height="4.41" fill="rgb(38,153,117)"/>
+<rect x="180" y="158.88" width="96.71" height="4.41" fill="rgb(38,153,117)"/>
+<rect x="180" y="163.29" width="95.26" height="4.41" fill="rgb(38,153,117)"/>
+<rect x="180" y="167.71" width="94.58" height="4.41" fill="rgb(38,153,117)"/>
+<rect x="180" y="172.12" width="94.48" height="4.41" fill="rgb(38,153,117)"/>
+<rect x="180" y="176.53" width="92.02" height="4.41" fill="rgb(38,153,117)"/>
+<rect x="180" y="180.94" width="91.49" height="4.41" fill="rgb(38,153,117)"/>
+<rect x="180" y="185.35" width="87.03" height="4.41" fill="rgb(38,153,117)"/>
+<rect x="180" y="189.76" width="56.63" height="4.41" fill="rgb(38,153,117)"/>
+<line x1="255.34" y1="53" x2="255.34" y2="203" stroke="rgb(43,59,82)" stroke-width="2" stroke-linecap="round"/>
+<text x="180" y="20" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">Silhouette plot</text>
+<text x="180" y="36" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">4 clusters / 31 points / line: mean silhouette</text>
+</svg>

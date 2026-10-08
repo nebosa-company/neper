@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# L092 the ML-diagnostics plots against numpy and scikit-learn
+$gfxChartMlDiagnosticsReferencePath = Join-Path $testBuild 'gfx-chart-ml-diagnostics-reference-selfhost.exe'
+$gfxChartMlDiagnosticsReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_ml_diagnostics_reference\src\main.e') $repo 'x64' 'windows' $gfxChartMlDiagnosticsReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMlDiagnosticsReferenceWritten -ne 'executable written') { throw 'gfx_chart_ml_diagnostics_reference emission failed' }
+$gfxChartMlDiagnosticsReferenceOutput = & $gfxChartMlDiagnosticsReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMlDiagnosticsReferenceOutput -ne 'gfx chart ml diagnostics reference ok') { throw "gfx_chart_ml_diagnostics_reference answered wrongly: exit $LASTEXITCODE" }
 # L075 the paginated-report compositions against a numpy replay
 $gfxChartReportReferencePath = Join-Path $testBuild 'gfx-chart-report-reference-selfhost.exe'
 $gfxChartReportReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_report_reference\src\main.e') $repo 'x64' 'windows' $gfxChartReportReferencePath

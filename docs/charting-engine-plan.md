@@ -1337,3 +1337,15 @@ goal, not evidence.
 node and its descendants masked, with the leaf count covered. Applications bind
 the resulting mask to their own tables and navigation; no dashboard framework is
 added. `gfx_chart_aggregate_tree` checks both on Windows and Linux.
+
+`ice_curves` draws one polyline per instance from caller-computed, instance-major
+model predictions swept over a strictly increasing grid, optionally centred so every
+curve starts at zero (c-ICE), plus their mean (the partial-dependence curve) in the
+plotted units. `silhouette_samples` (`e.ml.cluster`) scores every sample under
+Euclidean distance, refuses an empty cluster, and scores a singleton 0;
+`silhouette_plot` stacks clusters in index order, sorted by descending score, with
+one blank row between them, bars on a fixed [-1, 1] axis and the mean as one segment.
+`missingness_map` turns a presence table into heatmap tiles (1 = missing) with each
+column's missing share. `gfx_chart_ml_diagnostics_reference` checks all three
+against numpy (and scikit-learn's silhouette when installed) on Windows and Linux;
+the gallery adds `ice_pdp`, `silhouette` and `missingness` PNG/SVG previews.

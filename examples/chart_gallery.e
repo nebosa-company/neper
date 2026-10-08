@@ -10,6 +10,7 @@ use e.io
 use e.math
 use e.mem
 use e.str
+use e.ml.cluster as cluster
 use e.fmt.png
 use e.gfx.chart
 use e.gfx.chart.scene as chart_scene
@@ -11341,6 +11342,222 @@ fn render_labeled_chart(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target
     ret render_builder(a, q, output_target, canvas, renderer, &builder, path)
 }
 
+// L092: ICE curves with the partial-dependence mean, a silhouette plot, and a missingness map,
+// each from synthetic data computed here (no model or dataset is bundled).
+fn render_ice_pdp_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/ice_pdp.png"
+    let plot = geometry.rect(46.0, 53.0, 268.0, 133.0)
+    let instances = 14usize
+    var grid: [9]f64 = zero
+    var predictions: [126]f64 = zero
+    var i = 0usize
+    while i < 9usize {
+        grid[i] = f64(i) * 0.75f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < instances {
+        let a_i = 0.6f64 + 0.12f64 * f64(i % 7usize)
+        let b_i = 0.35f64 * f64(i % 5usize) - 0.7f64
+        let c_i = 0.4f64 * f64(i) - 2.5f64
+        var j = 0usize
+        while j < 9usize {
+            predictions[i * 9usize + j] = a_i * math.sin[f64](grid[j]) + b_i * grid[j] * 0.5f64 + c_i
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var means: [9]f64 = zero
+    var curve_segments: [112]chart.Segment = zero
+    var mean_segments: [8]chart.Segment = zero
+    let (ice, ice_error) = chart.ice_curves(predictions[..], instances, grid[..], true, plot, means[..], curve_segments[..], mean_segments[..])
+    if ice_error != ok { ret ice_error }
+    let x_ticks = [2]chart.Tick{ chart.Tick { value: 0.0, fraction: 0.0 }, chart.Tick { value: 6.0, fraction: 1.0 } }
+    let y_ticks = [2]chart.Tick{ chart.Tick { value: 0.0, fraction: 0.0 }, chart.Tick { value: 1.0, fraction: 1.0 } }
+    var labels: [3]chart.Label = zero
+    labels[0usize] = chart.Label { text: "Centred ICE and partial dependence", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center }
+    labels[1usize] = chart.Label { text: "Thin: 14 instances (c-ICE) / thick: their mean", anchor: chart.Coord { x: 180.0, y: 36.0 }, align: .Center }
+    labels[2usize] = chart.Label { text: "feature value", anchor: chart.Coord { x: 180.0, y: 208.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let faint = paint.rgba(0.55, 0.70, 0.88, 0.55)
+    let strong = paint.rgba(0.82, 0.19, 0.22, 1.0)
+    let grid_ink = paint.rgba(0.87, 0.91, 0.95, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    let (made, builder_error) = scene.builder(a, 256usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid_ink }, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &ice.curves, paint.Brush { Solid: faint })
+    try chart_scene.append(a, &builder, &ice.mean, paint.Brush { Solid: strong })
+    try chart_scene.append_labels(a, &builder, labels[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, labels[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid_ink, dark)
+    try chart_svg.append(&writer, &ice.curves, faint)
+    try chart_svg.append(&writer, &ice.mean, strong)
+    try chart_svg.append_labels(&writer, labels[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, labels[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_silhouette_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/silhouette.png"
+    let plot = geometry.rect(46.0, 53.0, 268.0, 150.0)
+    let centres = [6]f64{ 0.0f64, 0.0f64, 5.0f64, 1.0f64, 2.0f64, 6.0f64 }
+    var points: [62]f64 = zero
+    var labels_of: [31]usize = zero
+    var r = rand.pcg64(20261013u64, 7u64)
+    var i = 0usize
+    while i < 30usize {
+        let group = i / 10usize
+        points[i * 2usize] = centres[group * 2usize] + (rand.pcg64_f64(&r) - 0.5f64) * 3.6f64
+        points[i * 2usize + 1usize] = centres[group * 2usize + 1usize] + (rand.pcg64_f64(&r) - 0.5f64) * 3.6f64
+        labels_of[i] = group
+        i += 1usize
+    }
+    points[60usize] = 9.0f64
+    points[61usize] = 9.0f64
+    labels_of[30usize] = 3usize
+    labels_of[4usize] = 1usize
+    var scores: [31]f64 = zero
+    let (mean, sil_error) = cluster.silhouette_samples(points[..], 31usize, 2usize, labels_of[..], 4usize, scores[..])
+    if sil_error != ok { ret sil_error }
+    var order: [31]usize = zero
+    var bars: [31]geometry.Rect = zero
+    var mean_line: [1]chart.Segment = zero
+    let (sil, plot_error) = chart.silhouette_plot(scores[..], labels_of[..], 4usize, plot, order[..], bars[..], mean_line[..])
+    if plot_error != ok { ret plot_error }
+    let mean_marks = chart.Layout { kind: .Rug, coords: zero, segments: mean_line[..1usize], bars: zero, x_min: -1.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    var counts = [4]usize{ 0usize, 0usize, 0usize, 0usize }
+    i = 0usize
+    while i < 31usize {
+        counts[labels_of[i]] += 1usize
+        i += 1usize
+    }
+    let colors = [4]paint.Color{ paint.rgba(0.07, 0.38, 0.76, 1.0), paint.rgba(0.86, 0.39, 0.17, 1.0), paint.rgba(0.15, 0.60, 0.46, 1.0), paint.rgba(0.48, 0.35, 0.72, 1.0) }
+    var text: [3]chart.Label = zero
+    text[0usize] = chart.Label { text: "Silhouette plot", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center }
+    text[1usize] = chart.Label { text: "4 clusters / 31 points / line: mean silhouette", anchor: chart.Coord { x: 180.0, y: 36.0 }, align: .Center }
+    text[2usize] = chart.Label { text: "-1", anchor: chart.Coord { x: 46.0, y: 216.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    let (made, builder_error) = scene.builder(a, 256usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    var start = 0usize
+    var cluster_index = 0usize
+    while cluster_index < 4usize {
+        let block = bars_of(&sil, start, counts[cluster_index])
+        try chart_scene.append(a, &builder, &block, paint.Brush { Solid: colors[cluster_index] })
+        start += counts[cluster_index]
+        cluster_index += 1usize
+    }
+    try chart_scene.append(a, &builder, &mean_marks, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, text[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, text[1usize..2usize], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    start = 0usize
+    cluster_index = 0usize
+    while cluster_index < 4usize {
+        let block = bars_of(&sil, start, counts[cluster_index])
+        try chart_svg.append(&writer, &block, colors[cluster_index])
+        start += counts[cluster_index]
+        cluster_index += 1usize
+    }
+    try chart_svg.append(&writer, &mean_marks, dark)
+    try chart_svg.append_labels(&writer, text[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, text[1usize..2usize], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+// The bars of one cluster, as a Bar layout with no mean line, so each cluster takes its own colour.
+fn bars_of(all: *const chart.Layout, start: usize, count: usize) -> chart.Layout {
+    ret chart.Layout { kind: .Bar, coords: zero, segments: zero, bars: all.bars[start..start + count], x_min: all.x_min, x_max: all.x_max, y_min: all.y_min, y_max: all.y_max }
+}
+
+fn render_missingness_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/missingness.png"
+    let plot = geometry.rect(46.0, 80.0, 268.0, 120.0)
+    var present: [160]bool = zero
+    var i = 0usize
+    while i < 160usize {
+        let row = i / 8usize
+        let column = i % 8usize
+        present[i] = !((row * 7usize + column * 3usize) % 11usize < column / 2usize + 1usize && column != 0usize && column != 3usize)
+        if column == 5usize && row % 3usize == 0usize { present[i] = false }
+        i += 1usize
+    }
+    var cells: [160]chart.Cell = zero
+    var fractions: [8]f64 = zero
+    let (map, map_error) = chart.missingness_map(present[..], 20usize, 8usize, plot, cells[..], fractions[..])
+    if map_error != ok { ret map_error }
+    var strip: [8]geometry.Rect = zero
+    i = 0usize
+    while i < 8usize {
+        let width = plot.width / 8.0
+        strip[i] = geometry.rect(plot.x + f32(i) * width + 1.0, 70.0 - 28.0 * f32(fractions[i]), width - 2.0, 28.0 * f32(fractions[i]))
+        i += 1usize
+    }
+    let strip_layout = chart.Layout { kind: .Bar, coords: zero, segments: zero, bars: strip[..], x_min: 0.0, x_max: 8.0, y_min: 0.0, y_max: 1.0 }
+    var text: [3]chart.Label = zero
+    text[0usize] = chart.Label { text: "Missingness map", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center }
+    text[1usize] = chart.Label { text: "20 rows x 8 columns / red: missing / bars: missing share per column", anchor: chart.Coord { x: 180.0, y: 36.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let red = paint.rgba(0.82, 0.19, 0.22, 1.0)
+    let pale = paint.rgba(0.93, 0.96, 0.99, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    let (made, builder_error) = scene.builder(a, 512usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try chart_scene.append_matrix(&builder, &map, pale, pale, red)
+    try chart_scene.append(a, &builder, &strip_layout, paint.Brush { Solid: blue })
+    try chart_scene.append_labels(a, &builder, text[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, text[1usize..2usize], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.append_matrix(&writer, &map, pale, pale, red)
+    try chart_svg.append(&writer, &strip_layout, blue)
+    try chart_svg.append_labels(&writer, text[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, text[1usize..2usize], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, device_error) = gpu.open(a, .Cpu, 0u32)
     if device_error != ok { ret device_error }
@@ -11809,6 +12026,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if history_error != ok { ret history_error }
     try render_state_timeline(a, queue, output_target, canvas, &renderer, history_layers, timeline_state_ids[..], timeline_rows[..], history_states[..], history_colors[..], "Status history", "docs/chart-previews/status_history.png")
     try render_sparklines(a, queue, output_target, canvas, &renderer)
+    try render_ice_pdp_preview(a, queue, output_target, canvas, &renderer)
+    try render_silhouette_preview(a, queue, output_target, canvas, &renderer)
+    try render_missingness_preview(a, queue, output_target, canvas, &renderer)
     try render_calendar_preview(a, queue, output_target, canvas, &renderer)
     try render_risk_matrix_preview(a, queue, output_target, canvas, &renderer)
     try render_resource_histogram_preview(a, queue, output_target, canvas, &renderer)

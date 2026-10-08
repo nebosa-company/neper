@@ -4649,6 +4649,182 @@ fn word_cloud(words: []const str, weights: []const f32, unit_widths: []const f32
     ret (marks[..active], ok)
 }
 
+type IceLayout = struct { curves: Layout, mean: Layout, y_min: f32, y_max: f32 }
+
+// Individual conditional expectation curves and their partial-dependence mean.
+// `predictions` is instance-major (instances x grid.len) model output the caller
+// computed with one feature swept over `grid`; no model is called here. With
+// `center`, every curve starts at 0 (c-ICE) so shape, not level, is compared.
+// `means` receives the mean curve (the PDP) in the plotted units.
+fn ice_curves(predictions: []const f64, instances: usize, grid: []const f64, center: bool, bounds: geometry.Rect, means: []f64, curve_segments: []Segment, mean_segments: []Segment) -> (IceLayout, err) {
+    let g = grid.len
+    if instances == 0usize || g == 0usize { ret (zero, Empty) }
+    if g < 2usize || predictions.len != instances * g || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if means.len < g || mean_segments.len < g - 1usize || curve_segments.len / (g - 1usize) < instances { ret (zero, TooLarge) }
+    var i = 0usize
+    while i < g {
+        if !finite64(grid[i]) || (i > 0usize && grid[i] <= grid[i - 1usize]) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < g {
+        means[i] = 0.0f64
+        i += 1usize
+    }
+    var lo = 0.0f64
+    var hi = 0.0f64
+    var first = true
+    var row = 0usize
+    while row < instances {
+        var shift = 0.0f64
+        if center { shift = predictions[row * g] }
+        var j = 0usize
+        while j < g {
+            let v = predictions[row * g + j]
+            if !finite64(v) { ret (zero, Invalid) }
+            let shown = v - shift
+            means[j] += shown / f64(instances)
+            if first || shown < lo { lo = shown }
+            if first || shown > hi { hi = shown }
+            first = false
+            j += 1usize
+        }
+        row += 1usize
+    }
+    if !(hi > lo) {
+        lo -= 0.5f64
+        hi += 0.5f64
+    }
+    if !finite(f32(lo)) || !finite(f32(hi)) || !(f32(hi) > f32(lo)) { ret (zero, Invalid) }
+    let x0 = grid[0usize]
+    let span = grid[g - 1usize] - x0
+    let bottom = bounds.y + bounds.height
+    row = 0usize
+    while row < instances {
+        var shift = 0.0f64
+        if center { shift = predictions[row * g] }
+        var j = 0usize
+        while j + 1usize < g {
+            let xa = bounds.x + bounds.width * f32((grid[j] - x0) / span)
+            let xb = bounds.x + bounds.width * f32((grid[j + 1usize] - x0) / span)
+            let ya = bottom - bounds.height * f32((predictions[row * g + j] - shift - lo) / (hi - lo))
+            let yb = bottom - bounds.height * f32((predictions[row * g + j + 1usize] - shift - lo) / (hi - lo))
+            if !finite(xa) || !finite(xb) || !finite(ya) || !finite(yb) { ret (zero, Invalid) }
+            curve_segments[row * (g - 1usize) + j] = Segment { from: Coord { x: xa, y: ya }, to: Coord { x: xb, y: yb } }
+            j += 1usize
+        }
+        row += 1usize
+    }
+    i = 0usize
+    while i + 1usize < g {
+        let xa = bounds.x + bounds.width * f32((grid[i] - x0) / span)
+        let xb = bounds.x + bounds.width * f32((grid[i + 1usize] - x0) / span)
+        let ya = bottom - bounds.height * f32((means[i] - lo) / (hi - lo))
+        let yb = bottom - bounds.height * f32((means[i + 1usize] - lo) / (hi - lo))
+        mean_segments[i] = Segment { from: Coord { x: xa, y: ya }, to: Coord { x: xb, y: yb } }
+        i += 1usize
+    }
+    let curves = Layout { kind: .Line, coords: zero, segments: curve_segments[..instances * (g - 1usize)], bars: zero, x_min: f32(x0), x_max: f32(grid[g - 1usize]), y_min: f32(lo), y_max: f32(hi) }
+    let mean = Layout { kind: .Line, coords: zero, segments: mean_segments[..g - 1usize], bars: zero, x_min: f32(x0), x_max: f32(grid[g - 1usize]), y_min: f32(lo), y_max: f32(hi) }
+    ret (IceLayout { curves: curves, mean: mean, y_min: f32(lo), y_max: f32(hi) }, ok)
+}
+
+// Silhouette bars: clusters stack top to bottom in index order, separated by one
+// blank row, each sorted by descending score; bars grow from the zero line on a
+// fixed [-1, 1] axis and one vertical segment marks the mean. `order[b]` is the
+// sample drawn as bar b, so the caller keeps identity for colours and labels.
+fn silhouette_plot(scores: []const f64, labels: []const usize, k: usize, bounds: geometry.Rect, order: []usize, bars: []geometry.Rect, mean_line: []Segment) -> (Layout, err) {
+    let n = scores.len
+    if n == 0usize { ret (zero, Empty) }
+    if labels.len != n || k < 2usize || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if order.len < n || bars.len < n || mean_line.len < 1usize { ret (zero, TooLarge) }
+    var used = 0usize
+    var total = 0.0f64
+    var cluster = 0usize
+    while cluster < k {
+        var found = false
+        var i = 0usize
+        while i < n {
+            if labels[i] >= k || !finite64(scores[i]) || scores[i] < -1.0f64 || scores[i] > 1.0f64 { ret (zero, Invalid) }
+            if labels[i] == cluster {
+                found = true
+                // stable insertion by descending score inside this cluster's block
+                var at = used
+                while at > 0usize && labels[order[at - 1usize]] == cluster && scores[order[at - 1usize]] < scores[i] {
+                    order[at] = order[at - 1usize]
+                    at -= 1usize
+                }
+                order[at] = i
+                used += 1usize
+            }
+            i += 1usize
+        }
+        if !found { ret (zero, Invalid) }
+        cluster += 1usize
+    }
+    var summed = 0usize
+    while summed < n {
+        total += scores[summed]
+        summed += 1usize
+    }
+    let rows = n + k - 1usize
+    let row_height = bounds.height / f32(rows)
+    let zero_x = bounds.x + bounds.width * 0.5
+    var row = 0usize
+    var b = 0usize
+    while b < n {
+        if b > 0usize && labels[order[b]] != labels[order[b - 1usize]] { row += 1usize }
+        let s = f32(scores[order[b]])
+        let edge = zero_x + bounds.width * 0.5 * s
+        var left = zero_x
+        var right = edge
+        if edge < zero_x {
+            left = edge
+            right = zero_x
+        }
+        bars[b] = geometry.rect(left, bounds.y + f32(row) * row_height, right - left, row_height)
+        row += 1usize
+        b += 1usize
+    }
+    let mean_x = zero_x + bounds.width * 0.5 * f32(total / f64(n))
+    mean_line[0usize] = Segment { from: Coord { x: mean_x, y: bounds.y }, to: Coord { x: mean_x, y: bounds.y + bounds.height } }
+    ret (Layout { kind: .Bar, coords: zero, segments: mean_line[..1usize], bars: bars[..n], x_min: -1.0, x_max: 1.0, y_min: 0.0, y_max: f32(rows) }, ok)
+}
+
+// A rows x columns table of presence flags (row-major) as heatmap tiles: value
+// 1 is missing, 0 present. `column_missing` receives each column's missing
+// fraction, the usual bar above or below a missingness map.
+fn missingness_map(present: []const bool, rows: usize, columns: usize, bounds: geometry.Rect, cells: []Cell, column_missing: []f64) -> (MatrixLayout, err) {
+    if rows == 0usize || columns == 0usize { ret (zero, Empty) }
+    if present.len != rows * columns || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if cells.len < present.len || column_missing.len < columns { ret (zero, TooLarge) }
+    var column = 0usize
+    while column < columns {
+        column_missing[column] = 0.0f64
+        column += 1usize
+    }
+    var any_missing = false
+    var any_present = false
+    var i = 0usize
+    while i < present.len {
+        var value = 1.0f32
+        if present[i] {
+            value = 0.0
+            any_present = true
+        } else {
+            column_missing[i % columns] += 1.0f64 / f64(rows)
+            any_missing = true
+        }
+        cells[i] = Cell { rect: cell_rect(bounds, i % columns, i / columns, columns, rows), value: value }
+        i += 1usize
+    }
+    var lo = 0.0f32
+    var hi = 1.0f32
+    if !any_missing { hi = 0.0 }
+    if !any_present { lo = 1.0 }
+    ret (MatrixLayout { kind: .Heatmap, cells: cells[..present.len], columns: columns, rows: rows, value_min: lo, value_max: hi }, ok)
+}
+
 // Floating low-to-high bars use an explicit shared numeric domain and
 // categorical rows. Unlike a dumbbell, the interval itself carries area;
 // endpoint caps remain a separate stroke layer for independent styling.

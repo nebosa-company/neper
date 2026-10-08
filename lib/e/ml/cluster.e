@@ -934,3 +934,68 @@ fn birch_fit(a: *mem.Arena, x: []const f64, n: usize, d: usize, branching: usize
     }
     ret (tree, ok)
 }
+
+// Per-sample silhouette s = (b - a) / max(a, b) under Euclidean distance, where
+// a is the mean distance to the sample's own cluster and b the least mean
+// distance to another; a singleton scores 0. `labels` are indices below `k`
+// (k >= 2) and every cluster must have a member, so an empty cluster is refused
+// rather than silently skipped. `scores.len >= n`. Answers the mean silhouette.
+// ponytail: O(n^2 d) pairwise passes; fine for diagnostic plots, sample first for large n.
+fn silhouette_samples(x: []const f64, n: usize, d: usize, labels: []const usize, k: usize, scores: []f64) -> (f64, err) {
+    if n < 2usize || d == 0usize || k < 2usize || x.len != n * d || labels.len != n { ret (0.0f64, Invalid) }
+    if scores.len < n { ret (0.0f64, TooSmall) }
+    var sizes: [64]usize = zero
+    if k > 64usize { ret (0.0f64, TooSmall) }
+    var i = 0usize
+    while i < n {
+        if labels[i] >= k { ret (0.0f64, Invalid) }
+        sizes[labels[i]] += 1usize
+        i += 1usize
+    }
+    var c = 0usize
+    while c < k {
+        if sizes[c] == 0usize { ret (0.0f64, Invalid) }
+        c += 1usize
+    }
+    var sums: [64]f64 = zero
+    var total = 0.0f64
+    i = 0usize
+    while i < n {
+        c = 0usize
+        while c < k {
+            sums[c] = 0.0f64
+            c += 1usize
+        }
+        var j = 0usize
+        while j < n {
+            if j != i { sums[labels[j]] += math.sqrt[f64](distance_squared(x, d, i, x, j)) }
+            j += 1usize
+        }
+        let own = labels[i]
+        if sizes[own] == 1usize {
+            scores[i] = 0.0f64
+        } else {
+            let a = sums[own] / f64(sizes[own] - 1usize)
+            var b = 0.0f64
+            var have = false
+            c = 0usize
+            while c < k {
+                if c != own {
+                    let mean = sums[c] / f64(sizes[c])
+                    if !have || mean < b {
+                        b = mean
+                        have = true
+                    }
+                }
+                c += 1usize
+            }
+            var top = a
+            if b > top { top = b }
+            scores[i] = 0.0f64
+            if top > 0.0f64 { scores[i] = (b - a) / top }
+        }
+        total += scores[i]
+        i += 1usize
+    }
+    ret (total / f64(n), ok)
+}
