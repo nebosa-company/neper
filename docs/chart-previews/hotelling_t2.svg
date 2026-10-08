@@ -15,7 +15,7 @@
 <line x1="41" y1="56.45" x2="46" y2="56.45" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
 <line x1="46" y1="53" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
 <line x1="46" y1="186" x2="314" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
-<line x1="46" y1="103.71" x2="314" y2="103.71" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
+<line x1="46" y1="127.7" x2="314" y2="127.7" stroke="rgb(209,48,56)" stroke-width="2" stroke-linecap="round"/>
 <path d="M62.75 186 L96.25 178.44 L129.75 155.77 L163.25 178.44 L196.75 178.44 L230.25 186 L263.75 65.09 L297.25 170.89" fill="none" stroke="rgb(20,99,189)" stroke-width="2" stroke-linejoin="round"/>
 <rect x="59.75" y="183" width="6" height="6" fill="rgb(20,99,189)"/>
 <rect x="93.25" y="175.44" width="6" height="6" fill="rgb(20,99,189)"/>
@@ -35,6 +35,6 @@
 <text x="62.75" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">1</text>
 <text x="163.25" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">4</text>
 <text x="297.25" y="202" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">8</text>
-<text x="321" y="106.71" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(43,59,82)">UCL</text>
+<text x="321" y="130.7" font-family="sans-serif" font-size="8" text-anchor="start" fill="rgb(43,59,82)">UCL</text>
 <text x="180" y="227" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)">Red: T2 beyond Phase II limit / alpha = 0.05</text>
 </svg>
