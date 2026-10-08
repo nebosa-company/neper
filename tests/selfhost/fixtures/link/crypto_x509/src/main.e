@@ -121,13 +121,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e24 != ok || p256_chain.certificates.len != 2usize { os.exit(33) }
     let (p384_suffix, e25) = x509.parse(a, p384_suffix_der)
     if e25 != ok { os.exit(34) }
+    // A P-384 key with an ecdsa-with-SHA384 self-signature (D2249): parsed as a P-384 key and verified.
     switch p384_suffix.public_key {
-    case .Unsupported as raw:
-        if raw.len != 97usize { os.exit(35) }
+    case .P384 as key:
+        if key.bytes[0] != 4u8 { os.exit(35) }
     default:
         os.exit(35)
     }
-    if x509.verify_signature(a, p384_suffix, p384_suffix) != x509.InvalidCertificate { os.exit(36) }
+    if x509.verify_signature(a, p384_suffix, p384_suffix) != ok { os.exit(36) }
+    if x509.verify_signature(a, p384_suffix, p256_root) != x509.InvalidCertificate { os.exit(36) }
     // Critical extensions and CA constraints fail closed.
     let (unknown_critical, e26) = x509.parse(a, unknown_critical_der)
     if e26 != ok || !unknown_critical.unhandled_critical { os.exit(37) }

@@ -336,9 +336,10 @@ fn fill_client_hello(config: ClientConfig, out: []u8, secret: *kx.X25519SecretKe
     try put_extension(out, &at, 43usize, versions[0..])
     let groups: [4]u8 = [4]u8{ 0, 2, 0, 29 }
     try put_extension(out, &at, 10usize, groups[0..])
-    // ed25519, ecdsa_secp256r1_sha256, rsa_pss_rsae_sha256 for CertificateVerify, and
-    // rsa_pkcs1_sha256 for an RSA certificate's own signature (RFC 8446 4.2.3).
-    let signatures: [10]u8 = [10]u8{ 0, 8, 8, 7, 4, 3, 8, 4, 4, 1 }
+    // ed25519, ecdsa_secp256r1_sha256, ecdsa_secp384r1_sha384 and rsa_pss_rsae_sha256/384/512 for
+    // CertificateVerify, and rsa_pkcs1_sha256/384/512 for an RSA certificate's own signature (RFC 8446
+    // 4.2.3); the certificate chain's ECDSA signatures with SHA-384 need no scheme of their own.
+    let signatures: [20]u8 = [20]u8{ 0, 18, 8, 7, 4, 3, 5, 3, 8, 4, 8, 5, 8, 6, 4, 1, 5, 1, 6, 1 }
     try put_extension(out, &at, 13usize, signatures[0..])
     var share: [38]u8 = zero
     share[1] = 36u8
@@ -743,11 +744,17 @@ fn verify_certificate_verify(a: *mem.Arena, leaf: x509.Certificate, transcript_h
         if message[4] != 4u8 || message[5] != 3u8 { ret Protocol }
         if sign.p256_verify(public, input[0..], message[8usize..]) { ret ok }
         ret InvalidCertificate
+    case .P384 as public:
+        // ecdsa_secp384r1_sha384 (0x0503).
+        if message[4] != 5u8 || message[5] != 3u8 { ret Protocol }
+        if sign.p384_verify(public, input[0..], message[8usize..]) { ret ok }
+        ret InvalidCertificate
     case .Rsa as public:
-        // rsa_pss_rsae_sha256 (0x0804): TLS 1.3 signs with PSS even for an rsaEncryption key.
-        if message[4] != 8u8 || message[5] != 4u8 { ret Protocol }
+        // rsa_pss_rsae_sha256/384/512 (0x0804..0x0806): TLS 1.3 signs with PSS even for an rsaEncryption key.
+        if message[4] != 8u8 || message[5] < 4u8 || message[5] > 6u8 { ret Protocol }
+        let hash_id = 128u16 * u16(message[5] - 2u8)
         let mark = mem.mark(a)
-        let valid = sign.rsa_pss_verify(a, public.modulus, public.exponent, input[0..], message[8usize..])
+        let valid = sign.rsa_pss_verify_hash(a, public.modulus, public.exponent, input[0..], message[8usize..], hash_id)
         mem.reset(a, mark)
         if valid { ret ok }
         ret InvalidCertificate
@@ -880,6 +887,9 @@ fn parse_encrypted_extensions(message: []const u8, offered: []const str) -> (str
             if value.len != 0usize { ret ("", Protocol) }
             continue
         }
+        // supported_groups (10) is the one extension a server may send unsolicited in EncryptedExtensions
+        // (RFC 8446 4.2.7); real servers do, and it carries nothing a client acts on.
+        if extension_kind == 10usize { continue }
         if extension_kind != 16usize { ret ("", Unsupported) }
         if extension_kind == 16usize {
             if selected.len != 0usize || value.len < 3usize { ret ("", Protocol) }

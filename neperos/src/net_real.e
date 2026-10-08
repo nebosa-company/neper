@@ -37,13 +37,28 @@ fn visit(host: str) {
     say("\n")
     if r != netproto.R_OK { ret }
     var request: [160]u8 = zero
-    let text = "GET / HTTP/1.0\r\nHost: www.python.org\r\nConnection: close\r\n\r\n"
+    let head = "GET / HTTP/1.0\r\nHost: "
+    let tail = "\r\nConnection: close\r\n\r\n"
+    var length = 0usize
     var i = 0usize
-    while i < text.len {
-        request[i] = text[i]
+    while i < head.len {
+        request[length] = head[i]
+        length += 1usize
         i += 1usize
     }
-    if netclient.send(mem.address_of(&request[0usize]), text.len) != netproto.R_OK {
+    i = 0usize
+    while i < host.len {
+        request[length] = host[i]
+        length += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < tail.len {
+        request[length] = tail[i]
+        length += 1usize
+        i += 1usize
+    }
+    if netclient.send(mem.address_of(&request[0usize]), length) != netproto.R_OK {
         say("net real send failed\n")
         ret
     }
@@ -65,6 +80,12 @@ fn visit(host: str) {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     visit("www.python.org")
+    visit("example.com")
+    visit("github.com")
+    visit("www.wikipedia.org")
+    visit("letsencrypt.org")
+    visit("stooq.com")
+    visit("www.google.com")
     netclient.quit()
     ret ok
 }

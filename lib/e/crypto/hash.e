@@ -286,6 +286,42 @@ fn sha512(data: []const u8) -> [64]u8 {
     ret sha512_done(&s)
 }
 
+// SHA-384 (FIPS 180-4 6.5): SHA-512 from its own initial state, the digest cut to 48 bytes. The state
+// is the SHA-512 one, so `sha512_update` feeds it.
+fn sha384_init() -> Sha512 {
+    var s: Sha512 = zero
+    s.h[0] = 14680500436340154072u64
+    s.h[1] = 7105036623409894663u64
+    s.h[2] = 10473403895298186519u64
+    s.h[3] = 1526699215303891257u64
+    s.h[4] = 7436329637833083697u64
+    s.h[5] = 10282925794625328401u64
+    s.h[6] = 15784041429090275239u64
+    s.h[7] = 5167115440072839076u64
+    ret s
+}
+
+fn sha384_update(h: *Sha512, data: []const u8) {
+    sha512_update(h, data)
+}
+
+fn sha384_done(h: *Sha512) -> [48]u8 {
+    let full = sha512_done(h)
+    var out: [48]u8 = zero
+    var i = 0usize
+    while i < 48usize {
+        out[i] = full[i]
+        i += 1usize
+    }
+    ret out
+}
+
+fn sha384(data: []const u8) -> [48]u8 {
+    var s = sha384_init()
+    sha512_update(&s, data)
+    ret sha384_done(&s)
+}
+
 // Keccak-f[1600]: twenty-four rounds of theta, rho, pi, chi and iota over 25 lanes.
 fn keccak_round_constant(round: usize) -> u64 {
     let table: [24]u64 = [24]u64{

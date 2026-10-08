@@ -867,12 +867,50 @@ fn p256_joint_mul(u1: P256Int, u2: P256Int, public: P256Affine) -> P256Point {
     ret out
 }
 
+// The digest of `message` under the hash `hash_id` names (256, 384 or 512 for SHA-2 of that size) and
+// its length in bytes; the length is zero for any other id. The signature schemes of X.509 and TLS
+// pair a curve or an RSA key with one of these three.
+fn digest_of(message: []const u8, hash_id: u16) -> ([64]u8, usize) {
+    var out: [64]u8 = zero
+    if hash_id == 256u16 {
+        let d = hash.sha256(message)
+        mem.copy[u8](out[0..], d[0..])
+        ret (out, 32usize)
+    }
+    if hash_id == 384u16 {
+        let d = hash.sha384(message)
+        mem.copy[u8](out[0..], d[0..])
+        ret (out, 48usize)
+    }
+    if hash_id == 512u16 {
+        let d = hash.sha512(message)
+        mem.copy[u8](out[0..], d[0..])
+        ret (out, 64usize)
+    }
+    ret (out, 0usize)
+}
+
+// ECDSA P-256 over `message` hashed by `hash_id`: SHA-256 for ecdsa_secp256r1_sha256, SHA-384 or
+// SHA-512 for a certificate a larger curve's key signed (the digest's leftmost 256 bits are used).
+fn p256_verify_hash(public: P256PublicKey, message: []const u8, signature_der: []const u8, hash_id: u16) -> bool {
+    let (digest, digest_len) = digest_of(message, hash_id)
+    if digest_len == 0usize { ret false }
+    ret p256_verify_digest(public, digest[..digest_len], signature_der)
+}
+
 fn p256_verify(public: P256PublicKey, message: []const u8, signature_der: []const u8) -> bool {
+    ret p256_verify_hash(public, message, signature_der, 256u16)
+}
+
+// ECDSA P-256 over a digest the caller computed. A digest longer than the curve order contributes its
+// leftmost 256 bits (FIPS 186-4 6.4).
+fn p256_verify_digest(public: P256PublicKey, digest: []const u8, signature_der: []const u8) -> bool {
     let (point, point_ok) = p256_public(public)
     let (r, s, signature_ok) = p256_signature(signature_der)
     if !point_ok || !signature_ok { ret false }
-    let digest = hash.sha256(message)
-    let (z, z_ok) = p256_from_be(digest[0..])
+    var take = digest.len
+    if take > 32usize { take = 32usize }
+    let (z, z_ok) = p256_from_be(digest[..take])
     if !z_ok { ret false }
     let order = p256_n()
     let inverse = p256_inverse(s, order)
@@ -884,6 +922,349 @@ fn p256_verify(public: P256PublicKey, message: []const u8, signature_der: []cons
     var x = p256_field_mul(result.x, p256_field_square(z_inverse))
     if p256_compare(x, order) >= 0i32 { x = p256_sub_raw(x, order) }
     ret p256_equal(x, r)
+}
+
+// --- ECDSA P-384 verification (FIPS 186-4 D.1.2.4), for the TLS chains whose intermediates and roots
+// sign with secp384r1 and SHA-384. Values are twelve little-endian 32-bit limbs. The P-256 verifier above
+// multiplies by bit-serial double-and-add; at 384 bits that would cost seconds on an emulated core, so
+// this one multiplies in Montgomery form (word-serial CIOS) over the field prime p and the group order n,
+// each with its own constants worked out per call from the modulus alone. Like the P-256 verifier it
+// handles only public inputs, so it is variable-time.
+type P384PublicKey = struct { bytes: [97]u8 }
+type P384Int = struct { v: [12]u32 }
+type P384Affine = struct { x: P384Int, y: P384Int }
+type P384Point = struct { x: P384Int, y: P384Int, z: P384Int }
+// A Montgomery modulus: the modulus, -m^-1 mod 2^32, R mod m (the form of 1) and R^2 mod m, R = 2^384.
+type P384Mod = struct { m: P384Int, ninv: u32, one: P384Int, r2: P384Int }
+
+fn p384_p() -> P384Int {
+    ret P384Int { v: [12]u32{ 4294967295, 0, 0, 4294967295, 4294967294, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295 } }
+}
+
+fn p384_n() -> P384Int {
+    ret P384Int { v: [12]u32{ 3435473267, 3974895978, 1219536762, 1478102450, 4097256927, 3345173889, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295, 4294967295 } }
+}
+
+fn p384_b() -> P384Int {
+    ret P384Int { v: [12]u32{ 3555470063, 713410797, 2318324125, 3327539597, 1343457114, 51644559, 4269883666, 404593774, 3824692505, 2559444331, 3795773412, 3006345127 } }
+}
+
+fn p384_base() -> P384Affine {
+    let x = P384Int { v: [12]u32{ 1920338615, 978607672, 3210029420, 1426256477, 2186553912, 1509376480, 2343017368, 1847409506, 4079005044, 2394015518, 3196781879, 2861025826 } }
+    let y = P384Int { v: [12]u32{ 2431258207, 2051218812, 494829981, 174109134, 3052452032, 3923390739, 681186428, 4176747965, 2459098153, 1570674879, 2519084143, 907533898 } }
+    ret P384Affine { x: x, y: y }
+}
+
+fn p384_zero(a: P384Int) -> bool {
+    var i = 0usize
+    while i < 12usize {
+        if a.v[i] != 0u32 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn p384_equal(a: P384Int, b: P384Int) -> bool {
+    var i = 0usize
+    while i < 12usize {
+        if a.v[i] != b.v[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn p384_compare(a: P384Int, b: P384Int) -> i32 {
+    var i = 12usize
+    while i > 0usize {
+        i -= 1usize
+        if a.v[i] < b.v[i] { ret -1i32 }
+        if a.v[i] > b.v[i] { ret 1i32 }
+    }
+    ret 0i32
+}
+
+fn p384_sub_raw(a: P384Int, b: P384Int) -> P384Int {
+    var out: P384Int = zero
+    var borrow = 0u64
+    var i = 0usize
+    while i < 12usize {
+        let lhs = u64(a.v[i])
+        let rhs = u64(b.v[i]) + borrow
+        if lhs >= rhs {
+            out.v[i] = u32(lhs - rhs)
+            borrow = 0u64
+        } else {
+            out.v[i] = u32(lhs + 4294967296u64 - rhs)
+            borrow = 1u64
+        }
+        i += 1usize
+    }
+    ret out
+}
+
+fn p384_add_mod(a: P384Int, b: P384Int, modulus: P384Int) -> P384Int {
+    var out: P384Int = zero
+    var carry = 0u64
+    var i = 0usize
+    while i < 12usize {
+        let sum = u64(a.v[i]) + u64(b.v[i]) + carry
+        out.v[i] = u32(sum & 4294967295u64)
+        carry = sum >> 32u32
+        i += 1usize
+    }
+    if carry != 0u64 || p384_compare(out, modulus) >= 0i32 { ret p384_sub_raw(out, modulus) }
+    ret out
+}
+
+fn p384_sub_mod(a: P384Int, b: P384Int, modulus: P384Int) -> P384Int {
+    if p384_compare(a, b) >= 0i32 { ret p384_sub_raw(a, b) }
+    ret p384_sub_raw(modulus, p384_sub_raw(b, a))
+}
+
+fn p384_bit(a: P384Int, bit: usize) -> bool {
+    ret ((a.v[bit / 32usize] >> u32(bit % 32usize)) & 1u32) != 0u32
+}
+
+// The constants Montgomery multiplication needs for an odd modulus `m`.
+fn p384_mod(m: P384Int) -> P384Mod {
+    var inverse = m.v[0]
+    var round = 0usize
+    while round < 5usize {
+        inverse = inverse *% (2u32 -% (m.v[0] *% inverse))
+        round += 1usize
+    }
+    var one: P384Int = zero
+    one.v[0] = 1u32
+    var bit = 0usize
+    while bit < 384usize {
+        one = p384_add_mod(one, one, m)
+        bit += 1usize
+    }
+    var r2 = one
+    bit = 0usize
+    while bit < 384usize {
+        r2 = p384_add_mod(r2, r2, m)
+        bit += 1usize
+    }
+    ret P384Mod { m: m, ninv: 0u32 -% inverse, one: one, r2: r2 }
+}
+
+// a * b / R mod m (finely integrated operand scanning): twelve rounds of one row of a * b[i] and one
+// row of q * m, q chosen to clear the lowest word, each word shifted down as it is cleared.
+fn p384_mont_mul(f: *P384Mod, a: P384Int, b: P384Int) -> P384Int {
+    var t: [14]u32 = zero
+    var i = 0usize
+    while i < 12usize {
+        let bi = u64(b.v[i])
+        var carry = 0u64
+        var j = 0usize
+        while j < 12usize {
+            let s = u64(t[j]) + u64(a.v[j]) * bi + carry
+            t[j] = u32(s & 4294967295u64)
+            carry = s >> 32u32
+            j += 1usize
+        }
+        let top = u64(t[12]) + carry
+        t[12] = u32(top & 4294967295u64)
+        t[13] = u32(top >> 32u32)
+        let q = u64(t[0] *% f.ninv)
+        carry = (u64(t[0]) + q * u64(f.m.v[0])) >> 32u32
+        j = 1usize
+        while j < 12usize {
+            let s = u64(t[j]) + q * u64(f.m.v[j]) + carry
+            t[j - 1usize] = u32(s & 4294967295u64)
+            carry = s >> 32u32
+            j += 1usize
+        }
+        let high = u64(t[12]) + carry
+        t[11] = u32(high & 4294967295u64)
+        t[12] = t[13] + u32(high >> 32u32)
+        t[13] = 0u32
+        i += 1usize
+    }
+    var out: P384Int = zero
+    i = 0usize
+    while i < 12usize {
+        out.v[i] = t[i]
+        i += 1usize
+    }
+    if t[12] != 0u32 || p384_compare(out, f.m) >= 0i32 { ret p384_sub_raw(out, f.m) }
+    ret out
+}
+
+fn p384_to_mont(f: *P384Mod, a: P384Int) -> P384Int { ret p384_mont_mul(f, a, f.r2) }
+
+fn p384_from_mont(f: *P384Mod, a: P384Int) -> P384Int {
+    var one: P384Int = zero
+    one.v[0] = 1u32
+    ret p384_mont_mul(f, a, one)
+}
+
+// a^(m-2) mod m for a prime m, a and the result in Montgomery form.
+fn p384_inverse(f: *P384Mod, a: P384Int) -> P384Int {
+    var two: P384Int = zero
+    two.v[0] = 2u32
+    let exponent = p384_sub_raw(f.m, two)
+    var out = f.one
+    var bit = 384usize
+    while bit > 0usize {
+        bit -= 1usize
+        out = p384_mont_mul(f, out, out)
+        if p384_bit(exponent, bit) { out = p384_mont_mul(f, out, a) }
+    }
+    ret out
+}
+
+fn p384_from_be(bytes: []const u8) -> (P384Int, bool) {
+    var out: P384Int = zero
+    if bytes.len == 0usize || bytes.len > 48usize { ret (out, false) }
+    var i = 0usize
+    while i < bytes.len {
+        let from_end = bytes.len - 1usize - i
+        out.v[from_end / 4usize] = out.v[from_end / 4usize] | (u32(bytes[i]) << u32((from_end % 4usize) * 8usize))
+        i += 1usize
+    }
+    ret (out, true)
+}
+
+fn p384_field_add(f: *P384Mod, a: P384Int, b: P384Int) -> P384Int { ret p384_add_mod(a, b, f.m) }
+fn p384_field_sub(f: *P384Mod, a: P384Int, b: P384Int) -> P384Int { ret p384_sub_mod(a, b, f.m) }
+fn p384_field_mul(f: *P384Mod, a: P384Int, b: P384Int) -> P384Int { ret p384_mont_mul(f, a, b) }
+fn p384_field_square(f: *P384Mod, a: P384Int) -> P384Int { ret p384_mont_mul(f, a, a) }
+fn p384_field_double(f: *P384Mod, a: P384Int) -> P384Int { ret p384_add_mod(a, a, f.m) }
+fn p384_field_four(f: *P384Mod, a: P384Int) -> P384Int { ret p384_field_double(f, p384_field_double(f, a)) }
+fn p384_field_eight(f: *P384Mod, a: P384Int) -> P384Int { ret p384_field_double(f, p384_field_four(f, a)) }
+
+// Jacobian doubling for a = -3 (dbl-2001-b), coordinates in Montgomery form; infinity has z = 0.
+fn p384_point_double(f: *P384Mod, point: P384Point) -> P384Point {
+    if p384_zero(point.z) || p384_zero(point.y) { ret zero }
+    let delta = p384_field_square(f, point.z)
+    let gamma = p384_field_square(f, point.y)
+    let beta = p384_field_mul(f, point.x, gamma)
+    let product = p384_field_mul(f, p384_field_sub(f, point.x, delta), p384_field_add(f, point.x, delta))
+    let alpha = p384_field_add(f, p384_field_double(f, product), product)
+    let x = p384_field_sub(f, p384_field_square(f, alpha), p384_field_eight(f, beta))
+    let z = p384_field_sub(f, p384_field_sub(f, p384_field_square(f, p384_field_add(f, point.y, point.z)), gamma), delta)
+    let y = p384_field_sub(f, p384_field_mul(f, alpha, p384_field_sub(f, p384_field_four(f, beta), x)), p384_field_eight(f, p384_field_square(f, gamma)))
+    ret P384Point { x: x, y: y, z: z }
+}
+
+// Mixed addition (Jacobian + affine, madd-2007-bl); the affine point's coordinates are in Montgomery form.
+fn p384_point_add_mixed(f: *P384Mod, point: P384Point, affine: P384Affine) -> P384Point {
+    if p384_zero(point.z) { ret P384Point { x: affine.x, y: affine.y, z: f.one } }
+    let zz = p384_field_square(f, point.z)
+    let u = p384_field_mul(f, affine.x, zz)
+    let s = p384_field_mul(f, affine.y, p384_field_mul(f, point.z, zz))
+    let h = p384_field_sub(f, u, point.x)
+    if p384_zero(h) {
+        if p384_equal(s, point.y) { ret p384_point_double(f, point) }
+        ret zero
+    }
+    let hh = p384_field_square(f, h)
+    let i = p384_field_four(f, hh)
+    let j = p384_field_mul(f, h, i)
+    let r = p384_field_double(f, p384_field_sub(f, s, point.y))
+    let v = p384_field_mul(f, point.x, i)
+    let x = p384_field_sub(f, p384_field_sub(f, p384_field_square(f, r), j), p384_field_double(f, v))
+    let y = p384_field_sub(f, p384_field_mul(f, r, p384_field_sub(f, v, x)), p384_field_double(f, p384_field_mul(f, point.y, j)))
+    let z = p384_field_sub(f, p384_field_sub(f, p384_field_square(f, p384_field_add(f, point.z, h)), zz), hh)
+    ret P384Point { x: x, y: y, z: z }
+}
+
+// The public key's point in Montgomery form, if it is a point of the curve (y^2 = x^3 - 3x + b).
+fn p384_public(f: *P384Mod, public: P384PublicKey) -> (P384Affine, bool) {
+    var out: P384Affine = zero
+    if public.bytes[0] != 4u8 { ret (out, false) }
+    let (x, x_ok) = p384_from_be(public.bytes[1usize..49usize])
+    let (y, y_ok) = p384_from_be(public.bytes[49usize..97usize])
+    if !x_ok || !y_ok || p384_compare(x, f.m) >= 0i32 || p384_compare(y, f.m) >= 0i32 { ret (out, false) }
+    let xm = p384_to_mont(f, x)
+    let ym = p384_to_mont(f, y)
+    let x3 = p384_field_mul(f, p384_field_square(f, xm), xm)
+    let three_x = p384_field_add(f, p384_field_double(f, xm), xm)
+    let rhs = p384_field_add(f, p384_field_sub(f, x3, three_x), p384_to_mont(f, p384_b()))
+    if !p384_equal(p384_field_square(f, ym), rhs) { ret (out, false) }
+    ret (P384Affine { x: xm, y: ym }, true)
+}
+
+fn p384_der_integer(encoded: []const u8, at: *usize) -> (P384Int, bool) {
+    var out: P384Int = zero
+    if *at + 2usize > encoded.len || encoded[*at] != 2u8 { ret (out, false) }
+    let length = usize(encoded[*at + 1usize])
+    *at += 2usize
+    if length == 0usize || length > 49usize || *at + length > encoded.len { ret (out, false) }
+    var value = encoded[*at..*at + length]
+    *at += length
+    if (value[0] & 128u8) != 0u8 { ret (out, false) }
+    if value.len > 1usize && value[0] == 0u8 {
+        if (value[1] & 128u8) == 0u8 { ret (out, false) }
+        value = value[1usize..]
+    }
+    let (parsed, parsed_ok) = p384_from_be(value)
+    if !parsed_ok || p384_zero(parsed) || p384_compare(parsed, p384_n()) >= 0i32 { ret (out, false) }
+    ret (parsed, true)
+}
+
+fn p384_signature(encoded: []const u8) -> (P384Int, P384Int, bool) {
+    var empty: P384Int = zero
+    if encoded.len < 8usize || encoded[0] != 48u8 || usize(encoded[1]) + 2usize != encoded.len { ret (empty, empty, false) }
+    var at = 2usize
+    let (r, r_ok) = p384_der_integer(encoded, &at)
+    let (s, s_ok) = p384_der_integer(encoded, &at)
+    if !r_ok || !s_ok || at != encoded.len { ret (empty, empty, false) }
+    ret (r, s, true)
+}
+
+// u1 * G + u2 * Q, the scalars plain integers, the points affine in Montgomery form.
+fn p384_joint_mul(f: *P384Mod, u1: P384Int, u2: P384Int, public: P384Affine) -> P384Point {
+    let base = p384_base()
+    let base_m = P384Affine { x: p384_to_mont(f, base.x), y: p384_to_mont(f, base.y) }
+    var out: P384Point = zero
+    var bit = 384usize
+    while bit > 0usize {
+        bit -= 1usize
+        out = p384_point_double(f, out)
+        if p384_bit(u1, bit) { out = p384_point_add_mixed(f, out, base_m) }
+        if p384_bit(u2, bit) { out = p384_point_add_mixed(f, out, public) }
+    }
+    ret out
+}
+
+// ECDSA P-384 over a digest the caller computed; one longer than the order contributes its leftmost 384 bits.
+fn p384_verify_digest(public: P384PublicKey, digest: []const u8, signature_der: []const u8) -> bool {
+    var field = p384_mod(p384_p())
+    let (point, point_ok) = p384_public(&field, public)
+    let (r, s, signature_ok) = p384_signature(signature_der)
+    if !point_ok || !signature_ok { ret false }
+    var take = digest.len
+    if take > 48usize { take = 48usize }
+    let (z0, z_ok) = p384_from_be(digest[..take])
+    if !z_ok { ret false }
+    var z = z0
+    let order = p384_n()
+    if p384_compare(z, order) >= 0i32 { z = p384_sub_raw(z, order) }
+    var group = p384_mod(order)
+    let w = p384_inverse(&group, p384_to_mont(&group, s))
+    let u1 = p384_mont_mul(&group, z, w)
+    let u2 = p384_mont_mul(&group, r, w)
+    let result = p384_joint_mul(&field, u1, u2, point)
+    if p384_zero(result.z) { ret false }
+    let z_inverse = p384_inverse(&field, result.z)
+    let x = p384_from_mont(&field, p384_field_mul(&field, result.x, p384_field_square(&field, z_inverse)))
+    var reduced = x
+    if p384_compare(reduced, order) >= 0i32 { reduced = p384_sub_raw(reduced, order) }
+    ret p384_equal(reduced, r)
+}
+
+// ECDSA P-384 over `message` hashed by `hash_id` (SHA-384 for ecdsa_secp384r1_sha384).
+fn p384_verify_hash(public: P384PublicKey, message: []const u8, signature_der: []const u8, hash_id: u16) -> bool {
+    let (digest, digest_len) = digest_of(message, hash_id)
+    if digest_len == 0usize { ret false }
+    ret p384_verify_digest(public, digest[..digest_len], signature_der)
+}
+
+fn p384_verify(public: P384PublicKey, message: []const u8, signature_der: []const u8) -> bool {
+    ret p384_verify_hash(public, message, signature_der, 384u16)
 }
 
 // --- ECDSA P-256 signing is unavailable until the verifier's variable-time integer
@@ -1216,20 +1597,23 @@ fn rsa_max_bytes() -> usize { ret 512usize }
 
 // MGF1-SHA256 of `seed`, XORed into all of `mask`.
 fn mgf1_xor(seed: []const u8, mask: []u8) {
+    mgf1_xor_hash(seed, mask, 256u16)
+}
+
+// MGF1 over the SHA-2 hash `hash_id` names; `seed` is at most 64 bytes (a digest).
+fn mgf1_xor_hash(seed: []const u8, mask: []u8, hash_id: u16) {
     var counter = 0u32
     var at = 0usize
+    var input: [68]u8 = zero
+    mem.copy[u8](input[0..], seed)
     while at < mask.len {
-        var h = hash.sha256_init()
-        hash.sha256_update(&h, seed)
-        var counter_bytes: [4]u8 = zero
-        counter_bytes[0] = u8(counter >> 24u32)
-        counter_bytes[1] = u8((counter >> 16u32) & 255u32)
-        counter_bytes[2] = u8((counter >> 8u32) & 255u32)
-        counter_bytes[3] = u8(counter & 255u32)
-        hash.sha256_update(&h, counter_bytes[0..])
-        let block = hash.sha256_done(&h)
+        input[seed.len] = u8(counter >> 24u32)
+        input[seed.len + 1usize] = u8((counter >> 16u32) & 255u32)
+        input[seed.len + 2usize] = u8((counter >> 8u32) & 255u32)
+        input[seed.len + 3usize] = u8(counter & 255u32)
+        let (block, block_len) = digest_of(input[..seed.len + 4usize], hash_id)
         var i = 0usize
-        while i < 32usize && at < mask.len {
+        while i < block_len && at < mask.len {
             mask[at] = mask[at] ^ block[i]
             at += 1usize
             i += 1usize
@@ -1238,15 +1622,21 @@ fn mgf1_xor(seed: []const u8, mask: []u8) {
     }
 }
 
-// H = SHA-256(eight zero bytes || SHA-256(message) || salt).
+// H = Hash(eight zero bytes || Hash(message) || salt), in `hash_id`'s hash; the digest and its length.
+fn pss_hash_of(message: []const u8, salt: []const u8, hash_id: u16) -> ([64]u8, usize) {
+    let (m_hash, hash_len) = digest_of(message, hash_id)
+    var input: [136]u8 = zero
+    mem.copy[u8](input[8usize..], m_hash[..hash_len])
+    mem.copy[u8](input[8usize + hash_len..], salt)
+    let (digest, digest_len) = digest_of(input[..8usize + hash_len + salt.len], hash_id)
+    ret (digest, digest_len)
+}
+
 fn pss_hash(message: []const u8, salt: []const u8) -> [32]u8 {
-    let m_hash = hash.sha256(message)
-    var zeros: [8]u8 = zero
-    var h = hash.sha256_init()
-    hash.sha256_update(&h, zeros[0..])
-    hash.sha256_update(&h, m_hash[0..])
-    hash.sha256_update(&h, salt)
-    ret hash.sha256_done(&h)
+    let (digest, digest_len) = pss_hash_of(message, salt, 256u16)
+    var out: [32]u8 = zero
+    mem.copy[u8](out[0..], digest[..32usize])
+    ret out
 }
 
 // Private RSA is unavailable until `e.algo.bignum` has constant-time modular
@@ -1275,21 +1665,32 @@ fn rsa_public_op(a: *mem.Arena, n: []const u8, e: []const u8, signature: []const
 }
 
 fn rsa_pss_verify(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8) -> bool {
+    ret rsa_pss_verify_hash(a, n, e, message, signature, 256u16)
+}
+
+// RSASSA-PSS with the SHA-2 hash `hash_id` names for the message, the mask and a salt as long as the
+// digest -- what TLS 1.3's rsa_pss_rsae_sha256, _sha384 and _sha512 sign (RFC 8446 4.2.3).
+fn rsa_pss_verify_hash(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8, hash_id: u16) -> bool {
+    var hash_len = 0usize
+    if hash_id == 256u16 { hash_len = 32usize }
+    if hash_id == 384u16 { hash_len = 48usize }
+    if hash_id == 512u16 { hash_len = 64usize }
+    if hash_len == 0usize { ret false }
     let (modulus, n_error) = bignum.int_from_bytes_be(a, n)
     if n_error != ok { ret false }
     let mod_bits = bignum.int_bits(modulus)
     let em_bits = mod_bits - 1usize
     let em_len = (em_bits + 7usize) / 8usize
     let k = (mod_bits + 7usize) / 8usize
-    let salt_len = rsa_salt_len()
-    if mod_bits < 8usize * (salt_len + 34usize) + 2usize || k > rsa_max_bytes() || signature.len != k { ret false }
+    let salt_len = hash_len
+    if em_len < hash_len + salt_len + 2usize || k > rsa_max_bytes() || signature.len != k { ret false }
     var em: [512]u8 = zero
     if !rsa_public_op(a, n, e, signature, em[..em_len]) { ret false }
     if em[em_len - 1usize] != 188u8 { ret false }
-    let db_len = em_len - 33usize
+    let db_len = em_len - hash_len - 1usize
     let top_mask = 255u8 >> u8(8usize * em_len - em_bits)
     if (em[0] & ~top_mask) != 0u8 { ret false }
-    mgf1_xor(em[db_len..db_len + 32usize], em[..db_len])
+    mgf1_xor_hash(em[db_len..db_len + hash_len], em[..db_len], hash_id)
     em[0] = em[0] & top_mask
     var i = 0usize
     while i < db_len - salt_len - 1usize {
@@ -1297,35 +1698,45 @@ fn rsa_pss_verify(a: *mem.Arena, n: []const u8, e: []const u8, message: []const 
         i += 1usize
     }
     if em[db_len - salt_len - 1usize] != 1u8 { ret false }
-    let expected = pss_hash(message, em[db_len - salt_len..db_len])
-    ret hash.equal_constant_time(expected[0..], em[db_len..db_len + 32usize])
+    let (expected, expected_len) = pss_hash_of(message, em[db_len - salt_len..db_len], hash_id)
+    ret hash.equal_constant_time(expected[..expected_len], em[db_len..db_len + hash_len])
 }
 
 // RSASSA-PKCS1-v1_5 with SHA-256: the encoded message is rebuilt and compared whole.
 fn rsa_pkcs1v15_verify(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8) -> bool {
+    ret rsa_pkcs1v15_verify_hash(a, n, e, message, signature, 256u16)
+}
+
+// The same with SHA-384 or SHA-512: the DigestInfo prefix differs only in three bytes (RFC 8017 9.2 note 1).
+fn rsa_pkcs1v15_verify_hash(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8, hash_id: u16) -> bool {
+    let (digest, digest_len) = digest_of(message, hash_id)
+    if digest_len == 0usize { ret false }
     let (modulus, n_error) = bignum.int_from_bytes_be(a, n)
     if n_error != ok { ret false }
     let k = (bignum.int_bits(modulus) + 7usize) / 8usize
-    if k < 62usize || k > rsa_max_bytes() || signature.len != k { ret false }
+    let info_len = 19usize + digest_len
+    if k < info_len + 11usize || k > rsa_max_bytes() || signature.len != k { ret false }
     var em: [512]u8 = zero
     if !rsa_public_op(a, n, e, signature, em[..k]) { ret false }
     var expected: [512]u8 = zero
     expected[1] = 1u8
     var i = 2usize
-    while i < k - 52usize {
+    while i < k - info_len - 1usize {
         expected[i] = 255u8
         i += 1usize
     }
-    let prefix: [19]u8 = [19]u8{ 48, 49, 48, 13, 6, 9, 96, 134, 72, 1, 101, 3, 4, 2, 1, 5, 0, 4, 32 }
+    var prefix: [19]u8 = [19]u8{ 48, 49, 48, 13, 6, 9, 96, 134, 72, 1, 101, 3, 4, 2, 1, 5, 0, 4, 32 }
+    prefix[1] = u8(17usize + digest_len)
+    prefix[14] = u8(1usize + (digest_len - 32usize) / 16usize)
+    prefix[18] = u8(digest_len)
     i = 0usize
     while i < 19usize {
-        expected[k - 51usize + i] = prefix[i]
+        expected[k - info_len + i] = prefix[i]
         i += 1usize
     }
-    let digest = hash.sha256(message)
     i = 0usize
-    while i < 32usize {
-        expected[k - 32usize + i] = digest[i]
+    while i < digest_len {
+        expected[k - digest_len + i] = digest[i]
         i += 1usize
     }
     ret hash.equal_constant_time(expected[..k], em[..k])

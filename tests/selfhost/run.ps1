@@ -1114,6 +1114,13 @@ $cryptoSignWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $cryptoSignWritten -ne 'executable written') { throw 'crypto_sign emission failed' }
 & $cryptoSignPath
 if ($LASTEXITCODE -ne 0) { throw "a crypto_sign check failed: exit $LASTEXITCODE" }
+# `e.crypto.hash` SHA-384, `e.crypto.sign` ECDSA P-384 and P-256 with SHA-256/384/512 and RSA PKCS#1 v1.5 and PSS
+# with SHA-256/384/512, against hashlib and Python's cryptography package (C144, D2249); 72 checks, each its own exit code.
+$cryptoSignWidePath = Join-Path $testBuild 'crypto-sign-wide-selfhost.exe'
+$cryptoSignWideWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_sign_wide\src\main.e') $repo 'x64' 'windows' $cryptoSignWidePath
+if ($LASTEXITCODE -ne 0 -or $cryptoSignWideWritten -ne 'executable written') { throw 'crypto_sign_wide emission failed' }
+& $cryptoSignWidePath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_sign_wide check failed: exit $LASTEXITCODE" }
 # `e.fmt.pem`: blocks with a suffix and with headers, encode in 64 columns, five refusals.
 $fmtPemPath = Join-Path $testBuild 'fmt-pem-selfhost.exe'
 $fmtPemWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pem\src\main.e') $repo 'x64' 'windows' $fmtPemPath

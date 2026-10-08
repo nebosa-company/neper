@@ -241,8 +241,9 @@ fn main(a: *mem.Arena) -> err {
     if client_hello_error != ok { os.exit(9i32) }
     let (hello_info, parse_client_error) = tls.parse_client_hello(client_hello[..client_hello_len], server_protocols[0..])
     if parse_client_error != ok || !same_bytes(hello_info.selected_alpn, "h2") { os.exit(10i32) }
-    // ed25519, ecdsa_secp256r1_sha256, rsa_pss_rsae_sha256 and rsa_pkcs1_sha256 (D1644).
-    let p256_offer = "\x00\x0d\x00\x0a\x00\x08\x08\x07\x04\x03\x08\x04\x04\x01"
+    // ed25519, ecdsa_secp256r1_sha256, ecdsa_secp384r1_sha384, rsa_pss_rsae_sha256/384/512 and
+    // rsa_pkcs1_sha256/384/512 (D1644, D2249).
+    let p256_offer = "\x00\x0d\x00\x14\x00\x12\x08\x07\x04\x03\x05\x03\x08\x04\x08\x05\x08\x06\x04\x01\x05\x01\x06\x01"
     var offer_at = 0usize
     var has_p256_offer = false
     while offer_at + p256_offer.len <= client_hello_len {

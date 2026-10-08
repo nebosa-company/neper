@@ -5465,6 +5465,10 @@ fn sha512_compress(s: *Sha512, block: []const u8)
 fn sha512_update(h: *Sha512, data: []const u8)
 fn sha512_done(h: *Sha512) -> [64]u8
 fn sha512(data: []const u8) -> [64]u8
+fn sha384_init() -> Sha512
+fn sha384_update(h: *Sha512, data: []const u8)
+fn sha384_done(h: *Sha512) -> [48]u8
+fn sha384(data: []const u8) -> [48]u8
 fn keccak_round_constant(round: usize) -> u64
 fn keccak_rho(index: usize) -> u32
 fn keccak_f(lanes: []u64)
@@ -5549,6 +5553,7 @@ fn poly1305_update(state: *Poly1305, bytes: []const u8)
 fn poly1305_done(state: *Poly1305) -> [16]u8
 fn poly1305(key: [32]u8, message: []const u8) -> [16]u8
 fn poly1305_verify(key: [32]u8, message: []const u8, tag: [16]u8) -> bool
+fn legacy_hmac_sha1(key: []const u8, message: []const u8) -> [20]u8
 ```
 
 HMAC follows RFC 2104; verification compares fixed-length tags in constant time.
@@ -5795,6 +5800,51 @@ fn p256_der_integer(encoded: []const u8, at: *usize) -> (P256Int, bool)
 fn p256_signature(encoded: []const u8) -> (P256Int, P256Int, bool)
 fn p256_joint_mul(u1: P256Int, u2: P256Int, public: P256Affine) -> P256Point
 fn p256_verify(public: P256PublicKey, message: []const u8, signature_der: []const u8) -> bool
+fn digest_of(message: []const u8, hash_id: u16) -> ([64]u8, usize)
+fn p256_verify_hash(public: P256PublicKey, message: []const u8, signature_der: []const u8, hash_id: u16) -> bool
+fn p256_verify_digest(public: P256PublicKey, digest: []const u8, signature_der: []const u8) -> bool
+type P384PublicKey = struct { bytes: [97]u8 }
+type P384Int = struct { v: [12]u32 }
+type P384Affine = struct { x: P384Int, y: P384Int }
+type P384Point = struct { x: P384Int, y: P384Int, z: P384Int }
+type P384Mod = struct { m: P384Int, ninv: u32, one: P384Int, r2: P384Int }
+fn p384_p() -> P384Int
+fn p384_n() -> P384Int
+fn p384_b() -> P384Int
+fn p384_base() -> P384Affine
+fn p384_zero(a: P384Int) -> bool
+fn p384_equal(a: P384Int, b: P384Int) -> bool
+fn p384_compare(a: P384Int, b: P384Int) -> i32
+fn p384_sub_raw(a: P384Int, b: P384Int) -> P384Int
+fn p384_add_mod(a: P384Int, b: P384Int, modulus: P384Int) -> P384Int
+fn p384_sub_mod(a: P384Int, b: P384Int, modulus: P384Int) -> P384Int
+fn p384_bit(a: P384Int, bit: usize) -> bool
+fn p384_mod(m: P384Int) -> P384Mod
+fn p384_mont_mul(f: *P384Mod, a: P384Int, b: P384Int) -> P384Int
+fn p384_to_mont(f: *P384Mod, a: P384Int) -> P384Int { ret p384_mont_mul(f, a, f.r2) }
+fn p384_from_mont(f: *P384Mod, a: P384Int) -> P384Int
+fn p384_inverse(f: *P384Mod, a: P384Int) -> P384Int
+fn p384_from_be(bytes: []const u8) -> (P384Int, bool)
+fn p384_field_add(f: *P384Mod, a: P384Int, b: P384Int) -> P384Int { ret p384_add_mod(a, b, f.m) }
+fn p384_field_sub(f: *P384Mod, a: P384Int, b: P384Int) -> P384Int { ret p384_sub_mod(a, b, f.m) }
+fn p384_field_mul(f: *P384Mod, a: P384Int, b: P384Int) -> P384Int { ret p384_mont_mul(f, a, b) }
+fn p384_field_square(f: *P384Mod, a: P384Int) -> P384Int { ret p384_mont_mul(f, a, a) }
+fn p384_field_double(f: *P384Mod, a: P384Int) -> P384Int { ret p384_add_mod(a, a, f.m) }
+fn p384_field_four(f: *P384Mod, a: P384Int) -> P384Int { ret p384_field_double(f, p384_field_double(f, a)) }
+fn p384_field_eight(f: *P384Mod, a: P384Int) -> P384Int { ret p384_field_double(f, p384_field_four(f, a)) }
+fn p384_point_double(f: *P384Mod, point: P384Point) -> P384Point
+fn p384_point_add_mixed(f: *P384Mod, point: P384Point, affine: P384Affine) -> P384Point
+fn p384_public(f: *P384Mod, public: P384PublicKey) -> (P384Affine, bool)
+fn p384_der_integer(encoded: []const u8, at: *usize) -> (P384Int, bool)
+fn p384_signature(encoded: []const u8) -> (P384Int, P384Int, bool)
+fn p384_joint_mul(f: *P384Mod, u1: P384Int, u2: P384Int, public: P384Affine) -> P384Point
+fn p384_verify_digest(public: P384PublicKey, digest: []const u8, signature_der: []const u8) -> bool
+fn p384_verify_hash(public: P384PublicKey, message: []const u8, signature_der: []const u8, hash_id: u16) -> bool
+fn p384_verify(public: P384PublicKey, message: []const u8, signature_der: []const u8) -> bool
+fn mgf1_xor_hash(seed: []const u8, mask: []u8, hash_id: u16)
+fn pss_hash_of(message: []const u8, salt: []const u8, hash_id: u16) -> ([64]u8, usize)
+fn rsa_pss_verify_hash(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8, hash_id: u16) -> bool
+fn rsa_pkcs1v15_verify_hash(a: *mem.Arena, n: []const u8, e: []const u8, message: []const u8, signature: []const u8, hash_id: u16) -> bool
 fn p256_to_be(a: P256Int) -> [32]u8
 fn p256_to_affine(point: P256Point) -> P256Affine
 fn p256_scalar_valid(k: P256Int) -> bool
@@ -13462,6 +13512,16 @@ fn isbn10(s: str) -> bool
 fn iban_length(a: u8, b: u8) -> usize
 fn mod97(r: u32, s: str) -> (u32, bool)
 fn iban(s: str) -> bool
+const BRAND_UNKNOWN: usize = 0usize
+const BRAND_VISA: usize = 1usize
+const BRAND_MASTERCARD: usize = 2usize
+const BRAND_AMEX: usize = 3usize
+const BRAND_DISCOVER: usize = 4usize
+const BRAND_DINERS: usize = 5usize
+const BRAND_JCB: usize = 6usize
+const BRAND_UNIONPAY: usize = 7usize
+fn card_brand(s: str) -> usize
+fn card_brand_name(brand: usize) -> str
 ```
 
 Identifier checks: `luhn` and `luhn_check_digit`, `isbn13`, `isbn10`, `ean13`, `ean8`,

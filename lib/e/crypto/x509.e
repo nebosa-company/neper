@@ -19,7 +19,7 @@ use e.fmt.pem as pem
 
 // An RSA key's modulus and public exponent, big-endian, views into the certificate.
 type RsaPublicKey = struct { modulus: []const u8, exponent: []const u8 }
-type PublicKey = union enum u8 { Ed25519: sign.Ed25519PublicKey, P256: sign.P256PublicKey, Unsupported: []const u8, Rsa: RsaPublicKey }
+type PublicKey = union enum u8 { Ed25519: sign.Ed25519PublicKey, P256: sign.P256PublicKey, Unsupported: []const u8, Rsa: RsaPublicKey, P384: sign.P384PublicKey }
 type Certificate = struct { der: []const u8, subject: str, issuer: str, dns_names: []const str, permitted_dns: []const str, excluded_dns: []const str, not_before: time.Instant, not_after: time.Instant, public_key: PublicKey, is_ca: bool, has_path_len: bool, path_len: u16, has_key_usage: bool, key_cert_sign: bool, unhandled_critical: bool }
 type Pool = struct { certificates: []const Certificate }
 type VerifyOptions = struct { roots: Pool, intermediates: Pool, dns_name: str, now: time.Instant, usage: KeyUsage, max_depth: u16 }
@@ -33,7 +33,7 @@ error InvalidUsage
 error TooDeep
 
 const DEPTH: u16 = 16u16
-type SignatureAlgorithm = enum u8 { Ed25519, EcdsaSha256, Unsupported, RsaSha256 }
+type SignatureAlgorithm = enum u8 { Ed25519, EcdsaSha256, Unsupported, RsaSha256, EcdsaSha384, EcdsaSha512, RsaSha384, RsaSha512 }
 
 // The next value of a reader, or `InvalidCertificate` when there is none.
 fn next(r: *asn1.Reader) -> (asn1.Value, err) {
@@ -171,18 +171,28 @@ fn signature_algorithm(value: asn1.Value) -> (SignatureAlgorithm, err) {
     if oid_error != ok { ret (.Unsupported, oid_error) }
     let ed25519: [3]u8 = [3]u8{ 43, 101, 112 }
     let ecdsa_sha256: [8]u8 = [8]u8{ 42, 134, 72, 206, 61, 4, 3, 2 }
+    let ecdsa_sha384: [8]u8 = [8]u8{ 42, 134, 72, 206, 61, 4, 3, 3 }
+    let ecdsa_sha512: [8]u8 = [8]u8{ 42, 134, 72, 206, 61, 4, 3, 4 }
     let rsa_sha256: [9]u8 = [9]u8{ 42, 134, 72, 134, 247, 13, 1, 1, 11 }
+    let rsa_sha384: [9]u8 = [9]u8{ 42, 134, 72, 134, 247, 13, 1, 1, 12 }
+    let rsa_sha512: [9]u8 = [9]u8{ 42, 134, 72, 134, 247, 13, 1, 1, 13 }
     var algorithm = SignatureAlgorithm.Unsupported
     if oid_equal(oid.content, ed25519[0..]) { algorithm = .Ed25519 }
     if oid_equal(oid.content, ecdsa_sha256[0..]) { algorithm = .EcdsaSha256 }
-    if oid_equal(oid.content, rsa_sha256[0..]) {
-        // sha256WithRSAEncryption carries a NULL parameter, or none (RFC 4055 2.1).
+    if oid_equal(oid.content, ecdsa_sha384[0..]) { algorithm = .EcdsaSha384 }
+    if oid_equal(oid.content, ecdsa_sha512[0..]) { algorithm = .EcdsaSha512 }
+    var rsa_algorithm = SignatureAlgorithm.Unsupported
+    if oid_equal(oid.content, rsa_sha256[0..]) { rsa_algorithm = .RsaSha256 }
+    if oid_equal(oid.content, rsa_sha384[0..]) { rsa_algorithm = .RsaSha384 }
+    if oid_equal(oid.content, rsa_sha512[0..]) { rsa_algorithm = .RsaSha512 }
+    if rsa_algorithm != .Unsupported {
+        // The sha*WithRSAEncryption identifiers carry a NULL parameter, or none (RFC 4055 2.1).
         let (parameter, has_parameter, parameter_error) = asn1.reader_next_err(&parts)
         if parameter_error != ok { ret (.Unsupported, InvalidCertificate) }
         if has_parameter && (parameter.tag.class != .Universal || parameter.tag.number != 5u32 || parameter.content.len != 0usize) { ret (.Unsupported, InvalidCertificate) }
         let (_, has_more, more_error) = asn1.reader_next_err(&parts)
         if more_error != ok || has_more { ret (.Unsupported, InvalidCertificate) }
-        ret (.RsaSha256, ok)
+        ret (rsa_algorithm, ok)
     }
     if algorithm != .Unsupported {
         let (_, has_parameter, parameter_error) = asn1.reader_next_err(&parts)
@@ -313,6 +323,7 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
     let ed25519: [3]u8 = [3]u8{ 43, 101, 112 }
     let ec_public: [7]u8 = [7]u8{ 42, 134, 72, 206, 61, 2, 1 }
     let p256_curve: [8]u8 = [8]u8{ 42, 134, 72, 206, 61, 3, 1, 7 }
+    let p384_curve: [5]u8 = [5]u8{ 43, 129, 4, 0, 34 }
     let rsa_encryption: [9]u8 = [9]u8{ 42, 134, 72, 134, 247, 13, 1, 1, 1 }
     var key_kind = 0u8
     if oid_equal(key_oid.content, ed25519[0..]) {
@@ -330,6 +341,7 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
         let (_, has_parameter, parameter_error) = asn1.reader_next_err(&key_algorithm_inner)
         if parameter_error != ok || has_parameter { ret (zero, InvalidCertificate) }
         if oid_equal(curve.content, p256_curve[0..]) { key_kind = 2u8 }
+        if oid_equal(curve.content, p384_curve[0..]) { key_kind = 4u8 }
     }
     let (key_bits, key_bits_error) = expect(&spki_inner, 3u32, false)
     if key_bits_error != ok { ret (zero, key_bits_error) }
@@ -345,6 +357,11 @@ fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
         var public: sign.P256PublicKey = zero
         mem.copy[u8](public.bytes[0..], key_bits.content[1usize..])
         certificate.public_key = PublicKey{ P256: public }
+    } else if key_kind == 4u8 {
+        if key_bits.content.len != 98usize || key_bits.content[1] != 4u8 { ret (zero, InvalidCertificate) }
+        var public: sign.P384PublicKey = zero
+        mem.copy[u8](public.bytes[0..], key_bits.content[1usize..])
+        certificate.public_key = PublicKey{ P384: public }
     } else if key_kind == 3u8 {
         let (rsa_key, rsa_error) = rsa_public_key(key_bits.content[1usize..])
         if rsa_error != ok { ret (zero, rsa_error) }
@@ -601,11 +618,14 @@ fn pool(a: *mem.Arena, certificates: []const Certificate) -> Pool {
 fn verify_signature(a: *mem.Arena, certificate: Certificate, issuer: Certificate) -> err {
     let (tbs, signature_bytes, algorithm, outer_algorithm, parts_error) = signed_parts(certificate.der)
     if parts_error != ok { ret parts_error }
-    if algorithm == .RsaSha256 {
+    if algorithm == .RsaSha256 || algorithm == .RsaSha384 || algorithm == .RsaSha512 {
+        var hash_id = 256u16
+        if algorithm == .RsaSha384 { hash_id = 384u16 }
+        if algorithm == .RsaSha512 { hash_id = 512u16 }
         switch issuer.public_key {
         case .Rsa as key:
             let mark = mem.mark(a)
-            let valid = sign.rsa_pkcs1v15_verify(a, key.modulus, key.exponent, tbs, signature_bytes)
+            let valid = sign.rsa_pkcs1v15_verify_hash(a, key.modulus, key.exponent, tbs, signature_bytes, hash_id)
             mem.reset(a, mark)
             if valid { ret ok }
         default:
@@ -624,10 +644,15 @@ fn verify_signature(a: *mem.Arena, certificate: Certificate, issuer: Certificate
         }
         ret InvalidCertificate
     }
-    if algorithm == .EcdsaSha256 {
+    if algorithm == .EcdsaSha256 || algorithm == .EcdsaSha384 || algorithm == .EcdsaSha512 {
+        var hash_id = 256u16
+        if algorithm == .EcdsaSha384 { hash_id = 384u16 }
+        if algorithm == .EcdsaSha512 { hash_id = 512u16 }
         switch issuer.public_key {
         case .P256 as key:
-            if sign.p256_verify(key, tbs, signature_bytes) { ret ok }
+            if sign.p256_verify_hash(key, tbs, signature_bytes, hash_id) { ret ok }
+        case .P384 as key:
+            if sign.p384_verify_hash(key, tbs, signature_bytes, hash_id) { ret ok }
         default:
             ret InvalidCertificate
         }

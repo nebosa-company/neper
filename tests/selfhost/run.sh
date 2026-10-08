@@ -1059,6 +1059,12 @@ crypto_sign_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$crypto_sign_written" = 'executable written' ]
 chmod +x "$test_build/crypto-sign-selfhost"
 "$test_build/crypto-sign-selfhost"
+# `e.crypto.hash` SHA-384, `e.crypto.sign` ECDSA P-384 and P-256 with SHA-256/384/512 and RSA PKCS#1 v1.5 and PSS
+# with SHA-256/384/512, against hashlib and Python's cryptography package (C144, D2249); 72 checks, each its own exit code.
+crypto_sign_wide_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_sign_wide/src/main.e" "$repo" x64 linux "$test_build/crypto-sign-wide-selfhost")
+[ "$crypto_sign_wide_written" = 'executable written' ]
+chmod +x "$test_build/crypto-sign-wide-selfhost"
+"$test_build/crypto-sign-wide-selfhost"
 # `e.fmt.pem`: blocks with a suffix and with headers, encode in 64 columns, five refusals.
 fmt_pem_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pem/src/main.e" "$repo" x64 linux "$test_build/fmt-pem-selfhost")
 [ "$fmt_pem_written" = 'executable written' ]
