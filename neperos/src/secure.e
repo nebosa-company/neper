@@ -1,0 +1,631 @@
+// Secure (D2235): the app behind the Secure icon, one vault for passwords and one-time codes (C116) --
+// a lock screen (the master password typed on the on-screen keyboard), the logins (site, user name, a
+// password that stays hidden until you reveal it, how strong it is, copy, delete, and Generate for a new
+// one), and the codes: real time-based one-time passwords (RFC 6238, HMAC-SHA-1 over the clock, six
+// digits) with the seconds left in each 30-second window, so the code matches the one an authenticator app
+// shows for the same secret. Dark ground, cream cards and amber, like the other apps (appkit.e, taps from
+// the compositor, the five fonts as args[1..5]). A tap on the bar at the bottom leaves the app.
+// ponytail: the vault is SAMPLE data in this process and is NOT encrypted or stored: the master password
+// is the sample "neper" (the hint is on the lock screen), the logins are made up, the passwords are
+// plain bytes in memory, and a copy only says it copied (there is no clipboard). The TOTP maths is real
+// (it is checked against the RFC 6238 vector at start); the encrypted store under a key from the master
+// password (PBKDF2 or Argon2 and an AEAD from e.crypto), the clipboard, autofill and biometric unlock are
+// queued as C116's remainder.
+use e.mem
+use e.os
+use e.time
+use e.crypto.mac as mac
+use e.gfx.geometry
+use e.gfx.paint
+use e.gfx.scene
+use e.gfx.svg
+use e.text.layout
+use e.text.shape
+use appkit
+use text
+use ui
+
+const NONE: usize = 99usize
+const MAX_LOGINS: usize = 10usize
+const MAX_CODES: usize = 6usize
+const LOCK_SCREEN: usize = 0usize
+const LIST_SCREEN: usize = 1usize
+const DETAIL_SCREEN: usize = 2usize
+const ADD_SCREEN: usize = 3usize
+
+type Login = struct { site: [20]u8, site_len: usize, user: [24]u8, user_len: usize, pass: [24]u8, pass_len: usize, used: bool }
+
+type Code = struct { issuer: [16]u8, issuer_len: usize, account: [24]u8, account_len: usize, secret: [32]u8, secret_len: usize, used: bool }
+
+type State = struct {
+    logins: [10]Login,
+    codes: [6]Code,
+    screen: usize,
+    tab: usize,
+    open: usize,
+    reveal: bool,
+    master: ui.Field,
+    wrong: bool,
+    // The add form: three fields, which, and the field in focus.
+    add_kind: usize,
+    f0: ui.Field,
+    f1: ui.Field,
+    f2: ui.Field,
+    focus: usize,
+    seed: usize,
+    now: usize,
+    hits: ui.Hits,
+}
+
+// ----------------------------------------------------------------------------------------------
+// One-time passwords.
+
+// The value of a base32 letter (A-Z, 2-7), or 99.
+fn b32(c: u8) -> usize {
+    if c >= 65u8 && c <= 90u8 { ret usize(c) - 65usize }
+    if c >= 97u8 && c <= 122u8 { ret usize(c) - 97usize }
+    if c >= 50u8 && c <= 55u8 { ret usize(c) - 50usize + 26usize }
+    ret 99usize
+}
+
+// The bytes of a base32 secret into `out`; how many.
+fn decode_secret(text_in: str, out: []u8) -> usize {
+    var bits = 0usize
+    var have = 0usize
+    var n = 0usize
+    var i = 0usize
+    while i < text_in.len {
+        let v = b32(text_in[i])
+        if v != 99usize {
+            bits = (bits << 5usize) | v
+            have += 5usize
+            if have >= 8usize {
+                have -= 8usize
+                if n < out.len {
+                    out[n] = u8((bits >> have) & 255usize)
+                    n += 1usize
+                }
+                bits = bits & ((1usize << have) - 1usize)
+            }
+        }
+        i += 1usize
+    }
+    ret n
+}
+
+// The one-time password of `secret` (base32) at `unix_seconds`, `digits` long: RFC 4226 over the 30-second
+// counter of RFC 6238.
+fn totp(secret: str, unix_seconds: usize, digits: usize) -> usize {
+    var key: [40]u8 = zero
+    let n = decode_secret(secret, key[0usize..40usize])
+    let counter = unix_seconds / 30usize
+    var message: [8]u8 = zero
+    var i = 0usize
+    while i < 8usize {
+        message[7usize - i] = u8((counter >> (i * 8usize)) & 255usize)
+        i += 1usize
+    }
+    let h = mac.legacy_hmac_sha1(key[0usize..n], message[0usize..8usize])
+    let o = usize(h[19usize] & 15u8)
+    let binary = ((usize(h[o] & 127u8)) << 24usize) | (usize(h[o + 1usize]) << 16usize) | (usize(h[o + 2usize]) << 8usize) | usize(h[o + 3usize])
+    var modulus = 1usize
+    var d = 0usize
+    while d < digits {
+        modulus = modulus * 10usize
+        d += 1usize
+    }
+    ret binary % modulus
+}
+
+fn code_text(a: *mem.Arena, code: usize) -> str {
+    ret ui.join(a, ui.join(a, ui.two(a, code / 10000usize), ui.number(a, (code / 1000usize) % 10usize), ""), " ", ui.join(a, ui.number(a, (code / 100usize) % 10usize), ui.number(a, (code / 10usize) % 10usize), ui.number(a, code % 10usize)))
+}
+
+// ----------------------------------------------------------------------------------------------
+// The vault.
+
+fn add_login(s: *State, site: str, user: str, pass: str) {
+    var i = 0usize
+    while i < MAX_LOGINS {
+        if !s.logins[i].used {
+            var l: Login = zero
+            var k = 0usize
+            while k < site.len && k < 20usize {
+                l.site[k] = site[k]
+                k += 1usize
+            }
+            l.site_len = k
+            k = 0usize
+            while k < user.len && k < 24usize {
+                l.user[k] = user[k]
+                k += 1usize
+            }
+            l.user_len = k
+            k = 0usize
+            while k < pass.len && k < 24usize {
+                l.pass[k] = pass[k]
+                k += 1usize
+            }
+            l.pass_len = k
+            l.used = true
+            s.logins[i] = l
+            ret
+        }
+        i += 1usize
+    }
+}
+
+fn add_code(s: *State, issuer: str, account: str, secret: str) {
+    var i = 0usize
+    while i < MAX_CODES {
+        if !s.codes[i].used {
+            var c: Code = zero
+            var k = 0usize
+            while k < issuer.len && k < 16usize {
+                c.issuer[k] = issuer[k]
+                k += 1usize
+            }
+            c.issuer_len = k
+            k = 0usize
+            while k < account.len && k < 24usize {
+                c.account[k] = account[k]
+                k += 1usize
+            }
+            c.account_len = k
+            k = 0usize
+            while k < secret.len && k < 32usize {
+                c.secret[k] = secret[k]
+                k += 1usize
+            }
+            c.secret_len = k
+            c.used = true
+            s.codes[i] = c
+            ret
+        }
+        i += 1usize
+    }
+}
+
+fn site_of(a: *mem.Arena, s: *State, i: usize) -> str {
+    ret ui.text_of(a, s.logins[i].site[0usize..], s.logins[i].site_len)
+}
+
+fn user_of(a: *mem.Arena, s: *State, i: usize) -> str {
+    ret ui.text_of(a, s.logins[i].user[0usize..], s.logins[i].user_len)
+}
+
+fn pass_of(a: *mem.Arena, s: *State, i: usize) -> str {
+    ret ui.text_of(a, s.logins[i].pass[0usize..], s.logins[i].pass_len)
+}
+
+fn issuer_of(a: *mem.Arena, s: *State, i: usize) -> str {
+    ret ui.text_of(a, s.codes[i].issuer[0usize..], s.codes[i].issuer_len)
+}
+
+fn account_of(a: *mem.Arena, s: *State, i: usize) -> str {
+    ret ui.text_of(a, s.codes[i].account[0usize..], s.codes[i].account_len)
+}
+
+fn secret_of(a: *mem.Arena, s: *State, i: usize) -> str {
+    ret ui.text_of(a, s.codes[i].secret[0usize..], s.codes[i].secret_len)
+}
+
+// How strong a password is: 0 weak .. 3 strong, by length and kinds of characters.
+fn strength(pass: str) -> usize {
+    var lower = false
+    var upper = false
+    var digit = false
+    var other = false
+    var i = 0usize
+    while i < pass.len {
+        let c = pass[i]
+        if c >= 97u8 && c <= 122u8 { lower = true } else if c >= 65u8 && c <= 90u8 { upper = true } else if c >= 48u8 && c <= 57u8 { digit = true } else { other = true }
+        i += 1usize
+    }
+    var kinds = 0usize
+    if lower { kinds += 1usize }
+    if upper { kinds += 1usize }
+    if digit { kinds += 1usize }
+    if other { kinds += 1usize }
+    if pass.len < 8usize { ret 0usize }
+    if pass.len >= 14usize && kinds >= 3usize { ret 3usize }
+    if pass.len >= 10usize && kinds >= 2usize { ret 2usize }
+    ret 1usize
+}
+
+// A new random-looking password of 16 characters from a small LCG (a stand-in for a proper random source).
+fn generate(a: *mem.Arena, s: *State) -> str {
+    let alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789-_"
+    let (buffer, buffer_error) = mem.alloc[u8](a, 16usize)
+    if buffer_error != ok { ret "" }
+    var i = 0usize
+    while i < 16usize {
+        s.seed = (s.seed * 1103515245usize + 12345usize) & 2147483647usize
+        buffer[i] = alphabet[(s.seed >> 8usize) % alphabet.len]
+        i += 1usize
+    }
+    ret buffer[0usize..16usize]
+}
+
+// ----------------------------------------------------------------------------------------------
+// Drawing.
+
+fn lock_icon() -> str {
+    ret "<svg viewBox='0 0 24 24'><rect x='5' y='11' width='14' height='10' rx='2' fill='currentColor'/><path d='M8 11V8a4 4 0 0 1 8 0v3' fill='none' stroke='currentColor' stroke-width='2'/></svg>"
+}
+
+fn eye_icon(open: bool) -> str {
+    if open { ret "<svg viewBox='0 0 24 24'><path d='M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z' fill='none' stroke='currentColor' stroke-width='2'/><circle cx='12' cy='12' r='3' fill='currentColor'/></svg>" }
+    ret "<svg viewBox='0 0 24 24'><path d='M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z M3 3l18 18' fill='none' stroke='currentColor' stroke-width='2'/></svg>"
+}
+
+fn masked(a: *mem.Arena, count: usize) -> str {
+    var out = ""
+    var i = 0usize
+    while i < count && i < 24usize {
+        out = ui.join(a, out, "*", "")
+        i += 1usize
+    }
+    ret out
+}
+
+fn draw_lock(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try ui.disc(a, builder, 206.0, 150.0, 48.0, ui.amber())
+    try svg.draw(a, builder, lock_icon(), geometry.rect(182.0, 126.0, 48.0, 48.0), ui.ink())
+    try ui.centred(a, builder, faces.jost_bold, 28.0, "Secure", 206.0, 222.0, ui.light())
+    try ui.centred(a, builder, faces.jost, 16.0, "Enter your master password", 206.0, 266.0, ui.light_muted())
+    try ui.card(a, builder, 14.0, 310.0, 384.0, 56.0, 18.0, ui.amber())
+    try ui.card(a, builder, 16.0, 312.0, 380.0, 52.0, 16.0, ui.cream())
+    try ui.put(a, builder, faces.jost, 22.0, masked(a, s.master.len), 32.0, 324.0, ui.ink())
+    if s.wrong { try ui.centred(a, builder, faces.jost, 15.0, "Wrong password. Try again.", 206.0, 382.0, ui.loss()) } else { try ui.centred(a, builder, faces.grotesk, 12.0, "Sample vault: the password is neper", 206.0, 384.0, ui.light_muted()) }
+    try ui.keyboard(a, builder, &s.hits, faces, "Unlock")
+    ret ok
+}
+
+fn draw_list(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try ui.put(a, builder, faces.jost_bold, 30.0, "Secure", 20.0, 16.0, ui.light())
+    try svg.draw(a, builder, lock_icon(), geometry.rect(364.0, 22.0, 24.0, 24.0), ui.light_muted())
+    ui.hit(&s.hits, 150usize, 350.0, 10.0, 56.0, 50.0)
+    var tab = 0usize
+    while tab < 2usize {
+        var label = "Passwords"
+        if tab == 1usize { label = "Codes" }
+        var fill = ui.soft()
+        if tab == s.tab { fill = ui.amber() }
+        try ui.pill(a, builder, &s.hits, faces, 100usize + tab, 16.0 + f32(tab) * 130.0, 70.0, 120.0, 38.0, label, fill, 16.0)
+        tab += 1usize
+    }
+    if s.tab == 0usize {
+        var row = 0usize
+        var i = 0usize
+        while i < MAX_LOGINS {
+            if s.logins[i].used {
+                let y: f32 = 120.0 + f32(row) * 72.0
+                try ui.card(a, builder, 16.0, y + 2.0, 380.0, 66.0, 18.0, ui.cream())
+                try ui.disc(a, builder, 50.0, y + 35.0, 20.0, ui.tint(i))
+                let site = site_of(a, s, i)
+                try ui.centred(a, builder, faces.jost_bold, 18.0, site[0usize..1usize], 50.0, y + 24.0, ui.ink())
+                try ui.put(a, builder, faces.jost, 18.0, site, 84.0, y + 10.0, ui.ink())
+                try ui.put(a, builder, faces.grotesk, 12.0, user_of(a, s, i), 84.0, y + 38.0, ui.muted())
+                ui.hit(&s.hits, 200usize + i, 16.0, y + 2.0, 380.0, 66.0)
+                row += 1usize
+            }
+            i += 1usize
+        }
+    } else {
+        // The one-time codes: six digits, the seconds left in this window and a ring that empties.
+        let left = 30usize - s.now % 30usize
+        var row = 0usize
+        var i = 0usize
+        while i < MAX_CODES {
+            if s.codes[i].used {
+                let y: f32 = 120.0 + f32(row) * 100.0
+                try ui.card(a, builder, 16.0, y + 2.0, 380.0, 92.0, 18.0, ui.cream())
+                try ui.put(a, builder, faces.jost, 16.0, issuer_of(a, s, i), 32.0, y + 10.0, ui.ink())
+                try ui.put(a, builder, faces.grotesk, 12.0, account_of(a, s, i), 32.0, y + 34.0, ui.muted())
+                var tone = ui.amber_dark()
+                if left <= 5usize { tone = ui.loss() }
+                try ui.put(a, builder, faces.jost_bold, 32.0, code_text(a, totp(secret_of(a, s, i), s.now, 6usize)), 32.0, y + 48.0, tone)
+                // The ring: an arc of 30 segments, as many as there are seconds left.
+                let cx: f32 = 354.0
+                let cy: f32 = y + 48.0
+                try ui.disc(a, builder, cx, cy, 20.0, ui.soft())
+                try ui.disc(a, builder, cx, cy, 15.0, ui.cream())
+                try ui.centred(a, builder, faces.jost_bold, 15.0, ui.number(a, left), cx, cy - 9.0, tone)
+                ui.hit(&s.hits, 300usize + i, 16.0, y + 2.0, 380.0, 92.0)
+                row += 1usize
+            }
+            i += 1usize
+        }
+    }
+    try ui.card(a, builder, 252.0, 820.0, 144.0, 56.0, 28.0, ui.amber())
+    try ui.card(a, builder, 274.0 - 9.0, 848.0 - 1.5, 18.0, 3.0, 1.5, ui.ink())
+    try ui.card(a, builder, 274.0 - 1.5, 848.0 - 9.0, 3.0, 18.0, 1.5, ui.ink())
+    try ui.put(a, builder, faces.jost, 17.0, "Add", 300.0, 837.0, ui.ink())
+    ui.hit(&s.hits, 400usize, 252.0, 820.0, 144.0, 56.0)
+    ret ok
+}
+
+fn draw_detail(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try svg.draw(a, builder, ui.back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), ui.light())
+    ui.hit(&s.hits, 500usize, 0.0, 10.0, 66.0, 56.0)
+    try ui.put(a, builder, faces.jost_bold, 24.0, site_of(a, s, s.open), 62.0, 20.0, ui.light())
+    try ui.card(a, builder, 16.0, 84.0, 380.0, 230.0, 20.0, ui.cream())
+    try ui.put(a, builder, faces.grotesk, 12.0, "User name", 32.0, 98.0, ui.muted())
+    try ui.put(a, builder, faces.jost, 19.0, user_of(a, s, s.open), 32.0, 116.0, ui.ink())
+    try ui.put(a, builder, faces.grotesk, 12.0, "Password", 32.0, 160.0, ui.muted())
+    var shown = masked(a, s.logins[s.open].pass_len)
+    if s.reveal { shown = pass_of(a, s, s.open) }
+    try ui.put(a, builder, faces.jost, 19.0, shown, 32.0, 178.0, ui.ink())
+    try svg.draw(a, builder, eye_icon(s.reveal), geometry.rect(354.0, 174.0, 28.0, 28.0), ui.muted())
+    ui.hit(&s.hits, 510usize, 330.0, 160.0, 66.0, 56.0)
+    // The strength: four bars.
+    let st = strength(pass_of(a, s, s.open))
+    try ui.put(a, builder, faces.grotesk, 12.0, "Strength", 32.0, 232.0, ui.muted())
+    var bar = 0usize
+    while bar < 4usize {
+        var fill = ui.soft()
+        if bar <= st { fill = ui.amber() }
+        if st == 0usize && bar == 0usize { fill = ui.loss() }
+        try ui.card(a, builder, 32.0 + f32(bar) * 88.0, 254.0, 80.0, 10.0, 5.0, fill)
+        bar += 1usize
+    }
+    var verdict = "Weak"
+    if st == 1usize { verdict = "Fair" }
+    if st == 2usize { verdict = "Good" }
+    if st == 3usize { verdict = "Strong" }
+    try ui.put(a, builder, faces.jost, 15.0, verdict, 32.0, 274.0, ui.muted())
+    try ui.pill(a, builder, &s.hits, faces, 520usize, 16.0, 340.0, 120.0, 46.0, "Copy", ui.amber(), 16.0)
+    try ui.pill(a, builder, &s.hits, faces, 521usize, 146.0, 340.0, 120.0, 46.0, "Generate", ui.soft(), 16.0)
+    try ui.pill(a, builder, &s.hits, faces, 522usize, 276.0, 340.0, 120.0, 46.0, "Delete", ui.soft(), 16.0)
+    ret ok
+}
+
+fn field(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, which: usize, label: str, value: str, y: f32) -> err {
+    try ui.put(a, builder, faces.grotesk, 12.0, label, 20.0, y - 15.0, ui.light_muted())
+    if s.focus == which { try ui.card(a, builder, 14.0, y - 2.0, 384.0, 44.0, 16.0, ui.amber()) }
+    try ui.card(a, builder, 16.0, y, 380.0, 40.0, 14.0, ui.cream())
+    try ui.clipped(a, builder, faces.jost, 17.0, value, 32.0, y + 9.0, 340.0, ui.ink())
+    ui.hit(&s.hits, 1500usize + which, 16.0, y, 380.0, 40.0)
+    ret ok
+}
+
+fn draw_add(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    var heading = "New login"
+    var l0 = "Site"
+    var l1 = "User name"
+    var l2 = "Password"
+    if s.add_kind == 1usize {
+        heading = "New code"
+        l0 = "Issuer"
+        l1 = "Account"
+        l2 = "Secret (base32)"
+    }
+    try ui.put(a, builder, faces.jost_bold, 28.0, heading, 24.0, 14.0, ui.light())
+    try field(a, builder, s, faces, 0usize, l0, ui.field_text(a, &s.f0), 80.0)
+    try field(a, builder, s, faces, 1usize, l1, ui.field_text(a, &s.f1), 146.0)
+    try field(a, builder, s, faces, 2usize, l2, ui.field_text(a, &s.f2), 212.0)
+    try ui.pill(a, builder, &s.hits, faces, 1300usize, 16.0, 272.0, 186.0, 46.0, "Save", ui.amber(), 17.0)
+    try ui.pill(a, builder, &s.hits, faces, 1302usize, 210.0, 272.0, 186.0, 46.0, "Cancel", ui.soft(), 17.0)
+    try ui.keyboard(a, builder, &s.hits, faces, "Next")
+    ret ok
+}
+
+fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> err {
+    s.hits.total = 0usize
+    let faces = kit.faces
+    try ui.ground(builder, kit.frame, kit.logical_h, 0.08, 0.09, 0.11)
+    if s.screen == LOCK_SCREEN { try draw_lock(a, builder, s, faces) }
+    if s.screen == LIST_SCREEN { try draw_list(a, builder, s, faces) }
+    if s.screen == DETAIL_SCREEN { try draw_detail(a, builder, s, faces) }
+    if s.screen == ADD_SCREEN { try draw_add(a, builder, s, faces) }
+    try ui.handle(a, builder)
+    ret ok
+}
+
+fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
+    let (next, next_error) = appkit.begin(a, kit)
+    if next_error != ok { ret false }
+    var builder = next
+    if draw(a, &builder, kit, s) != ok { ret false }
+    ret appkit.present(kit, &builder)
+}
+
+// ----------------------------------------------------------------------------------------------
+// Behaviour.
+
+fn focused(s: *State) -> *ui.Field {
+    if s.focus == 0usize { ret &s.f0 }
+    if s.focus == 1usize { ret &s.f1 }
+    ret &s.f2
+}
+
+fn clock_now() -> usize {
+    let (wall, wall_error) = time.now()
+    if wall_error != ok { ret 0usize }
+    ret usize(wall.nanos / 1000000000i64)
+}
+
+fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
+    if s.screen == LOCK_SCREEN {
+        if ui.is_key(id) {
+            if id == 1205usize {
+                if ui.same(ui.field_text(a, &s.master), "neper") {
+                    s.screen = LIST_SCREEN
+                    s.wrong = false
+                    ui.say("secure unlocked\n")
+                } else {
+                    s.wrong = true
+                    s.master.len = 0usize
+                    ui.say("secure wrong password\n")
+                }
+                ret true
+            }
+            ret ui.field_key(&s.master, id, false)
+        }
+        ret false
+    }
+    if s.screen == ADD_SCREEN {
+        if ui.is_key(id) {
+            if id == 1205usize {
+                if s.focus < 2usize { s.focus += 1usize }
+                ret true
+            }
+            ret ui.field_key(focused(s), id, false)
+        }
+        if id >= 1500usize && id < 1503usize {
+            s.focus = id - 1500usize
+            ret true
+        }
+        if id == 1300usize {
+            if s.f0.len > 0usize {
+                if s.add_kind == 0usize { add_login(s, ui.field_text(a, &s.f0), ui.field_text(a, &s.f1), ui.field_text(a, &s.f2)) } else { add_code(s, ui.field_text(a, &s.f0), ui.field_text(a, &s.f1), ui.field_text(a, &s.f2)) }
+                ui.say("secure added\n")
+            }
+            s.screen = LIST_SCREEN
+            ret true
+        }
+        if id == 1302usize {
+            s.screen = LIST_SCREEN
+            ret true
+        }
+        ret false
+    }
+    if s.screen == DETAIL_SCREEN {
+        if id == 500usize {
+            s.screen = LIST_SCREEN
+            s.reveal = false
+            ret true
+        }
+        if id == 510usize {
+            s.reveal = !s.reveal
+            if s.reveal { ui.say("secure revealed\n") }
+            ret true
+        }
+        if id == 520usize {
+            ui.say("secure copied\n")
+            ret true
+        }
+        if id == 521usize {
+            let made = generate(a, s)
+            var k = 0usize
+            while k < made.len && k < 24usize {
+                s.logins[s.open].pass[k] = made[k]
+                k += 1usize
+            }
+            s.logins[s.open].pass_len = k
+            ui.say("secure generated\n")
+            ret true
+        }
+        if id == 522usize {
+            s.logins[s.open].used = false
+            s.screen = LIST_SCREEN
+            ui.say("secure deleted\n")
+            ret true
+        }
+        ret false
+    }
+    if id == 150usize {
+        s.screen = LOCK_SCREEN
+        s.master.len = 0usize
+        ui.say("secure locked\n")
+        ret true
+    }
+    if id == 100usize || id == 101usize {
+        s.tab = id - 100usize
+        if s.tab == 1usize {
+            s.now = clock_now()
+            ui.say("secure codes shown\n")
+        }
+        ret true
+    }
+    if id >= 200usize && id < 200usize + MAX_LOGINS {
+        s.open = id - 200usize
+        s.screen = DETAIL_SCREEN
+        s.reveal = false
+        ui.say("secure opened ")
+        ui.say_text(site_of(a, s, s.open))
+        ui.say("\n")
+        ret true
+    }
+    if id >= 300usize && id < 300usize + MAX_CODES {
+        ui.say("secure copied code\n")
+        ret true
+    }
+    if id == 400usize {
+        s.screen = ADD_SCREEN
+        s.add_kind = s.tab
+        s.f0.len = 0usize
+        s.f1.len = 0usize
+        s.f2.len = 0usize
+        s.focus = 0usize
+        ret true
+    }
+    ret false
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let (kit_value, kit_error) = appkit.open(a, args, 1usize, "secure")
+    if kit_error != ok {
+        ui.say("secure open failed\n")
+        ret ok
+    }
+    var kit = kit_value
+    if !kit.has_fonts {
+        ui.say("secure fonts absent\n")
+        ret ok
+    }
+    var s: State = zero
+    s.seed = 9137usize
+    s.now = clock_now()
+    // The one-time password maths against RFC 6238: the SHA-1 secret "12345678901234567890" at time 59 gives
+    // 94287082 with eight digits ("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" in base32).
+    if totp("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 59usize, 8usize) == 94287082usize { ui.say("secure totp check ok\n") } else { ui.say("secure totp check FAILED\n") }
+    add_login(&s, "Neper Bank", "sam.rivera", "correct-horse-battery")
+    add_login(&s, "City Library", "sam.r", "Lib2024!")
+    add_login(&s, "Mail", "sam@example.com", "t7Kq-9mZp2Vx_4Rw")
+    add_login(&s, "Neper Cloud", "sam", "hunter22")
+    add_code(&s, "Neper Bank", "sam.rivera", "JBSWY3DPEHPK3PXP")
+    add_code(&s, "Mail", "sam@example.com", "GEZDGNBVGY3TQOJQ")
+    add_code(&s, "Neper Cloud", "sam", "MFRGGZDFMZTWQ2LK")
+    s.open = NONE
+    if !show(a, &kit, &s) {
+        ui.say("secure present failed\n")
+        ret ok
+    }
+    ui.say("secure shown\n")
+    var running = true
+    while running {
+        let tap = appkit.next_tap(&kit)
+        if tap.ended {
+            running = false
+        } else if tap.tick {
+            // On the codes tab the clock and the countdown follow the ticks, once a second.
+            if s.screen == LIST_SCREEN && s.tab == 1usize {
+                s.now = clock_now()
+                if s.now % 1usize == 0usize && tap.ms % 1000usize < 500usize {
+                    if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }
+                } else {
+                    appkit.answer(appkit.ANSWER_NONE)
+                }
+            } else {
+                appkit.answer(appkit.ANSWER_NONE)
+            }
+        } else if tap.y >= 896.0 {
+            ui.say("secure home\n")
+            appkit.leave()
+            running = false
+        } else {
+            let id = ui.hit_at(&s.hits, tap.x, tap.y)
+            if id != ui.NONE && act(a, &s, id) {
+                if !show(a, &kit, &s) {
+                    ui.say("secure present failed\n")
+                    appkit.answer(appkit.ANSWER_NONE)
+                }
+            } else {
+                appkit.answer(appkit.ANSWER_NONE)
+            }
+        }
+    }
+    ret ok
+}

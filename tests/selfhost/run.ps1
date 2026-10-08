@@ -9447,6 +9447,9 @@ if ($neperosQemu) {
     $translateImage = Join-Path $testBuild 'translate.img'
     $stepsAppImage = Join-Path $testBuild 'steps.img'
     $lunatrisAppImage = Join-Path $testBuild 'lunatris.img'
+    $secureAppImage = Join-Path $testBuild 'secure.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\secure.e') $repo aarch64 neperos $secureAppImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'secure did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\lunatris.e') $repo aarch64 neperos $lunatrisAppImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'lunatris did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\steps.e') $repo aarch64 neperos $stepsAppImage | Out-Null
@@ -9498,7 +9501,7 @@ if ($neperosQemu) {
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage $browserImage $mapsImage $compassImage $levelImage $flashlightImage $chatImage $meetImage $recorderImage $translateImage $stepsAppImage $lunatrisAppImage
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage $browserImage $mapsImage $compassImage $levelImage $flashlightImage $chatImage $meetImage $recorderImage $translateImage $stepsAppImage $lunatrisAppImage $secureAppImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
@@ -9591,6 +9594,9 @@ if ($neperosQemu) {
     # (D2234 Lunatris: move left, turn, move right, drop, leave)
     $lunatrisBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-lunatris.serial') 55163 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12248,18395;6044,22174;16384,22174;26722,22174;16384,24599;16384,32259' 2>&1) -join "`n"
     if ($lunatrisBoot -notmatch '(?s)lunatris shown.*lunatris move left.*lunatris rotate.*lunatris move right.*lunatris drop.*lunatris home') { throw "NeperOS lunatris did not pass its fixture: $lunatrisBoot" }
+    # (D2235 Secure: the RFC 6238 check, unlock with neper, the Codes tab, open Neper Bank and reveal the password, leave)
+    $secureBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-secure.serial') 55164 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;20440,18395;22030,24884;8828,20748;29982,20748;8828,20748;11850,20748;27757,26951;16384,3173;6044,3173;15906,5490;28790,6702;16384,32259' 2>&1) -join "`n"
+    if ($secureBoot -notmatch '(?s)secure totp check ok.*secure shown.*secure unlocked.*secure codes shown.*secure opened Neper Bank.*secure revealed.*secure home') { throw "NeperOS secure did not pass its fixture: $secureBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }

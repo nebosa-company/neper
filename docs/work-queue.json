@@ -279,6 +279,17 @@
       "evidence": "Queued (2026-10-08). The Lunatris app (D2234) plays a falling-blocks game on tap buttons with the piece falling on the 500 ms tick. Acceptance: (1) a finer timer (C133) so the fall can reach 20 rows a second at high levels, and auto-repeat on held buttons (the touch layer needs press and release events, not only taps); (2) a hold piece, a ghost piece showing where the piece will land, the standard wall kicks (a 7-bag is already used); (3) high scores and the last game kept in storage (C125), with a score board; (4) sound effects and music through e.audio; (5) swipe and tap gestures (drag the piece, swipe down to drop) once the touch layer carries drags; (6) the name: the game is called Lunatris for now; it must not be called Tetris, a registered trademark, so the final name is chosen by the user (Blocks is the neutral candidate) and changed in the icon label and the app title; (7) a fixture that plays a scripted sequence with a fixed seed and checks the score and the lines. Not queued here: multiplayer, other modes."
     },
     {
+      "id": "C140",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 140,
+      "title": "NeperOS Secure (C116's remainder): an encrypted store, the clipboard, autofill, biometrics",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Secure app (D2235) is the vault's face with real one-time passwords (RFC 6238, checked at start) on sample logins held in memory. Acceptance: (1) the store encrypted at rest: a key from the master password with PBKDF2 or Argon2 (e.crypto.kdf) and an AEAD (e.crypto.aead) per entry, kept in Files' protected directory (C125) with a version and an integrity tag, a wrong password taking constant time, auto-lock on timeout and when the app leaves; (2) add and edit entries for logins and codes, import and export (an encrypted file, and the common authenticator formats), the otpauth:// URI from a QR scan (L137, C122), the SHA-256 and SHA-512 and eight-digit variants of TOTP, and HOTP; (3) a clipboard service with a timed clear, and autofill of a login into the Browser (C129) and other apps through a capability; (4) fingerprint and face unlock (C126 settings) with the master password as the fallback; (5) a password generator with options and a breach check by hash prefix over C117; (6) Wallet's cards and Dynamic's API keys can be kept here; (7) a fixture on QEMU that creates a vault, restarts and checks the entries decrypt, and the RFC 4226 and RFC 6238 vectors. Not queued here: sharing a vault, passkeys."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",

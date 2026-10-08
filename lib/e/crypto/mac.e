@@ -56,6 +56,53 @@ fn hmac_sha256(key: []const u8, message: []const u8) -> [32]u8 {
     ret sha256_done(&s)
 }
 
+// HMAC-SHA-1 (RFC 2104 over the legacy SHA-1 digest), kept for what still identifies itself by it:
+// one-time passwords (RFC 4226 and RFC 6238) use it. The message is at most 128 bytes (a counter is 8);
+// a longer one gives all zeros.
+fn legacy_hmac_sha1(key: []const u8, message: []const u8) -> [20]u8 {
+    var out: [20]u8 = zero
+    if message.len > 128usize { ret out }
+    var block: [64]u8 = zero
+    if key.len > 64usize {
+        let digest = hash.legacy_sha1(key)
+        var at = 0usize
+        while at < 20usize {
+            block[at] = digest[at]
+            at += 1usize
+        }
+    } else {
+        var at = 0usize
+        while at < key.len {
+            block[at] = key[at]
+            at += 1usize
+        }
+    }
+    var inner: [192]u8 = zero
+    var i = 0usize
+    while i < 64usize {
+        inner[i] = block[i] ^ 54u8
+        i += 1usize
+    }
+    i = 0usize
+    while i < message.len {
+        inner[64usize + i] = message[i]
+        i += 1usize
+    }
+    let inner_digest = hash.legacy_sha1(inner[0usize..64usize + message.len])
+    var outer: [84]u8 = zero
+    i = 0usize
+    while i < 64usize {
+        outer[i] = block[i] ^ 92u8
+        i += 1usize
+    }
+    i = 0usize
+    while i < 20usize {
+        outer[64usize + i] = inner_digest[i]
+        i += 1usize
+    }
+    ret hash.legacy_sha1(outer[0usize..84usize])
+}
+
 fn verify_sha256(key: []const u8, message: []const u8, tag: [32]u8) -> bool {
     let computed = hmac_sha256(key, message)
     ret hash.equal_constant_time(computed[0..], tag[0..])
