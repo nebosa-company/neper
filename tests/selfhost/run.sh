@@ -9317,7 +9317,7 @@ greeting"
     recorder_img="$test_build/recorder.img"
     translate_img="$test_build/translate.img"
     steps_img="$test_build/steps.img"
-    lunatris_img="$test_build/lunatris.img"
+    blocks_img="$test_build/blocks.img"
     secure_img="$test_build/secure.img"
     ai_img="$test_build/ai.img"
     document_img="$test_build/document.img"
@@ -9326,7 +9326,7 @@ greeting"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/document.e" "$repo" aarch64 neperos "$document_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ai.e" "$repo" aarch64 neperos "$ai_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/secure.e" "$repo" aarch64 neperos "$secure_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/lunatris.e" "$repo" aarch64 neperos "$lunatris_img")" = 'executable written' ]
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/blocks.e" "$repo" aarch64 neperos "$blocks_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/steps.e" "$repo" aarch64 neperos "$steps_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/translate.e" "$repo" aarch64 neperos "$translate_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/recorder.e" "$repo" aarch64 neperos "$recorder_img")" = 'executable written' ]
@@ -9352,7 +9352,7 @@ greeting"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/clock.e" "$repo" aarch64 neperos "$clock_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/calc.e" "$repo" aarch64 neperos "$calc_img")" = 'executable written' ]
     crater_archive="$test_build/shell-crater-archive.img"
-    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "$calc_img" "$clock_img" "$tasks_img" "$messages_img" "$stocks_img" "$weather_img" "$ssh_img" "$wallet_img" "$camera_img" "$photos_img" "$files_img" "$settings_img" "$call_img" "$mail_img" "$browser_img" "$maps_img" "$compass_img" "$level_img" "$flashlight_img" "$chat_img" "$meet_img" "$recorder_img" "$translate_img" "$steps_img" "$lunatris_img" "$secure_img" "$ai_img" "$document_img" "$dynamic_img"
+    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "$calc_img" "$clock_img" "$tasks_img" "$messages_img" "$stocks_img" "$weather_img" "$ssh_img" "$wallet_img" "$camera_img" "$photos_img" "$files_img" "$settings_img" "$call_img" "$mail_img" "$browser_img" "$maps_img" "$compass_img" "$level_img" "$flashlight_img" "$chat_img" "$meet_img" "$recorder_img" "$translate_img" "$steps_img" "$blocks_img" "$secure_img" "$ai_img" "$document_img" "$dynamic_img"
     crater_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" keyboard "$test_build/shell-crater.serial" 55136 "compositor bigarena unified" 'shell app code 5' - 2 2>&1)
     case "$crater_boot" in
         *'shell wallpaper from fs'*) printf '%s
@@ -9518,10 +9518,10 @@ greeting"
         *'steps shown'*'steps walking on'*'steps walking off'*'steps total'*'steps goal 10000'*'steps home'*) ;;
         *) printf '%s\n' "NeperOS steps did not pass its fixture: $steps_boot" >&2; exit 1 ;;
     esac
-    lunatris_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-lunatris.serial" 55163 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12248,18395;6044,22174;16384,22174;26722,22174;16384,24599;16384,32259' 2>&1)
-    case "$lunatris_boot" in
-        *'lunatris shown'*'lunatris move left'*'lunatris rotate'*'lunatris move right'*'lunatris drop'*'lunatris home'*) ;;
-        *) printf '%s\n' "NeperOS lunatris did not pass its fixture: $lunatris_boot" >&2; exit 1 ;;
+    blocks_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-blocks.serial" 55163 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12248,18395;6044,22174;16384,22174;26722,22174;16384,24599;16384,32259' 2>&1)
+    case "$blocks_boot" in
+        *'blocks shown'*'blocks move left'*'blocks rotate'*'blocks move right'*'blocks drop'*'blocks home'*) ;;
+        *) printf '%s\n' "NeperOS blocks did not pass its fixture: $blocks_boot" >&2; exit 1 ;;
     esac
     secure_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-secure.serial" 55164 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;20440,18395;22030,24884;8828,20748;29982,20748;8828,20748;11850,20748;27757,26951;16384,3173;6044,3173;15906,5490;28790,6702;16384,32259' 2>&1)
     case "$secure_boot" in

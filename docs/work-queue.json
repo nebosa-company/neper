@@ -272,11 +272,11 @@
       "category": "compiler",
       "group": "NeperOS",
       "order": 139,
-      "title": "NeperOS Lunatris: held keys, hold, a ghost piece, high scores, sound, and the name",
+      "title": "NeperOS Blocks: held keys, hold, a ghost piece, high scores, sound",
       "score": 0,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Lunatris app (D2234) plays a falling-blocks game on tap buttons with the piece falling on the 500 ms tick. Acceptance: (1) a finer timer (C133) so the fall can reach 20 rows a second at high levels, and auto-repeat on held buttons (the touch layer needs press and release events, not only taps); (2) a hold piece, a ghost piece showing where the piece will land, the standard wall kicks (a 7-bag is already used); (3) high scores and the last game kept in storage (C125), with a score board; (4) sound effects and music through e.audio; (5) swipe and tap gestures (drag the piece, swipe down to drop) once the touch layer carries drags; (6) the name: the game is called Lunatris for now; it must not be called Tetris, a registered trademark, so the final name is chosen by the user (Blocks is the neutral candidate) and changed in the icon label and the app title; (7) a fixture that plays a scripted sequence with a fixed seed and checks the score and the lines. Not queued here: multiplayer, other modes."
+      "evidence": "Queued (2026-10-08). The Blocks app (D2234, called Lunatris until D2241) plays a falling-blocks game on tap buttons with the piece falling on the 500 ms tick. Acceptance: (1) a finer timer (C133) so the fall can reach 20 rows a second at high levels, and auto-repeat on held buttons (the touch layer needs press and release events, not only taps); (2) a hold piece, a ghost piece showing where the piece will land, the standard wall kicks (a 7-bag is already used); (3) high scores and the last game kept in storage (C125), with a score board; (4) sound effects and music through e.audio; (5) swipe and tap gestures (drag the piece, swipe down to drop) once the touch layer carries drags; (6) the name: the game is called Blocks (renamed from Lunatris by the user, D2241); it must not be called Tetris, a registered trademark; (7) a fixture that plays a scripted sequence with a fixed seed and checks the score and the lines. Not queued here: multiplayer, other modes."
     },
     {
       "id": "C140",

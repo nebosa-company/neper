@@ -1,4 +1,4 @@
-// Lunatris (D2234): the falling-blocks game behind the Lunatris icon -- a board of ten by twenty cells, seven
+// Blocks (D2234): the falling-blocks game behind the Blocks icon -- a board of ten by twenty cells, seven
 // kinds of piece in a shuffled bag, the next piece shown, a score, the lines cleared and a level. The
 // piece falls with the input server's ticks (one row each half second, more at higher levels); the buttons
 // move it left and right, turn it, drop it a row, or drop it all the way; Pause stops the fall and Restart
@@ -148,7 +148,7 @@ fn spawn(s: *State) {
     s.pieces += 1usize
     if !fits(s, s.piece, s.rot, s.px, s.py) {
         s.over = true
-        ui.say("lunatris game over\n")
+        ui.say("blocks game over\n")
     }
 }
 
@@ -218,7 +218,7 @@ fn lock(s: *State) {
         s.score += points * s.level
         s.lines += cleared
         s.level = 1usize + s.lines / 10usize
-        ui.say("lunatris lines ")
+        ui.say("blocks lines ")
         ui.say_num(s.lines)
         ui.say("\n")
     }
@@ -247,7 +247,7 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
     s.hits.total = 0usize
     let faces = kit.faces
     try ui.ground(builder, kit.frame, kit.logical_h, 0.07, 0.08, 0.10)
-    try ui.put(a, builder, faces.jost_bold, 26.0, "Lunatris", 20.0, 16.0, ui.light())
+    try ui.put(a, builder, faces.jost_bold, 26.0, "Blocks", 20.0, 16.0, ui.light())
     // The board.
     try ui.card(a, builder, 12.0, 84.0, 248.0, 488.0, 12.0, paint.Color { red: 0.13, green: 0.14, blue: 0.17, alpha: 1.0 })
     var r = 0usize
@@ -321,30 +321,30 @@ fn act(s: *State, id: usize) -> bool {
     if s.over {
         if id == 130usize || id == 106usize {
             restart(s)
-            ui.say("lunatris restart\n")
+            ui.say("blocks restart\n")
             ret true
         }
         ret false
     }
     if id == 106usize {
         restart(s)
-        ui.say("lunatris restart\n")
+        ui.say("blocks restart\n")
         ret true
     }
     if id == 105usize {
         s.paused = !s.paused
-        ui.say("lunatris pause\n")
+        ui.say("blocks pause\n")
         ret true
     }
     if s.paused { ret false }
     if id == 100usize {
         if fits(s, s.piece, s.rot, s.px - 1i32, s.py) { s.px -= 1i32 }
-        ui.say("lunatris move left\n")
+        ui.say("blocks move left\n")
         ret true
     }
     if id == 102usize {
         if fits(s, s.piece, s.rot, s.px + 1i32, s.py) { s.px += 1i32 }
-        ui.say("lunatris move right\n")
+        ui.say("blocks move right\n")
         ret true
     }
     if id == 101usize {
@@ -359,7 +359,7 @@ fn act(s: *State, id: usize) -> bool {
             s.rot = turned
             s.px += 1i32
         }
-        ui.say("lunatris rotate\n")
+        ui.say("blocks rotate\n")
         ret true
     }
     if id == 103usize {
@@ -373,31 +373,31 @@ fn act(s: *State, id: usize) -> bool {
             guard += 1usize
         }
         lock(s)
-        ui.say("lunatris drop\n")
+        ui.say("blocks drop\n")
         ret true
     }
     ret false
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let (kit_value, kit_error) = appkit.open(a, args, 1usize, "lunatris")
+    let (kit_value, kit_error) = appkit.open(a, args, 1usize, "blocks")
     if kit_error != ok {
-        ui.say("lunatris open failed\n")
+        ui.say("blocks open failed\n")
         ret ok
     }
     var kit = kit_value
     if !kit.has_fonts {
-        ui.say("lunatris fonts absent\n")
+        ui.say("blocks fonts absent\n")
         ret ok
     }
     var s: State = zero
     s.seed = 20261008usize
     restart(&s)
     if !show(a, &kit, &s) {
-        ui.say("lunatris present failed\n")
+        ui.say("blocks present failed\n")
         ret ok
     }
-    ui.say("lunatris shown\n")
+    ui.say("blocks shown\n")
     var running = true
     while running {
         let tap = appkit.next_tap(&kit)
@@ -417,14 +417,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 appkit.answer(appkit.ANSWER_NONE)
             }
         } else if tap.y >= 896.0 {
-            ui.say("lunatris home\n")
+            ui.say("blocks home\n")
             appkit.leave()
             running = false
         } else {
             let id = ui.hit_at(&s.hits, tap.x, tap.y)
             if id != ui.NONE && act(&s, id) {
                 if !show(a, &kit, &s) {
-                    ui.say("lunatris present failed\n")
+                    ui.say("blocks present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)
                 }
             } else {
