@@ -257,6 +257,17 @@
       "evidence": "Queued (2026-10-08). The Translate app (D2232) uses a sample book of eight phrases in six languages. Acceptance: (1) translation by an on-device model from the library (the ml modules) or a server over C117, with at least forty languages, auto-detect, and offline packs kept in Files (C125); (2) fonts and shaping for the scripts those languages need (Arabic, Devanagari, CJK, Cyrillic, Greek, Thai, Hebrew), added to the font set the apps load; (3) input by voice (Recorder's speech engine, C136), by camera (text recognition in e.gfx.vision on a Camera frame, C122) and by handwriting; (4) history and saved phrases, copy and share, speak the result (text to speech through e.audio); (5) conversation mode with two languages on the two halves of the screen; (6) a fixture on QEMU that translates a fixed sentence with a small test model and checks the output text. Not queued here: document translation, subtitles."
     },
     {
+      "id": "C138",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 138,
+      "title": "NeperOS Steps: the step sensor, history and goals in storage",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Steps app (D2233) counts sample steps (two a tick while Walk is on). Acceptance: (1) a step detector fed by the accelerometer through the sensor server (C131, C132) with a peak-and-threshold filter in the library and a run and walk classifier, counting in the background with a low-power rate; (2) the history of days, weeks and months kept in storage (C125), with the goal, streaks and a weekly report; (3) calories from the user's height and weight (a profile in Settings, C126) rather than the fixed 0.04 kcal per step; (4) a notification when the goal is reached through the status server and a widget on the home screen; (5) a fixture on QEMU that replays a recorded accelerometer walk and checks the count within two per cent. Not queued here: heart rate, workouts with GPS routes, sharing."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
