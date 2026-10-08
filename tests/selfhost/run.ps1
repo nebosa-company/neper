@@ -9443,6 +9443,9 @@ if ($neperosQemu) {
     $flashlightImage = Join-Path $testBuild 'flashlight.img'
     $chatImage = Join-Path $testBuild 'chat.img'
     $meetImage = Join-Path $testBuild 'meet.img'
+    $recorderImage = Join-Path $testBuild 'recorder.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\recorder.e') $repo aarch64 neperos $recorderImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'recorder did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\meet.e') $repo aarch64 neperos $meetImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'meet did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\chat.e') $repo aarch64 neperos $chatImage | Out-Null
@@ -9486,7 +9489,7 @@ if ($neperosQemu) {
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage $browserImage $mapsImage $compassImage $levelImage $flashlightImage $chatImage $meetImage
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage $browserImage $mapsImage $compassImage $levelImage $flashlightImage $chatImage $meetImage $recorderImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
@@ -9567,6 +9570,9 @@ if ($neperosQemu) {
     # (D2230 Meet: join Design review, mute the microphone, end, leave)
     $meetBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-meet.serial') 55159 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12248,14689;15906,8092;16384,25882;5567,28164;26404,28164;16384,32259' 2>&1) -join "`n"
     if ($meetBoot -notmatch '(?s)meet shown.*meet joining Design review.*meet joined.*meet mic off.*meet ended.*meet home') { throw "NeperOS meet did not pass its fixture: $meetBoot" }
+    # (D2231 Recorder: record for a few seconds, stop, open the new recording, play, leave)
+    $recorderBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-recorder.serial') 55160 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;20440,14689;16384,29590;16384,23886;15906,3993;16384,12121;16384,32259' 2>&1) -join "`n"
+    if ($recorderBoot -notmatch '(?s)recorder shown.*recorder recording.*recorder saved.*recorder open Recording.*recorder playing.*recorder home') { throw "NeperOS recorder did not pass its fixture: $recorderBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }

@@ -235,6 +235,17 @@
       "evidence": "Queued (2026-10-08). The Meet app (D2230) runs a demo meeting with made-up people. Acceptance: (1) signalling and media over C117: a WebRTC-style stack (ICE, DTLS-SRTP) or a simple SFU protocol, with the room codes and the calendar of upcoming meetings from the account service; (2) capture: the camera frames from the camera server (C122) and the microphone from e.audio, encoded and sent with a codec from the library (video and Opus-style audio), the received streams decoded into the tiles; (3) the grid and speaker layouts follow who speaks from the audio levels; (4) screen sharing from the compositor, raise hand, chat in the meeting (Chat, C134), captions; (5) echo cancellation, noise suppression and the bandwidth adaptation; (6) a fixture on QEMU with two clients in one machine against a local relay that exchanges test frames and checks them. Not queued here: recording, large webinars, breakout rooms."
     },
     {
+      "id": "C136",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 136,
+      "title": "NeperOS Recorder: real capture and playback, storage and transcription",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Recorder app (D2231) draws a sample wave and keeps recordings in the process. Acceptance: (1) capture from the microphone and playback to the speaker through e.audio (C122's server family), with the level meter driven by the real samples and the wave built from them; (2) recordings saved as files (Opus or WAV from the library) in Files (C125) with rename, share and delete, search by name; (3) a speech-to-text model run on the device or on a server (C117) for the transcript, with words timed to the playhead and tap-to-seek; (4) recording in the background with a notification and the lock-screen control; (5) a fixture on QEMU that records from a scripted audio source and plays it back checking the bytes. Not queued here: speaker labels, translation, noise removal."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
