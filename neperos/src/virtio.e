@@ -881,3 +881,40 @@ fn net_recv(net: *Net) -> (usize, usize, bool) {
     if total <= NET_HDR { ret (0usize, 0usize, false) }
     ret (net.rx_buf + id * NET_BUF + NET_HDR, total - NET_HDR, true)
 }
+
+// (D2246, C117) The entropy device opened for many fills: a server hands out bytes for as long as
+// it runs, so the ring and the buffer are made once and each fill reuses them (read_entropy above
+// makes a fresh queue every call and would exhaust the pool). The buffer is device-written; the
+// caller reads the bytes before the next fill overwrites them.
+type Entropy = struct { ring: Ring, buffer: usize, size: usize, seq: u16 }
+
+fn entropy_open(device: Device, size: usize) -> (Entropy, err) {
+    let negotiate_error = negotiate(device)
+    if negotiate_error != ok { ret (zero, negotiate_error) }
+    let (ring, ring_error) = setup_queue(device, 0u16)
+    if ring_error != ok { ret (zero, ring_error) }
+    let (buffer, buffer_error) = dma_region(size)
+    if buffer_error != ok { ret (zero, buffer_error) }
+    os.store64(ring.desc, u64(buffer))
+    os.store32(ring.desc + 8usize, u32(size))
+    os.store16(ring.desc + 12usize, DESC_WRITE)
+    os.store16(ring.desc + 14usize, 0u16)
+    status_add(device, STATUS_DRIVER_OK)
+    ret (Entropy { ring: ring, buffer: buffer, size: size, seq: 0u16 }, ok)
+}
+
+// Ask the device to fill the buffer once more; the count of bytes it wrote comes back (it may
+// write fewer than asked for).
+fn entropy_fill(e: *Entropy) -> (usize, err) {
+    let slot = usize(e.seq) % e.ring.size
+    os.store16(e.ring.avail + 4usize + 2usize * slot, 0u16)
+    os.barrier()
+    e.seq += 1u16
+    os.store16(e.ring.avail + 2usize, e.seq)
+    os.barrier()
+    os.store16(e.ring.notify, e.ring.index)
+    var spins = 0usize
+    while os.load16(e.ring.used + 2usize) != e.seq && spins < 200000000usize { spins += 1usize }
+    if os.load16(e.ring.used + 2usize) != e.seq { ret (0usize, NoData) }
+    ret (usize(os.load32(e.ring.used + 8usize + slot * 8usize)), ok)
+}

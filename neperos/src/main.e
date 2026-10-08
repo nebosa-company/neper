@@ -866,10 +866,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let net_mode = bootargs_error == ok && has_word(bootargs, "net")
     if net_mode {
         if pci_host_error != ok { ret NoInitrd }
+        if !parse_archive(image_addr) { ret BadArchive }
+        // Program 0 is the random server, holding virtio-rng and the request endpoint (slot 2, receive)
+        // and reply endpoint (slot 3, send); program 1 is the network stack, holding virtio-net and the
+        // other ends of the same two endpoints, so the only way it gets entropy is by asking.
+        last_server_index = thread.MAX_THREADS
+        let (rng_bar, rng_error) = start_driver_server(a, archive_base + archive_offset[0usize], archive_length[0usize], 1usize, pci_host, pci_host.mmio, pci.VIRTIO_ENTROPY, "rng")
+        if rng_error != ok { ret rng_error }
+        if last_server_index == thread.MAX_THREADS { ret NoInitrd }
+        thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 0usize)
+        thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 1usize)
         driver_pool_bytes = 1048576usize
-        let (net_bar, net_error) = start_driver_server(a, image_addr, image_len, 1usize, pci_host, pci_host.mmio, pci.VIRTIO_NET, "net")
+        driver_arena_bytes = 8388608usize
+        let (net_bar, net_error) = start_driver_server(a, archive_base + archive_offset[1usize], archive_length[1usize], 2usize, pci_host, rng_bar, pci.VIRTIO_NET, "net")
         if net_error != ok { ret net_error }
+        thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
+        thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 1usize)
         driver_pool_bytes = 131072usize
+        driver_arena_bytes = 0usize
     }
     // (D2160, C109) The input boot (`-append input`): the initrd is an archive of two programs. The
     // input server (program 0) alone holds the virtio-input device and the notification bound to its
