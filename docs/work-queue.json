@@ -169,6 +169,17 @@
       "evidence": "Queued (2026-10-08). The Browser app (D2224) shows sample pages that live in the app. Acceptance: (1) HTTP/1.1 and HTTP/2 over the C117 TLS client with redirects, cookies, a cache and the system proxy settings; (2) an HTML5 parser and a CSS layout engine (block, inline, flex, grid, the common properties) painting through e.gfx.scene, with e.text shaping, images (PNG, JPEG, SVG) and fonts; (3) forms, links, history, bookmarks, the address bar with search suggestions and a chosen search engine, tabs that survive a restart (C125 storage), incognito; (4) downloads into Files and opening files in their apps (C123); (5) a script engine is a separate item (JavaScript or Neper in the page); (6) permissions per site (camera, location) tied to Settings (C126); (7) a fixture on QEMU against a local web server that loads a page with an image and a form and follows a link. Not queued here: extensions, sync, WebRTC."
     },
     {
+      "id": "C130",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 130,
+      "title": "NeperOS Maps: real map data, location, search and navigation",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Maps app (D2225) draws a procedural sample city with six made-up places. Acceptance: (1) map data on the device: vector tiles (OpenStreetMap extracts) rendered through e.gfx.scene with labels, icons, zoom levels and rotation, offline regions kept in Files (C125), and drag and pinch (the touch layer needs both, not only taps); (2) a location service: GPS and network location on the Pixel, a simulated provider under QEMU, with permission tied to Settings (C126); (3) search by name and category with suggestions, place cards with hours and photos from the network (C117); (4) routing: walking, cycling, driving and transit over a road graph (the library has graph algorithms), with turn-by-turn instructions, rerouting and voice; (5) saved places, recent searches and a Home and Work shortcut, shared with Wallet and Weather; (6) a fixture on QEMU that loads a small offline region, finds a place and routes to it, checking the route length. Not queued here: street-level imagery, live traffic, indoor maps."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
