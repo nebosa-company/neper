@@ -1126,6 +1126,63 @@ fn hit_scatter(marks: *const Layout, row_ids: []const usize, pointer: Coord, rad
     ret (best, found, ok)
 }
 
+// Pick the rectangle mark (bar, card, tile, KPI) under a pointer. Edges count as
+// inside; overlaps go to the later rectangle, which is the one drawn on top.
+// Optional row IDs keep identity through compaction like hit_scatter, and
+// distance_squared is measured to the rectangle's centre.
+fn hit_rect(rects: []const geometry.Rect, row_ids: []const usize, pointer: Coord) -> (SelectionHit, bool, err) {
+    if (row_ids.len != 0usize && row_ids.len != rects.len) || !finite(pointer.x) || !finite(pointer.y) { ret (zero, false, Invalid) }
+    var found = false
+    var best: SelectionHit = zero
+    var i = 0usize
+    while i < rects.len {
+        let r = rects[i]
+        if !finite(r.x) || !finite(r.y) || !finite(r.width) || !finite(r.height) || r.width < 0.0 || r.height < 0.0 { ret (zero, false, Invalid) }
+        if pointer.x >= r.x && pointer.x <= r.x + r.width && pointer.y >= r.y && pointer.y <= r.y + r.height {
+            let dx = f64(pointer.x) - (f64(r.x) + f64(r.width) * 0.5f64)
+            let dy = f64(pointer.y) - (f64(r.y) + f64(r.height) * 0.5f64)
+            var source_row = i
+            if row_ids.len > 0usize { source_row = row_ids[i] }
+            best = SelectionHit { mark_index: i, source_row: source_row, distance_squared: dx * dx + dy * dy }
+            found = true
+        }
+        i += 1usize
+    }
+    ret (best, found, ok)
+}
+
+// The cross-filter/drill selection for a decomposition-tree node: mask[i] is
+// true for the node and every descendant (depth-first preorder, as in
+// aggregate_decomposition_tree), and the answer is how many leaves it covers so
+// the caller can show "n of m rows". The caller owns what the filter applies to.
+fn tree_subtree_mask(parents: []const usize, node: usize, mask: []bool) -> (usize, err) {
+    let n = parents.len
+    if n == 0usize { ret (0usize, Empty) }
+    if parents[0usize] != 0usize || node >= n { ret (0usize, Invalid) }
+    if mask.len < n { ret (0usize, TooLarge) }
+    var i = 0usize
+    while i < n {
+        if i > 0usize && parents[i] >= i { ret (0usize, Invalid) }
+        mask[i] = i == node || (i > 0usize && mask[parents[i]])
+        i += 1usize
+    }
+    var leaves = 0usize
+    i = 0usize
+    while i < n {
+        if mask[i] {
+            var child = false
+            var j = i + 1usize
+            while j < n {
+                if parents[j] == i { child = true }
+                j += 1usize
+            }
+            if !child { leaves += 1usize }
+        }
+        i += 1usize
+    }
+    ret (leaves, ok)
+}
+
 // A Box layout makes the same selected-point outline usable by scene and SVG.
 fn selected_point_outline(marks: *const Layout, mark_index: usize, padding: f32, storage: []geometry.Rect) -> (Layout, err) {
     if marks.kind != .Scatter || mark_index >= marks.coords.len || !finite(padding) || padding < 0.0 { ret (zero, Invalid) }

@@ -16404,6 +16404,8 @@ fn layered_layout(node_count: usize, from: []const u32, to: []const u32, bounds:
 fn masked_scatter(x: []const f32, y: []const f32, x_present: []const bool, y_present: []const bool, bounds: geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32, points: []Coord, row_ids: []usize) -> (MaskedScatterLayout, err)
 type SelectionHit = struct { mark_index: usize, source_row: usize, distance_squared: f64 }
 fn hit_scatter(marks: *const Layout, row_ids: []const usize, pointer: Coord, radius: f32) -> (SelectionHit, bool, err)
+fn hit_rect(rects: []const geometry.Rect, row_ids: []const usize, pointer: Coord) -> (SelectionHit, bool, err)
+fn tree_subtree_mask(parents: []const usize, node: usize, mask: []bool) -> (usize, err)
 fn selected_point_outline(marks: *const Layout, mark_index: usize, padding: f32, storage: []geometry.Rect) -> (Layout, err)
 fn cross_tab_report(row_ids: []const usize, column_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, work: *CrossTabStorage) -> (CrossTabLayout, err)
 fn matrix_report(row_ids: []const usize, column_ids: []const usize, values: []const f64, present: []const bool, group_ids: []const usize, rows: usize, columns: usize, bounds: geometry.Rect, header_width: f32, bar_scope: ReportBarScope, work: *MatrixReportStorage) -> (MatrixReportLayout, err)

@@ -1330,3 +1330,10 @@ should compare layout throughput, peak allocations, rendered pixels, export size
 and semantic accessibility against representative ggplot2/base/lattice/matplot
 fixtures before claiming superiority. Until those measurements exist, “beat” is a
 goal, not evidence.
+
+`hit_rect` resolves a pointer to the topmost bar, card, tile or KPI rectangle
+(edges inside, later rectangles win overlaps, optional row IDs) and
+`tree_subtree_mask` turns a decomposition-tree node into the drill filter: the
+node and its descendants masked, with the leaf count covered. Applications bind
+the resulting mask to their own tables and navigation; no dashboard framework is
+added. `gfx_chart_aggregate_tree` checks both on Windows and Linux.
