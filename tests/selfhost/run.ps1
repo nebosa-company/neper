@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# L075 the paginated-report compositions against a numpy replay
+$gfxChartReportReferencePath = Join-Path $testBuild 'gfx-chart-report-reference-selfhost.exe'
+$gfxChartReportReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_report_reference\src\main.e') $repo 'x64' 'windows' $gfxChartReportReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartReportReferenceWritten -ne 'executable written') { throw 'gfx_chart_report_reference emission failed' }
+$gfxChartReportReferenceOutput = & $gfxChartReportReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartReportReferenceOutput -ne 'gfx chart report reference ok') { throw "gfx_chart_report_reference answered wrongly: exit $LASTEXITCODE" }
 # L074 the state timeline against a Python replay
 $gfxChartStateTimelineReferencePath = Join-Path $testBuild 'gfx-chart-state-timeline-reference-selfhost.exe'
 $gfxChartStateTimelineReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_state_timeline_reference\src\main.e') $repo 'x64' 'windows' $gfxChartStateTimelineReferencePath
