@@ -11,7 +11,7 @@ use virtio
 use e.gfx.geometry
 use e.gfx.paint
 
-const AUX: usize = 548682334144usize
+const AUX: usize = 548684165120usize
 const TILE: usize = 96usize
 
 fn say(text: str) {

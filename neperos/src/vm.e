@@ -55,15 +55,19 @@ const ATTR_DEVICE: usize = 1usize << 2usize
 const USER_EXECUTE_NEVER: usize = 1usize << 54usize
 const GIGABYTE: usize = 1073741824usize
 const BLOCK_2MB: usize = 2097152usize
-// A driver thread's device and DMA addresses: the kernel leaves them in a small area just below
-// the arena, which the program reads at USER_BASE + AUX_OFF (D2137).
-const AUX_OFF: usize = 262080usize
+// A driver thread's device and DMA addresses: the kernel leaves them in a page of their own, the
+// last of the first level-3 table's 2 MB, which the program reads at USER_BASE + AUX_OFF (D2137).
+// It was a fixed 64 bytes at 256 KB, "just below the arena", until the arena began to sit after the
+// image (D2168): from then on any image over 256 KB had those 64 bytes written over its own bytes
+// (the 462 KB network server lost them out of its code or data, silently; D2248).
+const AUX_OFF: usize = 2093056usize
 
 type Space = struct {
     ttbr: usize,
     entry: usize,
     stack_top: usize,
     region_phys: usize,
+    aux_phys: usize,
     arena_addr: usize,
     arena_size: usize,
     arg_off: usize,
@@ -102,7 +106,7 @@ fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (S
     let arg_off = arena_off + ARENA_SIZE
     let window = arg_off + ARG_SIZE + STACK_SIZE
     let pages = window / PAGE
-    if pages > L3_PAGES { ret (zero, NoSpace) }
+    if pages > L3_PAGES - 1usize { ret (zero, NoSpace) }
     let (region, region_error) = mem.alloc[u8](a, window + PAGE)
     if region_error != ok { ret (zero, region_error) }
     let region_phys = (mem.address_of(&region[0usize]) + PAGE - 1usize) & ~(PAGE - 1usize)
@@ -126,6 +130,10 @@ fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (S
         os.store64(l3 + page_at * 8usize, u64((region_phys + page_at * PAGE) | bits))
         page_at += 1usize
     }
+    // The aux page, mapped last in the table so no window can reach it (the check above keeps one entry free).
+    let (aux, aux_error) = page_of(a)
+    if aux_error != ok { ret (zero, aux_error) }
+    os.store64(l3 + (L3_PAGES - 1usize) * 8usize, u64(aux | bits))
     var copied = 0usize
     while copied < image_len {
         os.store8(region_phys + copied, os.load8(image_addr + copied))
@@ -136,6 +144,7 @@ fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (S
         entry: USER_BASE,
         stack_top: USER_BASE + window,
         region_phys: region_phys,
+        aux_phys: aux,
         arena_addr: USER_BASE + arena_off,
         arena_size: ARENA_SIZE,
         arg_off: arg_off,
@@ -261,7 +270,7 @@ fn map_range_el0(a: *mem.Arena, ttbr: usize, pa: usize, len: usize, device: bool
 // A word the kernel leaves for a driver thread at `slot` of its aux area, read at
 // USER_BASE + AUX_OFF + slot*8 (D2137): a device or DMA address the kernel mapped for it.
 fn put_aux(space: Space, slot: usize, value: usize) {
-    os.store64(space.region_phys + AUX_OFF + slot * 8usize, u64(value))
+    os.store64(space.aux_phys + slot * 8usize, u64(value))
 }
 
 // (D2162, C110; resized D2201) A shared surface frame: the whole screen, mapped to the SAME physical

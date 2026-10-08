@@ -6,7 +6,7 @@ use e.mem
 use e.os
 use virtio
 
-const AUX: usize = 548682334144usize
+const AUX: usize = 548684165120usize
 const REQ: usize = 2usize
 const REP: usize = 3usize
 const NO_SLOT: usize = 99usize

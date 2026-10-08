@@ -9,7 +9,7 @@ use virtio
 use fs
 
 // The aux area the kernel fills for a driver server (D2138), at USER_BASE + vm.AUX_OFF.
-const AUX: usize = 548682334144usize
+const AUX: usize = 548684165120usize
 
 fn say(text: str) {
     let (written, write_error) = os.write(os.stdout(), text)

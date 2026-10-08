@@ -7,7 +7,7 @@ use e.mem
 use e.os
 use virtio
 
-const AUX: usize = 548682334144usize
+const AUX: usize = 548684165120usize
 // The shared surface frame (vm.SHARED_FRAME_VA): the whole screen, a 1280x2856 BGRA surface the app and
 // the compositor both map (vm.SHARED_FRAME_W and _H; keep equal).
 const SHARED: usize = 548684169216usize

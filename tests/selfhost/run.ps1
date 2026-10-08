@@ -9254,6 +9254,21 @@ if ($neperosQemu) {
     foreach ($efsLeak in @('fs write_file failed', 'fs read_file failed')) {
         if ($efsBoot -match [regex]::Escape($efsLeak)) { throw "NeperOS e.fs failed (${efsLeak}): $efsBoot" }
     }
+    # (D2248) A driver server's aux page must not alias its image: aux_test, padded with 0xA5 to 300,000 bytes
+    # (past the old 262,080-byte aux location), checks that the padding there is untouched and the page filled.
+    $auxTest = Join-Path $testBuild 'aux_test.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\aux_test.e') $repo aarch64 neperos $auxTest | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS aux test did not build' }
+    $auxBytes = [byte[]]::new(300000)
+    for ($auxAt = 0; $auxAt -lt $auxBytes.Length; $auxAt++) { $auxBytes[$auxAt] = 165 }
+    $auxImage = [IO.File]::ReadAllBytes($auxTest)
+    [Array]::Copy($auxImage, $auxBytes, $auxImage.Length)
+    [IO.File]::WriteAllBytes($auxTest, $auxBytes)
+    $auxDisk = Join-Path $testBuild 'aux-disk.img'
+    $auxStream = [IO.File]::Create($auxDisk); $auxStream.SetLength(1MB); $auxStream.Close()
+    $auxBlk = @('-drive', "file=$auxDisk,format=raw,if=none,id=blk0", '-device', 'virtio-blk-pci,disable-legacy=on,drive=blk0')
+    $auxBoot = Invoke-NeperOS $neperosImage (@('-initrd', $auxTest, '-append', 'fswrite') + $auxBlk)
+    if ($auxBoot -notmatch 'aux test: image intact, aux page filled') { throw "NeperOS aux page aliased the program image: $auxBoot" }
     # (D2244-D2247, C117) The network on QEMU user-mode networking: the random server (virtio-rng), the
     # network server (virtio-net: ARP, DHCP, DNS, TCP, TLS 1.3 with the chain and name checked) and an app
     # holding only the two socket endpoints. The host side (a DNS responder, HTTP and HTTPS servers) is

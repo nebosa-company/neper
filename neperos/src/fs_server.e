@@ -12,7 +12,7 @@ use fs
 use fsproto
 
 // The aux area the kernel fills for a driver server, at USER_BASE + vm.AUX_OFF (D2138).
-const AUX: usize = 548682334144usize
+const AUX: usize = 548684165120usize
 // The endpoint capability slots the kernel grants this server: requests arrive on 2, replies go on
 // 3 (slots 0 and 1 are the console and the device notification from start_driver_server).
 const REQ: usize = 2usize

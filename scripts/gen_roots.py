@@ -4,8 +4,9 @@
 
 The Mozilla roots (certifi's cacert.pem) as concatenated DER certificates -- the form the TLS client
 takes -- shipped as an initrd archive entry the kernel maps into the network server as an argument.
-(It was embedded in the program as a hex string first, but the compiler's literal pool holds about
-96 KB and silently zero-fills past it, so a 260 KB literal decoded as garbage after its first 93 KB.)
+(It was embedded in the program as a hex string first, but the kernel then wrote a driver server's
+aux area over the image bytes at 256 KB, D2248, and a 260 KB literal decoded as garbage after its first
+93 KB. The aux area has a page of its own now; an archive entry is still the better home for 130 KB of data.)
 Of the Mozilla roots only those the client can verify with are kept: an RSA key or a P-256 key, since
 e.crypto.sign has no P-384, P-521 or SHA-384/512 verifier and a root it cannot use only costs parse
 time on every handshake.

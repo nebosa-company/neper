@@ -9109,6 +9109,18 @@ greeting"
         *) printf '%s\n' "NeperOS e.fs did not read back what it wrote through the server: $neperos_efs" >&2; exit 1 ;;
     esac
     case "$neperos_efs" in *'fs write_file failed'*|*'fs read_file failed'*) printf '%s\n' "NeperOS e.fs failed: $neperos_efs" >&2; exit 1 ;; esac
+    # (D2248) A driver server's aux page must not alias its image: aux_test, padded with 0xA5 to 300,000 bytes
+    # (past the old 262,080-byte aux location), checks that the padding there is untouched and the page filled.
+    aux_test_img="$test_build/aux_test.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/aux_test.e" "$repo" aarch64 neperos "$aux_test_img")" = 'executable written' ]
+    python3 -c "import sys; d = open(sys.argv[1], 'rb').read(); open(sys.argv[1], 'wb').write(d + bytes([165]) * (300000 - len(d)))" "$aux_test_img"
+    aux_disk="$test_build/aux-disk.img"
+    dd if=/dev/zero of="$aux_disk" bs=1M count=1 status=none
+    neperos_aux=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$aux_test_img" -append fswrite -drive "file=$aux_disk,format=raw,if=none,id=blk0" -device virtio-blk-pci,disable-legacy=on,drive=blk0 < /dev/null 2>&1 | tr -d '\r')
+    case "$neperos_aux" in
+        *'aux test: image intact, aux page filled'*) ;;
+        *) printf '%s\n' "NeperOS aux page aliased the program image: $neperos_aux" >&2; exit 1 ;;
+    esac
     # (D2244-D2247, C117) The network on QEMU user-mode networking: the random server (virtio-rng), the
     # network server (virtio-net: ARP, DHCP, DNS, TCP, TLS 1.3 with the chain and name checked) and an app
     # holding only the two socket endpoints. The host side (a DNS responder, HTTP and HTTPS servers) is

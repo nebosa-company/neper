@@ -10,7 +10,7 @@ use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 
-const AUX: usize = 548682334144usize
+const AUX: usize = 548684165120usize
 const SIDE: u32 = 128u32
 
 fn say(text: str) {

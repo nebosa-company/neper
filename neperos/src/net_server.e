@@ -15,7 +15,7 @@ use tcp
 use https
 use netproto
 
-const AUX: usize = 548682334144usize
+const AUX: usize = 548684165120usize
 const REQ: usize = 2usize
 const REP: usize = 3usize
 const RNG_REQ: usize = 4usize

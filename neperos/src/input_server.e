@@ -10,7 +10,7 @@ use e.os
 use e.time
 use virtio
 
-const AUX: usize = 548682334144usize
+const AUX: usize = 548684165120usize
 const CLIENT: usize = 2usize
 const NOTIFY: usize = 1usize
 const NO_SLOT: usize = 99usize
