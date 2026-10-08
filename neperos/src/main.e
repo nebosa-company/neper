@@ -860,6 +860,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if gpu_error != ok { ret gpu_error }
         driver_arena_bytes = 0usize
     }
+    // (D2244, C117) The network boot (`-append net`): the initrd is the network stack under test,
+    // started as the sole holder of the virtio-net device with a 1 MB pool for its rings and
+    // buffers. QEMU runs it on user-mode networking (-nic user).
+    let net_mode = bootargs_error == ok && has_word(bootargs, "net")
+    if net_mode {
+        if pci_host_error != ok { ret NoInitrd }
+        driver_pool_bytes = 1048576usize
+        let (net_bar, net_error) = start_driver_server(a, image_addr, image_len, 1usize, pci_host, pci_host.mmio, pci.VIRTIO_NET, "net")
+        if net_error != ok { ret net_error }
+        driver_pool_bytes = 131072usize
+    }
     // (D2160, C109) The input boot (`-append input`): the initrd is an archive of two programs. The
     // input server (program 0) alone holds the virtio-input device and the notification bound to its
     // interrupt, and pushes each event to the client over endpoint 0 (send, slot 2). The client
@@ -1011,7 +1022,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         thread.grant(status_client, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
         thread.grant(status_client, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 1usize)
     }
-    if !shell_mode && !fs_mode && !fsserver_mode && !gpu_mode && !input_mode && !compositor_mode && !status_mode {
+    if !shell_mode && !fs_mode && !fsserver_mode && !gpu_mode && !net_mode && !input_mode && !compositor_mode && !status_mode {
     // A and B interleave under the timer, and X is handed a reference to kernel RAM --
     // mapped into its space without EL0 access -- so its read faults and it alone is killed.
     // The RAM base is as good a kernel address as any. S and R rendezvous over endpoint 0

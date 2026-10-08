@@ -31,10 +31,10 @@
       "group": "NeperOS",
       "order": 117,
       "title": "NeperOS networking: a virtio-net driver, TCP/IP, DNS and TLS for the apps",
-      "score": 0,
+      "score": 0.4,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Queued by the user (2026-10-08). NeperOS runs with `-nic none` and has no network, so every app that needs the internet is blocked: Stocks live data (C118), Weather, the AI chat app, Mail, Browser. Acceptance: (1) a virtio-net driver server on the QEMU virt machine (user-mode networking), (2) IPv4 with ARP, DHCP, ICMP echo, UDP and TCP, (3) a DNS resolver, (4) TLS 1.3 client with certificate validation against a bundled root set (e.crypto has the primitives), (5) a socket-like capability for apps (connect, send, receive, close) under the capability model, (6) a fixture on QEMU that resolves a name and fetches an HTTPS page from the host through user-mode networking. Not queued here: IPv6, a server side, Wi-Fi or cellular drivers."
+      "evidence": "Queued by the user (2026-10-08). NeperOS runs with `-nic none` and has no network, so every app that needs the internet is blocked: Stocks live data (C118), Weather, the AI chat app, Mail, Browser. Acceptance: (1) a virtio-net driver server on the QEMU virt machine (user-mode networking), (2) IPv4 with ARP, DHCP, ICMP echo, UDP and TCP, (3) a DNS resolver, (4) TLS 1.3 client with certificate validation against a bundled root set (e.crypto has the primitives), (5) a socket-like capability for apps (connect, send, receive, close) under the capability model, (6) a fixture on QEMU that resolves a name and fetches an HTTPS page from the host through user-mode networking. Not queued here: IPv6, a server side, Wi-Fi or cellular drivers. DONE: (1) virtio-net driver (D2244); (2) ARP, DHCP, ICMP echo, UDP in inet.e and a stop-and-wait TCP client in tcp.e (D2244, D2245); (3) DNS A-record resolver; measured under `-append net` on QEMU user-mode networking: lease, ping of the gateway, a name resolved, an HTTP GET answered from the host. NOT DONE: (4) TLS 1.3 with certificate validation, (5) the socket capability for apps, (6) the HTTPS fixture."
     },
     {
       "id": "C118",

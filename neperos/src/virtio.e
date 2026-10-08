@@ -782,3 +782,102 @@ fn input_next(input: *Input) -> (u16, u16, u32, bool) {
     os.store16(input.ring.notify, input.ring.index)
     ret (etype, ecode, evalue, true)
 }
+
+// (D2244, C117) virtio-net (virtio 1.x 5.1): queue 0 receives and queue 1 transmits. Every frame
+// travels behind a 12-byte header (VERSION_1 fixes its size), all zero because no offload is
+// negotiated -- only VERSION_1 and MAC -- so the stack computes every checksum itself and receives
+// frames with theirs complete. Sixteen 2 KB receive buffers sit on the ring, each handed back to
+// the device once the caller has read its frame; one 2 KB transmit buffer is reused, a send
+// completing before the next. The MAC lives at the start of the device configuration.
+const NET_RX: u16 = 0u16
+const NET_TX: u16 = 1u16
+const NET_HDR: usize = 12usize
+const NET_BUF: usize = 2048usize
+const NET_RX_BUFFERS: usize = 16usize
+const NET_F_MAC: u32 = 32u32
+
+type Net = struct { rx: Ring, tx: Ring, rx_buf: usize, tx_buf: usize, mac: u64, seen: u16, posted: u16, sent: u16, held: usize }
+
+// Negotiate VERSION_1 and MAC, build both queues, post every receive buffer and start the device.
+// The transmit buffer's frame area starts at `tx_buf + NET_HDR`; the caller fills it, then net_send.
+fn net_open(device: Device) -> (Net, err) {
+    os.store8(device.common + DEVICE_STATUS, 0u8)
+    status_add(device, STATUS_ACKNOWLEDGE)
+    status_add(device, STATUS_DRIVER)
+    os.store32(device.common + DRIVER_FEATURE_SELECT, 1u32)
+    os.store32(device.common + DRIVER_FEATURE, 1u32)
+    os.store32(device.common + DRIVER_FEATURE_SELECT, 0u32)
+    os.store32(device.common + DRIVER_FEATURE, NET_F_MAC)
+    status_add(device, STATUS_FEATURES_OK)
+    if (os.load8(device.common + DEVICE_STATUS) & STATUS_FEATURES_OK) == 0u8 { ret (zero, FeaturesRejected) }
+    let (rx, rx_error) = setup_queue(device, NET_RX)
+    if rx_error != ok { ret (zero, rx_error) }
+    let (tx, tx_error) = setup_queue(device, NET_TX)
+    if tx_error != ok { ret (zero, tx_error) }
+    let (rx_buf, rx_buf_error) = dma_region(NET_RX_BUFFERS * NET_BUF)
+    if rx_buf_error != ok { ret (zero, rx_buf_error) }
+    let (tx_buf, tx_buf_error) = dma_region(NET_BUF)
+    if tx_buf_error != ok { ret (zero, tx_buf_error) }
+    var i = 0usize
+    while i < NET_RX_BUFFERS {
+        os.store64(rx.desc + 16usize * i, u64(rx_buf + i * NET_BUF))
+        os.store32(rx.desc + 16usize * i + 8usize, u32(NET_BUF))
+        os.store16(rx.desc + 16usize * i + 12usize, DESC_WRITE)
+        os.store16(rx.avail + 4usize + 2usize * i, u16(i))
+        i += 1usize
+    }
+    os.store64(tx.desc, u64(tx_buf))
+    os.barrier()
+    os.store16(rx.avail + 2usize, u16(NET_RX_BUFFERS))
+    status_add(device, STATUS_DRIVER_OK)
+    os.barrier()
+    os.store16(rx.notify, rx.index)
+    var mac = 0u64
+    i = 0usize
+    while i < 6usize {
+        mac = (mac << 8u64) | u64(os.load8(device.config + i))
+        i += 1usize
+    }
+    ret (Net { rx: rx, tx: tx, rx_buf: rx_buf, tx_buf: tx_buf, mac: mac, seen: 0u16, posted: u16(NET_RX_BUFFERS), sent: 0u16, held: 0usize }, ok)
+}
+
+// Send the `len`-byte frame already placed at `net.tx_buf + NET_HDR`; returns when the device has
+// taken it.
+fn net_send(net: *Net, len: usize) -> err {
+    os.store32(net.tx.desc + 8usize, u32(NET_HDR + len))
+    os.store16(net.tx.desc + 12usize, 0u16)
+    let slot = usize(net.sent) % net.tx.size
+    os.store16(net.tx.avail + 4usize + 2usize * slot, 0u16)
+    os.barrier()
+    net.sent += 1u16
+    os.store16(net.tx.avail + 2usize, net.sent)
+    os.barrier()
+    os.store16(net.tx.notify, net.tx.index)
+    var spins = 0usize
+    while os.load16(net.tx.used + 2usize) != net.sent && spins < 200000000usize { spins += 1usize }
+    if os.load16(net.tx.used + 2usize) != net.sent { ret NoData }
+    ret ok
+}
+
+// The next received frame, if any: (address, length, true), or (0, 0, false) when none is waiting.
+// The address stays valid until the next net_recv, which first hands the previous buffer back.
+fn net_recv(net: *Net) -> (usize, usize, bool) {
+    if net.held != NET_RX_BUFFERS {
+        let slot = usize(net.posted) % net.rx.size
+        os.store16(net.rx.avail + 4usize + 2usize * slot, u16(net.held))
+        net.posted += 1u16
+        os.barrier()
+        os.store16(net.rx.avail + 2usize, net.posted)
+        os.barrier()
+        os.store16(net.rx.notify, net.rx.index)
+        net.held = NET_RX_BUFFERS
+    }
+    if os.load16(net.rx.used + 2usize) == net.seen { ret (0usize, 0usize, false) }
+    let j = usize(net.seen) % net.rx.size
+    let id = usize(os.load32(net.rx.used + 4usize + j * 8usize))
+    let total = usize(os.load32(net.rx.used + 8usize + j * 8usize))
+    net.seen += 1u16
+    net.held = id
+    if total <= NET_HDR { ret (0usize, 0usize, false) }
+    ret (net.rx_buf + id * NET_BUF + NET_HDR, total - NET_HDR, true)
+}
