@@ -32,7 +32,7 @@ const ABS_Y: usize = 1usize
 const ANSWER_NONE: usize = 0usize
 const ANSWER_LATER: usize = 4usize
 
-type Kit = struct { device: *gpu.Device, win: window.Window, drawable: scene.Target, renderer: scene.Renderer, faces: text.Faces, has_fonts: bool, scale: f32, logical_h: f32, previous: scene.SceneId, has_previous: bool, x: usize, y: usize, frame: usize }
+type Kit = struct { device: *gpu.Device, win: window.Window, drawable: scene.Target, renderer: scene.Renderer, faces: text.Faces, has_fonts: bool, scale: f32, logical_h: f32, previous: scene.SceneId, has_previous: bool, x: usize, y: usize, frame: usize, frame_mark: usize }
 
 // A tap, in dp, or the end of the event stream.
 // A tick (type 0xF1, every 500 ms when the input server has ticks on) carries the monotonic
@@ -50,17 +50,33 @@ fn open(a: *mem.Arena, args: []str, first_font: usize, title: str) -> (Kit, err)
     if drawable_error != ok { ret (kit, gpu.Unsupported) }
     let (q, q_error) = gpu.queue(device)
     if q_error != ok { ret (kit, q_error) }
-    let (renderer_value, renderer_error) = scene.renderer(a, device, q, 3u32, 1u32)
+    // (D2242) The renderer keeps its own arena for what it allocates and holds on to (its scenes, its glyph
+    // cache), apart from the program arena, so that arena can be given back at the start of every frame.
+    let (render_store, render_store_error) = mem.alloc[u8](a, 134217728usize)
+    if render_store_error != ok { ret (kit, render_store_error) }
+    let (render_box, render_box_error) = mem.alloc[mem.Arena](a, 1usize)
+    if render_box_error != ok { ret (kit, render_box_error) }
+    render_box[0usize] = mem.arena_from(render_store)
+    let (renderer_value, renderer_error) = scene.renderer(&render_box[0usize], device, q, 3u32, 1u32)
     if renderer_error != ok { ret (kit, renderer_error) }
     var renderer = renderer_value
     let (faces, has_fonts) = text.load_faces(&renderer, args, first_font)
     let scale = f32(os.SURFACE_W) / 412.0
-    kit = Kit { device: device, win: w, drawable: drawable, renderer: renderer, faces: faces, has_fonts: has_fonts, scale: scale, logical_h: f32(os.SURFACE_H) / scale, previous: zero, has_previous: false, x: 0usize, y: 0usize, frame: 0usize }
+    kit = Kit { device: device, win: w, drawable: drawable, renderer: renderer, faces: faces, has_fonts: has_fonts, scale: scale, logical_h: f32(os.SURFACE_H) / scale, previous: zero, has_previous: false, x: 0usize, y: 0usize, frame: 0usize, frame_mark: 0usize }
+    // (D2242) Whatever an app allocates after this point is for one frame: `begin` gives it back.
+    kit.frame_mark = mem.mark(a)
     ret (kit, ok)
 }
 
 // A builder whose scene is laid out in dp: a Save and the dp-to-pixel scale come first.
 fn begin(a: *mem.Arena, kit: *Kit) -> (scene.Builder, err) {
+    // The scene drawn before is released first, so nothing refers to the memory that is given back; then the
+    // arena returns to where it stood when the app opened (D2242), so a frame costs nothing for the next.
+    if kit.has_previous {
+        let released = scene.release_scene(&kit.renderer, kit.previous)
+        kit.has_previous = false
+    }
+    mem.reset(a, kit.frame_mark)
     let (builder_value, builder_error) = scene.builder(a, 4096usize)
     if builder_error != ok { ret (zero, builder_error) }
     var builder = builder_value

@@ -9488,7 +9488,7 @@ greeting"
         *'level shown'*'level mode Angle'*'level hold on'*'level calibrate'*'level home'*) ;;
         *) printf '%s\n' "NeperOS level did not pass its fixture: $level_boot" >&2; exit 1 ;;
     esac
-    flashlight_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-flashlight.serial" 55157 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;4096,29518;16384,1569;24175,4421;16384,10267;16384,10267;26722,1569;7317,22816;26959,20748;7317,22816;8669,6880;16384,14973;16384,14973;16384,32259' 2>&1)
+    flashlight_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-flashlight.serial" 55157 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;4096,29518;16384,1569;24175,4421;16384,10267;16384,10267;26722,1569;7317,22816;26959,20748;7317,22816;8669,6880;16384,14973;16384,14973;16384,14973;16384,14973;16384,32259' 2>&1)
     case "$flashlight_boot" in
         *'flashlight shown'*'flashlight pattern SOS'*'flashlight stopped'*'flashlight morse sos 27'*'flashlight morse done'*'flashlight home'*) ;;
         *) printf '%s\n' "NeperOS flashlight did not pass its fixture: $flashlight_boot" >&2; exit 1 ;;
