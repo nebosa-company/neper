@@ -2,7 +2,7 @@
 
 Neper builds renderer-neutral chart layouts from borrowed data and caller-owned output storage. The same marks feed its CPU scene/PNG and SVG adapters. This guide collects the produced charts, their preview notes, and the charting-engine design and catalogue. Readiness scores remain in [progress.html](progress.html).
 
-## Rendered previews (246/246)
+## Rendered previews (249/249)
 
 The total includes rendered PNG/SVG pairs and the [planned gallery targets](chart-preview-backlog.txt).
 
@@ -161,6 +161,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Org Chart | ![Org Chart](chart-previews/org_chart.png) | [SVG](chart-previews/org_chart.svg) |
 | P Control | ![P Control](chart-previews/p_control.png) | [SVG](chart-previews/p_control.svg) |
 | Parallel Coordinates | ![Parallel Coordinates](chart-previews/parallel_coordinates.png) | [SVG](chart-previews/parallel_coordinates.svg) |
+| Parallel Line Assay | ![Parallel Line Assay](chart-previews/parallel_line_assay.png) | [SVG](chart-previews/parallel_line_assay.svg) |
 | Pareto | ![Pareto](chart-previews/pareto.png) | [SVG](chart-previews/pareto.svg) |
 | Partial Auc | ![Partial Auc](chart-previews/partial_auc.png) | [SVG](chart-previews/partial_auc.svg) |
 | Pdf Export | ![Pdf Export](chart-previews/pdf_export.png) | [SVG](chart-previews/pdf_export.svg) |
@@ -212,6 +213,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Scatter | ![Scatter](chart-previews/scatter.png) | [SVG](chart-previews/scatter.svg) |
 | Scatter3D | ![Scatter3D](chart-previews/scatter3d.png) | [SVG](chart-previews/scatter3d.svg) |
 | Scatterplot Matrix | ![Scatterplot Matrix](chart-previews/scatterplot_matrix.png) | [SVG](chart-previews/scatterplot_matrix.svg) |
+| Schild Plot | ![Schild Plot](chart-previews/schild_plot.png) | [SVG](chart-previews/schild_plot.svg) |
 | Seasonal Subseries | ![Seasonal Subseries](chart-previews/seasonal_subseries.png) | [SVG](chart-previews/seasonal_subseries.svg) |
 | Sequence Diagram | ![Sequence Diagram](chart-previews/sequence_diagram.png) | [SVG](chart-previews/sequence_diagram.svg) |
 | Shared Guide Facets | ![Shared Guide Facets](chart-previews/shared_guide_facets.png) | [SVG](chart-previews/shared_guide_facets.svg) |
@@ -223,6 +225,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Spine Plot | ![Spine Plot](chart-previews/spine_plot.png) | [SVG](chart-previews/spine_plot.svg) |
 | Stacked 100 | ![Stacked 100](chart-previews/stacked_100.png) | [SVG](chart-previews/stacked_100.svg) |
 | Stacked Bar | ![Stacked Bar](chart-previews/stacked_bar.png) | [SVG](chart-previews/stacked_bar.svg) |
+| Standard Curve | ![Standard Curve](chart-previews/standard_curve.png) | [SVG](chart-previews/standard_curve.svg) |
 | State Machine | ![State Machine](chart-previews/state_machine.png) | [SVG](chart-previews/state_machine.svg) |
 | State Timeline | ![State Timeline](chart-previews/state_timeline.png) | [SVG](chart-previews/state_timeline.svg) |
 | Status History | ![Status History](chart-previews/status_history.png) | [SVG](chart-previews/status_history.svg) |
@@ -1891,3 +1894,10 @@ ones inside the dose and signal domain and draws the guide segments on the
 Michaelis-Menten fitting stay with L015. `gfx_chart_bioassay_reference` checks all three
 against numpy and scipy on Windows and Linux; the gallery adds `parallel_line_assay`,
 `schild_plot` and `standard_curve`.
+
+`gfx_chart_roc_reference` checks the ROC extensions against scikit-learn and numpy on one
+seeded 60-sample classifier with tied scores: every `binary_curve` point against
+`roc_curve(drop_intermediate=False)`, AUC and average precision, raw partial AUC (and
+its McClish standardisation against `roc_auc_score(max_fpr=...)`), the Youden point,
+net-benefit decision curves, the four `binary_metric_curve` geometries, and the
+`roc_partial_region` polygon, whose area is the raw partial AUC times the box area.

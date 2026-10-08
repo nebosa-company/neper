@@ -378,17 +378,6 @@
       "evidence": "Queued by D2148. Acceptance: Tasks (lists, due dates, done state) persisted in the filesystem; Settings (wallpaper, 12/24-hour clock, about this device) in a settings store that survives a reboot; QEMU fixtures as for C113. Closing this item closes the D2148 shell milestone and queues the next D2148 phase (the Android bridge over vsock). BEGUN D2181/D2182: both C114 app FACES render through e.gfx.scene over the e.gpu CPU backend, host==neperos both QEMU -- tasks_app.e a checklist (header + 6 rows: checkbox, task number in the 3x5 bitmap font, title bar; hash 3422317813), settings_app.e a settings list (header + 5 rows: label bar + toggle switch track/knob; hash 385502117). Not yet: interactive behavior (toggling, editing) and hosting the apps in the shell, which wait on C112's unified launcher. D2190: the Tasks app now COMPUTES its done-state through a toggle engine -- starts 3-of-6 done, applies a fixed sequence of toggle inputs (check tasks 3 and 5), counts the result and renders the computed checkboxes, printing `tasks done 5`; host==neperos hash 394791925 both QEMU, and the app-face loop asserts the literal `tasks done 5`. C114 -> 0.65: the Tasks toggle logic computes from input; the Settings toggles, live tap input, and shell-hosting still wait on C112's prodshell. D2191: the Settings app now COMPUTES its on-state through a toggle engine too -- starts 3-of-5 on, flips settings 2 and 5, counts and renders the computed switches, printing `settings on 5`; host==neperos hash 3605923141 both QEMU, loop asserts the literal. C114 -> 0.7: both apps compute their state from input; live tap input and shell-hosting still wait on C112's prodshell."
     },
     {
-      "id": "L096",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 194,
-      "title": "ROC extensions: decision curves, partial AUC, Youden index",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1824). Small add-on to planned ROC/PR: net-benefit decision curves, partial-AUC regions and Youden-index markers over the ROC geometry with numeric reference fixtures. No new mark types."
-    },
-    {
       "id": "L097",
       "category": "library",
       "group": "Algorithms",

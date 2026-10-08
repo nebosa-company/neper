@@ -1383,3 +1383,10 @@ ones inside the dose and signal domain and draws the guide segments on the
 Michaelis-Menten fitting stay with L015. `gfx_chart_bioassay_reference` checks all three
 against numpy and scipy on Windows and Linux; the gallery adds `parallel_line_assay`,
 `schild_plot` and `standard_curve`.
+
+`gfx_chart_roc_reference` checks the ROC extensions against scikit-learn and numpy on one
+seeded 60-sample classifier with tied scores: every `binary_curve` point against
+`roc_curve(drop_intermediate=False)`, AUC and average precision, raw partial AUC (and
+its McClish standardisation against `roc_auc_score(max_fpr=...)`), the Youden point,
+net-benefit decision curves, the four `binary_metric_curve` geometries, and the
+`roc_partial_region` polygon, whose area is the raw partial AUC times the box area.

@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# L096 the ROC extensions against scikit-learn and numpy
+gfx_chart_roc_reference_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_roc_reference/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-roc-reference-selfhost")
+[ "$gfx_chart_roc_reference_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-roc-reference-selfhost"
+gfx_chart_roc_reference_output=$("$test_build/gfx-chart-roc-reference-selfhost")
+[ "$gfx_chart_roc_reference_output" = 'gfx chart roc reference ok' ]
 # L095 the bioassay plots against numpy and scipy
 gfx_chart_bioassay_reference_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_bioassay_reference/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-bioassay-reference-selfhost")
 [ "$gfx_chart_bioassay_reference_written" = 'executable written' ]
