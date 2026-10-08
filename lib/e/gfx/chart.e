@@ -6897,7 +6897,8 @@ fn venn3(bounds: geometry.Rect, circles: []geometry.Rect, anchors: []Coord, laye
     let distance = radius * 1.15f64
     let dy = distance * 0.2886751345948129f64
     let cx = f64(bounds.x) + f64(bounds.width) * 0.5f64
-    let cy = f64(bounds.y) + f64(bounds.height) * 0.5f64
+    // The triangle hangs 1.5*dy below its top circle centre: centre the bounding box, not the middle row.
+    let cy = f64(bounds.y) + f64(bounds.height) * 0.5f64 + dy * 0.5f64
     let xs = [3]f64{ cx, cx - distance * 0.5f64, cx + distance * 0.5f64 }
     let ys = [3]f64{ cy - 2.0f64 * dy, cy + dy, cy + dy }
     var i = 0usize
