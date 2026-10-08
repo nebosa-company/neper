@@ -9445,8 +9445,11 @@ if ($neperosQemu) {
     $meetImage = Join-Path $testBuild 'meet.img'
     $recorderImage = Join-Path $testBuild 'recorder.img'
     $translateImage = Join-Path $testBuild 'translate.img'
-    $stepsImage = Join-Path $testBuild 'steps.img'
-    & $compiler emit-executable (Join-Path $repo 'neperos\src\steps.e') $repo aarch64 neperos $stepsImage | Out-Null
+    $stepsAppImage = Join-Path $testBuild 'steps.img'
+    $lunatrisAppImage = Join-Path $testBuild 'lunatris.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\lunatris.e') $repo aarch64 neperos $lunatrisAppImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'lunatris did not build' }
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\steps.e') $repo aarch64 neperos $stepsAppImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'steps did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\translate.e') $repo aarch64 neperos $translateImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'translate did not build' }
@@ -9495,7 +9498,7 @@ if ($neperosQemu) {
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage $browserImage $mapsImage $compassImage $levelImage $flashlightImage $chatImage $meetImage $recorderImage $translateImage $stepsImage
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage $browserImage $mapsImage $compassImage $levelImage $flashlightImage $chatImage $meetImage $recorderImage $translateImage $stepsAppImage $lunatrisAppImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
@@ -9585,6 +9588,9 @@ if ($neperosQemu) {
     # (D2233 Steps: walk, stop, change the goal, leave)
     $stepsBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-steps.serial') 55162 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,18395;8669,26240;8669,26240;24099,26240;16384,32259' 2>&1) -join "`n"
     if ($stepsBoot -notmatch '(?s)steps shown.*steps walking on.*steps walking off.*steps total.*steps goal 10000.*steps home') { throw "NeperOS steps did not pass its fixture: $stepsBoot" }
+    # (D2234 Lunatris: move left, turn, move right, drop, leave)
+    $lunatrisBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-lunatris.serial') 55163 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12248,18395;6044,22174;16384,22174;26722,22174;16384,24599;16384,32259' 2>&1) -join "`n"
+    if ($lunatrisBoot -notmatch '(?s)lunatris shown.*lunatris move left.*lunatris rotate.*lunatris move right.*lunatris drop.*lunatris home') { throw "NeperOS lunatris did not pass its fixture: $lunatrisBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }
