@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# L078 e.crypto.otp against the RFC 4226/6238 vectors and hmac
+$cryptoOtpPath = Join-Path $testBuild 'crypto-otp-selfhost.exe'
+$cryptoOtpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_otp\src\main.e') $repo 'x64' 'windows' $cryptoOtpPath
+if ($LASTEXITCODE -ne 0 -or $cryptoOtpWritten -ne 'executable written') { throw 'crypto_otp emission failed' }
+$cryptoOtpOutput = & $cryptoOtpPath
+if ($LASTEXITCODE -ne 0 -or $cryptoOtpOutput -ne 'crypto otp ok') { throw "crypto_otp answered wrongly: exit $LASTEXITCODE" }
 # L077 e.math.units against exact rational definitions
 $mathUnitsPath = Join-Path $testBuild 'math-units-selfhost.exe'
 $mathUnitsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_units\src\main.e') $repo 'x64' 'windows' $mathUnitsPath

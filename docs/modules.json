@@ -145,6 +145,7 @@
     "e.game.tilemap",
     "e.game.vision",
     "e.crypto.mac",
+    "e.crypto.otp",
     "e.crypto.kdf",
     "e.test.support",
     "e.algo.search",
@@ -985,6 +986,17 @@
    "direct_dependencies": [
     "e.crypto.aead",
     "e.crypto.hash"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.crypto.otp",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.crypto.mac"
    ],
    "blocked_by": []
   },

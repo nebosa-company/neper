@@ -1192,17 +1192,6 @@
       "evidence": "Planning only (D1812). Reference: JustCode tests/consistency.test.js. Not yet: extend existing Neper validation tools to check icon/resource references, translation-key coverage and duplicate keys, locale placeholder agreement, command/menu callback contracts and mnemonic conflicts. Consume actual resource/command registries and generated manifests; do not claim arbitrary dynamic source references can be proven by regex. Include small malformed-registry cases proving each check fails and wire checks into the existing build/test entry point with actionable locations. Keep repository-specific manifests, rules and CI wiring in scripts/tests; add no runtime validation framework or standard-library dependency."
     },
     {
-      "id": "L078",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 176,
-      "title": "TOTP/HOTP one-time codes in e.crypto",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1819). OATH parity missing from e.crypto: HOTP/TOTP generation plus verification-window helper over the existing HMAC-SHA1/SHA256, byte-exact against RFC 4226/6238 vectors. No secret-storage policy (host boundary). Ranked pure-testable."
-    },
-    {
       "id": "L079",
       "category": "library",
       "group": "Algorithms",

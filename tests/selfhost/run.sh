@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# L078 e.crypto.otp against the RFC 4226/6238 vectors and hmac
+crypto_otp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_otp/src/main.e" "$repo" x64 linux "$test_build/crypto-otp-selfhost")
+[ "$crypto_otp_written" = 'executable written' ]
+chmod +x "$test_build/crypto-otp-selfhost"
+crypto_otp_output=$("$test_build/crypto-otp-selfhost")
+[ "$crypto_otp_output" = 'crypto otp ok' ]
 # L077 e.math.units against exact rational definitions
 math_units_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_units/src/main.e" "$repo" x64 linux "$test_build/math-units-selfhost")
 [ "$math_units_written" = 'executable written' ]

@@ -5594,6 +5594,30 @@ No key generation, entropy read, truncation or secret logging is implicit.
 Streaming state lets HKDF process multiple input segments without concatenating
 unbounded caller data. done consumes the message state; reinitialize before reuse.
 
+### `e.crypto.otp`
+
+```neper
+error Invalid
+
+type Algorithm = enum u8 { Sha1, Sha256, Sha512 }
+
+fn pow10(digits: u32) -> u32
+fn digest(algorithm: Algorithm, key: []const u8, counter: u64, out: []u8) -> usize
+fn hotp(algorithm: Algorithm, key: []const u8, counter: u64, digits: u32) -> (u32, err)
+fn time_step(seconds: u64, start: u64, period: u32) -> (u64, err)
+fn totp(algorithm: Algorithm, key: []const u8, seconds: u64, start: u64, period: u32, digits: u32) -> (u32, err)
+fn verify_hotp(algorithm: Algorithm, key: []const u8, counter: u64, window: u32, digits: u32, candidate: u32) -> (u64, bool, err)
+fn verify_totp(algorithm: Algorithm, key: []const u8, seconds: u64, start: u64, period: u32, digits: u32, skew: u32, candidate: u32) -> (u64, bool, err)
+fn format(code: u32, digits: u32, out: []u8) -> (str, err)
+```
+
+HOTP (RFC 4226) and TOTP (RFC 6238) over HMAC-SHA1, -SHA256 and -SHA512: the 31-bit dynamic
+truncation of HMAC(key, 8-byte big-endian counter) modulo 10^digits, 6 to 9 digits. The key
+is the raw secret (Base32 from an otpauth URI is decoded by the caller); where secrets are
+kept is the host's decision. `verify_hotp` (look-ahead window) and `verify_totp` (skew steps
+either side) test every candidate counter without stopping at a match and answer the matching
+counter so a caller can refuse a replay. `format` writes the zero-padded decimal text.
+
 ### `e.crypto.kdf`
 
 ```neper
