@@ -9438,6 +9438,9 @@ if ($neperosQemu) {
     $mailImage = Join-Path $testBuild 'mail.img'
     $browserImage = Join-Path $testBuild 'browser.img'
     $mapsImage = Join-Path $testBuild 'maps.img'
+    $compassImage = Join-Path $testBuild 'compass.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\compass.e') $repo aarch64 neperos $compassImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'compass did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\maps.e') $repo aarch64 neperos $mapsImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'maps did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\browser.e') $repo aarch64 neperos $browserImage | Out-Null
@@ -9471,7 +9474,7 @@ if ($neperosQemu) {
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage $browserImage $mapsImage
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage $browserImage $mapsImage $compassImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
@@ -9537,6 +9540,9 @@ if ($neperosQemu) {
     # (D2225 Maps: open the places list, choose City Library, get directions, zoom in, leave)
     $mapsBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-maps.serial') 55154 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;20440,7273;16384,1569;16384,17790;8431,28663;29585,9982;16384,32259' 2>&1) -join "`n"
     if ($mapsBoot -notmatch '(?s)maps shown.*maps search.*maps place City Library.*maps route 5 min.*maps zoom 2.*maps home') { throw "NeperOS maps did not pass its fixture: $mapsBoot" }
+    # (D2226 Compass: lock the heading, open and close Calibrate, true north, leave)
+    $compassBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-compass.serial') 55155 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;28631,7273;6044,27914;16384,27914;16384,9340;26722,27914;16384,32259' 2>&1) -join "`n"
+    if ($compassBoot -notmatch '(?s)compass shown.*compass lock on.*compass calibrate.*compass true on.*compass home') { throw "NeperOS compass did not pass its fixture: $compassBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }

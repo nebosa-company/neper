@@ -180,6 +180,17 @@
       "evidence": "Queued (2026-10-08). The Maps app (D2225) draws a procedural sample city with six made-up places. Acceptance: (1) map data on the device: vector tiles (OpenStreetMap extracts) rendered through e.gfx.scene with labels, icons, zoom levels and rotation, offline regions kept in Files (C125), and drag and pinch (the touch layer needs both, not only taps); (2) a location service: GPS and network location on the Pixel, a simulated provider under QEMU, with permission tied to Settings (C126); (3) search by name and category with suggestions, place cards with hours and photos from the network (C117); (4) routing: walking, cycling, driving and transit over a road graph (the library has graph algorithms), with turn-by-turn instructions, rerouting and voice; (5) saved places, recent searches and a Home and Work shortcut, shared with Wallet and Weather; (6) a fixture on QEMU that loads a small offline region, finds a place and routes to it, checking the route length. Not queued here: street-level imagery, live traffic, indoor maps."
     },
     {
+      "id": "C131",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 131,
+      "title": "NeperOS Compass: the magnetometer, GPS and the declination",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Compass app (D2226) swings a sample heading. Acceptance: (1) a sensor server for the magnetometer, accelerometer and gyroscope (virtio-input-style under QEMU with a scripted source, the Pixel's sensor hub later) delivering readings at a fixed rate through the capability model; (2) the heading from the tilt-compensated magnetometer with hard-iron calibration and the figure-eight routine driven by real data, and the accuracy shown from it; (3) the position from the location service shared with Maps (C130) and the declination from a world magnetic model table in the library; (4) the Level app (C132) and Maps use the same sensor server; (5) a fixture on QEMU feeding a scripted sensor trace and checking the heading to a degree. Not queued here: augmented-reality overlays."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
