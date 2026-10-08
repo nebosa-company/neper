@@ -511,6 +511,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // screen a tap unlocks to the home screen. On the home screen a tap on an icon launches that app
     // as a process, waits for it, and redraws Home; a key launches the test app. Keep reading to the
     // sentinel.
+    // (D2240) Everything the home screen draws after this point is dropped each time an app returns.
+    let home_mark = mem.mark(a)
     var pointer_x = 0usize
     var pointer_y = 0usize
     var launched_test = false
@@ -578,6 +580,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         say("shell app code ")
                         say_num(code_app)
                         say("\n")
+                        // The last scene is released first, so nothing refers to the memory that is given back.
+                        if has_last_scene {
+                            let released_scene = scene.release_scene(&renderer, last_scene)
+                            has_last_scene = false
+                        }
+                        mem.reset(a, home_mark)
                         if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
                         framed = true
                         say("shell home\n")
