@@ -9293,66 +9293,17 @@ greeting"
     # Two key presses: the first unlocks the lock screen to the home screen (the compositor takes the
     # second frame), the second launches an app.
     assets="$repo/neperos/assets"
-    calc_img="$test_build/calc.img"
-    clock_img="$test_build/clock.img"
-    tasks_img="$test_build/tasks.img"
-    messages_img="$test_build/messages.img"
-    stocks_img="$test_build/stocks.img"
-    weather_img="$test_build/weather.img"
-    ssh_img="$test_build/ssh.img"
-    wallet_img="$test_build/wallet.img"
-    camera_img="$test_build/camera.img"
-    photos_img="$test_build/photos.img"
-    files_img="$test_build/files.img"
-    settings_img="$test_build/settings.img"
-    call_img="$test_build/call.img"
-    mail_img="$test_build/mail.img"
-    browser_img="$test_build/browser.img"
-    maps_img="$test_build/maps.img"
-    compass_img="$test_build/compass.img"
-    level_img="$test_build/level.img"
-    flashlight_img="$test_build/flashlight.img"
-    chat_img="$test_build/chat.img"
-    meet_img="$test_build/meet.img"
-    recorder_img="$test_build/recorder.img"
-    translate_img="$test_build/translate.img"
-    steps_img="$test_build/steps.img"
-    blocks_img="$test_build/blocks.img"
-    secure_img="$test_build/secure.img"
-    ai_img="$test_build/ai.img"
-    document_img="$test_build/document.img"
-    dynamic_img="$test_build/dynamic.img"
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/dynamic.e" "$repo" aarch64 neperos "$dynamic_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/document.e" "$repo" aarch64 neperos "$document_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ai.e" "$repo" aarch64 neperos "$ai_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/secure.e" "$repo" aarch64 neperos "$secure_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/blocks.e" "$repo" aarch64 neperos "$blocks_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/steps.e" "$repo" aarch64 neperos "$steps_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/translate.e" "$repo" aarch64 neperos "$translate_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/recorder.e" "$repo" aarch64 neperos "$recorder_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/meet.e" "$repo" aarch64 neperos "$meet_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/chat.e" "$repo" aarch64 neperos "$chat_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/flashlight.e" "$repo" aarch64 neperos "$flashlight_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/level.e" "$repo" aarch64 neperos "$level_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/compass.e" "$repo" aarch64 neperos "$compass_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/maps.e" "$repo" aarch64 neperos "$maps_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/browser.e" "$repo" aarch64 neperos "$browser_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/mail.e" "$repo" aarch64 neperos "$mail_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/call.e" "$repo" aarch64 neperos "$call_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/settings.e" "$repo" aarch64 neperos "$settings_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/files.e" "$repo" aarch64 neperos "$files_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/photos.e" "$repo" aarch64 neperos "$photos_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/camera.e" "$repo" aarch64 neperos "$camera_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/wallet.e" "$repo" aarch64 neperos "$wallet_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ssh.e" "$repo" aarch64 neperos "$ssh_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/weather.e" "$repo" aarch64 neperos "$weather_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/stocks.e" "$repo" aarch64 neperos "$stocks_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/messages.e" "$repo" aarch64 neperos "$messages_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/tasks.e" "$repo" aarch64 neperos "$tasks_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/clock.e" "$repo" aarch64 neperos "$clock_img")" = 'executable written' ]
-    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/calc.e" "$repo" aarch64 neperos "$calc_img")" = 'executable written' ]
+    # The apps and their fixtures are listed in tests/selfhost/neperos-apps.txt: each app is built into an image
+    # and the images go into the archive, in the table's order, after the wallpaper and the five fonts.
+    apps_table="$repo/tests/selfhost/neperos-apps.txt"
+    app_images=()
+    while IFS='|' read -r kind name rest; do
+        [ "$kind" = app ] || continue
+        [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/$name.e" "$repo" aarch64 neperos "$test_build/neperos-app-$name.img")" = 'executable written' ]
+        app_images+=("$test_build/neperos-app-$name.img")
+    done < <(grep -v '^#' "$apps_table")
     crater_archive="$test_build/shell-crater-archive.img"
-    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "$calc_img" "$clock_img" "$tasks_img" "$messages_img" "$stocks_img" "$weather_img" "$ssh_img" "$wallet_img" "$camera_img" "$photos_img" "$files_img" "$settings_img" "$call_img" "$mail_img" "$browser_img" "$maps_img" "$compass_img" "$level_img" "$flashlight_img" "$chat_img" "$meet_img" "$recorder_img" "$translate_img" "$steps_img" "$blocks_img" "$secure_img" "$ai_img" "$document_img" "$dynamic_img"
+    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "${app_images[@]}"
     crater_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" keyboard "$test_build/shell-crater.serial" 55136 "compositor bigarena unified" 'shell app code 5' - 2 2>&1)
     case "$crater_boot" in
         *'shell wallpaper from fs'*) printf '%s
@@ -9361,188 +9312,25 @@ greeting"
         *) printf '%s
 ' "NeperOS lunar shell did not lock, unlock and launch: $crater_boot" >&2; exit 1 ;;
     esac
-    # (D2205) Taps on a tablet: unlock, tap the Calculator icon, key in 7 x 6 + 9 = on Calc and tap
-    # the home bar. The tablet's 0..32767 axes map onto the 412 x 919 dp screen; the shell hit-tests the
-    # icon, the kernel starts Calc with the frame and input endpoints, and the app answers the
-    # compositor per event.
-    calc_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-calc.serial" 55137 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12288,10980;5886,14650;26882,14650;19883,17502;26882,20354;19883,14650;26882,23205;16384,31368' 2>&1)
-    case "$calc_boot" in
-        *'shell unlocked'*'shell tap Calculator'*'shell launching Calculator'*'calc shown'*'calc shows 7'*'calc shows 42'*'calc shows 51'*'calc home'*'shell app code 0'*) ;;
-        *) printf '%s
-' "NeperOS Calc did not launch from its icon and compute 51: $calc_boot" >&2; exit 1 ;;
-    esac
-    # (D2206) Calc's scientific and convert tabs. The taps are paced (NEPEROS_TAP_DELAY, seconds): the
-    # virtio-input queue drops events a slow app has not consumed. Scientific: sqrt 9 = 3, sin 30 = 0.5
-    # (degrees), 2 x^y 10 = 1024. Convert: 100 in Celsius is 212 in Fahrenheit.
-    export NEPEROS_TAP_DELAY=4
-    sci_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-sci.serial" 55138 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12288,10980;16384,4955;19883,18856;19883,16005;5886,16005;19883,24560;5886,27411;5886,11228;5886,16005;12885,24560;26882,13438;5886,24560;5886,27411;26882,27411;16384,31368' 2>&1)
-    case "$sci_boot" in
-        *'calc scientific 3'*'calc scientific 0.5'*'calc scientific 1024'*'calc home'*) ;;
-        *) printf '%s
-' "NeperOS Calc scientific tab did not compute: $sci_boot" >&2; exit 1 ;;
-    esac
-    conv_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-conv.serial" 55139 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12288,10980;25610,4955;27439,6487;5886,22635;5886,25487;5886,25487;16384,31368' 2>&1)
-    case "$conv_boot" in
-        *'calc converts 100 '*' = 212 '*) ;;
-        *) printf '%s
-' "NeperOS Calc did not convert 100 Celsius to Fahrenheit: $conv_boot" >&2; exit 1 ;;
-    esac
-    # (D2207) Clock: the Stopwatch runs and stops, a two-second Timer finishes (a tick finds it done),
-    # an alarm is added and saved, and the home bar leaves. The input server's 500 ms ticks drive the
-    # running displays; a full frame takes seconds under emulation, so the taps are eight seconds apart.
-    export NEPEROS_TAP_DELAY=8
-    clock_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-clock.serial" 55140 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;4096,10980;16384,30655;16384,27590;16384,27590;22938,30655;16384,8412;16384,23170;16384,17823;3277,30655;16384,27233;9146,20211;16384,32259' 2>&1)
-    case "$clock_boot" in
-        *'clock shown'*'clock stopwatch started'*'clock stopwatch stopped '*'clock timer started'*'clock timer done'*'clock alarm saved 07:00'*'clock home'*) ;;
-        *) printf '%s
-' "NeperOS Clock did not run its stopwatch, timer and alarm: $clock_boot" >&2; exit 1 ;;
-    esac
-    # (D2211) Tasks: complete the first task, add one through the sheet (keys a and b), and leave.
-    tasks_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-tasks.serial" 55141 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;20480,10980;3661,6916;27037,28520;4295,22816;18993,24884;8668,12193;16384,32259' 2>&1)
-    case "$tasks_boot" in
-        *'tasks shown'*'tasks completed'*'tasks added'*'tasks count 7'*'tasks home'*) ;;
-        *) printf '%s
-' "NeperOS Tasks did not complete and add a task: $tasks_boot" >&2; exit 1 ;;
-    esac
-    messages_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-messages.serial" 55142 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12288,3565;15906,4920;11930,30374;19405,22816;23939,20748;29586,16328;3181,1782;16384,32259' 2>&1)
-    case "$messages_boot" in
-        *'messages shown'*'messages opened'*'messages sent'*'messages count 12'*'messages home'*) ;;
-        *) printf '%s
-' "NeperOS Messages did not open a conversation and send: $messages_boot" >&2; exit 1 ;;
-    esac
-    stocks_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-stocks.serial" 55143 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;4096,22103;15906,5633;17655,7771;3181,1782;16384,32259' 2>&1)
-    case "$stocks_boot" in
-        *'stocks shown'*'stocks opened AAPL'*'stocks range 60'*'stocks back'*'stocks home'*) ;;
-        *) printf '%s
-' "NeperOS Stocks did not open a stock and change range: $stocks_boot" >&2; exit 1 ;;
-    esac
-    weather_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-weather.serial" 55144 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12288,22103;12408,1462;28313,7914;16384,32259' 2>&1)
-    case "$weather_boot" in
-        *'weather shown'*'weather place Cairo'*'weather unit F'*'weather home'*) ;;
-        *) printf '%s
-' "NeperOS Weather did not change place and unit: $weather_boot" >&2; exit 1 ;;
-    esac
-    ssh_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-ssh.serial" 55145 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;20480,22103;15906,5205;28472,22816;7317,22816;27758,26951;3181,1569;16384,32259' 2>&1)
-    case "$ssh_boot" in
-        *'ssh shown'*'ssh connected web-01'*'ssh command ls'*'ssh closed'*'ssh home'*) ;;
-        *) printf '%s
-' "NeperOS SSH did not connect and run a command: $ssh_boot" >&2; exit 1 ;;
-    esac
-    wallet_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-wallet.serial" 55146 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;4096,25811;19644,3315;15906,7130;3181,1569;16384,32259' 2>&1)
-    case "$wallet_boot" in
-        *'wallet brand Visa'*'wallet brand Mastercard'*'wallet shown'*'wallet filter Bank'*'wallet opened Neper Bank'*'wallet iban valid'*'wallet back'*'wallet home'*) ;;
-        *) printf '%s
-' "NeperOS Wallet did not open a bank account: $wallet_boot" >&2; exit 1 ;;
-    esac
-    camera_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-camera.serial" 55147 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;4096,7273;16384,28164;29585,28164;22427,24099;16384,28164;4135,28164;3181,1569;16384,32259' 2>&1)
-    case "$camera_boot" in
-        *'camera shown'*'camera photo 1'*'camera flip front'*'camera mode Scan'*'camera scan 2'*'camera review 2'*'camera back'*'camera home'*) ;;
-        *) printf '%s
-' "NeperOS Camera did not take a photo and a scan: $camera_boot" >&2; exit 1 ;;
-    esac
-    photos_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-photos.serial" 55148 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12288,7273;4454,6060;29585,1782;3181,1569;16384,30730;24574,6096;16384,32259' 2>&1)
-    case "$photos_boot" in
-        *'photos shown'*'photos opened 1'*'photos favorite on'*'photos back'*'photos tab Albums'*'photos album Trips'*'photos home'*) ;;
-        *) printf '%s
-' "NeperOS Photos did not open a picture and an album: $photos_boot" >&2; exit 1 ;;
-    esac
-    files_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-files.serial" 55149 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;28631,10980;11930,8770;11930,6845;5965,25454;16384,27736;3181,1569;28153,1319;25768,30730;4295,22816;19008,24884;8669,7273;16384,32259' 2>&1)
-    case "$files_boot" in
-        *'files shown'*'files folder Documents'*'files file Budget.xlsx'*'files open Budget.xlsx'*'files up'*'files sort Date'*'files created Ab'*'files home'*) ;;
-        *) printf '%s
-' "NeperOS Files did not browse and create a folder: $files_boot" >&2; exit 1 ;;
-    esac
-    settings_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-settings.serial" 55150 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;28631,18395;15906,6452;16384,9911;16384,5312;3181,1569;15906,4028;16384,4492;16384,32259' 2>&1)
-    case "$settings_boot" in
-        *'settings shown'*'settings page Display'*'settings toggle Dark theme off'*'settings slider Brightness 50'*'settings back'*'settings page Network'*'settings toggle Wi-Fi off'*'settings home'*) ;;
-        *) printf '%s
-' "NeperOS Settings did not change a switch and a slider: $settings_boot" >&2; exit 1 ;;
-    esac
-    call_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-call.serial" 55151 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;4096,3565;16384,11479;16384,11479;16384,11479;16384,18039;6522,8200;16384,18039;6522,8200;16384,22816;16384,24955;16384,32259' 2>&1)
-    case "$call_boot" in
-        *'call shown'*'call dialed 5550101'*'call connected'*'call ended'*'call home'*) ;;
-        *) printf '%s\n' "NeperOS call did not pass its fixture: $call_boot" >&2; exit 1 ;;
-    esac
-    mail_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-mail.serial" 55152 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;20440,3565;15906,5418;6840,30445;19405,22816;23939,20748;8669,13227;16384,32259' 2>&1)
-    case "$mail_boot" in
-        *'mail shown'*'mail opened Lunch on Friday?'*'mail composing'*'mail sent'*'mail home'*) ;;
-        *) printf '%s\n' "NeperOS mail did not pass its fixture: $mail_boot" >&2; exit 1 ;;
-    esac
-    browser_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-browser.serial" 55153 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;28631,3565;8589,10624;8430,19322;3977,30730;16384,1569;19405,22816;23939,20748;27758,26951;16384,32259' 2>&1)
-    case "$browser_boot" in
-        *'browser shown'*'browser go neper.dev'*'browser go docs.example'*'browser back'*'browser search hi'*'browser home'*) ;;
-        *) printf '%s\n' "NeperOS browser did not pass its fixture: $browser_boot" >&2; exit 1 ;;
-    esac
-    maps_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-maps.serial" 55154 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;20440,7273;16384,1569;16384,17790;8431,28663;29585,9982;16384,32259' 2>&1)
-    case "$maps_boot" in
-        *'maps shown'*'maps search'*'maps place City Library'*'maps route 5 min'*'maps zoom 2'*'maps home'*) ;;
-        *) printf '%s\n' "NeperOS maps did not pass its fixture: $maps_boot" >&2; exit 1 ;;
-    esac
-    compass_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-compass.serial" 55155 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;28631,7273;6044,27914;16384,27914;16384,9340;26722,27914;16384,32259' 2>&1)
-    case "$compass_boot" in
-        *'compass shown'*'compass lock on'*'compass calibrate'*'compass true on'*'compass home'*) ;;
-        *) printf '%s\n' "NeperOS compass did not pass its fixture: $compass_boot" >&2; exit 1 ;;
-    esac
-    level_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-level.serial" 55156 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;28631,25811;16384,3208;6044,28628;16384,28628;16384,32259' 2>&1)
-    case "$level_boot" in
-        *'level shown'*'level mode Angle'*'level hold on'*'level calibrate'*'level home'*) ;;
-        *) printf '%s\n' "NeperOS level did not pass its fixture: $level_boot" >&2; exit 1 ;;
-    esac
-    flashlight_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-flashlight.serial" 55157 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;4096,29518;16384,1569;24175,4421;16384,10267;16384,10267;26722,1569;7317,22816;26959,20748;7317,22816;8669,6880;16384,14973;16384,14973;16384,14973;16384,14973;16384,32259' 2>&1)
-    case "$flashlight_boot" in
-        *'flashlight shown'*'flashlight pattern SOS'*'flashlight stopped'*'flashlight morse sos 27'*'flashlight morse done'*'flashlight home'*) ;;
-        *) printf '%s\n' "NeperOS flashlight did not pass its fixture: $flashlight_boot" >&2; exit 1 ;;
-    esac
-    chat_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-chat.serial" 55158 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;4096,14689;15906,4563;13998,29340;19405,22816;23939,20748;29268,16720;16384,32259' 2>&1)
-    case "$chat_boot" in
-        *'chat shown'*'chat opened general'*'chat sent'*'chat home'*) ;;
-        *) printf '%s\n' "NeperOS chat did not pass its fixture: $chat_boot" >&2; exit 1 ;;
-    esac
-    meet_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-meet.serial" 55159 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12248,14689;15906,8092;16384,25882;5567,28164;26404,28164;16384,32259' 2>&1)
-    case "$meet_boot" in
-        *'meet shown'*'meet joining Design review'*'meet joined'*'meet mic off'*'meet ended'*'meet home'*) ;;
-        *) printf '%s\n' "NeperOS meet did not pass its fixture: $meet_boot" >&2; exit 1 ;;
-    esac
-    recorder_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-recorder.serial" 55160 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;20440,14689;16384,29590;16384,23886;15906,3993;16384,12121;16384,32259' 2>&1)
-    case "$recorder_boot" in
-        *'recorder shown'*'recorder recording'*'recorder saved'*'recorder open Recording'*'recorder playing'*'recorder home'*) ;;
-        *) printf '%s\n' "NeperOS recorder did not pass its fixture: $recorder_boot" >&2; exit 1 ;;
-    esac
-    translate_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-translate.serial" 55161 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;28631,14689;15746,7451;25529,1640;16384,10053;16384,32259' 2>&1)
-    case "$translate_boot" in
-        *'translate shown'*'translate phrase thank you'*'translate result gracias'*'translate to German'*'translate result danke'*'translate home'*) ;;
-        *) printf '%s\n' "NeperOS translate did not pass its fixture: $translate_boot" >&2; exit 1 ;;
-    esac
-    steps_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-steps.serial" 55162 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;4096,18395;8669,26240;8669,26240;24099,26240;16384,32259' 2>&1)
-    case "$steps_boot" in
-        *'steps shown'*'steps walking on'*'steps walking off'*'steps total'*'steps goal 10000'*'steps home'*) ;;
-        *) printf '%s\n' "NeperOS steps did not pass its fixture: $steps_boot" >&2; exit 1 ;;
-    esac
-    blocks_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-blocks.serial" 55163 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12248,18395;6044,22174;16384,22174;26722,22174;16384,24599;16384,32259' 2>&1)
-    case "$blocks_boot" in
-        *'blocks shown'*'blocks move left'*'blocks rotate'*'blocks move right'*'blocks drop'*'blocks home'*) ;;
-        *) printf '%s\n' "NeperOS blocks did not pass its fixture: $blocks_boot" >&2; exit 1 ;;
-    esac
-    secure_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-secure.serial" 55164 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;20440,18395;22030,24884;8828,20748;29982,20748;8828,20748;11850,20748;27757,26951;16384,3173;6044,3173;15906,5490;28790,6702;16384,32259' 2>&1)
-    case "$secure_boot" in
-        *'secure totp check ok'*'secure shown'*'secure unlocked'*'secure codes shown'*'secure opened Neper Bank'*'secure revealed'*'secure home'*) ;;
-        *) printf '%s\n' "NeperOS secure did not pass its fixture: $secure_boot" >&2; exit 1 ;;
-    esac
-    ai_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-ai.serial" 55165 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;28631,22103;24176,3422;25450,22816;8828,20748;17894,20748;8669,13155;13998,29340;19405,22816;23940,20748;29267,16720;16384,32259' 2>&1)
-    case "$ai_boot" in
-        *'ai shown'*'ai provider OpenAI'*'ai key saved'*'ai sent'*'ai reply'*'ai home'*) ;;
-        *) printf '%s\n' "NeperOS ai did not pass its fixture: $ai_boot" >&2; exit 1 ;;
-    esac
-    document_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-document.serial" 55166 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12248,25811;15906,3708;3181,1569;15906,7843;3181,1569;15906,9911;25450,30588;16384,32259' 2>&1)
-    case "$document_boot" in
-        *'document shown'*'document opened README.md'*'document opened hello.ne'*'document lang Neper'*'document opened report.pdf'*'document page 2'*'document home'*) ;;
-        *) printf '%s\n' "NeperOS document did not pass its fixture: $document_boot" >&2; exit 1 ;;
-    esac
-    dynamic_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-dynamic.serial" 55167 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;20440,25811;16384,5348;14872,20748;23940,20748;29982,20748;27757,26951;16384,10695;8669,13761;3181,1569;24336,13761;12963,24884;27757,26951;16384,10695;16384,32259' 2>&1)
-    case "$dynamic_boot" in
-        *'dynamic shown'*'dynamic prompt Tip'*'dynamic ready Tip calculator v1'*'dynamic open Tip calculator'*'dynamic extended Tip calculator v2'*'dynamic home'*) ;;
-        *) printf '%s\n' "NeperOS dynamic did not pass its fixture: $dynamic_boot" >&2; exit 1 ;;
-    esac
+    # Every fixture of the table: boot the archive with a tablet, send the taps (tablet units, NEPEROS_TAP_DELAY
+    # seconds apart: a full frame takes seconds under emulation and the virtio-input queue drops events a slow
+    # app has not consumed), and require the markers on the serial output in order. An app's markers come
+    # from its own `say` lines; the first fixture is the Calculator's and the later ones start after unlock.
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = fixture ] || continue
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" 'shell app code' - 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) printf 'NeperOS %s fixture did not reach "%s" (%s): %s\n' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
     unset NEPEROS_TAP_DELAY
     unset NEPEROS_MEM NEPEROS_GPU
 fi
