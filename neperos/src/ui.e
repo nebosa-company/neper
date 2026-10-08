@@ -116,6 +116,15 @@ fn same(left: str, right: str) -> bool {
     ret true
 }
 
+// "12 min ago", "3 hr ago", "Yesterday", "4 days ago" from minutes.
+fn ago_text(a: *mem.Arena, ago: usize) -> str {
+    if ago < 1usize { ret "Just now" }
+    if ago < 60usize { ret join(a, number(a, ago), " min ago", "") }
+    if ago < 1440usize { ret join(a, number(a, ago / 60usize), " hr ago", "") }
+    if ago < 2880usize { ret "Yesterday" }
+    ret join(a, number(a, ago / 1440usize), " days ago", "")
+}
+
 fn weekday_short(day: usize) -> str {
     if day == 0usize { ret "Mon" }
     if day == 1usize { ret "Tue" }
@@ -403,11 +412,11 @@ fn is_key(id: usize) -> bool {
     ret id >= 1000usize && id <= 1205usize
 }
 
-// A text field being edited: up to 64 bytes.
-type Field = struct { bytes: [64]u8, len: usize }
+// A text field being edited: up to 160 bytes.
+type Field = struct { bytes: [160]u8, len: usize }
 
 fn field_type(f: *Field, byte: u8, capital: bool) {
-    if f.len >= 64usize { ret }
+    if f.len >= 160usize { ret }
     var b = byte
     if capital && f.len == 0usize && b >= 97u8 && b <= 122u8 { b = b - 32u8 }
     f.bytes[f.len] = b

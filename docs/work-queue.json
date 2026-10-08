@@ -147,6 +147,17 @@
       "evidence": "Queued (2026-10-08). The Call app (D2222) has a keypad, recents, contacts and a call screen on sample data; a call is a demo that 'connects' after a second. Acceptance: (1) a telephony server over the modem or a SIP/VoIP stack on C117 networking: dial, answer, reject, hold, mute, speaker, DTMF, call waiting and conference; (2) the in-call audio path through e.audio with the earpiece, speaker and Bluetooth routes; (3) a contact store shared with Messages, Mail and Wallet: add, edit, delete, favorites, search, import and export vCard; (4) recents and missed-call notifications through the status server, and Do Not Disturb honoured; (5) voicemail and visual voicemail; (6) emergency numbers always dialable; (7) a fixture on QEMU against a loopback SIP server that dials, answers and ends a call and checks the audio frames. Not queued here: video calls (Meet), SMS (Messages), eSIM management."
     },
     {
+      "id": "C128",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 128,
+      "title": "NeperOS Mail: a real mail client over IMAP and SMTP",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Mail app (D2223) shows a sample mailbox in the process. Acceptance: (1) IMAP and SMTP over TLS on C117, with accounts added in the app (the passwords kept in Secure, C116), OAuth for the large providers, folder sync and push; (2) threads, labels, search, archive, mark read and unread, swipe actions; (3) rich messages: HTML rendering through the Document engine (C123), inline images, attachments saved into Files (C125) and opened in their apps; (4) compose with attachments from Files, Photos and Camera, drafts, signatures and the contact picker (C127); (5) notifications through the status server and a badge on the icon; (6) a fixture on QEMU against a local IMAP and SMTP test server that fetches, reads, replies and checks the sent message. Not queued here: calendar invites, PGP."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
