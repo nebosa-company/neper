@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>parallel_line_assay</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="46" y="53" width="268" height="133" fill="rgb(250,252,255)"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="46" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="53" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="186" x2="314" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="186" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="314" y2="53" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="53" x2="46" y2="53" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<path d="M46 178.28 L314 53 M46 186 L314 60.72" fill="none" stroke="rgb(20,99,189)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="43" y="173.13" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="43" y="180.69" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="43" y="170.1" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="117.76" y="142.89" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="117.76" y="135.33" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="117.76" y="145.92" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="192.51" y="103.59" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="192.51" y="111.15" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="192.51" y="100.56" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="267.27" y="68.82" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="267.27" y="76.38" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="267.27" y="65.79" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="86.73" y="164.06" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="86.73" y="156.5" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="86.73" y="167.08" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="161.49" y="127.78" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="161.49" y="132.31" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="161.49" y="123.24" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="236.24" y="94.52" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="236.24" y="86.96" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="236.24" y="96.03" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="311" y="58.24" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="311" y="53.7" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="311" y="61.26" width="6" height="6" fill="rgb(209,48,56)"/>
+<text x="180" y="20" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">Parallel-line assay</text>
+<text x="180" y="36" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)">Common slope / test above standard: potency &gt; 1</text>
+</svg>

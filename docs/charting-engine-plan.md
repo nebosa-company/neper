@@ -1370,3 +1370,16 @@ totals reconcile by construction. `gfx_chart_compound_pie_reference` checks vert
 a numpy replay, polygon areas against the chord-sector formula and proportional to the
 values, connectors and refusals on Windows and Linux; the gallery adds `pie_of_pie` and
 `bar_of_pie`.
+
+`parallel_line_assay` fits the classical parallel-line model on log10 dose (common
+slope, separate intercepts), plots both lines over every observation, and reports the
+relative potency of test to standard with Fieller limits at 1 - alpha plus the F
+statistic for common versus separate slopes and whether it passes at alpha.
+`schild_plot` plots log10 antagonist concentration against log10(DR - 1) with the
+least-squares line, slope, pA2 and pKB at unit slope. `standard_curve_readback`
+inverts a caller-parameterised LL.4 standard curve for unknown signals, flags the
+ones inside the dose and signal domain and draws the guide segments on the
+`dose_response` axes. The fits ride the closed-form least-squares here; Emax/Hill and
+Michaelis-Menten fitting stay with L015. `gfx_chart_bioassay_reference` checks all three
+against numpy and scipy on Windows and Linux; the gallery adds `parallel_line_assay`,
+`schild_plot` and `standard_curve`.

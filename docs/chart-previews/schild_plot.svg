@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>schild_plot</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="46" y="53" width="268" height="133" fill="rgb(250,252,255)"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="46" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="53" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="186" x2="314" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="186" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="314" y2="53" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="53" x2="46" y2="53" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<path d="M46 185.15 L314 53" fill="none" stroke="rgb(20,99,189)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="43" y="183" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="94.62" y="155.82" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="151.19" y="128.27" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="202.81" y="103.82" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="259.38" y="75.37" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="311" y="50.17" width="6" height="6" fill="rgb(209,48,56)"/>
+<text x="180" y="20" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">Schild plot</text>
+<text x="180" y="36" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)">log10(dose ratio - 1) against log10 antagonist: slope near 1 is competitive</text>
+</svg>

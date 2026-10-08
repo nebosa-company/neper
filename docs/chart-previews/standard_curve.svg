@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>standard_curve</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="46" y="53" width="268" height="133" fill="rgb(250,252,255)"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="46" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="53" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="314" y1="186" x2="314" y2="191" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="186" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="314" y2="53" stroke="rgb(222,232,242)" stroke-width="1" stroke-linecap="round"/>
+<line x1="41" y1="53" x2="46" y2="53" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="53" x2="46" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<line x1="46" y1="186" x2="314" y2="186" stroke="rgb(43,59,82)" stroke-width="1" stroke-linecap="round"/>
+<path d="M46 53.26 L50.25 53.33 L54.51 53.42 L58.76 53.54 L63.02 53.68 L67.27 53.86 L71.52 54.09 L75.78 54.38 L80.03 54.74 L84.29 55.2 L88.54 55.78 L92.79 56.5 L97.05 57.41 L101.3 58.54 L105.56 59.95 L109.81 61.69 L114.06 63.83 L118.32 66.45 L122.57 69.6 L126.83 73.37 L131.08 77.82 L135.33 82.97 L139.59 88.84 L143.84 95.39 L148.1 102.52 L152.35 110.1 L156.6 117.94 L160.86 125.82 L165.11 133.52 L169.37 140.85 L173.62 147.65 L177.87 153.79 L182.13 159.23 L186.38 163.95 L190.63 167.98 L194.89 171.38 L199.14 174.19 L203.4 176.51 L207.65 178.4 L211.9 179.94 L216.16 181.17 L220.41 182.16 L224.67 182.96 L228.92 183.59 L233.17 184.09 L237.43 184.49 L241.68 184.81 L245.94 185.06 L250.19 185.26 L254.44 185.41 L258.7 185.54 L262.95 185.63 L267.21 185.71 L271.46 185.77 L275.71 185.82 L279.97 185.86 L284.22 185.89 L288.48 185.91 L292.73 185.93 L296.98 185.95 L301.24 185.96 L305.49 185.97 L309.75 185.97 L314 185.98" fill="none" stroke="rgb(20,99,189)" stroke-width="2" stroke-linejoin="round"/>
+<rect x="43" y="52.29" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="96.6" y="55.73" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="122.17" y="66.05" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="150.2" y="107.33" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="175.77" y="152.04" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="203.8" y="176.12" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="257.4" y="182.43" width="6" height="6" fill="rgb(209,48,56)"/>
+<rect x="311" y="183" width="6" height="6" fill="rgb(209,48,56)"/>
+<line x1="46" y1="104.59" x2="149.28" y2="104.59" stroke="rgb(43,59,82)" stroke-width="2" stroke-linecap="round"/>
+<line x1="149.28" y1="104.59" x2="149.28" y2="186" stroke="rgb(43,59,82)" stroke-width="2" stroke-linecap="round"/>
+<line x1="46" y1="173.39" x2="197.84" y2="173.39" stroke="rgb(43,59,82)" stroke-width="2" stroke-linecap="round"/>
+<line x1="197.84" y1="173.39" x2="197.84" y2="186" stroke="rgb(43,59,82)" stroke-width="2" stroke-linecap="round"/>
+<line x1="46" y1="58.73" x2="101.93" y2="58.73" stroke="rgb(43,59,82)" stroke-width="2" stroke-linecap="round"/>
+<line x1="101.93" y1="58.73" x2="101.93" y2="186" stroke="rgb(43,59,82)" stroke-width="2" stroke-linecap="round"/>
+<text x="180" y="20" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">Standard curve readback</text>
+<text x="180" y="36" font-family="sans-serif" font-size="7" text-anchor="middle" fill="rgb(43,59,82)">3 of 4 unknown signals read off the curve; 2.45 is above the top asymptote</text>
+</svg>

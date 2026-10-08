@@ -4286,6 +4286,288 @@ fn compound_pie(values: []const f32, tail: usize, kind: CompoundKind, bounds: ge
     ret (CompoundPie { main: main[..main_count], breakout: slices, bars: stacks, connectors: connectors, other_total: other, main_total: total - other }, ok)
 }
 
+type ParallelLineFit = struct {
+    observations: Layout, lines: Layout,
+    slope: f64, intercept_standard: f64, intercept_test: f64,
+    log_potency: f64, potency: f64, potency_lower: f64, potency_upper: f64,
+    parallelism_f: f64, parallel: bool, residual_df: usize,
+}
+
+// Classical parallel-line assay on log10 dose: standard and test preparations get a
+// common slope and separate intercepts (least squares), the plot shows both lines and
+// every observation (the first dose_s.len points are the standard), and the relative
+// potency of test to standard is 10^M with M = (a_t - a_s) / b, bracketed by Fieller's
+// limits at confidence 1 - alpha. `parallelism_f` is the F statistic for a common
+// versus separate slopes (1 and n-4 df) and `parallel` compares it with its critical
+// value at alpha. Refused: a slope too uncertain for finite limits (Fieller's g >= 1),
+// a perfect separate-slopes fit (no residual to test against), fewer than 2 points a
+// preparation or 5 in all, non-positive doses.
+fn parallel_line_assay(dose_s: []const f64, resp_s: []const f64, dose_t: []const f64, resp_t: []const f64, alpha: f64, bounds: geometry.Rect, points: []Coord, lines: []Segment) -> (ParallelLineFit, err) {
+    let ns = dose_s.len
+    let nt = dose_t.len
+    if ns == 0usize || nt == 0usize { ret (zero, Empty) }
+    if resp_s.len != ns || resp_t.len != nt || ns < 2usize || nt < 2usize || ns + nt < 5usize || !(alpha > 0.0f64 && alpha < 1.0f64) || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if points.len < ns + nt || lines.len < 2usize { ret (zero, TooLarge) }
+    var xs: [64]f64 = zero
+    var xt: [64]f64 = zero
+    if ns > 64usize || nt > 64usize { ret (zero, TooLarge) }
+    var mean_xs = 0.0f64
+    var mean_ys = 0.0f64
+    var mean_xt = 0.0f64
+    var mean_yt = 0.0f64
+    var i = 0usize
+    while i < ns {
+        if !finite64(dose_s[i]) || dose_s[i] <= 0.0f64 || !finite64(resp_s[i]) { ret (zero, Invalid) }
+        xs[i] = math.log10[f64](dose_s[i])
+        mean_xs += xs[i] / f64(ns)
+        mean_ys += resp_s[i] / f64(ns)
+        i += 1usize
+    }
+    i = 0usize
+    while i < nt {
+        if !finite64(dose_t[i]) || dose_t[i] <= 0.0f64 || !finite64(resp_t[i]) { ret (zero, Invalid) }
+        xt[i] = math.log10[f64](dose_t[i])
+        mean_xt += xt[i] / f64(nt)
+        mean_yt += resp_t[i] / f64(nt)
+        i += 1usize
+    }
+    var sxx_s = 0.0f64
+    var sxy_s = 0.0f64
+    var syy_s = 0.0f64
+    var sxx_t = 0.0f64
+    var sxy_t = 0.0f64
+    var syy_t = 0.0f64
+    i = 0usize
+    while i < ns {
+        sxx_s += (xs[i] - mean_xs) * (xs[i] - mean_xs)
+        sxy_s += (xs[i] - mean_xs) * (resp_s[i] - mean_ys)
+        syy_s += (resp_s[i] - mean_ys) * (resp_s[i] - mean_ys)
+        i += 1usize
+    }
+    i = 0usize
+    while i < nt {
+        sxx_t += (xt[i] - mean_xt) * (xt[i] - mean_xt)
+        sxy_t += (xt[i] - mean_xt) * (resp_t[i] - mean_yt)
+        syy_t += (resp_t[i] - mean_yt) * (resp_t[i] - mean_yt)
+        i += 1usize
+    }
+    let sxx = sxx_s + sxx_t
+    if !(sxx > 0.0f64) { ret (zero, Invalid) }
+    let slope = (sxy_s + sxy_t) / sxx
+    if !(slope != 0.0f64) { ret (zero, Invalid) }
+    let sse_common = (syy_s + syy_t) - slope * (sxy_s + sxy_t)
+    var sse_separate = syy_s + syy_t
+    if sxx_s > 0.0f64 { sse_separate -= sxy_s * sxy_s / sxx_s }
+    if sxx_t > 0.0f64 { sse_separate -= sxy_t * sxy_t / sxx_t }
+    let n = ns + nt
+    if !(sse_separate > 0.0f64) || !finite64(sse_common) { ret (zero, Invalid) }
+    let f_statistic = (sse_common - sse_separate) / (sse_separate / f64(n - 4usize))
+    let df = n - 3usize
+    let f_share = beta_quantile_for_f(alpha, 1.0f64, f64(n - 4usize))
+    let f_critical = f64(n - 4usize) * f_share / (1.0f64 - f_share)
+    // Student t^2 from the beta quantile: x = t^2 / (df + t^2).
+    let t_share = stat.beta_quantile(1.0f64 - alpha, 0.5f64, f64(df) * 0.5f64)
+    let t2 = f64(df) * t_share / (1.0f64 - t_share)
+    let s2 = sse_common / f64(df)
+    let difference = mean_yt - mean_ys
+    let v1 = s2 * (1.0f64 / f64(ns) + 1.0f64 / f64(nt))
+    let v2 = s2 / sxx
+    let denominator = slope * slope - t2 * v2
+    if !(denominator > 0.0f64) || !finite64(t2) { ret (zero, Invalid) }
+    let discriminant = t2 * (difference * difference * v2 + slope * slope * v1 - t2 * v1 * v2)
+    if !(discriminant >= 0.0f64) { ret (zero, Invalid) }
+    let root = math.sqrt[f64](discriminant)
+    let r1 = (difference * slope - root) / denominator
+    let r2 = (difference * slope + root) / denominator
+    var low_ratio = r1
+    var high_ratio = r2
+    if r2 < r1 {
+        low_ratio = r2
+        high_ratio = r1
+    }
+    let shift = mean_xs - mean_xt
+    let log_potency = shift + difference / slope
+    let intercept_s = mean_ys - slope * mean_xs
+    let intercept_t = mean_yt - slope * mean_xt
+    var x_lo = xs[0usize]
+    var x_hi = xs[0usize]
+    var y_lo = resp_s[0usize]
+    var y_hi = resp_s[0usize]
+    i = 0usize
+    while i < ns {
+        if xs[i] < x_lo { x_lo = xs[i] }
+        if xs[i] > x_hi { x_hi = xs[i] }
+        if resp_s[i] < y_lo { y_lo = resp_s[i] }
+        if resp_s[i] > y_hi { y_hi = resp_s[i] }
+        i += 1usize
+    }
+    i = 0usize
+    while i < nt {
+        if xt[i] < x_lo { x_lo = xt[i] }
+        if xt[i] > x_hi { x_hi = xt[i] }
+        if resp_t[i] < y_lo { y_lo = resp_t[i] }
+        if resp_t[i] > y_hi { y_hi = resp_t[i] }
+        i += 1usize
+    }
+    let ends = [4]f64{ intercept_s + slope * x_lo, intercept_s + slope * x_hi, intercept_t + slope * x_lo, intercept_t + slope * x_hi }
+    i = 0usize
+    while i < 4usize {
+        if ends[i] < y_lo { y_lo = ends[i] }
+        if ends[i] > y_hi { y_hi = ends[i] }
+        i += 1usize
+    }
+    if !(x_hi > x_lo) || !(y_hi > y_lo) { ret (zero, Invalid) }
+    let bottom = bounds.y + bounds.height
+    i = 0usize
+    while i < ns {
+        points[i] = Coord { x: bounds.x + bounds.width * f32((xs[i] - x_lo) / (x_hi - x_lo)), y: bottom - bounds.height * f32((resp_s[i] - y_lo) / (y_hi - y_lo)) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < nt {
+        points[ns + i] = Coord { x: bounds.x + bounds.width * f32((xt[i] - x_lo) / (x_hi - x_lo)), y: bottom - bounds.height * f32((resp_t[i] - y_lo) / (y_hi - y_lo)) }
+        i += 1usize
+    }
+    var k = 0usize
+    while k < 2usize {
+        let a = ends[k * 2usize]
+        let b = ends[k * 2usize + 1usize]
+        lines[k] = Segment { from: Coord { x: bounds.x, y: bottom - bounds.height * f32((a - y_lo) / (y_hi - y_lo)) }, to: Coord { x: bounds.x + bounds.width, y: bottom - bounds.height * f32((b - y_lo) / (y_hi - y_lo)) } }
+        k += 1usize
+    }
+    k = 0usize
+    while k < n {
+        if !finite(points[k].x) || !finite(points[k].y) { ret (zero, Invalid) }
+        k += 1usize
+    }
+    let observations = Layout { kind: .Scatter, coords: points[..n], segments: zero, bars: zero, x_min: f32(x_lo), x_max: f32(x_hi), y_min: f32(y_lo), y_max: f32(y_hi) }
+    let fitted = Layout { kind: .Line, coords: zero, segments: lines[..2usize], bars: zero, x_min: f32(x_lo), x_max: f32(x_hi), y_min: f32(y_lo), y_max: f32(y_hi) }
+    ret (ParallelLineFit {
+        observations: observations, lines: fitted, slope: slope, intercept_standard: intercept_s, intercept_test: intercept_t,
+        log_potency: log_potency, potency: math.pow[f64](10.0f64, log_potency),
+        potency_lower: math.pow[f64](10.0f64, shift + low_ratio), potency_upper: math.pow[f64](10.0f64, shift + high_ratio),
+        parallelism_f: f_statistic, parallel: f_statistic <= f_critical, residual_df: df,
+    }, ok)
+}
+
+fn beta_quantile_for_f(alpha: f64, d1: f64, d2: f64) -> f64 {
+    ret stat.beta_quantile(1.0f64 - alpha, d1 * 0.5f64, d2 * 0.5f64)
+}
+
+type SchildFit = struct { observations: Layout, line: Layout, slope: f64, intercept: f64, r_squared: f64, pa2: f64, pkb_unit: f64 }
+
+// Schild plot: x = log10 antagonist concentration B, y = log10(DR - 1) for dose ratios
+// DR > 1. The least-squares line gives the slope (1 for a competitive antagonist),
+// pA2 = intercept / slope (minus the x-intercept) and pKB under a slope fixed at 1,
+// the mean of y - x. At least three points over more than one concentration.
+fn schild_plot(antagonist: []const f64, dose_ratio: []const f64, bounds: geometry.Rect, points: []Coord, line: []Segment) -> (SchildFit, err) {
+    let n = antagonist.len
+    if n == 0usize { ret (zero, Empty) }
+    if dose_ratio.len != n || n < 3usize || !valid_bounds(bounds) { ret (zero, Invalid) }
+    if points.len < n || line.len < 1usize { ret (zero, TooLarge) }
+    if n > 64usize { ret (zero, TooLarge) }
+    var x: [64]f64 = zero
+    var y: [64]f64 = zero
+    var mean_x = 0.0f64
+    var mean_y = 0.0f64
+    var i = 0usize
+    while i < n {
+        if !finite64(antagonist[i]) || antagonist[i] <= 0.0f64 || !finite64(dose_ratio[i]) || dose_ratio[i] <= 1.0f64 { ret (zero, Invalid) }
+        x[i] = math.log10[f64](antagonist[i])
+        y[i] = math.log10[f64](dose_ratio[i] - 1.0f64)
+        mean_x += x[i] / f64(n)
+        mean_y += y[i] / f64(n)
+        i += 1usize
+    }
+    var sxx = 0.0f64
+    var sxy = 0.0f64
+    var syy = 0.0f64
+    var unit = 0.0f64
+    var x_lo = x[0usize]
+    var x_hi = x[0usize]
+    var y_lo = y[0usize]
+    var y_hi = y[0usize]
+    i = 0usize
+    while i < n {
+        sxx += (x[i] - mean_x) * (x[i] - mean_x)
+        sxy += (x[i] - mean_x) * (y[i] - mean_y)
+        syy += (y[i] - mean_y) * (y[i] - mean_y)
+        unit += (y[i] - x[i]) / f64(n)
+        if x[i] < x_lo { x_lo = x[i] }
+        if x[i] > x_hi { x_hi = x[i] }
+        if y[i] < y_lo { y_lo = y[i] }
+        if y[i] > y_hi { y_hi = y[i] }
+        i += 1usize
+    }
+    if !(sxx > 0.0f64) { ret (zero, Invalid) }
+    let slope = sxy / sxx
+    let intercept = mean_y - slope * mean_x
+    var r_squared = 1.0f64
+    if syy > 0.0f64 { r_squared = sxy * sxy / (sxx * syy) }
+    if !(slope != 0.0f64) { ret (zero, Invalid) }
+    let line_ends = [2]f64{ intercept + slope * x_lo, intercept + slope * x_hi }
+    i = 0usize
+    while i < 2usize {
+        if line_ends[i] < y_lo { y_lo = line_ends[i] }
+        if line_ends[i] > y_hi { y_hi = line_ends[i] }
+        i += 1usize
+    }
+    if !(y_hi > y_lo) { ret (zero, Invalid) }
+    let bottom = bounds.y + bounds.height
+    i = 0usize
+    while i < n {
+        points[i] = Coord { x: bounds.x + bounds.width * f32((x[i] - x_lo) / (x_hi - x_lo)), y: bottom - bounds.height * f32((y[i] - y_lo) / (y_hi - y_lo)) }
+        if !finite(points[i].x) || !finite(points[i].y) { ret (zero, Invalid) }
+        i += 1usize
+    }
+    line[0usize] = Segment { from: Coord { x: bounds.x, y: bottom - bounds.height * f32((line_ends[0usize] - y_lo) / (y_hi - y_lo)) }, to: Coord { x: bounds.x + bounds.width, y: bottom - bounds.height * f32((line_ends[1usize] - y_lo) / (y_hi - y_lo)) } }
+    let observed = Layout { kind: .Scatter, coords: points[..n], segments: zero, bars: zero, x_min: f32(x_lo), x_max: f32(x_hi), y_min: f32(y_lo), y_max: f32(y_hi) }
+    let fitted = Layout { kind: .Line, coords: zero, segments: line[..1usize], bars: zero, x_min: f32(x_lo), x_max: f32(x_hi), y_min: f32(y_lo), y_max: f32(y_hi) }
+    ret (SchildFit { observations: observed, line: fitted, slope: slope, intercept: intercept, r_squared: r_squared, pa2: intercept / slope, pkb_unit: unit }, ok)
+}
+
+// Read unknowns back off a standard curve: for each signal strictly between the
+// curve's asymptotes, invert the LL.4 mean to a concentration, flag it in range when
+// it lies inside [dose_min, dose_max], and emit two guide segments (signal level across
+// to the curve, then down to the dose axis) on the same axes dose_response uses
+// (log dose across, [y_min, y_max] up). Returns the layout of guides and the count read.
+fn standard_curve_readback(lower: f64, upper: f64, ec50: f64, slope: f64, signals: []const f64, dose_min: f64, dose_max: f64, y_min: f64, y_max: f64, bounds: geometry.Rect, concentrations: []f64, in_range: []bool, guides: []Segment) -> (Layout, usize, err) {
+    let n = signals.len
+    if n == 0usize { ret (zero, 0usize, Empty) }
+    if !(lower < upper) || !(ec50 > 0.0f64) || !(slope != 0.0f64) || !finite64(lower) || !finite64(upper) || !finite64(ec50) || !finite64(slope) { ret (zero, 0usize, Invalid) }
+    if !(dose_min > 0.0f64) || !(dose_max > dose_min) || !(y_max > y_min) || !finite64(dose_min) || !finite64(dose_max) || !finite64(y_min) || !finite64(y_max) || !valid_bounds(bounds) { ret (zero, 0usize, Invalid) }
+    if concentrations.len < n || in_range.len < n || guides.len < 2usize * n { ret (zero, 0usize, TooLarge) }
+    let log_min = math.log[f64](dose_min)
+    let log_span = math.log[f64](dose_max) - log_min
+    let bottom = bounds.y + bounds.height
+    var read = 0usize
+    var used = 0usize
+    var i = 0usize
+    while i < n {
+        if !finite64(signals[i]) { ret (zero, 0usize, Invalid) }
+        concentrations[i] = 0.0f64
+        in_range[i] = false
+        let fraction_of_span = (signals[i] - lower) / (upper - lower)
+        if fraction_of_span > 0.0f64 && fraction_of_span < 1.0f64 {
+            let log_x = math.log[f64](ec50) + math.log[f64](1.0f64 / fraction_of_span - 1.0f64) / slope
+            let concentration = math.exp[f64](log_x)
+            concentrations[i] = concentration
+            if finite64(concentration) && concentration >= dose_min && concentration <= dose_max && signals[i] >= y_min && signals[i] <= y_max {
+                in_range[i] = true
+                read += 1usize
+                let px = bounds.x + bounds.width * f32((log_x - log_min) / log_span)
+                let py = bottom - bounds.height * f32((signals[i] - y_min) / (y_max - y_min))
+                if !finite(px) || !finite(py) { ret (zero, 0usize, Invalid) }
+                guides[used] = Segment { from: Coord { x: bounds.x, y: py }, to: Coord { x: px, y: py } }
+                guides[used + 1usize] = Segment { from: Coord { x: px, y: py }, to: Coord { x: px, y: bottom } }
+                used += 2usize
+            }
+        }
+        i += 1usize
+    }
+    ret (Layout { kind: .Rug, coords: zero, segments: guides[..used], bars: zero, x_min: f32(dose_min), x_max: f32(dose_max), y_min: f32(y_min), y_max: f32(y_max) }, read, ok)
+}
+
 fn polar_point(center_x: f64, center_y: f64, radius: f64, angle: f64) -> Coord {
     ret Coord { x: f32(center_x + radius * math.cos[f64](angle)), y: f32(center_y + radius * math.sin[f64](angle)) }
 }

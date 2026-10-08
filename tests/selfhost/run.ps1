@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# L095 the bioassay plots against numpy and scipy
+$gfxChartBioassayReferencePath = Join-Path $testBuild 'gfx-chart-bioassay-reference-selfhost.exe'
+$gfxChartBioassayReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_bioassay_reference\src\main.e') $repo 'x64' 'windows' $gfxChartBioassayReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBioassayReferenceWritten -ne 'executable written') { throw 'gfx_chart_bioassay_reference emission failed' }
+$gfxChartBioassayReferenceOutput = & $gfxChartBioassayReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartBioassayReferenceOutput -ne 'gfx chart bioassay reference ok') { throw "gfx_chart_bioassay_reference answered wrongly: exit $LASTEXITCODE" }
 # L094 pie-of-pie and bar-of-pie against a numpy replay
 $gfxChartCompoundPieReferencePath = Join-Path $testBuild 'gfx-chart-compound-pie-reference-selfhost.exe'
 $gfxChartCompoundPieReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_compound_pie_reference\src\main.e') $repo 'x64' 'windows' $gfxChartCompoundPieReferencePath

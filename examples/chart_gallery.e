@@ -11749,6 +11749,104 @@ fn render_compound_pie_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+// L095: bioassay plots from synthetic assays (no dataset is bundled).
+fn render_bioassay_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, which: usize) -> err {
+    var path = "docs/chart-previews/parallel_line_assay.png"
+    var title = "Parallel-line assay"
+    if which == 1usize {
+        path = "docs/chart-previews/schild_plot.png"
+        title = "Schild plot"
+    }
+    if which == 2usize {
+        path = "docs/chart-previews/standard_curve.png"
+        title = "Standard curve readback"
+    }
+    let plot = geometry.rect(46.0, 53.0, 268.0, 133.0)
+    var points: [64]chart.Coord = zero
+    var segments: [64]chart.Segment = zero
+    var curve_segments: [63]chart.Segment = zero
+    var grid: [64]f64 = zero
+    var estimates: [64]f64 = zero
+    var guides: [8]chart.Segment = zero
+    var concentrations: [4]f64 = zero
+    var flags: [4]bool = zero
+    var observed: chart.Layout = zero
+    var fitted: chart.Layout = zero
+    var guide_layout: chart.Layout = zero
+    var note = "Standard and test share a slope; potency is the horizontal gap"
+    if which == 0usize {
+        let dose_s = [12]f64{ 1.0f64, 1.0f64, 1.0f64, 2.0f64, 2.0f64, 2.0f64, 4.0f64, 4.0f64, 4.0f64, 8.0f64, 8.0f64, 8.0f64 }
+        let resp_s = [12]f64{ 21.0f64, 18.5f64, 22.0f64, 31.0f64, 33.5f64, 30.0f64, 44.0f64, 41.5f64, 45.0f64, 55.5f64, 53.0f64, 56.5f64 }
+        let dose_t = [12]f64{ 1.5f64, 1.5f64, 1.5f64, 3.0f64, 3.0f64, 3.0f64, 6.0f64, 6.0f64, 6.0f64, 12.0f64, 12.0f64, 12.0f64 }
+        let resp_t = [12]f64{ 24.0f64, 26.5f64, 23.0f64, 36.0f64, 34.5f64, 37.5f64, 47.0f64, 49.5f64, 46.5f64, 59.0f64, 60.5f64, 58.0f64 }
+        let (fit, fit_error) = chart.parallel_line_assay(dose_s[..], resp_s[..], dose_t[..], resp_t[..], 0.05, plot, points[..], segments[..])
+        if fit_error != ok { ret fit_error }
+        observed = fit.observations
+        fitted = fit.lines
+        note = "Common slope / test above standard: potency > 1"
+    } else if which == 1usize {
+        let conc = [6]f64{ 1.0e-8f64, 3.0e-8f64, 1.0e-7f64, 3.0e-7f64, 1.0e-6f64, 3.0e-6f64 }
+        let ratio = [6]f64{ 1.5f64, 2.6f64, 6.2f64, 15.8f64, 51.0f64, 148.0f64 }
+        let (fit, fit_error) = chart.schild_plot(conc[..], ratio[..], plot, points[..], segments[..])
+        if fit_error != ok { ret fit_error }
+        observed = fit.observations
+        fitted = fit.line
+        note = "log10(dose ratio - 1) against log10 antagonist: slope near 1 is competitive"
+    } else {
+        let dose = [8]f64{ 1.0e-11f64, 1.0e-10f64, 3.0e-10f64, 1.0e-9f64, 3.0e-9f64, 1.0e-8f64, 1.0e-7f64, 1.0e-6f64 }
+        let response = [8]f64{ 2.36f64, 2.30f64, 2.12f64, 1.40f64, 0.62f64, 0.20f64, 0.09f64, 0.08f64 }
+        let (curve, curve_error) = chart.dose_response(dose[..], response[..], 0.08, 2.4, 1.2e-9, 1.3, plot, grid[..], estimates[..], points[..], curve_segments[..])
+        if curve_error != ok { ret curve_error }
+        observed = curve.observations
+        fitted = curve.curve
+        let unknowns = [4]f64{ 1.5f64, 0.3f64, 2.3f64, 2.45f64 }
+        let (marks, read, read_error) = chart.standard_curve_readback(0.08, 2.4, 1.2e-9, 1.3, unknowns[..], 1.0e-11, 1.0e-6, 0.08, 2.4, plot, concentrations[..], flags[..], guides[..])
+        if read_error != ok || read != 3usize { ret chart.Invalid }
+        guide_layout = marks
+        note = "3 of 4 unknown signals read off the curve; 2.45 is above the top asymptote"
+    }
+    let x_ticks = [2]chart.Tick{ chart.Tick { value: 0.0, fraction: 0.0 }, chart.Tick { value: 1.0, fraction: 1.0 } }
+    let y_ticks = [2]chart.Tick{ chart.Tick { value: 0.0, fraction: 0.0 }, chart.Tick { value: 1.0, fraction: 1.0 } }
+    var text: [2]chart.Label = zero
+    text[0usize] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center }
+    text[1usize] = chart.Label { text: note, anchor: chart.Coord { x: 180.0, y: 36.0 }, align: .Center }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let blue = paint.rgba(0.08, 0.39, 0.74, 1.0)
+    let red = paint.rgba(0.82, 0.19, 0.22, 1.0)
+    let grid_ink = paint.rgba(0.87, 0.91, 0.95, 1.0)
+    let pale = paint.rgba(0.98, 0.99, 1.0, 1.0)
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    let (made, builder_error) = scene.builder(a, 256usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    try fill(&builder, plot, paint.Brush { Solid: pale })
+    try chart_scene.append_guides(&builder, plot, x_ticks[..], y_ticks[..], paint.Brush { Solid: grid_ink }, paint.Brush { Solid: dark })
+    try chart_scene.append(a, &builder, &fitted, paint.Brush { Solid: blue })
+    try chart_scene.append(a, &builder, &observed, paint.Brush { Solid: red })
+    if which == 2usize { try chart_scene.append(a, &builder, &guide_layout, paint.Brush { Solid: dark }) }
+    try chart_scene.append_labels(a, &builder, text[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, text[1usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    try chart_svg.rect(&writer, plot, pale, false)
+    try chart_svg.append_guides(&writer, plot, x_ticks[..], y_ticks[..], grid_ink, dark)
+    try chart_svg.append(&writer, &fitted, blue)
+    try chart_svg.append(&writer, &observed, red)
+    if which == 2usize { try chart_svg.append(&writer, &guide_layout, dark) }
+    try chart_svg.append_labels(&writer, text[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, text[1usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, device_error) = gpu.open(a, .Cpu, 0u32)
     if device_error != ok { ret device_error }
@@ -12224,6 +12322,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_pie_25d_preview(a, queue, output_target, canvas, &renderer)
     try render_compound_pie_preview(a, queue, output_target, canvas, &renderer, .Pie, "docs/chart-previews/pie_of_pie.png", "Pie of pie")
     try render_compound_pie_preview(a, queue, output_target, canvas, &renderer, .Bar, "docs/chart-previews/bar_of_pie.png", "Bar of pie")
+    try render_bioassay_preview(a, queue, output_target, canvas, &renderer, 0usize)
+    try render_bioassay_preview(a, queue, output_target, canvas, &renderer, 1usize)
+    try render_bioassay_preview(a, queue, output_target, canvas, &renderer, 2usize)
     try render_calendar_preview(a, queue, output_target, canvas, &renderer)
     try render_risk_matrix_preview(a, queue, output_target, canvas, &renderer)
     try render_resource_histogram_preview(a, queue, output_target, canvas, &renderer)

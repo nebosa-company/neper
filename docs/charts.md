@@ -2,7 +2,7 @@
 
 Neper builds renderer-neutral chart layouts from borrowed data and caller-owned output storage. The same marks feed its CPU scene/PNG and SVG adapters. This guide collects the produced charts, their preview notes, and the charting-engine design and catalogue. Readiness scores remain in [progress.html](progress.html).
 
-## Rendered previews (244/244)
+## Rendered previews (246/246)
 
 The total includes rendered PNG/SVG pairs and the [planned gallery targets](chart-preview-backlog.txt).
 
@@ -17,6 +17,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Attribute Agreement | ![Attribute Agreement](chart-previews/attribute_agreement.png) | [SVG](chart-previews/attribute_agreement.svg) |
 | Band | ![Band](chart-previews/band.png) | [SVG](chart-previews/band.svg) |
 | Bar | ![Bar](chart-previews/bar.png) | [SVG](chart-previews/bar.svg) |
+| Bar Of Pie | ![Bar Of Pie](chart-previews/bar_of_pie.png) | [SVG](chart-previews/bar_of_pie.svg) |
 | Beeswarm | ![Beeswarm](chart-previews/beeswarm.png) | [SVG](chart-previews/beeswarm.svg) |
 | Benchmark Matplotlib | ![Benchmark Matplotlib](chart-previews/benchmark_matplotlib.png) | [SVG](chart-previews/benchmark_matplotlib.svg) |
 | Bin2D | ![Bin2D](chart-previews/bin2d.png) | [SVG](chart-previews/bin2d.svg) |
@@ -178,6 +179,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Phased Xbar S | ![Phased Xbar S](chart-previews/phased_xbar_s.png) | [SVG](chart-previews/phased_xbar_s.svg) |
 | Pie | ![Pie](chart-previews/pie.png) | [SVG](chart-previews/pie.svg) |
 | Pie 25D | ![Pie 25D](chart-previews/pie_25d.png) | [SVG](chart-previews/pie_25d.svg) |
+| Pie Of Pie | ![Pie Of Pie](chart-previews/pie_of_pie.png) | [SVG](chart-previews/pie_of_pie.svg) |
 | Plot Grid | ![Plot Grid](chart-previews/plot_grid.png) | [SVG](chart-previews/plot_grid.svg) |
 | Point Line | ![Point Line](chart-previews/point_line.png) | [SVG](chart-previews/point_line.svg) |
 | Population Pyramid | ![Population Pyramid](chart-previews/population_pyramid.png) | [SVG](chart-previews/population_pyramid.svg) |
@@ -1876,3 +1878,16 @@ totals reconcile by construction. `gfx_chart_compound_pie_reference` checks vert
 a numpy replay, polygon areas against the chord-sector formula and proportional to the
 values, connectors and refusals on Windows and Linux; the gallery adds `pie_of_pie` and
 `bar_of_pie`.
+
+`parallel_line_assay` fits the classical parallel-line model on log10 dose (common
+slope, separate intercepts), plots both lines over every observation, and reports the
+relative potency of test to standard with Fieller limits at 1 - alpha plus the F
+statistic for common versus separate slopes and whether it passes at alpha.
+`schild_plot` plots log10 antagonist concentration against log10(DR - 1) with the
+least-squares line, slope, pA2 and pKB at unit slope. `standard_curve_readback`
+inverts a caller-parameterised LL.4 standard curve for unknown signals, flags the
+ones inside the dose and signal domain and draws the guide segments on the
+`dose_response` axes. The fits ride the closed-form least-squares here; Emax/Hill and
+Michaelis-Menten fitting stay with L015. `gfx_chart_bioassay_reference` checks all three
+against numpy and scipy on Windows and Linux; the gallery adds `parallel_line_assay`,
+`schild_plot` and `standard_curve`.
