@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# L076 e.text.mask against fnmatch and hand tables
+text_mask_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_mask/src/main.e" "$repo" x64 linux "$test_build/text-mask-selfhost")
+[ "$text_mask_written" = 'executable written' ]
+chmod +x "$test_build/text-mask-selfhost"
+text_mask_output=$("$test_build/text-mask-selfhost")
+[ "$text_mask_output" = 'text mask ok' ]
 # L097 the QC and agreement extensions against numpy and scipy
 gfx_chart_qc_agreement_reference_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_qc_agreement_reference/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-qc-agreement-reference-selfhost")
 [ "$gfx_chart_qc_agreement_reference_written" = 'executable written' ]

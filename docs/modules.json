@@ -200,6 +200,7 @@
     "e.text.rank",
     "e.text.index",
     "e.text.tokenize",
+    "e.text.mask",
     "e.data.spatial",
     "e.data.succinct",
     "e.data.rope",
@@ -3225,6 +3226,15 @@
     "e.math",
     "e.mem"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.mask",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {

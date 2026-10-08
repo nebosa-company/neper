@@ -2,7 +2,7 @@
 
 Neper builds renderer-neutral chart layouts from borrowed data and caller-owned output storage. The same marks feed its CPU scene/PNG and SVG adapters. This guide collects the produced charts, their preview notes, and the charting-engine design and catalogue. Readiness scores remain in [progress.html](progress.html).
 
-## Rendered previews (249/249)
+## Rendered previews (253/253)
 
 The total includes rendered PNG/SVG pairs and the [planned gallery targets](chart-preview-backlog.txt).
 
@@ -24,6 +24,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Bland Altman | ![Bland Altman](chart-previews/bland_altman.png) | [SVG](chart-previews/bland_altman.svg) |
 | Bode | ![Bode](chart-previews/bode.png) | [SVG](chart-previews/bode.svg) |
 | Box | ![Box](chart-previews/box.png) | [SVG](chart-previews/box.svg) |
+| Box Cox Profile | ![Box Cox Profile](chart-previews/box_cox_profile.png) | [SVG](chart-previews/box_cox_profile.svg) |
 | Boxen | ![Boxen](chart-previews/boxen.png) | [SVG](chart-previews/boxen.svg) |
 | Branching Process Map | ![Branching Process Map](chart-previews/branching_process_map.png) | [SVG](chart-previews/branching_process_map.svg) |
 | Bubble | ![Bubble](chart-previews/bubble.png) | [SVG](chart-previews/bubble.svg) |
@@ -51,6 +52,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Column 25D | ![Column 25D](chart-previews/column_25d.png) | [SVG](chart-previews/column_25d.svg) |
 | Combo Axes | ![Combo Axes](chart-previews/combo_axes.png) | [SVG](chart-previews/combo_axes.svg) |
 | Combo Bar Line | ![Combo Bar Line](chart-previews/combo_bar_line.png) | [SVG](chart-previews/combo_bar_line.svg) |
+| Concordance | ![Concordance](chart-previews/concordance.png) | [SVG](chart-previews/concordance.svg) |
 | Confidence Band | ![Confidence Band](chart-previews/confidence_band.png) | [SVG](chart-previews/confidence_band.svg) |
 | Confusion Matrix | ![Confusion Matrix](chart-previews/confusion_matrix.png) | [SVG](chart-previews/confusion_matrix.svg) |
 | Connected Scatter | ![Connected Scatter](chart-previews/connected_scatter.png) | [SVG](chart-previews/connected_scatter.svg) |
@@ -135,6 +137,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Layered | ![Layered](chart-previews/layered.png) | [SVG](chart-previews/layered.svg) |
 | Legend Collision | ![Legend Collision](chart-previews/legend_collision.png) | [SVG](chart-previews/legend_collision.svg) |
 | Leverage Residual | ![Leverage Residual](chart-previews/leverage_residual.png) | [SVG](chart-previews/leverage_residual.svg) |
+| Levey Jennings | ![Levey Jennings](chart-previews/levey_jennings.png) | [SVG](chart-previews/levey_jennings.svg) |
 | Line | ![Line](chart-previews/line.png) | [SVG](chart-previews/line.svg) |
 | Locale Axes | ![Locale Axes](chart-previews/locale_axes.png) | [SVG](chart-previews/locale_axes.svg) |
 | Loess Band | ![Loess Band](chart-previews/loess_band.png) | [SVG](chart-previews/loess_band.svg) |
@@ -237,6 +240,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Sunburst | ![Sunburst](chart-previews/sunburst.png) | [SVG](chart-previews/sunburst.svg) |
 | Swimlane | ![Swimlane](chart-previews/swimlane.png) | [SVG](chart-previews/swimlane.svg) |
 | Symlog Line | ![Symlog Line](chart-previews/symlog_line.png) | [SVG](chart-previews/symlog_line.svg) |
+| Symmetry Plot | ![Symmetry Plot](chart-previews/symmetry_plot.png) | [SVG](chart-previews/symmetry_plot.svg) |
 | T Control | ![T Control](chart-previews/t_control.png) | [SVG](chart-previews/t_control.svg) |
 | Ternary | ![Ternary](chart-previews/ternary.png) | [SVG](chart-previews/ternary.svg) |
 | Tornado | ![Tornado](chart-previews/tornado.png) | [SVG](chart-previews/tornado.svg) |

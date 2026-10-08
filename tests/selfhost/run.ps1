@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# L076 e.text.mask against fnmatch and hand tables
+$textMaskPath = Join-Path $testBuild 'text-mask-selfhost.exe'
+$textMaskWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_mask\src\main.e') $repo 'x64' 'windows' $textMaskPath
+if ($LASTEXITCODE -ne 0 -or $textMaskWritten -ne 'executable written') { throw 'text_mask emission failed' }
+$textMaskOutput = & $textMaskPath
+if ($LASTEXITCODE -ne 0 -or $textMaskOutput -ne 'text mask ok') { throw "text_mask answered wrongly: exit $LASTEXITCODE" }
 # L097 the QC and agreement extensions against numpy and scipy
 $gfxChartQcAgreementReferencePath = Join-Path $testBuild 'gfx-chart-qc-agreement-reference-selfhost.exe'
 $gfxChartQcAgreementReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_qc_agreement_reference\src\main.e') $repo 'x64' 'windows' $gfxChartQcAgreementReferencePath

@@ -1192,17 +1192,6 @@
       "evidence": "Planning only (D1812). Reference: JustCode tests/consistency.test.js. Not yet: extend existing Neper validation tools to check icon/resource references, translation-key coverage and duplicate keys, locale placeholder agreement, command/menu callback contracts and mnemonic conflicts. Consume actual resource/command registries and generated manifests; do not claim arbitrary dynamic source references can be proven by regex. Include small malformed-registry cases proving each check fails and wire checks into the existing build/test entry point with actionable locations. Keep repository-specific manifests, rules and CI wiring in scripts/tests; add no runtime validation framework or standard-library dependency."
     },
     {
-      "id": "L076",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 174,
-      "title": "Filename-mask matching (TMask parity) in e.text",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1819). Delphi TMask parity: `*?[]` sets/ranges with escaping over caller storage, no filesystem coupling (e.fs consumes separately). Pure table fixtures incl. character sets, ranges, negation, escaping and invalid patterns. Ranked pure-testable: zero I/O. Follow-on (D1873): pathspec gitwildmatch (`**`, dir-only markers) for ignore-file parity."
-    },
-    {
       "id": "L077",
       "category": "library",
       "group": "Algorithms",

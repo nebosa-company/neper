@@ -4255,6 +4255,34 @@ free) break space-separated words into lines answered as (start, end) byte pairs
 overlong word alone on its line; `justify` spreads a line's words to `width` columns
 with the extra spaces from the left.
 
+### `e.text.mask`
+
+```neper
+error Invalid
+
+type Item = struct { end: usize, kind: u8 }
+
+const STAR: u8 = 1u8
+const ANY: u8 = 2u8
+const SET: u8 = 3u8
+const LITERAL: u8 = 4u8
+
+fn decode(s: str, i: usize) -> (u32, usize)
+fn fold(c: u32, case_sensitive: bool) -> u32
+fn item(mask: str, p: usize) -> (Item, err)
+fn set_char(mask: str, q: usize) -> (u32, usize, err)
+fn valid(mask: str) -> err
+fn item_matches(mask: str, p: usize, it: Item, cp: u32, case_sensitive: bool) -> bool
+fn matches(mask: str, text: str, case_sensitive: bool) -> (bool, err)
+fn matches_any(masks: str, text: str, case_sensitive: bool) -> (bool, err)
+```
+
+Delphi TMask-style filename masks over bytes with no allocation: `*`, `?` (one UTF-8
+code point), `[set]` with ranges, `!` or `^` negation and a literal leading `]`, and `\c`
+escapes, ASCII-only case folding on request. A malformed mask is refused before any matching;
+`matches_any` takes `;`-separated masks. No filesystem coupling (e.fs consumes it
+separately).
+
 ### `e.text.metric`
 
 ```neper
