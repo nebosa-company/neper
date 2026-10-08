@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" width="360" height="240" viewBox="0 0 360 240"><title>column_25d</title><desc>Neper chart rendered from caller-owned geometry</desc>
+<rect x="0" y="0" width="360" height="240" fill="rgb(255,255,255)"/>
+<rect x="52" y="145.6" width="28" height="50.4" fill="rgb(26,115,204)"/>
+<path d="M52 145.6 L80 145.6 L88 137.6 L60 137.6 Z" fill="rgb(115,184,242)"/>
+<path d="M80 145.6 L88 137.6 L88 188 L80 196 Z" fill="rgb(13,71,140)"/>
+<rect x="96" y="116.8" width="28" height="79.2" fill="rgb(26,115,204)"/>
+<path d="M96 116.8 L124 116.8 L132 108.8 L104 108.8 Z" fill="rgb(115,184,242)"/>
+<path d="M124 116.8 L132 108.8 L132 188 L124 196 Z" fill="rgb(13,71,140)"/>
+<rect x="140" y="131.2" width="28" height="64.8" fill="rgb(26,115,204)"/>
+<path d="M140 131.2 L168 131.2 L176 123.2 L148 123.2 Z" fill="rgb(115,184,242)"/>
+<path d="M168 131.2 L176 123.2 L176 188 L168 196 Z" fill="rgb(13,71,140)"/>
+<rect x="184" y="90.4" width="28" height="105.6" fill="rgb(26,115,204)"/>
+<path d="M184 90.4 L212 90.4 L220 82.4 L192 82.4 Z" fill="rgb(115,184,242)"/>
+<path d="M212 90.4 L220 82.4 L220 188 L212 196 Z" fill="rgb(13,71,140)"/>
+<rect x="228" y="110.8" width="28" height="85.2" fill="rgb(26,115,204)"/>
+<path d="M228 110.8 L256 110.8 L264 102.8 L236 102.8 Z" fill="rgb(115,184,242)"/>
+<path d="M256 110.8 L264 102.8 L264 188 L256 196 Z" fill="rgb(13,71,140)"/>
+<rect x="272" y="82" width="28" height="114" fill="rgb(26,115,204)"/>
+<path d="M272 82 L300 82 L308 74 L280 74 Z" fill="rgb(115,184,242)"/>
+<path d="M300 82 L308 74 L308 188 L300 196 Z" fill="rgb(13,71,140)"/>
+<text x="180" y="20" font-family="sans-serif" font-size="13" text-anchor="middle" fill="rgb(43,59,82)">2.5D columns</text>
+<text x="180" y="36" font-family="sans-serif" font-size="8" text-anchor="middle" fill="rgb(43,59,82)">Fixed oblique projection on ordinary bar geometry</text>
+</svg>

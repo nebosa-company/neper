@@ -1349,3 +1349,13 @@ one blank row between them, bars on a fixed [-1, 1] axis and the mean as one seg
 column's missing share. `gfx_chart_ml_diagnostics_reference` checks all three
 against numpy (and scikit-learn's silhouette when installed) on Windows and Linux;
 the gallery adds `ice_pdp`, `silhouette` and `missingness` PNG/SVG previews.
+
+`extrude_bars` gives each front rectangle a top and a right-hand side face under a
+fixed cabinet oblique projection (offset of half the depth right and up), as Area quads,
+and `pie_25d` draws a tilted thick pie: slice tops are vertically squashed sectors and
+each slice's visible near-half outer wall is dropped by the thickness (empty when the
+slice lies on the far half). Both are styling on 2-D geometry, distinct from the
+`scatter3d` camera: no depth sorting beyond the documented draw order (bars left to
+right, front then top then side; walls, then tops). `gfx_chart_25d_reference` checks
+vertices against a numpy replay, parallelogram areas by shoelace, the visible wall arc
+and the footprint on Windows and Linux; the gallery adds `column_25d` and `pie_25d`.

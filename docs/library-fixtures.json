@@ -855,6 +855,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_25d_reference",
     "gfx_chart_3d_reference",
     "gfx_chart_accessible_palette",
     "gfx_chart_aggregate_tree",
@@ -1110,11 +1111,12 @@
    "module": "e.gfx.chart",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 294,
-   "delivered": 294,
+   "catalogue": 297,
+   "delivered": 297,
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_25d_reference",
     "gfx_chart_3d_reference",
     "gfx_chart_accessible_palette",
     "gfx_chart_aggregate_tree",

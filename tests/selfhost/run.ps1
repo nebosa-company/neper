@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# L093 the 2.5D bar and pie styling against a numpy replay
+$gfxChart25dReferencePath = Join-Path $testBuild 'gfx-chart-25d-reference-selfhost.exe'
+$gfxChart25dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_25d_reference\src\main.e') $repo 'x64' 'windows' $gfxChart25dReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChart25dReferenceWritten -ne 'executable written') { throw 'gfx_chart_25d_reference emission failed' }
+$gfxChart25dReferenceOutput = & $gfxChart25dReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChart25dReferenceOutput -ne 'gfx chart 25d reference ok') { throw "gfx_chart_25d_reference answered wrongly: exit $LASTEXITCODE" }
 # L092 the ML-diagnostics plots against numpy and scikit-learn
 $gfxChartMlDiagnosticsReferencePath = Join-Path $testBuild 'gfx-chart-ml-diagnostics-reference-selfhost.exe'
 $gfxChartMlDiagnosticsReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_ml_diagnostics_reference\src\main.e') $repo 'x64' 'windows' $gfxChartMlDiagnosticsReferencePath

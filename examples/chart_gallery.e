@@ -11558,6 +11558,121 @@ fn render_missingness_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+// L093: 2.5D styling on 2-D geometry (fixed oblique offset, tilted thick pie).
+fn render_column_25d_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/column_25d.png"
+    let values = [6]f32{ 42.0, 66.0, 54.0, 88.0, 71.0, 95.0 }
+    var fronts: [6]geometry.Rect = zero
+    var i = 0usize
+    while i < 6usize {
+        let height = values[i] * 1.2
+        fronts[i] = geometry.rect(52.0 + f32(i) * 44.0, 196.0 - height, 28.0, height)
+        i += 1usize
+    }
+    var points: [48]chart.Coord = zero
+    var tops: [6]chart.Layout = zero
+    var sides: [6]chart.Layout = zero
+    let (solid, solid_error) = chart.extrude_bars(fronts[..], 16.0, points[..], tops[..], sides[..])
+    if solid_error != ok { ret solid_error }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    let front = paint.rgba(0.10, 0.45, 0.80, 1.0)
+    let top_ink = paint.rgba(0.45, 0.72, 0.95, 1.0)
+    let side_ink = paint.rgba(0.05, 0.28, 0.55, 1.0)
+    var text: [2]chart.Label = zero
+    text[0usize] = chart.Label { text: "2.5D columns", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center }
+    text[1usize] = chart.Label { text: "Fixed oblique projection on ordinary bar geometry", anchor: chart.Coord { x: 180.0, y: 36.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    let (made, builder_error) = scene.builder(a, 256usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    i = 0usize
+    while i < 6usize {
+        try fill(&builder, fronts[i], paint.Brush { Solid: front })
+        try chart_scene.append(a, &builder, &solid.tops[i], paint.Brush { Solid: top_ink })
+        try chart_scene.append(a, &builder, &solid.sides[i], paint.Brush { Solid: side_ink })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, text[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, text[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < 6usize {
+        try chart_svg.rect(&writer, fronts[i], front, false)
+        try chart_svg.append(&writer, &solid.tops[i], top_ink)
+        try chart_svg.append(&writer, &solid.sides[i], side_ink)
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, text[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, text[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
+fn render_pie_25d_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer) -> err {
+    let path = "docs/chart-previews/pie_25d.png"
+    let values = [5]f32{ 34.0, 22.0, 18.0, 15.0, 11.0 }
+    var points: [1000]chart.Coord = zero
+    var tops: [5]chart.Layout = zero
+    var walls: [5]chart.Layout = zero
+    let (pie, pie_error) = chart.pie_25d(values[..], geometry.rect(70.0, 52.0, 220.0, 160.0), 0.55, 16.0, points[..], tops[..], walls[..])
+    if pie_error != ok { ret pie_error }
+    let tints = [5]paint.Color{ paint.rgba(0.07, 0.38, 0.76, 1.0), paint.rgba(0.86, 0.39, 0.17, 1.0), paint.rgba(0.15, 0.60, 0.46, 1.0), paint.rgba(0.48, 0.35, 0.72, 1.0), paint.rgba(0.80, 0.68, 0.18, 1.0) }
+    let shade = [5]paint.Color{ paint.rgba(0.04, 0.23, 0.46, 1.0), paint.rgba(0.52, 0.23, 0.10, 1.0), paint.rgba(0.09, 0.36, 0.28, 1.0), paint.rgba(0.29, 0.21, 0.43, 1.0), paint.rgba(0.48, 0.41, 0.11, 1.0) }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    var text: [2]chart.Label = zero
+    text[0usize] = chart.Label { text: "2.5D pie", anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center }
+    text[1usize] = chart.Label { text: "Tilt 0.55 / thickness 16 / visible near-half walls", anchor: chart.Coord { x: 180.0, y: 36.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    let (made, builder_error) = scene.builder(a, 1024usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var i = 0usize
+    while i < 5usize {
+        if pie.sides[i].coords.len > 0usize { try chart_scene.append(a, &builder, &pie.sides[i], paint.Brush { Solid: shade[i] }) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 5usize {
+        try chart_scene.append(a, &builder, &pie.tops[i], paint.Brush { Solid: tints[i] })
+        i += 1usize
+    }
+    try chart_scene.append_labels(a, &builder, text[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, text[1usize..], font, 8.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < 5usize {
+        if pie.sides[i].coords.len > 0usize { try chart_svg.append(&writer, &pie.sides[i], shade[i]) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 5usize {
+        try chart_svg.append(&writer, &pie.tops[i], tints[i])
+        i += 1usize
+    }
+    try chart_svg.append_labels(&writer, text[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, text[1usize..], dark, 8.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, device_error) = gpu.open(a, .Cpu, 0u32)
     if device_error != ok { ret device_error }
@@ -12029,6 +12144,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_ice_pdp_preview(a, queue, output_target, canvas, &renderer)
     try render_silhouette_preview(a, queue, output_target, canvas, &renderer)
     try render_missingness_preview(a, queue, output_target, canvas, &renderer)
+    try render_column_25d_preview(a, queue, output_target, canvas, &renderer)
+    try render_pie_25d_preview(a, queue, output_target, canvas, &renderer)
     try render_calendar_preview(a, queue, output_target, canvas, &renderer)
     try render_risk_matrix_preview(a, queue, output_target, canvas, &renderer)
     try render_resource_histogram_preview(a, queue, output_target, canvas, &renderer)

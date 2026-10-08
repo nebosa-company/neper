@@ -4014,6 +4014,126 @@ fn pie(values: []const f32, bounds: geometry.Rect, hole: f32, points: []Coord, l
     ret (layers[..values.len], ok)
 }
 
+type Extruded = struct { tops: []Layout, sides: []Layout }
+
+// 2.5D bars: each front rectangle gains a top and a right-hand side face under a
+// fixed cabinet oblique projection (offset = depth/2 right and up), as Area quads.
+// Draw bars left to right, front then top then side, so a nearer bar's front
+// covers the previous bar's side when the gap is under depth/2. This is styling
+// on 2-D geometry, not the camera of scatter3d: no depth sorting beyond that.
+fn extrude_bars(fronts: []const geometry.Rect, depth: f32, points: []Coord, tops: []Layout, sides: []Layout) -> (Extruded, err) {
+    let n = fronts.len
+    if n == 0usize { ret (zero, Empty) }
+    if !finite(depth) || depth < 0.0 { ret (zero, Invalid) }
+    if points.len / 8usize < n || tops.len < n || sides.len < n { ret (zero, TooLarge) }
+    let d = depth * 0.5
+    var i = 0usize
+    while i < n {
+        let f = fronts[i]
+        if !finite(f.x) || !finite(f.y) || !finite(f.width) || !finite(f.height) || f.width <= 0.0 || f.height < 0.0 || !finite(f.x + f.width + d) || !finite(f.y - d) { ret (zero, Invalid) }
+        let first = i * 8usize
+        points[first] = Coord { x: f.x, y: f.y }
+        points[first + 1usize] = Coord { x: f.x + f.width, y: f.y }
+        points[first + 2usize] = Coord { x: f.x + f.width + d, y: f.y - d }
+        points[first + 3usize] = Coord { x: f.x + d, y: f.y - d }
+        points[first + 4usize] = Coord { x: f.x + f.width, y: f.y }
+        points[first + 5usize] = Coord { x: f.x + f.width + d, y: f.y - d }
+        points[first + 6usize] = Coord { x: f.x + f.width + d, y: f.y + f.height - d }
+        points[first + 7usize] = Coord { x: f.x + f.width, y: f.y + f.height }
+        tops[i] = Layout { kind: .Area, coords: points[first..first + 4usize], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        sides[i] = Layout { kind: .Area, coords: points[first + 4usize..first + 8usize], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    ret (Extruded { tops: tops[..n], sides: sides[..n] }, ok)
+}
+
+// A tilted, thick pie: slice tops are the circular sectors squashed vertically by
+// `tilt` (0.2..1), and `walls[i]` is the visible outer wall of slice i, the part
+// of its arc on the lower (near) half, dropped by `thickness`; a slice entirely on
+// the far half has an empty wall. Draw all walls, then all tops. The footprint is
+// bounds: 2*r*tilt + thickness tall and 2*r wide, whichever binds.
+fn pie_25d(values: []const f32, bounds: geometry.Rect, tilt: f32, thickness: f32, points: []Coord, tops: []Layout, walls: []Layout) -> (Extruded, err) {
+    let n = values.len
+    if n == 0usize { ret (zero, Empty) }
+    if !valid_bounds(bounds) || !finite(tilt) || tilt < 0.2 || tilt > 1.0 || !finite(thickness) || thickness < 0.0 || thickness >= bounds.height { ret (zero, Invalid) }
+    if tops.len < n || walls.len < n { ret (zero, TooLarge) }
+    var total = 0.0f64
+    var i = 0usize
+    while i < n {
+        if !finite(values[i]) || values[i] < 0.0 { ret (zero, Invalid) }
+        total += f64(values[i])
+        i += 1usize
+    }
+    if !(total > 0.0f64) { ret (zero, Invalid) }
+    var needed = 0usize
+    i = 0usize
+    while i < n {
+        let share = f64(values[i]) / total
+        needed += 4usize + usize(share * 96.0f64) + 2usize * (3usize + usize(share * 48.0f64))
+        i += 1usize
+    }
+    if points.len < needed { ret (zero, TooLarge) }
+    var radius = f64(bounds.width) * 0.5f64
+    let vertical = (f64(bounds.height) - f64(thickness)) / (2.0f64 * f64(tilt))
+    if vertical < radius { radius = vertical }
+    let cx = f64(bounds.x) + f64(bounds.width) * 0.5f64
+    let cy = f64(bounds.y) + radius * f64(tilt)
+    let pi = 3.141592653589793f64
+    var used = 0usize
+    var cumulative = 0.0f64
+    i = 0usize
+    while i < n {
+        let share = f64(values[i]) / total
+        let start = -1.5707963267948966f64 + 6.283185307179586f64 * cumulative / total
+        cumulative += f64(values[i])
+        let finish = start + 6.283185307179586f64 * share
+        let top_steps = 2usize + usize(share * 96.0f64)
+        let top_first = used
+        points[used] = Coord { x: f32(cx), y: f32(cy) }
+        used += 1usize
+        var j = 0usize
+        while j <= top_steps {
+            let angle = start + (finish - start) * f64(j) / f64(top_steps)
+            points[used] = Coord { x: f32(cx + radius * math.cos[f64](angle)), y: f32(cy + radius * f64(tilt) * math.sin[f64](angle)) }
+            used += 1usize
+            j += 1usize
+        }
+        tops[i] = Layout { kind: .Area, coords: points[top_first..used], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        var low = start
+        if low < 0.0f64 { low = 0.0f64 }
+        var high = finish
+        if high > pi { high = pi }
+        if high <= low {
+            walls[i] = Layout { kind: .Area, coords: zero, segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        } else {
+            let wall_steps = 2usize + usize(share * 48.0f64)
+            let wall_first = used
+            j = 0usize
+            while j <= wall_steps {
+                let angle = low + (high - low) * f64(j) / f64(wall_steps)
+                points[used] = Coord { x: f32(cx + radius * math.cos[f64](angle)), y: f32(cy + radius * f64(tilt) * math.sin[f64](angle)) }
+                used += 1usize
+                j += 1usize
+            }
+            j = wall_steps + 1usize
+            while j > 0usize {
+                j -= 1usize
+                let angle = low + (high - low) * f64(j) / f64(wall_steps)
+                points[used] = Coord { x: f32(cx + radius * math.cos[f64](angle)), y: f32(cy + radius * f64(tilt) * math.sin[f64](angle) + f64(thickness)) }
+                used += 1usize
+            }
+            walls[i] = Layout { kind: .Area, coords: points[wall_first..used], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        }
+        i += 1usize
+    }
+    var k = 0usize
+    while k < used {
+        if !finite(points[k].x) || !finite(points[k].y) { ret (zero, Invalid) }
+        k += 1usize
+    }
+    ret (Extruded { tops: tops[..n], sides: walls[..n] }, ok)
+}
+
 fn polar_point(center_x: f64, center_y: f64, radius: f64, angle: f64) -> Coord {
     ret Coord { x: f32(center_x + radius * math.cos[f64](angle)), y: f32(center_y + radius * math.sin[f64](angle)) }
 }

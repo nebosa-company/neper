@@ -2,7 +2,7 @@
 
 Neper builds renderer-neutral chart layouts from borrowed data and caller-owned output storage. The same marks feed its CPU scene/PNG and SVG adapters. This guide collects the produced charts, their preview notes, and the charting-engine design and catalogue. Readiness scores remain in [progress.html](progress.html).
 
-## Rendered previews (239/239)
+## Rendered previews (242/242)
 
 The total includes rendered PNG/SVG pairs and the [planned gallery targets](chart-preview-backlog.txt).
 
@@ -114,6 +114,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Histogram3D | ![Histogram3D](chart-previews/histogram3d.png) | [SVG](chart-previews/histogram3d.svg) |
 | Horizon | ![Horizon](chart-previews/horizon.png) | [SVG](chart-previews/horizon.svg) |
 | Hotelling T2 | ![Hotelling T2](chart-previews/hotelling_t2.png) | [SVG](chart-previews/hotelling_t2.svg) |
+| Ice Pdp | ![Ice Pdp](chart-previews/ice_pdp.png) | [SVG](chart-previews/ice_pdp.svg) |
 | Icicle | ![Icicle](chart-previews/icicle.png) | [SVG](chart-previews/icicle.svg) |
 | In Cell Data Bars | ![In Cell Data Bars](chart-previews/in_cell_data_bars.png) | [SVG](chart-previews/in_cell_data_bars.svg) |
 | Individuals Control | ![Individuals Control](chart-previews/individuals_control.png) | [SVG](chart-previews/individuals_control.svg) |
@@ -144,6 +145,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Mewma | ![Mewma](chart-previews/mewma.png) | [SVG](chart-previews/mewma.svg) |
 | Milestone Roadmap | ![Milestone Roadmap](chart-previews/milestone_roadmap.png) | [SVG](chart-previews/milestone_roadmap.svg) |
 | Missing Data Scatter | ![Missing Data Scatter](chart-previews/missing_data_scatter.png) | [SVG](chart-previews/missing_data_scatter.svg) |
+| Missingness | ![Missingness](chart-previews/missingness.png) | [SVG](chart-previews/missingness.svg) |
 | Monte Carlo Cdf | ![Monte Carlo Cdf](chart-previews/monte_carlo_cdf.png) | [SVG](chart-previews/monte_carlo_cdf.svg) |
 | Monte Carlo Histogram | ![Monte Carlo Histogram](chart-previews/monte_carlo_histogram.png) | [SVG](chart-previews/monte_carlo_histogram.svg) |
 | Mosaic | ![Mosaic](chart-previews/mosaic.png) | [SVG](chart-previews/mosaic.svg) |
@@ -209,6 +211,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Seasonal Subseries | ![Seasonal Subseries](chart-previews/seasonal_subseries.png) | [SVG](chart-previews/seasonal_subseries.svg) |
 | Sequence Diagram | ![Sequence Diagram](chart-previews/sequence_diagram.png) | [SVG](chart-previews/sequence_diagram.svg) |
 | Shared Guide Facets | ![Shared Guide Facets](chart-previews/shared_guide_facets.png) | [SVG](chart-previews/shared_guide_facets.svg) |
+| Silhouette | ![Silhouette](chart-previews/silhouette.png) | [SVG](chart-previews/silhouette.svg) |
 | Sipoc | ![Sipoc](chart-previews/sipoc.png) | [SVG](chart-previews/sipoc.svg) |
 | Slopegraph | ![Slopegraph](chart-previews/slopegraph.png) | [SVG](chart-previews/slopegraph.svg) |
 | Sparkline | ![Sparkline](chart-previews/sparkline.png) | [SVG](chart-previews/sparkline.svg) |
@@ -1850,3 +1853,13 @@ one blank row between them, bars on a fixed [-1, 1] axis and the mean as one seg
 column's missing share. `gfx_chart_ml_diagnostics_reference` checks all three
 against numpy (and scikit-learn's silhouette when installed) on Windows and Linux;
 the gallery adds `ice_pdp`, `silhouette` and `missingness` PNG/SVG previews.
+
+`extrude_bars` gives each front rectangle a top and a right-hand side face under a
+fixed cabinet oblique projection (offset of half the depth right and up), as Area quads,
+and `pie_25d` draws a tilted thick pie: slice tops are vertically squashed sectors and
+each slice's visible near-half outer wall is dropped by the thickness (empty when the
+slice lies on the far half). Both are styling on 2-D geometry, distinct from the
+`scatter3d` camera: no depth sorting beyond the documented draw order (bars left to
+right, front then top then side; walls, then tops). `gfx_chart_25d_reference` checks
+vertices against a numpy replay, parallelogram areas by shoelace, the visible wall arc
+and the footprint on Windows and Linux; the gallery adds `column_25d` and `pie_25d`.

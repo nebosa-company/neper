@@ -16405,6 +16405,8 @@ fn layered_layout(node_count: usize, from: []const u32, to: []const u32, bounds:
 fn masked_scatter(x: []const f32, y: []const f32, x_present: []const bool, y_present: []const bool, bounds: geometry.Rect, x_min: f32, x_max: f32, y_min: f32, y_max: f32, points: []Coord, row_ids: []usize) -> (MaskedScatterLayout, err)
 type SelectionHit = struct { mark_index: usize, source_row: usize, distance_squared: f64 }
 fn hit_scatter(marks: *const Layout, row_ids: []const usize, pointer: Coord, radius: f32) -> (SelectionHit, bool, err)
+fn extrude_bars(fronts: []const geometry.Rect, depth: f32, points: []Coord, tops: []Layout, sides: []Layout) -> (Extruded, err)
+fn pie_25d(values: []const f32, bounds: geometry.Rect, tilt: f32, thickness: f32, points: []Coord, tops: []Layout, walls: []Layout) -> (Extruded, err)
 fn hit_rect(rects: []const geometry.Rect, row_ids: []const usize, pointer: Coord) -> (SelectionHit, bool, err)
 fn tree_subtree_mask(parents: []const usize, node: usize, mask: []bool) -> (usize, err)
 fn ice_curves(predictions: []const f64, instances: usize, grid: []const f64, center: bool, bounds: geometry.Rect, means: []f64, curve_segments: []Segment, mean_segments: []Segment) -> (IceLayout, err)
