@@ -73,6 +73,10 @@ var driver_pool_bytes: usize = 131072usize
 // a non-zero value maps a separate EL0 region of that size and points the program's arena at it,
 // for the e.ui/e.gpu stack whose allocations dwarf 64 KB. Set before a start, reset to 0 after.
 var driver_arena_bytes: usize = 0usize
+// (D2239) The arena of the full-screen app launched last, kept for the next one (see with_big_arena).
+var app_arena_region: usize = 0usize
+var app_arena_bytes: usize = 0usize
+var reuse_app_arena: bool = false
 // (D2207) Whether the input server started next sends 500 ms tick events (the unified shell's boot).
 var input_ticks: usize = 0usize
 // (D2202, D2204) Initrd files handed to the next process started: archive entries extra_first ..
@@ -92,9 +96,20 @@ var shared_frame_phys: usize = 0usize
 // back.
 fn with_big_arena(space: vm.Space) -> (vm.Space, err) {
     if driver_arena_bytes == 0usize { ret (space, ok) }
-    let (arena_storage, arena_error) = mem.alloc[u8](kernel_arena, driver_arena_bytes + 4096usize)
-    if arena_error != ok { ret (space, arena_error) }
-    let region = (mem.address_of(&arena_storage[0usize]) + 4095usize) & ~4095usize
+    var region = 0usize
+    if reuse_app_arena && app_arena_region != 0usize && app_arena_bytes >= driver_arena_bytes {
+        // (D2239) A full-screen app that has exited left its arena behind; the next one runs in it, so
+        // a boot can start any number of apps one after another (the kernel arena never gives memory back).
+        region = app_arena_region
+    } else {
+        let (arena_storage, arena_error) = mem.alloc[u8](kernel_arena, driver_arena_bytes + 4096usize)
+        if arena_error != ok { ret (space, arena_error) }
+        region = (mem.address_of(&arena_storage[0usize]) + 4095usize) & ~4095usize
+        if reuse_app_arena {
+            app_arena_region = region
+            app_arena_bytes = driver_arena_bytes
+        }
+    }
     let map_error = vm.map_range_el0(kernel_arena, space.ttbr, region, driver_arena_bytes, false)
     if map_error != ok { ret (space, map_error) }
     var updated = space
@@ -649,7 +664,9 @@ fn launch(frame: *a64.Frame) {
         extra_first = 8usize
         extra_count = 5usize
     }
+    reuse_app_arena = screen_app
     let (child, child_error) = start_process(archive_base + archive_offset[index], archive_length[index], "child")
+    reuse_app_arena = false
     driver_arena_bytes = 0usize
     extra_count = 0usize
     if child_error != ok {
