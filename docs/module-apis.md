@@ -14699,6 +14699,48 @@ deterministic Miller-Rabin test. Tables are caller storage: `sieve` needs
 `factor_trial` fifteen slots for any 64-bit value, `discrete_log_bsgs` `2 * ceil(sqrt(bound))`
 words. `crt` takes pairwise coprime moduli whose product fits a `u64`.
 
+### `e.math.units`
+
+```neper
+error Invalid
+error Unknown
+error Incompatible
+error Duplicate
+error TooSmall
+
+const LENGTH: u32 = 1u32
+const AREA: u32 = 2u32
+const VOLUME: u32 = 3u32
+const MASS: u32 = 4u32
+const TIME: u32 = 5u32
+const TEMPERATURE: u32 = 6u32
+const DATA: u32 = 7u32
+const BUILTIN: usize = 79usize
+
+type Unit = struct { symbol: str, name: str, family: u32, scale: f64, offset: f64 }
+type Registry = struct { units: []Unit, count: usize }
+
+fn unit(symbol: str, name: str, family: u32, scale: f64) -> Unit
+fn builtin(i: usize) -> Unit
+fn builtin_count() -> usize
+fn family_name(family: u32) -> str
+fn same(a: str, b: str) -> bool
+fn finite(v: f64) -> bool
+fn registry(storage: []Unit) -> (Registry, err)
+fn register(r: *Registry, u: Unit) -> err
+fn find(r: *const Registry, symbol: str) -> (Unit, err)
+fn family_units(r: *const Registry, family: u32, out: []usize) -> (usize, err)
+fn convert_between(value: f64, from: Unit, to: Unit) -> (f64, err)
+fn convert(r: *const Registry, value: f64, from: str, to: str) -> (f64, err)
+```
+
+A ConvUtils/StdConvs-style registry over caller storage: units are a symbol, a name, a
+family (dimension) and an affine map to the family's base unit (`base = value * scale +
+offset`). 79 built-ins across length, area, volume, mass, time, temperature and data (SI, US,
+imperial and IEC binary units, exact where defined); callers register units of their own
+families. Conversion needs equal families; temperature maps apply to readings, not
+differences; a year is Julian; no live currency rates.
+
 ### `e.math.pkpd`
 
 ```neper

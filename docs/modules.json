@@ -353,7 +353,8 @@
     "e.debug.dump",
     "e.net.auth",
     "e.debug.dump.host",
-    "e.math.pkpd"
+    "e.math.pkpd",
+    "e.math.units"
    ]
   },
   {
@@ -4186,6 +4187,15 @@
     "e.math",
     "e.math.opt"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.units",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {

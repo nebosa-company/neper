@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# L077 e.math.units against exact rational definitions
+$mathUnitsPath = Join-Path $testBuild 'math-units-selfhost.exe'
+$mathUnitsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_units\src\main.e') $repo 'x64' 'windows' $mathUnitsPath
+if ($LASTEXITCODE -ne 0 -or $mathUnitsWritten -ne 'executable written') { throw 'math_units emission failed' }
+$mathUnitsOutput = & $mathUnitsPath
+if ($LASTEXITCODE -ne 0 -or $mathUnitsOutput -ne 'math units ok') { throw "math_units answered wrongly: exit $LASTEXITCODE" }
 # L076 e.text.mask against fnmatch and hand tables
 $textMaskPath = Join-Path $testBuild 'text-mask-selfhost.exe'
 $textMaskWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_mask\src\main.e') $repo 'x64' 'windows' $textMaskPath

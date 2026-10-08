@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# L077 e.math.units against exact rational definitions
+math_units_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_units/src/main.e" "$repo" x64 linux "$test_build/math-units-selfhost")
+[ "$math_units_written" = 'executable written' ]
+chmod +x "$test_build/math-units-selfhost"
+math_units_output=$("$test_build/math-units-selfhost")
+[ "$math_units_output" = 'math units ok' ]
 # L076 e.text.mask against fnmatch and hand tables
 text_mask_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_mask/src/main.e" "$repo" x64 linux "$test_build/text-mask-selfhost")
 [ "$text_mask_written" = 'executable written' ]
