@@ -9441,6 +9441,9 @@ if ($neperosQemu) {
     $compassImage = Join-Path $testBuild 'compass.img'
     $levelImage = Join-Path $testBuild 'level.img'
     $flashlightImage = Join-Path $testBuild 'flashlight.img'
+    $chatImage = Join-Path $testBuild 'chat.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\chat.e') $repo aarch64 neperos $chatImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'chat did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\flashlight.e') $repo aarch64 neperos $flashlightImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'flashlight did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\level.e') $repo aarch64 neperos $levelImage | Out-Null
@@ -9480,7 +9483,7 @@ if ($neperosQemu) {
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage $browserImage $mapsImage $compassImage $levelImage $flashlightImage
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage $browserImage $mapsImage $compassImage $levelImage $flashlightImage $chatImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
@@ -9555,6 +9558,9 @@ if ($neperosQemu) {
     # (D2228 Flashlight: the SOS pattern started and stopped, then the message sos sent in Morse to its end)
     $flashlightBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-flashlight.serial') 55157 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,29518;16384,1569;24175,4421;16384,10267;16384,10267;26722,1569;7317,22816;26959,20748;7317,22816;8669,6880;16384,14973;16384,14973;16384,32259' 2>&1) -join "`n"
     if ($flashlightBoot -notmatch '(?s)flashlight shown.*flashlight pattern SOS.*flashlight stopped.*flashlight morse sos 27.*flashlight morse done.*flashlight home') { throw "NeperOS flashlight did not pass its fixture: $flashlightBoot" }
+    # (D2229 Chat: open general, type Hi, send, leave)
+    $chatBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-chat.serial') 55158 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,14689;15906,4563;13998,29340;19405,22816;23939,20748;29268,16720;16384,32259' 2>&1) -join "`n"
+    if ($chatBoot -notmatch '(?s)chat shown.*chat opened general.*chat sent.*chat home') { throw "NeperOS chat did not pass its fixture: $chatBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }

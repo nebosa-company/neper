@@ -213,6 +213,17 @@
       "evidence": "Queued (2026-10-08). The Flashlight app (D2228) turns the SCREEN bright and beats once every 500 ms tick. Acceptance: (1) a torch capability on the Pixel (the camera LED through the camera server of C122) and a simulated one under QEMU, with brightness levels where the hardware has them and the camera and flash-mode permission checks; (2) a finer timer (a 10 ms tick or a timer capability) so a Morse unit can be 100 ms and a strobe can reach 10 flashes a second, with a speed control; (3) a quick toggle from the status bar and the lock screen; (4) patterns kept as a list the user can add to (a custom pattern of beats); (5) the torch turns off when the camera opens and on a timeout; (6) a fixture on QEMU that sends a message and checks the beat times against the unit. Not queued here: sound or screen-colour signalling."
     },
     {
+      "id": "C134",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 134,
+      "title": "NeperOS Chat: a real team chat service",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Chat app (D2229) holds sample rooms in the process. Acceptance: (1) a chat protocol over C117 TLS (WebSocket or a Matrix-style API) with accounts, rooms, direct messages, presence and typing indicators, delivery and read marks; (2) message history in storage (C125), search, threads, mentions, emoji reactions with a picker, edit and delete; (3) files and images from Files and Camera, link previews; (4) notifications through the status server with per-room settings (C126); (5) voice and video from a room opens Meet (C135); (6) end-to-end encryption with keys in Secure (C116); (7) a fixture on QEMU against a local test server that sends and receives a message across two clients. Not queued here: bots, workflows, a desktop client."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
