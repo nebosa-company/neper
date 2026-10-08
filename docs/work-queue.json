@@ -246,6 +246,17 @@
       "evidence": "Queued (2026-10-08). The Recorder app (D2231) draws a sample wave and keeps recordings in the process. Acceptance: (1) capture from the microphone and playback to the speaker through e.audio (C122's server family), with the level meter driven by the real samples and the wave built from them; (2) recordings saved as files (Opus or WAV from the library) in Files (C125) with rename, share and delete, search by name; (3) a speech-to-text model run on the device or on a server (C117) for the transcript, with words timed to the playhead and tap-to-seek; (4) recording in the background with a notification and the lock-screen control; (5) a fixture on QEMU that records from a scripted audio source and plays it back checking the bytes. Not queued here: speaker labels, translation, noise removal."
     },
     {
+      "id": "C137",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 137,
+      "title": "NeperOS Translate: a real translation model, more languages, camera and voice input",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Translate app (D2232) uses a sample book of eight phrases in six languages. Acceptance: (1) translation by an on-device model from the library (the ml modules) or a server over C117, with at least forty languages, auto-detect, and offline packs kept in Files (C125); (2) fonts and shaping for the scripts those languages need (Arabic, Devanagari, CJK, Cyrillic, Greek, Thai, Hebrew), added to the font set the apps load; (3) input by voice (Recorder's speech engine, C136), by camera (text recognition in e.gfx.vision on a Camera frame, C122) and by handwriting; (4) history and saved phrases, copy and share, speak the result (text to speech through e.audio); (5) conversation mode with two languages on the two halves of the screen; (6) a fixture on QEMU that translates a fixed sentence with a small test model and checks the output text. Not queued here: document translation, subtitles."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
