@@ -224,6 +224,17 @@
       "evidence": "Queued (2026-10-08). The Chat app (D2229) holds sample rooms in the process. Acceptance: (1) a chat protocol over C117 TLS (WebSocket or a Matrix-style API) with accounts, rooms, direct messages, presence and typing indicators, delivery and read marks; (2) message history in storage (C125), search, threads, mentions, emoji reactions with a picker, edit and delete; (3) files and images from Files and Camera, link previews; (4) notifications through the status server with per-room settings (C126); (5) voice and video from a room opens Meet (C135); (6) end-to-end encryption with keys in Secure (C116); (7) a fixture on QEMU against a local test server that sends and receives a message across two clients. Not queued here: bots, workflows, a desktop client."
     },
     {
+      "id": "C135",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 135,
+      "title": "NeperOS Meet: real video calls: signalling, media transport, capture",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Meet app (D2230) runs a demo meeting with made-up people. Acceptance: (1) signalling and media over C117: a WebRTC-style stack (ICE, DTLS-SRTP) or a simple SFU protocol, with the room codes and the calendar of upcoming meetings from the account service; (2) capture: the camera frames from the camera server (C122) and the microphone from e.audio, encoded and sent with a codec from the library (video and Opus-style audio), the received streams decoded into the tiles; (3) the grid and speaker layouts follow who speaks from the audio levels; (4) screen sharing from the compositor, raise hand, chat in the meeting (Chat, C134), captions; (5) echo cancellation, noise suppression and the bandwidth adaptation; (6) a fixture on QEMU with two clients in one machine against a local relay that exchanges test frames and checks them. Not queued here: recording, large webinars, breakout rooms."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
