@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# L074 the state timeline against a Python replay
+$gfxChartStateTimelineReferencePath = Join-Path $testBuild 'gfx-chart-state-timeline-reference-selfhost.exe'
+$gfxChartStateTimelineReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_state_timeline_reference\src\main.e') $repo 'x64' 'windows' $gfxChartStateTimelineReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartStateTimelineReferenceWritten -ne 'executable written') { throw 'gfx_chart_state_timeline_reference emission failed' }
+$gfxChartStateTimelineReferenceOutput = & $gfxChartStateTimelineReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartStateTimelineReferenceOutput -ne 'gfx chart state timeline reference ok') { throw "gfx_chart_state_timeline_reference answered wrongly: exit $LASTEXITCODE" }
 # L073 the mekko, Euler, Venn and word-cloud layouts against numpy and scipy
 $gfxChartCompositionReferencePath = Join-Path $testBuild 'gfx-chart-composition-reference-selfhost.exe'
 $gfxChartCompositionReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_composition_reference\src\main.e') $repo 'x64' 'windows' $gfxChartCompositionReferencePath
