@@ -136,6 +136,17 @@
       "evidence": "Queued by the user (2026-10-08). The Weather app (D2214) ships on a seeded sample forecast; this item replaces it once C117 (networking) exists. Acceptance: (1) a keyless forecast source (Open-Meteo or the Norwegian MET API; no account) giving the current temperature and condition, the hourly strip, seven days, humidity, wind and UV, with the sample data as the offline fallback and a visible 'updated' time; (2) places: search by name, add and remove, the current location by the user's choice, kept in storage; (3) units (C and F, km/h and mph) remembered; (4) sunrise and sunset, precipitation chance and alerts; (5) a condition for each hour (the sample strip shows today's condition for all eight hours, so it cannot show a change coming), precipitation chance per hour, and hours and weekdays in the place's own time zone (the sample follows UTC). Fixtures run against recorded responses, not the live internet."
     },
     {
+      "id": "C127",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 127,
+      "title": "NeperOS Call: a real telephony stack, the contact store, voicemail",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Call app (D2222) has a keypad, recents, contacts and a call screen on sample data; a call is a demo that 'connects' after a second. Acceptance: (1) a telephony server over the modem or a SIP/VoIP stack on C117 networking: dial, answer, reject, hold, mute, speaker, DTMF, call waiting and conference; (2) the in-call audio path through e.audio with the earpiece, speaker and Bluetooth routes; (3) a contact store shared with Messages, Mail and Wallet: add, edit, delete, favorites, search, import and export vCard; (4) recents and missed-call notifications through the status server, and Do Not Disturb honoured; (5) voicemail and visual voicemail; (6) emergency numbers always dialable; (7) a fixture on QEMU against a loopback SIP server that dials, answers and ends a call and checks the audio frames. Not queued here: video calls (Meet), SMS (Messages), eSIM management."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",

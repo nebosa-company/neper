@@ -53,12 +53,12 @@ var device_irqs: usize = 0usize
 // kernel allocates from, kept so the `launch` system call can build a new process's space, with
 // a running ASID so each process's TLB entries stay its own.
 const ARCHIVE_MAGIC: u32 = 0x4E455041u32
-const MAX_ARCHIVE: usize = 32usize
+const MAX_ARCHIVE: usize = 48usize
 var kernel_arena: *mem.Arena = zero
 var archive_base: usize = 0usize
 var archive_count: usize = 0usize
-var archive_offset: [32]usize = zero
-var archive_length: [32]usize = zero
+var archive_offset: [48]usize = zero
+var archive_length: [48]usize = zero
 var next_asid: usize = 0usize
 // (D2153) The thread index of the last driver server started, so the filesystem-server boot can
 // grant it the endpoint capabilities it serves clients over.

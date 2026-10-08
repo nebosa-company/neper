@@ -30,8 +30,10 @@ fn app_ai() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 9
 fn app_wallet() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#2f4658'/><rect x='22' y='20' width='52' height='22' rx='5' fill='#e0b36a' transform='rotate(-8 48 31)'/><rect x='16' y='32' width='64' height='44' rx='9' fill='#e8ebf0'/><path d='M16 44 H80' stroke='#2f4658' stroke-width='3' opacity='0.35'/><rect x='56' y='48' width='24' height='18' rx='6' fill='#2f4658'/><circle cx='64' cy='57' r='3.4' fill='#e0b36a'/></svg>" }
 fn app_document() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#3b4a5e'/><path d='M26 14 H54 L72 32 V80 a4 4 0 0 1 -4 4 H26 a4 4 0 0 1 -4 -4 V18 a4 4 0 0 1 4 -4 Z' fill='#e8ebf0'/><path d='M54 14 V32 H72 Z' fill='#b9bdc9'/><path d='M30 42 H62 M30 50 H56' fill='none' stroke='#3b4a5e' stroke-width='3.5' stroke-linecap='round'/><path d='M38 62 L31 68 L38 74 M52 62 L59 68 L52 74' fill='none' stroke='#c9902f' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/></svg>" }
 fn app_dynamic() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#34406a'/><rect x='16' y='24' width='58' height='46' rx='8' fill='#e8ebf0'/><rect x='16' y='24' width='58' height='12' rx='6' fill='#b9bdc9'/><circle cx='24' cy='30' r='2.2' fill='#34406a'/><circle cx='31' cy='30' r='2.2' fill='#34406a'/><path d='M26 48 H48 M26 56 H40' fill='none' stroke='#34406a' stroke-width='3.5' stroke-linecap='round'/><path d='M66 10 C67.5 22 72 26.5 84 28 C72 29.5 67.5 34 66 46 C64.5 34 60 29.5 48 28 C60 26.5 64.5 22 66 10 Z' fill='#e0b36a'/><path d='M80 56 C80.8 62 83 64.2 89 65 C83 65.8 80.8 68 80 74 C79.2 68 77 65.8 71 65 C77 64.2 79.2 62 80 56 Z' fill='#e0b36a'/></svg>" }
+fn app_level() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#3a4a3c'/><rect x='10' y='38' width='76' height='26' rx='8' fill='#e0b36a'/><rect x='34' y='42' width='28' height='18' rx='9' fill='#2f3a2f'/><circle cx='48' cy='51' r='6.5' fill='#cfe8c8'/><path d='M20 38 V32 M76 38 V32 M48 38 V28' stroke='#e8ebf0' stroke-width='3' stroke-linecap='round'/><path d='M26 76 H70 M26 76 L48 66 M26 76 A22 22 0 0 1 31 63' fill='none' stroke='#e8ebf0' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'/></svg>" }
+fn app_flashlight() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#2f3646'/><path d='M34 20 H62 L58 40 H38 Z' fill='#e8ebf0'/><rect x='38' y='40' width='20' height='38' rx='5' fill='#b9bdc9'/><rect x='42' y='50' width='12' height='8' rx='3' fill='#2f3646'/><path d='M30 14 L22 6 M48 12 V2 M66 14 L74 6' stroke='#e0b36a' stroke-width='4' stroke-linecap='round'/></svg>" }
 
-const APP_COUNT: usize = 27usize
+const APP_COUNT: usize = 29usize
 
 fn app(index: usize) -> str {
     if index == 0usize { ret app_phone() }
@@ -61,6 +63,8 @@ fn app(index: usize) -> str {
     if index == 24usize { ret app_wallet() }
     if index == 25usize { ret app_document() }
     if index == 26usize { ret app_dynamic() }
+    if index == 27usize { ret app_level() }
+    if index == 28usize { ret app_flashlight() }
     ret ""
 }
 
@@ -92,6 +96,8 @@ fn app_name(index: usize) -> str {
     if index == 24usize { ret "wallet" }
     if index == 25usize { ret "document" }
     if index == 26usize { ret "dynamic" }
+    if index == 27usize { ret "level" }
+    if index == 28usize { ret "flashlight" }
     ret ""
 }
 
@@ -123,6 +129,8 @@ fn app_label(index: usize) -> str {
     if index == 24usize { ret "Wallet" }
     if index == 25usize { ret "Document" }
     if index == 26usize { ret "Dynamic" }
+    if index == 27usize { ret "Level" }
+    if index == 28usize { ret "Flashlight" }
     ret ""
 }
 

@@ -9434,6 +9434,9 @@ if ($neperosQemu) {
     $photosImage = Join-Path $testBuild 'photos.img'
     $filesImage = Join-Path $testBuild 'files.img'
     $settingsImage = Join-Path $testBuild 'settings.img'
+    $callImage = Join-Path $testBuild 'call.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\call.e') $repo aarch64 neperos $callImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'call did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\settings.e') $repo aarch64 neperos $settingsImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Settings did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\srciles.e') $repo aarch64 neperos $filesImage | Out-Null
@@ -9459,7 +9462,7 @@ if ($neperosQemu) {
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
@@ -9513,6 +9516,9 @@ if ($neperosQemu) {
     # (D2220) Settings: Display, the Dark theme switch and a brightness step, back, Network, the Wi-Fi switch, leave.
     $settingsBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-settings.serial') 55150 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;28631,21246;15906,6452;16384,9911;16384,5312;3181,1569;15906,4028;16384,4492;16384,32259' 2>&1) -join "`n"
     if ($settingsBoot -notmatch '(?s)settings shown.*settings page Display.*settings toggle Dark theme off.*settings slider Brightness 50.*settings back.*settings page Network.*settings toggle Wi-Fi off.*settings home') { throw "NeperOS Settings did not change a switch and a slider: $settingsBoot" }
+    # (D2222 Call: dial 5550101 on the keypad, call, wait for it to connect, end, leave)
+    $callBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-call.serial') 55151 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,3565;16384,11479;16384,11479;16384,11479;16384,18039;6522,8200;16384,18039;6522,8200;16384,22816;16384,24955;16384,32259' 2>&1) -join "`n"
+    if ($callBoot -notmatch '(?s)call shown.*call dialed 5550101.*call connected.*call ended.*call home') { throw "NeperOS call did not pass its fixture: $callBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }
