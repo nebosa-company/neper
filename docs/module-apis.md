@@ -13448,11 +13448,49 @@ fn marzullo(lows: []const i64, highs: []const i64, n: usize, scratch: []i64) -> 
 fn marzullo_estimate(lows: []const i64, highs: []const i64, n: usize, scratch: []i64) -> (i64, err)
 fn berkeley(offsets: []const i64, n: usize, tolerance: i64, out: []i64) -> err
 fn cristian(t0_send: i64, t_server: i64, t1_receive: i64, min_one_way: i64) -> (i64, i64)
+
+error KissOfDeath
+error Unsynchronized
+error BadReply
+error Mismatch
+
+const NTP_UNIX_DELTA: u64 = 2208988800u64
+const NTP_MODE_CLIENT: u8 = 3u8
+const NTP_MODE_SERVER: u8 = 4u8
+
+type NtpPacket = struct {
+    leap: u8, version: u8, mode: u8, stratum: u8, poll: i32, precision: i32,
+    root_delay: u32, root_dispersion: u32, reference_id: u32,
+    reference: u64, origin: u64, receive: u64, transmit: u64,
+}
+
+fn read_u32(bytes: []const u8, at: usize) -> u32
+fn read_u64(bytes: []const u8, at: usize) -> u64
+fn write_u32(out: []u8, at: usize, value: u32)
+fn write_u64(out: []u8, at: usize, value: u64)
+fn signed_byte(b: u8) -> i32
+fn ntp_decode(bytes: []const u8) -> (NtpPacket, err)
+fn ntp_encode(p: NtpPacket, out: []u8) -> err
+fn ntp_request(version: u8, transmit: u64) -> (NtpPacket, err)
+fn ntp_to_unix_nanos(ts: u64) -> i64
+fn unix_nanos_to_ntp(nanos: i64) -> (u64, err)
+fn ntp_short_to_nanos(v: u32) -> i64
+fn nanos_to_ntp_short(nanos: i64) -> (u32, err)
+fn offset_delay(t1: i64, t2: i64, t3: i64, t4: i64) -> (i64, i64)
+fn ntp_check_reply(sent: u64, reply: NtpPacket) -> err
 ```
 
 `marzullo` (the interval covered by the most sources) and `marzullo_estimate`,
 `berkeley` (median-filtered average adjustments) and `cristian` (round-trip halving
 with an error bound).
+
+The NTP/SNTP wire codec (RFC 5905) has no sockets or clock: `ntp_decode` and `ntp_encode` map
+the 48-byte packet to fields (extension fields and the MAC are ignored), `ntp_request` builds
+a mode-3 request, and `ntp_check_reply` accepts a mode-4 server reply of version 3 or 4 that echoes
+the request's transmit time (`Mismatch` otherwise), is not a kiss-o'-death, is synchronised and has
+a stratum of at most 15. Timestamps convert to Unix nanoseconds with the era pivot at 2^31 seconds
+(1968-01-20 to 2104-02-26), outside which conversion is refused; 16.16 root delay and dispersion
+convert to nanoseconds; `offset_delay` is RFC 5905 section 8. The caller drives UDP port 123.
 
 ### `e.time.cron`
 

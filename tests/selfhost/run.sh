@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# L079 the NTP/SNTP codec against struct and datetime
+time_ntp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_ntp/src/main.e" "$repo" x64 linux "$test_build/time-ntp-selfhost")
+[ "$time_ntp_written" = 'executable written' ]
+chmod +x "$test_build/time-ntp-selfhost"
+time_ntp_output=$("$test_build/time-ntp-selfhost")
+[ "$time_ntp_output" = 'time ntp ok' ]
 # L078 e.crypto.otp against the RFC 4226/6238 vectors and hmac
 crypto_otp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_otp/src/main.e" "$repo" x64 linux "$test_build/crypto-otp-selfhost")
 [ "$crypto_otp_written" = 'executable written' ]

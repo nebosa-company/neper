@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# L079 the NTP/SNTP codec against struct and datetime
+$timeNtpPath = Join-Path $testBuild 'time-ntp-selfhost.exe'
+$timeNtpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_ntp\src\main.e') $repo 'x64' 'windows' $timeNtpPath
+if ($LASTEXITCODE -ne 0 -or $timeNtpWritten -ne 'executable written') { throw 'time_ntp emission failed' }
+$timeNtpOutput = & $timeNtpPath
+if ($LASTEXITCODE -ne 0 -or $timeNtpOutput -ne 'time ntp ok') { throw "time_ntp answered wrongly: exit $LASTEXITCODE" }
 # L078 e.crypto.otp against the RFC 4226/6238 vectors and hmac
 $cryptoOtpPath = Join-Path $testBuild 'crypto-otp-selfhost.exe'
 $cryptoOtpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_otp\src\main.e') $repo 'x64' 'windows' $cryptoOtpPath
