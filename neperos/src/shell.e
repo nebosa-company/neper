@@ -343,6 +343,7 @@ fn program_of(icon: usize) -> usize {
     if icon == 6usize { ret 28usize }
     if icon == 7usize { ret 29usize }
     if icon == 27usize { ret 30usize }
+    if icon == 28usize { ret 31usize }
     ret 0usize
 }
 
