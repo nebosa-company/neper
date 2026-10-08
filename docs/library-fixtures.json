@@ -219,14 +219,15 @@
    "module": "e.crypto.hash",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 88,
-   "delivered": 88,
+   "catalogue": 92,
+   "delivered": 92,
    "pending": [],
    "fixtures": [
     "crypto_hash",
     "crypto_kdf_plan",
     "crypto_pq",
     "crypto_sign_plan",
+    "crypto_sign_wide",
     "differential"
    ]
   },
@@ -259,13 +260,14 @@
    "module": "e.crypto.sign",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 183,
-   "delivered": 183,
+   "catalogue": 228,
+   "delivered": 228,
    "pending": [],
    "fixtures": [
     "crypto_pq",
     "crypto_sign",
     "crypto_sign_plan",
+    "crypto_sign_wide",
     "fmt_jwt",
     "misc_gaps",
     "net_tls"
@@ -279,6 +281,7 @@
    "delivered": 46,
    "pending": [],
    "fixtures": [
+    "crypto_sign_wide",
     "crypto_x509",
     "misc_gaps",
     "net_tls"
@@ -852,6 +855,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_3d_reference",
     "gfx_chart_accessible_palette",
     "gfx_chart_aggregate_tree",
     "gfx_chart_agreement_forest",
@@ -1004,6 +1008,8 @@
     "gfx_core",
     "gfx_paint_plan",
     "gfx_scene",
+    "gfx_scene_damage",
+    "gfx_svg",
     "text_layout",
     "ui_a11y_controls",
     "ui_accessibility",
@@ -1103,6 +1109,7 @@
    "pending": [],
    "fixtures": [
     "gfx_chart",
+    "gfx_chart_3d_reference",
     "gfx_chart_accessible_palette",
     "gfx_chart_aggregate_tree",
     "gfx_chart_agreement_forest",
@@ -1827,6 +1834,8 @@
     "gfx_core",
     "gfx_paint_plan",
     "gfx_scene",
+    "gfx_scene_damage",
+    "gfx_svg",
     "ui_accessibility",
     "ui_actions_v2",
     "ui_app",
@@ -2047,7 +2056,9 @@
     "gfx_chart_word_cloud",
     "gfx_chart_yield_curve",
     "gfx_scene",
+    "gfx_scene_damage",
     "gfx_scene_plan",
+    "gfx_svg",
     "ui_a11y_controls",
     "ui_accessibility",
     "ui_actions",
@@ -2140,6 +2151,18 @@
    ]
   },
   {
+   "module": "e.gfx.svg",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 4,
+   "delivered": 4,
+   "pending": [],
+   "fixtures": [
+    "gfx_scene_damage",
+    "gfx_svg"
+   ]
+  },
+  {
    "module": "e.gpu",
    "milestone": "M3",
    "schedule": "scheduled",
@@ -2153,6 +2176,8 @@
     "gfx_chart_png",
     "gfx_chart_widget",
     "gfx_scene",
+    "gfx_scene_damage",
+    "gfx_svg",
     "gpu_barrier",
     "gpu_barrier_chain",
     "gpu_barrier_helper",
@@ -2343,6 +2368,7 @@
     "control_loop",
     "dsp",
     "fmt_flac",
+    "gfx_chart_3d_reference",
     "gfx_chart_combo_axes",
     "gfx_chart_loess",
     "gfx_chart_mekko",
@@ -2610,6 +2636,7 @@
    "pending": [],
    "fixtures": [
     "gfx_scene",
+    "gfx_scene_damage",
     "text_gaps",
     "text_layout",
     "ui_accessibility",
@@ -2792,6 +2819,7 @@
     "async_io",
     "cancel",
     "concurrent_queue_map",
+    "crypto_sign_wide",
     "crypto_x509",
     "db",
     "gfx_chart_date_axis",

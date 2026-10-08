@@ -3666,6 +3666,12 @@ $gfxChartSurface3dWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $gfxChartSurface3dWritten -ne 'executable written') { throw 'gfx_chart_surface3d emission failed' }
 $gfxChartSurface3dOutput = & $gfxChartSurface3dPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartSurface3dOutput -ne 'gfx chart surface3d ok') { throw "the e.gfx.chart 3-D surface/wireframe answered wrongly: exit $LASTEXITCODE" }
+# The 3-D charts against independent references (L069, D2253): projection, depth order, KDE, bin counts, refusals.
+$gfxChart3dReferencePath = Join-Path $testBuild 'gfx-chart-3d-reference-selfhost.exe'
+$gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_3d_reference\src\main.e') $repo 'x64' 'windows' $gfxChart3dReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
+$gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
 $gfxChartAnomPath = Join-Path $testBuild 'gfx-chart-anom-selfhost.exe'
 $gfxChartAnomWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_anom\src\main.e') $repo 'x64' 'windows' $gfxChartAnomPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartAnomWritten -ne 'executable written') { throw 'gfx_chart_anom emission failed' }

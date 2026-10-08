@@ -3268,6 +3268,12 @@ gfx_chart_surface3d_written=$($test_build/neper-self emit-executable "$repo/test
 chmod +x "$test_build/gfx-chart-surface3d-selfhost"
 gfx_chart_surface3d_output=$("$test_build/gfx-chart-surface3d-selfhost")
 [ "$gfx_chart_surface3d_output" = 'gfx chart surface3d ok' ]
+# The 3-D charts against independent references (L069, D2253): projection, depth order, KDE, bin counts, refusals.
+gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_3d_reference/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-3d-reference-selfhost")
+[ "$gfx_chart_3d_reference_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
+gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
+[ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
 gfx_chart_anom_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_anom/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-anom-selfhost")
 [ "$gfx_chart_anom_written" = 'executable written' ]
 chmod +x "$test_build/gfx-chart-anom-selfhost"
