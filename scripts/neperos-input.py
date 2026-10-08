@@ -76,10 +76,12 @@ def main():
     # a host short of memory cannot give next to the guest's RAM).
     if os.environ.get("NEPEROS_TB"):
         args += ["-accel", "tcg,tb-size=" + os.environ["NEPEROS_TB"]]
-    # NEPEROS_NET=1 gives the machine a user-mode network and a random-number device (C117, D2247).
+    # NEPEROS_NET=1 gives the machine a user-mode network and a random-number device (C117, D2247);
+    # NEPEROS_RNG=1 gives it the random-number device alone (the Secure vault's fixture, D2252).
     if os.environ.get("NEPEROS_NET") == "1":
-        args += ["-netdev", "user,id=n0", "-device", "virtio-net-pci,netdev=n0,disable-legacy=on,romfile=",
-                 "-device", "virtio-rng-pci,disable-legacy=on"]
+        args += ["-netdev", "user,id=n0", "-device", "virtio-net-pci,netdev=n0,disable-legacy=on,romfile="]
+    if os.environ.get("NEPEROS_NET") == "1" or os.environ.get("NEPEROS_RNG") == "1":
+        args += ["-device", "virtio-rng-pci,disable-legacy=on"]
     proc = subprocess.Popen(args)
     try:
         sock = None

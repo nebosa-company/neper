@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C116",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 116,
-      "title": "NeperOS Secure app: one vault for passwords and MFA codes",
-      "score": 0,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Queued by the user (2026-10-08). The Secure app (home icon 'Secure', index 18, the shield with a keyhole) keeps both passwords and MFA codes in one place. Acceptance: (1) a list of entries, each a login (site, user name, password, copy and reveal) or an MFA entry (a TOTP secret showing the current six-digit code with a countdown ring), searchable and in the cream, amber and dark look of Calc, Clock, Tasks and Messages; (2) add, edit and delete an entry on the app's own on-screen keyboard; (3) TOTP computed from the secret with HMAC-SHA1 over the wall clock (RFC 6238; e.crypto has the pieces), checked against the RFC test vectors; (4) entries encrypted at rest under a key derived from a master password, which unlocks the app; storage waits on the filesystem server; (5) a fixture on QEMU that adds a login and an MFA entry and reads the code back. Not queued here: sync, autofill into other apps, passkeys."
-    },
-    {
       "id": "C118",
       "category": "compiler",
       "group": "NeperOS",
@@ -332,6 +321,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C115 (2026-10-08). Neither full suite finishes here: tests/selfhost/run.ps1 trips on PowerShell's Stop preference when a native command writes to stderr, and the Linux run.sh builds with neper build, which crashes the WSL2 VM on this host. Per-feature fixtures have been run by hand on both hosts. Acceptance: (1) run.ps1 runs to its end on this Windows host without manual patching; (2) run.sh runs to its end in WSL, with the memory it needs set down in the script's header and the VM left alive; (3) each reports its last line and the count of checks, and the totals feed docs/test-results.json, the tile on the readiness page."
+    },
+    {
+      "id": "C148",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 148,
+      "title": "NeperOS clipboard: Copy in Secure puts text on it, text fields paste from it",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C116 (2026-10-08). Secure's Copy says it copied but there is no clipboard, so a password or a code cannot leave the app. Acceptance: (1) a clipboard service holding one text value with an owner, started by the kernel, with endpoints granted to apps that copy or paste; (2) Secure's Copy on a password and on a one-time code puts it there and clears it after a short time (30 s) or when another copy replaces it; (3) the on-screen keyboard's text fields (ui.Field) offer Paste when the clipboard holds text; (4) a copied secret is never written to the console; (5) a fixture that copies a code in Secure and pastes it in another app's field."
     },
     {
       "id": "C104",

@@ -1065,6 +1065,12 @@ crypto_sign_wide_written=$($test_build/neper-self emit-executable "$repo/tests/s
 [ "$crypto_sign_wide_written" = 'executable written' ]
 chmod +x "$test_build/crypto-sign-wide-selfhost"
 "$test_build/crypto-sign-wide-selfhost"
+# The Secure vault's cryptography (neperos/src/vault.e, D2252): PBKDF2-HMAC-SHA-256 against hashlib, records
+# byte-for-byte equal to AES-256-GCM's from Python's cryptography package, the meta file, and the refusals.
+vault_test_written=$($test_build/neper-self emit-executable "$repo/neperos/src/vault_test.e" "$repo" x64 linux "$test_build/vault-test-selfhost")
+[ "$vault_test_written" = 'executable written' ]
+chmod +x "$test_build/vault-test-selfhost"
+"$test_build/vault-test-selfhost"
 # `e.fmt.pem`: blocks with a suffix and with headers, encode in 64 columns, five refusals.
 fmt_pem_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pem/src/main.e" "$repo" x64 linux "$test_build/fmt-pem-selfhost")
 [ "$fmt_pem_written" = 'executable written' ]
@@ -9401,6 +9407,27 @@ greeting"
     kill "$live_hosts" 2> /dev/null || true
     wait "$live_hosts" 2> /dev/null || true
     unset NEPEROS_NET
+    # The disk fixtures: a fresh 1 MB disk and a random-number device; the run ends at the row's last marker.
+    export NEPEROS_RNG=1
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = diskfixture ] || continue
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        fixture_disk="$test_build/shell-$fixture.disk"
+        dd if=/dev/zero of="$fixture_disk" bs=1M count=1 status=none
+        last_marker="${markers##*;;}"
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$fixture_disk" 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) printf 'NeperOS %s fixture did not reach "%s" (%s): %s\n' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
+    unset NEPEROS_RNG
     unset NEPEROS_TAP_DELAY
     unset NEPEROS_MEM NEPEROS_GPU
 fi

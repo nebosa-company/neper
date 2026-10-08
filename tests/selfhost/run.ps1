@@ -1121,6 +1121,13 @@ $cryptoSignWideWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $cryptoSignWideWritten -ne 'executable written') { throw 'crypto_sign_wide emission failed' }
 & $cryptoSignWidePath
 if ($LASTEXITCODE -ne 0) { throw "a crypto_sign_wide check failed: exit $LASTEXITCODE" }
+# The Secure vault's cryptography (neperos/src/vault.e, D2252): PBKDF2-HMAC-SHA-256 against hashlib, records
+# byte-for-byte equal to AES-256-GCM's from Python's cryptography package, the meta file, and the refusals.
+$vaultTestPath = Join-Path $testBuild 'vault-test-selfhost.exe'
+$vaultTestWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\vault_test.e') $repo 'x64' 'windows' $vaultTestPath
+if ($LASTEXITCODE -ne 0 -or $vaultTestWritten -ne 'executable written') { throw 'vault_test emission failed' }
+& $vaultTestPath
+if ($LASTEXITCODE -ne 0) { throw "a vault_test check failed: exit $LASTEXITCODE" }
 # `e.fmt.pem`: blocks with a suffix and with headers, encode in 64 columns, five refusals.
 $fmtPemPath = Join-Path $testBuild 'fmt-pem-selfhost.exe'
 $fmtPemWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pem\src\main.e') $repo 'x64' 'windows' $fmtPemPath
@@ -9521,6 +9528,21 @@ if ($neperosQemu) {
         if (-not $liveHosts.HasExited) { $liveHosts.Kill() }
         Remove-Item Env:NEPEROS_NET -ErrorAction SilentlyContinue
     }
+    # The disk fixtures: a fresh 1 MB disk and a random-number device; the run ends at the row's last marker.
+    $env:NEPEROS_RNG = '1'
+    foreach ($row in $appsTable) {
+        $fields = $row.Split('|', 7)
+        if ($fields[0] -ne 'diskfixture') { continue }
+        $fixture = $fields[1]
+        if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
+        $fixtureDisk = Join-Path $testBuild "shell-$fixture.disk"
+        $diskStream = [IO.File]::Create($fixtureDisk); $diskStream.SetLength(1MB); $diskStream.Close()
+        $lastMarker = ($fields[5] -split ';;')[-1]
+        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' $lastMarker $fixtureDisk 0 $fields[4] 2>&1) -join "`n"
+        $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+        if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+    }
+    Remove-Item Env:NEPEROS_RNG -ErrorAction SilentlyContinue
     Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }

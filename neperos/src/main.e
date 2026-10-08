@@ -80,6 +80,9 @@ var reuse_app_arena: bool = false
 // (D2247) Whether the unified boot started the network and random servers; every launched app is then granted the
 // client ends of the network server (slots 3 and 4).
 var net_present: bool = false
+// (D2252) The same for the random server and the filesystem server: the Secure app is granted their client ends.
+var rng_present: bool = false
+var fs_present: bool = false
 // (D2207) Whether the input server started next sends 500 ms tick events (the unified shell's boot).
 var input_ticks: usize = 0usize
 // (D2247) A word the kernel leaves in aux slot 7 of the next driver server: the network server reads 1 as
@@ -705,6 +708,17 @@ fn launch(frame: *a64.Frame) {
             thread.grant(child, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 8usize)
             thread.grant(child, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 9usize)
         }
+        // (D2252) The Secure app (archive entry 38, the table's `secure`) alone reaches storage and the random server.
+        if index == 38usize {
+            if fs_present {
+                thread.grant(child, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
+                thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
+            }
+            if rng_present {
+                thread.grant(child, 7usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 10usize)
+                thread.grant(child, 8usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 11usize)
+            }
+        }
     }
     frame.x[0usize] = u64(child)
 }
@@ -1053,45 +1067,56 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 thread.grant(comp_app, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 5usize)
             }
             }
-            // (D2247, C117) The network, when the machine has a virtio-net device and the archive
-            // carries the two servers after the apps (entries 42 and 43): the network server (endpoints
-            // 8 requests and 9 replies to its clients; 10 and 11 to and from the random server) and the
-            // random server holding virtio-rng. Every app the shell launches is then granted the two
-            // client ends in slots 3 and 4. A machine without the device starts neither, and an app
-            // that asks for the network gets the kernel's refusal.
+            // (D2247, D2252) The system servers, each started when the machine has its device and the archive
+            // carries the programs after the apps (42 the random server, 43 the network server, 44 the trust
+            // store, 45 the fixture's root in a test archive): the random server holding virtio-rng (endpoints 10
+            // requests, 11 replies), the network server holding virtio-net (8 and 9 to its clients, and the random
+            // server's two ends when there is one), and the filesystem server holding virtio-blk (6 requests, 7
+            // replies; the program is entry 5). Every app the shell launches is granted the two client ends of the
+            // network server (slots 3 and 4); the Secure app alone is granted the filesystem's (slots 5 and 6) and
+            // the random server's (slots 7 and 8). A machine without a device starts nothing for it, and an app that
+            // asks for what it was not granted gets the kernel's refusal.
             if archive_count >= 45usize {
-                // Entry 44 is the trust store; a test archive adds the fixture root as entry 45.
+                if has_word(bootargs, "nettest") && archive_count >= 46usize { driver_flag = 1usize }
+                last_server_index = thread.MAX_THREADS
+                let (rng_bar, rng_error) = start_driver_server(a, archive_base + archive_offset[42usize], archive_length[42usize], 8usize, pci_host, next_bar, pci.VIRTIO_ENTROPY, "rng")
+                if rng_error != ok { ret rng_error }
+                if last_server_index != thread.MAX_THREADS {
+                    thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 10usize)
+                    thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 11usize)
+                    rng_present = true
+                }
+                // The network server's arguments: the trust store (and the test root).
                 extra_first = 44usize
                 extra_count = 1usize
-                if has_word(bootargs, "nettest") && archive_count >= 46usize {
-                    driver_flag = 1usize
-                    extra_count = 2usize
-                }
+                if has_word(bootargs, "nettest") && archive_count >= 46usize { extra_count = 2usize }
                 driver_pool_bytes = 1048576usize
                 driver_arena_bytes = 8388608usize
                 last_server_index = thread.MAX_THREADS
-                let (net_bar, net_error) = start_driver_server(a, archive_base + archive_offset[43usize], archive_length[43usize], 9usize, pci_host, next_bar, pci.VIRTIO_NET, "net")
+                let (net_bar, net_error) = start_driver_server(a, archive_base + archive_offset[43usize], archive_length[43usize], 9usize, pci_host, rng_bar, pci.VIRTIO_NET, "net")
                 extra_count = 0usize
                 if net_error != ok { ret net_error }
                 driver_pool_bytes = 131072usize
                 driver_arena_bytes = 0usize
                 driver_flag = 0usize
                 if last_server_index != thread.MAX_THREADS {
-                    let net_server = last_server_index
-                    last_server_index = thread.MAX_THREADS
-                    let (rng_bar, rng_error) = start_driver_server(a, archive_base + archive_offset[42usize], archive_length[42usize], 8usize, pci_host, net_bar, pci.VIRTIO_ENTROPY, "rng")
-                    if rng_error != ok { ret rng_error }
-                    if last_server_index != thread.MAX_THREADS {
-                        thread.grant(net_server, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 8usize)
-                        thread.grant(net_server, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 9usize)
-                        thread.grant(net_server, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 10usize)
-                        thread.grant(net_server, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 11usize)
-                        thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 10usize)
-                        thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 11usize)
-                        net_present = true
+                    thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 8usize)
+                    thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 9usize)
+                    if rng_present {
+                        thread.grant(last_server_index, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 10usize)
+                        thread.grant(last_server_index, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 11usize)
                     }
+                    net_present = true
                 }
-                // Launched apps take ASIDs above the two servers'.
+                last_server_index = thread.MAX_THREADS
+                let (fs_bar, fs_error) = start_driver_server(a, archive_base + archive_offset[5usize], archive_length[5usize], 7usize, pci_host, net_bar, pci.VIRTIO_BLOCK, "fs")
+                if fs_error != ok { ret fs_error }
+                if last_server_index != thread.MAX_THREADS {
+                    thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 6usize)
+                    thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 7usize)
+                    fs_present = true
+                }
+                // Launched apps take ASIDs above the servers'.
                 next_asid = 9usize
             }
         }

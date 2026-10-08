@@ -22,7 +22,7 @@ const BLOCKED: u8 = 4u8
 // capability space, a thread cannot name an endpoint, the console or a frame. `object` is
 // the kernel index the capability grants, and `parent` the slot it was derived from (or
 // NONE), so a revoke walks the derivations. Rights are ANDed down on each derivation.
-const CAPS: usize = 8usize
+const CAPS: usize = 10usize
 const CAP_NULL: u8 = 0u8
 const CAP_ENDPOINT: u8 = 1u8
 const CAP_CONSOLE: u8 = 2u8
@@ -46,7 +46,7 @@ type Cap = struct { kind: u8, rights: u8, object: usize, parent: usize }
 // sentinel, and `waiting_child` the child it is blocked reaping (NONE otherwise).
 // (D2157) `detached` marks a thread (from os.thread_detach) whose slot is freed the moment it
 // exits rather than kept for a join -- a thread nobody will reap.
-type Thread = struct { state: u8, name: str, ttbr: usize, caps: [8]Cap, frame: a64.Frame, parent: usize, exit_code: usize, waiting_child: usize, detached: usize, window: usize }
+type Thread = struct { state: u8, name: str, ttbr: usize, caps: [10]Cap, frame: a64.Frame, parent: usize, exit_code: usize, waiting_child: usize, detached: usize, window: usize }
 
 // The exit code of a process the kernel killed for a fault, which its parent's reap returns.
 const FAULT_CODE: usize = 18446744073709551615usize
@@ -104,7 +104,7 @@ fn add(space: vm.Space, name: str, arg_table: usize, arg_count: usize) -> usize 
     frame.sp_el0 = u64(space.stack_top)
     frame.elr = u64(space.entry)
     frame.spsr = 0u64
-    var empty: [8]Cap = zero
+    var empty: [10]Cap = zero
     // The parent is whatever thread is current: none at boot (where `current` is NONE), the
     // launcher under the `launch` system call, so a later `reap` on this child finds its parent.
     threads[slot] = Thread { state: READY, name: name, ttbr: space.ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: space.size }
@@ -147,7 +147,7 @@ fn add_in_space(ttbr: usize, name: str, elr: usize, arg0: usize, arg1: usize, st
     frame.sp_el0 = u64(stack_top)
     frame.elr = u64(elr)
     frame.spsr = 0u64
-    var empty: [8]Cap = zero
+    var empty: [10]Cap = zero
     // A spawned thread shares the creating thread's address space, so it shares its window size too.
     var inherited = 0usize
     if current != NONE { inherited = threads[current].window }
