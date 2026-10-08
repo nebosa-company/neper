@@ -4134,6 +4134,158 @@ fn pie_25d(values: []const f32, bounds: geometry.Rect, tilt: f32, thickness: f32
     ret (Extruded { tops: tops[..n], sides: walls[..n] }, ok)
 }
 
+type CompoundKind = enum u8 { Pie, Bar }
+type CompoundPie = struct { main: []Layout, breakout: []Layout, bars: []geometry.Rect, connectors: Layout, other_total: f64, main_total: f64 }
+
+// How many trailing values each hold less than `max_share` of the total: the
+// small slices a compound pie usually moves into its breakout. Stops at the first
+// value that is not small, so the grouped slices stay a contiguous tail.
+fn small_tail_count(values: []const f32, max_share: f32) -> (usize, err) {
+    if values.len == 0usize { ret (0usize, Empty) }
+    if !finite(max_share) || max_share <= 0.0 || max_share > 1.0 { ret (0usize, Invalid) }
+    var total = 0.0f64
+    var i = 0usize
+    while i < values.len {
+        if !finite(values[i]) || values[i] < 0.0 { ret (0usize, Invalid) }
+        total += f64(values[i])
+        i += 1usize
+    }
+    if !(total > 0.0f64) { ret (0usize, Invalid) }
+    var count = 0usize
+    i = values.len
+    while i > 0usize {
+        i -= 1usize
+        if f64(values[i]) / total < f64(max_share) { count += 1usize } else { break }
+    }
+    ret (count, ok)
+}
+
+fn sector_points(points: []Coord, used: usize, cx: f64, cy: f64, radius: f64, start: f64, finish: f64, share: f64) -> usize {
+    let steps = 2usize + usize(share * 96.0f64)
+    var at = used
+    points[at] = Coord { x: f32(cx), y: f32(cy) }
+    at += 1usize
+    var j = 0usize
+    while j <= steps {
+        let angle = start + (finish - start) * f64(j) / f64(steps)
+        points[at] = Coord { x: f32(cx + radius * math.cos[f64](angle)), y: f32(cy + radius * math.sin[f64](angle)) }
+        at += 1usize
+        j += 1usize
+    }
+    ret at
+}
+
+// Pie-of-pie and bar-of-pie. The last `tail` values leave the main pie and return
+// as one "Other" slice (the last main layer) turned to face the breakout; the
+// breakout is a smaller pie of just those values, or one stacked bar of them top to
+// bottom. Two connector segments run from the Other slice's edges to the breakout's
+// top and bottom. `other_total` equals the breakout's own total, so slice-to-breakout
+// totals reconcile by construction.
+fn compound_pie(values: []const f32, tail: usize, kind: CompoundKind, bounds: geometry.Rect, points: []Coord, main: []Layout, breakout: []Layout, bars: []geometry.Rect, links: []Segment) -> (CompoundPie, err) {
+    let n = values.len
+    if n == 0usize { ret (zero, Empty) }
+    if tail < 2usize || tail >= n || !valid_bounds(bounds) { ret (zero, Invalid) }
+    let main_count = n - tail + 1usize
+    if main.len < main_count || links.len < 2usize { ret (zero, TooLarge) }
+    if kind == .Pie && breakout.len < tail { ret (zero, TooLarge) }
+    if kind == .Bar && bars.len < tail { ret (zero, TooLarge) }
+    var total = 0.0f64
+    var other = 0.0f64
+    var i = 0usize
+    while i < n {
+        if !finite(values[i]) || values[i] < 0.0 { ret (zero, Invalid) }
+        total += f64(values[i])
+        if i >= n - tail { other += f64(values[i]) }
+        i += 1usize
+    }
+    if !(total > 0.0f64) || !(other > 0.0f64) { ret (zero, Invalid) }
+    var needed = 0usize
+    i = 0usize
+    while i < main_count {
+        var v = other
+        if i < main_count - 1usize { v = f64(values[i]) }
+        needed += 4usize + usize(v / total * 96.0f64)
+        i += 1usize
+    }
+    if kind == .Pie {
+        i = n - tail
+        while i < n {
+            needed += 4usize + usize(f64(values[i]) / other * 96.0f64)
+            i += 1usize
+        }
+    }
+    if points.len < needed { ret (zero, TooLarge) }
+    let pi = 3.141592653589793f64
+    var r1 = f64(bounds.width) * 0.25f64
+    if f64(bounds.height) * 0.5f64 < r1 { r1 = f64(bounds.height) * 0.5f64 }
+    let r2 = r1 * 0.7f64
+    let cy = f64(bounds.y) + f64(bounds.height) * 0.5f64
+    let c1 = f64(bounds.x) + r1
+    let c2 = f64(bounds.x) + f64(bounds.width) - r2
+    let other_fraction = other / total
+    let turn = pi * other_fraction
+    var used = 0usize
+    var cumulative = 0.0f64
+    i = 0usize
+    while i < main_count {
+        var v = other
+        if i < main_count - 1usize { v = f64(values[i]) }
+        let share = v / total
+        let start = turn + 2.0f64 * pi * cumulative / total
+        cumulative += v
+        let finish = start + 2.0f64 * pi * share
+        let first = used
+        used = sector_points(points, used, c1, cy, r1, start, finish, share)
+        main[i] = Layout { kind: .Area, coords: points[first..used], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+        i += 1usize
+    }
+    var top = Coord { x: f32(c2), y: f32(cy - r2) }
+    var bottom = Coord { x: f32(c2), y: f32(cy + r2) }
+    var slices: []Layout = zero
+    var stacks: []geometry.Rect = zero
+    if kind == .Pie {
+        cumulative = 0.0f64
+        i = 0usize
+        while i < tail {
+            let v = f64(values[n - tail + i])
+            let share = v / other
+            let start = -0.5f64 * pi + 2.0f64 * pi * cumulative / other
+            cumulative += v
+            let finish = start + 2.0f64 * pi * share
+            let first = used
+            used = sector_points(points, used, c2, cy, r2, start, finish, share)
+            breakout[i] = Layout { kind: .Area, coords: points[first..used], segments: zero, bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+            i += 1usize
+        }
+        slices = breakout[..tail]
+    } else {
+        let bar_width = r2 * 0.9f64
+        let left = c2 - bar_width * 0.5f64
+        cumulative = 0.0f64
+        i = 0usize
+        while i < tail {
+            let v = f64(values[n - tail + i])
+            let y0 = cy - r2 + 2.0f64 * r2 * cumulative / other
+            cumulative += v
+            let y1 = cy - r2 + 2.0f64 * r2 * cumulative / other
+            bars[i] = geometry.rect(f32(left), f32(y0), f32(bar_width), f32(y1 - y0))
+            i += 1usize
+        }
+        top = Coord { x: f32(left), y: f32(cy - r2) }
+        bottom = Coord { x: f32(left), y: f32(cy + r2) }
+        stacks = bars[..tail]
+    }
+    links[0usize] = Segment { from: Coord { x: f32(c1 + r1 * math.cos[f64](0.0f64 - turn)), y: f32(cy + r1 * math.sin[f64](0.0f64 - turn)) }, to: top }
+    links[1usize] = Segment { from: Coord { x: f32(c1 + r1 * math.cos[f64](turn)), y: f32(cy + r1 * math.sin[f64](turn)) }, to: bottom }
+    var k = 0usize
+    while k < used {
+        if !finite(points[k].x) || !finite(points[k].y) { ret (zero, Invalid) }
+        k += 1usize
+    }
+    let connectors = Layout { kind: .Rug, coords: zero, segments: links[..2usize], bars: zero, x_min: 0.0, x_max: 1.0, y_min: 0.0, y_max: 1.0 }
+    ret (CompoundPie { main: main[..main_count], breakout: slices, bars: stacks, connectors: connectors, other_total: other, main_total: total - other }, ok)
+}
+
 fn polar_point(center_x: f64, center_y: f64, radius: f64, angle: f64) -> Coord {
     ret Coord { x: f32(center_x + radius * math.cos[f64](angle)), y: f32(center_y + radius * math.sin[f64](angle)) }
 }

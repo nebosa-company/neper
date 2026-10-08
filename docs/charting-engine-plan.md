@@ -1359,3 +1359,14 @@ slice lies on the far half). Both are styling on 2-D geometry, distinct from the
 right, front then top then side; walls, then tops). `gfx_chart_25d_reference` checks
 vertices against a numpy replay, parallelogram areas by shoelace, the visible wall arc
 and the footprint on Windows and Linux; the gallery adds `column_25d` and `pie_25d`.
+
+`compound_pie` draws pie-of-pie and bar-of-pie: the last `tail` values leave the main
+pie and return as one Other slice (its last layer) turned to face the breakout, which is
+a smaller pie of just those values or one stacked bar of them top to bottom; two
+connector segments run from the Other slice's edges to the breakout's top and bottom.
+`small_tail_count` finds the contiguous trailing values under a share threshold, the usual
+small-slice grouping. `other_total` is the breakout's own total, so slice-to-breakout
+totals reconcile by construction. `gfx_chart_compound_pie_reference` checks vertices against
+a numpy replay, polygon areas against the chord-sector formula and proportional to the
+values, connectors and refusals on Windows and Linux; the gallery adds `pie_of_pie` and
+`bar_of_pie`.

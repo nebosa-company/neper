@@ -2,7 +2,7 @@
 
 Neper builds renderer-neutral chart layouts from borrowed data and caller-owned output storage. The same marks feed its CPU scene/PNG and SVG adapters. This guide collects the produced charts, their preview notes, and the charting-engine design and catalogue. Readiness scores remain in [progress.html](progress.html).
 
-## Rendered previews (242/242)
+## Rendered previews (244/244)
 
 The total includes rendered PNG/SVG pairs and the [planned gallery targets](chart-preview-backlog.txt).
 
@@ -47,6 +47,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Clipped Annotation | ![Clipped Annotation](chart-previews/clipped_annotation.png) | [SVG](chart-previews/clipped_annotation.svg) |
 | Cohort Retention | ![Cohort Retention](chart-previews/cohort_retention.png) | [SVG](chart-previews/cohort_retention.svg) |
 | Color Vision | ![Color Vision](chart-previews/color_vision.png) | [SVG](chart-previews/color_vision.svg) |
+| Column 25D | ![Column 25D](chart-previews/column_25d.png) | [SVG](chart-previews/column_25d.svg) |
 | Combo Axes | ![Combo Axes](chart-previews/combo_axes.png) | [SVG](chart-previews/combo_axes.svg) |
 | Combo Bar Line | ![Combo Bar Line](chart-previews/combo_bar_line.png) | [SVG](chart-previews/combo_bar_line.svg) |
 | Confidence Band | ![Confidence Band](chart-previews/confidence_band.png) | [SVG](chart-previews/confidence_band.svg) |
@@ -176,6 +177,7 @@ The total includes rendered PNG/SVG pairs and the [planned gallery targets](char
 | Phased Xbar R | ![Phased Xbar R](chart-previews/phased_xbar_r.png) | [SVG](chart-previews/phased_xbar_r.svg) |
 | Phased Xbar S | ![Phased Xbar S](chart-previews/phased_xbar_s.png) | [SVG](chart-previews/phased_xbar_s.svg) |
 | Pie | ![Pie](chart-previews/pie.png) | [SVG](chart-previews/pie.svg) |
+| Pie 25D | ![Pie 25D](chart-previews/pie_25d.png) | [SVG](chart-previews/pie_25d.svg) |
 | Plot Grid | ![Plot Grid](chart-previews/plot_grid.png) | [SVG](chart-previews/plot_grid.svg) |
 | Point Line | ![Point Line](chart-previews/point_line.png) | [SVG](chart-previews/point_line.svg) |
 | Population Pyramid | ![Population Pyramid](chart-previews/population_pyramid.png) | [SVG](chart-previews/population_pyramid.svg) |
@@ -1863,3 +1865,14 @@ slice lies on the far half). Both are styling on 2-D geometry, distinct from the
 right, front then top then side; walls, then tops). `gfx_chart_25d_reference` checks
 vertices against a numpy replay, parallelogram areas by shoelace, the visible wall arc
 and the footprint on Windows and Linux; the gallery adds `column_25d` and `pie_25d`.
+
+`compound_pie` draws pie-of-pie and bar-of-pie: the last `tail` values leave the main
+pie and return as one Other slice (its last layer) turned to face the breakout, which is
+a smaller pie of just those values or one stacked bar of them top to bottom; two
+connector segments run from the Other slice's edges to the breakout's top and bottom.
+`small_tail_count` finds the contiguous trailing values under a share threshold, the usual
+small-slice grouping. `other_total` is the breakout's own total, so slice-to-breakout
+totals reconcile by construction. `gfx_chart_compound_pie_reference` checks vertices against
+a numpy replay, polygon areas against the chord-sector formula and proportional to the
+values, connectors and refusals on Windows and Linux; the gallery adds `pie_of_pie` and
+`bar_of_pie`.

@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# L094 pie-of-pie and bar-of-pie against a numpy replay
+gfx_chart_compound_pie_reference_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_compound_pie_reference/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-compound-pie-reference-selfhost")
+[ "$gfx_chart_compound_pie_reference_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-compound-pie-reference-selfhost"
+gfx_chart_compound_pie_reference_output=$("$test_build/gfx-chart-compound-pie-reference-selfhost")
+[ "$gfx_chart_compound_pie_reference_output" = 'gfx chart compound pie reference ok' ]
 # L093 the 2.5D bar and pie styling against a numpy replay
 gfx_chart_25d_reference_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_25d_reference/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-25d-reference-selfhost")
 [ "$gfx_chart_25d_reference_written" = 'executable written' ]

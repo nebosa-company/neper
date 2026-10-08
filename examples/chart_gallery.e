@@ -11673,6 +11673,82 @@ fn render_pie_25d_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Targ
     ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
 }
 
+// L094: pie-of-pie and bar-of-pie; the small trailing slices leave the main pie as one Other slice.
+fn render_compound_pie_preview(a: *mem.Arena, q: *gpu.Queue, output_target: *gpu.Target, canvas: scene.Target, renderer: *scene.Renderer, kind: chart.CompoundKind, path: str, title: str) -> err {
+    let values = [8]f32{ 27.0, 21.0, 17.0, 12.0, 9.0, 6.5, 4.5, 3.0 }
+    let (grouped, group_error) = chart.small_tail_count(values[..], 0.08)
+    if group_error != ok || grouped < 2usize { ret chart.Invalid }
+    var points: [2000]chart.Coord = zero
+    var main_layers: [8]chart.Layout = zero
+    var breakout: [8]chart.Layout = zero
+    var bars: [8]geometry.Rect = zero
+    var links: [2]chart.Segment = zero
+    let (compound, compound_error) = chart.compound_pie(values[..], grouped, kind, geometry.rect(14.0, 50.0, 332.0, 170.0), points[..], main_layers[..], breakout[..], bars[..], links[..])
+    if compound_error != ok { ret compound_error }
+    let tints = [6]paint.Color{ paint.rgba(0.07, 0.38, 0.76, 1.0), paint.rgba(0.86, 0.39, 0.17, 1.0), paint.rgba(0.15, 0.60, 0.46, 1.0), paint.rgba(0.48, 0.35, 0.72, 1.0), paint.rgba(0.80, 0.68, 0.18, 1.0), paint.rgba(0.55, 0.58, 0.63, 1.0) }
+    let small_tints = [3]paint.Color{ paint.rgba(0.70, 0.72, 0.76, 1.0), paint.rgba(0.60, 0.63, 0.68, 1.0), paint.rgba(0.50, 0.53, 0.59, 1.0) }
+    let dark = paint.rgba(0.17, 0.23, 0.32, 1.0)
+    var text: [2]chart.Label = zero
+    text[0usize] = chart.Label { text: title, anchor: chart.Coord { x: 180.0, y: 20.0 }, align: .Center }
+    text[1usize] = chart.Label { text: "Last 3 values (each under 8%) move to the breakout as one Other slice", anchor: chart.Coord { x: 180.0, y: 36.0 }, align: .Center }
+    let (font_bytes, font_error) = fs.read_file(a, "docs/video/neper-capabilities/fonts/Montserrat-ExtraBold.ttf", 1048576usize)
+    if font_error != ok { ret font_error }
+    let font = shape.Font { id: 17u32, data: font_bytes, face_index: 0u32 }
+    let (made, builder_error) = scene.builder(a, 1024usize)
+    if builder_error != ok { ret builder_error }
+    var builder = made
+    try fill(&builder, geometry.rect(0.0, 0.0, f32(WIDTH), f32(HEIGHT)), paint.Brush { Solid: paint.rgba(1.0, 1.0, 1.0, 1.0) })
+    var i = 0usize
+    while i < compound.main.len {
+        var tint = tints[5usize]
+        if i + 1usize < compound.main.len { tint = tints[i] }
+        try chart_scene.append(a, &builder, &compound.main[i], paint.Brush { Solid: tint })
+        i += 1usize
+    }
+    i = 0usize
+    while i < compound.breakout.len {
+        try chart_scene.append(a, &builder, &compound.breakout[i], paint.Brush { Solid: small_tints[i % 3usize] })
+        i += 1usize
+    }
+    i = 0usize
+    while i < compound.bars.len {
+        try fill(&builder, compound.bars[i], paint.Brush { Solid: small_tints[i % 3usize] })
+        i += 1usize
+    }
+    try chart_scene.append(a, &builder, &compound.connectors, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, text[..1usize], font, 13.0, paint.Brush { Solid: dark })
+    try chart_scene.append_labels(a, &builder, text[1usize..], font, 7.0, paint.Brush { Solid: dark })
+    try render_builder(a, q, output_target, canvas, renderer, &builder, path)
+    let (svg_held, svg_error) = svg_start(a, path)
+    if svg_error != ok { ret svg_error }
+    var svg_state = svg_held
+    var writer = io.writer(mem.cast[*void](&svg_state), io.memory_write)
+    i = 0usize
+    while i < compound.main.len {
+        var tint = tints[5usize]
+        if i + 1usize < compound.main.len { tint = tints[i] }
+        try chart_svg.append(&writer, &compound.main[i], tint)
+        i += 1usize
+    }
+    i = 0usize
+    while i < compound.breakout.len {
+        try chart_svg.append(&writer, &compound.breakout[i], small_tints[i % 3usize])
+        i += 1usize
+    }
+    i = 0usize
+    while i < compound.bars.len {
+        try chart_svg.rect(&writer, compound.bars[i], small_tints[i % 3usize], false)
+        i += 1usize
+    }
+    try chart_svg.append(&writer, &compound.connectors, dark)
+    try chart_svg.append_labels(&writer, text[..1usize], dark, 13.0)
+    try chart_svg.append_labels(&writer, text[1usize..], dark, 7.0)
+    try chart_svg.finish(&writer)
+    let (svg_path, path_error) = vector_path(a, path)
+    if path_error != ok { ret path_error }
+    ret fs.write_file(a, svg_path, io.memory_bytes(&svg_state))
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, device_error) = gpu.open(a, .Cpu, 0u32)
     if device_error != ok { ret device_error }
@@ -12146,6 +12222,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try render_missingness_preview(a, queue, output_target, canvas, &renderer)
     try render_column_25d_preview(a, queue, output_target, canvas, &renderer)
     try render_pie_25d_preview(a, queue, output_target, canvas, &renderer)
+    try render_compound_pie_preview(a, queue, output_target, canvas, &renderer, .Pie, "docs/chart-previews/pie_of_pie.png", "Pie of pie")
+    try render_compound_pie_preview(a, queue, output_target, canvas, &renderer, .Bar, "docs/chart-previews/bar_of_pie.png", "Bar of pie")
     try render_calendar_preview(a, queue, output_target, canvas, &renderer)
     try render_risk_matrix_preview(a, queue, output_target, canvas, &renderer)
     try render_resource_histogram_preview(a, queue, output_target, canvas, &renderer)
