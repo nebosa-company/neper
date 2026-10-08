@@ -12,7 +12,7 @@ out_path = os.path.join(root, "neperos", "src", "icons.e")
 
 
 # The launcher's grid order (four columns, so six rows of four); files not listed follow, sorted.
-APP_ORDER = ["phone", "messages", "mail", "browser", "camera", "gallery", "maps", "compass", "clock", "calculator", "tasks", "files", "chat", "meet", "recorder", "translate", "steps", "lunatris", "mfa", "settings", "stocks", "weather", "ssh", "ai", "wallet"]
+APP_ORDER = ["phone", "messages", "mail", "browser", "camera", "gallery", "maps", "compass", "clock", "calculator", "tasks", "files", "chat", "meet", "recorder", "translate", "steps", "lunatris", "mfa", "settings", "stocks", "weather", "ssh", "ai", "wallet", "document"]
 
 
 # The name each app shows under its icon (the file name where it is not the right word).

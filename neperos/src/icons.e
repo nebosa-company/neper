@@ -28,8 +28,9 @@ fn app_weather() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='
 fn app_ssh() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#26292f'/><rect x='14' y='22' width='68' height='52' rx='8' fill='#14161a' stroke='#e8ebf0' stroke-width='4'/><path d='M26 40 L38 49 L26 58' fill='none' stroke='#e0b36a' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/><path d='M46 59 H64' fill='none' stroke='#e8ebf0' stroke-width='5' stroke-linecap='round'/></svg>" }
 fn app_ai() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#3a3550'/><path d='M42 54 L58 54 L58 76 L53 88 L43 88 L46 76 Z' fill='#c9ccd6'/><path d='M52 56 C58 50 76 50 82 58 C88 67 80 81 68 82 C57 82 48 68 52 56 Z' fill='#d3d6df'/><path d='M10 44 C9 28 26 13 46 13 C64 11 82 19 87 34 C90 44 86 53 78 57 C70 58 62 56 56 60 C50 64 44 69 36 68 C26 68 24 62 18 58 C12 54 10 50 10 44 Z' fill='#e8ebf0'/><g fill='none' stroke='#b9bdc9' stroke-width='1.6' stroke-linecap='round'><path d='M22 60 C32 50 44 52 54 57 M16 38 C24 24 44 22 58 24 C70 26 78 32 82 40'/></g><g fill='none' stroke='#3a3550' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 44 H33 V34 H47 V24 M30 54 H44 V45 H57 V31 H68 M60 47 H73 V39 M62 53 H72 M26 34 V28 H36 M52 40 V52 M62 68 H74 M68 68 V75'/></g><g fill='#e0b36a' stroke='#3a3550' stroke-width='1.4'><circle cx='20' cy='44' r='2.8'/><circle cx='47' cy='24' r='2.8'/><circle cx='68' cy='31' r='2.8'/><circle cx='73' cy='39' r='2.8'/><circle cx='72' cy='53' r='2.8'/><circle cx='30' cy='54' r='2.8'/><circle cx='36' cy='28' r='2.8'/><circle cx='52' cy='52' r='2.8'/><circle cx='62' cy='68' r='2.8'/><circle cx='74' cy='68' r='2.8'/><circle cx='68' cy='75' r='2.8'/></g></svg>" }
 fn app_wallet() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#2f4658'/><rect x='22' y='20' width='52' height='22' rx='5' fill='#e0b36a' transform='rotate(-8 48 31)'/><rect x='16' y='32' width='64' height='44' rx='9' fill='#e8ebf0'/><path d='M16 44 H80' stroke='#2f4658' stroke-width='3' opacity='0.35'/><rect x='56' y='48' width='24' height='18' rx='6' fill='#2f4658'/><circle cx='64' cy='57' r='3.4' fill='#e0b36a'/></svg>" }
+fn app_document() -> str { ret "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect width='96' height='96' rx='22' fill='#3b4a5e'/><path d='M26 14 H54 L72 32 V80 a4 4 0 0 1 -4 4 H26 a4 4 0 0 1 -4 -4 V18 a4 4 0 0 1 4 -4 Z' fill='#e8ebf0'/><path d='M54 14 V32 H72 Z' fill='#b9bdc9'/><path d='M30 42 H62 M30 50 H56' fill='none' stroke='#3b4a5e' stroke-width='3.5' stroke-linecap='round'/><path d='M38 62 L31 68 L38 74 M52 62 L59 68 L52 74' fill='none' stroke='#c9902f' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/></svg>" }
 
-const APP_COUNT: usize = 25usize
+const APP_COUNT: usize = 26usize
 
 fn app(index: usize) -> str {
     if index == 0usize { ret app_phone() }
@@ -57,6 +58,7 @@ fn app(index: usize) -> str {
     if index == 22usize { ret app_ssh() }
     if index == 23usize { ret app_ai() }
     if index == 24usize { ret app_wallet() }
+    if index == 25usize { ret app_document() }
     ret ""
 }
 
@@ -86,6 +88,7 @@ fn app_name(index: usize) -> str {
     if index == 22usize { ret "ssh" }
     if index == 23usize { ret "ai" }
     if index == 24usize { ret "wallet" }
+    if index == 25usize { ret "document" }
     ret ""
 }
 
@@ -115,6 +118,7 @@ fn app_label(index: usize) -> str {
     if index == 22usize { ret "SSH" }
     if index == 23usize { ret "AI" }
     if index == 24usize { ret "Wallet" }
+    if index == 25usize { ret "Document" }
     ret ""
 }
 
