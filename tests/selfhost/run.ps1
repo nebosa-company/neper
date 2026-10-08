@@ -9450,6 +9450,9 @@ if ($neperosQemu) {
     $secureAppImage = Join-Path $testBuild 'secure.img'
     $aiAppImage = Join-Path $testBuild 'ai.img'
     $documentAppImage = Join-Path $testBuild 'document.img'
+    $dynamicAppImage = Join-Path $testBuild 'dynamic.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\dynamic.e') $repo aarch64 neperos $dynamicAppImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'dynamic did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\document.e') $repo aarch64 neperos $documentAppImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'document did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\ai.e') $repo aarch64 neperos $aiAppImage | Out-Null
@@ -9507,7 +9510,7 @@ if ($neperosQemu) {
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage $browserImage $mapsImage $compassImage $levelImage $flashlightImage $chatImage $meetImage $recorderImage $translateImage $stepsAppImage $lunatrisAppImage $secureAppImage $aiAppImage $documentAppImage
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage $browserImage $mapsImage $compassImage $levelImage $flashlightImage $chatImage $meetImage $recorderImage $translateImage $stepsAppImage $lunatrisAppImage $secureAppImage $aiAppImage $documentAppImage $dynamicAppImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
@@ -9609,6 +9612,9 @@ if ($neperosQemu) {
     # (D2237 Document: open README.md, hello.ne (Neper highlighting) and report.pdf, turn a page, leave)
     $documentBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-document.serial') 55166 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12248,25811;15906,3708;3181,1569;15906,7843;3181,1569;15906,9911;25450,30588;16384,32259' 2>&1) -join "`n"
     if ($documentBoot -notmatch '(?s)document shown.*document opened README.md.*document opened hello.ne.*document lang Neper.*document opened report.pdf.*document page 2.*document home') { throw "NeperOS document did not pass its fixture: $documentBoot" }
+    # (D2238 Dynamic: describe a tip app, wait for the stages, open it, extend it, leave)
+    $dynamicBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-dynamic.serial') 55167 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;20440,25811;16384,5348;14872,20748;23940,20748;29982,20748;27757,26951;16384,10695;8669,13761;3181,1569;24336,13761;12963,24884;27757,26951;16384,10695;16384,32259' 2>&1) -join "`n"
+    if ($dynamicBoot -notmatch '(?s)dynamic shown.*dynamic prompt Tip.*dynamic ready Tip calculator v1.*dynamic open Tip calculator.*dynamic extended Tip calculator v2.*dynamic home') { throw "NeperOS dynamic did not pass its fixture: $dynamicBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }

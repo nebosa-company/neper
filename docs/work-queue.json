@@ -312,6 +312,17 @@
       "evidence": "Queued (2026-10-08). The Document app (D2237) shows sample files: a Markdown renderer for headings, bullets and code, a code view with a one-rule-set highlighter and keyword lists for eight languages, and hand-drawn PDF, Word and PowerPoint pages. This is C123's remainder. Acceptance: (1) a PDF reader in the library (objects, streams with Flate, fonts and text positioning, images, vector paths) painting through e.gfx.scene, with the outline, search, page jump and zoom by pinch (the touch layer needs it); (2) a Word (.docx) and PowerPoint (.pptx) reader over the Open Packaging zip and XML in the library (paragraph and run styles, lists, tables, images, slide shapes and text), and OpenDocument next; (3) a Markdown parser (CommonMark with tables) and an HTML view shared with Mail (C128) and the Browser (C129); (4) highlighting from table-driven rule sets in the library (token rules per language, picked by extension and shebang) for the 30 languages that lead the TIOBE index in the month the item is built, plus Neper reusing its own tokenizer, with a fixture of snippets and the expected token classes for each; (5) open files from Files (C125), Mail attachments and the Browser's downloads, with large files paged; (6) a share and open-with sheet, and Dynamic's source view (C124) uses the code view; (7) a fixture on QEMU that opens a real Markdown, PDF, DOCX and PPTX file from a test image and checks the text drawn. Not queued here: editing, annotation, signing."
     },
     {
+      "id": "C143",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 143,
+      "title": "NeperOS Dynamic, step one: the prompt client and the app kit contract",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Dynamic app (D2238) makes apps from three templates inside itself. This item is the first real step of C124 that does not need a model: the contract between a generated app and the system. Acceptance: (1) an app manifest format (name, icon, capabilities, entry, API level, version) and a package format (manifest, image, signature) with a loader in the shell that installs a package under its own directory (C125), adds its icon to the home grid after the built-in apps and launches it with only its declared capabilities; (2) the app kit as a stable API (appkit, ui, text, scenes and the e.* subset the scanner allows), versioned, with the diagnostics of the compiler made readable for a model (the card of traps in docs/llm-neper-card.md as a prompt prefix); (3) a signing key held by the server and a verifier on the device (e.crypto.sign), with revocation; (4) the scanner as a library: it walks the NIR of the built app and rejects raw syscalls and MMIO, undeclared network or storage use, and unbounded loops over input, with a report the Details screen shows; (5) a fixture that builds one hand-written app to a package, signs it, installs it on QEMU, launches it from its new icon and removes it; the prompt and server pieces follow in C124. Not queued here: a store, sharing."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
