@@ -301,6 +301,17 @@
       "evidence": "Queued (2026-10-08). The AI app (D2236) has the provider and key setup and a chat whose replies are canned. Acceptance: (1) HTTPS clients over C117 for the providers' messages APIs (Anthropic, OpenAI, Google, and a local server such as an Ollama or llama.cpp endpoint), the reply streamed into the bubble, errors (a wrong key, a rate limit, no network) shown in plain words; (2) the API key kept in Secure (C140), never in the app's memory longer than a request, never logged, and a key check on Save with a cheap call; (3) conversations kept in storage (C125) with titles, search, rename and delete, system prompts, and the model, temperature and token limits as settings; (4) images from Camera and Photos, files from Files and documents from Document (C123) as inputs, and the reply's code blocks with syntax highlighting (C123); (5) a tool use loop so a conversation can call other apps through capabilities (read the calendar, make a note) with a confirmation each time; (6) Dynamic (C124) builds on this client for writing apps; (7) a fixture against a local mock server that streams a reply and checks the text and the error paths. Not queued here: voice mode, image generation."
     },
     {
+      "id": "C142",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 142,
+      "title": "NeperOS Document: real PDF, Office and Markdown readers; highlighting for the 30 leading languages",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Document app (D2237) shows sample files: a Markdown renderer for headings, bullets and code, a code view with a one-rule-set highlighter and keyword lists for eight languages, and hand-drawn PDF, Word and PowerPoint pages. This is C123's remainder. Acceptance: (1) a PDF reader in the library (objects, streams with Flate, fonts and text positioning, images, vector paths) painting through e.gfx.scene, with the outline, search, page jump and zoom by pinch (the touch layer needs it); (2) a Word (.docx) and PowerPoint (.pptx) reader over the Open Packaging zip and XML in the library (paragraph and run styles, lists, tables, images, slide shapes and text), and OpenDocument next; (3) a Markdown parser (CommonMark with tables) and an HTML view shared with Mail (C128) and the Browser (C129); (4) highlighting from table-driven rule sets in the library (token rules per language, picked by extension and shebang) for the 30 languages that lead the TIOBE index in the month the item is built, plus Neper reusing its own tokenizer, with a fixture of snippets and the expected token classes for each; (5) open files from Files (C125), Mail attachments and the Browser's downloads, with large files paged; (6) a share and open-with sheet, and Dynamic's source view (C124) uses the code view; (7) a fixture on QEMU that opens a real Markdown, PDF, DOCX and PPTX file from a test image and checks the text drawn. Not queued here: editing, annotation, signing."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",

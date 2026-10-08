@@ -9320,6 +9320,8 @@ greeting"
     lunatris_img="$test_build/lunatris.img"
     secure_img="$test_build/secure.img"
     ai_img="$test_build/ai.img"
+    document_img="$test_build/document.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/document.e" "$repo" aarch64 neperos "$document_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/ai.e" "$repo" aarch64 neperos "$ai_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/secure.e" "$repo" aarch64 neperos "$secure_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/lunatris.e" "$repo" aarch64 neperos "$lunatris_img")" = 'executable written' ]
@@ -9348,7 +9350,7 @@ greeting"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/clock.e" "$repo" aarch64 neperos "$clock_img")" = 'executable written' ]
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/calc.e" "$repo" aarch64 neperos "$calc_img")" = 'executable written' ]
     crater_archive="$test_build/shell-crater-archive.img"
-    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "$calc_img" "$clock_img" "$tasks_img" "$messages_img" "$stocks_img" "$weather_img" "$ssh_img" "$wallet_img" "$camera_img" "$photos_img" "$files_img" "$settings_img" "$call_img" "$mail_img" "$browser_img" "$maps_img" "$compass_img" "$level_img" "$flashlight_img" "$chat_img" "$meet_img" "$recorder_img" "$translate_img" "$steps_img" "$lunatris_img" "$secure_img" "$ai_img"
+    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "$calc_img" "$clock_img" "$tasks_img" "$messages_img" "$stocks_img" "$weather_img" "$ssh_img" "$wallet_img" "$camera_img" "$photos_img" "$files_img" "$settings_img" "$call_img" "$mail_img" "$browser_img" "$maps_img" "$compass_img" "$level_img" "$flashlight_img" "$chat_img" "$meet_img" "$recorder_img" "$translate_img" "$steps_img" "$lunatris_img" "$secure_img" "$ai_img" "$document_img"
     crater_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" keyboard "$test_build/shell-crater.serial" 55136 "compositor bigarena unified" 'shell app code 5' - 2 2>&1)
     case "$crater_boot" in
         *'shell wallpaper from fs'*) printf '%s
@@ -9528,6 +9530,11 @@ greeting"
     case "$ai_boot" in
         *'ai shown'*'ai provider OpenAI'*'ai key saved'*'ai sent'*'ai reply'*'ai home'*) ;;
         *) printf '%s\n' "NeperOS ai did not pass its fixture: $ai_boot" >&2; exit 1 ;;
+    esac
+    document_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-document.serial" 55166 "compositor bigarena unified" 'shell app code' - 0 '16384,16361;12248,25811;15906,3708;3181,1569;15906,7843;3181,1569;15906,9911;25450,30588;16384,32259' 2>&1)
+    case "$document_boot" in
+        *'document shown'*'document opened README.md'*'document opened hello.ne'*'document lang Neper'*'document opened report.pdf'*'document page 2'*'document home'*) ;;
+        *) printf '%s\n' "NeperOS document did not pass its fixture: $document_boot" >&2; exit 1 ;;
     esac
     unset NEPEROS_TAP_DELAY
     unset NEPEROS_MEM NEPEROS_GPU
