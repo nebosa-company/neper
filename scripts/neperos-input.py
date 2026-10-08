@@ -72,6 +72,10 @@ def main():
     if len(sys.argv) > 9 and sys.argv[9] != "-":
         args += ["-drive", "file=%s,format=raw,if=none,id=blk0" % sys.argv[9],
                  "-device", "virtio-blk-pci,disable-legacy=on,drive=blk0"]
+    # NEPEROS_NET=1 gives the machine a user-mode network and a random-number device (C117, D2247).
+    if os.environ.get("NEPEROS_NET") == "1":
+        args += ["-netdev", "user,id=n0", "-device", "virtio-net-pci,netdev=n0,disable-legacy=on,romfile=",
+                 "-device", "virtio-rng-pci,disable-legacy=on"]
     proc = subprocess.Popen(args)
     try:
         sock = None

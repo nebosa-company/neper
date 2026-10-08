@@ -30,7 +30,7 @@ const BROADCAST: u64 = 281474976710655u64
 // emulated time, and every exchange retries a few waits.
 const POLLS: usize = 4000000usize
 
-type Stack = struct { net: virtio.Net, mac: u64, ip: u32, mask: u32, gw: u32, dns: u32, gw_mac: u64, ident: u16 }
+type Stack = struct { net: virtio.Net, mac: u64, ip: u32, mask: u32, gw: u32, dns: u32, dns_port: u16, gw_mac: u64, ident: u16 }
 
 fn put16(at: usize, value: u16) {
     os.store8(at, u8(value >> 8u16))
@@ -123,7 +123,7 @@ fn say_ip(ip: u32) {
 fn attach(device: virtio.Device) -> (Stack, err) {
     let (net, net_error) = virtio.net_open(device)
     if net_error != ok { ret (zero, net_error) }
-    ret (Stack { net: net, mac: net.mac, ip: 0u32, mask: 0u32, gw: 0u32, dns: 0u32, gw_mac: BROADCAST, ident: 1u16 }, ok)
+    ret (Stack { net: net, mac: net.mac, ip: 0u32, mask: 0u32, gw: 0u32, dns: 0u32, dns_port: 53u16, gw_mac: BROADCAST, ident: 1u16 }, ok)
 }
 
 // ---- Ethernet and ARP ----
@@ -457,12 +457,12 @@ fn resolve(st: *Stack, name: str) -> (u32, err) {
         put16(o + 1usize, 1u16)
         put16(o + 3usize, 1u16)
         o += 5usize
-        let send_error = udp_send(st, 53000u16, st.dns, 53u16, o - at)
+        let send_error = udp_send(st, 53000u16, st.dns, st.dns_port, o - at)
         if send_error != ok { ret (0u32, send_error) }
         var spins = 0usize
         while spins < POLLS {
             let (proto, src, payload, len) = poll(st)
-            if proto == PROTO_UDP && len >= UDP_HDR + 12usize && get16(payload) == 53u16 && get16(payload + 2usize) == 53000u16 {
+            if proto == PROTO_UDP && len >= UDP_HDR + 12usize && get16(payload) == st.dns_port && get16(payload + 2usize) == 53000u16 {
                 let msg = payload + UDP_HDR
                 let msg_len = len - UDP_HDR
                 if get16(msg) == id {

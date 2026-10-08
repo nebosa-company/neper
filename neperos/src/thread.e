@@ -53,7 +53,7 @@ const FAULT_CODE: usize = 18446744073709551615usize
 
 // A synchronous IPC endpoint: a queue of threads blocked on it, all senders or all
 // receivers, since a sender and a receiver rendezvous rather than both waiting.
-const ENDPOINTS: usize = 8usize
+const ENDPOINTS: usize = 12usize
 const EP_EMPTY: u8 = 0u8
 const EP_SENDERS: u8 = 1u8
 const EP_RECEIVERS: u8 = 2u8
@@ -69,7 +69,7 @@ const NOTIFICATIONS: usize = 2usize
 type Notification = struct { pending: usize, waiters: [24]usize, count: usize }
 
 var threads: [24]Thread = zero
-var endpoints: [8]Endpoint = zero
+var endpoints: [12]Endpoint = zero
 var notifications: [2]Notification = zero
 var current: usize = 24usize
 // The next boot-reserved endpoint retype will hand out.

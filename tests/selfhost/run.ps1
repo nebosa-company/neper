@@ -9254,6 +9254,28 @@ if ($neperosQemu) {
     foreach ($efsLeak in @('fs write_file failed', 'fs read_file failed')) {
         if ($efsBoot -match [regex]::Escape($efsLeak)) { throw "NeperOS e.fs failed (${efsLeak}): $efsBoot" }
     }
+    # (D2244-D2247, C117) The network on QEMU user-mode networking: the random server (virtio-rng), the
+    # network server (virtio-net: ARP, DHCP, DNS, TCP, TLS 1.3 with the chain and name checked) and an app
+    # holding only the two socket endpoints. The host side (a DNS responder, HTTP and HTTPS servers) is
+    # tests/selfhost/fixtures/neperos/net/host_services.py; the app resolves neper.test through it, fetches
+    # a page over TLS and over plain HTTP, is refused under a wrong name, and is refused a closed port.
+    foreach ($netProgram in @('rng_server', 'net_server', 'net_check')) {
+        & $compiler emit-executable (Join-Path $repo "neperos\src\$netProgram.e") $repo aarch64 neperos (Join-Path $testBuild "$netProgram.img") | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "the NeperOS network program $netProgram did not build" }
+    }
+    $netArchive = Join-Path $testBuild 'net-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $netArchive (Join-Path $testBuild 'rng_server.img') (Join-Path $testBuild 'net_server.img') (Join-Path $testBuild 'net_check.img') (Join-Path $repo 'neperos\assets\roots\mozilla.der') (Join-Path $repo 'tests\selfhost\fixtures\neperos\net\ca.der')
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS network archive did not assemble' }
+    $netReady = Join-Path $testBuild 'net-hosts.ready'
+    if (Test-Path $netReady) { Remove-Item $netReady }
+    $netHosts = Start-Process -FilePath python -ArgumentList @((Join-Path $repo 'tests\selfhost\fixtures\neperos\net\host_services.py'), $netReady) -PassThru -WindowStyle Hidden
+    try {
+        for ($netWait = 0; $netWait -lt 50 -and -not (Test-Path $netReady); $netWait++) { Start-Sleep -Milliseconds 200 }
+        $netBoot = Invoke-NeperOS $neperosImage @('-initrd', $netArchive, '-append', 'net', '-netdev', 'user,id=n0', '-device', 'virtio-net-pci,netdev=n0,disable-legacy=on,romfile=', '-device', 'virtio-rng-pci,disable-legacy=on')
+    } finally {
+        if (-not $netHosts.HasExited) { $netHosts.Kill() }
+    }
+    if ($netBoot -notmatch '(?s)net check tls connected.*net check tls HTTP/1\.0 200 OK.*net check tls body hello from the neper test server.*net check wrong name result 4.*net check plain connected.*net check plain HTTP/1\.0 200 OK.*net check closed port result 3.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS network app did not complete its exchanges: $netBoot" }
     # (D2159, C108) virtio-gpu display server: gpu_test, started as the sole holder of the scanout,
     # reads the mode, draws a test pattern and flushes it; the harness screendumps the display over
     # QMP and the SHA-256 of the screendump must match the golden (identical on QEMU 8.2 and 11.1).
@@ -9435,7 +9457,7 @@ if ($neperosQemu) {
         $appImages += $appImage
     }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') @appImages
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') @appImages (Join-Path $assets 'roots\mozilla.der')
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }

@@ -9109,6 +9109,29 @@ greeting"
         *) printf '%s\n' "NeperOS e.fs did not read back what it wrote through the server: $neperos_efs" >&2; exit 1 ;;
     esac
     case "$neperos_efs" in *'fs write_file failed'*|*'fs read_file failed'*) printf '%s\n' "NeperOS e.fs failed: $neperos_efs" >&2; exit 1 ;; esac
+    # (D2244-D2247, C117) The network on QEMU user-mode networking: the random server (virtio-rng), the
+    # network server (virtio-net: ARP, DHCP, DNS, TCP, TLS 1.3 with the chain and name checked) and an app
+    # holding only the two socket endpoints. The host side (a DNS responder, HTTP and HTTPS servers) is
+    # tests/selfhost/fixtures/neperos/net/host_services.py; the app resolves neper.test through it, fetches
+    # a page over TLS and over plain HTTP, is refused under a wrong name, and is refused a closed port.
+    for net_prog in rng_server net_server net_check; do
+        [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/$net_prog.e" "$repo" aarch64 neperos "$test_build/$net_prog.img")" = 'executable written' ]
+    done
+    net_archive="$test_build/net-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$net_archive" "$test_build/rng_server.img" "$test_build/net_server.img" "$test_build/net_check.img" "$repo/neperos/assets/roots/mozilla.der" "$repo/tests/selfhost/fixtures/neperos/net/ca.der"
+    net_ready="$test_build/net-hosts.ready"
+    rm -f "$net_ready"
+    python3 "$repo/tests/selfhost/fixtures/neperos/net/host_services.py" "$net_ready" > /dev/null 2>&1 &
+    net_hosts=$!
+    net_wait=0
+    while [ ! -f "$net_ready" ] && [ "$net_wait" -lt 50 ]; do sleep 0.2; net_wait=$((net_wait + 1)); done
+    neperos_net=$(timeout 120 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -netdev user,id=n0 -device virtio-net-pci,netdev=n0,disable-legacy=on,romfile= -device virtio-rng-pci,disable-legacy=on -nographic -no-reboot -kernel "$neperos_image" -initrd "$net_archive" -append net < /dev/null 2>&1 | tr -d '\r')
+    kill "$net_hosts" 2> /dev/null || true
+    wait "$net_hosts" 2> /dev/null || true
+    case "$neperos_net" in
+        *'net check tls connected'*'net check tls HTTP/1.0 200 OK'*'net check tls body hello from the neper test server'*'net check wrong name result 4'*'net check plain connected'*'net check plain HTTP/1.0 200 OK'*'net check closed port result 3'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *) printf '%s\n' "NeperOS network app did not complete its exchanges: $neperos_net" >&2; exit 1 ;;
+    esac
     # (D2159, C108) virtio-gpu display server: gpu_test draws a test pattern and flushes it; the
     # harness screendumps the scanout over QMP and the SHA-256 must match the golden (identical on
     # QEMU 8.2 and 11.1).
@@ -9303,7 +9326,7 @@ greeting"
         app_images+=("$test_build/neperos-app-$name.img")
     done < <(grep -v '^#' "$apps_table")
     crater_archive="$test_build/shell-crater-archive.img"
-    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "${app_images[@]}"
+    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "${app_images[@]}" "$assets/roots/mozilla.der"
     crater_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" keyboard "$test_build/shell-crater.serial" 55136 "compositor bigarena unified" 'shell app code 5' - 2 2>&1)
     case "$crater_boot" in
         *'shell wallpaper from fs'*) printf '%s

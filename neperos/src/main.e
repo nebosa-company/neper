@@ -77,8 +77,14 @@ var driver_arena_bytes: usize = 0usize
 var app_arena_region: usize = 0usize
 var app_arena_bytes: usize = 0usize
 var reuse_app_arena: bool = false
+// (D2247) Whether the unified boot started the network and random servers; every launched app is then granted the
+// client ends of the network server (slots 3 and 4).
+var net_present: bool = false
 // (D2207) Whether the input server started next sends 500 ms tick events (the unified shell's boot).
 var input_ticks: usize = 0usize
+// (D2247) A word the kernel leaves in aux slot 7 of the next driver server: the network server reads 1 as
+// "also trust the fixture root", set only by the `net` test boot.
+var driver_flag: usize = 0usize
 // (D2202, D2204) Initrd files handed to the next process started: archive entries extra_first ..
 // extra_first + extra_count - 1. The kernel maps those pages into the process and passes each as an
 // argument after its name (args[1] is the first file's bytes, read in place); zero means nothing to
@@ -522,7 +528,21 @@ fn start_driver_server(a: *mem.Arena, image_addr: usize, image_len: usize, asid:
     vm.put_aux(space, 4usize, pool_bytes)
     vm.put_aux(space, 5usize, device.config)
     vm.put_aux(space, 6usize, input_ticks)
-    let (arg_table, arg_count) = setup_args(space, name, 0usize, false)
+    vm.put_aux(space, 7usize, driver_flag)
+    // (D2247) Archive entries handed to a server as arguments, the way a process gets its fonts: the
+    // network server's trust roots.
+    var arg_table = 0usize
+    var arg_count = 0usize
+    if extra_count == 0usize {
+        let (table, count) = setup_args(space, name, 0usize, false)
+        arg_table = table
+        arg_count = count
+    } else {
+        let (table, count, files_error) = setup_args_files(space, name)
+        if files_error != ok { ret (bar, files_error) }
+        arg_table = table
+        arg_count = count
+    }
     let index = thread.add(space, name, arg_table, arg_count)
     if index == thread.MAX_THREADS { ret (bar, vm.NoSpace) }
     thread.grant(index, 0usize, thread.CAP_CONSOLE, thread.RIGHT_WRITE, 0usize)
@@ -681,6 +701,10 @@ fn launch(frame: *a64.Frame) {
         }
         thread.grant(child, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
         thread.grant(child, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 2usize)
+        if net_present {
+            thread.grant(child, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 8usize)
+            thread.grant(child, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 9usize)
+        }
     }
     frame.x[0usize] = u64(child)
 }
@@ -860,16 +884,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if gpu_error != ok { ret gpu_error }
         driver_arena_bytes = 0usize
     }
-    // (D2244, C117) The network boot (`-append net`): the initrd is the network stack under test,
-    // started as the sole holder of the virtio-net device with a 1 MB pool for its rings and
-    // buffers. QEMU runs it on user-mode networking (-nic user).
+    // (D2244, D2246, D2247, C117) The network boot (`-append net`): the initrd is an archive of three
+    // programs on QEMU user-mode networking. Program 0 is the random server, the sole holder of
+    // virtio-rng, serving over endpoints 0 (requests, received on slot 2) and 1 (replies, sent on
+    // slot 3). Program 1 is the network server, the sole holder of virtio-net, with the other ends of
+    // those two (slots 4 and 5) so the only way it gets entropy is by asking, and endpoints 2
+    // (requests, received on slot 2) and 3 (replies, sent on slot 3) from its clients. Program 2 is an
+    // app granted just the client ends (slots 3 and 4): the capability is its only way to the network.
     let net_mode = bootargs_error == ok && has_word(bootargs, "net")
     if net_mode {
         if pci_host_error != ok { ret NoInitrd }
         if !parse_archive(image_addr) { ret BadArchive }
-        // Program 0 is the random server, holding virtio-rng and the request endpoint (slot 2, receive)
-        // and reply endpoint (slot 3, send); program 1 is the network stack, holding virtio-net and the
-        // other ends of the same two endpoints, so the only way it gets entropy is by asking.
         last_server_index = thread.MAX_THREADS
         let (rng_bar, rng_error) = start_driver_server(a, archive_base + archive_offset[0usize], archive_length[0usize], 1usize, pci_host, pci_host.mmio, pci.VIRTIO_ENTROPY, "rng")
         if rng_error != ok { ret rng_error }
@@ -878,12 +903,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
         thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 1usize)
         driver_pool_bytes = 1048576usize
         driver_arena_bytes = 8388608usize
+        if !has_word(bootargs, "realroots") { driver_flag = 1usize }
+        // The trust store (program 3, the Mozilla roots) and the fixture's root (program 4) are mapped
+        // into the server as its arguments 1 and 2.
+        extra_first = 3usize
+        extra_count = 2usize
+        last_server_index = thread.MAX_THREADS
         let (net_bar, net_error) = start_driver_server(a, archive_base + archive_offset[1usize], archive_length[1usize], 2usize, pci_host, rng_bar, pci.VIRTIO_NET, "net")
+        extra_count = 0usize
         if net_error != ok { ret net_error }
-        thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
-        thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 1usize)
+        if last_server_index == thread.MAX_THREADS { ret NoInitrd }
         driver_pool_bytes = 131072usize
         driver_arena_bytes = 0usize
+        driver_flag = 0usize
+        thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 2usize)
+        thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 3usize)
+        thread.grant(last_server_index, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
+        thread.grant(last_server_index, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 1usize)
+        next_asid = 2usize
+        let (net_app, net_app_error) = start_process(archive_base + archive_offset[2usize], archive_length[2usize], "app")
+        if net_app_error != ok { ret net_app_error }
+        thread.grant(net_app, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 2usize)
+        thread.grant(net_app, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 3usize)
     }
     // (D2160, C109) The input boot (`-append input`): the initrd is an archive of two programs. The
     // input server (program 0) alone holds the virtio-input device and the notification bound to its
@@ -1011,6 +1052,47 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 thread.grant(loader, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 5usize)
                 thread.grant(comp_app, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 5usize)
             }
+            }
+            // (D2247, C117) The network, when the machine has a virtio-net device and the archive
+            // carries the two servers after the apps (entries 42 and 43): the network server (endpoints
+            // 8 requests and 9 replies to its clients; 10 and 11 to and from the random server) and the
+            // random server holding virtio-rng. Every app the shell launches is then granted the two
+            // client ends in slots 3 and 4. A machine without the device starts neither, and an app
+            // that asks for the network gets the kernel's refusal.
+            if archive_count >= 45usize {
+                // Entry 44 is the trust store; a test archive adds the fixture root as entry 45.
+                extra_first = 44usize
+                extra_count = 1usize
+                if has_word(bootargs, "nettest") && archive_count >= 46usize {
+                    driver_flag = 1usize
+                    extra_count = 2usize
+                }
+                driver_pool_bytes = 1048576usize
+                driver_arena_bytes = 8388608usize
+                last_server_index = thread.MAX_THREADS
+                let (net_bar, net_error) = start_driver_server(a, archive_base + archive_offset[43usize], archive_length[43usize], 9usize, pci_host, next_bar, pci.VIRTIO_NET, "net")
+                extra_count = 0usize
+                if net_error != ok { ret net_error }
+                driver_pool_bytes = 131072usize
+                driver_arena_bytes = 0usize
+                driver_flag = 0usize
+                if last_server_index != thread.MAX_THREADS {
+                    let net_server = last_server_index
+                    last_server_index = thread.MAX_THREADS
+                    let (rng_bar, rng_error) = start_driver_server(a, archive_base + archive_offset[42usize], archive_length[42usize], 8usize, pci_host, net_bar, pci.VIRTIO_ENTROPY, "rng")
+                    if rng_error != ok { ret rng_error }
+                    if last_server_index != thread.MAX_THREADS {
+                        thread.grant(net_server, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 8usize)
+                        thread.grant(net_server, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 9usize)
+                        thread.grant(net_server, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 10usize)
+                        thread.grant(net_server, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 11usize)
+                        thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 10usize)
+                        thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 11usize)
+                        net_present = true
+                    }
+                }
+                // Launched apps take ASIDs above the two servers'.
+                next_asid = 9usize
             }
         }
     }

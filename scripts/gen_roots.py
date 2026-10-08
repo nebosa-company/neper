@@ -1,19 +1,35 @@
-"""Embed trust roots into neperos/src/roots.e (D2246, C117) as hex, one function per set.
+"""Write the NeperOS trust store, neperos/assets/roots/mozilla.der (D2246, D2247, C117).
 
-  python scripts/gen_roots.py            the fixture's test root (tests/selfhost/fixtures/neperos/net/ca.der)
+  python scripts/gen_roots.py
 
-The TLS client takes its roots as concatenated DER certificates; hex is the one encoding a Neper
-string literal carries without escapes. The decoded bytes are the same whatever the source.
+The Mozilla roots (certifi's cacert.pem) as concatenated DER certificates -- the form the TLS client
+takes -- shipped as an initrd archive entry the kernel maps into the network server as an argument.
+(It was embedded in the program as a hex string first, but the compiler's literal pool holds about
+96 KB and silently zero-fills past it, so a 260 KB literal decoded as garbage after its first 93 KB.)
+Of the Mozilla roots only those the client can verify with are kept: an RSA key or a P-256 key, since
+e.crypto.sign has no P-384, P-521 or SHA-384/512 verifier and a root it cannot use only costs parse
+time on every handshake.
 """
 import pathlib
+import warnings
 
+import certifi
+from cryptography import x509
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
+
+warnings.simplefilter('ignore')
 root = pathlib.Path(__file__).resolve().parent.parent
-test_root = (root / 'tests/selfhost/fixtures/neperos/net/ca.der').read_bytes()
-out = ['// Trust roots embedded by scripts/gen_roots.py (D2246). Do not edit by hand.',
-       '// Each function is concatenated DER certificates as hex; roots.decode turns it into bytes.',
-       '',
-       '// The fixture\'s own root: the CA that signed the test server certificate (neper.test).',
-       'fn test_root_hex() -> str { ret "%s" }' % test_root.hex(),
-       '']
-(root / 'neperos/src/roots.e').write_text('\n'.join(out), encoding='utf-8', newline='\n')
-print('wrote neperos/src/roots.e', len(test_root), 'bytes of root')
+
+kept = []
+dropped = 0
+for cert in x509.load_pem_x509_certificates(pathlib.Path(certifi.where()).read_bytes()):
+    key = cert.public_key()
+    usable = isinstance(key, rsa.RSAPublicKey) or (isinstance(key, ec.EllipticCurvePublicKey) and key.curve.name == 'secp256r1')
+    if usable:
+        kept.append(cert.public_bytes(serialization.Encoding.DER))
+    else:
+        dropped += 1
+bundle = b''.join(kept)
+(root / 'neperos/assets/roots/mozilla.der').write_bytes(bundle)
+print('wrote neperos/assets/roots/mozilla.der:', len(kept), 'roots,', len(bundle), 'bytes;', dropped, 'dropped')
