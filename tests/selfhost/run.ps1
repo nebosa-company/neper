@@ -3672,6 +3672,18 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# L071 the multivariate SPC charts and ANOM against numpy and scipy
+$gfxChartSpcMultivariateReferencePath = Join-Path $testBuild 'gfx-chart-spc-multivariate-reference-selfhost.exe'
+$gfxChartSpcMultivariateReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_spc_multivariate_reference\src\main.e') $repo 'x64' 'windows' $gfxChartSpcMultivariateReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSpcMultivariateReferenceWritten -ne 'executable written') { throw 'gfx_chart_spc_multivariate_reference emission failed' }
+$gfxChartSpcMultivariateReferenceOutput = & $gfxChartSpcMultivariateReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartSpcMultivariateReferenceOutput -ne 'gfx chart spc multivariate reference ok') { throw "gfx_chart_spc_multivariate_reference answered wrongly: exit $LASTEXITCODE" }
+# L071 the SPC estimators against numpy and scipy
+$algoStatSpcReferencePath = Join-Path $testBuild 'algo-stat-spc-reference-selfhost.exe'
+$algoStatSpcReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_spc_reference\src\main.e') $repo 'x64' 'windows' $algoStatSpcReferencePath
+if ($LASTEXITCODE -ne 0 -or $algoStatSpcReferenceWritten -ne 'executable written') { throw 'algo_stat_spc_reference emission failed' }
+$algoStatSpcReferenceOutput = & $algoStatSpcReferencePath
+if ($LASTEXITCODE -ne 0 -or $algoStatSpcReferenceOutput -ne 'algo stat spc reference ok') { throw "algo_stat_spc_reference answered wrongly: exit $LASTEXITCODE" }
 # The maps against independent references (L070, D2254): projections, area-scaled symbols, choropleth, winding, refusals.
 $gfxChartMapReferencePath = Join-Path $testBuild 'gfx-chart-map-reference-selfhost.exe'
 $gfxChartMapReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_map_reference\src\main.e') $repo 'x64' 'windows' $gfxChartMapReferencePath

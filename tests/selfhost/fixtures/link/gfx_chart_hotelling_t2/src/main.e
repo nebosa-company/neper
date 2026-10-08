@@ -31,7 +31,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (phase_two, phase_two_error) = chart.hotelling_t2_individuals(monitored[..], 2usize, historical[..], 0.05f64, bounds, &storage)
     if phase_two_error != ok || !phase_two.phase_two || phase_two.historical_count != 8usize || phase_two.trace.coords.len != 4usize || phase_two.trace.segments.len != 3usize || phase_two.signals.coords.len != 1usize || phase_two.upper.segments.len != 1usize { ret chart.Invalid }
     if !near(phase_two.means[0usize], 0.0f64) || !near(phase_two.means[1usize], 0.0f64) || !near(phase_two.covariance[0usize], 4.0f64 / 7.0f64) || !near(phase_two.covariance[1usize], 4.0f64 / 7.0f64) || !near(phase_two.covariance[3usize], 8.0f64 / 7.0f64) { ret chart.Invalid }
-    if !near(phase_two.scores[0usize], 0.0f64) || !near(phase_two.scores[1usize], 1.75f64) || !near(phase_two.scores[2usize], 7.0f64) || !near(phase_two.scores[3usize], 28.0f64) || !(phase_two.upper_limit > 18.0f64 && phase_two.upper_limit < 20.0f64) { ret chart.Invalid }
+    if !near(phase_two.scores[0usize], 0.0f64) || !near(phase_two.scores[1usize], 1.75f64) || !near(phase_two.scores[2usize], 7.0f64) || !near(phase_two.scores[3usize], 28.0f64) || !(phase_two.upper_limit > 13.0f64 && phase_two.upper_limit < 14.0f64) { ret chart.Invalid }
     if !near(f64(phase_two.signals.coords[0usize].x), 220.0f64) { ret chart.Invalid }
     let blue = paint.rgba(0.1, 0.4, 0.8, 1.0)
     let red = paint.rgba(0.8, 0.2, 0.2, 1.0)
@@ -54,7 +54,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let svg = io.memory_bytes(&held)
     if !str.contains(svg, "<line") || !str.contains(svg, "</svg>") { ret chart.Invalid }
     let (phase_one, phase_one_error) = chart.hotelling_t2_individuals(historical[..], 2usize, historical[..0usize], 0.05f64, bounds, &storage)
-    if phase_one_error != ok || phase_one.phase_two || phase_one.trace.coords.len != 8usize || phase_one.signals.coords.len != 0usize || !(phase_one.upper_limit > 4.0f64 && phase_one.upper_limit < 5.0f64) || !near(phase_one.scores[0usize], 1.75f64) { ret chart.Invalid }
+    if phase_one_error != ok || phase_one.phase_two || phase_one.trace.coords.len != 8usize || phase_one.signals.coords.len != 0usize || !(phase_one.upper_limit > 4.2f64 && phase_one.upper_limit < 4.4f64) || !near(phase_one.scores[0usize], 1.75f64) { ret chart.Invalid }
     let singular = [12]f64{ 1.0f64, 2.0f64, 2.0f64, 4.0f64, 3.0f64, 6.0f64, 4.0f64, 8.0f64, 5.0f64, 10.0f64, 6.0f64, 12.0f64 }
     let (_, singular_error) = chart.hotelling_t2_individuals(monitored[..], 2usize, singular[..], 0.05f64, bounds, &storage)
     let (_, bad_shape) = chart.hotelling_t2_individuals(monitored[..7usize], 2usize, historical[..], 0.05f64, bounds, &storage)

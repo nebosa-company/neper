@@ -9425,11 +9425,11 @@ fn hotelling_t2_individuals(values: []const f64, columns: usize, historical: []c
     let size = f64(m)
     var upper_limit = 0.0f64
     if phase_two {
-        let beta = stat.beta_quantile(1.0f64 - alpha / 2.0f64, p / 2.0f64, (size - p) / 2.0f64)
+        let beta = stat.beta_quantile(1.0f64 - alpha, p / 2.0f64, (size - p) / 2.0f64)
         if beta >= 1.0f64 { ret (zero, Invalid) }
         upper_limit = ((size + 1.0f64) * (size - 1.0f64) / size) * beta / (1.0f64 - beta)
     } else {
-        let beta = stat.beta_quantile(1.0f64 - alpha / 2.0f64, p / 2.0f64, (size - p - 1.0f64) / 2.0f64)
+        let beta = stat.beta_quantile(1.0f64 - alpha, p / 2.0f64, (size - p - 1.0f64) / 2.0f64)
         upper_limit = ((size - 1.0f64) * (size - 1.0f64) / size) * beta
     }
     if !finite64(upper_limit) || upper_limit <= 0.0f64 { ret (zero, Invalid) }

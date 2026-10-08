@@ -3274,6 +3274,18 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# L071 the multivariate SPC charts and ANOM against numpy and scipy
+gfx_chart_spc_multivariate_reference_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_spc_multivariate_reference/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-spc-multivariate-reference-selfhost")
+[ "$gfx_chart_spc_multivariate_reference_written" = 'executable written' ]
+chmod +x "$test_build/gfx-chart-spc-multivariate-reference-selfhost"
+gfx_chart_spc_multivariate_reference_output=$("$test_build/gfx-chart-spc-multivariate-reference-selfhost")
+[ "$gfx_chart_spc_multivariate_reference_output" = 'gfx chart spc multivariate reference ok' ]
+# L071 the SPC estimators against numpy and scipy
+algo_stat_spc_reference_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_spc_reference/src/main.e" "$repo" x64 linux "$test_build/algo-stat-spc-reference-selfhost")
+[ "$algo_stat_spc_reference_written" = 'executable written' ]
+chmod +x "$test_build/algo-stat-spc-reference-selfhost"
+algo_stat_spc_reference_output=$("$test_build/algo-stat-spc-reference-selfhost")
+[ "$algo_stat_spc_reference_output" = 'algo stat spc reference ok' ]
 # The maps against independent references (L070, D2254): projections, area-scaled symbols, choropleth, winding, refusals.
 gfx_chart_map_reference_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_chart_map_reference/src/main.e" "$repo" x64 linux "$test_build/gfx-chart-map-reference-selfhost")
 [ "$gfx_chart_map_reference_written" = 'executable written' ]
