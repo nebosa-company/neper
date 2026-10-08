@@ -1,0 +1,4 @@
+{
+  "windows": {"label": "Windows", "passed": 31, "total": 31, "what": "NeperOS app fixtures (QEMU, 2 needed a longer tap delay)", "date": "2026-10-08"},
+  "wsl": {"label": "WSL", "passed": 31, "total": 31, "what": "NeperOS app fixtures (QEMU, 3 needed a longer tap delay)", "date": "2026-10-08"}
+}

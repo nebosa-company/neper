@@ -217,6 +217,23 @@ def group_card(label, key, pct, sub):
 
 cards = '\n'.join(group_card(label, key, pct, sub) for label, key, pct, sub in GROUP_CARDS)
 
+
+def test_card():
+    """Tile of recorded fixture passes per host, read from docs/test-results.json."""
+    path = Path('docs/test-results.json')
+    if not path.exists():
+        return ''
+    rows = ''
+    for r in json.loads(path.read_text(encoding='utf-8')).values():
+        pct = 100.0 * r['passed'] / r['total'] if r['total'] else 0.0
+        rows += ('<div class="sub"><b>' + html.escape(r['label']) + '</b> ' + str(r['passed']) + ' of '
+                 + str(r['total']) + ' passed (' + ('%.0f' % pct) + '%) · ' + html.escape(r['what'])
+                 + ' · ' + html.escape(r['date']) + '</div>')
+    return '<section class="card tests"><div class="lab">Tests passing</div>' + rows + '</section>'
+
+
+cards += '\n' + test_card()
+
 # Keep the chart catalogue in its maintained Markdown source. The readiness
 # page links to a generated chart guide and shows the unfinished queue.
 chart_plan = Path('docs/charting-engine-plan.md').read_text(encoding='utf-8')
