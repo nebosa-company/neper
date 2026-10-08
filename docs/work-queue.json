@@ -158,6 +158,17 @@
       "evidence": "Queued (2026-10-08). The Mail app (D2223) shows a sample mailbox in the process. Acceptance: (1) IMAP and SMTP over TLS on C117, with accounts added in the app (the passwords kept in Secure, C116), OAuth for the large providers, folder sync and push; (2) threads, labels, search, archive, mark read and unread, swipe actions; (3) rich messages: HTML rendering through the Document engine (C123), inline images, attachments saved into Files (C125) and opened in their apps; (4) compose with attachments from Files, Photos and Camera, drafts, signatures and the contact picker (C127); (5) notifications through the status server and a badge on the icon; (6) a fixture on QEMU against a local IMAP and SMTP test server that fetches, reads, replies and checks the sent message. Not queued here: calendar invites, PGP."
     },
     {
+      "id": "C129",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 129,
+      "title": "NeperOS Browser: a real engine: HTTP over TLS, HTML and CSS, images, forms",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Browser app (D2224) shows sample pages that live in the app. Acceptance: (1) HTTP/1.1 and HTTP/2 over the C117 TLS client with redirects, cookies, a cache and the system proxy settings; (2) an HTML5 parser and a CSS layout engine (block, inline, flex, grid, the common properties) painting through e.gfx.scene, with e.text shaping, images (PNG, JPEG, SVG) and fonts; (3) forms, links, history, bookmarks, the address bar with search suggestions and a chosen search engine, tabs that survive a restart (C125 storage), incognito; (4) downloads into Files and opening files in their apps (C123); (5) a script engine is a separate item (JavaScript or Neper in the page); (6) permissions per site (camera, location) tied to Settings (C126); (7) a fixture on QEMU against a local web server that loads a page with an image and a form and follows a link. Not queued here: extensions, sync, WebRTC."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",

@@ -9436,6 +9436,9 @@ if ($neperosQemu) {
     $settingsImage = Join-Path $testBuild 'settings.img'
     $callImage = Join-Path $testBuild 'call.img'
     $mailImage = Join-Path $testBuild 'mail.img'
+    $browserImage = Join-Path $testBuild 'browser.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\browser.e') $repo aarch64 neperos $browserImage | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'browser did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\mail.e') $repo aarch64 neperos $mailImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'mail did not build' }
     & $compiler emit-executable (Join-Path $repo 'neperos\src\call.e') $repo aarch64 neperos $callImage | Out-Null
@@ -9465,7 +9468,7 @@ if ($neperosQemu) {
     & $compiler emit-executable (Join-Path $repo 'neperos\src\calc.e') $repo aarch64 neperos $calcImage | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'Calc did not build' }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') $calcImage $clockImage $tasksImage $messagesImage $stocksImage $weatherImage $sshImage $walletImage $cameraImage $photosImage $filesImage $settingsImage $callImage $mailImage $browserImage
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
@@ -9473,51 +9476,51 @@ if ($neperosQemu) {
     # the home bar. The tablet's 0..32767 axes map onto the 412 x 919 dp screen; the shell hit-tests the
     # icon, the kernel starts Calc with the frame and input endpoints, and the app answers the
     # compositor per event.
-    $calcBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-calc.serial') 55137 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,12405;5886,14650;26882,14650;19883,17502;26882,20354;19883,14650;26882,23205;16384,31368' 2>&1) -join "`n"
+    $calcBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-calc.serial') 55137 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,10980;5886,14650;26882,14650;19883,17502;26882,20354;19883,14650;26882,23205;16384,31368' 2>&1) -join "`n"
     if ($calcBoot -notmatch '(?s)shell unlocked.*shell tap Calculator.*shell launching Calculator.*calc shown.*calc shows 7.*calc shows 42.*calc shows 51.*calc home.*shell app code 0') { throw "NeperOS Calc did not launch from its icon and compute 51: $calcBoot" }
     # (D2206) Calc's scientific and convert tabs. The taps are paced (NEPEROS_TAP_DELAY, seconds): the
     # virtio-input queue drops events a slow app has not consumed. Scientific: sqrt 9 = 3, sin 30 = 0.5
     # (degrees), 2 x^y 10 = 1024. Convert: 100 in Celsius is 212 in Fahrenheit.
     $env:NEPEROS_TAP_DELAY = '4'
-    $sciBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-sci.serial') 55138 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,12405;16384,4955;19883,18856;19883,16005;5886,16005;19883,24560;5886,27411;5886,11228;5886,16005;12885,24560;26882,13438;5886,24560;5886,27411;26882,27411;16384,31368' 2>&1) -join "`n"
+    $sciBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-sci.serial') 55138 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,10980;16384,4955;19883,18856;19883,16005;5886,16005;19883,24560;5886,27411;5886,11228;5886,16005;12885,24560;26882,13438;5886,24560;5886,27411;26882,27411;16384,31368' 2>&1) -join "`n"
     if ($sciBoot -notmatch '(?s)calc scientific 3.*calc scientific 0.5.*calc scientific 1024.*calc home') { throw "NeperOS Calc scientific tab did not compute: $sciBoot" }
-    $convBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-conv.serial') 55139 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,12405;25610,4955;27439,6487;5886,22635;5886,25487;5886,25487;16384,31368' 2>&1) -join "`n"
+    $convBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-conv.serial') 55139 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,10980;25610,4955;27439,6487;5886,22635;5886,25487;5886,25487;16384,31368' 2>&1) -join "`n"
     if ($convBoot -notmatch 'calc converts 100 [^ ]* = 212') { throw "NeperOS Calc did not convert 100 Celsius to Fahrenheit: $convBoot" }
     # (D2207) Clock: the Stopwatch runs and stops, a two-second Timer finishes (a tick finds it done),
     # an alarm is added and saved, and the home bar leaves. The input server's 500 ms ticks drive the
     # running displays; a full frame takes seconds under emulation, so the taps are eight seconds apart.
     $env:NEPEROS_TAP_DELAY = '8'
-    $clockBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-clock.serial') 55140 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,12405;16384,30655;16384,27590;16384,27590;22938,30655;16384,8412;16384,23170;16384,17823;3277,30655;16384,27233;9146,20211;16384,32259' 2>&1) -join "`n"
+    $clockBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-clock.serial') 55140 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,10980;16384,30655;16384,27590;16384,27590;22938,30655;16384,8412;16384,23170;16384,17823;3277,30655;16384,27233;9146,20211;16384,32259' 2>&1) -join "`n"
     if ($clockBoot -notmatch '(?s)clock shown.*clock stopwatch started.*clock stopwatch stopped (\d\d+).*clock timer started.*clock timer done.*clock alarm saved 07:00.*clock home') { throw "NeperOS Clock did not run its stopwatch, timer and alarm: $clockBoot" }
     # (D2211) Tasks: complete the first task, add one through the sheet (keys a and b), and leave.
-    $tasksBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-tasks.serial') 55141 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;20480,12405;3661,6916;27037,28520;4295,22816;18993,24884;8668,12193;16384,32259' 2>&1) -join "`n"
+    $tasksBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-tasks.serial') 55141 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;20480,10980;3661,6916;27037,28520;4295,22816;18993,24884;8668,12193;16384,32259' 2>&1) -join "`n"
     if ($tasksBoot -notmatch '(?s)tasks shown.*tasks completed.*tasks added.*tasks count 7.*tasks home') { throw "NeperOS Tasks did not complete and add a task: $tasksBoot" }
     # (D2212) Messages: open the first conversation, open the keyboard, type "Hi", send, go back and leave.
     $messagesBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-messages.serial') 55142 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,3565;15906,4920;11930,30374;19405,22816;23939,20748;29586,16328;3181,1782;16384,32259' 2>&1) -join "`n"
     if ($messagesBoot -notmatch '(?s)messages shown.*messages opened.*messages sent.*messages count 12.*messages home') { throw "NeperOS Messages did not open a conversation and send: $messagesBoot" }
     # (D2213) Stocks: open AAPL, choose the 2M range, go back and leave.
-    $stocksBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-stocks.serial') 55143 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,25668;15906,5633;17655,7771;3181,1782;16384,32259' 2>&1) -join "`n"
+    $stocksBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-stocks.serial') 55143 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,22103;15906,5633;17655,7771;3181,1782;16384,32259' 2>&1) -join "`n"
     if ($stocksBoot -notmatch '(?s)stocks shown.*stocks opened AAPL.*stocks range 60.*stocks back.*stocks home') { throw "NeperOS Stocks did not open a stock and change range: $stocksBoot" }
     # (D2214) Weather: choose Cairo, switch to Fahrenheit and leave.
-    $weatherBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-weather.serial') 55144 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,25668;12408,1462;28313,7914;16384,32259' 2>&1) -join "`n"
+    $weatherBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-weather.serial') 55144 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,22103;12408,1462;28313,7914;16384,32259' 2>&1) -join "`n"
     if ($weatherBoot -notmatch '(?s)weather shown.*weather place Cairo.*weather unit F.*weather home') { throw "NeperOS Weather did not change place and unit: $weatherBoot" }
     # (D2215) SSH: connect to web-01, run ls, go back and leave.
-    $sshBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-ssh.serial') 55145 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;20480,25668;15906,5205;28472,22816;7317,22816;27758,26951;3181,1569;16384,32259' 2>&1) -join "`n"
+    $sshBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-ssh.serial') 55145 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;20480,22103;15906,5205;28472,22816;7317,22816;27758,26951;3181,1569;16384,32259' 2>&1) -join "`n"
     if ($sshBoot -notmatch '(?s)ssh shown.*ssh connected web-01.*ssh command ls.*ssh closed.*ssh home') { throw "NeperOS SSH did not connect and run a command: $sshBoot" }
     # (D2216) Wallet: the network of the sample cards (e.valid), the Bank filter, a bank account whose IBAN checks, back, leave.
-    $walletBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-wallet.serial') 55146 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,30091;19644,3315;15906,7130;3181,1569;16384,32259' 2>&1) -join "`n"
+    $walletBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-wallet.serial') 55146 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,25811;19644,3315;15906,7130;3181,1569;16384,32259' 2>&1) -join "`n"
     if ($walletBoot -notmatch '(?s)wallet brand Visa.*wallet brand Mastercard.*wallet shown.*wallet filter Bank.*wallet opened Neper Bank.*wallet iban valid.*wallet back.*wallet home') { throw "NeperOS Wallet did not open a bank account: $walletBoot" }
     # (D2217) Camera: a photo, the front camera, Scan mode and a scan, the review of the two captures, back, leave.
-    $cameraBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-camera.serial') 55147 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,7986;16384,28164;29585,28164;22427,24099;16384,28164;4135,28164;3181,1569;16384,32259' 2>&1) -join "`n"
+    $cameraBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-camera.serial') 55147 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,7273;16384,28164;29585,28164;22427,24099;16384,28164;4135,28164;3181,1569;16384,32259' 2>&1) -join "`n"
     if ($cameraBoot -notmatch '(?s)camera shown.*camera photo 1.*camera flip front.*camera mode Scan.*camera scan 2.*camera review 2.*camera back.*camera home') { throw "NeperOS Camera did not take a photo and a scan: $cameraBoot" }
     # (D2218) Photos: open the first picture, mark it a favorite, back, the Albums tab, the Trips album, leave.
-    $photosBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-photos.serial') 55148 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,7986;4454,6060;29585,1782;3181,1569;16384,30730;24574,6096;16384,32259' 2>&1) -join "`n"
+    $photosBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-photos.serial') 55148 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;12288,7273;4454,6060;29585,1782;3181,1569;16384,30730;24574,6096;16384,32259' 2>&1) -join "`n"
     if ($photosBoot -notmatch '(?s)photos shown.*photos opened 1.*photos favorite on.*photos back.*photos tab Albums.*photos album Trips.*photos home') { throw "NeperOS Photos did not open a picture and an album: $photosBoot" }
     # (D2219) Files: into Documents, a file's sheet and Open, up, the Date sort, a new folder named Ab, leave.
-    $filesBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-files.serial') 55149 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;28631,12406;11930,8770;11930,6845;5965,25454;16384,27736;3181,1569;28153,1319;25768,30730;4295,22816;19008,24884;8669,7273;16384,32259' 2>&1) -join "`n"
+    $filesBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-files.serial') 55149 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;28631,10980;11930,8770;11930,6845;5965,25454;16384,27736;3181,1569;28153,1319;25768,30730;4295,22816;19008,24884;8669,7273;16384,32259' 2>&1) -join "`n"
     if ($filesBoot -notmatch '(?s)files shown.*files folder Documents.*files file Budget.xlsx.*files open Budget.xlsx.*files up.*files sort Date.*files created Ab.*files home') { throw "NeperOS Files did not browse and create a folder: $filesBoot" }
     # (D2220) Settings: Display, the Dark theme switch and a brightness step, back, Network, the Wi-Fi switch, leave.
-    $settingsBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-settings.serial') 55150 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;28631,21246;15906,6452;16384,9911;16384,5312;3181,1569;15906,4028;16384,4492;16384,32259' 2>&1) -join "`n"
+    $settingsBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-settings.serial') 55150 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;28631,18395;15906,6452;16384,9911;16384,5312;3181,1569;15906,4028;16384,4492;16384,32259' 2>&1) -join "`n"
     if ($settingsBoot -notmatch '(?s)settings shown.*settings page Display.*settings toggle Dark theme off.*settings slider Brightness 50.*settings back.*settings page Network.*settings toggle Wi-Fi off.*settings home') { throw "NeperOS Settings did not change a switch and a slider: $settingsBoot" }
     # (D2222 Call: dial 5550101 on the keypad, call, wait for it to connect, end, leave)
     $callBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-call.serial') 55151 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;4096,3565;16384,11479;16384,11479;16384,11479;16384,18039;6522,8200;16384,18039;6522,8200;16384,22816;16384,24955;16384,32259' 2>&1) -join "`n"
@@ -9525,6 +9528,9 @@ if ($neperosQemu) {
     # (D2223 Mail: open the first message, reply, type Hi, send, leave)
     $mailBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-mail.serial') 55152 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;20440,3565;15906,5418;6840,30445;19405,22816;23939,20748;8669,13227;16384,32259' 2>&1) -join "`n"
     if ($mailBoot -notmatch '(?s)mail shown.*mail opened Lunch on Friday?.*mail composing.*mail sent.*mail home') { throw "NeperOS mail did not pass its fixture: $mailBoot" }
+    # (D2224 Browser: open neper.dev from the start page, follow Read the docs, back, search for hi, leave)
+    $browserBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild 'shell-browser.serial') 55153 'compositor bigarena unified' 'shell app code' '-' 0 '16384,16361;28631,3565;8589,10624;8430,19322;3977,30730;16384,1569;19405,22816;23939,20748;27758,26951;16384,32259' 2>&1) -join "`n"
+    if ($browserBoot -notmatch '(?s)browser shown.*browser go neper.dev.*browser go docs.example.*browser back.*browser search hi.*browser home') { throw "NeperOS browser did not pass its fixture: $browserBoot" }
     Remove-Item Env:NEPEROS_TAP_DELAY
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU
 }

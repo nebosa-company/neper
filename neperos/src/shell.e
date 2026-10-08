@@ -223,7 +223,7 @@ fn draw_home(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, has_font
         let col = idx % 4usize
         let row = idx / 4usize
         let cx = 51.5 + f32(col) * 103.0
-        let y = 70.0 + f32(row) * 124.0
+        let y = 70.0 + f32(row) * 104.0
         try svg.draw(a, builder, icons.app(idx), geometry.rect(cx - 30.0, y, 60.0, 60.0), white)
         if has_fonts {
             // A dark pill under the name keeps it readable on bright terrain.
@@ -316,8 +316,8 @@ fn show_home(a: *mem.Arena, renderer: *scene.Renderer, w: *window.Window, drawab
 fn icon_at(x: f32, y: f32) -> usize {
     if y < 70.0 || x < 0.0 || x >= 412.0 { ret 99usize }
     let col = usize(x / 103.0)
-    let row = usize((y - 70.0) / 124.0)
-    let within = (y - 70.0) - f32(row) * 124.0
+    let row = usize((y - 70.0) / 104.0)
+    let within = (y - 70.0) - f32(row) * 104.0
     if within > 86.0 || col >= 4usize { ret 99usize }
     ret row * 4usize + col
 }
@@ -339,6 +339,7 @@ fn program_of(icon: usize) -> usize {
     if icon == 19usize { ret 24usize }
     if icon == 0usize { ret 25usize }
     if icon == 2usize { ret 26usize }
+    if icon == 3usize { ret 27usize }
     ret 0usize
 }
 
