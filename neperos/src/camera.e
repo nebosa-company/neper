@@ -19,6 +19,7 @@ use e.text.layout
 use e.text.shape
 use appkit
 use text
+use scenes
 
 const NONE: usize = 99usize
 const MAX_CAPS: usize = 24usize
@@ -26,11 +27,6 @@ const MAX_HITS: usize = 32usize
 const VIDEO: usize = 0usize
 const PHOTO: usize = 1usize
 const SCAN: usize = 2usize
-// The world the scenes are drawn in: the 412 x 560 viewfinder sits at (OX, OY) inside it, so every
-// number is positive and a wide shot (0.5x) can show what lies beyond the frame.
-const OX: usize = 400usize
-const OY: usize = 300usize
-
 fn say(line: str) {
     let (written, write_error) = os.write(os.stdout(), line)
 }
@@ -132,166 +128,13 @@ fn emit_num(buffer: []u8, at: usize, value: usize) -> usize {
 }
 
 // ----------------------------------------------------------------------------------------------
-// The sample scenes, as svg built at run time.
-
-fn e_rect(b: []u8, n: usize, x: usize, y: usize, w: usize, h: usize, color: str) -> usize {
-    var m = emit(b, n, "<rect x='")
-    m = emit_num(b, m, x)
-    m = emit(b, m, "' y='")
-    m = emit_num(b, m, y)
-    m = emit(b, m, "' width='")
-    m = emit_num(b, m, w)
-    m = emit(b, m, "' height='")
-    m = emit_num(b, m, h)
-    m = emit(b, m, "' fill='")
-    m = emit(b, m, color)
-    ret emit(b, m, "'/>")
-}
-
-fn e_circle(b: []u8, n: usize, cx: usize, cy: usize, r: usize, color: str) -> usize {
-    var m = emit(b, n, "<circle cx='")
-    m = emit_num(b, m, cx)
-    m = emit(b, m, "' cy='")
-    m = emit_num(b, m, cy)
-    m = emit(b, m, "' r='")
-    m = emit_num(b, m, r)
-    m = emit(b, m, "' fill='")
-    m = emit(b, m, color)
-    ret emit(b, m, "'/>")
-}
-
-// A band of the world from `ya` to `yb`, cut at `top` (the first row the scene reaches).
-fn e_band(b: []u8, n: usize, x0: usize, x1: usize, top: usize, ya: usize, yb: usize, color: str) -> usize {
-    var lo = ya
-    if lo < top { lo = top }
-    if yb <= lo { ret n }
-    ret e_rect(b, n, x0, lo, x1 - x0, yb - lo, color)
-}
-
-// A closed polygon through the (x, y) pairs of `pts`, its x kept between `lo` and `hi`.
-fn e_poly(b: []u8, n: usize, lo: usize, hi: usize, pts: []const usize, color: str) -> usize {
-    var m = emit(b, n, "<path d='")
-    var i = 0usize
-    while i + 1usize < pts.len {
-        if i == 0usize { m = emit(b, m, "M") } else { m = emit(b, m, " L") }
-        var px = pts[i]
-        if px < lo { px = lo }
-        if px > hi { px = hi }
-        m = emit_num(b, m, px)
-        m = emit(b, m, " ")
-        m = emit_num(b, m, pts[i + 1usize])
-        i += 2usize
-    }
-    m = emit(b, m, " Z' fill='")
-    m = emit(b, m, color)
-    ret emit(b, m, "'/>")
-}
-
-fn zoom_text(zoom: usize) -> str {
-    if zoom == 0usize { ret "0.5" }
-    if zoom == 1usize { ret "1" }
-    if zoom == 2usize { ret "2" }
-    ret "5"
-}
+// Zoom.
 
 fn zoom_label(zoom: usize) -> str {
     if zoom == 0usize { ret "0.5" }
     if zoom == 1usize { ret "1x" }
     if zoom == 2usize { ret "2x" }
     ret "5x"
-}
-
-// kind 0: a sunset over a lake (the rear camera), 1: a portrait (the front camera), 2: a document on a
-// desk. `seed` moves the sun and the paper; `zoom` scales about the centre; `wide` draws the world past
-// the frame (for 0.5x), otherwise it ends at the frame so nothing spills out of a thumbnail.
-fn scene_svg(a: *mem.Arena, kind: usize, seed: usize, zoom: usize, wide: bool) -> str {
-    let (b, b_error) = mem.alloc[u8](a, 8000usize)
-    if b_error != ok { ret "" }
-    var x0 = OX
-    var x1 = OX + 412usize
-    var y0 = OY
-    var y1 = OY + 560usize
-    if wide {
-        x0 = 0usize
-        x1 = OX * 2usize + 412usize
-        y0 = 0usize
-        y1 = OY * 2usize + 560usize
-    }
-    var n = 0usize
-    n = emit(b, n, "<svg viewBox='0 0 412 560'><g transform='translate(206 280) scale(")
-    n = emit(b, n, zoom_text(zoom))
-    n = emit(b, n, ") translate(-606 -580)'>")
-    if kind == 0usize {
-        // The sky in bands, the horizon at 600.
-        n = e_band(b, n, x0, x1, y0, 0usize, 200usize, "#1c2a52")
-        n = e_band(b, n, x0, x1, y0, 200usize, 360usize, "#3b4a80")
-        n = e_band(b, n, x0, x1, y0, 360usize, 450usize, "#8a6aa0")
-        n = e_band(b, n, x0, x1, y0, 450usize, 520usize, "#d98a7a")
-        n = e_band(b, n, x0, x1, y0, 520usize, 570usize, "#f0b27a")
-        n = e_band(b, n, x0, x1, y0, 570usize, 600usize, "#f6d49a")
-        let sun_x = OX + 150usize + (seed * 53usize) % 160usize
-        n = e_circle(b, n, sun_x, 568usize, 54usize, "#f8d8a0")
-        n = e_circle(b, n, sun_x, 568usize, 34usize, "#fff1c4")
-        // The far mountains and the nearer hills.
-        let far: [22]usize = [22]usize{ x0, 600usize, 520usize, 530usize, 600usize, 570usize, 700usize, 500usize, 780usize, 560usize, 860usize, 515usize, 960usize, 570usize, 1040usize, 525usize, 1100usize, 575usize, 1160usize, 520usize, x1, 600usize }
-        n = e_poly(b, n, x0, x1, far[0usize..22usize], "#5c4a7a")
-        let near: [14]usize = [14]usize{ x0, 600usize, 560usize, 570usize, 660usize, 590usize, 780usize, 555usize, 900usize, 590usize, 1000usize, 560usize, x1, 600usize }
-        n = e_poly(b, n, x0, x1, near[0usize..14usize], "#3a3f66")
-        // The lake and the sun's reflection.
-        n = e_rect(b, n, x0, 600usize, x1 - x0, 140usize, "#4a6a9a")
-        n = e_rect(b, n, sun_x - 30usize, 606usize, 60usize, 4usize, "#f6d49a")
-        n = e_rect(b, n, sun_x - 20usize, 618usize, 40usize, 4usize, "#e8b88a")
-        n = e_rect(b, n, sun_x - 12usize, 632usize, 24usize, 4usize, "#e8b88a")
-        // The shore and two pines.
-        let shore: [20]usize = [20]usize{ x0, y1, x0, 745usize, 520usize, 720usize, 640usize, 750usize, 760usize, 730usize, 900usize, 745usize, 1000usize, 715usize, x1, 740usize, x1, y1, x0, y1 }
-        n = e_poly(b, n, x0, x1, shore[0usize..20usize], "#1c2333")
-        let pine_a: [6]usize = [6]usize{ 480usize, 640usize, 452usize, 730usize, 508usize, 730usize }
-        n = e_poly(b, n, x0, x1, pine_a[0usize..6usize], "#11151f")
-        let pine_b: [6]usize = [6]usize{ 480usize, 690usize, 444usize, 790usize, 516usize, 790usize }
-        n = e_poly(b, n, x0, x1, pine_b[0usize..6usize], "#11151f")
-        let pine_c: [6]usize = [6]usize{ 700usize, 650usize, 672usize, 740usize, 728usize, 740usize }
-        n = e_poly(b, n, x0, x1, pine_c[0usize..6usize], "#11151f")
-        let pine_d: [6]usize = [6]usize{ 700usize, 700usize, 664usize, 800usize, 736usize, 800usize }
-        n = e_poly(b, n, x0, x1, pine_d[0usize..6usize], "#11151f")
-    } else if kind == 1usize {
-        // A portrait against a pink wall with a window of light.
-        n = e_rect(b, n, x0, y0, x1 - x0, y1 - y0, "#c98a96")
-        n = e_rect(b, n, 640usize, 330usize, 150usize, 190usize, "#e8b9bf")
-        let shoulders: [16]usize = [16]usize{ 400usize, y1, 420usize, 880usize, 520usize, 800usize, 556usize, 760usize, 656usize, 760usize, 692usize, 800usize, 792usize, 880usize, 812usize, y1 }
-        n = e_poly(b, n, x0, x1, shoulders[0usize..16usize], "#3c4a6a")
-        n = e_rect(b, n, 576usize, 730usize, 60usize, 50usize, "#d9a584")
-        n = e_circle(b, n, 606usize, 640usize, 96usize, "#2b2118")
-        n = e_circle(b, n, 606usize, 672usize, 84usize, "#e6b894")
-        n = e_circle(b, n, 578usize, 668usize, 7usize, "#2b2118")
-        n = e_circle(b, n, 634usize, 668usize, 7usize, "#2b2118")
-        n = emit(b, n, "<path d='M580 702 Q606 724 632 702' fill='none' stroke='#8a4a4a' stroke-width='5' stroke-linecap='round'/>")
-    } else {
-        // A sheet of paper on a desk, slightly turned.
-        n = e_rect(b, n, x0, y0, x1 - x0, y1 - y0, "#3a2a20")
-        var grain = 0usize
-        while grain < 8usize {
-            n = e_rect(b, n, x0, 330usize + grain * 70usize, x1 - x0, 3usize, "#4a3628")
-            grain += 1usize
-        }
-        let turn = 3usize + seed % 5usize
-        n = emit(b, n, "<g transform='rotate(-")
-        n = emit_num(b, n, turn)
-        n = emit(b, n, " 606 580)'>")
-        n = e_rect(b, n, 478usize, 366usize, 272usize, 440usize, "#1f1610")
-        n = e_rect(b, n, 470usize, 360usize, 272usize, 440usize, "#f2efe6")
-        n = e_rect(b, n, 500usize, 392usize, 120usize, 16usize, "#2b3a55")
-        var line = 0usize
-        while line < 10usize {
-            var w = 200usize
-            if line % 4usize == 3usize { w = 140usize }
-            n = e_rect(b, n, 500usize, 432usize + line * 30usize, w, 8usize, "#9a9a9a")
-            line += 1usize
-        }
-        n = e_circle(b, n, 690usize, 750usize, 22usize, "#d9a0a0")
-        n = emit(b, n, "</g>")
-    }
-    n = emit(b, n, "</g></svg>")
-    ret b[0usize..n]
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -406,6 +249,17 @@ fn centred(a: *mem.Arena, builder: *scene.Builder, font: shape.Font, size: f32, 
     ret put(a, builder, font, size, line, cx - text.measure(a, font, size, line) / 2.0, y, c)
 }
 
+// A picture drawn inside its own rectangle: nothing of the scene shows outside it.
+fn picture(a: *mem.Arena, builder: *scene.Builder, doc: str, r: geometry.Rect, c: paint.Color) -> err {
+    let save: scene.Command = .Save
+    try scene.push(builder, save)
+    try scene.push(builder, scene.Command { Clip: scene.Clip { Rect: r } })
+    try svg.draw(a, builder, doc, r, c)
+    let restore: scene.Command = .Restore
+    try scene.push(builder, restore)
+    ret ok
+}
+
 fn bolt_icon() -> str {
     ret "<svg viewBox='0 0 24 24'><path d='M13 2L5 14h6l-1 8 8-12h-6z' fill='currentColor'/></svg>"
 }
@@ -460,7 +314,7 @@ fn draw_camera(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     if s.mode == SCAN { kind = 2usize }
     var seed = 2usize
     if s.cap_total > 0usize { seed = s.cap_total * 13usize + 5usize }
-    try svg.draw(a, builder, scene_svg(a, kind, seed, s.zoom, s.zoom == 0usize), geometry.rect(0.0, 84.0, 412.0, 560.0), light())
+    try picture(a, builder, scenes.scene_svg(a, kind, seed, s.zoom, s.zoom == 0usize, 412usize, 560usize), geometry.rect(0.0, 84.0, 412.0, 560.0), light())
     if s.grid {
         try card(a, builder, 137.0, 84.0, 1.0, 560.0, 0.5, paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 0.4 })
         try card(a, builder, 275.0, 84.0, 1.0, 560.0, 0.5, paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 0.4 })
@@ -537,7 +391,7 @@ fn draw_camera(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     try card(a, builder, 24.0, 762.0, 56.0, 56.0, 14.0, paint.Color { red: 0.22, green: 0.22, blue: 0.24, alpha: 1.0 })
     if s.cap_total > 0usize {
         let last = s.caps[s.cap_total - 1usize]
-        try svg.draw(a, builder, scene_svg(a, cap_scene(last), last.seed, 1usize, false), geometry.rect(26.0, 764.0, 52.0, 52.0), light())
+        try picture(a, builder, scenes.scene_svg(a, cap_scene(last), last.seed, 1usize, false, 412usize, 560usize), geometry.rect(26.0, 764.0, 52.0, 52.0), light())
     }
     hit(s, 300usize, 24.0, 762.0, 56.0, 56.0)
     try disc(a, builder, 372.0, 790.0, 26.0, paint.Color { red: 0.22, green: 0.22, blue: 0.24, alpha: 1.0 })
@@ -555,7 +409,7 @@ fn cap_scene(c: Cap) -> usize {
 
 fn draw_review(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     let c = s.caps[s.view]
-    try svg.draw(a, builder, scene_svg(a, cap_scene(c), c.seed, 1usize, false), geometry.rect(0.0, 84.0, 412.0, 560.0), light())
+    try picture(a, builder, scenes.scene_svg(a, cap_scene(c), c.seed, 1usize, false, 412usize, 560usize), geometry.rect(0.0, 84.0, 412.0, 560.0), light())
     if c.kind == 2usize { try brackets(a, builder) }
     if c.kind == 1usize {
         try disc(a, builder, 206.0, 364.0, 34.0, shade(0.5))
