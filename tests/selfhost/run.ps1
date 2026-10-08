@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# The maps against independent references (L070, D2254): projections, area-scaled symbols, choropleth, winding, refusals.
+$gfxChartMapReferencePath = Join-Path $testBuild 'gfx-chart-map-reference-selfhost.exe'
+$gfxChartMapReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_map_reference\src\main.e') $repo 'x64' 'windows' $gfxChartMapReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMapReferenceWritten -ne 'executable written') { throw 'gfx_chart_map_reference emission failed' }
+$gfxChartMapReferenceOutput = & $gfxChartMapReferencePath
+if ($LASTEXITCODE -ne 0 -or $gfxChartMapReferenceOutput -ne 'gfx chart map reference ok') { throw "gfx_chart_map_reference answered wrongly: exit $LASTEXITCODE" }
 $gfxChartAnomPath = Join-Path $testBuild 'gfx-chart-anom-selfhost.exe'
 $gfxChartAnomWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_chart_anom\src\main.e') $repo 'x64' 'windows' $gfxChartAnomPath
 if ($LASTEXITCODE -ne 0 -or $gfxChartAnomWritten -ne 'executable written') { throw 'gfx_chart_anom emission failed' }
