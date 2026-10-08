@@ -9297,7 +9297,7 @@ if ($neperosQemu) {
     } finally {
         if (-not $netHosts.HasExited) { $netHosts.Kill() }
     }
-    if ($netBoot -notmatch '(?s)net check tls connected.*net check tls HTTP/1\.0 200 OK.*net check tls body hello from the neper test server.*net check wrong name result 4.*net check plain connected.*net check plain HTTP/1\.0 200 OK.*net check closed port result 3.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS network app did not complete its exchanges: $netBoot" }
+    if ($netBoot -notmatch '(?s)net check tls connected.*net check tls HTTP/1\.0 200 OK.*net check tls body hello from the neper test server.*net check wrong name result 4.*net check plain connected.*net check plain HTTP/1\.0 200 OK.*net check closed port result 3.*net check candles status 200 bytes 4293.*net check series status 200 bytes 7436.*net check bad key status 200 bytes 93.*all threads done.*neperos: exit 0x0000000000000000') { throw "NeperOS network app did not complete its exchanges: $netBoot" }
     # (D2159, C108) virtio-gpu display server: gpu_test, started as the sole holder of the scanout,
     # reads the mode, draws a test pattern and flushes it; the harness screendumps the display over
     # QMP and the SHA-256 of the screendump must match the golden (identical on QEMU 8.2 and 11.1).
@@ -9481,6 +9481,10 @@ if ($neperosQemu) {
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') @appImages (Join-Path $assets 'roots\mozilla.der')
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
+    # The same archive with the fixture's root as one more entry, for the fixtures that run on a network (livefixture rows).
+    $liveArchive = Join-Path $testBuild 'shell-live-archive.img'
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $liveArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') @appImages (Join-Path $assets 'roots\mozilla.der') (Join-Path $repo 'tests\selfhost\fixtures\neperos\net\ca.der')
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS live-fixture archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
     # Every fixture of the table: boot the archive with a tablet, send the taps (tablet units, NEPEROS_TAP_DELAY
@@ -9495,6 +9499,27 @@ if ($neperosQemu) {
         $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' 'shell app code' '-' 0 $fields[4] 2>&1) -join "`n"
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
         if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+    }
+    # The live fixtures: the same, on a user-mode network with the host side (DNS, HTTP, HTTPS with the recorded API
+    # replies) running, the network server in test mode (`nettest`) and the fixture's root as the 46th archive entry.
+    $liveReady = Join-Path $testBuild 'live-hosts.ready'
+    if (Test-Path $liveReady) { Remove-Item $liveReady }
+    $liveHosts = Start-Process -FilePath python -ArgumentList @((Join-Path $repo 'tests\selfhost\fixtures\neperos\net\host_services.py'), $liveReady) -PassThru -WindowStyle Hidden
+    try {
+        for ($liveWait = 0; $liveWait -lt 50 -and -not (Test-Path $liveReady); $liveWait++) { Start-Sleep -Milliseconds 200 }
+        $env:NEPEROS_NET = '1'
+        foreach ($row in $appsTable) {
+            $fields = $row.Split('|', 7)
+            if ($fields[0] -ne 'livefixture') { continue }
+            $fixture = $fields[1]
+            if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
+            $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $liveArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified nettest' 'shell app code' '-' 0 $fields[4] 2>&1) -join "`n"
+            $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+            if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+        }
+    } finally {
+        if (-not $liveHosts.HasExited) { $liveHosts.Kill() }
+        Remove-Item Env:NEPEROS_NET -ErrorAction SilentlyContinue
     }
     Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue
     Remove-Item Env:NEPEROS_MEM, Env:NEPEROS_GPU

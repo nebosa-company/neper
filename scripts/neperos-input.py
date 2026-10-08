@@ -72,6 +72,10 @@ def main():
     if len(sys.argv) > 9 and sys.argv[9] != "-":
         args += ["-drive", "file=%s,format=raw,if=none,id=blk0" % sys.argv[9],
                  "-device", "virtio-blk-pci,disable-legacy=on,drive=blk0"]
+    # NEPEROS_TB=<MB> sizes QEMU's translation cache (its default of 1 GB is committed up front on Windows, which
+    # a host short of memory cannot give next to the guest's RAM).
+    if os.environ.get("NEPEROS_TB"):
+        args += ["-accel", "tcg,tb-size=" + os.environ["NEPEROS_TB"]]
     # NEPEROS_NET=1 gives the machine a user-mode network and a random-number device (C117, D2247).
     if os.environ.get("NEPEROS_NET") == "1":
         args += ["-netdev", "user,id=n0", "-device", "virtio-net-pci,netdev=n0,disable-legacy=on,romfile=",

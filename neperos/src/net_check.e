@@ -6,6 +6,7 @@ use e.mem
 use e.os
 use netclient
 use netproto
+use httpc
 
 fn say(text: str) {
     let (written, write_error) = os.write(os.stdout(), text)
@@ -92,6 +93,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
     say("net check closed port result ")
     say_num(refused)
     say("\n")
+    // The small HTTPS client apps use (httpc.e) against the recorded API replies: Coinbase's candles
+    // without a key, Twelve Data's series with the right key and with a wrong one.
+    api("api.exchange.coinbase.com", "/products/BTC-USD/candles?granularity=86400", "net check candles")
+    api("api.twelvedata.com", "/time_series?symbol=AAPL&interval=1day&outputsize=60&apikey=demo", "net check series")
+    api("api.twelvedata.com", "/time_series?symbol=AAPL&interval=1day&outputsize=60&apikey=wrong", "net check bad key")
     netclient.quit()
     ret ok
+}
+
+// One GET through httpc: the label, the status, the body's length and its first bytes.
+fn api(host: str, path: str, label: str) {
+    var arena_storage: [131072]u8 = zero
+    var arena = mem.arena_from(arena_storage[0usize..])
+    let (reply, get_error) = httpc.get(&arena, host, path, "")
+    say(label)
+    if get_error != ok {
+        say(" failed ")
+        if get_error == httpc.NoNetwork { say("no network") }
+        if get_error == httpc.Unreachable { say("unreachable") }
+        if get_error == httpc.TlsFailed { say("tls") }
+        if get_error == httpc.Io { say("io") }
+        if get_error == httpc.Malformed { say("malformed") }
+        if get_error == httpc.TooLarge { say("too large") }
+        say("\n")
+        ret
+    }
+    say(" status ")
+    say_num(reply.status)
+    say(" bytes ")
+    say_num(reply.body.len)
+    say(" starts ")
+    var head = reply.body.len
+    if head > 24usize { head = 24usize }
+    say(reply.body[0usize..head])
+    say("\n")
 }

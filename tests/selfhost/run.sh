@@ -9147,7 +9147,7 @@ greeting"
     kill "$net_hosts" 2> /dev/null || true
     wait "$net_hosts" 2> /dev/null || true
     case "$neperos_net" in
-        *'net check tls connected'*'net check tls HTTP/1.0 200 OK'*'net check tls body hello from the neper test server'*'net check wrong name result 4'*'net check plain connected'*'net check plain HTTP/1.0 200 OK'*'net check closed port result 3'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
+        *'net check tls connected'*'net check tls HTTP/1.0 200 OK'*'net check tls body hello from the neper test server'*'net check wrong name result 4'*'net check plain connected'*'net check plain HTTP/1.0 200 OK'*'net check closed port result 3'*'net check candles status 200 bytes 4293'*'net check series status 200 bytes 7436'*'net check bad key status 200 bytes 93'*'all threads done'*'neperos: exit 0x0000000000000000'*) ;;
         *) printf '%s\n' "NeperOS network app did not complete its exchanges: $neperos_net" >&2; exit 1 ;;
     esac
     # (D2159, C108) virtio-gpu display server: gpu_test draws a test pattern and flushes it; the
@@ -9345,6 +9345,8 @@ greeting"
     done < <(grep -v '^#' "$apps_table")
     crater_archive="$test_build/shell-crater-archive.img"
     python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "${app_images[@]}" "$assets/roots/mozilla.der"
+    # The same archive with the fixture's root as one more entry, for the fixtures that run on a network (livefixture rows).
+    python3 "$repo/scripts/build-shell-archive.py" "$live_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "${app_images[@]}" "$assets/roots/mozilla.der" "$repo/tests/selfhost/fixtures/neperos/net/ca.der"
     crater_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" keyboard "$test_build/shell-crater.serial" 55136 "compositor bigarena unified" 'shell app code 5' - 2 2>&1)
     case "$crater_boot" in
         *'shell wallpaper from fs'*) printf '%s
@@ -9372,6 +9374,33 @@ greeting"
             esac
         done
     done < <(grep -v '^#' "$apps_table")
+    # The live fixtures: the same, on a user-mode network with the host side (DNS, HTTP, HTTPS with the recorded API
+    # replies) running, the network server in test mode (`nettest`) and the fixture's root as the 46th archive entry.
+    live_ready="$test_build/live-hosts.ready"
+    rm -f "$live_ready"
+    python3 "$repo/tests/selfhost/fixtures/neperos/net/host_services.py" "$live_ready" > /dev/null 2>&1 &
+    live_hosts=$!
+    live_wait=0
+    while [ ! -f "$live_ready" ] && [ "$live_wait" -lt 50 ]; do sleep 0.2; live_wait=$((live_wait + 1)); done
+    export NEPEROS_NET=1
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = livefixture ] || continue
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$live_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified nettest" 'shell app code' - 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) kill "$live_hosts" 2> /dev/null || true; printf 'NeperOS %s fixture did not reach "%s" (%s): %s\n' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
+    kill "$live_hosts" 2> /dev/null || true
+    wait "$live_hosts" 2> /dev/null || true
+    unset NEPEROS_NET
     unset NEPEROS_TAP_DELAY
     unset NEPEROS_MEM NEPEROS_GPU
 fi

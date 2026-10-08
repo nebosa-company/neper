@@ -34,6 +34,7 @@ type Session = struct {
     dns_ip: u32,
     dns_port: u16,
     trust: str,
+    test: bool,
 }
 
 fn say(text: str) {
@@ -129,7 +130,9 @@ fn connect(s: *Session, a: *mem.Arena, host: str, port: u16, secure: bool) -> us
         address = found
     }
     s.mark = mem.mark(a)
-    let (conn, connect_error) = tcp.connect(&s.st, address, port, s.ring)
+    var dial_port = port
+    if s.test && port == 443u16 { dial_port = 8443u16 }
+    let (conn, connect_error) = tcp.connect(&s.st, address, dial_port, s.ring)
     if connect_error != ok {
         mem.reset(a, s.mark)
         ret netproto.R_CONNECT
@@ -164,7 +167,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     // The trust roots arrive as a mapped archive entry: args[1] the Mozilla set, and args[2], only in the test boots, the fixture root.
     if args.len > 1usize { s.trust = args[1usize] }
-    if os.load64(AUX + 56usize) == 1u64 && args.len > 2usize { s.trust = args[2usize] }
+    if os.load64(AUX + 56usize) == 1u64 {
+        // The test boots: the fixture root in place of the Mozilla set, the host's DNS responder (10.0.2.2:5300) as the
+        // default resolver, and port 443 dialled as 8443, so a fixture can serve recorded API replies unprivileged.
+        s.test = true
+        s.dns_ip = 167772674u32
+        s.dns_port = 5300u16
+        if args.len > 2usize { s.trust = args[2usize] }
+    }
     var ring_storage: [65536]u8 = zero
     s.ring = mem.address_of(&ring_storage[0usize])
     var chunk: [2048]u8 = zero

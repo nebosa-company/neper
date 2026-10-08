@@ -5,7 +5,9 @@
   UDP 5300  a DNS responder answering every A query with 10.0.2.2 (the guest names the resolver
             explicitly, so the fixture needs no internet and no privileged port)
   TCP 8081  HTTP
-  TCP 8443  HTTPS, TLS 1.3 only, the leaf certificate signed by the fixture CA, name neper.test
+  TCP 8443  HTTPS, TLS 1.3 only, the leaf certificate signed by the fixture CA (names neper.test,
+            api.exchange.coinbase.com, api.twelvedata.com); besides the plain page it answers the Stocks
+            fixture's two APIs from the recordings made by record.py
 
 Writes the ready-file once all three listen, then serves until killed.
 """
@@ -14,6 +16,7 @@ import pathlib
 import socket
 import ssl
 import struct
+import urllib.parse
 import sys
 import threading
 
@@ -21,12 +24,43 @@ here = pathlib.Path(__file__).resolve().parent
 BODY = b'hello from the neper test server\n'
 
 
+def recorded(name):
+    return (here / name).read_bytes()
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-Length', str(len(BODY)))
+    def reply(self, status, body, kind='text/plain'):
+        self.send_response(status)
+        self.send_header('Content-Type', kind)
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
-        self.wfile.write(BODY)
+        self.wfile.write(body)
+
+    def do_GET(self):
+        # The Stocks fixture's two APIs, answered from recordings (record.py): Coinbase Exchange's daily
+        # candles (no key) and Twelve Data's time_series (the key `demo`, the symbol AAPL).
+        url = urllib.parse.urlparse(self.path)
+        host = (self.headers.get('Host') or '').split(':')[0]
+        query = urllib.parse.parse_qs(url.query)
+        if host == 'api.exchange.coinbase.com' and url.path.startswith('/products/') and url.path.endswith('/candles'):
+            product = url.path.split('/')[2]
+            known = here / ('candles-%s.json' % product)
+            if known.exists():
+                self.reply(200, known.read_bytes(), 'application/json')
+            else:
+                self.reply(404, b'{"message":"NotFound"}', 'application/json')
+            return
+        if host == 'api.twelvedata.com' and url.path == '/time_series':
+            if query.get('apikey', [''])[0] != 'demo':
+                self.reply(200, b'{"code":401,"message":"**apikey** parameter is incorrect or not specified.","status":"error"}', 'application/json')
+                return
+            known = here / ('time_series-%s.json' % query.get('symbol', [''])[0])
+            if known.exists():
+                self.reply(200, known.read_bytes(), 'application/json')
+            else:
+                self.reply(200, b'{"code":400,"message":"**symbol** not found","status":"error"}', 'application/json')
+            return
+        self.reply(200, BODY)
 
     def log_message(self, *args):
         pass

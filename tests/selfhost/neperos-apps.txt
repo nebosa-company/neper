@@ -5,6 +5,10 @@
 #   fixture|<name>|<port>|<tap delay s>|<taps>|<markers joined by ;;>|<note>
 #     boots the archive on QEMU with a tablet, sends the taps (tablet units, a delay between them) and
 #     requires every marker, in order, on the serial output. Delay 0 leaves the default.
+#   livefixture|<name>|<port>|<tap delay s>|<taps>|<markers joined by ;;>|<note>
+#     the same, with a user-mode network and the host side of tests/selfhost/fixtures/neperos/net running
+#     (DNS, HTTP, and HTTPS with recorded Coinbase and Twelve Data replies), the network server in test mode
+#     (the fixture root, that DNS, port 443 dialled as 8443) -- an app's live data against recorded replies.
 app|calc
 app|clock
 app|tasks
@@ -67,3 +71,4 @@ fixture|secure|55164|8|16384,16361;20440,18395;22030,24884;8828,20748;29982,2074
 fixture|ai|55165|8|16384,16361;28631,22103;24176,3422;25450,22816;8828,20748;17894,20748;8669,13155;13998,29340;19405,22816;23940,20748;29267,16720;16384,32259|ai shown;;ai provider OpenAI;;ai key saved;;ai sent;;ai reply;;ai home|(D2236 AI: choose OpenAI, type a key, save it, send Hi, get the canned reply, leave)
 fixture|document|55166|8|16384,16361;12248,25811;15906,3708;3181,1569;15906,7843;3181,1569;15906,9911;25450,30588;16384,32259|document shown;;document opened README.md;;document opened hello.ne;;document lang Neper;;document opened report.pdf;;document page 2;;document home|(D2237 Document: open README.md, hello.ne (Neper highlighting) and report.pdf, turn a page, leave)
 fixture|dynamic|55167|8|16384,16361;20440,25811;16384,5348;14872,20748;23940,20748;29982,20748;27757,26951;16384,10695;8669,13761;3181,1569;24336,13761;12963,24884;27757,26951;16384,10695;16384,32259|dynamic shown;;dynamic prompt Tip;;dynamic ready Tip calculator v1;;dynamic open Tip calculator;;dynamic extended Tip calculator v2;;dynamic home|(D2238 Dynamic: describe a tip app, wait for the stages, open it, extend it, leave)
+livefixture|stocks_live|55168|10|16384,16361;4096,22103;22588,1925;10339,22813;8828,20746;25053,24881;26962,20746;27757,26948;28394,1925;15907,3208;15907,3208;15907,3208;16384,5133;2386,1782;16384,26092;16384,25593;17497,1925;15032,6773;19009,24881;14873,20746;12964,24881;3181,26948;20917,20746;7317,22813;10339,22813;27757,26948;15907,3208;15907,3208;15907,3208;16384,32259|stocks shown;;stocks key sheet;;stocks key saved;;stocks sync;;stocks refresh live 3 failed 6 skipped 0;;stocks opened AAPL;;stocks back;;stocks opened BTC-USD;;stocks removed BTC-USD;;stocks add sheet;;stocks added BTC-USD;;stocks home|(D2251 Stocks live: the key demo, Sync against recorded Coinbase and Twelve Data replies, open AAPL, remove BTC-USD, add it back.)
