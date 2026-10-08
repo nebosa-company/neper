@@ -191,6 +191,17 @@
       "evidence": "Queued (2026-10-08). The Compass app (D2226) swings a sample heading. Acceptance: (1) a sensor server for the magnetometer, accelerometer and gyroscope (virtio-input-style under QEMU with a scripted source, the Pixel's sensor hub later) delivering readings at a fixed rate through the capability model; (2) the heading from the tilt-compensated magnetometer with hard-iron calibration and the figure-eight routine driven by real data, and the accuracy shown from it; (3) the position from the location service shared with Maps (C130) and the declination from a world magnetic model table in the library; (4) the Level app (C132) and Maps use the same sensor server; (5) a fixture on QEMU feeding a scripted sensor trace and checking the heading to a degree. Not queued here: augmented-reality overlays."
     },
     {
+      "id": "C132",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 132,
+      "title": "NeperOS Level: the accelerometer and gyroscope for the bubble level and protractor",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Queued (2026-10-08). The Level app (D2227) shows a sample tilt. Acceptance: (1) the accelerometer and gyroscope read through the sensor server of C131 at 50 Hz or better; (2) a complementary or Kalman filter in the library (e.algo or e.control) giving a steady tilt, with calibration offsets kept in storage (C125) and a self-test on a flat surface; (3) Level, Angle and an edge mode (the phone on its side) switch from the real orientation; (4) the readings in degrees, per cent slope and a ratio, with a beep or vibration when level; (5) a fixture on QEMU that feeds a scripted trace and checks the reading to a tenth of a degree. Not queued here: augmented-reality measuring, a ruler."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
