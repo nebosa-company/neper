@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.net.cidr IPv4 prefix arithmetic against Python ipaddress (L019)
+$netCidrPath = Join-Path $testBuild 'net-cidr-selfhost.exe'
+$netCidrWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_cidr\src\main.e') $repo 'x64' 'windows' $netCidrPath
+if ($LASTEXITCODE -ne 0 -or $netCidrWritten -ne 'executable written') { throw 'net_cidr emission failed' }
+$netCidrOutput = & $netCidrPath
+if ($LASTEXITCODE -ne 0 -or $netCidrOutput -ne 'net cidr ok') { throw "net_cidr answered wrongly: exit $LASTEXITCODE" }
 # e.algo.schedule.dependency_order against a transcription of petcow topo_order (L018)
 $algoScheduleOrderPath = Join-Path $testBuild 'algo-schedule-order-selfhost.exe'
 $algoScheduleOrderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_schedule_order\src\main.e') $repo 'x64' 'windows' $algoScheduleOrderPath

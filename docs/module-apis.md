@@ -8982,6 +8982,40 @@ Clock-free state machines: Go-Back-N (`sender_send`, `sender_ack`, `sender_timeo
 RFC 1982 `seq_less`, RFC 6298 `rtt_estimate` with `rtt_backoff` and Karn's `rtt_karn`,
 and RFC 5681 `aimd_ack`/`aimd_loss`.
 
+### `e.net.cidr`
+
+```neper
+error BadPrefix
+error BadLength
+error LengthTooLong
+error NotIpv4
+error BadAddress
+error Negative
+error NewbitsTooBig
+error NetnumRange
+error HostRange
+error DoesNotFit
+
+type Ipv4Prefix = struct { addr: u32, len: u32 }
+
+fn decimal(text: str) -> (u64, bool)
+fn parse(prefix: str) -> (Ipv4Prefix, err)
+fn mask_of(length: u32) -> u32
+fn network(p: Ipv4Prefix) -> u32
+fn netmask(p: Ipv4Prefix) -> u32
+fn subnet(p: Ipv4Prefix, newbits: i64, netnum: i64) -> (Ipv4Prefix, err)
+fn host(p: Ipv4Prefix, hostnum: i64) -> (u32, err)
+fn subnets(p: Ipv4Prefix, newbits: []const i64, out: []Ipv4Prefix) -> (usize, err)
+fn format_addr(a: *mem.Arena, addr: u32) -> (str, err)
+fn format(a: *mem.Arena, p: Ipv4Prefix) -> (str, err)
+fn subnet_text(a: *mem.Arena, prefix: str, newbits: i64, netnum: i64) -> (str, err)
+fn host_text(a: *mem.Arena, prefix: str, hostnum: i64) -> (str, err)
+fn netmask_text(a: *mem.Arena, prefix: str) -> (str, err)
+fn subnets_text(a: *mem.Arena, prefix: str, newbits: []const i64) -> ([]str, err)
+```
+
+IPv4 CIDR prefix arithmetic with Terraform's semantics (L019): `parse` (`a.b.c.d/n`), `subnet` (`cidrsubnet`: extend by `newbits`, pick `netnum`), `host` (`cidrhost`), `netmask` (`cidrnetmask`), `subnets` (`cidrsubnets`: sizes packed at size-aligned offsets) and their text forms `subnet_text`, `host_text`, `netmask_text`, `subnets_text`, plus `network`, `format` and `format_addr`. Host bits of a written prefix are ignored; octets are plain decimal without a leading zero; negative, oversize and out-of-range inputs are refused with a named error (`Negative`, `NewbitsTooBig`, `NetnumRange`, `HostRange`, `DoesNotFit`, and `BadPrefix`, `BadLength`, `LengthTooLong`, `NotIpv4`, `BadAddress` for the text). IPv6 is not handled (it answers `NotIpv4`). The fixture `net_cidr` checks 663 cases against Python's `ipaddress` and Terraform's documented examples.
+
 ### `e.net.coap`
 
 ```neper

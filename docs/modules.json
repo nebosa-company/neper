@@ -342,6 +342,7 @@
     "e.ui.undo",
     "e.fmt.lzma",
     "e.fmt.parquet",
+    "e.net.cidr",
     "e.net.coap",
     "e.net.mqtt",
     "e.net.stun",
@@ -2916,6 +2917,17 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.cidr",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
+   ],
    "blocked_by": []
   },
   {

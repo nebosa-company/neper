@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.net.cidr IPv4 prefix arithmetic against Python ipaddress (L019)
+net_cidr_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_cidr/src/main.e" "$repo" x64 linux "$test_build/net-cidr-selfhost")
+[ "$net_cidr_written" = 'executable written' ]
+chmod +x "$test_build/net-cidr-selfhost"
+net_cidr_output=$("$test_build/net-cidr-selfhost")
+[ "$net_cidr_output" = 'net cidr ok' ]
 # e.algo.schedule.dependency_order against a transcription of petcow topo_order (L018)
 algo_schedule_order_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_schedule_order/src/main.e" "$repo" x64 linux "$test_build/algo-schedule-order-selfhost")
 [ "$algo_schedule_order_written" = 'executable written' ]
