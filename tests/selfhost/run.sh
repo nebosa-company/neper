@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.fmt.xslt against libxslt (L081, D2274)
+fmt_xslt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xslt/src/main.e" "$repo" x64 linux "$test_build/fmt-xslt-selfhost")
+[ "$fmt_xslt_written" = 'executable written' ]
+chmod +x "$test_build/fmt-xslt-selfhost"
+fmt_xslt_output=$("$test_build/fmt-xslt-selfhost")
+[ "$fmt_xslt_output" = 'fmt xslt ok' ]
 # L081 part 3a: e.fmt.xpath against libxml2
 fmt_xpath_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xpath/src/main.e" "$repo" x64 linux "$test_build/fmt-xpath-selfhost")
 [ "$fmt_xpath_written" = 'executable written' ]

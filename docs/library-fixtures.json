@@ -620,7 +620,8 @@
     "fmt_soap",
     "fmt_xml",
     "fmt_xpath",
-    "fmt_xsd_schema"
+    "fmt_xsd_schema",
+    "fmt_xslt"
    ]
   },
   {

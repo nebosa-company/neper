@@ -13277,6 +13277,147 @@ node is a DOM `NodeId` or an attribute as its owner plus an index; node-sets are
 Numbers print as the shortest decimal that identifies the double, never with an exponent. `id()` is empty
 (no DTD), and an unbound variable, an unknown function, the wrong arity or a type error answers its own error.
 
+### `e.fmt.xslt`
+
+```neper
+error Invalid
+error Unsupported
+error NoRule
+error Terminated
+error TooComplex
+
+const NONE: u32 = 4294967295u32
+
+fn xsl_namespace() -> str
+
+type Avt = struct { literals: []str, exprs: []u32, count: usize }
+type Sort = struct { select: u32, numeric: bool, descending: bool }
+type WithParam = struct { name: str, select: u32, body: []u32, has_select: bool }
+type Instr = struct {
+type Param = struct { name: str, select: u32, body: []u32, has_select: bool }
+type Template = struct { name: str, has_name: bool, mode: str, body: []u32, params: []Param }
+type Rule = struct { expr: u32, priority: f64, template: u32, order: u32, mode: str }
+type Output = struct { text: str, omit_declaration: bool, is_text: bool }
+type Stylesheet = struct {
+
+const I_TEXT: u8 = 1u8
+const I_LRE: u8 = 2u8
+const I_VALUE_OF: u8 = 3u8
+const I_APPLY: u8 = 4u8
+const I_CALL: u8 = 5u8
+const I_FOR_EACH: u8 = 6u8
+const I_IF: u8 = 7u8
+const I_CHOOSE: u8 = 8u8
+const I_WHEN: u8 = 9u8
+const I_OTHERWISE: u8 = 10u8
+const I_VARIABLE: u8 = 11u8
+const I_ELEMENT: u8 = 12u8
+const I_ATTRIBUTE: u8 = 13u8
+const I_COMMENT: u8 = 14u8
+const I_PI: u8 = 15u8
+const I_COPY: u8 = 16u8
+const I_COPY_OF: u8 = 17u8
+const I_MESSAGE: u8 = 18u8
+const I_XSL_TEXT: u8 = 19u8
+
+fn same(a: str, b: str) -> bool
+fn node_of(d: *const xml.Document, id: xml.NodeId) -> xml.Node
+fn split_name(name: str) -> (str, str)
+fn is_xsl(d: *const xml.Document, id: xml.NodeId, local: str) -> bool
+fn xsl_local(d: *const xml.Document, id: xml.NodeId) -> (str, bool)
+fn attr_value(d: *const xml.Document, id: xml.NodeId, name: str) -> (str, bool)
+fn first_child(d: *const xml.Document, id: xml.NodeId) -> xml.NodeId
+fn next_sibling(d: *const xml.Document, id: xml.NodeId) -> xml.NodeId
+fn is_blank_text(text: str) -> bool
+fn scope_bindings(a: *mem.Arena, d: *const xml.Document, id: xml.NodeId) -> ([]xp.Binding, err)
+
+type Compiler = struct {
+
+fn add_expr(c: *Compiler, id: xml.NodeId, text: str) -> (u32, err)
+fn new_instr(c: *Compiler, kind: u8, id: xml.NodeId) -> (u32, err)
+fn compile_avt(c: *Compiler, id: xml.NodeId, text: str) -> (Avt, err)
+fn static_avt(c: *Compiler, text: str) -> (Avt, err)
+fn count_content(c: *const Compiler, id: xml.NodeId) -> usize
+fn is_excluded(c: *const Compiler, prefix: str) -> bool
+fn compile_body(c: *Compiler, id: xml.NodeId, xsl_text_whitespace: bool) -> ([]u32, err)
+fn compile_sorts(c: *Compiler, id: xml.NodeId) -> ([]Sort, err)
+fn compile_with_params(c: *Compiler, id: xml.NodeId) -> ([]WithParam, err)
+fn compile_instruction(c: *Compiler, id: xml.NodeId) -> (u32, err)
+fn compile_body_skipping_sort(c: *Compiler, id: xml.NodeId) -> ([]u32, err)
+fn compile_literal(c: *Compiler, id: xml.NodeId) -> (u32, err)
+fn split_pattern(a: *mem.Arena, text: str) -> ([]str, err)
+fn default_priority(compiled: *const xp.Compiled) -> f64
+fn add_rule(c: *Compiler, id: xml.NodeId, match_text: str, priority_text: str, has_priority: bool, template: u32, mode: str) -> err
+fn compile_param(c: *Compiler, id: xml.NodeId) -> (Param, err)
+fn load(a: *mem.Arena, source: []const u8) -> (Stylesheet, err)
+fn compile_template_body(c: *Compiler, id: xml.NodeId) -> ([]u32, err)
+
+type ResNode = struct {
+type ResAttr = struct { name: str, ns: str, value: str, next: u32 }
+type ResDecl = struct { prefix: str, uri: str, next: u32 }
+type Tree = struct { nodes: []ResNode, count: usize, attrs: []ResAttr, attr_count: usize, decls: []ResDecl, decl_count: usize }
+
+const R_ELEMENT: u8 = 1u8
+const R_TEXT: u8 = 2u8
+const R_COMMENT: u8 = 3u8
+const R_PI: u8 = 4u8
+const R_ROOT: u8 = 5u8
+
+fn new_tree(a: *mem.Arena) -> (Tree, err)
+fn grow_nodes(a: *mem.Arena, t: *Tree) -> err
+fn add_node(a: *mem.Arena, t: *Tree, parent: u32, kind: u8, name: str, ns: str, value: str) -> (u32, err)
+fn add_attr(a: *mem.Arena, t: *Tree, owner: u32, name: str, ns: str, value: str) -> err
+fn add_decl(a: *mem.Arena, t: *Tree, owner: u32, prefix: str, uri: str) -> err
+fn tree_text(a: *mem.Arena, t: *const Tree) -> (str, err)
+
+type Scope = struct { prefixes: []str, uris: []str, count: usize }
+
+fn scope_lookup(s: *const Scope, prefix: str) -> (str, bool)
+
+type Sink = struct { buffer: []u8, used: usize, a: *mem.Arena }
+
+fn put(sink: *Sink, text: str) -> err
+fn put_escaped(sink: *Sink, text: str, attribute: bool) -> err
+fn prefix_of(name: str) -> str
+fn write_node(a: *mem.Arena, t: *const Tree, id: u32, sink: *Sink, scope: *Scope) -> err
+fn serialize(a: *mem.Arena, t: *const Tree, is_text: bool, omit_declaration: bool) -> (str, err)
+
+type Run = struct {
+
+fn out_tree(r: *Run) -> *Tree
+fn push_variable(r: *Run, name: str, value: xp.Value) -> err
+fn eval_expr(r: *Run, index: u32, ctx: xp.Context) -> (xp.Value, err)
+fn eval_string(r: *Run, index: u32, ctx: xp.Context) -> (str, err)
+fn eval_avt(r: *Run, avt: Avt, ctx: xp.Context) -> (str, err)
+fn add_text(r: *Run, text: str) -> err
+fn ns_of_prefix(scope: []const xp.Binding, prefix: str) -> (str, bool)
+fn copy_node(r: *Run, n: xp.XNode, deep: bool) -> err
+fn copy_tree_children(r: *Run, source: u32, from: u32) -> err
+fn run_to_tree(r: *Run, body: []const u32, ctx: xp.Context) -> (u32, err)
+fn rtf_value(r: *Run, index: u32) -> (xp.Value, err)
+fn eval_binding(r: *Run, select: u32, has_select: bool, body: []const u32, ctx: xp.Context) -> (xp.Value, err)
+fn pattern_matches(r: *Run, rule: Rule, n: xp.XNode) -> bool
+fn find_rule(r: *Run, n: xp.XNode, mode: str) -> u32
+fn sort_nodes(r: *Run, nodes: []xp.XNode, sorts: []const Sort) -> ([]xp.XNode, err)
+fn text_compare(x: str, y: str) -> i32
+fn sort_before(keys: []const str, nums: []const f64, sorts: []const Sort, a: usize, b: usize) -> bool
+fn exec_body(r: *Run, body: []const u32, ctx: xp.Context) -> err
+fn exec(r: *Run, index: u32, ctx: xp.Context) -> err
+fn apply_to_node(r: *Run, n: xp.XNode, mode: str, position: usize, size: usize, params: []const WithParam, caller: xp.Context) -> err
+fn builtin_rule(r: *Run, n: xp.XNode, mode: str, position: usize, size: usize) -> err
+fn exec_template(r: *Run, template: Template, n: xp.XNode, position: usize, size: usize, params: []const WithParam, caller: xp.Context) -> err
+fn exec_inner(r: *Run, index: u32, ctx: xp.Context) -> err
+fn transform(a: *mem.Arena, ss: *const Stylesheet, doc: *const xml.Document, params: []const xp.Variable) -> (Output, err)
+```
+
+XSLT 1.0 over `e.fmt.xml` and `e.fmt.xpath`. `load` compiles a stylesheet into templates, instructions and
+compiled XPath expressions; `transform` runs it against a source document (global parameters as `Variable`s)
+and answers the serialized result. Templates with match unions, priorities, modes and parameters,
+apply-templates, call-template, for-each with sort, variables and result tree fragments, if/choose, the node
+constructors, copy and copy-of, attribute value templates, the built-in rules, `current()`, and xml or text
+output with namespace fixup. import, include, key, number, decimal-format, attribute-sets, the html method and
+whitespace stripping answer `Unsupported`. Checked against libxslt on canonicalised results.
+
 ### `e.fmt.soap`
 
 ```neper
