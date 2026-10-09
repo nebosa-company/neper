@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# L081 part 1: e.fmt.xsd built-in datatypes against libxml2
+fmt_xsd_types_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xsd_types/src/main.e" "$repo" x64 linux "$test_build/fmt-xsd-types-selfhost")
+[ "$fmt_xsd_types_written" = 'executable written' ]
+chmod +x "$test_build/fmt-xsd-types-selfhost"
+fmt_xsd_types_output=$("$test_build/fmt-xsd-types-selfhost")
+[ "$fmt_xsd_types_output" = 'fmt xsd types ok' ]
 # L080 e.fmt.soap against xml.etree
 fmt_soap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_soap/src/main.e" "$repo" x64 linux "$test_build/fmt-soap-selfhost")
 [ "$fmt_soap_written" = 'executable written' ]

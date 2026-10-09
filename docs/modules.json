@@ -114,6 +114,7 @@
     "e.fmt.tar",
     "e.fmt.yaml",
     "e.fmt.xml",
+    "e.fmt.xsd",
     "e.fmt.soap",
     "e.fmt.html",
     "e.fmt.html.template",
@@ -1770,6 +1771,17 @@
     "e.io",
     "e.mem",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.xsd",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.text.utf8"
    ],
    "blocked_by": []
   },

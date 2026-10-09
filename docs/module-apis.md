@@ -12864,6 +12864,62 @@ partial input. Their explicit-limit variants accept an inclusive maximum up to
 1 GiB; zero selects the default. `stream` borrows already-buffered bytes, so its
 input budget remains the caller's responsibility.
 
+### `e.fmt.xsd`
+
+```neper
+type Type = enum u8 {
+type Whitespace = enum u8 { Preserve, Replace, Collapse }
+
+fn type_named(local: str) -> (Type, bool)
+fn whitespace(t: Type) -> Whitespace
+fn same(a: str, b: str) -> bool
+fn is_space(c: u8) -> bool
+fn is_digit(c: u8) -> bool
+fn trim(text: str) -> str
+fn is_xml_char(c: u32) -> bool
+fn all_xml_chars(text: str) -> bool
+fn is_ncname_start(c: u32) -> bool
+fn is_ncname_char(c: u32) -> bool
+fn name_shape(text: str, allow_colon: bool, token: bool) -> bool
+fn is_ncname(text: str) -> bool
+fn is_name(text: str) -> bool
+fn is_nmtoken(text: str) -> bool
+fn is_qname(text: str) -> bool
+fn is_language(text: str) -> bool
+fn hex_value(c: u8) -> bool
+fn is_any_uri(text: str) -> bool
+fn after_sign(s: str) -> usize
+fn all_digits(s: str) -> bool
+fn is_decimal(s: str) -> bool
+fn strip_zeros(digits: str) -> str
+fn at_most(digits: str, bound: str) -> bool
+fn is_zero(digits: str) -> bool
+fn int_in(s: str, negative_limit: str, positive_limit: str, zero_ok: bool) -> bool
+fn is_float(s: str) -> bool
+fn two(s: str, at: usize) -> (u32, bool)
+fn leap_year(y: u64, negative: bool) -> bool
+fn days_in(month: u32, year: u64, negative: bool) -> u32
+fn scan_year(s: str, at: usize) -> (usize, u64, bool, bool)
+fn is_zone(s: str, at: usize) -> bool
+fn is_time_then_zone(s: str, at: usize) -> bool
+fn is_date_then(s: str, at: usize, want_time: bool, want_day: bool) -> bool
+fn is_g_year(s: str) -> bool
+fn is_g_month_day(s: str) -> bool
+fn is_g_day(s: str) -> bool
+fn is_g_month(s: str) -> bool
+fn is_duration(s: str) -> bool
+fn is_hex_binary(s: str) -> bool
+fn base64_value(c: u8) -> i32
+fn is_base64(s: str) -> bool
+fn valid(t: Type, text: str) -> bool
+```
+
+XML Schema 1.0 built-in datatypes: `valid(type, text)` answers whether `text` is a legal lexical form of
+one of 39 built-in types after the type's whitespace handling (`whitespace`: preserve for string, replace for
+normalizedString, collapse otherwise). It follows the Part 2 grammar, with the 5th-edition XML name characters,
+arbitrary-length integers and decimals, and anyURI accepting any string of XML characters. Facets, value
+comparison and structural validation sit on top of it.
+
 ### `e.fmt.soap`
 
 ```neper

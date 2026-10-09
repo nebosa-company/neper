@@ -1197,10 +1197,10 @@
       "group": "Formats",
       "order": 179,
       "title": "XSD validation and XSLT core for e.fmt.xml",
-      "score": 0,
+      "score": 0.3,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1819). e.fmt.xml parses but cannot validate or transform: XSD built-in datatypes plus structural validation, and XSLT 1.0 core templates without extension functions, against W3C fixtures. Ranked pure-testable."
+      "evidence": "Planning only (D1819). e.fmt.xml parses but cannot validate or transform: XSD built-in datatypes plus structural validation, and XSLT 1.0 core templates without extension functions, against W3C fixtures. Ranked pure-testable. PART 1 DONE (D2271): e.fmt.xsd built-in datatypes (39 types, lexical validity after whitespace handling) checked on 4,048 libxml2 cases plus a 90-entry spec table on Windows and Linux. Remaining: XSD structural validation (element and attribute declarations, sequence/choice/all, occurs, facets, lists, unions) and the XSLT 1.0 core with an XPath expression evaluator."
     },
     {
       "id": "L082",
