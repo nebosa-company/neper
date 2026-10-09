@@ -3160,6 +3160,170 @@ fn kpi_from_groups(a: *mem.Arena, groups: []const Group, aggregation: str, thres
 
 Aggregation, charts, KPIs and pivots over `e.algo.view`'s filter engine: `aggregate` (count, countValues, unique, sum, avg, min, max, median), `build_chart_data` (x buckets by year, month, quarter, day, week or width, a split field, several series, top-N with an aggregated "Other"), `build_kpi` with a comparison and threshold bands, `build_pivot` with row, column and grand totals, `summary_report` bands, and the server-aggregate planner (`plan_aggregate` names why a widget cannot be computed in the database) with the shaping of the database's groups into the same chart and KPI payloads. Checked against appdor's own engine.
 
+### `e.algo.page`
+
+```neper
+type Counter = struct { table: str, value: f64 }
+type KeyMinter = struct { counters: []Counter, count: usize }
+
+fn new_minter(a: *mem.Arena, capacity: usize) -> KeyMinter
+fn counter_of(m: *KeyMinter, table: str) -> f64
+fn set_counter(m: *KeyMinter, table: str, value: f64)
+fn mint(a: *mem.Arena, m: *KeyMinter, table: str, prefix: str) -> str
+fn reserve(m: *KeyMinter, table: str, through: f64)
+fn prefix_for(a: *mem.Arena, name: str) -> str
+fn split_words(a: *mem.Arena, s: str) -> []const str
+fn first_units(a: *mem.Arena, s: str, n: usize) -> str
+fn parse_record_key(s: str) -> (str, f64, bool)
+
+type Row = struct { fields: []const f.Field }
+type SortKey = struct { field: str, descending: bool }
+type Cell = struct { value: f.Value, present: bool }
+
+fn cell_at(fields: []const f.Field, name: str) -> Cell
+fn is_nullish(c: Cell) -> bool
+fn strict_equal(x: Cell, y: Cell) -> bool
+fn js_less(a: *mem.Arena, x: Cell, y: Cell) -> bool
+fn text_number(a: *mem.Arena, s: str) -> f64
+fn compare_by(a: *mem.Arena, order: []const SortKey, x: []const f.Field, y: []const f.Field) -> i32
+fn b64_index(b: u8) -> u32
+fn decode_cursor_text(a: *mem.Arena, s: str) -> str
+fn base64_standard(a: *mem.Arena, s: str) -> str
+fn encode_cursor(a: *mem.Arena, order: []const SortKey, last: []const f.Field) -> str
+fn decode_cursor(a: *mem.Arena, cursor: str) -> ([]const f.Field, bool)
+fn json_value(a: *mem.Arena, x: json.Value) -> f.Value
+
+type Page = struct { valid: bool, reason: str, positions: []const usize, next_cursor: str, has_next_cursor: bool, has_more: bool }
+
+fn paginate(a: *mem.Arena, rows: []const Row, sort: []const SortKey, limit: f64, cursor: str, has_cursor: bool) -> Page
+fn sort_small(a: *mem.Arena, rows: []const Row, keys: []const SortKey, order: []usize)
+fn merge_positions(a: *mem.Arena, rows: []const Row, keys: []const SortKey, order: []usize, tmp: []usize, lo: usize, hi: usize)
+
+type Column = struct { id: str, name: str, type_name: str, linked_table: str, has_linked_table: bool }
+type Table = struct { id: str, name: str, columns: []const Column }
+type Duplicate = struct { table: Table, rows: []const Row, id_from: []const str, id_to: []const str }
+
+fn duplicate_table(a: *mem.Arena, table: Table, rows: []const Row, with_records: bool, new_id: str, new_name: str, minter: *KeyMinter, has_minter: bool) -> Duplicate
+fn rewrite_link(a: *mem.Arena, v: f.Value, from: []const str, to: []const str) -> f.Value
+fn default_row_height() -> f64
+
+type RowPlan = struct { start: f64, end: f64, top_spacer: f64, bottom_spacer: f64, aria_row_count: f64 }
+
+fn plan_rows(total: f64, scroll_top: f64, viewport_height: f64, row_height: f64, overscan: f64) -> RowPlan
+fn row_page_size() -> f64
+fn grid_row_cap() -> f64
+fn alt_view_row_cap() -> f64
+fn kanban_max_lanes() -> f64
+fn kanban_cards_per_lane() -> f64
+fn gallery_max_groups() -> f64
+fn gallery_cards_per_group() -> f64
+fn pivot_max_rows() -> f64
+fn pivot_max_columns() -> f64
+fn calendar_chips_per_day() -> f64
+fn timeline_max_bars() -> f64
+fn workload_max_assignees() -> f64
+fn map_max_markers() -> f64
+fn form_submission_burst_per_second() -> f64
+fn format_integer(a: *mem.Arena, n: f64, locale: str) -> str
+fn js_trim_locale(s: str) -> str
+
+type LoadPlan = struct { loaded: f64, truncated: bool, requests: f64, notice: str, has_notice: bool }
+
+fn load_plan(a: *mem.Arena, n: f64, locale: str) -> LoadPlan
+fn latency_budget(name: str) -> (f64, bool)
+
+type Budget = struct { within: bool, known: bool, budget: f64, measured: f64, message: str }
+
+fn within_budget(a: *mem.Arena, name: str, measured_ms: f64) -> Budget
+fn percentile(a: *mem.Arena, values: []const f64, p: f64) -> (f64, bool)
+```
+
+Record paging, row windows and the published limits: human-readable record keys (`INV-1042`) minted from per-table counters that only move forward, keyset pagination that stays O(page) at any depth with an opaque base64 cursor over the sort position and an id tie-break (V8's order for mixed-type comparisons), table duplication that rewrites a table's own links to point at the copy, the arithmetic of a windowed row list (spacers and the true ARIA row count), the row caps and latency budgets the product claims with `load_plan`, `within_budget` and nearest-rank `percentile`. Checked against appdor's own engine together with `e.algo.batch`.
+
+### `e.algo.batch`
+
+```neper
+type Message = struct { key: str, text: str }
+
+fn humanize_key(a: *mem.Arena, key: str) -> str
+fn fill(a: *mem.Arena, template: str, names: []const str, values: []const str) -> str
+fn message(a: *mem.Arena, catalog: []const Message, key: str, names: []const str, values: []const str) -> str
+fn no_names() -> []const str
+
+type Outcome = struct { good: bool, reason: str, has_reason: bool }
+
+fn success() -> Outcome
+fn failure(reason: str) -> Outcome
+
+type Failed = struct { record_id: f.Value, reason: str }
+type Ledger = struct { succeeded: []const f.Value, failed: []const Failed }
+type Apply = fn(*void, f.Value) -> Outcome
+type BatchResult = struct {
+
+fn run_batch(a: *mem.Arena, ids: []const f.Value, apply: Apply, state: *void, chunk_size: usize, start: usize, ledger: Ledger) -> BatchResult
+fn describe_batch(a: *mem.Arena, total: usize, succeeded: usize, failed: usize) -> str
+fn sync_threshold() -> usize
+fn default_chunk_size() -> usize
+
+type Verdict = struct { allowed: bool, reason: str }
+type Authorize = fn(*void, f.Value) -> Verdict
+type Denied = struct { id: f.Value, reason: str }
+type BulkPlan = struct {
+
+fn plan_refusal(why: str) -> BulkPlan
+fn plan_bulk_mutation(a: *mem.Arena, catalog: []const Message, targets: []const f.Value, patch: []const f.Field, authorize: Authorize, has_authorize: bool, state: *void, skip_denied: bool, chunk_size: usize, threshold: usize, has_threshold: bool, correlation_id: str) -> BulkPlan
+
+type IdOutcome = struct { id: f.Value, good: bool, reason: str }
+type Applied = struct { threw: bool, reason: str, all_ok: bool, results: []const IdOutcome }
+type BulkApply = fn(*void, []const f.Value, []const f.Field, str) -> Applied
+type Cancelled = fn(*void) -> bool
+type Progress = struct { done: usize, total: usize, applied: usize, failed: usize, percent: f64 }
+type BulkResult = struct {
+
+fn run_bulk_mutation(a: *mem.Arena, plan: BulkPlan, apply: BulkApply, state: *void, is_cancelled: Cancelled, has_cancel: bool) -> BulkResult
+
+type ReasonCount = struct { reason: str, count: usize }
+type BulkSummary = struct {
+
+fn summarize_bulk_outcome(a: *mem.Arena, catalog: []const Message, result: BulkResult) -> BulkSummary
+
+type Change = struct { record_id: f.Value, field: str, before: f.Value, after: f.Value }
+type Entry = struct { serial: usize, label: str, has_label: bool, changes: []const Change }
+type Stack = struct { key: str, epoch: usize, undo: []Entry, undo_n: usize, redo: []Entry, redo_n: usize }
+type Pending = struct { stack_key: str, epoch: usize, serial: usize, redo_direction: bool, settled: bool }
+type UndoStore = struct {
+
+fn default_depth() -> usize
+fn new_undo_store(a: *mem.Arena, depth: usize, max_stacks: usize, max_pending: usize) -> UndoStore
+fn set_scope(s: *UndoStore, scope: str)
+fn refresh_scope(s: *UndoStore)
+fn stack_key(a: *mem.Arena, editor: str, table: str) -> str
+fn stack_for(s: *UndoStore, editor: str, table: str) -> usize
+fn drop_first(entries: []Entry, n: usize) -> usize
+fn undo_push(s: *UndoStore, editor: str, table: str, changes: []const Change, label: str, has_label: bool) -> usize
+
+type Write = struct { record_id: f.Value, field: str, value: f.Value, expected: f.Value, has_expected: bool }
+type Step = struct { valid: bool, reason: str, label: str, has_label: bool, writes: []const Write, token: usize, has_token: bool }
+
+fn no_step(why: str) -> Step
+fn writes_of(a: *mem.Arena, entry: Entry, undoing: bool, with_expected: bool) -> []const Write
+fn undo(s: *UndoStore, editor: str, table: str) -> Step
+fn redo(s: *UndoStore, editor: str, table: str) -> Step
+fn prepare(s: *UndoStore, editor: str, table: str, redo_direction: bool) -> Step
+
+type Ack = struct { record_id: f.Value, field: str }
+
+fn commit(s: *UndoStore, token: usize, acknowledged: []const Ack) -> usize
+
+type UndoState = struct { can_undo: bool, can_redo: bool, undo_depth: usize }
+
+fn undo_state(s: *UndoStore, editor: str, table: str) -> UndoState
+fn bulk_changes(a: *mem.Arena, rows: []const view.Row, record_ids: []const f.Value, field: str, value: f.Value) -> []const Change
+fn same_undo_value(left: f.Value, right: f.Value) -> bool
+```
+
+Batch operations and edit history: a batch run in bounded chunks with a per-record outcome ledger a killed job resumes from, the bulk mutation planner (every target authorized up front, the whole operation refused if any is denied unless asked to skip, chunked, sync or async by size, one correlation marker), its runner with progress events and its per-reason report, and per-editor per-table undo/redo stacks of cell and range edits with acknowledged-only settlement, depth caps and scope-change clearing. Callbacks are function values over a caller-owned state pointer. Checked against appdor's own engine.
+
 ### `e.algo.geo`
 
 ```neper

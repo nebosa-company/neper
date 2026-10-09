@@ -455,6 +455,7 @@
     "algo_formula_misc",
     "algo_formula_sql",
     "algo_formula_text",
+    "algo_page_batch",
     "algo_predicate",
     "algo_query",
     "algo_transpile",

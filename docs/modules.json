@@ -342,6 +342,8 @@
     "e.algo.checksum",
     "e.algo.view",
     "e.algo.pivot",
+    "e.algo.page",
+    "e.algo.batch",
     "e.algo.geo",
     "e.algo.predicate",
     "e.algo.privacy",
@@ -4560,6 +4562,39 @@
   },
   {
    "name": "e.algo.pivot",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.view",
+    "e.math",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.page",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.formula.text",
+    "e.algo.view",
+    "e.fmt.json",
+    "e.math",
+    "e.mem",
+    "e.str",
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.batch",
    "layer": 4,
    "surface": "source",
    "milestone": null,

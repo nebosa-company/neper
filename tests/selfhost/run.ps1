@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.algo.page and e.algo.batch against appdor records-engine, bulk, undo-redo and limits (L033, D2304)
+$algoPageBatchPath = Join-Path $testBuild 'algo-page-batch-selfhost.exe'
+$algoPageBatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_page_batch\src\main.e') $repo 'x64' 'windows' $algoPageBatchPath
+if ($LASTEXITCODE -ne 0 -or $algoPageBatchWritten -ne 'executable written') { throw 'algo_page_batch emission failed' }
+$algoPageBatchOutput = & $algoPageBatchPath
+if ($LASTEXITCODE -ne 0 -or $algoPageBatchOutput -ne 'algo page batch ok') { throw "algo_page_batch answered wrongly: exit $LASTEXITCODE" }
 # e.data.validate against appdor validation engine (L031, D2302)
 $dataValidatePath = Join-Path $testBuild 'data-validate-selfhost.exe'
 $dataValidateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_validate\src\main.e') $repo 'x64' 'windows' $dataValidatePath

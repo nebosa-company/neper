@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.algo.page and e.algo.batch against appdor records-engine, bulk, undo-redo and limits (L033, D2304)
+algo_page_batch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_page_batch/src/main.e" "$repo" x64 linux "$test_build/algo-page-batch-selfhost")
+[ "$algo_page_batch_written" = 'executable written' ]
+chmod +x "$test_build/algo-page-batch-selfhost"
+algo_page_batch_output=$("$test_build/algo-page-batch-selfhost")
+[ "$algo_page_batch_output" = 'algo page batch ok' ]
 # e.data.validate against appdor validation engine (L031, D2302)
 data_validate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_validate/src/main.e" "$repo" x64 linux "$test_build/data-validate-selfhost")
 [ "$data_validate_written" = 'executable written' ]
