@@ -1192,17 +1192,6 @@
       "evidence": "Planning only (D1812). Reference: JustCode tests/consistency.test.js. Not yet: extend existing Neper validation tools to check icon/resource references, translation-key coverage and duplicate keys, locale placeholder agreement, command/menu callback contracts and mnemonic conflicts. Consume actual resource/command registries and generated manifests; do not claim arbitrary dynamic source references can be proven by regex. Include small malformed-registry cases proving each check fails and wire checks into the existing build/test entry point with actionable locations. Keep repository-specific manifests, rules and CI wiring in scripts/tests; add no runtime validation framework or standard-library dependency."
     },
     {
-      "id": "L082",
-      "category": "library",
-      "group": "Drivers",
-      "order": 180,
-      "title": "SMTP send transport in e.net",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1819). e.fmt.mail parses only: SMTP send (EHLO, AUTH PLAIN/LOGIN, DATA, TLS via e.net.tls) with loopback fake-server fixtures asserting bytes sent. No mailbox storage. Ranked loopback-testable; harnesses exist (net, net_http, net_tls)."
-    },
-    {
       "id": "L083",
       "category": "library",
       "group": "Drivers",

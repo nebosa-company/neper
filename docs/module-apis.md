@@ -9349,6 +9349,72 @@ id that resets it. Reconnection, persistence across readers and retry policy
 belong to the caller. An io.Reader adapter can wrap response_read for SSE; its
 lifetime and cancellation remain those of ResponseStream.
 
+### `e.net.smtp`
+
+```neper
+type Reply = struct { code: u16, text: str, lines: usize }
+type Capabilities = struct {
+type Rejection = struct { address: str, code: u16 }
+type Sent = struct { rejected: []const Rejection, accepted: usize, reply: Reply }
+type Session = struct {
+
+error Protocol
+error Rejected
+error Closed
+error Unsupported
+error TooLarge
+error Invalid
+
+const LINE_LIMIT: usize = 1024usize
+const REPLY_LIMIT: usize = 16384usize
+const COMMAND_LIMIT: usize = 4096usize
+
+fn no_reply() -> Reply
+fn no_capabilities() -> Capabilities
+fn read_byte(s: *Session) -> (u8, err)
+fn digit(b: u8) -> bool
+fn read_reply(s: *Session) -> (Reply, err)
+fn enhanced(r: Reply) -> str
+fn transient(r: Reply) -> bool
+fn put(buf: []u8, at: *usize, text: []const u8) -> err
+fn put_decimal(buf: []u8, at: *usize, value: u64) -> err
+fn send_line(s: *Session, n: usize) -> err
+fn exchange(s: *Session, line: []const u8) -> (Reply, err)
+fn accept(s: *Session, r: Reply, want: u16) -> err
+fn path_ok(address: str) -> bool
+fn domain_ok(name: str) -> bool
+fn connect(a: *mem.Arena, source: io.Reader, sink: io.Writer, local: str) -> (Session, err)
+fn parse_size(text: str) -> u64
+fn word_end(text: str, from: usize) -> usize
+fn parse_capabilities(text: str) -> Capabilities
+fn ehlo(s: *Session) -> err
+fn starttls(s: *Session, config: tls.ClientConfig) -> err
+fn base64_of(buf: []u8, at: *usize, raw: []const u8) -> err
+fn wipe(buf: []u8)
+fn auth_plain(s: *Session, user: str, password: str) -> err
+fn auth_login(s: *Session, user: str, password: str) -> err
+fn auth_xoauth2(s: *Session, user: str, token: str) -> err
+fn auth(s: *Session, user: str, password: str) -> err
+fn command_with_path(s: *Session, verb: str, address: str, extra: []const u8) -> (Reply, err)
+fn reset(s: *Session) -> err
+fn noop(s: *Session) -> err
+fn emit(out: []u8, n: *usize, b: u8)
+
+type Stuffer = struct { line_start: bool, after_cr: bool, wrote: usize }
+
+fn stuff(st: *Stuffer, out: []u8, chunk: []const u8) -> usize
+fn send(s: *Session, from: str, recipients: []const str, body: io.Reader, size_hint: u64) -> (Sent, err)
+fn quit(s: *Session) -> err
+```
+
+SMTP submission client over any `io.Reader`/`io.Writer` pair (a socket, a pipe or a TLS stream). `connect`
+reads the greeting, `ehlo` learns the extensions (HELO fallback), `starttls` upgrades through e.net.tls and
+says EHLO again, `auth` picks PLAIN or LOGIN (XOAUTH2 on request), and `send` runs MAIL FROM, RCPT TO and DATA
+for one message, dot-stuffing it and normalising line ends, with SIZE checked first and refused recipients
+reported. Addresses with control characters, spaces or angle brackets are refused before they reach the wire.
+Replies are read byte by byte; a non-2xx/3xx reply is `Rejected` with the reply in `Session.last`. No
+composition, no CRAM-MD5, no SMTPUTF8, no pipelining.
+
 ### `e.net.ws`
 
 ```neper

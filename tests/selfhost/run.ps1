@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.net.smtp: scripted servers byte for byte plus a live STARTTLS session (L082, D2275)
+$netSmtpPath = Join-Path $testBuild 'net-smtp-selfhost.exe'
+$netSmtpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_smtp\src\main.e') $repo 'x64' 'windows' $netSmtpPath
+if ($LASTEXITCODE -ne 0 -or $netSmtpWritten -ne 'executable written') { throw 'net_smtp emission failed' }
+$netSmtpOutput = & $netSmtpPath
+if ($LASTEXITCODE -ne 0 -or $netSmtpOutput -ne 'net smtp ok') { throw "net_smtp answered wrongly: exit $LASTEXITCODE" }
 # e.fmt.xslt against libxslt (L081, D2274)
 $fmtXsltPath = Join-Path $testBuild 'fmt-xslt-selfhost.exe'
 $fmtXsltWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_xslt\src\main.e') $repo 'x64' 'windows' $fmtXsltPath

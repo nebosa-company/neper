@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.net.smtp: scripted servers byte for byte plus a live STARTTLS session (L082, D2275)
+net_smtp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_smtp/src/main.e" "$repo" x64 linux "$test_build/net-smtp-selfhost")
+[ "$net_smtp_written" = 'executable written' ]
+chmod +x "$test_build/net-smtp-selfhost"
+net_smtp_output=$("$test_build/net-smtp-selfhost")
+[ "$net_smtp_output" = 'net smtp ok' ]
 # e.fmt.xslt against libxslt (L081, D2274)
 fmt_xslt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xslt/src/main.e" "$repo" x64 linux "$test_build/fmt-xslt-selfhost")
 [ "$fmt_xslt_written" = 'executable written' ]
