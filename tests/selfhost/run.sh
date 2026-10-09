@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.algo.formula.sql against appdor compileToSql and classifyPushdown (L029, D2300)
+algo_formula_sql_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_formula_sql/src/main.e" "$repo" x64 linux "$test_build/algo-formula-sql-selfhost")
+[ "$algo_formula_sql_written" = 'executable written' ]
+chmod +x "$test_build/algo-formula-sql-selfhost"
+algo_formula_sql_output=$("$test_build/algo-formula-sql-selfhost")
+[ "$algo_formula_sql_output" = 'algo formula sql ok' ]
 # e.algo.transpile against appdor compat translate and detectDialect (L028, D2299)
 algo_transpile_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_transpile/src/main.e" "$repo" x64 linux "$test_build/algo-transpile-selfhost")
 [ "$algo_transpile_written" = 'executable written' ]

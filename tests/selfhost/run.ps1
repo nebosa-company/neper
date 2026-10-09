@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.algo.formula.sql against appdor compileToSql and classifyPushdown (L029, D2300)
+$algoFormulaSqlPath = Join-Path $testBuild 'algo-formula-sql-selfhost.exe'
+$algoFormulaSqlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_formula_sql\src\main.e') $repo 'x64' 'windows' $algoFormulaSqlPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaSqlWritten -ne 'executable written') { throw 'algo_formula_sql emission failed' }
+$algoFormulaSqlOutput = & $algoFormulaSqlPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaSqlOutput -ne 'algo formula sql ok') { throw "algo_formula_sql answered wrongly: exit $LASTEXITCODE" }
 # e.algo.transpile against appdor compat translate and detectDialect (L028, D2299)
 $algoTranspilePath = Join-Path $testBuild 'algo-transpile-selfhost.exe'
 $algoTranspileWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_transpile\src\main.e') $repo 'x64' 'windows' $algoTranspilePath

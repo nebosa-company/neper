@@ -452,6 +452,7 @@
     "algo_formula_datetime",
     "algo_formula_math",
     "algo_formula_misc",
+    "algo_formula_sql",
     "algo_formula_text",
     "algo_predicate",
     "algo_transpile",

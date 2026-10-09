@@ -2634,6 +2634,80 @@ fn detect(a: *mem.Arena, source: str) -> []Ranked
 
 Formula dialect translation: a competitor's formula text becomes canonical formula text with a machine-readable report (`converted`, `converted-with-warnings` or `failed`, each diagnostic a category, message and function). Seven dialects (Airtable, monday.com, ClickUp, Smartsheet, Quickbase, Notion, Google AppSheet) are rows of a data table giving field-reference style and per-function renames, argument reorders, negations, added arguments, warnings, cross-record and unsupported flags; everything else resolves through the registry's names and aliases. `detect` ranks which dialect pasted text was written in. Checked case for case against appdor's own translator.
 
+### `e.algo.formula.sql`
+
+```neper
+fn text_index_max() -> str
+fn fragment_max() -> usize
+fn max_regex_input() -> str
+fn exp_max() -> str
+fn exp_min() -> str
+
+type Column = struct { name: str, field_type: str, column: str }
+type Options = struct { double_quote_columns: bool }
+type Compiled = struct { sql: str, params: []const f.Value, pushdown: str, value_type: str, oversize: bool }
+type Verdict = struct { classification: str, reason: str, has_reason: bool, unsupported: []const str, has_unsupported: bool }
+
+fn in_list(s: str, list: []const str) -> bool
+fn value_type_of_field(a: *mem.Arena, field_type: str) -> str
+
+type Part = struct { sql: str, pushdown: str, vtype: str, node: f.Node, has_node: bool }
+type Comp = struct {
+
+fn typed(sql: str, pushdown: str, vtype: str) -> Part
+fn none() -> Part
+fn param(c: *Comp, value: f.Value) -> str
+fn col(c: *Comp, name: str) -> str
+fn utf16_length(s: str) -> usize
+fn j(c: *Comp, x: str, y: str) -> str
+fn j3(c: *Comp, x: str, y: str, z: str) -> str
+fn j4(c: *Comp, x: str, y: str, z: str, w: str) -> str
+fn j5(c: *Comp, x: str, y: str, z: str, w: str, v: str) -> str
+fn blank_text(c: *Comp, sql: str) -> str
+fn text_arg(c: *Comp, sql: str) -> str
+fn at(args: []const Part, i: usize) -> str
+fn is_name(s: str, upper: str) -> bool
+fn ast_may_error(node: f.Node) -> bool
+fn match_name(c: *Comp, s: str) -> str
+fn bool_arg(c: *Comp, p: Part) -> (str, bool)
+fn is_text(p: Part) -> bool
+fn equality(c: *Comp, left: Part, right: Part, negated: bool) -> str
+fn ordering(c: *Comp, op: str, left: Part, right: Part) -> str
+fn power(c: *Comp, base: str, exponent: str) -> str
+fn find_field(c: *Comp, name: str) -> (usize, bool)
+fn field_part(c: *Comp, name: str) -> (Part, bool)
+fn compile(c: *Comp, node: f.Node) -> Part
+fn compile_node(c: *Comp, node: f.Node) -> Part
+fn compile_name(c: *Comp, node: f.Node) -> Part
+fn compile_unary(c: *Comp, node: f.Node) -> Part
+fn compile_binary(c: *Comp, node: f.Node) -> Part
+fn compile_ternary(c: *Comp, node: f.Node) -> Part
+fn interval_unit(unit: str) -> (str, bool)
+fn unit_text(c: *Comp, node: f.Node) -> (str, bool)
+fn try_date_add(c: *Comp, node: f.Node) -> (Part, bool)
+fn try_date_dif(c: *Comp, node: f.Node) -> (Part, bool)
+fn compile_call(c: *Comp, node: f.Node) -> Part
+fn try_hardcoded(c: *Comp, raw: str, args: []const Part) -> (Part, bool)
+fn count_of(c: *Comp, args: []const Part, i: usize) -> str
+fn clamped(c: *Comp, expr: str) -> str
+fn fn1(c: *Comp, name: str, args: []const Part, vtype: str) -> Part
+fn extract(c: *Comp, field: str, args: []const Part) -> Part
+fn compile_function(c: *Comp, entry: *const f.Entry, args: []const Part) -> Part
+fn failure(oversize: bool) -> Compiled
+fn compile_formula(a: *mem.Arena, reg: *const f.Registry, source: str, schema: []const Column, options: Options) -> Compiled
+fn boolean_fragment(a: *mem.Arena, compiled: Compiled) -> (str, bool)
+fn is_pushdownable(a: *mem.Arena, reg: *const f.Registry, source: str, schema: []const Column, options: Options) -> bool
+
+type Walk = struct { names: []str, count: usize, volatile_seen: bool, unsupported_seen: bool }
+
+fn walk(c: *Comp, w: *Walk, node: f.Node)
+fn node_total(node: f.Node) -> usize
+fn classify_tree(a: *mem.Arena, reg: *const f.Registry, tree: f.Node) -> Verdict
+fn classify(a: *mem.Arena, reg: *const f.Registry, source: str) -> Verdict
+```
+
+Formula-to-SQL compilation and pushdown classification. `compile_formula` turns a formula tree into a parameterized PostgreSQL expression (`$N` placeholders, never interpolated values) that agrees with the in-process evaluator: blank as NULLIF/COALESCE, `IS NOT DISTINCT FROM` and case folding for text equality, row comparison for ordering (a blank sorts first), half-up ROUND, floored MOD, NULL guards for domain errors, a refusal (`pushdown: none`) where a value's truth in boolean position cannot be decided from declared types, and an abandoned compile past 32,768 characters. `classify` answers full, partial or none for formula text without compiling it, naming the unsupported functions. Checked case for case against appdor's own compiler and classifier.
+
 ### `e.algo.geo`
 
 ```neper
