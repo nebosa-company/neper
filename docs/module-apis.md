@@ -12920,6 +12920,155 @@ normalizedString, collapse otherwise). It follows the Part 2 grammar, with the 5
 arbitrary-length integers and decimals, and anyURI accepting any string of XML characters. Facets, value
 comparison and structural validation sit on top of it.
 
+### `e.fmt.xsd.schema`
+
+```neper
+error Invalid
+error Unsupported
+error Unresolved
+error TooComplex
+
+const NONE: u32 = 4294967295u32
+const UNBOUNDED: u32 = 4294967295u32
+const ANY_TYPE: u32 = 39u32
+const ANY_SIMPLE_TYPE: u32 = 40u32
+const BUILTINS: usize = 41usize
+
+type Variety = enum u8 { Atomic, List, Union }
+type ParticleKind = enum u8 { Element, Sequence, Choice, All, Any }
+type Content = enum u8 { Empty, Simple, Elements, Mixed }
+type Facets = struct {
+type AttrUse = struct { name: str, ns: str, type_index: u32, required: bool, prohibited: bool, has_fixed: bool, fixed: str }
+type TypeDef = struct {
+type Particle = struct { kind: ParticleKind, min: u32, max: u32, element: u32, children: []u32, rule: str, rule_tns: str }
+type ElementDecl = struct { name: str, ns: str, type_index: u32, nillable: bool, has_fixed: bool, fixed: str }
+type Schema = struct {
+type ErrorCode = enum u8 {
+type Result = struct { valid: bool, code: ErrorCode, node: xml.NodeId }
+
+fn xs_namespace() -> str
+fn xsi_namespace() -> str
+fn same(a: str, b: str) -> bool
+fn node(d: *const xml.Document, id: xml.NodeId) -> xml.Node
+fn split_name(name: str) -> (str, str)
+fn declares(attribute_name: str, prefix: str) -> bool
+fn resolve(d: *const xml.Document, id: xml.NodeId, prefix: str) -> (str, err)
+fn expand(d: *const xml.Document, id: xml.NodeId) -> (str, str, err)
+fn is_named(d: *const xml.Document, id: xml.NodeId, uri: str, local: str) -> bool
+fn next_element(d: *const xml.Document, from: xml.NodeId) -> xml.NodeId
+fn first_child_element(d: *const xml.Document, parent: xml.NodeId) -> xml.NodeId
+fn next_sibling_element(d: *const xml.Document, id: xml.NodeId) -> xml.NodeId
+fn attr(d: *const xml.Document, id: xml.NodeId, name: str) -> (str, bool)
+fn attr_or(d: *const xml.Document, id: xml.NodeId, name: str, fallback: str) -> str
+fn element_text(a: *mem.Arena, d: *const xml.Document, id: xml.NodeId) -> (str, err)
+fn is_blank(text: str) -> bool
+
+type Named = struct { kind: u8, name: str, node: xml.NodeId, index: u32 }
+type Compiler = struct {
+
+fn new_type(c: *Compiler) -> (u32, err)
+fn empty_facets() -> Facets
+fn simple_def(name: str, ns: str) -> TypeDef
+fn builtin_names() -> [39]str
+fn builtin_index(local: str) -> u32
+fn builtin_type(index: u32) -> xsd.Type
+fn init_builtins(s: *Schema)
+fn new_particle(c: *Compiler, kind: ParticleKind, min: u32, max: u32) -> (u32, err)
+fn new_element(c: *Compiler, name: str, ns: str, type_index: u32) -> (u32, err)
+fn xs(c: *const Compiler, id: xml.NodeId, local: str) -> bool
+fn unsupported_marker(c: *const Compiler, id: xml.NodeId) -> bool
+fn register(c: *Compiler, kind: u8, name: str, id: xml.NodeId, index: u32) -> err
+fn lookup(c: *const Compiler, kind: u8, name: str) -> (Named, bool)
+fn qname(c: *const Compiler, id: xml.NodeId, text: str) -> (str, str, err)
+fn type_ref(c: *Compiler, id: xml.NodeId, text: str) -> (u32, err)
+fn parse_u64(text: str) -> (u64, bool)
+fn occurs(c: *const Compiler, id: xml.NodeId) -> (u32, u32, err)
+fn parse_whitespace(text: str) -> (xsd.Whitespace, bool)
+fn compile_pattern(c: *Compiler, groups: []const str) -> (regex.Regex, err)
+fn count_children(c: *const Compiler, id: xml.NodeId, local: str) -> usize
+fn one_u64(c: *const Compiler, id: xml.NodeId) -> (u64, err)
+fn compile_facets(c: *Compiler, restriction: xml.NodeId, f: *Facets) -> err
+fn first_xs_child(c: *const Compiler, id: xml.NodeId, local: str) -> xml.NodeId
+fn simple_of(c: *Compiler, id: xml.NodeId, attribute_name: str) -> (u32, err)
+fn compile_simple(c: *Compiler, id: xml.NodeId, index: u32) -> err
+fn attribute_form(c: *const Compiler, id: xml.NodeId) -> str
+fn element_form(c: *const Compiler, id: xml.NodeId) -> str
+fn count_attribute_decls(c: *const Compiler, id: xml.NodeId, depth: u32) -> usize
+fn collect_attributes(c: *Compiler, id: xml.NodeId, list: []AttrUse, count: *usize, any: *bool, depth: u32) -> err
+fn compile_element_particle(c: *Compiler, id: xml.NodeId) -> (u32, err)
+fn fill_element(c: *Compiler, id: xml.NodeId, decl: u32) -> err
+fn compile_group_particle(c: *Compiler, id: xml.NodeId, depth: u32) -> (u32, err)
+fn compile_group_ref(c: *Compiler, id: xml.NodeId, depth: u32) -> (u32, err)
+fn model_child(c: *const Compiler, id: xml.NodeId) -> xml.NodeId
+fn compile_complex(c: *Compiler, id: xml.NodeId, index: u32) -> err
+fn load(a: *mem.Arena, source: []const u8) -> (Schema, err)
+fn char_length(text: str) -> usize
+fn effective_whitespace(s: *const Schema, t: u32) -> xsd.Whitespace
+fn root_builtin(s: *const Schema, t: u32) -> u32
+fn normalize(a: *mem.Arena, ws: xsd.Whitespace, text: str) -> (str, err)
+fn decimal_parts(text: str) -> (bool, str, str)
+fn cmp_digits(a: str, b: str) -> i32
+fn cmp_decimal(x: str, y: str) -> i32
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64
+fn num2(s: str, at: usize) -> i64
+fn instant(prim: xsd.Type, s: str, assumed: i64) -> (i64, i64, bool)
+fn cmp_instants(d1: i64, t1: i64, d2: i64, t2: i64) -> i32
+fn compare_temporal(prim: xsd.Type, x: str, y: str) -> i32
+fn compare_values(prim: xsd.Type, x: str, y: str) -> i32
+fn is_ordered(prim: xsd.Type) -> bool
+fn binary_length(prim: xsd.Type, text: str) -> usize
+fn measured_length(prim: xsd.Type, has_prim: bool, text: str) -> usize
+fn digit_counts(text: str) -> (usize, usize)
+fn is_decimal_family(prim: xsd.Type) -> bool
+fn facet_normal(a: *mem.Arena, s: *const Schema, t: u32, text: str) -> (str, err)
+fn check_simple(a: *mem.Arena, s: *const Schema, t: u32, text: str) -> (bool, err)
+fn facets_ok_list(s: *const Schema, t: u32, def: TypeDef, norm: str, items: usize) -> (bool, err)
+fn facets_ok_atomic(a: *mem.Arena, s: *const Schema, t: u32, def: TypeDef, norm: str) -> (bool, err)
+fn values_equal(a: *mem.Arena, s: *const Schema, t: u32, x: str, y: str) -> (bool, err)
+
+type Walk = struct {
+
+fn fail(w: *Walk, code: ErrorCode, id: xml.NodeId) -> bool
+fn is_xmlns_attribute(name: str) -> bool
+fn note_identity(w: *Walk, t: u32, text: str, id: xml.NodeId) -> bool
+fn find_declared(w: *const Walk, uri: str, local: str, decls: []const u32, count: usize) -> u32
+fn collect_decls(w: *const Walk, p: u32, out: []u32, count: *usize, depth: u32)
+fn count_decls(w: *const Walk, p: u32, depth: u32) -> usize
+
+type Kids = struct { ids: []xml.NodeId, names: []str, nss: []str, count: usize }
+
+fn wildcard_allows(rule: str, tns: str, uri: str) -> bool
+fn matches_decl(w: *const Walk, k: *const Kids, pos: usize, decl: u32) -> bool
+fn clear(set: []bool)
+fn any_set(set: []bool) -> bool
+fn add_all(into: []bool, from: []const bool) -> bool
+fn note_reach(furthest: *usize, set: []const bool)
+fn step(w: *const Walk, k: *const Kids, p: u32, from: []const bool, out: []bool, furthest: *usize, depth: u32) -> err
+fn repeat(w: *const Walk, k: *const Kids, p: u32, from: []const bool, out: []bool, furthest: *usize, depth: u32) -> err
+fn text_of(w: *Walk, id: xml.NodeId) -> (str, bool)
+fn has_element_child(w: *const Walk, id: xml.NodeId) -> xml.NodeId
+fn attribute_ns(w: *const Walk, id: xml.NodeId, name: str) -> (str, str, bool)
+fn validate_attributes(w: *Walk, def: TypeDef, id: xml.NodeId, allow_none: bool) -> bool
+fn nil_value(w: *const Walk, id: xml.NodeId) -> (bool, bool, bool)
+fn validate_element(w: *Walk, decl: u32, id: xml.NodeId) -> bool
+fn validate_typed(w: *Walk, t: u32, id: xml.NodeId, e: ElementDecl) -> bool
+fn validate_children(w: *Walk, def: TypeDef, id: xml.NodeId, text_pos: usize) -> bool
+fn validate(a: *mem.Arena, s: *const Schema, d: *const xml.Document) -> (Result, err)
+fn validate_text(a: *mem.Arena, s: *const Schema, source: []const u8) -> (Result, err)
+fn node_path(a: *mem.Arena, d: *const xml.Document, id: xml.NodeId) -> (str, err)
+```
+
+XML Schema 1.0 validation of an instance, over `e.fmt.xml` and the built-in datatypes of `e.fmt.xsd`.
+`load` compiles one schema document into type, element and particle tables in an arena; `validate`
+(or `validate_text`) answers `Result { valid, code, node }` for the first error, and `node_path` gives that
+node as `/a/b[2]`. Covered: global and local elements and attributes with form, use, fixed and nillable;
+simple types by restriction (all twelve facets), list and union; complex types with sequence, choice, all,
+any (with namespace constraints), occurrence bounds, groups, attribute groups, extension and restriction,
+simple, mixed and empty content; ID and IDREF. Refused at load as `Unsupported`: import, include, redefine,
+substitutionGroup, abstract, key, keyref, unique, notation, xsi:type and patterns the regex engine cannot
+express. Errors are found in document order, attributes before content, and a content-model failure points
+at the first child that cannot continue (or at the parent when content ends early).
+
 ### `e.fmt.soap`
 
 ```neper

@@ -115,6 +115,7 @@
     "e.fmt.yaml",
     "e.fmt.xml",
     "e.fmt.xsd",
+    "e.fmt.xsd.schema",
     "e.fmt.soap",
     "e.fmt.html",
     "e.fmt.html.template",
@@ -1781,6 +1782,22 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.xsd.schema",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.xml",
+    "e.fmt.xsd",
+    "e.mem",
+    "e.str",
+    "e.text.regex",
     "e.text.utf8"
    ],
    "blocked_by": []
