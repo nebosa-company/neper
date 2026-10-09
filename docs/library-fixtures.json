@@ -3004,8 +3004,8 @@
    "module": "e.time.calendar",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 32,
-   "delivered": 32,
+   "catalogue": 34,
+   "delivered": 34,
    "pending": [],
    "fixtures": [
     "misc_gaps",

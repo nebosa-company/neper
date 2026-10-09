@@ -4056,6 +4056,26 @@ fn copy[T: type](dst: Tensor[T], src: ConstTensor[T]) -> err
 fn add[T: type](dst: Tensor[T], x: ConstTensor[T], y: ConstTensor[T]) -> err
 ```
 
+### `e.text.edit`
+
+```neper
+error Invalid
+error OffsetRange
+error Negative
+
+fn substr(s: str, offset: i64, length: i64) -> (str, err)
+fn chomp(s: str) -> str
+fn trim_prefix(s: str, prefix: str) -> str
+fn trim_suffix(s: str, suffix: str) -> str
+fn indent(a: *mem.Arena, width: i64, s: str) -> (str, err)
+fn title(a: *mem.Arena, s: str) -> (str, err)
+fn reverse(a: *mem.Arena, s: str) -> (str, err)
+fn base_name(path: str) -> str
+fn dir_name(path: str) -> str
+```
+
+Terraform-compatible string edits after petcow (L021): `substr` (by characters, a negative length to the end, `OffsetRange` past the text), `chomp`, `indent` (spaces after every newline), `trim_prefix`, `trim_suffix`, `title` (first character of each space-separated word, simple one-to-one uppercase), `reverse` (by scalar, not grapheme cluster) and the slash-pure `base_name` and `dir_name` (no file system, no `.` or `..` resolving; empty is "."). The character functions refuse invalid UTF-8 with `Invalid`; the byte-level ones take any bytes. `e.str` already has `starts_with`, `ends_with` and `contains`. The fixture `text_edit` checks 4609 cases against Python string operations.
+
 ### `e.text.encoding`
 
 ```neper

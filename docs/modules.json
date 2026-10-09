@@ -61,6 +61,7 @@
     "e.algo.linalg.matrix",
     "e.algo.linalg.tensor",
     "e.math.fixed",
+    "e.text.edit",
     "e.text.encoding",
     "e.text.unicode",
     "e.text.normalize",
@@ -3181,6 +3182,19 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.edit",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.text.unicode",
     "e.text.utf8"
    ],
    "blocked_by": []

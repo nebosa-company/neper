@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.text.edit Terraform string functions against Python string operations (L021)
+$textEditPath = Join-Path $testBuild 'text-edit-selfhost.exe'
+$textEditWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_edit\src\main.e') $repo 'x64' 'windows' $textEditPath
+if ($LASTEXITCODE -ne 0 -or $textEditWritten -ne 'executable written') { throw 'text_edit emission failed' }
+$textEditOutput = & $textEditPath
+if ($LASTEXITCODE -ne 0 -or $textEditOutput -ne 'text edit ok') { throw "text_edit answered wrongly: exit $LASTEXITCODE" }
 # e.time.calendar.iso_day_count and age_days against datetime.toordinal (L020)
 $timeCalendarIsoPath = Join-Path $testBuild 'time-calendar-iso-selfhost.exe'
 $timeCalendarIsoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_calendar_iso\src\main.e') $repo 'x64' 'windows' $timeCalendarIsoPath
