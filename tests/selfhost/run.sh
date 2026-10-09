@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.crypto.ristretto against an independent RFC 9496 reference (L003)
+crypto_ristretto_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_ristretto/src/main.e" "$repo" x64 linux "$test_build/crypto-ristretto-selfhost")
+[ "$crypto_ristretto_written" = 'executable written' ]
+chmod +x "$test_build/crypto-ristretto-selfhost"
+crypto_ristretto_output=$("$test_build/crypto-ristretto-selfhost")
+[ "$crypto_ristretto_output" = 'crypto ristretto ok' ]
 # e.ui.flow editor: panes, nodes, moves, links, palette drops, inspector, deletes, lint strip (L091, D2284)
 ui_flow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_flow/src/main.e" "$repo" x64 linux "$test_build/ui-flow-selfhost")
 [ "$ui_flow_written" = 'executable written' ]

@@ -320,6 +320,7 @@
     "e.audio.synth",
     "e.crypto.classic",
     "e.crypto.merkle",
+    "e.crypto.ristretto",
     "e.crypto.secret",
     "e.fmt.lz4",
     "e.fmt.snappy",
@@ -1070,6 +1071,17 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.crypto.hash"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.crypto.ristretto",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.crypto.sign"
    ],
    "blocked_by": []
   },

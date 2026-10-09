@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.crypto.ristretto against an independent RFC 9496 reference (L003)
+$cryptoRistrettoPath = Join-Path $testBuild 'crypto-ristretto-selfhost.exe'
+$cryptoRistrettoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_ristretto\src\main.e') $repo 'x64' 'windows' $cryptoRistrettoPath
+if ($LASTEXITCODE -ne 0 -or $cryptoRistrettoWritten -ne 'executable written') { throw 'crypto_ristretto emission failed' }
+$cryptoRistrettoOutput = & $cryptoRistrettoPath
+if ($LASTEXITCODE -ne 0 -or $cryptoRistrettoOutput -ne 'crypto ristretto ok') { throw "crypto_ristretto answered wrongly: exit $LASTEXITCODE" }
 # e.ui.flow editor: panes, nodes, moves, links, palette drops, inspector, deletes, lint strip (L091, D2284)
 $uiFlowPath = Join-Path $testBuild 'ui-flow-selfhost.exe'
 $uiFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_flow\src\main.e') $repo 'x64' 'windows' $uiFlowPath

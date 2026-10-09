@@ -6023,6 +6023,37 @@ AES-GCM runs a bitsliced AES four blocks at a time and a multiplication-based GH
 without secret-indexed tables or secret-dependent branches (D1645); `expand_key` and
 `aes_encrypt_block` remain the byte-oriented block function `e.crypto.cipher` uses.
 
+### `e.crypto.ristretto`
+
+```neper
+type Ristretto = struct { point: sign.Pt }
+
+error Invalid
+
+fn sqrt_ad_minus_one() -> sign.Fe
+fn invsqrt_a_minus_d() -> sign.Fe
+fn one_minus_d_sq() -> sign.Fe
+fn d_minus_one_sq() -> sign.Fe
+fn pow_252_3() -> [32]u8
+fn ct_eq(a: sign.Fe, b: sign.Fe) -> u8
+fn ct_is_zero(a: sign.Fe) -> u8
+fn ct_abs(a: sign.Fe) -> sign.Fe
+fn sqrt_ratio(u: sign.Fe, v: sign.Fe) -> (bool, sign.Fe)
+fn decode(bytes: [32]u8) -> (Ristretto, err)
+fn encode(p: Ristretto) -> [32]u8
+fn equals(a: Ristretto, b: Ristretto) -> bool
+fn identity() -> Ristretto
+fn base() -> Ristretto
+fn neg(p: Ristretto) -> Ristretto
+fn add(p: Ristretto, q: Ristretto) -> Ristretto
+fn sub(p: Ristretto, q: Ristretto) -> Ristretto
+fn mul(scalar: [32]u8, p: Ristretto) -> Ristretto
+fn map(input: [32]u8) -> Ristretto
+fn derive(input: []const u8) -> (Ristretto, err)
+```
+
+Ristretto255, the prime-order group over Curve25519 of RFC 9496, on the Edwards arithmetic of `e.crypto.sign`: `decode` (strict: canonical, non-negative, a square ratio, non-negative `t`, nonzero `y`) and `encode`, `equals`, `identity`, `base`, `neg`, `add`, `sub`, `mul` (the scalar reduced mod l), the Elligator `map` of 32 bytes and `derive` of 64 bytes (hash the message first and keep domain separation in the caller). Secret-dependent choices run through arithmetic masks; validity branches decide over public encodings only. The fixture `crypto_ristretto` checks 409 cases against an independent integer reference of the RFC that itself agrees with the RFC's published multiples and bad encodings. Not covered: the OPRF/VOPRF or PSI protocols built on the group, and hash-to-group with an expander (`expand_message_xmd`), which a caller composes from `e.crypto.hash`.
+
 ### `e.crypto.secret`
 
 ```neper
