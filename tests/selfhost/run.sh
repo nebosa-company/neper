@@ -3274,6 +3274,18 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.ui.flow editor: panes, nodes, moves, links, palette drops, inspector, deletes, lint strip (L091, D2284)
+ui_flow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_flow/src/main.e" "$repo" x64 linux "$test_build/ui-flow-selfhost")
+[ "$ui_flow_written" = 'executable written' ]
+chmod +x "$test_build/ui-flow-selfhost"
+ui_flow_output=$("$test_build/ui-flow-selfhost")
+[ "$ui_flow_output" = 'ui flow ok' ]
+# e.ui.flow model and geometry against closure-based brute force on 150 random graphs (L091, D2284)
+ui_flow_logic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_flow_logic/src/main.e" "$repo" x64 linux "$test_build/ui-flow-logic-selfhost")
+[ "$ui_flow_logic_written" = 'executable written' ]
+chmod +x "$test_build/ui-flow-logic-selfhost"
+ui_flow_logic_output=$("$test_build/ui-flow-logic-selfhost")
+[ "$ui_flow_logic_output" = 'ui flow logic ok' ]
 # e.ui.sheet control: windowing, merges, frozen lines, styling, embeds, selection, editing, keys, wheel (L090, D2283)
 ui_sheet_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_sheet/src/main.e" "$repo" x64 linux "$test_build/ui-sheet-selfhost")
 [ "$ui_sheet_written" = 'executable written' ]

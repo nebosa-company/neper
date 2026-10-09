@@ -5408,6 +5408,115 @@ in-cell editing in an editor over the cell (`Edit`, `Type`, `Commit`, `Cancel` e
 over a block of cells at `embed_rect`, pointer selection (tap, drag, header taps), wheel scrolling, and arrow, Home,
 End, Page, Tab, Enter and F2 keys that keep the active cell in view. The caller owns the state and the text.
 
+### `e.ui.flow`
+
+```neper
+type NodeType = struct { name: str, inputs: []const str, outputs: []const str, required: u32 }
+type Param = struct { name: str, value: str }
+type Node = struct { id: u32, kind: usize, x: f32, y: f32, label: str, params: []const Param }
+type Link = struct { from: u32, from_port: usize, to: u32, to_port: usize }
+type Graph = struct { types: []const NodeType, nodes: []const Node, links: []const Link }
+type View = struct { pan_x: f32, pan_y: f32 }
+type HitKind = enum u8 { Canvas, Node, InPort, OutPort, Link }
+type Hit = struct { kind: HitKind, node: u32, index: usize, port: usize }
+type Connect = enum u8 { Ok, SelfLoop, Duplicate, InputTaken, BadPort, UnknownNode, Cycle }
+type Severity = enum u8 { Error, Warning }
+type Code = enum u8 { DuplicateId, DanglingLink, InputFed, UnconnectedInput, Cycle, Unreachable, Isolated, DuplicateLabel }
+type Issue = struct { severity: Severity, code: Code, node: u32, link: usize }
+type Pane = enum u8 { None, Palette, Canvas, Inspector, Lint }
+type Panes = struct { palette: geometry.Rect, canvas: geometry.Rect, inspector: geometry.Rect, lint: geometry.Rect }
+
+error Invalid
+error TooLarge
+
+fn node_width() -> f32
+fn header_height() -> f32
+fn port_row() -> f32
+fn port_radius() -> f32
+fn grid_step() -> f32
+fn node_index(g: Graph, id: u32) -> (usize, bool)
+fn ports_of(g: Graph, node: usize) -> usize
+fn node_height(g: Graph, node: usize) -> f32
+fn node_rect(g: Graph, node: usize) -> geometry.Rect
+fn port_pos(g: Graph, node: usize, output: bool, port: usize) -> geometry.Point
+fn to_screen(v: View, canvas: geometry.Rect, p: geometry.Point) -> geometry.Point
+fn to_world(v: View, canvas: geometry.Rect, p: geometry.Point) -> geometry.Point
+fn curve_offset(from: geometry.Point, to: geometry.Point) -> f32
+fn curve_point(from: geometry.Point, to: geometry.Point, t: f32) -> geometry.Point
+fn segment_distance(p: geometry.Point, a: geometry.Point, b: geometry.Point) -> f32
+fn sqrt32(v: f32) -> f32
+fn link_distance(from: geometry.Point, to: geometry.Point, p: geometry.Point) -> f32
+fn link_ends(g: Graph, link: usize) -> (geometry.Point, geometry.Point, bool)
+fn hit_test(g: Graph, v: View, canvas: geometry.Rect, x: f32, y: f32) -> Hit
+fn snap(v: f32, step: f32) -> f32
+fn can_connect(g: Graph, from: u32, from_port: usize, to: u32, to_port: usize, forbid_cycles: bool) -> Connect
+fn reaches(g: Graph, start: u32, target_id: u32) -> bool
+fn same_text(x: str, y: str) -> bool
+
+type Lint = struct { a: *mem.Arena, issues: []Issue, count: usize }
+
+fn push_issue(l: *Lint, issue: Issue) -> err
+fn lint(a: *mem.Arena, g: Graph) -> ([]const Issue, err)
+fn on_cycle(g: Graph) -> [256]bool
+fn panes(width: f32, height: f32, lint_open: bool, issue_count: usize) -> Panes
+fn pane_at(p: Panes, x: f32, y: f32) -> Pane
+fn palette_item_at(p: Panes, count: usize, x: f32, y: f32) -> usize
+fn fit(g: Graph, width: f32, height: f32) -> View
+
+type DragKind = enum u8 { None, Node, Link, Palette, Pan }
+type DragState = struct { kind: DragKind, node: u32, port: usize, from_output: bool, type_index: usize, x: f32, y: f32, off_x: f32, off_y: f32, pan_x: f32, pan_y: f32 }
+type FlowState = struct {
+type FlowEventKind = enum u8 {
+type FlowEvent = struct {
+type FlowOptions = struct { forbid_cycles: bool, grid: f32, disabled: bool }
+
+fn flow_options() -> FlowOptions
+fn none_drag() -> DragState
+fn base_event(kind: FlowEventKind, state: FlowState) -> FlowEvent
+fn inspector_field_at(p: Panes, count: usize, x: f32, y: f32) -> usize
+fn lint_row_at(p: Panes, count: usize, x: f32, y: f32) -> usize
+
+type FlowCtx = struct {
+
+fn fire(c: *FlowCtx, event: FlowEvent) -> err
+fn select_node(s: FlowState, id: u32) -> FlowState
+fn flow_press(ctx: *void, gesture: widget.Gesture) -> err
+fn flow_tap(c: *FlowCtx, at: geometry.Point) -> err
+fn flow_drag(c: *FlowCtx, d: widget.Drag) -> err
+fn flow_end(c: *FlowCtx, end: geometry.Point) -> err
+fn str_of(buf: []u8, len: usize) -> str
+fn flow_key(ctx: *void, k: input.KeyEvent) -> err
+fn flow_typed(ctx: *void, value: str) -> err
+fn flow_input(ctx: *void, event: input.Event) -> err
+
+type GroundPaint = struct { color: paint.Color, step: f32, pan_x: f32, pan_y: f32 }
+
+fn ground_measure(ctx: *void, limits: ui_layout.Constraints) -> geometry.Size
+fn ground_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err
+
+type LinkPaint = struct {
+
+fn stroke_curve(a: *mem.Arena, b: *scene.Builder, from: geometry.Point, to: geometry.Point, color: paint.Color, width: f32) -> err
+fn links_paint(ctx: *void, b: *scene.Builder, area: geometry.Rect) -> err
+fn custom_node(a: *mem.Arena, key: widget.Key, ctx: *void, bytes: []const u8, measure: fn(*void, ui_layout.Constraints) -> geometry.Size, painter: fn(*void, *scene.Builder, geometry.Rect) -> err, width: f32, height: f32) -> widget.Node
+fn mem_one(a: *mem.Arena, node: widget.Node) -> []const widget.Node
+fn text_node(a: *mem.Arena, t: *const control.Theme, text: str, role: style.TextRole, ink: paint.Color) -> (widget.Node, err)
+fn joined(a: *mem.Arena, first: str, second: str, third: str) -> (str, err)
+fn count_text(a: *mem.Arena, value: usize) -> (str, err)
+fn issue_words(a: *mem.Arena, g: Graph, issue: Issue) -> (str, err)
+fn node_view(a: *mem.Arena, t: *const control.Theme, key: widget.Key, g: Graph, index: usize, selected: bool, linked_in: []const bool, linked_out: []const bool, mark: u8) -> (widget.Node, err)
+fn flow_editor(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, g: Graph, state: FlowState, draft: []u8, change: widget.Change[FlowEvent], width: f32, height: f32, options: FlowOptions) -> (widget.Node, err)
+```
+
+Flow (node-graph) editor. Model and geometry, pure: node types with named ports, nodes and links as the caller's
+data, node and port positions, hit testing (port, node, link, canvas), links as cubic curves with distance to a
+point, the rules a new link must meet and the reason one is refused, snapping, the layout of the palette, canvas,
+inspector and lint strip, `fit`, and `lint` (unconnected required inputs, dangling links, an input fed twice,
+cycles, unreachable and isolated nodes, duplicate labels and ids). Editor (`flow_editor`): palette of node types
+dropped onto the canvas, nodes moved, links dragged from port to port, canvas panned, an inspector bound to the
+selected node's label and parameters, links and nodes deleted, and a lint strip with markers on the nodes and a
+list whose rows select their node. The caller owns the graph and the state and applies each event's state.
+
 ### `e.ui.state`
 
 ```neper

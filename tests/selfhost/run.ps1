@@ -3672,6 +3672,18 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.ui.flow editor: panes, nodes, moves, links, palette drops, inspector, deletes, lint strip (L091, D2284)
+$uiFlowPath = Join-Path $testBuild 'ui-flow-selfhost.exe'
+$uiFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_flow\src\main.e') $repo 'x64' 'windows' $uiFlowPath
+if ($LASTEXITCODE -ne 0 -or $uiFlowWritten -ne 'executable written') { throw 'ui_flow emission failed' }
+$uiFlowOutput = & $uiFlowPath
+if ($LASTEXITCODE -ne 0 -or $uiFlowOutput -ne 'ui flow ok') { throw "ui_flow answered wrongly: exit $LASTEXITCODE" }
+# e.ui.flow model and geometry against closure-based brute force on 150 random graphs (L091, D2284)
+$uiFlowLogicPath = Join-Path $testBuild 'ui-flow-logic-selfhost.exe'
+$uiFlowLogicWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_flow_logic\src\main.e') $repo 'x64' 'windows' $uiFlowLogicPath
+if ($LASTEXITCODE -ne 0 -or $uiFlowLogicWritten -ne 'executable written') { throw 'ui_flow_logic emission failed' }
+$uiFlowLogicOutput = & $uiFlowLogicPath
+if ($LASTEXITCODE -ne 0 -or $uiFlowLogicOutput -ne 'ui flow logic ok') { throw "ui_flow_logic answered wrongly: exit $LASTEXITCODE" }
 # e.ui.sheet control: windowing, merges, frozen lines, styling, embeds, selection, editing, keys, wheel (L090, D2283)
 $uiSheetPath = Join-Path $testBuild 'ui-sheet-selfhost.exe'
 $uiSheetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_sheet\src\main.e') $repo 'x64' 'windows' $uiSheetPath
