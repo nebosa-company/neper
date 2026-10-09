@@ -2016,6 +2016,62 @@ window.len` points of `out` and `scratch`; `triangulate_ear_clip` writes
 `3 * (n - 2)` indices for a simple polygon in either winding; the simplifiers
 mark kept points with 1 in `keep`.
 
+### `e.algo.predicate`
+
+```neper
+error NotMapping
+error BoolNotAlone
+error NotList
+error MissingKey
+error BadOp
+error MissingOp
+error MissingValue
+error MissingElement
+error CountNeedsNumber
+error BadCountOp
+
+type Op = enum u8 { Eq, Ne, Gt, Lt, Ge, Le, In, NotIn, Contains, Regex, Glob, Present, Absent, Any, All, Count }
+type Kind = enum u8 { And, Or, Not, Leaf, Builtin }
+type Filter = struct {
+
+fn same(left: str, right: str) -> bool
+fn lower_byte(c: u8) -> u8
+fn is_space(c: u8) -> bool
+fn parse_op(text: str) -> (Op, bool)
+fn object_of(v: json.Value) -> ([]const json.Member, bool)
+fn is_comparison(op: Op) -> bool
+fn member(members: []const json.Member, key: str) -> (json.Value, bool)
+fn string_of(v: json.Value) -> (str, bool)
+fn is_number(v: json.Value) -> bool
+fn number_f64(v: json.Value) -> (f64, bool)
+fn integer_of(v: json.Value) -> (i64, bool)
+fn parse_list(a: *mem.Arena, v: json.Value) -> ([]const Filter, err)
+fn single(a: *mem.Arena, f: Filter) -> ([]const Filter, err)
+fn parse(a: *mem.Arena, v: json.Value) -> (Filter, err)
+fn navigate(path: str, attrs: []const json.Member) -> (json.Value, bool)
+fn is_scalar(v: json.Value) -> bool
+fn scalar_eq(av: json.Value, want: json.Value) -> bool
+fn contains_text(s: str, needle: str) -> bool
+fn glob_match(a: *mem.Arena, pattern: str, text: str) -> bool
+fn compare(a: *mem.Arena, op: Op, av: json.Value, want: json.Value) -> bool
+fn element_matches(a: *mem.Arena, sub: *const Filter, element: json.Value) -> bool
+fn eval_leaf(a: *mem.Arena, f: *const Filter, attrs: []const json.Member) -> bool
+fn digits_of(a: *mem.Arena, n: usize) -> str
+fn world_open(rule: []const json.Member) -> bool
+fn rule_port(rule: []const json.Member, key: str) -> (i64, bool)
+fn sg_world_open_ports(attrs: []const json.Member, ports: []const i64) -> bool
+fn equals_ignore_case(text: str, word: str) -> bool
+fn sg_world_open_all_protocols(attrs: []const json.Member) -> bool
+fn is_star(v: json.Value) -> bool
+fn principal_has_wildcard(p: json.Value, has: bool) -> bool
+fn statement_allows_wildcard(statement: []const json.Member) -> bool
+fn iam_wildcard_principal(attrs: []const json.Member) -> bool
+fn eval_builtin(a: *mem.Arena, f: *const Filter, attrs: []const json.Member) -> bool
+fn eval(a: *mem.Arena, f: *const Filter, attrs: []const json.Member) -> bool
+```
+
+Declarative predicates over a resource's attributes (L025), the value-rule subset of petcow's Spartan filter engine: a filter is `and`/`or`/`not` over leaves that read a dotted `key` from an attribute object and apply an `op` to a `value` (`eq`, `ne`, `gt`, `lt`, `ge`, `le`, `in`, `not_in`, `contains`, `regex` through `e.text.regex`, `glob`, `present`, `absent`, `any`, `all` over an `element` sub-filter, `count` with `count_op`), or a built-in (`sg_world_open_ports`, `sg_world_open_all_protocols`, `iam_wildcard_principal`). `parse` validates a filter once with named refusals; `eval` is then pure. Policy sets, GSL, waivers and reports of the full engine are not here. The fixture `algo_predicate` checks 952 cases against a transcription of the Rust.
+
 ### `e.algo.privacy`
 
 ```neper

@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.algo.predicate Spartan filter subset against a transcription of petcow filter.rs (L025)
+$algoPredicatePath = Join-Path $testBuild 'algo-predicate-selfhost.exe'
+$algoPredicateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_predicate\src\main.e') $repo 'x64' 'windows' $algoPredicatePath
+if ($LASTEXITCODE -ne 0 -or $algoPredicateWritten -ne 'executable written') { throw 'algo_predicate emission failed' }
+$algoPredicateOutput = & $algoPredicatePath
+if ($LASTEXITCODE -ne 0 -or $algoPredicateOutput -ne 'algo predicate ok') { throw "algo_predicate answered wrongly: exit $LASTEXITCODE" }
 # e.algo.findings stable ids and idempotent merge against a transcription of petcow scan.rs (L024)
 $algoFindingsPath = Join-Path $testBuild 'algo-findings-selfhost.exe'
 $algoFindingsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_findings\src\main.e') $repo 'x64' 'windows' $algoFindingsPath

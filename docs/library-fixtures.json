@@ -446,6 +446,7 @@
    "fixtures": [
     "algo_collect",
     "algo_findings",
+    "algo_predicate",
     "fmt_encode",
     "fmt_gaps_a",
     "fmt_json"
