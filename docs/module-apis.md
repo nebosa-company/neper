@@ -1860,7 +1860,7 @@ Stable finding ids and the idempotent merge of a scanner's report into recorded 
 ### `e.algo.formula`
 
 ```neper
-type Kind = enum u8 { Blank, Number, Text, Bool, Date, Array, Error }
+type Kind = enum u8 { Blank, Number, Text, Bool, Date, Array, Error, Record }
 type Value = struct { kind: Kind, n: f64, s: str, items: []const Value, code: u8 }
 
 const E_DIV0: u8 = 0u8
@@ -1880,8 +1880,10 @@ fn text(s: str) -> Value
 fn boolean(b: bool) -> Value
 fn date(ms: f64) -> Value
 fn array(items: []const Value) -> Value
+fn record(items: []const Value) -> Value
 fn make_error(code: u8, message: str) -> Value
 fn div_zero() -> Value
+fn div_zero_message(message: str) -> Value
 fn value_error(message: str) -> Value
 fn na_error(message: str) -> Value
 fn name_error(message: str) -> Value
@@ -1904,6 +1906,8 @@ fn date_iso(a: *mem.Arena, ms: f64) -> str
 fn put_int(out: []u8, at: usize, value: i64, width: usize) -> usize
 fn digits_value(s: str, from: usize, count: usize) -> (i64, bool)
 fn parse_iso(s: str) -> (f64, bool)
+fn parse_legacy_numeric(s: str) -> (f64, bool)
+fn parse_date_text(s: str) -> (f64, bool)
 fn is_naive_datetime(s: str) -> bool
 fn is_iso_temporal(s: str) -> bool
 fn trim_text(s: str) -> str
@@ -2000,6 +2004,7 @@ type Field = struct { name: str, value: Value }
 type Formula = struct { name: str, source: str }
 type FieldGetter = fn(*void, str) -> (Value, bool)
 type Context = struct {
+type FieldMeta = struct { field: str, props: []const Field }
 type Cached = struct { name: str, node: Node, parsed: bool }
 type Evaluator = struct {
 
@@ -2039,9 +2044,532 @@ fn detect_cycle(a: *mem.Arena, formulas: []const Formula) -> ([]const str, bool)
 fn evaluation_order(a: *mem.Arena, formulas: []const Formula) -> ([]const str, bool)
 fn visit_order(node: usize, edges: []const []const usize, seen: []bool, formulas: []const Formula, order: []str, at: usize) -> usize
 fn infer_type(a: *mem.Arena, source: str, ctx: *const Context, reg: *const Registry) -> str
+fn random(ev: *Evaluator) -> f64
+fn weekday_name(index: i64) -> str
+fn month_name(month: i64) -> str
+fn date_js_string(a: *mem.Arena, ms: f64) -> str
 ```
 
-Spreadsheet-style formula engine core (L026), a port of appdor's `src/formula` tokenizer, parser, evaluator, registry and value model. Formulas have `{Field}` and bare-name references, `let` variables (`LET`, `LETS`), `//` comments, the operators `+ - * / % ^ & = == != <> < <= > >= && || !`, `cond ? a : b` and array literals. Errors are values (`#DIV/0!`, `#VALUE!`, `#N/A`, `#NAME?`, `#NUM!`, `#REF!`, `#ERROR!`, `#LIMIT!`) that flow through operators and eager arguments; blank propagates through arithmetic; a step budget and a node cap end a runaway formula with `#LIMIT!`; a circular reference between sibling formulas is a `#REF!` naming the cycle. `evaluate`, `parse` (with a UTF-16 diagnostic), `dependencies`, `detect_cycle`, `evaluation_order` and `infer_type` are the public functions; functions are `Entry` records in a `Registry` (case- and underscore-insensitive names, aliases, arity, lazy, pass-errors and volatility flags), registered by the function modules; `register_core` adds `LET` and `LETS`. Numbers print as JavaScript prints them. Text dates are ISO-8601 only, and a field named like a JavaScript object property is an ordinary field. The fixture `algo_formula` checks 718 cases against appdor's own engine.
+A formula engine, the core of the formula library: a tokenizer and parser for the Airtable/Notion-style language (field references in braces, operators, ternary, array literals, LET/LETS), an evaluator with a step and node budget, a function registry with names, aliases, arity and lazy/volatile/generate-once flags, dependency collection, cycle detection and evaluation order over formula fields, and the JavaScript-compatible value rules (number text, text/number/date conversion, loose equality, ordering) every function builds on. The functions themselves are the `e.algo.formula.*` modules; `e.algo.formula.library` registers them all.
+
+### `e.algo.formula.basic`
+
+```neper
+fn trunc_of(v: f.Value) -> f64
+fn finance_numbers(c: *f.Call, count: usize, out: []f64) -> f.Value
+fn min_usize(x: usize, y: usize) -> usize
+fn abs_f(x: f64) -> f64
+fn h_if(c: *f.Call) -> f.Value
+fn h_ifs(c: *f.Call) -> f.Value
+fn h_iferror(c: *f.Call) -> f.Value
+fn h_ifna(c: *f.Call) -> f.Value
+fn h_switch(c: *f.Call) -> f.Value
+fn h_and(c: *f.Call) -> f.Value
+fn h_or(c: *f.Call) -> f.Value
+fn h_xor(c: *f.Call) -> f.Value
+fn h_not(c: *f.Call) -> f.Value
+fn h_true(c: *f.Call) -> f.Value
+fn h_false(c: *f.Call) -> f.Value
+fn h_blank(c: *f.Call) -> f.Value
+fn h_error(c: *f.Call) -> f.Value
+fn h_inrange(c: *f.Call) -> f.Value
+fn h_typeof(c: *f.Call) -> f.Value
+fn h_is_same(c: *f.Call) -> f.Value
+fn h_unequal(c: *f.Call) -> f.Value
+fn h_isblank(c: *f.Call) -> f.Value
+fn h_isnotblank(c: *f.Call) -> f.Value
+fn h_isnumber(c: *f.Call) -> f.Value
+fn h_istext(c: *f.Call) -> f.Value
+fn h_isnontext(c: *f.Call) -> f.Value
+fn is_falsy(v: f.Value) -> bool
+fn h_iserror(c: *f.Call) -> f.Value
+fn h_isna(c: *f.Call) -> f.Value
+fn h_islogical(c: *f.Call) -> f.Value
+fn h_type(c: *f.Call) -> f.Value
+fn h_isdate(c: *f.Call) -> f.Value
+fn h_nz(c: *f.Call) -> f.Value
+fn h_is_same_type(c: *f.Call) -> f.Value
+fn as_list(c: *f.Call, v: f.Value, one: []f.Value) -> []const f.Value
+fn h_choose(c: *f.Call) -> f.Value
+fn h_index(c: *f.Call) -> f.Value
+fn h_match(c: *f.Call) -> f.Value
+fn h_lookup(c: *f.Call) -> f.Value
+fn slice_bounds(length: usize, start: f64, end: f64) -> (usize, usize)
+fn h_offset(c: *f.Call) -> f.Value
+fn h_pmt(c: *f.Call) -> f.Value
+fn h_fv(c: *f.Call) -> f.Value
+fn h_pv(c: *f.Call) -> f.Value
+fn h_npv(c: *f.Call) -> f.Value
+fn h_nper(c: *f.Call) -> f.Value
+fn h_rate(c: *f.Call) -> f.Value
+fn h_irr(c: *f.Call) -> f.Value
+fn h_sln(c: *f.Call) -> f.Value
+fn add(r: *f.Registry, a: *mem.Arena, name: str, aliases: []const str, category: str, lazy: bool, pass: bool, low: i32, high: i32, handler: f.Handler) -> err
+fn one_alias(a: *mem.Arena, name: str) -> []const str
+fn two_aliases(a: *mem.Arena, first: str, second: str) -> []const str
+fn register(r: *f.Registry, a: *mem.Arena) -> err
+```
+
+The logical, information, lookup and finance functions of the formula library (43 functions: IF, IFS, IFERROR, IFNA, SWITCH, AND, OR, XOR, NOT, ISBLANK, ISNUMBER, ISERROR, TYPE, CHOOSE, INDEX, MATCH, LOOKUP, OFFSET, PMT, FV, PV, NPV, NPER, RATE, IRR, SLN and their aliases), one handler each, checked call for call against appdor's own engine. `register` adds them to a registry.
+
+### `e.algo.formula.math`
+
+```neper
+fn msg0(a: *mem.Arena, key: str) -> str
+fn msg1(a: *mem.Arena, key: str, v1: str) -> str
+fn msg2(a: *mem.Arena, key: str, v1: str, v2: str) -> str
+fn abs_f(x: f64) -> f64
+fn is_integer(x: f64) -> bool
+fn js_round(x: f64) -> f64
+fn flat_count(args: []const f.Value) -> usize
+fn flat_values(a: *mem.Arena, args: []const f.Value) -> []const f.Value
+fn numbers(c: *f.Call, args: []const f.Value) -> ([]const f64, f.Value)
+fn sum_of(nums: []const f64) -> f64
+fn mean_of(nums: []const f64) -> f64
+fn sorted(c: *f.Call, nums: []const f64, descending: bool) -> []f64
+fn variance(c: *f.Call, nums: []const f64, population: bool) -> f.Value
+fn one(c: *f.Call) -> f.Value
+fn at(c: *f.Call, i: usize) -> f.Value
+fn unary(c: *f.Call, kind: u8) -> f.Value
+fn h_sum(c: *f.Call) -> f.Value
+fn h_average(c: *f.Call) -> f.Value
+fn h_count(c: *f.Call) -> f.Value
+fn h_counta(c: *f.Call) -> f.Value
+fn h_countblank(c: *f.Call) -> f.Value
+fn h_countall(c: *f.Call) -> f.Value
+fn h_countunique(c: *f.Call) -> f.Value
+fn js_string(a: *mem.Arena, v: f.Value) -> str
+fn h_countm(c: *f.Call) -> f.Value
+fn h_max(c: *f.Call) -> f.Value
+fn h_min(c: *f.Call) -> f.Value
+fn h_median(c: *f.Call) -> f.Value
+fn h_mode(c: *f.Call) -> f.Value
+fn h_stdev(c: *f.Call) -> f.Value
+fn h_stdevp(c: *f.Call) -> f.Value
+fn h_var(c: *f.Call) -> f.Value
+fn h_varp(c: *f.Call) -> f.Value
+fn h_product(c: *f.Call) -> f.Value
+fn h_multiply(c: *f.Call) -> f.Value
+fn h_sumproduct(c: *f.Call) -> f.Value
+
+type Matcher = struct { plain: bool, op: u8, rhs_is_number: bool, rhs_number: f64, rhs_text: str, value: f.Value }
+
+fn has_line_break(s: str) -> bool
+fn leading_operator(s: str, from: usize, allow_bang: bool) -> (u8, usize)
+fn is_space(b: u8) -> bool
+fn make_matcher(c: *f.Call, criteria: f.Value) -> Matcher
+fn matches(c: *f.Call, m: *const Matcher, value: f.Value) -> bool
+fn range_of(c: *f.Call, v: f.Value) -> []const f.Value
+fn h_countif(c: *f.Call) -> f.Value
+fn h_sumif(c: *f.Call) -> f.Value
+fn h_averageif(c: *f.Call) -> f.Value
+fn matches_criterion(c: *f.Call, cell: f.Value, criterion: f.Value) -> bool
+fn matching_rows(c: *f.Call, start: usize, rows: []usize) -> (usize, f.Value)
+fn h_countifs(c: *f.Call) -> f.Value
+fn conditional(c: *f.Call, average: bool) -> f.Value
+fn h_sumifs(c: *f.Call) -> f.Value
+fn h_averageifs(c: *f.Call) -> f.Value
+fn h_add(c: *f.Call) -> f.Value
+fn two_numbers(c: *f.Call) -> (f.Value, f.Value, f.Value)
+fn h_minus(c: *f.Call) -> f.Value
+fn h_divide(c: *f.Call) -> f.Value
+fn h_mod(c: *f.Call) -> f.Value
+fn h_quotient(c: *f.Call) -> f.Value
+fn h_power(c: *f.Call) -> f.Value
+fn h_abs(c: *f.Call) -> f.Value
+fn h_sign(c: *f.Call) -> f.Value
+fn h_exp(c: *f.Call) -> f.Value
+fn h_sin(c: *f.Call) -> f.Value
+fn h_cos(c: *f.Call) -> f.Value
+fn h_tan(c: *f.Call) -> f.Value
+fn h_asin(c: *f.Call) -> f.Value
+fn h_acos(c: *f.Call) -> f.Value
+fn h_atan(c: *f.Call) -> f.Value
+fn h_degrees(c: *f.Call) -> f.Value
+fn h_radians(c: *f.Call) -> f.Value
+fn h_log10(c: *f.Call) -> f.Value
+fn h_log2(c: *f.Call) -> f.Value
+fn h_int(c: *f.Call) -> f.Value
+fn h_pi(c: *f.Call) -> f.Value
+fn h_sqrt(c: *f.Call) -> f.Value
+fn h_ln(c: *f.Call) -> f.Value
+fn h_log(c: *f.Call) -> f.Value
+fn h_logn(c: *f.Call) -> f.Value
+fn ten_to(d: f.Value) -> f64
+fn h_round(c: *f.Call) -> f.Value
+fn h_roundup(c: *f.Call) -> f.Value
+fn h_rounddown(c: *f.Call) -> f.Value
+fn to_multiple(c: *f.Call, up: bool) -> f.Value
+fn h_ceiling(c: *f.Call) -> f.Value
+fn h_floor(c: *f.Call) -> f.Value
+fn h_atan2(c: *f.Call) -> f.Value
+fn h_isodd(c: *f.Call) -> f.Value
+fn h_iseven(c: *f.Call) -> f.Value
+fn h_fact(c: *f.Call) -> f.Value
+fn h_combin(c: *f.Call) -> f.Value
+fn h_permut(c: *f.Call) -> f.Value
+fn h_trunc(c: *f.Call) -> f.Value
+fn h_even(c: *f.Call) -> f.Value
+fn h_odd(c: *f.Call) -> f.Value
+fn h_kurtosis(c: *f.Call) -> f.Value
+fn h_skewness(c: *f.Call) -> f.Value
+fn erf(x: f64) -> f64
+fn h_is_normal(c: *f.Call) -> f.Value
+fn nth(c: *f.Call, name: str, descending: bool) -> f.Value
+fn h_large(c: *f.Call) -> f.Value
+fn h_small(c: *f.Call) -> f.Value
+fn h_avgw(c: *f.Call) -> f.Value
+fn h_randbetween(c: *f.Call) -> f.Value
+fn add(r: *f.Registry, a: *mem.Arena, name: str, aliases: []const str, generate_once: bool, low: i32, high: i32, handler: f.Handler) -> err
+fn al1(a: *mem.Arena, x: str) -> []const str
+fn al2(a: *mem.Arena, x: str, y: str) -> []const str
+fn register(r: *f.Registry, a: *mem.Arena) -> err
+```
+
+The 74 math functions of the formula library (arithmetic, rounding, aggregation, statistics, trigonometry, number theory, bit operations), with JavaScript number semantics: `Math.round` half toward +infinity, `%` as fmod, `FACT`/`COMBIN`/`PERMUT` loops that stop at infinity. `register` adds them to a registry.
+
+### `e.algo.formula.text`
+
+```neper
+fn max_regex_input() -> usize
+fn utf16_len(s: str) -> usize
+fn units_of(a: *mem.Arena, s: str) -> []u16
+fn text_of_units(a: *mem.Arena, units: []const u16) -> str
+fn scalar_width(scalar: u32) -> usize
+fn text_arg(c: *f.Call, i: usize) -> str
+fn js_space(u: u32) -> bool
+fn is_word_unit(u: u32) -> bool
+fn clamp_index(x: f64) -> usize
+fn number_or(c: *f.Call, i: usize, fallback: f64) -> (f64, f.Value)
+fn is_cased(scalar: u32) -> bool
+fn push_scalar(out: []u8, at: usize, scalar: u32) -> usize
+fn lower_text(a: *mem.Arena, s: str) -> str
+fn upper_text(a: *mem.Arena, s: str) -> str
+fn h_char(c: *f.Call) -> f.Value
+fn h_unichar(c: *f.Call) -> f.Value
+fn h_code(c: *f.Call) -> f.Value
+fn h_unicode(c: *f.Call) -> f.Value
+fn element_text(c: *f.Call, v: f.Value) -> str
+fn h_concatenate(c: *f.Call) -> f.Value
+fn includes(hay: str, needle: str) -> bool
+fn h_contains(c: *f.Call) -> f.Value
+fn h_exact(c: *f.Call) -> f.Value
+fn truthy(v: f.Value) -> bool
+fn h_same(c: *f.Call) -> f.Value
+fn index_of_units(hay: []const u16, needle: []const u16, from: usize) -> i64
+fn find_impl(c: *f.Call, case_sensitive: bool) -> f.Value
+fn h_find(c: *f.Call) -> f.Value
+fn h_search(c: *f.Call) -> f.Value
+fn h_isemail(c: *f.Call) -> f.Value
+fn is_label_byte(b: u8) -> bool
+fn h_isurl(c: *f.Call) -> f.Value
+fn h_left(c: *f.Call) -> f.Value
+fn h_right(c: *f.Call) -> f.Value
+fn h_mid(c: *f.Call) -> f.Value
+fn h_len(c: *f.Call) -> f.Value
+fn h_lower(c: *f.Call) -> f.Value
+fn h_upper(c: *f.Call) -> f.Value
+fn h_proper(c: *f.Call) -> f.Value
+fn h_reverse(c: *f.Call) -> f.Value
+fn repeat_text(a: *mem.Arena, s: str, count: usize) -> str
+fn h_repeat(c: *f.Call) -> f.Value
+fn h_replace(c: *f.Call) -> f.Value
+fn h_substitute(c: *f.Call) -> f.Value
+fn h_textjoin(c: *f.Call) -> f.Value
+fn trim_units(a: *mem.Arena, s: str) -> str
+fn h_trim(c: *f.Call) -> f.Value
+fn h_wordcount(c: *f.Call) -> f.Value
+fn h_occurance(c: *f.Call) -> f.Value
+fn soundex_code(b: u8) -> u8
+fn h_soundex(c: *f.Call) -> f.Value
+fn annex_b(a: *mem.Arena, pattern: str) -> str
+fn compile_pattern(c: *f.Call, pattern: str, ignore_case: bool) -> (regex.Regex, f.Value)
+fn h_regexmatch(c: *f.Call) -> f.Value
+fn h_regexextract(c: *f.Call) -> f.Value
+fn expand_replacement(a: *mem.Arena, s: str, caps: regex.Captures, replacement: str) -> str
+fn h_regexreplace(c: *f.Call) -> f.Value
+fn h_starts_with(c: *f.Call) -> f.Value
+fn h_ends_with(c: *f.Call) -> f.Value
+fn casing_words(a: *mem.Arena, s: str, out: []str) -> usize
+fn upper_first(a: *mem.Arena, w: str) -> str
+fn join_words(a: *mem.Arena, words: []const str, mode: str) -> str
+fn is_casing_mode(mode: str) -> bool
+fn h_casing(c: *f.Call) -> f.Value
+fn h_clean(c: *f.Call) -> f.Value
+fn hex_value(b: u8) -> i32
+fn h_decode_url_component(c: *f.Call) -> f.Value
+fn decode_component(a: *mem.Arena, s: str) -> (str, bool)
+fn h_initials(c: *f.Call) -> f.Value
+fn pad_with(c: *f.Call, side: u8) -> f.Value
+fn h_padleft(c: *f.Call) -> f.Value
+fn h_padright(c: *f.Call) -> f.Value
+fn h_pad(c: *f.Call) -> f.Value
+fn h_part(c: *f.Call) -> f.Value
+fn match_all(c: *f.Call, re: *const regex.Regex, s: str, out: []regex.Captures) -> usize
+fn extract_with(c: *f.Call, pattern: str, ignore_case: bool, kind: u8) -> f.Value
+fn h_extractemails(c: *f.Call) -> f.Value
+fn h_extractnumbers(c: *f.Call) -> f.Value
+fn h_extractprices(c: *f.Call) -> f.Value
+fn h_extractphonenumbers(c: *f.Call) -> f.Value
+fn h_extractdomains(c: *f.Call) -> f.Value
+fn h_extractdates(c: *f.Call) -> f.Value
+fn h_extracthashtags(c: *f.Call) -> f.Value
+fn h_extract(c: *f.Call) -> f.Value
+fn add(r: *f.Registry, a: *mem.Arena, name: str, aliases: []const str, low: i32, high: i32, handler: f.Handler) -> err
+fn al1(a: *mem.Arena, x: str) -> []const str
+fn al2(a: *mem.Arena, x: str, y: str) -> []const str
+fn register(r: *f.Registry, a: *mem.Arena) -> err
+```
+
+The 49 text functions of the formula library (case, search, replace, pad, regular expressions through `e.text.regex`, extraction of emails, numbers, prices, phones, domains, dates). Positions and lengths count UTF-16 code units as JavaScript's do, so LEN of an emoji is 2. `register` adds them to a registry; `decode_component` is `decodeURIComponent`.
+
+### `e.algo.formula.datetime`
+
+```neper
+fn day_ms() -> f64
+fn finite(x: f64) -> bool
+fn integer_of(x: f64) -> f64
+fn time_clip(t: f64) -> f64
+fn make_day(year: f64, month: f64, date: f64) -> f64
+fn make_time(hour: f64, minute: f64, second: f64, milli: f64) -> f64
+fn date_utc(year: f64, month: f64, day: f64, hour: f64, minute: f64, second: f64, milli: f64) -> f64
+
+type Parts = struct { year: f64, month: f64, day: f64, hour: f64, minute: f64, second: f64, milli: f64, weekday: f64 }
+
+fn parts_of(ms: f64) -> Parts
+fn from_parts(p: Parts) -> f64
+fn utc_midnight(ms: f64) -> f64
+fn clock_now(c: *f.Call) -> f64
+fn js_round(x: f64) -> f64
+fn month_name(index: i64) -> str
+fn weekday_name(index: i64) -> str
+fn iso_week_number(ms: f64) -> f64
+fn normalize_unit(a: *mem.Arena, raw: str) -> u8
+fn unit_text(a: *mem.Arena, v: f.Value) -> str
+fn add_unit(ms: f64, amount: f64, unit: u8) -> f64
+fn add_months_clamped(ms: f64, count: f64) -> f64
+fn date_utc_raw(year: f64, month: f64, day: f64) -> f64
+fn elapsed_months(from: f64, to: f64) -> f64
+fn pad_number(a: *mem.Arena, n: f64, width: usize) -> str
+fn upper_ascii(a: *mem.Arena, s: str) -> str
+fn abs_f(x: f64) -> f64
+fn ordinal(a: *mem.Arena, n: f64) -> str
+fn matches_at(fmt: str, at: usize, token: str) -> bool
+fn token_at(fmt: str, at: usize) -> str
+fn localized(token: str) -> str
+fn format_date(a: *mem.Arena, ms: f64, fmt: str) -> str
+fn parse_tokens() -> [28]str
+fn numeric_width(token: str) -> usize
+fn parse_date_with_format(a: *mem.Arena, src_text: str, fmt_text: str) -> (f64, bool)
+fn units_of(a: *mem.Arena, s: str) -> []u16
+fn as_date(c: *f.Call, i: usize) -> (f64, f.Value, bool)
+fn num_or(c: *f.Call, i: usize, fallback: f64) -> f64
+fn h_date(c: *f.Call) -> f.Value
+fn h_time(c: *f.Call) -> f.Value
+fn h_now(c: *f.Call) -> f.Value
+fn h_today(c: *f.Call) -> f.Value
+fn extract(c: *f.Call, what: u8) -> f.Value
+fn h_year(c: *f.Call) -> f.Value
+fn h_month(c: *f.Call) -> f.Value
+fn h_day(c: *f.Call) -> f.Value
+fn h_hour(c: *f.Call) -> f.Value
+fn h_minute(c: *f.Call) -> f.Value
+fn h_second(c: *f.Call) -> f.Value
+fn h_century(c: *f.Call) -> f.Value
+fn h_weekday(c: *f.Call) -> f.Value
+fn h_weeknum(c: *f.Call) -> f.Value
+fn h_isoweeknum(c: *f.Call) -> f.Value
+fn h_dateadd(c: *f.Call) -> f.Value
+fn diff_ymd(a: f64, b: f64) -> (f64, f64, f64)
+fn h_datedif(c: *f.Call) -> f.Value
+fn h_datetime_diff(c: *f.Call) -> f.Value
+fn h_days(c: *f.Call) -> f.Value
+fn h_datevalue(c: *f.Call) -> f.Value
+fn h_timevalue(c: *f.Call) -> f.Value
+fn h_edate(c: *f.Call) -> f.Value
+fn h_eomonth(c: *f.Call) -> f.Value
+fn holiday_list(c: *f.Call, index: usize, out: []f64) -> usize
+fn is_holiday(list: []const f64, count: usize, t: f64) -> bool
+fn h_networkdays(c: *f.Call) -> f.Value
+fn h_workday(c: *f.Call) -> f.Value
+fn h_yearfrac(c: *f.Call) -> f.Value
+fn shift_by(c: *f.Call, unit_ms: f64, direction: f64) -> f.Value
+fn h_add_days(c: *f.Call) -> f.Value
+fn h_subtract_days(c: *f.Call) -> f.Value
+fn h_add_minutes(c: *f.Call) -> f.Value
+fn h_subtract_minutes(c: *f.Call) -> f.Value
+fn h_datetime_add(c: *f.Call) -> f.Value
+fn boundary(c: *f.Call, what: u8) -> f.Value
+fn h_firstdayofmonth(c: *f.Call) -> f.Value
+fn h_lastdayofmonth(c: *f.Call) -> f.Value
+fn h_eoweek(c: *f.Call) -> f.Value
+fn h_ewomonth(c: *f.Call) -> f.Value
+fn h_dayofyear(c: *f.Call) -> f.Value
+fn since_now(c: *f.Call, sign: f64) -> f.Value
+fn h_dayssince(c: *f.Call) -> f.Value
+fn h_daysremaining(c: *f.Call) -> f.Value
+fn h_hours_diff(c: *f.Call) -> f.Value
+fn total_of(c: *f.Call, unit_ms: f64) -> f.Value
+fn h_totalhours(c: *f.Call) -> f.Value
+fn h_totalminutes(c: *f.Call) -> f.Value
+fn h_is_before(c: *f.Call) -> f.Value
+fn h_is_after(c: *f.Call) -> f.Value
+fn h_dateonly(c: *f.Call) -> f.Value
+fn h_datestr(c: *f.Call) -> f.Value
+fn h_timestr(c: *f.Call) -> f.Value
+fn h_totimestamp(c: *f.Call) -> f.Value
+fn h_fromtimestamp(c: *f.Call) -> f.Value
+fn h_datetime_parse(c: *f.Call) -> f.Value
+fn plural(a: *mem.Arena, count: f64, name: str) -> str
+fn relative_text(a: *mem.Arena, value_ms: f64, now_ms: f64) -> str
+fn h_fromnow(c: *f.Call) -> f.Value
+fn h_daterange(c: *f.Call) -> f.Value
+fn offset_zone_seconds(name: str) -> (i64, bool)
+fn h_set_timezone(c: *f.Call) -> f.Value
+fn h_set_locale(c: *f.Call) -> f.Value
+fn add(r: *f.Registry, a: *mem.Arena, name: str, aliases: []const str, volatile_fn: bool, low: i32, high: i32, handler: f.Handler) -> err
+fn al1(a: *mem.Arena, x: str) -> []const str
+fn al2(a: *mem.Arena, x: str, y: str) -> []const str
+fn register(r: *f.Registry, a: *mem.Arena) -> err
+```
+
+The 58 date and time functions of the formula library (DATE, NOW, DATEADD, DATEDIF, WEEKNUM, WORKDAY, time zones through `SET_TIMEZONE`, an English `SET_LOCALE`, DATERANGE records), over millisecond timestamps with JavaScript's ISO and legacy numeric date parsing. `format_date` and `parse_date_with_format` are the moment-style format language. `register` adds them to a registry.
+
+### `e.algo.formula.convert`
+
+```neper
+fn to_fixed(a: *mem.Arena, x: f64, digits: usize) -> str
+fn h_totext(c: *f.Call) -> f.Value
+fn h_tonumber(c: *f.Call) -> f.Value
+fn h_todate(c: *f.Call) -> f.Value
+fn h_datetime_format(c: *f.Call) -> f.Value
+fn add(r: *f.Registry, a: *mem.Arena, name: str, aliases: []const str, low: i32, high: i32, handler: f.Handler) -> err
+fn aliases3(a: *mem.Arena, x: str, y: str, z: str) -> []const str
+fn aliases4(a: *mem.Arena, x: str, y: str, z: str, w: str) -> []const str
+fn aliases1(a: *mem.Arena, x: str) -> []const str
+fn register(r: *f.Registry, a: *mem.Arena) -> err
+```
+
+The four conversion functions of the formula library: TOTEXT (with `0.00` formats through `to_fixed`, JavaScript's `toFixed`), TONUMBER, TODATE and DATETIME_FORMAT. `register` adds them to a registry.
+
+### `e.algo.formula.misc`
+
+```neper
+fn items_of(a: *mem.Arena, v: f.Value) -> []const f.Value
+fn values_of(a: *mem.Arena, count: usize) -> []f.Value
+fn array_of(out: []f.Value, n: usize) -> f.Value
+fn js_number(a: *mem.Arena, v: f.Value) -> f64
+fn js_trim(s: str) -> str
+fn hex_of(a: *mem.Arena, digest: []const u8) -> str
+fn h_random(c: *f.Call) -> f.Value
+fn hex_digit(v: u64) -> u8
+fn h_uuid(c: *f.Call) -> f.Value
+fn h_md5(c: *f.Call) -> f.Value
+fn h_sha1(c: *f.Call) -> f.Value
+fn h_sha256(c: *f.Call) -> f.Value
+fn h_crc32(c: *f.Call) -> f.Value
+fn decode_mode(c: *f.Call) -> bool
+fn sextet_none() -> u32
+fn b64_index(b: u8) -> u32
+fn byte_at(vals: []const u32, i: usize) -> u32
+fn base64_decode(c: *f.Call, s: str) -> f.Value
+fn h_base64(c: *f.Call) -> f.Value
+fn upper_digit(v: u8) -> u8
+fn encode_component(a: *mem.Arena, s: str) -> str
+fn h_urlencode(c: *f.Call) -> f.Value
+fn h_generatepassword(c: *f.Call) -> f.Value
+fn element_scope(c: *f.Call, element: f.Value, index: usize, with_acc: bool, acc: f.Value) -> *const f.Scope
+fn eval_element(c: *f.Call, node: f.Node, element: f.Value, index: usize) -> f.Value
+fn h_map(c: *f.Call) -> f.Value
+fn h_filter(c: *f.Call) -> f.Value
+fn h_reduce(c: *f.Call) -> f.Value
+fn sort_order(a: *mem.Arena, x: f.Value, y: f.Value, desc: bool) -> f64
+fn sort_small(a: *mem.Arena, order: []usize, keys: []const f.Value, desc: bool)
+fn merge_sort(a: *mem.Arena, order: []usize, tmp: []usize, keys: []const f.Value, desc: bool, lo: usize, hi: usize)
+fn h_sort(c: *f.Call) -> f.Value
+fn h_any(c: *f.Call) -> f.Value
+fn h_all(c: *f.Call) -> f.Value
+fn join_parts(a: *mem.Arena, parts: []const str, delim: str) -> str
+fn h_join(c: *f.Call) -> f.Value
+fn h_flat(c: *f.Call) -> f.Value
+fn operands(c: *f.Call) -> []const f.Value
+fn h_unique(c: *f.Call) -> f.Value
+fn h_compact(c: *f.Call) -> f.Value
+fn is_ws_byte(b: u8) -> bool
+fn is_line_break(b: u8) -> bool
+fn criterion(s: str) -> (str, str, bool)
+fn h_collect(c: *f.Call) -> f.Value
+fn h_get(c: *f.Call) -> f.Value
+fn h_first(c: *f.Call) -> f.Value
+fn h_last(c: *f.Call) -> f.Value
+fn h_split(c: *f.Call) -> f.Value
+fn slice_position(a: *mem.Arena, raw: f.Value, len: usize, fallback: f64) -> f64
+fn h_slice(c: *f.Call) -> f.Value
+fn host_value(c: *f.Call, key: str) -> (f.Value, bool)
+fn host_or_blank(c: *f.Call, key: str) -> f.Value
+fn h_row(c: *f.Call) -> f.Value
+fn h_tableid(c: *f.Call) -> f.Value
+fn h_appid(c: *f.Call) -> f.Value
+fn h_realmid(c: *f.Call) -> f.Value
+fn h_userid(c: *f.Call) -> f.Value
+fn h_createdon(c: *f.Call) -> f.Value
+fn h_updatedon(c: *f.Call) -> f.Value
+fn h_createdby(c: *f.Call) -> f.Value
+fn h_updatedby(c: *f.Call) -> f.Value
+fn h_browseragent(c: *f.Call) -> f.Value
+fn h_currentuser(c: *f.Call) -> f.Value
+fn h_getrecords(c: *f.Call) -> f.Value
+fn h_getfieldvalues(c: *f.Call) -> f.Value
+fn h_children(c: *f.Call) -> f.Value
+fn h_ancestors(c: *f.Call) -> f.Value
+fn h_isnew(c: *f.Call) -> f.Value
+fn named(fields: []const f.Field, name: str) -> f.Value
+fn h_ischanged(c: *f.Call) -> f.Value
+fn h_priorvalue(c: *f.Call) -> f.Value
+fn field_name_of(node: f.Node) -> (str, bool)
+fn h_name(c: *f.Call) -> f.Value
+fn meta_for(c: *f.Call, node: f.Node) -> ([]const f.Field, bool)
+fn h_property(c: *f.Call) -> f.Value
+fn h_properties(c: *f.Call) -> f.Value
+fn from_json(a: *mem.Arena, v: json.Value) -> f.Value
+fn is_digit(b: u8) -> bool
+
+type Step = struct { key: str, index: f64, numeric: bool }
+
+fn path_steps(a: *mem.Arena, path: str) -> []Step
+fn h_jsonquery(c: *f.Call) -> f.Value
+
+type Xml = struct {
+
+fn xml_ws(b: u8) -> bool
+fn xml_starts(x: *Xml, lit: str) -> bool
+fn xml_skip_ws(x: *Xml)
+fn xml_past(x: *Xml, needle: str)
+fn xml_push_run(x: *Xml, node: usize, from: usize, to: usize)
+fn xml_node(x: *Xml, parent: usize, has_parent: bool) -> usize
+fn xml_text(a: *mem.Arena, x: *Xml, node: usize) -> str
+
+type Seg = struct { tag: str, index: f64, indexed: bool }
+
+fn xml_seg(s: str) -> Seg
+fn h_xmlquery(c: *f.Call) -> f.Value
+fn add(r: *f.Registry, a: *mem.Arena, name: str, aliases: []const str, category: str, lazy: bool, once: bool, volatile_fn: bool, low: i32, high: i32, handler: f.Handler) -> err
+fn alias1(a: *mem.Arena, x: str) -> []const str
+fn alias2(a: *mem.Arena, x: str, y: str) -> []const str
+fn alias3(a: *mem.Arena, x: str, y: str, z: str) -> []const str
+fn alias4(a: *mem.Arena, x: str, y: str, z: str, w: str) -> []const str
+fn register(r: *f.Registry, a: *mem.Arena) -> err
+```
+
+The random/hash/encode, array, reference and extraction functions of the formula library (49 functions): RANDOM, UUID, MD5, SHA1, SHA256, CRC32, BASE64, URLENCODE, GENERATEPASSWORD; the lambda forms MAP, FILTER, REDUCE, SORT (V8's order for ties and inconsistent comparisons), ANY, ALL and JOIN, FLAT, UNIQUE, COMPACT, COLLECT, GET, SPLIT, SLICE; ROW, CURRENTUSER, ISCHANGED, NAME, PROPERTY and the other host references (read from `Context.host`, `prior`, `meta`); JSONQUERY and XMLQUERY. `register` adds them to a registry.
+
+### `e.algo.formula.library`
+
+```neper
+fn build(a: *mem.Arena) -> (f.Registry, err)
+```
+
+The whole formula library in one registry: `build` registers LET, LETS and every function group, 279 functions under 330 names, the set appdor's default registry holds.
 
 ### `e.algo.geo`
 

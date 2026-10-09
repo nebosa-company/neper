@@ -329,6 +329,13 @@
     "e.algo.egraph",
     "e.algo.findings",
     "e.algo.formula",
+    "e.algo.formula.basic",
+    "e.algo.formula.math",
+    "e.algo.formula.text",
+    "e.algo.formula.datetime",
+    "e.algo.formula.convert",
+    "e.algo.formula.misc",
+    "e.algo.formula.library",
     "e.algo.geo",
     "e.algo.predicate",
     "e.algo.privacy",
@@ -4353,6 +4360,122 @@
     "e.text.unicode",
     "e.text.utf8",
     "e.time"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.formula.basic",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.math",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.formula.math",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.math",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.formula.text",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.math",
+    "e.mem",
+    "e.str",
+    "e.text.regex",
+    "e.text.unicode",
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.formula.datetime",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.math",
+    "e.mem",
+    "e.str",
+    "e.text.unicode",
+    "e.text.utf8",
+    "e.time",
+    "e.tz"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.formula.convert",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.formula.datetime",
+    "e.math",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.formula.misc",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.formula.text",
+    "e.algo.hash",
+    "e.bytes",
+    "e.crypto.hash",
+    "e.fmt.json",
+    "e.math",
+    "e.mem",
+    "e.str",
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.formula.library",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.formula.basic",
+    "e.algo.formula.convert",
+    "e.algo.formula.datetime",
+    "e.algo.formula.math",
+    "e.algo.formula.misc",
+    "e.algo.formula.text",
+    "e.mem"
    ],
    "blocked_by": []
   },

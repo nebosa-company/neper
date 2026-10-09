@@ -35,7 +35,7 @@ use e.time
 
 // --- Values ---------------------------------------------------------------------------------------------------
 
-type Kind = enum u8 { Blank, Number, Text, Bool, Date, Array, Error }
+type Kind = enum u8 { Blank, Number, Text, Bool, Date, Array, Error, Record }
 
 // A formula value. `n` is the number, the date in milliseconds since the epoch, or 1/0 for a boolean; `s` is the
 // text or an error's message; `items` the elements of an array; `code` an error's code.
@@ -84,9 +84,14 @@ fn date(ms: f64) -> Value { ret Value { kind: .Date, n: ms, s: "", items: zero_i
 
 fn array(items: []const Value) -> Value { ret Value { kind: .Array, n: 0.0f64, s: "", items: items, code: 0u8 } }
 
+// A two-field range record (DATERANGE): `items` are its start and end.
+fn record(items: []const Value) -> Value { ret Value { kind: .Record, n: 0.0f64, s: "", items: items, code: 0u8 } }
+
 fn make_error(code: u8, message: str) -> Value { ret Value { kind: .Error, n: 0.0f64, s: message, items: zero_items(), code: code } }
 
 fn div_zero() -> Value { ret make_error(E_DIV0, "Division by zero") }
+
+fn div_zero_message(message: str) -> Value { ret make_error(E_DIV0, message) }
 
 fn value_error(message: str) -> Value { ret make_error(E_VALUE, message) }
 
@@ -514,6 +519,71 @@ fn parse_iso(s: str) -> (f64, bool) {
     ret (millis, true)
 }
 
+// The legacy reading JavaScript gives to text that is only numbers and separators (`/ - , . space`), after V8's
+// DayComposer: one to three numbers; the first is a year when it is not a day (1..31), else the month, then the
+// day, then the year; a missing day or month is 1 and a missing year is 2001; a year of 0..49 is 20xx and 50..99
+// is 19xx. `1` is 1 January 2001, `5` is 1 May 2001, `12/31/1999` and `1999-12-31` are what they look like.
+fn parse_legacy_numeric(s: str) -> (f64, bool) {
+    var comps: [3]f64 = zero
+    var count = 0usize
+    var i = 0usize
+    var any = false
+    while i < s.len {
+        let b = s[i]
+        if is_digit(b) {
+            var v = 0.0f64
+            var digits = 0usize
+            while i < s.len && is_digit(s[i]) {
+                v = v * 10.0f64 + f64(s[i] - 48u8)
+                digits += 1usize
+                i += 1usize
+            }
+            if digits > 9usize || count >= 3usize { ret (0.0f64, false) }
+            comps[count] = v
+            count += 1usize
+            any = true
+        } else if b == 47u8 || b == 45u8 || b == 44u8 || b == 46u8 || b == 32u8 {
+            i += 1usize
+        } else {
+            ret (0.0f64, false)
+        }
+    }
+    if !any { ret (0.0f64, false) }
+    while count < 3usize {
+        comps[count] = 1.0f64
+        count += 1usize
+    }
+    var year = 0.0f64
+    var month = 0.0f64
+    var day = 0.0f64
+    let first_is_day = comps[0usize] >= 1.0f64 && comps[0usize] <= 31.0f64
+    if !first_is_day {
+        year = comps[0usize]
+        month = comps[1usize]
+        day = comps[2usize]
+    } else {
+        month = comps[0usize]
+        day = comps[1usize]
+        year = comps[2usize]
+    }
+    if year >= 0.0f64 && year <= 49.0f64 { year += 2000.0f64 } else if year >= 50.0f64 && year <= 99.0f64 { year += 1900.0f64 }
+    if month < 1.0f64 || month > 12.0f64 || day < 1.0f64 || day > 31.0f64 { ret (0.0f64, false) }
+    // The day rolls over a short month the way `Date.UTC` does (31 April is 1 May).
+    let first = f64(time.days_from_civil(i64(year), i64(month), 1i64))
+    let ms = (first + day - 1.0f64) * ms_per_day()
+    if ms > 8640000000000000.0f64 || ms < -8640000000000000.0f64 { ret (0.0f64, false) }
+    ret (ms, true)
+}
+
+// The instant a date text names: ISO-8601, or the numeric legacy form above.
+fn parse_date_text(s: str) -> (f64, bool) {
+    let (iso, good) = parse_iso(s)
+    if good { ret (iso, true) }
+    if is_naive_datetime(s) { ret (0.0f64, false) }
+    let (legacy, legacy_ok) = parse_legacy_numeric(s)
+    ret (legacy, legacy_ok)
+}
+
 // A date-time text that names no zone: `YYYY-MM-DD[T ]HH:MM[:SS[.f+]]`.
 fn is_naive_datetime(s: str) -> bool {
     if s.len < 16usize { ret false }
@@ -615,7 +685,11 @@ fn to_text(a: *mem.Arena, v: Value) -> Value {
         ret text("false")
     }
     if v.kind == .Number { ret text(number_text(a, v.n)) }
-    if v.kind == .Date { ret text(date_iso(a, v.n)) }
+    if v.kind == .Date {
+        if v.n != v.n { ret generic_error("Invalid time value") }
+        ret text(date_iso(a, v.n))
+    }
+    if v.kind == .Record { ret text("[object Object]") }
     // An array: the elements as text, blank as empty, joined by commas.
     var out = ""
     var i = 0usize
@@ -672,6 +746,7 @@ fn to_bool(v: Value) -> bool {
         ret true
     }
     if v.kind == .Date { ret true }
+    if v.kind == .Record { ret true }
     ret v.items.len > 0usize
 }
 
@@ -688,7 +763,7 @@ fn to_date(a: *mem.Arena, v: Value) -> Value {
         ret date(math.trunc[f64](v.n))
     }
     if v.kind == .Text {
-        let (ms, good) = parse_iso(v.s)
+        let (ms, good) = parse_date_text(v.s)
         if good { ret date(ms) }
         ret value_error(join3(a, "Cannot convert \"", v.s, "\" to a date"))
     }
@@ -1592,7 +1667,7 @@ fn register(r: *Registry, a: *mem.Arena, entry: Entry) -> err {
     k = 0usize
     while k < entry.aliases.len {
         let alias_key = normalize_name(a, entry.aliases[k])
-        if !str.eq(alias_key, e.key) {
+        if find_key(r, alias_key) >= r.key_count {
             r.keys[r.key_count] = alias_key
             r.owners[r.key_count] = r.count
             r.key_count += 1usize
@@ -1644,7 +1719,10 @@ type FieldGetter = fn(*void, str) -> (Value, bool)
 // The evaluation context. `fields` are the host's cell values by display name (matched exactly, then without
 // regard to case); `get_field` overrides them when set. `formulas` are the other formula fields beside this one
 // and `field_name` the one being evaluated, which is what lets a cycle be named. `now` is the clock for the
-// volatile functions, in milliseconds since the epoch; `user` is for the host's own handlers. A zero
+// volatile functions, in milliseconds since the epoch; `user` is for the host's own handlers. `host` holds the
+// host's named values for the reference functions (rowId, tableId, appId, realmId, userId, createdOn, updatedOn,
+// createdBy, updatedBy, browserAgent, currentUser, userName); `prior` and `changed` are the record before the
+// change, for ISCHANGED and PRIORVALUE, `is_new` is ISNEW and `meta` the field configuration for PROPERTY. A zero
 // `max_steps` is 2,000,000 and a zero `max_nodes` 10,000.
 type Context = struct {
     fields: []const Field,
@@ -1659,8 +1737,19 @@ type Context = struct {
     strict_refs: bool,
     now: f64,
     has_now: bool,
+    random_seed: u64,
     user: *void,
+    host: []const Field,
+    prior: []const Field,
+    has_prior: bool,
+    changed: []const str,
+    has_changed: bool,
+    is_new: bool,
+    meta: []const FieldMeta,
 }
+
+// The configured properties of one field, for PROPERTY and PROPERTIES.
+type FieldMeta = struct { field: str, props: []const Field }
 
 type Cached = struct { name: str, node: Node, parsed: bool }
 
@@ -1676,6 +1765,7 @@ type Evaluator = struct {
     cache: []Cached,
     cache_count: usize,
     empty: Scope,
+    rng: u64,
 }
 
 fn evaluator(a: *mem.Arena, reg: *const Registry, ctx: *const Context) -> Evaluator {
@@ -1684,6 +1774,8 @@ fn evaluator(a: *mem.Arena, reg: *const Registry, ctx: *const Context) -> Evalua
     ev.reg = reg
     ev.ctx = ctx
     ev.max_steps = ctx.max_steps
+    ev.rng = ctx.random_seed
+    if ev.rng == 0u64 { ev.rng = 88172645463325252u64 }
     if ev.max_steps == 0usize { ev.max_steps = 2000000usize }
     let (stack, stack_error) = mem.alloc[str](a, 64usize)
     if stack_error == ok { ev.resolving = stack }
@@ -2238,4 +2330,90 @@ fn visit_order(node: usize, edges: []const []const usize, seen: []bool, formulas
 // or `error`.
 fn infer_type(a: *mem.Arena, source: str, ctx: *const Context, reg: *const Registry) -> str {
     ret type_of(evaluate(a, source, ctx, reg))
+}
+
+// A pseudo-random number in [0, 1) from the evaluator's own generator (xorshift64*, seeded from the context), so
+// the volatile functions are reproducible for a given `random_seed`.
+fn random(ev: *Evaluator) -> f64 {
+    var x = ev.rng
+    x = x ^ (x >> 12u64)
+    x = x ^ (x << 25u64)
+    x = x ^ (x >> 27u64)
+    ev.rng = x
+    let r = x *% 2685821657736338717u64
+    ret f64(r >> 11u64) / 9007199254740992.0f64
+}
+
+fn weekday_name(index: i64) -> str {
+    if index == 0i64 { ret "Sun" }
+    if index == 1i64 { ret "Mon" }
+    if index == 2i64 { ret "Tue" }
+    if index == 3i64 { ret "Wed" }
+    if index == 4i64 { ret "Thu" }
+    if index == 5i64 { ret "Fri" }
+    ret "Sat"
+}
+
+fn month_name(month: i64) -> str {
+    if month == 1i64 { ret "Jan" }
+    if month == 2i64 { ret "Feb" }
+    if month == 3i64 { ret "Mar" }
+    if month == 4i64 { ret "Apr" }
+    if month == 5i64 { ret "May" }
+    if month == 6i64 { ret "Jun" }
+    if month == 7i64 { ret "Jul" }
+    if month == 8i64 { ret "Aug" }
+    if month == 9i64 { ret "Sep" }
+    if month == 10i64 { ret "Oct" }
+    if month == 11i64 { ret "Nov" }
+    ret "Dec"
+}
+
+// JavaScript's `Date.prototype.toString()` for a UTC host: `Wed Mar 01 2026 12:30:45 GMT+0000 (Coordinated
+// Universal Time)`.
+fn date_js_string(a: *mem.Arena, ms: f64) -> str {
+    if ms != ms { ret "Invalid Date" }
+    let days = math.floor[f64](ms / ms_per_day())
+    let into_day = ms - days * ms_per_day()
+    let (year, month, day) = time.civil_from_days(i64(days))
+    let whole = i64(into_day)
+    var weekday = (i64(days) + 4i64) % 7i64
+    if weekday < 0i64 { weekday += 7i64 }
+    let (out, e) = mem.alloc[u8](a, 80usize)
+    if e != ok { ret "" }
+    var w = 0usize
+    let w1 = weekday_name(weekday)
+    var i = 0usize
+    while i < 3usize {
+        out[w] = w1[i]
+        w += 1usize
+        i += 1usize
+    }
+    out[w] = 32u8
+    w += 1usize
+    let m1 = month_name(month)
+    i = 0usize
+    while i < 3usize {
+        out[w] = m1[i]
+        w += 1usize
+        i += 1usize
+    }
+    out[w] = 32u8
+    w = put_int(out, w + 1usize, day, 2usize)
+    out[w] = 32u8
+    w = put_int(out, w + 1usize, year, 4usize)
+    out[w] = 32u8
+    w = put_int(out, w + 1usize, whole / 3600000i64, 2usize)
+    out[w] = 58u8
+    w = put_int(out, w + 1usize, whole / 60000i64 % 60i64, 2usize)
+    out[w] = 58u8
+    w = put_int(out, w + 1usize, whole / 1000i64 % 60i64, 2usize)
+    let tail = " GMT+0000 (Coordinated Universal Time)"
+    i = 0usize
+    while i < tail.len {
+        out[w] = tail[i]
+        w += 1usize
+        i += 1usize
+    }
+    ret out[0usize..w]
 }

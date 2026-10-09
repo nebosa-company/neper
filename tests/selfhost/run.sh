@@ -3274,6 +3274,48 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.algo.formula.library: all 279 functions in one registry (L027, D2298)
+algo_formula_library_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_formula_library/src/main.e" "$repo" x64 linux "$test_build/algo-formula-library-selfhost")
+[ "$algo_formula_library_written" = 'executable written' ]
+chmod +x "$test_build/algo-formula-library-selfhost"
+algo_formula_library_output=$("$test_build/algo-formula-library-selfhost")
+[ "$algo_formula_library_output" = 'algo formula library ok' ]
+# e.algo.formula.misc against appdor's engine (L027, D2298)
+algo_formula_misc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_formula_misc/src/main.e" "$repo" x64 linux "$test_build/algo-formula-misc-selfhost")
+[ "$algo_formula_misc_written" = 'executable written' ]
+chmod +x "$test_build/algo-formula-misc-selfhost"
+algo_formula_misc_output=$("$test_build/algo-formula-misc-selfhost")
+[ "$algo_formula_misc_output" = 'algo formula misc ok' ]
+# e.algo.formula.convert against appdor's engine (L027, D2298)
+algo_formula_convert_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_formula_convert/src/main.e" "$repo" x64 linux "$test_build/algo-formula-convert-selfhost")
+[ "$algo_formula_convert_written" = 'executable written' ]
+chmod +x "$test_build/algo-formula-convert-selfhost"
+algo_formula_convert_output=$("$test_build/algo-formula-convert-selfhost")
+[ "$algo_formula_convert_output" = 'algo formula convert ok' ]
+# e.algo.formula.datetime against appdor's engine (L027, D2298)
+algo_formula_datetime_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_formula_datetime/src/main.e" "$repo" x64 linux "$test_build/algo-formula-datetime-selfhost")
+[ "$algo_formula_datetime_written" = 'executable written' ]
+chmod +x "$test_build/algo-formula-datetime-selfhost"
+algo_formula_datetime_output=$("$test_build/algo-formula-datetime-selfhost")
+[ "$algo_formula_datetime_output" = 'algo formula datetime ok' ]
+# e.algo.formula.text against appdor's engine (L027, D2298)
+algo_formula_text_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_formula_text/src/main.e" "$repo" x64 linux "$test_build/algo-formula-text-selfhost")
+[ "$algo_formula_text_written" = 'executable written' ]
+chmod +x "$test_build/algo-formula-text-selfhost"
+algo_formula_text_output=$("$test_build/algo-formula-text-selfhost")
+[ "$algo_formula_text_output" = 'algo formula text ok' ]
+# e.algo.formula.math against appdor's engine (L027, D2298)
+algo_formula_math_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_formula_math/src/main.e" "$repo" x64 linux "$test_build/algo-formula-math-selfhost")
+[ "$algo_formula_math_written" = 'executable written' ]
+chmod +x "$test_build/algo-formula-math-selfhost"
+algo_formula_math_output=$("$test_build/algo-formula-math-selfhost")
+[ "$algo_formula_math_output" = 'algo formula math ok' ]
+# e.algo.formula.basic against appdor's engine (L027, D2298)
+algo_formula_basic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_formula_basic/src/main.e" "$repo" x64 linux "$test_build/algo-formula-basic-selfhost")
+[ "$algo_formula_basic_written" = 'executable written' ]
+chmod +x "$test_build/algo-formula-basic-selfhost"
+algo_formula_basic_output=$("$test_build/algo-formula-basic-selfhost")
+[ "$algo_formula_basic_output" = 'algo formula basic ok' ]
 # e.algo.formula core against appdor's formula engine (L026)
 algo_formula_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_formula/src/main.e" "$repo" x64 linux "$test_build/algo-formula-selfhost")
 [ "$algo_formula_written" = 'executable written' ]

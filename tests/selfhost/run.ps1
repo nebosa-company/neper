@@ -3672,6 +3672,48 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.algo.formula.library: all 279 functions in one registry (L027, D2298)
+$algoFormulaLibraryPath = Join-Path $testBuild 'algo-formula-library-selfhost.exe'
+$algoFormulaLibraryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_formula_library\src\main.e') $repo 'x64' 'windows' $algoFormulaLibraryPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaLibraryWritten -ne 'executable written') { throw 'algo_formula_library emission failed' }
+$algoFormulaLibraryOutput = & $algoFormulaLibraryPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaLibraryOutput -ne 'algo formula library ok') { throw "algo_formula_library answered wrongly: exit $LASTEXITCODE" }
+# e.algo.formula.misc against appdor's engine (L027, D2298)
+$algoFormulaMiscPath = Join-Path $testBuild 'algo-formula-misc-selfhost.exe'
+$algoFormulaMiscWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_formula_misc\src\main.e') $repo 'x64' 'windows' $algoFormulaMiscPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaMiscWritten -ne 'executable written') { throw 'algo_formula_misc emission failed' }
+$algoFormulaMiscOutput = & $algoFormulaMiscPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaMiscOutput -ne 'algo formula misc ok') { throw "algo_formula_misc answered wrongly: exit $LASTEXITCODE" }
+# e.algo.formula.convert against appdor's engine (L027, D2298)
+$algoFormulaConvertPath = Join-Path $testBuild 'algo-formula-convert-selfhost.exe'
+$algoFormulaConvertWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_formula_convert\src\main.e') $repo 'x64' 'windows' $algoFormulaConvertPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaConvertWritten -ne 'executable written') { throw 'algo_formula_convert emission failed' }
+$algoFormulaConvertOutput = & $algoFormulaConvertPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaConvertOutput -ne 'algo formula convert ok') { throw "algo_formula_convert answered wrongly: exit $LASTEXITCODE" }
+# e.algo.formula.datetime against appdor's engine (L027, D2298)
+$algoFormulaDatetimePath = Join-Path $testBuild 'algo-formula-datetime-selfhost.exe'
+$algoFormulaDatetimeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_formula_datetime\src\main.e') $repo 'x64' 'windows' $algoFormulaDatetimePath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaDatetimeWritten -ne 'executable written') { throw 'algo_formula_datetime emission failed' }
+$algoFormulaDatetimeOutput = & $algoFormulaDatetimePath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaDatetimeOutput -ne 'algo formula datetime ok') { throw "algo_formula_datetime answered wrongly: exit $LASTEXITCODE" }
+# e.algo.formula.text against appdor's engine (L027, D2298)
+$algoFormulaTextPath = Join-Path $testBuild 'algo-formula-text-selfhost.exe'
+$algoFormulaTextWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_formula_text\src\main.e') $repo 'x64' 'windows' $algoFormulaTextPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaTextWritten -ne 'executable written') { throw 'algo_formula_text emission failed' }
+$algoFormulaTextOutput = & $algoFormulaTextPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaTextOutput -ne 'algo formula text ok') { throw "algo_formula_text answered wrongly: exit $LASTEXITCODE" }
+# e.algo.formula.math against appdor's engine (L027, D2298)
+$algoFormulaMathPath = Join-Path $testBuild 'algo-formula-math-selfhost.exe'
+$algoFormulaMathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_formula_math\src\main.e') $repo 'x64' 'windows' $algoFormulaMathPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaMathWritten -ne 'executable written') { throw 'algo_formula_math emission failed' }
+$algoFormulaMathOutput = & $algoFormulaMathPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaMathOutput -ne 'algo formula math ok') { throw "algo_formula_math answered wrongly: exit $LASTEXITCODE" }
+# e.algo.formula.basic against appdor's engine (L027, D2298)
+$algoFormulaBasicPath = Join-Path $testBuild 'algo-formula-basic-selfhost.exe'
+$algoFormulaBasicWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_formula_basic\src\main.e') $repo 'x64' 'windows' $algoFormulaBasicPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaBasicWritten -ne 'executable written') { throw 'algo_formula_basic emission failed' }
+$algoFormulaBasicOutput = & $algoFormulaBasicPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaBasicOutput -ne 'algo formula basic ok') { throw "algo_formula_basic answered wrongly: exit $LASTEXITCODE" }
 # e.algo.formula core against appdor's formula engine (L026)
 $algoFormulaPath = Join-Path $testBuild 'algo-formula-selfhost.exe'
 $algoFormulaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_formula\src\main.e') $repo 'x64' 'windows' $algoFormulaPath
