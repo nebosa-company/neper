@@ -3672,6 +3672,18 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.time.calendar.iso_day_count and age_days against datetime.toordinal (L020)
+$timeCalendarIsoPath = Join-Path $testBuild 'time-calendar-iso-selfhost.exe'
+$timeCalendarIsoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_calendar_iso\src\main.e') $repo 'x64' 'windows' $timeCalendarIsoPath
+if ($LASTEXITCODE -ne 0 -or $timeCalendarIsoWritten -ne 'executable written') { throw 'time_calendar_iso emission failed' }
+$timeCalendarIsoOutput = & $timeCalendarIsoPath
+if ($LASTEXITCODE -ne 0 -or $timeCalendarIsoOutput -ne 'time calendar iso ok') { throw "time_calendar_iso answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.semver.at_least loose dotted versions against petcow version_at_least (L020)
+$fmtSemverLoosePath = Join-Path $testBuild 'fmt-semver-loose-selfhost.exe'
+$fmtSemverLooseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_semver_loose\src\main.e') $repo 'x64' 'windows' $fmtSemverLoosePath
+if ($LASTEXITCODE -ne 0 -or $fmtSemverLooseWritten -ne 'executable written') { throw 'fmt_semver_loose emission failed' }
+$fmtSemverLooseOutput = & $fmtSemverLoosePath
+if ($LASTEXITCODE -ne 0 -or $fmtSemverLooseOutput -ne 'fmt semver loose ok') { throw "fmt_semver_loose answered wrongly: exit $LASTEXITCODE" }
 # e.net.cidr IPv4 prefix arithmetic against Python ipaddress (L019)
 $netCidrPath = Join-Path $testBuild 'net-cidr-selfhost.exe'
 $netCidrWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_cidr\src\main.e') $repo 'x64' 'windows' $netCidrPath

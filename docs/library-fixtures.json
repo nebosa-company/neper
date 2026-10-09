@@ -3010,7 +3010,8 @@
    "fixtures": [
     "misc_gaps",
     "text_locale",
-    "time_calendar"
+    "time_calendar",
+    "time_calendar_iso"
    ]
   },
   {

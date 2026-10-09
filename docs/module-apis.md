@@ -7881,6 +7881,7 @@ type DateTime = struct { date: time.Date, time: time.Time }
 type Weekday = enum u8 { Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday }
 type IsoWeek = struct { year: i32, week: u8 }
 type Components = struct { year: i32, month: u8, day: u8, hour: u8, minute: u8, second: u8, nanos: u32, weekday: Weekday, day_of_year: u16 }
+
 error Invalid
 
 fn is_leap_year(year: i32) -> bool
@@ -7910,6 +7911,8 @@ fn parse[PATTERN: str](source: str) -> (DateTime, err)
 fn julian_day_epoch() -> i64
 fn julian_day(date: time.Date) -> (i64, err)
 fn julian_day_to_date(jdn: i64) -> time.Date
+fn iso_day_count(text: str) -> (i64, err)
+fn age_days(today: str, then: str) -> (i64, err)
 ```
 
 This is proleptic Gregorian calendar arithmetic with ISO-8601 weekdays and weeks.
@@ -7917,6 +7920,8 @@ Adding months or years clamps the day to the last valid day of the target month.
 Patterns are compile-time strings over the closed verbs `yyyy MM dd HH mm ss SSSSSSSSS`;
 punctuation is literal and locale names are deliberately absent. Named zones and
 daylight-saving ambiguity belong to `e.tz`.
+
+`iso_day_count` reads the first ten bytes of a text as a real `YYYY-MM-DD` and counts days from 1970-01-01, and `age_days(today, then)` is the difference (L020, after petcow's baseline age); anything that is not a real date is `Invalid`. Checked by `time_calendar_iso` against `datetime.toordinal`.
 
 ### `e.tz`
 
@@ -12314,10 +12319,10 @@ and backslash escapes. It deliberately excludes interpolation and includes.
 
 ```neper
 type Version = struct { major: u64, minor: u64, patch: u64, prerelease: str, build: str }
-type Partial = struct { major: u64, minor: u64, patch: u64, prerelease: str, x_major: bool, x_minor: bool, x_patch: bool }
-type SetState = struct { all: bool, prerelease_allowed: bool }
+
 error Invalid
 error TooSmall
+
 const DOT: u8 = 46u8
 const DASH: u8 = 45u8
 const PLUS: u8 = 43u8
@@ -12342,6 +12347,8 @@ const OP_GE: u8 = 5u8
 const OP_CARET: u8 = 6u8
 const OP_TILDE: u8 = 7u8
 
+type Partial = struct { major: u64, minor: u64, patch: u64, prerelease: str, x_major: bool, x_minor: bool, x_patch: bool }
+
 fn is_digit(b: u8) -> bool
 fn is_ident_byte(b: u8) -> bool
 fn is_numeric(s: str) -> bool
@@ -12365,6 +12372,9 @@ fn partial_component(s: str, present: bool) -> (u64, bool, err)
 fn parse_partial(text: str) -> (Partial, err)
 fn version_of(major: u64, minor: u64, patch: u64, prerelease: str) -> Version
 fn test_op(op: u8, bound: Version, v: Version) -> bool
+
+type SetState = struct { all: bool, prerelease_allowed: bool }
+
 fn apply(s: *SetState, op: u8, bound: Version, v: Version)
 fn apply_caret(s: *SetState, p: Partial, v: Version)
 fn apply_tilde(s: *SetState, p: Partial, v: Version)
@@ -12374,11 +12384,17 @@ fn split_op(token: str) -> (u8, usize)
 fn next_token(s: str, at: *usize) -> (str, bool)
 fn satisfies_set(v: Version, set: str) -> (bool, err)
 fn satisfies(v: Version, range: str) -> (bool, err)
+fn component_at(s: str, index: usize) -> (u64, str, bool)
+fn component_count(s: str) -> usize
+fn cmp_loose(have: str, want: str) -> i32
+fn at_least(have: str, want: str) -> bool
 ```
 
 `parse` (SemVer 2.0.0 with an optional `v`), `cmp` (spec precedence; build ignored),
 `format` and `satisfies` over node-style ranges (`^ ~ = < <= > >=`, wildcards, hyphen
 ranges, whitespace AND, `||` OR) desugared as read.
+
+`at_least` and `cmp_loose` (L020) compare the loose dotted versions a package manager prints (`10.2` against `9.6`, `1.2-rc1` below `1.2`, a missing component 0) numerically, after petcow's `version_at_least`; a component past 64 bits saturates. Checked by `fmt_semver_loose`.
 
 ### `e.fmt.cbor`
 

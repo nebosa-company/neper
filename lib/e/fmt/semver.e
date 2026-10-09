@@ -549,3 +549,86 @@ fn satisfies(v: Version, range: str) -> (bool, err) {
     }
     ret (any, ok)
 }
+
+// ---------------------------------------------------------------------------
+// Loose dotted versions (L020), after petcow's `version_at_least`: the version strings a package manager or
+// a vendor prints (`17.2`, `1.27.4`, `1.2-rc1`, `2.0.0.1`) which are not SemVer, compared numerically.
+//
+// A string splits on dots; each component is its leading digits (a number, 0 when there are none) and the
+// rest as a suffix. Components compare as numbers, a missing component is 0, and at an equal number the
+// suffixes decide: no suffix is the release itself and outranks any suffix (`1.2` is above `1.2-rc1`), and two
+// suffixes compare bytewise. Lexical comparison of the whole text is the bug this avoids (`10.2` sorts before
+// `9.6`). A number too long for 64 bits saturates at the maximum (petcow reads it as 0).
+
+// Component `index` of `s`: its number, its suffix, and whether the string has one.
+fn component_at(s: str, index: usize) -> (u64, str, bool) {
+    var start = 0usize
+    var seen = 0usize
+    var at = 0usize
+    while at <= s.len {
+        if at == s.len || s[at] == DOT {
+            if seen == index {
+                var digits_end = start
+                var value = 0u64
+                while digits_end < at && is_digit(s[digits_end]) {
+                    let digit = u64(s[digits_end] - ZERO)
+                    if value > (18446744073709551615u64 - digit) / 10u64 { value = 18446744073709551615u64 } else { value = value * 10u64 + digit }
+                    digits_end += 1usize
+                }
+                ret (value, s[digits_end..at], true)
+            }
+            seen += 1usize
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    ret (0u64, s[0usize..0usize], false)
+}
+
+fn component_count(s: str) -> usize {
+    var count = 1usize
+    var at = 0usize
+    while at < s.len {
+        if s[at] == DOT { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+// -1, 0 or 1 as `have` is below, equal to or above `want`.
+fn cmp_loose(have: str, want: str) -> i32 {
+    var most = component_count(have)
+    if component_count(want) > most { most = component_count(want) }
+    var i = 0usize
+    while i < most {
+        let (a_number, a_suffix, a_present) = component_at(have, i)
+        let (b_number, b_suffix, b_present) = component_at(want, i)
+        if a_number != b_number {
+            if a_number > b_number { ret 1i32 }
+            ret -1i32
+        }
+        let a_empty = a_suffix.len == 0usize
+        let b_empty = b_suffix.len == 0usize
+        if a_empty && !b_empty { ret 1i32 }
+        if !a_empty && b_empty { ret -1i32 }
+        var at = 0usize
+        while at < a_suffix.len && at < b_suffix.len {
+            if a_suffix[at] != b_suffix[at] {
+                if a_suffix[at] > b_suffix[at] { ret 1i32 }
+                ret -1i32
+            }
+            at += 1usize
+        }
+        if a_suffix.len != b_suffix.len {
+            if a_suffix.len > b_suffix.len { ret 1i32 }
+            ret -1i32
+        }
+        i += 1usize
+    }
+    ret 0i32
+}
+
+// Whether `have` is at least `want` (equal counts).
+fn at_least(have: str, want: str) -> bool {
+    ret cmp_loose(have, want) >= 0i32
+}

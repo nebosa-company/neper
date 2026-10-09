@@ -314,3 +314,37 @@ fn julian_day(date: time.Date) -> (i64, err) {
 fn julian_day_to_date(jdn: i64) -> time.Date {
     ret date_of(jdn - julian_day_epoch())
 }
+
+// ---------------------------------------------------------------------------
+// ISO day counts from text (L020), after petcow's baseline age: the first ten bytes of `text` must be a real
+// `YYYY-MM-DD` (a longer timestamp such as `2026-07-01T00:00:00Z` is fine, its time ignored), counted in days
+// from 1970-01-01. A short text, a non-digit, month 13 or 30 February is `Invalid`; petcow's own helper would
+// have run its arithmetic on them.
+fn iso_day_count(text: str) -> (i64, err) {
+    if text.len < 10usize { ret (0i64, Invalid) }
+    if text[4usize] != 45u8 || text[7usize] != 45u8 { ret (0i64, Invalid) }
+    var year = 0i64
+    var month = 0i64
+    var day = 0i64
+    var i = 0usize
+    while i < 10usize {
+        if i != 4usize && i != 7usize {
+            if text[i] < 48u8 || text[i] > 57u8 { ret (0i64, Invalid) }
+            let digit = i64(text[i] - 48u8)
+            if i < 4usize { year = year * 10i64 + digit } else if i < 7usize { month = month * 10i64 + digit } else { day = day * 10i64 + digit }
+        }
+        i += 1usize
+    }
+    if month < 1i64 || month > 12i64 { ret (0i64, Invalid) }
+    if day < 1i64 || day > time.days_in_month(year, month) { ret (0i64, Invalid) }
+    ret (time.days_from_civil(year, month, day), ok)
+}
+
+// The whole days from the date in `then` to the date in `today` (negative when `then` is later).
+fn age_days(today: str, then: str) -> (i64, err) {
+    let (a, a_error) = iso_day_count(today)
+    if a_error != ok { ret (0i64, a_error) }
+    let (b, b_error) = iso_day_count(then)
+    if b_error != ok { ret (0i64, b_error) }
+    ret (a - b, ok)
+}

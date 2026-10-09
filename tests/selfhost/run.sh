@@ -3274,6 +3274,18 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.time.calendar.iso_day_count and age_days against datetime.toordinal (L020)
+time_calendar_iso_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_calendar_iso/src/main.e" "$repo" x64 linux "$test_build/time-calendar-iso-selfhost")
+[ "$time_calendar_iso_written" = 'executable written' ]
+chmod +x "$test_build/time-calendar-iso-selfhost"
+time_calendar_iso_output=$("$test_build/time-calendar-iso-selfhost")
+[ "$time_calendar_iso_output" = 'time calendar iso ok' ]
+# e.fmt.semver.at_least loose dotted versions against petcow version_at_least (L020)
+fmt_semver_loose_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_semver_loose/src/main.e" "$repo" x64 linux "$test_build/fmt-semver-loose-selfhost")
+[ "$fmt_semver_loose_written" = 'executable written' ]
+chmod +x "$test_build/fmt-semver-loose-selfhost"
+fmt_semver_loose_output=$("$test_build/fmt-semver-loose-selfhost")
+[ "$fmt_semver_loose_output" = 'fmt semver loose ok' ]
 # e.net.cidr IPv4 prefix arithmetic against Python ipaddress (L019)
 net_cidr_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_cidr/src/main.e" "$repo" x64 linux "$test_build/net-cidr-selfhost")
 [ "$net_cidr_written" = 'executable written' ]
