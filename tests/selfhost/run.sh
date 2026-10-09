@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.net.ftp: PASV/EPSV parsers, scripted control channel, live plain, PASV-fallback and FTPS sessions on loopback (L084, D2277)
+net_ftp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_ftp/src/main.e" "$repo" x64 linux "$test_build/net-ftp-selfhost")
+[ "$net_ftp_written" = 'executable written' ]
+chmod +x "$test_build/net-ftp-selfhost"
+net_ftp_output=$("$test_build/net-ftp-selfhost")
+[ "$net_ftp_output" = 'net ftp ok' ]
 # e.net.imap: scripted server byte for byte plus a live STARTTLS session (L083, D2276)
 net_imap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_imap/src/main.e" "$repo" x64 linux "$test_build/net-imap-selfhost")
 [ "$net_imap_written" = 'executable written' ]

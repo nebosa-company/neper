@@ -9555,6 +9555,79 @@ responses are collected up to the completion, literals stay inline in the respon
 `TooLarge`, and arguments with CR, LF, NUL or a byte above 127 are `Invalid` before they are written. No
 APPEND, no IDLE, no local store.
 
+### `e.net.ftp`
+
+```neper
+type Reply = struct { code: u16, text: str, lines: usize }
+type Session = struct {
+type Collect = struct { a: *mem.Arena, data: []u8, used: usize, limit: usize, failure: err }
+
+error Protocol
+error Rejected
+error Closed
+error TooLarge
+error Invalid
+error Unsupported
+
+const LINE_LIMIT: usize = 2048usize
+const REPLY_LIMIT: usize = 32768usize
+const COMMAND_LIMIT: usize = 2048usize
+
+fn no_reply() -> Reply
+fn digit(b: u8) -> bool
+fn put(buf: []u8, at: *usize, text: []const u8) -> err
+fn clean(text: str) -> bool
+fn parse_number(text: str, at: *usize) -> (u64, bool)
+fn parse_pasv(text: str) -> (u16, bool)
+fn parse_epsv(text: str) -> (u16, bool)
+fn fill(s: *Session) -> err
+fn next_byte(s: *Session) -> (u8, err)
+fn read_reply(s: *Session) -> (Reply, err)
+fn transient(r: Reply) -> bool
+fn exchange(s: *Session, verb: str, argument: str) -> (Reply, err)
+fn expect(s: *Session, reply: Reply, family: u16) -> err
+fn simple(s: *Session, verb: str, argument: str, family: u16) -> (Reply, err)
+fn connect(a: *mem.Arena, source: io.Reader, sink: io.Writer, peer: net.Address) -> (Session, err)
+fn auth_tls(s: *Session, config: tls.ClientConfig) -> err
+fn login(s: *Session, user: str, password: str) -> err
+fn binary(s: *Session) -> err
+fn pwd(s: *Session) -> (str, err)
+fn cwd(s: *Session, path: str) -> err
+fn cdup(s: *Session) -> err
+fn mkd(s: *Session, path: str) -> err
+fn rmd(s: *Session, path: str) -> err
+fn dele(s: *Session, path: str) -> err
+fn rename(s: *Session, from: str, to: str) -> err
+fn size(s: *Session, path: str) -> (u64, err)
+fn mdtm(s: *Session, path: str) -> (str, err)
+fn feat(s: *Session) -> (str, err)
+fn noop(s: *Session) -> err
+fn quit(s: *Session) -> err
+fn passive(s: *Session) -> (u16, err)
+fn data_entropy(s: *Session, out: []u8)
+fn transfer_inner(s: *Session, verb: str, argument: str, upload: bool, src: io.Reader, dst: io.Writer) -> err
+fn transfer(s: *Session, verb: str, argument: str, upload: bool, src: io.Reader, dst: io.Writer) -> err
+fn pump(upload: bool, file_source: *io.Reader, file_sink: *io.Writer, wire_source: *io.Reader, wire_sink: *io.Writer, chunk: []u8) -> err
+fn collect_write(ctx: *void, src: []const u8) -> (usize, err)
+fn collect_flush(ctx: *void) -> err
+fn empty_read(ctx: *void, dst: []u8) -> (usize, err)
+fn nothing_to_send() -> io.Reader
+fn collect_to_buffer(s: *Session, verb: str, argument: str, limit: usize) -> ([]const u8, err)
+fn list(s: *Session, path: str, names_only: bool, limit: usize) -> ([]const u8, err)
+fn retr(s: *Session, path: str, dst: io.Writer) -> err
+fn retrieve(s: *Session, path: str, limit: usize) -> ([]const u8, err)
+fn store(s: *Session, path: str, src: io.Reader) -> err
+```
+
+FTP client over any `io.Reader`/`io.Writer` control pair, with real passive-mode data connections. `connect`
+reads the greeting, `auth_tls` upgrades through e.net.tls and sets PBSZ 0 / PROT P so data connections are TLS
+(FTPS), `login`, `binary`, `pwd`, `cwd`, `cdup`, `mkd`, `rmd`, `dele`, `rename`, `size`, `mdtm`, `feat`, `noop`
+and `quit` are the control commands, and `list`, `retr` (streamed), `retrieve` (into memory under a limit) and
+`store` move data (EPSV, falling back to PASV). The data connection always goes to the control peer's own
+address and takes only the port from the reply, so a server cannot redirect it; each TLS data handshake gets
+fresh derived entropy. A 4xx/5xx reply is `Rejected` with the reply in `Session.last`; a transfer that fails
+midway kills the session (`Closed`). No active mode, MLSD, resume or server side.
+
 ### `e.net.ws`
 
 ```neper

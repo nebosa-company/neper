@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.net.ftp: PASV/EPSV parsers, scripted control channel, live plain, PASV-fallback and FTPS sessions on loopback (L084, D2277)
+$netFtpPath = Join-Path $testBuild 'net-ftp-selfhost.exe'
+$netFtpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_ftp\src\main.e') $repo 'x64' 'windows' $netFtpPath
+if ($LASTEXITCODE -ne 0 -or $netFtpWritten -ne 'executable written') { throw 'net_ftp emission failed' }
+$netFtpOutput = & $netFtpPath
+if ($LASTEXITCODE -ne 0 -or $netFtpOutput -ne 'net ftp ok') { throw "net_ftp answered wrongly: exit $LASTEXITCODE" }
 # e.net.imap: scripted server byte for byte plus a live STARTTLS session (L083, D2276)
 $netImapPath = Join-Path $testBuild 'net-imap-selfhost.exe'
 $netImapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_imap\src\main.e') $repo 'x64' 'windows' $netImapPath

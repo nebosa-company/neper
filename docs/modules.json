@@ -98,6 +98,7 @@
     "e.net.smtp",
     "e.net.pop3",
     "e.net.imap",
+    "e.net.ftp",
     "e.net.ws",
     "e.net.snapshot",
     "e.db",
@@ -2802,6 +2803,22 @@
     "e.bytes",
     "e.io",
     "e.mem",
+    "e.net.tls",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.ftp",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.crypto.hash",
+    "e.io",
+    "e.mem",
+    "e.net",
     "e.net.tls",
     "e.str"
    ],

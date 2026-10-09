@@ -2468,6 +2468,7 @@
    "fixtures": [
     "misc_gaps",
     "net",
+    "net_ftp",
     "net_http",
     "net_tls"
    ]
@@ -2505,6 +2506,7 @@
    "delivered": 20,
    "pending": [],
    "fixtures": [
+    "net_ftp",
     "net_imap",
     "net_pop3",
     "net_smtp",
@@ -2857,6 +2859,7 @@
     "log_debug",
     "misc_gaps",
     "net",
+    "net_ftp",
     "net_imap",
     "net_pop3",
     "net_smtp",
