@@ -46,3 +46,19 @@ results = [{'v': 1, 'vw': float(v['close']), 'o': float(v['open']), 'c': float(v
 (HERE / 'aggs-AAPL.json').write_text(json.dumps({'ticker': 'AAPL', 'queryCount': len(results), 'resultsCount': len(results),
     'adjusted': True, 'results': results, 'status': 'OK', 'request_id': 'fixture', 'count': len(results)}, separators=(',', ':')), encoding='utf-8')
 print('aggs AAPL', len(results), 'results (shape from docs)')
+
+# Weather (C119): Open-Meteo's forecast for three places (keyless) and its geocoding search for "bergen". The
+# forecast URL is the one weather.e builds; the coordinates are the app's places in hundredths of a degree.
+FORECAST = ('https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s&current=temperature_2m,relative_humidity_2m,'
+            'apparent_temperature,weather_code,wind_speed_10m,uv_index,is_day&hourly=temperature_2m,weather_code,'
+            'precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,'
+            'precipitation_probability_max,uv_index_max&timezone=auto&forecast_days=7&forecast_hours=24')
+for name, lat, lon in (('seattle', '47.61', '-122.33'), ('oslo', '59.91', '10.75'), ('bergen', '60.39', '5.32')):
+    forecast = fetch(FORECAST % (lat, lon))
+    assert 'current' in forecast, forecast
+    (HERE / ('forecast-%s.json' % name)).write_text(json.dumps(forecast, separators=(',', ':')), encoding='utf-8')
+    print(name, 'forecast, now', forecast['current']['time'])
+places = fetch('https://geocoding-api.open-meteo.com/v1/search?name=bergen&count=5&language=en&format=json')
+assert places.get('results'), places
+(HERE / 'geocode-bergen.json').write_text(json.dumps(places, separators=(',', ':')), encoding='utf-8')
+print('geocode bergen', [(r['name'], round(r['latitude'], 2), round(r['longitude'], 2)) for r in places['results']])

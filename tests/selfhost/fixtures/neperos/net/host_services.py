@@ -50,6 +50,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
             else:
                 self.reply(404, b'{"message":"NotFound"}', 'application/json')
             return
+        if host == 'api.open-meteo.com' and url.path == '/v1/forecast':
+            # Keyless; the recordings are keyed by the latitude the app sends (hundredths of a degree).
+            known = {'47.61': 'seattle', '59.91': 'oslo', '60.39': 'bergen'}.get(query.get('latitude', [''])[0])
+            if known:
+                self.reply(200, (here / ('forecast-%s.json' % known)).read_bytes(), 'application/json')
+            else:
+                self.reply(400, b'{"error":true,"reason":"no recording for these coordinates"}', 'application/json')
+            return
+        if host == 'geocoding-api.open-meteo.com' and url.path == '/v1/search':
+            if query.get('name', [''])[0].lower() == 'bergen':
+                self.reply(200, (here / 'geocode-bergen.json').read_bytes(), 'application/json')
+            else:
+                self.reply(200, b'{"generationtime_ms":0.1}', 'application/json')
+            return
         if host == 'api.twelvedata.com' and url.path == '/symbol_search':
             # Public, no key: the recorded matches for "app", an empty list for anything else.
             if query.get('symbol', [''])[0].lower() == 'app':
