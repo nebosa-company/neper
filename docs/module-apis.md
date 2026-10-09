@@ -5236,6 +5236,83 @@ fn ellipsis(a: *mem.Arena, style: Style, line: str, max_width: f32, mode: Ellips
 The module performs Unicode bidi resolution, line breaking, fallback and visual
 placement. Byte offsets always identify UTF-8 boundaries in `source`.
 
+### `e.ui.report`
+
+```neper
+type Cell = struct { text: str, number: f64, numeric: bool }
+type Source = struct { columns: []const str, cells: []const Cell, rows: usize }
+type Align = enum u8 { Left, Center, Right }
+type ElementKind = enum u8 { Text, Line, Rect }
+type Element = struct { kind: ElementKind, x: f32, y: f32, width: f32, height: f32, text: str, size: f32, bold: bool, align: Align, border: bool, grow: bool }
+type BandKind = enum u8 { ReportHeader, PageHeader, GroupHeader, Detail, GroupFooter, ReportFooter, PageFooter }
+type Band = struct { kind: BandKind, height: f32, elements: []const Element, level: usize, page_break_before: bool }
+type Group = struct { field: str, keep_together: bool, repeat_header: bool }
+type Report = struct {
+type Item = struct { kind: ElementKind, x: f32, y: f32, width: f32, height: f32, text: str, size: f32, bold: bool, align: Align }
+type Page = struct { number: usize, items: []const Item }
+type Layout = struct { pages: []const Page }
+type Measure = struct { ctx: *void, wrap: fn(*void, str, f32, f32, bool, []str) -> usize }
+type FixedPitch = struct { em: f32 }
+
+error Invalid
+error TooLarge
+
+const MAX_LINES: usize = 64usize
+const MAX_LEVELS: usize = 4usize
+
+fn fixed_wrap(ctx: *void, text: str, size: f32, width: f32, bold: bool, out: []str) -> usize
+fn emit_line(out: []str, n: usize, line: str) -> usize
+fn wrap_paragraph(para: str, per_line: usize, out: []str, start: usize) -> usize
+fn fixed_pitch(pitch: *const FixedPitch) -> Measure
+fn pow10(d: usize) -> f64
+fn format_fixed(a: *mem.Arena, v: f64, decimals: usize) -> (str, err)
+fn same_text(x: str, y: str) -> bool
+fn column_of(source: Source, name: str) -> (usize, bool)
+
+type Scope = struct { order: []const usize, lo: usize, hi: usize, row: usize, row_number: usize, page: usize, pages: usize }
+
+fn cell_at(source: Source, order: []const usize, r: usize, column: usize) -> Cell
+fn starts(text: str, prefix: str) -> bool
+fn parse_decimals(text: str, fallback: usize) -> usize
+fn expression(a: *mem.Arena, source: Source, scope: Scope, body: str) -> (str, err)
+fn expand(a: *mem.Arena, source: Source, scope: Scope, template: str) -> (str, err)
+fn grow_for(a: *mem.Arena, buf: []u8, used: usize, extra: usize) -> ([]u8, err)
+
+type Run = struct {
+
+fn sort_rows(r: *const Report, order: []usize, scratch: []usize, columns: [4]usize, lo: usize, hi: usize)
+fn text_before(x: str, y: str) -> bool
+fn row_before(r: *const Report, p: usize, q: usize, columns: [4]usize) -> bool
+
+type Placed = struct { height: f32, count: usize }
+
+fn materialise(run: *Run, band: *const Band, scope: Scope, left: f32, top: f32, into: bool) -> (f32, err)
+fn push_item(run: *Run, item: Item) -> err
+fn scope_all(run: *Run) -> Scope
+fn scope_for(run: *Run, kind: BandKind, level: usize, row: usize) -> Scope
+fn page_left(run: *Run) -> f32
+fn begin_page(run: *Run) -> err
+fn end_page(run: *Run) -> err
+fn repeat_headers(run: *Run) -> err
+fn break_page(run: *Run, repeat: bool) -> err
+fn place(run: *Run, band: *const Band, scope: Scope, repeat: bool) -> err
+fn bands_height(run: *Run, kind: BandKind, level: usize, row: usize) -> (f32, err)
+fn group_height(run: *Run, level: usize, row: usize) -> (f32, err)
+fn emit_kind(run: *Run, kind: BandKind, level: usize, row: usize, repeat: bool) -> err
+fn run_once(run: *Run) -> err
+fn layout(a: *mem.Arena, report: *const Report, measure: Measure) -> (Layout, err)
+```
+
+Banded report engine: the layout half of QuickReport and FastReport. A `Report` is a page, bands (report header,
+page header, group headers, detail, group footers, report footer, page footer) of text, line and rectangle
+elements, grouping fields and a `Source` of rows; `layout` answers the pages as lists of positioned primitives
+for a renderer or print job. It sorts rows into groups, expands text templates (`[Field]`, `[Field:2]`,
+`[SUM/AVG/MIN/MAX(Field)]`, `[COUNT()]`, `[ROW]`, `[PAGE]`, `[PAGES]`), wraps text through a `Measure` and grows
+bands to hold it, and paginates: page header and footer on every page, group headers kept with their first detail,
+groups kept together when they fit a page, page breaks before groups, repeated group headers, and `[PAGES]`
+settled by laying out until the count holds still. `fixed_pitch` is a stand-in measure. Checked against a second
+implementation on 80 seeded random reports. No images, sub-reports, columns, printing or PDF.
+
 ### `e.ui.state`
 
 ```neper

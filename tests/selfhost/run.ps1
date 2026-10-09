@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.ui.report against a second implementation on 80 random reports (L089, D2282)
+$uiReportPath = Join-Path $testBuild 'ui-report-selfhost.exe'
+$uiReportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_report\src\main.e') $repo 'x64' 'windows' $uiReportPath
+if ($LASTEXITCODE -ne 0 -or $uiReportWritten -ne 'executable written') { throw 'ui_report emission failed' }
+$uiReportOutput = & $uiReportPath
+if ($LASTEXITCODE -ne 0 -or $uiReportOutput -ne 'ui report ok') { throw "ui_report answered wrongly: exit $LASTEXITCODE" }
 # e.ui.window caption geometry and navigation.title_bar (L088, D2281)
 $uiTitleBarPath = Join-Path $testBuild 'ui-title-bar-selfhost.exe'
 $uiTitleBarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_title_bar\src\main.e') $repo 'x64' 'windows' $uiTitleBarPath

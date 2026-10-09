@@ -336,6 +336,7 @@
     "e.fmt.arrow",
     "e.net.balance",
     "e.net.reliable",
+    "e.ui.report",
     "e.ui.state",
     "e.ui.undo",
     "e.fmt.lzma",
@@ -3807,6 +3808,17 @@
     "e.mem",
     "e.os",
     "e.ui.style"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.report",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
    ],
    "blocked_by": []
   },

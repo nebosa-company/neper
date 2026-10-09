@@ -1192,17 +1192,6 @@
       "evidence": "Planning only (D1812). Reference: JustCode tests/consistency.test.js. Not yet: extend existing Neper validation tools to check icon/resource references, translation-key coverage and duplicate keys, locale placeholder agreement, command/menu callback contracts and mnemonic conflicts. Consume actual resource/command registries and generated manifests; do not claim arbitrary dynamic source references can be proven by regex. Include small malformed-registry cases proving each check fails and wire checks into the existing build/test entry point with actionable locations. Keep repository-specific manifests, rules and CI wiring in scripts/tests; add no runtime validation framework or standard-library dependency."
     },
     {
-      "id": "L089",
-      "category": "library",
-      "group": "UI",
-      "order": 187,
-      "title": "Banded report designer engine in e.ui",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1821). QuickReport/FPReport parity missing at engine level: header/detail/footer/group bands over e.db and L032 aggregation, text layout, pagination and phase-4 print jobs; L075 covers chart-side compositions only. PDF export waits on a PDF writer (none in e.fmt). Designer canvas stays app-side on e.ui primitives; engine first with band-layout and pagination fixtures."
-    },
-    {
       "id": "L090",
       "category": "library",
       "group": "UI",
