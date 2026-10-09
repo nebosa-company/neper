@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.ui.navigation ribbon: tabs, contextual band, groups, split/dropdown/gallery commands, collapse, keyboard (L087, D2280)
+ui_ribbon_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_ribbon/src/main.e" "$repo" x64 linux "$test_build/ui-ribbon-selfhost")
+[ "$ui_ribbon_written" = 'executable written' ]
+chmod +x "$test_build/ui-ribbon-selfhost"
+ui_ribbon_output=$("$test_build/ui-ribbon-selfhost")
+[ "$ui_ribbon_output" = 'ui ribbon ok' ]
 # e.net.mdns against python-zeroconf plus a loopback UDP exchange (L086, D2279)
 net_mdns_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_mdns/src/main.e" "$repo" x64 linux "$test_build/net-mdns-selfhost")
 [ "$net_mdns_written" = 'executable written' ]

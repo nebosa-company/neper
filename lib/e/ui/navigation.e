@@ -7531,3 +7531,844 @@ fn window_switcher_filterable(a: *mem.Arena, key: widget.Key, t: *const control.
     let (made, made_error) = centred_modal(a, key, t, label, scoped, dismiss, width, false)
     ret (made, made_error)
 }
+
+// ---------------------------------------------------------------- ribbon (D2280, L087)
+
+// An Office-style ribbon over the command and action model of this module: a quick-access
+// bar, a strip of tabs (some contextual, under a tinted band naming their context), and for
+// the current tab a panel of groups of commands; collapsed it shows only the strip and puts
+// the panel in an overlay under the chosen tab. The caller owns the state (which tab is
+// current, whether the ribbon is collapsed or its panel is out, which menu or gallery is
+// open) and every control fires the caller's `widget.Submit`.
+
+// A tile of a gallery: its name, what it does, whether it is the current choice, whether it may be chosen.
+type RibbonItem = struct { label: str, action: widget.Submit, selected: bool, enabled: bool }
+
+// A command in a group. A plain command presses `action`; with `toggle` it also says whether it is `checked`.
+// With a `menu` and an `action` it is a split command (the arrow beside it fires `menu_toggle` and opens the
+// menu); with a `menu` and no `action` it is a dropdown whose whole face fires `menu_toggle`. With a `gallery` it is
+// a grid of `columns` by `rows` tiles of `gallery` followed by a button that fires `gallery_toggle` and opens the
+// rest in an overlay; `large` commands stand the full height of the group with the glyph over the label, others
+// are 24 tall in stacks of three.
+type RibbonCommand = struct {
+    label: str, glyph: control.GlyphKind, action: widget.Submit, enabled: bool, large: bool,
+    toggle: bool, checked: bool, tooltip: str,
+    menu: []const overlay.MenuItem, menu_open: bool, menu_toggle: widget.Submit,
+    gallery: []const RibbonItem, columns: usize, rows: usize, gallery_open: bool, gallery_toggle: widget.Submit,
+}
+
+// A group: its name under the commands and, when `launcher` is set, a small button after the name that opens the
+// group's dialog (named `launcher_label`).
+type RibbonGroup = struct { label: str, commands: []const RibbonCommand, launcher: widget.Submit, launcher_label: str }
+
+// A tab: its name, its groups, the context it belongs to (empty for an ordinary tab) and whether it is shown now.
+type RibbonTab = struct { label: str, groups: []const RibbonGroup, context: str, visible: bool }
+
+// How the ribbon stands: the current tab (an index into all the tabs), whether it is collapsed and, if so, whether
+// its panel is out, what each tab fires (`picks`, one per tab), what the collapse button and Ctrl+F1 fire, what
+// Escape or a press outside fires to put a collapsed panel away, the quick-access actions, and the width.
+type RibbonOptions = struct { selected: usize, collapsed: bool, popup: bool, picks: []const widget.Submit, collapse: widget.Submit, dismiss: widget.Submit, quick: []const Action, width: f32 }
+
+fn ribbon_options() -> RibbonOptions {
+    var out: RibbonOptions = zero
+    out.width = 960.0
+    ret out
+}
+
+// Key layout, relative to the ribbon's key: the quick-access buttons `+ 1 + index`, the collapse button `+ 90`, the
+// tabs `+ 100 + index`, the context bands `+ 300 + index`, the launchers `+ 900 + group`, the panel's overlay
+// `+ 499`; a command `+ 4096 + (group * 32 + command) * 64` with its arrow at `+ 1`, its menu or gallery overlay
+// at `+ 2` (its items after), its tooltip at `+ 21` and the gallery tiles at `+ 24 + index`.
+fn ribbon_command_key(key: widget.Key, group: usize, command: usize) -> widget.Key {
+    ret key + 4096u64 + (u64(group) * 32u64 + u64(command)) * 64u64
+}
+
+fn ribbon_tab_key(key: widget.Key, tab: usize) -> widget.Key { ret key + 100u64 + u64(tab) }
+
+fn ribbon_tile_count(c: *const RibbonCommand) -> usize {
+    var shown = c.columns * c.rows
+    if shown > c.gallery.len { shown = c.gallery.len }
+    ret shown
+}
+
+// The keys of the current panel that take the arrow keys, in visual order: a command, its arrow, a gallery's shown
+// tiles and its button, and the launchers last of their group.
+fn ribbon_panel_keys(key: widget.Key, tab: *const RibbonTab, out: []widget.Key) -> usize {
+    var n = 0usize
+    var g = 0usize
+    while g < tab.groups.len {
+        let group = &tab.groups[g]
+        var c = 0usize
+        while c < group.commands.len {
+            let command = &group.commands[c]
+            let base = ribbon_command_key(key, g, c)
+            if command.gallery.len > 0usize {
+                var tile = 0usize
+                while tile < ribbon_tile_count(command) {
+                    out[n] = base + 24u64 + u64(tile)
+                    n += 1usize
+                    tile += 1usize
+                }
+                out[n] = base + 1u64
+                n += 1usize
+            } else {
+                out[n] = base
+                n += 1usize
+                if command.menu.len > 0usize && widget.submit_set(command.action.invoke) {
+                    out[n] = base + 1u64
+                    n += 1usize
+                }
+            }
+            c += 1usize
+        }
+        if widget.submit_set(group.launcher.invoke) {
+            out[n] = key + 900u64 + u64(g)
+            n += 1usize
+        }
+        g += 1usize
+    }
+    ret n
+}
+
+fn ribbon_ink(t: *const control.Theme, enabled: bool) -> paint.Color {
+    if !enabled { ret control.with_alpha(style.color(t.tokens, .OnSurface), t.tokens.states.disabled_content) }
+    ret style.color(t.tokens, .OnSurface)
+}
+
+// The face of a command: the glyph over the label (large) or before it, with a small chevron after the label of a dropdown.
+fn ribbon_face(a: *mem.Arena, t: *const control.Theme, label: str, glyph: control.GlyphKind, large: bool, chevron: bool, ink: paint.Color) -> (widget.Node, err) {
+    var caption = control.text_options()
+    caption.role = .BodySmall
+    caption.wrap = .None
+    caption.align = .Center
+    let (word, word_error) = control.colored_text(a, 0u64, label, t, caption, ink)
+    if word_error != ok { ret (zero, word_error) }
+    var side: f32 = 16.0
+    if large { side = 28.0 }
+    let (picture, picture_error) = control.stroked_glyph(a, ink, glyph, side, 1.5)
+    if picture_error != ok { ret (zero, picture_error) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 3usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    parts[n] = picture
+    n += 1usize
+    parts[n] = word
+    n += 1usize
+    if chevron {
+        let (tail, tail_error) = control.stroked_glyph(a, ink, .ChevronDown, 12.0, 1.5)
+        if tail_error != ok { ret (zero, tail_error) }
+        parts[n] = tail
+        n += 1usize
+    }
+    if large {
+        // large: glyph, then the label (and a chevron beside it)
+        if chevron {
+            let (line, line_error) = mem.alloc[widget.Node](a, 2usize)
+            if line_error != ok { ret (zero, TooLarge) }
+            line[0usize] = parts[1usize]
+            line[1usize] = parts[2usize]
+            parts[1usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 2.0 }, style.defaults(), line[0usize..2usize])
+            n = 2usize
+        }
+        ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 2.0 }, style.defaults(), parts[0usize..n]), ok)
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 6.0 }, style.defaults(), parts[0usize..n]), ok)
+}
+
+// One pressable of the panel: `ink` text, `state-hover` layer, `secondary-container` while checked, 4 rounded; the
+// roving Tab stop keeps its focusability, the others are reached with the arrow keys.
+fn ribbon_press(a: *mem.Arena, t: *const control.Theme, key: widget.Key, name: str, face: widget.Node, large: bool, wide: f32, enabled: bool, checked: bool, toggle: bool, expanded: bool, menu: bool, action: *const widget.Submit, stop: bool) -> (widget.Node, err) {
+    let state = control.control_state(t, key, enabled, checked)
+    let ink = ribbon_ink(t, enabled)
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = control.with_alpha(ink, control.state_opacity(t, state))
+    if checked { look.background = style.color(t.tokens, .SecondaryContainer) }
+    look.foreground = ink
+    look.border_width = 0.0
+    look.radius = 4.0
+    look.custom_padding = true
+    look.padding = 4.0
+    look.padding_y = 2.0
+    look.min_width = 24.0
+    look.min_height = 24.0
+    if large {
+        look.min_width = 56.0
+        look.min_height = 66.0
+        look.padding_y = 4.0
+    }
+    if wide > look.min_width { look.min_width = wide }
+    var states = 0u32
+    if toggle && checked { states = accessibility.STATE_CHECKED }
+    if expanded { states = states | accessibility.STATE_EXPANDED }
+    var actions = 0u32
+    if menu { actions = accessibility.ACTION_SHOW_MENU }
+    let (pressed, pressed_error) = control.pressable_states(a, key, t, 3u8, name, look, enabled, checked && !toggle, states, actions, 0u64, action, face)
+    if pressed_error != ok { ret (zero, pressed_error) }
+    var made = pressed
+    if !stop {
+        let (untabbed, untabbed_error) = untab_pressable(a, made)
+        if untabbed_error != ok { ret (zero, untabbed_error) }
+        made = untabbed
+    }
+    ret (made, ok)
+}
+
+fn ribbon_tipped(a: *mem.Arena, t: *const control.Theme, key: widget.Key, node: widget.Node, tip: str) -> (widget.Node, err) {
+    if tip.len == 0usize { ret (node, ok) }
+    let (shown, shown_error) = overlay.tooltip(a, key + 21u64, t, key, tip, overlay.tooltip_wanted(t, key))
+    if shown_error != ok { ret (zero, shown_error) }
+    let (layers, layers_error) = mem.alloc[widget.Node](a, 2usize)
+    if layers_error != ok { ret (zero, TooLarge) }
+    layers[0usize] = node
+    layers[1usize] = shown
+    ret (widget.stack(0u64, style.defaults(), layers[0usize..2usize]), ok)
+}
+
+// A gallery tile: its label in a 64 by 40 rounded box, `secondary-container` with a `primary` outline when chosen.
+fn ribbon_tile(a: *mem.Arena, t: *const control.Theme, key: widget.Key, item: *const RibbonItem, stop: bool) -> (widget.Node, err) {
+    let state = control.control_state(t, key, item.enabled, item.selected)
+    let ink = ribbon_ink(t, item.enabled)
+    var look = style.resolve(t.tokens, .Plain, state)
+    look.background = control.with_alpha(ink, control.state_opacity(t, state))
+    look.foreground = ink
+    look.border_width = 1.0
+    look.border = style.color(t.tokens, .OutlineVariant)
+    look.radius = 4.0
+    look.custom_padding = true
+    look.padding = 4.0
+    look.padding_y = 4.0
+    look.min_width = 80.0
+    look.min_height = 40.0
+    if item.selected {
+        look.background = style.color(t.tokens, .SecondaryContainer)
+        look.border = style.color(t.tokens, .Primary)
+        look.border_width = 2.0
+    }
+    var caption = control.text_options()
+    caption.role = .BodySmall
+    caption.wrap = .None
+    caption.align = .Center
+    let (word, word_error) = control.colored_text(a, 0u64, item.label, t, caption, ink)
+    if word_error != ok { ret (zero, word_error) }
+    let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
+    if centred_error != ok { ret (zero, TooLarge) }
+    centred[0usize] = word
+    let face = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 0.0 }, control.sized_style(72.0, 32.0), centred[0usize..1usize])
+    var states = 0u32
+    if item.selected { states = accessibility.STATE_SELECTED }
+    let (pressed, pressed_error) = control.pressable_states(a, key, t, 3u8, item.label, look, item.enabled, item.selected, states, 0u32, 0u64, &item.action, face)
+    if pressed_error != ok { ret (zero, pressed_error) }
+    if stop { ret (pressed, ok) }
+    let (untabbed, untabbed_error) = untab_pressable(a, pressed)
+    if untabbed_error != ok { ret (zero, untabbed_error) }
+    ret (untabbed, ok)
+}
+
+// The tiles `from..to` of a gallery as rows of `columns`, 4 apart.
+fn ribbon_grid(a: *mem.Arena, t: *const control.Theme, base: widget.Key, c: *const RibbonCommand, from: usize, to: usize, columns: usize, tab_key: widget.Key) -> (widget.Node, err) {
+    var cols = columns
+    if cols == 0usize { cols = 1usize }
+    let rows = (to - from + cols - 1usize) / cols
+    let (lines, lines_error) = mem.alloc[widget.Node](a, rows + 1usize)
+    if lines_error != ok { ret (zero, TooLarge) }
+    var r = 0usize
+    while r < rows {
+        let (tiles, tiles_error) = mem.alloc[widget.Node](a, cols)
+        if tiles_error != ok { ret (zero, TooLarge) }
+        var n = 0usize
+        while n < cols && from + r * cols + n < to {
+            let index = from + r * cols + n
+            let (tile, tile_error) = ribbon_tile(a, t, base + 24u64 + u64(index), &c.gallery[index], base + 24u64 + u64(index) == tab_key)
+            if tile_error != ok { ret (zero, tile_error) }
+            tiles[n] = tile
+            n += 1usize
+        }
+        lines[r] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), tiles[0usize..n])
+        r += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), lines[0usize..rows]), ok)
+}
+
+// A command as one node of its group.
+fn ribbon_command(a: *mem.Arena, t: *const control.Theme, base: widget.Key, c: *const RibbonCommand, tab_key: widget.Key) -> (widget.Node, err) {
+    let ink = ribbon_ink(t, c.enabled)
+    if c.gallery.len > 0usize {
+        let shown = ribbon_tile_count(c)
+        let (grid, grid_error) = ribbon_grid(a, t, base, c, 0usize, shown, c.columns, tab_key)
+        if grid_error != ok { ret (zero, grid_error) }
+        // the button that opens the rest: a 16 wide strip of the grid's height with a chevron
+        let (chevron, chevron_error) = control.stroked_glyph(a, ink, .ChevronDown, 12.0, 1.5)
+        if chevron_error != ok { ret (zero, chevron_error) }
+        let (more, more_error) = ribbon_press(a, t, base + 1u64, c.label, chevron, false, 16.0, c.enabled, false, false, c.gallery_open, true, &c.gallery_toggle, base + 1u64 == tab_key)
+        if more_error != ok { ret (zero, more_error) }
+        let (pieces, pieces_error) = mem.alloc[widget.Node](a, 3usize)
+        if pieces_error != ok { ret (zero, TooLarge) }
+        pieces[0usize] = grid
+        pieces[1usize] = more
+        let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Stretch, gap: 2.0 }, style.defaults(), pieces[0usize..2usize])
+        // the overlay: every tile in `columns` columns on a raised card
+        let (all, all_error) = ribbon_grid(a, t, base, c, 0usize, c.gallery.len, c.columns, tab_key)
+        if all_error != ok { ret (zero, all_error) }
+        var card = control.surface_options(t)
+        card.background = .SurfaceContainerHigh
+        card.padding = 8.0
+        let (inner, inner_error) = mem.alloc[widget.Node](a, 1usize)
+        if inner_error != ok { ret (zero, TooLarge) }
+        inner[0usize] = all
+        let raised = widget.box(0u64, control.surface_style(t, card), inner[0usize..1usize])
+        var sem: widget.Semantics = zero
+        sem.role = 35u8
+        sem.label = c.label
+        let (popup_nodes, popup_error) = mem.alloc[widget.Node](a, 1usize)
+        if popup_error != ok { ret (zero, TooLarge) }
+        popup_nodes[0usize] = widget.semantics(0u64, sem, style.defaults(), mem_one(a, raised))
+        pieces[2usize] = widget.box(0u64, style.defaults(), zero)
+        if c.gallery_open {
+            pieces[2usize] = widget.overlay(base + 2u64, widget.Overlay { anchor: base + 1u64, placement: .Below, offset: zero, modal: false, dismiss: c.gallery_toggle }, style.defaults(), popup_nodes[0usize..1usize])
+        }
+        let (stack, stack_error) = mem.alloc[widget.Node](a, 2usize)
+        if stack_error != ok { ret (zero, TooLarge) }
+        stack[0usize] = row
+        stack[1usize] = pieces[2usize]
+        ret (widget.stack(0u64, style.defaults(), stack[0usize..2usize]), ok)
+    }
+    let split = c.menu.len > 0usize && widget.submit_set(c.action.invoke)
+    let dropdown = c.menu.len > 0usize && !split
+    let (face, face_error) = ribbon_face(a, t, c.label, c.glyph, c.large, dropdown, ink)
+    if face_error != ok { ret (zero, face_error) }
+    var press: *const widget.Submit = &c.action
+    if dropdown { press = &c.menu_toggle }
+    let (main, main_error) = ribbon_press(a, t, base, c.label, face, c.large, 0.0, c.enabled, c.checked, c.toggle, dropdown && c.menu_open, dropdown, press, base == tab_key)
+    if main_error != ok { ret (zero, main_error) }
+    var node = main
+    if split {
+        let (chevron, chevron_error) = control.stroked_glyph(a, ink, .ChevronDown, 12.0, 1.5)
+        if chevron_error != ok { ret (zero, chevron_error) }
+        let (arrow, arrow_error) = ribbon_press(a, t, base + 1u64, c.label, chevron, false, 0.0, c.enabled, false, false, c.menu_open, true, &c.menu_toggle, base + 1u64 == tab_key)
+        if arrow_error != ok { ret (zero, arrow_error) }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = main
+        pair[1usize] = arrow
+        if c.large {
+            node = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
+        } else {
+            node = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), pair[0usize..2usize])
+        }
+    }
+    if c.menu.len > 0usize {
+        var anchor = base
+        if split { anchor = base + 1u64 }
+        let (opened, opened_error) = overlay.menu(a, base + 2u64, t, anchor, c.label, c.menu, c.menu_open, &c.menu_toggle)
+        if opened_error != ok { ret (zero, opened_error) }
+        let (menu_parts, menu_parts_error) = mem.alloc[widget.Node](a, 2usize)
+        if menu_parts_error != ok { ret (zero, menu_parts_error) }
+        menu_parts[0usize] = node
+        menu_parts[1usize] = opened
+        node = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 0.0 }, style.defaults(), menu_parts[0usize..2usize])
+    }
+    let (tipped, tipped_error) = ribbon_tipped(a, t, base, node, c.tooltip)
+    if tipped_error != ok { ret (zero, tipped_error) }
+    ret (tipped, ok)
+}
+
+fn mem_one(a: *mem.Arena, node: widget.Node) -> []const widget.Node {
+    let (one, one_error) = mem.alloc[widget.Node](a, 1usize)
+    if one_error != ok { ret zero }
+    one[0usize] = node
+    ret one[0usize..1usize]
+}
+
+// A group: its commands side by side (small ones stacked three high), then its name 4 under them, centred, with
+// the launcher at the end.
+fn ribbon_group(a: *mem.Arena, t: *const control.Theme, key: widget.Key, index: usize, group: *const RibbonGroup, tab_key: widget.Key) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, group.commands.len + 1usize)
+    if cells_error != ok { ret (zero, TooLarge) }
+    var made = 0usize
+    var c = 0usize
+    while c < group.commands.len {
+        let command = &group.commands[c]
+        if command.large || command.gallery.len > 0usize {
+            let (node, node_error) = ribbon_command(a, t, ribbon_command_key(key, index, c), command, tab_key)
+            if node_error != ok { ret (zero, node_error) }
+            cells[made] = node
+            made += 1usize
+            c += 1usize
+            continue
+        }
+        // up to three small commands in a column
+        let (column, column_error) = mem.alloc[widget.Node](a, 3usize)
+        if column_error != ok { ret (zero, TooLarge) }
+        var n = 0usize
+        while n < 3usize && c < group.commands.len && !group.commands[c].large && group.commands[c].gallery.len == 0usize {
+            let (node, node_error) = ribbon_command(a, t, ribbon_command_key(key, index, c), &group.commands[c], tab_key)
+            if node_error != ok { ret (zero, node_error) }
+            column[n] = node
+            n += 1usize
+            c += 1usize
+        }
+        cells[made] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), column[0usize..n])
+        made += 1usize
+    }
+    var caption = control.text_options()
+    caption.role = .BodySmall
+    caption.wrap = .None
+    caption.align = .Center
+    let (name, name_error) = control.colored_text(a, 0u64, group.label, t, caption, style.color(t.tokens, .OnSurfaceVariant))
+    if name_error != ok { ret (zero, name_error) }
+    let (foot, foot_error) = mem.alloc[widget.Node](a, 4usize)
+    if foot_error != ok { ret (zero, TooLarge) }
+    var f = 0usize
+    foot[f] = name
+    f += 1usize
+    if widget.submit_set(group.launcher.invoke) {
+        let launcher_key = key + 900u64 + u64(index)
+        let (arrow, arrow_error) = control.stroked_glyph(a, style.color(t.tokens, .OnSurfaceVariant), .Maximize, 10.0, 1.2)
+        if arrow_error != ok { ret (zero, arrow_error) }
+        let (button, button_error) = ribbon_press(a, t, launcher_key, group.launcher_label, arrow, false, 16.0, true, false, false, false, false, &group.launcher, launcher_key == tab_key)
+        if button_error != ok { ret (zero, button_error) }
+        foot[f] = button
+        f += 1usize
+    }
+    var foot_style = style.defaults()
+    foot_style.height = style.Length { Px: 20.0 }
+    let row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 4.0 }, foot_style, foot[0usize..f])
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var body_style = style.defaults()
+    body_style.height = style.Length { Px: 68.0 }
+    parts[0usize] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 2.0 }, body_style, cells[0usize..made])
+    parts[1usize] = row
+    var column_style = style.defaults()
+    column_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 4.0 }, column_style, parts[0usize..2usize])
+    let (wrapped, wrapped_error) = mem.alloc[widget.Node](a, 1usize)
+    if wrapped_error != ok { ret (zero, TooLarge) }
+    wrapped[0usize] = column
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = group.label
+    ret (widget.semantics(0u64, sem, style.defaults(), wrapped[0usize..1usize]), ok)
+}
+
+type RibbonTabStep = struct { runtime: *widget.Runtime, tabs: []const widget.Key, picks: []const widget.Submit, backward: bool, edge: bool }
+
+// Left and Right from a focused tab pick its visible neighbour (Home and End the ends) and move the focus to it.
+fn ribbon_tab_step(ctx: *void) -> err {
+    let m = mem.cast[*RibbonTabStep](ctx)
+    var current = 0usize
+    while current < m.tabs.len {
+        if m.tabs[current] != 0u64 && widget.focus_within(m.runtime, m.tabs[current]) { break }
+        current += 1usize
+    }
+    if current == m.tabs.len { ret ok }
+    var next = current
+    if m.edge {
+        var scan = 0usize
+        if !m.backward { scan = m.tabs.len }
+        var found = false
+        while !found {
+            if m.backward {
+                if scan >= m.tabs.len { break }
+                if m.tabs[scan] != 0u64 {
+                    next = scan
+                    found = true
+                } else {
+                    scan += 1usize
+                }
+            } else {
+                if scan == 0usize { break }
+                scan -= 1usize
+                if m.tabs[scan] != 0u64 {
+                    next = scan
+                    found = true
+                }
+            }
+        }
+    } else if m.backward {
+        var scan = current
+        while scan > 0usize {
+            scan -= 1usize
+            if m.tabs[scan] != 0u64 {
+                next = scan
+                break
+            }
+        }
+    } else {
+        var scan = current + 1usize
+        while scan < m.tabs.len {
+            if m.tabs[scan] != 0u64 {
+                next = scan
+                break
+            }
+            scan += 1usize
+        }
+    }
+    if next == current { ret ok }
+    try m.picks[next].invoke(m.picks[next].ctx)
+    ret widget.focus_key(m.runtime, m.tabs[next])
+}
+
+type RibbonJump = struct { runtime: *widget.Runtime, to: widget.Key, dismiss: widget.Submit, dismisses: bool }
+
+// Down from a tab enters the panel; Escape or Up from the panel returns to the tab (and puts a collapsed panel away).
+fn ribbon_jump(ctx: *void) -> err {
+    let j = mem.cast[*RibbonJump](ctx)
+    if j.dismisses && widget.submit_set(j.dismiss.invoke) { try j.dismiss.invoke(j.dismiss.ctx) }
+    ret widget.focus_key(j.runtime, j.to)
+}
+
+// The ribbon. The quick-access bar is 32 tall, the strip 32, the panel 100; the tabs, group names and commands are
+// the caller's data. `tabs` lists every tab, shown or not; `options.picks` has one action per tab.
+fn ribbon(a: *mem.Arena, key: widget.Key, t: *const control.Theme, tabs: []const RibbonTab, options: RibbonOptions) -> (widget.Node, err) {
+    if options.picks.len != tabs.len || options.selected >= tabs.len || tabs.len > 64usize { ret (zero, TooLarge) }
+    let current = &tabs[options.selected]
+    // the panel's roving Tab stop and the keys the arrow keys travel
+    let (panel_keys, panel_keys_error) = mem.alloc[widget.Key](a, 1usize + ribbon_key_budget(current))
+    if panel_keys_error != ok { ret (zero, TooLarge) }
+    let panel_count = ribbon_panel_keys(key, current, panel_keys)
+    var tab_key = 0u64
+    if panel_count > 0usize { tab_key = panel_keys[0usize] }
+    var pk = 0usize
+    while pk < panel_count {
+        if widget.focus_within(t.runtime, panel_keys[pk]) { tab_key = panel_keys[pk] }
+        pk += 1usize
+    }
+    // quick access
+    let (rows, rows_error) = mem.alloc[widget.Node](a, 4usize)
+    if rows_error != ok { ret (zero, TooLarge) }
+    var row = 0usize
+    var bar_style = style.defaults()
+    bar_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerHigh) }
+    bar_style.height = style.Length { Px: 32.0 }
+    bar_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
+    if options.quick.len > 0usize {
+        let (quick, quick_error) = spaced_row(a, key + 1u64, t, options.quick, .Plain, 2.0, false)
+        if quick_error != ok { ret (zero, quick_error) }
+        let (quick_wrap, quick_wrap_error) = mem.alloc[widget.Node](a, 1usize)
+        if quick_wrap_error != ok { ret (zero, TooLarge) }
+        quick_wrap[0usize] = quick
+        var quick_sem: widget.Semantics = zero
+        quick_sem.role = 2u8
+        quick_sem.label = "Quick access"
+        let (quick_group, quick_group_error) = mem.alloc[widget.Node](a, 1usize)
+        if quick_group_error != ok { ret (zero, TooLarge) }
+        quick_group[0usize] = widget.semantics(0u64, quick_sem, style.defaults(), quick_wrap[0usize..1usize])
+        rows[row] = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, bar_style, quick_group[0usize..1usize])
+        row += 1usize
+    }
+    // the strip: measured tabs, a band over contextual runs, the collapse button at the end
+    let (widths, widths_error) = mem.alloc[f32](a, tabs.len)
+    if widths_error != ok { ret (zero, TooLarge) }
+    let (tab_keys, tab_keys_error) = mem.alloc[widget.Key](a, tabs.len)
+    if tab_keys_error != ok { ret (zero, TooLarge) }
+    let (tab_nodes, tab_nodes_error) = mem.alloc[widget.Node](a, tabs.len + 2usize)
+    if tab_nodes_error != ok { ret (zero, TooLarge) }
+    let (band_nodes, band_nodes_error) = mem.alloc[widget.Node](a, tabs.len + 1usize)
+    if band_nodes_error != ok { ret (zero, TooLarge) }
+    var shown = 0usize
+    var any_context = false
+    var i = 0usize
+    while i < tabs.len {
+        tab_keys[i] = 0u64
+        if tabs[i].visible || i == options.selected {
+            let (advance, _, _, metrics_error) = control.run_metrics(a, t, .TitleSmall, tabs[i].label)
+            if metrics_error != ok { ret (zero, metrics_error) }
+            var wide = advance + 32.0
+            if wide < 64.0 { wide = 64.0 }
+            widths[i] = wide
+            tab_keys[i] = ribbon_tab_key(key, i)
+            if tabs[i].context.len > 0usize { any_context = true }
+            shown += 1usize
+        }
+        i += 1usize
+    }
+    var placed = 0usize
+    var band_at = 0usize
+    i = 0usize
+    while i < tabs.len {
+        if tab_keys[i] == 0u64 {
+            i += 1usize
+            continue
+        }
+        let chosen = i == options.selected
+        let contextual = tabs[i].context.len > 0usize
+        var ink = style.color(t.tokens, .OnSurfaceVariant)
+        if chosen { ink = style.color(t.tokens, .OnSurface) }
+        if contextual { ink = style.color(t.tokens, .OnTertiaryContainer) }
+        let state = control.control_state(t, tab_keys[i], true, chosen)
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = control.with_alpha(ink, control.state_opacity(t, state))
+        if chosen { look.background = style.color(t.tokens, .SurfaceContainer) }
+        look.foreground = ink
+        look.border_width = 0.0
+        look.radius = 0.0
+        look.corners = style.Corners { top_left: 6.0, top_right: 6.0, bottom_right: 0.0, bottom_left: 0.0 }
+        look.custom_padding = true
+        look.padding = 16.0
+        look.padding_y = 0.0
+        look.min_width = widths[i]
+        look.min_height = 32.0
+        var caption = control.text_options()
+        caption.role = .TitleSmall
+        caption.wrap = .None
+        caption.align = .Center
+        let (label, label_error) = control.colored_text(a, 0u64, tabs[i].label, t, caption, ink)
+        if label_error != ok { ret (zero, label_error) }
+        let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
+        if centred_error != ok { ret (zero, TooLarge) }
+        centred[0usize] = label
+        var face_style = control.sized_style(widths[i] - 32.0, 32.0)
+        face_style.min_width = style.Length { Px: widths[i] - 32.0 }
+        let face = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Center, cross: .Center, gap: 0.0 }, face_style, centred[0usize..1usize])
+        let (pressed, pressed_error) = control.pressable(a, tab_keys[i], t, 19u8, tabs[i].label, look, true, chosen, &options.picks[i], face)
+        if pressed_error != ok { ret (zero, pressed_error) }
+        // every shown tab takes focus, so a press leaves the arrow keys working from it
+        let tab_node = pressed
+        tab_nodes[placed] = tab_node
+        placed += 1usize
+        // the band: the first tab of a run of one context carries its name over the run's width
+        var run_start = !contextual
+        if contextual {
+            var before = i
+            var previous_shown = false
+            while before > 0usize {
+                before -= 1usize
+                if tab_keys[before] != 0u64 {
+                    previous_shown = true
+                    break
+                }
+            }
+            run_start = !previous_shown || !same_words(tabs[before].context, tabs[i].context)
+        }
+        if contextual && run_start {
+            var span = widths[i]
+            var after = i + 1usize
+            while after < tabs.len {
+                if tab_keys[after] != 0u64 {
+                    if !same_words(tabs[after].context, tabs[i].context) { break }
+                    span += widths[after] + 2.0
+                }
+                after += 1usize
+            }
+            var band_caption = control.text_options()
+            band_caption.role = .LabelSmall
+            band_caption.wrap = .None
+            band_caption.align = .Center
+            let (band_word, band_word_error) = control.colored_text(a, 0u64, tabs[i].context, t, band_caption, style.color(t.tokens, .OnTertiaryContainer))
+            if band_word_error != ok { ret (zero, band_word_error) }
+            let (band_inner, band_inner_error) = mem.alloc[widget.Node](a, 1usize)
+            if band_inner_error != ok { ret (zero, TooLarge) }
+            band_inner[0usize] = band_word
+            var band_style = control.sized_style(span, 20.0)
+            band_style.background = paint.Brush { Solid: style.color(t.tokens, .TertiaryContainer) }
+            band_style.corners = style.Corners { top_left: 6.0, top_right: 6.0, bottom_right: 0.0, bottom_left: 0.0 }
+            let piece = widget.flex(key + 300u64 + u64(i), ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, band_style, band_inner[0usize..1usize])
+            band_nodes[band_at] = piece
+            band_at += 1usize
+        } else if !contextual {
+            let blank = control.sized_style(widths[i], 20.0)
+            band_nodes[band_at] = widget.box(0u64, blank, zero)
+            band_at += 1usize
+        }
+        i += 1usize
+    }
+    // the collapse button, at the strip's end
+    var collapse_glyph: control.GlyphKind = .ChevronUp
+    if options.collapsed { collapse_glyph = .ChevronDown }
+    let (collapse_mark, collapse_mark_error) = control.stroked_glyph(a, style.color(t.tokens, .OnSurfaceVariant), collapse_glyph, 14.0, 1.5)
+    if collapse_mark_error != ok { ret (zero, collapse_mark_error) }
+    var collapse_name = "Collapse the ribbon"
+    if options.collapsed { collapse_name = "Expand the ribbon" }
+    let (collapse_cell, collapse_cell_error) = mem.alloc[widget.Submit](a, 1usize)
+    if collapse_cell_error != ok { ret (zero, TooLarge) }
+    collapse_cell[0usize] = options.collapse
+    let (collapse_button, collapse_error) = ribbon_press(a, t, key + 90u64, collapse_name, collapse_mark, false, 28.0, true, false, false, false, false, &collapse_cell[0usize], false)
+    if collapse_error != ok { ret (zero, collapse_error) }
+    let (strip_parts, strip_parts_error) = mem.alloc[widget.Node](a, placed + 2usize)
+    if strip_parts_error != ok { ret (zero, TooLarge) }
+    var s = 0usize
+    while s < placed {
+        strip_parts[s] = tab_nodes[s]
+        s += 1usize
+    }
+    strip_parts[placed] = widget.spacer(0u64, 1.0)
+    strip_parts[placed + 1usize] = collapse_button
+    var strip_style = style.defaults()
+    strip_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
+    strip_style.height = style.Length { Px: 32.0 }
+    strip_style.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
+    let strip = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 2.0 }, strip_style, strip_parts[0usize..placed + 2usize])
+    var band_row = widget.box(0u64, style.defaults(), zero)
+    if any_context {
+        var band_style = style.defaults()
+        band_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) }
+        band_style.height = style.Length { Px: 20.0 }
+        band_style.padding = style.EdgeLengths { left: style.Length { Px: 8.0 }, top: style.Length { Px: 0.0 }, right: style.Length { Px: 8.0 }, bottom: style.Length { Px: 0.0 } }
+        band_row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .End, gap: 2.0 }, band_style, band_nodes[0usize..band_at])
+    }
+    // arrow keys on the strip
+    let (steps, steps_error) = mem.alloc[RibbonTabStep](a, 4usize)
+    if steps_error != ok { ret (zero, TooLarge) }
+    let (jumps, jumps_error) = mem.alloc[RibbonJump](a, 3usize)
+    if jumps_error != ok { ret (zero, TooLarge) }
+    let (strip_shortcuts, strip_shortcuts_error) = mem.alloc[widget.Shortcut](a, 6usize)
+    if strip_shortcuts_error != ok { ret (zero, TooLarge) }
+    var move = 0usize
+    while move < 4usize {
+        steps[move] = RibbonTabStep { runtime: t.runtime, tabs: tab_keys[0usize..tabs.len], picks: options.picks, backward: move == 0usize || move == 2usize, edge: move >= 2usize }
+        move += 1usize
+    }
+    var forward_key = 39u32
+    var backward_key = 37u32
+    if t.tokens.direction == .RightToLeft {
+        forward_key = 37u32
+        backward_key = 39u32
+    }
+    strip_shortcuts[0usize] = widget.Shortcut { key: backward_key, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[0usize]), invoke: ribbon_tab_step } }
+    strip_shortcuts[1usize] = widget.Shortcut { key: forward_key, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[1usize]), invoke: ribbon_tab_step } }
+    strip_shortcuts[2usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[2usize]), invoke: ribbon_tab_step } }
+    strip_shortcuts[3usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&steps[3usize]), invoke: ribbon_tab_step } }
+    var shortcut_count = 4usize
+    if panel_count > 0usize {
+        jumps[0usize] = RibbonJump { runtime: t.runtime, to: panel_keys[0usize], dismiss: zero, dismisses: false }
+        strip_shortcuts[4usize] = widget.Shortcut { key: 40u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&jumps[0usize]), invoke: ribbon_jump } }
+        shortcut_count = 5usize
+    }
+    if options.collapsed && options.popup {
+        jumps[2usize] = RibbonJump { runtime: t.runtime, to: ribbon_tab_key(key, options.selected), dismiss: options.dismiss, dismisses: true }
+        strip_shortcuts[shortcut_count] = widget.Shortcut { key: 27u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&jumps[2usize]), invoke: ribbon_jump } }
+        shortcut_count += 1usize
+    }
+    let (strip_inner, strip_inner_error) = mem.alloc[widget.Node](a, 1usize)
+    if strip_inner_error != ok { ret (zero, TooLarge) }
+    strip_inner[0usize] = strip
+    let strip_scoped = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: strip_shortcuts[0usize..shortcut_count], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), strip_inner[0usize..1usize])
+    var list_sem: widget.Semantics = zero
+    list_sem.role = 20u8
+    list_sem.label = "Ribbon tabs"
+    let (strip_list, strip_list_error) = mem.alloc[widget.Node](a, 1usize)
+    if strip_list_error != ok { ret (zero, TooLarge) }
+    strip_list[0usize] = strip_scoped
+    let tab_list = widget.semantics(0u64, list_sem, style.defaults(), strip_list[0usize..1usize])
+    let (head_parts, head_parts_error) = mem.alloc[widget.Node](a, 2usize)
+    if head_parts_error != ok { ret (zero, TooLarge) }
+    var head_n = 0usize
+    if any_context {
+        head_parts[head_n] = band_row
+        head_n += 1usize
+    }
+    head_parts[head_n] = tab_list
+    head_n += 1usize
+    rows[row] = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, style.defaults(), head_parts[0usize..head_n])
+    row += 1usize
+    // the panel
+    let showing = !options.collapsed || options.popup
+    if showing {
+        let (groups, groups_error) = mem.alloc[widget.Node](a, current.groups.len * 2usize + 1usize)
+        if groups_error != ok { ret (zero, TooLarge) }
+        var g = 0usize
+        var n = 0usize
+        while g < current.groups.len {
+            let (made, made_error) = ribbon_group(a, t, key, g, &current.groups[g], tab_key)
+            if made_error != ok { ret (zero, made_error) }
+            groups[n] = made
+            n += 1usize
+            if g + 1usize < current.groups.len {
+                var rule = control.sized_style(t.tokens.sizes.divider, 80.0)
+                rule.background = paint.Brush { Solid: style.color(t.tokens, .OutlineVariant) }
+                groups[n] = widget.box(0u64, rule, zero)
+                n += 1usize
+            }
+            g += 1usize
+        }
+        var panel_style = style.defaults()
+        panel_style.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
+        panel_style.height = style.Length { Px: 100.0 }
+        panel_style.width = style.Length { Px: options.width }
+        panel_style.padding = style.EdgeLengths { left: style.Length { Px: 4.0 }, top: style.Length { Px: 6.0 }, right: style.Length { Px: 4.0 }, bottom: style.Length { Px: 0.0 } }
+        let panel_row = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Start, gap: 2.0 }, panel_style, groups[0usize..n])
+        // arrow keys in the panel
+        let (panel_moves, panel_moves_error) = mem.alloc[StatusMove](a, 4usize)
+        if panel_moves_error != ok { ret (zero, TooLarge) }
+        let (panel_shortcuts, panel_shortcuts_error) = mem.alloc[widget.Shortcut](a, 7usize)
+        if panel_shortcuts_error != ok { ret (zero, TooLarge) }
+        var pm = 0usize
+        while pm < 4usize {
+            panel_moves[pm] = StatusMove { runtime: t.runtime, keys: panel_keys[0usize..panel_count], backward: pm == 0usize || pm == 2usize, edge: pm >= 2usize }
+            pm += 1usize
+        }
+        panel_shortcuts[0usize] = widget.Shortcut { key: backward_key, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&panel_moves[0usize]), invoke: status_move_fire } }
+        panel_shortcuts[1usize] = widget.Shortcut { key: forward_key, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&panel_moves[1usize]), invoke: status_move_fire } }
+        panel_shortcuts[2usize] = widget.Shortcut { key: 36u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&panel_moves[2usize]), invoke: status_move_fire } }
+        panel_shortcuts[3usize] = widget.Shortcut { key: 35u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&panel_moves[3usize]), invoke: status_move_fire } }
+        jumps[1usize] = RibbonJump { runtime: t.runtime, to: ribbon_tab_key(key, options.selected), dismiss: options.dismiss, dismisses: options.collapsed && options.popup }
+        panel_shortcuts[4usize] = widget.Shortcut { key: 27u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&jumps[1usize]), invoke: ribbon_jump } }
+        panel_shortcuts[5usize] = widget.Shortcut { key: 38u32, modifiers: zero, action: widget.Submit { ctx: mem.cast[*void](&jumps[1usize]), invoke: ribbon_jump } }
+        let (panel_inner, panel_inner_error) = mem.alloc[widget.Node](a, 1usize)
+        if panel_inner_error != ok { ret (zero, TooLarge) }
+        panel_inner[0usize] = panel_row
+        var panel_node = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: panel_shortcuts[0usize..6usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), panel_inner[0usize..1usize])
+        var panel_sem: widget.Semantics = zero
+        panel_sem.role = 2u8
+        panel_sem.label = current.label
+        let (panel_wrap, panel_wrap_error) = mem.alloc[widget.Node](a, 1usize)
+        if panel_wrap_error != ok { ret (zero, TooLarge) }
+        panel_wrap[0usize] = panel_node
+        panel_node = widget.semantics(key + 499u64 + 1u64, panel_sem, style.defaults(), panel_wrap[0usize..1usize])
+        if options.collapsed {
+            let (floating, floating_error) = mem.alloc[widget.Node](a, 1usize)
+            if floating_error != ok { ret (zero, TooLarge) }
+            floating[0usize] = panel_node
+            panel_node = widget.overlay(key + 499u64, widget.Overlay { anchor: ribbon_tab_key(key, options.selected), placement: .Below, offset: zero, modal: false, dismiss: options.dismiss }, style.defaults(), floating[0usize..1usize])
+        }
+        rows[row] = panel_node
+        row += 1usize
+    }
+    // Ctrl+F1 collapses and expands
+    let (collapse_shortcuts, collapse_shortcuts_error) = mem.alloc[widget.Shortcut](a, 1usize)
+    if collapse_shortcuts_error != ok { ret (zero, TooLarge) }
+    var ctrl: input.Modifiers = zero
+    ctrl.control = true
+    collapse_shortcuts[0usize] = widget.Shortcut { key: 112u32, modifiers: ctrl, action: options.collapse }
+    var column_style = style.defaults()
+    column_style.width = style.Length { Px: options.width }
+    let column = widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Stretch, gap: 0.0 }, column_style, rows[0usize..row])
+    let (column_wrap, column_wrap_error) = mem.alloc[widget.Node](a, 1usize)
+    if column_wrap_error != ok { ret (zero, TooLarge) }
+    column_wrap[0usize] = column
+    let scoped = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: collapse_shortcuts[0usize..1usize], default_action: zero, cancel_action: zero, keys: zero }, style.defaults(), column_wrap[0usize..1usize])
+    var sem: widget.Semantics = zero
+    sem.role = 39u8
+    sem.label = "Ribbon"
+    let (scoped_wrap, scoped_wrap_error) = mem.alloc[widget.Node](a, 1usize)
+    if scoped_wrap_error != ok { ret (zero, TooLarge) }
+    scoped_wrap[0usize] = scoped
+    ret (widget.semantics(key, sem, style.defaults(), scoped_wrap[0usize..1usize]), ok)
+}
+
+fn same_words(x: str, y: str) -> bool {
+    if x.len != y.len { ret false }
+    var i = 0usize
+    while i < x.len {
+        if x[i] != y[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// Room for every key `ribbon_panel_keys` can write for `tab`.
+fn ribbon_key_budget(tab: *const RibbonTab) -> usize {
+    var total = 0usize
+    var g = 0usize
+    while g < tab.groups.len {
+        total += 1usize
+        var c = 0usize
+        while c < tab.groups[g].commands.len {
+            total += 2usize + tab.groups[g].commands[c].columns * tab.groups[g].commands[c].rows
+            c += 1usize
+        }
+        g += 1usize
+    }
+    ret total
+}
