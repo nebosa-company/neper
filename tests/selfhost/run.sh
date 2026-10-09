@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.algo.privacy.padme_ceil against the Padme definition by search (L004)
+algo_privacy_padme_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_privacy_padme/src/main.e" "$repo" x64 linux "$test_build/algo-privacy-padme-selfhost")
+[ "$algo_privacy_padme_written" = 'executable written' ]
+chmod +x "$test_build/algo-privacy-padme-selfhost"
+algo_privacy_padme_output=$("$test_build/algo-privacy-padme-selfhost")
+[ "$algo_privacy_padme_output" = 'algo privacy padme ok' ]
 # e.crypto.ristretto against an independent RFC 9496 reference (L003)
 crypto_ristretto_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_ristretto/src/main.e" "$repo" x64 linux "$test_build/crypto-ristretto-selfhost")
 [ "$crypto_ristretto_written" = 'executable written' ]

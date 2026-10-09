@@ -1973,6 +1973,8 @@ fn randomized_response_seeded(bit: bool, p: f64, r: *rand.Pcg64) -> bool
 fn randomized_response_estimate(count_ones: usize, n: usize, p: f64) -> f64
 fn compose_basic(epsilons: []const f64) -> f64
 fn compose_advanced(epsilon: f64, k: usize, delta_prime: f64) -> (f64, err)
+fn top_bit(x: u64) -> u64
+fn padme_ceil(length: u64) -> (u64, err)
 ```
 
 Differential privacy: `laplace` and `laplace_vector`, `gaussian` with `gaussian_sigma`
@@ -1981,6 +1983,8 @@ Warner's estimate, `compose_basic` and `compose_advanced`, `clip`. The mechanism
 from the operating system's randomness (`random_u64` and the uniform and normal draws
 over it); each `_seeded` form takes a caller's `rand.Pcg64` for reproducible tests, and
 `laplace_from_uniform` and `exponential_from_uniform` are the draws' pure halves.
+
+`padme_ceil` (L004) is the Padme length bucketing of Nikitin et al.: the padded length that keeps S = floor(log2 floor(log2 L)) + 1 significant bits, an overhead of at most about 12% and logarithmically many classes; lengths 0 and 1 stay, and a length whose padded form passes 2^64 is refused as `Invalid`. Checked against the definition by search and over every length to 200000 by `algo_privacy_padme`.
 
 ### `e.algo.query`
 

@@ -288,3 +288,31 @@ fn compose_advanced(epsilon: f64, k: usize, delta_prime: f64) -> (f64, err) {
     let first = epsilon * math.sqrt[f64](2.0f64 * kf * math.log[f64](1.0f64 / delta_prime))
     ret (first + kf * epsilon * (math.exp[f64](epsilon) - 1.0f64), ok)
 }
+
+// The index of the highest set bit of `x` (x >= 1).
+fn top_bit(x: u64) -> u64 {
+    var n = 0u64
+    var rest = x
+    while rest > 1u64 {
+        rest = rest >> 1u64
+        n += 1u64
+    }
+    ret n
+}
+
+// Padme (Nikitin et al., "Reducing Metadata Leakage from Encrypted Files and Communication with PURBs"):
+// the padded length for a payload of `length` bytes, so that lengths fall into logarithmically many
+// classes. With E = floor(log2 L) and S = floor(log2 E) + 1, the last E - S bits are cleared by rounding
+// up: only S significant bits are left, so the overhead is at most about 12% and shrinks as L grows, and
+// the number of distinct padded lengths up to 2^n grows like n^2/2 rather than 2^n. Lengths 0 and 1 stay
+// as they are. A length whose padded form does not fit in 64 bits is refused with `Invalid`.
+fn padme_ceil(length: u64) -> (u64, err) {
+    if length < 2u64 { ret (length, ok) }
+    let e = top_bit(length)
+    if e == 0u64 { ret (length, ok) }
+    let s = top_bit(e) + 1u64
+    let last = e - s
+    let mask = (1u64 << last) - 1u64
+    if length > 18446744073709551615u64 - mask { ret (0u64, Invalid) }
+    ret ((length + mask) & ~mask, ok)
+}
