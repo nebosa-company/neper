@@ -2571,6 +2571,69 @@ fn build(a: *mem.Arena) -> (f.Registry, err)
 
 The whole formula library in one registry: `build` registers LET, LETS and every function group, 279 functions under 330 names, the set appdor's default registry holds.
 
+### `e.algo.transpile`
+
+```neper
+fn snapshot() -> str
+fn unknown_function() -> str
+fn unsupported_feature() -> str
+fn semantic_mismatch() -> str
+fn cross_record() -> str
+fn unmigrated_column() -> str
+fn max_source_length() -> usize
+fn row(a: *mem.Arena, s: str, line: str) -> str
+fn table(a: *mem.Arena) -> str
+
+type Dialect = struct { id: str, label: str, refs: str, snapshot: str }
+type Mapping = struct {
+type Diagnostic = struct { category: str, message: str, function: str, has_function: bool }
+type Result = struct {
+type Ranked = struct { dialect: str, score: i64 }
+
+fn count_lines(s: str, tag: u8) -> usize
+fn cells(a: *mem.Arena, line: str, out: []str) -> usize
+fn parse_index(s: str) -> i64
+fn dialects(a: *mem.Arena) -> []Dialect
+fn mappings(a: *mem.Arena, dialect: str) -> []Mapping
+fn find_mapping(entries: []const Mapping, key: str) -> (usize, bool)
+fn is_word(b: u8) -> bool
+fn is_letter(b: u8) -> bool
+fn is_space(b: u8) -> bool
+fn fold(b: u8) -> u8
+fn trim(s: str) -> str
+fn starts_fold(s: str, at: usize, word: str) -> bool
+fn replace_call_refs(a: *mem.Arena, text: str, word: str) -> str
+fn replace_brackets(a: *mem.Arena, text: str) -> str
+fn normalize_refs(a: *mem.Arena, text: str, refs: str) -> str
+fn match_var(p: str) -> (str, str, bool)
+fn quickbase_text(a: *mem.Arena, text: str, comments: []str, comment_count: []usize) -> str
+
+type Work = struct {
+
+fn report(w: *Work, category: str, message: str, function: str, has_function: bool)
+fn translate_date_tokens(value: str, dialect: str) -> str
+fn kids_of(a: *mem.Arena, n: usize) -> []f.Node
+fn number_at(s: str, from: usize) -> (usize, usize)
+fn apply_rewrites(w: *Work, node: f.Node, m: Mapping) -> f.Node
+fn map_call(w: *Work, node: f.Node) -> f.Node
+fn column_known(a: *mem.Arena, columns: []const str, name: str) -> bool
+fn transform(w: *Work, node: f.Node) -> f.Node
+fn op_prec(op: str) -> i32
+fn node_prec(node: f.Node) -> i32
+fn quote_text(a: *mem.Arena, s: str) -> str
+fn is_simple_name(s: str) -> bool
+fn upper_ascii(a: *mem.Arena, s: str) -> str
+fn wrapped(a: *mem.Arena, child: f.Node, parent_prec: i32, right_side: bool, parent_op: str, check_side: bool) -> str
+fn stringify(a: *mem.Arena, node: f.Node) -> str
+fn is_fatal(category: str) -> bool
+fn finish(a: *mem.Arena, source: str, dialect: str, diags: []Diagnostic, count: usize, canonical: str, has_canonical: bool) -> Result
+fn translate(a: *mem.Arena, reg: *const f.Registry, source: str, dialect: str, columns: []const str) -> Result
+fn zero_mappings() -> []const Mapping
+fn detect(a: *mem.Arena, source: str) -> []Ranked
+```
+
+Formula dialect translation: a competitor's formula text becomes canonical formula text with a machine-readable report (`converted`, `converted-with-warnings` or `failed`, each diagnostic a category, message and function). Seven dialects (Airtable, monday.com, ClickUp, Smartsheet, Quickbase, Notion, Google AppSheet) are rows of a data table giving field-reference style and per-function renames, argument reorders, negations, added arguments, warnings, cross-record and unsupported flags; everything else resolves through the registry's names and aliases. `detect` ranks which dialect pasted text was written in. Checked case for case against appdor's own translator.
+
 ### `e.algo.geo`
 
 ```neper

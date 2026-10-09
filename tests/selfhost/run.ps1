@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.algo.transpile against appdor compat translate and detectDialect (L028, D2299)
+$algoTranspilePath = Join-Path $testBuild 'algo-transpile-selfhost.exe'
+$algoTranspileWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_transpile\src\main.e') $repo 'x64' 'windows' $algoTranspilePath
+if ($LASTEXITCODE -ne 0 -or $algoTranspileWritten -ne 'executable written') { throw 'algo_transpile emission failed' }
+$algoTranspileOutput = & $algoTranspilePath
+if ($LASTEXITCODE -ne 0 -or $algoTranspileOutput -ne 'algo transpile ok') { throw "algo_transpile answered wrongly: exit $LASTEXITCODE" }
 # e.algo.formula.library: all 279 functions in one registry (L027, D2298)
 $algoFormulaLibraryPath = Join-Path $testBuild 'algo-formula-library-selfhost.exe'
 $algoFormulaLibraryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_formula_library\src\main.e') $repo 'x64' 'windows' $algoFormulaLibraryPath

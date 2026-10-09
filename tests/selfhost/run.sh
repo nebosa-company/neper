@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.algo.transpile against appdor compat translate and detectDialect (L028, D2299)
+algo_transpile_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_transpile/src/main.e" "$repo" x64 linux "$test_build/algo-transpile-selfhost")
+[ "$algo_transpile_written" = 'executable written' ]
+chmod +x "$test_build/algo-transpile-selfhost"
+algo_transpile_output=$("$test_build/algo-transpile-selfhost")
+[ "$algo_transpile_output" = 'algo transpile ok' ]
 # e.algo.formula.library: all 279 functions in one registry (L027, D2298)
 algo_formula_library_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_formula_library/src/main.e" "$repo" x64 linux "$test_build/algo-formula-library-selfhost")
 [ "$algo_formula_library_written" = 'executable written' ]
