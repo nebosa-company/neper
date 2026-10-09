@@ -4174,7 +4174,9 @@
    "surface": "source",
    "milestone": null,
    "schedule": "later",
-   "direct_dependencies": [],
+   "direct_dependencies": [
+    "e.mem"
+   ],
    "blocked_by": []
   },
   {

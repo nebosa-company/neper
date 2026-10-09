@@ -8,6 +8,8 @@
 // deadlines (a disjoint-set over slots), and `cooldown` the length of the
 // shortest schedule of tasks with a cooling gap between repeats.
 
+use e.mem
+
 error TooSmall
 error Invalid
 
@@ -173,4 +175,215 @@ fn cooldown(tasks: []const usize, kinds: usize, gap: usize, counts: []usize) -> 
     let bound = (most - 1usize) * (gap + 1usize) + at_most
     if bound > tasks.len { ret (bound, ok) }
     ret (tasks.len, ok)
+}
+
+// ---------------------------------------------------------------------------
+// Dependency order (Kahn), after petcow's `topo_order`: dependencies first, the same input always giving the
+// same order, and a graph that cannot be ordered refused, never guessed.
+//
+// A node has an `id` and the targets it `depends_on`. A target names a node whose id is exactly the target OR
+// the target followed by `[`, so depending on `subnet` means all of `subnet[0]`, `subnet[1]` ... (the expanded
+// members of a `for_each` set). Ties are broken by id (bytewise, stable): the initial ready set is sorted by id
+// and so is each batch of nodes a processed node frees. Three refusals: `UnknownDependency` (a target no node
+// matches; `node` and `dep` say which), `SelfDependency` (a target that matches the node itself; `node`) and
+// `Cycle` (`stuck` lists the nodes left over, ascending, which are on or behind a cycle).
+
+
+error UnknownDependency
+error SelfDependency
+error Cycle
+
+type DependencyNode = struct { id: str, depends_on: []const str }
+
+type DependencyOrder = struct { order: []const usize, stuck: []const usize, node: usize, dep: usize }
+
+// Whether node id `id` is the dependency target `wanted` or one of its `wanted[...]` members.
+fn target_matches(id: str, wanted: str) -> bool {
+    if id.len == wanted.len {
+        var i = 0usize
+        while i < id.len {
+            if id[i] != wanted[i] { ret false }
+            i += 1usize
+        }
+        ret true
+    }
+    if id.len <= wanted.len { ret false }
+    var i = 0usize
+    while i < wanted.len {
+        if id[i] != wanted[i] { ret false }
+        i += 1usize
+    }
+    ret id[wanted.len] == 91u8
+}
+
+// Bytewise `left < right`.
+fn id_less(left: str, right: str) -> bool {
+    var i = 0usize
+    while i < left.len && i < right.len {
+        if left[i] != right[i] { ret left[i] < right[i] }
+        i += 1usize
+    }
+    ret left.len < right.len
+}
+
+// Stable insertion sort of `items` (node indices) by node id.
+fn sort_ids(nodes: []const DependencyNode, items: []usize) {
+    var i = 1usize
+    while i < items.len {
+        let v = items[i]
+        var k = i
+        while k > 0usize && id_less(nodes[v].id, nodes[items[k - 1usize]].id) {
+            items[k] = items[k - 1usize]
+            k -= 1usize
+        }
+        items[k] = v
+        i += 1usize
+    }
+}
+
+// The node indices in dependency order. On an error `order` is empty and the fields named above say why.
+fn dependency_order(a: *mem.Arena, nodes: []const DependencyNode) -> (DependencyOrder, err) {
+    var result: DependencyOrder = zero
+    let n = nodes.len
+    if n == 0usize { ret (result, ok) }
+    let (indegree, indegree_error) = mem.alloc[usize](a, n)
+    if indegree_error != ok { ret (result, indegree_error) }
+    let (outdegree, outdegree_error) = mem.alloc[usize](a, n + 1usize)
+    if outdegree_error != ok { ret (result, outdegree_error) }
+    var i = 0usize
+    while i < n {
+        indegree[i] = 0usize
+        i += 1usize
+    }
+    i = 0usize
+    while i <= n {
+        outdegree[i] = 0usize
+        i += 1usize
+    }
+    // Pass 1: resolve every target, refuse the unknown and the self-referential, count the edges.
+    var edges = 0usize
+    i = 0usize
+    while i < n {
+        var d = 0usize
+        while d < nodes[i].depends_on.len {
+            var matched = false
+            var t = 0usize
+            while t < n {
+                if target_matches(nodes[t].id, nodes[i].depends_on[d]) {
+                    matched = true
+                    if t == i {
+                        result.node = i
+                        result.dep = d
+                        ret (result, SelfDependency)
+                    }
+                    indegree[i] += 1usize
+                    outdegree[t + 1usize] += 1usize
+                    edges += 1usize
+                }
+                t += 1usize
+            }
+            if !matched {
+                result.node = i
+                result.dep = d
+                ret (result, UnknownDependency)
+            }
+            d += 1usize
+        }
+        i += 1usize
+    }
+    // Adjacency (dependency -> dependents) in compressed form: outdegree becomes the start offsets.
+    i = 0usize
+    while i < n {
+        outdegree[i + 1usize] += outdegree[i]
+        i += 1usize
+    }
+    var adjacent: []usize = zero
+    if edges > 0usize {
+        let (storage, adjacent_error) = mem.alloc[usize](a, edges)
+        if adjacent_error != ok { ret (result, adjacent_error) }
+        adjacent = storage
+    }
+    let (cursor, cursor_error) = mem.alloc[usize](a, n)
+    if cursor_error != ok { ret (result, cursor_error) }
+    i = 0usize
+    while i < n {
+        cursor[i] = outdegree[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var d = 0usize
+        while d < nodes[i].depends_on.len {
+            var t = 0usize
+            while t < n {
+                if target_matches(nodes[t].id, nodes[i].depends_on[d]) {
+                    adjacent[cursor[t]] = i
+                    cursor[t] += 1usize
+                }
+                t += 1usize
+            }
+            d += 1usize
+        }
+        i += 1usize
+    }
+    // Kahn: the queue is the order itself. The first ready set and every freed batch are sorted by id.
+    let (queue, queue_error) = mem.alloc[usize](a, n)
+    if queue_error != ok { ret (result, queue_error) }
+    var tail = 0usize
+    i = 0usize
+    while i < n {
+        if indegree[i] == 0usize {
+            queue[tail] = i
+            tail += 1usize
+        }
+        i += 1usize
+    }
+    sort_ids(nodes, queue[0usize..tail])
+    var head = 0usize
+    while head < tail {
+        let node = queue[head]
+        head += 1usize
+        let batch = tail
+        var e = outdegree[node]
+        while e < outdegree[node + 1usize] {
+            let next = adjacent[e]
+            indegree[next] -= 1usize
+            if indegree[next] == 0usize {
+                queue[tail] = next
+                tail += 1usize
+            }
+            e += 1usize
+        }
+        sort_ids(nodes, queue[batch..tail])
+    }
+    if tail == n {
+        result.order = queue[0usize..n]
+        ret (result, ok)
+    }
+    // The rest are on a cycle or behind one.
+    let (seen, seen_error) = mem.alloc[bool](a, n)
+    if seen_error != ok { ret (result, seen_error) }
+    i = 0usize
+    while i < n {
+        seen[i] = false
+        i += 1usize
+    }
+    i = 0usize
+    while i < tail {
+        seen[queue[i]] = true
+        i += 1usize
+    }
+    let (stuck, stuck_error) = mem.alloc[usize](a, n - tail)
+    if stuck_error != ok { ret (result, stuck_error) }
+    var count = 0usize
+    i = 0usize
+    while i < n {
+        if !seen[i] {
+            stuck[count] = i
+            count += 1usize
+        }
+        i += 1usize
+    }
+    result.stuck = stuck[0usize..count]
+    ret (result, Cycle)
 }

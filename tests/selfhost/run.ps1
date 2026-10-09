@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.algo.schedule.dependency_order against a transcription of petcow topo_order (L018)
+$algoScheduleOrderPath = Join-Path $testBuild 'algo-schedule-order-selfhost.exe'
+$algoScheduleOrderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_schedule_order\src\main.e') $repo 'x64' 'windows' $algoScheduleOrderPath
+if ($LASTEXITCODE -ne 0 -or $algoScheduleOrderWritten -ne 'executable written') { throw 'algo_schedule_order emission failed' }
+$algoScheduleOrderOutput = & $algoScheduleOrderPath
+if ($LASTEXITCODE -ne 0 -or $algoScheduleOrderOutput -ne 'algo schedule dependency order ok') { throw "algo_schedule_order answered wrongly: exit $LASTEXITCODE" }
 # e.algo.privacy.padme_ceil against the Padme definition by search (L004)
 $algoPrivacyPadmePath = Join-Path $testBuild 'algo-privacy-padme-selfhost.exe'
 $algoPrivacyPadmeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_privacy_padme\src\main.e') $repo 'x64' 'windows' $algoPrivacyPadmePath

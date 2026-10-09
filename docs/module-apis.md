@@ -2283,20 +2283,36 @@ score with the alignment as `Op`s over two rows of storage).
 ```neper
 error TooSmall
 error Invalid
-const NONE: usize = 18446744073709551615usize
 
 fn sort_by(order: []usize, keys: []const i64)
 fn activity_selection(starts: []const i64, ends: []const i64, chosen: []usize, order: []usize) -> (usize, err)
 fn interval_cover(starts: []const i64, ends: []const i64, points: []i64, order: []usize) -> (usize, err)
 fn find_slot(parent: []usize, slot: usize) -> usize
 fn jobs_with_deadlines(deadlines: []const usize, profits: []const i64, slots: []usize, parent: []usize, order: []usize) -> (i64, usize, err)
+
+const NONE: usize = 18446744073709551615usize
+
 fn cooldown(tasks: []const usize, kinds: usize, gap: usize, counts: []usize) -> (usize, err)
+
+error UnknownDependency
+error SelfDependency
+error Cycle
+
+type DependencyNode = struct { id: str, depends_on: []const str }
+type DependencyOrder = struct { order: []const usize, stuck: []const usize, node: usize, dep: usize }
+
+fn target_matches(id: str, wanted: str) -> bool
+fn id_less(left: str, right: str) -> bool
+fn sort_ids(nodes: []const DependencyNode, items: []usize)
+fn dependency_order(a: *mem.Arena, nodes: []const DependencyNode) -> (DependencyOrder, err)
 ```
 
 Greedy scheduling over intervals and jobs: `activity_selection` (earliest end first),
 `interval_cover` (fewest points touching every interval), `jobs_with_deadlines` (most
 profitable first into the latest free slot, disjoint sets over slots) and `cooldown`
 (the shortest schedule bound with a gap between repeats).
+
+`dependency_order` (L018) is petcow's Kahn ordering: nodes with an id and the targets they depend on, a target matching the node of that id or its `target[...]` set members, ties broken by id bytewise, refusals `UnknownDependency`, `SelfDependency` and `Cycle` (with the stuck nodes); checked against a transcription of the Rust by `algo_schedule_order`.
 
 ### `e.algo.timeseries`
 
