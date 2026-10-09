@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.data.validate against appdor validation engine (L031, D2302)
+$dataValidatePath = Join-Path $testBuild 'data-validate-selfhost.exe'
+$dataValidateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_validate\src\main.e') $repo 'x64' 'windows' $dataValidatePath
+if ($LASTEXITCODE -ne 0 -or $dataValidateWritten -ne 'executable written') { throw 'data_validate emission failed' }
+$dataValidateOutput = & $dataValidatePath
+if ($LASTEXITCODE -ne 0 -or $dataValidateOutput -ne 'data validate ok') { throw "data_validate answered wrongly: exit $LASTEXITCODE" }
 # e.algo.checksum against appdor specialized, barcode and nace validators (L030, D2301)
 $algoChecksumPath = Join-Path $testBuild 'algo-checksum-selfhost.exe'
 $algoChecksumWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_checksum\src\main.e') $repo 'x64' 'windows' $algoChecksumPath

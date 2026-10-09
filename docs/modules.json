@@ -220,6 +220,7 @@
     "e.data.rope",
     "e.data.cartesian_tree",
     "e.data.bitmap",
+    "e.data.validate",
     "e.data.hamt",
     "e.data.link_cut",
     "e.data.stream",
@@ -1381,6 +1382,24 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.bytes"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.validate",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.checksum",
+    "e.algo.formula",
+    "e.algo.formula.text",
+    "e.math",
+    "e.mem",
+    "e.str",
+    "e.text.regex",
+    "e.text.utf8"
    ],
    "blocked_by": []
   },

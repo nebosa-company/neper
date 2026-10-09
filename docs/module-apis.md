@@ -1161,6 +1161,129 @@ half: `roaring_add/contains/remove/count/to_list`, `roaring_and/or`) and word-al
 hybrid bit vectors (`wah` encode, `wah_decode`, `wah_count`, `wah_and/or` directly over
 the encoded streams, canonical fills).
 
+### `e.data.validate`
+
+```neper
+fn js_space(u: u32) -> bool
+fn is_digit(c: u8) -> bool
+fn is_hex(c: u8) -> bool
+fn is_letter(c: u8) -> bool
+fn is_word(c: u8) -> bool
+fn js_trim(s: str) -> str
+fn has_space(s: str) -> bool
+fn js_string(a: *mem.Arena, v: f.Value) -> str
+fn js_number(a: *mem.Arena, v: f.Value) -> f64
+fn is_nan(x: f64) -> bool
+fn is_finite(x: f64) -> bool
+fn is_blank(v: f.Value) -> bool
+fn lookup(fields: []const f.Field, name: str) -> f.Value
+fn has_field(fields: []const f.Field, name: str) -> bool
+fn is_deleted(fields: []const f.Field) -> bool
+fn code_point_length(s: str) -> usize
+fn upper_ascii(a: *mem.Arena, s: str) -> str
+fn lower_ascii(a: *mem.Arena, s: str) -> str
+fn all_chars(s: str, from: usize, to: usize, kind: u8) -> bool
+fn is_email(s: str) -> bool
+fn is_url(a: *mem.Arena, s: str) -> bool
+fn is_phone(a: *mem.Arena, s: str) -> bool
+fn is_octet(s: str) -> bool
+fn is_ipv4(s: str) -> bool
+fn is_cidr(s: str) -> bool
+fn is_uuid(s: str) -> bool
+fn is_short_uuid(s: str) -> bool
+fn is_hex_len(s: str, n: usize) -> bool
+fn is_base64(s: str) -> bool
+fn digits_between(s: str, low: usize, high: usize) -> bool
+fn is_tzdb(s: str) -> bool
+fn iso3166_pairs() -> str
+fn is_iso3166(a: *mem.Arena, value: str, alpha3: bool) -> bool
+fn data_uri_image(s: str) -> bool
+fn is_image_text(a: *mem.Arena, raw: str) -> bool
+fn is_image_value(a: *mem.Arena, v: f.Value) -> bool
+fn on_earth(a: *mem.Arena, lat: f64, lng: f64) -> bool
+fn coord_halves(s: str) -> (str, str, bool)
+fn trim_end_space(s: str) -> str
+fn js_trim_start(s: str) -> str
+fn is_decimal_text(s: str) -> bool
+fn text_number(s: str) -> f64
+fn format_check(a: *mem.Arena, type_name: str, v: f.Value) -> (bool, bool)
+fn is_computed_type(t: str) -> bool
+
+type Definition = struct {
+type Rule = struct {
+type Table = struct { fields: []const Definition, rules: []const Rule }
+type Row = struct { fields: []const f.Field }
+type Message = struct { locale: str, key: str, text: str }
+type Context = struct {
+type Violation = struct { field: str, has_field: bool, code: str, severity: str, rule_id: str, has_rule_id: bool, message: str }
+type Outcome = struct { valid: bool, violations: []const Violation }
+
+fn context(locale: str) -> Context
+fn blank_definition() -> Definition
+fn truthy(v: f.Value) -> bool
+fn eval_expr(a: *mem.Arena, reg: *const f.Registry, expr: str, record: []const f.Field, ctx: *const Context) -> f.Value
+fn is_computed_field(d: Definition) -> bool
+
+type Behavior = struct { visible: bool, editable: bool, required: bool }
+
+fn field_behavior(a: *mem.Arena, reg: *const f.Registry, d: Definition, record: []const f.Field, ctx: *const Context) -> Behavior
+fn interpolate(a: *mem.Arena, template: str, params: []const f.Field, record: []const f.Field) -> str
+fn default_message(a: *mem.Arena, ctx: *const Context, code: str, params: []const f.Field, record: []const f.Field) -> str
+fn resolve_message(a: *mem.Arena, ctx: *const Context, custom: str, code: str, params: []const f.Field, record: []const f.Field) -> str
+
+type Sink = struct { items: []Violation, count: usize }
+
+fn push(s: *Sink, v: Violation)
+fn named_text(fields: []const f.Field, name: str) -> (str, bool)
+fn comparable(a: *mem.Arena, v: f.Value, type_name: str) -> (f64, bool)
+fn param(name: str, value: f.Value) -> f.Field
+fn validate_record(a: *mem.Arena, reg: *const f.Registry, table: Table, record: []const f.Field, ctx: *const Context) -> Outcome
+fn zero_params() -> []const f.Field
+fn severity_of(d: Definition, code: str) -> str
+fn join_items(a: *mem.Arena, v: f.Value, sep: str) -> str
+fn violation(a: *mem.Arena, ctx: *const Context, d: Definition, code: str, severity: str, record: []const f.Field, label: str, params: []const f.Field) -> Violation
+fn compute_initial_values(a: *mem.Arena, reg: *const f.Registry, table: Table, ctx: *const Context) -> []const f.Field
+fn apply_auto_set(a: *mem.Arena, reg: *const f.Registry, table: Table, record: []const f.Field, ctx: *const Context) -> []const f.Field
+fn computed_write_violations(a: *mem.Arena, table: Table, write_keys: []const str, ctx: *const Context) -> []const Violation
+
+type Container = struct { id: str, kind: str, show_if: str, fields: []const str, children: []const Container }
+type ContainerState = struct { id: str, visible: bool, self_visible: bool, hidden_by_ancestor: bool, kind: str }
+
+fn walk_containers(a: *mem.Arena, reg: *const f.Registry, nodes: []const Container, parent_visible: bool, record: []const f.Field, ctx: *const Context, out: []ContainerState, n: usize) -> usize
+fn count_containers(nodes: []const Container) -> usize
+fn evaluate_containers(a: *mem.Arena, reg: *const f.Registry, nodes: []const Container, record: []const f.Field, ctx: *const Context) -> []const ContainerState
+
+type FormField = struct { name: str, visible: bool, editable: bool, required: bool, container: str, has_container: bool }
+
+fn holder_of(nodes: []const Container, name: str) -> (str, bool)
+fn evaluate_form_behavior(a: *mem.Arena, reg: *const f.Registry, defs: []const Definition, containers: []const Container, record: []const f.Field, ctx: *const Context) -> []const FormField
+
+type Suggestions = struct { values: []const f.Value, constrained: bool, failed: bool }
+
+fn suggested_values(a: *mem.Arena, reg: *const f.Registry, d: Definition, record: []const f.Field, ctx: *const Context, has_limit: bool, limit: f64) -> Suggestions
+
+type RowResult = struct { index: usize, violations: []const Violation, valid: bool }
+type CodeCount = struct { code: str, count: usize }
+type Summary = struct { total: usize, valid: usize, invalid: usize, by_code: []const CodeCount }
+type ImportReport = struct {
+
+fn has_error(vs: []const Violation) -> bool
+fn validate_import(a: *mem.Arena, reg: *const f.Registry, table: Table, rows: []const Row, policy_name: str, stored_all: []const Row, ctx: *const Context) -> ImportReport
+
+type BackfillHit = struct { index: usize, violation: Violation }
+type BackfillReport = struct { checked: usize, violating: usize, violations: []const BackfillHit, sample: []const BackfillHit }
+
+fn backfill_check(a: *mem.Arena, reg: *const f.Registry, table: Table, records: []const Row, candidate: Definition, field_rule: bool, record_rule: Rule, sample_size: usize, ctx: *const Context) -> BackfillReport
+
+type Duplicate = struct { index: usize, score: f64, matched: usize, compared: usize }
+
+fn duplicate_key(a: *mem.Arena, v: f.Value) -> str
+fn find_duplicates(a: *mem.Arena, record: []const f.Field, existing: []const Row, self_index: i64, names: []const str, threshold: f64) -> []const Duplicate
+fn copy_context(ctx: *const Context) -> Context
+```
+
+Record validation, after appdor's validation engine. `validate_record` checks a record against a table's field rules (required, type format through the built-in format validators and `e.algo.checksum`, min and max, length in code points, pattern, option membership, validIf expressions, uniqueness among live rows) and record-level rules, reporting every violation at once with a severity and a localized or custom message. Conditional behavior (showIf, editableIf, requireIf; hidden fields skipped; containers that hide what they hold; non-constraining suggestions), initial values, auto-set rules and computed-write refusals sit beside it, and set-wise checks cover an import under the reject, skip or flag policy with intra-batch uniqueness, a backfill count for a candidate rule, and fuzzy duplicate warnings. Rule expressions run through `e.algo.formula`; an error is false, so a broken rule fails safe. Checked against appdor's own engine over 1,010 cases.
+
 ### `e.data.hamt`
 
 ```neper

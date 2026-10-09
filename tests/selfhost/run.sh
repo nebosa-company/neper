@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.data.validate against appdor validation engine (L031, D2302)
+data_validate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_validate/src/main.e" "$repo" x64 linux "$test_build/data-validate-selfhost")
+[ "$data_validate_written" = 'executable written' ]
+chmod +x "$test_build/data-validate-selfhost"
+data_validate_output=$("$test_build/data-validate-selfhost")
+[ "$data_validate_output" = 'data validate ok' ]
 # e.algo.checksum against appdor specialized, barcode and nace validators (L030, D2301)
 algo_checksum_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_checksum/src/main.e" "$repo" x64 linux "$test_build/algo-checksum-selfhost")
 [ "$algo_checksum_written" = 'executable written' ]
