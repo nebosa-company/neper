@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# L080 e.fmt.soap against xml.etree
+$fmtSoapPath = Join-Path $testBuild 'fmt-soap-selfhost.exe'
+$fmtSoapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_soap\src\main.e') $repo 'x64' 'windows' $fmtSoapPath
+if ($LASTEXITCODE -ne 0 -or $fmtSoapWritten -ne 'executable written') { throw 'fmt_soap emission failed' }
+$fmtSoapOutput = & $fmtSoapPath
+if ($LASTEXITCODE -ne 0 -or $fmtSoapOutput -ne 'fmt soap ok') { throw "fmt_soap answered wrongly: exit $LASTEXITCODE" }
 # L079 the NTP/SNTP codec against struct and datetime
 $timeNtpPath = Join-Path $testBuild 'time-ntp-selfhost.exe'
 $timeNtpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_ntp\src\main.e') $repo 'x64' 'windows' $timeNtpPath

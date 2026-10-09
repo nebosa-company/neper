@@ -114,6 +114,7 @@
     "e.fmt.tar",
     "e.fmt.yaml",
     "e.fmt.xml",
+    "e.fmt.soap",
     "e.fmt.html",
     "e.fmt.html.template",
     "e.fmt.png",
@@ -1766,6 +1767,20 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.io",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.soap",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.xml",
     "e.io",
     "e.mem",
     "e.str"

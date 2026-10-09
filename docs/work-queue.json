@@ -1192,17 +1192,6 @@
       "evidence": "Planning only (D1812). Reference: JustCode tests/consistency.test.js. Not yet: extend existing Neper validation tools to check icon/resource references, translation-key coverage and duplicate keys, locale placeholder agreement, command/menu callback contracts and mnemonic conflicts. Consume actual resource/command registries and generated manifests; do not claim arbitrary dynamic source references can be proven by regex. Include small malformed-registry cases proving each check fails and wire checks into the existing build/test entry point with actionable locations. Keep repository-specific manifests, rules and CI wiring in scripts/tests; add no runtime validation framework or standard-library dependency."
     },
     {
-      "id": "L080",
-      "category": "library",
-      "group": "Formats",
-      "order": 178,
-      "title": "SOAP envelope and WSDL-type codec in e.fmt",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1819). Enterprise doc glue missing: SOAP 1.1/1.2 envelope build/parse and WSDL/XSD-type mapping over e.fmt.xml and e.net.http, faults as typed errors. Canned-XML fixtures, no server side. Ranked pure-testable."
-    },
-    {
       "id": "L081",
       "category": "library",
       "group": "Formats",
