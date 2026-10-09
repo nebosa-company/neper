@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# L081 part 3a: e.fmt.xpath against libxml2
+fmt_xpath_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xpath/src/main.e" "$repo" x64 linux "$test_build/fmt-xpath-selfhost")
+[ "$fmt_xpath_written" = 'executable written' ]
+chmod +x "$test_build/fmt-xpath-selfhost"
+fmt_xpath_output=$("$test_build/fmt-xpath-selfhost")
+[ "$fmt_xpath_output" = 'fmt xpath ok' ]
 # L081 part 2: e.fmt.xsd.schema against libxml2
 fmt_xsd_schema_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xsd_schema/src/main.e" "$repo" x64 linux "$test_build/fmt-xsd-schema-selfhost")
 [ "$fmt_xsd_schema_written" = 'executable written' ]

@@ -116,6 +116,7 @@
     "e.fmt.xml",
     "e.fmt.xsd",
     "e.fmt.xsd.schema",
+    "e.fmt.xpath",
     "e.fmt.soap",
     "e.fmt.html",
     "e.fmt.html.template",
@@ -1798,6 +1799,21 @@
     "e.mem",
     "e.str",
     "e.text.regex",
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.xpath",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.xml",
+    "e.math",
+    "e.mem",
+    "e.str",
     "e.text.utf8"
    ],
    "blocked_by": []

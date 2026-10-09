@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# L081 part 3a: e.fmt.xpath against libxml2
+$fmtXpathPath = Join-Path $testBuild 'fmt-xpath-selfhost.exe'
+$fmtXpathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_xpath\src\main.e') $repo 'x64' 'windows' $fmtXpathPath
+if ($LASTEXITCODE -ne 0 -or $fmtXpathWritten -ne 'executable written') { throw 'fmt_xpath emission failed' }
+$fmtXpathOutput = & $fmtXpathPath
+if ($LASTEXITCODE -ne 0 -or $fmtXpathOutput -ne 'fmt xpath ok') { throw "fmt_xpath answered wrongly: exit $LASTEXITCODE" }
 # L081 part 2: e.fmt.xsd.schema against libxml2
 $fmtXsdSchemaPath = Join-Path $testBuild 'fmt-xsd-schema-selfhost.exe'
 $fmtXsdSchemaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_xsd_schema\src\main.e') $repo 'x64' 'windows' $fmtXsdSchemaPath

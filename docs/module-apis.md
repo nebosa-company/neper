@@ -13069,6 +13069,214 @@ substitutionGroup, abstract, key, keyref, unique, notation, xsi:type and pattern
 express. Errors are found in document order, attributes before content, and a content-model failure points
 at the first child that cannot continue (or at the parent when content ends early).
 
+### `e.fmt.xpath`
+
+```neper
+error Invalid
+error Unsupported
+error UnknownFunction
+error UnknownVariable
+error WrongArity
+error TypeMismatch
+error TooComplex
+
+const NONE: u32 = 4294967295u32
+
+type XNode = struct { id: u32, attribute: u32 }
+type Kind = enum u8 { NodeSet, String, Number, Boolean }
+type Value = struct { kind: Kind, nodes: []XNode, text: str, number: f64, flag: bool }
+type Binding = struct { prefix: str, uri: str }
+type Variable = struct { name: str, value: Value }
+type Variables = struct { items: []Variable, count: usize }
+type Extensions = struct { current: XNode, has_current: bool }
+type Expr = struct { kind: u8, op: u8, left: u32, right: u32, text: str, number: f64, args: []u32, steps: []Step, absolute: bool, preds: []u32 }
+type Step = struct { axis: u8, test: u8, prefix: str, local: str, preds: []u32 }
+type Compiled = struct { exprs: []Expr, count: usize, root: u32, bindings: []const Binding }
+
+const E_OR: u8 = 1u8
+const E_AND: u8 = 2u8
+const E_EQ: u8 = 3u8
+const E_NE: u8 = 4u8
+const E_LT: u8 = 5u8
+const E_LE: u8 = 6u8
+const E_GT: u8 = 7u8
+const E_GE: u8 = 8u8
+const E_ADD: u8 = 9u8
+const E_SUB: u8 = 10u8
+const E_MUL: u8 = 11u8
+const E_DIV: u8 = 12u8
+const E_MOD: u8 = 13u8
+const E_NEG: u8 = 14u8
+const E_UNION: u8 = 15u8
+const E_NUMBER: u8 = 16u8
+const E_LITERAL: u8 = 17u8
+const E_VAR: u8 = 18u8
+const E_CALL: u8 = 19u8
+const E_PATH: u8 = 20u8
+const A_CHILD: u8 = 0u8
+const A_DESCENDANT: u8 = 1u8
+const A_PARENT: u8 = 2u8
+const A_ANCESTOR: u8 = 3u8
+const A_FOLLOWING_SIBLING: u8 = 4u8
+const A_PRECEDING_SIBLING: u8 = 5u8
+const A_FOLLOWING: u8 = 6u8
+const A_PRECEDING: u8 = 7u8
+const A_ATTRIBUTE: u8 = 8u8
+const A_NAMESPACE: u8 = 9u8
+const A_SELF: u8 = 10u8
+const A_DESCENDANT_OR_SELF: u8 = 11u8
+const A_ANCESTOR_OR_SELF: u8 = 12u8
+const T_NAME: u8 = 0u8
+const T_ANY: u8 = 1u8
+const T_PREFIX_ANY: u8 = 2u8
+const T_NODE: u8 = 3u8
+const T_TEXT: u8 = 4u8
+const T_COMMENT: u8 = 5u8
+const T_PI: u8 = 6u8
+
+fn same(a: str, b: str) -> bool
+
+type Token = struct { kind: u8, text: str, number: f64 }
+
+const K_END: u8 = 0u8
+const K_LPAREN: u8 = 1u8
+const K_RPAREN: u8 = 2u8
+const K_LBRACKET: u8 = 3u8
+const K_RBRACKET: u8 = 4u8
+const K_DOT: u8 = 5u8
+const K_DOTDOT: u8 = 6u8
+const K_AT: u8 = 7u8
+const K_COMMA: u8 = 8u8
+const K_COLONCOLON: u8 = 9u8
+const K_SLASH: u8 = 10u8
+const K_SLASHSLASH: u8 = 11u8
+const K_PIPE: u8 = 12u8
+const K_PLUS: u8 = 13u8
+const K_MINUS: u8 = 14u8
+const K_EQ: u8 = 15u8
+const K_NE: u8 = 16u8
+const K_LT: u8 = 17u8
+const K_LE: u8 = 18u8
+const K_GT: u8 = 19u8
+const K_GE: u8 = 20u8
+const K_STAR: u8 = 21u8
+const K_NUMBER: u8 = 22u8
+const K_LITERAL: u8 = 23u8
+const K_NAME: u8 = 24u8
+const K_VAR: u8 = 25u8
+const K_PREFIX_STAR: u8 = 26u8
+const K_MUL: u8 = 44u8
+
+fn is_digit(c: u8) -> bool
+fn is_space(c: u8) -> bool
+fn name_start(c: u8) -> bool
+fn name_byte(c: u8) -> bool
+fn scan_ncname(text: str, at: usize) -> usize
+fn operator_context(prev: u8, has_prev: bool) -> bool
+
+const K_AND: u8 = 40u8
+const K_OR: u8 = 41u8
+const K_MOD: u8 = 42u8
+const K_DIV: u8 = 43u8
+
+fn tokenize(a: *mem.Arena, text: str) -> ([]Token, usize, err)
+
+type Parser = struct { a: *mem.Arena, tokens: []Token, count: usize, at: usize, exprs: []Expr, used: usize, depth: u32 }
+
+fn peek_kind(p: *const Parser) -> u8
+fn new_expr(p: *Parser, kind: u8) -> (u32, err)
+fn binary(p: *Parser, kind: u8, left: u32, right: u32) -> (u32, err)
+fn parse_or(p: *Parser) -> (u32, err)
+fn parse_and(p: *Parser) -> (u32, err)
+fn parse_equality(p: *Parser) -> (u32, err)
+fn parse_relational(p: *Parser) -> (u32, err)
+fn parse_additive(p: *Parser) -> (u32, err)
+fn is_multiply(p: *const Parser) -> bool
+fn parse_multiplicative(p: *Parser) -> (u32, err)
+fn parse_unary(p: *Parser) -> (u32, err)
+fn parse_union(p: *Parser) -> (u32, err)
+fn axis_named(name: str) -> (u8, bool)
+fn is_node_type(name: str) -> bool
+fn parse_predicates(p: *Parser) -> ([]u32, err)
+fn parse_step(p: *Parser) -> (Step, err)
+fn starts_step(k: u8) -> bool
+fn parse_steps(p: *Parser, required: bool) -> ([]Step, err)
+fn parse_primary(p: *Parser) -> (u32, err)
+fn is_primary_start(p: *const Parser) -> bool
+fn parse_path(p: *Parser) -> (u32, err)
+fn compile(a: *mem.Arena, text: str, bindings: []const Binding) -> (Compiled, err)
+fn nodeset_value(nodes: []XNode) -> Value
+fn string_value(text: str) -> Value
+fn number_value(n: f64) -> Value
+fn boolean_value(b: bool) -> Value
+fn infinity() -> f64
+fn not_a_number() -> f64
+fn is_nan(x: f64) -> bool
+fn node_key(n: XNode) -> u64
+
+type Context = struct { node: XNode, position: usize, size: usize }
+
+fn node_of(d: *const xml.Document, id: u32) -> xml.Node
+fn split_name(name: str) -> (str, str)
+fn declares(attribute_name: str, prefix: str) -> bool
+fn resolve_prefix(d: *const xml.Document, id: u32, prefix: str) -> (str, bool)
+fn is_xmlns_name(name: str) -> bool
+fn qname_of(d: *const xml.Document, n: XNode) -> str
+fn expanded_name(d: *const xml.Document, n: XNode) -> (str, str)
+fn subtree_end(d: *const xml.Document, id: u32) -> u32
+fn string_of(a: *mem.Arena, d: *const xml.Document, n: XNode) -> (str, err)
+
+type NodeList = struct { items: []XNode, count: usize }
+
+fn push_node(a: *mem.Arena, list: *NodeList, n: XNode) -> err
+fn sort_unique(a: *mem.Arena, nodes: []XNode) -> ([]XNode, err)
+fn is_reverse(axis: u8) -> bool
+fn axis_nodes(a: *mem.Arena, d: *const xml.Document, n: XNode, axis: u8, list: *NodeList) -> err
+fn lookup_binding(c: *const Compiled, prefix: str) -> (str, bool)
+fn matches_test(d: *const xml.Document, c: *const Compiled, step: Step, n: XNode) -> bool
+fn char_count(text: str) -> usize
+fn char_offset(text: str, k: usize) -> usize
+fn number_text(a: *mem.Arena, x: f64) -> (str, err)
+fn strip_integer_fraction(text: str) -> str
+fn text_number(text: str) -> f64
+fn to_string(a: *mem.Arena, d: *const xml.Document, v: Value) -> (str, err)
+fn to_number(a: *mem.Arena, d: *const xml.Document, v: Value) -> (f64, err)
+fn to_boolean(v: Value) -> bool
+fn compare_numbers(op: u8, x: f64, y: f64) -> bool
+fn compare_strings(op: u8, x: str, y: str) -> bool
+fn compare(a: *mem.Arena, d: *const xml.Document, op: u8, x: Value, y: Value) -> (bool, err)
+fn compare_bools(op: u8, x: bool, y: bool) -> bool
+
+type Env = struct {
+
+fn lookup_variable(vars: *const Variables, name: str) -> (Value, bool)
+fn eval(env: *Env, id: u32, ctx: Context) -> (Value, err)
+fn apply_predicates(env: *Env, preds: []const u32, list: []XNode) -> ([]XNode, err)
+fn eval_path(env: *Env, e: Expr, ctx: Context) -> (Value, err)
+fn eval_inner(env: *Env, id: u32, ctx: Context) -> (Value, err)
+fn fmod(x: f64, y: f64) -> f64
+fn arg_value(env: *Env, e: Expr, k: usize, ctx: Context) -> (Value, err)
+fn arg_string(env: *Env, e: Expr, k: usize, ctx: Context) -> (str, err)
+fn arg_number(env: *Env, e: Expr, k: usize, ctx: Context) -> (f64, err)
+fn xpath_round(x: f64) -> f64
+fn context_nodeset(ctx: Context, a: *mem.Arena) -> (Value, err)
+fn first_node(env: *Env, e: Expr, ctx: Context) -> (XNode, bool, err)
+fn call_function(env: *Env, e: Expr, ctx: Context) -> (Value, err)
+fn evaluate(a: *mem.Arena, c: *const Compiled, d: *const xml.Document, ctx: Context, vars: *const Variables, ext: *const Extensions) -> (Value, err)
+fn no_variables() -> Variables
+fn no_extensions() -> Extensions
+fn run(a: *mem.Arena, d: *const xml.Document, text: str, bindings: []const Binding) -> (Value, err)
+```
+
+XPath 1.0 over an `e.fmt.xml` document. `compile` parses an expression once into an arena (prefixes bound
+through `Binding`s); `evaluate` runs it at a `Context` against optional `Variables` and `Extensions` (`current()`
+for XSLT); `run` compiles and evaluates at the root element. All operators, the twelve axes except `namespace`
+(always empty), every node test, predicates, and the core function library, with the four value types and
+their conversions as the specification defines them, including the existential comparison of node-sets. A
+node is a DOM `NodeId` or an attribute as its owner plus an index; node-sets are in document order.
+Numbers print as the shortest decimal that identifies the double, never with an exponent. `id()` is empty
+(no DTD), and an unbound variable, an unknown function, the wrong arity or a type error answers its own error.
+
 ### `e.fmt.soap`
 
 ```neper
