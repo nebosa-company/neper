@@ -6,8 +6,8 @@
             explicitly, so the fixture needs no internet and no privileged port)
   TCP 8081  HTTP
   TCP 8443  HTTPS, TLS 1.3 only, the leaf certificate signed by the fixture CA (names neper.test,
-            api.exchange.coinbase.com, api.twelvedata.com); besides the plain page it answers the Stocks
-            fixture's two APIs from the recordings made by record.py
+            api.exchange.coinbase.com, api.twelvedata.com, www.alphavantage.co, api.polygon.io); besides the plain
+            page it answers the Stocks fixture's APIs from the recordings made by record.py
 
 Writes the ready-file once all three listen, then serves until killed.
 """
@@ -49,6 +49,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.reply(200, known.read_bytes(), 'application/json')
             else:
                 self.reply(404, b'{"message":"NotFound"}', 'application/json')
+            return
+        if host == 'api.twelvedata.com' and url.path == '/symbol_search':
+            # Public, no key: the recorded matches for "app", an empty list for anything else.
+            if query.get('symbol', [''])[0].lower() == 'app':
+                self.reply(200, (here / 'symbol_search-app.json').read_bytes(), 'application/json')
+            else:
+                self.reply(200, b'{"data":[],"status":"ok"}', 'application/json')
+            return
+        if host == 'www.alphavantage.co' and url.path == '/query' and query.get('function', [''])[0] == 'TIME_SERIES_DAILY':
+            # The demo key serves IBM only; any other pair gets the "Information" notice the real service sends.
+            if query.get('apikey', [''])[0] == 'demo' and query.get('symbol', [''])[0] == 'IBM':
+                self.reply(200, (here / 'daily-IBM.json').read_bytes(), 'application/json')
+            else:
+                self.reply(200, b'{"Information":"The **demo** API key is for demo purposes only."}', 'application/json')
+            return
+        if host == 'api.polygon.io' and url.path.startswith('/v2/aggs/ticker/'):
+            # No public key exists: the fixture key `polykey` and the symbol AAPL, the documented shape.
+            if query.get('apiKey', [''])[0] != 'polykey':
+                self.reply(401, b'{"status":"ERROR","request_id":"fixture","error":"Unknown API Key"}', 'application/json')
+            elif url.path.split('/')[4] == 'AAPL':
+                self.reply(200, (here / 'aggs-AAPL.json').read_bytes(), 'application/json')
+            else:
+                self.reply(200, b'{"ticker":"NONE","queryCount":0,"resultsCount":0,"adjusted":true,"status":"OK","request_id":"fixture","count":0}', 'application/json')
             return
         if host == 'api.twelvedata.com' and url.path == '/time_series':
             if query.get('apikey', [''])[0] != 'demo':

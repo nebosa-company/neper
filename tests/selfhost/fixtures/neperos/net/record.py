@@ -28,3 +28,21 @@ series = fetch('https://api.twelvedata.com/time_series?symbol=AAPL&interval=1day
 assert series.get('status') == 'ok', series
 (HERE / 'time_series-AAPL.json').write_text(json.dumps(series, separators=(',', ':')), encoding='utf-8')
 print('AAPL', len(series['values']), 'values, newest', series['values'][0]['datetime'])
+
+# Alpha Vantage's TIME_SERIES_DAILY for IBM with its public demo key (the demo key serves IBM only), and Twelve
+# Data's symbol_search for "app" (public, no key). The Polygon reply is not recorded: Polygon has no public
+# key, so the file is the AAPL closes above in the shape its docs give for /v2/aggs (results[].c, newest
+# first, status OK); only the shape is claimed, not a recording.
+daily = fetch('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=IBM&apikey=demo')
+assert 'Time Series (Daily)' in daily, daily
+(HERE / 'daily-IBM.json').write_text(json.dumps(daily, separators=(',', ':')), encoding='utf-8')
+print('IBM', len(daily['Time Series (Daily)']), 'days, newest', next(iter(daily['Time Series (Daily)'])))
+found = fetch('https://api.twelvedata.com/symbol_search?symbol=app&outputsize=30')
+assert found.get('status') == 'ok', found
+(HERE / 'symbol_search-app.json').write_text(json.dumps(found, separators=(',', ':')), encoding='utf-8')
+print('search app', len(found['data']), 'matches')
+results = [{'v': 1, 'vw': float(v['close']), 'o': float(v['open']), 'c': float(v['close']), 'h': float(v['high']),
+            'l': float(v['low']), 't': 1700000000000 - 86400000 * i, 'n': 1} for i, v in enumerate(series['values'])]
+(HERE / 'aggs-AAPL.json').write_text(json.dumps({'ticker': 'AAPL', 'queryCount': len(results), 'resultsCount': len(results),
+    'adjusted': True, 'results': results, 'status': 'OK', 'request_id': 'fixture', 'count': len(results)}, separators=(',', ':')), encoding='utf-8')
+print('aggs AAPL', len(results), 'results (shape from docs)')

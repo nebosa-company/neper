@@ -10,6 +10,10 @@
 // Both go through the network server's socket capability (httpc.e); with no network, or on any error, the
 // ticker keeps what it had and the status line says why. Daily closes, delayed, not real time; Yahoo's
 // unofficial endpoints are left alone and Stooq's CSV now sits behind a bot check.
+// The stock provider is chosen in the Key sheet: Twelve Data, Alpha Vantage (TIME_SERIES_DAILY) or Polygon
+// (/v2/aggs), each with its own key; changing it clears the key. Finnhub is not offered: its free tier has
+// no daily history. The Add sheet's Find lists stock symbols matching what was typed (Twelve Data's
+// symbol_search, no key); crypto has no search, a pair is typed.
 // ponytail: the key lives in this process only, so it is asked for again each time the app opens -- an app
 // cannot reach storage yet (queue items C116 Secure and C125 Files hold the encrypted home for it).
 use e.mem
@@ -37,6 +41,11 @@ const KEY_SCREEN: usize = 3usize
 const JOB_NONE: usize = 0usize
 const JOB_REFRESH: usize = 1usize
 const JOB_ADD: usize = 2usize
+const JOB_FIND: usize = 3usize
+const FOUND_MAX: usize = 5usize
+const PROVIDER_TWELVE: usize = 0usize
+const PROVIDER_ALPHA: usize = 1usize
+const PROVIDER_POLYGON: usize = 2usize
 
 const ID_ROW: usize = 100usize
 const ID_ADD: usize = 200usize
@@ -49,6 +58,9 @@ const ID_STOCK_KIND: usize = 800usize
 const ID_CRYPTO_KIND: usize = 801usize
 const ID_CANCEL: usize = 802usize
 const ID_CLEAR_KEY: usize = 900usize
+const ID_FIND: usize = 803usize
+const ID_PROVIDER: usize = 810usize
+const ID_MATCH: usize = 1300usize
 
 type State = struct {
     prices: [540]f32,
@@ -65,6 +77,12 @@ type State = struct {
     entry: ui.Field,
     key: ui.Field,
     add_crypto: bool,
+    provider: usize,
+    found: usize,
+    found_symbol: [50]u8,
+    found_symbol_len: [5]usize,
+    found_name: [120]u8,
+    found_name_len: [5]usize,
     hits: ui.Hits,
     status: [72]u8,
     status_len: usize,
@@ -312,6 +330,7 @@ fn reason_text(reason: usize) -> str {
     if reason == 5usize { ret "key refused" }
     if reason == 6usize { ret "not enough history" }
     if reason == 7usize { ret "needs an API key" }
+    if reason == 8usize { ret "symbol unknown" }
     ret "failed"
 }
 
@@ -374,8 +393,149 @@ fn fetch_crypto(a: *mem.Arena, s: *State, t: usize) -> bool {
     ret good
 }
 
+fn provider_name(p: usize) -> str {
+    if p == PROVIDER_ALPHA { ret "Alpha Vantage" }
+    if p == PROVIDER_POLYGON { ret "Polygon" }
+    ret "Twelve Data"
+}
+
+// One GET answered with a JSON document; on failure s.reason says why and the value is empty. A 401 or 403
+// is a refused key (Polygon answers its key errors with a status); other statuses than 200 are a bad reply.
+// The parsed value lives in `a` above the caller's mark.
+fn fetch_json(a: *mem.Arena, s: *State, host: str, path: str) -> (json.Value, bool) {
+    var none: json.Value = zero
+    let (reply, get_error) = httpc.get(a, host, path, "")
+    if get_error != ok {
+        s.reason = reason_of(get_error)
+        ret (none, false)
+    }
+    if reply.status == 401usize || reply.status == 403usize {
+        s.reason = 5usize
+        ret (none, false)
+    }
+    if reply.status != 200usize {
+        s.reason = 4usize
+        ret (none, false)
+    }
+    let (parsed, parse_error) = json.parse(a, reply.body, json.Options { allow_duplicate_keys: false, max_depth: 8u16 })
+    if parse_error != ok {
+        s.reason = 4usize
+        ret (none, false)
+    }
+    ret (parsed, true)
+}
+
+// Alpha Vantage TIME_SERIES_DAILY (compact: the newest 100 days), an object keyed by date, newest first:
+// {"Time Series (Daily)": {"2026-10-08": {"4. close": "226.6100", ...}, ...}}. A refused or rate-limited key
+// gets {"Information": ...} or {"Note": ...}, an unknown symbol {"Error Message": ...}.
+fn fetch_alpha(a: *mem.Arena, s: *State, t: usize) -> bool {
+    let mark = mem.mark(a)
+    var path = ui.join(a, "/query?function=TIME_SERIES_DAILY&symbol=", symbol_of(s, t), "&apikey=")
+    path = ui.join(a, path, ui.field_text(a, &s.key), "")
+    let (parsed, fetched) = fetch_json(a, s, "www.alphavantage.co", path)
+    if !fetched {
+        mem.reset(a, mark)
+        ret false
+    }
+    var good = false
+    switch parsed {
+    case .Object as fields:
+        let (series, has_series) = member(fields, "Time Series (Daily)")
+        if has_series {
+            switch series {
+            case .Object as days:
+                if days.len >= DAYS {
+                    good = true
+                    var d = 0usize
+                    while d < DAYS && good {
+                        switch days[DAYS - 1usize - d].value {
+                        case .Object as row:
+                            let (closing, has_close) = member(row, "4. close")
+                            if has_close {
+                                let (close, close_ok) = price_of(a, closing)
+                                if close_ok && close > 0.0 { s.prices[t * DAYS + d] = close } else { good = false }
+                            } else {
+                                good = false
+                            }
+                        default:
+                            good = false
+                        }
+                        d += 1usize
+                    }
+                } else {
+                    s.reason = 6usize
+                }
+            default:
+                s.reason = 4usize
+            }
+        } else {
+            let (unused, has_error) = member(fields, "Error Message")
+            if has_error { s.reason = 8usize } else { s.reason = 5usize }
+        }
+    default:
+        s.reason = 4usize
+    }
+    mem.reset(a, mark)
+    if !good && s.reason == 0usize { s.reason = 4usize }
+    ret good
+}
+
+// Polygon /v2/aggs daily bars, newest first (sort=desc): {"results": [{"c": 189.52, "t": ...}, ...],
+// "resultsCount": 60, "status": "OK"}. The range runs from 2020 to 2099, so `limit` decides what comes back.
+fn fetch_polygon(a: *mem.Arena, s: *State, t: usize) -> bool {
+    let mark = mem.mark(a)
+    var path = ui.join(a, "/v2/aggs/ticker/", symbol_of(s, t), "/range/1/day/2020-01-01/2099-12-31?adjusted=true&sort=desc&limit=60&apiKey=")
+    path = ui.join(a, path, ui.field_text(a, &s.key), "")
+    let (parsed, fetched) = fetch_json(a, s, "api.polygon.io", path)
+    if !fetched {
+        mem.reset(a, mark)
+        ret false
+    }
+    var good = false
+    switch parsed {
+    case .Object as fields:
+        let (results, has_results) = member(fields, "results")
+        if has_results {
+            switch results {
+            case .Array as bars:
+                if bars.len >= DAYS {
+                    good = true
+                    var d = 0usize
+                    while d < DAYS && good {
+                        switch bars[DAYS - 1usize - d] {
+                        case .Object as bar:
+                            let (closing, has_close) = member(bar, "c")
+                            if has_close {
+                                let (close, close_ok) = price_of(a, closing)
+                                if close_ok && close > 0.0 { s.prices[t * DAYS + d] = close } else { good = false }
+                            } else {
+                                good = false
+                            }
+                        default:
+                            good = false
+                        }
+                        d += 1usize
+                    }
+                } else {
+                    s.reason = 6usize
+                }
+            default:
+                s.reason = 4usize
+            }
+        } else {
+            // A valid key and a symbol it finds nothing for: status OK and no "results".
+            s.reason = 8usize
+        }
+    default:
+        s.reason = 4usize
+    }
+    mem.reset(a, mark)
+    if !good && s.reason == 0usize { s.reason = 4usize }
+    ret good
+}
+
 // Twelve Data time_series, newest first: {"values": [{"datetime": ..., "close": "189.52", ...}], "status": "ok"}.
-fn fetch_stock(a: *mem.Arena, s: *State, t: usize) -> bool {
+fn fetch_twelve(a: *mem.Arena, s: *State, t: usize) -> bool {
     if s.key.len == 0usize {
         s.reason = 7usize
         ret false
@@ -438,10 +598,104 @@ fn fetch_stock(a: *mem.Arena, s: *State, t: usize) -> bool {
     ret good
 }
 
+fn fetch_stock(a: *mem.Arena, s: *State, t: usize) -> bool {
+    if s.key.len == 0usize {
+        s.reason = 7usize
+        ret false
+    }
+    if s.provider == PROVIDER_ALPHA { ret fetch_alpha(a, s, t) }
+    if s.provider == PROVIDER_POLYGON { ret fetch_polygon(a, s, t) }
+    ret fetch_twelve(a, s, t)
+}
+
 fn fetch_ticker(a: *mem.Arena, s: *State, t: usize) -> bool {
     s.reason = 0usize
     if s.crypto[t] { ret fetch_crypto(a, s, t) }
     ret fetch_stock(a, s, t)
+}
+
+// Twelve Data symbol_search for what is typed in the Add sheet (no key): up to FOUND_MAX distinct symbols with
+// their names, in `found_*`. {"data": [{"symbol": "APP", "instrument_name": "AppLovin ..."}, ...], "status": "ok"}.
+fn find_symbols(a: *mem.Arena, s: *State) -> bool {
+    s.found = 0usize
+    s.reason = 0usize
+    let mark = mem.mark(a)
+    // Only letters, digits, '-' and '.' go into the URL.
+    var term: [32]u8 = zero
+    var n = 0usize
+    var i = 0usize
+    while i < s.entry.len && n < 32usize {
+        let c = s.entry.bytes[i]
+        if (c >= 97u8 && c <= 122u8) || (c >= 48u8 && c <= 57u8) || c == 45u8 || c == 46u8 {
+            term[n] = c
+            n += 1usize
+        }
+        i += 1usize
+    }
+    let (word, word_error) = mem.alloc[u8](a, n)
+    if word_error != ok { ret false }
+    i = 0usize
+    while i < n {
+        word[i] = term[i]
+        i += 1usize
+    }
+    let path = ui.join(a, "/symbol_search?outputsize=30&symbol=", word[0usize..n], "")
+    let (parsed, fetched) = fetch_json(a, s, "api.twelvedata.com", path)
+    if !fetched {
+        mem.reset(a, mark)
+        ret false
+    }
+    switch parsed {
+    case .Object as fields:
+        let (data, has_data) = member(fields, "data")
+        if has_data {
+            switch data {
+            case .Array as matches:
+                var m = 0usize
+                while m < matches.len && s.found < FOUND_MAX {
+                    switch matches[m] {
+                    case .Object as row:
+                        let (symbol, got_symbol) = member(row, "symbol")
+                        let (name, got_name) = member(row, "instrument_name")
+                        if got_symbol && got_name {
+                            switch symbol {
+                            case .String as symbol_text:
+                                switch name {
+                                case .String as name_text:
+                                    var seen = false
+                                    var f = 0usize
+                                    while f < s.found {
+                                        if ui.same(s.found_symbol[f * SYMBOL_BYTES..f * SYMBOL_BYTES + s.found_symbol_len[f]], symbol_text) { seen = true }
+                                        f += 1usize
+                                    }
+                                    if !seen && symbol_text.len <= SYMBOL_BYTES && symbol_text.len > 0usize {
+                                        s.found_symbol_len[s.found] = set_text(s.found_symbol[0usize..], s.found * SYMBOL_BYTES, SYMBOL_BYTES, symbol_text)
+                                        s.found_name_len[s.found] = set_text(s.found_name[0usize..], s.found * NAME_BYTES, NAME_BYTES, name_text)
+                                        s.found += 1usize
+                                    }
+                                default:
+                                    s.reason = 0usize
+                                }
+                            default:
+                                s.reason = 0usize
+                            }
+                        }
+                    default:
+                        s.reason = 0usize
+                    }
+                    m += 1usize
+                }
+            default:
+                s.reason = 4usize
+            }
+        } else {
+            s.reason = 4usize
+        }
+    default:
+        s.reason = 4usize
+    }
+    mem.reset(a, mark)
+    ret s.reason == 0usize
 }
 
 // One step of the running job, done on a tick: Sync fetches the next ticker, Add looks the new one up.
@@ -478,6 +732,18 @@ fn job_step(a: *mem.Arena, s: *State) {
             s.job_failed += 1usize
         }
         say_status(s, ui.join(a, ui.join(a, "Syncing ", ui.number(a, s.job_next), " of "), ui.number(a, s.count), ""))
+        ret
+    }
+    if s.job == JOB_FIND {
+        s.job = JOB_NONE
+        if find_symbols(a, s) {
+            if s.found == 0usize { say_status(s, "No symbol matches that") } else { say_status(s, "Tap a match to use it") }
+        } else {
+            say_status(s, ui.join(a, "Search failed: ", reason_text(s.reason), ""))
+        }
+        ui.say("stocks found ")
+        ui.say_num(s.found)
+        ui.say("\n")
         ret
     }
     if s.job == JOB_ADD {
@@ -679,25 +945,49 @@ fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
     try ui.card(a, builder, 16.0, 96.0, 380.0, 56.0, 16.0, ui.cream())
     if shown.len == 0usize {
         var hint = "AAPL or BTC-USD"
-        if key { hint = "Twelve Data API key" }
+        if key { hint = ui.join(a, provider_name(s.provider), " API key", "") }
         try ui.put(a, builder, faces.jost, 22.0, hint, 32.0, 112.0, ui.muted())
     } else {
         try ui.put(a, builder, faces.jost, 22.0, shown, 32.0, 112.0, ui.ink())
     }
     if key {
-        let (box_a, wrap_a) = ui.wrapped(a, builder, faces.grotesk, 13.0, "From twelvedata.com (a free key works). Kept only while this app is open; stocks need it, crypto does not.", 24.0, 172.0, 372.0, 4u32, ui.light_muted())
+        var p = 0usize
+        while p < 3usize {
+            var fill = ui.soft()
+            if s.provider == p { fill = ui.amber() }
+            let x: f32 = 16.0 + f32(p) * 126.0
+            try ui.pill(a, builder, &s.hits, faces, ID_PROVIDER + p, x, 172.0, 118.0, 34.0, provider_name(p), fill, 14.0)
+            p += 1usize
+        }
+        var about = "From twelvedata.com (a free key works)."
+        if s.provider == PROVIDER_ALPHA { about = "From alphavantage.co (a free key works; the demo key serves IBM)." }
+        if s.provider == PROVIDER_POLYGON { about = "From polygon.io (the free plan is rate-limited)." }
+        let (box_a, wrap_a) = ui.wrapped(a, builder, faces.grotesk, 13.0, ui.join(a, about, " Changing the provider clears the key. Kept only while this app is open; stocks need it, crypto does not.", ""), 24.0, 222.0, 372.0, 5u32, ui.light_muted())
         if wrap_a != ok { ret wrap_a }
-        if s.key.len > 0usize { try ui.pill(a, builder, &s.hits, faces, ID_CLEAR_KEY, 24.0, 252.0, 120.0, 34.0, "Clear key", ui.soft(), 14.0) }
+        if s.key.len > 0usize { try ui.pill(a, builder, &s.hits, faces, ID_CLEAR_KEY, 24.0, 330.0, 120.0, 34.0, "Clear key", ui.soft(), 14.0) }
     } else {
         var stock_fill = ui.soft()
         var crypto_fill = ui.soft()
         if s.add_crypto { crypto_fill = ui.amber() } else { stock_fill = ui.amber() }
         try ui.pill(a, builder, &s.hits, faces, ID_STOCK_KIND, 16.0, 172.0, 110.0, 36.0, "Stock", stock_fill, 15.0)
         try ui.pill(a, builder, &s.hits, faces, ID_CRYPTO_KIND, 134.0, 172.0, 110.0, 36.0, "Crypto", crypto_fill, 15.0)
-        var note = "Stocks come from Twelve Data and need the API key (Key). Type a symbol such as AAPL."
-        if s.add_crypto { note = "Crypto comes from Coinbase with no key. Type a pair such as BTC-USD or ETH-USD." }
-        let (box_b, wrap_b) = ui.wrapped(a, builder, faces.grotesk, 13.0, note, 24.0, 226.0, 372.0, 4u32, ui.light_muted())
-        if wrap_b != ok { ret wrap_b }
+        if !s.add_crypto { try ui.pill(a, builder, &s.hits, faces, ID_FIND, 300.0, 172.0, 96.0, 36.0, "Find", ui.soft(), 15.0) }
+        if !s.add_crypto && s.found > 0usize {
+            var m = 0usize
+            while m < s.found {
+                let y: f32 = 222.0 + f32(m) * 46.0
+                try ui.card(a, builder, 16.0, y, 380.0, 40.0, 14.0, ui.cream())
+                try ui.put(a, builder, faces.jost_bold, 17.0, s.found_symbol[m * SYMBOL_BYTES..m * SYMBOL_BYTES + s.found_symbol_len[m]], 30.0, y + 9.0, ui.ink())
+                try ui.clipped(a, builder, faces.grotesk, 12.0, s.found_name[m * NAME_BYTES..m * NAME_BYTES + s.found_name_len[m]], 130.0, y + 12.0, 256.0, ui.muted())
+                ui.hit(&s.hits, ID_MATCH + m, 16.0, y, 380.0, 40.0)
+                m += 1usize
+            }
+        } else {
+            var note = ui.join(a, "Stocks come from ", provider_name(s.provider), " and need its API key (Key). Type a symbol such as AAPL, or part of a name and tap Find.")
+            if s.add_crypto { note = "Crypto comes from Coinbase with no key. Type a pair such as BTC-USD or ETH-USD." }
+            let (box_b, wrap_b) = ui.wrapped(a, builder, faces.grotesk, 13.0, note, 24.0, 226.0, 372.0, 4u32, ui.light_muted())
+            if wrap_b != ok { ret wrap_b }
+        }
     }
     if s.status_len > 0usize { try ui.clipped(a, builder, faces.grotesk, 12.0, s.status[0usize..s.status_len], 24.0, 460.0, 372.0, ui.light_muted()) }
     var enter = "Add"
@@ -780,6 +1070,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
                 say_status(s, "Looking it up...")
                 ret true
             }
+            s.found = 0usize
             ret ui.field_key(&s.entry, id, false)
         }
         if id == 1205usize {
@@ -802,6 +1093,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if id == ID_ADD {
             s.screen = ADD_SCREEN
             s.entry.len = 0usize
+            s.found = 0usize
             s.status_len = 0usize
             ui.say("stocks add sheet\n")
             ret true
@@ -853,6 +1145,42 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if id == ID_CANCEL {
         s.screen = LIST_SCREEN
         s.status_len = 0usize
+        ret true
+    }
+    if s.screen == ADD_SCREEN && id == ID_FIND && !s.add_crypto {
+        if s.entry.len == 0usize {
+            say_status(s, "Type part of a symbol or name first")
+            ret true
+        }
+        s.job = JOB_FIND
+        say_status(s, "Searching...")
+        ret true
+    }
+    if s.screen == ADD_SCREEN && id >= ID_MATCH && id < ID_MATCH + s.found {
+        let m = id - ID_MATCH
+        var n = 0usize
+        while n < s.found_symbol_len[m] {
+            s.entry.bytes[n] = s.found_symbol[m * SYMBOL_BYTES + n]
+            n += 1usize
+        }
+        s.entry.len = s.found_symbol_len[m]
+        s.found = 0usize
+        say_status(s, "Symbol filled in: tap Add")
+        ui.say("stocks picked ")
+        ui.say_text(s.entry.bytes[0usize..s.entry.len])
+        ui.say("\n")
+        ret true
+    }
+    if s.screen == KEY_SCREEN && id >= ID_PROVIDER && id < ID_PROVIDER + 3usize {
+        let chosen = id - ID_PROVIDER
+        if chosen != s.provider {
+            s.provider = chosen
+            s.key.len = 0usize
+            say_status(s, ui.join(a, provider_name(chosen), " chosen, key cleared", ""))
+            ui.say("stocks provider ")
+            ui.say_num(chosen)
+            ui.say("\n")
+        }
         ret true
     }
     if s.screen == ADD_SCREEN {
