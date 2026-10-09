@@ -445,6 +445,7 @@
    "pending": [],
    "fixtures": [
     "algo_collect",
+    "fmt_encode",
     "fmt_gaps_a",
     "fmt_json"
    ]
@@ -633,6 +634,7 @@
    "delivered": 11,
    "pending": [],
    "fixtures": [
+    "fmt_encode",
     "fmt_yaml"
    ]
   },

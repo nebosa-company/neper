@@ -356,6 +356,7 @@
     "e.db.pool",
     "e.db.query",
     "e.db.storage",
+    "e.fmt.encode",
     "e.fmt.flac",
     "e.text.bidi",
     "e.concurrent.deque",
@@ -5056,6 +5057,23 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.encode",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.fmt.csv",
+    "e.fmt.json",
+    "e.fmt.yaml",
+    "e.io",
+    "e.mem",
+    "e.text.utf8"
+   ],
    "blocked_by": []
   },
   {

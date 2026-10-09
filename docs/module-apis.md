@@ -16194,6 +16194,33 @@ fn mix_into(m: *Mixer, out: *audio.Frames) -> (usize, err)
 fn resample(a: *mem.Arena, src: audio.Frames, rate: u32) -> (audio.Frames, err)
 ```
 
+### `e.fmt.encode`
+
+```neper
+error BadBase64
+error NotUtf8
+error UnsupportedEncoding
+error Ragged
+error Invalid
+
+fn base64_encode(a: *mem.Arena, s: str) -> (str, err)
+fn base64_decode(a: *mem.Arena, s: str) -> (str, err)
+fn is_utf8_name(name: str) -> bool
+fn text_encode_base64(a: *mem.Arena, s: str, encoding: str) -> (str, err)
+fn text_decode_base64(a: *mem.Arena, s: str, encoding: str) -> (str, err)
+fn upper_hex(nibble: u8) -> u8
+fn url_encode(a: *mem.Arena, s: str) -> (str, err)
+fn json_encode(a: *mem.Arena, v: json.Value) -> (str, err)
+fn json_decode(a: *mem.Arena, text: str) -> (json.Value, err)
+fn yaml_encode(a: *mem.Arena, v: yaml.Value) -> (str, err)
+fn yaml_decode(a: *mem.Arena, text: str) -> (yaml.Value, err)
+fn copy_text(a: *mem.Arena, s: str) -> (str, err)
+fn csv_decode(a: *mem.Arena, text: str) -> (json.Value, err)
+fn none_list() -> []json.Value
+```
+
+Terraform's encoding functions over the codecs Neper already has (L023), no new codec: `base64_encode`, `base64_decode` (the bytes must be UTF-8 or it is `NotUtf8`, fail closed), `text_encode_base64` and `text_decode_base64` (only the UTF-8 charset, spelled `UTF-8` or `UTF8` in any case; another is `UnsupportedEncoding`), `url_encode` (RFC 3986 percent-encoding, a space is `%20`), `json_encode`/`json_decode`, `yaml_encode`/`yaml_decode` and `csv_decode` (header row to a list of string-valued objects, `Ragged` when a row's column count differs). Results are in the caller's arena. The fixture `fmt_encode` checks 1667 cases against Python's base64, urllib, json and csv.
+
 ### `e.fmt.flac`
 
 ```neper

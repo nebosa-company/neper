@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.fmt.encode Terraform encoding functions against Python codecs (L023)
+fmt_encode_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_encode/src/main.e" "$repo" x64 linux "$test_build/fmt-encode-selfhost")
+[ "$fmt_encode_written" = 'executable written' ]
+chmod +x "$test_build/fmt-encode-selfhost"
+fmt_encode_output=$("$test_build/fmt-encode-selfhost")
+[ "$fmt_encode_output" = 'fmt encode ok' ]
 # e.algo.collect Terraform collection functions against Python (L022)
 algo_collect_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_collect/src/main.e" "$repo" x64 linux "$test_build/algo-collect-selfhost")
 [ "$algo_collect_written" = 'executable written' ]
