@@ -2508,6 +2508,7 @@
    "fixtures": [
     "net_ftp",
     "net_imap",
+    "net_ldap",
     "net_pop3",
     "net_smtp",
     "net_tls",
@@ -2861,6 +2862,7 @@
     "net",
     "net_ftp",
     "net_imap",
+    "net_ldap",
     "net_pop3",
     "net_smtp",
     "net_tls",

@@ -9628,6 +9628,109 @@ address and takes only the port from the reply, so a server cannot redirect it; 
 fresh derived entropy. A 4xx/5xx reply is `Rejected` with the reply in `Session.last`; a transfer that fails
 midway kills the session (`Closed`). No active mode, MLSD, resume or server side.
 
+### `e.net.ldap`
+
+```neper
+type Result = struct { code: u32, matched_dn: str, message: str, referrals: []const str }
+type Attribute = struct { name: str, values: []const str }
+type Entry = struct { dn: str, attributes: []const Attribute }
+type Change = struct { operation: u8, attribute: str, values: []const str }
+type Session = struct {
+type Writer = struct { buf: []u8, at: usize, failed: bool }
+type Cursor = struct { data: []const u8, at: usize }
+
+const SCOPE_BASE: u8 = 0u8
+const SCOPE_ONE: u8 = 1u8
+const SCOPE_SUBTREE: u8 = 2u8
+const MODIFY_ADD: u8 = 0u8
+const MODIFY_DELETE: u8 = 1u8
+const MODIFY_REPLACE: u8 = 2u8
+const T_SEQUENCE: u8 = 48u8
+const T_SET: u8 = 49u8
+const T_INTEGER: u8 = 2u8
+const T_OCTETS: u8 = 4u8
+const T_BOOLEAN: u8 = 1u8
+const T_ENUMERATED: u8 = 10u8
+const OP_BIND: u8 = 96u8
+const OP_BIND_RESPONSE: u8 = 97u8
+const OP_UNBIND: u8 = 66u8
+const OP_SEARCH: u8 = 99u8
+const OP_ENTRY: u8 = 100u8
+const OP_DONE: u8 = 101u8
+const OP_MODIFY: u8 = 102u8
+const OP_MODIFY_RESPONSE: u8 = 103u8
+const OP_ADD: u8 = 104u8
+const OP_ADD_RESPONSE: u8 = 105u8
+const OP_DELETE: u8 = 74u8
+const OP_DELETE_RESPONSE: u8 = 107u8
+const OP_COMPARE: u8 = 110u8
+const OP_COMPARE_RESPONSE: u8 = 111u8
+const OP_REFERENCE: u8 = 115u8
+const OP_EXTENDED: u8 = 119u8
+const OP_EXTENDED_RESPONSE: u8 = 120u8
+const OP_INTERMEDIATE: u8 = 121u8
+
+error Protocol
+error Rejected
+error Closed
+error TooLarge
+error Invalid
+error Unsupported
+
+fn w_byte(w: *Writer, b: u8)
+fn w_bytes(w: *Writer, bytes: []const u8)
+fn w_length(w: *Writer, n: usize)
+fn w_octets(w: *Writer, tag: u8, bytes: []const u8)
+fn w_integer(w: *Writer, tag: u8, value: i64)
+fn begin(w: *Writer, tag: u8) -> usize
+fn end(w: *Writer, mark: usize)
+fn hex_value(b: u8) -> (u8, bool)
+fn unescape(text: str, from: usize, to: usize, out: []u8) -> (usize, bool)
+fn filter_end(text: str, at: usize) -> (usize, bool)
+fn is_attr_char(b: u8) -> bool
+fn put_filter(w: *Writer, text: str, from: usize, to: usize, depth: usize) -> bool
+fn encode_filter(dst: []u8, text: str) -> (usize, err)
+fn fill(s: *Session) -> err
+fn next_byte(s: *Session) -> (u8, err)
+fn read_message(s: *Session) -> (usize, err)
+fn next(c: *Cursor) -> (u8, []const u8, bool)
+fn int_of(content: []const u8) -> (i64, bool)
+fn copy_text(a: *mem.Arena, text: []const u8) -> (str, err)
+fn parse_result(a: *mem.Arena, c: *Cursor) -> (Result, err)
+fn begin_message(s: *Session, w: *Writer) -> (usize, u32)
+fn send_message(s: *Session, w: *Writer, mark: usize) -> err
+fn read_for(s: *Session, id: u32) -> (u8, []const u8, err)
+fn copy_bytes(a: *mem.Arena, bytes: []const u8) -> ([]const u8, err)
+fn expect_result(s: *Session, id: u32, want: u8) -> err
+fn clean(text: str) -> bool
+fn connect(a: *mem.Arena, source: io.Reader, sink: io.Writer, limit: usize) -> (Session, err)
+fn starttls(s: *Session, config: tls.ClientConfig) -> err
+fn bind_op(s: *Session, name: str, sasl: bool, mechanism: str, credentials: []const u8) -> err
+fn wipe(buf: []u8)
+fn bind_simple(s: *Session, dn: str, password: str) -> err
+fn bind_anonymous(s: *Session) -> err
+fn bind_plain(s: *Session, authzid: str, user: str, password: str) -> err
+fn parse_entry(a: *mem.Arena, content: []const u8) -> (Entry, err)
+fn values_of(entry: Entry, name: str) -> []const str
+fn search(s: *Session, base: str, scope: u8, filter: str, attributes: []const str, size_limit: u32, time_limit: u32, types_only: bool) -> ([]const Entry, err)
+fn compare(s: *Session, dn: str, attribute: str, value: str) -> (bool, err)
+fn put_values(w: *Writer, values: []const str)
+fn add(s: *Session, dn: str, attributes: []const Attribute) -> err
+fn modify(s: *Session, dn: str, changes: []const Change) -> err
+fn delete(s: *Session, dn: str) -> err
+fn unbind(s: *Session) -> err
+```
+
+LDAPv3 client over any `io.Reader`/`io.Writer` pair with the BER written and read here (LDAP uses plain BER,
+not the strict DER of e.fmt.asn1). `connect`, `starttls` (the StartTLS extended operation, then the handshake),
+`bind_simple`, `bind_anonymous` and `bind_plain` (SASL PLAIN) authenticate; `search` collects entries up to
+SearchResultDone (references are counted), and `compare`, `add`, `modify`, `delete` and `unbind` are the other
+operations. `encode_filter` turns an RFC 4515 filter string (and/or/not, equality, substring, presence,
+approximate, ordering, extensible match, `\hh` escapes) into Filter BER. A non-success result is `Rejected`
+with the whole result (code, matched DN, message, referrals) in `Session.last`; an empty-password simple bind is
+refused. Checked against ldap3's encoder on 241 filters and a 13-request conversation. No controls, paging,
+referral chasing, ModifyDN or abandon.
+
 ### `e.net.ws`
 
 ```neper
