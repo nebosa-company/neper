@@ -2708,6 +2708,97 @@ fn classify(a: *mem.Arena, reg: *const f.Registry, source: str) -> Verdict
 
 Formula-to-SQL compilation and pushdown classification. `compile_formula` turns a formula tree into a parameterized PostgreSQL expression (`$N` placeholders, never interpolated values) that agrees with the in-process evaluator: blank as NULLIF/COALESCE, `IS NOT DISTINCT FROM` and case folding for text equality, row comparison for ordering (a blank sorts first), half-up ROUND, floored MOD, NULL guards for domain errors, a refusal (`pushdown: none`) where a value's truth in boolean position cannot be decided from declared types, and an abandoned compile past 32,768 characters. `classify` answers full, partial or none for formula text without compiling it, naming the unsupported functions. Checked case for case against appdor's own compiler and classifier.
 
+### `e.algo.checksum`
+
+```neper
+fn js_space(u: u32) -> bool
+fn is_digit(c: u8) -> bool
+fn is_upper(c: u8) -> bool
+fn is_alnum_upper(c: u8) -> bool
+fn is_ascii(s: str) -> bool
+fn trim(s: str) -> str
+fn upper(a: *mem.Arena, s: str) -> str
+fn clean(a: *mem.Arena, s: str) -> str
+fn all_digits(s: str) -> bool
+fn digits_in(s: str, from: usize, to: usize) -> bool
+fn mod97(s: str) -> u64
+fn luhn_digits(s: str) -> bool
+fn is_luhn(a: *mem.Arena, value: str) -> bool
+fn is_credit_card(a: *mem.Arena, value: str) -> bool
+fn is_imei(a: *mem.Arena, value: str) -> bool
+fn is_iban(a: *mem.Arena, value: str) -> bool
+fn is_lei(a: *mem.Arena, value: str) -> bool
+fn is_isbn10(a: *mem.Arena, value: str) -> bool
+fn ean13_digits(s: str) -> bool
+fn is_ean13(a: *mem.Arena, value: str) -> bool
+fn is_isbn(a: *mem.Arena, value: str) -> bool
+fn is_isin(a: *mem.Arena, value: str) -> bool
+fn vin_value(c: u8) -> i64
+fn vin_weight(i: usize) -> i64
+fn is_vin(a: *mem.Arena, value: str) -> bool
+fn is_bic(a: *mem.Arena, value: str) -> bool
+fn spec_class(c: u8, ch: u8) -> bool
+fn match_spec(s: str, at: usize, spec: str, from: usize) -> bool
+fn eu_vat_table() -> str
+fn is_eu_vat(a: *mem.Arena, value: str) -> bool
+fn is_mic(a: *mem.Arena, value: str) -> bool
+fn is_duns(a: *mem.Arena, value: str) -> bool
+fn is_hs_code(a: *mem.Arena, value: str) -> bool
+fn is_un_locode(a: *mem.Arena, value: str) -> bool
+fn is_incoterm(a: *mem.Arena, value: str) -> bool
+fn is_icd10(a: *mem.Arena, value: str) -> bool
+fn vh_d() -> str
+fn vh_p() -> str
+fn verhoeff_valid(s: str) -> bool
+fn is_snomed(a: *mem.Arena, value: str) -> bool
+fn is_loinc(a: *mem.Arena, value: str) -> bool
+fn is_ndc(a: *mem.Arena, value: str) -> bool
+fn is_rxcui(a: *mem.Arena, value: str) -> bool
+fn is_hex_upper(c: u8) -> bool
+fn is_mac(a: *mem.Arena, value: str) -> bool
+fn is_upc(a: *mem.Arena, value: str) -> bool
+fn row(a: *mem.Arena, s: str, line: str) -> str
+fn join3(a: *mem.Arena, x: str, y: str, z: str) -> str
+fn nace_table(a: *mem.Arena) -> str
+
+type NaceCode = struct { level: str, section: str, division: str, code: str }
+
+fn cell(line: str, n: usize) -> str
+fn section_of(a: *mem.Arena, division: str) -> str
+fn is_section_letter(a: *mem.Arena, letter: str) -> bool
+fn is_nace_section(a: *mem.Arena, letter: str) -> bool
+fn is_nace_division(a: *mem.Arena, code: str) -> bool
+fn nace_section_of(a: *mem.Arena, division: str) -> str
+fn nace_title(a: *mem.Arena, tag: u8, code: str, original: str, locale: str) -> str
+fn nace_section_title(a: *mem.Arena, letter: str, locale: str) -> str
+fn nace_division_title(a: *mem.Arena, code: str, locale: str) -> str
+fn parse_nace(a: *mem.Arena, value: str) -> (NaceCode, bool)
+fn is_nace(a: *mem.Arena, value: str) -> bool
+
+type BarcodeResult = struct { valid: bool, reason: str, message: str, value: str, symbology: str }
+
+fn barcode_fail(reason: str, message: str) -> BarcodeResult
+fn symbology_spec(name: str) -> (str, usize, str, bool)
+fn number_text(a: *mem.Arena, n: usize) -> str
+fn mod10_check_digit(payload: str) -> usize
+fn code39_alphabet() -> str
+fn code39_value(c: u8) -> usize
+fn utf16_len(s: str) -> usize
+fn validate_barcode(a: *mem.Arena, value: str, symbology: str) -> BarcodeResult
+fn is_barcode_value(a: *mem.Arena, value: str) -> bool
+
+type ScanEnvironment = struct { has_detector: bool, is_secure_context: bool, has_camera: bool, permission: str }
+type ScanSupport = struct { available: bool, reason: str, message: str, needs_prompt: bool }
+
+fn scan_support(env: ScanEnvironment) -> ScanSupport
+fn symbology_key(a: *mem.Arena, format: str) -> str
+fn scan_to_value(a: *mem.Arena, raw_value: str, format: str, accepted: []const str) -> BarcodeResult
+fn kinds() -> str
+fn validate(a: *mem.Arena, kind: str, value: str) -> (bool, bool)
+```
+
+Identifier checksum validators, after appdor's specialized, barcode and NACE field modules: IBAN and LEI (ISO 7064 mod 97-10), Luhn, credit card and IMEI lengths, ISBN-10, EAN-13/ISBN-13, UPC-A, ISIN, VIN, BIC, EU VAT structure per member state, MIC, DUNS, HS code, UN/LOCODE, Incoterms 2020, ICD-10, SNOMED CT (Verhoeff), LOINC, NDC, RxCUI, MAC address and the NACE Rev. 2.1 classification (parse, section and division titles in English and Bulgarian). Barcodes get their symbology rules (GS1 mod 10, Code 39 mod 43) with stable reason slugs and messages, the scan-capability decision and the scan-to-field-value narrowing. `validate(kind, value)` is the name-keyed registry; text is read as the originals read it (upper-cased, white space and hyphens ignored where tolerated, ASCII-only classes). Checked against appdor's own validators over 3,146 cases.
+
 ### `e.algo.geo`
 
 ```neper

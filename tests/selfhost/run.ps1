@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.algo.checksum against appdor specialized, barcode and nace validators (L030, D2301)
+$algoChecksumPath = Join-Path $testBuild 'algo-checksum-selfhost.exe'
+$algoChecksumWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_checksum\src\main.e') $repo 'x64' 'windows' $algoChecksumPath
+if ($LASTEXITCODE -ne 0 -or $algoChecksumWritten -ne 'executable written') { throw 'algo_checksum emission failed' }
+$algoChecksumOutput = & $algoChecksumPath
+if ($LASTEXITCODE -ne 0 -or $algoChecksumOutput -ne 'algo checksum ok') { throw "algo_checksum answered wrongly: exit $LASTEXITCODE" }
 # e.algo.formula.sql against appdor compileToSql and classifyPushdown (L029, D2300)
 $algoFormulaSqlPath = Join-Path $testBuild 'algo-formula-sql-selfhost.exe'
 $algoFormulaSqlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_formula_sql\src\main.e') $repo 'x64' 'windows' $algoFormulaSqlPath

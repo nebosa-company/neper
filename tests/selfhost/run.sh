@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.algo.checksum against appdor specialized, barcode and nace validators (L030, D2301)
+algo_checksum_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_checksum/src/main.e" "$repo" x64 linux "$test_build/algo-checksum-selfhost")
+[ "$algo_checksum_written" = 'executable written' ]
+chmod +x "$test_build/algo-checksum-selfhost"
+algo_checksum_output=$("$test_build/algo-checksum-selfhost")
+[ "$algo_checksum_output" = 'algo checksum ok' ]
 # e.algo.formula.sql against appdor compileToSql and classifyPushdown (L029, D2300)
 algo_formula_sql_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_formula_sql/src/main.e" "$repo" x64 linux "$test_build/algo-formula-sql-selfhost")
 [ "$algo_formula_sql_written" = 'executable written' ]

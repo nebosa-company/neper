@@ -444,6 +444,7 @@
    "delivered": 114,
    "pending": [],
    "fixtures": [
+    "algo_checksum",
     "algo_collect",
     "algo_findings",
     "algo_formula",
