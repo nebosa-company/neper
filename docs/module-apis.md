@@ -5313,6 +5313,101 @@ groups kept together when they fit a page, page breaks before groups, repeated g
 settled by laying out until the count holds still. `fixed_pitch` is a stand-in measure. Checked against a second
 implementation on 80 seeded random reports. No images, sub-reports, columns, printing or PDF.
 
+### `e.ui.sheet`
+
+```neper
+type Override = struct { index: usize, size: f32 }
+type Axis = struct { count: usize, default_size: f32, overrides: []const Override, prefix: []const f32 }
+type Merge = struct { row: usize, col: usize, rows: usize, cols: usize }
+type Merges = struct { items: []const Merge, max_rows: usize }
+type Grid = struct { rows: Axis, cols: Axis, merges: Merges, frozen_rows: usize, frozen_cols: usize }
+type View = struct { x: f32, y: f32, width: f32, height: f32, header_width: f32, header_height: f32 }
+type Visible = struct { first_row: usize, last_row: usize, first_col: usize, last_col: usize }
+type Selection = struct { row: usize, col: usize, anchor_row: usize, anchor_col: usize }
+type Range = struct { row: usize, col: usize, rows: usize, cols: usize }
+type Region = enum u8 { Cell, ColumnHeader, RowHeader, Corner, Outside }
+type Hit = struct { region: Region, row: usize, col: usize }
+type Move = enum u8 { Left, Right, Up, Down, Home, End, PageUp, PageDown, First, Last }
+type CellRect = struct { row: usize, col: usize, rows: usize, cols: usize, rect: geometry.Rect, frozen_row: bool, frozen_col: bool }
+
+error Invalid
+error TooLarge
+
+fn axis(a: *mem.Arena, count: usize, default_size: f32, overrides: []const Override) -> (Axis, err)
+fn overrides_before(ax: Axis, index: usize) -> usize
+fn axis_start(ax: Axis, index: usize) -> f32
+fn axis_size(ax: Axis, index: usize) -> f32
+fn axis_total(ax: Axis) -> f32
+fn axis_index_at(ax: Axis, pos: f32) -> usize
+fn merge_before(x: Merge, y: Merge) -> bool
+fn merges(a: *mem.Arena, items: []const Merge, row_count: usize, col_count: usize) -> (Merges, err)
+fn merge_at(m: Merges, row: usize, col: usize) -> (Merge, bool)
+fn grid(rows: Axis, cols: Axis, merge_list: Merges, frozen_rows: usize, frozen_cols: usize) -> (Grid, err)
+fn owner(g: Grid, row: usize, col: usize) -> Range
+fn frozen_size(g: Grid) -> (f32, f32)
+fn scroll_limits(g: Grid, v: View) -> (f32, f32)
+fn clamp_scroll(g: Grid, v: View) -> (f32, f32)
+fn visible_range(g: Grid, v: View) -> Visible
+fn screen_start(ax: Axis, frozen: usize, scroll: f32, index: usize) -> f32
+fn cell_rect(g: Grid, v: View, row: usize, col: usize) -> CellRect
+fn overlaps(r: geometry.Rect, width: f32, height: f32) -> bool
+fn visible_cells(a: *mem.Arena, g: Grid, v: View) -> ([]const CellRect, err)
+fn listed(items: []const CellRect, row: usize, col: usize) -> bool
+fn hit_test(g: Grid, v: View, x: f32, y: f32) -> Hit
+fn selection_range(g: Grid, s: Selection) -> Range
+fn step_line(ax: Axis, index: usize, forward: bool) -> usize
+fn navigate(g: Grid, s: Selection, how: Move, extend: bool, page: usize) -> Selection
+fn first_line(ax: Axis) -> usize
+fn last_line(ax: Axis) -> usize
+fn reveal(g: Grid, v: View, row: usize, col: usize) -> (f32, f32)
+
+type Align = enum u8 { Left, Center, Right }
+type CellStyle = struct {
+type SheetCell = struct { text: str, style: CellStyle, read_only: bool }
+type SheetSource = struct { ctx: *void, cell: fn(*void, usize, usize) -> SheetCell }
+type Embed = struct { row: usize, col: usize, rows: usize, cols: usize, label: str, content: widget.Node }
+type SheetState = struct { selection: Selection, editing: bool, len: usize, scroll_x: f32, scroll_y: f32 }
+type SheetEventKind = enum u8 { Select, Extend, Edit, Type, Commit, Cancel, Scroll }
+type SheetEvent = struct { kind: SheetEventKind, state: SheetState, row: usize, col: usize, text: str }
+type SheetOptions = struct { header_width: f32, header_height: f32, disabled: bool }
+
+fn sheet_options() -> SheetOptions
+fn column_name(a: *mem.Arena, col: usize) -> (str, err)
+fn number_name(a: *mem.Arena, value: usize) -> (str, err)
+fn cell_name(a: *mem.Arena, row: usize, col: usize) -> (str, err)
+fn embed_rect(g: Grid, v: View, e: Embed) -> geometry.Rect
+fn sheet_view(g: Grid, state: SheetState, width: f32, height: f32, options: SheetOptions) -> View
+
+type SheetKeys = struct {
+
+fn with_selection(g: Grid, s: SheetState, selection: Selection, view: View) -> SheetState
+fn sheet_key(ctx: *void, k: input.KeyEvent) -> err
+fn str_of(buf: []u8, len: usize) -> str
+fn sheet_input(ctx: *void, event: input.Event) -> err
+
+type SheetPress = struct { keys: *SheetKeys, drag: bool }
+
+fn sheet_press(ctx: *void, gesture: widget.Gesture) -> err
+fn sheet_point(s: *SheetKeys, at: geometry.Point, extend: bool) -> err
+fn sheet_typed(ctx: *void, value: str) -> err
+fn fire_sheet(s: *SheetKeys, event: SheetEvent) -> err
+fn cell_ink(t: *const control.Theme, c: SheetCell) -> paint.Color
+fn sheet_cell_node(a: *mem.Arena, t: *const control.Theme, rect: geometry.Rect, c: SheetCell, key: widget.Key, row: usize, col: usize, rows: usize, cols: usize, g: Grid) -> (widget.Node, err)
+fn mem_one(a: *mem.Arena, node: widget.Node) -> []const widget.Node
+fn header_node(a: *mem.Arena, t: *const control.Theme, text: str, width: f32, height: f32, selected: bool) -> (widget.Node, err)
+fn sheet(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: str, g: Grid, source: SheetSource, state: SheetState, draft: []u8, embeds: []const Embed, change: widget.Change[SheetEvent], width: f32, height: f32, options: SheetOptions) -> (widget.Node, err)
+```
+
+Spreadsheet grid: the geometry and the control. Geometry: axes of rows and columns with a default size and sparse
+overrides (size 0 hides), merged cells, frozen rows and columns, the part of the sheet in view, each cell's
+rectangle, which cell a point hits, a selection grown to take whole merges, keyboard navigation over merges and
+hidden lines, and the scroll offsets that reveal a cell; a million-row sheet costs what its overrides cost.
+Control (`sheet`): lettered and numbered headers, only the visible cells built, merged cells as one box, frozen
+lines held in place, cell fills, ink, alignment and borders, a tinted selection range and a ringed active cell,
+in-cell editing in an editor over the cell (`Edit`, `Type`, `Commit`, `Cancel` events), content such as a chart laid
+over a block of cells at `embed_rect`, pointer selection (tap, drag, header taps), wheel scrolling, and arrow, Home,
+End, Page, Tab, Enter and F2 keys that keep the active cell in view. The caller owns the state and the text.
+
 ### `e.ui.state`
 
 ```neper

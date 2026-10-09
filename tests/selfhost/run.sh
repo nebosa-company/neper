@@ -3274,6 +3274,18 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.ui.sheet control: windowing, merges, frozen lines, styling, embeds, selection, editing, keys, wheel (L090, D2283)
+ui_sheet_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_sheet/src/main.e" "$repo" x64 linux "$test_build/ui-sheet-selfhost")
+[ "$ui_sheet_written" = 'executable written' ]
+chmod +x "$test_build/ui-sheet-selfhost"
+ui_sheet_output=$("$test_build/ui-sheet-selfhost")
+[ "$ui_sheet_output" = 'ui sheet ok' ]
+# e.ui.sheet geometry against brute-force models on 120 random sheets (L090, D2283)
+ui_sheet_geometry_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_sheet_geometry/src/main.e" "$repo" x64 linux "$test_build/ui-sheet-geometry-selfhost")
+[ "$ui_sheet_geometry_written" = 'executable written' ]
+chmod +x "$test_build/ui-sheet-geometry-selfhost"
+ui_sheet_geometry_output=$("$test_build/ui-sheet-geometry-selfhost")
+[ "$ui_sheet_geometry_output" = 'ui sheet geometry ok' ]
 # e.ui.report against a second implementation on 80 random reports (L089, D2282)
 ui_report_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_report/src/main.e" "$repo" x64 linux "$test_build/ui-report-selfhost")
 [ "$ui_report_written" = 'executable written' ]

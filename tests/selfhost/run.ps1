@@ -3672,6 +3672,18 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.ui.sheet control: windowing, merges, frozen lines, styling, embeds, selection, editing, keys, wheel (L090, D2283)
+$uiSheetPath = Join-Path $testBuild 'ui-sheet-selfhost.exe'
+$uiSheetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_sheet\src\main.e') $repo 'x64' 'windows' $uiSheetPath
+if ($LASTEXITCODE -ne 0 -or $uiSheetWritten -ne 'executable written') { throw 'ui_sheet emission failed' }
+$uiSheetOutput = & $uiSheetPath
+if ($LASTEXITCODE -ne 0 -or $uiSheetOutput -ne 'ui sheet ok') { throw "ui_sheet answered wrongly: exit $LASTEXITCODE" }
+# e.ui.sheet geometry against brute-force models on 120 random sheets (L090, D2283)
+$uiSheetGeometryPath = Join-Path $testBuild 'ui-sheet-geometry-selfhost.exe'
+$uiSheetGeometryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_sheet_geometry\src\main.e') $repo 'x64' 'windows' $uiSheetGeometryPath
+if ($LASTEXITCODE -ne 0 -or $uiSheetGeometryWritten -ne 'executable written') { throw 'ui_sheet_geometry emission failed' }
+$uiSheetGeometryOutput = & $uiSheetGeometryPath
+if ($LASTEXITCODE -ne 0 -or $uiSheetGeometryOutput -ne 'ui sheet geometry ok') { throw "ui_sheet_geometry answered wrongly: exit $LASTEXITCODE" }
 # e.ui.report against a second implementation on 80 random reports (L089, D2282)
 $uiReportPath = Join-Path $testBuild 'ui-report-selfhost.exe'
 $uiReportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_report\src\main.e') $repo 'x64' 'windows' $uiReportPath

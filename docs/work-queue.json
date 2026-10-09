@@ -1192,17 +1192,6 @@
       "evidence": "Planning only (D1812). Reference: JustCode tests/consistency.test.js. Not yet: extend existing Neper validation tools to check icon/resource references, translation-key coverage and duplicate keys, locale placeholder agreement, command/menu callback contracts and mnemonic conflicts. Consume actual resource/command registries and generated manifests; do not claim arbitrary dynamic source references can be proven by regex. Include small malformed-registry cases proving each check fails and wire checks into the existing build/test entry point with actionable locations. Keep repository-specific manifests, rules and CI wiring in scripts/tests; add no runtime validation framework or standard-library dependency."
     },
     {
-      "id": "L090",
-      "category": "library",
-      "group": "UI",
-      "order": 188,
-      "title": "Spreadsheet grid control in e.ui.collection",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1824). Celvyx parity missing the visual half: virtualized grid with merged cells, in-cell editing, charts-in-cells and fill/border styling over e.ui.collection virtualization, complementing queued L026-L029 (formula) and L032 (table query) with no grid of their own. Fixtures for windowing, merges, edit commit/cancel and embedded content bounds."
-    },
-    {
       "id": "L091",
       "category": "library",
       "group": "UI",
