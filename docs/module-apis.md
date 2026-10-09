@@ -9731,6 +9731,77 @@ with the whole result (code, matched DN, message, referrals) in `Session.last`; 
 refused. Checked against ldap3's encoder on 241 filters and a 13-request conversation. No controls, paging,
 referral chasing, ModifyDN or abandon.
 
+### `e.net.mdns`
+
+```neper
+type Address = struct { v6: bool, bytes: [16]u8 }
+type Service = struct {
+type Reply = struct { len: usize, unicast: bool }
+type Known = struct { target: []const u8, ttl: u32 }
+type Record = struct {
+type Cache = struct { a: *mem.Arena, records: []Record, count: usize }
+type Found = struct {
+type Names = struct { service_type: []const u8, instance: []const u8, host: []const u8, domain_enum: []const u8 }
+type Out = struct { buf: []u8, at: usize, count: u16 }
+
+error Invalid
+error Malformed
+error TooSmall
+error TooLarge
+
+const PORT: u16 = 5353u16
+const FLAG_RESPONSE: u16 = 33792u16
+const CACHE_FLUSH: u16 = 32768u16
+const KIND_PTR: usize = 0usize
+const KIND_SRV: usize = 1usize
+const KIND_TXT: usize = 2usize
+const KIND_A: usize = 3usize
+const KIND_AAAA: usize = 4usize
+const KIND_ENUM: usize = 5usize
+const KINDS: usize = 6usize
+const CACHE_LIMIT: usize = 1024usize
+
+fn group_v4() -> net.Endpoint
+fn wire_name(dst: []u8, at: usize, label: str, rest: str, rest2: str) -> (usize, err)
+fn clear_flags(flags: []bool)
+fn arena_name(a: *mem.Arena, label: str, rest: str, rest2: str) -> ([]const u8, err)
+fn names_of(a: *mem.Arena, s: Service) -> (Names, err)
+fn out_bytes(o: *Out, bytes: []const u8) -> err
+fn out_u16(o: *Out, v: u16) -> err
+fn out_u32(o: *Out, v: u32) -> err
+fn out_record(o: *Out, name: []const u8, kind: u16, class: u16, ttl: u32, rdata: []const u8) -> err
+fn txt_rdata(a: *mem.Arena, strings: []const str) -> ([]const u8, err)
+fn srv_rdata(a: *mem.Arena, s: Service, host: []const u8) -> ([]const u8, err)
+fn cap(ttl: u32, legacy: bool) -> u32
+fn add_kind(a: *mem.Arena, o: *Out, services: []const Service, names: []const Names, index: usize, kind: usize, done: []bool, legacy: bool, goodbye: bool) -> err
+fn add_related(a: *mem.Arena, o: *Out, services: []const Service, names: []const Names, index: usize, done: []bool, legacy: bool, goodbye: bool) -> err
+fn announce(a: *mem.Arena, dst: []u8, services: []const Service, goodbye: bool) -> (usize, err)
+fn query(dst: []u8, name: str, qtype: u16, unicast: bool, known: []const Known) -> (usize, err)
+fn eq_wire(a: []const u8, b: []const u8) -> bool
+fn known_answer(query_packet: []const u8, pos_start: usize, answers: usize, name: []const u8, wanted_target: []const u8, ttl: u32) -> bool
+fn answer(a: *mem.Arena, dst: []u8, services: []const Service, packet: []const u8, legacy: bool) -> (Reply, err)
+fn serve_once(a: *mem.Arena, socket: net.Socket, services: []const Service, multicast: net.Endpoint, has_multicast: bool) -> err
+fn cache_new(a: *mem.Arena) -> (Cache, err)
+fn same_address(x: Address, y: Address) -> bool
+fn same_bytes(x: []const u8, y: []const u8) -> bool
+fn same_content(x: Record, y: Record) -> bool
+fn copy_bytes(a: *mem.Arena, bytes: []const u8) -> ([]const u8, err)
+fn store(c: *Cache, candidate: Record, flush: bool, ttl: u32, now: u64) -> err
+fn learn(c: *Cache, packet: []const u8, now: u64) -> (usize, err)
+fn text_of(a: *mem.Arena, wire: []const u8) -> (str, err)
+fn discover(c: *Cache, a: *mem.Arena, service: str, domain: str, now: u64) -> ([]const Found, err)
+```
+
+Multicast DNS and DNS-SD over the packet codec of e.net.dns; the caller moves datagrams. `answer` is the
+responder for a list of `Service`s (PTR, SRV, TXT, A, AAAA, the `_services._dns-sd._udp` enumeration, related
+records as additionals, known-answer suppression for PTR, the QU bit, and the legacy-unicast form that echoes
+the id and question and caps TTLs); `announce` builds the startup response or, with `goodbye`, the TTL 0 form;
+`query` builds a question with optional known answers; `learn` reads responses into a `Cache` that honours TTLs,
+goodbyes and the cache-flush bit; `discover` lists the instances of a service type with host, port, TXT and
+addresses. `serve_once` answers one datagram on a UDP socket. Names stay in wire form, so instance labels may
+hold spaces and dots. Checked against python-zeroconf. No multicast group join, probing, NSEC or outgoing
+name compression.
+
 ### `e.net.ws`
 
 ```neper

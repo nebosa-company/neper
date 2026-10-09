@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.net.mdns against python-zeroconf plus a loopback UDP exchange (L086, D2279)
+$netMdnsPath = Join-Path $testBuild 'net-mdns-selfhost.exe'
+$netMdnsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_mdns\src\main.e') $repo 'x64' 'windows' $netMdnsPath
+if ($LASTEXITCODE -ne 0 -or $netMdnsWritten -ne 'executable written') { throw 'net_mdns emission failed' }
+$netMdnsOutput = & $netMdnsPath
+if ($LASTEXITCODE -ne 0 -or $netMdnsOutput -ne 'net mdns ok') { throw "net_mdns answered wrongly: exit $LASTEXITCODE" }
 # e.net.ldap against ldap3's BER plus a live StartTLS session (L085, D2278)
 $netLdapPath = Join-Path $testBuild 'net-ldap-selfhost.exe'
 $netLdapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_ldap\src\main.e') $repo 'x64' 'windows' $netLdapPath

@@ -2470,6 +2470,7 @@
     "net",
     "net_ftp",
     "net_http",
+    "net_mdns",
     "net_tls"
    ]
   },

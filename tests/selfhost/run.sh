@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.net.mdns against python-zeroconf plus a loopback UDP exchange (L086, D2279)
+net_mdns_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_mdns/src/main.e" "$repo" x64 linux "$test_build/net-mdns-selfhost")
+[ "$net_mdns_written" = 'executable written' ]
+chmod +x "$test_build/net-mdns-selfhost"
+net_mdns_output=$("$test_build/net-mdns-selfhost")
+[ "$net_mdns_output" = 'net mdns ok' ]
 # e.net.ldap against ldap3's BER plus a live StartTLS session (L085, D2278)
 net_ldap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_ldap/src/main.e" "$repo" x64 linux "$test_build/net-ldap-selfhost")
 [ "$net_ldap_written" = 'executable written' ]
