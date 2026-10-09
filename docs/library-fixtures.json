@@ -444,6 +444,7 @@
    "delivered": 114,
    "pending": [],
    "fixtures": [
+    "algo_collect",
     "fmt_gaps_a",
     "fmt_json"
    ]

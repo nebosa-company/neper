@@ -167,6 +167,7 @@
     "e.algo.coding",
     "e.math.ntheory",
     "e.math.root",
+    "e.algo.collect",
     "e.algo.combin",
     "e.data.fenwick",
     "e.data.sparse_table",
@@ -675,6 +676,20 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.collect",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.json",
+    "e.math",
+    "e.mem",
+    "e.str"
+   ],
    "blocked_by": []
   },
   {

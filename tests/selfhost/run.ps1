@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.algo.collect Terraform collection functions against Python (L022)
+$algoCollectPath = Join-Path $testBuild 'algo-collect-selfhost.exe'
+$algoCollectWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_collect\src\main.e') $repo 'x64' 'windows' $algoCollectPath
+if ($LASTEXITCODE -ne 0 -or $algoCollectWritten -ne 'executable written') { throw 'algo_collect emission failed' }
+$algoCollectOutput = & $algoCollectPath
+if ($LASTEXITCODE -ne 0 -or $algoCollectOutput -ne 'algo collect ok') { throw "algo_collect answered wrongly: exit $LASTEXITCODE" }
 # e.text.edit Terraform string functions against Python string operations (L021)
 $textEditPath = Join-Path $testBuild 'text-edit-selfhost.exe'
 $textEditWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_edit\src\main.e') $repo 'x64' 'windows' $textEditPath

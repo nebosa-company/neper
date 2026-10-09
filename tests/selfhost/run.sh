@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.algo.collect Terraform collection functions against Python (L022)
+algo_collect_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_collect/src/main.e" "$repo" x64 linux "$test_build/algo-collect-selfhost")
+[ "$algo_collect_written" = 'executable written' ]
+chmod +x "$test_build/algo-collect-selfhost"
+algo_collect_output=$("$test_build/algo-collect-selfhost")
+[ "$algo_collect_output" = 'algo collect ok' ]
 # e.text.edit Terraform string functions against Python string operations (L021)
 text_edit_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_edit/src/main.e" "$repo" x64 linux "$test_build/text-edit-selfhost")
 [ "$text_edit_written" = 'executable written' ]

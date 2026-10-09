@@ -1717,6 +1717,51 @@ accumulator alongside an error. Ordinary for never silently consumes next_err.
 
 ## 4. Pure algorithms, text and cryptography
 
+### `e.algo.collect`
+
+```neper
+error Invalid
+error LengthMismatch
+error Empty
+error OutOfRange
+error NegativeIndex
+error ZeroStep
+error TooLarge
+error TooFew
+error NotFinite
+error BadBase
+error NotInteger
+
+const MAX_RANGE: usize = 1000000usize
+const MAX_PRODUCT: usize = 1000000usize
+
+fn same(left: json.Value, right: json.Value) -> bool
+fn flatten_count(list: []const json.Value) -> usize
+fn flatten_into(list: []const json.Value, out: []json.Value, at: usize) -> usize
+fn flatten(a: *mem.Arena, list: []const json.Value) -> ([]const json.Value, err)
+fn distinct(a: *mem.Arena, list: []const json.Value) -> ([]const json.Value, err)
+fn compact(a: *mem.Arena, list: []const json.Value) -> ([]const json.Value, err)
+fn slice(list: []const json.Value, start: i64, end: i64) -> ([]const json.Value, err)
+fn element(list: []const json.Value, index: i64) -> (json.Value, err)
+fn one(list: []const json.Value) -> (json.Value, err)
+fn matchkeys(a: *mem.Arena, values: []const json.Value, keys: []const json.Value, searchset: []const json.Value) -> ([]const json.Value, err)
+fn zipmap(a: *mem.Arena, keys: []const json.Value, values: []const json.Value) -> ([]const json.Member, err)
+fn transpose(a: *mem.Arena, members: []const json.Member) -> ([]const json.Member, err)
+fn setproduct(a: *mem.Arena, lists: []const []const json.Value) -> ([]const json.Value, err)
+fn range(a: *mem.Arena, start: i64, limit: i64, step: i64) -> ([]const i64, err)
+fn number_value(v: json.Value) -> (f64, bool)
+fn sum(list: []const json.Value) -> (f64, err)
+fn product(list: []const json.Value) -> (f64, err)
+fn minimum(list: []const json.Value) -> (f64, err)
+fn maximum(list: []const json.Value) -> (f64, err)
+fn pow(base: f64, exponent: f64) -> f64
+fn log(number: f64, base: f64) -> (f64, err)
+fn signum(x: f64) -> i64
+fn parse_int(text: str, base: i64) -> (i64, err)
+```
+
+Terraform-compatible collection operations over `e.fmt.json` values (L022), after petcow: `flatten`, `distinct`, `compact`, `slice`, `element` (wraps round), `one`, `matchkeys`, `zipmap`, `transpose`, `setproduct`, `range` (at most 1,000,000 elements, a zero step refused), the number functions `sum`, `product`, `minimum`, `maximum`, `pow`, `log` (a result that is not finite is `NotFinite`), `signum` and `parse_int` (base 2 to 36, optional sign, surrounding whitespace). Equality is by value (`1` equals `1.0`; objects by key set). Results that build lists or objects live in the caller's arena. The fixture `algo_collect` checks 5770 cases against Python objects.
+
 ### `e.algo.combin`
 
 ```neper
