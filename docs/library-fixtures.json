@@ -2505,6 +2505,8 @@
    "delivered": 20,
    "pending": [],
    "fixtures": [
+    "net_imap",
+    "net_pop3",
     "net_smtp",
     "net_tls",
     "x_openssl"
@@ -2855,6 +2857,8 @@
     "log_debug",
     "misc_gaps",
     "net",
+    "net_imap",
+    "net_pop3",
     "net_smtp",
     "net_tls",
     "proc_output",

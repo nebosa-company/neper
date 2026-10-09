@@ -9415,6 +9415,146 @@ reported. Addresses with control characters, spaces or angle brackets are refuse
 Replies are read byte by byte; a non-2xx/3xx reply is `Rejected` with the reply in `Session.last`. No
 composition, no CRAM-MD5, no SMTPUTF8, no pipelining.
 
+### `e.net.pop3`
+
+```neper
+type Session = struct {
+type Stat = struct { count: usize, octets: u64 }
+type Entry = struct { number: usize, size: u64, id: str }
+
+error Protocol
+error Rejected
+error Closed
+error TooLarge
+error Invalid
+error Unsupported
+
+const LINE_LIMIT: usize = 1024usize
+const COMMAND_LIMIT: usize = 512usize
+
+fn next_byte(s: *Session) -> (u8, err)
+fn read_line(s: *Session) -> (usize, err)
+fn copy_text(a: *mem.Arena, text: []const u8) -> (str, err)
+fn read_status(s: *Session) -> (str, err)
+fn read_multiline(s: *Session, limit: usize) -> ([]const u8, err)
+fn clean(text: str) -> bool
+fn put(buf: []u8, at: *usize, text: []const u8) -> err
+fn put_decimal(buf: []u8, at: *usize, value: u64) -> err
+fn send_line(s: *Session, n: usize) -> err
+fn command(s: *Session, verb: str, argument: str, second: u64, has_second: bool) -> (str, err)
+fn number_text(s: *Session, n: usize) -> str
+fn connect(a: *mem.Arena, source: io.Reader, sink: io.Writer) -> (Session, err)
+fn starttls(s: *Session, config: tls.ClientConfig) -> err
+fn login(s: *Session, user: str, password: str) -> err
+fn capa(s: *Session, limit: usize) -> (str, err)
+fn parse_number(text: str, at: *usize) -> (u64, bool)
+fn stat(s: *Session) -> (Stat, err)
+fn listing(s: *Session, verb: str, with_id: bool, limit: usize) -> ([]const Entry, err)
+fn list(s: *Session, limit: usize) -> ([]const Entry, err)
+fn uidl(s: *Session, limit: usize) -> ([]const Entry, err)
+fn retr(s: *Session, number: usize, limit: usize) -> ([]const u8, err)
+fn top(s: *Session, number: usize, lines: usize, limit: usize) -> ([]const u8, err)
+fn dele(s: *Session, number: usize) -> err
+fn rset(s: *Session) -> err
+fn noop(s: *Session) -> err
+fn quit(s: *Session) -> err
+```
+
+POP3 client over any `io.Reader`/`io.Writer` pair. `connect` reads the greeting, `starttls` (STLS) upgrades
+through e.net.tls, `login` sends USER and PASS, and `stat`, `list`, `uidl`, `retr`, `top`, `dele`, `rset`,
+`noop`, `capa` and `quit` are the commands. A multi-line answer is read to the lone dot with the dot stuffing
+undone, and a message comes back as CRLF bytes ready for `e.fmt.mail.read_message`. A size limit bounds every
+multi-line answer, -ERR is `Rejected` with its text in `Session.last`, and a command argument carrying CR, LF
+or NUL is `Invalid` before it is written. No local store, no APOP.
+
+### `e.net.imap`
+
+```neper
+type Session = struct {
+type Capabilities = struct { imap4rev1: bool, starttls: bool, login_disabled: bool, auth_plain: bool, sasl_ir: bool, uidplus: bool, idle: bool, move: bool, raw: str }
+type Reply = struct { text: str, untagged: []const str }
+type Mailbox = struct { exists: u32, recent: u32, uid_validity: u32, uid_next: u32, unseen: u32, flags: str, permanent_flags: str, read_only: bool }
+type Name = struct { attributes: str, delimiter: str, name: str }
+type Section = struct { key: str, value: str, present: bool }
+type FetchData = struct { seq: u32, uid: u32, size: u32, flags: str, internal_date: str, sections: []const Section }
+type Buf = struct { data: []u8, used: usize }
+type Scan = struct { text: str, at: usize }
+type Value = struct { kind: u8, text: str }
+
+const ATOM: u8 = 0u8
+const QUOTED: u8 = 1u8
+const LITERAL: u8 = 2u8
+const LIST: u8 = 3u8
+const NIL: u8 = 4u8
+
+error Protocol
+error No
+error Bad
+error Rejected
+error Closed
+error TooLarge
+error Invalid
+error Unsupported
+
+const LINE_LIMIT: usize = 8192usize
+const COMMAND_LIMIT: usize = 4096usize
+
+fn no_capabilities() -> Capabilities
+fn is_digit(b: u8) -> bool
+fn same_fold(x: str, y: str) -> bool
+fn starts_fold(text: str, prefix: str) -> bool
+fn find_fold(text: str, needle: str, from: usize) -> usize
+fn parse_u32(text: str, at: *usize) -> (u32, bool)
+fn copy_text(a: *mem.Arena, text: []const u8) -> (str, err)
+fn put(buf: []u8, at: *usize, text: []const u8) -> err
+fn put_decimal(buf: []u8, at: *usize, value: u64) -> err
+fn clean(text: str) -> bool
+fn quote(buf: []u8, at: *usize, text: str) -> err
+fn fill(s: *Session) -> err
+fn next_byte(s: *Session) -> (u8, err)
+fn read_line(s: *Session) -> (usize, err)
+fn append(s: *Session, b: *Buf, bytes: []const u8) -> err
+fn literal_size(n: usize, line: []const u8) -> (usize, bool)
+fn read_response(s: *Session) -> (str, err)
+fn tag_text(s: *Session, buf: []u8, at: *usize) -> err
+fn run(s: *Session, text: []const u8, continuation: []const u8, has_continuation: bool) -> (Reply, err)
+fn connect(a: *mem.Arena, source: io.Reader, sink: io.Writer, limit: usize) -> (Session, err)
+fn parse_capabilities(text: str) -> Capabilities
+fn capability(s: *Session) -> err
+fn starttls(s: *Session, config: tls.ClientConfig) -> err
+fn login(s: *Session, user: str, password: str) -> err
+fn authenticate_plain(s: *Session, user: str, password: str) -> err
+fn skip_spaces(sc: *Scan)
+fn next_value(a: *mem.Arena, sc: *Scan) -> (Value, err)
+fn inside(group: str) -> str
+fn bracket_value(item: str, name: str) -> (str, bool)
+fn count_item(item: str, word: str) -> (u32, bool)
+fn open_mailbox(s: *Session, verb: str, name: str) -> (Mailbox, err)
+fn select(s: *Session, name: str) -> (Mailbox, err)
+fn examine(s: *Session, name: str) -> (Mailbox, err)
+fn list(s: *Session, reference: str, pattern: str) -> ([]const Name, err)
+fn uid_prefix(by_uid: bool) -> str
+fn search(s: *Session, criteria: str, by_uid: bool) -> ([]const u32, err)
+fn parse_fetch(a: *mem.Arena, item: str) -> (FetchData, err)
+fn section(data: FetchData, key: str) -> (str, bool)
+fn has_flag(data: FetchData, flag: str) -> bool
+fn fetch(s: *Session, set: str, items: str, by_uid: bool) -> ([]const FetchData, err)
+fn store(s: *Session, set: str, action: str, by_uid: bool) -> err
+fn expunge(s: *Session) -> (usize, err)
+fn noop(s: *Session) -> err
+fn close_mailbox(s: *Session) -> err
+fn logout(s: *Session) -> err
+```
+
+IMAP4rev1 client over any `io.Reader`/`io.Writer` pair. `connect`, `capability` and `starttls` negotiate;
+`login` and `authenticate_plain` sign in; `select`/`examine`, `list`, `search`, `fetch`, `store`, `expunge`,
+`noop`, `close_mailbox` and `logout` each run one tagged command (UID forms through `by_uid`). Untagged
+responses are collected up to the completion, literals stay inline in the response text, and `parse_fetch`,
+`section` and `has_flag` read FETCH data: a body section is the message bytes ready for
+`e.fmt.mail.read_message`. NO is `No`, BAD is `Bad`, a response above the `limit` given to `connect` is
+`TooLarge`, and arguments with CR, LF, NUL or a byte above 127 are `Invalid` before they are written. No
+APPEND, no IDLE, no local store.
+
 ### `e.net.ws`
 
 ```neper

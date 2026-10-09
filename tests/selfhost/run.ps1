@@ -3672,6 +3672,18 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.net.imap: scripted server byte for byte plus a live STARTTLS session (L083, D2276)
+$netImapPath = Join-Path $testBuild 'net-imap-selfhost.exe'
+$netImapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_imap\src\main.e') $repo 'x64' 'windows' $netImapPath
+if ($LASTEXITCODE -ne 0 -or $netImapWritten -ne 'executable written') { throw 'net_imap emission failed' }
+$netImapOutput = & $netImapPath
+if ($LASTEXITCODE -ne 0 -or $netImapOutput -ne 'net imap ok') { throw "net_imap answered wrongly: exit $LASTEXITCODE" }
+# e.net.pop3: scripted server byte for byte plus a live STLS session (L083, D2276)
+$netPop3Path = Join-Path $testBuild 'net-pop3-selfhost.exe'
+$netPop3Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_pop3\src\main.e') $repo 'x64' 'windows' $netPop3Path
+if ($LASTEXITCODE -ne 0 -or $netPop3Written -ne 'executable written') { throw 'net_pop3 emission failed' }
+$netPop3Output = & $netPop3Path
+if ($LASTEXITCODE -ne 0 -or $netPop3Output -ne 'net pop3 ok') { throw "net_pop3 answered wrongly: exit $LASTEXITCODE" }
 # e.net.smtp: scripted servers byte for byte plus a live STARTTLS session (L082, D2275)
 $netSmtpPath = Join-Path $testBuild 'net-smtp-selfhost.exe'
 $netSmtpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_smtp\src\main.e') $repo 'x64' 'windows' $netSmtpPath

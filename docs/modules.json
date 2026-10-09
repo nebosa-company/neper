@@ -96,6 +96,8 @@
     "e.net.tls",
     "e.net.http",
     "e.net.smtp",
+    "e.net.pop3",
+    "e.net.imap",
     "e.net.ws",
     "e.net.snapshot",
     "e.db",
@@ -2764,6 +2766,34 @@
   },
   {
    "name": "e.net.smtp",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.io",
+    "e.mem",
+    "e.net.tls",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.pop3",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.io",
+    "e.mem",
+    "e.net.tls"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.imap",
    "layer": 6,
    "surface": "source",
    "milestone": null,
