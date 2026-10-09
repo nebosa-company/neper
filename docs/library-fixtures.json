@@ -456,6 +456,7 @@
     "algo_formula_sql",
     "algo_formula_text",
     "algo_predicate",
+    "algo_query",
     "algo_transpile",
     "data_validate",
     "fmt_encode",
