@@ -1,9 +1,9 @@
-// `e.algo.search` against appdor's own `src/search/{index,indexing-pipeline,tenant-scope}.js`:
+// `e.algo.fulltext` against appdor's own `src/search/{index,indexing-pipeline,tenant-scope}.js`:
 // scripts/search_reference.mjs scores queries over random entity sets, plans, and runs scripted index, outbox and
 // recents sessions with appdor's engine and writes `{"op": ..., ...inputs, "e": outcome}` lines; the fixture rebuilds
 // the inputs and must render the same outcome.
 use e.algo.formula as f
-use e.algo.search as s
+use e.algo.fulltext as s
 use e.algo.view as view
 use e.fmt.json as json
 use e.io
@@ -723,6 +723,6 @@ fn evaluate(a: *mem.Arena, m: []const json.Member) -> str {
 //__VECTOR_FUNCTIONS__
 fn main(a: *mem.Arena, args: []str) -> err {
     //__VECTOR_CALLS__
-    try io.print("algo search ok")
+    try io.print("algo fulltext ok")
     ret ok
 }

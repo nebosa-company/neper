@@ -1105,6 +1105,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if build_error != ok { os.exit(90i32) }
     var registry = built
     //__VECTOR_CALLS__
-    try io.print("algo query ok")
+    try io.print("algo view ok")
     ret ok
 }

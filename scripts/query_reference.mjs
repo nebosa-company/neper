@@ -355,7 +355,7 @@ const funcs = chunks.map((c, i) => `fn vectors_${i}() -> str {\n    ret ${c}\n}\
 const calls = chunks.map((_, i) => `    if run(a, vectors_${i}(), &registry) != 0u8 { os.exit(${i + 1}i32) }\n`).join('');
 const template = readFileSync(resolve(here, 'query_fixture_template.e'), 'utf8');
 const out = template.replace('//__VECTOR_FUNCTIONS__\n', () => `${funcs}\n`).replace('    //__VECTOR_CALLS__\n', () => calls);
-const target = resolve(here, '..', 'tests/selfhost/fixtures/link/algo_query/src/main.e');
+const target = resolve(here, '..', 'tests/selfhost/fixtures/link/algo_view/src/main.e');
 mkdirSync(dirname(target), { recursive: true });
 writeFileSync(target, out, 'utf8');
-console.log(`${cases.length} cases in ${chunks.length} chunks -> algo_query`);
+console.log(`${cases.length} cases in ${chunks.length} chunks -> algo_view`);

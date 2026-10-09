@@ -3672,6 +3672,18 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.fulltext`: full-text search and the indexing pipeline against appdor (252 cases, D2305).
+$algoFulltextPath = Join-Path $testBuild 'algo-fulltext-selfhost.exe'
+$algoFulltextWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_fulltext\src\main.e') $repo 'x64' 'windows' $algoFulltextPath
+if ($LASTEXITCODE -ne 0 -or $algoFulltextWritten -ne 'executable written') { throw 'algo_fulltext emission failed' }
+$algoFulltextOutput = & $algoFulltextPath
+if ($LASTEXITCODE -ne 0 -or $algoFulltextOutput -ne 'algo fulltext ok') { throw "algo_fulltext answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.view` and `e.algo.pivot`: the table query engine against appdor (1698 cases, TZ=UTC, D2303).
+$algoViewPath = Join-Path $testBuild 'algo-view-selfhost.exe'
+$algoViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_view\src\main.e') $repo 'x64' 'windows' $algoViewPath
+if ($LASTEXITCODE -ne 0 -or $algoViewWritten -ne 'executable written') { throw 'algo_view emission failed' }
+$algoViewOutput = & $algoViewPath
+if ($LASTEXITCODE -ne 0 -or $algoViewOutput -ne 'algo view ok') { throw "algo_view answered wrongly: exit $LASTEXITCODE" }
 # e.algo.page and e.algo.batch against appdor records-engine, bulk, undo-redo and limits (L033, D2304)
 $algoPageBatchPath = Join-Path $testBuild 'algo-page-batch-selfhost.exe'
 $algoPageBatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_page_batch\src\main.e') $repo 'x64' 'windows' $algoPageBatchPath

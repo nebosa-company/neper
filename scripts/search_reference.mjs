@@ -1,7 +1,7 @@
 // Reference vectors for `e.algo.search` (L034): random entity sets and queries scored by appdor's own search
 // (src/search/index.js), and scripted index / outbox / recents sessions run through its indexing pipeline and realm
 // boundary (indexing-pipeline.js, tenant-scope.js); written as the link fixture tests/selfhost/fixtures/link/
-// algo_search. APPDOR_DIR defaults to D:/repos/appdor.
+// algo_fulltext. APPDOR_DIR defaults to D:/repos/appdor.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -245,7 +245,7 @@ const funcs = chunks.map((c, i) => `fn vectors_${i}() -> str {\n    ret ${c}\n}\
 const calls = chunks.map((_, i) => `    if run(a, vectors_${i}()) != 0u8 { os.exit(${i + 1}i32) }\n`).join('');
 const template = readFileSync(resolve(here, 'search_fixture_template.e'), 'utf8');
 const out = template.replace('//__VECTOR_FUNCTIONS__\n', () => `${funcs}\n`).replace('    //__VECTOR_CALLS__\n', () => calls);
-const target = resolve(here, '..', 'tests/selfhost/fixtures/link/algo_search/src/main.e');
+const target = resolve(here, '..', 'tests/selfhost/fixtures/link/algo_fulltext/src/main.e');
 mkdirSync(dirname(target), { recursive: true });
 writeFileSync(target, out, 'utf8');
-console.log(`${cases.length} cases in ${chunks.length} chunks -> algo_search`);
+console.log(`${cases.length} cases in ${chunks.length} chunks -> algo_fulltext`);

@@ -160,6 +160,7 @@
     "e.crypto.otp",
     "e.crypto.kdf",
     "e.test.support",
+    "e.algo.fulltext",
     "e.algo.search",
     "e.text.search",
     "e.text.distance",
@@ -663,6 +664,23 @@
     "e.algo.rand",
     "e.crypto.hash",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.fulltext",
+   "layer": 5,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.formula.text",
+    "e.algo.view",
+    "e.math",
+    "e.mem",
+    "e.str",
+    "e.text.utf8"
    ],
    "blocked_by": []
   },

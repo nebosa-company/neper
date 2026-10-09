@@ -5188,6 +5188,174 @@ fn strings(items: []str)
 fn strings_from(items: []str, depth: usize)
 ```
 
+### `e.algo.fulltext`
+
+```neper
+fn is_alnum(c: u8) -> bool
+fn tokenize(a: *mem.Arena, text: str) -> []const str
+fn has_token(tokens: []const str, term: str) -> bool
+fn has_prefixed(tokens: []const str, term: str) -> bool
+fn type_boost(kind: str) -> f64
+
+type Entity = struct {
+
+fn field_text(a: *mem.Arena, v: f.Value) -> str
+fn in_list(list: []const str, name: str) -> bool
+
+type IndexOptions = struct { searchable: []const str, has_searchable: bool, skip: []const str }
+
+fn body_text(a: *mem.Arena, e: Entity, options: IndexOptions) -> str
+
+type Doc = struct {
+type Index = struct { docs: []const Doc }
+
+fn build_index(a: *mem.Arena, entities: []const Entity, options: IndexOptions) -> Index
+fn score_term(d: Doc, term: str) -> (f64, bool)
+fn record_key(s: str) -> (str, str, bool)
+fn detect_record_key(text: str) -> (str, str, bool)
+fn is_record_key(value: str) -> bool
+
+type SearchOptions = struct {
+type Hit = struct { entity: Entity, score: f64, matches: []const str }
+type SearchResult = struct { results: []const Hit, total: usize }
+
+fn search(a: *mem.Arena, index: Index, query: str, options: SearchOptions) -> SearchResult
+fn hit_after(left: Hit, right: Hit) -> bool
+
+type Column = struct { name: str, not_searchable: bool }
+
+fn searchable_fields(a: *mem.Arena, data: []const f.Field, columns: []const Column) -> []const f.Field
+
+type FieldMatch = struct { field: str, snippet: str }
+type TableHit = struct { index: usize, fields: []const FieldMatch }
+
+fn units(a: *mem.Arena, s: str) -> []const u16
+fn snippet(a: *mem.Arena, text: str, needle: str) -> str
+fn view_unit_index(a: *mem.Arena, s: str, byte_at: usize) -> usize
+fn find_in_table(a: *mem.Arena, records: []const view.Row, query: str, names: []const str) -> []const TableHit
+fn server_row_threshold() -> f64
+fn search_rpc() -> str
+
+type SearchPlan = struct {
+
+fn plan_search(query: str, row_count: f64, has_row_count: bool, loaded_rows: f64, has_loaded: bool, table_id: str, limit: f64, has_limit: bool, offset: f64, has_offset: bool, fuzzy: bool) -> SearchPlan
+
+type Realm = struct { valid: bool, id: str, reason: str }
+
+fn resolve_realm(v: f.Value, present: bool) -> Realm
+fn text_realm(s: str, present: bool) -> Realm
+
+type IndexDoc = struct {
+
+fn document_realm(d: IndexDoc) -> (str, bool)
+fn in_realm(d: IndexDoc, realm: str) -> bool
+
+type KindCount = struct { kind: str, count: usize }
+type Counts = struct { total: usize, by_kind: []const KindCount, realm: str, has_realm: bool }
+
+fn empty_counts() -> Counts
+fn count_docs(a: *mem.Arena, docs: []const IndexDoc, realm: str) -> Counts
+
+type Candidate = struct { id: str, title: str, kind: str, score: f64, key: str, table_id: str }
+type Boost = fn(*void, IndexDoc) -> f64
+type SearchIndex = struct {
+
+fn new_index(a: *mem.Arena, capacity: usize, enforce_realm: bool, realm: str, has_realm: bool) -> SearchIndex
+fn find_doc(ix: *SearchIndex, id: str) -> usize
+fn put_doc(ix: *SearchIndex, d: IndexDoc) -> bool
+
+type Upsert = struct { valid: bool, reason: str }
+
+fn upsert(ix: *SearchIndex, d: IndexDoc) -> Upsert
+
+type BatchUpsert = struct { upserted: usize, errors: usize, deduplicated: usize }
+
+fn batch_upsert(ix: *SearchIndex, entries: []const IndexDoc) -> BatchUpsert
+fn remove_at(ix: *SearchIndex, at: usize)
+fn remove(ix: *SearchIndex, id: str)
+fn batch_remove(ix: *SearchIndex, ids: []const str) -> usize
+fn doc_count(ix: *SearchIndex) -> usize
+fn has_doc(ix: *SearchIndex, id: str) -> bool
+
+type Query = struct {
+type CanSee = fn(*void, IndexDoc) -> bool
+
+fn rank(ix: *SearchIndex, candidates: []const IndexDoc, text: str, q: Query, boost: Boost, has_boost: bool, state: *void) -> []const Candidate
+fn none_strings() -> []const str
+fn query_docs(ix: *SearchIndex, text: str, q: Query, can_see: CanSee, has_can_see: bool, boost: Boost, has_boost: bool, state: *void) -> []const Candidate
+fn scope_in_place(docs: []IndexDoc, realm: str) -> []IndexDoc
+fn narrow(docs: []IndexDoc, q: Query, can_see: CanSee, has_can_see: bool, state: *void) -> []IndexDoc
+
+type Suggestion = struct { id: str, title: str, kind: str }
+type Scoped = struct { results: []const Candidate, total: usize, counts: Counts, suggestions: []const Suggestion }
+
+fn empty_scoped() -> Scoped
+fn query_scoped(ix: *SearchIndex, text: str, q: Query, can_see: CanSee, has_can_see: bool, boost: Boost, has_boost: bool, state: *void) -> Scoped
+
+type IndexStats = struct {
+
+fn scoped_stats(ix: *SearchIndex, realm: str, has_realm: bool) -> (Counts, usize, usize, usize)
+fn clear(ix: *SearchIndex)
+
+type Dropped = struct { valid: bool, reason: str, removed: usize, unattributed: usize }
+
+fn drop_realm_and_unattributed(ix: *SearchIndex, realm: str, has_realm: bool) -> Dropped
+fn stats(ix: *SearchIndex) -> IndexStats
+fn wedged_depth() -> usize
+fn wedged_age_min() -> f64
+
+type Event = struct { seq: f64, artifact_id: str, type_name: str, at: str, has_at: bool }
+type Mapped = struct { has_doc: bool, doc: IndexDoc, threw: bool, message: str }
+type ToDocument = fn(*void, Event) -> Mapped
+type DeadLetter = struct { seq: f64, artifact_id: str, message: str, at: str }
+type Consumer = struct {
+
+fn new_consumer(a: *mem.Arena, dead_capacity: usize) -> Consumer
+
+type Drained = struct { processed: usize, upserts: usize, removals: usize, errors: usize, cursor: f64, dead_letters: []const DeadLetter }
+
+fn is_removal(t: str) -> bool
+fn apply_event(c: *Consumer, ix: *SearchIndex, e: Event, to_document: ToDocument, state: *void, now_iso: str, upserts: *Counter)
+
+type Counter = struct { upserts: usize, removals: usize, errors: usize }
+
+fn drain(c: *Consumer, ix: *SearchIndex, events: []const Event, batch_mode: bool, to_document: ToDocument, state: *void, now_iso: str) -> Drained
+
+type Backlog = struct { depth: usize, oldest_seq: f64, oldest_at: str, has_oldest: bool, has_oldest_at: bool, cursor: f64 }
+
+fn backlog(c: *Consumer, outbox: []const Event) -> Backlog
+
+type Wedged = struct { wedged: bool, reason: str }
+
+fn is_wedged(c: *Consumer, outbox: []const Event, now_ms: f64) -> Wedged
+
+type ConsumerStats = struct {
+
+fn consumer_stats(c: *Consumer, outbox: []const Event, now_ms: f64) -> ConsumerStats
+fn clear_dead_letters(c: *Consumer)
+
+type Touch = struct { id: str, at: str }
+type UserRecents = struct { user: str, items: []Touch, count: usize }
+type UserFavorites = struct { user: str, ids: []str, count: usize }
+type Recents = struct {
+
+fn new_recents(a: *mem.Arena, limit: usize, max_users: usize) -> Recents
+fn user_slot(r: *Recents, user: str) -> usize
+fn fav_slot(r: *Recents, user: str, create: bool) -> usize
+fn touch(r: *Recents, user: str, id: str, at: str)
+fn recents_of(r: *Recents, user: str, n: usize) -> []const Touch
+fn favorite(r: *Recents, user: str, id: str)
+fn unfavorite(r: *Recents, user: str, id: str)
+fn is_favorite(r: *Recents, user: str, id: str) -> bool
+
+type BoostState = struct { recents: *Recents, user: str }
+
+fn recents_boost(state: *void, d: IndexDoc) -> f64
+fn purge_for_user(r: *Recents, user: str, visible: []const str)
+```
+
+Full-text search over documents and records after appdor's search engine: AND-term scoring with title, prefix and body weights, the index-time field allowlist, find-in-table snippets and the client/server plan, an incremental document index with realm boundaries that fail closed and permission trimming before truncation, an outbox consumer with an idempotent cursor, dead letters and wedge detection, and recents and favorites boosts.
+
 ### `e.algo.search`
 
 ```neper

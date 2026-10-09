@@ -3274,6 +3274,18 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# `e.algo.fulltext`: full-text search and the indexing pipeline against appdor (252 cases, D2305).
+algo_fulltext_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_fulltext/src/main.e" "$repo" x64 linux "$test_build/algo-fulltext-selfhost")
+[ "$algo_fulltext_written" = 'executable written' ]
+chmod +x "$test_build/algo-fulltext-selfhost"
+algo_fulltext_output=$("$test_build/algo-fulltext-selfhost")
+[ "$algo_fulltext_output" = 'algo fulltext ok' ]
+# `e.algo.view` and `e.algo.pivot`: the table query engine against appdor (1698 cases, TZ=UTC, D2303).
+algo_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_view/src/main.e" "$repo" x64 linux "$test_build/algo-view-selfhost")
+[ "$algo_view_written" = 'executable written' ]
+chmod +x "$test_build/algo-view-selfhost"
+algo_view_output=$("$test_build/algo-view-selfhost")
+[ "$algo_view_output" = 'algo view ok' ]
 # e.algo.page and e.algo.batch against appdor records-engine, bulk, undo-redo and limits (L033, D2304)
 algo_page_batch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_page_batch/src/main.e" "$repo" x64 linux "$test_build/algo-page-batch-selfhost")
 [ "$algo_page_batch_written" = 'executable written' ]
