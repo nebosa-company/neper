@@ -328,6 +328,7 @@
     "e.fmt.snappy",
     "e.algo.egraph",
     "e.algo.findings",
+    "e.algo.formula",
     "e.algo.geo",
     "e.algo.predicate",
     "e.algo.privacy",
@@ -4336,6 +4337,22 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.formula",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.mem",
+    "e.str",
+    "e.text.unicode",
+    "e.text.utf8",
+    "e.time"
    ],
    "blocked_by": []
   },

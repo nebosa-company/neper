@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.algo.formula core against appdor's formula engine (L026)
+algo_formula_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_formula/src/main.e" "$repo" x64 linux "$test_build/algo-formula-selfhost")
+[ "$algo_formula_written" = 'executable written' ]
+chmod +x "$test_build/algo-formula-selfhost"
+algo_formula_output=$("$test_build/algo-formula-selfhost")
+[ "$algo_formula_output" = 'algo formula ok' ]
 # e.algo.predicate Spartan filter subset against a transcription of petcow filter.rs (L025)
 algo_predicate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_predicate/src/main.e" "$repo" x64 linux "$test_build/algo-predicate-selfhost")
 [ "$algo_predicate_written" = 'executable written' ]

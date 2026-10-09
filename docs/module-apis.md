@@ -1857,6 +1857,192 @@ fn merge(a: *mem.Arena, base: str, existing: []const Finding, reported: []const 
 
 Stable finding ids and the idempotent merge of a scanner's report into recorded findings (L024), after petcow's `scan.rs`. `stable_id` is FNV-1a 64 over the parts with `|` between them, as 16 lowercase hex digits; `finding_id` hashes the resource, the tool without its version (`tool_key`) and the rule. `merge` takes the recorded findings of one resource and a scanner's report: a match by id keeps the recorded state, justification, expiry and detection time and takes the new severity and description (`last_update` moves only on a change); an unmatched report is a new `Open` finding; a recorded open finding of the owner tool that is no longer reported becomes `Fixed`; every other recorded finding, hand-written or another tool's, is kept. The result is sorted by tool, rule and description. A text that may be absent is an `Opt`. The fixture `algo_findings` checks 167 cases against a transcription of the Rust.
 
+### `e.algo.formula`
+
+```neper
+type Kind = enum u8 { Blank, Number, Text, Bool, Date, Array, Error }
+type Value = struct { kind: Kind, n: f64, s: str, items: []const Value, code: u8 }
+
+const E_DIV0: u8 = 0u8
+const E_VALUE: u8 = 1u8
+const E_NA: u8 = 2u8
+const E_NAME: u8 = 3u8
+const E_NUM: u8 = 4u8
+const E_REF: u8 = 5u8
+const E_ERROR: u8 = 6u8
+const E_LIMIT: u8 = 7u8
+
+fn code_text(code: u8) -> str
+fn blank() -> Value
+fn zero_items() -> []const Value
+fn number(n: f64) -> Value
+fn text(s: str) -> Value
+fn boolean(b: bool) -> Value
+fn date(ms: f64) -> Value
+fn array(items: []const Value) -> Value
+fn make_error(code: u8, message: str) -> Value
+fn div_zero() -> Value
+fn value_error(message: str) -> Value
+fn na_error(message: str) -> Value
+fn name_error(message: str) -> Value
+fn num_error(message: str) -> Value
+fn ref_error(message: str) -> Value
+fn generic_error(message: str) -> Value
+fn limit_error(message: str) -> Value
+fn is_error(v: Value) -> bool
+fn is_na(v: Value) -> bool
+fn is_blank(v: Value) -> bool
+fn type_of(v: Value) -> str
+fn type_code(v: Value) -> i64
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn join3(a: *mem.Arena, x: str, y: str, z: str) -> str
+fn is_digit(c: u8) -> bool
+fn number_text(a: *mem.Arena, x: f64) -> str
+fn parse_number_text(s: str) -> (f64, bool)
+fn ms_per_day() -> f64
+fn date_iso(a: *mem.Arena, ms: f64) -> str
+fn put_int(out: []u8, at: usize, value: i64, width: usize) -> usize
+fn digits_value(s: str, from: usize, count: usize) -> (i64, bool)
+fn parse_iso(s: str) -> (f64, bool)
+fn is_naive_datetime(s: str) -> bool
+fn is_iso_temporal(s: str) -> bool
+fn trim_text(s: str) -> str
+fn to_number(a: *mem.Arena, v: Value) -> Value
+fn to_text(a: *mem.Arena, v: Value) -> Value
+fn lower_text(a: *mem.Arena, s: str) -> str
+fn to_bool(v: Value) -> bool
+fn to_date(a: *mem.Arena, v: Value) -> Value
+fn loose_equals(a: *mem.Arena, x: Value, y: Value) -> bool
+fn compare_utf16(x: str, y: str) -> i32
+fn compare_values(a: *mem.Arena, x: Value, y: Value) -> Value
+fn collect_numbers(a: *mem.Arena, args: []const Value, out: []f64) -> (usize, Value)
+fn collect_into(a: *mem.Arena, v: Value, out: []f64, at: usize) -> (usize, Value)
+fn flatten_values(args: []const Value, out: []Value, at: usize) -> usize
+fn infinity() -> f64
+fn nan() -> f64
+fn fmod(x: f64, y: f64) -> f64
+
+type Diag = struct { good: bool, message: str, offset: usize, complexity: bool }
+
+fn no_offset() -> usize
+fn diag_ok() -> Diag
+fn utf16_offset(src: str, pos: usize) -> usize
+
+const T_NUMBER: u8 = 0u8
+const T_STRING: u8 = 1u8
+const T_BOOL: u8 = 2u8
+const T_NULL: u8 = 3u8
+const T_IDENT: u8 = 4u8
+const T_FIELD: u8 = 5u8
+const T_OP: u8 = 6u8
+const T_PUNCT: u8 = 7u8
+const T_EOF: u8 = 8u8
+
+type Token = struct { kind: u8, s: str, n: f64, b: bool, pos: usize }
+
+fn is_ident_start(c: u8) -> bool
+fn is_ident_part(c: u8) -> bool
+fn is_ws(c: u8) -> bool
+fn literal_value(a: *mem.Arena, s: str) -> f64
+fn tokenize(a: *mem.Arena, src: str) -> ([]Token, Diag)
+
+type NodeKind = enum u8 { Number, String, Bool, Null, Field, Name, Call, Unary, Binary, Ternary, Array }
+type Node = struct { kind: NodeKind, n: f64, s: str, b: bool, op: str, kids: []const Node }
+
+fn leaf(kind: NodeKind) -> Node
+fn zero_nodes() -> []const Node
+
+type Parser = struct { a: *mem.Arena, src: str, tokens: []const Token, at: usize, failed: bool, message: str, pos: usize }
+
+fn fail(p: *Parser, message: str, pos: usize)
+fn describe(p: *Parser, t: Token) -> str
+fn peek(p: *Parser) -> Token
+fn is_op(p: *Parser, v: str) -> bool
+fn is_punct(p: *Parser, v: str) -> bool
+fn expect_punct(p: *Parser, v: str)
+fn node2(p: *Parser, kind: NodeKind, op: str, left: Node, right: Node) -> Node
+fn parse_ternary(p: *Parser) -> Node
+fn parse_ternary_entry(p: *Parser) -> Node
+fn parse_or(p: *Parser) -> Node
+fn parse_and(p: *Parser) -> Node
+fn is_comparison_op(t: Token) -> bool
+fn parse_comparison(p: *Parser) -> Node
+fn parse_concat(p: *Parser) -> Node
+fn parse_additive(p: *Parser) -> Node
+fn parse_multiplicative(p: *Parser) -> Node
+fn parse_exponent(p: *Parser) -> Node
+fn parse_unary(p: *Parser) -> Node
+fn parse_arg_list(p: *Parser, open: str, close: str) -> []const Node
+fn parse_primary(p: *Parser) -> Node
+fn count_nodes(node: Node) -> usize
+fn parse(a: *mem.Arena, source: str, max_nodes: usize) -> (Node, Diag)
+fn collect_references(a: *mem.Arena, node: Node) -> []const str
+fn collect_into_names(node: Node, names: []str, at: usize) -> usize
+
+error Collision
+error RegistryFull
+
+type Call = struct { ev: *Evaluator, entry: *const Entry, args: []const Value, nodes: []const Node, scope: *const Scope, has_scope: bool, a: *mem.Arena }
+type Handler = fn(*Call) -> Value
+type Entry = struct {
+type Registry = struct { entries: []Entry, keys: []str, count: usize, key_count: usize, owners: []usize }
+
+fn normalize_name(a: *mem.Arena, name: str) -> str
+fn registry(a: *mem.Arena, capacity: usize) -> (Registry, err)
+fn find_key(r: *const Registry, key: str) -> usize
+fn register(r: *Registry, a: *mem.Arena, entry: Entry) -> err
+fn resolve(a: *mem.Arena, r: *const Registry, name: str) -> (usize, bool)
+fn entry_at(r: *const Registry, index: usize) -> *const Entry
+fn check_arity(a: *mem.Arena, entry: *const Entry, count: usize) -> str
+
+type Scope = struct { name: str, value: Value, parent: *const Scope, has_parent: bool }
+type Field = struct { name: str, value: Value }
+type Formula = struct { name: str, source: str }
+type FieldGetter = fn(*void, str) -> (Value, bool)
+type Context = struct {
+type Cached = struct { name: str, node: Node, parsed: bool }
+type Evaluator = struct {
+
+fn evaluator(a: *mem.Arena, reg: *const Registry, ctx: *const Context) -> Evaluator
+fn tick(ev: *Evaluator) -> bool
+fn budget_error() -> Value
+fn eval(ev: *Evaluator, node: Node, scope: *const Scope, has_scope: bool) -> Value
+fn eval_node(c: *Call, node: Node) -> Value
+fn resolving_index(ev: *Evaluator, name: str) -> usize
+fn formula_index(ev: *Evaluator, name: str) -> usize
+fn lookup_field(ev: *Evaluator, name: str) -> (Value, bool)
+fn circular_error(ev: *Evaluator, from: usize, name: str) -> Value
+fn push_name(ev: *Evaluator, name: str)
+fn pop_name(ev: *Evaluator)
+fn eval_formula(ev: *Evaluator, name: str, source: str) -> Value
+fn resolve_cell(ev: *Evaluator, name: str) -> (Value, bool)
+fn resolve_field(ev: *Evaluator, name: str) -> Value
+fn scope_lookup(scope: *const Scope, has_scope: bool, name: str) -> (Value, bool)
+fn resolve_name(ev: *Evaluator, name: str, scope: *const Scope, has_scope: bool) -> Value
+fn eval_unary(ev: *Evaluator, node: Node, scope: *const Scope, has_scope: bool) -> Value
+fn arithmetic(a: *mem.Arena, op: str, left: Value, right: Value) -> Value
+fn eval_binary(ev: *Evaluator, node: Node, scope: *const Scope, has_scope: bool) -> Value
+fn eval_call(ev: *Evaluator, node: Node, scope: *const Scope, has_scope: bool) -> Value
+fn invoke(ev: *Evaluator, entry: *const Entry, nodes: []const Node, scope: *const Scope, has_scope: bool) -> Value
+fn zero_items_mut() -> []Value
+fn variable_name(node: Node) -> (str, bool)
+fn bind(a: *mem.Arena, parent: *const Scope, has_parent: bool, name: str, value: Value) -> *const Scope
+fn let_handler(c: *Call) -> Value
+fn lets_handler(c: *Call) -> Value
+fn register_core(r: *Registry, a: *mem.Arena) -> err
+fn evaluate(a: *mem.Arena, source: str, ctx: *const Context, reg: *const Registry) -> Value
+fn evaluate_ast(a: *mem.Arena, node: Node, ctx: *const Context, reg: *const Registry) -> Value
+fn dependencies(a: *mem.Arena, source: str) -> ([]const str, Diag)
+fn has_formula(formulas: []const Formula, name: str) -> bool
+fn formula_edges(a: *mem.Arena, formulas: []const Formula) -> ([]const []const usize, err)
+fn detect_cycle(a: *mem.Arena, formulas: []const Formula) -> ([]const str, bool)
+fn evaluation_order(a: *mem.Arena, formulas: []const Formula) -> ([]const str, bool)
+fn visit_order(node: usize, edges: []const []const usize, seen: []bool, formulas: []const Formula, order: []str, at: usize) -> usize
+fn infer_type(a: *mem.Arena, source: str, ctx: *const Context, reg: *const Registry) -> str
+```
+
+Spreadsheet-style formula engine core (L026), a port of appdor's `src/formula` tokenizer, parser, evaluator, registry and value model. Formulas have `{Field}` and bare-name references, `let` variables (`LET`, `LETS`), `//` comments, the operators `+ - * / % ^ & = == != <> < <= > >= && || !`, `cond ? a : b` and array literals. Errors are values (`#DIV/0!`, `#VALUE!`, `#N/A`, `#NAME?`, `#NUM!`, `#REF!`, `#ERROR!`, `#LIMIT!`) that flow through operators and eager arguments; blank propagates through arithmetic; a step budget and a node cap end a runaway formula with `#LIMIT!`; a circular reference between sibling formulas is a `#REF!` naming the cycle. `evaluate`, `parse` (with a UTF-16 diagnostic), `dependencies`, `detect_cycle`, `evaluation_order` and `infer_type` are the public functions; functions are `Entry` records in a `Registry` (case- and underscore-insensitive names, aliases, arity, lazy, pass-errors and volatility flags), registered by the function modules; `register_core` adds `LET` and `LETS`. Numbers print as JavaScript prints them. Text dates are ISO-8601 only, and a field named like a JavaScript object property is an ordinary field. The fixture `algo_formula` checks 718 cases against appdor's own engine.
+
 ### `e.algo.geo`
 
 ```neper

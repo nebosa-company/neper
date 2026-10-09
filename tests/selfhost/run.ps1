@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.algo.formula core against appdor's formula engine (L026)
+$algoFormulaPath = Join-Path $testBuild 'algo-formula-selfhost.exe'
+$algoFormulaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_formula\src\main.e') $repo 'x64' 'windows' $algoFormulaPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaWritten -ne 'executable written') { throw 'algo_formula emission failed' }
+$algoFormulaOutput = & $algoFormulaPath
+if ($LASTEXITCODE -ne 0 -or $algoFormulaOutput -ne 'algo formula ok') { throw "algo_formula answered wrongly: exit $LASTEXITCODE" }
 # e.algo.predicate Spartan filter subset against a transcription of petcow filter.rs (L025)
 $algoPredicatePath = Join-Path $testBuild 'algo-predicate-selfhost.exe'
 $algoPredicateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_predicate\src\main.e') $repo 'x64' 'windows' $algoPredicatePath

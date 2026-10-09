@@ -446,6 +446,7 @@
    "fixtures": [
     "algo_collect",
     "algo_findings",
+    "algo_formula",
     "algo_predicate",
     "fmt_encode",
     "fmt_gaps_a",
@@ -2867,6 +2868,7 @@
    "delivered": 38,
    "pending": [],
    "fixtures": [
+    "algo_formula",
     "text_gaps",
     "text_unicode"
    ]
