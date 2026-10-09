@@ -1829,6 +1829,34 @@ are `i64` and never checked for overflow. The Li Chao tree covers an integer dom
 with `4 * (high - low + 1)` nodes; the convex hull trick wants lines in decreasing
 slope order and queries at increasing `x`.
 
+### `e.algo.findings`
+
+```neper
+error Invalid
+
+type State = enum u8 { Open, Accepted, Fixed, FalsePositive }
+type Severity = enum u8 { Info, Low, Medium, High, Critical }
+type Opt = struct { present: bool, text: str }
+type Finding = struct {
+type Reported = struct {
+
+fn some(text: str) -> Opt
+fn none() -> Opt
+fn tool_key(tool: str) -> str
+fn fnv_step(hash: u64, byte: u8) -> u64
+fn hex_digit(nibble: u64) -> u8
+fn stable_id(a: *mem.Arena, parts: []const str) -> (str, err)
+fn finding_id(a: *mem.Arena, resource: str, tool: str, rule: str) -> (str, err)
+fn same(left: str, right: str) -> bool
+fn has_prefix(text: str, prefix: str) -> bool
+fn compare(left: str, right: str) -> i32
+fn before(x: Finding, y: Finding) -> bool
+fn find_by_id(existing: []const Finding, id: str) -> usize
+fn merge(a: *mem.Arena, base: str, existing: []const Finding, reported: []const Reported, now: str, owner_tool: str) -> ([]const Finding, err)
+```
+
+Stable finding ids and the idempotent merge of a scanner's report into recorded findings (L024), after petcow's `scan.rs`. `stable_id` is FNV-1a 64 over the parts with `|` between them, as 16 lowercase hex digits; `finding_id` hashes the resource, the tool without its version (`tool_key`) and the rule. `merge` takes the recorded findings of one resource and a scanner's report: a match by id keeps the recorded state, justification, expiry and detection time and takes the new severity and description (`last_update` moves only on a change); an unmatched report is a new `Open` finding; a recorded open finding of the owner tool that is no longer reported becomes `Fixed`; every other recorded finding, hand-written or another tool's, is kept. The result is sorted by tool, rule and description. A text that may be absent is an `Opt`. The fixture `algo_findings` checks 167 cases against a transcription of the Rust.
+
 ### `e.algo.geo`
 
 ```neper

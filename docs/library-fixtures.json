@@ -445,6 +445,7 @@
    "pending": [],
    "fixtures": [
     "algo_collect",
+    "algo_findings",
     "fmt_encode",
     "fmt_gaps_a",
     "fmt_json"

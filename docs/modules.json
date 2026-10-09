@@ -327,6 +327,7 @@
     "e.fmt.lz4",
     "e.fmt.snappy",
     "e.algo.egraph",
+    "e.algo.findings",
     "e.algo.geo",
     "e.algo.privacy",
     "e.algo.query",
@@ -4323,6 +4324,17 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.algo.disjoint_set"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.findings",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
    ],
    "blocked_by": []
   },

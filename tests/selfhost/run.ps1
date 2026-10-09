@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# e.algo.findings stable ids and idempotent merge against a transcription of petcow scan.rs (L024)
+$algoFindingsPath = Join-Path $testBuild 'algo-findings-selfhost.exe'
+$algoFindingsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_findings\src\main.e') $repo 'x64' 'windows' $algoFindingsPath
+if ($LASTEXITCODE -ne 0 -or $algoFindingsWritten -ne 'executable written') { throw 'algo_findings emission failed' }
+$algoFindingsOutput = & $algoFindingsPath
+if ($LASTEXITCODE -ne 0 -or $algoFindingsOutput -ne 'algo findings ok') { throw "algo_findings answered wrongly: exit $LASTEXITCODE" }
 # e.fmt.encode Terraform encoding functions against Python codecs (L023)
 $fmtEncodePath = Join-Path $testBuild 'fmt-encode-selfhost.exe'
 $fmtEncodeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_encode\src\main.e') $repo 'x64' 'windows' $fmtEncodePath
