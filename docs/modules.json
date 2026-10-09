@@ -340,6 +340,8 @@
     "e.algo.transpile",
     "e.algo.formula.sql",
     "e.algo.checksum",
+    "e.algo.view",
+    "e.algo.pivot",
     "e.algo.geo",
     "e.algo.predicate",
     "e.algo.privacy",
@@ -4537,6 +4539,37 @@
     "e.mem",
     "e.str",
     "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.view",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.math",
+    "e.mem",
+    "e.str",
+    "e.text.utf8",
+    "e.time"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.pivot",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.view",
+    "e.math",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },

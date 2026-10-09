@@ -2922,6 +2922,244 @@ fn validate(a: *mem.Arena, kind: str, value: str) -> (bool, bool)
 
 Identifier checksum validators, after appdor's specialized, barcode and NACE field modules: IBAN and LEI (ISO 7064 mod 97-10), Luhn, credit card and IMEI lengths, ISBN-10, EAN-13/ISBN-13, UPC-A, ISIN, VIN, BIC, EU VAT structure per member state, MIC, DUNS, HS code, UN/LOCODE, Incoterms 2020, ICD-10, SNOMED CT (Verhoeff), LOINC, NDC, RxCUI, MAC address and the NACE Rev. 2.1 classification (parse, section and division titles in English and Bulgarian). Barcodes get their symbology rules (GS1 mod 10, Code 39 mod 43) with stable reason slugs and messages, the scan-capability decision and the scan-to-field-value narrowing. `validate(kind, value)` is the name-keyed registry; text is read as the originals read it (upper-cased, white space and hyphens ignored where tolerated, ASCII-only classes). Checked against appdor's own validators over 3,146 cases.
 
+### `e.algo.view`
+
+```neper
+fn day_ms() -> f64
+
+type Row = struct { fields: []const f.Field }
+type FieldDef = struct { name: str, type_name: str, has_options: bool, options: []const f.Value, option_colors: []const f.Field }
+
+fn cell_of(row: Row, name: str) -> (f.Value, bool)
+fn value_at(row: Row, name: str) -> f.Value
+fn is_empty(v: f.Value) -> bool
+fn is_nan(x: f64) -> bool
+fn is_finite(x: f64) -> bool
+fn js_space(u: u32) -> bool
+fn js_trim(s: str) -> str
+fn js_string(a: *mem.Arena, v: f.Value) -> str
+fn cell_string(a: *mem.Arena, row: Row, name: str) -> str
+fn lc(a: *mem.Arena, s: str) -> str
+fn js_number(a: *mem.Arena, v: f.Value) -> f64
+fn to_num(a: *mem.Arena, v: f.Value) -> (f64, bool)
+fn same_value(a: f.Value, b: f.Value) -> bool
+fn as_array(a: *mem.Arena, v: f.Value) -> []const f.Value
+fn includes(list: []const f.Value, v: f.Value) -> bool
+fn is_digit(c: u8) -> bool
+fn is_naive_datetime(s: str) -> bool
+fn to_date(a: *mem.Arena, v: f.Value) -> (f64, bool)
+fn day_start(ms: f64) -> f64
+
+type Operand = struct {
+
+fn plain_operand(v: f.Value) -> Operand
+
+type Context = struct { now: f64, has_now: bool, user_id: f.Value, has_user: bool, base: f.Context }
+
+fn clock(ctx: *const Context) -> f64
+fn resolve_date(a: *mem.Arena, op: Operand, ctx: *const Context) -> (f64, bool)
+fn resolve_range(a: *mem.Arena, op: Operand, ctx: *const Context) -> (f64, f64, bool)
+fn no_value() -> str
+fn pad2(a: *mem.Arena, n: i64) -> str
+
+type Bucket = struct { name: str, size: f64, has_size: bool }
+
+fn no_bucket() -> Bucket
+fn bucket_key(a: *mem.Arena, v: f.Value, bucket: Bucket) -> (str, bool)
+
+type Node = struct {
+
+fn empty_group(operator: str) -> Node
+fn is_group(n: Node) -> bool
+fn truthy(v: f.Value) -> bool
+fn same_day(a: *mem.Arena, cell: f.Value, other: f64, has_other: bool) -> bool
+fn cmp_day(a: *mem.Arena, cell: f.Value, other: f64, has_other: bool) -> f64
+fn op_known(list: str, op: str) -> bool
+fn operator_list(type_name: str) -> str
+fn punct_order() -> str
+
+type Weight = struct { primary: u32, secondary: u32, tertiary: u32 }
+
+fn letter_weight(base: u8, accent: u32, upper: bool) -> Weight
+fn latin1_base(scalar: u32) -> (u8, u32, bool, bool)
+fn char_weights(scalar: u32, out: []Weight) -> usize
+fn collate_text(x: str, y: str) -> i32
+fn find_field(fields: []const FieldDef, name: str) -> (FieldDef, bool)
+fn strict_equal(av: f.Value, a_present: bool, bv: f.Value, b_present: bool) -> bool
+fn eval_condition(a: *mem.Arena, reg: *const f.Registry, node: Node, row: Row, fields: []const FieldDef, ctx: *const Context) -> bool
+fn matches_bucket(a: *mem.Arena, cell: f.Value, node: Node) -> bool
+fn eval_tree(a: *mem.Arena, reg: *const f.Registry, node: Node, row: Row, fields: []const FieldDef, ctx: *const Context) -> bool
+fn matches_filter(a: *mem.Arena, reg: *const f.Registry, node: Node, has_filter: bool, row: Row, fields: []const FieldDef, ctx: *const Context) -> bool
+fn filter_rows(a: *mem.Arena, reg: *const f.Registry, rows: []const Row, node: Node, has_filter: bool, fields: []const FieldDef, ctx: *const Context) -> []const Row
+
+type SortSpec = struct { field: str, direction: str }
+
+fn is_numeric_type(t: str) -> bool
+fn collate(a: *mem.Arena, x: f.Value, y: f.Value, def: FieldDef, has_def: bool) -> f64
+
+type SortJob = struct {
+type Compare = fn(*SortJob, usize, usize) -> f64
+
+fn compare_rows(job: *SortJob, x: usize, y: usize) -> f64
+fn compare_keys(job: *SortJob, x: usize, y: usize) -> f64
+fn order_of(job: *SortJob, cmp: Compare, x: usize, y: usize) -> f64
+fn sort_small(job: *SortJob, cmp: Compare, order: []usize)
+fn merge_sort(job: *SortJob, cmp: Compare, order: []usize, tmp: []usize, lo: usize, hi: usize)
+fn sorted_order(job: *SortJob, cmp: Compare, n: usize) -> []usize
+fn sort_rows(a: *mem.Arena, rows: []const Row, sorts: []const SortSpec, fields: []const FieldDef) -> []const Row
+
+type Group = struct { value: f.Value, is_none: bool, label: str, rows: []const Row, count: usize }
+
+fn group_rows(a: *mem.Arena, rows: []const Row, field: str, direction: str, fields: []const FieldDef) -> []const Group
+
+type Summary = struct { kind: u8, n: f64, entries: []const Tally }
+type Tally = struct { label: str, count: usize }
+
+fn summary_none() -> Summary
+fn summary_number(n: f64) -> Summary
+fn summary_date(ms: f64) -> Summary
+fn json_key(a: *mem.Arena, v: f.Value) -> str
+fn unique_count(a: *mem.Arena, vals: []const f.Value) -> usize
+fn filled_count(vals: []const f.Value) -> usize
+fn nums_of(a: *mem.Arena, vals: []const f.Value, out: []f64) -> usize
+fn is_date_like(v: f.Value) -> bool
+fn min_max(a: *mem.Arena, vals: []const f.Value, want_min: bool) -> Summary
+fn is_checked(v: f.Value) -> bool
+fn month_ms() -> f64
+fn summarize_values(a: *mem.Arena, vals: []const f.Value, name: str) -> Summary
+fn summarize(a: *mem.Arena, rows: []const Row, field: str, name: str) -> Summary
+
+type ColorRule = struct { has_filter: bool, filter: Node, expr: str, color: str }
+type ColorConfig = struct { mode: str, field: str, rules: []const ColorRule }
+
+fn row_color(a: *mem.Arena, reg: *const f.Registry, row: Row, color: ColorConfig, fields: []const FieldDef, ctx: *const Context) -> (str, bool)
+fn quick_search(a: *mem.Arena, rows: []const Row, term: str, names: []const str) -> []const Row
+
+type SummarySpec = struct { field: str, function: str }
+type SummaryEntry = struct { field: str, value: Summary }
+type SubGroup = struct { group: Group, summaries: []const SummaryEntry }
+type ViewGroup = struct { group: Group, subgroups: []const Group, summaries: []const SummaryEntry }
+type ViewConfig = struct {
+type ViewResult = struct {
+
+fn summary_entries(a: *mem.Arena, rows: []const Row, specs: []const SummarySpec) -> []const SummaryEntry
+fn apply_view(a: *mem.Arena, reg: *const f.Registry, rows: []const Row, config: ViewConfig, fields: []const FieldDef, ctx: *const Context) -> ViewResult
+fn node_at(tree: Node, path: []const usize) -> (Node, bool)
+fn with_children(node: Node, children: []const Node) -> Node
+fn replace_at(a: *mem.Arena, tree: Node, path: []const usize, depth: usize, replacement: Node, remove: bool) -> Node
+fn add_node(a: *mem.Arena, tree: Node, path: []const usize, node: Node) -> Node
+fn remove_node(a: *mem.Arena, tree: Node, path: []const usize) -> Node
+fn zero_nodes() -> []const Node
+fn replace_node(a: *mem.Arena, tree: Node, path: []const usize, node: Node) -> Node
+fn toggle_group_operator(a: *mem.Arena, tree: Node, path: []const usize) -> (Node, bool)
+fn prune_tree(a: *mem.Arena, tree: Node) -> (Node, bool)
+fn count_conditions(tree: Node) -> usize
+fn tree_depth(tree: Node) -> usize
+fn sort_level(sorts: []const SortSpec, field: str) -> usize
+fn append_sort_level(a: *mem.Arena, sorts: []const SortSpec, field: str) -> ([]const SortSpec, str)
+fn remove_sort_level(a: *mem.Arena, sorts: []const SortSpec, field: str) -> []const SortSpec
+fn move_sort_level(a: *mem.Arena, sorts: []const SortSpec, field: str, delta: i64) -> ([]const SortSpec, bool)
+fn is_multi_sorted(sorts: []const SortSpec) -> bool
+```
+
+The view query pipeline: nested AND/OR filters over field-type operator tables (text, number, select, multiselect, checkbox, date with relative operands and ranges, user, bucket and formula conditions), a stable multi-level sort with empty cells last and select options in option order, grouping with an explicit "No value" group, the grid footer's summary functions (count, filled, unique, sum, average, median, min, max, range, stdev, distribution, totalSize, ...), row coloring, quick search and `apply_view` over a saved view config; the immutable filter-tree edits (add, remove, replace, toggle, prune, count, depth) and the multi-column sort-level edits. Text order is a root-collation approximation (ASCII punctuation, digits, letters with case as the last tie-break, Latin-1 accents secondary). Checked against appdor's own engine over 1,698 cases together with `e.algo.pivot`.
+
+### `e.algo.pivot`
+
+```neper
+fn is_nan(x: f64) -> bool
+
+type Cell = struct { n: f64, none: bool }
+
+fn cell(n: f64) -> Cell
+fn no_cell() -> Cell
+
+type Series = struct { field: str, aggregation: str, label: str }
+
+fn count_series() -> Series
+fn aggregation_of(s: Series) -> str
+fn numbers_of(a: *mem.Arena, vals: []const f.Value, out: []f64) -> usize
+fn aggregate(a: *mem.Arena, rows: []const view.Row, series: Series) -> Cell
+
+type Label = struct { value: f.Value, none: bool, other: bool, pos: usize, origin: usize }
+type Threshold = struct { value: f64, has_value: bool, label: str, color: str, icon: str }
+type ChartConfig = struct {
+type Dataset = struct { label: str, has_split: bool, split_none: bool, split_value: f.Value, data: []const Cell }
+type Drill = struct { other: bool, field: str, value: f.Value, is_null: bool }
+type ChartData = struct { chart_type: str, labels: []const str, datasets: []const Dataset, drilldown: []const Drill }
+
+fn label_text(a: *mem.Arena, l: Label) -> str
+fn same_label(x: Label, y: Label) -> bool
+fn sort_labels(a: *mem.Arena, labels: []Label) -> usize
+fn label_after(a: *mem.Arena, left: Label, right: Label, numeric: bool) -> bool
+fn series_label(s: Series) -> str
+fn build_chart_data(a: *mem.Arena, reg: *const f.Registry, rows: []const view.Row, config: ChartConfig, fields: []const view.FieldDef, ctx: *const view.Context) -> ChartData
+fn key_position(keys: []const Label, label: Label) -> usize
+fn group_rows(a: *mem.Arena, rows: []const view.Row, order: []const usize, starts: []const usize, pos: usize) -> []const view.Row
+
+type Band = struct { label: str, color: str, icon: str, band: usize }
+
+fn evaluate_thresholds(a: *mem.Arena, value: Cell, thresholds: []const Threshold) -> (Band, bool)
+fn threshold_value(t: Threshold) -> f64
+
+type Comparison = struct { value: Cell, delta: f64, percent_delta: Cell, direction: str }
+type Kpi = struct { value: Cell, row_count: usize, has_comparison: bool, comparison: Comparison, has_threshold: bool, threshold: Band }
+
+fn build_kpi(a: *mem.Arena, reg: *const f.Registry, rows: []const view.Row, config: ChartConfig, fields: []const view.FieldDef, ctx: *const view.Context) -> Kpi
+fn empty_mark() -> str
+fn key_of(a: *mem.Arena, row: view.Row, names: []const str) -> str
+fn sort_keys(a: *mem.Arena, keys: []str)
+
+type PivotRow = struct { key: str, cells: []const Cell, total: Cell }
+type Pivot = struct {
+
+fn build_pivot(a: *mem.Arena, reg: *const f.Registry, rows: []const view.Row, row_fields: []const str, column_fields: []const str, measure: Series, has_filter: bool, filter: view.Node, fields: []const view.FieldDef, ctx: *const view.Context) -> Pivot
+fn rows_where(a: *mem.Arena, data: []const view.Row, row_keys: []const str, col_keys: []const str, row_key: str, by_row: bool, col_key: str, by_col: bool) -> []const view.Row
+
+type Measure = struct { series: Series, label: str }
+
+fn measure_label(m: Measure) -> str
+
+type Band2 = struct { key: str, count: usize, values: []const Cell }
+type Report = struct { labels: []const str, groups: []const Band2, grand_total: []const Cell, total: usize }
+
+fn summary_report(a: *mem.Arena, reg: *const f.Registry, rows: []const view.Row, group_by: []const str, measures: []const Measure, has_filter: bool, filter: view.Node, fields: []const view.FieldDef, ctx: *const view.Context) -> Report
+
+type Condition = struct {
+type Flattened = struct { usable: bool, reason: str, conditions: []const Condition }
+
+fn server_ops(family: str) -> str
+fn op_family(type_name: str) -> str
+fn flatten_into(node: view.Node, out: []view.Node, n: usize) -> usize
+fn node_total(node: view.Node) -> usize
+fn refuse(reason: str) -> Flattened
+fn flatten_filter(a: *mem.Arena, has_filter: bool, filter: view.Node) -> Flattened
+
+type PlanConfig = struct {
+type PlanArgs = struct {
+type Plan = struct { usable: bool, reason: str, args: PlanArgs }
+
+fn server_aggregation(name: str) -> bool
+fn additive(name: str) -> bool
+fn plan_refusal(reason: str) -> Plan
+fn plan_aggregate(a: *mem.Arena, config: PlanConfig, kind: str) -> Plan
+
+type Group = struct { bucket: str, has_bucket: bool, split: str, has_split: bool, measure: Cell, row_count: f64 }
+type ServerChart = struct { data: ChartData, total: f64 }
+
+fn group_bucket(g: Group) -> str
+fn group_split(g: Group) -> str
+fn text_label(key: str) -> str
+fn chart_data_from_groups(a: *mem.Arena, groups: []const Group, config: PlanConfig, chart_type: str) -> ServerChart
+fn server_cell(groups: []const Group, label: Label, by_split: bool, split: str, dropped: []const str, additive_agg: bool) -> Cell
+
+type ServerKpi = struct { value: Cell, row_count: f64, has_threshold: bool, threshold: Band }
+
+fn kpi_from_groups(a: *mem.Arena, groups: []const Group, aggregation: str, thresholds: []const Threshold) -> ServerKpi
+```
+
+Aggregation, charts, KPIs and pivots over `e.algo.view`'s filter engine: `aggregate` (count, countValues, unique, sum, avg, min, max, median), `build_chart_data` (x buckets by year, month, quarter, day, week or width, a split field, several series, top-N with an aggregated "Other"), `build_kpi` with a comparison and threshold bands, `build_pivot` with row, column and grand totals, `summary_report` bands, and the server-aggregate planner (`plan_aggregate` names why a widget cannot be computed in the database) with the shaping of the database's groups into the same chart and KPI payloads. Checked against appdor's own engine.
+
 ### `e.algo.geo`
 
 ```neper
