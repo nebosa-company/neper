@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# e.ui.window caption geometry and navigation.title_bar (L088, D2281)
+ui_title_bar_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_title_bar/src/main.e" "$repo" x64 linux "$test_build/ui-title-bar-selfhost")
+[ "$ui_title_bar_written" = 'executable written' ]
+chmod +x "$test_build/ui-title-bar-selfhost"
+ui_title_bar_output=$("$test_build/ui-title-bar-selfhost")
+[ "$ui_title_bar_output" = 'ui title bar ok' ]
 # e.ui.navigation ribbon: tabs, contextual band, groups, split/dropdown/gallery commands, collapse, keyboard (L087, D2280)
 ui_ribbon_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_ribbon/src/main.e" "$repo" x64 linux "$test_build/ui-ribbon-selfhost")
 [ "$ui_ribbon_written" = 'executable written' ]

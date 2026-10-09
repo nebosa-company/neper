@@ -20,6 +20,7 @@ use e.ui.layout as ui_layout
 use e.ui.overlay
 use e.ui.style
 use e.ui.widget
+use e.ui.window as win
 
 error TooLarge
 
@@ -8371,4 +8372,223 @@ fn ribbon_key_budget(tab: *const RibbonTab) -> usize {
         g += 1usize
     }
     ret total
+}
+
+// ---------------------------------------------------------------- title bar (D2281, L088)
+
+// An application-drawn window caption over the geometry of `e.ui.window` (`caption_layout`, `hit_region`): the title, a
+// drag region and the platform's own caption buttons -- minimise, maximise or restore, close -- at the platform's end
+// (macOS at the start, as 12 round traffic lights), every rectangle exactly the one `caption_layout` answers so the host's
+// hit test and the drawn bar agree. Over host chrome (`frameless` false) it is the title alone and claims no drag; in
+// fullscreen it is nothing. What a press means is the caller's: the buttons fire `minimize`, `maximize` (which
+// restores while maximised) and `close`, a drag begun on the bar fires `move`, and a double press fires `toggle`.
+type TitleBarOptions = struct {
+    platform: win.Platform, mode: win.Mode, frameless: bool, minimizable: bool, maximizable: bool, resizable: bool,
+    icon: bool, rtl: bool, active: bool, glyph: control.GlyphKind,
+    minimize: widget.Submit, maximize: widget.Submit, close: widget.Submit, move: widget.Submit, toggle: widget.Submit,
+}
+
+fn title_bar_options(platform: win.Platform) -> TitleBarOptions {
+    var out: TitleBarOptions = zero
+    let base = win.caption_options(platform)
+    out.platform = platform
+    out.mode = base.mode
+    out.frameless = base.frameless
+    out.minimizable = base.minimizable
+    out.maximizable = base.maximizable
+    out.resizable = base.resizable
+    out.icon = base.icon
+    out.active = true
+    out.glyph = .Menu
+    ret out
+}
+
+type TitleDrag = struct { move: widget.Submit, toggle: widget.Submit }
+
+fn title_drag_fire(ctx: *void, g: widget.Gesture) -> err {
+    let d = mem.cast[*TitleDrag](ctx)
+    switch g {
+    case .DragStart as start:
+        if widget.submit_set(d.move.invoke) { ret d.move.invoke(d.move.ctx) }
+    case .DoubleTap as tap:
+        if widget.submit_set(d.toggle.invoke) { ret d.toggle.invoke(d.toggle.ctx) }
+    default:
+        ret ok
+    }
+    ret ok
+}
+
+// The caption options a title bar's options stand for.
+fn title_caption(options: *const TitleBarOptions) -> win.CaptionOptions {
+    var out: win.CaptionOptions = zero
+    out.platform = options.platform
+    out.mode = options.mode
+    out.frameless = options.frameless
+    out.minimizable = options.minimizable
+    out.maximizable = options.maximizable
+    out.resizable = options.resizable
+    out.icon = options.icon
+    out.rtl = options.rtl
+    ret out
+}
+
+fn caption_name(slot: win.CaptionSlot) -> str {
+    if slot.kind == .Minimize { ret "Minimize" }
+    if slot.kind == .Maximize {
+        if slot.restore { ret "Restore" }
+        ret "Maximize"
+    }
+    ret "Close"
+}
+
+// The face of one caption button: a Windows or Linux glyph (a dash, a square, two squares, a cross) in `ink`, or a macOS
+// traffic light's coloured disc (grey when the window is not active).
+fn caption_face(a: *mem.Arena, t: *const control.Theme, slot: win.CaptionSlot, platform: win.Platform, ink: paint.Color, active: bool, hovered: bool) -> (widget.Node, err) {
+    if platform == .Mac {
+        var disc = style.color(t.tokens, .Success)
+        if slot.kind == .Minimize { disc = style.color(t.tokens, .Warning) }
+        if slot.kind == .Close { disc = style.color(t.tokens, .Error) }
+        if !active { disc = style.color(t.tokens, .OutlineVariant) }
+        var look = control.sized_style(12.0, 12.0)
+        look.background = paint.Brush { Solid: disc }
+        look.radius = 6.0
+        ret (widget.box(0u64, look, zero), ok)
+    }
+    var side: f32 = 10.0
+    if platform == .Linux { side = 12.0 }
+    var glyph: control.GlyphKind = .Dash
+    if slot.kind == .Close { glyph = .Cross }
+    if slot.kind == .Maximize && !slot.restore { glyph = .Maximize }
+    if slot.kind == .Maximize && slot.restore {
+        // two squares, the front one offset down and to the left
+        var frame = control.sized_style(7.0, 7.0)
+        frame.border = style.Border { width: 1.0, color: ink }
+        let (pair, pair_error) = mem.alloc[widget.Node](a, 2usize)
+        if pair_error != ok { ret (zero, TooLarge) }
+        pair[0usize] = widget.positioned(0u64, 3.0, 0.0, style.defaults(), mem_one(a, widget.box(0u64, frame, zero)))
+        var front = control.sized_style(7.0, 7.0)
+        front.border = style.Border { width: 1.0, color: ink }
+        front.background = paint.Brush { Solid: style.color(t.tokens, .Background) }
+        if hovered { front.background = paint.Brush { Solid: paint.rgba(0.0, 0.0, 0.0, 0.0) } }
+        pair[1usize] = widget.positioned(0u64, 0.0, 3.0, style.defaults(), mem_one(a, widget.box(0u64, front, zero)))
+        ret (widget.stack(0u64, control.sized_style(10.0, 10.0), pair[0usize..2usize]), ok)
+    }
+    if slot.kind == .Minimize {
+        // a 10 by 1 line, centred (the dash glyph is a dotted mark at this size)
+        var line = control.sized_style(10.0, 1.0)
+        line.background = paint.Brush { Solid: ink }
+        ret (widget.box(0u64, line, zero), ok)
+    }
+    let (mark, mark_error) = control.stroked_glyph(a, ink, glyph, side, 1.0)
+    if mark_error != ok { ret (zero, mark_error) }
+    ret (mark, ok)
+}
+
+// The title bar `width` wide. Keys from `key`: the drag region and title `+ 1`, minimise `+ 2`, maximise `+ 3`, close `+ 4`.
+// The bar is a group named "Title bar"; the buttons are named Minimize, Maximize or Restore, and Close.
+fn title_bar(a: *mem.Arena, key: widget.Key, t: *const control.Theme, title: str, options: TitleBarOptions, width: f32) -> (widget.Node, err) {
+    let caption_options = title_caption(&options)
+    var words = control.text_options()
+    words.role = .LabelLarge
+    words.wrap = .None
+    if options.platform == .Mac { words.align = .Center }
+    var ink = style.color(t.tokens, .OnSurface)
+    if !options.active { ink = style.color(t.tokens, .OnSurfaceVariant) }
+    let (advance, _, _, metrics_error) = control.run_metrics(a, t, .LabelLarge, title)
+    if metrics_error != ok { ret (zero, metrics_error) }
+    let caption = win.caption_layout(width, caption_options, advance)
+    if caption.bar.height == 0.0 {
+        var sem: widget.Semantics = zero
+        sem.role = 2u8
+        sem.label = "Title bar"
+        ret (widget.semantics(key, sem, control.sized_style(width, 0.0), zero), ok)
+    }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, 8usize)
+    if parts_error != ok { ret (zero, TooLarge) }
+    var n = 0usize
+    // the title inside the drag region
+    let (word, word_error) = control.colored_text(a, key + 6u64, title, t, words, ink)
+    if word_error != ok { ret (zero, word_error) }
+    let (title_cell, title_cell_error) = mem.alloc[widget.Node](a, 1usize)
+    if title_cell_error != ok { ret (zero, TooLarge) }
+    title_cell[0usize] = word
+    let title_look = control.sized_style(caption.drag.width, caption.drag.height)
+    var title_main: ui_layout.MainAlign = .Start
+    if options.platform == .Mac { title_main = .Center }
+    if options.rtl && options.platform != .Mac { title_main = .End }
+    let (drag_cell, drag_cell_error) = mem.alloc[TitleDrag](a, 1usize)
+    if drag_cell_error != ok { ret (zero, TooLarge) }
+    drag_cell[0usize] = TitleDrag { move: options.move, toggle: options.toggle }
+    let titled = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: title_main, cross: .Center, gap: 0.0 }, title_look, title_cell[0usize..1usize])
+    let (region_cell, region_cell_error) = mem.alloc[widget.Node](a, 1usize)
+    if region_cell_error != ok { ret (zero, TooLarge) }
+    region_cell[0usize] = titled
+    let region_style = control.sized_style(caption.drag.width, caption.drag.height)
+    let region = widget.region(key + 1u64, widget.Region { gesture: widget.GestureAction { ctx: mem.cast[*void](&drag_cell[0usize]), invoke: title_drag_fire }, gestures: widget.GESTURE_TAP | widget.GESTURE_DRAG, enabled: caption.draggable, focusable: false }, region_style, region_cell[0usize..1usize])
+    parts[n] = widget.positioned(0u64, caption.drag.x, 0.0, style.defaults(), mem_one(a, region))
+    n += 1usize
+    if options.icon && caption.icon.width > 0.0 {
+        let (icon, icon_error) = control.stroked_glyph(a, ink, options.glyph, 16.0, 1.5)
+        if icon_error != ok { ret (zero, icon_error) }
+        parts[n] = widget.positioned(key + 5u64, caption.icon.x, caption.icon.y, style.defaults(), mem_one(a, icon))
+        n += 1usize
+    }
+    // the buttons
+    let (presses, presses_error) = mem.alloc[widget.Submit](a, 3usize)
+    if presses_error != ok { ret (zero, TooLarge) }
+    presses[0usize] = options.minimize
+    presses[1usize] = options.maximize
+    presses[2usize] = options.close
+    var i = 0usize
+    while i < caption.count {
+        let slot = caption.slots[i]
+        var index = 2usize
+        if slot.kind == .Maximize { index = 1usize }
+        if slot.kind == .Minimize { index = 0usize }
+        let button_key = key + 2u64 + u64(index)
+        let state = control.control_state(t, button_key, slot.enabled, false)
+        var fill = paint.rgba(0.0, 0.0, 0.0, 0.0)
+        var glyph_ink = ink
+        if !slot.enabled { glyph_ink = control.with_alpha(ink, t.tokens.states.disabled_content) }
+        if options.platform != .Mac && (state.hovered || state.pressed) && slot.enabled {
+            fill = control.with_alpha(ink, 0.08)
+            if state.pressed { fill = control.with_alpha(ink, 0.12) }
+            if slot.kind == .Close {
+                fill = style.color(t.tokens, .Error)
+                glyph_ink = style.color(t.tokens, .OnError)
+            }
+        }
+        let (face, face_error) = caption_face(a, t, slot, options.platform, glyph_ink, options.active, state.hovered)
+        if face_error != ok { ret (zero, face_error) }
+        var look = style.resolve(t.tokens, .Plain, state)
+        look.background = fill
+        look.foreground = glyph_ink
+        look.border_width = 0.0
+        look.radius = 0.0
+        if options.platform != .Windows { look.radius = slot.rect.height * 0.5 }
+        look.custom_padding = true
+        look.padding = 0.0
+        look.padding_y = 0.0
+        look.min_width = slot.rect.width
+        look.min_height = slot.rect.height
+        let (centred, centred_error) = mem.alloc[widget.Node](a, 1usize)
+        if centred_error != ok { ret (zero, TooLarge) }
+        centred[0usize] = face
+        let cell = widget.flex(0u64, ui_layout.Flex { axis: .Horizontal, main: .Center, cross: .Center, gap: 0.0 }, control.sized_style(slot.rect.width, slot.rect.height), centred[0usize..1usize])
+        let (pressed, pressed_error) = control.pressable(a, button_key, t, 3u8, caption_name(slot), look, slot.enabled, false, &presses[index], cell)
+        if pressed_error != ok { ret (zero, pressed_error) }
+        parts[n] = widget.positioned(0u64, slot.rect.x, slot.rect.y, style.defaults(), mem_one(a, pressed))
+        n += 1usize
+        i += 1usize
+    }
+    var bar = control.sized_style(width, caption.bar.height)
+    bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainer) }
+    if !options.active { bar.background = paint.Brush { Solid: style.color(t.tokens, .SurfaceContainerLow) } }
+    let (bar_cell, bar_cell_error) = mem.alloc[widget.Node](a, 1usize)
+    if bar_cell_error != ok { ret (zero, TooLarge) }
+    bar_cell[0usize] = widget.stack(0u64, bar, parts[0usize..n])
+    var sem: widget.Semantics = zero
+    sem.role = 2u8
+    sem.label = "Title bar"
+    ret (widget.semantics(key, sem, style.defaults(), bar_cell[0usize..1usize]), ok)
 }

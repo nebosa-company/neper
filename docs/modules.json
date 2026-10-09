@@ -3612,7 +3612,8 @@
     "e.ui.layout",
     "e.ui.overlay",
     "e.ui.style",
-    "e.ui.widget"
+    "e.ui.widget",
+    "e.ui.window"
    ],
    "blocked_by": []
   },

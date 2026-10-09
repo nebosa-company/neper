@@ -348,3 +348,229 @@ fn damaged(window: *const Window) -> (geometry.Rect, bool) {
     if !s.damaged { ret (zero, false) }
     ret (s.damage, true)
 }
+
+// ------------------------------------------------ app-drawn caption (D2281, L088)
+
+// The geometry of a window caption the application draws itself, with no host: where the title, the drag region and
+// the caption buttons go on each platform, which part of the window a point belongs to, and what a press there means.
+// The host keeps drawing the real chrome unless the window was opened frameless (`CaptionOptions.frameless`); a bar over
+// host chrome carries only the title and no buttons, and claims no drag. Carrying the intents out (minimising, moving and
+// resizing a native window) is the host's: `e.os` has no such calls yet, so an intent is data for the application to pass
+// on once it does.
+type Platform = enum u8 { Windows, Mac, Linux }
+type CaptionButton = enum u8 { Minimize, Maximize, Close }
+type CaptionOptions = struct {
+    platform: Platform, mode: Mode, frameless: bool, minimizable: bool, maximizable: bool, resizable: bool,
+    icon: bool, rtl: bool,
+}
+type CaptionSlot = struct { kind: CaptionButton, rect: geometry.Rect, enabled: bool, restore: bool }
+type Caption = struct {
+    bar: geometry.Rect, icon: geometry.Rect, title: geometry.Rect, drag: geometry.Rect, slots: [3]CaptionSlot,
+    count: usize, leading: bool, centred: bool, draggable: bool,
+}
+type Region = enum u8 { Client, Caption, Minimize, Maximize, Close, Left, Right, Top, Bottom, TopLeft, TopRight, BottomLeft, BottomRight }
+type Intent = enum u8 {
+    None, Minimize, Maximize, Restore, Close, Move, ResizeLeft, ResizeRight, ResizeTop, ResizeBottom,
+    ResizeTopLeft, ResizeTopRight, ResizeBottomLeft, ResizeBottomRight,
+}
+
+fn caption_options(platform: Platform) -> CaptionOptions {
+    var out: CaptionOptions = zero
+    out.platform = platform
+    out.mode = .Windowed
+    out.frameless = true
+    out.minimizable = true
+    out.maximizable = true
+    out.resizable = true
+    out.icon = platform != .Mac
+    ret out
+}
+
+// The bar's height: 32 on Windows, 28 on macOS (traffic lights), 36 on Linux.
+fn caption_height(platform: Platform) -> f32 {
+    if platform == .Mac { ret 28.0 }
+    if platform == .Linux { ret 36.0 }
+    ret 32.0
+}
+
+// The caption buttons, in the order they stand from the window's start: the platform's own (Windows and Linux put
+// minimise, maximise, close at the end with close outermost; macOS puts close, minimise, zoom at the start).
+fn caption_order(platform: Platform) -> [3]CaptionButton {
+    if platform == .Mac { ret [3]CaptionButton{ .Close, .Minimize, .Maximize } }
+    ret [3]CaptionButton{ .Minimize, .Maximize, .Close }
+}
+
+// Whether a platform's buttons stand at the start of a left-to-right window (macOS), or at the end; `rtl` mirrors both.
+fn caption_leading(options: CaptionOptions) -> bool {
+    var leading = options.platform == .Mac
+    if options.rtl { leading = !leading }
+    ret leading
+}
+
+// A button's width and height: 46 by the bar's height on Windows (flush, no gaps), 12 round 8 apart on macOS, 28 round
+// 8 apart on Linux, with 10 of margin on the platforms that space them.
+fn caption_button_size(platform: Platform) -> (f32, f32) {
+    if platform == .Mac { ret (12.0, 12.0) }
+    if platform == .Linux { ret (28.0, 28.0) }
+    ret (46.0, 32.0)
+}
+
+fn caption_gap(platform: Platform) -> f32 {
+    if platform == .Windows { ret 0.0 }
+    ret 8.0
+}
+
+fn caption_margin(platform: Platform) -> f32 {
+    if platform == .Windows { ret 0.0 }
+    ret 10.0
+}
+
+// The caption at `width`: nothing in fullscreen (the bar is 0 tall), otherwise the bar, the optional 16 icon (10 in on
+// Windows and Linux, none on macOS), the buttons (only for a frameless window) and the title and drag region between.
+// `title_width` is the title's own width, used to centre it on macOS.
+fn caption_layout(width: f32, options: CaptionOptions, title_width: f32) -> Caption {
+    var out: Caption = zero
+    out.leading = caption_leading(options)
+    out.centred = options.platform == .Mac
+    if options.mode == .Fullscreen || width <= 0.0 { ret out }
+    let height = caption_height(options.platform)
+    out.bar = geometry.rect(0.0, 0.0, width, height)
+    let (button_width, button_height) = caption_button_size(options.platform)
+    let gap = caption_gap(options.platform)
+    let margin = caption_margin(options.platform)
+    var order = caption_order(options.platform)
+    if options.rtl {
+        let first = order[0usize]
+        order[0usize] = order[2usize]
+        order[2usize] = first
+    }
+    var count = 0usize
+    if options.frameless { count = 3usize }
+    out.count = count
+    // the buttons, from the end that holds them
+    var used: f32 = 0.0
+    var i = 0usize
+    while i < count {
+        let kind = order[i]
+        var enabled = true
+        if kind == .Minimize { enabled = options.minimizable }
+        if kind == .Maximize { enabled = options.maximizable && options.resizable }
+        var x: f32 = 0.0
+        if out.leading {
+            x = margin + f32(i) * (button_width + gap)
+        } else {
+            // trailing: the last in order is outermost
+            x = width - margin - f32(count - i) * button_width - f32(count - 1usize - i) * gap
+        }
+        let y = (height - button_height) * 0.5
+        out.slots[i] = CaptionSlot { kind: kind, rect: geometry.rect(x, y, button_width, button_height), enabled: enabled, restore: kind == .Maximize && options.mode == .Maximized }
+        i += 1usize
+    }
+    if count > 0usize { used = margin + f32(count) * button_width + f32(count - 1usize) * gap }
+    // what is left is the title and the drag region
+    var from: f32 = 0.0
+    var to = width
+    if out.leading {
+        from = used
+        if count > 0usize { from += margin }
+    } else if count > 0usize {
+        to = width - used
+        if margin > 0.0 { to -= margin }
+    }
+    if options.icon && !out.centred {
+        let side: f32 = 16.0
+        var ix: f32 = 10.0
+        if options.rtl { ix = width - 10.0 - side }
+        out.icon = geometry.rect(ix, (height - side) * 0.5, side, side)
+        if options.rtl {
+            to = ix - 6.0
+        } else {
+            from = ix + side + 6.0
+            if out.leading && used > from { from = used }
+        }
+    } else if !out.centred {
+        if !out.leading || count == 0usize { from += 12.0 }
+    }
+    if from > to { from = to }
+    out.drag = geometry.rect(from, 0.0, to - from, height)
+    out.draggable = options.frameless
+    if out.centred {
+        var tw = title_width
+        if tw > to - from { tw = to - from }
+        out.title = geometry.rect(from + (to - from - tw) * 0.5, 0.0, tw, height)
+    } else {
+        out.title = geometry.rect(from, 0.0, to - from, height)
+    }
+    ret out
+}
+
+// Which part of a `width` by `height` window the point `p` is in. A frameless resizable window in the windowed state
+// has a `border` wide resize ring (corners twice as long as it is wide) that takes the points before the caption.
+fn hit_region(width: f32, height: f32, options: CaptionOptions, title_width: f32, border: f32, p: geometry.Point) -> Region {
+    if p.x < 0.0 || p.y < 0.0 || p.x >= width || p.y >= height { ret .Client }
+    if options.frameless && options.resizable && options.mode == .Windowed && border > 0.0 {
+        let left = p.x < border
+        let right = p.x >= width - border
+        let top = p.y < border
+        let bottom = p.y >= height - border
+        let corner = border * 2.0
+        if top && (p.x < corner || left) { ret .TopLeft }
+        if top && (p.x >= width - corner || right) { ret .TopRight }
+        if bottom && (p.x < corner || left) { ret .BottomLeft }
+        if bottom && (p.x >= width - corner || right) { ret .BottomRight }
+        if left && p.y < corner { ret .TopLeft }
+        if right && p.y < corner { ret .TopRight }
+        if left && p.y >= height - corner { ret .BottomLeft }
+        if right && p.y >= height - corner { ret .BottomRight }
+        if left { ret .Left }
+        if right { ret .Right }
+        if top { ret .Top }
+        if bottom { ret .Bottom }
+    }
+    let caption = caption_layout(width, options, title_width)
+    var i = 0usize
+    while i < caption.count {
+        if geometry.contains(caption.slots[i].rect, p) {
+            if caption.slots[i].kind == .Minimize { ret .Minimize }
+            if caption.slots[i].kind == .Maximize { ret .Maximize }
+            ret .Close
+        }
+        i += 1usize
+    }
+    if geometry.contains(caption.bar, p) { ret .Caption }
+    ret .Client
+}
+
+// What a press (or a double press) in `region` asks of the host. A disabled button, the client area and a bar over host
+// chrome ask nothing; the caption moves on a press and maximises or restores on a double press.
+fn caption_intent(region: Region, options: CaptionOptions, double: bool) -> Intent {
+    if region == .Caption {
+        if !options.frameless { ret .None }
+        if double {
+            if !options.maximizable || !options.resizable { ret .None }
+            if options.mode == .Maximized { ret .Restore }
+            ret .Maximize
+        }
+        if options.mode == .Fullscreen { ret .None }
+        ret .Move
+    }
+    if region == .Minimize {
+        if !options.minimizable { ret .None }
+        ret .Minimize
+    }
+    if region == .Maximize {
+        if !options.maximizable || !options.resizable { ret .None }
+        if options.mode == .Maximized { ret .Restore }
+        ret .Maximize
+    }
+    if region == .Close { ret .Close }
+    if region == .Left { ret .ResizeLeft }
+    if region == .Right { ret .ResizeRight }
+    if region == .Top { ret .ResizeTop }
+    if region == .Bottom { ret .ResizeBottom }
+    if region == .TopLeft { ret .ResizeTopLeft }
+    if region == .TopRight { ret .ResizeTopRight }
+    if region == .BottomLeft { ret .ResizeBottomLeft }
+    if region == .BottomRight { ret .ResizeBottomRight }
+    ret .None
+}

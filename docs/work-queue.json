@@ -1192,17 +1192,6 @@
       "evidence": "Planning only (D1812). Reference: JustCode tests/consistency.test.js. Not yet: extend existing Neper validation tools to check icon/resource references, translation-key coverage and duplicate keys, locale placeholder agreement, command/menu callback contracts and mnemonic conflicts. Consume actual resource/command registries and generated manifests; do not claim arbitrary dynamic source references can be proven by regex. Include small malformed-registry cases proving each check fails and wire checks into the existing build/test entry point with actionable locations. Keep repository-specific manifests, rules and CI wiring in scripts/tests; add no runtime validation framework or standard-library dependency."
     },
     {
-      "id": "L088",
-      "category": "library",
-      "group": "UI",
-      "order": 186,
-      "title": "Custom title-bar panel in e.ui.window",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1821). TTitleBarPanel parity missing (verified: only an incidental local in navigation.e): app-rendered caption with title, caption buttons, drag region and maximized/fullscreen states, per-capability button order, with the host still owning real chrome unless frameless is granted. Fixtures for layout, caption hit regions, platform button order and accessibility roles."
-    },
-    {
       "id": "L089",
       "category": "library",
       "group": "UI",

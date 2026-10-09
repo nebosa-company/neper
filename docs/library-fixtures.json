@@ -1110,6 +1110,7 @@
     "ui_tabular",
     "ui_testing",
     "ui_theme",
+    "ui_title_bar",
     "ui_transient",
     "ui_widget",
     "ui_window",
@@ -1699,7 +1700,8 @@
     "ui_status5_v2",
     "ui_status_v2",
     "ui_surface",
-    "ui_testing"
+    "ui_testing",
+    "ui_title_bar"
    ]
   },
   {
@@ -1928,6 +1930,7 @@
     "ui_tabs_rtl",
     "ui_testing",
     "ui_theme",
+    "ui_title_bar",
     "ui_widget",
     "ui_window"
    ]
@@ -2174,6 +2177,7 @@
     "ui_tabs_rtl",
     "ui_tabular",
     "ui_testing",
+    "ui_title_bar",
     "ui_transient",
     "ui_widget",
     "ui_window",
@@ -2324,6 +2328,7 @@
     "ui_tabular",
     "ui_taskbar",
     "ui_testing",
+    "ui_title_bar",
     "ui_transient",
     "ui_widget",
     "ui_window",
@@ -2817,6 +2822,7 @@
     "ui_tabs_rtl",
     "ui_tabular",
     "ui_testing",
+    "ui_title_bar",
     "ui_transient",
     "ui_widget",
     "ui_workspace"
@@ -2965,6 +2971,7 @@
     "ui_tabular",
     "ui_taskbar",
     "ui_testing",
+    "ui_title_bar",
     "ui_transient",
     "ui_window",
     "ui_workspace",
@@ -3083,6 +3090,7 @@
     "ui_surface",
     "ui_tabs_rtl",
     "ui_tabular",
+    "ui_title_bar",
     "ui_transient",
     "ui_workspace"
    ]
@@ -3180,6 +3188,7 @@
     "ui_surface",
     "ui_tabs_rtl",
     "ui_tabular",
+    "ui_title_bar",
     "ui_transient",
     "ui_workspace"
    ]
@@ -3235,6 +3244,7 @@
     "ui_productivity",
     "ui_ribbon",
     "ui_status5_v2",
+    "ui_title_bar",
     "ui_workspace"
    ]
   },
@@ -3479,6 +3489,7 @@
     "ui_slider",
     "ui_tabular",
     "ui_testing",
+    "ui_title_bar",
     "ui_transient",
     "ui_widget",
     "ui_window",
@@ -3578,6 +3589,7 @@
     "ui_surface",
     "ui_tabular",
     "ui_testing",
+    "ui_title_bar",
     "ui_transient",
     "ui_widget",
     "ui_workspace"
@@ -3683,6 +3695,7 @@
     "ui_taskbar",
     "ui_testing",
     "ui_theme",
+    "ui_title_bar",
     "ui_transient",
     "ui_widget",
     "ui_workspace"
@@ -3774,6 +3787,7 @@
     "ui_tabs_rtl",
     "ui_tabular",
     "ui_testing",
+    "ui_title_bar",
     "ui_transient",
     "ui_workspace"
    ]
@@ -3886,6 +3900,7 @@
     "ui_tabular",
     "ui_taskbar",
     "ui_testing",
+    "ui_title_bar",
     "ui_transient",
     "ui_widget",
     "ui_workspace"
@@ -3911,6 +3926,7 @@
     "ui_semantics",
     "ui_taskbar",
     "ui_testing",
+    "ui_title_bar",
     "ui_widget",
     "ui_window"
    ]
