@@ -20,6 +20,10 @@
   way took twice the output tokens per byte and cost 4-5x as much per KB of new code
   (`python scripts/lang-stats.py`). A script is for content it computes: constants,
   tables, generated fixtures.
+- Read the digests before the logs: `docs/digest/queue.tsv` (one row per open item)
+  and `docs/digest/decisions.tsv` (one row per decision, with its size); then
+  `grep -n "^## D<n> " docs/decisions.md` for the one entry. Regenerate with
+  `python scripts/render_digest.py`; never read `decisions.md` whole.
 
 ## Prompt routing (measured: `python scripts/lang-stats.py`)
 

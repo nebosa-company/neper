@@ -1,0 +1,2066 @@
+id	bytes	title
+D84	1253	standard-library composition and stable dependency closure
+D85	1400	`e.data.sort` becomes `algo.sort`
+D86	2108	the `e.data.*` / `algo.*` boundary is genericity
+D87	3113	every toolchain namespace consolidates under `e.*`
+D88	1992	the supplied `hash` folds components where bytes are not contiguous
+D89	1929	`e.mem` gains `view`, the one arena operation source cannot express
+D90	2238	one generated readiness document, updated by every session
+D91	1274	`lines` marks its mode with the empty separator
+D92	2353	each `e.algo.rand` name is one published algorithm
+D93	847	`printf`'s sink is generated, not declared
+D94	1875	`e.io`'s callbacks are declarations
+D95	1778	the bootstrap's archive is a tagged revision and its stage hashes
+D96	2247	`mem.address_of` reads an address out, and nothing reads one back
+D97	2703	`e.os` is written per target, and `e.fs` is written once over it
+D98	2695	`os.FileInfo` carries what `e.fs.Metadata` promises
+D99	2301	`e.os` writes permissions as a mode and times as nanoseconds
+D100	2485	`read_link` gives back the string, and `symlink` stores one
+D101	2070	the working directory is `e.os` state, and moving back is the caller's job
+D102	1818	`executable_path` is what the host records, not what it ought to be
+D103	2130	`os.env` reads the environment; `e.fs` knows which names to ask for
+D104	2193	`canonical` opens the path and asks what was opened
+D105	2184	a temporary name is taken before it is handed out
+D106	2255	`replace` refuses two ways, and one host needs a second mechanism to do it
+D107	3149	a directory-relative open is the host's walk, not a check before one
+D108	3306	`remove_at` and `rename_at` resolve the parent, then act on the name
+D109	3346	the platform error detail is a named exception to §15, and stays unwritten
+D110	3156	sockets are the transport only, and a narrow foreign return has to be widened
+D111	2873	a poller carries a pointer, and one host does not have one to carry
+D112	1767	`socket_local_address` reports the port the host chose
+D113	2280	the Windows poller keeps the set that `WSAPoll` will not
+D114	2269	a file mapping arrives as a pointer, and only one host can say so directly
+D115	3539	a watch begins when it opens, on both hosts
+D116	2393	a broken pipe is the end of a stream, not a failure
+D117	1890	a lock timeout is polled, because neither host has one
+D118	4288	a process group is created with the child, not around it
+D119	1308	`stdin` is source, and the three standard streams no longer come from one place
+D120	3591	one host has a resolver, the other gets a DNS client
+D121	3342	the calendar is a shift, not a table, and its range is what an i64 reaches
+D122	3821	a glob is two nested matchers, and the outer one is the reason `**` exists
+D123	3081	`e.mem`'s last four split in half, and the layering decides where each one lives
+D124	3561	a type-valued answer belongs in `comptime_type`, which is not the type grammar
+D125	4203	a comptime value crosses a call, and one funnel carries it
+D126	3302	the type grammar gets brackets and a trailing call, and the resolver does the classifying
+D127	2006	a comptime `Field` parameterises a type, by the same two edits a function needed
+D128	3465	the loader group, and why Linux was never blocked
+D129	3122	`error_message` needs no ambient state, so it is written; `last_error_detail` still does
+D130	3099	only what `main` reaches is emitted, and D128 was wrong about what that cost
+D131	2724	a dead function's references die with it, and D130 claimed otherwise before they did
+D132	2640	the error detail is a slot per thread, and says nothing rather than something wrong
+D133	2930	the root arena is reserved, and committed a chunk at a time as it is used
+D134	3739	a JSON number is the lexeme it arrived as, and reflection could not carry the codec
+D135	2853	a bounded CSV reader, and the file that ended in a different word than the slice
+D136	2904	a reflection question inside a generic is deferred, not answered
+D137	2739	INI has no standard, so every rule here is a choice; two of them shape the rest
+D138	2409	a branch a `meta` question settles has one arm, and the other is not code
+D139	3218	`f.ty(x)` is a conversion, and with it the three codecs are written
+D140	2915	`e.fmt.json` complete: the stream, and the patch that copies before it changes anything
+D141	2912	`e.proc` reads both pipes at once, and the spawn path that never marked a handle inheritable
+D142	2222	`e.thread` and `e.test` complete, and the float `eq` rule 4 always listed
+D143	2453	`e.data.map` is open addressing over three parallel arrays, and a binding may wait for its protocol
+D144	2984	`e.bytes` needs the foundation layer, and one generic `load` needs `size_of` to fold
+D145	3132	`e.data.iter` is `I.next` through a type parameter, and the argument block is claimed before it is filled
+D146	2497	`e.math`'s exact set: `sqrt` is the instruction, the rest is bits, and what is not written is said
+D147	3296	`e.math` complete: `fma` in integer arithmetic, the transcendentals from fdlibm, and every bound measured
+D148	3541	`Vec[T, N]` and `Mask[T, N]` are seeded aggregates, and `e.simd` is source over their lanes
+D149	1576	an ELF segment starts where the headers end, not on the next page
+D150	2650	the runtime is a prefix, cut after the last function the program reaches
+D151	1681	the Linux runtime is one source file again, recovered from its bytes
+D152	1449	the Windows floor stays where it is: a smaller one is a Meterpreter stager to Defender
+D153	1750	`main`'s `args` are checked on both link paths, and the sizes as they stand
+D154	1817	the `.em` format carries a module's `var`s, so a program that reaches one links from artifacts
+D155	2192	the artifact linker reads each module once, not per function and not per error
+D156	2476	the artifact linker keeps every reachable function, so D130 holds universally
+D157	1879	the same fold on both link paths: the size win back, D130 kept
+D158	1405	the lane-wise operators, lowered over the lanes
+D159	1047	`Vec[T, N]{ ... }` and `v[i]`: the two spellings, over the same lanes
+D160	1416	a comptime array parameter, and `shuffle` with it: `e.simd` at 28 of 28
+D161	1327	`e.data.stack`, `e.data.queue` and `e.algo.disjoint_set`; `union` cannot be a function
+D162	1154	`e.algo.stat` and `e.data.slot_map`
+D163	2106	`e.data.linked`, and the two generic-substitution defects it exposed
+D164	1162	`e.data.graph` and `e.algo.graph`
+D165	1724	`e.data.tree` as a treap, and two more compiler gaps closed on the way
+D166	1266	`e.algo.complex`, `e.algo.linalg.matrix` and `e.algo.linalg.tensor`; assignability in lowering
+D167	1206	`e.text.encoding` and `e.algo.bignum`
+D168	1109	`e.fmt.uri` and `e.algo.decimal`
+D169	1061	`e.time.calendar` and `e.fmt.quoted_printable`
+D170	969	`e.fmt.mime` and `e.fmt.tar`
+D171	1081	`e.metrics` and `e.fmt.lzw`
+D172	1080	`e.fs.mmap`, `e.fs.watch` and `e.fmt.msgpack`
+D173	1364	the crypto set: `hash`, `mac`, `kdf`, `random` and `aead`
+D174	1706	`e.crypto.kx` and `e.crypto.sign`: X25519 and Ed25519
+D175	1612	`e.fmt.pem`, `e.fmt.asn1` and `e.fmt.bson`
+D176	2071	`e.algo.deflate` with `e.fmt.zlib`, `e.fmt.gzip` and `e.fmt.protobuf`
+D177	1767	`e.fmt.zip`, `e.test.support` and `e.cli`
+D178	1740	`e.text.template`, `e.fmt.multipart` and `e.db`
+D179	1703	`e.fmt.xml` and `e.tz`
+D180	949	`e.concurrent.queue` and `e.concurrent.map`
+D181	1440	`e.fmt.bzip2` and `e.text.io`
+D182	1065	`e.debug` and `e.log`
+D183	1651	`e.fmt.yaml` and `e.crypto.x509`
+D184	1179	`e.text.unicode`
+D185	1692	`e.fmt.zstd`
+D186	1715	`e.fmt.html`, the common path of the WHATWG algorithm
+D187	1199	`e.async` and `e.fmt.mail`
+D188	1488	`e.fmt.html.template`, escaping by context
+D189	811	`str.format` recurses into slices and arrays
+D190	703	`str.format` prints an enum by its variant name
+D191	799	`str.format` calls a type's own `format`
+D192	1038	An `extern` declaration is checked against the C ABI table
+D193	1282	A trailing `...` on an `extern fn` is a C variadic
+D194	1319	A failed check follows section 11's trap protocol
+D195	1043	`unreachable()` is the one always-on builtin
+D196	1379	The `divide` and `shift` rows trap with a record
+D197	1355	`Kind(x)` is a cast, and the `enum` row traps
+D198	1736	Integer casts are checked, and `T.trunc(x)` is the meant truncation
+D199	1303	`main`'s failure line is written from a synthesized error table
+D200	1456	The `tag` row, and the float side of `narrow`
+D201	876	The `null` row: a dereference of `nil` traps
+D202	1527	The `overflow` row: `+ - *` and unary `-` trap when the result does not fit
+D203	1113	`@nocheck { ... }` leaves the debug-only rows out of a block
+D204	1330	`emit-executable --release` is the release build
+D205	1395	`emit-em-all --incremental` applies the edge rule
+D206	1464	A trap ends with its backtrace, from a symbol table after the code
+D207	2304	Cross-module inlining through an oracle lowered ahead of the program
+D208	1060	The bootstrap's archive is recorded
+D209	1348	The line table: every frame of a backtrace has its file and line
+D210	1315	The `align` row is checked at the aligned intrinsics' call sites
+D211	1196	Debug builds do not inline; `emit-em-all` takes `--release`
+D212	1698	Nested inlining through a second oracle, and every function has a frame
+D213	1331	The artifact path at the compiler's own size
+D214	1975	The edge rule is settled before lowering, and a kept module is not compiled
+D215	1400	Registered diagnostic codes for the graph, the scanner and the command line
+D216	1033	`when` over the target namespace
+D217	998	The debug fills
+D218	1653	A `const` initialiser may call a function
+D219	652	A call in an array length or a `[...]` argument
+D220	566	A `when` condition through the interpreter
+D221	918	Array locals and `for` over a range in the interpreter
+D222	979	Bool constants, and a calling constant put off rather than refused
+D223	961	`target.arch` and `target.os` as values
+D224	815	The kept modules' bodies are not checked, and the checksum is table-driven
+D225	1058	`emit-executable --arena SIZE`
+D226	827	A call saves the live registers alone
+D227	1503	`tokens --json` and `parse --json`, and the first of the conformance corpus
+D228	1106	`check-file --json`, through one diagnostic emitter
+D229	1008	`info --json` is the capability query, pinned per host
+D230	1119	`emit-executable --json` is the build stream
+D231	926	`run --json` builds then launches, capturing the whole output
+D232	881	- `index --json` names the module and its declarations
+D233	729	- `dis --json` lists each function's bytes
+D234	1187	- `fmt --json` emits the canonical layout
+D235	1734	- The allocator's pool is ten registers, five of them callee-saved
+D236	2440	- A scalar local is a value, and a loop's temporaries are its own
+D237	1567	- Fused compare-and-branch, fall-through, and short immediates
+D238	1056	- `build-manifest --json` and a SHA-256 in the compiler
+D239	2564	- `@reorder`, an opt-in that packs a struct by alignment (planned, low priority)
+D240	1244	- `test --json` runs each @test in its own process
+D241	3947	- `e.time.cron`, a cron-expression parser and next-fire clock (planned)
+D242	660	- A test carries its real wall time
+D243	1180	- `e.grep`, a dependency-free code scanner (planned)
+D244	787	- `fmt --check` reports E-FORMAT-0001
+D245	1459	- `else if` lowers as the nested `if` it is
+D246	2764	- A test that outruns its deadline is ended from inside
+D247	1572	- A grouped return value may carry an operator
+D248	2436	- Audio arrives as a vocabulary, two decoders and a mixer
+D249	2617	- A game engine core is ten pure modules, and three things it must not add
+D250	1664	- The corpus is validated against the v1 schema, by both suites
+D252	2550	- What classical 2D and 2.5D still needed: a camera, a grid, input and placed sound
+D251	2124	- A symbol carries its signature, its attributes and its `///` documentation
+D253	2778	- A trap's record is read back as the `trap` payload, under `run` and `test`
+D254	2813	- A build writes its manifest, into a directory the project makes once
+D255	1191	- The format corpus, and a space inside a brace pair
+D256	1276	- A `@test` that is not a test is E-TEST-9999, before anything is compiled
+D257	1815	- What `fmt` refuses is diagnostics, in every form
+D258	1327	- A declaration's parameters, fields and members are symbols under it
+D259	645	- `info` names every command the stream reaches
+D260	1287	- An unreadable operand is the envelope, on every `--json` command
+D261	1123	- A program built twice is the same bytes, and its manifest says so
+D262	2075	- `check-project` checks every module under a project, one stream
+D263	2051	- `test-project` runs every module under a project, and a runner is built as part of it
+D264	2740	- Source maps: the test runner writes one, and the compiler reads it back
+D265	2004	- A manifest's inputs have their real roots, and its dependencies an interface hash
+D266	2476	- `e.math.fixed`, and angles measured in turns
+D267	1332	- `run` passes what follows `--` to the program
+D268	4235	- The fixed step and the entity store, and a fixture check that is not the suite
+D269	1766	- `dis` lists mnemonics, from a decoder over what the emitter produces
+D270	3416	- One coordinate vocabulary for four shapes, and a tilemap that is bits beside tiles
+D271	1803	- References in the index, resolved by the rule that forbids shadowing
+D272	2941	- Contact times and shadows, both answered in integers
+D273	1249	- One blank line between declarations, `{}`, and `else` beside `}`
+D274	696	- The leading `use` block sorts by module path, then alias
+D275	1616	- Every recovered failure is a diagnostic, and a barrier crossing is E-SYNTAX-0012
+D276	1663	- Spec section 2's spellings, as a front door onto the positional forms
+D277	1812	- Lists break at 100 columns, one element per line, and join when they fit
+D278	621	- A `call` in the listing is named
+D279	2901	- A conversation is data, and a particle pool forgets in order
+D280	955	- The index is one span order over symbols and references
+D281	1056	- The runner renames the operand's `main`, and the map carries the seam
+D282	2851	- Frames and transitions, and the order a frame is drawn in
+D283	818	- `--language-version` selects the advertised profile, or refuses before reading
+D284	1036	- A second fixture per corpus root, and what writing them found
+D285	809	- An aggregate literal's body is a list
+D286	457	- Attribute lines sort by name
+D287	1266	- `os.mkdir` joins the fixed surface, as a bootstrap intrinsic only
+D288	2829	- A* in integers, a tree that names its action, and forgiving input
+D289	1269	- `-` reads stdin on `tokens`, `parse` and `fmt`
+D290	1543	- `--absolute-paths` adds `absolute_path` beside the operand's identity
+D291	811	- A Linux build writes its executable executable
+D292	858	- `neper test FILE` works under `.neper/debug/test/`
+D293	828	- An artifact's manifest path is project-relative
+D294	1083	- `neper check` and `neper test` with no operand are the project
+D295	1078	- `fmt FILE` formats in place; `fmt` alone formats the project
+D296	3028	- Quantised deltas, and guessing ahead of the server
+D297	1114	- A reject fixture for every code the compiler raises
+D298	1155	- `neper index` with no operand indexes the project
+D299	2284	- `e.text.utf8`: the question asked once
+D300	845	- Analysis still runs under a stale source map
+D301	2812	- `e.text.normalize`: four forms, one window
+D302	2959	- One NIR tier for every program, and a capacity that says so
+D303	3745	- Measure the compiler, then index its names
+D304	3492	- The front end runs one module at a time, in dependency order
+D305	2473	- Code generation stops walking every value per instruction
+D306	5752	- Two million lines: pools sized from the program, and the constants underneath
+D307	1323	- The code buffer holds bytes
+D308	1658	- `--stats`: what a build was, measured after it
+D309	2258	- `run --release` means it, and the oracles are sized like the builder
+D310	1977	- The oracle lowers what it can inline, and no more than that
+D311	1194	- `os.peak_memory` and `os.wait_usage`: the two `--stats` rows that read n/a
+D312	808	- A failing `try` in `main` writes the failure line
+D313	1837	- The first oracle rides the body sweep, the second parses only where it has entries
+D314	1908	- An executable is lowered and selected one module at a time
+D315	1331	- A token is its kind and its bytes; every position is derived
+D316	838	- A module is scanned once, and every pass reads the list
+D317	1390	- A node is twenty bytes, a child one word, and every module keeps its tree
+D318	1309	- The node is read in place, and a call or expression is checked once per scope
+D319	2197	- A hot build: `emit-executable --incremental`, the image from artifacts
+D320	3730	- The artifact path at scale: bytes are bytes, a module's own rows, indexes over every walk
+D321	2627	- The front end in waves of workers
+D322	3421	- A hot build parses what changed, and what it must
+D323	2437	- The manifest's digests ride the artifact, and the root arena is a gibibyte
+D324	1703	- A wave's artifacts on worker threads, and the link reads what it holds
+D325	2694	- The modules lowered on worker threads, and every executable linked from artifacts
+D326	3523	- The bodies checked and both oracles built on the workers that lower
+D327	2468	- The settle writes an interface only when an edge asks, and the sweep's answers reach the lowering
+D328	1386	- Names validated on the workers; the declaration tables stay copied
+D329	1923	- `os.copy_bytes`: one runtime copy where a byte loop stood, and the failure report in value order
+D330	2972	- The last three leaves, a Linux arena past two gibibytes, and a promotion bug found by measuring
+D331	2348	- `-j N`, a perturbed schedule, and the harness asking whether the image depends on either
+D332	2291	- The image's digest reused when the image is the one on disk (planned)
+D333	2260	- The compiler's hashes from `e.algo.hash` and `e.crypto.hash` (planned)
+D334	1587	- `--stats` counts what the link dropped
+D335	1704	- `--stats` as a record in the stream (planned)
+D336	3819	- Two hashes in hardware, the warm build's readers, and the link on the workers
+D337	1814	- A relocated build is the same build: the image spells its sources from the root
+D338	1866	- The M2 baseline: the compiler preserved before post-M2 tracks touch it
+D339	3173	- A worker's arena is a reservation committed as it is touched
+D340	2160	- The whole arena is committed as it is touched
+D341	2552	- Bounded malformed input: the fuzzer, the nesting bound, and the link's hash scratch
+D342	2080	- The NIR verifier at the lowering boundary
+D343	1636	- An artifact is published by one atomic replace, and a damaged cache is rebuilt
+D344	1316	- A failure that reaches the top is a diagnostic, and the stream still ends
+D345	4071	- Resources are affine and owed: the H01 rules checked over the seeded handles
+D346	1935	- The inlining cap re-evaluated and retained, and every decision explained
+D347	1748	- `e.cancel`: the common cancellation primitive, delivered
+D348	3031	- Declared resources, containment, and a resource's fields as its module's
+D349	2872	- A borrow is given to no one, a copy is not a duplicate, and `os.dup` is
+D350	1498	- The rest of `e.os`'s handles are resources
+D351	2392	- Nothing moves out from under a pointer, and an arena is affine
+D352	1803	- H01's cost measured and cut, and its closure record
+D353	2014	- A container takes what it is given, a flag is tested like an error, and the bootstrap's token table
+D354	2561	- H02's lexical subset: a region ends at its reset, a view at its container's change
+D355	1831	- A release build is a checked build, and every unsafe boundary is listed
+D356	1552	- The first bounds proof, and the inlined bodies that had lost their checks
+D357	1242	- A thread over this frame's storage is joined in this frame
+D358	1859	- A by-value argument is a snapshot, copied only where something could write it
+D359	1610	- `explain-file`: every dispatch and instantiation, from the checker
+D360	1661	- A cleanup's failure does not overwrite the primary's detail, and a dropped error is listed
+D361	2044	- `context-file`: one function's facts, with provenance, under a budget
+D362	1825	- `uses-file`: every resolved use of a function, and what a deletion has to know
+D363	1522	- The build manifest says what an incremental build kept, and why
+D364	1072	- A safety diagnostic carries its other site as a related span
+D365	1615	- What a thread was given is the thread's until the join, and H04's design
+D366	1165	- The performance gate: a measurement judged against the budgets
+D367	2392	- The GPU contracts frozen before M3: H13, H21, H22 and H23 by design
+D368	1806	- A corrupt artifact is named: E-LINK-0001 on the command line, `invalid-artifact` in the manifest
+D369	2278	- A check policy is a build identity: `--unchecked` artifacts carry their own mode
+D370	1774	- `run --json` holds a bounded prefix of the child's output, and says what it left
+D371	1838	- The unsafe inventory lists what the program did not declare: extern, cast, bitcast, union
+D372	2268	- No persistent server before the measurement says so: H10 and H16 dispositions
+D373	2191	- A version 2 source map names its generator, and a mapping says what may be edited
+D374	1833	- The language card is rendered from the grammar, stamped and hashed
+D375	2726	- The tokenizer profile: what the vocabulary costs, versioned with the grammar
+D376	2124	- The first structured edit: a rename is a plan with preconditions, and nothing applies itself
+D377	1160	- The guard form of the bounds proof: `if i < x.len` proves its block
+D378	1111	- The conjunct form of the bounds proof: the leftmost `i < x.len` of an `&&` proves the rest
+D379	1616	- A lock held as a value: `sync.Guard` is a resource, and H01 is the lock discipline
+D380	1367	- The early-exit form of the bounds proof: `if i >= x.len { ret }` proves the rest of the block
+D381	1622	- The first fix: a forgotten cleanup offers its `defer`
+D382	1194	- The second fix: an untested acquisition offers its test
+D383	2122	- The stage measured: two scans that had gone quadratic and per-byte, and the cost that stands
+D384	1163	- The width proof: an index that cannot reach the array's length
+D385	1005	- The slack form of the bounds proof: `while at + K <= x.len` proves `x[at + j]`
+D386	1421	- The stack object's slot was a rewalk of the function: fifteen per cent of the build
+D387	1650	- The warm build profiled: the byte sinks copy whole, and the hash's loads are proven
+D388	1499	- The hash reads its words inline, and a reader's guard is its proof
+D389	711	- The inventory's line numbers counted once per module, not once per site
+D390	1209	- Two slices of one length: `if a.len != b.len { ret }` proves the other
+D391	2914	- A kept module's bodies are not checked in a release build either
+D392	2113	- Header trees: an unchanged import of a changed module is parsed for its declarations alone
+D393	1189	- A pointer bound from `&x` is `x` by another name to the lending rule
+D394	941	- A pointer bound from `&x` reaches storage a reset took away
+D395	1037	- A slice bound from a place of `x` is the same alias
+D396	1838	- `context-file` states the caller's contract from the signature
+D397	1211	- `context-file --module`: the contract facts as a catalogue
+D398	1746	- The compiler that wrote an artifact is part of its identity
+D399	1840	- `--deadline MS`: a build is cancelled at the next checkpoint between phases
+D400	1131	- `--bytes N`: a context page is bounded in serialized bytes, and says what it held
+D401	1735	- A type mismatch names both types, in the message and as fields
+D402	1587	- A worker sets itself up on its own thread
+D403	1827	- Two quadratic walks in the register allocator
+D404	1344	- The card's examples are programs the suites check
+D405	1104	- The manifest counts what a build did rather than kept
+D406	1958	- `plan-add-parameter-file`: the signature-change plan
+D407	1470	- A context answer names the program it was computed against
+D408	1323	- Inlining decisions are records of the build stream
+D409	1525	- `query-batch`: many queries, one check
+D410	1196	- A batch line is a request of its own, and the arena says so
+D411	1226	- The compiler's identity is a CRC-32C, not an xxHash64
+D412	675	- `--stats` after a warm build
+D413	1108	- A struct holding `&x` in a field aliases `x` through that field
+D414	1264	- `plan-replace-expression-file`: the fourth plan shape
+D415	1438	- `plan-change-signature-file`: the four plan shapes all exist
+D416	1062	- An assignment records an alias as a binding does, and ends the one it replaces
+D417	1426	- Caller-supplied error detail on the checked path
+D418	1060	- A hand edit of a generated file, told from a stale map
+D419	1328	- A type is a context subject
+D420	1291	- A field's uses, and its rename
+D421	1523	- A release build's header trees keep the oracle's candidates
+D422	1097	- A worker checks the deadline between its modules
+D423	1190	- `test-impact-file`: the tests an edit reaches
+D424	834	- `test-file --only`: the tests an impact query named
+D425	814	- The card names the edit loop
+D426	1154	- `--instances N`: a specialization budget
+D427	1262	- A diagnostic names the module it lands in by the manifest's rule
+D428	2410	- The runtime touches what the kernel writes, not every allocation
+D429	866	- The card carries the token-cost table
+D430	1398	- A dispatch that found nothing says why
+D431	963	- The inline cap is part of the artifact identity
+D432	845	- A fix carries the plans' preconditions
+D433	1191	- Read and write locks held as values
+D434	1063	- A group of threads is one resource
+D435	966	- A fault injected into the cache writes
+D436	729	- A plan's result names the program's snapshot
+D437	954	- A constant or a global is a context subject
+D438	1050	- Metamorphic tests: what must change nothing
+D439	959	- A removed parameter must be unused
+D440	950	- The card marks each diagnostic code verified, present or planned
+D441	860	- The deadline is read between functions
+D442	622	- The lowering reads the deadline between functions too
+D443	903	- The `_detail` form for the rest of the path-taking surface
+D444	1064	- A scalar mismatch carries its conversion as a fix
+D445	749	- An unknown name names its nearest neighbour
+D446	1077	- The manifest counts the declarations rechecked
+D447	690	- A module without the member named says which
+D448	843	- A field the aggregate does not declare says which
+D449	1034	- Differential execution against an independent oracle
+D450	780	- Register pressure is a `--stats` row
+D451	896	- An error's uses and rename
+D452	1139	- The bounds proof through a second local
+D453	1115	- A generic instance's cost is a record of the build stream
+D454	720	- Progress records
+D455	811	- An argument per call for the added parameter
+D456	842	- The bootstrap as the codegen's oracle
+D457	963	- The unsafe inventory rides in the artifact
+D459	997	- The content hash verified where the image folds by it
+D460	1238	- A callee resolved once
+D461	1160	- A callee's module found once per string
+D462	1562	- The bounds proof through a field base
+D463	1354	- The phase and the layout in the explain stream
+D464	1144	- A generator's combined inputs
+D465	1334	- A nested source map, followed one level
+D466	1570	- The instance's request site on a template-body failure
+D467	1013	- The source map in the build manifest
+D468	1077	- A `const`'s phase and value in the explain stream
+D469	901	- Every dispatched command is in `--help` and `info`
+D470	1109	- No runtime interpreter; `eval` rides the comptime one
+D471	1145	- Windows resources: an `.rc` compiler and a `.rsrc` section
+D472	1491	- A cyclic artifact reference is a damaged artifact
+D473	1612	- The manifest as the cache's anchor
+D474	1074	- A whole-build budget over the interpreter's steps
+D475	1062	- An invalid `undef` is refused
+D476	1250	- `--stats` as a record in the stream
+D477	1188	- Metamorphic tests: renamed locals and reversed fields
+D478	965	- Metamorphic tests: renamed functions and types
+D479	1179	- `e.fs` in the `_detail` form
+D480	840	- `e.proc` in the `_detail` form
+D481	1234	- `apply-plan`: the compiler applies its own plans
+D482	1124	- `compare-manifests`: two builds held against each other
+D483	1144	- Locals in the index
+D484	888	- The local rename reads the index
+D485	796	- An unknown type name, at its token, with the nearest type
+D486	1253	- Moves as facts, and the folded `if` that was no record
+D487	621	- Views as facts
+D488	681	- `-` on `index`
+D489	653	- `.` and `..` collapsed in `absolute_path`
+D490	484	- `-` on `check-file`
+D491	705	- The conversion fix over a whole value
+D492	1137	- A body's use of a constant is a value edge
+D493	1210	- A layout a body reads is an edge
+D494	1502	- A protocol function's absence is an edge
+D495	982	- A deleted declaration on the warm path
+D496	998	- The deadline inside an evaluation
+D497	951	- Raw dereferences as sites
+D498	714	- Dependency hashes on the context page
+D499	915	- The chain of maps, three levels
+D500	1120	- An `if` over constants folds
+D501	527	- A view's end as a fact
+D502	873	- Overlays: a module's text from another file
+D503	653	- A trap in another module, sourced
+D504	996	- Trivia apart from the identity
+D505	1007	- The crew's one shared scratch table
+D506	1105	- The deterministic half of the gate, in the suites
+D507	1001	- The key is a candidate
+D508	703	- Extracted constants as a metamorphic transformation
+D509	961	- Uses through an alias, and the module beside the operand
+D510	1151	- A call at compile time is a use
+D511	502	- The callback fixture
+D512	1018	- An edit the generator owns
+D513	729	- The index marks the boundaries
+D514	641	- Typed name facts
+D515	1142	- A type's rename is a plan
+D516	402	- The uses of a type
+D517	868	- The functions spelled with the type follow its rename
+D518	798	- A function found by its spelling keeps it
+D519	946	- A frame inlined from another module names its origin
+D520	795	- A broken source answers as a stream
+D521	1007	- The header held until the first record
+D522	632	- The two commands left on stderr
+D523	472	- A batch that cannot be answered is one stream
+D524	712	- Overlays for a check and the queries
+D525	933	- The formatter as a metamorphic transformation
+D526	653	- The compiler without its comments
+D527	914	- A named constant is a literal to the proofs
+D528	1377	- The index names every reference
+D529	888	- The compiler with its symbols renamed
+D530	646	- The compiler with its fields reversed
+D531	718	- The compiler with its declarations reversed
+D532	818	- The library turned too
+D533	748	- The turns in release
+D534	1212	- Trailing whitespace out of the identity, and the warm path under the turns
+D535	628	- A parameter's name is not its signature
+D536	561	- The warm path under the turns, in release
+D537	828	- The plans over the compiler
+D538	525	- The signature plans over the compiler
+D539	837	- The explain table sorted once
+D540	1152	- The deadline inside a function
+D541	1278	- The buffers grow to the function
+D542	953	- The inlined runs in the disassembly
+D543	875	- The instantiation chain
+D544	1096	- The project index over the compiler
+D545	682	- The safety family's symbol
+D546	1031	- The arena dry, named
+D547	591	- The stale plan's file
+D548	797	- Bytes read as a bool or an enum are checked
+D549	738	- The formatted library
+D550	753	- The library's locals renamed
+D551	1083	- The library's fields reversed and its declarations reordered
+D552	948	- The runtime's arena, checked
+D553	1365	- Every function's first error
+D554	1149	- The tagged union's punned tag
+D555	1126	- The whole-image boundary in context
+D556	1086	- One boundary policy for a query batch
+D557	1133	- The artifact's unsafe manifest
+D558	1086	- Retained memory after warmup
+D559	909	- Ten thousand reclaimed queries
+D560	1390	- The library's symbols renamed with the compiler
+D561	862	- Live progress has an explicit order
+D562	1455	- The compiler's parameters reordered by its own plans
+D563	953	- Generator ownership follows edits into dependencies
+D564	1044	- Source-map chains pass three nested generators
+D565	966	- Disassembly retains nested inline provenance
+D566	819	- The language card marks command standing
+D567	759	- The language card marks grammar-rule standing
+D568	806	- API catalogue standing comes from the checked target
+D569	1075	- Each language version keeps its own generated card
+D570	989	- Verified APIs name an executable test witness
+D571	758	- An absent catalogue subject is explicitly unavailable
+D572	772	- An absent API subject is explicitly unavailable
+D573	727	- Generic API signatures keep their compile-time parameters
+D574	924	- Module catalogues include generic API templates
+D575	865	- The adopted module plan validates again
+D576	965	- Source API surfaces are checked by the real resolver
+D577	887	- Compiler-origin source APIs have exact indexed signatures
+D578	1136	- Controlled process runs report bounded partial outcomes
+D579	1293	- Delivered M1/M2 partial catalogues join the semantic gate
+D580	1475	- Process capture has a bounded final drain
+D581	939	- The complete termination grace is exercised
+D582	1535	- A root handle survives movement of its directory
+D583	823	- Walk abandonment has a tested close boundary
+D584	986	- Cross-volume replacement refuses rather than copying
+D585	2075	- A concurrent link swap never escapes a held root
+D586	955	- Lock contention retains native detail and its portable outcome
+D587	1104	- Durability failure does not imply replacement rollback
+D588	895	- SSE is a bounded reader before HTTP owns a connection
+D589	666	- A long-lived event stream does not grow the arena
+D590	1433	- HTTP framing is a bounded stream codec before it is a client
+D591	1125	- Network transport starts with host-independent address values
+D592	1141	- `e.net` is the portable owner of blocking sockets
+D593	1303	- Controlled sockets poll; controlled DNS refuses a promise it cannot keep
+D594	995	- A plain HTTP request owns exactly one connection
+D595	964	- Plain response streams decode framing without retaining the body
+D596	721	- WebSocket client keys are caller-entropy Base64
+D597	853	- Client upgrade preserves the first WebSocket frame
+D598	871	- Outbound WebSocket frames mask without retaining payloads
+D599	893	- Inbound WebSocket frames are role-masked and caller-bounded
+D600	558	- TLS streams begin as inert caller-owned state
+D601	609	- Natural collation compares digit magnitude without parsing integers
+D602	662	- Cron searches calendar days under an explicit fixed offset
+D603	808	- Grep stays stateless because its frozen Index has no state
+D604	644	- Audio frames use one host-independent signed full scale
+D605	667	- Mixer voices live entirely in caller storage
+D606	677	- Mixing clips at every deterministic Q16 boundary
+D607	711	- Resampling is an explicit deterministic nearest-neighbor step
+D608	802	- WAV decoding owns the RIFF bytes and streams frames
+D609	761	- WAV encoding is a single exact RIFF allocation
+D610	900	- A resource moved through a pointer is still pinned
+D611	922	- Generic containment is decided after substitution
+D612	799	- A tagged union carries the ownership of any payload
+D613	983	- A resource cleanup owns its final parameter
+D614	1193	- Checked byte I/O owns its failure detail
+D615	629	- The Linux static gate records D614's checked I/O surface
+D616	1132	- Literal-indexed fixed-array slots carry ownership
+D617	847	- Comptime array indices share one ownership slot
+D618	846	- Array ownership diagnostics identify the exact slot
+D619	838	- A full-slice alias retains its resource-array owner
+D620	854	- Comptime slice offsets retain the same resource slots
+D621	924	- The sync fixture keeps its statically named thread as a local owner
+D622	969	- The Windows static gate records per-slot ownership evidence
+D623	844	- The Linux static gate records per-slot ownership evidence
+D624	631	- Seeded resource representations use explicit handle views
+D625	658	- Resource reflection is an empty field sequence outside its module
+D626	601	- Reflective reads do not copy affine fields
+D627	574	- Reflective writes do not copy affine fields
+D628	762	- Typed codecs inherit the reflective resource boundary
+D629	638	- Concurrent process waiting has one audited representation bridge
+D630	514	- Safety conformance observes files through the public handle view
+D631	426	- TLS key derivation is the RFC 8446 SHA-256 schedule
+D632	785	- TLS records authenticate their framing before publishing plaintext
+D633	748	- TLS hello negotiation exposes only the reviewed profile
+D634	807	- TLS server authentication is Ed25519 X.509 over bounded DER
+D635	903	- TLS handshakes authenticate before exposing application keys
+D636	477	- The bootstrap OS oracle uses public file views
+D637	769	- TLS stream adapters never fall back to plaintext
+D638	704	- TLS close is an authenticated, idempotent half-close
+D639	694	- Controlled TLS handshakes stop at every transport boundary
+D640	627	- Full HTTP requests reuse the authenticated TLS stream
+D641	1118	- Streaming HTTP over TLS keeps one controlled owner
+D642	403	- The v1 stream schema types the TLS capability record
+D643	440	- TLS integration workers name their scratch-stack requirement
+D644	702	- TLS peer parsing closes the narrow-profile edges
+D645	594	- P-256 verification is one public-input primitive
+D646	706	- X.509 verifies P-256 chains without rejecting unused suffixes
+D647	615	- TLS clients offer and verify ECDSA P-256/SHA-256
+D648	744	- TLS handshake framing follows records rather than assuming them
+D649	454	- Unsupported certificate suffixes stay non-authoritative
+D650	659	- Generic by-value arguments keep snapshot semantics
+D651	605	- Multiple returns preserve a by-value snapshot
+D652	623	- Foreign-call wrappers cannot invalidate a value snapshot
+D653	594	- Cross-module inlining preserves value snapshots
+D654	769	- Format 11 closes the by-value snapshot ABI
+D655	668	- Buffered flushes retain only the unwritten suffix
+D656	808	- Detail-capable readers are an additive stream type
+D657	732	- Detail-capable writers include flush provenance
+D658	885	- Detail streams preserve nested effects and failed allocation steps
+D659	1386	- Caller-owned detail closes H07
+D664	1488	- The M2.5 GPU design gate is machine-checkable and closed
+D666	756	- Protocol signature failures expose both checked contracts
+D667	850	- Generic instances expose their satisfied protocol requirements
+D668	861	- Exact function-typed comptime parameters select strategies
+D669	797	- Comptime function strategies forward through dependent instances
+D670	693	- Target-dependent `when` decisions expose their compile-time phase
+D671	607	- Mutable calls follow a direct pointer alias to the container
+D672	545	- Pointer copies retain their original local target
+D673	522	- Region matching uses canonical local arena identity
+D674	543	- Thread starts follow local context pointer aliases
+D675	638	- A deferred region reset takes effect at scope exit
+D676	566	- A pointer-parameter copy keeps the parameter's storage identity
+D677	504	- A copied region mark retains the original checkpoint
+D678	521	- Accessors follow local pointer aliases to their container
+D679	535	- Thread contexts through slices lend their known backing storage
+D680	504	- A derived slice cannot escape across its deferred reset
+D681	446	- A derived pointer cannot escape across its deferred reset
+D682	487	- Aggregate pointer aliases retain a deferred-reset boundary
+D683	471	- An aggregate carrying a region pointer cannot escape its reset
+D684	432	- A direct aggregate copy preserves its pointer alias
+D685	448	- Aggregate assignment copies the same pointer alias
+D686	545	- Thread contexts prefer the storage behind an aggregate pointer field
+D687	516	- Mutable calls prefer the storage behind an aggregate pointer field
+D688	477	- Accessors prefer the storage behind an aggregate pointer field
+D689	339	- Nested aggregate literals retain their enclosed region pointer
+D690	518	- Aggregate field assignment retains an enclosed region pointer
+D691	671	- Two aggregate pointer fields retain distinct lexical targets
+D692	434	- A carrier escape examines both aggregate pointer fields
+D693	459	- Aggregate copies preserve both pointer-field targets
+D694	489	- Pointer-field assignment preserves sibling aliases
+D695	676	- Thread contexts resolve the second aggregate pointer field
+D696	644	- Later aggregate pointer fields use a sparse alias table
+D697	504	- Carrier escape checks sparse aggregate aliases
+D698	489	- Aggregate copies preserve sparse pointer-field identities
+D699	437	- Pointer-field assignment upserts sparse aliases
+D700	498	- Thread contexts resolve later aggregate pointer fields
+D701	654	- Nested aggregate pointer aliases retain complete paths
+D702	501	- Nested-only carriers participate in deferred escape checks
+D703	444	- Aggregate copies preserve nested-only alias paths
+D704	611	- Nested field assignments use recursive alias paths
+D705	502	- Thread contexts resolve recursive aggregate alias paths
+D706	590	- Fixed-array literals retain comptime element alias paths
+D707	475	- Deferred escape checks fixed-array element aliases
+D708	425	- Fixed-array copies preserve element alias paths
+D709	453	- Comptime array-element assignments retain aliases
+D710	458	- Thread contexts resolve fixed-array element aliases
+D711	576	- Runtime array alias reads use every possible element owner
+D712	503	- Runtime array pointer returns check every candidate region
+D713	459	- Runtime array mutable calls invalidate every candidate's views
+D714	465	- Runtime array thread contexts lend every candidate owner
+D715	503	- Runtime element candidates compose with nested aggregate paths
+D716	498	- Runtime affine-array reads check every possible slot
+D717	826	- Runtime affine-array moves make candidate slots uncertain
+D718	503	- Runtime affine-array stores protect every candidate
+D719	865	- Runtime affine-array stores retain possible obligations
+D720	594	- Runtime-offset slices retain affine-array candidates
+D721	583	- Owned resource-slice parameters carry one collective obligation
+D722	422	- Owned resource slices reject partial element moves
+D723	459	- A zero-to-length sweep drains an owned resource slice
+D724	452	- Full fixed-array slices transfer every owned slot
+D725	453	- Constant-offset owned slices transfer one suffix
+D726	608	- Supplied equality and hashing carry executable laws
+D727	665	- Declared protocol laws use one generic property harness
+D728	689	- Explicit and implicit strategies are compared on one task
+D729	718	- Recursive strategy specialization has a measured boundary
+D730	1006	- Explicit protocol strategy cost is measured against implicit dispatch
+D731	727	- Result borrows are explicit declaration contracts
+D732	538	- A result-borrow contract is proved at every return
+D733	650	- Aggregate result contracts cover every pointer leaf
+D734	601	- Callers retain the declared input identity
+D735	648	- Borrow summaries survive specialization and artifacts
+D736	602	- No-escape inputs are explicit declaration contracts
+D737	441	- A no-escape contract rejects returned aliases recursively
+D738	335	- A no-escape contract rejects global retention
+D739	432	- No-escape forwarding requires a checked matching callee
+D740	563	- No-escape summaries survive specialization and artifacts
+D741	427	- One no-escape contract may name several inputs
+D742	344	- Multi-input return proof checks every named origin
+D743	294	- Multi-input global proof checks every named origin
+D744	344	- Multi-input forwarding is positional at both ends
+D745	453	- Artifact format 14 carries a counted no-escape position set
+D746	1132	- `@reorder` is delivered as an alignment sort in the layout pass
+D747	2683	- xxHash64 and FNV-1a from `e.algo.hash`
+D748	696	- Serial work is an ordered active queue
+D749	426	- The readiness page is metrics only
+D750	1247	- A mask is refused at every position that stores a value
+D751	1518	- One packed instruction per sixteen-byte lane-wise operator
+D752	1015	- Packed `~` on a sixteen-byte integer vector
+D753	1230	- Packed `& | ^` on a sixteen-lane mask
+D754	1635	- Packed `~` on a sixteen-lane mask
+D755	2155	- The packed forms reach an eight-lane mask
+D756	2042	- The packed forms reach a four-lane mask
+D757	1960	- The packed forms reach a two-lane mask
+D758	2070	- The packed forms reach the masks of more than sixteen lanes
+D759	1968	- The packed forms reach the thirty-two- and sixty-four-byte vectors
+D760	3022	- The packed shifts, by a count the compiler knows
+D761	2783	- The packed shift by a count in a register
+D762	2430	- The packed multiply on thirty-two-bit lanes
+D763	1399	- The packed multiply on sixty-four-bit lanes
+D764	1447	- The packed multiply on byte lanes
+D765	1969	- `--cpu x64-v3`: the packed forms over ymm
+D766	768	`e.audio.spatial` draws from `*rand.Pcg64`, the game modules' generator
+D767	1974	`e.audio.spatial` places a gain; the pan stays with the caller
+D768	1910	`e.text.regex` is a Pike VM, and a module with helpers lands at `partial`
+D769	1430	`e.text.shape` reads OpenType tables directly, in em units
+D770	1627	`e.fmt.mp3` is minimp3 in neper, with a `state` field on the fence
+D771	1018	`e.text.locale` carries a CLDR 47 subset in its own text format
+D772	1560	A generic function instantiated by name stands as a value
+D773	1504	`e.async.io` drives blocking callbacks at `wait` and sockets on the loop
+D774	2592	The image cohort lands as one wave and lifts `image-codec-conformance`
+D775	2723	`e.text.layout`, `e.ui.style` and `e.ui.layout` land behind the image cohort
+D776	2036	`e.test.fuzz` and `e.test.coverage` deliver their runtime halves
+D777	2845	`e.asset` lands on a compiler-generated registry; `embedded-asset-linking` is met
+D778	4060	M3 opens with `e.gpu` on the CPU backend and `gpu.launch` as the third pack intrinsic
+D779	2048	`e.gpu.tensor` over the CPU device: kernels per element type, chosen by folded questions
+D780	3789	The CPU build of a kernel is a resumable step; `gpu.barrier()` is its cut
+D781	2159	`shared var` on the CPU backend: the workgroup's block, addressed in the entry
+D782	1095	`meta.signed[T]()` joins the folded questions
+D783	740	A generic aggregate argument infers its template's parameters
+D784	806	A template may format its `T`; the expansion is the caller's
+D785	2117	The fault buffer and `gpu.Fault` on the CPU backend
+D786	1400	`Vec`/`Mask` cross a call by copied storage until there is a vector register class
+D787	942	A declared `...` is refused by name; C060 closes
+D788	1194	The inlining cap stays within a module too; C079 closes
+D789	1312	A one-function edit rebuilds in milliseconds on both hosts; C080 closes
+D790	1898	The test root's control handle is the exit status; C062 and C065 close
+D791	2067	Presentation is images, targets and frames over kernels; `gpu-presentation-api` delivered
+D792	1086	The build manifest lists every declared asset
+D793	1050	The fixture waits out the scanner after a durable replace
+D794	1122	A linter for the bootstrap's rules over `src/`
+D795	2780	The native window primitives in `e.os`; `native-window-api` on Windows
+D796	3030	`e.gfx.scene`: the CPU reference renderer
+D797	1812	`e.ui.window` and `e.ui.input` over the host primitives
+D798	1354	`e.ui.asset`: variants, fonts and a texture cache over the registry
+D799	2565	`e.ui.widget`: elements, state, layout, paint and dispatch
+D800	954	The static gate re-pinned for the window primitives
+D801	1338	`e.ui.animation` and `e.ui.testing`
+D802	2262	`e.ui.accessibility`, `e.ui.app`, and the accessibility bridge as a primitive
+D803	2100	The Linux window backend speaks X11 on the display's socket
+D804	1046	The static gate re-pinned for the X11 backend and the accessibility primitive
+D805	2073	The widget catalogue opens: a delivered `partial` module resolves a phase blocker, and P0-01's theme tokens
+D806	1844	Typed actions, the gesture arena, and focus and shortcut scopes in `e.ui.widget`
+D807	1992	Editable text in `e.ui.widget`: a caller-owned buffer edited in place
+D808	1640	Viewports in `e.ui.widget`: one `Scroll` kind, lazy by a count
+D809	1760	The semantics node: what an element says of itself, in the widget, read by the tree
+D810	1354	Overlays in `e.ui.widget`: placed after the tree, painted last, the topmost takes the pointer
+D811	1603	The host capability model in `e.ui.window`, and the lifecycle events
+D812	1733	The widget harness grows the proposal's queries and sequences, and the gallery is a function
+D813	1761	`e.ui.control` opens: controls are functions under a `Theme`, and the content controls
+D814	1732	Borders, radii and shadows are style, painted by the runtime; the surface controls
+D815	975	The primary layouts: two constructors, one new layout, and a margin that is a position
+D816	1540	The layout adapters, and a placed flex fills its settled size
+D817	1150	Scrolling and insets: a scrollbar that stands apart, and insets that pad
+D818	1675	The button family: a control's look comes from what the runtime is doing to it
+D819	1394	Discrete selection: the value stays with the caller, one action per choice
+D821	1908	A record that names no declaration names none for good, and a replaced module is named
+D820	1434	The slider is a runtime kind, because a value needs the geometry only the runtime has
+D822	1382	Progress: a bar of two boxes, a ring of stroked quarter turns
+D823	1248	Text fields: one field, four faces, and a secret that keeps its offsets
+D824	1002	Basic choice: a select is a button and a modal overlay, a list box a viewport of rows
+D825	1628	Forms: validation is data, a field is a labelled group, Enter reaches the form
+D826	1858	Disclosure and panes: expanded is the caller's, tabs pick, a handle reports a size
+D827	1653	e.ui.overlay opens: transient UI is an overlay the caller keeps open
+D828	1754	e.ui.navigation opens: navigation state is the caller's path, the bars only place it
+D829	1729	Advanced actions: a split button leaves its menu to the caller, a rating is one focus target
+D830	1871	Numeric and shortcut input: a scope may take every key, a dial reads the pointer's angle
+D831	1958	Advanced text and choice: the adapter is the caller's, the suggestions are one helper
+D832	1953	Feedback and disclosure: the notice queue is the caller's slice, the clock is the caller's phase
+D833	1807	e.ui.collection opens: a source is three callbacks, and only what is in view is built
+D835	1486	Paged collections: a swipe turns once, and the flag that says so lives in the element's state cell
+D834	2512	The algos.md stream opens: five pure modules over caller storage
+D836	2776	Ten more modules: number theory, roots, combinatorics, range queries, DP, caches, tries and consistent hashing
+D837	2892	Geometry, special functions, random variates, statistical tests and the graph family
+D838	3430	Transforms, integrators, estimators, optimisers, samplers and bit formats
+D839	1429	Collection interaction: a drop is an explicit move, and every touch behaviour has a button
+D840	1422	Adaptive navigation: the width chooses the form, the caller keeps the path
+D841	1864	Transient presentation: light dismissal is a modal overlay plus a scope, and a modal bounds the keyboard
+D842	1554	Pickers: a calendar is buttons over civil-day arithmetic, and every picker reports the whole value
+D843	3374	Text algorithms: phonetics, conventions, stemming, wrapping, scoring, suffix structures, diffs, retrieval and tokenisers
+D844	1793	Content manipulation: a zoom view is a viewport with a transform, a drop is a gesture, the clipboard is a command set
+D845	1949	Rich tabular data: a header's sort, reorder and resize are requests, a tree asks only the expanded
+D846	1497	Statistical learning opens: linear models, clustering, neighbours and naive Bayes
+D847	1001	Trees, margins, updates, losses and decoders
+D848	1134	Networks, Markov models, tabular control, reduction and approximate search
+D849	1270	Node-pool structures: treaps, skip lists, splay trees, windows and a B+ tree
+D850	1178	Alignment, scheduling, time series, exact cover and metric search
+D851	1323	Property editing: the editor is the caller's, the grid only places it
+D852	1560	Document workspace: tabs move by a drop, a dock reports the whole of its sizes
+D855	1266	The graph family grows: centralities, colouring, communities, cuts and isomorphism
+D856	1480	Combinatorial optimisation, satisfiability, constraints, minimisation and decision diagrams
+D857	1515	Spatial indexes, succinct structures, ropes, Cartesian trees and compressed bitmaps
+D858	1322	Persistent tries, dynamic trees, event-time streams, rate limits and resilience
+D859	1155	Identifier validation, control loops, versions, CBOR and parsing
+D860	842	TOML, Markdown, clock synchronisation, trace context and hyphenation
+D861	749	Distributed clocks, elections, gossip, failure detection and LL(1)
+D862	878	LR parsing, collaborative text, property testing, simulation and linearizability
+D863	971	Pretty printing, JSON Schema, CSS, and the consensus and commit protocols
+D864	895	Replicas, collectives, error-correcting codes and quasi-random sequences
+D865	906	Game navigation, procedural generation, physics, animation and curves
+D866	1429	Robot kinematics, motion, planning and mapping, and a signal-processing library
+D867	1408	The address of a float carries its pointer type
+D853	1305	Productivity navigation: a wizard validates nothing, a palette filters nothing
+D854	1018	Desktop selection and history: a font picker over the caller's catalogue, a notification list over the caller's queue
+D868	1258	Meshes, rasterisation, shading, path tracing and compressed textures
+D869	694	Anti-entropy, CRDTs, deadlock detection, distributed hash tables and locks
+D870	1038	Distributed mutual exclusion, global snapshots and image filters
+D871	657	Audio effects and synthesis
+D872	1416	A body is lowered over an empty local table
+D873	1524	Batch 31: classical ciphers, Merkle trees, secret sharing, LZ4 and Snappy
+D874	1298	Batch 32: e-graphs, S2 cells, differential privacy, Mo's ordering, SMT pieces
+D875	1458	Batch 33: block ciphers, Avro resolution, FlatBuffers, JWT and IDNA
+D876	1484	Batch 34: Arrow, load balancing, reliable transport, signals and undo
+D877	1711	Batch 35: LZMA and xz, Parquet, CoAP, MQTT and STUN/ICE
+D878	1614	Batch 36: Noise IK, Brotli, DNS and DNSSEC, HTTP/3 framing, QUIC migration
+D879	1778	Batch 37: the database trio, FLAC and the bidirectional algorithm
+D880	1860	Batch 38: lock-free structures, reclamation, segmentation and a thread pool
+D881	1886	Batch 39: the first batch of planned functions owed to existing modules
+D882	2172	Batch 40: planned functions for matrices, sorting, random sampling and bytes
+D883	1596	Batch 41: planned functions for game AI, heaps, caches, coding and DP
+D884	2079	Batch 42: rendering techniques, painting, key derivation, signatures and transforms
+D885	2242	`e.os.shell` opens the host's shell: a capability record, never an emulation
+D886	1048	The tray is a controller: the shell's item, the shell's menu, the app's badge
+D887	1953	COM by vtable slot: the taskbar button and the jump list are the shell's objects
+D888	842	Shell file operations are delegations, and say so
+D889	1722	A notice is the shell's balloon or the desktop's daemon, and buttons are nobody's
+D890	2135	Data exchange is one representation per block, and OLE objects are slot tables of `@cc(c)` functions
+D891	1172	An offer is types and a provider; the representation is produced when the hand-off asks
+D892	1383	A promised file is a representation, and the drop target is the app's own window
+D893	1119	The clipboard takes an offer and a monitor reads a counter, not the clipboard
+D894	1367	A file dialog is the shell's object, and a cancel is an answer
+D895	741	A grant is the path today and a type for the sandbox tomorrow
+D896	1810	Activation is the registry for this user, a mutex for the instance, and the command line for the event
+D897	1002	The runtime routing is the library's; the package registration is the packager's
+D898	1262	The hidden window is the session's ear: hotkeys, shutdown and power arrive there
+D899	869	A login item is a startup registration, and the fixture holds the machine awake for a moment
+D900	1169	A print job is a device context and pages of pixels, and the PDF printer makes it testable
+D901	731	The caller renders the page; the job only carries it
+D902	1524	A permission is the consent the settings record, and a desktop program has no prompt of its own
+D903	1032	The gate is delivered; the capture, the sensor and the prompt are other subsystems
+D910	1712	Batch 43: the thin gaps, forty-one modules in five family fixtures
+D911	2145	Batch 44: formats, text, learning and a miscellany; `e.net.http.auth` arrives
+D904	2017	The thirteen algorithms the UI chain still owed, each over what the runtime already knows
+D912	1775	Batch 45: post-quantum, test support, allocators and GPU kernels; what stays owed
+D913	3196	The first desktop application: a Windows gallery of every control, and what running one taught the chain
+D914	2659	Frames that cost what changed: damage, one measure per node, fast rects, eight-byte copies
+D915	1311	The stream's closing suites: goldens, pins and the static gate re-pinned
+D916	2659	Unchanged subtrees are replayed, scrolling moves pixels: the dirty-layout half of Flutter's frame
+D917	1120	A custom paint names its state, and a viewport scrolls by whole pixels
+D918	2497	Definite initialization of the references an `undef` value holds
+D919	2275	A pointer cast keeps a representation
+D920	1545	Bytes from across the C ABI do not arrive as a member
+D921	1493	An untagged union holds no member-only field
+D922	1799	A trap site is a call, and its text is laid once
+D923	1857	A null check already made is not made again
+D924	1031	A generic union's instance is asked what its declaration was
+D925	1580	`@packed` and `@align(N)` lay out as section 4 says
+D926	2098	The last planned syscalls and a fiber scheduler: the algos plan is answered
+D927	2147	A trap's text and stub are shared by the program
+D928	2165	Opus decodes, and the algos plan is answered in full
+D929	960	`--unchecked` is a debug build's too
+D930	2894	The timed gate is paired, and it found the M2.5 compiler slower
+D931	1950	Eight more cuts from the profile, none of them to an output
+D932	1765	Fields read where whole instructions were copied
+D933	2467	A copy's size is known where it is emitted
+D934	2370	The warm build trusts its own hash of the same bytes
+D935	1373	The paired gate passes on both hosts
+D936	2599	The budget table after D935: what it names, and why none of it is a regression
+D937	1541	The Neper UI v2 design language is the specification `e.ui` builds to
+D938	2206	The v2 tokens are `e.ui.style`'s values, generated from `docs/ux/tokens.json`
+D939	2370	H25's edit/revert workflow, frozen and paired
+D940	2463	The runtime paints the focus ring; a control's state is a layer of its own content colour
+D942	1933	The button draws its v2 specification
+D941	2025	H25's rename workflow, frozen with an absolute budget
+D943	2400	H25's CPU program workflow: the same contract runs as fast, and the images carry every global
+D944	2070	The action controls draw their v2 specifications
+D945	1060	A box's corners are four radii, and the split button uses them
+D946	1661	An image lays out only the globals its code reaches
+D947	1979	H25's persistent-session workflow: a query in tens of milliseconds, nothing retained
+D948	2611	H25's context/repair workflow: what an agent is handed, and repairs by the compiler's own fixes
+D949	1222	The H25 report, and C033 closed
+D951	2290	The text field and the form parts draw their v2 specifications
+D952	2124	The compound inputs draw their v2 specifications
+D950	2977	A check goes on past a failing declaration, and its cascade is a note under it
+D953	1124	The rating, the dial and the shortcut recorder draw their v2 specifications
+D955	2255	The choice, the switch, the chip and the segmented control draw their v2 specifications
+D956	2743	The select, the list box, the combo box and the spin box draw their v2 specifications
+D954	2624	A check goes on past a syntax failure, and says what it left unchecked
+D957	1439	A selector takes its instruction by value, measured
+D958	2011	The slider's states and the multi-select list's count bar; sliders are tab stops
+D959	4466	The calendar, the date picker and the picker's sheet draw their v2 specifications
+D960	2908	The time field and the duration field draw their v2 specifications
+D961	4966	The colour field and the font panel draw their v2 specifications
+D962	4432	Icons, avatars, images, canvases and headings draw their v2 specifications
+D963	2562	Selectable text draws its v2 specification
+D964	3511	Rich text draws its v2 specification
+D965	3387	Dividers, cards, group boxes, disclosures and accordions draw their v2 specifications
+D966	3849	Sashes, split views, dock panels and the document workspace draw their v2 specifications
+D967	2898	Dock panels draw their tab-group, stacked and floating v2 variants
+D968	2542	The dock layout runs on a slot model with an activity strip, collapse and maximise
+D969	2823	The document workspace draws its v2 editor groups, location bar, compact form and MRU keys
+D970	4252	Progress bars and rings, gauges, levels, placeholders and skeletons draw their v2 specifications
+D971	5749	Badges, banners, empty states, snackbars, notification lists and status bars draw their v2 specifications
+D972	5969	App bars, navigation stacks, breadcrumbs, tabs and menu bars draw their v2 specifications
+D973	6449	Destination bars, navigation drawers, navigation splits, page indicators and pagination draw their v2 specifications
+D974	4630	Document tabs and wizards draw their v2 specifications
+D975	5076	Menus, context menus and tooltips draw their v2 specifications
+D976	4111	Popups, flyouts and popovers draw their v2 specifications
+D977	4543	Dialogs, sheets and action sheets draw their v2 specifications
+D978	3057	The command palette and window switcher draw their v2 specifications
+D979	4928	Rows, lists, the virtual list, grid view and virtual grid draw their v2 specifications
+D980	3774	The header row, table rows and table draw their v2 specifications, and the data grid its dense frame
+D981	3224	The tree, outline and tree table draw their v2 specifications
+D982	5865	The page view, carousel, pull to refresh, swipe actions and reorderable list draw their v2 specifications
+D983	4329	The property grid and key-value editor draw their v2 specifications, and a touch press ripples
+D984	4347	The data grid gains its core: one active cell, navigation and edit modes, the cell editor and the invalid, range, dirty and status looks
+D985	953	Interactive controls report their specific accessibility roles
+D986	1157	One runtime clock drives animation frames and reduced-motion progress
+D987	697	Overlay width can follow its measured anchor
+D988	556	Point-centred overlays use measured content width
+D989	418	Stacked dock headers fill their slot
+D990	465	Dock busy indicators use the shared motion clock
+D991	442	Dock panels are accessibility regions
+D992	912	Dock focus cycles through semantic landmarks
+D993	487	Focused dock panels handle Ctrl+M
+D994	771	MenuBar semantics drive F10 title mode
+D995	477	Alt release enters MenuBar title mode
+D996	520	Open menu bars follow hovered titles
+D997	485	Menu items support initial-letter typeahead
+D998	557	Menu commands dismiss and restore menu-mode focus
+D999	576	Alt plus a menu-title initial opens that menu
+D1000	470	Alt plus a menu-item initial runs that command
+D1001	495	Menu typeahead buffers Unicode prefixes for 500 ms
+D1002	509	Held Alt underlines MenuBar title access keys
+D1003	842	MenuBar supports one level of cascading submenus
+D1004	943	Submenu hover waits and protects diagonal travel
+D1005	922	Menus draw icon, checkbox and radio leading slots
+D1006	525	Menu commands support a secondary line
+D1007	790	General menus reuse the shared cascade runtime
+D1008	633	Menu focus rings are semantic and inset
+D1009	773	Hostile format edges fail at their shared parsers
+D1010	1043	Touch submenus replace their parent page
+D1011	730	X.509 critical policy fails closed
+D1012	738	Tooltip hover timing lives in the shared runtime
+D1013	533	X.509 DNS name constraints are enforced
+D1014	538	Bonsai defaults to review-only model edits
+D1015	627	IDNA labels enforce IDNA 2008 validity
+D1016	617	Secret-key crypto is constant-control-flow or unavailable
+D1017	1145	Touch context menus lift their target
+D1018	688	Touch context drag-release chooses the row
+D1019	777	Rich tooltips keep the anchor-to-surface crossing open
+D1020	666	Build-cache manifests are authenticated outside the cache
+D1021	584	Tooltip overlays supply their anchor description relation
+D1022	645	Plain touch tooltips use the runtime gesture arena
+D1023	603	Long-press haptics are an optional runtime host callback
+D1024	604	Standard flyout buttons own their open state
+D1025	498	Suggestion popup owners expose the active descendant
+D1026	514	Empty popups announce their result
+D1027	533	Popup failures are actionable alerts
+D1028	1509	Security re-review binds cache bytes and closes library gaps
+D1029	665	Popup loading and footer states use the final surface
+D1030	544	Popup rows can emphasize the matched label range
+D1031	643	Compact touch flyouts become bottom sheets
+D1032	657	Popover beaks stay centred on their anchors
+D1033	576	Busy popovers suppress repeated actions
+D1034	579	Dirty popovers consume outside presses
+D1035	612	Compact touch popovers reuse the bottom sheet
+D1036	557	Busy dialogs wait for their default action
+D1037	492	Dialog dismissal follows the dialog kind
+D1038	528	Dialog icons use one centred consequence well
+D1039	566	Compact dialogs become full-window forms
+D1040	444	Modal side-sheet width is bounded
+D1041	499	Sheet headers can navigate back
+D1042	413	Dirty sheets keep their task open
+D1043	539	Sheet actions stay fixed at the bottom
+D1044	416	Action-sheet cancellation copy is caller-owned
+D1045	471	Android action sheets omit visible Cancel
+D1046	476	Android action rows can lead with icons
+D1047	485	Pointer action sheets reuse Menu
+D1048	638	iOS action sheets use grouped cards
+D1049	519	Dialog button order is selected by the host
+D1050	489	Dialog scroll edges opt into dividers
+D1051	537	Standard side sheets live in page layout
+D1052	509	Standard bottom sheets peek in page layout
+D1053	611	Bottom sheets resolve named detents
+D1054	685	Modal bottom sheets follow and settle downward drags
+D1055	495	Command palette modes share one field
+D1056	598	Command palette groups preserve option identity
+D1057	514	Palette categories remain part of each option
+D1058	525	Palette match ranges keep option identity
+D1059	579	Palette shortcuts reuse compact key caps
+D1060	539	One unavailable reason owns every disabled-row signal
+D1061	517	Palette loading reuses the shared progress clock
+D1062	463	Query changes reset through the existing selection channel
+D1063	829	Ranked palettes map display order back to command identity
+D1064	666	Compact palettes are the same ranked command model
+D1065	806	Switcher grid keeps tile identity separate from detail copy
+D1066	727	Switcher close actions stay index-addressed
+D1067	909	Filtered switchers preserve the caller's MRU identity
+D1068	884	Hold-to-switch keeps host events in caller-owned state
+D1069	849	Keyed scopes own Tab before fallback traversal
+D1072	672	DataGrid error help reuses the shared tooltip lifecycle
+D1073	604	Saving remains a caller-owned DataGrid state
+D1070	839	DataGrid clipboard commands keep the source caller-owned
+D1071	705	Navigation-mode typing consumes text, not physical keys
+D1074	677	Double tap augments rather than replaces Tap
+D1075	695	Pointer range selection reads shared held modifiers
+D1076	628	Row headers select through the existing range model
+D1077	615	Non-text grid cells remain caller-owned commands
+D1078	634	Column selection is a standard header menu command
+D1079	562	Keyboard grid movement requests only the scroll it needs
+D1080	609	DockPanel header double-click reuses Maximise
+D1081	593	Tree arrows follow the visible hierarchy
+D1082	471	Tree branch actions match their current state
+D1083	540	Tree branch double-click keeps one toggle path
+D1084	516	Tree star expands collapsed siblings
+D1085	639	Virtual-list keys reveal unbuilt rows
+D1086	571	VirtualList overscans one viewport each way
+D1087	663	VirtualGrid keys reveal unbuilt tiles
+D1088	450	VirtualGrid shares the exact viewport overscan
+D1089	516	GridView Home and End respect rows
+D1090	492	Table keys reveal unbuilt rows
+D1091	422	Table overscans one viewport each way
+D1092	452	Table's first row moves into its header
+D1093	375	Header cells sort from Enter and Space
+D1094	378	Header arrows stay within the column row
+D1095	364	Table headers move into the first row
+D1096	410	Header keys resize through the existing callback
+D1097	411	Header keys reorder through the existing callback
+D1098	398	Header semantic Press performs its advertised sort
+D1099	493	Header resize grips are adjustable separators
+D1100	457	Collection Press actions execute their callbacks
+D1101	646	Lists and grids reuse runtime typeahead
+D1102	515	TreeItems inherit labels and join typeahead
+D1103	437	TreeItem Press uses the row's pick callback
+D1104	437	Tree no longer truncates at 512 visible rows
+D1105	498	Header sort direction reaches the host record
+D1106	614	TreeTable publishes a treegrid
+D1107	494	Data rows inherit their first text label
+D1108	612	Table cells publish self-contained name and value
+D1109	439	Flat accessibility records preserve every state
+D1110	406	Flat records retain semantic metadata
+D1111	437	Flat records retain semantic relationships
+D1112	427	Host identities retain generations
+D1113	389	Focus order has no fixed tree ceiling
+D1114	437	Accessibility publication uses reusable exact storage
+D1115	546	Runtime focus order uses element capacity
+D1116	432	Hit testing traverses every sibling
+D1117	596	Window mode reaches the native host
+D1118	505	Screen work areas come from the desktop shell
+D1119	598	Menu bar cascades reuse the recursive command model
+D1120	463	Pull to refresh starts only at the scroll edge
+D1121	482	Property groups keep identity by name
+D1122	388	Navigation stack binds the desktop back chord
+D1123	440	Modal drawers inherit overlay focus ownership
+D1124	397	Compact split navigation shares the back scope
+D1125	420	Time lists route arrows through existing picks
+D1126	428	Swipe tiles close after successful actions
+D1127	417	Legacy swipe actions share tile dismissal
+D1128	367	Time fields reserve Alt+Down for opening
+D1129	350	Calendar Page keys reuse month navigation
+D1130	322	Date fields share the picker opening chord
+D1131	433	Date-picker opening targets the selected day
+D1132	433	Calendar day keys follow civil dates
+D1133	406	Calendar days use one roving tab stop
+D1134	412	Document tabs expose one roving tab stop
+D1135	486	Destination bars use roving focus
+D1136	413	Pointer destinations expose numeric access keys
+D1137	449	Navigation drawers use roving row focus
+D1138	484	Roving tab lists share buffered typeahead
+D1139	469	Modal drawer picks dismiss after success
+D1140	435	Document tabs switch in strip order with page keys
+D1141	480	Document tabs move with shifted page keys
+D1142	473	Wizard step changes focus their heading
+D1143	415	Pointer wizards expose Back and Next access keys
+D1144	590	Wizards expose reachable non-linear steps
+D1145	541	Finishing wizards lock competing actions
+D1146	476	Dirty wizards confirm discard
+D1147	494	Tab focus rings stay inside edge-to-edge tabs
+D1148	423	Page-indicator arrow keys follow reading direction
+D1149	500	Page indicators mirror fully in right-to-left themes
+D1150	481	Page indicators scrub through every crossed page
+D1151	507	Mouse Back shares navigation's cancel path
+D1152	460	Command-left-bracket shares the back scope
+D1153	489	Modal navigation drawers follow the start edge
+D1154	500	Compact pagination uses text actions
+D1155	437	Pagination chevrons follow reading direction
+D1156	428	Breadcrumb chevrons mirror in right-to-left themes
+D1157	631	PageView follows right-to-left page direction
+D1158	466	ActionRow mirrors without changing Toolbar
+D1159	433	Divider insets follow reading direction
+D1160	436	Disclosure arrows follow reading direction
+D1161	490	Slider keyboard follows direction and large steps
+D1162	392	Rating completes directional navigation
+D1163	338	Tabs mirror horizontal navigation
+D1164	440	Directional Icons mirror in RTL
+D1165	479	Slider geometry mirrors in RTL
+D1166	441	Rating cells follow reading direction
+D1167	343	Re-clicking a Rating clears it
+D1168	344	Rating exposes a complete spoken value
+D1169	421	Rating digits use ordinary shortcuts
+D1170	399	Slider publishes its current value
+D1171	442	Rating focus is visible at both levels
+D1172	422	Rating pressed state wins per cell
+D1173	378	Rating drag scrubs logical values
+D1174	430	Notification rows own keyboard focus
+D1175	328	Notification Delete reuses row dismissal
+D1176	423	Notification names carry severity
+D1177	348	Notification List is a named region
+D1178	284	Status Bar is one named group
+D1179	377	Status Bar actions use one roving Tab stop
+D1180	459	Edge-to-edge controls declare their focus inset
+D1181	424	Status actions own explicit tooltip text
+D1182	524	GroupBox collapse remains caller-owned
+D1183	383	Group validation is one assertive Alert
+D1184	371	Card supporting text is its description
+D1185	545	Dragged Cards use the existing state layer and elevation
+D1186	507	Card loading reuses the shared skeleton sweep
+D1187	414	Card slots keep media flush and actions aligned
+D1188	614	Card selection is separate from opening
+D1189	576	Card selection follows modifier and touch conventions
+D1190	466	Nested Card actions own hover
+D1191	737	Nested Card actions are accessibility siblings
+D1192	1004	Visual transforms stay out of layout
+D1193	951	Keyboard reorder stays pending until drop
+D1194	1071	Reorder feedback rides the drag cell
+D1195	1233	Context menus are asked for through Show menu
+D1196	1327	Reorderable rows carry a Move context menu
+D1198	1131	The motion framework is planned for the next release
+D1197	1354	Named accessibility actions ride on_action
+D1199	1124	A drag near a viewport's edge scrolls it
+D1200	753	Swipe actions are the row's named accessibility actions
+D1201	571	Implicit animation state is runtime-keyed
+D1202	462	D800's quadratic curves are renamed and aliased
+D1203	337	Colours interpolate in premultiplied linear light
+D1204	271	Physics lives inside e.ui.animation
+D1205	298	Implicit animations opt into an entrance with `appear`
+D1206	390	Opacity is a node kind, Faded
+D1207	230	Stagger is capped at 8 steps
+D1208	276	No custom hero shuttles in v1
+D1209	358	Route transitions absorb pointer input on both routes
+D1210	710	A touch hold opens a reorderable row's Move menu
+D1211	754	List rows page by the window's height
+D1212	963	A pane's sash cancels a drag on Escape and resets on double-click
+D1213	892	Tabs can be disabled
+D1214	937	The motion table is the authority where no README exists
+D1215	548	A component's reduced-motion value wins
+D1216	570	Opacity-only pulses survive reduced motion at 10 fps
+D1217	428	One shimmer, Skeleton's
+D1218	1495	The design language's motion gaps are filled
+D1219	791	The scroll thumb widens under the pointer
+D1220	832	A notification's Dismiss shows on hover and focus
+D1221	780	An expander can lead with an icon
+D1222	1833	All 103 ui fixtures pass again
+D1223	637	Security helpers join their module fences
+D1224	1081	A plain build keeps the incremental cache authorised
+D1225	554	A write fault leaves an unauthorised cache
+D1226	939	Tabs take icons and count badges
+D1227	745	Avatars group with an overflow count
+D1228	1011	Text fields get a context menu
+D1229	861	The calendar's week starts on the locale's first day
+D1230	863	Times follow the locale's clock and typed times parse
+D1231	1248	Dates follow the locale's numeric form and typed dates parse
+D1232	780	The colour picker's spectrum and strips take keys
+D1233	1019	Document tabs carry a context menu
+D1234	941	The menu bar folds into one menu button
+D1235	788	Grid views page by the window's height
+D1236	906	Rows carry a context menu
+D1237	696	Grid views have icon tiles
+D1238	860	The status bar narrows by dropping end items
+D1239	871	Pagination has a table footer
+D1240	832	Lists have a multi-select gesture model
+D1241	1011	Multi-select lists have selection mode and a selection bar
+D1242	483	Tabs have dot badges
+D1243	615	A squeezed status message shows its full text as a tooltip
+D1244	1159	Calendars mark week numbers, events and unavailable days
+D1245	908	Grid views have the list's multi-select model
+D1246	1290	Tables are selectable
+D1247	788	Lists and grids have loading and empty states
+D1248	746	Tables have loading and empty states
+D1249	821	Scroll thumbs drag
+D1250	1014	Builders measure text, and breadcrumbs collapse to fit
+D1251	491	Menu bars measure whether they fit
+D1252	640	Images can be pressable
+D1253	681	Avatars can be pressable
+D1254	707	Scrollable tab bars scroll
+D1255	998	Overflowing tab bars page with chevrons
+D1256	1276	Search bars open a docked search view
+D1257	879	Dates can be typed
+D1258	678	The docked date picker has Today and Clear
+D1259	886	Key-value editors have secret values and an empty row
+D1260	865	Add and visibility glyphs; secrets can be shown
+D1261	831	Password fields can reveal their value
+D1262	651	Ctrl+K and / open search
+D1263	859	The search view has its compact full-screen form
+D1264	765	Rows can be control rows
+D1265	724	Rows can lead with an avatar or thumbnail
+D1266	795	Rails have a menu button and FAB; sidebars a header
+D1267	778	App bars collapse with the page's scroll
+D1268	570	App bars can hide on scroll
+D1269	747	Standard drawers hide, collapse to the rail and resize
+D1270	641	Modal drawers open from an edge swipe
+D1271	870	The navigation stack moves the focus on push and pop
+D1272	641	The navigation stack guards a dirty page
+D1273	860	Workspace groups have sizes and sashes
+D1274	667	Colour pickers show recent colours
+D1275	719	Typing filters a time field's list
+D1276	632	Calendar days are named by their full date
+D1277	567	Calendar arrows skip wholly unavailable weeks
+D1278	1062	Snackbars and toasts time out
+D1279	846	Progress bars and gauges ease to new values
+D1280	508	Level indicators ease to new values
+D1281	920	The tab indicator slides between tabs
+D1282	642	Disclosure chevrons turn
+D1283	540	Wide tables scroll sideways
+D1284	795	Data grids read pasted text
+D1285	749	Disclosure content grows and shrinks
+D1286	873	Modal drawers slide in and out
+D1287	715	Snackbars and toasts enter with motion
+D1288	770	Page views settle to the new page
+D1289	473	The refreshing arc spins on its own
+D1290	823	Breadcrumbs cut long names in the middle
+D1291	1121	Cut crumbs show their name in a tooltip; unmappable characters no longer fail a frame
+D1292	844	Editors survive characters no font maps
+D1293	1075	The date picker has its modal touch form
+D1294	1087	The time picker has its touch dial
+D1295	745	The time picker has its input mode
+D1296	388	Duration presets wrap
+D1297	667	Floating dock panels move by their header
+D1298	601	Dock layouts move floating panels
+D1299	700	Workspaces set four groups in a grid
+D1300	365	Selection bars say their count politely
+D1301	546	Levels take a neutral scale and gauges say no data with a dash
+D1302	1034	Notification lists gain settings, loading and failed-load rows
+D1303	1031	Notification lists fold repeated notices
+D1304	624	Table selection bars use text buttons
+D1305	692	Expanders and accordions move
+D1306	716	The time dial takes the keyboard
+D1307	1174	Calendars have a year view
+D1308	926	Breadcrumbs gain a root icon and an editable path
+D1309	670	The tab indicator eases its width as it slides
+D1310	715	Resizable panes snap shut
+D1311	648	Picker sheets cap at 60% of the window
+D1312	886	Table rows show their actions on hover
+D1313	974	Table rows expand into a detail row
+D1314	1268	Key-value editors have a text mode
+D1315	1380	Virtual lists gain placeholders, an end cap and an anchored mode
+D1316	813	Grid tiles layer their media and stroke the tick at 2.5
+D1317	833	Destination pills fill from the centre
+D1318	725	Collapsing app bars cross-fade their title
+D1319	879	Navigation stacks slide on push and pop
+D1320	691	Banners grow in and shrink out
+D1321	981	Accordions gain icons, error summaries and motion
+D1322	1055	Colour fields type Hex, RGB or HSL
+D1323	550	Colour fields keep the hue through a grey
+D1324	955	Virtual lists pin their section header
+D1325	2178	The Interface reads back whole
+D1326	868	Breadcrumbs open sibling menus
+D1327	922	Key-value editors have an ordered variant
+D1328	618	Tables end-align numeric columns
+D1329	918	Document tabs gain icons, a read-only mark and preview names
+D1330	897	Trees have disabled and loading nodes
+D1331	828	Empty states rise 10% and cross-fade
+D1332	739	Picker sheets slide up
+D1333	700	Resizable panes show their size while dragged
+D1334	924	Widgets ask for the pointer cursor; sashes show the resize cursor
+D1335	625	Text fields show the text cursor, links the hand
+D1336	786	Document strips scroll and show all open files
+D1337	707	Document tab menus carry the caller's further commands
+D1338	495	Colour thumbs are 28 on touch and grow when hovered
+D1339	636	Colour fields type their opacity
+D1340	606	Table headers mark filtered columns
+D1341	805	Table headers have a grouped tier
+D1342	800	Tree nodes rename in place
+D1343	668	Touch colour panels switch between swatches and spectrum
+D1344	699	Dragged document tabs lift and show where they will land
+D1345	696	Dragged table headers lift
+D1346	1606	Dock panels drag to another slot or tear off
+D1347	1049	Documents drag between editor groups
+D1348	510	Touch carousels show all
+D1349	1111	Time pickers have wheels
+D1350	571	Duration pickers have wheels
+D1351	614	Date pickers have wheels
+D1352	643	Durations have unit boxes on touch
+D1353	524	Removing a pair offers Undo
+D1354	519	Duration boxes move focus on after two digits
+D1355	731	Colour pickers open a bottom sheet on touch
+D1356	741	Collapsible panes ease shut and open
+D1357	813	Dragged headers show where they land
+D1358	654	The dock guide stands over the slot under the pointer
+D1359	930	New notices slide in at the top
+D1360	791	Picker sheets slide down when they close
+D1361	764	Breadcrumbs take drops
+D1362	787	The time dial turns under a drag
+D1363	695	Arrows move between years
+D1364	732	Popups fade and grow in
+D1365	588	The search view fades and grows in
+D1366	723	Typed dates are rewritten on blur
+D1367	562	Typed times are rewritten on blur
+D1368	678	Up and Down step a time field
+D1369	639	Picker modals are titled with a label
+D1370	1014	The docked date field can be typed
+D1371	810	Key-value text keeps its comments
+D1372	812	Tree rows drag onto branches
+D1373	695	A held drag opens a tree branch
+D1374	570	A held drag navigates to a crumb
+D1375	831	Overflowing tab bars fade at the clipped edge
+D1376	1028	Entries decelerate and exits accelerate
+D1377	1190	Swipe rows fling, rubber-band and settle
+D1378	679	A fast swipe turns the page
+D1379	816	Page views cross-fade under reduced motion
+D1380	1203	Carousel strips drag
+D1381	842	Progress indicators keep their show timing
+D1382	814	A selected range of numbers shows its sum
+D1383	630	Holding a table row on touch starts selection
+D1384	1026	Grid tiles drag onto folders
+D1385	829	Pointer drags rubber-band a grid selection
+D1386	660	A slow list says it is still loading
+D1387	713	Unreadable times mark the field invalid
+D1388	754	Calendars name months and weekdays in German, French and Spanish
+D1389	660	Picker wheels coast after a fling
+D1390	934	Progress bars carry their label row and detail line
+D1391	647	The contextual app bar fades in
+D1392	656	Tray badges show their count
+D1393	639	An arriving avatar photo fades in over the initials
+D1394	683	Snackbars span compact windows
+D1395	838	Typed dates outside their bounds say which dates to choose
+D1396	615	Tab completes folder names in the path field
+D1397	519	Alt and a digit pick a workspace tab
+D1398	715	Workspaces switch by recent use and reopen closed documents
+D1399	531	An empty workspace offers Open recent
+D1400	929	Overlay scrollbars fade when idle
+D1401	822	Grid tiles glide to their new places on reflow
+D1402	832	Touch data grids edit rows in a sheet
+D1403	464	Fast dial drags snap minutes to the fives
+D1404	492	Pictures fade in when they finish loading
+D1405	711	Picker sheets expand when their handle is drawn up
+D1406	886	Split views snap and cycle panes with F6
+D1407	757	Font pickers list recent families first
+D1408	572	Font pickers group monospace families
+D1409	603	Touch navigation splits snap the list
+D1410	569	F6 cycles a navigation split's panes
+D1411	503	Escape in a split's detail returns to the list
+D1412	656	Single-pane splits push the detail in
+D1413	542	Tables show a failed load in place
+D1414	810	Pull to refresh settles back
+D1415	607	Skeleton rows match the real rows' height
+D1416	763	Popups fade out when closed
+D1417	760	The search view shows a loading bar
+D1418	828	Flung wheels decelerate through their rows
+D1419	630	The dial shows a minute between the fives
+D1420	662	The dial's hand sweeps
+D1421	688	The dial fades its numbers in on a switch
+D1422	955	The year view scrolls a century either side
+D1423	820	Calendar months slide
+D1424	611	The calendar's year view fades in and out
+D1425	694	Date wheels follow the locale's order
+D1426	894	The duration picker's touch modal
+D1427	1076	Tooltips fade and scale in and out
+D1428	946	Menus scale and fade in
+D1429	854	Flyouts and popovers come in
+D1430	850	Dialogs scale and fade in over a fading scrim
+D1431	1105	Modal sheets slide in from their edge
+D1432	1485	Palette, switcher and menu bar motion; motion wrappers keep the tree's shape
+D1433	808	Switches slide and cross-fade
+D1434	1012	Checkboxes fill and radios grow their dot
+D1435	608	A link's wash fades in
+D1436	737	Sort arrows flip by turning
+D1437	703	Tree twisties turn as branches open
+D1438	883	Row and group chevrons turn as they open
+D1439	604	Pagination's current fill cross-fades
+D1440	788	List box selection fades
+D1441	850	Form field messages fade in place
+D1442	826	Rich text links fade their wash
+D1443	704	The breadcrumb path field fades in
+D1444	979	Colour picker thumbs ease on keyboard steps
+D1445	1191	Stack pushes decelerate and pops accelerate
+D1446	813	Wizard steps slide and fade in
+D1447	1490	Drawer and destination page motion
+D1448	952	Virtual grid tiles move on reflow
+D1449	1148	The select menu grows in
+D1450	1260	The bottom destination bar hides on scroll
+D1451	750	The dock guide fades in
+D1452	821	The outline's current marker slides
+D1453	1565	Text picks weight, italic and fixed-pitch faces
+D1455	1093	Working-tree patches are applied by a neper tool
+D1456	1112	Text areas scroll their overflow
+D1457	499	A pressable image is described by its alt text
+D1458	542	Text can take a size off the ramp; 32 avatars' initials are 13
+D1459	664	Comment lines after the last pair survive the text mode
+D1460	541	Key-value identifier names stand in the code face
+D1461	1241	The full-screen range form
+D1462	772	Disabled app bar actions hide at their group's outer end
+D1463	533	The picker sheet's handle is a 48 drag target
+D1464	932	Split views stack where both panes do not fit
+D1465	721	Popup matches stand at weight 600
+D1466	817	Strong text and the current breadcrumb stand at weight 600
+D1467	958	Snackbars take two lines when the action does not fit
+D1468	902	The font picker's trigger
+D1469	1008	A double press selects a word in a text editor
+D1470	713	Edge auto-scroll steps by measured time
+D1471	730	The time dial's old numbers fade out
+D1472	862	Split views keep a ratio across resizes
+D1473	742	The year grid is one Tab stop
+D1474	926	The page indicator's pill is 24 x 8 and slides
+D1475	993	List rows ease their selection
+D1476	660	A swipe row closes on ease-standard
+D1477	1128	A dragged document tab's ghost follows the pointer
+D1478	1169	A dragged table header's ghost follows the pointer
+D1479	560	The tab strip's drop line stands over the ghost
+D1480	1361	A dismissed notice leaves
+D1481	779	A text area follows the caret across soft-wrapped lines
+D1482	1284	A keyboard key in rich text is 24 tall with a 2px foot
+D1483	1363	An untyped float literal on the left of a comparison takes the right's width
+D1484	680	A header dropped before the first column shows its landing line
+D1485	855	A page view cross-fades under reduced motion
+D1486	1149	Unmapped characters draw as the font's missing-glyph box
+D1487	806	A padded viewport's thumb strip is where its thumb is painted
+D1488	847	A shut notification fold stands in for its notices on the keyboard
+D1489	985	The page indicator cross-fades under reduced motion
+D1490	657	List rows cross-fade their selection under reduced motion
+D1491	1340	Transient surfaces fade only under reduced motion
+D1492	800	Sheets fade in under reduced motion
+D1493	996	A toast carries its title and severity
+D1494	922	Toasts behind the head collapse into a count
+D1495	1078	A virtual table's Shift+Up/Down extend past the built rows
+D1496	1768	A badge appears scaling up and cross-fades its count
+D1497	781	A list's page is its viewport's height
+D1498	1011	A destination's page fades through
+D1499	928	A navigation stack's pop draws the page it leaves
+D1500	949	Table rows can be disabled
+D1501	647	Table rows can be loading
+D1502	679	The outline's current bar stands at the pane's edge
+D1503	1168	Trees can virtualise their rows
+D1504	782	Tree tables can virtualise their rows
+D1505	1001	A data grid's edited value fades in
+D1506	995	Tree table rows drag and drop
+D1507	1064	Rows added to a list grow in
+D1508	568	A gauge has a loading state
+D1509	935	A notification list's insert slide follows the rows and the scroll
+D1510	2276	The Interface carries what the checker keeps of a declaration
+D1511	3548	A stable import declares from its Interface
+D1512	805	A grid's rubber band starts on the empty area only
+D1513	863	The year grid's arrows reach years past the built rows
+D1514	1751	Globals from the Interface
+D1515	3266	Function emission reused inside a rebuilt module
+D1516	1547	Emission reuse in release and for edge-changed modules
+D1517	1541	C036 closes as H14's v1 precursor
+D1518	846	The instruction level pinned in the incremental identity
+D1519	3217	apply-plan's transaction boundary
+D1520	1599	Allocation sites counted and the vectorizer reported unavailable
+D1521	2301	The inlining cap against GP-01 and the M2 CPU workloads
+D1522	1429	Alias facts cross a decoded module
+D1523	2192	Lazy `.em` section access, defined and measured
+D1524	2034	The vector register class goes to M4 under H20's later-delivery rule
+D1525	2395	Chunked capture records with binary chunks
+D1526	3056	A batch's snapshots: edits, pins, eviction and stale keys
+D1527	3684	A memory budget for the lowering workers
+D1528	2050	Provenance through inlining in a selection diagnostic
+D1529	2472	Spec surfaces per variant and the deferred-library fixture manifest
+D1530	1814	The filled "on" form of an icon
+D1531	750	A selected icon tab shows its filled icon
+D1532	1244	Icon buttons: a badge on the icon, a filled selected toggle
+D1533	1465	A tree table sorts within each parent and counts in a footer
+D1534	1446	Outline numbers and follow mode
+D1535	1255	Toasts stack three high
+D1536	1183	A shown secret hides after 30 s
+D1537	1261	A refresh's outcome snackbar
+D1538	1646	Outline filter
+D1539	1399	Table toolbar
+D1540	1528	Virtual grid padding, size levels and paging
+D1541	1527	A removed key-value row collapses
+D1542	1232	A removed list row collapses
+D1543	1329	Sticky list subheader
+D1544	1265	Property grid selected row and draggable divider
+D1545	1463	Pinned first column
+D1546	1428	Navigation split supporting pane
+D1547	2215	Interactive canvas
+D1548	1262	Carousel release steps what the drag carried
+D1549	1197	Selection in an inactive window
+D1550	883	A pane's default size is the caller's
+D1551	2052	Tokenizer profiles in the build manifest
+D1552	2015	A plan over more than one program
+D1553	2120	Borrow origins as facts
+D1554	2898	Partial context answers over the functions that do check
+D1555	3069	The protected data as a view of the guard
+D1556	3050	Thread contexts through external slices, and globals
+D1557	1449	A perturbation fixture for a program's own threads
+D1558	1490	A cast keeps its operand's provenance
+D1559	1861	Build, then freeze
+D1560	1776	Slot map keys name their owner
+D1561	2390	A pin lives to its pointer's last use
+D1562	2302	A container keeps what it is given to own
+D1563	2815	H01's check-bodies cost, counted in instructions and cut
+D1564	2897	H01 inside its check-bodies budget
+D1565	4171	A callee keeps what its body can keep
+D1566	2843	Owned resources split at a runtime bound
+D1567	2413	`try` lowers in a binding and an assignment
+D1568	2703	A list that owns what it holds
+D1569	3636	The comptime interpreter's memory: structs, slices, strings, arrays across calls
+D1570	2692	`phash256` is mtg.studio's card-scan hash, and its limit is the libm's
+D1571	3111	`x.sqlite.sqlite`: the first `e.db` driver, over the host's own SQLite
+D1573	2212	Pointers in the comptime interpreter
+D1574	1841	Errors, several results and try in the comptime interpreter
+D1572	2030	X buttons 6, 7 and 10 on are no event, not a primary click
+D1575	2136	The arena as comptime interpreter memory
+D1591	1591	`x.postgresql.libpq`: binary results, single-row streaming, settled parameter types
+D1592	2504	`x.oracle.mysql`: the text protocol, a client-side scanner, per-OS `unsigned long`
+D1576	1891	Meta-only calls in an evaluated body
+D1577	2023	`neper eval` folds a constant and prints it
+D1578	2226	Work stolen per module does not pay
+D1579	910	C082 moves behind the rest of the queue
+D1580	390	C083 follows C096
+D1581	2466	DWARF lines and symbols in every ELF image
+D1582	4861	Locals, types and frames for a debugger on ELF
+D1583	3353	DWARF and COFF symbols in Windows images
+D1593	4431	Fast float text: Clinger, Eisel-Lemire and Ryu, with every result unchanged
+D1584	1984	Locals scoped to their blocks
+D1585	2262	Unions and tagged unions in debug info
+D1594	2722	Past 48 imports on Linux, and past 58 externs anywhere
+D1595	2469	A labelled field keeps its shape when its label floats
+D1586	3364	The trap table in NEPS layout and its own section
+D1596	2601	Throwaway database servers pick free ports
+D1587	1141	C084 closes; CodeView goes with M4's PDB writer
+D1588	3012	Section 10's restrictions through a kernel's reach
+D1597	1402	The e.db benchmark compares Neper with C, Go and Rust
+D1589	3375	Device-only helpers, Buf elements, generic helpers, caps and the shared total
+D1590	2552	Shared memory as its own address space; C089 closes
+D1598	5570	The controls the accessibility audit found wanting
+D1599	2654	Borrowed rows are a second reader call, not a new lifetime for the first
+D1600	2283	A word-wide byte copy lives in `e.bytes`, because `e.mem` cannot ask its own intrinsics
+D1601	2898	`e.ui.audit`: the accessibility audit, checked in
+D1606	2888	libpq readers take 256 rows per result where libpq has chunked mode
+D1650	4457	`x.microsoft.odbc`: the `e.db` driver over ODBC, named for the API's owner
+D1651	2304	A negative named constant narrower than 64 bits is its 64-bit two's complement
+D1602	2834	The screen-reader bridge on Windows: a UI Automation provider
+D1603	2808	The screen-reader bridge on Linux: AT-SPI over a hand-written D-Bus client
+D1604	1193	The accessibility tree in tree order, and a secret field's value masked
+D1605	4390	Debug struct definitions in text order, so a link does not depend on the artifacts' order
+D1607	5823	A value live across a call prefers a register the call keeps, and arguments move straight to their registers
+D1608	1496	`os.args` reads the command line again rather than a register the entry set
+D1609	2969	A struct literal's padding is zero, as `zero`'s is
+D1640	2525	The compiler's rename checks compare outside the debug sections, and `e.data.list`'s surface is current
+D1641	2840	A call nested in its own arguments is reordered inside the outer call's edit; the Linux goldens catch up with D1602
+D1654	854	`--target` is the spelling `build` and `run` document; `--triple` stays as an alias
+D1655	3622	No general-purpose memory manager; what growth leaves in the arena, measured
+D1660	8215	Memory is measured as commit, and a cold build is taken toward the Delphi model one phase at a time
+D1661	5621	The artifact writer keeps the interface digest alone and the inventory's records, not the buffers they came from
+D1662	7132	A fork's memo slots grow as its types do; comptime parameters are shared, and body hashes cut to the declarations
+D1663	6445	A token is twelve bytes
+D1664	16146	A lowering worker rolls its builder back once a module's artifact is written
+D1665	10847	`os.release` joins the bootstrap's fixed surface
+D1666	12406	Each module's tokens and tree get a reservation of their own
+D1667	14040	The lowered modules' blocks are released after the lowering join
+D1668	19122	A module's tokens and tree go back right after its own artifact
+D1672	4464	An extern's `@import` is part of its signature
+D1675	4350	A struct or union crosses `extern fn` by value, as the target's C compiler passes it
+D1676	4860	A `@cc` function and an `extern fn` type take and return structs the C way too
+D1677	13162	A record's attributes, a kernel's shape, an extern's `...` and device-only are in the signature
+D1642	2706	A release build allocates none of the debug tables it never writes
+D1643	4708	`x.microsoft.tds`: SQL Server's own protocol, spoken inside TLS 1.3
+D1644	2232	`e.net.tls` verifies RSA servers; a NewSessionTicket is read past
+D1645	2626	AES-GCM is bitsliced, and GHASH multiplies
+D1646	3049	OpenSSL as an optional record cipher: `tls.use_aead` and `x.openssl.crypto`
+D1678	2510	A local that collides is renamed by the compiler's own fix (T029)
+D1679	3619	A diagnostic names its subject: the callee, the operator, the counts, the escape, the name (T028)
+D1680	2775	`lang-stats.py` judges the compiler, not the shell (T030)
+D1681	2943	A repeated build is incremental, and an unchanged one stops after the load (C097)
+D1682	2079	`neper build` and `neper run` of a project (T002)
+D1683	1701	What reached "internal compiler failure" is named (T013)
+D1684	1684	A failed assertion's message reaches the test record (T005)
+D1685	1700	The build manifest lists the libraries the image imports (T014)
+D1686	1119	`index --all` indexes the toolchain's library too (T009)
+D1690	2106	`e.text.regex` gains an opt-in backtracker (#352)
+D1691	1805	`e.math.opt.milp`: branch and cut with Gomory mixed-integer cuts (#1987, #1988)
+D1692	1550	`e.algo.check`: explicit-state and bounded model checking (#2224, #2225)
+D1693	1776	`e.debug.dump`: ELF cores and Windows minidumps (#1645)
+D1694	3013	`e.net.auth`: integrated authentication through the host's provider; SQL Server logs in with it (#1403)
+D1695	1651	`e.algo.csp.ac2001`: arc consistency with last-support pointers (#1972)
+D1696	1017	`compare-manifests` holds libraries and assets to their hashes (T022)
+D1697	1148	A project walk names each module under its project root (T003, T015)
+D1698	1297	The operand's source map holds 32 mappings (T015)
+D1699	1263	`fmt --check --json` over a project (T006)
+D1700	1196	`fmt` writes a raw string with the fewest `#` (T006)
+D1701	1437	The compiler's CRC-32C comes from `e.algo.hash` (T021)
+D1702	577	E-LINK-9999 is pinned by a real collision (T013)
+D1703	1728	`dis --att` spells the listing as GNU `as` does (T010)
+D1704	2597	`dis` follows jumps, and decodes every legacy SSE form the emitter writes (T010)
+D1705	1658	`dis` decodes the VEX forms of `--cpu x64-v3` (T010)
+D1706	2195	Section 10's refusals are E-GPU-9999; the last unpinned codes are pinned (T013)
+D1707	2478	`fmt` refuses a layout that does not parse; one statement per line is the grammar's (T006)
+D1708	1764	A comptime parameter is an indexed `parameter`, and `[N]T` references it (T009)
+D1709	1599	`check-project` reports a lib module's errors, once (T003)
+D1710	1606	A merged project stream renumbers a note's `parent` (T003)
+D1711	1181	JSON output that cannot be written is one stderr line and exit 2 (T001)
+D1712	832	The rename turn renames a comptime parameter's `type` uses
+D1713	1721	A source map moves the columns of a mapping's first line (T015)
+D1714	1879	A source map is read member by member (T015)
+D1715	2241	The index names the calls the compiler makes (T009)
+D1716	1448	The test runner renames every `main` of the operand (T005)
+D1717	1461	The Windows error-detail slots are probed (the link/fs_basics race)
+D1718	1335	Every token kind and syntax node kind is pinned (T007, T008)
+D1610	5763	The SPIR-V emitter's design, and C090 split into rows
+D1611	2359	Vulkan is a dynamically loaded runtime, and kernels carry their SPIR-V
+D1612	2097	SPIR-V loops reuse NIR's stack-carried state and join extra back edges
+D1613	1608	SPIR-V f32 division and square root finish with exact integer rounding
+D1614	1990	SPIR-V helpers flatten aggregate parameters into words
+D1615	1624	Vulkan workgroup storage is one word block per module
+D1719	1347	MTG Studio adds two algorithm backlog candidates
+D1720	1355	Subgroup identity is an input, not a helper call
+D1721	1409	CPU subgroup collectives resume by subgroup
+D1722	1662	Kernel capabilities cross the launch boundary
+D1723	1461	Subgroup exchange snapshots raw lane values
+D1724	1918	Chit-chat contributes two reusable algorithm candidates
+D1725	1260	Subgroup reductions reuse the exchange snapshot
+D1726	1210	Checked Vulkan argument blocks start with the fault address
+D1727	741	Device tag traps reuse the fault writer
+D1728	998	Pointer conditions are scalar before the structured branch header
+D1729	1320	SPIR-V guards integer arithmetic before it can fault
+D1730	1298	Aligned SIMD stores report device faults
+D1731	1145	A module without reachable checks has no fault slot
+D1732	969	Whole-image unchecked Vulkan has no fault ABI
+D1733	1562	Vulkan pipeline caches are content-addressed local state
+D1734	1074	Embedded device code carries its writing compiler identity
+D1735	938	A failed Vulkan cache rebuild leaves the valid entry intact
+D1736	2325	GP-09 and GP-10 reuse the acceptance paths that already carry their oracles
+D1737	1479	The performance-language result is one alternating, oracle-checked corpus
+D1738	1103	The first GP performance-language result is published without disguising the gaps
+D1739	925	Shared slice headers keep their address space through NIR
+D1740	1027	Shared expression temporaries are private, not workgroup allocations
+D1741	867	Kernel bool spills use their one-byte storage representation
+D1742	1390	The exact-kernel sweep follows semantic compatibility, not fixture names
+D1743	631	Frame-spill invariant for resumable CPU `for` loops
+D1744	619	CPU launch scratch ends with the launch
+D1745	723	Widen the preaddressed CPU invocation frame to 256 words
+D1746	684	The large-frame parity probe uses floor-width integers
+D1747	715	Select CPU subgroup width at run time
+D1748	996	Compare loop ordinals at CPU barrier rendezvous
+D1749	1006	Bridge the run environment option in the C bootstrap
+D1750	975	Address CPU kernel frame allocations, not every private word
+D1751	886	Hoist only the CPU frame addresses a kernel uses
+D1752	1086	Inline a direct barrier helper into each CPU kernel step
+D1753	813	Grow inline maps only for large barrier helpers
+D1754	1184	Inline only barrier-reachable helper chains into CPU steps
+D1755	1127	Retain pending assignment and binary values across helper barriers
+D1756	1184	Keep earlier arguments and index bases across helper cuts
+D1757	1050	Retain a compound assignment's prior value across a helper barrier
+D1758	836	Inline reached generic barrier instances into CPU kernel steps
+D1759	874	Keep the C bootstrap large enough to build its current compiler
+D1760	1474	Copy barrier helpers with one hidden-slot result
+D1761	1351	Keep every result of a copied barrier helper
+D1762	924	Refuse indirect device calls through function-pointer fields
+D1763	947	Keep earlier return values across later barrier expressions
+D1764	971	Keep slice inputs across barrier-bearing bounds
+D1765	1178	Preserve return values while deferred barriers run
+D1766	1042	Capture deferred call arguments in the CPU invocation frame
+D1767	964	Retain a computed vector operand across a barrier helper
+D1768	720	Retain a range loop's start across a barrier-bearing end
+D1769	863	Keep the self-host gate runnable after C091 fixture additions
+D1770	785	Check device unsigned addition against the remaining range
+D1771	630	Save shared pointers in private SPIR-V slots
+D1772	712	Test cache recovery without requiring canonical driver bytes
+D1773	691	Preserve multi-target assignment addresses across a barrier
+D1774	693	Isolate the Vulkan cache-recovery suite per run
+D1775	810	Preserve earlier assignment places across later place cuts
+D1776	501	Exercise barrier-bearing loop conditions and both bounds
+D1777	888	Keep a protocol iterator address across CPU barrier resumes
+D1778	631	Audit aggregate fields and switch subjects across barrier cuts
+D1779	1130	Discover implicit iterator calls before CPU barrier fission
+D1780	978	Keep iterator discovery compatible with the C bootstrap
+D1781	935	Check implicit iterator device reachability in `check-file`
+D1782	741	Exercise deferred barriers on uniform loop exits
+D1783	786	Keep nested iterator barrier helpers in the CPU regression
+D1784	730	Reconcile the fixture manifest before judging C091 suites
+D1785	1331	Queue the R/Python statistics gaps as L056-L064, exclude trained stacks and dashboards
+D1786	1072	Close CPU barrier fission after the pending-expression audit
+D1787	895	Reuse one lazy staging block per synchronous Vulkan queue
+D1788	1213	Serialize each GPU device's bookkeeping and close transition
+D1789	611	Keep chart geometry renderer-neutral and caller-owned
+D1790	600	Bin histograms into caller-owned counts and contiguous bars
+D1791	531	Keep chart marks separate from scene rendering
+D1792	502	Treat ECDF input as a sorted numeric view
+D1793	2403	Bound untrusted ingestion and execution; publish through exclusive staging
+D1794	722	Reuse statistical kernels for distribution marks
+D1795	1525	Plan a native complete code editor against JustCode and CodeMirror 6
+D1796	698	Keep matrix values separate from palette and panel layout
+D1797	659	Reuse Cartesian marks for area, lollipop and error bars
+D1798	698	Transform Cartesian domains without copying data columns
+D1799	672	Stream SVG from the chart layout contract
+D1800	705	Share facet scales by borrowing explicit Cartesian domains
+D1801	736	Represent confidence bands and dumbbells as existing mark shapes
+D1802	769	Keep chart text as positioned, caller-owned label metadata
+D1803	761	Derive readable numeric ticks without owning text storage
+D1804	673	Compose bar series from existing Bar layouts
+D1805	802	Reuse chart labels for category centers and series legends
+D1806	694	Derive distribution variants from histogram and axis strokes
+D1807	587	Track the complete code editor in the serial backlog
+D1808	642	Compose point-line charts and jittered strips from existing marks
+D1809	856	Require JustCode coverage plus the TIOBE top 30
+D1810	701	Pack beeswarm dots and stack histogram observations
+D1811	767	Do not shift pixels beneath unchanged scene paint
+D1812	1107	Adopt JustCode extras at their reusable library or tooling boundary
+D1813	723	Show numbered unfinished work by category in generated progress
+D1814	656	Derive waterfall bars and connectors from cumulative levels
+D1816	1292	Queue vendor chart gaps on the existing chart architecture
+D1815	682	Export chart rasters before opening arena-backed PNG writers
+D1817	1364	Queue top-50 BI remainder as L073-L075, keep AI/service visuals out
+D1818	600	Compose bullet charts from existing bar and rule layers
+D1819	1177	Queue testable Delphi-RTL gaps as L076-L086, defer radio/push/sensors
+D1820	684	Keep Pareto counts and cumulative share as separate layers
+D1821	1103	Queue VCL/FCL control gaps as L087-L089
+D1822	726	Compose pie and donut slices as Area polygons
+D1823	764	Reuse rectangular and polygon marks for grid and stage compositions
+D1824	1085	Queue Celvyx visual gaps as L090-L099
+D1825	704	Map bubble values to circle area on scatter scales
+D1826	820	Keep fitted and covariance overlays on shared scatter domains
+D1827	902	Distinguish OLS mean confidence from prediction intervals
+D1828	753	Compose category-centered bar and line layers with independent y axes
+D1829	857	Keep ridgeline heights comparable across groups
+D1830	769	Keep OHLC semantics in geometry, not the paint backend
+D1831	747	Model a treemap as hierarchy layout over Bar leaves
+D1832	811	Share hierarchy validation between treemap and sunburst
+D1833	674	Reuse proportional hierarchy totals for an icicle
+D1834	816	Place hierarchy circles on safe sibling rings
+D1835	593	Mirror population bars on one scale
+D1836	819	Keep Sankey flow scale shared across columns
+D1837	623	Conserve alluvial flow on adjacent stages
+D1838	698	Center streamgraph layers on one shared scale
+D1839	659	Preserve asymmetric matrix weights in chord ribbons
+D1840	706	Make mekko cell area the encoded quantity
+D1841	686	Separate measured two-set Euler from nominal three-set Venn
+D1842	636	Keep rank-over-time ribbons ordinal and tie-stable
+D1843	751	Compose target gauges and KPI cards from existing marks
+D1844	811	Keep word-cloud packing font-metric driven and renderer-neutral
+D1845	778	Share ordered interval geometry across state and status histories
+D1846	746	Reuse Line and sparse Heatmap geometry for compact time reports
+D1847	607	Compose discrete events and report bars from existing marks
+D1848	672	Keep agreement statistics outside chart geometry
+D1849	617	Group tied classification scores before drawing diagnostic curves
+D1850	628	Keep classifier diagnostics as statistics plus existing marks
+D1851	758	Extend the ROC sweep without a second threshold engine
+D1852	639	Queue XLSX worksheet encode as L100 for grid/report export
+D1853	824	Derive OLS influence values once, then reuse existing marks
+D1854	680	Group tied follow-up times before drawing survival steps
+D1855	739	Keep Shewhart limits in statistics and reuse Cartesian marks
+D1856	997	Let subgroup size shape attribute-control limits
+D1857	932	Reuse run and limit layers for X-bar/S, CUSUM and EWMA
+D1858	1146	Estimate Laney dispersion from adjacent standardized subgroups
+D1859	1213	Rare-event gaps use geometric limits; elapsed times use exponential limits
+D1860	1163	Mark the completing point for eight SPC special-cause tests
+D1861	1027	Phase Individuals limits and stop run tests at phase boundaries
+D1862	894	Estimate attribute-control limits independently by phase
+D1863	859	Re-estimate Laney dispersion within each phase
+D1864	1227	Re-estimate X-bar/R and X-bar/S limits by phase
+D1865	704	Parallel coordinates reuse independent segment marks
+D1866	498	Normal P-P shares the Q-Q point-and-reference adapters
+D1867	605	Scatterplot matrices share facet and scatter geometry
+D1868	631	Boxen reuses R7 quantiles and Box marks
+D1869	670	Mosaic separates area from contingency residual colour
+D1870	766	Association plots encode signed departures from independence
+D1871	809	Fourfold geometry composes existing area and line marks
+D1872	872	Horizon bands split at every threshold crossing
+D1873	1323	Queue PyPI top-50 gaps as L101-L111, AWS excluded
+D1874	739	Seasonal subseries compose line traces and mean rules
+D1875	769	Fan intervals share one scale and retain quantile nesting
+D1876	846	Classical additive decomposition owns calculation and four-panel layout
+D1877	1009	Queue Go-library gaps as L112-L123, cloud and frameworks out
+D1878	648	Correlogram shares Rug strokes across ACF and PACF
+D1879	716	Empirical variogram keeps pair statistics beside scatter geometry
+D1880	840	Radar and rose reuse polar Area polygons and Rug guides
+D1881	1302	Queue Rust-crate gaps as L124-L135 plus six backlog follow-ons
+D1882	676	Ternary diagrams close three parts into reusable Scatter/Rug marks
+D1883	751	Quiver arrows reuse Cartesian tail mapping and Rug segments
+D1884	759	Streamlines integrate a regular vector field into independent strokes
+D1885	850	Share a two-dimensional delay embedding across phase and recurrence plots
+D1886	726	Drawdown and cohort retention reuse Area and Heatmap
+D1887	885	Contour levels become isolines and clipped scalar bands
+D1888	870	Finance panels align x and state their return semantics
+D1889	848	Queue Zig gaps as L136-L137 plus two backlog follow-ons
+D1890	1116	Queue .NET gaps as L138-L152 plus five backlog follow-ons
+D1891	973	Queue Java gaps as L153-L161 plus nine backlog follow-ons
+D1892	658	Gantt progress composes two Bar layers on a shared time axis
+D1893	611	Milestone roadmaps reuse time positions with filled diamond marks
+D1894	647	Burndown and burnup share explicit Line domains
+D1895	687	Earned-value curves keep the plan horizon separate from observations
+D1896	661	Risk matrices separate policy ratings from observed counts
+D1897	802	Resource histograms preserve assignment-boundary peaks
+D1898	748	Queue LLMx harness gaps as T036-T038 plus six backlog follow-ons
+D1899	810	Swimlane flows cross role partitions without claiming BPMN conformance
+D1900	870	Kanban boards show WIP breaches without discarding cards
+D1901	1027	PERT/CPM separates task timing from network geometry
+D1902	928	Keep value-stream metrics distinct from readable stage placement
+D1903	831	SIPOC is a fixed five-column overview, not an executable flow
+D1906	685	Count gallery deliverables, not grouped catalogue entries
+D1907	798	Evaluate decision trees before drawing their geometry
+D1904	709	Record the three-harness snapshot in T026 and T028
+D1908	633	Org charts use leaf-weighted hierarchy geometry
+D1909	649	Layer dependency graphs by longest path through a DAG
+D1910	605	Flowcharts keep control-flow geometry separate from DAG ranking
+D1911	683	State machines pair deterministic events with explicit diagram geometry
+D1912	646	Sequence diagrams preserve message order and explicit activations
+D1913	701	ER diagrams keep schema ownership and cardinality visible
+D1914	731	Branching process maps conserve split flow and expose losses
+D1915	775	Stem-and-leaf rows preserve duplicates and signed reconstruction
+D1916	676	Floating range bars keep bounds and interval fill separate
+D1917	751	Probability paper separates observed values from percent-scale geometry
+D1918	756	Spine plots color outcomes without changing count-proportional area
+D1919	668	Hexagonal bins conserve observations at panel boundaries
+D1920	659	Rectangular 2D bins reuse the matrix renderer
+D1921	659	2D KDE contours share the statistical kernel and contour layout
+D1922	673	Raincloud layers share the half-violin value axis
+D1923	643	Slopegraphs use a shared paired-value scale
+D1924	687	Reuse ordered paths and exact bins for paired scatter views
+D1925	1380	Separate modelled dose means from observed interval hazards
+D1926	939	Influence bubbles reuse one-predictor OLS diagnostics
+D1927	1122	Compose a normal capability sixpack for individuals
+D1928	909	Keep fishbone categories and nested causes in one ordered input
+D1929	759	Make the cause–effect tree a distinct hierarchical layout
+D1930	1110	Put Type-I censored lifetimes on Weibull probability paper
+D1931	1047	Keep the single-sample OC curve tied to its sampling model
+D1932	1298	Derive Gage R&R bars from a balanced crossed random-effects study
+D1933	989	Separate within-group and between-group lines in multi-vari charts
+D1934	916	Raw main effects keep factors independent and expose counts
+D1935	945	Interaction plots keep factor-level series independent
+D1936	962	Put three two-level raw cell means at cube vertices
+D1937	971	Spectrogram geometry consumes existing STFT coefficients
+D1938	883	Reproject spectrogram power as independent waterfall traces
+D1939	929	Bode plots share log frequency and keep magnitude and phase separate
+D1940	1010	Nyquist charts keep sampled branches separate and axes equally scaled
+D1941	1006	Share a perspective camera for three-dimensional chart families
+D1942	878	Extrude joint x-y bins through the shared 3-D camera
+D1943	1109	Keep density surfaces and wireframes on one regular 3-D grid
+D1944	1262	ANOM decision limits use pooled within-group variation and an explicit critical
+D1945	1121	Individual Hotelling T² charts distinguish Phase I and Phase II limits
+D1946	1492	Generalized variance exposes the moment-normal approximation explicitly
+D1947	1378	MEWMA separates exact finite-time scores from limit calibration
+D1948	1048	Focused normal capability distinguishes empirical and fitted tails
+D1949	683	Separate chart documentation from readiness reporting
+D1950	1361	Nonnormal capability starts with a labeled lognormal MLE
+D1951	613	Binomial attribute capability is defective-unit analysis, not defect-rate analysis
+D1952	1016	Balanced batch capability uses explicit ANOVA variance components
+D1953	1090	Gage linearity fits replicate bias against ordered reference standards
+D1954	885	Queue best-LLM-language work after charts: T2 slices, demand order, E2 gate
+D1955	680	Finish chart work before other unfinished capabilities
+D1956	863	Attribute agreement separates item-level repeatability from pooled ratings
+D1957	538	Keep the local chart gallery self-contained
+D1958	763	Keep crossed gage runs at individual-measurement granularity
+D1959	916	Share explicit map windows across polygon and symbol charts
+D1960	457	Render chart gallery thumbnails as inline SVG
+D1961	954	Keep report aggregates distinct from their rendered cells
+D1962	913	Treat a future-state value stream as an explicit target plan
+D1963	1379	PK/PD mathematics in e.math.pkpd
+D1964	1020	Separate exact cap-table share counts from percentage geometry
+D1965	899	Keep tornado assumption identity across response reversal
+D1966	908	Football-field ranges share one caller-declared valuation basis
+D1967	922	Yield curves keep supplied rates and actual tenor spacing
+D1968	937	Monte Carlo previews summarise caller-owned trial outcomes
+D1969	882	Decomposition trees retain explicit aggregate semantics
+D1970	708	Calendar axes use civil-day distances and explicit month breaks
+D1971	739	Discrete bar axes preserve explicit factor order and empty levels
+D1972	685	Category facets bind factor levels to shared-scale panels
+D1973	652	Wrapped legends use caller-measured text widths
+D1974	714	Missing scatter cells use explicit presence masks
+D1975	646	Chart clipping is an explicit adapter scope
+D1976	668	Weighted plot grids compose independent chart specifications
+D1977	529	Shared facet guides label only exterior panel edges
+D1978	692	Scatter selection preserves source rows and SVG focus targets
+D1979	856	VAR(p) and structural time-series in e.algo.timeseries (L059)
+D1980	649	ARIMA and inventory extensions in e.algo.timeseries (L017)
+D1981	737	Safety-signal detection in e.algo.stat.safety (L016)
+D1982	558	Random-slopes LMM in e.algo.stat.mixed
+D1983	702	Binomial/Poisson GLMM by PQL in e.algo.stat.mixed
+D1984	594	Hypergeometric probabilities in e.algo.stat (L001)
+D1985	681	Survival-analysis extensions in e.algo.stat.survival (L005)
+D1986	604	Diagnostic-test statistics in e.algo.stat.diagnostic (L008)
+D1987	695	Meta-analysis core in e.algo.stat.meta (L006)
+D1988	638	Robust total-least-squares line fitting in e.gfx.vision (L002)
+D1989	762	Generalized regression extensions in e.algo.stat.regression (L007)
+D2101	903	Chart palettes guarantee contrast on the written bytes
+D2102	996	SVG charts take the scene's brushes and can carry their face
+D2103	1060	Chart colour-vision checks simulate dichromats and score with CIEDE2000
+D2104	943	Point labels are placed greedily and dropped rather than overprinted
+D2105	968	Locale-aware chart tick text lives in its own module
+D2106	981	Charts join e.ui through a canvas custom that lays out at paint time
+D2107	1285	Chart PDFs use built-in Helvetica and caller-owned content storage
+D2108	890	Chart performance is measured against matplotlib in-process
+D2109	905	Close L061 and queue the R chart benchmarks as L162
+D2110	739	Queue faster PNG encoding as L163
+D2111	993	SVG charts write numbers to 0.01 px and omit default opacity
+D2113	842	Linux programs end with exit_group when main returns
+D2118	640	saxpy names the device it skips for flushing denormals
+D1669	15106	The lowering starts without committing what its first module does not touch
+D1670	14786	The crew shares the parameter and return tables through windows
+D1671	9009	The crew shares the function tables through windows too
+D2112	929	Network charts use deterministic Fruchterman-Reingold layout
+D2114	1114	Chart widgets zoom, pan and hover through a wheel-taking region
+D2115	1420	GeoJSON polygons feed choropleths; equal-interval classes get a legend
+D2116	939	3-D charts orbit by dragging
+D2117	1400	Hierarchies get a layered layout; Barnes-Hut waits for large graphs
+D2119	2786	NeperOS: a Neper microkernel for Pixel phones, staged from an aarch64 back end
+D2120	1461	LOESS is the smoothing overlay, with a band from the smoother matrix
+D2121	1873	Combos bind series to any number of axes; a missing value breaks the line
+D2122	1180	The plan checker takes import renames from the source it checks
+D2123	5217	The aarch64 back end: AAPCS64 over the x64 selector's shape
+D2124	2502	AAPCS64 passes C aggregates by its own rules, and the arm64 test bed is real
+D2125	1338	NeperOS stage 1 is four queue items, and a kernel image is position-independent
+D2126	4544	aarch64-none: a kernel image, a runtime of hooks, and the machine as runtime calls
+D2127	3705	NeperOS stage 1b: GICv3, the timer, preemptive EL0 threads and isolation
+D2128	4056	NeperOS stage 1c: capabilities, synchronous IPC and the boundaries they draw
+D2129	1493	NeperOS stage 1d begins: the PCI ECAM enumerated for virtio devices
+D2130	2432	The readiness page is four colored group cards and one backlog
+D2131	2760	NeperOS stage 1d: the modern virtio-pci transport and an entropy driver
+D2132	1927	NeperOS stage 1d: the virtio-blk driver reads and writes a disk sector
+D2133	2087	NeperOS stage 1d: the virtio-console driver transmits over port 0
+D2134	2603	NeperOS stage 1d: EL0 raw-memory intrinsics, the floor for user-mode drivers
+D2135	1383	NeperOS stage 1d: the virtio transport's DMA is location-agnostic
+D2136	1828	A module-scope `var` initialised to a bool folds like an integer one
+D2137	2300	NeperOS stage 1d: mapping a device's MMIO into an EL0 driver
+D2138	2505	NeperOS stage 1d: the entropy driver runs as an EL0 user-mode server
+D2139	2613	NeperOS stage 1d: all three virtio drivers are EL0 user-mode servers
+D2140	1244	NeperOS stage 1d: a negative prober shows the drivers' confinement from outside
+D2141	2722	NeperOS stage 1d: the drivers hold their interrupt, and the entropy server waits on it
+D2142	2267	NeperOS stage 1d closes: the console server echoes, so C103 is done
+D2143	1928	NeperOS stage 2 opens (C104), and is blocked on a test environment
+D2144	2272	NeperOS stage 2: an ns16550 console, and crosvm cannot emulate aarch64 on this x86-64 host
+D2145	1810	the EL0 user window moves to the top of the address space, off the RAM gigabyte
+D2146	2505	PCI over CAM as well as ECAM, and each virtio BAR mapped by the capability that names it
+D2147	1958	EL0 page mappings are non-global, so a thread never reads another's at USER_BASE
+D2148	2954	NeperOS phone shell: path A, a guest on the Pixel with an Android bridge for the radios
+D2149	1637	a virtio-vsock driver: a NeperOS guest opens a STREAM connection to an AVF host
+D2150	1723	`os.launch` and `os.reap`: the system-call surface for NeperOS processes (C105 foundation)
+D2151	1823	C105 closes: processes from an initrd archive, with launch/reap/exit
+D2152	1789	C106 foundation: a persistent filesystem on virtio-block
+D2153	2869	C106 closes: an EL0 filesystem server, capability-gated over IPC
+D2154	2096	C107 begins: the e.os NeperOS variant, with e.io running on it
+D2155	1634	C107: e.time on NeperOS, over a clock system call
+D2156	1025	C107: e.fmt on NeperOS (the json codec, over an e.io writer)
+D2157	2208	C107: e.thread on NeperOS, threads in a shared address space
+D2158	2735	C107: e.fs on NeperOS, file I/O through the C106 server
+D2159	2006	C108 closes: a virtio-gpu 2D display server
+D2160	1674	C109 closes: touch and key input over virtio-input
+D2161	1694	C110 begins: the CPU rasterizer draws on NeperOS
+D2162	1759	C110: a compositor over shared surface frames
+D2163	1452	C110: input from C109 routed to the focused surface
+D2164	1512	C110: damage-only flush, and an optional input server
+D2165	1756	C110: e.gpu's CPU backend compiles and links for NeperOS
+D2166	1440	C110: e.gpu's CPU backend runs on NeperOS over a large program arena
+D2167	1511	C110: e.gfx.scene renders through the CPU backend on NeperOS
+D2168	3048	C110: the e.ui stack renders on NeperOS, matching its host pixel hash
+D2169	2262	C110: the e.ui window backend presents over the compositor
+D2170	1859	C110: e.ui text renders from a font read from the filesystem, closing C110
+D2171	1923	C111: the system status service
+D2172	1096	C112: the launcher's layout skeleton
+D2173	1224	C112: the launcher presented over the compositor
+D2174	1786	C112: a PNG wallpaper read from the filesystem, scaled to cover
+D2175	1358	C112: the launcher's top bar driven by the live C111 status
+D2176	1479	C112: app-icon labels via a built-in bitmap digit font
+D2177	829	C112: the launcher pages past 40 icons
+D2178	1654	C112: the launcher's tap-to-launch and Home round trip
+D2179	606	C113: the Clock app face
+D2180	603	C113: the Calculator app face
+D2181	507	C114: the Tasks app face
+D2182	1007	C114: the Settings app face
+D2183	1538	e.fmt breadth on NeperOS: the fmt fixture encodes a second codec
+D2184	1944	e.fmt breadth on NeperOS: a third codec (ini), and the gpu-boot toolchain wall
+D2185	1339	e.thread group spawn on NeperOS (shell boot verifiable), and the miscompile is narrow
+D2186	1130	e.time calendar breadth on NeperOS: a civil date, not just a raw clock read
+D2187	1041	e.io buffer round-trip on NeperOS: the fifth e.os-surface module gets shell-boot breadth
+D2188	2099	the Clock app shows the live time; and the "toolchain wall" was a test-harness error
+D2189	1037	the Calculator actually computes (not a fixed "42" face)
+D2190	1012	the Tasks app computes its done-state through a toggle engine
+D2191	1006	the Settings app computes its on-state through a toggle engine
+D2192	2126	the unified shell: launcher hosted over the compositor with live tap input (sidesteps the heisenbug)
+D2193	1183	the unified shell shows live status (the clock) in its top bar
+D2194	1013	Boot words match whole words; the "AUX heisenbug" was `prodshell` containing `shell`
+D2195	1179	The unified shell reads the C111 status service as a second process
+D2196	1336	The unified shell's wallpaper is read from the C106 filesystem; C112 closes at 1.0
+D2197	927	App faces present through the compositor when started as the compositor app
+D2198	1468	`e.gfx.svg`: an SVG subset drawn into a scene builder
+D2199	1000	The Pixel 9 Pro display plan (C115)
+D2200	1184	The icon set: SVG sources, embedded by a script, drawn through `e.gfx.svg`
+D2201	1938	The display is the Pixel 9 Pro's 1280x2856 end to end
+D2202	1475	The Neper crater wallpaper: resampled once, shipped in the initrd, read in place
+D2203	1360	Icons for every app in the Desktop `ux` folder
+D2204	2378	The lunar fonts and the lock screen
+D2205	2364	Icon taps, full-screen apps and Lunar Calc
+D2206	1326	the coverage resolve starts its running sum where the edges do, not where the damage does
+D2206	1864	Calc: scientific and convert tabs, Android's units, and the input driver's buffers
+D2207	2439	Clock, and a tick for apps that animate
+D2208	1448	The Stopwatch follows Android's look
+D2209	1338	Every Clock tab on Android's light look
+D2210	775	The Clock keeps Android's layout in the earlier colours
+D2211	943	Tasks, after Google Tasks
+D2212	1331	Messages, after Google Messages; Stocks, Weather and SSH join the grid
+D2213	1168	Stocks on sample data; networking and live data queued
+D2214	911	Weather on a sample forecast; live data queued
+D2215	1212	SSH after Termius, on a local demo session; the real client queued
+D2216	1662	Wallet after Google Wallet: cards, bank accounts and documents on sample data; validators in e.valid
+D2217	1364	Camera after the Pixel camera, on sample scenes; the real sensor queued
+D2218	1645	Photos after Google Photos on sample scenes; shared scenes; Document and Dynamic icons
+D2219	1269	Files after Android's Files, on a sample tree; real storage queued
+D2220	1750	Settings after the Pixel's, on sample values; the system link queued
+D2221	814	A shared helper module for the apps; room for 48 archive entries
+D2222	1014	Call after the Pixel's phone, on sample contacts; telephony queued
+D2223	883	Mail after Gmail, on a sample mailbox; a real client queued
+D2224	1092	Browser after Chrome, on sample pages; a real engine queued
+D2225	1208	Maps after Google Maps, on a sample city; real data queued; Steps icon redrawn
+D2226	942	Compass on a sample heading; sensors queued; Steps toes as ellipses
+D2227	960	Level (a bubble level and protractor) on a sample tilt; sensors queued
+D2228	1100	Flashlight with patterns and Morse, on the screen as the light; the LED queued
+D2229	797	Chat after Slack and Google Chat, on sample rooms; a service queued
+D2230	985	Meet (video meetings after Google Meet) as a demo meeting; real calls queued
+D2231	1012	Recorder after the Pixel's, on a sample wave; real audio queued
+D2232	997	Translate after Google Translate, on a sample phrase book; a real model queued
+D2233	1008	Steps after Google Fit, on sample steps; the sensor queued
+D2234	1289	Lunatris, a falling-blocks game; the name left open
+D2235	1527	Secure: logins and real one-time codes on a sample vault; the encrypted store queued
+D2236	1086	AI (a bring-your-own-key chat) with canned replies; the real client queued
+D2237	1290	Document: a viewer with syntax highlighting, on sample files; real readers queued
+D2238	1557	Dynamic: apps from a prompt, shown with three templates; the contract queued
+D2239	1061	A boot can launch any number of apps: the full-screen app arena is reused
+D2240	1134	The shell gives back what a home redraw takes, so Home survives any number of app returns
+D2241	598	Lunatris is renamed Blocks
+D2242	1830	App frames no longer leak: the arena is given back at the start of each frame
+D2243	1693	The NeperOS app fixtures are a table
+D2244	1464	NeperOS networking starts with a polled virtio-net driver and an IPv4 stack in one user-mode server
+D2245	933	NeperOS TCP is a stop-and-wait client with an in-order receive ring
+D2246	1539	TLS 1.3 runs over the TCP client, with entropy from a random server over IPC
+D2247	3611	Apps reach the network through two endpoint capabilities to a network server that owns TCP, TLS and the roots
+D2248	2025	A driver server's aux area has a page of its own; it used to overwrite images over 256 KB
+D2249	3922	SHA-384, ECDSA P-384 and RSA-SHA384/512 verification, so the real internet's chains validate (C144)
+D2250	831	C115 is closed and its leftovers are three items
+D2251	3857	Stocks reads live data: Coinbase candles and Twelve Data, through a small HTTPS client; Stooq is out (C118)
+D2252	3375	Secure keeps its vault encrypted on disk, behind the master password (C116)
+D2253	1559	L069 is closed: the 3-D charts were delivered; what was missing was independent references
+D2254	1397	L070 is closed: the maps were delivered; they get independent references and every refusal
+D2255	1442	L071 closed: SPC estimators and multivariate charts against numpy and scipy; Hotelling `alpha` is one-sided
+D2256	986	L072 closed: ribbons, gauges, KPIs and the decomposition tree were delivered; the missing piece was selection over rectangles and tree drill
+D2257	1385	L073 closed: mekko, Euler, Venn and word clouds against independent references; the Venn triangle is now centred
+D2258	1055	L074 closed: the state timeline against a Python replay on a seeded epoch-millisecond history
+D2259	1466	L075 closed: cross-tab, matrix report, in-cell bars and sparklines against a numpy replay
+D2260	1825	L092 closed: ICE/PDP curves, silhouette plot and missingness map
+D2261	1294	L093 closed: 2.5D columns and pies as styling on 2-D geometry
+D2262	1665	L094 closed: pie-of-pie and bar-of-pie
+D2263	2114	L095 closed: parallel-line assay, Schild plot and standard-curve readback
+D2264	1488	L096 closed: the ROC extensions against scikit-learn and numpy
+D2265	2087	L097 closed: Levey-Jennings, Lin's CCC, symmetry plot and Box-Cox profile
+D2266	1804	L076 closed: e.text.mask, Delphi TMask-style filename masks
+D2267	2462	L077 closed: e.math.units, a dimensioned unit-conversion registry
+D2268	2249	L078 closed: e.crypto.otp, HOTP and TOTP
+D2269	2621	L079 closed: the NTP/SNTP wire codec in e.time.sync
+D2270	3011	L080 closed: e.fmt.soap, SOAP 1.1/1.2 envelopes, faults and a WSDL 1.1 reader
+D2271	2671	L081 part 1: e.fmt.xsd, the XML Schema 1.0 built-in datatypes
+D2272	3282	L081 part 2: e.fmt.xsd.schema, structural validation against a schema
+D2273	3376	L081 part 3a: e.fmt.xpath, the XPath 1.0 engine under XSLT
+D2274	1567	L081 part 3b: e.fmt.xslt, the XSLT 1.0 core
+D2275	2298	L082: e.net.smtp, the SMTP submission client
+D2276	2922	L083: e.net.pop3 and e.net.imap, mailbox fetch
+D2277	2939	L084: e.net.ftp, the FTP/FTPS client
+D2278	3397	L085: e.net.ldap, the LDAPv3 client
+D2279	4470	L086: e.net.mdns, multicast DNS and DNS-SD
+D2280	5233	L087: the ribbon in e.ui.navigation
+D2281	4516	L088: the app-drawn caption, in e.ui.window and e.ui.navigation
+D2282	5288	L089: the banded report engine, e.ui.report
+D2283	6471	L090: the spreadsheet grid, e.ui.sheet
+D2284	6216	L091: the flow (node-graph) editor, e.ui.flow
+D2285	2271	Stocks: Alpha Vantage and Polygon as stock providers, and a symbol search (C118)
+D2286	3076	Weather reads Open-Meteo: live forecasts, place search, per-hour conditions, the place's own time zone (C119)
+D2287	2348	L003: Ristretto255 in `e.crypto.ristretto`, checked against an independent RFC 9496 reference
+D2288	1363	L004: `padme_ceil` in `e.algo.privacy`
+D2289	1828	L018: `dependency_order` in `e.algo.schedule`
+D2290	2214	L019: IPv4 CIDR math in a new `e.net.cidr`
+D2291	2203	L020: loose version comparison in `e.fmt.semver`, ISO day counts in `e.time.calendar`
+D2292	2418	L021: Terraform string edits in a new `e.text.edit`
+D2293	2265	L022: Terraform collection operations in a new `e.algo.collect`, over `e.fmt.json` values
+D2294	2033	L023: Terraform's encoding functions as `e.fmt.encode`, wrappers with contracts
+D2295	2358	L024: stable finding ids and the idempotent merge, in a new `e.algo.findings`
+D2296	2531	L025: the Spartan filter predicates as `e.algo.predicate`
+D2297	3482	L026: the formula engine core as `e.algo.formula`, checked against appdor's own engine
+D2298	3167	L027: the formula function library as `e.algo.formula.*`, checked against appdor's own engine
+D2299	2589	L028: formula dialect translation as `e.algo.transpile`, the seven dialects as a data table
+D2300	3079	L029: the formula-to-SQL compiler and pushdown classifier as `e.algo.formula.sql`
+D2301	2861	L030: the identifier checksum suite as `e.algo.checksum`
+D2302	3554	L031: record validation as `e.data.validate`, checked against appdor's validation engine
+D2303	3302	L032: the table query engine as `e.algo.view` and `e.algo.pivot`
+D2304	3229	L033: keyset paging, row windows, batch ledgers and undo as `e.algo.page` and `e.algo.batch`
+D2305	1489	L034: full-text search and the indexing pipeline as `e.algo.fulltext`
+D2306	3525	L035: project scheduling as `e.algo.project` and zoned workflow triggers as `e.algo.trigger`
+D2307	2365	L036 (part one): status workflows as `e.algo.fsm`
+D2308	835	T026: the traps section lands in the language card
+D2309	685	T038: agent-ingestible digests of the queue and the decision log

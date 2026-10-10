@@ -1698,17 +1698,6 @@
       "evidence": "Planning only (D1898). lang-stats pools opencode-database rows under DeepSeek with no opencode split and prices everything at Opus rates, so free-model harness work is invisible and mispriced. Split the harness, read model identity where recorded, and price free tiers at zero before any ctx-cost claim is trusted."
     },
     {
-      "id": "T038",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 38,
-      "title": "Agent-ingestible queue and decision digests",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Planning only (D1898). decisions.md is 2.4 MB and queue evidence runs to KBs per item: nothing is ingestible whole and routine greps overflow tool caps. Emit a compact machine index (ids, scores, one-line status) plus an evidence-length budget in the renderer, keeping render_tasks.py per-item files as the deep layer."
-    },
-    {
       "id": "T039",
       "category": "tooling",
       "group": "Tooling",
