@@ -34,6 +34,8 @@ python3 "$repo/scripts/lint_bootstrap.py" "$repo/src"
 python3 "$repo/scripts/source_metrics_test.py"
 # The agent routes (T036): the card, context-file, a patch tool and check-fixture stay reachable.
 python3 "$repo/scripts/check_agent_routes.py"
+# UI resource and command consistency audit fixtures (T035).
+python3 "$repo/scripts/ui_audit_test.py"
 # Every bootstrap frame has to cover the temporaries its statements allocate. A
 # frame sized by guess rather than by measurement lets a deep statement address
 # below rsp, into the outgoing argument area and past the stack pointer.

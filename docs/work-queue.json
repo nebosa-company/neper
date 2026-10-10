@@ -966,10 +966,10 @@
       "group": "Validation",
       "order": 35,
       "title": "UI resource and command consistency audits",
-      "score": 0,
+      "score": 0.5,
       "model": "sonnet",
       "thinking": "medium",
-      "evidence": "Planning only (D1812). Reference: JustCode tests/consistency.test.js. Not yet: extend existing Neper validation tools to check icon/resource references, translation-key coverage and duplicate keys, locale placeholder agreement, command/menu callback contracts and mnemonic conflicts. Consume actual resource/command registries and generated manifests; do not claim arbitrary dynamic source references can be proven by regex. Include small malformed-registry cases proving each check fails and wire checks into the existing build/test entry point with actionable locations. Keep repository-specific manifests, rules and CI wiring in scripts/tests; add no runtime validation framework or standard-library dependency."
+      "evidence": "Planning only (D1812). Reference: JustCode tests/consistency.test.js. Not yet: extend existing Neper validation tools to check icon/resource references, translation-key coverage and duplicate keys, locale placeholder agreement, command/menu callback contracts and mnemonic conflicts. Consume actual resource/command registries and generated manifests; do not claim arbitrary dynamic source references can be proven by regex. Include small malformed-registry cases proving each check fails and wire checks into the existing build/test entry point with actionable locations. Keep repository-specific manifests, rules and CI wiring in scripts/tests; add no runtime validation framework or standard-library dependency. DELIVERED (D2315): scripts/ui_audit.py and scripts/ui_audit_test.py (one malformed manifest per check, run by both suites). NOT DONE: running it against a real registry manifest; the repository has no resource, translation or command catalogue to emit one."
     },
     {
       "id": "L098",

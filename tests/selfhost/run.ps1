@@ -42,6 +42,9 @@ if ($LASTEXITCODE -ne 0) { throw 'scripts/source_metrics_test.py failed' }
 # The agent routes (T036): the card, context-file, a patch tool and check-fixture stay reachable.
 & python (Join-Path $repo 'scripts\check_agent_routes.py')
 if ($LASTEXITCODE -ne 0) { throw 'scripts/check_agent_routes.py failed' }
+# UI resource and command consistency audit fixtures (T035).
+& python (Join-Path $repo 'scripts\ui_audit_test.py')
+if ($LASTEXITCODE -ne 0) { throw 'scripts/ui_audit_test.py failed' }
 # Every bootstrap frame has to cover the temporaries its statements allocate. A
 # frame sized by guess rather than by measurement lets a deep statement address
 # below rsp, into the outgoing argument area and past the stack pointer.
