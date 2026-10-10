@@ -3370,6 +3370,27 @@ gfx_cssvalue_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/gfx-cssvalue-selfhost"
 gfx_cssvalue_output=$("$test_build/gfx-cssvalue-selfhost")
 [ "$gfx_cssvalue_output" = 'gfx cssvalue ok' ]
+# `e.fmt.css.container`: three-valued container-query conditions against Vaper's own Dart code
+# # (400 trees at ten sizes, D2343).
+text_css_container_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_css_container/src/main.e" "$repo" x64 linux "$test_build/text-css-container-selfhost" -j 2)
+[ "$text_css_container_written" = 'executable written' ]
+chmod +x "$test_build/text-css-container-selfhost"
+text_css_container_output=$("$test_build/text-css-container-selfhost")
+[ "$text_css_container_output" = 'css container ok' ]
+# `e.fmt.css.match`: selector matching, :has(), An+B, state and form pseudo-classes over an HTML document
+# # against Vaper's own matcher (560 documents and selector lists, D2343).
+text_css_match_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_css_match/src/main.e" "$repo" x64 linux "$test_build/text-css-match-selfhost" -j 2)
+[ "$text_css_match_written" = 'executable written' ]
+chmod +x "$test_build/text-css-match-selfhost"
+text_css_match_output=$("$test_build/text-css-match-selfhost")
+[ "$text_css_match_output" = 'css match ok' ]
+# `e.fmt.html.accessible`: roles, accessible names, states and the accessibility tree of an HTML document
+# # against Vaper's own builder (220 documents, D2343).
+html_accessible_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/html_accessible/src/main.e" "$repo" x64 linux "$test_build/html-accessible-selfhost" -j 2)
+[ "$html_accessible_written" = 'executable written' ]
+chmod +x "$test_build/html-accessible-selfhost"
+html_accessible_output=$("$test_build/html-accessible-selfhost")
+[ "$html_accessible_output" = 'html accessible ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

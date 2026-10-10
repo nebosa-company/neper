@@ -15350,6 +15350,138 @@ fn parse_transform_origin(a: *mem.Arena, raw: str) -> (f64, f64)
 
 CSS value microsyntax (L039), after Vaper's `vaper_css_values/lib/src/value.dart`: lengths with `calc()`, `min()`, `max()`, `clamp()`, `abs()`, `hypot()`, `mod()`, `rem()` and `round()` reduced to a pixel offset plus at most one relative unit (`parse_length`, `to_px`), numeric math expressions (`parse_css_number`), angles and times, `light-dark()`, and colours -- named, hex, `rgb()`, `hsl()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color()` over the predefined RGB and XYZ spaces, relative colour syntax, `color-mix()` and `contrast-color()` (`parse_color`) -- plus 2D transform lists reduced to one affine, a transform origin and the percentage part of a translate. A parse that Vaper answers with null answers false here. Checked against Vaper's own Dart parsers over 1,060 random values on both hosts, numbers within 1e-9 and colours exactly (D2342).
 
+### `e.fmt.css.container`
+
+```neper
+type Tri = enum u8 { False, True, Unknown }
+type CondKind = enum u8 { And, Or, Not, Unknown, Feature }
+type FeatureKind = enum u8 { Width, Height, AspectRatio, OrientationPortrait, OrientationLandscape }
+type Op = enum u8 { Lt, Le, Gt, Ge, Eq }
+type Condition = struct { kind: CondKind, parts: []const Condition, feature: FeatureKind, op: Op, value: f64 }
+type Size = struct { has_width: bool, width: f64, has_height: bool, height: f64 }
+
+fn unknown_condition() -> Condition
+fn compare(c: Condition, actual: f64) -> bool
+fn tri(b: bool) -> Tri
+fn evaluate(c: Condition, size: Size) -> Tri
+fn uses_block_axis(c: Condition) -> bool
+fn matches(c: Condition, size: Size) -> bool
+```
+
+Container query evaluation (L040), after Vaper's `css/container_query.dart`: a condition tree of `and`, `or`, `not`, an unknown leaf and size features (`width`, `height`, `aspect-ratio`, `orientation`) evaluated three-valued against a container whose width or height may not be known, so an unknown stays unknown through `not` and through `and` or `or` unless the other branch decides. A query matches only when definitely true; an equality feature uses the half-pixel tolerance of `@media (width: ...)`. Checked against Vaper's own Dart code over 400 random trees at ten sizes on both hosts (D2343).
+
+### `e.fmt.css.match`
+
+```neper
+type State = struct { has_hover: bool, hover: html.NodeId, has_focus: bool, focus: html.NodeId, has_active: bool, active: html.NodeId, focus_within: []const html.NodeId, has_scope: bool, scope: html.NodeId }
+type Matcher = struct { a: *mem.Arena, doc: *const html.Document, state: State }
+
+fn no_state() -> State
+fn new_matcher(a: *mem.Arena, doc: *const html.Document, state: State) -> Matcher
+fn node_of(m: *const Matcher, id: html.NodeId) -> *const html.Node
+fn is_element(m: *const Matcher, id: html.NodeId) -> bool
+fn parent_element(m: *const Matcher, id: html.NodeId) -> html.NodeId
+fn next_element(m: *const Matcher, from: html.NodeId) -> html.NodeId
+fn first_child_element(m: *const Matcher, id: html.NodeId) -> html.NodeId
+fn next_sibling_element(m: *const Matcher, id: html.NodeId) -> html.NodeId
+fn prev_element(m: *const Matcher, from: html.NodeId) -> html.NodeId
+fn prev_sibling_element(m: *const Matcher, id: html.NodeId) -> html.NodeId
+fn attr(m: *const Matcher, id: html.NodeId, name: str) -> (str, bool)
+fn has_attr(m: *const Matcher, id: html.NodeId, name: str) -> bool
+fn local_name(m: *const Matcher, id: html.NodeId) -> str
+fn lower(a: *mem.Arena, s: str) -> str
+fn is_space(c: u8) -> bool
+fn trim(s: str) -> str
+fn class_contains(m: *const Matcher, id: html.NodeId, name: str) -> bool
+fn element_id(m: *const Matcher, id: html.NodeId) -> str
+fn in_ids(ids: []const html.NodeId, id: html.NodeId) -> bool
+fn selector_matches(m: *const Matcher, sel: selector.Selector, el: html.NodeId) -> bool
+fn matches_compound(m: *const Matcher, c: selector.Compound, el: html.NodeId) -> bool
+fn any_sub_matches(m: *const Matcher, subs: []const selector.Selector, el: html.NodeId) -> bool
+fn matches_part(m: *const Matcher, part: selector.Simple, el: html.NodeId) -> bool
+fn includes_word(a: str, b: str) -> bool
+fn attr_compare(m: *const Matcher, el: html.NodeId, part: selector.Simple, op: u8) -> bool
+fn is_first_child(m: *const Matcher, el: html.NodeId) -> bool
+fn is_last_child(m: *const Matcher, el: html.NodeId) -> bool
+fn child_index_of_type(m: *const Matcher, el: html.NodeId) -> i64
+fn is_last_of_type(m: *const Matcher, el: html.NodeId) -> bool
+fn counts_for_nth(m: *const Matcher, part: selector.Simple, el: html.NodeId, c: html.NodeId, of_type: bool) -> bool
+fn matches_nth_child(m: *const Matcher, part: selector.Simple, el: html.NodeId, from_end: bool, of_type: bool) -> bool
+fn last_element_child(m: *const Matcher, id: html.NodeId) -> html.NodeId
+fn int_of(s: str) -> (i64, bool)
+fn matches_nth(m: *const Matcher, arg: str, index: i64) -> bool
+fn cat2(a: *mem.Arena, x: str, y: str) -> str
+fn matches_arg_selector(m: *const Matcher, el: html.NodeId, arg: str) -> bool
+fn matches_arg_selector_list(m: *const Matcher, el: html.NodeId, arg: str) -> bool
+fn matches_in_subtree(m: *const Matcher, sel: selector.Selector, root: html.NodeId) -> bool
+fn candidate_matches(m: *const Matcher, tail: selector.Selector, candidate: html.NodeId) -> bool
+fn matches_has(m: *const Matcher, el: html.NodeId, relatives: []const selector.Selector) -> bool
+fn has_in_descendants(m: *const Matcher, el: html.NodeId, tail: selector.Selector) -> bool
+fn is_formish(name: str) -> bool
+fn input_type(m: *const Matcher, el: html.NodeId) -> str
+fn number_of(a: *mem.Arena, s: str) -> (f64, bool)
+fn attr_number(m: *const Matcher, el: html.NodeId, name: str) -> (f64, bool)
+fn control_is_validatable(m: *const Matcher, el: html.NodeId) -> bool
+fn email_ok(value: str) -> bool
+fn url_ok(value: str) -> bool
+fn control_invalid(m: *const Matcher, el: html.NodeId) -> bool
+fn matches_pseudo_class(m: *const Matcher, pseudo: str, el: html.NodeId) -> bool
+```
+
+Selector matching over an HTML document (L040), after Vaper's `css/selector_matcher.dart`: a parsed selector from `e.fmt.css.selector` tested against an element of an `e.fmt.html` document by walking its combinators right to left from the key compound, with the simple selectors, the structural pseudo-classes, `:not()`, `:is()`, `:where()`, `:has()` and its relative lookahead, `:nth-*()` with An+B and `of S`, the attribute operators with the `i` flag, and the state and form pseudo-classes (`:hover`, `:focus`, `:checked`, `:disabled`, `:required`, `:in-range`, `:valid`, `:invalid`, ...) over a `State` the host installs. Checked against Vaper's own matcher over 560 random documents and selector lists on both hosts (D2343).
+
+### `e.fmt.html.accessible`
+
+```neper
+type Role = enum u8 { Generic, Text, Heading, Link, Button, Image, TextField, Checkbox, Radio, Combobox, Listbox, Slider, Progressbar, List, ListItem, Table, Row, Cell, ColumnHeader, RowHeader, Navigation, Main, Banner, ContentInfo, Complementary, Form, Search, Region, Article, Dialog, Separator, Figure, Group }
+type Node = struct { role: Role, name: str, has_value: bool, value: str, node_id: i64, has_level: bool, level: i64, has_checked: bool, checked: bool, checked_mixed: bool, disabled: bool, has_expanded: bool, expanded: bool, has_selected: bool, selected: bool, required: bool, invalid: bool, has_now: bool, now: f64, has_min: bool, min: f64, has_max: bool, max: f64, has_url: bool, url: str, focusable: bool, children: []const Node }
+type Builder = struct { a: *mem.Arena, doc: *const html.Document, next_id: i64 }
+
+fn role_name(r: Role) -> str
+fn blank_node(role: Role) -> Node
+fn is_space(c: u8) -> bool
+fn trim(s: str) -> str
+fn lower(a: *mem.Arena, s: str) -> str
+fn cat(a: *mem.Arena, x: str, y: str) -> str
+fn collapse(a: *mem.Arena, s: str) -> str
+fn int_of(s: str) -> (i64, bool)
+fn number_of(a: *mem.Arena, s: str) -> (f64, bool)
+fn node_of(b: *const Builder, id: html.NodeId) -> *const html.Node
+fn attr(b: *const Builder, id: html.NodeId, name: str) -> (str, bool)
+fn has_attr(b: *const Builder, id: html.NodeId, name: str) -> bool
+fn tag(b: *const Builder, id: html.NodeId) -> str
+fn parent_element(b: *const Builder, id: html.NodeId) -> html.NodeId
+fn aria(b: *const Builder, el: html.NodeId, name: str) -> (str, bool)
+fn aria_bool(b: *const Builder, el: html.NodeId, name: str) -> (bool, bool)
+fn is_aria_hidden(b: *const Builder, el: html.NodeId) -> bool
+fn flat_text(b: *const Builder, el: html.NodeId) -> str
+fn input_type(b: *const Builder, el: html.NodeId) -> str
+fn explicit_role(name: str) -> (Role, bool)
+fn native_role(b: *const Builder, el: html.NodeId) -> Role
+fn role_of(b: *const Builder, el: html.NodeId) -> Role
+fn names_from_content(r: Role) -> bool
+fn find_by_id(b: *const Builder, from: html.NodeId, id: str) -> html.NodeId
+fn find_label_for(b: *const Builder, from: html.NodeId, id: str) -> html.NodeId
+fn label_text(b: *const Builder, control: html.NodeId) -> (str, bool)
+fn child_text(b: *const Builder, el: html.NodeId, name: str) -> (str, bool)
+fn trimmed_attr(b: *const Builder, el: html.NodeId, name: str) -> (str, bool)
+fn native_name(b: *const Builder, el: html.NodeId) -> (str, bool)
+fn name_of(b: *const Builder, el: html.NodeId, role: Role) -> str
+fn heading_level_of_tag(b: *const Builder, el: html.NodeId) -> (i64, bool)
+fn num_attr(b: *const Builder, el: html.NodeId, name: str, fallback: f64) -> f64
+fn push_node(l: *list.List[Node], n: Node)
+fn new_nodes(a: *mem.Arena) -> list.List[Node]
+fn link_href_above(b: *const Builder, id: html.NodeId) -> (str, bool)
+fn text_leaves(b: *Builder, id: html.NodeId, node_id: i64) -> []const Node
+fn build_children(b: *Builder, parent: html.NodeId) -> []const Node
+fn skip_ids(b: *Builder, el: html.NodeId)
+fn with_node_id(n: Node, id: i64) -> Node
+fn build_element(b: *Builder, el: html.NodeId, id: i64) -> []const Node
+fn build_tree(a: *mem.Arena, doc: *const html.Document, root: html.NodeId) -> Node
+```
+
+The accessibility tree of an HTML document (L040), after Vaper's `a11y/accessibility_builder.dart`: each element's role (an explicit `role` from a known set first, else its native role), its accessible name in the order the standard fixes (`aria-labelledby` over `aria-label` over the native source -- `alt`, `<label>`, placeholder, caption, title -- over text content for the roles that name from content), its states, heading level, value range and link target, and the tree with `aria-hidden` subtrees dropped, a nameless stateless generic container flattened and the redundant text leaves of a name-from-content role removed (`build_tree`). Checked against Vaper's own builder over 220 random documents on both hosts (D2343).
+
 ### `e.fmt.csv`
 
 ```neper

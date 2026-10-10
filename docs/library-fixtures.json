@@ -400,7 +400,9 @@
    "pending": [],
    "fixtures": [
     "fmt_gaps_a",
-    "fmt_html"
+    "fmt_html",
+    "html_accessible",
+    "text_css_match"
    ]
   },
   {
@@ -476,6 +478,9 @@
     "fmt_gaps_a",
     "fmt_json",
     "gfx_cssvalue",
+    "html_accessible",
+    "text_css_container",
+    "text_css_match",
     "text_css_selector",
     "text_css_syntax",
     "ui_interpolate",

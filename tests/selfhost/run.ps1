@@ -3787,6 +3787,27 @@ $gfxCssvalueWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $gfxCssvalueWritten -ne 'executable written') { throw 'gfx_cssvalue emission failed' }
 $gfxCssvalueOutput = & $gfxCssvaluePath
 if ($LASTEXITCODE -ne 0 -or $gfxCssvalueOutput -ne 'gfx cssvalue ok') { throw "gfx_cssvalue answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.css.container`: three-valued container-query conditions against Vaper's own Dart code
+# # (400 trees at ten sizes, D2343).
+$textCssContainerPath = Join-Path $testBuild 'text-css-container-selfhost.exe'
+$textCssContainerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_css_container\src\main.e') $repo 'x64' 'windows' $textCssContainerPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textCssContainerWritten -ne 'executable written') { throw 'text_css_container emission failed' }
+$textCssContainerOutput = & $textCssContainerPath
+if ($LASTEXITCODE -ne 0 -or $textCssContainerOutput -ne 'css container ok') { throw "text_css_container answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.css.match`: selector matching, :has(), An+B, state and form pseudo-classes over an HTML document
+# # against Vaper's own matcher (560 documents and selector lists, D2343).
+$textCssMatchPath = Join-Path $testBuild 'text-css-match-selfhost.exe'
+$textCssMatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_css_match\src\main.e') $repo 'x64' 'windows' $textCssMatchPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textCssMatchWritten -ne 'executable written') { throw 'text_css_match emission failed' }
+$textCssMatchOutput = & $textCssMatchPath
+if ($LASTEXITCODE -ne 0 -or $textCssMatchOutput -ne 'css match ok') { throw "text_css_match answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.html.accessible`: roles, accessible names, states and the accessibility tree of an HTML document
+# # against Vaper's own builder (220 documents, D2343).
+$htmlAccessiblePath = Join-Path $testBuild 'html-accessible-selfhost.exe'
+$htmlAccessibleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\html_accessible\src\main.e') $repo 'x64' 'windows' $htmlAccessiblePath -j 2
+if ($LASTEXITCODE -ne 0 -or $htmlAccessibleWritten -ne 'executable written') { throw 'html_accessible emission failed' }
+$htmlAccessibleOutput = & $htmlAccessiblePath
+if ($LASTEXITCODE -ne 0 -or $htmlAccessibleOutput -ne 'html accessible ok') { throw "html_accessible answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2
