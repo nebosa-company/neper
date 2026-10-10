@@ -3493,6 +3493,12 @@ fmt_exe_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 chmod +x "$test_build/fmt-exe-selfhost"
 fmt_exe_output=$("$test_build/fmt-exe-selfhost")
 [ "$fmt_exe_output" = 'fmt exe ok' ]
+# e.text.sig: YARA-lite rule compile and scan (text and hex strings, jumps, wildcards, modifiers, conditions) against an independent re-based matcher (183 cases, D2359).
+text_sig_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_sig/src/main.e" "$repo" x64 linux "$test_build/text-sig-selfhost" -j 2)
+[ "$text_sig_written" = 'executable written' ]
+chmod +x "$test_build/text-sig-selfhost"
+text_sig_output=$("$test_build/text-sig-selfhost")
+[ "$text_sig_output" = 'text sig ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

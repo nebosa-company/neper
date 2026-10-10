@@ -642,17 +642,6 @@
       "evidence": "Appdor services/mcp-server (stdio NDJSON plus HTTP JSON-RPC, caller-JWT RLS scoping), src/sharing share tokens (b64url payload plus HMAC, distinct from jwt.e), src/audit record taxonomy with CSV export, src/templates workflow recipe catalog as data. Serve via e.net.http plus e.os.proc stdio and e.db; DB-poll worker shape (no AMQP) maps to e.task plus e.db.pool."
     },
     {
-      "id": "L053",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 151,
-      "title": "Multi-pattern signature scanning (YARA-lite subset)",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "e.grep is literal search only (lib/e/grep.e) -- the yara-python gap for malware triage over S1/S2 inputs. First diff e.algo.search for Aho-Corasick; if absent, add a YARA-lite subset (hex strings with wildcards/jumps, ASCII/UTF-16 literals, all-of/any-of/count conditions) with fixtures for overlapping matches, wildcards and no-match. Plan: docs/ethical-hacking.md S3."
-    },
-    {
       "id": "L054",
       "category": "library",
       "group": "Drivers",

@@ -6874,6 +6874,76 @@ fn put_unit(unit: u32, big_endian: bool, out: []u8, at: usize)
 fn encode_utf16(s: str, big_endian: bool, out: []u8) -> (usize, err)
 ```
 
+### `e.text.sig`
+
+```neper
+error Syntax
+error TooMany
+error TooSmall
+
+type Token = struct { kind: u8, value: u8, mask: u8, min: u32, max: u32 }
+type Pattern = struct { name: str, first: u32, count: u32, hex: bool, nocase: bool, ascii: bool, wide: bool, fullword: bool }
+type Node = struct { kind: u8, op: u8, quant: u8, a: u32, b: u32, n: u64 }
+type Rule = struct { name: str, first_string: u32, string_count: u32, root: u32 }
+type Set = struct { rules: []Rule, patterns: []Pattern, tokens: []Token, nodes: []Node, members: []u32, rule_count: usize, pattern_count: usize, token_count: usize, node_count: usize, member_count: usize }
+type Parser = struct { src: str, at: usize, s: Set, rule_first: usize }
+
+const MAX_RULES: usize = 64usize
+const MAX_PATTERNS: usize = 256usize
+const MAX_TOKENS: usize = 4096usize
+const MAX_NODES: usize = 1024usize
+const MAX_MEMBERS: usize = 1024usize
+const N_TRUE: u8 = 0u8
+const N_FALSE: u8 = 1u8
+const N_AND: u8 = 2u8
+const N_OR: u8 = 3u8
+const N_NOT: u8 = 4u8
+const N_STRING: u8 = 5u8
+const N_AT: u8 = 6u8
+const N_COUNT: u8 = 7u8
+const N_FILESIZE: u8 = 8u8
+const N_OF: u8 = 9u8
+
+fn is_space(c: u8) -> bool
+fn is_ident_start(c: u8) -> bool
+fn is_ident(c: u8) -> bool
+fn is_alnum(c: u8) -> bool
+fn fold(c: u8) -> u8
+fn same(x: str, y: str) -> bool
+fn skip(p: *Parser)
+fn word(p: *Parser) -> str
+fn peek_word(p: *Parser) -> str
+fn eat(p: *Parser, c: u8) -> bool
+fn hexval(c: u8) -> i32
+fn number(p: *Parser) -> (u64, bool)
+fn new_node(p: *Parser, kind: u8) -> (u32, bool)
+fn push_token(p: *Parser, t: Token) -> bool
+fn find_pattern(p: *Parser, name: str) -> i32
+fn text_string(p: *Parser, pat: *Pattern) -> bool
+fn hex_string(p: *Parser, pat: *Pattern) -> bool
+fn declaration(p: *Parser) -> err
+fn compare_op(p: *Parser) -> (u8, bool)
+fn add_member(p: *Parser, idx: usize) -> bool
+fn string_set(p: *Parser, node: u32) -> bool
+fn parse_primary(p: *Parser, depth: u32) -> (u32, bool)
+fn parse_not(p: *Parser, depth: u32) -> (u32, bool)
+fn parse_and(p: *Parser, depth: u32) -> (u32, bool)
+fn parse_or(p: *Parser, depth: u32) -> (u32, bool)
+fn meta_value(p: *Parser) -> bool
+fn parse_rule(p: *Parser) -> err
+fn compile(a: *mem.Arena, source: str) -> (Set, err)
+fn tokens_at(s: *const Set, t: usize, end: usize, data: []const u8, pos: usize) -> bool
+fn literal_at(s: *const Set, pat: Pattern, data: []const u8, pos: usize, wide: bool) -> bool
+fn pattern_at(s: *const Set, pi: usize, data: []const u8, pos: usize) -> bool
+fn count_matches(s: *const Set, pi: usize, data: []const u8) -> u32
+fn nth_match(s: *const Set, pi: usize, data: []const u8, k: usize) -> (usize, bool)
+fn compare(op: u8, x: u64, y: u64) -> bool
+fn eval(s: *const Set, node: u32, data: []const u8, counts: []const u32) -> bool
+fn scan(s: *const Set, data: []const u8, counts: []u32, matched: []bool) -> err
+```
+
+YARA-lite signature scanning: `compile` parses rule text (`meta:`, `strings:`, `condition:`) into arena tables and `scan` counts, per string, the offsets where it matches and evaluates every rule. Strings are quoted text (`ascii`, `wide`, `nocase`, `fullword`, `\xHH` escapes) or hex (`??`, nibble wildcards, `[n]`/`[n-m]` jumps); conditions have `and`/`or`/`not`, `$a`, `$a at N`, `#a OP N`, `filesize OP N`, and `any|all|none|N of them|($a, $b*)`. Overlapping occurrences count, ascii and wide hits at one offset count once; jumps backtrack, so cost per offset is bounded by the product of the jump widths. Capacities: 64 rules, 256 strings, 4096 tokens, 1024 condition nodes (`TooMany`). Not here: regexes, modules, imports, ranges beyond `at`, alternatives, tags, `for` loops, xor/base64.
+
 ### `e.text.search`
 
 ```neper

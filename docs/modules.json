@@ -206,6 +206,7 @@
     "e.algo.syncjob",
     "e.algo.fulltext",
     "e.algo.search",
+    "e.text.sig",
     "e.text.search",
     "e.text.distance",
     "e.algo.sketch",
@@ -4068,6 +4069,17 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.sig",
+   "layer": 3,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
+   ],
    "blocked_by": []
   },
   {

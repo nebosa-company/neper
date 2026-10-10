@@ -3910,6 +3910,12 @@ $fmtExeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtExeWritten -ne 'executable written') { throw 'fmt_exe emission failed' }
 $fmtExeOutput = & $fmtExePath
 if ($LASTEXITCODE -ne 0 -or $fmtExeOutput -ne 'fmt exe ok') { throw "fmt_exe answered wrongly: exit $LASTEXITCODE" }
+# e.text.sig: YARA-lite rule compile and scan (text and hex strings, jumps, wildcards, modifiers, conditions) against an independent re-based matcher (183 cases, D2359).
+$textSigPath = Join-Path $testBuild 'text-sig-selfhost.exe'
+$textSigWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_sig\src\main.e') $repo 'x64' 'windows' $textSigPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textSigWritten -ne 'executable written') { throw 'text_sig emission failed' }
+$textSigOutput = & $textSigPath
+if ($LASTEXITCODE -ne 0 -or $textSigOutput -ne 'text sig ok') { throw "text_sig answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

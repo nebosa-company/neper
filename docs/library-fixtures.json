@@ -489,6 +489,7 @@
     "text_css_match",
     "text_css_selector",
     "text_css_syntax",
+    "text_sig",
     "ui_interpolate",
     "x_agent_bundle",
     "x_agent_contract",
