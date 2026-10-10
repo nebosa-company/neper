@@ -2116,4 +2116,5 @@ D2357	1187	L051 closed: e.net.packet and e.net.pcap checked against an independe
 D2358	1322	L052 closed: e.fmt.elf and e.fmt.pe checked against an independent struct writer and reader
 D2359	1432	L053 closed: e.text.sig, a YARA-lite subset checked against an independent matcher
 D2360	1619	C118 crypto search: Coinbase /products matched in the Add sheet, and a key-gated Polygon recording
-D2361	1196	C126 part one: Settings keeps its values in /settings, through the filesystem server
+D2361	1197	C126 part one: Settings keeps its values in /settings, through the filesystem server
+D2362	1148	C126 part two: search across the settings, by name and keyword, opening the page on the match

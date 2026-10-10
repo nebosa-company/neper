@@ -21,11 +21,14 @@ use appkit
 use text
 use icons
 use vaultfs
+use ui
 
 const NONE: usize = 99usize
 const MAX_HITS: usize = 96usize
 const PAGES: usize = 11usize
 const MAIN: usize = 99usize
+const SEARCH: usize = 98usize
+const FOUND_MAX: usize = 6usize
 // The settings, by number.
 const WIFI: usize = 0usize
 const MOBILE: usize = 1usize
@@ -202,6 +205,104 @@ fn setting_name(setting: usize) -> str {
     ret "Notifications"
 }
 
+// (C126) What a setting is called in search, the words that also find it, and the page it lives on. The
+// notification switches (NOTIFY + app) are listed under the app's name.
+fn setting_label(setting: usize) -> str {
+    if setting >= NOTIFY { ret notify_app(setting - NOTIFY) }
+    ret setting_name(setting)
+}
+
+fn setting_words(setting: usize) -> str {
+    if setting == WIFI { ret "wifi wireless internet wlan" }
+    if setting == MOBILE { ret "cellular data sim lte 5g" }
+    if setting == AIRPLANE { ret "flight radio offline" }
+    if setting == HOTSPOT { ret "tethering share internet" }
+    if setting == BRIGHTNESS { ret "screen light dim display" }
+    if setting == DARK { ret "night mode theme black" }
+    if setting == ADAPTIVE { ret "auto light sensor" }
+    if setting == TIMEOUT { ret "sleep screen off lock delay" }
+    if setting == FONT { ret "text size larger bigger" }
+    if setting == MEDIA { ret "sound music video speaker audio" }
+    if setting == RING { ret "ringtone call phone volume" }
+    if setting == ALARM { ret "clock wake volume" }
+    if setting == DND { ret "silent quiet mute interruptions" }
+    if setting == VIBRATE { ret "haptic buzz calls" }
+    if setting == SAVER { ret "power low battery" }
+    if setting == LOCATION { ret "gps position places" }
+    if setting == CAMERA_ACCESS { ret "privacy permission photo" }
+    if setting == MIC_ACCESS { ret "privacy permission voice record" }
+    if setting == FINGERPRINT { ret "biometric unlock security touch" }
+    if setting == LOCK { ret "pin pattern password security" }
+    if setting == HOUR24 { ret "time clock format military" }
+    if setting == CONTRAST { ret "accessibility text vision" }
+    if setting == MAGNIFY { ret "zoom accessibility vision" }
+    if setting == NETWORK { ret "wifi networks ssid" }
+    if setting == BLUETOOTH { ret "pair wireless headphones devices" }
+    if setting == ROTATE { ret "orientation landscape portrait screen" }
+    ret "alerts messages"
+}
+
+fn setting_page(setting: usize) -> usize {
+    if setting == WIFI || setting == MOBILE || setting == AIRPLANE || setting == HOTSPOT { ret 0usize }
+    if setting == NETWORK || setting == BLUETOOTH { ret 0usize }
+    if setting == BRIGHTNESS || setting == DARK || setting == ADAPTIVE || setting == TIMEOUT || setting == FONT { ret 1usize }
+    if setting == MEDIA || setting == RING || setting == ALARM || setting == DND || setting == VIBRATE { ret 2usize }
+    if setting == SAVER { ret 3usize }
+    if setting >= NOTIFY { ret 5usize }
+    if setting == LOCATION || setting == CAMERA_ACCESS || setting == MIC_ACCESS || setting == FINGERPRINT || setting == LOCK { ret 7usize }
+    if setting == HOUR24 { ret 9usize }
+    ret 8usize
+}
+
+// Whether the lower-case term q.bytes[from..to] occurs in `hay`, ignoring its case.
+fn term_in(hay: str, q: *ui.Field, from: usize, to: usize) -> bool {
+    let width = to - from
+    var at = 0usize
+    while at + width <= hay.len {
+        var k = 0usize
+        var matched = true
+        while k < width && matched {
+            var h = hay[at + k]
+            if h >= 65u8 && h <= 90u8 { h = h + 32u8 }
+            if h != q.bytes[from + k] { matched = false }
+            k += 1usize
+        }
+        if matched { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// Every space-separated term of the query is in the setting's name or its words; an empty query matches nothing.
+fn setting_matches(q: *ui.Field, setting: usize) -> bool {
+    let name = setting_label(setting)
+    let words = setting_words(setting)
+    var i = 0usize
+    var any = false
+    while i < q.len {
+        while i < q.len && q.bytes[i] == 32u8 { i += 1usize }
+        let start = i
+        while i < q.len && q.bytes[i] != 32u8 { i += 1usize }
+        if i > start {
+            any = true
+            if !term_in(name, q, start, i) && !term_in(words, q, start, i) { ret false }
+        }
+    }
+    ret any
+}
+
+fn find_settings(s: *State) {
+    s.found_total = 0usize
+    var setting = 0usize
+    while setting < NOTIFY + 8usize && s.found_total < FOUND_MAX {
+        if setting_matches(&s.search, setting) {
+            s.found[s.found_total] = setting
+            s.found_total += 1usize
+        }
+        setting += 1usize
+    }
+}
+
 fn network_name(index: usize) -> str {
     if index == 0usize { ret "Home-5G" }
     if index == 1usize { ret "CafeGuest" }
@@ -231,6 +332,10 @@ type State = struct {
     scroll: f32,
     hits: [96]Hit,
     hit_total: usize,
+    search: ui.Field,
+    found: [8]usize,
+    found_total: usize,
+    keys: ui.Hits,
 }
 
 fn defaults(s: *State) {
@@ -764,6 +869,9 @@ fn draw_about(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
 
 fn draw_main(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try put(a, builder, faces.jost_bold, 32.0, "Settings", 24.0, 22.0, fg())
+    try card(a, builder, 292.0, 24.0, 104.0, 38.0, 19.0, surface())
+    try centred(a, builder, faces.jost, 17.0, "Search", 344.0, 31.0, ink())
+    hit(s, 600usize, 292.0, 24.0, 104.0, 38.0)
     var page = 0usize
     while page < PAGES {
         let y: f32 = 80.0 + f32(page) * 68.0
@@ -775,6 +883,35 @@ fn draw_main(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         hit(s, 100usize + page, 16.0, y + 2.0, 380.0, 62.0)
         page += 1usize
     }
+    ret ok
+}
+
+fn draw_search(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), fg())
+    hit(s, 500usize, 0.0, 10.0, 66.0, 56.0)
+    try put(a, builder, faces.jost_bold, 24.0, "Search", 62.0, 20.0, fg())
+    try card(a, builder, 16.0, 70.0, 380.0, 50.0, 14.0, cream())
+    if s.search.len == 0usize {
+        try put(a, builder, faces.jost, 20.0, "Search settings", 30.0, 82.0, muted())
+        try centred(a, builder, faces.grotesk, 14.0, "Try brightness, wifi or volume", 206.0, 150.0, fg_dim())
+    } else {
+        try put(a, builder, faces.jost, 20.0, ui.field_text(a, &s.search), 30.0, 82.0, ink())
+        if s.found_total == 0usize {
+            try centred(a, builder, faces.grotesk, 14.0, "No settings match", 206.0, 150.0, fg_dim())
+        }
+    }
+    var i = 0usize
+    while i < s.found_total {
+        let y: f32 = 136.0 + f32(i) * 58.0
+        let setting = s.found[i]
+        try card(a, builder, 16.0, y, 380.0, 50.0, 14.0, surface())
+        try put(a, builder, faces.jost, 18.0, setting_label(setting), 30.0, y + 5.0, ink())
+        try clipped(a, builder, faces.grotesk, 12.0, page_name(setting_page(setting)), 30.0, y + 30.0, 330.0, muted())
+        hit(s, 6000usize + i, 16.0, y, 380.0, 50.0)
+        i += 1usize
+    }
+    s.keys.total = 0usize
+    try ui.keyboard(a, builder, &s.keys, faces, "Go")
     ret ok
 }
 
@@ -804,6 +941,8 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
     try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, kit.logical_h), brush: paint.Brush { Solid: ground(1.0 - f32(kit.frame % 2usize) * 0.002) } } })
     if s.page == MAIN {
         try draw_main(a, builder, s, faces)
+    } else if s.page == SEARCH {
+        try draw_search(a, builder, s, faces)
     } else {
         try draw_page(a, builder, s, faces)
     }
@@ -843,6 +982,42 @@ fn flip(s: *State, setting: usize) {
 
 // What a tap at `x` on button `id` did: true when the screen changed.
 fn act(s: *State, id: usize, x: f32) -> bool {
+    if s.page == SEARCH {
+        var open = NONE
+        if id >= 6000usize && id < 6000usize + s.found_total { open = id - 6000usize }
+        if id == 1205usize && s.found_total > 0usize { open = 0usize }
+        if open != NONE {
+            let setting = s.found[open]
+            s.page = setting_page(setting)
+            s.scroll = 0.0
+            say("settings found ")
+            say(setting_label(setting))
+            say("\n")
+            ret true
+        }
+        if id == 500usize {
+            s.page = MAIN
+            say("settings back\n")
+            ret true
+        }
+        if ui.is_key(id) && ui.field_key(&s.search, id, false) {
+            find_settings(s)
+            say("settings search ")
+            say(s.search.bytes[0usize..s.search.len])
+            say(" ")
+            say_num(s.found_total)
+            say("\n")
+            ret true
+        }
+        ret false
+    }
+    if s.page == MAIN && id == 600usize {
+        s.page = SEARCH
+        s.search.len = 0usize
+        s.found_total = 0usize
+        say("settings search\n")
+        ret true
+    }
     if s.page == MAIN {
         if id >= 100usize && id < 100usize + PAGES {
             s.page = id - 100usize
@@ -959,9 +1134,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             appkit.leave()
             running = false
         } else {
-            let id = hit_at(&s, tap.x, tap.y)
+            var id = NONE
+            if s.page == SEARCH { id = ui.hit_at(&s.keys, tap.x, tap.y) }
+            if id == NONE { id = hit_at(&s, tap.x, tap.y) }
             if id != NONE && act(&s, id, tap.x) {
-                if id >= 1000usize && id < 6000usize { save(&s) }
+                if id >= 1000usize && id < 6000usize && s.page != SEARCH { save(&s) }
                 if !show(a, &kit, &s) {
                     say("settings present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)
