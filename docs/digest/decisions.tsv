@@ -2102,4 +2102,5 @@ D2343	1505	L040 part one to three: container queries, selector matching and the 
 D2344	1610	L041 closed: e.fmt.hcl and x.migrate.terraform, checked against petcow's migrate_hcl
 D2345	491	L042 closed: scanner finding parsers and the Mermaid emitter, checked against petcow's scan.rs and diagram.rs
 D2346	1039	L043 closed: e.fmt.woff and e.fmt.woff2 checked against Vaper's decoders
-D2347	1020	L044 closed: e.fmt.xlsx sheet normalisation and x.migrate.typemaps checked against Appdor
+D2347	1021	L044 closed: e.fmt.xlsx sheet normalisation and x.migrate.typemaps checked against Appdor
+D2348	1080	L045 part one: x.identity.jose and x.identity.oidc checked against Appdor

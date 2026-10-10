@@ -17057,6 +17057,80 @@ fn describe_sheets(a: *mem.Arena, names_in: []const str, requested: str) -> (Des
 
 Spreadsheet sheet-to-table normalisation (L044), after Appdor's `src/io/xlsx.js`: a sheet already read into typed `Cell` values becomes headers and string rows (`sheet_to_table`, `workbook_to_tables`), with a zero kept as `0`, a boolean as `true`/`false`, a date as its local `YYYY-MM-DD` (and ` HH:MM:SS` off midnight), the header row found by `detect_header_row` (the first of the first ten rows filling more than half of the widest), blank and duplicate headings renamed by the CSV rule (`resolve_headers`), and the width taken from the last filled column. Also `parse_cell_ref`, `sheet_formulas` and `describe_sheets`. The OOXML container is not read: Appdor leaves that to SheetJS. Checked against Appdor's own functions over 700 cases (with `x.migrate.typemaps`) on both hosts (D2347).
 
+### `x.identity.jose`
+
+```neper
+type Decoded = struct { valid: bool, message: str, header: json.Value, payload: json.Value, signature: str, signing_input: str }
+
+fn b64_index(c: u8) -> i32
+fn base64url_decode(a: *mem.Arena, s: str) -> []u8
+fn base64url_encode(a: *mem.Arena, bytes: []const u8) -> str
+fn failed(msg: str) -> Decoded
+fn decode_jwt(a: *mem.Arena, token: str) -> Decoded
+fn verify_rs256(a: *mem.Arena, message: []const u8, signature: []const u8, n: str, e: str) -> bool
+fn text_of(v: json.Value, key: str) -> (str, bool)
+fn js_string(a: *mem.Arena, v: json.Value) -> str
+fn lowered_is_none(s: str) -> bool
+fn verify_jwt_signature(a: *mem.Arena, token: str, jwk: json.Value, has_jwk: bool) -> (bool, str)
+fn select_jwk(jwks: json.Value, header: json.Value) -> (json.Value, bool)
+```
+
+The JOSE subset an OpenID Connect relying party needs (L045), after Appdor's `src/identity/jose.js`: lenient base64url (`base64url_decode`, `base64url_encode`), `decode_jwt` without verification, `verify_rs256` over `e.crypto.sign`'s PKCS#1 v1.5 check, `verify_jwt_signature` (`alg: none`, PSS and the EC families refused by name) and `select_jwk`. A verifier only. Checked with `x.identity.oidc` against Appdor's own functions over 536 cases with real RS256 signatures on both hosts (D2348).
+
+### `x.identity.oidc`
+
+```neper
+fn default_skew_seconds() -> f64
+
+type Config = struct { issuer: str, authorization_endpoint: str, token_endpoint: str, jwks_uri: str, has_userinfo: bool, userinfo_endpoint: str, has_end_session: bool, end_session_endpoint: str, scopes_supported: []const str, response_types_supported: []const str, id_token_signing_alg_values_supported: []const str, code_challenge_methods_supported: []const str }
+type Discovery = struct { valid: bool, missing: []const str, config: Config }
+type Pair = struct { key: str, value: str }
+type AuthRequest = struct { client_id: str, redirect_uri: str, scope: str, state: str, nonce: str, code_challenge: str, prompt: str, login_hint: str, extra: []const Pair }
+type Url = struct { valid: bool, missing: []const str, url: str }
+type Callback = struct { valid: bool, error_code: str, has_description: bool, description: str, code: str, state: str }
+type TokenRequest = struct { valid: bool, missing: []const str, url: str, body: str, has_authorization: bool, authorization: str }
+type Expectations = struct { issuer: str, client_id: str, nonce: str, jwks: json.Value, now_ms: f64, has_max_age: bool, max_age_seconds: f64, has_skew: bool, skew_seconds: f64 }
+type Validation = struct { valid: bool, message: str, claims: json.Value }
+type Profile = struct { has_subject: bool, subject: str, has_email: bool, email: str, email_verified: bool, has_name: bool, name: str, has_given_name: bool, given_name: str, has_family_name: bool, family_name: str, groups: []const str, has_issuer: bool, issuer: str }
+type Link = struct { action: str, reason: str }
+
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn text_of(v: json.Value, key: str) -> (str, bool)
+fn strings_or(a: *mem.Arena, v: json.Value, key: str, fallback: []const str) -> []const str
+fn list_of(a: *mem.Arena, xs: []const str) -> []const str
+fn parse_discovery(a: *mem.Arena, document: json.Value) -> Discovery
+fn discovery_url(a: *mem.Arena, issuer: str) -> str
+fn pkce_challenge(a: *mem.Arena, verifier: str) -> str
+fn same_text(x: str, y: str) -> bool
+fn verify_pkce(a: *mem.Arena, code_verifier: str, code_challenge: str) -> bool
+fn create_pkce_pair(a: *mem.Arena, random: []const u8) -> Pair
+fn form_hex(n: u8) -> u8
+fn form_encode(a: *mem.Arena, s: str) -> str
+
+type Params = struct { keys: []str, values: []str, count: usize }
+
+fn params_new(a: *mem.Arena, capacity: usize) -> Params
+fn params_set(p: *Params, key: str, value: str)
+fn params_text(a: *mem.Arena, p: *const Params) -> str
+fn missing_list(a: *mem.Arena, names: []const str, present: []const bool) -> []const str
+fn build_authorization_url(a: *mem.Arena, config: Config, r: AuthRequest) -> Url
+fn parse_callback(a: *mem.Arena, params: json.Value, expected_state: str) -> Callback
+fn build_token_request(a: *mem.Arena, config: Config, client_id: str, client_secret: str, code: str, redirect_uri: str, code_verifier: str) -> TokenRequest
+fn absent_or(a: *mem.Arena, v: json.Value, key: str) -> str
+fn rejected(msg: str) -> Validation
+fn number_claim(v: json.Value, key: str) -> (f64, bool)
+fn floor_f64(x: f64) -> f64
+fn validate_id_token(a: *mem.Arena, id_token: str, ex: Expectations) -> Validation
+fn mapped(claims: json.Value, mapping: []const Pair, key: str, fallback: str) -> (str, bool)
+fn truthy_text(claims: json.Value, name: str) -> (str, bool)
+fn profile_from_claims(a: *mem.Arena, claims: json.Value, mapping: []const Pair) -> Profile
+fn lower_ascii(a: *mem.Arena, s: str) -> str
+fn link_policy(a: *mem.Arena, p: Profile, verified_domains: []const str, existing_account: bool, allow_unverified_email_link: bool) -> Link
+fn build_logout_url(a: *mem.Arena, config: Config, id_token_hint: str, post_logout_redirect_uri: str, state: str) -> Url
+```
+
+OpenID Connect relying party with PKCE (L045), after Appdor's `src/identity/oidc.js`: `parse_discovery` and `discovery_url`, `pkce_challenge`/`verify_pkce`/`create_pkce_pair`, `build_authorization_url` and `build_token_request` (values, form-urlencoded in the reference's parameter order, `client_secret_basic` when a secret is given), `parse_callback`, `validate_id_token` in the order of OpenID Connect Core 3.1.3.7 (signature, issuer, audience and `azp`, time, nonce, `max_age`), `profile_from_claims`, `link_policy` and `build_logout_url`. Checked against Appdor's own functions over 536 cases on both hosts (D2348).
+
 ### `e.fmt.xml`
 
 ```neper

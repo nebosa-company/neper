@@ -625,10 +625,10 @@
       "group": "Drivers",
       "order": 143,
       "title": "Dependency-free identity protocol logic",
-      "score": 0,
+      "score": 0.4,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Appdor src/identity/jose.js (BigInt RS256 verify refusing PSS/EC; neper jwt.e has HS/EdDSA only), oidc.js (discovery parse, PKCE S256), saml.js plus xml.js (8-step validate, anti-wrap, exclusive C14N subset), scim-protocol.js (filter/PATCH grammar, envelopes). Zero npm. Port pure logic; host I/O rides on e.net.http/tls/dns. Follow-on (D1890): JWKS rotation and OP server-side flows to confirm at implementation."
+      "evidence": "Appdor src/identity/jose.js (BigInt RS256 verify refusing PSS/EC; neper jwt.e has HS/EdDSA only), oidc.js (discovery parse, PKCE S256), saml.js plus xml.js (8-step validate, anti-wrap, exclusive C14N subset), scim-protocol.js (filter/PATCH grammar, envelopes). Zero npm. Port pure logic; host I/O rides on e.net.http/tls/dns. Follow-on (D1890): JWKS rotation and OP server-side flows to confirm at implementation. Part one landed: x.identity.jose and x.identity.oidc, 536 differential cases with real RS256 signatures on Windows and Linux (D2348). Remaining: saml.js with xml.js (validate, anti-wrap, exclusive C14N) and scim-protocol.js."
     },
     {
       "id": "L046",

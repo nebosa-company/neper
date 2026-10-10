@@ -3838,6 +3838,12 @@ $fmtXlsxWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtXlsxWritten -ne 'executable written') { throw 'fmt_xlsx emission failed' }
 $fmtXlsxOutput = & $fmtXlsxPath
 if ($LASTEXITCODE -ne 0 -or $fmtXlsxOutput -ne 'fmt xlsx ok') { throw "fmt_xlsx answered wrongly: exit $LASTEXITCODE" }
+# x.identity.jose and x.identity.oidc against Appdor's jose.js and oidc.js (536 cases, D2348).
+$xIdentityOidcPath = Join-Path $testBuild 'x-identity-oidc-selfhost.exe'
+$xIdentityOidcWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_identity_oidc\src\main.e') $repo 'x64' 'windows' $xIdentityOidcPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xIdentityOidcWritten -ne 'executable written') { throw 'x_identity_oidc emission failed' }
+$xIdentityOidcOutput = & $xIdentityOidcPath
+if ($LASTEXITCODE -ne 0 -or $xIdentityOidcOutput -ne 'x identity oidc ok') { throw "x_identity_oidc answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

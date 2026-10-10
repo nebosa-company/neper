@@ -492,6 +492,7 @@
     "x_agent_policy",
     "x_agent_receipt",
     "x_agent_task",
+    "x_identity_oidc",
     "x_lint_scan",
     "x_migrate",
     "x_migrate_terraform"

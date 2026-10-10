@@ -3421,6 +3421,12 @@ fmt_xlsx_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/fmt-xlsx-selfhost"
 fmt_xlsx_output=$("$test_build/fmt-xlsx-selfhost")
 [ "$fmt_xlsx_output" = 'fmt xlsx ok' ]
+# x.identity.jose and x.identity.oidc against Appdor's jose.js and oidc.js (536 cases, D2348).
+x_identity_oidc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_identity_oidc/src/main.e" "$repo" x64 linux "$test_build/x-identity-oidc-selfhost" -j 2)
+[ "$x_identity_oidc_written" = 'executable written' ]
+chmod +x "$test_build/x-identity-oidc-selfhost"
+x_identity_oidc_output=$("$test_build/x-identity-oidc-selfhost")
+[ "$x_identity_oidc_output" = 'x identity oidc ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

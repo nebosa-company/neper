@@ -133,6 +133,8 @@
     "e.fmt.woff",
     "x.migrate.typemaps",
     "e.fmt.xlsx",
+    "x.identity.jose",
+    "x.identity.oidc",
     "e.fmt.xml",
     "e.fmt.xsd",
     "e.fmt.xsd.schema",
@@ -2219,6 +2221,41 @@
     "e.mem",
     "e.str",
     "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.identity.jose",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.crypto.sign",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.identity.oidc",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.chain",
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.crypto.hash",
+    "e.fmt.encode",
+    "e.fmt.json",
+    "e.mem",
+    "e.str",
+    "x.identity.jose"
    ],
    "blocked_by": []
   },
