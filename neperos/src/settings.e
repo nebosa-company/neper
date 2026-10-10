@@ -20,6 +20,7 @@ use e.text.shape
 use appkit
 use text
 use icons
+use vaultfs
 
 const NONE: usize = 99usize
 const MAX_HITS: usize = 96usize
@@ -265,6 +266,37 @@ fn defaults(s: *State) {
     }
     s.values[NOTIFY + 5usize] = 0usize
     dark_theme = true
+}
+
+// (C126) The values are kept in /settings, one byte each, through the filesystem server on the endpoints the
+// kernel grants this app (slots 5 and 6, as for Secure). A machine without a disk refuses the first send and
+// the app runs on its defaults; a file of another length or with a value past a slider's range is ignored.
+fn save(s: *State) {
+    var raw: [48]u8 = zero
+    var i = 0usize
+    while i < SETTINGS {
+        raw[i] = u8(s.values[i])
+        i += 1usize
+    }
+    if vaultfs.write("/settings", mem.address_of(&raw[0usize]), SETTINGS) { say("settings saved\n") }
+}
+
+fn load(s: *State) -> bool {
+    var raw: [48]u8 = zero
+    let (count, found) = vaultfs.read("/settings", mem.address_of(&raw[0usize]), 48usize)
+    if !found || count != SETTINGS { ret false }
+    var i = 0usize
+    while i < SETTINGS {
+        if raw[i] > 10u8 { ret false }
+        i += 1usize
+    }
+    i = 0usize
+    while i < SETTINGS {
+        s.values[i] = usize(raw[i])
+        i += 1usize
+    }
+    dark_theme = s.values[DARK] != 0usize
+    ret true
 }
 
 fn is_on(s: *State, setting: usize) -> bool {
@@ -902,6 +934,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var s: State = zero
     defaults(&s)
+    if load(&s) {
+        say("settings loaded dark ")
+        say_num(s.values[DARK])
+        say(" brightness ")
+        say_num(s.values[BRIGHTNESS] * 10usize)
+        say("\n")
+    }
     s.page = MAIN
     if !show(a, &kit, &s) {
         say("settings present failed\n")
@@ -922,6 +961,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else {
             let id = hit_at(&s, tap.x, tap.y)
             if id != NONE && act(&s, id, tap.x) {
+                if id >= 1000usize && id < 6000usize { save(&s) }
                 if !show(a, &kit, &s) {
                     say("settings present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)

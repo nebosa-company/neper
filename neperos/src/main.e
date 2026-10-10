@@ -709,12 +709,13 @@ fn launch(frame: *a64.Frame) {
             thread.grant(child, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 9usize)
         }
         // (D2252) The Secure app (archive entry 38, the table's `secure`) alone reaches storage and the random server.
-        if index == 38usize {
+        // (C126) Settings (entry 24) keeps its values in the filesystem too.
+        if index == 38usize || index == 24usize {
             if fs_present {
                 thread.grant(child, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                 thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
             }
-            if rng_present {
+            if rng_present && index == 38usize {
                 thread.grant(child, 7usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 10usize)
                 thread.grant(child, 8usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 11usize)
             }
