@@ -17216,6 +17216,123 @@ fn sort_resources(a: *mem.Arena, resources: []const json.Value, sort_by: str, de
 
 SCIM 2.0 protocol core, RFC 7643 and RFC 7644 (L045), after Appdor's `src/identity/scim-protocol.js`, over JSON values: the filter grammar (`parse_filter`, `evaluate`: `eq ne co sw ew gt ge lt le pr`, `and`, `or`, `not`, groups and value paths, case-insensitive, with the reference's own error messages), `get_attribute`, the PATCH path grammar and `add`/`replace`/`remove` applied immutably (`parse_patch_path`, `apply_patch_op`, `apply_patch`), `project_attributes`, `list_response`, `scim_error`, the content-derived `resource_version`, `to_scim_user` and `to_scim_group`, `service_provider_config`, `resource_types` and `sort_resources`. Checked against Appdor's own functions over 594 cases on both hosts (D2349).
 
+### `x.identity.xml`
+
+```neper
+type Entry = struct { is_text: bool, text: str, node: usize }
+type Node = struct { name: str, prefix: str, local: str, attr_names: []const str, attr_values: []const str, ns_prefixes: []const str, ns_uris: []const str, children: []const usize, entries: []const Entry, text: str, parent: i64 }
+type Doc = struct { valid: bool, message: str, nodes: []Node, root: usize }
+
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn is_name_start(c: u8) -> bool
+fn is_name_char(c: u8) -> bool
+fn is_space(c: u8) -> bool
+fn starts_at(s: str, at: usize, prefix: str) -> bool
+fn find_from(s: str, needle: str, from: usize) -> (usize, bool)
+fn blank_text(s: str) -> bool
+fn js_trim(s: str) -> str
+fn utf16_offset(s: str, at: usize) -> usize
+fn push_scalar(buf: []u8, at: usize, code: u32) -> usize
+fn hex_digit_value(c: u8) -> i32
+fn decode_entities(a: *mem.Arena, s: str) -> str
+fn escape_text(a: *mem.Arena, s: str) -> str
+fn escape_attribute(a: *mem.Arena, s: str) -> str
+fn bad(a: *mem.Arena, source: str, at: usize, message: str) -> Doc
+fn bare(message: str) -> Doc
+fn parse_xml(a: *mem.Arena, source: str) -> Doc
+fn attribute_of(n: Node, name: str) -> (str, bool)
+fn resolve_namespace(d: Doc, at: usize, prefix: str) -> (str, bool)
+fn collect(d: Doc, at: usize, ns: str, local: str, out: []usize, n: *usize)
+fn find_elements(a: *mem.Arena, d: Doc, at: usize, ns: str, local: str) -> []const usize
+fn find_element(a: *mem.Arena, d: Doc, at: usize, ns: str, local: str) -> (usize, bool)
+fn id_of(n: Node) -> (str, bool)
+fn find_by_id(d: Doc, at: usize, id: str) -> (usize, bool)
+fn is_word(c: u8) -> bool
+fn looks_like_qname(s: str) -> bool
+fn colon_at(s: str) -> i64
+
+type Rendered = struct { prefixes: []str, uris: []str, count: usize }
+
+fn rendered_get(r: Rendered, prefix: str) -> (str, bool)
+fn render(a: *mem.Arena, d: Doc, at: usize, inherited: Rendered, inclusive: []const str) -> str
+fn canonicalize(a: *mem.Arena, d: Doc, at: usize, inclusive: []const str) -> str
+fn without_signature(a: *mem.Arena, d: Doc, at: usize) -> (Doc, usize)
+```
+
+A small XML reader and Exclusive XML Canonicalization 1.0 for SAML (L045), after Appdor's `src/identity/xml.js`: `parse_xml` (elements, attributes, namespaces, text, CDATA, comments and the declaration; no DTD, so no entity expansion; the reference's own error messages and UTF-16 offsets), `decode_entities`, `resolve_namespace`, `find_elements`/`find_element`/`find_by_id`, `canonicalize` (visibly-utilised namespace declarations, attributes sorted by namespace then local name, text kept with its whitespace, the C14N escapes, `InclusiveNamespaces` prefixes) and `without_signature` (the enveloped-signature transform). Checked against Appdor's own functions over 416 cases with `x.identity.saml` on both hosts (D2350).
+
+### `x.identity.saml`
+
+```neper
+type Key = struct { has: bool, n: str, e: str }
+type Signed = struct { valid: bool, message: str, id: str, assertion: usize, signed_element: str }
+type Assertion = struct { present: bool, id: str, issuer: str, has_name_id: bool, name_id: str, name_id_format: str, session_index: str, authn_instant: str, not_before: str, not_on_or_after: str, audiences: []const str, recipient: str, confirmation_not_on_or_after: str, confirmation_in_response_to: str, attr_names: []const str, attr_values: []const []const str }
+type Response = struct { valid: bool, message: str, doc: xml.Doc, id: str, in_response_to: str, destination: str, issue_instant: str, issuer: str, status_present: bool, status_has_value: bool, status_code: str, status_message: str, assertion: Assertion }
+type Config = struct { issuer: str, audience: str, acs_url: str, key: Key, expected_in_response_to: str, now: f64, has_skew: bool, skew_ms: f64, seen: []const str }
+type Validation = struct { valid: bool, message: str, detail: str, has_detail: bool, assertion_id: str, signed_element: str, assertion: Assertion, expires_at: f64, has_expiry: bool }
+type Request = struct { valid: bool, missing: []const str, binding: str, xml: str, form_action: str, saml_request: str, relay_state: str, url: str }
+type ReplayCache = struct { ids: []str, expiries: []f64, count: usize }
+
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn ns_protocol() -> str
+fn ns_assertion() -> str
+fn ns_signature() -> str
+fn ns_metadata() -> str
+fn status_success() -> str
+fn binding_post() -> str
+fn binding_redirect() -> str
+fn nameid_email() -> str
+fn to_base64(a: *mem.Arena, bytes: []const u8) -> str
+fn from_base64(a: *mem.Arena, s: str) -> []u8
+fn xml_escape(a: *mem.Arena, s: str) -> str
+fn deflate_raw_stored(a: *mem.Arena, bytes: []const u8) -> []u8
+fn saml_id(a: *mem.Arena, seed: str) -> str
+fn missing_names(a: *mem.Arena, names: []const str, present: []const bool) -> []const str
+fn build_authn_request(a: *mem.Arena, id: str, issue_instant: str, destination: str, issuer: str, acs_url: str, name_id_format: str, force_authn: bool, relay_state: str, binding: str) -> Request
+fn split_words(a: *mem.Arena, s: str) -> []const str
+fn strip_ws(a: *mem.Arena, s: str) -> str
+fn trimmed(s: str) -> str
+fn attr_or_undefined(a: *mem.Arena, d: xml.Doc, at: usize, has: bool, name: str) -> str
+fn prefixes_of(a: *mem.Arena, d: xml.Doc, at: usize) -> []const str
+fn failed(msg: str) -> Signed
+fn verify_xml_signature(a: *mem.Arena, d: xml.Doc, signature: usize, has_signature: bool, key: Key) -> Signed
+fn extract_signed_assertion(a: *mem.Arena, d: xml.Doc, key: Key) -> Signed
+fn empty_assertion() -> Assertion
+fn attr_text(d: xml.Doc, at: usize, name: str) -> str
+fn bad_response(a: *mem.Arena, message: str) -> Response
+fn starts_with_markup(s: str) -> bool
+fn parse_saml_response(a: *mem.Arena, encoded: str) -> Response
+fn days_from_civil(y_in: i64, m: i64, d: i64) -> i64
+fn digits(s: str, at: usize, n: usize) -> (i64, bool)
+fn parse_instant(s: str) -> (f64, bool)
+fn none_validation(msg: str) -> Validation
+fn contains_text(xs: []const str, v: str) -> bool
+fn join_list(a: *mem.Arena, xs: []const str) -> str
+fn validate_saml_response(a: *mem.Arena, parsed: Response, c: Config) -> Validation
+fn new_replay_cache(a: *mem.Arena, capacity: usize) -> ReplayCache
+fn replay_prune(c: *ReplayCache, now: f64)
+fn replay_has(c: *ReplayCache, id: str, now: f64) -> bool
+fn replay_remember(c: *ReplayCache, id: str, expires_at: f64, has_expiry: bool, now: f64)
+fn replay_size(c: *ReplayCache, now: f64) -> usize
+
+type Length = struct { length: usize, offset: usize, good: bool }
+
+fn read_length(der: []const u8, index: usize) -> Length
+
+type RsaKey = struct { found: bool, modulus: []const u8, exponent: []const u8 }
+
+fn extract_rsa_public_key(der: []const u8) -> RsaKey
+fn certificate_to_jwk(a: *mem.Arena, certificate: str) -> (Key, bool)
+fn starts_dashes(s: str, at: usize) -> bool
+fn build_sp_metadata(a: *mem.Arena, entity_id: str, acs_url: str, slo_url: str, name_id_format: str, want_signed: bool) -> (str, []const str)
+
+type IdpMetadata = struct { valid: bool, message: str, entity_id: str, sso_url: str, post_url: str, certificates: []const str }
+
+fn parse_idp_metadata(a: *mem.Arena, source: str) -> IdpMetadata
+```
+
+SAML 2.0 service provider, Web Browser SSO (L045), after Appdor's `src/identity/saml.js`: `build_authn_request` (HTTP-Redirect with stored-block deflate, or HTTP-POST), XML-DSig verification (`verify_xml_signature`: RSA-SHA256 over the canonical SignedInfo, SHA-256 digest of the referenced element with the enveloped-signature transform, SHA-1 refused by name), the wrapping defence (`extract_signed_assertion`: one Assertion, covered by the signature's Reference or an ancestor), `parse_saml_response`, `validate_saml_response` in the reference's order of checks (signature, status, issuer, conditions, audience, subject confirmation, `InResponseTo`, destination, replay), a replay cache, `certificate_to_jwk`, `build_sp_metadata` and `parse_idp_metadata`. There is no switch that turns verification off. Checked against Appdor's own functions over 416 cases, with responses really signed with RSA-SHA256, on both hosts (D2350).
+
 ### `e.fmt.xml`
 
 ```neper

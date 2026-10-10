@@ -493,6 +493,7 @@
     "x_agent_receipt",
     "x_agent_task",
     "x_identity_oidc",
+    "x_identity_saml",
     "x_identity_scim",
     "x_lint_scan",
     "x_migrate",

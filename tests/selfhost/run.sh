@@ -3433,6 +3433,12 @@ x_identity_scim_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/x-identity-scim-selfhost"
 x_identity_scim_output=$("$test_build/x-identity-scim-selfhost")
 [ "$x_identity_scim_output" = 'x identity scim ok' ]
+# x.identity.xml and x.identity.saml against Appdor's xml.js and saml.js (416 cases with real signatures, D2350).
+x_identity_saml_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_identity_saml/src/main.e" "$repo" x64 linux "$test_build/x-identity-saml-selfhost" -j 2)
+[ "$x_identity_saml_written" = 'executable written' ]
+chmod +x "$test_build/x-identity-saml-selfhost"
+x_identity_saml_output=$("$test_build/x-identity-saml-selfhost")
+[ "$x_identity_saml_output" = 'x identity saml ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

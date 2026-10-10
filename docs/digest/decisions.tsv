@@ -2104,4 +2104,5 @@ D2345	491	L042 closed: scanner finding parsers and the Mermaid emitter, checked 
 D2346	1039	L043 closed: e.fmt.woff and e.fmt.woff2 checked against Vaper's decoders
 D2347	1021	L044 closed: e.fmt.xlsx sheet normalisation and x.migrate.typemaps checked against Appdor
 D2348	1081	L045 part one: x.identity.jose and x.identity.oidc checked against Appdor
-D2349	953	L045 part two: x.identity.scim checked against Appdor
+D2349	954	L045 part two: x.identity.scim checked against Appdor
+D2350	890	L045 closed: x.identity.xml and x.identity.saml checked against Appdor

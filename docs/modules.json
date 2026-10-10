@@ -136,6 +136,8 @@
     "x.identity.jose",
     "x.identity.oidc",
     "x.identity.scim",
+    "x.identity.xml",
+    "x.identity.saml",
     "e.fmt.xml",
     "e.fmt.xsd",
     "e.fmt.xsd.schema",
@@ -2274,6 +2276,40 @@
     "e.fmt.json",
     "e.mem",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.identity.xml",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.formula.text",
+    "e.mem",
+    "e.str",
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.identity.saml",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.crypto.hash",
+    "e.fmt.json",
+    "e.mem",
+    "e.str",
+    "x.identity.jose",
+    "x.identity.oidc",
+    "x.identity.xml"
    ],
    "blocked_by": []
   },
