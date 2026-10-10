@@ -3292,6 +3292,13 @@ x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/x-migrate-selfhost"
 x_migrate_output=$("$test_build/x-migrate-selfhost")
 [ "$x_migrate_output" = 'x migrate ok' ]
+# `x.agent.contract` (T042, H35): the content-addressed change contract -- validation, canonical form, hash,
+# verdict and amendment links against an independent reference (267 cases, D2323).
+x_agent_contract_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_agent_contract/src/main.e" "$repo" x64 linux "$test_build/x-agent-contract-selfhost" -j 2)
+[ "$x_agent_contract_written" = 'executable written' ]
+chmod +x "$test_build/x-agent-contract-selfhost"
+x_agent_contract_output=$("$test_build/x-agent-contract-selfhost")
+[ "$x_agent_contract_output" = 'x agent contract ok' ]
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 algo_trigger_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_trigger/src/main.e" "$repo" x64 linux "$test_build/algo-trigger-selfhost")
 [ "$algo_trigger_written" = 'executable written' ]

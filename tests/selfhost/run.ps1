@@ -3709,6 +3709,13 @@ $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $xMigrateWritten -ne 'executable written') { throw 'x_migrate emission failed' }
 $xMigrateOutput = & $xMigratePath
 if ($LASTEXITCODE -ne 0 -or $xMigrateOutput -ne 'x migrate ok') { throw "x_migrate answered wrongly: exit $LASTEXITCODE" }
+# `x.agent.contract` (T042, H35): the content-addressed change contract -- validation, canonical form, hash,
+# verdict and amendment links against an independent reference (267 cases, D2323).
+$xAgentContractPath = Join-Path $testBuild 'x-agent-contract-selfhost.exe'
+$xAgentContractWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_agent_contract\src\main.e') $repo 'x64' 'windows' $xAgentContractPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xAgentContractWritten -ne 'executable written') { throw 'x_agent_contract emission failed' }
+$xAgentContractOutput = & $xAgentContractPath
+if ($LASTEXITCODE -ne 0 -or $xAgentContractOutput -ne 'x agent contract ok') { throw "x_agent_contract answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 $algoTriggerPath = Join-Path $testBuild 'algo-trigger-selfhost.exe'
 $algoTriggerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_trigger\src\main.e') $repo 'x64' 'windows' $algoTriggerPath

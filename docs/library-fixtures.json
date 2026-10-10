@@ -467,6 +467,7 @@
     "fmt_encode",
     "fmt_gaps_a",
     "fmt_json",
+    "x_agent_contract",
     "x_migrate"
    ]
   },
