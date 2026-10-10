@@ -15003,6 +15003,133 @@ uniqueItems, items, required, properties, additionalProperties, allOf/anyOf/oneO
 boolean schemas and `$ref` to `#` and `#/$defs/name`; the first failing pointer is written
 to a caller buffer.
 
+### `e.fmt.css.syntax`
+
+```neper
+error Invalid
+
+type Kind = enum u8 { Ident, Function, AtKeyword, Hash, String, BadString, Url, BadUrl, Delim, Number, Percentage, Dimension, Whitespace, Cdo, Cdc, Colon, Semicolon, Comma, LeftSquare, RightSquare, LeftParen, RightParen, LeftCurly, RightCurly, Eof }
+type Token = struct { kind: Kind, start: usize, end: usize, value: str, number: f64, unit: str, integer: bool, hash_id: bool }
+type Block = struct { open: Kind, inner: []const Token }
+type Rule = struct { at: bool, name: str, prelude: []const Token, has_block: bool, block: Block }
+type Declaration = struct { name: str, value: []const Token, important: bool }
+
+fn kind_name(k: Kind) -> str
+fn is_space(c: i32) -> bool
+fn is_newline_like(c: i32) -> bool
+fn is_ws(c: i32) -> bool
+fn is_digit(c: i32) -> bool
+fn is_hex(c: i32) -> bool
+fn is_letter(c: i32) -> bool
+fn is_name_start(c: i32) -> bool
+fn is_name(c: i32) -> bool
+fn hex_value(c: i32) -> i32
+
+type Scan = struct { a: *mem.Arena, src: str, n: usize, i: usize, out: list.List[Token] }
+
+fn cp(s: *const Scan, at: usize) -> i32
+fn peek(s: *const Scan, offset: usize) -> i32
+fn plain(kind: Kind, start: usize, end: usize) -> Token
+fn add(s: *Scan, t: Token)
+fn add_plain(s: *Scan, kind: Kind, start: usize)
+fn add_valued(s: *Scan, kind: Kind, start: usize, value: str)
+fn push_code_point(b: *str.Builder, c: u32)
+fn push_source_byte(b: *str.Builder, c: i32)
+fn is_valid_escape(s: *const Scan, at: usize) -> bool
+fn is_ident_start_seq(s: *const Scan, at: usize) -> bool
+fn starts_number(s: *const Scan, at: usize) -> bool
+fn consume_escape(s: *Scan) -> u32
+fn consume_name(s: *Scan) -> str
+fn consume_number(s: *Scan) -> (f64, bool)
+fn consume_numeric(s: *Scan)
+fn consume_bad_url_remnants(s: *Scan, start: usize)
+fn consume_url(s: *Scan, start: usize)
+fn consume_ident_like(s: *Scan)
+fn lower_eq(s: str, lower: str) -> bool
+fn consume_string(s: *Scan, quote: i32)
+fn consume_hash(s: *Scan)
+fn delim_of(c: i32, s: *Scan) -> str
+fn consume_token(s: *Scan)
+fn tokenize(a: *mem.Arena, input: str) -> ([]const Token, err)
+
+type Grammar = struct { a: *mem.Arena, t: []const Token, pos: usize }
+
+fn closer_for(k: Kind) -> Kind
+fn is_opener(k: Kind) -> bool
+fn cur(g: *const Grammar) -> Token
+fn at_eof(g: *const Grammar) -> bool
+fn push_token(l: *list.List[Token], t: Token)
+fn new_tokens(a: *mem.Arena) -> list.List[Token]
+fn trim(toks: []const Token) -> []const Token
+fn append_balanced(g: *Grammar, out: *list.List[Token])
+fn consume_simple_block(g: *Grammar) -> Block
+fn lower_text(a: *mem.Arena, s: str) -> str
+fn empty_block() -> Block
+fn consume_at_rule(g: *Grammar) -> Rule
+fn consume_qualified_rule(g: *Grammar) -> (Rule, bool)
+fn parse_rules(a: *mem.Arena, tokens: []const Token, top_level: bool) -> ([]const Rule, err)
+fn parse_one_declaration(g: *Grammar, toks: []const Token) -> (Declaration, bool)
+fn parse_declarations(a: *mem.Arena, tokens: []const Token) -> ([]const Declaration, err)
+fn raw_text(source: str, tokens: []const Token) -> str
+```
+
+A CSS Syntax Level 3 tokenizer and rule grammar (L038), after Vaper's `css_tokenizer.dart` and `css_syntax.dart`: `tokenize` turns text into tokens with byte offsets and never fails (malformed text becomes `BadString`, `BadUrl` and `Delim` recovery tokens), `parse_rules` builds qualified rules, at-rules and simple blocks, `parse_declarations` reads a block's declarations with `!important`, and `raw_text` slices the source for a token range byte-faithfully. Unbalanced blocks end at the end of input, a bad declaration is skipped to the next `;` and a rule with no block is dropped. Checked against Vaper's own Dart code over 420 random inputs of well-formed and malformed CSS on both hosts (D2340).
+
+### `e.fmt.css.selector`
+
+```neper
+type SimpleKind = enum u8 { Universal, Type, Klass, Id, PseudoClass, FirstChild, LastChild, OnlyChild, NthChild, NthLastChild, NthOfType, NthLastOfType, FirstOfType, LastOfType, OnlyOfType, Empty, Root, Not, Is, Where, Has, Scope, AttrPresent, AttrEquals, AttrIncludes, AttrDash, AttrPrefix, AttrSuffix, AttrSubstring }
+type Combinator = enum u8 { Descendant, Child, AdjacentSibling, GeneralSibling }
+type PseudoElement = enum u8 { Before, After, Marker, FirstLetter, FirstLine }
+type Simple = struct { kind: SimpleKind, name: str, argument: str, subs: []const Selector, attr_ci: bool }
+type Compound = struct { parts: []const Simple }
+type Selector = struct { compounds: []const Compound, combinators: []const Combinator }
+type RuleSelector = struct { selector: Selector, has_pseudo: bool, pseudo: PseudoElement }
+type Specificity = struct { ids: i64, classes: i64, types: i64 }
+
+fn kind_name(k: SimpleKind) -> str
+fn combinator_name(c: Combinator) -> str
+fn pseudo_element_name(p: PseudoElement) -> str
+fn ordinal(s: Specificity) -> i64
+fn add_spec(x: Specificity, y: Specificity) -> Specificity
+fn zero_spec() -> Specificity
+fn simple_specificity(s: Simple) -> Specificity
+fn specificity(sel: Selector) -> Specificity
+
+type Parser = struct { a: *mem.Arena, src: str }
+type SimpleResult = struct { good: bool, has_selector: bool, selector: Simple, has_pseudo: bool, pseudo: PseudoElement, next: usize }
+type Complex = struct { good: bool, selector: Selector, has_pseudo: bool, pseudo: PseudoElement }
+
+fn new_simple(kind: SimpleKind, name: str) -> Simple
+fn rejected() -> SimpleResult
+fn found_simple(s: Simple, next: usize) -> SimpleResult
+fn found_pseudo(p: PseudoElement, next: usize) -> SimpleResult
+fn lower(a: *mem.Arena, s: str) -> str
+fn trim(toks: []const syntax.Token) -> []const syntax.Token
+fn skip_ws(toks: []const syntax.Token, from: usize) -> usize
+fn is_delim(t: syntax.Token, value: str) -> bool
+fn split_top_level_comma(a: *mem.Arena, tokens: []const syntax.Token) -> []const []const syntax.Token
+fn rejected_complex() -> Complex
+fn push_simple(l: *list.List[Simple], s: Simple)
+fn new_simples(a: *mem.Arena) -> list.List[Simple]
+fn parse_complex(p: *const Parser, toks: []const syntax.Token) -> Complex
+fn parse_simple(p: *const Parser, toks: []const syntax.Token, start: usize) -> SimpleResult
+fn parse_attribute(p: *const Parser, toks: []const syntax.Token, open: usize) -> SimpleResult
+fn attribute_from_inner(p: *const Parser, inner: []const syntax.Token) -> (Simple, bool)
+fn pseudo_class_by_name(name: str) -> Simple
+fn pseudo_element_of(name: str, next: usize) -> SimpleResult
+fn parse_pseudo(p: *const Parser, toks: []const syntax.Token, i: usize) -> SimpleResult
+fn plain_list(p: *const Parser, tokens: []const syntax.Token) -> []const Selector
+fn relative_list(p: *const Parser, tokens: []const syntax.Token) -> []const Selector
+fn is_word(c: u8) -> bool
+fn trim_text(s: str) -> str
+fn parse_nth(p: *const Parser, kind: SimpleKind, arg: []const syntax.Token) -> Simple
+fn functional_pseudo(p: *const Parser, name: str, arg: []const syntax.Token) -> (Simple, bool)
+fn parse_selector_list_for_rule(a: *mem.Arena, source: str, tokens: []const syntax.Token) -> ([]const RuleSelector, err)
+```
+
+The CSS selector model and parser (L038), after Vaper's `selector.dart` and `selector_parser.dart`: complex selectors as compounds joined by descendant, child, adjacent-sibling and general-sibling combinators; type, universal, class, id and attribute selectors (all six operators and the `i` flag); the structural pseudo-classes, `:not()`, `:is()`, `:where()`, `:has()` with relative selectors, and `:nth-*()` with an `of S` list; the legacy pseudo-elements; and specificity as (ids, classes, types) with the functional pseudo-classes recursing. A selector the parser cannot represent is dropped from its list rather than failing it. Checked against Vaper's own Dart parser over 520 random selector lists on both hosts (D2340).
+
 ### `e.fmt.csv`
 
 ```neper

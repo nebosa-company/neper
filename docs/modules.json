@@ -38,6 +38,8 @@
     "e.time",
     "e.test",
     "e.fmt.json",
+    "e.fmt.css.syntax",
+    "e.fmt.css.selector",
     "e.fmt.csv",
     "e.fmt.ini",
     "e.text.utf8",
@@ -1749,6 +1751,33 @@
    "direct_dependencies": [
     "e.io",
     "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.css.syntax",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.css.selector",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.fmt.css.syntax",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },

@@ -3759,6 +3759,20 @@ $algoSyncjobWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $algoSyncjobWritten -ne 'executable written') { throw 'algo_syncjob emission failed' }
 $algoSyncjobOutput = & $algoSyncjobPath
 if ($LASTEXITCODE -ne 0 -or $algoSyncjobOutput -ne 'algo syncjob ok') { throw "algo_syncjob answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.css.syntax`: the CSS Syntax 3 tokenizer and rule grammar against Vaper's own Dart code
+# # over 420 random inputs of well-formed and malformed CSS (D2340).
+$textCssSyntaxPath = Join-Path $testBuild 'text-css-syntax-selfhost.exe'
+$textCssSyntaxWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_css_syntax\src\main.e') $repo 'x64' 'windows' $textCssSyntaxPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textCssSyntaxWritten -ne 'executable written') { throw 'text_css_syntax emission failed' }
+$textCssSyntaxOutput = & $textCssSyntaxPath
+if ($LASTEXITCODE -ne 0 -or $textCssSyntaxOutput -ne 'css syntax ok') { throw "text_css_syntax answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.css.selector`: the selector model, parser and specificity against Vaper's own Dart parser
+# # over 520 random selector lists (D2340).
+$textCssSelectorPath = Join-Path $testBuild 'text-css-selector-selfhost.exe'
+$textCssSelectorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_css_selector\src\main.e') $repo 'x64' 'windows' $textCssSelectorPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textCssSelectorWritten -ne 'executable written') { throw 'text_css_selector emission failed' }
+$textCssSelectorOutput = & $textCssSelectorPath
+if ($LASTEXITCODE -ne 0 -or $textCssSelectorOutput -ne 'css selector ok') { throw "text_css_selector answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

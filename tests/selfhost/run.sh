@@ -3342,6 +3342,20 @@ algo_syncjob_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/algo-syncjob-selfhost"
 algo_syncjob_output=$("$test_build/algo-syncjob-selfhost")
 [ "$algo_syncjob_output" = 'algo syncjob ok' ]
+# `e.fmt.css.syntax`: the CSS Syntax 3 tokenizer and rule grammar against Vaper's own Dart code
+# # over 420 random inputs of well-formed and malformed CSS (D2340).
+text_css_syntax_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_css_syntax/src/main.e" "$repo" x64 linux "$test_build/text-css-syntax-selfhost" -j 2)
+[ "$text_css_syntax_written" = 'executable written' ]
+chmod +x "$test_build/text-css-syntax-selfhost"
+text_css_syntax_output=$("$test_build/text-css-syntax-selfhost")
+[ "$text_css_syntax_output" = 'css syntax ok' ]
+# `e.fmt.css.selector`: the selector model, parser and specificity against Vaper's own Dart parser
+# # over 520 random selector lists (D2340).
+text_css_selector_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_css_selector/src/main.e" "$repo" x64 linux "$test_build/text-css-selector-selfhost" -j 2)
+[ "$text_css_selector_written" = 'executable written' ]
+chmod +x "$test_build/text-css-selector-selfhost"
+text_css_selector_output=$("$test_build/text-css-selector-selfhost")
+[ "$text_css_selector_output" = 'css selector ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
