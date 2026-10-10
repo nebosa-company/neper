@@ -27,7 +27,7 @@ C142	compiler	0	1479	NeperOS Document: real PDF, Office and Markdown readers; hi
 C143	compiler	0	1309	NeperOS Dynamic, step one: the prompt client and the app kit contract	The Dynamic app (D2238) makes apps from three templates inside itself.
 C145	compiler	0	652	NeperOS Clock: alarms ring with the app closed	Split from C115 (2026-10-08).
 C146	compiler	0	546	NeperOS Clock: daylight saving in the world-clock cities	Split from C115 (2026-10-08).
-C147	compiler	0.5	1256	Full suites complete on this machine: Windows run.ps1 and Linux run.sh	a complete run on either host (run.sh under WSL not run) and the test-results.json totals.
+C147	compiler	0.5	1643	Full suites complete on this machine: Windows run.ps1 and Linux run.sh	a complete run on either host (run.sh under WSL not run) and the test-results.json totals. RUN 17 (2026-10-10, seeded, with the sc500k static gate and the live-API network assertion excluded through a
 C148	compiler	0	651	NeperOS clipboard: Copy in Secure puts text on it, text fields paste from it	Split from C116 (2026-10-08).
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C107	compiler	0.9	6770	NeperOS shell 3: the e.os surface on NeperOS (os.neperos.e)	Queued by D2148.
