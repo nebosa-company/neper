@@ -8,6 +8,7 @@ serves them; the suites never touch the internet, so run this only to refresh th
 cut to the 70 newest (the app reads 60) to keep the files small.
 """
 import json
+import os
 import pathlib
 import urllib.request
 
@@ -30,9 +31,7 @@ assert series.get('status') == 'ok', series
 print('AAPL', len(series['values']), 'values, newest', series['values'][0]['datetime'])
 
 # Alpha Vantage's TIME_SERIES_DAILY for IBM with its public demo key (the demo key serves IBM only), and Twelve
-# Data's symbol_search for "app" (public, no key). The Polygon reply is not recorded: Polygon has no public
-# key, so the file is the AAPL closes above in the shape its docs give for /v2/aggs (results[].c, newest
-# first, status OK); only the shape is claimed, not a recording.
+# Data's symbol_search for "app" (public, no key).
 daily = fetch('https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=IBM&apikey=demo')
 assert 'Time Series (Daily)' in daily, daily
 (HERE / 'daily-IBM.json').write_text(json.dumps(daily, separators=(',', ':')), encoding='utf-8')
@@ -41,11 +40,25 @@ found = fetch('https://api.twelvedata.com/symbol_search?symbol=app&outputsize=30
 assert found.get('status') == 'ok', found
 (HERE / 'symbol_search-app.json').write_text(json.dumps(found, separators=(',', ':')), encoding='utf-8')
 print('search app', len(found['data']), 'matches')
-results = [{'v': 1, 'vw': float(v['close']), 'o': float(v['open']), 'c': float(v['close']), 'h': float(v['high']),
-            'l': float(v['low']), 't': 1700000000000 - 86400000 * i, 'n': 1} for i, v in enumerate(series['values'])]
-(HERE / 'aggs-AAPL.json').write_text(json.dumps({'ticker': 'AAPL', 'queryCount': len(results), 'resultsCount': len(results),
-    'adjusted': True, 'results': results, 'status': 'OK', 'request_id': 'fixture', 'count': len(results)}, separators=(',', ':')), encoding='utf-8')
-print('aggs AAPL', len(results), 'results (shape from docs)')
+# Polygon's /v2/aggs daily bars for AAPL. Polygon has no public key, so with POLYGON_API_KEY in the
+# environment this records a real reply; without it the file is the AAPL closes above in the shape its docs
+# give (results[].c, newest first, status OK) -- the shape is claimed, not a recording.
+polygon_key = os.environ.get('POLYGON_API_KEY')
+if polygon_key:
+    aggs = fetch('https://api.polygon.io/v2/aggs/ticker/AAPL/range/1/day/2023-07-01/2023-11-14?adjusted=true&sort=desc&limit=60&apiKey=%s' % polygon_key)
+    assert aggs.get('status') in ('OK', 'DELAYED') and aggs.get('results'), aggs
+    aggs['request_id'] = 'fixture'
+    (HERE / 'aggs-AAPL.json').write_text(json.dumps(aggs, separators=(',', ':')), encoding='utf-8')
+    print('aggs AAPL', len(aggs['results']), 'results (recorded)')
+else:
+    results = [{'v': 1, 'vw': float(v['close']), 'o': float(v['open']), 'c': float(v['close']), 'h': float(v['high']),
+                'l': float(v['low']), 't': 1700000000000 - 86400000 * i, 'n': 1} for i, v in enumerate(series['values'])]
+    (HERE / 'aggs-AAPL.json').write_text(json.dumps({'ticker': 'AAPL', 'queryCount': len(results), 'resultsCount': len(results),
+        'adjusted': True, 'results': results, 'status': 'OK', 'request_id': 'fixture', 'count': len(results)}, separators=(',', ':')), encoding='utf-8')
+    print('aggs AAPL', len(results), 'results (shape from docs; set POLYGON_API_KEY to record)')
+
+# Coinbase's /products (public, no key) is the full ~700-pair list; products.json next to this script is a
+# curated handful so the crypto Find's match counts stay stable, and is not overwritten here.
 
 # Weather (C119): Open-Meteo's forecast for three places (keyless) and its geocoding search for "bergen". The
 # forecast URL is the one weather.e builds; the coordinates are the app's places in hundredths of a degree.

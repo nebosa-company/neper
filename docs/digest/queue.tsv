@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-C118	compiler	0.92	2502	NeperOS Stocks live data: Stooq daily prices, bring-your-own-key providers, crypto	the key survives only the session (storage: C116, C125); Finnhub (free tier has no daily history); crypto search; the Polygon reply is a documented shape, not a recording.
+C118	compiler	0.94	3051	NeperOS Stocks live data: Stooq daily prices, bring-your-own-key providers, crypto	the key survives only the session (storage: C116, C125); Finnhub (free tier has no daily history); the committed Polygon reply is still a documented shape, not a recording (Polygon has no public key, 
 C126	compiler	0	1417	NeperOS Settings: settings that act on the system, kept across restarts, searchable	The Settings app (D2220) keeps its values as sample state in the process;
 C125	compiler	0	1219	NeperOS Files: real storage through the filesystem server, file hand-over between apps	The Files app (D2219) browses a sample tree kept in the process.
 C124	compiler	0	2252	NeperOS Dynamic: apps from a prompt, compiled in Neper on a server, scanned, installed	Dynamic is the app that makes apps: the user writes a prompt that says what app they need;

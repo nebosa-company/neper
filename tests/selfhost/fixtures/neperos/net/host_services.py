@@ -42,6 +42,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
         url = urllib.parse.urlparse(self.path)
         host = (self.headers.get('Host') or '').split(':')[0]
         query = urllib.parse.parse_qs(url.query)
+        if host == 'api.exchange.coinbase.com' and url.path == '/products':
+            # Public, no key: the curated pair list the Add sheet's crypto Find searches.
+            self.reply(200, (here / 'products.json').read_bytes(), 'application/json')
+            return
         if host == 'api.exchange.coinbase.com' and url.path.startswith('/products/') and url.path.endswith('/candles'):
             product = url.path.split('/')[2]
             known = here / ('candles-%s.json' % product)

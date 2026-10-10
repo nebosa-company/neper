@@ -2114,4 +2114,5 @@ D2355	1480	L049 closed: webhook signatures, auth schemes, MCP protocol and OpenA
 D2356	805	L050 closed: x.ops.inventory checked against Petcow's facts and inventory
 D2357	1187	L051 closed: e.net.packet and e.net.pcap checked against an independent implementation
 D2358	1322	L052 closed: e.fmt.elf and e.fmt.pe checked against an independent struct writer and reader
-D2359	1431	L053 closed: e.text.sig, a YARA-lite subset checked against an independent matcher
+D2359	1432	L053 closed: e.text.sig, a YARA-lite subset checked against an independent matcher
+D2360	1618	C118 crypto search: Coinbase /products matched in the Add sheet, and a key-gated Polygon recording

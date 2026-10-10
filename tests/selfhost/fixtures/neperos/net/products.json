@@ -1,0 +1,8 @@
+[{"id":"BTC-USD","base_currency":"BTC","quote_currency":"USD","display_name":"BTC-USD","status":"online","trading_disabled":false},
+{"id":"BTC-EUR","base_currency":"BTC","quote_currency":"EUR","display_name":"BTC-EUR","status":"online","trading_disabled":false},
+{"id":"BTC-GBP","base_currency":"BTC","quote_currency":"GBP","display_name":"BTC-GBP","status":"delisted","trading_disabled":true},
+{"id":"ETH-USD","base_currency":"ETH","quote_currency":"USD","display_name":"ETH-USD","status":"online","trading_disabled":false},
+{"id":"SOL-USD","base_currency":"SOL","quote_currency":"USD","display_name":"SOL-USD","status":"online","trading_disabled":false},
+{"id":"ADA-USD","base_currency":"ADA","quote_currency":"USD","display_name":"ADA-USD","status":"online","trading_disabled":false},
+{"id":"XRP-USD","base_currency":"XRP","quote_currency":"USD","display_name":"XRP-USD","status":"online","trading_disabled":false},
+{"id":"DOGE-USD","base_currency":"DOGE","quote_currency":"USD","display_name":"DOGE-USD","status":"online","trading_disabled":false}]

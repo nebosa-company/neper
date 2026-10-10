@@ -13,7 +13,8 @@
 // The stock provider is chosen in the Key sheet: Twelve Data, Alpha Vantage (TIME_SERIES_DAILY) or Polygon
 // (/v2/aggs), each with its own key; changing it clears the key. Finnhub is not offered: its free tier has
 // no daily history. The Add sheet's Find lists stock symbols matching what was typed (Twelve Data's
-// symbol_search, no key); crypto has no search, a pair is typed.
+// symbol_search, no key); crypto's Find lists Coinbase trading pairs matching what was typed
+// (its public /products list, no key).
 // ponytail: the key lives in this process only, so it is asked for again each time the app opens -- an app
 // cannot reach storage yet (queue items C116 Secure and C125 Files hold the encrypted home for it).
 use e.mem
@@ -698,6 +699,88 @@ fn find_symbols(a: *mem.Arena, s: *State) -> bool {
     ret s.reason == 0usize
 }
 
+// The string value of a member, or false if the key is missing or not a string.
+fn str_field(row: []const json.Member, key: str) -> (str, bool) {
+    let (v, got) = member(row, key)
+    if !got { ret ("", false) }
+    switch v {
+    case .String as found_text:
+        ret (found_text, true)
+    default:
+        ret ("", false)
+    }
+}
+
+// Whether `needle` occurs in `hay` (an empty needle matches everything).
+fn contains_term(hay: str, needle: str) -> bool {
+    if needle.len == 0usize { ret true }
+    if needle.len > hay.len { ret false }
+    var i = 0usize
+    while i + needle.len <= hay.len {
+        var j = 0usize
+        var same = true
+        while j < needle.len && same {
+            if hay[i + j] != needle[j] { same = false }
+            j += 1usize
+        }
+        if same { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+// Coinbase Exchange products (public, no key) matching what is typed in the Add sheet: up to FOUND_MAX online
+// pairs whose id holds the term (upper-cased), in `found_*`. [{"id": "BTC-USD", "base_currency": "BTC",
+// "quote_currency": "USD", "status": "online"}, ...].
+fn find_crypto(a: *mem.Arena, s: *State) -> bool {
+    s.found = 0usize
+    s.reason = 0usize
+    let mark = mem.mark(a)
+    // Upper-case letters, digits, '-' and '.' make the term; Coinbase ids are upper-case.
+    var term: [16]u8 = zero
+    var tn = 0usize
+    var i = 0usize
+    while i < s.entry.len && tn < 16usize {
+        var c = s.entry.bytes[i]
+        if c >= 97u8 && c <= 122u8 { c = c - 32u8 }
+        if (c >= 65u8 && c <= 90u8) || (c >= 48u8 && c <= 57u8) || c == 45u8 || c == 46u8 {
+            term[tn] = c
+            tn += 1usize
+        }
+        i += 1usize
+    }
+    let (parsed, fetched) = fetch_json(a, s, "api.exchange.coinbase.com", "/products")
+    if !fetched {
+        mem.reset(a, mark)
+        ret false
+    }
+    switch parsed {
+    case .Array as rows:
+        var m = 0usize
+        while m < rows.len && s.found < FOUND_MAX {
+            switch rows[m] {
+            case .Object as row:
+                let (id_text, ok_id) = str_field(row, "id")
+                let (base_text, ok_base) = str_field(row, "base_currency")
+                let (quote_text, ok_quote) = str_field(row, "quote_currency")
+                let (status_text, ok_status) = str_field(row, "status")
+                if ok_id && ok_base && ok_quote && ok_status && ui.same(status_text, "online") && id_text.len > 0usize && id_text.len <= SYMBOL_BYTES && contains_term(id_text, term[0usize..tn]) {
+                    s.found_symbol_len[s.found] = set_text(s.found_symbol[0usize..], s.found * SYMBOL_BYTES, SYMBOL_BYTES, id_text)
+                    s.found_name_len[s.found] = set_text(s.found_name[0usize..], s.found * NAME_BYTES, NAME_BYTES, ui.join(a, ui.join(a, base_text, " / ", ""), quote_text, ""))
+                    s.found += 1usize
+                }
+            default:
+                s.reason = 0usize
+            }
+            m += 1usize
+        }
+    default:
+        s.reason = 4usize
+    }
+    mem.reset(a, mark)
+    ret s.reason == 0usize
+}
+
 // One step of the running job, done on a tick: Sync fetches the next ticker, Add looks the new one up.
 fn job_step(a: *mem.Arena, s: *State) {
     if s.job == JOB_REFRESH {
@@ -736,8 +819,10 @@ fn job_step(a: *mem.Arena, s: *State) {
     }
     if s.job == JOB_FIND {
         s.job = JOB_NONE
-        if find_symbols(a, s) {
-            if s.found == 0usize { say_status(s, "No symbol matches that") } else { say_status(s, "Tap a match to use it") }
+        var looked_up = false
+        if s.add_crypto { looked_up = find_crypto(a, s) } else { looked_up = find_symbols(a, s) }
+        if looked_up {
+            if s.found == 0usize { say_status(s, "No match for that") } else { say_status(s, "Tap a match to use it") }
         } else {
             say_status(s, ui.join(a, "Search failed: ", reason_text(s.reason), ""))
         }
@@ -971,8 +1056,8 @@ fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
         if s.add_crypto { crypto_fill = ui.amber() } else { stock_fill = ui.amber() }
         try ui.pill(a, builder, &s.hits, faces, ID_STOCK_KIND, 16.0, 172.0, 110.0, 36.0, "Stock", stock_fill, 15.0)
         try ui.pill(a, builder, &s.hits, faces, ID_CRYPTO_KIND, 134.0, 172.0, 110.0, 36.0, "Crypto", crypto_fill, 15.0)
-        if !s.add_crypto { try ui.pill(a, builder, &s.hits, faces, ID_FIND, 300.0, 172.0, 96.0, 36.0, "Find", ui.soft(), 15.0) }
-        if !s.add_crypto && s.found > 0usize {
+        try ui.pill(a, builder, &s.hits, faces, ID_FIND, 300.0, 172.0, 96.0, 36.0, "Find", ui.soft(), 15.0)
+        if s.found > 0usize {
             var m = 0usize
             while m < s.found {
                 let y: f32 = 222.0 + f32(m) * 46.0
@@ -984,7 +1069,7 @@ fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
             }
         } else {
             var note = ui.join(a, "Stocks come from ", provider_name(s.provider), " and need its API key (Key). Type a symbol such as AAPL, or part of a name and tap Find.")
-            if s.add_crypto { note = "Crypto comes from Coinbase with no key. Type a pair such as BTC-USD or ETH-USD." }
+            if s.add_crypto { note = "Crypto comes from Coinbase with no key. Type a pair such as BTC-USD, or part of one and tap Find." }
             let (box_b, wrap_b) = ui.wrapped(a, builder, faces.grotesk, 13.0, note, 24.0, 226.0, 372.0, 4u32, ui.light_muted())
             if wrap_b != ok { ret wrap_b }
         }
@@ -1147,7 +1232,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         s.status_len = 0usize
         ret true
     }
-    if s.screen == ADD_SCREEN && id == ID_FIND && !s.add_crypto {
+    if s.screen == ADD_SCREEN && id == ID_FIND {
         if s.entry.len == 0usize {
             say_status(s, "Type part of a symbol or name first")
             ret true
@@ -1186,10 +1271,12 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if s.screen == ADD_SCREEN {
         if id == ID_STOCK_KIND {
             s.add_crypto = false
+            s.found = 0usize
             ret true
         }
         if id == ID_CRYPTO_KIND {
             s.add_crypto = true
+            s.found = 0usize
             ret true
         }
     }
