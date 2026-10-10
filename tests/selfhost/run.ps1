@@ -3826,6 +3826,12 @@ $xLintScanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $xLintScanWritten -ne 'executable written') { throw 'x_lint_scan emission failed' }
 $xLintScanOutput = & $xLintScanPath
 if ($LASTEXITCODE -ne 0 -or $xLintScanOutput -ne 'x lint scan ok') { throw "x_lint_scan answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.woff and e.fmt.woff2 against Vaper's woffToSfnt and woff2ToSfnt (480 cases, D2346).
+$fmtWoffPath = Join-Path $testBuild 'fmt-woff-selfhost.exe'
+$fmtWoffWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_woff\src\main.e') $repo 'x64' 'windows' $fmtWoffPath -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtWoffWritten -ne 'executable written') { throw 'fmt_woff emission failed' }
+$fmtWoffOutput = & $fmtWoffPath
+if ($LASTEXITCODE -ne 0 -or $fmtWoffOutput -ne 'fmt woff ok') { throw "fmt_woff answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

@@ -477,6 +477,7 @@
     "fmt_encode",
     "fmt_gaps_a",
     "fmt_json",
+    "fmt_woff",
     "gfx_cssvalue",
     "html_accessible",
     "text_css_container",

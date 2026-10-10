@@ -3409,6 +3409,12 @@ x_lint_scan_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/x-lint-scan-selfhost"
 x_lint_scan_output=$("$test_build/x-lint-scan-selfhost")
 [ "$x_lint_scan_output" = 'x lint scan ok' ]
+# e.fmt.woff and e.fmt.woff2 against Vaper's woffToSfnt and woff2ToSfnt (480 cases, D2346).
+fmt_woff_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_woff/src/main.e" "$repo" x64 linux "$test_build/fmt-woff-selfhost" -j 2)
+[ "$fmt_woff_written" = 'executable written' ]
+chmod +x "$test_build/fmt-woff-selfhost"
+fmt_woff_output=$("$test_build/fmt-woff-selfhost")
+[ "$fmt_woff_output" = 'fmt woff ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

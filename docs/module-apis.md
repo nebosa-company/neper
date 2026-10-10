@@ -16943,6 +16943,68 @@ The subset is block mappings/sequences, flow collections, plain/single/double-qu
 scalars, literal/folded blocks and `null`/boolean/integer/float core tags. Anchors,
 aliases, merge keys, directives, custom tags and multiple documents are `Unsupported`.
 
+### `e.fmt.woff2`
+
+```neper
+error Invalid
+
+const SPARE: usize = 4096usize
+const LIMIT: usize = 268435456usize
+
+type Buf = struct { data: []const u8, pos: usize, end: usize, bad: bool }
+type Table = struct { tag: u32, flags: u32, dst_len: usize, xform_len: usize, src_off: usize, content: []const u8 }
+
+fn tag_of(s: str) -> u32
+fn known_tag(i: u32) -> u32
+fn get8(b: *Buf) -> u32
+fn get16(b: *Buf) -> u32
+fn get32(b: *Buf) -> u32
+fn skip(b: *Buf, n: usize)
+fn take(b: *Buf, n: usize) -> []const u8
+fn read255(b: *Buf) -> u32
+fn read_base128(b: *Buf) -> u32
+fn with_sign(flag: u32, base: i64) -> i64
+fn low16(v: i64) -> u32
+fn store16(dst: []u8, at: usize, v: u32)
+fn store32(dst: []u8, at: usize, v: u32)
+fn at_byte(g: *Buf, o: usize) -> u32
+fn triplets(flags: []const u8, g: *Buf, n: usize, xs: []i64, ys: []i64, on: []u8) -> usize
+fn store_points(xs: []const i64, ys: []const i64, on: []const u8, n: usize, contours: usize, instr: usize, overlap: bool, dst: []u8) -> usize
+fn compute_bbox(xs: []const i64, ys: []const i64, n: usize, dst: []u8)
+
+type Composite = struct { size: usize, instr: bool }
+
+fn size_of_composite(s: *Buf) -> Composite
+
+type Glyphs = struct { glyf: []u8, loca: []u8, x_mins: []u32 }
+
+fn zero_bytes(b: []u8)
+fn reconstruct_glyf(a: *mem.Arena, data: []const u8, loca_len: usize) -> (Glyphs, err)
+fn reconstruct_hmtx(a: *mem.Arena, data: []const u8, glyph_count: i64, metrics: usize, x_mins: []const u32) -> ([]u8, err)
+fn checksum(d: []const u8, len: usize) -> u32
+fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err)
+```
+
+A WOFF2 font decoder (L043): `to_sfnt` reads the container and table directory (known-tag indexes, UIntBase128 lengths), decompresses the table data through `e.fmt.brotli`, reverses the `glyf`/`loca` transform (the seven glyph streams, triplet-coded points, composite glyphs, bounding boxes, overlap bitmap) and the `hmtx` transform, and rebuilds the sfnt with recomputed table checksums and `head.checkSumAdjustment`. Font collections, malformed streams and unsupported transforms are `Invalid`. Checked against Vaper's `woff2ToSfnt` over 320 random and damaged fonts on both hosts (D2346).
+
+### `e.fmt.woff`
+
+```neper
+error Invalid
+
+const LIMIT: usize = 67108864usize
+
+type Entry = struct { tag: u32, checksum: u32, data: []const u8 }
+
+fn be32(b: []const u8, at: usize) -> u32
+fn put32(b: []u8, at: usize, v: u32)
+fn put16(b: []u8, at: usize, v: u32)
+fn inflate(a: *mem.Arena, window: []u8, raw: []const u8, want: usize) -> ([]u8, err)
+fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err)
+```
+
+A WOFF 1.0 font decoder (L043): `to_sfnt` reads the 44-byte header and the 20-byte table directory, inflates each table whose compressed length is below its original length (zlib framing and Adler-32 checked over `e.algo.deflate`), and rebuilds the sfnt with the offset table, tag-sorted directory entries and tables padded to four bytes. A short, inconsistent or uncompressible input is `Invalid`. Checked against Vaper's `woffToSfnt` over 160 random and damaged fonts on both hosts (D2346).
+
 ### `e.fmt.xml`
 
 ```neper

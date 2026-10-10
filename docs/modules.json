@@ -129,6 +129,8 @@
     "e.fmt.zip",
     "e.fmt.tar",
     "e.fmt.yaml",
+    "e.fmt.woff2",
+    "e.fmt.woff",
     "e.fmt.xml",
     "e.fmt.xsd",
     "e.fmt.xsd.schema",
@@ -2164,6 +2166,31 @@
     "e.io",
     "e.mem",
     "e.gfx.image"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.woff2",
+   "layer": 3,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.fmt.brotli"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.woff",
+   "layer": 3,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.algo.deflate",
+    "e.algo.hash"
    ],
    "blocked_by": []
   },
