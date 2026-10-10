@@ -2084,4 +2084,5 @@ D2326	1770	T042: `x.agent.bundle`, composing isolated changes without composing 
 D2327	1612	T042: `x.agent.receipt`, the one record that says a change was verified, and under what
 D2328	1645	T042: `x.agent.task`, a long operation as a durable, authorized state machine
 D2329	1387	T021: `e.crypto.hash` builds under the bootstrap, which was what blocked the compiler from using it
-D2330	1673	T027 (first step): the measurement's inputs are frozen before any model runs
+D2330	1674	T027 (first step): the measurement's inputs are frozen before any model runs
+D2331	2015	L036 (runtime half, first piece): `e.algo.journal`, the run journal as the program counter

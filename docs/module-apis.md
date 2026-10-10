@@ -5561,6 +5561,89 @@ fn template(a: *mem.Arena, key: str, table_id: str, status_field: str, generated
 
 Status workflows after appdor's workflow definition, rule registries and guard: the definition model with draft-only editing, open workflow and built-in templates, pre-publish validation (initial state, duplicates, dangling transitions, rule config checks, reachability, dead ends, lock-outs), version diffs, and the guard — allowed transitions and why-not, permissions, conditions, screen inputs, validators, optimistic concurrency, history and event, compiled post-functions, raw status write resolution, bulk partial/atomic, simulation and time in state. Checked by `algo_fsm` against appdor's engine.
 
+### `e.algo.journal`
+
+```neper
+error UnknownEntryType
+error NotAnObject
+error NotANumber
+
+type Obj = list.List[json.Member]
+type Commit = struct { base_seq: usize, workflow_version: json.Value, entries: list.List[json.Value], patch: Obj }
+type Applied = struct { landed: bool, run: json.Value, failure: json.Value }
+type Store = struct { a: *mem.Arena, prefix: str, counter: usize, runs: list.List[json.Value] }
+
+fn entry_type_known(name: str) -> bool
+fn is_terminal(status: str) -> bool
+fn text(s: str) -> json.Value
+fn flag(b: bool) -> json.Value
+fn members_of(v: json.Value) -> ([]const json.Member, bool)
+fn items_of(v: json.Value) -> ([]const json.Value, bool)
+fn string_of(v: json.Value) -> (str, bool)
+fn is_null(v: json.Value) -> bool
+fn truthy(v: json.Value) -> bool
+fn get(v: json.Value, key: str) -> (json.Value, bool)
+fn get_or(v: json.Value, key: str, fallback: json.Value) -> json.Value
+fn get_or_falsy(v: json.Value, key: str, fallback: json.Value) -> json.Value
+fn new_obj(a: *mem.Arena) -> (Obj, err)
+fn put(o: *Obj, key: str, value: json.Value) -> err
+fn obj_value(o: *const Obj) -> json.Value
+fn assign(o: *Obj, source: json.Value) -> err
+fn from_value(a: *mem.Arena, v: json.Value) -> (Obj, err)
+fn count_of(v: json.Value) -> (usize, bool)
+fn number_value(a: *mem.Arena, n: usize) -> (json.Value, err)
+fn same_scalar(x: json.Value, y: json.Value) -> bool
+fn create_run(a: *mem.Arena, workflow: json.Value, trigger: json.Value, options: json.Value) -> (json.Value, err)
+fn choose(c: bool, yes: str, no: str) -> str
+fn entries_of(run: json.Value) -> []const json.Value
+fn entry_type(e: json.Value) -> str
+fn entry_key(e: json.Value) -> (str, bool)
+fn key_is(e: json.Value, key: str) -> bool
+fn last_entry(run: json.Value, kind: str, key: str) -> (json.Value, bool)
+fn result(run: json.Value, key: str) -> (json.Value, bool)
+fn is_complete(run: json.Value, key: str) -> bool
+fn skipped(run: json.Value, key: str) -> (json.Value, bool)
+fn started(run: json.Value, key: str) -> (json.Value, bool)
+fn branch(run: json.Value, key: str) -> (json.Value, bool)
+fn loop_entry(run: json.Value, key: str) -> (json.Value, bool)
+fn signal(run: json.Value, key: str) -> (json.Value, bool)
+fn has_signal(run: json.Value, key: str) -> bool
+fn timer_fired(run: json.Value, key: str) -> bool
+fn last_recorded(run: json.Value, key: str) -> (json.Value, bool)
+fn has_recorded(run: json.Value, key: str) -> bool
+fn recorded(run: json.Value, key: str) -> (json.Value, bool)
+fn failures(run: json.Value, key: str) -> (usize, json.Value)
+fn failure_count(run: json.Value, key: str) -> usize
+fn last_failure(run: json.Value, key: str) -> (json.Value, bool)
+fn fork_branches(a: *mem.Arena, run: json.Value, key: str) -> ([]const json.Value, err)
+fn size(run: json.Value) -> usize
+fn begin_commit(a: *mem.Arena, run: json.Value) -> (Commit, err)
+fn is_empty(c: *const Commit) -> bool
+fn add(a: *mem.Arena, c: *Commit, kind: str, fields: json.Value) -> err
+fn set_header(c: *Commit, fields: json.Value) -> err
+fn rebase(a: *mem.Arena, c: *Commit, next_seq: usize) -> err
+fn build(a: *mem.Arena, c: *const Commit) -> (json.Value, err)
+fn failure(a: *mem.Arena, reason: str, detail_key: str, detail: json.Value, second_key: str, second: json.Value) -> (json.Value, err)
+fn apply_commit(a: *mem.Arena, run: json.Value, commit: json.Value) -> (Applied, err)
+fn record_clock(a: *mem.Arena, run: json.Value, c: *Commit, key: str, host_now: json.Value) -> (json.Value, bool, err)
+fn summarize_run(a: *mem.Arena, run: json.Value) -> (json.Value, err)
+fn number_f64(v: json.Value) -> (f64, err)
+fn number_from_difference(a: *mem.Arena, x: f64) -> (json.Value, err)
+fn new_store(a: *mem.Arena, prefix: str) -> (Store, err)
+fn run_id_of(run: json.Value) -> str
+fn duplicate_in(s: *const Store, run: json.Value, field: str) -> bool
+fn store_create(s: *Store, run: json.Value) -> (json.Value, err)
+fn number_text(v: json.Value) -> (str, bool)
+fn store_find(s: *const Store, run_id: str) -> (usize, bool)
+fn store_load(s: *const Store, run_id: str) -> (json.Value, bool)
+fn store_commit(s: *Store, run_id: str, commit: json.Value) -> (json.Value, err)
+fn number_le(x: json.Value, y: json.Value) -> bool
+fn store_due(s: *const Store, now: json.Value, limit: usize) -> ([]const json.Value, err)
+fn store_list(s: *const Store) -> []const json.Value
+```
+
+The durable run journal of L036's runtime half, checked against appdor's `src/workflow/journal.js`: runs, entries, commits and patches are `e.fmt.json` values, a commit is one atomic write of new entries and a header patch guarded by `expected_seq`, and `apply_commit` returns a new run, refusing a stale write, an out-of-order sequence and a status change on a finished run. `add` stamps `rev`, the workflow version, last so a caller cannot supply it; `record_clock` journals a clock reading once and returns it on every replay. The index queries (`result`, `is_complete`, `branch`, `failure_count` since the last `run-retried`, `fork_branches`, `recorded`, ...) read the entries with appdor's Map semantics. `Store` is the in-memory reference of a real store's contract: unique change, batch and schedule-occurrence keys per workflow, a run id replaced where it stands, `store_due` reading only headers. JavaScript's `||` and `??` are reproduced exactly.
+
 ### `e.algo.fulltext`
 
 ```neper

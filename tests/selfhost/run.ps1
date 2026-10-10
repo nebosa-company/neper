@@ -3703,6 +3703,13 @@ $algoFsmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $algoFsmWritten -ne 'executable written') { throw 'algo_fsm emission failed' }
 $algoFsmOutput = & $algoFsmPath
 if ($LASTEXITCODE -ne 0 -or $algoFsmOutput -ne 'algo fsm ok') { throw "algo_fsm answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.journal`: the durable run journal -- runs, commits, optimistic writes, index queries, clock recording and the
+# in-memory store -- against appdor's src/workflow/journal.js (160 operation scripts, D2331).
+$algoJournalPath = Join-Path $testBuild 'algo-journal-selfhost.exe'
+$algoJournalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_journal\src\main.e') $repo 'x64' 'windows' $algoJournalPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoJournalWritten -ne 'executable written') { throw 'algo_journal emission failed' }
+$algoJournalOutput = & $algoJournalPath
+if ($LASTEXITCODE -ne 0 -or $algoJournalOutput -ne 'algo journal ok') { throw "algo_journal answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

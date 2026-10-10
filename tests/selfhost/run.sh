@@ -3286,6 +3286,13 @@ algo_fsm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/algo-fsm-selfhost"
 algo_fsm_output=$("$test_build/algo-fsm-selfhost")
 [ "$algo_fsm_output" = 'algo fsm ok' ]
+# `e.algo.journal`: the durable run journal -- runs, commits, optimistic writes, index queries, clock recording and the
+# in-memory store -- against appdor's src/workflow/journal.js (160 operation scripts, D2331).
+algo_journal_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_journal/src/main.e" "$repo" x64 linux "$test_build/algo-journal-selfhost" -j 2)
+[ "$algo_journal_written" = 'executable written' ]
+chmod +x "$test_build/algo-journal-selfhost"
+algo_journal_output=$("$test_build/algo-journal-selfhost")
+[ "$algo_journal_output" = 'algo journal ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
