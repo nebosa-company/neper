@@ -165,6 +165,7 @@
     "e.algo.fsm",
     "e.algo.ir",
     "e.algo.journal",
+    "e.algo.workflow",
     "e.algo.fulltext",
     "e.algo.search",
     "e.text.search",
@@ -740,6 +741,22 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.data.list",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.workflow",
+   "layer": 5,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.ir",
+    "e.algo.journal",
     "e.data.list",
     "e.fmt.json",
     "e.mem",

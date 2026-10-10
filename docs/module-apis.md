@@ -5735,6 +5735,100 @@ fn store_list(s: *const Store) -> []const json.Value
 
 The durable run journal of L036's runtime half, checked against appdor's `src/workflow/journal.js`: runs, entries, commits and patches are `e.fmt.json` values, a commit is one atomic write of new entries and a header patch guarded by `expected_seq`, and `apply_commit` returns a new run, refusing a stale write, an out-of-order sequence and a status change on a finished run. `add` stamps `rev`, the workflow version, last so a caller cannot supply it; `record_clock` journals a clock reading once and returns it on every replay. The index queries (`result`, `is_complete`, `branch`, `failure_count` since the last `run-retried`, `fork_branches`, `recorded`, ...) read the entries with appdor's Map semantics. `Store` is the in-memory reference of a real store's contract: unique change, batch and schedule-occurrence keys per workflow, a run id replaced where it stands, `store_due` reading only headers. JavaScript's `||` and `??` are reproduced exactly.
 
+### `e.algo.workflow`
+
+```neper
+error Exhausted
+
+type EffectResult = struct { handled: bool, failed: bool, permanent: bool, detail: str, has_result: bool, result: json.Value }
+type UrlVerdict = struct { refusal: str, unchecked_host: str }
+type Hooks = struct { ctx: *void, now: fn(*void) -> i64, sleep: fn(*void, i64), render_value: fn(*void, str, json.Value) -> (json.Value, bool), render_text: fn(*void, str, json.Value) -> str, trace: fn(*void, json.Value) -> json.Value, check_url: fn(*void, str) -> UrlVerdict, has_effect: fn(*void, str) -> bool, effect: fn(*void, str, json.Value) -> EffectResult, filter_matches: fn(*void, json.Value, json.Value) -> bool, env: json.Value }
+
+const OK: u8 = 0u8
+const SUSPEND: u8 = 1u8
+const STOP: u8 = 2u8
+const FAIL: u8 = 3u8
+const STALE: u8 = 4u8
+const CANCEL: u8 = 5u8
+const ERROR: u8 = 6u8
+
+type Flow = struct { kind: u8, value: json.Value, has_value: bool, wait: json.Value, message: str, step_id: str, has_step_id: bool, reason: str, budget: usize, has_budget: bool }
+type Executor = struct { a: *mem.Arena, hooks: *const Hooks, store: *journal.Store, workflow: json.Value, run: json.Value, commit: journal.Commit, vars: ir.Obj, outputs: ir.Obj, changes: list.List[json.Value], unchecked: list.List[str], step_budget: usize, steps_run: usize }
+
+fn done(v: json.Value, has: bool) -> Flow
+fn nothing() -> Flow
+fn signal(kind: u8, message: str) -> Flow
+fn fail_run(message: str, step_id: str) -> Flow
+fn suspend(wait: json.Value) -> Flow
+fn text(s: str) -> json.Value
+fn flag(b: bool) -> json.Value
+fn number(a: *mem.Arena, n: i64) -> json.Value
+fn usize_value(a: *mem.Arena, n: usize) -> json.Value
+fn cat(a: *mem.Arena, x: str, y: str) -> str
+fn cat3(a: *mem.Arena, x: str, y: str, z: str) -> str
+fn get(v: json.Value, key: str) -> (json.Value, bool)
+fn member_text(v: json.Value, key: str) -> str
+fn items(v: json.Value) -> []const json.Value
+fn present(v: json.Value, key: str) -> (json.Value, bool)
+fn obj(a: *mem.Arena) -> ir.Obj
+fn put(o: *ir.Obj, key: str, v: json.Value)
+fn push_value(l: *list.List[json.Value], v: json.Value)
+fn is_space(c: u8) -> bool
+fn lower_byte(c: u8) -> u8
+fn unit_ms(name: str) -> (f64, bool)
+fn number_end(s: str, from: usize) -> usize
+fn decimal_value(s: str) -> f64
+fn parse_duration(v: json.Value) -> (f64, bool)
+fn approval_signal(a: *mem.Arena, key: str) -> str
+fn truthy(v: json.Value) -> bool
+fn begin(ex: *Executor)
+fn record(ex: *Executor, kind: str, fields: json.Value) -> usize
+fn record_obj(ex: *Executor, kind: str, fields: ir.Obj) -> usize
+fn flush(ex: *Executor) -> Flow
+fn run_seq(run: json.Value) -> usize
+fn context(ex: *Executor, extra: json.Value) -> json.Value
+fn is_template(s: str) -> bool
+fn render_deep(ex: *Executor, v: json.Value, ctx: json.Value) -> (json.Value, bool)
+fn render_step_config(ex: *Executor, step: json.Value, ctx: json.Value) -> json.Value
+fn evaluate_condition(ex: *Executor, expression: json.Value, has: bool, ctx: json.Value) -> bool
+fn step_id_of(step: json.Value) -> str
+fn frames_with(a: *mem.Arena, frames: []const str, one: str) -> []const str
+fn key_of(ex: *Executor, step_id: str, frames: []const str) -> str
+fn exec_steps(ex: *Executor, steps: json.Value, frames: []const str, scope: json.Value) -> Flow
+fn assert_control(ex: *Executor) -> Flow
+fn exec_step(ex: *Executor, step: json.Value, frames: []const str, scope: json.Value) -> Flow
+fn set_entry_member(ex: *Executor, index: usize, key: str, value: json.Value)
+fn check_approval_evidence(ex: *Executor, step: json.Value, key: str, result: json.Value, has_result: bool) -> Flow
+fn resolve_items(ex: *Executor, step: json.Value, scope: json.Value) -> []const json.Value
+fn scalar_text(v: json.Value) -> str
+fn loop_scope(ex: *Executor, scope: json.Value, alias: str, list_of: []const json.Value, i: usize) -> json.Value
+fn loop_frame_text(ex: *Executor, step_id: str, index: usize) -> str
+fn fork_frame_text(ex: *Executor, step_id: str, branch: str) -> str
+fn config_text(step: json.Value, key: str) -> str
+fn replay_control(ex: *Executor, step: json.Value, frames: []const str, result: json.Value, has_result: bool, scope: json.Value) -> Flow
+fn dispatch(ex: *Executor, step: json.Value, frames: []const str, key: str, scope: json.Value, config: json.Value) -> Flow
+fn ir_number(v: json.Value) -> (i64, bool)
+fn dispatch_delay(ex: *Executor, step: json.Value, key: str, config: json.Value) -> Flow
+fn parse_instant(s: str) -> (i64, bool)
+fn digits(s: str, from: usize, count: usize) -> (i64, bool)
+fn dispatch_wait(ex: *Executor, step: json.Value, key: str, config: json.Value) -> Flow
+fn describe_label(ex: *Executor, step: json.Value, config: json.Value) -> str
+fn upper(a: *mem.Arena, s: str) -> str
+fn describe_change(ex: *Executor, step: json.Value, config: json.Value) -> (json.Value, json.Value)
+fn dispatch_approval(ex: *Executor, step: json.Value, key: str, scope: json.Value, config: json.Value) -> Flow
+fn run_branches(ex: *Executor, step: json.Value, frames: []const str, scope: json.Value) -> Flow
+fn wake_of(wait: json.Value) -> i64
+fn call_effect(ex: *Executor, step: json.Value, key: str, config: json.Value, scope: json.Value) -> Flow
+fn call_handler(ex: *Executor, step: json.Value, key: str, config: json.Value, scope: json.Value) -> Flow
+fn value_f64(v: json.Value, fallback: f64) -> f64
+fn result_object(ex: *Executor, status: str) -> ir.Obj
+fn finish(ex: *Executor, kind: str, fields: ir.Obj, patch: ir.Obj)
+fn execute_run(a: *mem.Arena, hooks: *const Hooks, store: *journal.Store, definition: json.Value, run: json.Value) -> (json.Value, err)
+fn choose(c: bool, yes: str, no: str) -> str
+```
+
+The durable workflow interpreter of L036's runtime half, checked against appdor's `src/workflow/runtime.js` with its real Jinja engine and trace redaction: a normalized definition executed against a run journal, every step consulting the journal first so that calling `execute_run` again on a suspended run is the whole of resuming it. `if`, `case`, `foreach`, `fork` and `try`, `stop` and `fail`; `delay`, `wait-signal` and `approval` (parked on a signal derived from the execution key); `set` and `log`; every other type an effect handed to an injected handler with an idempotency key stable across replays, retried with backoff and withheld in a dry run when its type mutates. `Hooks` carries what is injected: the clock and sleep, the template renderer, the redacting trace, the outbound URL check, the effect handlers and the environment. A fork's branches run in declaration order where appdor's run concurrently, so its journal entries are not interleaved as the concurrent ones are.
+
 ### `e.algo.fulltext`
 
 ```neper

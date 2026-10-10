@@ -3717,6 +3717,13 @@ $algoIrWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $algoIrWritten -ne 'executable written') { throw 'algo_ir emission failed' }
 $algoIrOutput = & $algoIrPath
 if ($LASTEXITCODE -ne 0 -or $algoIrOutput -ne 'algo ir ok') { throw "algo_ir answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.workflow`: the durable interpreter -- journal replay, control flow, waits, approvals, effects with retries, the
+# dry-run gate and the run driver -- against appdor's src/workflow/runtime.js with its real Jinja (150 workflows, D2333).
+$algoWorkflowPath = Join-Path $testBuild 'algo-workflow-selfhost.exe'
+$algoWorkflowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_workflow\src\main.e') $repo 'x64' 'windows' $algoWorkflowPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoWorkflowWritten -ne 'executable written') { throw 'algo_workflow emission failed' }
+$algoWorkflowOutput = & $algoWorkflowPath
+if ($LASTEXITCODE -ne 0 -or $algoWorkflowOutput -ne 'algo workflow ok') { throw "algo_workflow answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

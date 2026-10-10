@@ -3300,6 +3300,13 @@ algo_ir_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 chmod +x "$test_build/algo-ir-selfhost"
 algo_ir_output=$("$test_build/algo-ir-selfhost")
 [ "$algo_ir_output" = 'algo ir ok' ]
+# `e.algo.workflow`: the durable interpreter -- journal replay, control flow, waits, approvals, effects with retries, the
+# dry-run gate and the run driver -- against appdor's src/workflow/runtime.js with its real Jinja (150 workflows, D2333).
+algo_workflow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_workflow/src/main.e" "$repo" x64 linux "$test_build/algo-workflow-selfhost" -j 2)
+[ "$algo_workflow_written" = 'executable written' ]
+chmod +x "$test_build/algo-workflow-selfhost"
+algo_workflow_output=$("$test_build/algo-workflow-selfhost")
+[ "$algo_workflow_output" = 'algo workflow ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
