@@ -5936,6 +5936,80 @@ fn export_history(a: *mem.Arena, chain: []const json.Value, record_id: json.Valu
 
 Tamper-evident record history (L037), after appdor's `src/history/tamper-evident.js` and `diffRecords`: a SHA-256 hash chain over an audit stream (`chain_append`, `verify_chain` naming the first broken link), the field-level diff that makes a revision (`diff_records`, `record_change`), the WAS and CHANGED temporal predicates and the history filter built on them (`was`, `changed`, `filter_by_history`, `field_history`), plan-tiered retention that rebuilds the retained suffix behind a `retention-truncation` marker, and a portable export. Values are JSON; the canonical text has keys in byte order and no whitespace. Checked against appdor's own module over 220 random operation scripts on both hosts (D2336).
 
+### `e.algo.sync`
+
+```neper
+type SaveResult = struct { saved: bool, quota: bool, message: str }
+type StoreHooks = struct { ctx: *void, durable: bool, load: fn(*void) -> []const json.Value, save: fn(*void, []const json.Value) -> SaveResult, clear: fn(*void) -> SaveResult }
+type PushResult = struct { accepted: bool, conflict: bool, server: json.Value, has_server: bool, failure: str, has_failure: bool }
+type Remote = struct { ctx: *void, now: fn(*void) -> i64, fetch_page: fn(*void, json.Value, i64) -> json.Value, push: fn(*void, json.Value) -> PushResult }
+type Outbox = struct { a: *mem.Arena, store: *const StoreHooks, now: fn(*void) -> i64, now_ctx: *void, queue: list.List[json.Value], dead: list.List[json.Value], sequence: i64, loaded: bool, healthy: bool, last_error: str, has_error: bool, evicted: i64, max_attempts: i64, base_delay: i64 }
+
+fn text(s: str) -> json.Value
+fn flag(b: bool) -> json.Value
+fn number(a: *mem.Arena, n: i64) -> json.Value
+fn cat(a: *mem.Arena, x: str, y: str) -> str
+fn obj(a: *mem.Arena) -> ir.Obj
+fn put(o: *ir.Obj, key: str, v: json.Value)
+fn get(v: json.Value, key: str) -> (json.Value, bool)
+fn member_text(v: json.Value, key: str) -> (str, bool)
+fn items(v: json.Value) -> []const json.Value
+fn unset(o: *ir.Obj, key: str)
+fn push_value(l: *list.List[json.Value], v: json.Value)
+fn empty_list(a: *mem.Arena) -> list.List[json.Value]
+fn count_value(v: json.Value, key: str, fallback: i64) -> i64
+fn as_text(v: json.Value) -> str
+fn first_text(v: json.Value, first: str, second: str) -> str
+fn same_json(a: *mem.Arena, x: json.Value, y: json.Value) -> bool
+fn plain(a: *mem.Arena, v: json.Value) -> (str, err)
+fn write_plain(b: *str.Builder, v: json.Value) -> err
+fn spread(a: *mem.Arena, x: json.Value, y: json.Value) -> ir.Obj
+fn initial_cursor(a: *mem.Arena) -> json.Value
+fn cursor_at(c: json.Value) -> (str, bool)
+fn encode_cursor(a: *mem.Arena, c: json.Value) -> str
+fn decode_cursor(a: *mem.Arena, s: str) -> json.Value
+fn is_after_cursor(record: json.Value, c: json.Value) -> bool
+fn advance_cursor(a: *mem.Arena, records: []const json.Value, previous: json.Value) -> json.Value
+fn pull_changes(a: *mem.Arena, remote: *const Remote, cursor: json.Value, limit: i64, max_pages: i64) -> json.Value
+fn id_in(ids: []const str, id: str) -> bool
+fn apply_changes(a: *mem.Arena, local: []const json.Value, changes: json.Value, pending_ids: []const str) -> json.Value
+fn add_key(keys: *list.List[json.Value], key: str)
+fn add_keys_of(keys: *list.List[json.Value], v: json.Value)
+fn field_of(v: json.Value, key: str) -> json.Value
+fn detect_field_conflicts(a: *mem.Arena, base: json.Value, has_base: bool, mine: json.Value, theirs: json.Value) -> json.Value
+fn known_strategy(s: str) -> bool
+fn resolve_conflict(a: *mem.Arena, conflict: json.Value, strategy: str) -> json.Value
+fn same_target(x: json.Value, y: json.Value) -> bool
+fn merged_payload(a: *mem.Arena, existing: json.Value, mutation: json.Value) -> json.Value
+fn enqueue(a: *mem.Arena, queue: []const json.Value, mutation: json.Value) -> []const json.Value
+fn apply_optimistic(a: *mem.Arena, records: []const json.Value, mutation: json.Value) -> []const json.Value
+fn push_answer(remote: *const Remote, mutation: json.Value) -> PushResult
+fn sync_queue(a: *mem.Arena, queue: []const json.Value, remote: *const Remote, resolve: str, stop_on_error: bool) -> json.Value
+fn new_outbox(a: *mem.Arena, store: *const StoreHooks, now: fn(*void) -> i64, now_ctx: *void, max_attempts: i64, base_delay: i64) -> Outbox
+fn backoff_delay(attempts: i64, base: i64) -> i64
+fn durable(o: *const Outbox) -> bool
+fn with_dead_flag(a: *mem.Arena, m: json.Value, dead: bool) -> json.Value
+fn write_store(o: *Outbox) -> SaveResult
+fn persist(o: *Outbox) -> json.Value
+fn restore(o: *Outbox) -> json.Value
+fn refresh(o: *Outbox)
+fn pending(o: *const Outbox) -> []const json.Value
+fn dead_letters(o: *const Outbox) -> []const json.Value
+fn ready(a: *mem.Arena, o: *const Outbox, at: i64) -> []const json.Value
+fn add(o: *Outbox, mutation: json.Value) -> json.Value
+fn release_attachments(o: *Outbox, uploaded: []const str) -> i64
+fn flush(o: *Outbox, remote: *const Remote, at: i64, continue_on_error: bool, resolve: str) -> json.Value
+fn revive(o: *Outbox, seq: i64) -> json.Value
+fn discard(o: *Outbox, seq: i64) -> bool
+fn settle(o: *Outbox, seq: i64) -> bool
+fn clear(o: *Outbox)
+fn describe_outbox(a: *mem.Arena, o: *const Outbox) -> json.Value
+fn run_sync(a: *mem.Arena, o: *Outbox, has_outbox: bool, remote: *const Remote, local: []const json.Value, cursor: json.Value, strategy: str) -> json.Value
+fn to_ids(a: *mem.Arena, values: []const json.Value) -> []const str
+```
+
+Offline-first sync (L037), after appdor's `src/offline` modules: the coalescing write queue (`enqueue`, `apply_optimistic`, `sync_queue`), the durable outbox (`new_outbox`, `add`, `flush`, `revive`, `discard`, `settle`, `release_attachments`, `describe_outbox`) with sequence numbers, bounded retry with exponential backoff, dead letters and quota-aware persistence, the `(updatedAt, id)` cursor and delta pull (`pull_changes`, `apply_changes`, which leave a record with a pending write alone), field-level conflict detection and the manual, last-write-wins and field-merge resolutions, and `run_sync` with its second pull. The store, the server's page fetch and the push are injected; calls are synchronous. Checked against appdor's own modules over 260 random operation scripts, store failures included, on both hosts (D2337).
+
 ### `e.algo.fulltext`
 
 ```neper

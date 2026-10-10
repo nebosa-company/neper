@@ -3738,6 +3738,13 @@ $algoChainWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $algoChainWritten -ne 'executable written') { throw 'algo_chain emission failed' }
 $algoChainOutput = & $algoChainPath
 if ($LASTEXITCODE -ne 0 -or $algoChainOutput -ne 'algo chain ok') { throw "algo_chain answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.sync`: the coalescing queue, the durable outbox with backoff, dead letters and quota-aware persistence,
+# the cursor, delta pull, conflict resolution and full sync against appdor's src/offline (260 scripts, D2337).
+$algoSyncPath = Join-Path $testBuild 'algo-sync-selfhost.exe'
+$algoSyncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_sync\src\main.e') $repo 'x64' 'windows' $algoSyncPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoSyncWritten -ne 'executable written') { throw 'algo_sync emission failed' }
+$algoSyncOutput = & $algoSyncPath
+if ($LASTEXITCODE -ne 0 -or $algoSyncOutput -ne 'algo sync ok') { throw "algo_sync answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

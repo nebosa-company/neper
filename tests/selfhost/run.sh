@@ -3321,6 +3321,13 @@ algo_chain_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/algo-chain-selfhost"
 algo_chain_output=$("$test_build/algo-chain-selfhost")
 [ "$algo_chain_output" = 'algo chain ok' ]
+# `e.algo.sync`: the coalescing queue, the durable outbox with backoff, dead letters and quota-aware persistence,
+# the cursor, delta pull, conflict resolution and full sync against appdor's src/offline (260 scripts, D2337).
+algo_sync_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_sync/src/main.e" "$repo" x64 linux "$test_build/algo-sync-selfhost" -j 2)
+[ "$algo_sync_written" = 'executable written' ]
+chmod +x "$test_build/algo-sync-selfhost"
+algo_sync_output=$("$test_build/algo-sync-selfhost")
+[ "$algo_sync_output" = 'algo sync ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
