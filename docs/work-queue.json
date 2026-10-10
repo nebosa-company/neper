@@ -1703,10 +1703,10 @@
       "group": "Tooling",
       "order": 40,
       "title": "T2.1 understand and check: context, queries, provenance, diagnostics",
-      "score": 0,
+      "score": 0.05,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Planning only (D1954). T2.1 slice missing: compiler-derived context, reusable semantic queries, generated provenance, compiled guidance, unsafe enumeration, tiered checks, optimization explanations and causal/recoverable diagnostics. Pickup immediately after the chart cluster. Freeze latency/startup/resource budgets before implementation."
+      "evidence": "Planning only (D1954). T2.1 slice missing: compiler-derived context, reusable semantic queries, generated provenance, compiled guidance, unsafe enumeration, tiered checks, optimization explanations and causal/recoverable diagnostics. Pickup immediately after the chart cluster. Freeze latency/startup/resource budgets before implementation. FIRST STEP (D2316): latency budgets frozen in docs/tooling-budgets.md from scripts/measure_tooling_latency.py (small program 55-90 ms; src/main.e check 450 ms, index 1.3 s / 11.8 MB, module context 1.6 s). NOT DONE: every other T2.1 obligation (compiler-derived context beyond context-file, reusable queries, provenance, compiled guidance, unsafe enumeration, tiered checks, optimization explanations, causal diagnostics) and memory budgets."
     },
     {
       "id": "T041",
