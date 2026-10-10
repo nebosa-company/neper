@@ -642,17 +642,6 @@
       "evidence": "Appdor services/mcp-server (stdio NDJSON plus HTTP JSON-RPC, caller-JWT RLS scoping), src/sharing share tokens (b64url payload plus HMAC, distinct from jwt.e), src/audit record taxonomy with CSV export, src/templates workflow recipe catalog as data. Serve via e.net.http plus e.os.proc stdio and e.db; DB-poll worker shape (no AMQP) maps to e.task plus e.db.pool."
     },
     {
-      "id": "L052",
-      "category": "library",
-      "group": "Formats",
-      "order": 150,
-      "title": "Executable format readers (e.fmt.elf, e.fmt.pe)",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "lib/e/fmt has ~40 codecs and zero executable formats -- the lief/pefile/pyelftools gap for RE triage and forensics. Add read-only e.fmt.elf and e.fmt.pe (headers, program/section tables, symbol and dynamic tables) with minimal hand-built binary fixtures plus readelf/objdump text goldens; no disassembler, Mach-O deferred. Plan: docs/ethical-hacking.md S2."
-    },
-    {
       "id": "L053",
       "category": "library",
       "group": "Algorithms",

@@ -15812,6 +15812,62 @@ fn flowchart(a: *mem.Arena, project: str, nodes: []const Node) -> (str, err)
 
 A Mermaid flowchart emitter (L042): `flowchart` writes the `flowchart LR` text for a project's resource graph from `Node` values (an id, a kind, the ids it depends on and whether it is blocked), with petcow's node-id mangling, escaped labels and a dashed edge for a dependency that names no node. Checked against petcow's own `to_mermaid` over random graphs on both hosts (D2345).
 
+### `e.fmt.elf`
+
+```neper
+error Truncated
+error Invalid
+
+type Header = struct { class: u8, little: bool, version: u8, osabi: u8, abi_version: u8, kind: u16, machine: u16, entry: u64, phoff: u64, shoff: u64, flags: u32, ehsize: u16, phentsize: u16, phnum: u16, shentsize: u16, shnum: u16, shstrndx: u16 }
+type Segment = struct { kind: u32, flags: u32, offset: u64, vaddr: u64, paddr: u64, filesz: u64, memsz: u64, align: u64 }
+type Section = struct { name_offset: u32, kind: u32, flags: u64, addr: u64, offset: u64, size: u64, link: u32, info: u32, addralign: u64, entsize: u64 }
+type Symbol = struct { name_offset: u32, info: u8, other: u8, shndx: u16, value: u64, size: u64 }
+type Dynamic = struct { tag: u64, value: u64 }
+
+fn rd16(b: []const u8, at: usize, little: bool) -> u16
+fn rd32(b: []const u8, at: usize, little: bool) -> u32
+fn rd64(b: []const u8, at: usize, little: bool) -> u64
+fn fits(data: []const u8, offset: u64, length: u64) -> bool
+fn parse_header(data: []const u8) -> (Header, err)
+fn segment(data: []const u8, h: Header, index: usize) -> (Segment, err)
+fn section(data: []const u8, h: Header, index: usize) -> (Section, err)
+fn string_at(data: []const u8, table: Section, offset: u32) -> (str, err)
+fn section_name(data: []const u8, h: Header, s: Section) -> (str, err)
+fn symbol(data: []const u8, h: Header, table: Section, index: usize) -> (Symbol, err)
+fn dynamic(data: []const u8, h: Header, table: Section, index: usize) -> (Dynamic, err)
+```
+
+Read-only ELF32 and ELF64 reader in either byte order: file header, program headers, section headers with names from the section-name string table, `.symtab`/`.dynsym` entries with names from their string table, and dynamic-section tags. Every offset and length is checked before use (`Truncated` for a table or string past the data, `Invalid` for a bad identification, class, entry size or index); strings borrow from the input and nothing allocates. No relocations, no disassembly.
+
+### `e.fmt.pe`
+
+```neper
+error Truncated
+error Invalid
+
+type Directory = struct { rva: u32, size: u32 }
+type Image = struct { machine: u16, section_count: u16, timestamp: u32, characteristics: u16, magic: u16, plus: bool, entry_rva: u32, image_base: u64, section_alignment: u32, file_alignment: u32, subsystem: u16, dll_characteristics: u16, size_of_image: u32, size_of_headers: u32, directory_count: u32, directories: [16]Directory, section_table: usize }
+type Section = struct { name: [8]u8, virtual_size: u32, virtual_address: u32, raw_size: u32, raw_pointer: u32, characteristics: u32 }
+type Import = struct { original_first_thunk: u32, timestamp: u32, forwarder: u32, name_rva: u32, first_thunk: u32 }
+type Exports = struct { characteristics: u32, timestamp: u32, name_rva: u32, ordinal_base: u32, address_count: u32, name_count: u32, address_table: u32, name_table: u32, ordinal_table: u32 }
+
+fn rd16(b: []const u8, at: usize) -> u16
+fn rd32(b: []const u8, at: usize) -> u32
+fn rd64(b: []const u8, at: usize) -> u64
+fn fits(data: []const u8, offset: usize, length: usize) -> bool
+fn parse(data: []const u8) -> (Image, err)
+fn section(data: []const u8, img: Image, index: usize) -> (Section, err)
+fn name_length(s: Section) -> usize
+fn rva_to_offset(data: []const u8, img: Image, rva: u32) -> (usize, err)
+fn string_at(data: []const u8, img: Image, rva: u32) -> (str, err)
+fn import_descriptor(data: []const u8, img: Image, index: usize) -> (Import, bool, err)
+fn import_thunk(data: []const u8, img: Image, imp: Import, index: usize) -> (str, u16, bool, bool, err)
+fn exports(data: []const u8, img: Image) -> (Exports, bool, err)
+fn export_name(data: []const u8, img: Image, x: Exports, index: usize) -> (str, u32, err)
+```
+
+Read-only PE/COFF reader for PE32 and PE32+: DOS header and `e_lfanew`, COFF header, optional header with its sixteen data directories, the section table, RVA to file-offset mapping, the import directory (DLL names with each thunk table's functions or ordinals) and the export directory's names. Bounds-checked over the caller's bytes (`Truncated` past the data, `Invalid` for a bad signature, magic, count or unmapped RVA); names borrow from the input and nothing allocates. No resources, relocations or signature checks.
+
 ### `e.fmt.csv`
 
 ```neper

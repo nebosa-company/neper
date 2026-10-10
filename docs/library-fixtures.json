@@ -475,6 +475,7 @@
     "algo_workflow",
     "data_validate",
     "fmt_encode",
+    "fmt_exe",
     "fmt_gaps_a",
     "fmt_json",
     "fmt_woff",

@@ -47,6 +47,8 @@
     "e.fmt.html.accessible",
     "e.fmt.hcl",
     "e.fmt.mermaid",
+    "e.fmt.elf",
+    "e.fmt.pe",
     "e.fmt.csv",
     "e.fmt.ini",
     "e.text.utf8",
@@ -1899,6 +1901,24 @@
     "e.mem",
     "e.str"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.elf",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.pe",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {

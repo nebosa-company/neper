@@ -3904,6 +3904,12 @@ $netPacketWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $netPacketWritten -ne 'executable written') { throw 'net_packet emission failed' }
 $netPacketOutput = & $netPacketPath
 if ($LASTEXITCODE -ne 0 -or $netPacketOutput -ne 'net packet ok') { throw "net_packet answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.elf and e.fmt.pe: ELF32/64 and PE32/PE32+ headers, sections, symbols, imports and exports against an independent struct writer and reader (169 cases, D2358).
+$fmtExePath = Join-Path $testBuild 'fmt-exe-selfhost.exe'
+$fmtExeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_exe\src\main.e') $repo 'x64' 'windows' $fmtExePath -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtExeWritten -ne 'executable written') { throw 'fmt_exe emission failed' }
+$fmtExeOutput = & $fmtExePath
+if ($LASTEXITCODE -ne 0 -or $fmtExeOutput -ne 'fmt exe ok') { throw "fmt_exe answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

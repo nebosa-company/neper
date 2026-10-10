@@ -3487,6 +3487,12 @@ net_packet_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/net-packet-selfhost"
 net_packet_output=$("$test_build/net-packet-selfhost")
 [ "$net_packet_output" = 'net packet ok' ]
+# e.fmt.elf and e.fmt.pe: ELF32/64 and PE32/PE32+ headers, sections, symbols, imports and exports against an independent struct writer and reader (169 cases, D2358).
+fmt_exe_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_exe/src/main.e" "$repo" x64 linux "$test_build/fmt-exe-selfhost" -j 2)
+[ "$fmt_exe_written" = 'executable written' ]
+chmod +x "$test_build/fmt-exe-selfhost"
+fmt_exe_output=$("$test_build/fmt-exe-selfhost")
+[ "$fmt_exe_output" = 'fmt exe ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
