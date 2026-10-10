@@ -3274,6 +3274,12 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# `e.algo.fsm`: status workflow definition, validation, guard, bulk, simulation and templates against appdor (864 cases, D2307).
+algo_fsm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_fsm/src/main.e" "$repo" x64 linux "$test_build/algo-fsm-selfhost")
+[ "$algo_fsm_written" = 'executable written' ]
+chmod +x "$test_build/algo-fsm-selfhost"
+algo_fsm_output=$("$test_build/algo-fsm-selfhost")
+[ "$algo_fsm_output" = 'algo fsm ok' ]
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 algo_trigger_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_trigger/src/main.e" "$repo" x64 linux "$test_build/algo-trigger-selfhost")
 [ "$algo_trigger_written" = 'executable written' ]

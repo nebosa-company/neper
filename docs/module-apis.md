@@ -5403,6 +5403,164 @@ fn scan_batch(a: *mem.Arena, reg: *const f.Registry, rows: []const view.Row, fil
 
 Time-based triggers after appdor's workflow scheduler: five-field cron matched on a named zone's wall clock (a skipped time does not fire, a repeated one fires once), the authoring forms normalized to one runtime schedule, next-fire previews, the one-catch-up/skip/all missed-fire policies with their burst cap, the shared fire plan, the single-concurrency overlap decision, write-once date stamps, duration-in-state and a cursor-continued scan. Checked by `algo_trigger` against appdor's engine.
 
+### `e.algo.fsm`
+
+```neper
+type Rule = struct {
+type PostFn = struct {
+type Permissions = struct { present: bool, roles: []const str, users: []const str, groups: []const str, people_fields: []const str }
+type ScreenField = struct { field: str, required: bool }
+type Screen = struct { present: bool, fields: []const ScreenField }
+type State = struct { id: str, label: str, category: str }
+type Transition = struct {
+type Workflow = struct {
+type Principal = struct {
+type Pair = struct { key: str, value: str }
+type DecisionRow = struct { keys: []const str, values: []const f.Value, result: bool }
+type DecisionTable = struct { id: str, has_inputs: bool, inputs: []const str, rows: []const DecisionRow }
+type Table = struct { name: str, rows: []const view.Row }
+type Env = struct {
+type Check = struct { good: bool, message: str }
+
+fn err_unknown_transition() -> str
+fn err_wrong_state() -> str
+fn err_permission_denied() -> str
+fn err_condition_failed() -> str
+fn err_missing_inputs() -> str
+fn err_validator_failed() -> str
+fn err_version_conflict() -> str
+fn err_reason_required() -> str
+fn contains(list: []const str, x: str) -> bool
+fn is_condition_type(k: str) -> bool
+fn is_validator_type(k: str) -> bool
+fn is_post_type(k: str) -> bool
+fn required_of(kind: u8, type_name: str) -> str
+fn missing_member(required: str, keys: []const str) -> str
+fn kind_label(kind: u8) -> str
+fn check_config(kind: u8, is_object: bool, type_name: str, keys: []const str) -> Check
+fn is_category(c: str) -> bool
+fn normalize_state(id: str, label: str, has_label: bool, category: str) -> State
+fn no_permissions() -> Permissions
+fn no_screen() -> Screen
+fn nonempty(s: str, fallback: str) -> str
+fn normalize_transition(t: Transition, has_from: bool, generated: str) -> Transition
+fn blocked_treatment_of(raw: str) -> str
+fn empty_workflow(id: str, table_id: str, status_field: str, name: str) -> Workflow
+fn open_workflow(a: *mem.Arena, table_id: str, status_field: str, options: []const str) -> Workflow
+
+type Edit = struct { wf: Workflow, failed: bool, message: str }
+
+fn edit_ok(wf: Workflow) -> Edit
+fn edit_refused(wf: Workflow, message: str) -> Edit
+fn state_index(wf: Workflow, id: str) -> (usize, bool)
+fn add_state(a: *mem.Arena, wf: Workflow, s: State) -> Edit
+fn add_transition(a: *mem.Arena, wf: Workflow, t: Transition) -> Edit
+fn remove_state(a: *mem.Arena, wf: Workflow, id: str) -> Edit
+
+type Finding = struct { code: str, transition: str, has_transition: bool, state: str, has_state: bool, message: str }
+type Validation = struct { valid: bool, errors: []const Finding, warnings: []const Finding }
+
+fn finding(code: str, message: str) -> Finding
+fn flatten_rules(a: *mem.Arena, rules: []const Rule, out: []Rule, n: usize) -> usize
+fn count_rules(rules: []const Rule) -> usize
+fn validate_workflow(a: *mem.Arena, wf: Workflow) -> Validation
+
+type Change = struct { kind: str, id: str, label: str }
+
+fn rules_equal(x: []const Rule, y: []const Rule) -> bool
+fn posts_equal(x: []const PostFn, y: []const PostFn) -> bool
+fn lists_equal(x: []const str, y: []const str) -> bool
+fn screens_equal(x: Screen, y: Screen) -> bool
+fn transitions_equal(x: Transition, y: Transition) -> bool
+fn transition_index(wf: Workflow, id: str) -> (usize, bool)
+fn diff_workflows(a: *mem.Arena, x: Workflow, y: Workflow) -> []const Change
+fn list_len(v: f.Value) -> usize
+fn list_at(v: f.Value, i: usize) -> f.Value
+fn list_includes_text(v: f.Value, x: str) -> bool
+fn truthy(v: f.Value) -> bool
+fn field_value(fields: []const f.Field, name: str) -> (f.Value, bool)
+fn is_blank_input(v: f.Value, present: bool) -> bool
+fn merged(a: *mem.Arena, record: []const f.Field, inputs: []const f.Field) -> []const f.Field
+
+type RuleCtx = struct {
+
+fn view_context() -> view.Context
+fn filter_holds(a: *mem.Arena, rule: Rule, row_fields: []const f.Field, env: *const Env) -> bool
+fn formula_truthy(a: *mem.Arena, expr: str, fields: []const f.Field, env: *const Env) -> bool
+fn find_decision_table(env: *const Env, id: str) -> (DecisionTable, bool)
+fn decision_holds(rule: Rule, c: *const RuleCtx) -> bool
+fn eval_condition(a: *mem.Arena, rule: Rule, c: *const RuleCtx) -> bool
+
+type Verdict = struct {
+
+fn verdict_ok(kind: str) -> Verdict
+fn verdict_failed(kind: str, text: str) -> Verdict
+fn message_or(rule: Rule, fallback: str) -> str
+fn required_empty(v: f.Value, present: bool) -> bool
+fn eval_validator(a: *mem.Arena, rule: Rule, c: *const RuleCtx) -> Verdict
+fn json_quote(a: *mem.Arena, s: str) -> str
+fn value_json(a: *mem.Arena, v: f.Value) -> str
+fn literal_json(a: *mem.Arena, x: str, has: bool) -> str
+fn update_step(a: *mem.Arena, table: str, record: []const f.Field, values: str) -> str
+fn followers(a: *mem.Arena, pf: PostFn, table: str, record: []const f.Field, add: bool) -> str
+fn compile_post_function(a: *mem.Arena, pf: PostFn, table: str, record: []const f.Field) -> str
+fn permits_actor(t: Transition, record: []const f.Field, p: Principal) -> bool
+fn legacy_target(env: *const Env, key: str) -> (str, bool)
+fn state_key(a: *mem.Arena, v: f.Value, present: bool) -> str
+fn from_matches(a: *mem.Arena, t: Transition, current: f.Value, present: bool, env: *const Env, use_legacy: bool) -> bool
+fn is_known_state(wf: Workflow, current: f.Value, present: bool) -> bool
+fn rule_ctx(record: []const f.Field, p: Principal, env: *const Env, inputs: []const f.Field) -> RuleCtx
+fn allowed_transitions(a: *mem.Arena, wf: Workflow, record: []const f.Field, p: Principal, env: *const Env) -> []const Transition
+
+type Explanation = struct { available: bool, reason: str, conditions: []const str }
+
+fn explain_transition(a: *mem.Arena, wf: Workflow, record: []const f.Field, t: Transition, p: Principal, env: *const Env) -> Explanation
+fn missing_screen_inputs(a: *mem.Arena, t: Transition, inputs: []const f.Field) -> []const str
+
+type History = struct {
+type Event = struct {
+type Outcome = struct {
+
+fn refusal(code: str) -> Outcome
+
+type Options = struct {
+
+fn truthy_text(s: str) -> bool
+fn with_field(a: *mem.Arena, fields: []const f.Field, name: str, value: f.Value) -> []const f.Field
+fn execute_transition(a: *mem.Arena, wf: Workflow, record: []const f.Field, transition_id: str, o: Options, env: *const Env) -> Outcome
+
+type StatusWrite = struct { noop: bool, transition: Transition, has_transition: bool, error_code: str, candidates: []const Transition }
+
+fn resolve_status_write(a: *mem.Arena, wf: Workflow, record: []const f.Field, new_status: str, p: Principal, env: *const Env) -> StatusWrite
+
+type RuleReport = struct { kind: str, passed: bool, error_text: str, has_error: bool }
+type Report = struct {
+
+fn simulate_transition(a: *mem.Arena, wf: Workflow, record: []const f.Field, transition_id: str, p: Principal, env: *const Env, inputs: []const f.Field) -> Report
+
+type BulkOutcome = struct {
+type Bulk = struct { policy: str, committed: usize, outcomes: []const BulkOutcome }
+
+fn bulk_transition(a: *mem.Arena, wf: Workflow, records: []const []const f.Field, transition_id: str, o: Options, env: *const Env, atomic: bool) -> Bulk
+
+type Entry = struct { from: str, to: str, at: str }
+type Visit = struct { state: str, entered_at: str, left_at: str, has_left: bool, ms: f64 }
+type Total = struct { state: str, ms: f64 }
+type Dwell = struct { visits: []const Visit, totals: []const Total }
+
+fn time_in_state(a: *mem.Arena, entries: []const Entry, now: str) -> Dwell
+fn split_on(a: *mem.Arena, s: str, sep: u8) -> []const str
+
+type TemplateSource = struct { name: str, initial: str, states: str, transitions: str, known: bool }
+
+fn template_source(key: str) -> TemplateSource
+fn blank_rule(raw: str, kind: str) -> Rule
+fn blank_post(raw: str, kind: str) -> PostFn
+fn template(a: *mem.Arena, key: str, table_id: str, status_field: str, generated_id: str) -> (Workflow, bool)
+```
+
+Status workflows after appdor's workflow definition, rule registries and guard: the definition model with draft-only editing, open workflow and built-in templates, pre-publish validation (initial state, duplicates, dangling transitions, rule config checks, reachability, dead ends, lock-outs), version diffs, and the guard — allowed transitions and why-not, permissions, conditions, screen inputs, validators, optimistic concurrency, history and event, compiled post-functions, raw status write resolution, bulk partial/atomic, simulation and time in state. Checked by `algo_fsm` against appdor's engine.
+
 ### `e.algo.fulltext`
 
 ```neper

@@ -3672,6 +3672,12 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.fsm`: status workflow definition, validation, guard, bulk, simulation and templates against appdor (864 cases, D2307).
+$algoFsmPath = Join-Path $testBuild 'algo-fsm-selfhost.exe'
+$algoFsmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_fsm\src\main.e') $repo 'x64' 'windows' $algoFsmPath
+if ($LASTEXITCODE -ne 0 -or $algoFsmWritten -ne 'executable written') { throw 'algo_fsm emission failed' }
+$algoFsmOutput = & $algoFsmPath
+if ($LASTEXITCODE -ne 0 -or $algoFsmOutput -ne 'algo fsm ok') { throw "algo_fsm answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 $algoTriggerPath = Join-Path $testBuild 'algo-trigger-selfhost.exe'
 $algoTriggerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_trigger\src\main.e') $repo 'x64' 'windows' $algoTriggerPath

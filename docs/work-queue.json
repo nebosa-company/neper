@@ -603,10 +603,10 @@
       "group": "Algorithms",
       "order": 134,
       "title": "Durable workflow runtime with FSM guard",
-      "score": 0,
+      "score": 0.4,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Appdor src/workflow/runtime.js (journal-replay executeRun, if/case/foreach/fork-join/try/delay/wait-signal/approval, retry with idempotencyKey, SSRF guard, stepBudget 10000), flow-engine.js (inline sync flows), src/workflows/definition.js and guard.js (validateWorkflow incl. reachability, permitsActor, optimistic-version commit, bulk partial/atomic). Store and effects stay injected. Port into e.algo.workflow/fsm/dag."
+      "evidence": "Appdor src/workflow/runtime.js (journal-replay executeRun, if/case/foreach/fork-join/try/delay/wait-signal/approval, retry with idempotencyKey, SSRF guard, stepBudget 10000), flow-engine.js (inline sync flows), src/workflows/definition.js and guard.js (validateWorkflow incl. reachability, permitsActor, optimistic-version commit, bulk partial/atomic). Store and effects stay injected. Port into e.algo.workflow/fsm/dag. PART ONE DELIVERED (D2307): lib/e/algo/fsm.e, e.algo.fsm: workflow definition/validation/diff/templates/open workflow and the guard (allowed transitions, explain, execute with optimistic concurrency, history and event, compiled post-function steps, status-write resolution, bulk partial/atomic, simulate, time in state); fixture algo_fsm 864 cases against appdor on Windows and Linux. NOT DONE: the durable runtime (workflow/runtime.js, ir.js, journal.js, the Jinja template engine, flow-engine.js), e.algo.workflow/dag."
     },
     {
       "id": "L037",
