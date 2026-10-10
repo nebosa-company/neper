@@ -48,6 +48,11 @@ is a new `schema_revision`; an old one never changes meaning.
 same v1 stream without the `test` record of any passing test. `test_summary` counts them and the
 result is unchanged, so an all-pass run is its header, summary and result whatever the test count.
 
+`--retries N` (D2322, at most 8, either order with `--compact`) runs a test that does not pass again,
+up to N more times; its last attempt is the `test` record, and every test that ran more than once
+also gets a `test_retry` record (`name`, `module`, `attempts`, `outcome`). `test-impact-file ...
+--changed m --why` (D2321) adds `via`, the reason a test was selected, to each affected `impact`.
+
 `--language-version MAJOR.MINOR` selects one advertised version and defaults to the
 newest non-experimental version. An unsupported value is `E-CLI-9999` before source
 is read. The selected version fixes its grammar revision, stream versions and

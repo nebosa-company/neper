@@ -258,7 +258,7 @@ fn capabilities_json(a: *mem.Arena) -> err {
     try text(&out, "{\"name\":\"apply-plan\",\"group\":\"edit\"},{\"name\":\"build-manifest-file\",\"group\":\"build\"},{\"name\":\"check-em-edge\",\"group\":\"check\"},{\"name\":\"check-em-errors\",\"group\":\"check\"},{\"name\":\"check-file\",\"group\":\"check\"},{\"name\":\"check-project\",\"group\":\"check\"},{\"name\":\"codegen-file\",\"group\":\"inspect\"},{\"name\":\"compare-manifests\",\"group\":\"inspect\"},{\"name\":\"context-file\",\"group\":\"query\"},{\"name\":\"dis-file\",\"group\":\"inspect\"},{\"name\":\"emit-em\",\"group\":\"build\"},{\"name\":\"emit-em-all\",\"group\":\"build\"},{\"name\":\"emit-executable\",\"group\":\"build\"},{\"name\":\"emit-object\",\"group\":\"build\"},")
     try text(&out, "{\"name\":\"eval\",\"group\":\"run\"},{\"name\":\"explain-file\",\"group\":\"query\"},{\"name\":\"fmt\",\"group\":\"format\"},{\"name\":\"fmt-file\",\"group\":\"format\"},{\"name\":\"fmt-project\",\"group\":\"format\"},{\"name\":\"graph-file\",\"group\":\"query\"},{\"name\":\"index-file\",\"group\":\"query\"},{\"name\":\"index-project\",\"group\":\"query\"},{\"name\":\"info\",\"group\":\"tool\"},{\"name\":\"link-em\",\"group\":\"build\"},{\"name\":\"manifest-em\",\"group\":\"inspect\"},{\"name\":\"nir-file\",\"group\":\"inspect\"},{\"name\":\"object-file\",\"group\":\"inspect\"},{\"name\":\"parse\",\"group\":\"parse\"},{\"name\":\"parse-file\",\"group\":\"parse\"},")
     try text(&out, "{\"name\":\"plan-add-parameter-file\",\"group\":\"edit\"},{\"name\":\"plan-change-signature-file\",\"group\":\"edit\"},{\"name\":\"plan-rename-file\",\"group\":\"edit\"},{\"name\":\"plan-replace-expression-file\",\"group\":\"edit\"},{\"name\":\"project-file\",\"group\":\"query\"},{\"name\":\"query-batch\",\"group\":\"query\"},{\"name\":\"resolve-file\",\"group\":\"query\"},{\"name\":\"run\",\"group\":\"run\"},{\"name\":\"scan\",\"group\":\"inspect\"},{\"name\":\"scan-file\",\"group\":\"inspect\"},{\"name\":\"select-file\",\"group\":\"query\"},{\"name\":\"self-test\",\"group\":\"tool\"},{\"name\":\"test-file\",\"group\":\"test\"},{\"name\":\"test-impact-file\",\"group\":\"test\"},{\"name\":\"test-project\",\"group\":\"test\"},{\"name\":\"tokens\",\"group\":\"parse\"},{\"name\":\"uses-file\",\"group\":\"query\"},{\"name\":\"validate-em\",\"group\":\"check\"}],")
-    try text(&out, "\"flags\":[\"--arena\",\"--budget\",\"--compact\",\"--cpu\",\"--deadline\",\"--incremental\",\"--json\",\"--perturb\",\"--release\",\"--stats\",\"--stats-full\",\"--time\",\"--unchecked\",\"--why\",\"-j\"],\"environment\":[\"NEPER_JOBS\"],\"snapshot\":{\"field\":\"snapshot\",\"named_by\":[\"context-file\",\"plan-add-parameter-file\",\"plan-change-signature-file\",\"plan-rename-file\",\"plan-replace-expression-file\"]}}")
+    try text(&out, "\"flags\":[\"--arena\",\"--budget\",\"--compact\",\"--cpu\",\"--deadline\",\"--incremental\",\"--json\",\"--perturb\",\"--release\",\"--retries\",\"--stats\",\"--stats-full\",\"--time\",\"--unchecked\",\"--why\",\"-j\"],\"environment\":[\"NEPER_JOBS\"],\"snapshot\":{\"field\":\"snapshot\",\"named_by\":[\"context-file\",\"plan-add-parameter-file\",\"plan-change-signature-file\",\"plan-rename-file\",\"plan-replace-expression-file\"]}}")
     try flush(&out)
     try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{}}")
     ret flush(&out)
@@ -7360,7 +7360,7 @@ fn test_outcome_name(outcome: usize) -> str {
 // `test --json` (D240): the header, one buffered `test` record per @test function in source
 // order, a `test_summary`, and the result -- each with its real wall time (D242), its deadline
 // (D246), its error name and a crash's structured trap payload (D253).
-fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, source: str, spelled: str, names: []const str, lines: []const usize, outcomes: []const usize, statuses: []const i32, durations: []const usize, stdouts: []const str, stderrs: []const str, count: usize, summary_duration: usize, timeout_s: usize, compact: bool) -> err {
+fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, source: str, spelled: str, names: []const str, lines: []const usize, outcomes: []const usize, statuses: []const i32, durations: []const usize, stdouts: []const str, stderrs: []const str, count: usize, summary_duration: usize, timeout_s: usize, compact: bool, attempts: []const usize) -> err {
     var capacity = 8192usize
     var at = 0usize
     while at < count {
@@ -7394,6 +7394,20 @@ fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, source: str,
         if !(compact && outcomes[at] == 0usize) {
             let (message, rest) = test_message(a, stderrs[at])
             try test_record(&out, module_name, root, path, source, spelled, names[at], lines[at], outcomes[at], statuses[at], durations[at], timeout_s, stdouts[at], rest, message)
+        }
+        // A test that ran more than once says so (T041, H39), whatever its last outcome: a pass after
+        // a failed attempt is a flaky pass, never a silent one.
+        if attempts[at] > 0usize {
+            try text(&out, "{\"record\":\"test_retry\",\"name\":")
+            try quoted(&out, names[at])
+            try text(&out, ",\"module\":")
+            try quoted(&out, module_name)
+            try text(&out, ",\"attempts\":")
+            try decimal(&out, attempts[at] + 1usize)
+            try text(&out, ",\"outcome\":")
+            try quoted(&out, test_outcome_name(outcomes[at]))
+            try byte(&out, 125u8)
+            try flush(&out)
         }
         at += 1usize
     }

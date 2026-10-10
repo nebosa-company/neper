@@ -2075,4 +2075,5 @@ D2317	1466	C147 (second part): `NEPER_JOBS`, and the Windows suite reaches its l
 D2318	1281	T031: `x.migrate.migrate`, the four-way configuration-management importer
 D2319	1344	T039 (first slice): `info --json --capabilities`, version and capability discovery beyond the closed v1 `info`
 D2320	996	T041 (first slice): `--compact`, a test stream without its passing records
-D2321	850	T041: `test-impact-file --why`, the reason a test was selected
+D2321	851	T041: `test-impact-file --why`, the reason a test was selected
+D2322	1282	T041: `--retries N`, a flaky pass is a pass that says so

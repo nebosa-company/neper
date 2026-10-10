@@ -2343,7 +2343,7 @@ fn json_usize_after(line: str, key: str) -> usize {
 // byte order, each in its own process, the children's streams merged -- the header once,
 // every `test` record and every diagnostic, one `test_summary` adding the children's up,
 // one result. A module with no tests contributes nothing but its count.
-fn test_project_command(a: *mem.Arena, args: []str, compact: bool) -> err {
+fn test_project_command(a: *mem.Arena, args: []str, compact: bool, retries: usize) -> err {
     var report = stderr_sink()
     report.json = true
     report.file = os.stdout()
@@ -2374,7 +2374,7 @@ fn test_project_command(a: *mem.Arena, args: []str, compact: bool) -> err {
     var refused = false
     var at = 0usize
     while at < count {
-        var argv: [11]str = zero
+        var argv: [13]str = zero
         argv[0usize] = args[0usize]
         argv[1usize] = "test-file"
         argv[2usize] = paths[at]
@@ -2394,6 +2394,16 @@ fn test_project_command(a: *mem.Arena, args: []str, compact: bool) -> err {
         if under_src_error != ok { ret under_src_error }
         argv[argc + 2usize] = under_src
         argc += 3usize
+        if retries > 0usize {
+            argv[argc] = "--retries"
+            var retries_digits: [8]u8 = zero
+            let retries_len = nptest_append_decimal(retries_digits[..], 0usize, retries)
+            let (retries_text, retries_error) = mem.alloc[u8](a, retries_len + 1usize)
+            if retries_error != ok { ret retries_error }
+            os.copy_bytes(retries_text[0usize..retries_len], retries_digits[0usize..retries_len])
+            argv[argc + 1usize] = retries_text[0usize..retries_len]
+            argc += 2usize
+        }
         let (status, child_out, child_err, spawn_error) = nptest_spawn(a, argv[0usize..argc], child_base)
         if spawn_error != ok { ret spawn_error }
         if status == 2i32 { refused = true }
@@ -2411,7 +2421,7 @@ fn test_project_command(a: *mem.Arena, args: []str, compact: bool) -> err {
                 total += json_usize_after(line, "\"total\":")
                 duration += json_usize_after(line, "\"duration_ms\":")
             } else {
-                if (line.len > 16usize && same(line[0usize..16usize], "{\"record\":\"test\"")) || (line.len > 22usize && same(line[0usize..22usize], "{\"record\":\"diagnostic\"")) {
+                if (line.len > 16usize && same(line[0usize..16usize], "{\"record\":\"test\"")) || (line.len > 22usize && same(line[0usize..22usize], "{\"record\":\"test_retry\"")) || (line.len > 22usize && same(line[0usize..22usize], "{\"record\":\"diagnostic\"")) {
                     // `--compact` (T041, H32): a passing test is in the summary, not listed.
                     if !(compact && contains_text(line, "\"outcome\":\"passed\"")) {
                         try write_all(&report, line)
@@ -2584,7 +2594,7 @@ fn nptest_stem(path: str) -> str {
 
 // `test-file PATH ROOT ARCH OS WORKDIR --json` (D240): compile a runner that carries the
 // operand's @test functions, run each in its own process, and report section 7's stream.
-fn test_command(a: *mem.Arena, given: []str, compact: bool) -> err {
+fn test_command(a: *mem.Arena, given: []str, compact: bool, retries: usize) -> err {
     var no_lines: [1]usize = zero
     // `--only n1,n2,...` last (D424, H10): the tests to run, by name or by
     // `module.name`; the rest of the arguments are as they were without it.
@@ -2722,6 +2732,8 @@ fn test_command(a: *mem.Arena, given: []str, compact: bool) -> err {
     if durations_error != ok { ret durations_error }
     let (statuses, statuses_error) = mem.alloc[i32](a, 256usize)
     if statuses_error != ok { ret statuses_error }
+    let (attempts, attempts_error) = mem.alloc[usize](a, 256usize)
+    if attempts_error != ok { ret attempts_error }
     let suite_start = nptest_now()
     var index_storage: [8]u8 = zero
     var at = 0usize
@@ -2730,26 +2742,34 @@ fn test_command(a: *mem.Arena, given: []str, compact: bool) -> err {
         let index_str = index_storage[0usize..index_len]
         let (child_base, child_base_error) = nptest_join(a, args[6usize], "nptest-child")
         if child_base_error != ok { ret child_base_error }
-        let test_start = nptest_now()
-        let (status, child_out, child_err, run_error) = nptest_run(a, runner_exe, index_str, child_base)
-        if run_error != ok { ret run_error }
-        let test_end = nptest_now()
-        var elapsed_ms = 0usize
-        if test_end > test_start { elapsed_ms = (test_end - test_start) / 1000000usize }
-        durations[at] = elapsed_ms
-        var outcome = 0usize
-        if status != 0i32 {
-            outcome = 2usize
-            // Read past the failed assertion's message the root wrote first (T005).
-            let (_, child_rest) = tool.test_message(a, child_err)
-            if child_rest.len >= 7usize && same(child_rest[0usize..7usize], "error: ") { outcome = 1usize }
-            // The watchdog's own exit code, so a test still running at the deadline.
-            if status == 124i32 { outcome = 3usize }
+        // `--retries N` (T041, H39): a test that does not pass runs again, up to N more times; the
+        // last attempt is the record and `attempts` says how many it took.
+        var attempt = 0usize
+        var settled = false
+        while !settled {
+            let test_start = nptest_now()
+            let (status, child_out, child_err, run_error) = nptest_run(a, runner_exe, index_str, child_base)
+            if run_error != ok { ret run_error }
+            let test_end = nptest_now()
+            var elapsed_ms = 0usize
+            if test_end > test_start { elapsed_ms = (test_end - test_start) / 1000000usize }
+            durations[at] = elapsed_ms
+            var outcome = 0usize
+            if status != 0i32 {
+                outcome = 2usize
+                // Read past the failed assertion's message the root wrote first (T005).
+                let (_, child_rest) = tool.test_message(a, child_err)
+                if child_rest.len >= 7usize && same(child_rest[0usize..7usize], "error: ") { outcome = 1usize }
+                // The watchdog's own exit code, so a test still running at the deadline.
+                if status == 124i32 { outcome = 3usize }
+            }
+            outcomes[at] = outcome
+            statuses[at] = status
+            stdouts[at] = child_out
+            stderrs[at] = child_err
+            if outcome == 0usize || attempt >= retries { settled = true } else { attempt += 1usize }
         }
-        outcomes[at] = outcome
-        statuses[at] = status
-        stdouts[at] = child_out
-        stderrs[at] = child_err
+        attempts[at] = attempt
         at += 1usize
     }
     let suite_end = nptest_now()
@@ -2759,7 +2779,7 @@ fn test_command(a: *mem.Arena, given: []str, compact: bool) -> err {
     if timeout_s == 0usize { timeout_s = 1usize }
     // The child prints the runner by its reproducible spelling (D337), the basename
     // for a file under no source root.
-    try tool.test_json(a, module_name, shown_root, identity, text, basename(runner_path), names[0usize..count], lines[0usize..count], outcomes[0usize..count], statuses[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms, timeout_s, compact)
+    try tool.test_json(a, module_name, shown_root, identity, text, basename(runner_path), names[0usize..count], lines[0usize..count], outcomes[0usize..count], statuses[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms, timeout_s, compact, attempts[0usize..count])
     var any = false
     at = 0usize
     while at < count {
@@ -13666,23 +13686,36 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if args.len >= 4usize && same(args[1usize], "manifest-em") && same(args[args.len - 1usize], "--json") { ret artifact_manifest_command(a, args) }
     // `--compact` last (T041, H32): the same test stream without its passing `test` records;
     // `test_summary` still counts them, so an all-pass stream is its header, summary and result.
+    // `--retries N` (T041, H39): a test that does not pass is run again up to N more times. Both
+    // flags come last, in either order.
     var compact = false
+    var retries = 0usize
     var targs = args
-    if args.len >= 9usize && same(args[args.len - 1usize], "--compact") && (same(args[1usize], "test-file") || same(args[1usize], "test-project")) {
-        compact = true
-        targs = args[0usize..args.len - 1usize]
+    var flag_pass = 0usize
+    while flag_pass < 2usize {
+        let test_form = targs.len >= 9usize && (same(targs[1usize], "test-file") || same(targs[1usize], "test-project"))
+        if test_form && !compact && same(targs[targs.len - 1usize], "--compact") {
+            compact = true
+            targs = targs[0usize..targs.len - 1usize]
+        }
+        if test_form && retries == 0usize && targs.len >= 10usize && same(targs[targs.len - 2usize], "--retries") && decimal_ok(targs[targs.len - 1usize]) {
+            retries = decimal_value(targs[targs.len - 1usize])
+            if retries > 8usize { retries = 8usize }
+            targs = targs[0usize..targs.len - 2usize]
+        }
+        flag_pass += 1usize
     }
     // `test-file ... --json [--path REL] --only n1,n2` (D424, H10): the named tests alone.
-    if targs.len >= 10usize && same(targs[1usize], "test-file") && same(targs[targs.len - 2usize], "--only") && (same(targs[7usize], "--json") || same(targs[8usize], "--json")) { ret test_command(a, targs, compact) }
-    if targs.len == 8usize && same(targs[1usize], "test-file") && same(targs[7usize], "--json") { ret test_command(a, targs, compact) }
-    if targs.len == 9usize && same(targs[1usize], "test-file") && same(targs[8usize], "--json") { ret test_command(a, targs, compact) }
+    if targs.len >= 10usize && same(targs[1usize], "test-file") && same(targs[targs.len - 2usize], "--only") && (same(targs[7usize], "--json") || same(targs[8usize], "--json")) { ret test_command(a, targs, compact, retries) }
+    if targs.len == 8usize && same(targs[1usize], "test-file") && same(targs[7usize], "--json") { ret test_command(a, targs, compact, retries) }
+    if targs.len == 9usize && same(targs[1usize], "test-file") && same(targs[8usize], "--json") { ret test_command(a, targs, compact, retries) }
     // `... --json --path REL` (D263): the operand's identity under its project's src.
-    if targs.len == 10usize && same(targs[1usize], "test-file") && same(targs[7usize], "--json") && (same(targs[8usize], "--path") || same(targs[8usize], "--project-path")) { ret test_command(a, targs, compact) }
-    if targs.len == 11usize && same(targs[1usize], "test-file") && same(targs[8usize], "--json") && (same(targs[9usize], "--path") || same(targs[9usize], "--project-path")) { ret test_command(a, targs, compact) }
+    if targs.len == 10usize && same(targs[1usize], "test-file") && same(targs[7usize], "--json") && (same(targs[8usize], "--path") || same(targs[8usize], "--project-path")) { ret test_command(a, targs, compact, retries) }
+    if targs.len == 11usize && same(targs[1usize], "test-file") && same(targs[8usize], "--json") && (same(targs[9usize], "--path") || same(targs[9usize], "--project-path")) { ret test_command(a, targs, compact, retries) }
     // `test-project DIR TOOLCHAIN_ROOT ARCH OS WORKDIR [TIMEOUT_MS] --json` (D263): every
     // module under DIR/src, one stream.
-    if targs.len == 8usize && same(targs[1usize], "test-project") && same(targs[7usize], "--json") { ret test_project_command(a, targs, compact) }
-    if targs.len == 9usize && same(targs[1usize], "test-project") && same(targs[8usize], "--json") { ret test_project_command(a, targs, compact) }
+    if targs.len == 8usize && same(targs[1usize], "test-project") && same(targs[7usize], "--json") { ret test_project_command(a, targs, compact, retries) }
+    if targs.len == 9usize && same(targs[1usize], "test-project") && same(targs[8usize], "--json") { ret test_project_command(a, targs, compact, retries) }
     // `emit-executable FILE ROOT spv none OUT` (D1610): the program's kernels as one
     // SPIR-V module, and no executable.
     if args.len == 7usize && same(args[1usize], "emit-executable") && same(args[4usize], "spv") { ret spirv_command(a, args) }

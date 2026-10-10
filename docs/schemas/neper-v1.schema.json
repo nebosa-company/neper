@@ -1950,6 +1950,18 @@
         }
       }
     },
+    "testRetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record", "name", "module", "attempts", "outcome"],
+      "properties": {
+        "record": { "const": "test_retry" },
+        "name": { "type": "string" },
+        "module": { "type": "string" },
+        "attempts": { "type": "integer", "minimum": 2 },
+        "outcome": { "enum": ["passed", "failed", "crashed", "timeout"] }
+      }
+    },
     "testSummary": {
       "type": "object",
       "additionalProperties": false,
@@ -2219,6 +2231,9 @@
         },
         {
           "$ref": "#/$defs/capabilities"
+        },
+        {
+          "$ref": "#/$defs/testRetry"
         },
         {
           "$ref": "#/$defs/inline"

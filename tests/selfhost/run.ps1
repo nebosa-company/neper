@@ -7027,6 +7027,19 @@ cmd /c "`"$compiler`" test-project `"$(Join-Path $conformanceRoot 'tools\test_pr
 if ($LASTEXITCODE -ne 1) { throw "test-project --compact exited $LASTEXITCODE, expected 1" }
 $compactLines = [IO.File]::ReadAllLines($compactActual)
 if ($compactLines.Count -ne 4 -or $compactLines[1] -notmatch '"name":"is_odd".*"outcome":"failed"' -or $compactLines[2] -notmatch '"passed":2,"failed":1,"crashed":0,"timeout":0,"total":3' -or ([IO.File]::ReadAllText($compactActual) -match '"outcome":"passed"')) { throw "test-project --compact is not the failing record and the full summary: $($compactLines -join '|')" }
+# `--retries N` (T041, H39): a test that fails once and passes on its second run is a passing
+# record plus a `test_retry` naming the two attempts, never a silent pass; without the flag it fails.
+$flakyMarker = Join-Path $testBuild 'flaky-marker.txt'
+Remove-Item -LiteralPath $flakyMarker -ErrorAction SilentlyContinue
+$flakyActual = Join-Path $testBuild 'conformance-tools-flaky-retry.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools\flaky_test.e')`" `"$repo`" x64 windows `"$testBuild`" --json --retries 2 > `"$flakyActual`""
+if ($LASTEXITCODE -ne 0) { throw "the flaky test did not settle under --retries 2 (exit $LASTEXITCODE)" }
+$flakyText = [IO.File]::ReadAllText($flakyActual)
+if ($flakyText -notmatch '"record":"test_retry","name":"settles","module":"flaky_test","attempts":2,"outcome":"passed"' -or $flakyText -notmatch '"passed":2,"failed":0') { throw "the retried test is not a flaky pass: $flakyText" }
+Remove-Item -LiteralPath $flakyMarker -ErrorAction SilentlyContinue
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools\flaky_test.e')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$flakyActual`""
+if ($LASTEXITCODE -ne 1) { throw "the flaky test without --retries exited $LASTEXITCODE, expected 1" }
+Remove-Item -LiteralPath $flakyMarker -ErrorAction SilentlyContinue
 # `fmt FILE` formats the file in place, and `fmt` / `fmt --check` with no operand cover
 # every `.e` under the project's src/ and lib/ (D295): a project of one non-canonical
 # file fails the check, is formatted to the corpus's canonical text, then passes.

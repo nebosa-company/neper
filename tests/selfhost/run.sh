@@ -6875,6 +6875,17 @@ $test_build/neper-self test-project "$conformance_root/tools/test_project" "$rep
 grep -q '"name":"is_odd".*"outcome":"failed"' "$test_build/conformance-tools-test-project-compact.jsonl"
 grep -q '"passed":2,"failed":1,"crashed":0,"timeout":0,"total":3' "$test_build/conformance-tools-test-project-compact.jsonl"
 ! grep -q '"outcome":"passed"' "$test_build/conformance-tools-test-project-compact.jsonl"
+# `--retries N` (T041, H39): a test that fails once and passes on its second run is a passing
+# record plus a `test_retry` naming the two attempts, never a silent pass; without the flag it fails.
+rm -f "$test_build/flaky-marker.txt"
+(cd "$test_build" && $test_build/neper-self test-file "$conformance_root/tools/flaky_test.e" "$repo" x64 linux "$test_build" --json --retries 2 > "$test_build/conformance-tools-flaky-retry.jsonl")
+grep -q '"record":"test_retry","name":"settles","module":"flaky_test","attempts":2,"outcome":"passed"' "$test_build/conformance-tools-flaky-retry.jsonl"
+grep -q '"passed":2,"failed":0' "$test_build/conformance-tools-flaky-retry.jsonl"
+rm -f "$test_build/flaky-marker.txt"
+flaky_status=0
+(cd "$test_build" && $test_build/neper-self test-file "$conformance_root/tools/flaky_test.e" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-flaky-retry.jsonl") || flaky_status=$?
+[ "$flaky_status" = 1 ]
+rm -f "$test_build/flaky-marker.txt"
 # `fmt FILE` formats the file in place, and `fmt` / `fmt --check` with no operand cover
 # every `.e` under the project's src/ and lib/ (D295): a project of one non-canonical
 # file fails the check, is formatted to the corpus's canonical text, then passes.
