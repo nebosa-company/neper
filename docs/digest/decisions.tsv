@@ -2063,4 +2063,5 @@ D2305	1489	L034: full-text search and the indexing pipeline as `e.algo.fulltext`
 D2306	3525	L035: project scheduling as `e.algo.project` and zoned workflow triggers as `e.algo.trigger`
 D2307	2365	L036 (part one): status workflows as `e.algo.fsm`
 D2308	835	T026: the traps section lands in the language card
-D2309	685	T038: agent-ingestible digests of the queue and the decision log
+D2309	686	T038: agent-ingestible digests of the queue and the decision log
+D2310	855	T043: a demand-ranked view of the open library work

@@ -1,0 +1,248 @@
+rank	id	demand	title
+1	L163	103	Fast, small PNG encoding: dynamic Huffman, lazy matching and table CRC
+2	L050	97	Host facts and inventory helpers (key=value facts, group merge, dynamic hosts)
+3	L049	66	Webhook envelopes, auth-scheme table, MCP and OpenAPI builders
+4	L127	54	Object-store abstraction over fs, http and memory
+5	L111	53	JSON-path queries (jmespath parity) in e.algo.query
+6	L135	47	Micro-slivers: s2, bincode-style codec, magic sniff, shell words, host lookups, signals, byte-unit, rational
+7	L162	45	Chart benchmarks against ggplot2, base R graphics and lattice
+8	L100	41	XLSX worksheet encode for grid and report export
+9	L054	39	HTTP fuzz and host-sweep helpers for authorized scanning
+10	L147	38	Embedded document and event store
+11	L067	37	Refresh-stable explorer tree adapter over e.ui.collection
+12	L037	35	Offline-first sync, conflict merge, presence, verifiable history
+13	L131	32	Parser-combinator kit in e.parse
+14	L160	32	Micro-slivers IV: robots, sitemap, test polling, fixed-width, keystores
+15	L146	31	Word document generation over OOXML
+16	L152	30	Micro-slivers III: CMS signing, json5, TFTP, singleflight, host lookups, log rotation
+17	L052	29	Executable format readers (e.fmt.elf, e.fmt.pe)
+18	L144	29	Architecture-rule testing over module dependencies
+19	L133	25	Terminal line editor with history and completion
+20	L112	23	ORM layer over e.db: struct mapping, relations, hooks
+21	L066	21	Safe structured Markdown viewer over e.fmt.markdown and e.ui.control
+22	L142	21	BDD/Gherkin runner with e.meta step binding
+23	L149	20	Crash and error report upload client
+24	L158	20	Generic object pool with eviction
+25	L036	18	Durable workflow runtime with FSM guard
+26	L101	18	gRPC transport and stubs over e.fmt.protobuf
+27	L099	17	Ink canvas: stroke capture and replay in e.ui.widget
+28	L150	17	NodaTime-style dates: non-ISO calendars, patterns, maps
+29	L151	17	Industrial protocols: Modbus first, OPC UA and S7 follow
+30	L148	16	Scheduler control: day, week and agenda views
+31	L109	14	TLS trust-root provisioning for e.net.tls
+32	L065	13	Complete native code editor in e.ui.code_editor (CodeMirror 6 / JustCode parity)
+33	L053	12	Multi-pattern signature scanning (YARA-lite subset)
+34	L103	12	Recurrence rules and flexible date parsing in e.time
+35	L107	12	HTTP keep-alive connection pooling in e.net.http
+36	L130	12	Diagnostic report rendering for applications
+37	L153	12	Unified document text-extraction facade for search
+38	L106	11	Env-file loader (python-dotenv parity) in e.fmt
+39	L113	11	SQL migration runner over e.db
+40	L141	11	Virtual-actor framework over e.dist
+41	L119	10	Virtual filesystem: memory, overlay and union mounts
+42	L126	10	D-Bus message codec and client for Linux desktop
+43	L041	9	HCL read-only codec (e.fmt.hcl)
+44	L044	9	XLSX worksheet decode with vendor importer maps
+45	L048	9	Reference drivers: k8s labels, AWS subset, SSH transport
+46	L060	9	Variational inference in e.math.mcmc
+47	L098	9	Equation (math typesetting) rendering in e.text
+48	L105	9	Platform directories (platformdirs parity) in e.path
+49	L124	9	Extended image decoders: BMP, GIF, TIFF, QOI plus EXIF
+50	L139	9	Object-object mapper with conventions and projections
+51	L145	9	PDF document generation in e.fmt
+52	L154	9	Symbolic math: expression trees, diff, integrate, solve
+53	L120	8	RAR and 7z archive decoders in e.fmt
+54	L045	7	Dependency-free identity protocol logic
+55	L046	7	HTTP policy helpers: cache, cookies, SSRF gate, CORS/CSP, filter lists
+56	L064	7	Tidy-data verbs atop L032
+57	L108	7	PEP 440 specifiers and requirements for e.fmt.semver
+58	L122	7	Seeded fake-data generators in e.algo.rand
+59	L125	7	SVG document rendering in e.gfx
+60	L132	7	HTML sanitizer in e.fmt.html
+61	L128	6	Snapshot testing in e.test
+62	L040	5	Cascade, matcher, and accessibility-name kernels
+63	L047	5	Declarative REST driver core with provider-trait shape
+64	L043	4	WOFF1 and WOFF2 font decoders
+65	L102	4	Process and system info (psutil parity) in e.proc
+66	L104	4	Terminal kit: progress meters and rich text tables
+67	L116	4	Prometheus exposition and OTLP export for e.metrics/e.trace
+68	L161	4	Rules engine: Rete plus decision tables
+69	L058	3	Multivariate core in e.ml.reduce / e.algo.stat
+70	L137	3	Micro-slivers II: DHCP, SNMP, Gemini, gopher, finger, QR
+71	L042	2	Scanner finding parsers and Mermaid emitter
+72	L056	2	Elementary inferential completions in e.algo.stat
+73	L063	2	ML production core (histogram GBM, CV, pipeline, calibration)
+74	L115	2	NATS client in e.net
+75	L121	2	SOCKS5 client in e.net
+76	L129	2	Statistical bench harness in e.test
+77	L136	2	Terminal emulator engine in e.ui
+78	L138	2	Mediator: requests, notifications and pipeline behaviors
+79	L140	2	Persistent background jobs with retries and cron triggers
+80	L143	2	Mutation testing in e.test
+81	L155	2	Graph interchange formats: GraphML, GEXF, GML
+82	L055	1	Certificate issuance for authorized TLS-intercept testing (e.crypto.x509)
+83	L057	1	Regularized and robust regression in e.ml.linear
+84	L117	1	Password-hashing KDFs in e.crypto: bcrypt, argon2, scrypt
+85	L118	1	Mock and stub framework for e.test
+86	L159	1	Composable test matcher library
+87	L038	0	CSS tokenizer, grammar, and selector parser
+88	L039	0	CSS value microsyntax and animation interpolation
+89	L051	0	Packet codecs and pcap I/O (e.net.packet, e.net.pcap)
+90	L110	0	Statistical legacy-charset detection in e.text.encoding
+91	L114	0	NoSQL wire clients: Redis, MongoDB, Elasticsearch
+92	L123	0	Layered configuration with watch in e.cli
+93	L134	0	Shell completions and man pages for e.cli
+94	L156	0	Brokerless messaging patterns: ZeroMQ and NNG
+95	L157	0	Expression languages: JEXL, SpEL and MVEL parity
+
+sessions	name	kind	library modules
+21	main	hand-rolled	
+18	same	reinvented	e.algo.collect,e.algo.disjoint_set,e.algo.findings,e.algo.geom3,e.algo.predicate
+13	check	reinvented	e.cancel,e.fmt.json.schema,e.test.linearize
+13	child	reinvented	e.data.trie,e.fmt.avro,e.trace
+13	fill	reinvented	e.algo.batch,e.algo.linalg.matrix,e.algo.linalg.tensor,e.dist.crdt,e.fmt.gzip,e.
+12	add	reinvented	e.algo.complex,e.algo.decimal,e.algo.egraph,e.algo.formula.basic,e.algo.formula.
+12	options	reinvented	e.ui.audit
+12	write	reinvented	e.async.io,e.bytes,e.fmt.bson,e.fmt.gzip,e.fmt.html,e.fmt.ini,e.fmt.json,e.fmt.l
+11	bump	reinvented	e.robot.map
+11	classify	reinvented	e.algo.formula.sql,e.fmt.ini,e.ml.knn
+11	describe	reinvented	e.algo.formula,e.fmt.arrow,e.gpu.vulkan
+11	drain	reinvented	e.algo.deflate,e.algo.fulltext,e.fmt.tar,e.proc
+11	hex_digit	reinvented	e.algo.findings,e.algo.formula.misc,e.fmt.html.template,e.fmt.json,e.fmt.quoted_
+11	infinity	reinvented	e.algo.formula,e.algo.graph.path,e.fmt.xpath,e.gfx.mesh,e.math.opt.milp,e.ml.clu
+11	measure	reinvented	e.game.anim,e.text.layout,e.text.stem,e.ui.widget
+11	narrow	reinvented	e.algo.fulltext
+11	open	reinvented	e.fmt.mp3,e.fmt.wav,e.fmt.zip,e.fs.mmap,e.fs.watch,e.gpu,e.gpu.vulkan,e.os.neper
+11	point_eq	reinvented	e.gfx.scene
+11	probe	reinvented	e.algo.egraph,e.concurrent.map
+11	read	reinvented	e.async.io,e.bytes,e.fmt.bzip2,e.fmt.flac,e.fmt.gzip,e.fmt.lzw,e.fmt.quoted_prin
+11	reader	reinvented	e.bytes,e.fmt.asn1,e.fmt.bzip2,e.fmt.csv,e.fmt.gzip,e.fmt.ini,e.fmt.json,e.fmt.l
+11	scale	reinvented	e.algo.geom3,e.game.anim,e.gfx.shade,e.math
+11	text_of	reinvented	e.fmt.xsd.schema,e.net.mdns
+11	to_bool	reinvented	e.algo.formula
+11	writer	reinvented	e.bytes,e.fmt.csv,e.fmt.gzip,e.fmt.lzw,e.fmt.multipart,e.fmt.quoted_printable,e.
+10	above	reinvented	e.algo.geom
+10	add_scaled	hand-rolled	
+10	bits32	hand-rolled	
+10	bits64	hand-rolled	
+10	check_condition_statement	hand-rolled	
+10	compared_constant	hand-rolled	
+10	comptime_condition	hand-rolled	
+10	counted_next_err	hand-rolled	
+10	counter_next	hand-rolled	
+10	d_begin	reinvented	e.os.linux
+10	depth	reinvented	e.data.cartesian_tree,e.game.grid
+10	derived_from_subject	hand-rolled	
+10	double	hand-rolled	
+10	element_width	hand-rolled	
+10	expect_end	hand-rolled	
+10	expect_entry	hand-rolled	
+10	expect_get	hand-rolled	
+10	expect_row	hand-rolled	
+10	f64_of	hand-rolled	
+10	finish	reinvented	e.algo.transpile,e.data.graph,e.fmt.flatbuffers,e.fmt.gzip,e.fmt.jwt,e.fmt.lzw,e
+10	float_of	reinvented	e.fmt.bson,e.fmt.msgpack
+10	from_bits	hand-rolled	
+10	h_let	hand-rolled	
+10	h_ret	hand-rolled	
+10	h_two	hand-rolled	
+10	halve_even	hand-rolled	
+10	has	reinvented	e.game.ecs,e.gpu
+10	inner	hand-rolled	
+10	inner_width	hand-rolled	
+10	integer_of	reinvented	e.algo.formula.datetime,e.algo.predicate,e.fmt.asn1,e.fmt.bson,e.fmt.msgpack
+10	is_big	hand-rolled	
+10	is_even	hand-rolled	
+10	is_null	reinvented	e.fmt.json,e.gfx.chart.geojson
+10	is_pair	hand-rolled	
+10	keep_small	hand-rolled	
+10	length	reinvented	e.algo.geom3,e.fmt.lzma,e.game.anim,e.gfx.shade,e.math.fixed
+10	lookup	reinvented	e.data.validate,e.fmt.xsd.schema,e.text.index,e.text.normalize,e.text.template
+10	meta_constant	hand-rolled	
+10	middle	hand-rolled	
+10	mode	hand-rolled	
+10	name	hand-rolled	
+10	negative_zero	hand-rolled	
+10	nested_depth	hand-rolled	
+10	non_integers	hand-rolled	
+10	outer	hand-rolled	
+10	point_hash	hand-rolled	
+10	probe_element	hand-rolled	
+10	probe_fields	hand-rolled	
+10	probe_first	hand-rolled	
+10	probe_kind	hand-rolled	
+10	probe_len	hand-rolled	
+10	probe_sum	hand-rolled	
+10	produce	hand-rolled	
+10	quiet_nan	hand-rolled	
+10	root_of	reinvented	e.ui.widget
+10	rotl	reinvented	e.crypto.random
+10	runtime_choice	hand-rolled	
+10	sample	reinvented	e.fmt.png,e.game.physics,e.robot.motion,e.robot.plan
+10	source_over	hand-rolled	
+10	sum_all	hand-rolled	
+10	sum_checked	hand-rolled	
+10	total	hand-rolled	
+10	width	reinvented	e.fmt.arrow,e.game.tilemap
+9	aligned	reinvented	e.algo.decimal,e.ui.widget
+9	back_fill	reinvented	e.fmt.zstd
+9	back_finished	reinvented	e.fmt.zstd
+9	back_init	reinvented	e.fmt.zstd
+9	back_peek	reinvented	e.fmt.zstd
+9	back_read	reinvented	e.fmt.zstd
+9	back_skip	reinvented	e.fmt.zstd
+9	bit_intrinsics	hand-rolled	
+9	capture_write	hand-rolled	
+9	conversions	hand-rolled	
+9	count_events	hand-rolled	
+9	d_close	hand-rolled	
+9	d_execute	hand-rolled	
+9	d_prepare	hand-rolled	
+9	d_query	hand-rolled	
+9	d_rows_close	hand-rolled	
+9	d_rows_columns	hand-rolled	
+9	d_rows_next	hand-rolled	
+9	d_statement_close	hand-rolled	
+9	d_statement_execute	hand-rolled	
+9	d_statement_query	hand-rolled	
+9	d_transaction_commit	hand-rolled	
+9	d_transaction_execute	hand-rolled	
+9	d_transaction_query	hand-rolled	
+9	d_transaction_rollback	hand-rolled	
+9	decimal	reinvented	e.net.cidr
+9	default_ll	reinvented	e.fmt.zstd
+9	default_ml	reinvented	e.fmt.zstd
+9	default_of	reinvented	e.fmt.zstd
+9	flush_block	reinvented	e.fmt.zstd
+9	forward_init	reinvented	e.fmt.zstd
+9	forward_read	reinvented	e.fmt.zstd
+9	forward_used	reinvented	e.fmt.zstd
+9	fse_build	reinvented	e.fmt.zstd
+9	fse_read_counts	reinvented	e.fmt.zstd
+9	highest_bit	reinvented	e.fmt.zstd
+9	huff_build	reinvented	e.fmt.zstd
+9	huff_read	reinvented	e.fmt.zstd
+9	huff_stream	reinvented	e.fmt.zstd
+9	insert	reinvented	e.data.bk_tree,e.data.btree,e.data.list,e.data.rope,e.data.skip_list,e.data.slot
+9	layout	reinvented	e.fmt.pretty,e.gfx.chart,e.text.layout,e.ui.report
+9	ll_base	reinvented	e.fmt.zstd
+9	load32	reinvented	e.crypto.kx,e.crypto.sign,e.fmt.snappy,e.fmt.zstd,e.net.dns,e.net.quic,e.net.stu
+9	load64	reinvented	e.fmt.zstd
+9	make_room	reinvented	e.fmt.zstd
+9	mapping_of	hand-rolled	
+9	masks	hand-rolled	
+9	math_is_negative	hand-rolled	
+9	ml_base	reinvented	e.fmt.zstd
+9	moves	hand-rolled	
+9	next_block	reinvented	e.crypto.random,e.fmt.zstd
+9	open_rows	hand-rolled	
+9	params_of	hand-rolled	
+9	read_all	reinvented	e.io,e.text.io
+9	read_literals	reinvented	e.fmt.zstd
+9	reader_storage	reinvented	e.fmt.zstd
+9	reductions	hand-rolled	
+9	render	reinvented	e.gfx.scene,e.gfx.trace,e.test.fuzz
+9	rotl64	reinvented	e.crypto.hash,e.fmt.zstd
+9	run_sequences	reinvented	e.fmt.zstd
+9	seq_symbol	reinvented	e.fmt.zstd
+9	seq_table_read	reinvented	e.fmt.zstd

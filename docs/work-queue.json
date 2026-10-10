@@ -1742,17 +1742,6 @@
       "evidence": "Planning only (D1954). Reference host tools/neper-agent-host/ missing: policy and sandbox mediation, environment identity, scoped verified receipts (one exact change contract per receipt), isolated parallel change bundles and durable authorized tasks across reconnect and approval. First slice allowed to emit verified. Pickup immediately after the chart cluster; compiler declares facts, host owns authority."
     },
     {
-      "id": "T043",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 43,
-      "title": "Demand-ranked library breadth order from agent measurements",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Planning only (D1954). 155 library items stand open at combined 0.96 with no demand order: rank breadth work by what agents actually hand-roll, from lang-stats script evidence and repair clusters, as a generated ranked view. Re-rank on new measurements; never reorder the serial head by hand. Pickup immediately after the chart cluster."
-    },
-    {
       "id": "L162",
       "category": "library",
       "group": "Algorithms",
