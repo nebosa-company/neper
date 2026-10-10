@@ -1035,6 +1035,15 @@ fn jobs_flag(args: []str) -> usize {
     ret 0usize
 }
 
+// `NEPER_JOBS` (C147): the worker count a build takes when no `-j` is given, so a
+// host short of commit charge caps every build of a suite from one place. Zero when
+// unset or not a count; an explicit `-j` always wins.
+fn jobs_environment(a: *mem.Arena) -> usize {
+    let (text, env_error) = os.env(a, "NEPER_JOBS")
+    if env_error != ok { ret 0usize }
+    ret jobs_count(text)
+}
+
 // A decimal count from one to a thousand, or zero for anything else.
 fn jobs_count(spelling: str) -> usize {
     if spelling.len == 0usize || spelling.len > 4usize { ret 0usize }
@@ -13723,8 +13732,11 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if writes_executable || writes_em || writes_all_em { learn_compiler_identity(a, &loaded, args[0usize], args) }
         if trailing_flags {
             loaded.jobs = jobs_flag(args)
+            if loaded.jobs == 0usize { loaded.jobs = jobs_environment(a) }
             loaded.perturb = has_flag(args, "--perturb")
             loaded.memory_budget = memory_budget_flag(args)
+        } else {
+            loaded.jobs = jobs_environment(a)
         }
         report.timing = trailing_flags && has_flag(args, "--time")
         report.build.full = trailing_flags && has_flag(args, "--stats-full")

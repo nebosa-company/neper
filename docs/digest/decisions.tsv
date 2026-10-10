@@ -2070,4 +2070,5 @@ D2312	695	T036: the OpenCode skill and a routing smoke check
 D2313	1061	C147 (part): a seed compiler for the suite, and the stale assertions it found
 D2314	793	T037: lang-stats reads OpenCode as its own harness and prices free tiers at zero
 D2315	1143	T035: UI resource and command consistency audits over declared manifests
-D2316	842	T040 (first step): tooling latency budgets frozen from a measurement
+D2316	843	T040 (first step): tooling latency budgets frozen from a measurement
+D2317	1465	C147 (second part): `NEPER_JOBS`, and the Windows suite reaches its last fixtures

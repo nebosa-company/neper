@@ -317,10 +317,10 @@
       "group": "Validation",
       "order": 147,
       "title": "Full suites complete on this machine: Windows run.ps1 and Linux run.sh",
-      "score": 0.3,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C115 (2026-10-08). Neither full suite finishes here: tests/selfhost/run.ps1 trips on PowerShell's Stop preference when a native command writes to stderr, and the Linux run.sh builds with neper build, which crashes the WSL2 VM on this host. Per-feature fixtures have been run by hand on both hosts. Acceptance: (1) run.ps1 runs to its end on this Windows host without manual patching; (2) run.sh runs to its end in WSL, with the memory it needs set down in the script's header and the VM left alive; (3) each reports its last line and the count of checks, and the totals feed docs/test-results.json, the tile on the readiness page. PART (D2313): NEPER_SEED in run.ps1 (the bootstrap cannot build src/main.e under this host's commit), stale assertions fixed, fix_module_surfaces.py, -j 2 for the two huge fixtures; run.ps1 passes stage 1 and about 3,700 lines. NOT DONE: a complete run on either host and the test-results.json totals."
+      "evidence": "Split from C115 (2026-10-08). Neither full suite finishes here: tests/selfhost/run.ps1 trips on PowerShell's Stop preference when a native command writes to stderr, and the Linux run.sh builds with neper build, which crashes the WSL2 VM on this host. Per-feature fixtures have been run by hand on both hosts. Acceptance: (1) run.ps1 runs to its end on this Windows host without manual patching; (2) run.sh runs to its end in WSL, with the memory it needs set down in the script's header and the VM left alive; (3) each reports its last line and the count of checks, and the totals feed docs/test-results.json, the tile on the readiness page. PART (D2313): NEPER_SEED in run.ps1 (the bootstrap cannot build src/main.e under this host's commit), stale assertions fixed, fix_module_surfaces.py, -j 2 for the two huge fixtures; run.ps1 passes stage 1 and about 3,700 lines. PART 2 (D2317): NEPER_JOBS caps default workers from the environment; stale NeperOS and determinism assertions fixed; the seeded Windows run passes to line 9914 of 9937 (stops at the Flashlight timing fixture; sc500k static gate needs >3 GB free commit; network check hits a live API). NOT DONE: a complete run on either host (run.sh under WSL not run) and the test-results.json totals."
     },
     {
       "id": "C148",
@@ -452,7 +452,7 @@
       "score": 0,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "bootstrap/neper.c still builds stage 0. Follow-on (D1898): deletion is also the biggest LLMx lever \u00e2\u20ac\u201d until it lands, agents write M1 per the docs and compile neper-0 plus quirks, and failures like T021's look like agent error."
+      "evidence": "bootstrap/neper.c still builds stage 0. Follow-on (D1898): deletion is also the biggest LLMx lever â€” until it lands, agents write M1 per the docs and compile neper-0 plus quirks, and failures like T021's look like agent error."
     },
     {
       "id": "T004",
@@ -551,7 +551,7 @@
       "score": 0,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "post-m2-llm-hardening.md section 15 specifies the only evidence that can support a superiority claim -- correctness first, then total interaction tokens per verified success, repair turns and source-token pressure, 20 seeds per case, Neper's own tools against each baseline's native ones, rank first or statistically tied or expand rather than assert -- and nothing in this queue schedules it. benchmarks/llm_edit/neper_advantage_matrix.md and benchmarks/llm_gen are smoke runs by their own READMEs. Follow-on (D1898): include an OpenCode-harness arm in the held-out design, or LLMx fixes are measured everywhere except where agents actually run. Done when ten held-out tasks in two model families run under the acceptance rule with the harness, prompts, cards and baseline results frozen and the report versioned. Follow-on (D1954): full E2 comparative gate after this pilot \u00e2\u20ac\u201d broad plus registered cohorts with frozen weights, oracles and statistical rules; the ten pilot tasks above are the rehearsal, not the claim."
+      "evidence": "post-m2-llm-hardening.md section 15 specifies the only evidence that can support a superiority claim -- correctness first, then total interaction tokens per verified success, repair turns and source-token pressure, 20 seeds per case, Neper's own tools against each baseline's native ones, rank first or statistically tied or expand rather than assert -- and nothing in this queue schedules it. benchmarks/llm_edit/neper_advantage_matrix.md and benchmarks/llm_gen are smoke runs by their own READMEs. Follow-on (D1898): include an OpenCode-harness arm in the held-out design, or LLMx fixes are measured everywhere except where agents actually run. Done when ten held-out tasks in two model families run under the acceptance rule with the harness, prompts, cards and baseline results frozen and the report versioned. Follow-on (D1954): full E2 comparative gate after this pilot â€” broad plus registered cohorts with frozen weights, oracles and statistical rules; the ten pilot tasks above are the rehearsal, not the claim."
     },
     {
       "id": "T028",
@@ -958,7 +958,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1812). Reference: JustCode src/perp.js. Not yet: a tooling panel composed from existing collection/overlay controls and L066's safe viewer, reading persistent journal/status through a supplied adapter; timeline/detail/filter views, follow-tail, path-specific watcher refresh with bounded fallback, absent-harness handling and close/reopen reattachment. Work lifecycle stays in the harness, so closing the panel cannot stop work and reopening cannot lose it. Validate truncated/partial records, journal rotation, stale refresh replies and bounded large-journal reads. Harness discovery, binding validation and typed run/pause/message actions stay outside e.ui; the panel must not invent a second task scheduler. Follow-on (D1898): parallel harnesses also need a claim protocol \u00e2\u20ac\u201d queue-item checkout plus D-number reservation \u00e2\u20ac\u201d after two live collisions between sessions sharing one JSON queue. Use generic library view primitives without baking Perpetum or .harness schemas into the standard library."
+      "evidence": "Planning only (D1812). Reference: JustCode src/perp.js. Not yet: a tooling panel composed from existing collection/overlay controls and L066's safe viewer, reading persistent journal/status through a supplied adapter; timeline/detail/filter views, follow-tail, path-specific watcher refresh with bounded fallback, absent-harness handling and close/reopen reattachment. Work lifecycle stays in the harness, so closing the panel cannot stop work and reopening cannot lose it. Validate truncated/partial records, journal rotation, stale refresh replies and bounded large-journal reads. Harness discovery, binding validation and typed run/pause/message actions stay outside e.ui; the panel must not invent a second task scheduler. Follow-on (D1898): parallel harnesses also need a claim protocol â€” queue-item checkout plus D-number reservation â€” after two live collisions between sessions sharing one JSON queue. Use generic library view primitives without baking Perpetum or .harness schemas into the standard library."
     },
     {
       "id": "T035",
@@ -1266,7 +1266,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1881). image-crate parity gap (verified: png/jpeg/webp only): BMP, GIF (incl. animation frames), TIFF and QOI decoders plus an EXIF reader over e.gfx.image. Bounded-allocation fixtures incl. hostile files; encode stays out except where e.gfx.image already writes. Follow-on (D1889): extend encode to BMP/GIF/QOI/TIFF write for zigimg write parity. Follow-on (D1890): image-processing ops (resize, rotate, flip, blur) verified absent \u00e2\u20ac\u201d only Porter-Duff compositing exists."
+      "evidence": "Planning only (D1881). image-crate parity gap (verified: png/jpeg/webp only): BMP, GIF (incl. animation frames), TIFF and QOI decoders plus an EXIF reader over e.gfx.image. Bounded-allocation fixtures incl. hostile files; encode stays out except where e.gfx.image already writes. Follow-on (D1889): extend encode to BMP/GIF/QOI/TIFF write for zigimg write parity. Follow-on (D1890): image-processing ops (resize, rotate, flip, blur) verified absent â€” only Porter-Duff compositing exists."
     },
     {
       "id": "L125",

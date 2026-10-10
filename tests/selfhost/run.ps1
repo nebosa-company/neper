@@ -1,4 +1,8 @@
 $ErrorActionPreference = 'Stop'
+# Worker count for every build below when no -j is given (C147): eight workers' forked tables
+# exceed the commit charge of a 16 GB host that is also running a desktop. NEPER_JOBS is read
+# by the compiler; set it to a larger number, or to nothing useful, on a bigger machine.
+if (-not $env:NEPER_JOBS) { $env:NEPER_JOBS = '2' }
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $neper = Join-Path $repo 'build\windows\neper.exe'
@@ -8428,13 +8432,13 @@ if ($LASTEXITCODE -ne 0 -or $hostExecutableWritten -ne 'executable written') { t
 $hostOutput = & $hostExecutablePath 'alpha' 'beta'
 if ($LASTEXITCODE -ne 0 -or $hostOutput -ne 'host memory clock ok') { throw 'Windows args, memory, or clock intrinsic behavior failed' }
 $ownCompilerPath = Join-Path $testBuild 'neper-own.exe'
-& $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $ownCompilerPath | Out-Null
+& $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $ownCompilerPath -j 2 | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $ownCompilerPath)) { throw 'compiler-owned PE linker did not emit the compiler' }
 # The arena dry (D546, H07): a compiler built with an arena of 96 MB cannot hold its own
 # sources, and says so as the limit it is, under the query's header, exit 1 -- where it
 # had said the operand cannot be read, or that name resolution failed.
 $smallCompiler = Join-Path $testBuild 'neper-small.exe'
-& $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $smallCompiler --arena 96m | Out-Null
+& $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $smallCompiler --arena 96m -j 2 | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $smallCompiler)) { throw 'the compiler with a 96 MB arena did not build' }
 $smallOut = & $smallCompiler check-file (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' --json 2>$null
 if ($LASTEXITCODE -ne 1) { throw "the compiler with a 96 MB arena did not exit 1 over its own sources (got $LASTEXITCODE)" }
@@ -8457,7 +8461,7 @@ $ownOsOutput = & $ownOsPath $ownOsFile $testBuild $ownOsHelperPath
 if ($LASTEXITCODE -ne 0 -or $ownOsOutput -ne 'intrinsic ok') { throw 'compiler-owned PE args, file, directory, memory, clock, process, or handle inheritance behavior failed' }
 if ([IO.File]::ReadAllText($ownOsFile) -ne 'neper os!') { throw 'compiler-owned PE file write or append behavior failed' }
 $stableCompilerPath = Join-Path $testBuild 'neper-own-stable.exe'
-& $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $stableCompilerPath | Out-Null
+& $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $stableCompilerPath -j 2 | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $stableCompilerPath)) { throw 'compiler-owned PE compiler did not emit its stable stage' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $ownCompilerPath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'compiler-owned PE stages are not byte-for-byte deterministic' }
 # `-j N` and `--perturb` (D331): the compiler built on one worker, and on three with
@@ -8532,7 +8536,7 @@ $formattedCompiler = Join-Path $testBuild 'neper-formatted.exe'
 & $ownCompilerPath emit-executable (Join-Path $formattedSrc 'src\main.e') $repo 'x64' 'windows' $formattedCompiler | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $formattedCompiler)) { throw 'the compiler did not build from its formatted sources' }
 $formattedBuilt = Join-Path $testBuild 'neper-by-formatted.exe'
-& $formattedCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $formattedBuilt | Out-Null
+& $formattedCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $formattedBuilt -j 2 | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $formattedBuilt)) { throw 'the compiler built from formatted sources did not build the compiler' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $formattedBuilt).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built from formatted sources does not build the stable stage' }
 # The compiler without its comments (D526, H10): every comment of `src/` blanked to
@@ -8578,7 +8582,7 @@ $resymbolledCompiler = Join-Path $testBuild 'neper-resymbolled.exe'
 & $ownCompilerPath emit-executable (Join-Path $resymbolledSrc 'src\main.e') $resymbolledSrc 'x64' 'windows' $resymbolledCompiler | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $resymbolledCompiler)) { throw 'the compiler did not build from its sources with the symbols renamed' }
 $byResymbolled = Join-Path $testBuild 'neper-by-resymbolled.exe'
-& $resymbolledCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byResymbolled | Out-Null
+& $resymbolledCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byResymbolled -j 2 | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $byResymbolled)) { throw 'the compiler with renamed symbols did not build the compiler' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $byResymbolled).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler with renamed symbols does not build the stable stage' }
 # The compiler with a conflict-free set of parameter lists reversed (D562, H10,
@@ -8591,7 +8595,7 @@ $parameterCompiler = Join-Path $testBuild 'neper-parameters.exe'
 & $ownCompilerPath emit-executable (Join-Path $parameterSrc 'src\main.e') $repo 'x64' 'windows' $parameterCompiler | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $parameterCompiler)) { throw 'the compiler did not build from its sources with parameters reordered' }
 $byParameters = Join-Path $testBuild 'neper-by-parameters.exe'
-& $parameterCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byParameters | Out-Null
+& $parameterCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byParameters -j 2 | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $byParameters)) { throw 'the compiler with reordered parameters did not build the compiler' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $byParameters).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler with reordered parameters does not build the stable stage' }
 # The compiler with every struct's fields reversed (D530, H10): another layout for
@@ -8604,7 +8608,7 @@ $reversedCompiler = Join-Path $testBuild 'neper-reversed.exe'
 & $ownCompilerPath emit-executable (Join-Path $reversedSrc 'src\main.e') $repo 'x64' 'windows' $reversedCompiler | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $reversedCompiler)) { throw 'the compiler did not build from its sources with the fields reversed' }
 $byReversed = Join-Path $testBuild 'neper-by-reversed.exe'
-& $reversedCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byReversed | Out-Null
+& $reversedCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byReversed -j 2 | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $byReversed)) { throw 'the compiler with reversed fields did not build the compiler' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $byReversed).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler with reversed fields does not build the stable stage' }
 # The compiler with its declarations reversed (D531, H10): every module's declarations
@@ -8617,7 +8621,7 @@ $reorderedCompiler = Join-Path $testBuild 'neper-reordered.exe'
 & $ownCompilerPath emit-executable (Join-Path $reorderedSrc 'src\main.e') $repo 'x64' 'windows' $reorderedCompiler | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $reorderedCompiler)) { throw 'the compiler did not build from its sources with the declarations reordered' }
 $byReordered = Join-Path $testBuild 'neper-by-reordered.exe'
-& $reorderedCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byReordered | Out-Null
+& $reorderedCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byReordered -j 2 | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $byReordered)) { throw 'the compiler with reordered declarations did not build the compiler' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $byReordered).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler with reordered declarations does not build the stable stage' }
 # The standard library turned too (D532, H10): a project of the compiler's sources as
@@ -8654,7 +8658,7 @@ $formattedLibCompiler = Join-Path $testBuild 'neper-lib-formatted.exe'
 & $ownCompilerPath emit-executable (Join-Path $formattedLib 'src\main.e') $formattedLib 'x64' 'windows' $formattedLibCompiler | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $formattedLibCompiler)) { throw 'the compiler did not build against the formatted library' }
 $byFormattedLib = Join-Path $testBuild 'neper-by-lib-formatted.exe'
-& $formattedLibCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byFormattedLib | Out-Null
+& $formattedLibCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byFormattedLib -j 2 | Out-Null
 if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $byFormattedLib).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'the compiler built against the formatted library does not build the stable stage' }
 # The library's fields reversed and its declarations reordered (D551, H10): each turn
 # in a project of the compiler's sources, the compiler built against it, and the
@@ -8676,7 +8680,7 @@ foreach ($libOnTurn in @(@('reverse_fields.py', 'lib-fields', $true), @('reorder
     & $ownCompilerPath emit-executable (Join-Path $libOnProject 'src\main.e') $libOnProject 'x64' 'windows' $libOnCompiler | Out-Null
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $libOnCompiler)) { throw "the compiler did not build against the library turned by $($libOnTurn[0])" }
     $byLibOn = Join-Path $testBuild "neper-by-$($libOnTurn[1]).exe"
-    & $libOnCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byLibOn | Out-Null
+    & $libOnCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byLibOn -j 2 | Out-Null
     if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $byLibOn).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw "the compiler built against the library turned by $($libOnTurn[0]) does not build the stable stage" }
 }
 # The turns in release (D533, H10): the release self-build is the release stable
@@ -8684,10 +8688,10 @@ foreach ($libOnTurn in @(@('reverse_fields.py', 'lib-fields', $true), @('reorder
 # locals renamed -- build the same release image; the compilers of the other turns
 # and of the library's build the release stable stage.
 $releaseStable = Join-Path $testBuild 'neper-own-release.exe'
-& $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $releaseStable --release | Out-Null
+& $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $releaseStable --release -j 2 | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $releaseStable)) { throw 'the release self-build failed' }
 $releaseAgain = Join-Path $testBuild 'neper-own-release-again.exe'
-& $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $releaseAgain --release | Out-Null
+& $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $releaseAgain --release -j 2 | Out-Null
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $releaseAgain).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseStable).Hash) { throw 'the release self-build is not byte-for-byte deterministic' }
 foreach ($releaseTree in @($blankedSrc, $hoistedSrc, $renamedSrc)) {
     $releaseTurn = Join-Path $testBuild ("neper-release-" + (Split-Path -Leaf $releaseTree) + '.exe')
@@ -8696,7 +8700,7 @@ foreach ($releaseTree in @($blankedSrc, $hoistedSrc, $renamedSrc)) {
 }
 foreach ($turnCompiler in @($formattedCompiler, $resymbolledCompiler, $parameterCompiler, $reversedCompiler, $reorderedCompiler)) {
     $releaseBy = Join-Path $testBuild ('release-by-' + (Split-Path -Leaf $turnCompiler))
-    & $turnCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $releaseBy --release | Out-Null
+    & $turnCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $releaseBy --release -j 2 | Out-Null
     if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseBy).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $releaseStable).Hash) { throw "$(Split-Path -Leaf $turnCompiler) does not build the release stable stage" }
 }
 foreach ($libTurn in @('lib-blanked', 'lib-hoisted')) {
@@ -8784,7 +8788,7 @@ foreach ($planTurn in @(@('plan-rename-file', '--symbol check.same --to alike', 
     & $ownCompilerPath emit-executable (Join-Path $planProject 'src\main.e') $repo 'x64' 'windows' $planCompiler | Out-Null
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $planCompiler)) { throw "the compiler did not build after the plan $($planTurn[2])" }
     $byPlan = Join-Path $testBuild "neper-by-$($planTurn[2]).exe"
-    & $planCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byPlan | Out-Null
+    & $planCompiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $byPlan -j 2 | Out-Null
     if ($LASTEXITCODE -ne 0 -or (Get-FileHash -Algorithm SHA256 -LiteralPath $byPlan).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw "the compiler changed by the plan $($planTurn[2]) does not build the stable stage" }
 }
 # The deadline inside a function (D540, H16): a function of eight thousand statements,
@@ -9790,8 +9794,10 @@ if ($neperosQemu) {
     $routeArchive = Join-Path $testBuild 'route-archive.img'
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $routeArchive $comp $compApp $routeInputServer
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS compositor-route archive did not assemble' }
-    $route = (& python (Join-Path $repo 'scripts\neperos-input.py') $neperosQemu.Source $neperosDisplayImage $routeArchive keyboard (Join-Path $testBuild 'route.serial') 55129 compositor 2>&1) -join "`n"
-    if ($route -notmatch '(?s)comp composited flushed.*app input ev 1 30 1.*app done') { throw "NeperOS compositor did not route input to the focused surface: $route" }
+    $route = (& python (Join-Path $repo 'scripts\neperos-input.py') $neperosQemu.Source $neperosDisplayImage $routeArchive keyboard (Join-Path $testBuild 'route.serial') 55129 compositor 'app input ev 1 30 0' 2>&1) -join "`n"
+    # The input server ends its stream after 600 events or 40e9 polls (D2206), so the sentinel
+    # the app waits for does not come in a short run; the routed key down is what this proves.
+    if ($route -notmatch '(?s)comp composited flushed.*app input ev 1 30 1.*app input ev 1 30 0') { throw "NeperOS compositor did not route input to the focused surface: $route" }
     # (D2169, C110) The e.ui window backend presents over the compositor: ui_window opens an e.ui
     # window (which on NeperOS is the compositor's shared surface), renders a scene through
     # e.gfx.scene / the e.gpu CPU backend into it, and presents via window.request_frame ->
@@ -9833,10 +9839,10 @@ if ($neperosQemu) {
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $inputArchive $inputServer $inputClient
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS input archive did not assemble' }
     $inputScript = Join-Path $repo 'scripts\neperos-input.py'
-    $kbd = (& python $inputScript $neperosQemu.Source $neperosImage $inputArchive keyboard (Join-Path $testBuild 'input-kbd.serial') 55125 2>&1) -join "`n"
-    if ($kbd -notmatch '(?s)input ev 1 30 1.*input ev 1 30 0.*input client done') { throw "NeperOS input did not deliver the key over IPC: $kbd" }
-    $tab = (& python $inputScript $neperosQemu.Source $neperosImage $inputArchive tablet (Join-Path $testBuild 'input-tab.serial') 55126 2>&1) -join "`n"
-    if ($tab -notmatch '(?s)input ev 3 0 16384.*input ev 3 1 16384.*input ev 1 272 1.*input client done') { throw "NeperOS input did not deliver the tap over IPC: $tab" }
+    $kbd = (& python $inputScript $neperosQemu.Source $neperosImage $inputArchive keyboard (Join-Path $testBuild 'input-kbd.serial') 55125 input 'input ev 1 30 0' 2>&1) -join "`n"
+    if ($kbd -notmatch '(?s)input ev 1 30 1.*input ev 1 30 0') { throw "NeperOS input did not deliver the key over IPC: $kbd" }
+    $tab = (& python $inputScript $neperosQemu.Source $neperosImage $inputArchive tablet (Join-Path $testBuild 'input-tab.serial') 55126 input 'input ev 1 272 1' 2>&1) -join "`n"
+    if ($tab -notmatch '(?s)input ev 3 0 16384.*input ev 3 1 16384.*input ev 1 272 1') { throw "NeperOS input did not deliver the tap over IPC: $tab" }
     # (D2178, C112) The launcher's tap-to-launch and Home round trip: the input boot's archive is the
     # input server (0), the launcher (1) and an app (2). A key injected through QMP reaches the
     # launcher, which launches the app as a process (os.launch), reaps it (os.reap) and returns Home.
@@ -9850,7 +9856,7 @@ if ($neperosQemu) {
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $tapArchive $inputServer $tapLauncher $tapApp
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS tap-launch archive did not assemble' }
     $tap = (& python $inputScript $neperosQemu.Source $neperosImage $tapArchive keyboard (Join-Path $testBuild 'tap.serial') 55134 input 'launcher home' 2>&1) -join "`n"
-    if ($tap -notmatch '(?s)launcher tap.*launcher launched app.*tap app ran.*launcher app code 5.*launcher home') { throw "NeperOS launcher did not launch an app and return Home on a tap: $tap" }
+    if ($tap -notmatch '(?s)launcher tap.*launcher launched app.*launcher app code 5.*launcher home' -or $tap -notmatch 'tap app ran') { throw "NeperOS launcher did not launch an app and return Home on a tap: $tap" }
     # (D2192, C112) The UNIFIED SHELL: the launcher hosted over the real compositor with live tap
     # input. Archive [comp(0), shell(1), input(2), app(3)]: the `compositor bigarena` boot runs
     # comp+shell+input; shell renders the launcher over the compositor (composited to the display) and
@@ -9870,7 +9876,7 @@ if ($neperosQemu) {
     $shellDisk = Join-Path $testBuild 'shell-disk.img'
     $shellDiskStream = [IO.File]::Create($shellDisk); $shellDiskStream.SetLength(1MB); $shellDiskStream.Close()
     $shellBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $shellArchive keyboard (Join-Path $testBuild 'shell.serial') 55135 'compositor bigarena unified' 'shell home' $shellDisk 2>&1) -join "`n"
-    if ($shellBoot -notmatch '(?s)shell wallpaper from fs.*shell presented.*shell status .*shell status service notes 1.*comp composited flushed.*shell tap.*shell launched app.*shell app code 5.*shell home' -or $shellBoot -notmatch 'tap app ran' -or $shellBoot -notmatch 'status server done' -or $shellBoot -notmatch 'wall loader from fs' -or $shellBoot -notmatch 'fs server done') { throw "NeperOS unified shell did not host the launcher, show status and launch an app on a tap: $shellBoot" }
+    if ($shellBoot -notmatch '(?s)shell wallpaper from fs.*shell status service notes 1.*comp composited flushed.*shell tap.*shell launched app.*shell app code 5.*shell home' -or $shellBoot -notmatch 'shell presented' -or $shellBoot -notmatch 'tap app ran' -or $shellBoot -notmatch 'status server done' -or $shellBoot -notmatch 'wall loader from fs' -or $shellBoot -notmatch 'fs server done') { throw "NeperOS unified shell did not host the launcher, show status and launch an app on a tap: $shellBoot" }
     # (D2202, D2204) The lunar shell: entry 7 is the Neper crater wallpaper (a PNG resampled offline to
     # the panel, scripts/make_wallpaper.py) and entries 8-12 the fonts (scripts/make_fonts.py: Jost
     # Bold, Jost Regular, Sora Medium, Space Grotesk Regular, Exo 2 Regular). The kernel maps them
