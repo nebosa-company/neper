@@ -5,7 +5,8 @@ Reads every Claude Code transcript under ~/.claude/projects, every Codex rollout
 pooled; with --harness it is a language as one agent wrote it, and with --harness claude (codex, dsh) only that
 agent is read. Codex's apply_patch counts as Write/Edit and its shell commands as Bash. Every
 agent is costed with Claude's token weights and priced at the Opus list rate, so $ compares
-effort, not bills.
+effort, not bills; an opencode step a free tier ran (model id `:free`, or a zero recorded cost) carries
+no dollars, only effort, and the period line says how many.
 
 Code reaches a file four ways and all four count: the Write/Edit tools, `cat > file <<EOF`
 heredocs, patch.exe specs (D1455; their new sides count as direct code), and Python patch or generator scripts (written to a .py file or inlined as `python - <<EOF`) whose
@@ -39,11 +40,11 @@ ap = argparse.ArgumentParser(description=__doc__, epilog=AXES_HELP, formatter_cl
 ap.add_argument('-h', '--help', action='store_true', help='run as usual and explain every column beneath its table')
 ap.add_argument('-c', '--color', action='store_true', help='mark best, second best and worst per column even when not on a terminal')
 ap.add_argument('-d', '--days', type=float, help='only data from the last DAYS days')
-ap.add_argument('-a', '--harness', nargs='?', const='split', choices=['claude', 'codex', 'dsh', 'split'], metavar='AGENT',
+ap.add_argument('-a', '--harness', nargs='?', const='split', choices=['claude', 'codex', 'dsh', 'opencode', 'split'], metavar='AGENT',
                 help='alone: split every row by agent (claude, codex, deepseek) and score each harness apart; '
                      'with claude, codex or dsh (DeepSeek): read that agent only')
 ARGS = ap.parse_args()
-ONLY = {'claude': 'claude', 'codex': 'codex', 'dsh': 'deepseek'}.get(ARGS.harness)  # the one agent read, or None for all
+ONLY = {'claude': 'claude', 'codex': 'codex', 'dsh': 'deepseek', 'opencode': 'opencode'}.get(ARGS.harness)  # the one agent read, or None for all
 ARGS.harness = ARGS.harness == 'split'  # every later test of it asks whether rows are split by agent
 if ARGS.help: print(ap.format_help())
 
@@ -278,9 +279,14 @@ def codex():
 OPENCODE = {'read': 'Read', 'grep': 'Grep', 'glob': 'Glob', 'bash': 'Bash', 'write': 'Write', 'edit': 'Edit'}
 
 
-def deepseek():
-    """DeepSeek steps from the opencode database, one message per step (step-start to step-finish).
-    Only steps a deepseek-* model ran count; the other models' steps in a session are skipped."""
+FREE_MODEL = re.compile(r':free|-free', re.I)
+
+
+def opencode_steps(agent, wanted):
+    """Steps from the opencode database, one message per step (step-start to step-finish).
+    `wanted(modelID)` picks the steps this agent owns; the other models' steps in a session are
+    skipped. A step is `free` when its model id says so or opencode recorded a zero cost for a
+    step that spent tokens (D2314): effort is still counted, dollars are not."""
     db = os.path.expanduser('~/.local/share/opencode/opencode.db')
     if not os.path.exists(db): return
     rows = sqlite3.connect('file:%s?mode=ro' % db, uri=True).execute(
@@ -290,9 +296,10 @@ def deepseek():
         for _, md, pd, t in grp:
             m, p = json.loads(md), json.loads(pd); ts = t / 1000
             if m.get('role') != 'assistant': last_user = ts; continue
-            if 'deepseek' not in m.get('modelID', ''): cur = None; continue
+            if not wanted(m.get('modelID', '')): cur = None; continue
+            free = bool(FREE_MODEL.search(m.get('modelID', ''))) or (m.get('cost') == 0 and m.get('providerID') == 'opencode')
             k = p.get('type')
-            if k == 'step-start': cur = len(order); msgs[cur] = {'content': [], 'usage': {}, 'after': ts, 'ts': None}; order.append(cur)
+            if k == 'step-start': cur = len(order); msgs[cur] = {'content': [], 'usage': {}, 'after': ts, 'ts': None, 'free': free, 'model': m.get('modelID', '')}; order.append(cur)
             elif cur is None: continue
             elif k == 'text': msgs[cur]['content'].append({'type': 'text', 'text': p.get('text', '')})
             elif k == 'tool':
@@ -308,10 +315,20 @@ def deepseek():
                 msgs[cur]['usage'] = {'input_tokens': tk.get('input', 0), 'cache_read_input_tokens': c.get('read', 0), 'cache_creation_input_tokens': c.get('write', 0),
                                       'output_tokens': tk.get('output', 0) + tk.get('reasoning', 0), 'output_tokens_details': {'thinking_tokens': tk.get('reasoning', 0)}}
                 msgs[cur]['ts'] = msgs[cur]['ts'] or ts; cur = None
-        yield 'deepseek', msgs, order, results
+        yield agent, msgs, order, results
+
+
+def deepseek():
+    return opencode_steps('deepseek', lambda model: 'deepseek' in model)
+
+
+def opencode():
+    """Every opencode step a DeepSeek model did not run: the free tiers and the other providers."""
+    return opencode_steps('opencode', lambda model: bool(model) and 'deepseek' not in model)
 
 
 S = C.defaultdict(C.Counter)       # (lang, mode) -> counters
+FREE_TURNS = C.Counter()           # model id -> steps priced at zero (free tier)
 build_s = C.defaultdict(list)      # host lang -> wall seconds of each build/test command
 compile_s = C.defaultdict(list)    # host lang -> wall seconds of each command that only compiled
 ctx_tok = C.defaultdict(list)      # lang -> context tokens at each turn that landed its code
@@ -319,9 +336,9 @@ fix_t = C.defaultdict(list)        # host lang -> assistant turns from a compile
 diag_b = C.defaultdict(list)       # host lang -> bytes of each failed build/test output
 cache = C.defaultdict(lambda: [0, 0])  # lang -> [cache-read tokens, context tokens] over turns that landed its code
 
-AGENTS = ['claude', 'codex', 'deepseek']
+AGENTS = ['claude', 'codex', 'deepseek', 'opencode']
 span = []  # times of every reply counted, for the period line
-for agent, msgs, order, results in itertools.chain(*(read() for name, read in zip(AGENTS, (claude, codex, deepseek)) if ONLY in (None, name))):
+for agent, msgs, order, results in itertools.chain(*(read() for name, read in zip(AGENTS, (claude, codex, deepseek, opencode)) if ONLY in (None, name))):
     tag = lambda L: '%s %s' % (L, agent) if ARGS.harness else L  # with --harness a row is a language as one agent wrote it
     order = [mid for mid in order if (msgs[mid]['ts'] or 0) >= CUTOFF]
     span += [msgs[mid]['ts'] for mid in order if msgs[mid]['ts']]
@@ -343,7 +360,9 @@ for agent, msgs, order, results in itertools.chain(*(read() for name, read in zi
         write = cc.get('ephemeral_1h_input_tokens', 0) * 2 + cc.get('ephemeral_5m_input_tokens', 0) * 1.25 if cc \
             else u.get('cache_creation_input_tokens', 0) * 1.25
         ctx = u.get('input_tokens', 0) + u.get('cache_read_input_tokens', 0) + u.get('cache_creation_input_tokens', 0)
-        pending['cost'] += u.get('input_tokens', 0) + write + u.get('cache_read_input_tokens', 0) * 0.1 + out * 5
+        # A free-tier step spent tokens but no dollars: it adds effort (tok, ctx, turns) and no cost.
+        if msg.get('free'): FREE_TURNS[msg.get('model', '')] += 1
+        else: pending['cost'] += u.get('input_tokens', 0) + write + u.get('cache_read_input_tokens', 0) * 0.1 + out * 5
         pending['out'] += out; pending['turns'] += 1
         text_chars = sum(len(c.get('text', '')) for c in msg['content'] if c.get('type') == 'text')
         tool_chars = sum(len(json.dumps(c.get('input'))) for c in msg['content'] if c.get('type') == 'tool_use')
@@ -438,6 +457,8 @@ first, last = (CUTOFF, NOW) if ARGS.days else (min(span, default=NOW), max(span,
 print('period: %s -> %s (%s days)%s\n' % (datetime.fromtimestamp(first).strftime('%Y-%m-%d %H:%M'), datetime.fromtimestamp(last).strftime('%Y-%m-%d %H:%M'),
                                           '%g' % ARGS.days if ARGS.days else '%.0f' % ((last - first) / 86400),
                                           ('' if ARGS.days else ', all data') + (', %s only' % ONLY if ONLY else '')))
+if FREE_TURNS:
+    print('free tier: %s step(s) priced at $0 (effort counted, dollars not): %s\n' % (sum(FREE_TURNS.values()), ', '.join('%s %d' % kv for kv in sorted(FREE_TURNS.items()))))
 
 FLOOR = 100 * KB  # a language with less landed source than this is too thin to compare
 if ARGS.harness: ROWS = ['%s %s' % (L, a) for L in ROWS for a in AGENTS]
