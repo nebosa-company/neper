@@ -3672,6 +3672,18 @@ $gfxChart3dReferenceWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceWritten -ne 'executable written') { throw 'gfx_chart_3d_reference emission failed' }
 $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
+$algoTriggerPath = Join-Path $testBuild 'algo-trigger-selfhost.exe'
+$algoTriggerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_trigger\src\main.e') $repo 'x64' 'windows' $algoTriggerPath
+if ($LASTEXITCODE -ne 0 -or $algoTriggerWritten -ne 'executable written') { throw 'algo_trigger emission failed' }
+$algoTriggerOutput = & $algoTriggerPath
+if ($LASTEXITCODE -ne 0 -or $algoTriggerOutput -ne 'algo trigger ok') { throw "algo_trigger answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.project`: the project scheduling core against appdor (880 cases, D2306).
+$algoProjectPath = Join-Path $testBuild 'algo-project-selfhost.exe'
+$algoProjectWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_project\src\main.e') $repo 'x64' 'windows' $algoProjectPath
+if ($LASTEXITCODE -ne 0 -or $algoProjectWritten -ne 'executable written') { throw 'algo_project emission failed' }
+$algoProjectOutput = & $algoProjectPath
+if ($LASTEXITCODE -ne 0 -or $algoProjectOutput -ne 'algo project ok') { throw "algo_project answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.fulltext`: full-text search and the indexing pipeline against appdor (252 cases, D2305).
 $algoFulltextPath = Join-Path $testBuild 'algo-fulltext-selfhost.exe'
 $algoFulltextWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_fulltext\src\main.e') $repo 'x64' 'windows' $algoFulltextPath

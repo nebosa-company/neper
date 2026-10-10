@@ -3274,6 +3274,18 @@ gfx_chart_3d_reference_written=$($test_build/neper-self emit-executable "$repo/t
 chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
+# `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
+algo_trigger_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_trigger/src/main.e" "$repo" x64 linux "$test_build/algo-trigger-selfhost")
+[ "$algo_trigger_written" = 'executable written' ]
+chmod +x "$test_build/algo-trigger-selfhost"
+algo_trigger_output=$("$test_build/algo-trigger-selfhost")
+[ "$algo_trigger_output" = 'algo trigger ok' ]
+# `e.algo.project`: the project scheduling core against appdor (880 cases, D2306).
+algo_project_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_project/src/main.e" "$repo" x64 linux "$test_build/algo-project-selfhost")
+[ "$algo_project_written" = 'executable written' ]
+chmod +x "$test_build/algo-project-selfhost"
+algo_project_output=$("$test_build/algo-project-selfhost")
+[ "$algo_project_output" = 'algo project ok' ]
 # `e.algo.fulltext`: full-text search and the indexing pipeline against appdor (252 cases, D2305).
 algo_fulltext_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_fulltext/src/main.e" "$repo" x64 linux "$test_build/algo-fulltext-selfhost")
 [ "$algo_fulltext_written" = 'executable written' ]

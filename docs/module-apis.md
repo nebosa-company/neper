@@ -5188,6 +5188,221 @@ fn strings(items: []str)
 fn strings_from(items: []str, depth: usize)
 ```
 
+### `e.algo.project`
+
+```neper
+const DAY_MS: i64 = 86400000i64
+
+type Calendar = struct { weekdays: u32, holidays: []const i64, continuous: bool }
+
+const DEFAULT_WORKING_DAYS: u32 = 62u32
+
+fn floor_div(x: i64, y: i64) -> i64
+fn day_of_ms(ms: i64) -> i64
+fn weekday_of(day: i64) -> i64
+fn sort_days(days: []i64)
+fn working_calendar(a: *mem.Arena, weekdays: u32, holidays: []const i64) -> Calendar
+fn continuous_calendar() -> Calendar
+fn is_holiday(cal: Calendar, day: i64) -> bool
+fn is_working_day(cal: Calendar, day: i64) -> bool
+fn next_working_day(cal: Calendar, day: i64) -> i64
+fn add_working_days(cal: Calendar, from: i64, count: i64) -> i64
+fn count_working_days(cal: Calendar, from: i64, to: i64) -> i64
+fn working_span(cal: Calendar, from: i64, to: i64) -> i64
+
+const FS: u8 = 0u8
+const SS: u8 = 1u8
+const FF: u8 = 2u8
+const SF: u8 = 3u8
+
+type Dependency = struct { id: str, kind: u8, lag: i64 }
+
+fn upper_ascii(c: u8) -> u8
+fn kind_of(text: str) -> u8
+fn is_finite(x: f64) -> bool
+fn dependency_of(id: str, kind_text: str, lag: f64) -> (Dependency, bool)
+fn earliest_start_under(dep: Dependency, es: i64, ef: i64, successor_duration: i64) -> i64
+fn latest_finish_under(dep: Dependency, ls: i64, lf: i64, predecessor_duration: i64) -> i64
+
+type Task = struct {
+
+fn index_of(tasks: []const Task, id: str) -> (usize, bool)
+fn duration_of(t: Task) -> i64
+
+type Slot = struct { index: usize, es: i64, ef: i64, ls: i64, lf: i64, slack: i64, critical: bool }
+type CriticalPath = struct { order: []const usize, slots: []const Slot, project_duration: i64, cycle: str, has_cycle: bool }
+
+fn join_cycle(a: *mem.Arena, tasks: []const Task, stack: []const usize, depth: usize, closing: usize) -> str
+
+type Walk = struct { state: []u8, order: []usize, count: usize, stack: []usize, cycle: str, failed: bool }
+
+fn visit(a: *mem.Arena, tasks: []const Task, w: *Walk, at: usize, depth: usize)
+fn critical_path(a: *mem.Arena, tasks: []const Task) -> CriticalPath
+
+type Baseline = struct { id: str, start_ms: i64, has_start: bool, end_ms: i64, has_end: bool }
+type Bar = struct {
+type Layout = struct { bars: []const Bar, project_duration: i64, critical: []const usize, start_day: i64, end_day: i64, cycle: str, has_cycle: bool }
+
+fn normalize_progress(value: f64) -> f64
+fn days_between_ms(a_ms: i64, b_ms: i64) -> i64
+fn find_baseline(entries: []const Baseline, id: str) -> (Baseline, bool)
+fn gantt_layout(a: *mem.Arena, tasks: []const Task, cal: Calendar, project_start_ms: i64, has_start: bool, baseline: []const Baseline) -> Layout
+fn capture_baseline(a: *mem.Arena, layout: Layout) -> []const Baseline
+
+type Roll = struct { values: []f64, done: []bool, seen: []bool }
+
+fn roll_task(tasks: []const Task, r: *Roll, at: usize) -> f64
+fn roll_up_progress(a: *mem.Arena, tasks: []const Task) -> []const f64
+
+type Event = struct { id: str, start_ms: i64, has_start: bool, end_ms: i64, has_end: bool }
+type Cell = struct { day: i64, events: []const usize }
+type Month = struct { year: i64, month: i64, weeks: []const Cell }
+
+fn civil_days(year: i64, month: i64, day: i64) -> i64
+fn days_in_month(year: i64, month: i64) -> i64
+fn calendar_layout(a: *mem.Arena, events: []const Event, year: i64, month: i64, week_start: i64) -> Month
+
+type Assignment = struct { assignee: str, start_ms: i64, has_start: bool, end_ms: i64, has_end: bool, hours: f64, has_hours: bool }
+type CapacityOverride = struct { assignee: str, capacity: f64 }
+type DayLoad = struct { day: i64, hours: f64 }
+type Load = struct { assignee: str, days: []const DayLoad }
+type Over = struct { assignee: str, day: i64, hours: f64, over: f64, capacity: f64 }
+type Workload = struct { per_assignee: []const Load, overallocated: []const Over }
+
+fn capacity_for(overrides: []const CapacityOverride, assignee: str, fallback: f64) -> f64
+fn workload(a: *mem.Arena, assignments: []const Assignment, capacity: f64, overrides: []const CapacityOverride, count_mode: bool, cal: Calendar) -> Workload
+
+type Window = struct { id: str, es: i64, ef: i64 }
+type Move = struct { id: str, from: i64, to: i64, shift: i64 }
+
+fn window_index(items: []const Window, id: str) -> (usize, bool)
+fn cascade_duration(tasks: []const Task, schedule: []const Window, id: str) -> i64
+fn cascade_reschedule(a: *mem.Arena, tasks: []const Task, schedule: []const Window, change_id: str, change_start: i64) -> []const Move
+```
+
+Project scheduling after appdor's scheduling core: a working calendar (weekday mask and holidays, UTC day counts), the four typed dependencies with lag and lead, the critical path method over integer working-day offsets (cycle refused with the chain), Gantt bars resolved to dates with baseline variance, duration-weighted progress roll-up, the month grid of a calendar view, per-assignee workload with capacity overrides and the minimal cascade of follow-on moves. Checked by `algo_project` against appdor's engine.
+
+### `e.algo.trigger`
+
+```neper
+const DAY_MS: i64 = 86400000i64
+const MAX_CATCH_UP_FIRES: usize = 1000usize
+
+fn floor_div(x: i64, y: i64) -> i64
+fn is_finite(x: f64) -> bool
+fn civil_days(year: i64, month: i64, day: i64) -> i64
+fn civil_year(days: i64) -> i64
+fn civil_month(days: i64) -> i64
+fn civil_day(days: i64) -> i64
+fn days_in_month(year: i64, month: i64) -> i64
+fn weekday_of(days: i64) -> i64
+
+type Cron = struct { minute: u64, hour: u32, dom: u32, month: u32, dow: u32, dom_wild: bool, dow_wild: bool }
+
+fn upper_ascii(c: u8) -> u8
+fn name_equals(token: str, name: str) -> bool
+fn day_names() -> str
+fn month_names() -> str
+fn name_index(token: str, table: str) -> i64
+fn endpoint(token: str, table: str, has_names: bool, min: i64) -> i64
+fn parse_field(spec: str, min: i64, max: i64, table: str, has_names: bool) -> (u64, bool)
+fn split_fields(s: str, out: []str) -> usize
+fn parse_cron(expr: str) -> (Cron, bool)
+
+type Clock = struct { db: tz.Database }
+
+fn new_clock(a: *mem.Arena) -> (Clock, err)
+fn is_utc(name: str) -> bool
+fn is_known_timezone(c: *const Clock, name: str) -> bool
+fn offset_seconds(c: *const Clock, name: str, seconds: i64) -> i64
+fn ms_int(ms: f64) -> i64
+
+type Wall = struct { year: i64, month: i64, day: i64, hour: i64, minute: i64, second: i64, weekday: i64 }
+
+fn wall_clock(c: *const Clock, ms: f64, name: str) -> Wall
+fn zone_offset_ms(c: *const Clock, ms: f64, name: str) -> i64
+
+type Instants = struct { count: usize, at: [3]i64 }
+
+fn wall_to_instants(c: *const Clock, year: i64, month: i64, day: i64, hour: i64, minute: i64, name: str) -> Instants
+fn day_matches(c: Cron, dom: i64, dow: i64) -> bool
+fn next_cron_fire(c: *const Clock, cron: Cron, from_ms: f64, name: str) -> (f64, bool)
+fn previous_cron_fire(c: *const Clock, cron: Cron, now_ms: f64, name: str) -> (f64, bool)
+
+const KIND_NONE: u8 = 0u8
+const KIND_INTERVAL: u8 = 1u8
+const KIND_CRON: u8 = 2u8
+
+fn one_catch_up() -> str
+
+type Schedule = struct {
+type Field = struct { has: bool, text: str }
+type Simple = struct { present: bool, minute: Field, hour: Field, day: Field, day_of_month: Field }
+type Spec = struct {
+
+fn no_field() -> Field
+fn no_simple() -> Simple
+fn no_spec() -> Spec
+fn failure(message: str) -> Schedule
+fn is_policy(name: str) -> bool
+fn all_digits(s: str) -> bool
+fn field_text(x: Field, fallback: str) -> (str, bool)
+fn cron_schedule(c: *const Clock, text: str, timezone: str, on_missed: str) -> Schedule
+fn normalize_schedule(a: *mem.Arena, c: *const Clock, spec: Spec) -> Schedule
+
+type Stored = struct {
+
+fn runtime_schedule(a: *mem.Arena, c: *const Clock, stored: Stored) -> (Schedule, bool)
+fn next_fire(c: *const Clock, s: Schedule, from_ms: f64, anchor_ms: f64) -> (f64, bool)
+fn next_fires(a: *mem.Arena, c: *const Clock, s: Schedule, from_ms: f64, n: i64, anchor_ms: f64) -> []const f64
+
+type Plan = struct {
+
+fn empty_plan(policy: str, capped: bool) -> Plan
+fn missed_fires(a: *mem.Arena, c: *const Clock, s: Schedule, last_fired: f64, now_ms: f64, anchor_ms: f64) -> Plan
+
+type CatchUp = struct { due: bool, fire_at: f64, missed: i64, catch_up: bool, capped: bool }
+
+fn catch_up(a: *mem.Arena, c: *const Clock, s: Schedule, last_fired: f64, now_ms: f64, anchor_ms: f64) -> CatchUp
+fn number_of_text(x: Field) -> f64
+
+type FirePlan = struct { present: bool, plan: Plan }
+
+fn schedule_fire_plan(a: *mem.Arena, c: *const Clock, stored: Stored, last_fired: f64, now_ms: f64, anchor_ms: f64) -> FirePlan
+fn planned_from(a: *mem.Arena, c: *const Clock, sched: Schedule, from: f64, now_ms: f64, anchor: f64) -> FirePlan
+
+type Decision = struct {
+
+fn decision(fire: bool, reason: str) -> Decision
+fn overlap_decision(due: bool, fire_at: f64, has_active_run: bool, started_at: f64, concurrency: str, stale_after_ms: f64, now_ms: f64) -> Decision
+fn is_due(a: *mem.Arena, c: *const Clock, stored: Stored, now_ms: f64, last_run: f64, anchor: f64) -> bool
+
+type Workflow = struct {
+type Verdict = struct { id: str, decision: Decision }
+
+fn due_workflows(a: *mem.Arena, c: *const Clock, workflows: []const Workflow, now_ms: f64) -> []const Verdict
+
+type Stamp = struct { id: str, goal: f64 }
+type DateEvent = struct { id: str, goal: f64, fire_at: f64 }
+type DateEvents = struct { events: []const DateEvent, stamp_count: usize }
+
+fn due_date_events(a: *mem.Arena, ids: []const str, dates: []const str, offset_ms: f64, stamps: []Stamp, stamp_count: usize, now_ms: f64) -> DateEvents
+
+type InState = struct { id: str, since: f64, fired: bool }
+type StateEvent = struct { id: str, since: f64, duration_ms: f64 }
+type StateResult = struct { events: []const StateEvent, state_count: usize }
+
+fn row_id(a: *mem.Arena, row: view.Row) -> str
+fn duration_in_state_due(a: *mem.Arena, reg: *const f.Registry, rows: []const view.Row, filter: view.Node, has_filter: bool, fields: []const view.FieldDef, ctx: *const view.Context, duration_ms: f64, state: []InState, state_count: usize, now_ms: f64) -> StateResult
+
+type ScanEvent = struct { id: str, batch_id: str, size: usize, position: usize }
+type Scan = struct { events: []const ScanEvent, total: usize, next_cursor: usize, has_next: bool }
+
+fn scan_batch(a: *mem.Arena, reg: *const f.Registry, rows: []const view.Row, filter: view.Node, has_filter: bool, fields: []const view.FieldDef, ctx: *const view.Context, cap: usize, cursor: usize, batch_id: str, has_batch_id: bool) -> Scan
+```
+
+Time-based triggers after appdor's workflow scheduler: five-field cron matched on a named zone's wall clock (a skipped time does not fire, a repeated one fires once), the authoring forms normalized to one runtime schedule, next-fire previews, the one-catch-up/skip/all missed-fire policies with their burst cap, the shared fire plan, the single-concurrency overlap decision, write-once date stamps, duration-in-state and a cursor-continued scan. Checked by `algo_trigger` against appdor's engine.
+
 ### `e.algo.fulltext`
 
 ```neper
