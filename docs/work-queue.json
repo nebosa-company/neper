@@ -1714,10 +1714,10 @@
       "group": "Tooling",
       "order": 42,
       "title": "T2.3+T2.4 trusted host: policy, verified receipts, durable tasks",
-      "score": 0.1,
+      "score": 0.2,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Planning only (D1954). Reference host tools/neper-agent-host/ missing: policy and sandbox mediation, environment identity, scoped verified receipts (one exact change contract per receipt), isolated parallel change bundles and durable authorized tasks across reconnect and approval. First slice allowed to emit verified. Pickup immediately after the chart cluster; compiler declares facts, host owns authority. FIRST SLICE (D2323): lib/x/agent/contract.e, the H35 change contract (parse fail-closed, canonical form, SHA-256 identity, verdict, amendment link), fixture x_agent_contract (267 cases against an independent reference), both hosts. NOT DONE: policy and sandbox mediation, environment identity, change bundles, receipts, durable tasks, the host."
+      "evidence": "Planning only (D1954). Reference host tools/neper-agent-host/ missing: policy and sandbox mediation, environment identity, scoped verified receipts (one exact change contract per receipt), isolated parallel change bundles and durable authorized tasks across reconnect and approval. First slice allowed to emit verified. Pickup immediately after the chart cluster; compiler declares facts, host owns authority. FIRST SLICE (D2323): lib/x/agent/contract.e, the H35 change contract (parse fail-closed, canonical form, SHA-256 identity, verdict, amendment link), fixture x_agent_contract (267 cases against an independent reference), both hosts. NOT DONE: policy and sandbox mediation, environment identity, change bundles, receipts, durable tasks, the host. SECOND SLICE (D2324): lib/x/agent/environment.e, the H37 environment manifest (secrets only as hashes, hermetic/observed/uncontrolled with named omissions, identity over the core, observation kept apart), fixture x_agent_environment (265 cases, the perturbation acceptance), both hosts. NOT DONE: replay description, the host that observes a real run, policy/sandbox mediation (H36), change bundles (H38), receipts and durable tasks (H44)."
     },
     {
       "id": "L162",

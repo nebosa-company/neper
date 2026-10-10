@@ -3299,6 +3299,13 @@ x_agent_contract_written=$($test_build/neper-self emit-executable "$repo/tests/s
 chmod +x "$test_build/x-agent-contract-selfhost"
 x_agent_contract_output=$("$test_build/x-agent-contract-selfhost")
 [ "$x_agent_contract_output" = 'x agent contract ok' ]
+# `x.agent.environment` (T042, H37): the execution-environment manifest -- validation, hermetic/observed/uncontrolled
+# classification, identity, and the perturbation acceptance against an independent reference (265 cases, D2324).
+x_agent_environment_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_agent_environment/src/main.e" "$repo" x64 linux "$test_build/x-agent-environment-selfhost" -j 2)
+[ "$x_agent_environment_written" = 'executable written' ]
+chmod +x "$test_build/x-agent-environment-selfhost"
+x_agent_environment_output=$("$test_build/x-agent-environment-selfhost")
+[ "$x_agent_environment_output" = 'x agent environment ok' ]
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 algo_trigger_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_trigger/src/main.e" "$repo" x64 linux "$test_build/algo-trigger-selfhost")
 [ "$algo_trigger_written" = 'executable written' ]

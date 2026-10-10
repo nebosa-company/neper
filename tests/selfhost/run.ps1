@@ -3716,6 +3716,13 @@ $xAgentContractWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $xAgentContractWritten -ne 'executable written') { throw 'x_agent_contract emission failed' }
 $xAgentContractOutput = & $xAgentContractPath
 if ($LASTEXITCODE -ne 0 -or $xAgentContractOutput -ne 'x agent contract ok') { throw "x_agent_contract answered wrongly: exit $LASTEXITCODE" }
+# `x.agent.environment` (T042, H37): the execution-environment manifest -- validation, hermetic/observed/uncontrolled
+# classification, identity, and the perturbation acceptance against an independent reference (265 cases, D2324).
+$xAgentEnvironmentPath = Join-Path $testBuild 'x-agent-environment-selfhost.exe'
+$xAgentEnvironmentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_agent_environment\src\main.e') $repo 'x64' 'windows' $xAgentEnvironmentPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xAgentEnvironmentWritten -ne 'executable written') { throw 'x_agent_environment emission failed' }
+$xAgentEnvironmentOutput = & $xAgentEnvironmentPath
+if ($LASTEXITCODE -ne 0 -or $xAgentEnvironmentOutput -ne 'x agent environment ok') { throw "x_agent_environment answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 $algoTriggerPath = Join-Path $testBuild 'algo-trigger-selfhost.exe'
 $algoTriggerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_trigger\src\main.e') $repo 'x64' 'windows' $algoTriggerPath
