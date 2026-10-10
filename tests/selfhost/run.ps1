@@ -3737,6 +3737,13 @@ $xAgentBundleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $xAgentBundleWritten -ne 'executable written') { throw 'x_agent_bundle emission failed' }
 $xAgentBundleOutput = & $xAgentBundlePath
 if ($LASTEXITCODE -ne 0 -or $xAgentBundleOutput -ne 'x agent bundle ok') { throw "x_agent_bundle answered wrongly: exit $LASTEXITCODE" }
+# `x.agent.receipt` (T042): the verification receipt judged against its contract -- bound, safe, hermetic enough,
+# every required obligation passed with evidence -- against an independent reference (364 cases, D2327).
+$xAgentReceiptPath = Join-Path $testBuild 'x-agent-receipt-selfhost.exe'
+$xAgentReceiptWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_agent_receipt\src\main.e') $repo 'x64' 'windows' $xAgentReceiptPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xAgentReceiptWritten -ne 'executable written') { throw 'x_agent_receipt emission failed' }
+$xAgentReceiptOutput = & $xAgentReceiptPath
+if ($LASTEXITCODE -ne 0 -or $xAgentReceiptOutput -ne 'x agent receipt ok') { throw "x_agent_receipt answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 $algoTriggerPath = Join-Path $testBuild 'algo-trigger-selfhost.exe'
 $algoTriggerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_trigger\src\main.e') $repo 'x64' 'windows' $algoTriggerPath

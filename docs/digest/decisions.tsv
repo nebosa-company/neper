@@ -2080,4 +2080,5 @@ D2322	1283	T041: `--retries N`, a flaky pass is a pass that says so
 D2323	1662	T042 (first slice): `x.agent.contract`, the change contract as a content-addressed value
 D2324	1895	T042: `x.agent.environment`, the execution environment as a hashable manifest
 D2325	1867	T042: `x.agent.policy`, an action policy decided outside the agent that proposes it
-D2326	1769	T042: `x.agent.bundle`, composing isolated changes without composing their claims
+D2326	1770	T042: `x.agent.bundle`, composing isolated changes without composing their claims
+D2327	1611	T042: `x.agent.receipt`, the one record that says a change was verified, and under what

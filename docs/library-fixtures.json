@@ -471,6 +471,7 @@
     "x_agent_contract",
     "x_agent_environment",
     "x_agent_policy",
+    "x_agent_receipt",
     "x_migrate"
    ]
   },

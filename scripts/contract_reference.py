@@ -66,6 +66,10 @@ def is_text(v):
     return type(v) is str
 
 
+def hex_ok(v):
+    return is_text(v) and re.fullmatch(r"[0-9a-f]{64}", v) is not None
+
+
 def pairs_hook(pairs):
     keys = [k for k, _ in pairs]
     if len(set(keys)) != len(keys):
