@@ -447,6 +447,7 @@
     "algo_checksum",
     "algo_collect",
     "algo_findings",
+    "algo_flow",
     "algo_formula",
     "algo_formula_basic",
     "algo_formula_convert",

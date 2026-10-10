@@ -3724,6 +3724,13 @@ $algoWorkflowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $algoWorkflowWritten -ne 'executable written') { throw 'algo_workflow emission failed' }
 $algoWorkflowOutput = & $algoWorkflowPath
 if ($LASTEXITCODE -ne 0 -or $algoWorkflowOutput -ne 'algo workflow ok') { throw "algo_workflow answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.flow`: the inline flow interpreter -- conditions, branches, loops, find, CRUD, retried effects with redaction, the
+# step budget and the cascade guard -- against appdor's src/workflow/flow-engine.js (400 flows, D2334).
+$algoFlowPath = Join-Path $testBuild 'algo-flow-selfhost.exe'
+$algoFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\linklgo_flow\src\main.e') $repo 'x64' 'windows' $algoFlowPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoFlowWritten -ne 'executable written') { throw 'algo_flow emission failed' }
+$algoFlowOutput = & $algoFlowPath
+if ($LASTEXITCODE -ne 0 -or $algoFlowOutput -ne 'algo flow ok') { throw "algo_flow answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

@@ -3307,6 +3307,13 @@ algo_workflow_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/algo-workflow-selfhost"
 algo_workflow_output=$("$test_build/algo-workflow-selfhost")
 [ "$algo_workflow_output" = 'algo workflow ok' ]
+# `e.algo.flow`: the inline flow interpreter -- conditions, branches, loops, find, CRUD, retried effects with redaction, the
+# step budget and the cascade guard -- against appdor's src/workflow/flow-engine.js (400 flows, D2334).
+algo_flow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_flow/src/main.e" "$repo" x64 linux "$test_build/algo-flow-selfhost" -j 2)
+[ "$algo_flow_written" = 'executable written' ]
+chmod +x "$test_build/algo-flow-selfhost"
+algo_flow_output=$("$test_build/algo-flow-selfhost")
+[ "$algo_flow_output" = 'algo flow ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

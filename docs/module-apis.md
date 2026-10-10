@@ -5829,6 +5829,68 @@ fn choose(c: bool, yes: str, no: str) -> str
 
 The durable workflow interpreter of L036's runtime half, checked against appdor's `src/workflow/runtime.js` with its real Jinja engine and trace redaction: a normalized definition executed against a run journal, every step consulting the journal first so that calling `execute_run` again on a suspended run is the whole of resuming it. `if`, `case`, `foreach`, `fork` and `try`, `stop` and `fail`; `delay`, `wait-signal` and `approval` (parked on a signal derived from the execution key); `set` and `log`; every other type an effect handed to an injected handler with an idempotency key stable across replays, retried with backoff and withheld in a dry run when its type mutates. `Hooks` carries what is injected: the clock and sleep, the template renderer, the redacting trace, the outbound URL check, the effect handlers and the environment. A fork's branches run in declaration order where appdor's run concurrently, so its journal entries are not interleaved as the concurrent ones are.
 
+### `e.algo.flow`
+
+```neper
+type Effect = struct { present: bool, failed: bool, permanent: bool, message: str, code: str, has_code: bool, has_value: bool, value: json.Value }
+type Stepped = struct { status: str, code: str, has_code: bool, message: str, output: json.Value, has_output: bool, typed: json.Value, has_typed: bool }
+type Hooks = struct { ctx: *void, effect: fn(*void, str, json.Value) -> Effect, filter_matches: fn(*void, json.Value, json.Value) -> bool, dataset_find: fn(*void, str, json.Value, json.Value, json.Value) -> (json.Value, bool), script: fn(*void, json.Value, json.Value) -> Stepped, ai: fn(*void, json.Value, json.Value, json.Value, str, bool) -> Stepped }
+type Control = struct { status: str, reason: str }
+type Runner = struct { a: *mem.Arena, hooks: *const Hooks, reg: *const f.Registry, steps: list.List[json.Value], vars: ir.Obj, step_outputs: ir.Obj, reason: str, has_reason: bool, budget: json.Value, has_budget: bool, step_budget: usize, max_depth: i64, depth: i64, dry_run: json.Value, on_failure: str, error_branch: json.Value, has_error_branch: bool, refs: json.Value, dataset: json.Value }
+type Frame = struct { trigger: json.Value, trigger_meta: json.Value, current: json.Value, has_current: bool, index: usize }
+
+fn carry() -> Control
+fn ended(status: str, reason: str) -> Control
+fn text(s: str) -> json.Value
+fn flag(b: bool) -> json.Value
+fn number(a: *mem.Arena, n: i64) -> json.Value
+fn cat(a: *mem.Arena, x: str, y: str) -> str
+fn obj(a: *mem.Arena) -> ir.Obj
+fn put(o: *ir.Obj, key: str, v: json.Value)
+fn get(v: json.Value, key: str) -> (json.Value, bool)
+fn member_text(v: json.Value, key: str) -> str
+fn items(v: json.Value) -> []const json.Value
+fn empty_object() -> json.Value
+fn present(v: json.Value, key: str) -> (json.Value, bool)
+fn to_formula(a: *mem.Arena, v: json.Value) -> f.Value
+fn from_formula(a: *mem.Arena, v: f.Value) -> json.Value
+fn number_value(a: *mem.Arena, x: f64) -> json.Value
+fn binding_fields(r: *Runner, frame: Frame) -> []const f.Field
+fn evaluate(r: *Runner, frame: Frame, source: str) -> f.Value
+fn truthy_formula(v: f.Value) -> bool
+fn truthy_json(v: json.Value) -> bool
+fn context_value(r: *Runner, frame: Frame) -> json.Value
+fn get_path(root: json.Value, path: str) -> (json.Value, bool)
+fn resolve_value(r: *Runner, frame: Frame, spec: json.Value) -> (json.Value, bool)
+fn scalar_text(v: json.Value) -> str
+fn resolve_values(r: *Runner, frame: Frame, map: json.Value) -> json.Value
+fn eval_condition(r: *Runner, frame: Frame, cond: json.Value, has: bool) -> bool
+fn to_list(a: *mem.Arena, v: json.Value, found: bool) -> []const json.Value
+fn lower_contains(haystack: str, needle: str) -> bool
+fn sensitive(key: str) -> bool
+fn redact(a: *mem.Arena, v: json.Value) -> json.Value
+fn summarize_output(a: *mem.Arena, v: json.Value) -> json.Value
+fn log_step(r: *Runner, entry: ir.Obj) -> usize
+fn amend_status(r: *Runner, index: usize, status: str)
+fn terminate(r: *Runner, kind: str, budget: usize, used: usize, step_id: json.Value, step_type: json.Value) -> Control
+fn new_entry(r: *Runner, step: json.Value, status: str) -> ir.Obj
+fn id_or_null(step: json.Value) -> json.Value
+fn exec_steps(r: *Runner, frame: Frame, steps: json.Value) -> Control
+fn handle_failure(r: *Runner, frame: Frame) -> Control
+fn fail_entry(r: *Runner, entry: ir.Obj, message: str, code: str, has_code: bool) -> ir.Obj
+fn exec_step(r: *Runner, frame: Frame, step: json.Value) -> Control
+fn unset(o: *ir.Obj, key: str)
+fn put_present(o: *ir.Obj, key: str, v: json.Value, found: bool)
+fn handler_of(kind: str) -> str
+fn ir_count(v: json.Value) -> (usize, bool)
+fn ir_i64(v: json.Value) -> (i64, bool)
+fn bind_typed_output(r: *Runner, name: str, typed: json.Value)
+fn exec_find(r: *Runner, frame: Frame, step: json.Value, entry: ir.Obj) -> Control
+fn run_flow(a: *mem.Arena, hooks: *const Hooks, flow: json.Value, trigger: json.Value, options: json.Value) -> (json.Value, err)
+```
+
+The inline flow interpreter (L036), after appdor's `src/workflow/flow-engine.js`: a flat flow -- a trigger and an ordered graph of `condition`, `branch`, `loop`, `find`, `set`, `create`/`update`/`delete`, `email`/`notification`/`http`, `script`, `ai` and `run-workflow` steps -- executed synchronously against a trigger and answered as a step-level run log (`run_flow`). It is what transition post-functions run on: a graph executed now, inside a transaction the caller holds, with the step budget (`budget_exceeded`, status `terminated`), the cascade guard and the trace; durable waits are `e.algo.workflow`'s. Conditions and `formula` values are `e.algo.formula` over the trigger, the loop item and the variables; filter trees, the dataset, script and AI steps and every effect handler (retried, secrets redacted from the log) are injected as `Hooks`. A step type it does not know ends the run `failed` with reason `unknown_step`. Checked against the real engine over 400 random flows on both hosts (D2334).
+
 ### `e.algo.fulltext`
 
 ```neper

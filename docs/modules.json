@@ -166,6 +166,7 @@
     "e.algo.ir",
     "e.algo.journal",
     "e.algo.workflow",
+    "e.algo.flow",
     "e.algo.fulltext",
     "e.algo.search",
     "e.text.search",
@@ -757,6 +758,23 @@
    "direct_dependencies": [
     "e.algo.ir",
     "e.algo.journal",
+    "e.data.list",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.flow",
+   "layer": 5,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.formula.library",
+    "e.algo.ir",
     "e.data.list",
     "e.fmt.json",
     "e.mem",
