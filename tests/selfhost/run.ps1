@@ -3744,6 +3744,13 @@ $xAgentReceiptWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $xAgentReceiptWritten -ne 'executable written') { throw 'x_agent_receipt emission failed' }
 $xAgentReceiptOutput = & $xAgentReceiptPath
 if ($LASTEXITCODE -ne 0 -or $xAgentReceiptOutput -ne 'x agent receipt ok') { throw "x_agent_receipt answered wrongly: exit $LASTEXITCODE" }
+# `x.agent.task` (T042, H44): the durable operation lifecycle -- unguessable handles, monotonic status, bound single-use
+# input, one canonical terminal result -- against an independent reference (381 cases, D2328).
+$xAgentTaskPath = Join-Path $testBuild 'x-agent-task-selfhost.exe'
+$xAgentTaskWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_agent_task\src\main.e') $repo 'x64' 'windows' $xAgentTaskPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xAgentTaskWritten -ne 'executable written') { throw 'x_agent_task emission failed' }
+$xAgentTaskOutput = & $xAgentTaskPath
+if ($LASTEXITCODE -ne 0 -or $xAgentTaskOutput -ne 'x agent task ok') { throw "x_agent_task answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 $algoTriggerPath = Join-Path $testBuild 'algo-trigger-selfhost.exe'
 $algoTriggerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_trigger\src\main.e') $repo 'x64' 'windows' $algoTriggerPath

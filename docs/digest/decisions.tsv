@@ -2081,4 +2081,5 @@ D2323	1662	T042 (first slice): `x.agent.contract`, the change contract as a cont
 D2324	1895	T042: `x.agent.environment`, the execution environment as a hashable manifest
 D2325	1867	T042: `x.agent.policy`, an action policy decided outside the agent that proposes it
 D2326	1770	T042: `x.agent.bundle`, composing isolated changes without composing their claims
-D2327	1611	T042: `x.agent.receipt`, the one record that says a change was verified, and under what
+D2327	1612	T042: `x.agent.receipt`, the one record that says a change was verified, and under what
+D2328	1644	T042: `x.agent.task`, a long operation as a durable, authorized state machine

@@ -3327,6 +3327,13 @@ x_agent_receipt_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/x-agent-receipt-selfhost"
 x_agent_receipt_output=$("$test_build/x-agent-receipt-selfhost")
 [ "$x_agent_receipt_output" = 'x agent receipt ok' ]
+# `x.agent.task` (T042, H44): the durable operation lifecycle -- unguessable handles, monotonic status, bound single-use
+# input, one canonical terminal result -- against an independent reference (381 cases, D2328).
+x_agent_task_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_agent_task/src/main.e" "$repo" x64 linux "$test_build/x-agent-task-selfhost" -j 2)
+[ "$x_agent_task_written" = 'executable written' ]
+chmod +x "$test_build/x-agent-task-selfhost"
+x_agent_task_output=$("$test_build/x-agent-task-selfhost")
+[ "$x_agent_task_output" = 'x agent task ok' ]
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 algo_trigger_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_trigger/src/main.e" "$repo" x64 linux "$test_build/algo-trigger-selfhost")
 [ "$algo_trigger_written" = 'executable written' ]
