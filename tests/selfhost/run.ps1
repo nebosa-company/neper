@@ -6858,6 +6858,11 @@ $infoActual = Join-Path $testBuild 'conformance-tools-info.jsonl'
 cmd /c "`"$compiler`" info --json > `"$infoActual`""
 if ($LASTEXITCODE -ne 0) { throw "info --json exited $LASTEXITCODE" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $infoActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\info.x64-windows.expected.jsonl')).Hash) { throw "info --json differs from the conformance corpus" }
+# `info --json --capabilities` (T039, H18): the discovery record, byte for byte on every host.
+$capabilitiesActual = Join-Path $testBuild 'conformance-tools-capabilities.jsonl'
+cmd /c "`"$compiler`" info --json --capabilities > `"$capabilitiesActual`""
+if ($LASTEXITCODE -ne 0) { throw "info --json --capabilities exited $LASTEXITCODE" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $capabilitiesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\capabilities.expected.jsonl')).Hash) { throw "info --json --capabilities differs from the conformance corpus" }
 # `check-project --json` (D262): every module under a project's src in byte order, each
 # checked in its own process under its path relative to src, one stream; two of the
 # fixture's three modules carry an error.

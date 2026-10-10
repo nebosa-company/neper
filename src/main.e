@@ -13460,6 +13460,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     if args.len == 3usize && same(args[1usize], "info") && same(args[2usize], "--json") { ret tool.info_json(a, host_target(a)) }
+    if args.len == 4usize && same(args[1usize], "info") && same(args[2usize], "--json") && same(args[3usize], "--capabilities") { ret tool.capabilities_json(a) }
     if args.len >= 3usize && args.len <= 6usize && (same(args[1usize], "tokens") || same(args[1usize], "parse")) && !(args.len == 3usize && same(args[1usize], "parse")) { ret tool_command(a, args) }
     if args.len == 3usize && same(args[1usize], "scan-file") {
         let (text, load_error) = source.load(a, args[2usize])

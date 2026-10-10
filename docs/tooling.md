@@ -37,6 +37,13 @@ sorted by UTF-8 bytes. Each `language_profiles` entry contains `language_version
 that entry rather than by parallel-array position. This is the capability query;
 harnesses never scrape `--help`.
 
+`neper info --json --capabilities` (D2319) answers what the closed `info` record cannot: one
+`capabilities` record (`schema_revision` 1) with `stream_versions`, every `commands` entry
+(`name`, `group`), the `flags` and `environment` variables that bound a build, and the
+`snapshot` member (`field`, `named_by`) that names the program a result was computed over.
+Collections are sorted by UTF-8 bytes and the record does not depend on the host. A new member
+is a new `schema_revision`; an old one never changes meaning.
+
 `--language-version MAJOR.MINOR` selects one advertised version and defaults to the
 newest non-experimental version. An unsupported value is `E-CLI-9999` before source
 is read. The selected version fixes its grammar revision, stream versions and

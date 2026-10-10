@@ -1681,10 +1681,10 @@
       "group": "Tooling",
       "order": 39,
       "title": "T2.0 foundations: snapshots, cache identities, bounded transport",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Planning only (D1954). post-m2-llm-hardening T2.0 slice missing from the queue: immutable snapshots, complete cache identities, bounded request/result storage, cancellation, compact transport and hardened artifact publication (H15/H16/H18/H24). Pickup immediately after the chart cluster (L061, L068-L075). Versioned schema from the start; later slices extend it only by capability."
+      "evidence": "Planning only (D1954). post-m2-llm-hardening T2.0 slice missing from the queue: immutable snapshots, complete cache identities, bounded request/result storage, cancellation, compact transport and hardened artifact publication (H15/H16/H18/H24). Pickup immediately after the chart cluster (L061, L068-L075). Versioned schema from the start; later slices extend it only by capability. FIRST SLICE (D2319): `info --json --capabilities` lists every command with its group, the stream versions, bounding flags and the snapshot field; golden in tests/conformance/tools/capabilities.expected.jsonl, both suites. NOT DONE: per-command schema versions and bounds, the versioned edit/fix schema with expected-source hashes, bounded run --json capture, H15/H16/H24 acceptance runs."
     },
     {
       "id": "T040",

@@ -243,6 +243,27 @@ fn info_json(a: *mem.Arena, host: str) -> err {
     ret flush(&out)
 }
 
+// `info --json --capabilities` (T039, H18): the discovery record the closed v1 `info` cannot carry. One
+// `capabilities` record naming every command this build answers to (with its group), the stream versions
+// it speaks, the flags and the environment variable that bound a build, and the identity every query
+// result carries, then a result. Collections are sorted by bytes, as `info` is; a client that wants a
+// field not here asks for a later `schema_revision`, never a changed one.
+fn capabilities_json(a: *mem.Arena) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, 8192usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try header(&out, "info")
+    try text(&out, "{\"record\":\"capabilities\",\"schema_revision\":1,\"tool_version\":\"0.1.0\",\"stream_versions\":[1],\"commands\":[")
+    try text(&out, "{\"name\":\"apply-plan\",\"group\":\"edit\"},{\"name\":\"build-manifest-file\",\"group\":\"build\"},{\"name\":\"check-em-edge\",\"group\":\"check\"},{\"name\":\"check-em-errors\",\"group\":\"check\"},{\"name\":\"check-file\",\"group\":\"check\"},{\"name\":\"check-project\",\"group\":\"check\"},{\"name\":\"codegen-file\",\"group\":\"inspect\"},{\"name\":\"compare-manifests\",\"group\":\"inspect\"},{\"name\":\"context-file\",\"group\":\"query\"},{\"name\":\"dis-file\",\"group\":\"inspect\"},{\"name\":\"emit-em\",\"group\":\"build\"},{\"name\":\"emit-em-all\",\"group\":\"build\"},{\"name\":\"emit-executable\",\"group\":\"build\"},{\"name\":\"emit-object\",\"group\":\"build\"},")
+    try text(&out, "{\"name\":\"eval\",\"group\":\"run\"},{\"name\":\"explain-file\",\"group\":\"query\"},{\"name\":\"fmt\",\"group\":\"format\"},{\"name\":\"fmt-file\",\"group\":\"format\"},{\"name\":\"fmt-project\",\"group\":\"format\"},{\"name\":\"graph-file\",\"group\":\"query\"},{\"name\":\"index-file\",\"group\":\"query\"},{\"name\":\"index-project\",\"group\":\"query\"},{\"name\":\"info\",\"group\":\"tool\"},{\"name\":\"link-em\",\"group\":\"build\"},{\"name\":\"manifest-em\",\"group\":\"inspect\"},{\"name\":\"nir-file\",\"group\":\"inspect\"},{\"name\":\"object-file\",\"group\":\"inspect\"},{\"name\":\"parse\",\"group\":\"parse\"},{\"name\":\"parse-file\",\"group\":\"parse\"},")
+    try text(&out, "{\"name\":\"plan-add-parameter-file\",\"group\":\"edit\"},{\"name\":\"plan-change-signature-file\",\"group\":\"edit\"},{\"name\":\"plan-rename-file\",\"group\":\"edit\"},{\"name\":\"plan-replace-expression-file\",\"group\":\"edit\"},{\"name\":\"project-file\",\"group\":\"query\"},{\"name\":\"query-batch\",\"group\":\"query\"},{\"name\":\"resolve-file\",\"group\":\"query\"},{\"name\":\"run\",\"group\":\"run\"},{\"name\":\"scan\",\"group\":\"inspect\"},{\"name\":\"scan-file\",\"group\":\"inspect\"},{\"name\":\"select-file\",\"group\":\"query\"},{\"name\":\"self-test\",\"group\":\"tool\"},{\"name\":\"test-file\",\"group\":\"test\"},{\"name\":\"test-impact-file\",\"group\":\"test\"},{\"name\":\"test-project\",\"group\":\"test\"},{\"name\":\"tokens\",\"group\":\"parse\"},{\"name\":\"uses-file\",\"group\":\"query\"},{\"name\":\"validate-em\",\"group\":\"check\"}],")
+    try text(&out, "\"flags\":[\"--arena\",\"--budget\",\"--cpu\",\"--deadline\",\"--incremental\",\"--json\",\"--perturb\",\"--release\",\"--stats\",\"--stats-full\",\"--time\",\"--unchecked\",\"-j\"],\"environment\":[\"NEPER_JOBS\"],\"snapshot\":{\"field\":\"snapshot\",\"named_by\":[\"context-file\",\"plan-add-parameter-file\",\"plan-change-signature-file\",\"plan-rename-file\",\"plan-replace-expression-file\"]}}")
+    try flush(&out)
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{}}")
+    ret flush(&out)
+}
+
 // Section 2's captured bytes: a JSON string when they are valid UTF-8, base64 otherwise.
 fn captured(out: *Out, value: str) -> err {
     var at = 0usize

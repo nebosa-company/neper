@@ -6701,6 +6701,10 @@ info_actual="$test_build/conformance-tools-info.jsonl"
 $test_build/neper-self info --json > "$info_actual"
 cmp -s "$info_actual" "$conformance_root/tools/info.x64-linux.expected.jsonl" || { printf '%s
 ' "info --json differs from the conformance corpus" >&2; exit 1; }
+# `info --json --capabilities` (T039, H18): the discovery record, byte for byte on every host.
+capabilities_actual="$test_build/conformance-tools-capabilities.jsonl"
+$test_build/neper-self info --json --capabilities > "$capabilities_actual"
+cmp -s "$capabilities_actual" "$conformance_root/tools/capabilities.expected.jsonl" || { printf '%s\n' "info --json --capabilities differs from the conformance corpus" >&2; exit 1; }
 # `check-project --json` (D262): every module under a project's src in byte order, each
 # checked in its own process under its path relative to src, one stream; two of the
 # fixture's three modules carry an error.
