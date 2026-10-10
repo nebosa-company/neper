@@ -3356,6 +3356,13 @@ text_css_selector_written=$($test_build/neper-self emit-executable "$repo/tests/
 chmod +x "$test_build/text-css-selector-selfhost"
 text_css_selector_output=$("$test_build/text-css-selector-selfhost")
 [ "$text_css_selector_output" = 'css selector ok' ]
+# `e.ui.interpolate`: lerp, colour lerp, cubic-bezier and 2D affine interpolation
+# # against Vaper's own Dart kernels (400 operations, D2341).
+ui_interpolate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_interpolate/src/main.e" "$repo" x64 linux "$test_build/ui-interpolate-selfhost" -j 2)
+[ "$ui_interpolate_written" = 'executable written' ]
+chmod +x "$test_build/ui-interpolate-selfhost"
+ui_interpolate_output=$("$test_build/ui-interpolate-selfhost")
+[ "$ui_interpolate_output" = 'ui interpolate ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

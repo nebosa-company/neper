@@ -614,10 +614,10 @@
       "group": "Algorithms",
       "order": 137,
       "title": "CSS value microsyntax and animation interpolation",
-      "score": 0,
+      "score": 0.15,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Vaper vaper_css_values value.dart (parseColor incl. lab/light-dark, parseLength with calc/min/max/clamp/abs/hypot/mod/rem/round reduction to px offset, toPx) and interpolate.dart (number/color/2D-matrix lerp with short-arc rotation, cubicBezier bisection). Pure and heavily vector-tested. Port into e.gfx.color plus e.ui.animation after diffing ui/animation.e for overlap."
+      "evidence": "Vaper vaper_css_values value.dart (parseColor incl. lab/light-dark, parseLength with calc/min/max/clamp/abs/hypot/mod/rem/round reduction to px offset, toPx) and interpolate.dart (number/color/2D-matrix lerp with short-arc rotation, cubicBezier bisection). Pure and heavily vector-tested. Port into e.gfx.color plus e.ui.animation after diffing ui/animation.e for overlap. PART ONE (D2341): lib/e/ui/interpolate.e, e.ui.interpolate -- interpolate.dart (lerp, ARGB lerp, cubicBezier, decompose/recompose/lerpAffine); fixture ui_interpolate, 400 operations against Vaper's Dart on Windows and Linux. NOT DONE: value.dart (parseLength with calc/min/max/clamp/abs/hypot/mod/rem/round, parseColor in every space incl. lab/lch/oklab/oklch/color()/color-mix/light-dark, transforms, angle and time)."
     },
     {
       "id": "L040",

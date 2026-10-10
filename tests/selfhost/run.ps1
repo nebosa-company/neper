@@ -3773,6 +3773,13 @@ $textCssSelectorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $textCssSelectorWritten -ne 'executable written') { throw 'text_css_selector emission failed' }
 $textCssSelectorOutput = & $textCssSelectorPath
 if ($LASTEXITCODE -ne 0 -or $textCssSelectorOutput -ne 'css selector ok') { throw "text_css_selector answered wrongly: exit $LASTEXITCODE" }
+# `e.ui.interpolate`: lerp, colour lerp, cubic-bezier and 2D affine interpolation
+# # against Vaper's own Dart kernels (400 operations, D2341).
+$uiInterpolatePath = Join-Path $testBuild 'ui-interpolate-selfhost.exe'
+$uiInterpolateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_interpolate\src\main.e') $repo 'x64' 'windows' $uiInterpolatePath -j 2
+if ($LASTEXITCODE -ne 0 -or $uiInterpolateWritten -ne 'executable written') { throw 'ui_interpolate emission failed' }
+$uiInterpolateOutput = & $uiInterpolatePath
+if ($LASTEXITCODE -ne 0 -or $uiInterpolateOutput -ne 'ui interpolate ok') { throw "ui_interpolate answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

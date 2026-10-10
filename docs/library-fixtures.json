@@ -477,6 +477,7 @@
     "fmt_json",
     "text_css_selector",
     "text_css_syntax",
+    "ui_interpolate",
     "x_agent_bundle",
     "x_agent_contract",
     "x_agent_environment",

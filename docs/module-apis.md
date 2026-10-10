@@ -15130,6 +15130,24 @@ fn parse_selector_list_for_rule(a: *mem.Arena, source: str, tokens: []const synt
 
 The CSS selector model and parser (L038), after Vaper's `selector.dart` and `selector_parser.dart`: complex selectors as compounds joined by descendant, child, adjacent-sibling and general-sibling combinators; type, universal, class, id and attribute selectors (all six operators and the `i` flag); the structural pseudo-classes, `:not()`, `:is()`, `:where()`, `:has()` with relative selectors, and `:nth-*()` with an `of S` list; the legacy pseudo-elements; and specificity as (ids, classes, types) with the functional pseudo-classes recursing. A selector the parser cannot represent is dropped from its list rather than failing it. Checked against Vaper's own Dart parser over 520 random selector lists on both hosts (D2340).
 
+### `e.ui.interpolate`
+
+```neper
+type Decomposed = struct { translate_x: f64, translate_y: f64, scale_x: f64, scale_y: f64, angle: f64, skew: f64 }
+
+fn pi() -> f64
+fn lerp(a: f64, b: f64, t: f64) -> f64
+fn round_half_away(x: f64) -> f64
+fn channel(a: u32, b: u32, shift: u32, t: f64) -> u32
+fn lerp_color_argb(a: u32, b: u32, t: f64) -> u32
+fn cubic_bezier(x1: f64, y1: f64, x2: f64, y2: f64, t: f64) -> f64
+fn decompose2d(m: [6]f64) -> Decomposed
+fn recompose2d(d: Decomposed) -> [6]f64
+fn lerp_affine(a: [6]f64, b: [6]f64, t: f64) -> [6]f64
+```
+
+Animation interpolation kernels (L039), after Vaper's `vaper_css_values/lib/src/interpolate.dart`: a linear interpolation (`lerp`), ARGB colour interpolation in sRGB component by component with Dart's half-away rounding (`lerp_color_argb`), a cubic-bezier timing function by 24 bisections on x (`cubic_bezier`), and 2D affine interpolation by decomposition into translation, scale, rotation and one shear with the rotation taking the shorter arc (`decompose2d`, `recompose2d`, `lerp_affine`). `e.ui.animation` keeps the widget controller; these are the pure kernels. Checked against Vaper's own Dart code over 400 random operations on both hosts, numbers within 1e-9 (D2341).
+
 ### `e.fmt.csv`
 
 ```neper
