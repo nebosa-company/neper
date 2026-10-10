@@ -7718,6 +7718,14 @@ foreach ($impactCase in @(@('helper', 'impact'), @('nested.deep', 'impact_local'
 }
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" test-impact-file test_project/src/nested/deep.e `"$repo`" x64 windows --json --changed nowhere > `"$(Join-Path $testBuild 'conformance-tools-impact-refused.jsonl')`""
 if ($LASTEXITCODE -ne 2) { throw "test-impact-file over an unknown module did not exit 2 (got $LASTEXITCODE)" }
+# `--why` (T041, H32): each affected test also names the first function it reaches in a changed
+# module (its selection reason), the test itself when that is where the edit is.
+foreach ($whyCase in @(@('helper', 'impact_why'), @('nested.deep', 'impact_local_why'))) {
+    $whyActual = Join-Path $testBuild "conformance-tools-$($whyCase[1]).jsonl"
+    cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" test-impact-file test_project/src/nested/deep.e `"$repo`" x64 windows --json --changed $($whyCase[0]) --why > `"$whyActual`""
+    if ($LASTEXITCODE -ne 0) { throw "test-impact-file --why failed for $($whyCase[0])" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $whyActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "tools/$($whyCase[1]).expected.jsonl")).Hash) { throw "test-impact-file --why differs from the conformance corpus for $($whyCase[0])" }
+}
 # A query over a program that does not check (D520, H08, H18): the stream, exit 1.
 # (D1554) The context case asks for the function that fails, which has no page.
 foreach ($brokenCase in @(@('context-file', '--symbol', 'query_broken.main', 'context_broken'), @('uses-file', '--symbol', 'query_broken.helper', 'uses_broken'), @('plan-rename-file', '--symbol', 'query_broken.helper', 'plan_rename_broken'))) {

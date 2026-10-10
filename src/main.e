@@ -12687,7 +12687,7 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     }
     if kind == 8usize { query_error = tool.plan_replace_json(a, &checker, &loaded, args[8usize], args[10usize]) }
     if kind == 9usize { query_error = tool.plan_signature_json(a, &checker, &loaded, args[8usize], args[10usize]) }
-    if kind == 10usize { query_error = tool.impact_json(a, &checker, &loaded, args[8usize]) }
+    if kind == 10usize { query_error = tool.impact_json(a, &checker, &loaded, args[8usize], args.len >= 10usize && same(args[9usize], "--why")) }
     // A refused query's stream said exit 2, and so does the process (D406).
     if query_error == tool.Refused {
         os.exit(2i32)
@@ -13536,7 +13536,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // `plan-replace-expression-file PATH ROOT ARCH OS --json --span START:END --with EXPR` (D414, H29).
     if args.len >= 11usize && same(args[1usize], "plan-replace-expression-file") && same(args[6usize], "--json") && same(args[7usize], "--span") && same(args[9usize], "--with") && args[10usize].len != 0usize && overlays_only_after(args, 11usize) { ret query_file(a, &report, args, 8usize) }
     // `test-impact-file PATH ROOT ARCH OS --json --changed m1,m2` (D423, H10): the tests an edit reaches.
-    if args.len >= 9usize && same(args[1usize], "test-impact-file") && same(args[6usize], "--json") && same(args[7usize], "--changed") && overlays_only_after(args, 9usize) { ret query_file(a, &report, args, 10usize) }
+    if args.len >= 9usize && same(args[1usize], "test-impact-file") && same(args[6usize], "--json") && same(args[7usize], "--changed") && (overlays_only_after(args, 9usize) || (args.len >= 10usize && same(args[9usize], "--why") && overlays_only_after(args, 10usize))) { ret query_file(a, &report, args, 10usize) }
     // `query-batch PATH ROOT ARCH OS --json --batch FILE [--unchecked]` (D409,
     // D556, H16/H27): many queries, one check and one intended image policy.
     if args.len >= 9usize && same(args[1usize], "query-batch") && same(args[6usize], "--json") && same(args[7usize], "--batch") && policy_overlays_only_after(args, 9usize) { ret query_file(a, &report, args, 7usize) }

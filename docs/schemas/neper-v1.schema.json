@@ -1565,6 +1565,9 @@
         "affected": {
           "type": "boolean"
         },
+        "via": {
+          "type": "string"
+        },
         "span": {
           "$ref": "#/$defs/span"
         }

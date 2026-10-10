@@ -258,7 +258,7 @@ fn capabilities_json(a: *mem.Arena) -> err {
     try text(&out, "{\"name\":\"apply-plan\",\"group\":\"edit\"},{\"name\":\"build-manifest-file\",\"group\":\"build\"},{\"name\":\"check-em-edge\",\"group\":\"check\"},{\"name\":\"check-em-errors\",\"group\":\"check\"},{\"name\":\"check-file\",\"group\":\"check\"},{\"name\":\"check-project\",\"group\":\"check\"},{\"name\":\"codegen-file\",\"group\":\"inspect\"},{\"name\":\"compare-manifests\",\"group\":\"inspect\"},{\"name\":\"context-file\",\"group\":\"query\"},{\"name\":\"dis-file\",\"group\":\"inspect\"},{\"name\":\"emit-em\",\"group\":\"build\"},{\"name\":\"emit-em-all\",\"group\":\"build\"},{\"name\":\"emit-executable\",\"group\":\"build\"},{\"name\":\"emit-object\",\"group\":\"build\"},")
     try text(&out, "{\"name\":\"eval\",\"group\":\"run\"},{\"name\":\"explain-file\",\"group\":\"query\"},{\"name\":\"fmt\",\"group\":\"format\"},{\"name\":\"fmt-file\",\"group\":\"format\"},{\"name\":\"fmt-project\",\"group\":\"format\"},{\"name\":\"graph-file\",\"group\":\"query\"},{\"name\":\"index-file\",\"group\":\"query\"},{\"name\":\"index-project\",\"group\":\"query\"},{\"name\":\"info\",\"group\":\"tool\"},{\"name\":\"link-em\",\"group\":\"build\"},{\"name\":\"manifest-em\",\"group\":\"inspect\"},{\"name\":\"nir-file\",\"group\":\"inspect\"},{\"name\":\"object-file\",\"group\":\"inspect\"},{\"name\":\"parse\",\"group\":\"parse\"},{\"name\":\"parse-file\",\"group\":\"parse\"},")
     try text(&out, "{\"name\":\"plan-add-parameter-file\",\"group\":\"edit\"},{\"name\":\"plan-change-signature-file\",\"group\":\"edit\"},{\"name\":\"plan-rename-file\",\"group\":\"edit\"},{\"name\":\"plan-replace-expression-file\",\"group\":\"edit\"},{\"name\":\"project-file\",\"group\":\"query\"},{\"name\":\"query-batch\",\"group\":\"query\"},{\"name\":\"resolve-file\",\"group\":\"query\"},{\"name\":\"run\",\"group\":\"run\"},{\"name\":\"scan\",\"group\":\"inspect\"},{\"name\":\"scan-file\",\"group\":\"inspect\"},{\"name\":\"select-file\",\"group\":\"query\"},{\"name\":\"self-test\",\"group\":\"tool\"},{\"name\":\"test-file\",\"group\":\"test\"},{\"name\":\"test-impact-file\",\"group\":\"test\"},{\"name\":\"test-project\",\"group\":\"test\"},{\"name\":\"tokens\",\"group\":\"parse\"},{\"name\":\"uses-file\",\"group\":\"query\"},{\"name\":\"validate-em\",\"group\":\"check\"}],")
-    try text(&out, "\"flags\":[\"--arena\",\"--budget\",\"--compact\",\"--cpu\",\"--deadline\",\"--incremental\",\"--json\",\"--perturb\",\"--release\",\"--stats\",\"--stats-full\",\"--time\",\"--unchecked\",\"-j\"],\"environment\":[\"NEPER_JOBS\"],\"snapshot\":{\"field\":\"snapshot\",\"named_by\":[\"context-file\",\"plan-add-parameter-file\",\"plan-change-signature-file\",\"plan-rename-file\",\"plan-replace-expression-file\"]}}")
+    try text(&out, "\"flags\":[\"--arena\",\"--budget\",\"--compact\",\"--cpu\",\"--deadline\",\"--incremental\",\"--json\",\"--perturb\",\"--release\",\"--stats\",\"--stats-full\",\"--time\",\"--unchecked\",\"--why\",\"-j\"],\"environment\":[\"NEPER_JOBS\"],\"snapshot\":{\"field\":\"snapshot\",\"named_by\":[\"context-file\",\"plan-add-parameter-file\",\"plan-change-signature-file\",\"plan-rename-file\",\"plan-replace-expression-file\"]}}")
     try flush(&out)
     try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{}}")
     ret flush(&out)
@@ -4066,7 +4066,7 @@ fn verification_tests(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> ([]u
 // that lies in a changed module or reaches a function in one is `affected`. A
 // module named that the program has not is a diagnostic and exit 2. One `impact`
 // record per test in module then declaration order, the result counting both.
-fn impact_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, changed_text: str) -> err {
+fn impact_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, changed_text: str, why: bool) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, c.signature_function_count * 256usize + 65536usize)
     if storage_error != ok { ret storage_error }
     var out: Out = zero
@@ -4123,9 +4123,13 @@ fn impact_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, changed_text: 
         if function.module_index < g.count && manifest_has_attribute(g.modules[function.module_index].text, function.source_start, "test") {
             reachable_functions(c, edge_from, edge_to, edge_count, function_at, reached, stack)
             var affected = false
+            var via = 0usize
             var reached_at = 0usize
             while reached_at < c.function_count && !affected {
-                if reached[reached_at] && c.functions[reached_at].module_index < g.count && changed[c.functions[reached_at].module_index] { affected = true }
+                if reached[reached_at] && c.functions[reached_at].module_index < g.count && changed[c.functions[reached_at].module_index] {
+                    affected = true
+                    via = reached_at
+                }
                 reached_at += 1usize
             }
             let module = g.modules[function.module_index]
@@ -4140,6 +4144,12 @@ fn impact_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, changed_text: 
             try quoted_function(&out, c, g, function_at)
             try text(&out, ",\"affected\":")
             if affected { try text(&out, "true") } else { try text(&out, "false") }
+            // `--why` (T041, H32): the first function the test reaches that lies in a changed module,
+            // the test itself when it is one -- the reason the test was selected.
+            if why && affected {
+                try text(&out, ",\"via\":")
+                try quoted_function(&out, c, g, via)
+            }
             try text(&out, ",\"span\":")
             try point_span(&out, root, path, module.text, declaration)
             try byte(&out, 125u8)

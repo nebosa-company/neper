@@ -7212,6 +7212,13 @@ done
 impact_refused=0
 (cd "$conformance_root/tools" && $test_build/neper-self test-impact-file test_project/src/nested/deep.e "$repo" x64 linux --json --changed nowhere > "$test_build/conformance-tools-impact-refused.jsonl") || impact_refused=$?
 [ "$impact_refused" -eq 2 ]
+# `--why` (T041, H32): each affected test also names the first function it reaches in a changed
+# module (its selection reason), the test itself when that is where the edit is.
+for why_case in 'helper impact_why' 'nested.deep impact_local_why'; do
+    set -- $why_case
+    (cd "$conformance_root/tools" && $test_build/neper-self test-impact-file test_project/src/nested/deep.e "$repo" x64 linux --json --changed "$1" --why > "$test_build/conformance-tools-$2.jsonl")
+    cmp -s "$test_build/conformance-tools-$2.jsonl" "$conformance_root/tools/$2.expected.jsonl" || { printf '%s\n' "test-impact-file --why differs from the corpus for $1" >&2; exit 1; }
+done
 # A query over a program that does not check (D520, H08, H18): the stream, exit 1.
 # (D1554) The context case asks for the function that fails, which has no page.
 for broken_case in "context-file context_broken main" "uses-file uses_broken helper" "plan-rename-file plan_rename_broken helper"; do
