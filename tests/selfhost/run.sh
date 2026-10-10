@@ -3286,6 +3286,12 @@ algo_fsm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/algo-fsm-selfhost"
 algo_fsm_output=$("$test_build/algo-fsm-selfhost")
 [ "$algo_fsm_output" = 'algo fsm ok' ]
+# `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
+x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
+[ "$x_migrate_written" = 'executable written' ]
+chmod +x "$test_build/x-migrate-selfhost"
+x_migrate_output=$("$test_build/x-migrate-selfhost")
+[ "$x_migrate_output" = 'x migrate ok' ]
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 algo_trigger_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_trigger/src/main.e" "$repo" x64 linux "$test_build/algo-trigger-selfhost")
 [ "$algo_trigger_written" = 'executable written' ]

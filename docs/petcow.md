@@ -43,6 +43,8 @@ ic`, `${…}`→template mapping. Warn on registry sources, splats, `self/path/t
 | — | `src/vault.rs:1` `PETCOW_VAULT;v1;hex(salt‖nonce‖ct)` | rule only | Design (Argon2id + ChaCha20-Poly1305, random salt/nonce, fail-closed) maps onto existing `e.crypto.kdf/aead`. No new format. |
 | — | tfplugin protobuf wire, zip | skip | Have zip/protobuf; wire format stays out of the library. |
 
+F4 landed (D2318): `x.migrate.migrate` (`lib/x/migrate/migrate.e`), differential against the reference importers over 372 cases.
+
 Order: F1 → F2/F3 → F4.
 
 ## 3. Drivers (shape first, one REST pattern, defer the fleet)

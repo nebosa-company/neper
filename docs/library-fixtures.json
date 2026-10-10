@@ -466,7 +466,8 @@
     "data_validate",
     "fmt_encode",
     "fmt_gaps_a",
-    "fmt_json"
+    "fmt_json",
+    "x_migrate"
    ]
   },
   {
@@ -654,7 +655,8 @@
    "pending": [],
    "fixtures": [
     "fmt_encode",
-    "fmt_yaml"
+    "fmt_yaml",
+    "x_migrate"
    ]
   },
   {

@@ -3703,6 +3703,12 @@ $algoFsmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $algoFsmWritten -ne 'executable written') { throw 'algo_fsm emission failed' }
 $algoFsmOutput = & $algoFsmPath
 if ($LASTEXITCODE -ne 0 -or $algoFsmOutput -ne 'algo fsm ok') { throw "algo_fsm answered wrongly: exit $LASTEXITCODE" }
+# `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
+$xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
+$xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2
+if ($LASTEXITCODE -ne 0 -or $xMigrateWritten -ne 'executable written') { throw 'x_migrate emission failed' }
+$xMigrateOutput = & $xMigratePath
+if ($LASTEXITCODE -ne 0 -or $xMigrateOutput -ne 'x migrate ok') { throw "x_migrate answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 $algoTriggerPath = Join-Path $testBuild 'algo-trigger-selfhost.exe'
 $algoTriggerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_trigger\src\main.e') $repo 'x64' 'windows' $algoTriggerPath

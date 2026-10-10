@@ -752,17 +752,6 @@
       "evidence": "Appdor src/webhooks/sign.js (HMAC-SHA256 t-plus-v1 envelope, 300s replay window), src/auth-schemes (14 pure apply() schemes), src/mcp/protocol.js (JSON-RPC 2.0 plus MCP handshake versions), src/api/openapi-builder.js (OpenAPI 3.0.3 createSpec/addPath/addSchema). Port envelopes and builders onto e.crypto.mac plus e.net.http; no new deps."
     },
     {
-      "id": "T031",
-      "category": "tooling",
-      "group": "Tooling",
-      "order": 31,
-      "title": "Four-way CM importer (ansible/salt/puppet/chef to os resources)",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Petcow src/migrate.rs:1013 migrate_ansible plus :1414 salt, :1816 puppet (subset lexer), :2193 chef map modules to os.{package,service,file,command,user,group,cron,line_in_file,sysctl,hostname,timezone,mount,authorized_key,git,pip,symlink} with warn-instead-of-drop. Ship as an x.migrate tool with the cross-matrix pip/pkg/service/user/group/cron/file/symlink fixture. Plan: docs/petcow.md F4."
-    },
-    {
       "id": "T032",
       "category": "tooling",
       "group": "Tooling",
