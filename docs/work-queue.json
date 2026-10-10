@@ -609,17 +609,6 @@
       "evidence": "Appdor src/offline (coalescing enqueue, cursor pullChanges, field-level conflict detect with manual/LWW/field-merge resolve, durable queue with dead letters), src/sync (mapping propose, lease claim, doubling backoff, drift accept), src/history (diffRecords, revision replay, sha256 prev-plus-canonical tamper-evident chain), src/realtime (30s-TTL presence, version-or-LWW merge; polling transport flagged). Port into e.algo.sync/merge/queue/diff/chain/presence. PART ONE DELIVERED (D2336): lib/e/algo/chain.e, e.algo.chain -- the hash chain, diff, WAS/CHANGED predicates, history filter, field history, plan retention and export; fixture algo_chain, 220 scripts against appdor's tamper-evident.js on Windows and Linux. PART TWO (D2337): lib/e/algo/sync.e, e.algo.sync -- src/offline index.js, durable-queue.js and sync-engine.js: coalescing queue, durable outbox (backoff, dead letters, quota-aware persistence, attachment holds), cursor and delta pull, field-level conflicts and resolution, run_sync; fixture algo_sync, 260 scripts against appdor's own modules on Windows and Linux. PART THREE (D2338): lib/e/algo/realtime.e, e.algo.realtime -- presence, cell resolution, record merge, viewer filter, degradation, topic authorization, connection lifecycle, telemetry, payload trimming, view membership; fixture algo_realtime, 220 scripts against appdor's src/realtime on Windows and Linux. NOT DONE: src/offline write-queue.js, conflict-review.js, read-cache.js, access-purge.js; src/sync (mapping, lease, backoff, drift). PART FOUR (D2339): lib/e/algo/syncjob.e, e.algo.syncjob -- src/sync sync-schedule.js, sync-refusal.js and the pure half of synced-table.js with syncPlan; fixture algo_syncjob, 700 inputs against appdor's own modules on Windows and Linux. NOT DONE: src/offline write-queue, conflict-review, read-cache, access-purge; src/sync writeback.js, change-stream.js, entity-browse.js, proposeMapping/pagination parts of synced-table.js, sql-source.js."
     },
     {
-      "id": "L039",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 137,
-      "title": "CSS value microsyntax and animation interpolation",
-      "score": 0.15,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Vaper vaper_css_values value.dart (parseColor incl. lab/light-dark, parseLength with calc/min/max/clamp/abs/hypot/mod/rem/round reduction to px offset, toPx) and interpolate.dart (number/color/2D-matrix lerp with short-arc rotation, cubicBezier bisection). Pure and heavily vector-tested. Port into e.gfx.color plus e.ui.animation after diffing ui/animation.e for overlap. PART ONE (D2341): lib/e/ui/interpolate.e, e.ui.interpolate -- interpolate.dart (lerp, ARGB lerp, cubicBezier, decompose/recompose/lerpAffine); fixture ui_interpolate, 400 operations against Vaper's Dart on Windows and Linux. NOT DONE: value.dart (parseLength with calc/min/max/clamp/abs/hypot/mod/rem/round, parseColor in every space incl. lab/lch/oklab/oklch/color()/color-mix/light-dark, transforms, angle and time)."
-    },
-    {
       "id": "L040",
       "category": "library",
       "group": "Algorithms",

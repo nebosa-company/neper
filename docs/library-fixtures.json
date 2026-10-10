@@ -475,6 +475,7 @@
     "fmt_encode",
     "fmt_gaps_a",
     "fmt_json",
+    "gfx_cssvalue",
     "text_css_selector",
     "text_css_syntax",
     "ui_interpolate",

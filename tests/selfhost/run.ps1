@@ -3780,6 +3780,13 @@ $uiInterpolateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $uiInterpolateWritten -ne 'executable written') { throw 'ui_interpolate emission failed' }
 $uiInterpolateOutput = & $uiInterpolatePath
 if ($LASTEXITCODE -ne 0 -or $uiInterpolateOutput -ne 'ui interpolate ok') { throw "ui_interpolate answered wrongly: exit $LASTEXITCODE" }
+# `e.gfx.cssvalue`: lengths and calc, numbers, angles, times, colours in every syntax, relative colours,
+# # colour mixing and transforms against Vaper's own Dart parsers (1,060 values, D2342).
+$gfxCssvaluePath = Join-Path $testBuild 'gfx-cssvalue-selfhost.exe'
+$gfxCssvalueWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_cssvalue\src\main.e') $repo 'x64' 'windows' $gfxCssvaluePath -j 2
+if ($LASTEXITCODE -ne 0 -or $gfxCssvalueWritten -ne 'executable written') { throw 'gfx_cssvalue emission failed' }
+$gfxCssvalueOutput = & $gfxCssvaluePath
+if ($LASTEXITCODE -ne 0 -or $gfxCssvalueOutput -ne 'gfx cssvalue ok') { throw "gfx_cssvalue answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

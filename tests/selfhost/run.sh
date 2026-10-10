@@ -3363,6 +3363,13 @@ ui_interpolate_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/ui-interpolate-selfhost"
 ui_interpolate_output=$("$test_build/ui-interpolate-selfhost")
 [ "$ui_interpolate_output" = 'ui interpolate ok' ]
+# `e.gfx.cssvalue`: lengths and calc, numbers, angles, times, colours in every syntax, relative colours,
+# # colour mixing and transforms against Vaper's own Dart parsers (1,060 values, D2342).
+gfx_cssvalue_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_cssvalue/src/main.e" "$repo" x64 linux "$test_build/gfx-cssvalue-selfhost" -j 2)
+[ "$gfx_cssvalue_written" = 'executable written' ]
+chmod +x "$test_build/gfx-cssvalue-selfhost"
+gfx_cssvalue_output=$("$test_build/gfx-cssvalue-selfhost")
+[ "$gfx_cssvalue_output" = 'gfx cssvalue ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

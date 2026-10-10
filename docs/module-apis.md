@@ -15148,6 +15148,208 @@ fn lerp_affine(a: [6]f64, b: [6]f64, t: f64) -> [6]f64
 
 Animation interpolation kernels (L039), after Vaper's `vaper_css_values/lib/src/interpolate.dart`: a linear interpolation (`lerp`), ARGB colour interpolation in sRGB component by component with Dart's half-away rounding (`lerp_color_argb`), a cubic-bezier timing function by 24 bisections on x (`cubic_bezier`), and 2D affine interpolation by decomposition into translation, scale, rotation and one shear with the rotation taking the shorter arc (`decompose2d`, `recompose2d`, `lerp_affine`). `e.ui.animation` keeps the widget controller; these are the pure kernels. Checked against Vaper's own Dart code over 400 random operations on both hosts, numbers within 1e-9 (D2341).
 
+### `e.gfx.cssvalue`
+
+```neper
+type LengthUnit = enum u8 { Px, Pt, Em, Rem, Ex, Percent, Vw, Vh, Vmin, Vmax }
+type LengthOp = enum u8 { None, Min, Max, Clamp, Abs, Hypot, Mod, Rem, RoundNearest, RoundUp, RoundDown, RoundToZero }
+type CssLength = struct { value: f64, unit: LengthUnit, px_offset: f64, op: LengthOp, terms: []const CssLength }
+type Bases = struct { has_em: bool, em: f64, has_rem: bool, rem: f64, has_percent: bool, percent: f64, has_viewport_width: bool, viewport_width: f64, has_viewport_height: bool, viewport_height: f64 }
+
+fn no_bases() -> Bases
+fn pi() -> f64
+fn e_const() -> f64
+fn nan() -> f64
+fn infinity() -> f64
+fn is_nan(x: f64) -> bool
+fn is_infinite(x: f64) -> bool
+fn is_space(c: u8) -> bool
+fn trim_ws(s: str) -> str
+fn lower(a: *mem.Arena, s: str) -> str
+fn cat(a: *mem.Arena, x: str, y: str) -> str
+fn index_of(s: str, needle: str) -> i64
+fn last_index_of_byte(s: str, byte: u8) -> i64
+fn is_digit(c: u8) -> bool
+fn round_half_away(x: f64) -> f64
+fn clamp255(x: f64) -> i64
+fn clamp_f(x: f64, lo: f64, hi: f64) -> f64
+fn try_parse(a: *mem.Arena, input: str) -> (f64, bool)
+fn parse_or(a: *mem.Arena, s: str, fallback: f64) -> f64
+fn dart_text(a: *mem.Arena, x: f64) -> str
+fn strings_list(a: *mem.Arena) -> list.List[str]
+fn push_str(l: *list.List[str], s: str)
+fn split_top_level_commas(a: *mem.Arena, s: str) -> []const str
+fn split_top_level_spaces(a: *mem.Arena, s: str) -> []const str
+fn split_top_level_space(a: *mem.Arena, s: str) -> []const str
+fn split_on_mode(a: *mem.Arena, s: str, mode: u8) -> []const str
+fn top_level_index_of(s: str, ch: u8) -> i64
+
+type Term = struct { sign: f64, text: str }
+
+fn split_calc_terms(a: *mem.Arena, expr: str) -> ([]const Term, bool)
+fn trim_end_ws(s: str) -> str
+fn eval_number(a: *mem.Arena, expr: str) -> (f64, bool)
+fn num_add(a: *mem.Arena, s: str) -> (f64, bool)
+fn num_mul(a: *mem.Arena, s: str) -> (f64, bool)
+fn num_atom(a: *mem.Arena, s: str) -> (f64, bool)
+fn angle_or_number(a: *mem.Arena, s: str) -> (f64, bool)
+fn arg_value(a: *mem.Arena, args: []const str, i: usize) -> (f64, bool)
+fn apply_num_fn(a: *mem.Arena, name: str, args: []const str) -> (f64, bool)
+fn dart_min(x: f64, y: f64) -> f64
+fn dart_max(x: f64, y: f64) -> f64
+fn num_round(a: *mem.Arena, args: []const str) -> (f64, bool)
+fn parse_css_number(a: *mem.Arena, raw: str) -> (f64, bool)
+fn pick_light_dark(a: *mem.Arena, raw: str, dark: bool) -> (str, bool)
+fn parse_css_angle_radians(a: *mem.Arena, raw: str) -> (f64, bool)
+fn parse_css_time_seconds(a: *mem.Arena, raw: str) -> (f64, bool)
+fn time_add(a: *mem.Arena, s: str) -> (f64, bool)
+fn time_mul(a: *mem.Arena, s: str) -> (f64, bool)
+fn time_atom(a: *mem.Arena, s: str) -> (f64, bool)
+fn plain_length(value: f64, unit: LengthUnit) -> CssLength
+fn function_length(op: LengthOp, terms: []const CssLength) -> CssLength
+fn zero_length() -> CssLength
+fn to_px(l: CssLength, b: Bases) -> (f64, bool)
+fn match_length(s: str) -> (str, str, bool)
+fn length_unit_known(u: str) -> bool
+fn unit_length(value: f64, unit: str) -> (CssLength, bool)
+fn parse_plain_length(a: *mem.Arena, raw: str) -> (CssLength, bool)
+fn parse_length_fn(a: *mem.Arena, args: str, op: LengthOp) -> (CssLength, bool)
+fn parse_round_fn(a: *mem.Arena, args: str) -> (CssLength, bool)
+fn split_operator(s: str, sep: u8) -> (str, str, bool)
+
+type Product = struct { coeff: f64, has_length: bool, length: CssLength }
+
+fn parse_calc_product(a: *mem.Arena, token: str) -> (Product, bool)
+fn scalar_or_eval(a: *mem.Arena, s: str) -> (f64, bool)
+fn parse_calc(a: *mem.Arena, expr: str, b: Bases) -> (CssLength, bool)
+fn parse_length(a: *mem.Arena, raw: str, bases: Bases) -> (CssLength, bool)
+fn argb(a: i64, r: i64, g: i64, b: i64) -> u32
+fn euclid_mod(x: f64, m: f64) -> f64
+fn parse_alpha(a: *mem.Arena, p: str) -> f64
+fn parse_hue(a: *mem.Arena, p: str) -> f64
+fn hex_digit_value(c: u8) -> i64
+fn parse_hex(a: *mem.Arena, input: str) -> (u32, bool)
+fn rgb_channel(a: *mem.Arena, p: str) -> i64
+fn parse_rgb(a: *mem.Arena, s: str) -> (u32, bool)
+fn rgb_to_hsl(r: f64, g: f64, b: f64) -> (f64, f64, f64)
+fn hue_to_rgb(hue: f64) -> (f64, f64, f64)
+fn hsl_to_argb(hue: f64, s: f64, l: f64, al: f64) -> u32
+fn strip_percent(a: *mem.Arena, s: str) -> str
+fn parse_hsl(a: *mem.Arena, s: str) -> (u32, bool)
+fn hwb_to_argb(h: f64, w: f64, bl: f64, ai: i64) -> u32
+fn parse_hwb(a: *mem.Arena, s: str) -> (u32, bool)
+
+type Vars = struct { names: [8]str, values: [8]f64, count: usize }
+
+fn vars_add(v: *Vars, name: str, value: f64)
+fn vars_get(v: *const Vars, name: str) -> (f64, bool)
+fn is_lower_alpha(c: u8) -> bool
+fn replace_word(a: *mem.Arena, s: str, name: str, replacement: str) -> str
+fn substitute_vars(a: *mem.Arena, t: str, v: *const Vars) -> str
+fn resolve_rel_channel(a: *mem.Arena, tok: str, v: *const Vars, pct_ref: f64) -> (f64, bool)
+fn resolve_rel_hue(a: *mem.Arena, tok: str, v: *const Vars) -> (f64, bool)
+fn first_color_token(body: str) -> (str, str, bool)
+
+type RelParts = struct { good: bool, base: u32, rest: str, has_alpha: bool, alpha_tok: str }
+
+fn relative_head(a: *mem.Arena, s: str) -> RelParts
+fn channel_r(c: u32) -> i64
+fn channel_g(c: u32) -> i64
+fn channel_b(c: u32) -> i64
+fn channel_a(c: u32) -> i64
+fn parse_relative_rgb(a: *mem.Arena, s: str) -> (u32, bool)
+fn parse_relative_hsl(a: *mem.Arena, s: str) -> (u32, bool)
+fn parse_relative_hwb(a: *mem.Arena, s: str) -> (u32, bool)
+fn cbrt_of(x: f64) -> f64
+fn srgb_to_linear(c: f64) -> f64
+fn linear_to_srgb(c: f64) -> f64
+
+type Vec3 = struct { x: f64, y: f64, z: f64 }
+type Mat3 = struct { m: [9]f64 }
+
+fn mat_vec(m: Mat3, v: Vec3) -> Vec3
+fn mat(a0: f64, a1: f64, a2: f64, a3: f64, a4: f64, a5: f64, a6: f64, a7: f64, a8: f64) -> Mat3
+fn lin_srgb_to_xyz() -> Mat3
+fn xyz_to_lin_srgb() -> Mat3
+fn d65_to_d50() -> Mat3
+fn d50_to_d65() -> Mat3
+fn xyz_to_lms() -> Mat3
+fn lms_to_oklab() -> Mat3
+fn oklab_to_lms() -> Mat3
+fn lms_to_xyz() -> Mat3
+fn p3_to_xyz() -> Mat3
+fn a98_to_xyz() -> Mat3
+fn rec2020_to_xyz() -> Mat3
+fn prophoto_to_xyz() -> Mat3
+fn argb_to_xyz_d65(c: u32) -> Vec3
+fn unit_channel(v: f64) -> i64
+fn xyz_d65_to_argb(xyz: Vec3, alpha: f64) -> u32
+fn lab_wx() -> f64
+fn lab_wz() -> f64
+fn lab_e() -> f64
+fn lab_k() -> f64
+fn lab_f(t: f64) -> f64
+fn xyz_d50_to_lab(xyz: Vec3) -> Vec3
+fn lab_to_xyz_d50(lab: Vec3) -> Vec3
+fn lab_to_lch(lab: Vec3) -> Vec3
+fn lch_to_lab(lch: Vec3) -> Vec3
+fn xyz_d65_to_oklab(xyz: Vec3) -> Vec3
+fn oklab_to_xyz_d65(lab: Vec3) -> Vec3
+
+type Coords = struct { v: Vec3, alpha: f64 }
+
+fn to_space_coords(c: u32, space: str) -> (Coords, bool)
+fn from_space_coords(c: Coords, space: str) -> u32
+fn hue_index(space: str) -> i64
+fn is_xyz_space(space: str) -> bool
+fn parse_relative_color_fn(a: *mem.Arena, s: str) -> (u32, bool)
+fn parse_relative_color_space(a: *mem.Arena, s: str, space: str, n0: str, n1: str, n2: str) -> (u32, bool)
+fn interp_hue(h1: f64, h2: f64, w1: f64, w2: f64) -> f64
+fn mix_in_space(c1: u32, c2: u32, w1: f64, w2: f64, space: str) -> (u32, bool)
+fn component(a: *mem.Arena, t: str, pct_ref: f64) -> f64
+fn angle_of(a: *mem.Arena, t: str) -> f64
+
+type Components = struct { good: bool, toks: []const str, alpha: f64 }
+
+fn func_components(a: *mem.Arena, s: str) -> Components
+fn parse_lab_lch(a: *mem.Arena, s: str, space: str) -> (u32, bool)
+fn a98_to_linear(v: f64) -> f64
+fn rec2020_to_linear(v: f64) -> f64
+fn prophoto_to_linear(v: f64) -> f64
+fn map_v3(v: Vec3, which: u8) -> Vec3
+fn parse_color_function(a: *mem.Arena, s: str) -> (u32, bool)
+fn named_color(name: str) -> (u32, bool)
+fn strip_comments(a: *mem.Arena, s: str) -> str
+fn parse_color(a: *mem.Arena, raw: str) -> (u32, bool)
+fn mix_space_known(space: str) -> bool
+
+type Stop = struct { good: bool, color: u32, has_pct: bool, pct: f64 }
+
+fn color_stop(a: *mem.Arena, s: str, has_current: bool, current: u32) -> Stop
+fn parse_color_mix(a: *mem.Arena, raw: str, has_current: bool, current: u32) -> (u32, bool)
+fn relative_luminance(c: u32) -> f64
+fn parse_contrast_color(a: *mem.Arena, raw: str, has_current: bool, current: u32) -> (u32, bool)
+
+type Func = struct { name: str, args: []const str }
+
+fn is_name_char(c: u8) -> bool
+fn transform_functions(a: *mem.Arena, s: str) -> []const Func
+fn identity() -> [6]f64
+fn affine_mul(m: [6]f64, n: [6]f64) -> [6]f64
+fn six(a0: f64, a1: f64, a2: f64, a3: f64, a4: f64, a5: f64) -> [6]f64
+fn len_px(a: *mem.Arena, s: str) -> f64
+fn num_of(a: *mem.Arena, s: str) -> f64
+fn rad_of(a: *mem.Arena, s: str) -> f64
+fn arg_at(args: []const str, i: usize) -> str
+fn transform_func(a: *mem.Arena, name: str, args: []const str) -> ([6]f64, bool)
+fn parse_transform(a: *mem.Arena, raw: str) -> ([6]f64, bool)
+fn pct_of(a: *mem.Arena, s: str) -> f64
+fn parse_translate_percent(a: *mem.Arena, raw: str) -> (f64, f64)
+fn parse_transform_origin(a: *mem.Arena, raw: str) -> (f64, f64)
+```
+
+CSS value microsyntax (L039), after Vaper's `vaper_css_values/lib/src/value.dart`: lengths with `calc()`, `min()`, `max()`, `clamp()`, `abs()`, `hypot()`, `mod()`, `rem()` and `round()` reduced to a pixel offset plus at most one relative unit (`parse_length`, `to_px`), numeric math expressions (`parse_css_number`), angles and times, `light-dark()`, and colours -- named, hex, `rgb()`, `hsl()`, `hwb()`, `lab()`, `lch()`, `oklab()`, `oklch()`, `color()` over the predefined RGB and XYZ spaces, relative colour syntax, `color-mix()` and `contrast-color()` (`parse_color`) -- plus 2D transform lists reduced to one affine, a transform origin and the percentage part of a translate. A parse that Vaper answers with null answers false here. Checked against Vaper's own Dart parsers over 1,060 random values on both hosts, numbers within 1e-9 and colours exactly (D2342).
+
 ### `e.fmt.csv`
 
 ```neper

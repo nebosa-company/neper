@@ -2096,4 +2096,5 @@ D2337	1122	L037 part two: e.algo.sync, the offline outbox and delta sync checked
 D2338	930	L037 part three: e.algo.realtime, collaboration semantics checked against appdor's
 D2339	1105	L037 part four: e.algo.syncjob, scheduled sync planning checked against appdor's
 D2340	1118	L038 closed: the CSS tokenizer, grammar and selector parser, checked against Vaper's Dart code
-D2341	789	L039 part one: e.ui.interpolate, the animation kernels checked against Vaper's Dart
+D2341	790	L039 part one: e.ui.interpolate, the animation kernels checked against Vaper's Dart
+D2342	1262	L039 closed: e.gfx.cssvalue, the CSS value microsyntax checked against Vaper's Dart parsers
