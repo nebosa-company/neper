@@ -3723,6 +3723,13 @@ $xAgentEnvironmentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $xAgentEnvironmentWritten -ne 'executable written') { throw 'x_agent_environment emission failed' }
 $xAgentEnvironmentOutput = & $xAgentEnvironmentPath
 if ($LASTEXITCODE -ne 0 -or $xAgentEnvironmentOutput -ne 'x agent environment ok') { throw "x_agent_environment answered wrongly: exit $LASTEXITCODE" }
+# `x.agent.policy` (T042, H36): the enforced action policy -- most-specific decision, path classification, the
+# declared/observed audit verdicts, HMAC approvals and redaction against an independent reference (1259 cases, D2325).
+$xAgentPolicyPath = Join-Path $testBuild 'x-agent-policy-selfhost.exe'
+$xAgentPolicyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_agent_policy\src\main.e') $repo 'x64' 'windows' $xAgentPolicyPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xAgentPolicyWritten -ne 'executable written') { throw 'x_agent_policy emission failed' }
+$xAgentPolicyOutput = & $xAgentPolicyPath
+if ($LASTEXITCODE -ne 0 -or $xAgentPolicyOutput -ne 'x agent policy ok') { throw "x_agent_policy answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 $algoTriggerPath = Join-Path $testBuild 'algo-trigger-selfhost.exe'
 $algoTriggerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_trigger\src\main.e') $repo 'x64' 'windows' $algoTriggerPath

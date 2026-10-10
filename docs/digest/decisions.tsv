@@ -2078,4 +2078,5 @@ D2320	996	T041 (first slice): `--compact`, a test stream without its passing rec
 D2321	851	T041: `test-impact-file --why`, the reason a test was selected
 D2322	1283	T041: `--retries N`, a flaky pass is a pass that says so
 D2323	1662	T042 (first slice): `x.agent.contract`, the change contract as a content-addressed value
-D2324	1894	T042: `x.agent.environment`, the execution environment as a hashable manifest
+D2324	1895	T042: `x.agent.environment`, the execution environment as a hashable manifest
+D2325	1866	T042: `x.agent.policy`, an action policy decided outside the agent that proposes it
