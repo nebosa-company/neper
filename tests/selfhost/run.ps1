@@ -3898,6 +3898,12 @@ $xOpsInventoryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $xOpsInventoryWritten -ne 'executable written') { throw 'x_ops_inventory emission failed' }
 $xOpsInventoryOutput = & $xOpsInventoryPath
 if ($LASTEXITCODE -ne 0 -or $xOpsInventoryOutput -ne 'x ops inventory ok') { throw "x_ops_inventory answered wrongly: exit $LASTEXITCODE" }
+# e.net.packet and e.net.pcap against an independent spec implementation (341 cases, D2357).
+$netPacketPath = Join-Path $testBuild 'net-packet-selfhost.exe'
+$netPacketWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_packet\src\main.e') $repo 'x64' 'windows' $netPacketPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netPacketWritten -ne 'executable written') { throw 'net_packet emission failed' }
+$netPacketOutput = & $netPacketPath
+if ($LASTEXITCODE -ne 0 -or $netPacketOutput -ne 'net packet ok') { throw "net_packet answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

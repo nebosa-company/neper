@@ -12516,6 +12516,77 @@ fn check_url(a: *mem.Arena, url: str, has_lookup: bool, lookup_failed: bool, ans
 
 The outbound-URL guard (L046), after Appdor's `src/io/ssrf-guard.js`: `is_blocked_address` and `block_reason` classify an IP literal (private, loopback, link-local, carrier-grade NAT, multicast and reserved IPv4 ranges; IPv6 loopback, unique-local and link-local; the `::ffff:` mapped forms in dotted and hex spellings), `check_url_sync` judges what needs no resolver with the WHATWG host normalisation (`2130706433` and `0x7f.1` are loopback), and `check_url` adds the resolver's answers, every one of which must be public, returning exactly the answers it approved so a connection can be pinned to them. Checked against Appdor's own functions over 226 cases on both hosts (D2351).
 
+### `e.net.packet`
+
+```neper
+error Truncated
+error Invalid
+
+type Ethernet = struct { dst: [6]u8, src: [6]u8, ethertype: u16, vlan_count: u8, vlan_id: u16, vlan_pcp: u8, payload: []const u8 }
+type Arp = struct { operation: u16, sender_mac: [6]u8, sender_ip: [4]u8, target_mac: [6]u8, target_ip: [4]u8 }
+type Ipv4 = struct { ihl: u8, dscp: u8, ecn: u8, total_length: u16, id: u16, flags: u8, fragment_offset: u16, ttl: u8, protocol: u8, checksum: u16, checksum_ok: bool, src: [4]u8, dst: [4]u8, options: []const u8, payload: []const u8 }
+type Ipv6 = struct { traffic_class: u8, flow_label: u32, payload_length: u16, next_header: u8, hop_limit: u8, src: [16]u8, dst: [16]u8, protocol: u8, fragment: bool, fragment_offset: u16, more_fragments: bool, payload: []const u8 }
+type Tcp = struct { src_port: u16, dst_port: u16, seq: u32, ack: u32, data_offset: u8, flags: u16, window: u16, checksum: u16, urgent: u16, options: []const u8, payload: []const u8 }
+type Udp = struct { src_port: u16, dst_port: u16, length: u16, checksum: u16, payload: []const u8 }
+type Icmp = struct { kind: u8, code: u8, checksum: u16, rest: u32, payload: []const u8 }
+
+fn be16(b: []const u8, at: usize) -> u16
+fn be32(b: []const u8, at: usize) -> u32
+fn put16(b: []u8, at: usize, v: u16)
+fn put32(b: []u8, at: usize, v: u32)
+fn sum_words(data: []const u8, seed: u32) -> u32
+fn fold(sum: u32) -> u16
+fn internet_checksum(data: []const u8) -> u16
+fn pseudo_sum_v4(src: [4]u8, dst: [4]u8, protocol: u8, length: usize) -> u32
+fn pseudo_sum_v6(src: [16]u8, dst: [16]u8, protocol: u8, length: usize) -> u32
+fn transport_checksum_v4(src: [4]u8, dst: [4]u8, protocol: u8, segment: []const u8) -> u16
+fn transport_checksum_v6(src: [16]u8, dst: [16]u8, protocol: u8, segment: []const u8) -> u16
+fn transport_ok_v4(src: [4]u8, dst: [4]u8, protocol: u8, segment: []const u8) -> bool
+fn transport_ok_v6(src: [16]u8, dst: [16]u8, protocol: u8, segment: []const u8) -> bool
+fn copy6(b: []const u8, at: usize) -> [6]u8
+fn copy4(b: []const u8, at: usize) -> [4]u8
+fn copy16(b: []const u8, at: usize) -> [16]u8
+fn parse_ethernet(frame: []const u8) -> (Ethernet, err)
+fn parse_arp(data: []const u8) -> (Arp, err)
+fn parse_ipv4(data: []const u8) -> (Ipv4, err)
+fn is_extension(next: u8) -> bool
+fn parse_ipv6(data: []const u8) -> (Ipv6, err)
+fn parse_tcp(segment: []const u8) -> (Tcp, err)
+fn parse_udp(segment: []const u8) -> (Udp, err)
+fn parse_icmp(message: []const u8) -> (Icmp, err)
+fn build_ethernet(buf: []u8, dst: [6]u8, src: [6]u8, ethertype: u16) -> usize
+fn build_ipv4(buf: []u8, tos: u8, id: u16, flags: u8, fragment_offset: u16, ttl: u8, protocol: u8, src: [4]u8, dst: [4]u8, payload_length: usize) -> usize
+fn build_ipv6(buf: []u8, traffic_class: u8, flow_label: u32, next_header: u8, hop_limit: u8, src: [16]u8, dst: [16]u8, payload_length: usize) -> usize
+fn build_udp_v4(buf: []u8, src_port: u16, dst_port: u16, payload: []const u8, src: [4]u8, dst: [4]u8) -> usize
+fn build_tcp_v4(buf: []u8, src_port: u16, dst_port: u16, seq: u32, ack: u32, flags: u16, window: u16, urgent: u16, options: []const u8, payload: []const u8, src: [4]u8, dst: [4]u8) -> usize
+fn build_icmp(buf: []u8, kind: u8, code: u8, rest: u32, payload: []const u8) -> usize
+fn build_icmp_v6(buf: []u8, kind: u8, code: u8, rest: u32, payload: []const u8, src: [16]u8, dst: [16]u8) -> usize
+```
+
+Packet header codecs (L051): Ethernet II with 802.1Q/802.1ad tags, ARP (IPv4 over Ethernet), IPv4 with options, IPv6 with its extension-header chain (hop-by-hop, routing, fragment, destination options, authentication), TCP with options, UDP, ICMP and ICMPv6, and the Internet checksum (RFC 1071) with the IPv4 and IPv6 pseudo-headers. Parsers (`parse_ethernet`, `parse_arp`, `parse_ipv4`, `parse_ipv6`, `parse_tcp`, `parse_udp`, `parse_icmp`) borrow the payload from the caller's bytes and fail closed (`Truncated` for a length the data does not hold, `Invalid` for a version or length that cannot be); builders write into a caller's buffer with checksums computed. Checked against an independent implementation written from the RFCs (struct-built frames and an independent decoder) over 341 cases with `e.net.pcap` on both hosts (D2357).
+
+### `e.net.pcap`
+
+```neper
+error Truncated
+error Invalid
+
+type Reader = struct { data: []const u8, at: usize, big_endian: bool, nanos: bool, pcapng: bool, linktype: u32, snaplen: u32, if_count: usize, if_linktypes: [16]u32, if_resolution: [16]u32 }
+type Record = struct { ts_sec: u64, ts_nsec: u32, caplen: u32, origlen: u32, linktype: u32, data: []const u8 }
+
+fn u16_at(b: []const u8, at: usize, big: bool) -> u32
+fn u32_at(b: []const u8, at: usize, big: bool) -> u32
+fn open(data: []const u8) -> (Reader, err)
+fn pow10(n: u32) -> u64
+fn next(r: *Reader) -> (Record, bool, err)
+fn put16(b: []u8, at: usize, v: u32)
+fn put32(b: []u8, at: usize, v: u32)
+fn write_header(buf: []u8, linktype: u32, snaplen: u32) -> usize
+fn write_record(buf: []u8, ts_sec: u32, usec: u32, data: []const u8, origlen: u32) -> usize
+```
+
+Capture files (L051): classic pcap in both byte orders and both timestamp resolutions (microsecond `a1b2c3d4`, nanosecond `a1b23c4d`) and pcapng (section header, interface description with `if_tsresol`, enhanced and simple packet blocks, other blocks skipped), read over a caller's bytes with every length checked before it is used (`Truncated` for a record or block past the data, `Invalid` for a magic or length that cannot be); a little-endian microsecond writer (`write_header`, `write_record`). Checked with `e.net.packet` against an independent implementation over 341 cases on both hosts (D2357).
+
 ### `e.net.http`
 
 ```neper

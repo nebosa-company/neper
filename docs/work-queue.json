@@ -642,17 +642,6 @@
       "evidence": "Appdor services/mcp-server (stdio NDJSON plus HTTP JSON-RPC, caller-JWT RLS scoping), src/sharing share tokens (b64url payload plus HMAC, distinct from jwt.e), src/audit record taxonomy with CSV export, src/templates workflow recipe catalog as data. Serve via e.net.http plus e.os.proc stdio and e.db; DB-poll worker shape (no AMQP) maps to e.task plus e.db.pool."
     },
     {
-      "id": "L051",
-      "category": "library",
-      "group": "Drivers",
-      "order": 149,
-      "title": "Packet codecs and pcap I/O (e.net.packet, e.net.pcap)",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "e.net is socket-level only (tcp_connect/tcp_listen/udp_bind in lib/e/net.e) with a DNS wire codec (lib/e/net/dns.e) but no Ethernet/IPv4/IPv6/TCP/UDP/ICMP encode/decode and no pcap read/write -- the scapy/dpkt/pyshark gap. Add pure e.net.packet (headers, checksums, fail-closed on truncated input) plus e.net.pcap (pcap/pcapng read/write) with crafted-packet fixtures, checksum vectors and pcap round-trip goldens; raw-socket send stays platform code outside e.* tests. Plan: docs/ethical-hacking.md S1."
-    },
-    {
       "id": "L052",
       "category": "library",
       "group": "Formats",

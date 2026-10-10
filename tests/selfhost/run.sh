@@ -3481,6 +3481,12 @@ x_ops_inventory_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/x-ops-inventory-selfhost"
 x_ops_inventory_output=$("$test_build/x-ops-inventory-selfhost")
 [ "$x_ops_inventory_output" = 'x ops inventory ok' ]
+# e.net.packet and e.net.pcap against an independent spec implementation (341 cases, D2357).
+net_packet_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_packet/src/main.e" "$repo" x64 linux "$test_build/net-packet-selfhost" -j 2)
+[ "$net_packet_written" = 'executable written' ]
+chmod +x "$test_build/net-packet-selfhost"
+net_packet_output=$("$test_build/net-packet-selfhost")
+[ "$net_packet_output" = 'net packet ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

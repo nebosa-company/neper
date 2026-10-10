@@ -481,6 +481,7 @@
     "fmt_xlsx",
     "gfx_cssvalue",
     "html_accessible",
+    "net_packet",
     "net_policy",
     "net_ssrf",
     "text_css_container",

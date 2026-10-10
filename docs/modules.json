@@ -106,6 +106,8 @@
     "e.net.tls",
     "e.net.policy",
     "e.net.ssrf",
+    "e.net.packet",
+    "e.net.pcap",
     "e.net.http",
     "e.net.smtp",
     "e.net.pop3",
@@ -3435,6 +3437,24 @@
     "e.mem",
     "e.str"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.packet",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.pcap",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {
