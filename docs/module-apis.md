@@ -17850,6 +17850,42 @@ fn validate_spec(a: *mem.Arena, spec: json.Value) -> Validation
 
 OpenAPI 3.0.3 document builder (L049), after Appdor's `src/api/openapi-builder.js`: `create_spec` (skeleton with `info`, empty `paths` and `components.schemas`, optional `servers`, `tags` and `securitySchemes`), `add_path`, `add_schema` and `validate_spec`; documents are JSON values and each call returns a new one. Checked against Appdor's own functions on both hosts (D2355).
 
+### `x.ops.inventory`
+
+```neper
+type Doc = struct { valid: bool, message: str, names: []const str, addresses: []const str, host_groups: []const []const str, host_vars: []const json.Value, group_names: []const str, group_vars: []const json.Value }
+type Host = struct { name: str, address: str, groups: []const str, vars: json.Value }
+
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn sv(s: str) -> json.Value
+fn put(o: *ir.Obj, key: str, v: json.Value)
+fn new_obj(a: *mem.Arena) -> ir.Obj
+fn is_ws(c: u8) -> bool
+fn trim(s: str) -> str
+fn parse_i64(s: str) -> (i64, bool)
+fn parse_facts(a: *mem.Arena, stdout: str) -> json.Value
+fn custom_fact_script(a: *mem.Arena, names: []const str, commands: []const str) -> str
+fn sanitize(a: *mem.Arena, token: str) -> str
+fn bad(a: *mem.Arena, what: str) -> Doc
+fn key_text(v: yaml.Value) -> (str, bool)
+fn to_json(a: *mem.Arena, v: yaml.Value) -> json.Value
+fn mapping_of(v: yaml.Value) -> ([]const yaml.Pair, bool)
+fn find(m: []const yaml.Pair, name: str) -> (yaml.Value, bool)
+fn sort_indexes(a: *mem.Arena, names: []const str) -> []usize
+fn parse_inventory(a: *mem.Arena, source: str) -> Doc
+fn q_noop()
+fn resolve(a: *mem.Arena, d: Doc) -> []Host
+fn scalar_text(a: *mem.Arena, v: json.Value) -> str
+fn select(a: *mem.Arena, d: Doc, group: str, has_group: bool, var_key: str, var_value: str, has_var: bool) -> []const Host
+
+type Source = struct { type_name: str, address_from: str, has_group: bool, group: str, has_group_from_tag: bool, group_from_tag: str }
+type Observed = struct { name: str, attributes: json.Value, has_real_id: bool, real_id: str }
+
+fn synthesize_hosts(a: *mem.Arena, source: Source, observed: []const Observed) -> ([]const str, []const Host)
+```
+
+Host facts and inventory helpers (L050), after Petcow's `facts.rs`, `inventory.rs` and `naming.rs`: `parse_facts` (key=value lines, CRLF-safe, integers coerced, the text after the first `=` kept), `custom_fact_script` (first-line-only capture), `parse_inventory` with `resolve` and `select` (hosts sorted by name, group variables merged in listed order under host variables, optional group and variable filters; unknown keys refused), `synthesize_hosts` (observed cloud resources as hosts: address attribute, type/group/tag-derived groups, scalar attributes and string tags as variables, resource id passed through, no-address skipped) and `sanitize`. Checked against Petcow's own Rust over 140 cases on both hosts (D2356).
+
 ### `e.fmt.xml`
 
 ```neper

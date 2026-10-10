@@ -503,7 +503,8 @@
     "x_identity_scim",
     "x_lint_scan",
     "x_migrate",
-    "x_migrate_terraform"
+    "x_migrate_terraform",
+    "x_ops_inventory"
    ]
   },
   {

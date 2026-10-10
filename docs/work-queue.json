@@ -642,17 +642,6 @@
       "evidence": "Appdor services/mcp-server (stdio NDJSON plus HTTP JSON-RPC, caller-JWT RLS scoping), src/sharing share tokens (b64url payload plus HMAC, distinct from jwt.e), src/audit record taxonomy with CSV export, src/templates workflow recipe catalog as data. Serve via e.net.http plus e.os.proc stdio and e.db; DB-poll worker shape (no AMQP) maps to e.task plus e.db.pool."
     },
     {
-      "id": "L050",
-      "category": "library",
-      "group": "Drivers",
-      "order": 148,
-      "title": "Host facts and inventory helpers (key=value facts, group merge, dynamic hosts)",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Petcow src/facts.rs:88 parse_facts (key=value with integer coercion, CRLF-safe) plus custom_fact_script (first-line-only capture), and src/inventory.rs:88 resolve/select (group vars merged in listed order under host vars) plus :133 synthesize_hosts (address_from lookup, tag-derived groups, resource_id passthrough, skip on missing address). Pure but app-shaped: land as x.ops helpers alongside the x.ssh driver (L048), with fixtures from facts.rs:113 and inventory.rs:203. Plan: docs/petcow.md A9."
-    },
-    {
       "id": "L051",
       "category": "library",
       "group": "Drivers",

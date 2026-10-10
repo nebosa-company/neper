@@ -3892,6 +3892,12 @@ $xApiProtocolsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $xApiProtocolsWritten -ne 'executable written') { throw 'x_api_protocols emission failed' }
 $xApiProtocolsOutput = & $xApiProtocolsPath
 if ($LASTEXITCODE -ne 0 -or $xApiProtocolsOutput -ne 'x api protocols ok') { throw "x_api_protocols answered wrongly: exit $LASTEXITCODE" }
+# x.ops.inventory against Petcow's facts.rs and inventory.rs (140 cases, D2356).
+$xOpsInventoryPath = Join-Path $testBuild 'x-ops-inventory-selfhost.exe'
+$xOpsInventoryWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_ops_inventory\src\main.e') $repo 'x64' 'windows' $xOpsInventoryPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xOpsInventoryWritten -ne 'executable written') { throw 'x_ops_inventory emission failed' }
+$xOpsInventoryOutput = & $xOpsInventoryPath
+if ($LASTEXITCODE -ne 0 -or $xOpsInventoryOutput -ne 'x ops inventory ok') { throw "x_ops_inventory answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

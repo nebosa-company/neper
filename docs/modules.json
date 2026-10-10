@@ -148,6 +148,7 @@
     "x.net.authscheme",
     "x.mcp.protocol",
     "x.api.openapi",
+    "x.ops.inventory",
     "e.fmt.xml",
     "e.fmt.xsd",
     "e.fmt.xsd.schema",
@@ -2444,6 +2445,22 @@
    "direct_dependencies": [
     "e.algo.ir",
     "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.ops.inventory",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.fmt.json",
+    "e.fmt.yaml",
     "e.mem",
     "e.str"
    ],

@@ -3475,6 +3475,12 @@ x_api_protocols_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/x-api-protocols-selfhost"
 x_api_protocols_output=$("$test_build/x-api-protocols-selfhost")
 [ "$x_api_protocols_output" = 'x api protocols ok' ]
+# x.ops.inventory against Petcow's facts.rs and inventory.rs (140 cases, D2356).
+x_ops_inventory_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_ops_inventory/src/main.e" "$repo" x64 linux "$test_build/x-ops-inventory-selfhost" -j 2)
+[ "$x_ops_inventory_written" = 'executable written' ]
+chmod +x "$test_build/x-ops-inventory-selfhost"
+x_ops_inventory_output=$("$test_build/x-ops-inventory-selfhost")
+[ "$x_ops_inventory_output" = 'x ops inventory ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
