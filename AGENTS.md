@@ -27,6 +27,10 @@
 
 ## Prompt routing (measured: `python scripts/lang-stats.py`)
 
+- OpenCode reads this file and the skill at `.opencode/skills/neper/SKILL.md`; both
+  route to the same path: card first (`docs/llm-neper-card.md`), `context-file` before
+  file reads, `patch.exe` or `plan-*` before scripts, `scripts/check-fixture.sh` to
+  verify one fixture. `python scripts/check_agent_routes.py` fails when a route breaks.
 - Name the queue item (`L0xx`/`C0xx`/`T0xx`) plus its acceptance list in
   every build prompt. Bare delegates ("continue", "do it", "implement
   those", "/goal continue") correlate with repeat 59–72% and turns/ed

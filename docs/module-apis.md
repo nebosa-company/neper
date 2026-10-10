@@ -1209,12 +1209,12 @@ fn text_number(s: str) -> f64
 fn format_check(a: *mem.Arena, type_name: str, v: f.Value) -> (bool, bool)
 fn is_computed_type(t: str) -> bool
 
-type Definition = struct {
-type Rule = struct {
+type Definition = struct { name: str, label: str, type_name: str, required: bool, computed: bool, show_if: str, editable_if: str, require_if: str, has_min: bool, min: f.Value, has_max: bool, max: f.Value, has_min_length: bool, min_length: f64, has_max_length: bool, max_length: f64, pattern: str, has_options: bool, options: []const f.Value, allow_user_input: bool, has_limit: bool, limit: f64, valid_if: []const str, unique: bool, unique_case_sensitive: bool, messages: []const f.Field, severities: []const f.Field, severity: str, has_auto_set: bool, auto_when: str, auto_value: str, auto_replace: bool, initial_value: str, has_default: bool, default_value: f.Value, suggested_values: str, has_suggestion_limit: bool, suggestion_limit: f64 }
+type Rule = struct { id: str, has_id: bool, field: str, has_field: bool, expression: str, message: str, severity: str, inactive: bool }
 type Table = struct { fields: []const Definition, rules: []const Rule }
 type Row = struct { fields: []const f.Field }
 type Message = struct { locale: str, key: str, text: str }
-type Context = struct {
+type Context = struct { locale: str, has_existing: bool, existing: []const Row, self_index: i64, base: f.Context, is_new: bool, prior: []const f.Field, has_prior: bool, catalog: []const Message }
 type Violation = struct { field: str, has_field: bool, code: str, severity: str, rule_id: str, has_rule_id: bool, message: str }
 type Outcome = struct { valid: bool, violations: []const Violation }
 
@@ -1265,7 +1265,7 @@ fn suggested_values(a: *mem.Arena, reg: *const f.Registry, d: Definition, record
 type RowResult = struct { index: usize, violations: []const Violation, valid: bool }
 type CodeCount = struct { code: str, count: usize }
 type Summary = struct { total: usize, valid: usize, invalid: usize, by_code: []const CodeCount }
-type ImportReport = struct {
+type ImportReport = struct { policy: str, imported: []const usize, rejected: []const usize, flagged: []const usize, rows: []const RowResult, valid: bool, summary: Summary }
 
 fn has_error(vs: []const Violation) -> bool
 fn validate_import(a: *mem.Arena, reg: *const f.Registry, table: Table, rows: []const Row, policy_name: str, stored_all: []const Row, ctx: *const Context) -> ImportReport
@@ -1960,8 +1960,8 @@ error Invalid
 type State = enum u8 { Open, Accepted, Fixed, FalsePositive }
 type Severity = enum u8 { Info, Low, Medium, High, Critical }
 type Opt = struct { present: bool, text: str }
-type Finding = struct {
-type Reported = struct {
+type Finding = struct { id: Opt, tool: str, state: State, severity: Severity, rule: Opt, description: str, solution: Opt, justification: Opt, expires: Opt, detection_time: str, last_update: str }
+type Reported = struct { resource: str, tool: str, rule: str, severity: Severity, description: str, solution: Opt }
 
 fn some(text: str) -> Opt
 fn none() -> Opt
@@ -2111,7 +2111,7 @@ error RegistryFull
 
 type Call = struct { ev: *Evaluator, entry: *const Entry, args: []const Value, nodes: []const Node, scope: *const Scope, has_scope: bool, a: *mem.Arena }
 type Handler = fn(*Call) -> Value
-type Entry = struct {
+type Entry = struct { name: str, key: str, aliases: []const str, category: str, lazy: bool, pass_errors: bool, volatile_fn: bool, generate_once: bool, min_args: i32, max_args: i32, handler: Handler }
 type Registry = struct { entries: []Entry, keys: []str, count: usize, key_count: usize, owners: []usize }
 
 fn normalize_name(a: *mem.Arena, name: str) -> str
@@ -2126,10 +2126,10 @@ type Scope = struct { name: str, value: Value, parent: *const Scope, has_parent:
 type Field = struct { name: str, value: Value }
 type Formula = struct { name: str, source: str }
 type FieldGetter = fn(*void, str) -> (Value, bool)
-type Context = struct {
+type Context = struct { fields: []const Field, get_field: FieldGetter, has_get_field: bool, get_user: *void, formulas: []const Formula, field_name: str, has_field_name: bool, max_steps: usize, max_nodes: usize, strict_refs: bool, now: f64, has_now: bool, random_seed: u64, user: *void, host: []const Field, prior: []const Field, has_prior: bool, changed: []const str, has_changed: bool, is_new: bool, meta: []const FieldMeta }
 type FieldMeta = struct { field: str, props: []const Field }
 type Cached = struct { name: str, node: Node, parsed: bool }
-type Evaluator = struct {
+type Evaluator = struct { a: *mem.Arena, reg: *const Registry, ctx: *const Context, steps: usize, max_steps: usize, aborted: bool, resolving: []str, resolving_count: usize, cache: []Cached, cache_count: usize, empty: Scope, rng: u64 }
 
 fn evaluator(a: *mem.Arena, reg: *const Registry, ctx: *const Context) -> Evaluator
 fn tick(ev: *Evaluator) -> bool
@@ -2662,7 +2662,7 @@ type Step = struct { key: str, index: f64, numeric: bool }
 fn path_steps(a: *mem.Arena, path: str) -> []Step
 fn h_jsonquery(c: *f.Call) -> f.Value
 
-type Xml = struct {
+type Xml = struct { src: str, at: usize, tags: []str, parent: []usize, attr_from: []usize, attr_count: []usize, run_first: []usize, run_last: []usize, count: usize, attr_names: []str, attr_values: []str, attr_total: usize, run_from: []usize, run_to: []usize, run_next: []usize, run_total: usize, depth: usize, failed: bool }
 
 fn xml_ws(b: u8) -> bool
 fn xml_starts(x: *Xml, lit: str) -> bool
@@ -2708,9 +2708,9 @@ fn row(a: *mem.Arena, s: str, line: str) -> str
 fn table(a: *mem.Arena) -> str
 
 type Dialect = struct { id: str, label: str, refs: str, snapshot: str }
-type Mapping = struct {
+type Mapping = struct { dialect: str, name: str, key: str, to: str, reorder: str, negate: i64, add: str, date_token: i64, category: str, unsupported: bool, note: str }
 type Diagnostic = struct { category: str, message: str, function: str, has_function: bool }
-type Result = struct {
+type Result = struct { status: str, canonical: str, has_canonical: bool, diagnostics: []const Diagnostic, warnings: []const Diagnostic, source: str, dialect: str, snapshot: str }
 type Ranked = struct { dialect: str, score: i64 }
 
 fn count_lines(s: str, tag: u8) -> usize
@@ -2731,7 +2731,7 @@ fn normalize_refs(a: *mem.Arena, text: str, refs: str) -> str
 fn match_var(p: str) -> (str, str, bool)
 fn quickbase_text(a: *mem.Arena, text: str, comments: []str, comment_count: []usize) -> str
 
-type Work = struct {
+type Work = struct { a: *mem.Arena, reg: *const f.Registry, dialect: str, entries: []const Mapping, columns: []const str, diags: []Diagnostic, count: usize }
 
 fn report(w: *Work, category: str, message: str, function: str, has_function: bool)
 fn translate_date_tokens(value: str, dialect: str) -> str
@@ -2775,7 +2775,7 @@ fn in_list(s: str, list: []const str) -> bool
 fn value_type_of_field(a: *mem.Arena, field_type: str) -> str
 
 type Part = struct { sql: str, pushdown: str, vtype: str, node: f.Node, has_node: bool }
-type Comp = struct {
+type Comp = struct { a: *mem.Arena, reg: *const f.Registry, schema: []const Column, double_quote: bool, params: []f.Value, param_count: usize, failed: bool, oversize: bool }
 
 fn typed(sql: str, pushdown: str, vtype: str) -> Part
 fn none() -> Part
@@ -2950,7 +2950,7 @@ fn is_naive_datetime(s: str) -> bool
 fn to_date(a: *mem.Arena, v: f.Value) -> (f64, bool)
 fn day_start(ms: f64) -> f64
 
-type Operand = struct {
+type Operand = struct { present: bool, value: f.Value, relative: str, days: f64, has_start: bool, start: f.Value, has_end: bool, end: f.Value, is_object: bool }
 
 fn plain_operand(v: f.Value) -> Operand
 
@@ -2967,7 +2967,7 @@ type Bucket = struct { name: str, size: f64, has_size: bool }
 fn no_bucket() -> Bucket
 fn bucket_key(a: *mem.Arena, v: f.Value, bucket: Bucket) -> (str, bool)
 
-type Node = struct {
+type Node = struct { operator: str, children: []const Node, field: str, op: str, type_name: str, operand: Operand, expr: str, bucket: Bucket, values: []const f.Value, has_values: bool }
 
 fn empty_group(operator: str) -> Node
 fn is_group(n: Node) -> bool
@@ -2997,7 +2997,7 @@ type SortSpec = struct { field: str, direction: str }
 fn is_numeric_type(t: str) -> bool
 fn collate(a: *mem.Arena, x: f.Value, y: f.Value, def: FieldDef, has_def: bool) -> f64
 
-type SortJob = struct {
+type SortJob = struct { a: *mem.Arena, mode: u8, rows: []const Row, sorts: []const SortSpec, fields: []const FieldDef, keys: []const f.Value, key_none: []const bool, def: FieldDef, has_def: bool, descending: bool }
 type Compare = fn(*SortJob, usize, usize) -> f64
 
 fn compare_rows(job: *SortJob, x: usize, y: usize) -> f64
@@ -3039,8 +3039,8 @@ type SummarySpec = struct { field: str, function: str }
 type SummaryEntry = struct { field: str, value: Summary }
 type SubGroup = struct { group: Group, summaries: []const SummaryEntry }
 type ViewGroup = struct { group: Group, subgroups: []const Group, summaries: []const SummaryEntry }
-type ViewConfig = struct {
-type ViewResult = struct {
+type ViewConfig = struct { has_filter: bool, filter: Node, search: str, search_fields: []const str, sorts: []const SortSpec, group_by: []const str, summaries: []const SummarySpec, visible_fields: []const str, hide_new_fields: bool }
+type ViewResult = struct { rows: []const Row, projected: bool, summaries: []const SummaryEntry, groups: []const ViewGroup }
 
 fn summary_entries(a: *mem.Arena, rows: []const Row, specs: []const SummarySpec) -> []const SummaryEntry
 fn apply_view(a: *mem.Arena, reg: *const f.Registry, rows: []const Row, config: ViewConfig, fields: []const FieldDef, ctx: *const Context) -> ViewResult
@@ -3083,7 +3083,7 @@ fn aggregate(a: *mem.Arena, rows: []const view.Row, series: Series) -> Cell
 
 type Label = struct { value: f.Value, none: bool, other: bool, pos: usize, origin: usize }
 type Threshold = struct { value: f64, has_value: bool, label: str, color: str, icon: str }
-type ChartConfig = struct {
+type ChartConfig = struct { chart_type: str, x_field: str, x_bucket: view.Bucket, split_field: str, series: []const Series, has_filter: bool, filter: view.Node, top_n: usize, has_comparison_filter: bool, comparison_filter: view.Node, thresholds: []const Threshold }
 type Dataset = struct { label: str, has_split: bool, split_none: bool, split_value: f.Value, data: []const Cell }
 type Drill = struct { other: bool, field: str, value: f.Value, is_null: bool }
 type ChartData = struct { chart_type: str, labels: []const str, datasets: []const Dataset, drilldown: []const Drill }
@@ -3111,7 +3111,7 @@ fn key_of(a: *mem.Arena, row: view.Row, names: []const str) -> str
 fn sort_keys(a: *mem.Arena, keys: []str)
 
 type PivotRow = struct { key: str, cells: []const Cell, total: Cell }
-type Pivot = struct {
+type Pivot = struct { row_keys: []const str, column_keys: []const str, rows: []const PivotRow, column_totals: []const Cell, grand_total: Cell }
 
 fn build_pivot(a: *mem.Arena, reg: *const f.Registry, rows: []const view.Row, row_fields: []const str, column_fields: []const str, measure: Series, has_filter: bool, filter: view.Node, fields: []const view.FieldDef, ctx: *const view.Context) -> Pivot
 fn rows_where(a: *mem.Arena, data: []const view.Row, row_keys: []const str, col_keys: []const str, row_key: str, by_row: bool, col_key: str, by_col: bool) -> []const view.Row
@@ -3125,7 +3125,7 @@ type Report = struct { labels: []const str, groups: []const Band2, grand_total: 
 
 fn summary_report(a: *mem.Arena, reg: *const f.Registry, rows: []const view.Row, group_by: []const str, measures: []const Measure, has_filter: bool, filter: view.Node, fields: []const view.FieldDef, ctx: *const view.Context) -> Report
 
-type Condition = struct {
+type Condition = struct { field: str, op: str, type_name: str, value: str, has_value: bool, is_bucket: bool, bucket: str, has_bucket: bool, bucket_value: f.Value, bucket_values: []const f.Value }
 type Flattened = struct { usable: bool, reason: str, conditions: []const Condition }
 
 fn server_ops(family: str) -> str
@@ -3135,8 +3135,8 @@ fn node_total(node: view.Node) -> usize
 fn refuse(reason: str) -> Flattened
 fn flatten_filter(a: *mem.Arena, has_filter: bool, filter: view.Node) -> Flattened
 
-type PlanConfig = struct {
-type PlanArgs = struct {
+type PlanConfig = struct { table_id: str, series: []const Series, aggregation: str, field: str, measure_field: str, x_field: str, x_bucket: view.Bucket, x_bucket_invalid: bool, x_bucket_size_text: str, split_field: str, top_n: usize, has_comparison_filter: bool, has_filter: bool, filter: view.Node }
+type PlanArgs = struct { table_id: str, x_field: str, has_x_field: bool, x_bucket: str, has_x_bucket: bool, aggregation: str, measure_field: str, has_measure_field: bool, split_field: str, has_split_field: bool, conditions: []const Condition, limit: usize }
 type Plan = struct { usable: bool, reason: str, args: PlanArgs }
 
 fn server_aggregation(name: str) -> bool
@@ -3258,7 +3258,7 @@ fn failure(reason: str) -> Outcome
 type Failed = struct { record_id: f.Value, reason: str }
 type Ledger = struct { succeeded: []const f.Value, failed: []const Failed }
 type Apply = fn(*void, f.Value) -> Outcome
-type BatchResult = struct {
+type BatchResult = struct { ledger: Ledger, processed: usize, total: usize, done: bool, next_index: usize, has_next_index: bool, succeeded: usize, failed: usize }
 
 fn run_batch(a: *mem.Arena, ids: []const f.Value, apply: Apply, state: *void, chunk_size: usize, start: usize, ledger: Ledger) -> BatchResult
 fn describe_batch(a: *mem.Arena, total: usize, succeeded: usize, failed: usize) -> str
@@ -3268,7 +3268,7 @@ fn default_chunk_size() -> usize
 type Verdict = struct { allowed: bool, reason: str }
 type Authorize = fn(*void, f.Value) -> Verdict
 type Denied = struct { id: f.Value, reason: str }
-type BulkPlan = struct {
+type BulkPlan = struct { valid: bool, reason: str, denied: []const Denied, correlation_id: str, patch: []const f.Field, total: usize, skipped: []const Denied, chunks: []const []const f.Value, mode: str }
 
 fn plan_refusal(why: str) -> BulkPlan
 fn plan_bulk_mutation(a: *mem.Arena, catalog: []const Message, targets: []const f.Value, patch: []const f.Field, authorize: Authorize, has_authorize: bool, state: *void, skip_denied: bool, chunk_size: usize, threshold: usize, has_threshold: bool, correlation_id: str) -> BulkPlan
@@ -3278,12 +3278,12 @@ type Applied = struct { threw: bool, reason: str, all_ok: bool, results: []const
 type BulkApply = fn(*void, []const f.Value, []const f.Field, str) -> Applied
 type Cancelled = fn(*void) -> bool
 type Progress = struct { done: usize, total: usize, applied: usize, failed: usize, percent: f64 }
-type BulkResult = struct {
+type BulkResult = struct { valid: bool, reason: str, cancelled: bool, correlation_id: str, total: usize, applied: usize, failed: usize, outcomes: []const IdOutcome, progress: []const Progress }
 
 fn run_bulk_mutation(a: *mem.Arena, plan: BulkPlan, apply: BulkApply, state: *void, is_cancelled: Cancelled, has_cancel: bool) -> BulkResult
 
 type ReasonCount = struct { reason: str, count: usize }
-type BulkSummary = struct {
+type BulkSummary = struct { valid: bool, cancelled: bool, headline: str, correlation_id: str, failures: []const IdOutcome, by_reason: []const ReasonCount }
 
 fn summarize_bulk_outcome(a: *mem.Arena, catalog: []const Message, result: BulkResult) -> BulkSummary
 
@@ -3291,7 +3291,7 @@ type Change = struct { record_id: f.Value, field: str, before: f.Value, after: f
 type Entry = struct { serial: usize, label: str, has_label: bool, changes: []const Change }
 type Stack = struct { key: str, epoch: usize, undo: []Entry, undo_n: usize, redo: []Entry, redo_n: usize }
 type Pending = struct { stack_key: str, epoch: usize, serial: usize, redo_direction: bool, settled: bool }
-type UndoStore = struct {
+type UndoStore = struct { a: *mem.Arena, depth: usize, scope: str, owner: str, has_owner: bool, epoch: usize, stacks: []Stack, stack_n: usize, serial: usize, pending: []Pending, pending_n: usize }
 
 fn default_depth() -> usize
 fn new_undo_store(a: *mem.Arena, depth: usize, max_stacks: usize, max_pending: usize) -> UndoStore
@@ -3499,7 +3499,7 @@ error BadCountOp
 
 type Op = enum u8 { Eq, Ne, Gt, Lt, Ge, Le, In, NotIn, Contains, Regex, Glob, Present, Absent, Any, All, Count }
 type Kind = enum u8 { And, Or, Not, Leaf, Builtin }
-type Filter = struct {
+type Filter = struct { kind: Kind, children: []const Filter, key: str, op: Op, value: json.Value, has_value: bool, element: []const Filter, count_op: Op, has_count_op: bool, name: str, args: json.Value, has_args: bool }
 
 fn same(left: str, right: str) -> bool
 fn lower_byte(c: u8) -> u8
@@ -5224,7 +5224,7 @@ fn dependency_of(id: str, kind_text: str, lag: f64) -> (Dependency, bool)
 fn earliest_start_under(dep: Dependency, es: i64, ef: i64, successor_duration: i64) -> i64
 fn latest_finish_under(dep: Dependency, ls: i64, lf: i64, predecessor_duration: i64) -> i64
 
-type Task = struct {
+type Task = struct { id: str, name: str, duration: i64, has_duration: bool, milestone: bool, progress: f64, parent: str, has_parent: bool, deps: []const Dependency }
 
 fn index_of(tasks: []const Task, id: str) -> (usize, bool)
 fn duration_of(t: Task) -> i64
@@ -5240,7 +5240,7 @@ fn visit(a: *mem.Arena, tasks: []const Task, w: *Walk, at: usize, depth: usize)
 fn critical_path(a: *mem.Arena, tasks: []const Task) -> CriticalPath
 
 type Baseline = struct { id: str, start_ms: i64, has_start: bool, end_ms: i64, has_end: bool }
-type Bar = struct {
+type Bar = struct { id: str, name: str, start_offset: i64, duration: i64, start_day: i64, end_day: i64, slack: i64, critical: bool, milestone: bool, progress: f64, has_baseline: bool, baseline_start_ms: i64, has_baseline_start: bool, baseline_end_ms: i64, has_baseline_end: bool, variance: i64, has_variance: bool }
 type Layout = struct { bars: []const Bar, project_duration: i64, critical: []const usize, start_day: i64, end_day: i64, cycle: str, has_cycle: bool }
 
 fn normalize_progress(value: f64) -> f64
@@ -5335,10 +5335,10 @@ const KIND_CRON: u8 = 2u8
 
 fn one_catch_up() -> str
 
-type Schedule = struct {
+type Schedule = struct { kind: u8, cron: str, parsed: Cron, every_ms: f64, timezone: str, on_missed: str, reason: str, has_error: bool }
 type Field = struct { has: bool, text: str }
 type Simple = struct { present: bool, minute: Field, hour: Field, day: Field, day_of_month: Field }
-type Spec = struct {
+type Spec = struct { timezone: str, on_missed: str, has_cron: bool, cron: str, has_every: bool, every_ms: f64, has_minutes: bool, minutes: f64, daily: Simple, weekly: Simple, monthly: Simple }
 
 fn no_field() -> Field
 fn no_simple() -> Simple
@@ -5350,13 +5350,13 @@ fn field_text(x: Field, fallback: str) -> (str, bool)
 fn cron_schedule(c: *const Clock, text: str, timezone: str, on_missed: str) -> Schedule
 fn normalize_schedule(a: *mem.Arena, c: *const Clock, spec: Spec) -> Schedule
 
-type Stored = struct {
+type Stored = struct { kind: str, cron: str, has_cron: bool, every_ms: f64, has_every: bool, timezone: str, on_missed: str, at_hour: Field, at_minute: Field }
 
 fn runtime_schedule(a: *mem.Arena, c: *const Clock, stored: Stored) -> (Schedule, bool)
 fn next_fire(c: *const Clock, s: Schedule, from_ms: f64, anchor_ms: f64) -> (f64, bool)
 fn next_fires(a: *mem.Arena, c: *const Clock, s: Schedule, from_ms: f64, n: i64, anchor_ms: f64) -> []const f64
 
-type Plan = struct {
+type Plan = struct { policy: str, due: bool, fire_at: []const f64, missed: i64, skipped: i64, capped: bool, has_spent: bool, spent_at: f64 }
 
 fn empty_plan(policy: str, capped: bool) -> Plan
 fn missed_fires(a: *mem.Arena, c: *const Clock, s: Schedule, last_fired: f64, now_ms: f64, anchor_ms: f64) -> Plan
@@ -5371,13 +5371,13 @@ type FirePlan = struct { present: bool, plan: Plan }
 fn schedule_fire_plan(a: *mem.Arena, c: *const Clock, stored: Stored, last_fired: f64, now_ms: f64, anchor_ms: f64) -> FirePlan
 fn planned_from(a: *mem.Arena, c: *const Clock, sched: Schedule, from: f64, now_ms: f64, anchor: f64) -> FirePlan
 
-type Decision = struct {
+type Decision = struct { fire: bool, reason: str, has_skipped: bool, skipped_fire_at: f64, has_stale: bool, stale_for_ms: f64, has_active: bool, active_since_ms: f64 }
 
 fn decision(fire: bool, reason: str) -> Decision
 fn overlap_decision(due: bool, fire_at: f64, has_active_run: bool, started_at: f64, concurrency: str, stale_after_ms: f64, now_ms: f64) -> Decision
 fn is_due(a: *mem.Arena, c: *const Clock, stored: Stored, now_ms: f64, last_run: f64, anchor: f64) -> bool
 
-type Workflow = struct {
+type Workflow = struct { id: str, has_schedule: bool, schedule: Stored, last_run: f64, anchor: f64, has_active_run: bool, started_at: f64, concurrency: str, schedule_concurrency: str }
 type Verdict = struct { id: str, decision: Decision }
 
 fn due_workflows(a: *mem.Arena, c: *const Clock, workflows: []const Workflow, now_ms: f64) -> []const Verdict
@@ -5406,20 +5406,20 @@ Time-based triggers after appdor's workflow scheduler: five-field cron matched o
 ### `e.algo.fsm`
 
 ```neper
-type Rule = struct {
-type PostFn = struct {
+type Rule = struct { raw: str, is_object: bool, kind: str, keys: []const str, has_all: bool, has_any: bool, children: []const Rule, roles: []const str, groups: []const str, fields: []const str, field: str, filter: view.Node, has_filter: bool, expr: str, table: str, approval: str, relation: str, quantifier: str, has_quantifier: bool, message: str }
+type PostFn = struct { raw: str, is_object: bool, kind: str, id: str, keys: []const str, field: str, has_field: bool, value: str, has_value: bool, value_spec: str, has_value_spec: bool, user: str, has_user: bool, table: str, values: str, has_values: bool, goal: str, has_goal: bool, config: str, has_config: bool, workflow_id: str, has_workflow_id: bool, params: str, has_params: bool }
 type Permissions = struct { present: bool, roles: []const str, users: []const str, groups: []const str, people_fields: []const str }
 type ScreenField = struct { field: str, required: bool }
 type Screen = struct { present: bool, fields: []const ScreenField }
 type State = struct { id: str, label: str, category: str }
-type Transition = struct {
-type Workflow = struct {
-type Principal = struct {
+type Transition = struct { id: str, name: str, description: str, icon: str, has_icon: bool, from: str, to: str, primary: bool, conditions: []const Rule, validators: []const Rule, post_functions: []const PostFn, permissions: Permissions, screen: Screen }
+type Workflow = struct { id: str, table_id: str, status_field: str, name: str, status: str, version: f64, initial_state: str, has_initial: bool, states: []const State, transitions: []const Transition, blocked_treatment: str, open: bool }
+type Principal = struct { present: bool, id: str, has_id: bool, permissions: []const str, roles: []const str, groups: []const str }
 type Pair = struct { key: str, value: str }
 type DecisionRow = struct { keys: []const str, values: []const f.Value, result: bool }
 type DecisionTable = struct { id: str, has_inputs: bool, inputs: []const str, rows: []const DecisionRow }
 type Table = struct { name: str, rows: []const view.Row }
-type Env = struct {
+type Env = struct { reg: *const f.Registry, has_legacy: bool, legacy: []const Pair, fields: []const view.FieldDef, dataset: []const Table, approvals: []const Pair, decision_tables: []const DecisionTable }
 type Check = struct { good: bool, message: str }
 
 fn err_unknown_transition() -> str
@@ -5482,7 +5482,7 @@ fn field_value(fields: []const f.Field, name: str) -> (f.Value, bool)
 fn is_blank_input(v: f.Value, present: bool) -> bool
 fn merged(a: *mem.Arena, record: []const f.Field, inputs: []const f.Field) -> []const f.Field
 
-type RuleCtx = struct {
+type RuleCtx = struct { record: []const f.Field, principal: Principal, env: *const Env, inputs: []const f.Field }
 
 fn view_context() -> view.Context
 fn filter_holds(a: *mem.Arena, rule: Rule, row_fields: []const f.Field, env: *const Env) -> bool
@@ -5491,7 +5491,7 @@ fn find_decision_table(env: *const Env, id: str) -> (DecisionTable, bool)
 fn decision_holds(rule: Rule, c: *const RuleCtx) -> bool
 fn eval_condition(a: *mem.Arena, rule: Rule, c: *const RuleCtx) -> bool
 
-type Verdict = struct {
+type Verdict = struct { good: bool, validator: str, error_text: str, field: str, has_field: bool, missing: []const str, has_missing: bool, approval: str, has_approval: bool }
 
 fn verdict_ok(kind: str) -> Verdict
 fn verdict_failed(kind: str, text: str) -> Verdict
@@ -5517,13 +5517,13 @@ type Explanation = struct { available: bool, reason: str, conditions: []const st
 fn explain_transition(a: *mem.Arena, wf: Workflow, record: []const f.Field, t: Transition, p: Principal, env: *const Env) -> Explanation
 fn missing_screen_inputs(a: *mem.Arena, t: Transition, inputs: []const f.Field) -> []const str
 
-type History = struct {
-type Event = struct {
-type Outcome = struct {
+type History = struct { record_id: f.Value, has_record_id: bool, workflow_id: str, workflow_version: f64, transition_id: str, transition_name: str, from: f.Value, has_from: bool, to: str, actor: str, has_actor: bool, on_behalf_of: str, has_on_behalf: bool, channel: str, has_inputs: bool, inputs: []const f.Field, override: bool, reason: str, has_reason: bool, at: str }
+type Event = struct { table_id: str, from: f.Value, has_from: bool, to: str, transition_id: str, actor: str, has_actor: bool, cascade_depth: f64, dedup_key: str }
+type Outcome = struct { good: bool, error_code: str, transition_id: str, expected: f.Value, actual: f.Value, from: f.Value, has_from: bool, override: bool, condition: str, missing: []const str, validator: str, detail: str, field: str, has_field: bool, record: []const f.Field, history: History, event: Event, post_steps: []const str, self_transition: bool }
 
 fn refusal(code: str) -> Outcome
 
-type Options = struct {
+type Options = struct { principal: Principal, on_behalf_of: str, has_on_behalf: bool, inputs: []const f.Field, channel: str, now: str, has_expected_version: bool, expected_version: f.Value, override: bool, reason: str, cascade_depth: f64 }
 
 fn truthy_text(s: str) -> bool
 fn with_field(a: *mem.Arena, fields: []const f.Field, name: str, value: f.Value) -> []const f.Field
@@ -5534,11 +5534,11 @@ type StatusWrite = struct { noop: bool, transition: Transition, has_transition: 
 fn resolve_status_write(a: *mem.Arena, wf: Workflow, record: []const f.Field, new_status: str, p: Principal, env: *const Env) -> StatusWrite
 
 type RuleReport = struct { kind: str, passed: bool, error_text: str, has_error: bool }
-type Report = struct {
+type Report = struct { found: bool, good: bool, transition_id: str, transition_name: str, from: str, to: str, from_state_ok: bool, permission_ok: bool, conditions: []const RuleReport, validators: []const RuleReport, missing_inputs: []const str, post_preview: []const str }
 
 fn simulate_transition(a: *mem.Arena, wf: Workflow, record: []const f.Field, transition_id: str, p: Principal, env: *const Env, inputs: []const f.Field) -> Report
 
-type BulkOutcome = struct {
+type BulkOutcome = struct { record_id: f.Value, status: str, record: []const f.Field, error_code: str, detail: str, blocked_by_probe: bool, probe: Report, probe_error: str }
 type Bulk = struct { policy: str, committed: usize, outcomes: []const BulkOutcome }
 
 fn bulk_transition(a: *mem.Arena, wf: Workflow, records: []const []const f.Field, transition_id: str, o: Options, env: *const Env, atomic: bool) -> Bulk
@@ -5570,7 +5570,7 @@ fn has_token(tokens: []const str, term: str) -> bool
 fn has_prefixed(tokens: []const str, term: str) -> bool
 fn type_boost(kind: str) -> f64
 
-type Entity = struct {
+type Entity = struct { id: str, type_name: str, title: str, text: str, fields: []const f.Field, has_fields: bool, app_id: str, table_id: str, namespace: str, key: str }
 
 fn field_text(a: *mem.Arena, v: f.Value) -> str
 fn in_list(list: []const str, name: str) -> bool
@@ -5579,7 +5579,7 @@ type IndexOptions = struct { searchable: []const str, has_searchable: bool, skip
 
 fn body_text(a: *mem.Arena, e: Entity, options: IndexOptions) -> str
 
-type Doc = struct {
+type Doc = struct { entity: Entity, title: str, title_lower: str, title_tokens: []const str, body_lower: str, body_tokens: []const str }
 type Index = struct { docs: []const Doc }
 
 fn build_index(a: *mem.Arena, entities: []const Entity, options: IndexOptions) -> Index
@@ -5588,7 +5588,7 @@ fn record_key(s: str) -> (str, str, bool)
 fn detect_record_key(text: str) -> (str, str, bool)
 fn is_record_key(value: str) -> bool
 
-type SearchOptions = struct {
+type SearchOptions = struct { limit: usize, types: []const str, has_types: bool, app_id: str, table_id: str, namespace: str }
 type Hit = struct { entity: Entity, score: f64, matches: []const str }
 type SearchResult = struct { results: []const Hit, total: usize }
 
@@ -5609,7 +5609,7 @@ fn find_in_table(a: *mem.Arena, records: []const view.Row, query: str, names: []
 fn server_row_threshold() -> f64
 fn search_rpc() -> str
 
-type SearchPlan = struct {
+type SearchPlan = struct { mode: str, reason: str, table_id: str, has_table_id: bool, query: str, limit: f64, offset: f64, fuzzy: bool }
 
 fn plan_search(query: str, row_count: f64, has_row_count: bool, loaded_rows: f64, has_loaded: bool, table_id: str, limit: f64, has_limit: bool, offset: f64, has_offset: bool, fuzzy: bool) -> SearchPlan
 
@@ -5618,7 +5618,7 @@ type Realm = struct { valid: bool, id: str, reason: str }
 fn resolve_realm(v: f.Value, present: bool) -> Realm
 fn text_realm(s: str, present: bool) -> Realm
 
-type IndexDoc = struct {
+type IndexDoc = struct { id: str, kind: str, realm_id: str, has_realm: bool, tenant_id: str, title: str, text: str, fields: []const f.Field, has_fields: bool, table_id: str, key: str }
 
 fn document_realm(d: IndexDoc) -> (str, bool)
 fn in_realm(d: IndexDoc, realm: str) -> bool
@@ -5631,7 +5631,7 @@ fn count_docs(a: *mem.Arena, docs: []const IndexDoc, realm: str) -> Counts
 
 type Candidate = struct { id: str, title: str, kind: str, score: f64, key: str, table_id: str }
 type Boost = fn(*void, IndexDoc) -> f64
-type SearchIndex = struct {
+type SearchIndex = struct { a: *mem.Arena, docs: []IndexDoc, count: usize, enforce_realm: bool, index_realm: str, has_index_realm: bool, upserts: usize, removals: usize, errors: usize }
 
 fn new_index(a: *mem.Arena, capacity: usize, enforce_realm: bool, realm: str, has_realm: bool) -> SearchIndex
 fn find_doc(ix: *SearchIndex, id: str) -> usize
@@ -5650,7 +5650,7 @@ fn batch_remove(ix: *SearchIndex, ids: []const str) -> usize
 fn doc_count(ix: *SearchIndex) -> usize
 fn has_doc(ix: *SearchIndex, id: str) -> bool
 
-type Query = struct {
+type Query = struct { kinds: []const str, has_kinds: bool, table_id: str, tenant_id: str, realm: str, has_realm: bool, limit: usize, has_limit: bool, searchable: []const str, has_searchable: bool, skip: []const str, suggest_limit: usize }
 type CanSee = fn(*void, IndexDoc) -> bool
 
 fn rank(ix: *SearchIndex, candidates: []const IndexDoc, text: str, q: Query, boost: Boost, has_boost: bool, state: *void) -> []const Candidate
@@ -5665,7 +5665,7 @@ type Scoped = struct { results: []const Candidate, total: usize, counts: Counts,
 fn empty_scoped() -> Scoped
 fn query_scoped(ix: *SearchIndex, text: str, q: Query, can_see: CanSee, has_can_see: bool, boost: Boost, has_boost: bool, state: *void) -> Scoped
 
-type IndexStats = struct {
+type IndexStats = struct { document_count: usize, upserted: usize, removed: usize, errors: usize, by_kind: []const KindCount, by_tenant: []const KindCount }
 
 fn scoped_stats(ix: *SearchIndex, realm: str, has_realm: bool) -> (Counts, usize, usize, usize)
 fn clear(ix: *SearchIndex)
@@ -5681,7 +5681,7 @@ type Event = struct { seq: f64, artifact_id: str, type_name: str, at: str, has_a
 type Mapped = struct { has_doc: bool, doc: IndexDoc, threw: bool, message: str }
 type ToDocument = fn(*void, Event) -> Mapped
 type DeadLetter = struct { seq: f64, artifact_id: str, message: str, at: str }
-type Consumer = struct {
+type Consumer = struct { a: *mem.Arena, cursor: f64, total_processed: usize, total_upserts: usize, total_removals: usize, last_drain_at: str, has_last_drain: bool, dead: []DeadLetter, dead_count: usize }
 
 fn new_consumer(a: *mem.Arena, dead_capacity: usize) -> Consumer
 
@@ -5702,7 +5702,7 @@ type Wedged = struct { wedged: bool, reason: str }
 
 fn is_wedged(c: *Consumer, outbox: []const Event, now_ms: f64) -> Wedged
 
-type ConsumerStats = struct {
+type ConsumerStats = struct { cursor: f64, total_processed: usize, total_upserts: usize, total_removals: usize, last_drain_at: str, has_last_drain: bool, dead_letter_count: usize, backlog: Backlog, wedged: Wedged }
 
 fn consumer_stats(c: *Consumer, outbox: []const Event, now_ms: f64) -> ConsumerStats
 fn clear_dead_letters(c: *Consumer)
@@ -5710,7 +5710,7 @@ fn clear_dead_letters(c: *Consumer)
 type Touch = struct { id: str, at: str }
 type UserRecents = struct { user: str, items: []Touch, count: usize }
 type UserFavorites = struct { user: str, ids: []str, count: usize }
-type Recents = struct {
+type Recents = struct { a: *mem.Arena, limit: usize, users: []UserRecents, user_count: usize, favs: []UserFavorites, fav_count: usize }
 
 fn new_recents(a: *mem.Arena, limit: usize, max_users: usize) -> Recents
 fn user_slot(r: *Recents, user: str) -> usize
@@ -7424,7 +7424,7 @@ type Element = struct { kind: ElementKind, x: f32, y: f32, width: f32, height: f
 type BandKind = enum u8 { ReportHeader, PageHeader, GroupHeader, Detail, GroupFooter, ReportFooter, PageFooter }
 type Band = struct { kind: BandKind, height: f32, elements: []const Element, level: usize, page_break_before: bool }
 type Group = struct { field: str, keep_together: bool, repeat_header: bool }
-type Report = struct {
+type Report = struct { page_width: f32, page_height: f32, margin_left: f32, margin_top: f32, margin_right: f32, margin_bottom: f32, bands: []const Band, groups: []const Group, source: Source, sort: bool }
 type Item = struct { kind: ElementKind, x: f32, y: f32, width: f32, height: f32, text: str, size: f32, bold: bool, align: Align }
 type Page = struct { number: usize, items: []const Item }
 type Layout = struct { pages: []const Page }
@@ -7455,7 +7455,7 @@ fn expression(a: *mem.Arena, source: Source, scope: Scope, body: str) -> (str, e
 fn expand(a: *mem.Arena, source: Source, scope: Scope, template: str) -> (str, err)
 fn grow_for(a: *mem.Arena, buf: []u8, used: usize, extra: usize) -> ([]u8, err)
 
-type Run = struct {
+type Run = struct { a: *mem.Arena, r: *const Report, measure: Measure, order: []usize, pages_total: usize, pages: []Page, page_count: usize, items: []Item, item_count: usize, page_no: usize, y: f32, content_top: f32, bottom: f32, page_header: usize, page_footer: usize, has_header: bool, has_footer: bool, cur_row: usize, open_levels: usize, row_number: usize, starts: []usize, ends: []usize, stride: usize, key_columns: [4]usize, reserved: f32 }
 
 fn sort_rows(r: *const Report, order: []usize, scratch: []usize, columns: [4]usize, lo: usize, hi: usize)
 fn text_before(x: str, y: str) -> bool
@@ -11881,10 +11881,10 @@ lifetime and cancellation remain those of ResponseStream.
 
 ```neper
 type Reply = struct { code: u16, text: str, lines: usize }
-type Capabilities = struct {
+type Capabilities = struct { starttls: bool, pipelining: bool, eight_bit: bool, utf8: bool, enhanced: bool, size: u64, auth_plain: bool, auth_login: bool, auth_xoauth2: bool }
 type Rejection = struct { address: str, code: u16 }
 type Sent = struct { rejected: []const Rejection, accepted: usize, reply: Reply }
-type Session = struct {
+type Session = struct { a: *mem.Arena, source: io.Reader, sink: io.Writer, stream: *tls.Stream, secured: bool, local: str, greeting: Reply, caps: Capabilities, last: Reply, line: []u8, text: []u8, cmd: []u8 }
 
 error Protocol
 error Rejected
@@ -11946,7 +11946,7 @@ composition, no CRAM-MD5, no SMTPUTF8, no pipelining.
 ### `e.net.pop3`
 
 ```neper
-type Session = struct {
+type Session = struct { a: *mem.Arena, source: io.Reader, sink: io.Writer, stream: *tls.Stream, secured: bool, greeting: str, last: str, buf: []u8, at: usize, len: usize, line: []u8, cmd: []u8 }
 type Stat = struct { count: usize, octets: u64 }
 type Entry = struct { number: usize, size: u64, id: str }
 
@@ -11998,7 +11998,7 @@ or NUL is `Invalid` before it is written. No local store, no APOP.
 ### `e.net.imap`
 
 ```neper
-type Session = struct {
+type Session = struct { a: *mem.Arena, source: io.Reader, sink: io.Writer, stream: *tls.Stream, secured: bool, greeting: str, last: str, authenticated: bool, caps: Capabilities, tag: u32, limit: usize, buf: []u8, at: usize, len: usize, line: []u8, cmd: []u8 }
 type Capabilities = struct { imap4rev1: bool, starttls: bool, login_disabled: bool, auth_plain: bool, sasl_ir: bool, uidplus: bool, idle: bool, move: bool, raw: str }
 type Reply = struct { text: str, untagged: []const str }
 type Mailbox = struct { exists: u32, recent: u32, uid_validity: u32, uid_next: u32, unseen: u32, flags: str, permanent_flags: str, read_only: bool }
@@ -12087,7 +12087,7 @@ APPEND, no IDLE, no local store.
 
 ```neper
 type Reply = struct { code: u16, text: str, lines: usize }
-type Session = struct {
+type Session = struct { a: *mem.Arena, source: io.Reader, sink: io.Writer, stream: *tls.Stream, secured: bool, protected: bool, peer: net.Address, config: tls.ClientConfig, data_count: u32, broken: bool, greeting: Reply, last: Reply, buf: []u8, at: usize, len: usize, line: []u8, text: []u8, cmd: []u8 }
 type Collect = struct { a: *mem.Arena, data: []u8, used: usize, limit: usize, failure: err }
 
 error Protocol
@@ -12163,7 +12163,7 @@ type Result = struct { code: u32, matched_dn: str, message: str, referrals: []co
 type Attribute = struct { name: str, values: []const str }
 type Entry = struct { dn: str, attributes: []const Attribute }
 type Change = struct { operation: u8, attribute: str, values: []const str }
-type Session = struct {
+type Session = struct { a: *mem.Arena, source: io.Reader, sink: io.Writer, stream: *tls.Stream, secured: bool, next_id: u32, last: Result, limit: usize, buf: []u8, at: usize, len: usize, msg: []u8, out: []u8, references: usize }
 type Writer = struct { buf: []u8, at: usize, failed: bool }
 type Cursor = struct { data: []const u8, at: usize }
 
@@ -12263,12 +12263,12 @@ referral chasing, ModifyDN or abandon.
 
 ```neper
 type Address = struct { v6: bool, bytes: [16]u8 }
-type Service = struct {
+type Service = struct { instance: str, service: str, domain: str, host: str, port: u16, priority: u16, weight: u16, txt: []const str, addresses: []const Address, ttl_host: u32, ttl_other: u32 }
 type Reply = struct { len: usize, unicast: bool }
 type Known = struct { target: []const u8, ttl: u32 }
-type Record = struct {
+type Record = struct { name: []const u8, kind: u16, born: u64, expires: u64, target: []const u8, port: u16, priority: u16, weight: u16, data: []const u8, address: Address }
 type Cache = struct { a: *mem.Arena, records: []Record, count: usize }
-type Found = struct {
+type Found = struct { instance_wire: []const u8, instance: str, host_wire: []const u8, host: str, port: u16, priority: u16, weight: u16, txt: []const str, addresses: []const Address, resolved: bool }
 type Names = struct { service_type: []const u8, instance: []const u8, host: []const u8, domain_enum: []const u8 }
 type Out = struct { buf: []u8, at: usize, count: u16 }
 
@@ -15859,7 +15859,7 @@ input budget remains the caller's responsibility.
 ### `e.fmt.xsd`
 
 ```neper
-type Type = enum u8 {
+type Type = enum u8 { String, NormalizedString, Token, Language, Name, NCName, NMToken, ID, IDREF, AnyURI, QName, Boolean, Decimal, Integer, NonPositiveInteger, NegativeInteger, NonNegativeInteger, PositiveInteger, Long, Int, Short, Byte, UnsignedLong, UnsignedInt, UnsignedShort, UnsignedByte, Float, Double, Duration, DateTime, Time, Date, GYearMonth, GYear, GMonthDay, GDay, GMonth, HexBinary, Base64Binary }
 type Whitespace = enum u8 { Preserve, Replace, Collapse }
 
 fn type_named(local: str) -> (Type, bool)
@@ -15929,13 +15929,13 @@ const BUILTINS: usize = 41usize
 type Variety = enum u8 { Atomic, List, Union }
 type ParticleKind = enum u8 { Element, Sequence, Choice, All, Any }
 type Content = enum u8 { Empty, Simple, Elements, Mixed }
-type Facets = struct {
+type Facets = struct { has_length: bool, length: u64, has_min_length: bool, min_length: u64, has_max_length: bool, max_length: u64, has_total: bool, total_digits: u64, has_fraction: bool, fraction_digits: u64, has_whitespace: bool, whitespace: xsd.Whitespace, enumeration: []str, has_pattern: bool, pattern: regex.Regex, has_min_inclusive: bool, min_inclusive: str, has_max_inclusive: bool, max_inclusive: str, has_min_exclusive: bool, min_exclusive: str, has_max_exclusive: bool, max_exclusive: str }
 type AttrUse = struct { name: str, ns: str, type_index: u32, required: bool, prohibited: bool, has_fixed: bool, fixed: str }
-type TypeDef = struct {
+type TypeDef = struct { name: str, ns: str, complex: bool, builtin: bool, variety: Variety, base: u32, item: u32, members: []u32, facets: Facets, content: Content, particle: u32, attributes: []AttrUse, any_attribute: bool, simple_type: u32, attr_rule: str, attr_tns: str }
 type Particle = struct { kind: ParticleKind, min: u32, max: u32, element: u32, children: []u32, rule: str, rule_tns: str }
 type ElementDecl = struct { name: str, ns: str, type_index: u32, nillable: bool, has_fixed: bool, fixed: str }
-type Schema = struct {
-type ErrorCode = enum u8 {
+type Schema = struct { types: []TypeDef, type_count: usize, particles: []Particle, particle_count: usize, elements: []ElementDecl, element_count: usize, roots: []u32, root_count: usize, target_namespace: str }
+type ErrorCode = enum u8 { None, UnknownRoot, UnexpectedElement, MissingContent, UnknownAttribute, MissingAttribute, BadValue, BadAttributeValue, NotEmpty, TextNotAllowed, FixedMismatch, NilNotAllowed, DuplicateId, UnresolvedIdref, ProhibitedAttribute }
 type Result = struct { valid: bool, code: ErrorCode, node: xml.NodeId }
 
 fn xs_namespace() -> str
@@ -15956,7 +15956,7 @@ fn element_text(a: *mem.Arena, d: *const xml.Document, id: xml.NodeId) -> (str, 
 fn is_blank(text: str) -> bool
 
 type Named = struct { kind: u8, name: str, node: xml.NodeId, index: u32 }
-type Compiler = struct {
+type Compiler = struct { a: *mem.Arena, d: *const xml.Document, s: Schema, tns: str, wildcard_rule: str, element_qualified: bool, attribute_qualified: bool, named: []Named, named_count: usize, depth: u32 }
 
 fn new_type(c: *Compiler) -> (u32, err)
 fn empty_facets() -> Facets
@@ -16018,7 +16018,7 @@ fn facets_ok_list(s: *const Schema, t: u32, def: TypeDef, norm: str, items: usiz
 fn facets_ok_atomic(a: *mem.Arena, s: *const Schema, t: u32, def: TypeDef, norm: str) -> (bool, err)
 fn values_equal(a: *mem.Arena, s: *const Schema, t: u32, x: str, y: str) -> (bool, err)
 
-type Walk = struct {
+type Walk = struct { a: *mem.Arena, s: *const Schema, d: *const xml.Document, ids: []str, id_nodes: []xml.NodeId, id_count: usize, refs: []str, ref_nodes: []xml.NodeId, ref_count: usize, code: ErrorCode, at: xml.NodeId }
 
 fn fail(w: *Walk, code: ErrorCode, id: xml.NodeId) -> bool
 fn is_xmlns_attribute(name: str) -> bool
@@ -16239,7 +16239,7 @@ fn compare_strings(op: u8, x: str, y: str) -> bool
 fn compare(a: *mem.Arena, d: *const xml.Document, op: u8, x: Value, y: Value) -> (bool, err)
 fn compare_bools(op: u8, x: bool, y: bool) -> bool
 
-type Env = struct {
+type Env = struct { a: *mem.Arena, d: *const xml.Document, c: *const Compiled, vars: *const Variables, ext: *const Extensions, depth: u32 }
 
 fn lookup_variable(vars: *const Variables, name: str) -> (Value, bool)
 fn eval(env: *Env, id: u32, ctx: Context) -> (Value, err)
@@ -16285,12 +16285,12 @@ fn xsl_namespace() -> str
 type Avt = struct { literals: []str, exprs: []u32, count: usize }
 type Sort = struct { select: u32, numeric: bool, descending: bool }
 type WithParam = struct { name: str, select: u32, body: []u32, has_select: bool }
-type Instr = struct {
+type Instr = struct { kind: u8, name: str, expr: u32, expr_b: u32, name_avt: Avt, namespace_avt: Avt, attr_names: []str, attr_avts: []Avt, declared: []xp.Binding, scope: []xp.Binding, children: []u32, sorts: []Sort, with_params: []WithParam, mode: str, has_mode: bool, node: xml.NodeId }
 type Param = struct { name: str, select: u32, body: []u32, has_select: bool }
 type Template = struct { name: str, has_name: bool, mode: str, body: []u32, params: []Param }
 type Rule = struct { expr: u32, priority: f64, template: u32, order: u32, mode: str }
 type Output = struct { text: str, omit_declaration: bool, is_text: bool }
-type Stylesheet = struct {
+type Stylesheet = struct { instrs: []Instr, instr_count: usize, exprs: []xp.Compiled, expr_count: usize, templates: []Template, template_count: usize, rules: []Rule, rule_count: usize, globals: []Param, global_count: usize, output: Output, document: xml.Document }
 
 const I_TEXT: u8 = 1u8
 const I_LRE: u8 = 2u8
@@ -16323,7 +16323,7 @@ fn next_sibling(d: *const xml.Document, id: xml.NodeId) -> xml.NodeId
 fn is_blank_text(text: str) -> bool
 fn scope_bindings(a: *mem.Arena, d: *const xml.Document, id: xml.NodeId) -> ([]xp.Binding, err)
 
-type Compiler = struct {
+type Compiler = struct { a: *mem.Arena, d: *const xml.Document, s: Stylesheet, excluded: []str, order: u32 }
 
 fn add_expr(c: *Compiler, id: xml.NodeId, text: str) -> (u32, err)
 fn new_instr(c: *Compiler, kind: u8, id: xml.NodeId) -> (u32, err)
@@ -16344,7 +16344,7 @@ fn compile_param(c: *Compiler, id: xml.NodeId) -> (Param, err)
 fn load(a: *mem.Arena, source: []const u8) -> (Stylesheet, err)
 fn compile_template_body(c: *Compiler, id: xml.NodeId) -> ([]u32, err)
 
-type ResNode = struct {
+type ResNode = struct { kind: u8, name: str, ns: str, value: str, parent: u32, first_child: u32, last_child: u32, next_sibling: u32, first_attr: u32, last_attr: u32, first_decl: u32, last_decl: u32 }
 type ResAttr = struct { name: str, ns: str, value: str, next: u32 }
 type ResDecl = struct { prefix: str, uri: str, next: u32 }
 type Tree = struct { nodes: []ResNode, count: usize, attrs: []ResAttr, attr_count: usize, decls: []ResDecl, decl_count: usize }
@@ -16374,7 +16374,7 @@ fn prefix_of(name: str) -> str
 fn write_node(a: *mem.Arena, t: *const Tree, id: u32, sink: *Sink, scope: *Scope) -> err
 fn serialize(a: *mem.Arena, t: *const Tree, is_text: bool, omit_declaration: bool) -> (str, err)
 
-type Run = struct {
+type Run = struct { a: *mem.Arena, ss: *const Stylesheet, d: *const xml.Document, vars: xp.Variables, trees: []Tree, tree_count: usize, out: u32, cur: u32, depth: u32 }
 
 fn out_tree(r: *Run) -> *Tree
 fn push_variable(r: *Run, name: str, value: xp.Value) -> err
@@ -17091,7 +17091,7 @@ const NTP_UNIX_DELTA: u64 = 2208988800u64
 const NTP_MODE_CLIENT: u8 = 3u8
 const NTP_MODE_SERVER: u8 = 4u8
 
-type NtpPacket = struct {
+type NtpPacket = struct { leap: u8, version: u8, mode: u8, stratum: u8, poll: i32, precision: i32, root_delay: u32, root_dispersion: u32, reference_id: u32, reference: u64, origin: u64, receive: u64, transmit: u64 }
     leap: u8, version: u8, mode: u8, stratum: u8, poll: i32, precision: i32,
     root_delay: u32, root_dispersion: u32, reference_id: u32,
     reference: u64, origin: u64, receive: u64, transmit: u64,

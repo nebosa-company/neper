@@ -317,10 +317,10 @@
       "group": "Validation",
       "order": 147,
       "title": "Full suites complete on this machine: Windows run.ps1 and Linux run.sh",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C115 (2026-10-08). Neither full suite finishes here: tests/selfhost/run.ps1 trips on PowerShell's Stop preference when a native command writes to stderr, and the Linux run.sh builds with neper build, which crashes the WSL2 VM on this host. Per-feature fixtures have been run by hand on both hosts. Acceptance: (1) run.ps1 runs to its end on this Windows host without manual patching; (2) run.sh runs to its end in WSL, with the memory it needs set down in the script's header and the VM left alive; (3) each reports its last line and the count of checks, and the totals feed docs/test-results.json, the tile on the readiness page."
+      "evidence": "Split from C115 (2026-10-08). Neither full suite finishes here: tests/selfhost/run.ps1 trips on PowerShell's Stop preference when a native command writes to stderr, and the Linux run.sh builds with neper build, which crashes the WSL2 VM on this host. Per-feature fixtures have been run by hand on both hosts. Acceptance: (1) run.ps1 runs to its end on this Windows host without manual patching; (2) run.sh runs to its end in WSL, with the memory it needs set down in the script's header and the VM left alive; (3) each reports its last line and the count of checks, and the totals feed docs/test-results.json, the tile on the readiness page. PART (D2313): NEPER_SEED in run.ps1 (the bootstrap cannot build src/main.e under this host's commit), stale assertions fixed, fix_module_surfaces.py, -j 2 for the two huge fixtures; run.ps1 passes stage 1 and about 3,700 lines. NOT DONE: a complete run on either host and the test-results.json totals."
     },
     {
       "id": "C148",
@@ -944,10 +944,10 @@
       "group": "Project tools",
       "order": 33,
       "title": "Project source metrics by language with snapshot deltas",
-      "score": 0,
+      "score": 0.9,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1812). Reference: JustCode src/metrics.js and project_metrics in src-tauri/src/lib.rs. Not yet: a bounded, cancellable project scan counting code/comment/blank lines by language; language-registry/comment metadata reuse; configured ignore, binary/encoding and symlink policies; persisted snapshot comparison and machine-readable/human reports; string/comment/dialect and changed/deleted-file fixtures. Reports must not count themselves, and mixed-language or heuristic classification must disclose its limits. e.metrics is runtime telemetry, not this source-analysis command. Keep traversal, snapshot filenames and reports in tooling; extract a pure source-count helper into an existing text module only when another consumer actually needs it. No editor or project policy in the runtime standard library."
+      "evidence": "Planning only (D1812). Reference: JustCode src/metrics.js and project_metrics in src-tauri/src/lib.rs. Not yet: a bounded, cancellable project scan counting code/comment/blank lines by language; language-registry/comment metadata reuse; configured ignore, binary/encoding and symlink policies; persisted snapshot comparison and machine-readable/human reports; string/comment/dialect and changed/deleted-file fixtures. Reports must not count themselves, and mixed-language or heuristic classification must disclose its limits. e.metrics is runtime telemetry, not this source-analysis command. Keep traversal, snapshot filenames and reports in tooling; extract a pure source-count helper into an existing text module only when another consumer actually needs it. No editor or project policy in the runtime standard library. DELIVERED (D2311): scripts/source_metrics.py and scripts/source_metrics_test.py (both suites run it): bounded, cancellable scan; per-language code/comment/blank; ignore, binary, encoding and symlink policies; snapshot and compare; JSON and human reports; heuristic languages disclosed. NOT DONE: reuse of a shared language registry (none exists), a Neper-native command."
     },
     {
       "id": "T034",
@@ -1681,10 +1681,10 @@
       "group": "Tooling",
       "order": 36,
       "title": "OpenCode harness skill and agent routing",
-      "score": 0,
+      "score": 0.8,
       "model": "sonnet",
       "thinking": "medium",
-      "evidence": "Planning only (D1898). No .opencode skill, no AGENTS.md route to the card or context-file (patch.exe only): OpenCode agents land without the context-file-before-reads and card-first discipline T026 requires elsewhere. Add the skill, the AGENTS.md pointers and a first-run smoke check that an agent reaches context-file, patch and check-fixture without full-file reads."
+      "evidence": "Planning only (D1898). No .opencode skill, no AGENTS.md route to the card or context-file (patch.exe only): OpenCode agents land without the context-file-before-reads and card-first discipline T026 requires elsewhere. Add the skill, the AGENTS.md pointers and a first-run smoke check that an agent reaches context-file, patch and check-fixture without full-file reads. DELIVERED (D2312): .opencode/skills/neper/SKILL.md, AGENTS.md OpenCode route, scripts/check_agent_routes.py run by both suites. NOT DONE: a live OpenCode first-run smoke (static routing check only)."
     },
     {
       "id": "T037",

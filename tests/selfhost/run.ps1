@@ -13,8 +13,20 @@ $compilerAsm = Join-Path $testBuild 'neper-self.asm'
 # workload there is, the compiler compiling itself: 384m exhausts, 400m succeeds, and the
 # peak is 388m. A gigabyte is the largest program worth compiling, not the largest the
 # commit limit will bear.
-& $neper build (Join-Path $repo 'src\main.e') --arena 1g --output $compiler --emit-asm $compilerAsm
-if ($LASTEXITCODE -ne 0) { throw 'self-hosted compiler slice did not build' }
+# A seed (C147): a previously built self-hosted compiler, named by NEPER_SEED, builds this
+# stage in place of the C bootstrap, which on a host short of commit charge cannot hold the
+# compiler's source. The seed is only the first stage: the fixed point the suite checks below
+# is unchanged, and the bootstrap's own frame check is skipped because the seed has no
+# bootstrap asm to read. Without NEPER_SEED the bootstrap builds it, as before.
+$seed = $env:NEPER_SEED
+if ($seed) {
+    if (-not (Test-Path -LiteralPath $seed)) { throw "NEPER_SEED names no file: $seed" }
+    & $seed emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $compiler -j 1 --arena 1g | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the seed did not build the self-hosted compiler slice' }
+} else {
+    & $neper build (Join-Path $repo 'src\main.e') --arena 1g --output $compiler --emit-asm $compilerAsm
+    if ($LASTEXITCODE -ne 0) { throw 'self-hosted compiler slice did not build' }
+}
 & python (Join-Path $repo 'scripts\check_module_surfaces.py') --compiler $compiler --arch x64 --os windows
 if ($LASTEXITCODE -ne 0) { throw 'compiler-resolved module surface validation failed' }
 # The deferred-library fixture manifest (D1529): current, and every delivered API
@@ -24,6 +36,12 @@ if ($LASTEXITCODE -ne 0) { throw 'the deferred-library fixture manifest is stale
 # The bootstrap's rules for `src/` (D794), before the next ten-minute build finds one.
 & python (Join-Path $repo 'scripts\lint_bootstrap.py') (Join-Path $repo 'src')
 if ($LASTEXITCODE -ne 0) { throw 'src/ breaks a bootstrap rule (scripts/lint_bootstrap.py)' }
+# Project source metrics (T033): its policy fixtures run on every suite.
+& python (Join-Path $repo 'scripts\source_metrics_test.py')
+if ($LASTEXITCODE -ne 0) { throw 'scripts/source_metrics_test.py failed' }
+# The agent routes (T036): the card, context-file, a patch tool and check-fixture stay reachable.
+& python (Join-Path $repo 'scripts\check_agent_routes.py')
+if ($LASTEXITCODE -ne 0) { throw 'scripts/check_agent_routes.py failed' }
 # Every bootstrap frame has to cover the temporaries its statements allocate. A
 # frame sized by guess rather than by measurement lets a deep statement address
 # below rsp, into the outgoing argument area and past the stack pointer.
@@ -37,7 +55,7 @@ function Test-Frame {
         $script:frameOverruns += "$($script:frameProc) reaches [rbp-$($script:frameDeepest)] in a $($script:frameSize)-byte frame"
     }
 }
-foreach ($line in [IO.File]::ReadLines($compilerAsm)) {
+foreach ($line in $(if ($seed) { @() } else { [IO.File]::ReadLines($compilerAsm) })) {
     if ($line -match '^(\S+) PROC FRAME') {
         Test-Frame
         $frameProc = $Matches[1]; $frameSize = 0; $frameDeepest = 0; $frameProbe = -1
@@ -81,7 +99,7 @@ if ($LASTEXITCODE -ne 0 -or $scanFile -ne 'scan file ok') { throw 'arena-backed 
 $parseFile = & $compiler parse-file (Join-Path $PSScriptRoot 'fixtures\source-load.e')
 if ($LASTEXITCODE -ne 0 -or $parseFile -ne 'parse file ok') { throw 'arena-backed source parse failed' }
 $missingFile = & $compiler scan-file (Join-Path $testBuild 'missing-source.e') 2>&1
-if ($LASTEXITCODE -ne 1 -or ($missingFile -join "`n") -notmatch 'error: os\.NotFound') {
+if ($LASTEXITCODE -ne 1 -or ($missingFile -join "`n") -notmatch 'error: (e\.)?os\.NotFound') {
     throw 'source loader missing-file propagation failed'
 }
 $projectRoot = & $compiler project-file (Join-Path $repo 'src\main.e') $repo 'main'
@@ -3674,7 +3692,7 @@ $gfxChart3dReferenceOutput = & $gfxChart3dReferencePath
 if ($LASTEXITCODE -ne 0 -or $gfxChart3dReferenceOutput -ne 'gfx chart 3d reference ok') { throw "the e.gfx.chart 3-D references answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.fsm`: status workflow definition, validation, guard, bulk, simulation and templates against appdor (864 cases, D2307).
 $algoFsmPath = Join-Path $testBuild 'algo-fsm-selfhost.exe'
-$algoFsmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_fsm\src\main.e') $repo 'x64' 'windows' $algoFsmPath
+$algoFsmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_fsm\src\main.e') $repo 'x64' 'windows' $algoFsmPath -j 2
 if ($LASTEXITCODE -ne 0 -or $algoFsmWritten -ne 'executable written') { throw 'algo_fsm emission failed' }
 $algoFsmOutput = & $algoFsmPath
 if ($LASTEXITCODE -ne 0 -or $algoFsmOutput -ne 'algo fsm ok') { throw "algo_fsm answered wrongly: exit $LASTEXITCODE" }
@@ -3698,7 +3716,7 @@ $algoFulltextOutput = & $algoFulltextPath
 if ($LASTEXITCODE -ne 0 -or $algoFulltextOutput -ne 'algo fulltext ok') { throw "algo_fulltext answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.view` and `e.algo.pivot`: the table query engine against appdor (1698 cases, TZ=UTC, D2303).
 $algoViewPath = Join-Path $testBuild 'algo-view-selfhost.exe'
-$algoViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_view\src\main.e') $repo 'x64' 'windows' $algoViewPath
+$algoViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_view\src\main.e') $repo 'x64' 'windows' $algoViewPath -j 2
 if ($LASTEXITCODE -ne 0 -or $algoViewWritten -ne 'executable written') { throw 'algo_view emission failed' }
 $algoViewOutput = & $algoViewPath
 if ($LASTEXITCODE -ne 0 -or $algoViewOutput -ne 'algo view ok') { throw "algo_view answered wrongly: exit $LASTEXITCODE" }

@@ -30,6 +30,10 @@ python3 "$repo/scripts/check_module_surfaces.py" --compiler "$test_build/neper-s
 python3 "$repo/scripts/library_fixtures.py"
 # The bootstrap's rules for `src/` (D794), before the next ten-minute build finds one.
 python3 "$repo/scripts/lint_bootstrap.py" "$repo/src"
+# Project source metrics (T033): its policy fixtures run on every suite.
+python3 "$repo/scripts/source_metrics_test.py"
+# The agent routes (T036): the card, context-file, a patch tool and check-fixture stay reachable.
+python3 "$repo/scripts/check_agent_routes.py"
 # Every bootstrap frame has to cover the temporaries its statements allocate. A
 # frame sized by guess rather than by measurement lets a deep statement address
 # below rsp, into the outgoing argument area and past the stack pointer.
@@ -81,7 +85,7 @@ if missing_file=$($test_build/neper-self scan-file "$test_build/missing-source.e
     exit 1
 fi
 case "$missing_file" in
-    *'error: os.NotFound'*) ;;
+    *'error: os.NotFound'*|*'error: e.os.NotFound'*) ;;
     *) printf '%s\n' 'source loader returned the wrong missing-file error' >&2; exit 1 ;;
 esac
 project_root=$($test_build/neper-self project-file "$repo/src/main.e" "$repo" main)
@@ -3275,7 +3279,7 @@ chmod +x "$test_build/gfx-chart-3d-reference-selfhost"
 gfx_chart_3d_reference_output=$("$test_build/gfx-chart-3d-reference-selfhost")
 [ "$gfx_chart_3d_reference_output" = 'gfx chart 3d reference ok' ]
 # `e.algo.fsm`: status workflow definition, validation, guard, bulk, simulation and templates against appdor (864 cases, D2307).
-algo_fsm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_fsm/src/main.e" "$repo" x64 linux "$test_build/algo-fsm-selfhost")
+algo_fsm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_fsm/src/main.e" "$repo" x64 linux "$test_build/algo-fsm-selfhost" -j 2)
 [ "$algo_fsm_written" = 'executable written' ]
 chmod +x "$test_build/algo-fsm-selfhost"
 algo_fsm_output=$("$test_build/algo-fsm-selfhost")
@@ -3299,7 +3303,7 @@ chmod +x "$test_build/algo-fulltext-selfhost"
 algo_fulltext_output=$("$test_build/algo-fulltext-selfhost")
 [ "$algo_fulltext_output" = 'algo fulltext ok' ]
 # `e.algo.view` and `e.algo.pivot`: the table query engine against appdor (1698 cases, TZ=UTC, D2303).
-algo_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_view/src/main.e" "$repo" x64 linux "$test_build/algo-view-selfhost")
+algo_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_view/src/main.e" "$repo" x64 linux "$test_build/algo-view-selfhost" -j 2)
 [ "$algo_view_written" = 'executable written' ]
 chmod +x "$test_build/algo-view-selfhost"
 algo_view_output=$("$test_build/algo-view-selfhost")
