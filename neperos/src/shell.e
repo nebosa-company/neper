@@ -266,6 +266,10 @@ fn read_snapshot(into: *[5]usize) {
 }
 
 // Compile `list` as a scene of its own and draw it into the window, then present it.
+// (C126) The system theme word (theme.e): handed to every app launched, above its program index, and replaced by
+// the exit code the Settings app (archive entry 24) returns.
+var theme_word: usize = 21usize
+const SETTINGS_PROGRAM: usize = 24usize
 var last_scene: scene.SceneId = zero
 var has_last_scene: bool = false
 
@@ -573,13 +577,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         say("shell launching ")
                         say(icons.app_label(app))
                         say("\n")
-                        let child = os.launch(program)
+                        let child = os.launch(program + theme_word * 256usize)
                         // The app presents its own frames and answers the compositor; when it
                         // leaves it has told the compositor a frame will follow, which is Home.
                         let code_app = os.reap(child)
                         say("shell app code ")
                         say_num(code_app)
                         say("\n")
+                        if program == SETTINGS_PROGRAM && code_app >= 16usize && code_app < 32usize {
+                            theme_word = code_app
+                            say("shell theme ")
+                            say_num(theme_word)
+                            say("\n")
+                        }
                         // The last scene is released first, so nothing refers to the memory that is given back.
                         if has_last_scene {
                             let released_scene = scene.release_scene(&renderer, last_scene)

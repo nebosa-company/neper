@@ -8,6 +8,7 @@ use e.gfx.paint
 use e.gfx.scene
 use e.text.layout
 use e.text.shape
+use theme
 
 // Register `data` as font `id` with the renderer and return the shape.Font to lay text out in.
 fn register(renderer: *scene.Renderer, id: u32, data: []const u8) -> (shape.Font, err) {
@@ -21,7 +22,8 @@ fn register(renderer: *scene.Renderer, id: u32, data: []const u8) -> (shape.Font
 fn lay_out(a: *mem.Arena, font: shape.Font, size: f32, text: str, width: f32, max_lines: u32, align: layout.Align) -> (*layout.Layout, err) {
     let (choices, choices_error) = mem.alloc[layout.FontChoice](a, 1usize)
     if choices_error != ok { ret (zero, choices_error) }
-    choices[0usize] = layout.FontChoice { font: font, size: size }
+    // (C126) The system font size: every app's text is laid out through here.
+    choices[0usize] = layout.FontChoice { font: font, size: size * theme.font_scale() }
     var wrap = layout.Wrap.None
     if width > 0.0 { wrap = layout.Wrap.Word }
     let (value, layout_error) = layout.layout(a, text, layout.Style { fonts: choices[0usize..1usize], language: "en", line_height: 0.0 }, layout.Options { width: width, max_lines: max_lines, align: align, wrap: wrap, ellipsis: "\xE2\x80\xA6", notdef: false })

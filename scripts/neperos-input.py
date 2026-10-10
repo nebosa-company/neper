@@ -121,6 +121,10 @@ def main():
                 # a full frame per tap, so a long script paces its taps (seconds, NEPEROS_TAP_DELAY).
                 time.sleep(float(os.environ.get("NEPEROS_TAP_DELAY", "0")))
         wait_for(serial, done_needle, 120)
+        # NEPEROS_DUMP=<file.ppm>: a screendump of the display once the last marker is out (for looking at a screen).
+        if os.environ.get("NEPEROS_DUMP"):
+            time.sleep(2.0)
+            qmp(sock, {"execute": "screendump", "arguments": {"filename": os.environ["NEPEROS_DUMP"]}})
         sys.stdout.write(serial_text(serial))
         try:
             qmp(sock, {"execute": "quit"})

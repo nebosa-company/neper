@@ -235,15 +235,15 @@ fn ink() -> paint.Color {
 }
 
 fn muted() -> paint.Color {
-    ret paint.Color { red: 0.36, green: 0.35, blue: 0.34, alpha: 1.0 }
+    ret appkit.muted()
 }
 
 fn light() -> paint.Color {
-    ret paint.Color { red: 0.94, green: 0.93, blue: 0.90, alpha: 1.0 }
+    ret appkit.light()
 }
 
 fn light_muted() -> paint.Color {
-    ret paint.Color { red: 0.72, green: 0.72, blue: 0.74, alpha: 1.0 }
+    ret appkit.light_muted()
 }
 
 fn amber() -> paint.Color {

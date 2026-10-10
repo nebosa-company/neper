@@ -10,6 +10,7 @@ use e.gfx.svg
 use e.text.layout
 use e.text.shape
 use text
+use theme
 
 const NONE: usize = 99usize
 const MAX_HITS: usize = 96usize
@@ -171,16 +172,17 @@ fn ink() -> paint.Color {
     ret paint.Color { red: 0.13, green: 0.13, blue: 0.14, alpha: 1.0 }
 }
 
+// The three that follow the system theme (C126, theme.e): muted text on the cream cards, and the text on the ground.
 fn muted() -> paint.Color {
-    ret paint.Color { red: 0.36, green: 0.35, blue: 0.34, alpha: 1.0 }
+    ret theme.muted()
 }
 
 fn light() -> paint.Color {
-    ret paint.Color { red: 0.94, green: 0.93, blue: 0.90, alpha: 1.0 }
+    ret theme.light()
 }
 
 fn light_muted() -> paint.Color {
-    ret paint.Color { red: 0.72, green: 0.72, blue: 0.74, alpha: 1.0 }
+    ret theme.light_muted()
 }
 
 fn amber() -> paint.Color {
@@ -224,7 +226,7 @@ fn tint(index: usize) -> paint.Color {
 fn ground(builder: *scene.Builder, frame: usize, logical_h: f32, red: f32, green: f32, blue: f32) -> err {
     // The ground; its alpha alternates by 0.2% a frame (invisible) so each frame differs in its first
     // command (the renderer's incremental redraw skips shapes under changed text otherwise).
-    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, logical_h), brush: paint.Brush { Solid: paint.Color { red: red, green: green, blue: blue, alpha: 1.0 - f32(frame % 2usize) * 0.002 } } } })
+    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, logical_h), brush: paint.Brush { Solid: theme.ground_color(red, green, blue, 1.0 - f32(frame % 2usize) * 0.002) } } })
     ret ok
 }
 

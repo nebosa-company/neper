@@ -95,6 +95,8 @@ var driver_flag: usize = 0usize
 // would cover.)
 var extra_first: usize = 0usize
 var extra_count: usize = 0usize
+// (C126) The system theme as one more argument for a full-screen app: 'a' + the word's low four bits, or 0 for none.
+var theme_arg: usize = 0usize
 // (D2205) The compositor's shared frame, once it exists: a process launched from the shell that is a
 // full-screen app (an archive entry from 13 on) gets it mapped, a frame endpoint to send on and the
 // routed-input endpoint to receive on, and the five fonts as its arguments.
@@ -442,7 +444,8 @@ fn setup_args(space: vm.Space, name: str, kernel_pointer: usize, hostile: bool) 
 // "string" is the file itself (its physical address and length), with the file's pages mapped
 // into the process at that address.
 fn setup_args_files(space: vm.Space, name: str) -> (usize, usize, err) {
-    let count = 1usize + extra_count
+    var count = 1usize + extra_count
+    if theme_arg != 0usize { count += 1usize }
     let arg_off = space.arg_off
     let strings = arg_off + count * 16usize
     var i = 0usize
@@ -452,6 +455,11 @@ fn setup_args_files(space: vm.Space, name: str) -> (usize, usize, err) {
     }
     vm.put_word(space, arg_off, vm.address(strings))
     vm.put_word(space, arg_off + 8usize, name.len)
+    if theme_arg != 0usize {
+        vm.put_byte(space, strings + name.len, u8(theme_arg))
+        vm.put_word(space, arg_off + (1usize + extra_count) * 16usize, vm.address(strings + name.len))
+        vm.put_word(space, arg_off + (1usize + extra_count) * 16usize + 8usize, 1usize)
+    }
     var file = 0usize
     while file < extra_count {
         let pa = archive_base + archive_offset[extra_first + file]
@@ -674,7 +682,9 @@ fn start_process(image_addr: usize, image_len: usize, name: str) -> (usize, err)
 // `reap` collects it. An index past the archive, or a space or table that will not take it, gives
 // the all-ones sentinel.
 fn launch(frame: *a64.Frame) {
-    let index = usize(frame.x[0usize])
+    // (C126) The program index in the low byte and the system theme word above it.
+    let index = usize(frame.x[0usize]) & 255usize
+    let theme_word = usize(frame.x[0usize]) >> 8usize
     if index >= archive_count {
         frame.x[0usize] = 18446744073709551615u64
         ret
@@ -686,12 +696,14 @@ fn launch(frame: *a64.Frame) {
         driver_arena_bytes = vm.SHARED_FRAME_BYTES * 14usize
         extra_first = 8usize
         extra_count = 5usize
+        if theme_word >= 16usize && theme_word < 32usize { theme_arg = 97usize + (theme_word & 15usize) }
     }
     reuse_app_arena = screen_app
     let (child, child_error) = start_process(archive_base + archive_offset[index], archive_length[index], "child")
     reuse_app_arena = false
     driver_arena_bytes = 0usize
     extra_count = 0usize
+    theme_arg = 0usize
     if child_error != ok {
         frame.x[0usize] = 18446744073709551615u64
         ret

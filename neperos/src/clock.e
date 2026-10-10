@@ -309,7 +309,7 @@ fn ink() -> paint.Color {
 }
 
 fn muted() -> paint.Color {
-    ret paint.Color { red: 0.36, green: 0.35, blue: 0.34, alpha: 1.0 }
+    ret appkit.muted()
 }
 
 fn amber() -> paint.Color {
@@ -378,7 +378,7 @@ fn chrome(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -
     let faces = kit.faces
     // The backdrop alternates its alpha by 0.2% a frame (invisible): the renderer's incremental redraw
     // left changed text without the cards under it, so each frame must differ in its first command.
-    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, kit.logical_h), brush: paint.Brush { Solid: paint.Color { red: 0.08, green: 0.09, blue: 0.11, alpha: 1.0 - f32(kit.frame % 2usize) * 0.002 } } } })
+    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, kit.logical_h), brush: paint.Brush { Solid: appkit.ground_color(0.08, 0.09, 0.11, 1.0 - f32(kit.frame % 2usize) * 0.002) } } })
     try card(a, builder, 20.0, 40.0, 372.0, 56.0, 14.0, cream(0.96))
     try put(a, builder, faces.sora, 22.0, "CLOCK", 36.0, 53.0, ink())
     try card(a, builder, 20.0, 108.0, 372.0, 730.0, 16.0, cream(0.92))
@@ -417,11 +417,11 @@ fn gray_text() -> paint.Color {
 
 // Text on the dark ground, and a quieter tone of it.
 fn light() -> paint.Color {
-    ret paint.Color { red: 0.94, green: 0.93, blue: 0.90, alpha: 1.0 }
+    ret appkit.light()
 }
 
 fn light_muted() -> paint.Color {
-    ret paint.Color { red: 0.72, green: 0.72, blue: 0.74, alpha: 1.0 }
+    ret appkit.light_muted()
 }
 
 // The amber of Calc, darker where it is text or a thin line on the cream.

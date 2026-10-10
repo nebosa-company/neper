@@ -872,7 +872,7 @@ fn ink() -> paint.Color {
 }
 
 fn muted() -> paint.Color {
-    ret paint.Color { red: 0.36, green: 0.35, blue: 0.34, alpha: 1.0 }
+    ret appkit.muted()
 }
 
 fn card(a: *mem.Arena, builder: *scene.Builder, x: f32, y: f32, w: f32, h: f32, radius: f32, c: paint.Color) -> err {
@@ -918,7 +918,7 @@ fn draw_chrome(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, mode: u
     // The backdrop's alpha alternates by 0.2% each frame (invisible): the renderer redraws only the
     // box of what changed, and left a changed text box without the cards under it, so a frame that
     // always differs in its first command is drawn whole.
-    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, kit.logical_h), brush: paint.Brush { Solid: paint.Color { red: 0.08, green: 0.09, blue: 0.11, alpha: 1.0 - f32(kit.frame % 2usize) * 0.002 } } } })
+    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, kit.logical_h), brush: paint.Brush { Solid: appkit.ground_color(0.08, 0.09, 0.11, 1.0 - f32(kit.frame % 2usize) * 0.002) } } })
     try card(a, builder, 20.0, 40.0, 372.0, 56.0, 14.0, cream(0.96))
     let (t0, e0) = text.draw(a, builder, faces.sora, 22.0, "CALC", 36.0, 53.0, 0.0, 0u32, layout.Align.Start, ink())
     if e0 != ok { ret e0 }

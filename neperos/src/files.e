@@ -347,15 +347,15 @@ fn ink() -> paint.Color {
 }
 
 fn muted() -> paint.Color {
-    ret paint.Color { red: 0.36, green: 0.35, blue: 0.34, alpha: 1.0 }
+    ret appkit.muted()
 }
 
 fn light() -> paint.Color {
-    ret paint.Color { red: 0.94, green: 0.93, blue: 0.90, alpha: 1.0 }
+    ret appkit.light()
 }
 
 fn light_muted() -> paint.Color {
-    ret paint.Color { red: 0.72, green: 0.72, blue: 0.74, alpha: 1.0 }
+    ret appkit.light_muted()
 }
 
 fn amber() -> paint.Color {
@@ -662,7 +662,7 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
     let faces = kit.faces
     // The ground; its alpha alternates by 0.2% a frame (invisible) so each frame differs in its first
     // command (the renderer's incremental redraw skips shapes under changed text otherwise).
-    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, kit.logical_h), brush: paint.Brush { Solid: paint.Color { red: 0.08, green: 0.09, blue: 0.11, alpha: 1.0 - f32(kit.frame % 2usize) * 0.002 } } } })
+    try scene.push(builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, kit.logical_h), brush: paint.Brush { Solid: appkit.ground_color(0.08, 0.09, 0.11, 1.0 - f32(kit.frame % 2usize) * 0.002) } } })
     if s.screen == BROWSE_SCREEN {
         try draw_browse(a, builder, s, faces)
     } else {

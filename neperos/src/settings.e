@@ -22,6 +22,7 @@ use text
 use icons
 use vaultfs
 use ui
+use theme
 
 const NONE: usize = 99usize
 const MAX_HITS: usize = 96usize
@@ -402,6 +403,12 @@ fn load(s: *State) -> bool {
     }
     dark_theme = s.values[DARK] != 0usize
     ret true
+}
+
+// (C126) The three settings every app follows go out as the theme word: to this app's own text and ground at
+// once, and to the shell as the exit code, which hands it to the apps it launches next.
+fn sync_theme(s: *State) {
+    theme.set(theme.word_of(s.values[DARK], s.values[CONTRAST], s.values[FONT]))
 }
 
 fn is_on(s: *State, setting: usize) -> bool {
@@ -1115,7 +1122,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         say(" brightness ")
         say_num(s.values[BRIGHTNESS] * 10usize)
         say("\n")
+    } else {
+        // No stored values: show the theme the shell handed this app.
+        if theme.is_dark() { s.values[DARK] = 1usize } else { s.values[DARK] = 0usize }
+        if theme.high_contrast() { s.values[CONTRAST] = 1usize } else { s.values[CONTRAST] = 0usize }
+        s.values[FONT] = theme.word & 3usize
+        dark_theme = s.values[DARK] != 0usize
     }
+    sync_theme(&s)
     s.page = MAIN
     if !show(a, &kit, &s) {
         say("settings present failed\n")
@@ -1138,6 +1152,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if s.page == SEARCH { id = ui.hit_at(&s.keys, tap.x, tap.y) }
             if id == NONE { id = hit_at(&s, tap.x, tap.y) }
             if id != NONE && act(&s, id, tap.x) {
+                sync_theme(&s)
                 if id >= 1000usize && id < 6000usize && s.page != SEARCH { save(&s) }
                 if !show(a, &kit, &s) {
                     say("settings present failed\n")
@@ -1148,5 +1163,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
         }
     }
+    // The exit code is the system theme word (shell.e keeps it for the apps it launches).
+    os.exit(i32(theme.word))
     ret ok
 }

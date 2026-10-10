@@ -14,6 +14,7 @@ use e.gfx.paint
 use e.gfx.scene
 use e.ui.window
 use text
+use theme
 
 const ROUTED: usize = 2usize
 const FRAME: usize = 1usize
@@ -61,6 +62,13 @@ fn open(a: *mem.Arena, args: []str, first_font: usize, title: str) -> (Kit, err)
     if renderer_error != ok { ret (kit, renderer_error) }
     var renderer = renderer_value
     let (faces, has_fonts) = text.load_faces(&renderer, args, first_font)
+    // (C126) The kernel's last argument for an app is the system theme (theme.e).
+    if args.len > first_font + 5usize { theme.from_arg(args[args.len - 1usize]) }
+    if theme.word != theme.DEFAULT {
+        say("appkit theme ")
+        say_num(theme.word)
+        say("\n")
+    }
     let scale = f32(os.SURFACE_W) / 412.0
     kit = Kit { device: device, win: w, drawable: drawable, renderer: renderer, faces: faces, has_fonts: has_fonts, scale: scale, logical_h: f32(os.SURFACE_H) / scale, previous: zero, has_previous: false, x: 0usize, y: 0usize, frame: 0usize, frame_mark: 0usize }
     // (D2242) Whatever an app allocates after this point is for one frame: `begin` gives it back.
@@ -117,6 +125,37 @@ fn present(kit: *Kit, builder: *scene.Builder) -> bool {
     kit.frame += 1usize
     kit.has_previous = true
     ret window.request_frame(&kit.win) == ok
+}
+
+fn say_num(value: usize) {
+    var digits: [20]u8 = zero
+    var at = 20usize
+    var rest = value
+    var more = true
+    while more {
+        at -= 1usize
+        digits[at] = u8(rest % 10usize) + 48u8
+        rest = rest / 10usize
+        if rest == 0usize { more = false }
+    }
+    say(digits[at..20usize])
+}
+
+// The theme's colours, for the apps that keep their own palette functions (C126).
+fn light() -> paint.Color {
+    ret theme.light()
+}
+
+fn light_muted() -> paint.Color {
+    ret theme.light_muted()
+}
+
+fn muted() -> paint.Color {
+    ret theme.muted()
+}
+
+fn ground_color(red: f32, green: f32, blue: f32, alpha: f32) -> paint.Color {
+    ret theme.ground_color(red, green, blue, alpha)
 }
 
 fn say(line: str) {

@@ -199,11 +199,11 @@ fn add_cap(s: *State, kind: usize, seconds: usize) {
 // Drawing.
 
 fn light() -> paint.Color {
-    ret paint.Color { red: 0.94, green: 0.93, blue: 0.90, alpha: 1.0 }
+    ret appkit.light()
 }
 
 fn light_muted() -> paint.Color {
-    ret paint.Color { red: 0.72, green: 0.72, blue: 0.74, alpha: 1.0 }
+    ret appkit.light_muted()
 }
 
 fn amber() -> paint.Color {
