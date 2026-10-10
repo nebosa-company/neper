@@ -18,13 +18,13 @@ fn rotr32(x: u32, n: u32) -> u32 {
 }
 
 fn rotr64(x: u64, n: u32) -> u64 {
-    let low = x >> n
-    ret low | (x << ((64u32 - n) & 63u32))
+    let low = x >> u64(n)
+    ret low | (x << ((64u64 - u64(n)) & 63u64))
 }
 
 fn rotl64(x: u64, n: u32) -> u64 {
-    let high = x << n
-    ret high | (x >> ((64u32 - n) & 63u32))
+    let high = x << u64(n)
+    ret high | (x >> ((64u64 - u64(n)) & 63u64))
 }
 
 fn rotl32(x: u32, n: u32) -> u32 {
@@ -38,7 +38,7 @@ fn load_be32(block: []const u8, at: usize) -> u32 {
 }
 
 fn load_be64(block: []const u8, at: usize) -> u64 {
-    let high = u64(load_be32(block, at)) << 32u32
+    let high = u64(load_be32(block, at)) << 32u64
     let low = u64(load_be32(block, at + 4usize))
     ret high | low
 }
@@ -51,7 +51,7 @@ fn store_be32(out: []u8, at: usize, value: u32) {
 }
 
 fn store_be64(out: []u8, at: usize, value: u64) {
-    store_be32(out, at, u32(value >> 32u32))
+    store_be32(out, at, u32(value >> 32u64))
     store_be32(out, at + 4usize, u32(value & 4294967295u64))
 }
 
@@ -204,8 +204,8 @@ fn sha512_compress(s: *Sha512, block: []const u8) {
         t += 1usize
     }
     while t < 80usize {
-        let s0 = rotr64(w[t - 15usize], 1u32) ^ rotr64(w[t - 15usize], 8u32) ^ (w[t - 15usize] >> 7u32)
-        let s1 = rotr64(w[t - 2usize], 19u32) ^ rotr64(w[t - 2usize], 61u32) ^ (w[t - 2usize] >> 6u32)
+        let s0 = rotr64(w[t - 15usize], 1u32) ^ rotr64(w[t - 15usize], 8u32) ^ (w[t - 15usize] >> 7u64)
+        let s1 = rotr64(w[t - 2usize], 19u32) ^ rotr64(w[t - 2usize], 61u32) ^ (w[t - 2usize] >> 6u64)
         w[t] = w[t - 16usize] +% s0 +% w[t - 7usize] +% s1
         t += 1usize
     }
@@ -261,8 +261,8 @@ fn sha512_update(h: *Sha512, data: []const u8) {
 }
 
 fn sha512_done(h: *Sha512) -> [64]u8 {
-    let bits_lo = h.total_lo << 3u32
-    let bits_hi = (h.total_hi << 3u32) | (h.total_lo >> 61u32)
+    let bits_lo = h.total_lo << 3u64
+    let bits_hi = (h.total_hi << 3u64) | (h.total_lo >> 61u64)
     var pad: [1]u8 = [1]u8{ 128 }
     sha512_update(h, pad[0..])
     var none: [1]u8 = zero
@@ -392,7 +392,7 @@ fn keccak_absorb(lanes: []u64, block: []const u8) {
         var value = 0u64
         var byte = 0usize
         while byte < 8usize {
-            value = value | (u64(block[lane * 8usize + byte]) << u32(byte * 8usize))
+            value = value | (u64(block[lane * 8usize + byte]) << u64(byte * 8usize))
             byte += 1usize
         }
         lanes[lane] = lanes[lane] ^ value
@@ -404,7 +404,7 @@ fn keccak_absorb(lanes: []u64, block: []const u8) {
 fn keccak_squeeze(lanes: []const u64, out: []u8) {
     var at = 0usize
     while at < out.len {
-        out[at] = u8((lanes[at / 8usize] >> u32((at % 8usize) * 8usize)) & 255u64)
+        out[at] = u8((lanes[at / 8usize] >> u64((at % 8usize) * 8usize)) & 255u64)
         at += 1usize
     }
 }
@@ -420,7 +420,8 @@ fn sha3_256_update(h: *Sha3_256, data: []const u8) {
         h.block[usize(h.block_len)] = data[at]
         h.block_len += 1u8
         if usize(h.block_len) == 136usize {
-            keccak_absorb(h.lanes[0..], h.block[0..])
+            var lanes_owner = h
+            keccak_absorb(lanes_owner.lanes[0usize..25usize], h.block[0usize..136usize])
             h.block_len = 0u8
         }
         at += 1usize
@@ -436,7 +437,8 @@ fn sha3_256_done(h: *Sha3_256) -> [32]u8 {
     }
     h.block[usize(h.block_len)] = h.block[usize(h.block_len)] ^ 6u8
     h.block[135] = h.block[135] ^ 128u8
-    keccak_absorb(h.lanes[0..], h.block[0..])
+    var lanes_owner = h
+    keccak_absorb(lanes_owner.lanes[0usize..25usize], h.block[0usize..136usize])
     var out: [32]u8 = zero
     keccak_squeeze(h.lanes[0..], out[0..])
     ret out
@@ -459,7 +461,8 @@ fn sha3_512_update(h: *Sha3_512, data: []const u8) {
         h.block[usize(h.block_len)] = data[at]
         h.block_len += 1u8
         if usize(h.block_len) == 72usize {
-            keccak_absorb(h.lanes[0..], h.block[0..])
+            var lanes_owner = h
+            keccak_absorb(lanes_owner.lanes[0usize..25usize], h.block[0usize..72usize])
             h.block_len = 0u8
         }
         at += 1usize
@@ -474,7 +477,8 @@ fn sha3_512_done(h: *Sha3_512) -> [64]u8 {
     }
     h.block[usize(h.block_len)] = h.block[usize(h.block_len)] ^ 6u8
     h.block[71] = h.block[71] ^ 128u8
-    keccak_absorb(h.lanes[0..], h.block[0..])
+    var lanes_owner = h
+    keccak_absorb(lanes_owner.lanes[0usize..25usize], h.block[0usize..72usize])
     var out: [64]u8 = zero
     keccak_squeeze(h.lanes[0..], out[0..])
     ret out
@@ -510,7 +514,7 @@ fn legacy_sha1(data: []const u8) -> [20]u8 {
             var byte = 0u8
             if at < data.len { byte = data[at] }
             if at == data.len { byte = 128u8 }
-            if at >= total - 8usize { byte = u8(((u64(data.len) * 8u64) >> u32((total - 1usize - at) * 8usize)) & 255u64) }
+            if at >= total - 8usize { byte = u8(((u64(data.len) * 8u64) >> u64((total - 1usize - at) * 8usize)) & 255u64) }
             block[i] = byte
             i += 1usize
         }
@@ -611,7 +615,7 @@ fn legacy_md5(data: []const u8) -> [16]u8 {
             var byte = 0u8
             if at < data.len { byte = data[at] }
             if at == data.len { byte = 128u8 }
-            if at >= total - 8usize { byte = u8(((u64(data.len) * 8u64) >> u32((at - (total - 8usize)) * 8usize)) & 255u64) }
+            if at >= total - 8usize { byte = u8(((u64(data.len) * 8u64) >> u64((at - (total - 8usize)) * 8usize)) & 255u64) }
             block[i] = byte
             i += 1usize
         }
@@ -702,7 +706,7 @@ fn load_le64(bytes: []const u8, at: usize) -> u64 {
     var value = 0u64
     var i = 0usize
     while i < 8usize {
-        value = value | (u64(bytes[at + i]) << u32(i * 8usize))
+        value = value | (u64(bytes[at + i]) << u64(i * 8usize))
         i += 1usize
     }
     ret value
@@ -766,7 +770,7 @@ fn blake2b_init(out_len: usize, key: []const u8) -> Blake2b {
         s.h[i] = iv.h[i]
         i += 1usize
     }
-    s.h[0] = s.h[0] ^ 16842752u64 ^ u64(out_len & 255usize) ^ (u64(key.len & 255usize) << 8u32)
+    s.h[0] = s.h[0] ^ 16842752u64 ^ u64(out_len & 255usize) ^ (u64(key.len & 255usize) << 8u64)
     s.out_len = out_len
     if key.len > 0usize {
         var padded: [128]u8 = zero
@@ -807,7 +811,7 @@ fn blake2b_done(s: *Blake2b) -> [64]u8 {
     var out: [64]u8 = zero
     var i = 0usize
     while i < s.out_len {
-        out[i] = u8((s.h[i / 8usize] >> u32((i % 8usize) * 8usize)) & 255u64)
+        out[i] = u8((s.h[i / 8usize] >> u64((i % 8usize) * 8usize)) & 255u64)
         i += 1usize
     }
     ret out
@@ -890,7 +894,7 @@ fn blake3_compress(cv: [8]u32, block: [16]u32, counter: u64, block_len: u32, fla
     state[10] = blake3_iv(2usize)
     state[11] = blake3_iv(3usize)
     state[12] = u32(counter & 4294967295u64)
-    state[13] = u32(counter >> 32u32)
+    state[13] = u32(counter >> 32u64)
     state[14] = block_len
     state[15] = flags
     let permutation: [16]usize = [16]usize{ 2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8 }
@@ -999,9 +1003,9 @@ fn blake3_add_chunk_cv(h: *Blake3, cv_in: [8]u32, total_chunks: u64) {
     var cv = cv_in
     var remaining = total_chunks
     while (remaining & 1u64) == 0u64 {
-        h.stack_len -= 1usize
+        h.stack_len = h.stack_len - 1usize
         cv = blake3_output_cv(blake3_parent(blake3_stack_get(h, h.stack_len), cv, h.key, h.flags))
-        remaining = remaining >> 1u32
+        remaining = remaining >> 1u64
     }
     blake3_stack_push(h, cv)
 }
@@ -1102,7 +1106,7 @@ fn blake3_done(h: *Blake3, out: []u8) {
     var o = blake3_chunk_output(h)
     var remaining = h.stack_len
     while remaining > 0usize {
-        remaining -= 1usize
+        remaining = remaining - 1usize
         o = blake3_parent(blake3_stack_get(h, remaining), blake3_output_cv(o), h.key, h.flags)
     }
     blake3_output_root(o, out)
@@ -1160,7 +1164,8 @@ fn shake_absorb(s: *Shake, data: []const u8) {
         s.block[s.block_len] = data[at]
         s.block_len += 1usize
         if s.block_len == s.rate {
-            keccak_absorb(s.lanes[0..], s.block[0..s.rate])
+            var lanes_owner = s
+            keccak_absorb(lanes_owner.lanes[0usize..25usize], s.block[0..s.rate])
             s.block_len = 0usize
         }
         at += 1usize
@@ -1176,17 +1181,19 @@ fn shake_squeeze(s: *Shake, out: []u8) {
         }
         s.block[s.block_len] = s.block[s.block_len] ^ 31u8
         s.block[s.rate - 1usize] = s.block[s.rate - 1usize] ^ 128u8
-        keccak_absorb(s.lanes[0..], s.block[0..s.rate])
+        var lanes_owner = s
+        keccak_absorb(lanes_owner.lanes[0usize..25usize], s.block[0..s.rate])
         s.squeezing = true
         s.offset = 0usize
     }
     var at = 0usize
     while at < out.len {
         if s.offset == s.rate {
-            keccak_f(s.lanes[0..])
+            var lanes_owner = s
+            keccak_f(lanes_owner.lanes[0usize..25usize])
             s.offset = 0usize
         }
-        out[at] = u8((s.lanes[s.offset / 8usize] >> u32((s.offset % 8usize) * 8usize)) & 255u64)
+        out[at] = u8((s.lanes[s.offset / 8usize] >> u64((s.offset % 8usize) * 8usize)) & 255u64)
         s.offset += 1usize
         at += 1usize
     }

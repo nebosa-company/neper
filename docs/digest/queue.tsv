@@ -44,7 +44,7 @@ T004	tooling	0.93	1775	run	streaming
 T011	tooling	0.95	1062	info	the spec table's other levels -- `x64-v4`, `aarch64-*`, `x86-*`, `sm_*` -- which the emitter does not produce
 T012	tooling	0.9	849	v1 schema validation of emitted records	`python scripts/validate_stream.py` validates every committed golden against docs/schemas/neper-v1.schema.json, and both suites run it (D250): the 23 `.jsonl` streams under tests/conformance -- one re
 T016	tooling	0.9	1550	Conformance corpus accept/reject/format/tokens/parse/tools	the generated-code benchmark report section 9 asks for
-T021	tooling	0.7	1228	Compiler hashes from the library	SHA-256, which is blocked -- the C bootstrap builds stage one on every suite run and refuses `lib/e/crypto/hash.e` with nineteen E-TYPE-0002s where a `u64` shifts by a `u32`, so that half waits on the
+T021	tooling	0.7	1607	Compiler hashes from the library	SHA-256, which is blocked -- the C bootstrap builds stage one on every suite run and refuses `lib/e/crypto/hash.e` with nineteen E-TYPE-0002s where a `u64` shifts by a `u32`, so that half waits on the
 T022	tooling	0.9	975	Reproducible-build check	cross-host comparison (a Windows and a Linux build differ by design)
 T023	tooling	0.5	19	Generated-code benchmark corpus	benchmarks/llm_edit
 T026	tooling	0.7	3150	Agent workflow adoption: context-file before file reads, patch or plan-* before scripts	the measured movement of lang-stats ctx Ktk and script% on new sessions.
