@@ -2109,4 +2109,5 @@ D2350	891	L045 closed: x.identity.xml and x.identity.saml checked against Appdor
 D2351	1170	L046 closed: e.net.policy and e.net.ssrf checked against Vaper and Appdor
 D2352	1322	L047 part one: x.cloud.rest checked against Petcow's declarative REST helpers and registry
 D2353	991	L047 closed: x.cloud.manifest checked against Petcow's manifest.rs
-D2354	1264	L048 part one: x.cloud.aws and x.ssh.args checked against Petcow
+D2354	1265	L048 part one: x.cloud.aws and x.ssh.args checked against Petcow
+D2355	1479	L049 closed: webhook signatures, auth schemes, MCP protocol and OpenAPI builder checked against Appdor

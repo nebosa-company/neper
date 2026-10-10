@@ -17694,6 +17694,162 @@ fn ssh_args(a: *mem.Arena, address: str, vars: json.Value, command: str, powersh
 
 The OpenSSH command line a host's variables describe (L048), after Petcow's `transport/ssh.rs`: `ssh_args` builds key-based, never-prompting arguments (`BatchMode=yes`, a 15-second connect timeout, host-key checking on unless the host says otherwise, an optional pinned known-hosts file, identity file with `IdentitiesOnly=yes`, port, `user@address`) and the remote command, wrapped for PowerShell on a Windows target; host variables answer to PetCow's and Ansible's names. Checked against Petcow's own Rust with `x.cloud.aws` on both hosts (D2354).
 
+### `x.net.webhook`
+
+```neper
+type Check = struct { valid: bool, reason: str, secret_index: i64 }
+
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn hex_of(a: *mem.Arena, digest: []const u8) -> str
+fn hmac_sha256(a: *mem.Arena, key: str, message: str) -> str
+fn sign_body(a: *mem.Arena, body: str, secret: str) -> str
+fn floor_text(a: *mem.Arena, x: f64) -> str
+fn sign_body_v1(a: *mem.Arena, body: str, secret: str, ts: f64) -> str
+fn signature_header_name() -> str
+fn timestamp_header_name() -> str
+fn legacy_signature_header_name() -> str
+
+type Headers = struct { signature: str, timestamp: str }
+
+fn signature_headers(a: *mem.Arena, body: str, secret: str, ts: f64) -> Headers
+fn timing_safe_equal(x: str, y: str) -> bool
+fn is_ws(c: u8) -> bool
+fn trim(s: str) -> str
+fn lower(a: *mem.Arena, s: str) -> str
+fn js_number(text: str) -> (f64, bool)
+fn abs_f64(x: f64) -> f64
+fn refused(reason: str) -> Check
+fn tolerance_text(a: *mem.Arena, tolerance: f64) -> str
+fn verify_signature_headers(a: *mem.Arena, body: str, secret: str, signature: str, timestamp: str, tolerance: f64, now_ms: f64) -> Check
+fn is_hex_digit(c: u8) -> bool
+fn verify_v1(a: *mem.Arena, body: str, secret: str, header: str, tolerance: f64, now_ms: f64) -> Check
+fn verify_v1_rotated(a: *mem.Arena, body: str, secrets: []const str, header: str, tolerance: f64, now_ms: f64) -> Check
+```
+
+Webhook signatures (L049), after Appdor's `src/webhooks/sign.js`: HMAC-SHA-256 over the body (`sign_body`, `sha256=<hex>`), the timestamped v1 envelope `t=<unix>,v1=<hex>` over `"{t}.{body}"` (`sign_body_v1`), the two-header form (`signature_headers`), verification with a replay window and a constant-time comparison (`verify_signature_headers`, `verify_v1`), and current-and-previous secret overlap (`verify_v1_rotated`). The clock is a parameter in milliseconds. Checked against Appdor's own functions over 649 cases with `x.net.authscheme`, `x.mcp.protocol` and `x.api.openapi` on both hosts (D2355).
+
+### `x.net.authscheme`
+
+```neper
+type Applied = struct { request: json.Value, message: str, failed: bool }
+type Refresh = struct { present: bool, failed: bool, message: str, request: json.Value }
+type Token = struct { valid: bool, message: str, value: json.Value }
+type Url = struct { valid: bool, message: str, value: str }
+
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn sv(s: str) -> json.Value
+fn skew_ms() -> f64
+fn js_string(a: *mem.Arena, v: json.Value) -> str
+fn or_text(a: *mem.Arena, obj: json.Value, key: str, fallback: str) -> str
+fn present(obj: json.Value, key: str) -> bool
+fn text_member(a: *mem.Arena, obj: json.Value, key: str) -> str
+fn put(o: *ir.Obj, key: str, v: json.Value)
+fn new_obj(a: *mem.Arena) -> ir.Obj
+fn obj_of(a: *mem.Arena, v: json.Value) -> ir.Obj
+fn missing(a: *mem.Arena, scheme: str, field: str) -> str
+fn json_quote(a: *mem.Arena, s: str) -> str
+fn is_tchar(c: u8) -> bool
+fn header_problem(a: *mem.Arena, name: str, value: str, scheme: str) -> str
+fn base64(a: *mem.Arena, s: str) -> str
+fn uri_component(a: *mem.Arena, s: str) -> str
+fn encode_form(a: *mem.Arena, keys: []const str, values: []const json.Value, count: usize) -> str
+fn body_text(a: *mem.Arena, request: json.Value) -> str
+fn replace_first(a: *mem.Arena, s: str, needle: str, with: str) -> str
+fn path_of(url: str) -> str
+fn host_of(a: *mem.Arena, url: str) -> str
+fn lower(a: *mem.Arena, s: str) -> str
+fn infer_aws_service(a: *mem.Arena, url: str) -> str
+fn known_scheme(t: str) -> bool
+fn with_error(a: *mem.Arena, request: json.Value, message: str) -> json.Value
+fn apply_auth(a: *mem.Arena, connection: json.Value, request: json.Value, now_ms: f64) -> json.Value
+fn connection_value(connection: json.Value, key: str) -> json.Value
+fn upper(a: *mem.Arena, s: str) -> str
+fn timestamp_text(a: *mem.Arena, connection: json.Value, now_ms: f64) -> str
+fn number_member(connection: json.Value, key: str) -> (f64, bool)
+fn needs_refresh(a: *mem.Arena, connection: json.Value, now_ms: f64) -> bool
+fn refresh_failed(message: str) -> Refresh
+fn form_request(a: *mem.Arena, url: str, headers: json.Value, body: str) -> json.Value
+fn build_refresh(a: *mem.Arena, connection: json.Value) -> Refresh
+fn parse_token_response(a: *mem.Arena, response: json.Value, connection: json.Value, now_ms: f64, oidc: bool) -> Token
+fn is_secret_field(t: str, key: str) -> bool
+fn redact_connection(a: *mem.Arena, connection: json.Value) -> json.Value
+
+type Inbound = struct { valid: bool, reason: str }
+
+fn verify_inbound(a: *mem.Arena, connection: json.Value, headers: json.Value, body: json.Value, has_body: bool, now_ms: f64) -> Inbound
+fn form_component(a: *mem.Arena, s: str) -> str
+fn form_decode(a: *mem.Arena, s: str) -> str
+fn hex_val(c: u8) -> i32
+fn path_encode(a: *mem.Arena, s: str) -> str
+fn build_authorize_url(a: *mem.Arena, connection: json.Value, redirect_uri: str, scope: str, state: str, code_challenge: str, prompt: str) -> Url
+fn set_param(names: []str, vals: []str, count: *usize, key: str, value: str)
+```
+
+Outbound authentication schemes (L049), after Appdor's `src/auth-schemes/index.js`: fourteen schemes (none, basic, bearer, apiKey, jwt, oauth2, oidc, saml-bearer, hmac, awsSigV4, mtls, session, custom, webhook) turn a stored connection into the headers, query, transport hints and URL a request needs (`apply_auth`, with the reference's refusal tokens as an `error` member), plus `needs_refresh`, `build_refresh` and `parse_token_response` for token renewal as a request and an answer reader, `redact_connection`, `verify_inbound` (HMAC callers) and `build_authorize_url`. No I/O; clocks are parameters. Checked against Appdor's own functions over 649 cases on both hosts (D2355).
+
+### `x.mcp.protocol`
+
+```neper
+type Classified = struct { valid: bool, code: i64, reason: str, notification: bool, method: str, has_id: bool, id: json.Value }
+type Prompt = struct { found: bool, valid: bool, message: str, description: str, text: str }
+type Resource = struct { valid: bool, message: str, table_id: str, kind: str }
+type Server = struct { initialized: bool, version: str, has_client: bool }
+type Handled = struct { kind: u8, response: json.Value }
+type Chunk = struct { messages: []const json.Value, errors: []const str, remainder: str }
+
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn sv(s: str) -> json.Value
+fn int_value(a: *mem.Arena, n: i64) -> json.Value
+fn put(o: *ir.Obj, key: str, v: json.Value)
+fn new_obj(a: *mem.Arena) -> ir.Obj
+fn parse_error() -> i64
+fn invalid_request() -> i64
+fn method_not_found() -> i64
+fn invalid_params() -> i64
+fn internal_error() -> i64
+fn supported_versions() -> [3]str
+fn rpc_result(a: *mem.Arena, id: json.Value, result: json.Value) -> json.Value
+fn rpc_error(a: *mem.Arena, id: json.Value, code: i64, message: str) -> json.Value
+fn classify_message(message: json.Value) -> Classified
+fn negotiate_version(requested: str) -> str
+fn capabilities(a: *mem.Arena, resources: bool, with_prompts: bool, tool_list_changed: bool) -> json.Value
+fn argument(a: *mem.Arena, name: str, description: str, required: bool) -> json.Value
+fn prompt_entry(a: *mem.Arena, name: str, description: str, arguments: []const json.Value) -> json.Value
+fn prompts(a: *mem.Arena) -> json.Value
+fn arg_truthy(args: json.Value, name: str) -> bool
+fn arg_text(a: *mem.Arena, args: json.Value, name: str) -> str
+fn render_prompt(a: *mem.Arena, name: str, args: json.Value) -> Prompt
+fn table_resource_uri(a: *mem.Arena, table_id: str) -> str
+fn parse_resource_uri(a: *mem.Arena, uri: str) -> Resource
+fn encode_stdio_message(a: *mem.Arena, message: json.Value) -> str
+fn decode_stdio_chunk(a: *mem.Arena, buffer: str) -> Chunk
+fn new_server() -> Server
+fn pending(a: *mem.Arena, id: json.Value) -> json.Value
+fn handle(a: *mem.Arena, s: *Server, message: json.Value, instructions: str) -> Handled
+```
+
+JSON-RPC 2.0 and the Model Context Protocol handshake (L049), after Appdor's `src/mcp/protocol.js`: `classify_message` (request, notification or the reference's refusal tokens), `negotiate_version` over the three supported protocol versions, `capabilities`, `rpc_result`/`rpc_error`, the three built-in `prompts` and `render_prompt`, the `appdor://table/<id>/schema|records` URIs, newline-delimited stdio framing (`encode_stdio_message`, `decode_stdio_chunk`) and the protocol-level server state machine (`handle`: initialize, ping, notifications, prompts, the initialize-first guard, argument checks; accessor-backed methods answer `delegate`). Checked against Appdor's own functions on both hosts (D2355).
+
+### `x.api.openapi`
+
+```neper
+type Validation = struct { valid: bool, errors: []const str }
+
+fn sv(s: str) -> json.Value
+fn put(o: *ir.Obj, key: str, v: json.Value)
+fn new_obj(a: *mem.Arena) -> ir.Obj
+fn obj_of(a: *mem.Arena, v: json.Value) -> ir.Obj
+fn or_text(info: json.Value, key: str, fallback: str) -> json.Value
+fn create_spec(a: *mem.Arena, info: json.Value) -> json.Value
+fn lower(a: *mem.Arena, s: str) -> str
+fn add_path(a: *mem.Arena, spec: json.Value, path: str, method: str, operation: json.Value) -> json.Value
+fn add_schema(a: *mem.Arena, spec: json.Value, name: str, schema: json.Value) -> json.Value
+fn is_object(v: json.Value) -> bool
+fn validate_spec(a: *mem.Arena, spec: json.Value) -> Validation
+```
+
+OpenAPI 3.0.3 document builder (L049), after Appdor's `src/api/openapi-builder.js`: `create_spec` (skeleton with `info`, empty `paths` and `components.schemas`, optional `servers`, `tags` and `securitySchemes`), `add_path`, `add_schema` and `validate_spec`; documents are JSON values and each call returns a new one. Checked against Appdor's own functions on both hosts (D2355).
+
 ### `e.fmt.xml`
 
 ```neper

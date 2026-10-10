@@ -144,6 +144,10 @@
     "x.cloud.manifest",
     "x.cloud.aws",
     "x.ssh.args",
+    "x.net.webhook",
+    "x.net.authscheme",
+    "x.mcp.protocol",
+    "x.api.openapi",
     "e.fmt.xml",
     "e.fmt.xsd",
     "e.fmt.xsd.schema",
@@ -2375,6 +2379,69 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.algo.formula",
+    "e.algo.ir",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.net.webhook",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.crypto.mac",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.net.authscheme",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.chain",
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.fmt.encode",
+    "e.fmt.json",
+    "e.mem",
+    "e.str",
+    "x.identity.jose",
+    "x.net.webhook"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.mcp.protocol",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.fmt.encode",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.api.openapi",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
     "e.algo.ir",
     "e.fmt.json",
     "e.mem",

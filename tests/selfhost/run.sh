@@ -3469,6 +3469,12 @@ x_cloud_aws_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/x-cloud-aws-selfhost"
 x_cloud_aws_output=$("$test_build/x-cloud-aws-selfhost")
 [ "$x_cloud_aws_output" = 'x cloud aws ok' ]
+# x.net.webhook, x.net.authscheme, x.mcp.protocol and x.api.openapi against Appdor's sign.js, auth-schemes, mcp/protocol.js and openapi-builder.js (649 cases, D2355).
+x_api_protocols_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_api_protocols/src/main.e" "$repo" x64 linux "$test_build/x-api-protocols-selfhost" -j 2)
+[ "$x_api_protocols_written" = 'executable written' ]
+chmod +x "$test_build/x-api-protocols-selfhost"
+x_api_protocols_output=$("$test_build/x-api-protocols-selfhost")
+[ "$x_api_protocols_output" = 'x api protocols ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

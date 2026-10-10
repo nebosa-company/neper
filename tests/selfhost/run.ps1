@@ -3886,6 +3886,12 @@ $xCloudAwsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $xCloudAwsWritten -ne 'executable written') { throw 'x_cloud_aws emission failed' }
 $xCloudAwsOutput = & $xCloudAwsPath
 if ($LASTEXITCODE -ne 0 -or $xCloudAwsOutput -ne 'x cloud aws ok') { throw "x_cloud_aws answered wrongly: exit $LASTEXITCODE" }
+# x.net.webhook, x.net.authscheme, x.mcp.protocol and x.api.openapi against Appdor's sign.js, auth-schemes, mcp/protocol.js and openapi-builder.js (649 cases, D2355).
+$xApiProtocolsPath = Join-Path $testBuild 'x-api-protocols-selfhost.exe'
+$xApiProtocolsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_api_protocols\src\main.e') $repo 'x64' 'windows' $xApiProtocolsPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xApiProtocolsWritten -ne 'executable written') { throw 'x_api_protocols emission failed' }
+$xApiProtocolsOutput = & $xApiProtocolsPath
+if ($LASTEXITCODE -ne 0 -or $xApiProtocolsOutput -ne 'x api protocols ok') { throw "x_api_protocols answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2
