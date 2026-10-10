@@ -48,7 +48,7 @@ T021	tooling	0.7	1607	Compiler hashes from the library	SHA-256, which is blocked
 T022	tooling	0.9	975	Reproducible-build check	cross-host comparison (a Windows and a Linux build differ by design)
 T023	tooling	0.5	19	Generated-code benchmark corpus	benchmarks/llm_edit
 T026	tooling	0.7	3150	Agent workflow adoption: context-file before file reads, patch or plan-* before scripts	the measured movement of lang-stats ctx Ktk and script% on new sessions.
-T027	tooling	0	1026	H12 v1 precursor: held-out two-family evaluation on real tools	post-m2-llm-hardening.md section 15 specifies the only evidence that can support a superiority claim -- correctness first, then total interaction tokens per verified success, repair turns and source-t
+T027	tooling	0.05	1482	H12 v1 precursor: held-out two-family evaluation on real tools	register the model families and versions, the held-out task ids and the OpenCode arm, archive baseline results, and run (needs provider access and budget).
 T028	tooling	0.85	2807	Repeated diagnostics: fixtures and fingerprints for the codes that recur across a repair	lang-stats.py's repeat% and 1-edit% over transcripts written after D1679. Snapshot 2026-10-03 (14d): repeat% Claude 59.5 (was 61.5), Codex 70.0; 1-edit% identical across harnesses (54.3/53.5), so land
 T029	tooling	0.85	1768	Rename fix for a local that collides with a module-scope name (E-NAME-0003)	lang-stats.py over transcripts written after D1678 showing E-NAME-0003 no longer the top repeated code. Follow-on (D1898): same measurement must include OpenCode rows; a Claude-only reading cannot clo
 C082	compiler	0.75	2079	Work-stealing pool, parallel parse and codegen	the front end runs in waves of eight workers (D321);

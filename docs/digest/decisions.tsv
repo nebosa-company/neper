@@ -2083,4 +2083,5 @@ D2325	1867	T042: `x.agent.policy`, an action policy decided outside the agent th
 D2326	1770	T042: `x.agent.bundle`, composing isolated changes without composing their claims
 D2327	1612	T042: `x.agent.receipt`, the one record that says a change was verified, and under what
 D2328	1645	T042: `x.agent.task`, a long operation as a durable, authorized state machine
-D2329	1386	T021: `e.crypto.hash` builds under the bootstrap, which was what blocked the compiler from using it
+D2329	1387	T021: `e.crypto.hash` builds under the bootstrap, which was what blocked the compiler from using it
+D2330	1673	T027 (first step): the measurement's inputs are frozen before any model runs
