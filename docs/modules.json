@@ -169,6 +169,7 @@
     "e.algo.flow",
     "e.algo.chain",
     "e.algo.sync",
+    "e.algo.realtime",
     "e.algo.fulltext",
     "e.algo.search",
     "e.text.search",
@@ -813,6 +814,22 @@
     "e.fmt.json",
     "e.mem",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.realtime",
+   "layer": 5,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.ir",
+    "e.data.list",
+    "e.fmt.json",
+    "e.mem",
+    "e.str",
+    "e.time"
    ],
    "blocked_by": []
   },

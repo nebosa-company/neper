@@ -3745,6 +3745,13 @@ $algoSyncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $algoSyncWritten -ne 'executable written') { throw 'algo_sync emission failed' }
 $algoSyncOutput = & $algoSyncPath
 if ($LASTEXITCODE -ne 0 -or $algoSyncOutput -ne 'algo sync ok') { throw "algo_sync answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.realtime`: presence, cell resolution, merge, topic authorization, the connection lifecycle, telemetry,
+# trimming and view membership against appdor's src/realtime (220 scripts, D2338).
+$algoRealtimePath = Join-Path $testBuild 'algo-realtime-selfhost.exe'
+$algoRealtimeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_realtime\src\main.e') $repo 'x64' 'windows' $algoRealtimePath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoRealtimeWritten -ne 'executable written') { throw 'algo_realtime emission failed' }
+$algoRealtimeOutput = & $algoRealtimePath
+if ($LASTEXITCODE -ne 0 -or $algoRealtimeOutput -ne 'algo realtime ok') { throw "algo_realtime answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

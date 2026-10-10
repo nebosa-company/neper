@@ -6010,6 +6010,83 @@ fn to_ids(a: *mem.Arena, values: []const json.Value) -> []const str
 
 Offline-first sync (L037), after appdor's `src/offline` modules: the coalescing write queue (`enqueue`, `apply_optimistic`, `sync_queue`), the durable outbox (`new_outbox`, `add`, `flush`, `revive`, `discard`, `settle`, `release_attachments`, `describe_outbox`) with sequence numbers, bounded retry with exponential backoff, dead letters and quota-aware persistence, the `(updatedAt, id)` cursor and delta pull (`pull_changes`, `apply_changes`, which leave a record with a pending write alone), field-level conflict detection and the manual, last-write-wins and field-merge resolutions, and `run_sync` with its second pull. The store, the server's page fetch and the push are injected; calls are synchronous. Checked against appdor's own modules over 260 random operation scripts, store failures included, on both hosts (D2337).
 
+### `e.algo.realtime`
+
+```neper
+type Clock = struct { ctx: *void, now: fn(*void) -> i64, jitter: fn(*void) -> f64 }
+type TopicAuth = struct { a: *mem.Arena, clock: *const Clock, token_names: list.List[json.Value], token_info: list.List[json.Value], topics: list.List[json.Value], subs: list.List[json.Value] }
+type Lifecycle = struct { a: *mem.Arena, clock: *const Clock, state: str, last_event_at: i64, has_last_event: bool, disconnect_at: i64, has_disconnect: bool, sequence: i64, attempt: i64, events: list.List[json.Value] }
+type Telemetry = struct { a: *mem.Arena, clock: *const Clock, metrics: list.List[json.Value], counter_names: list.List[json.Value], counter_values: list.List[json.Value], correlation: i64 }
+
+fn text(s: str) -> json.Value
+fn flag(b: bool) -> json.Value
+fn number(a: *mem.Arena, n: i64) -> json.Value
+fn cat(a: *mem.Arena, x: str, y: str) -> str
+fn obj(a: *mem.Arena) -> ir.Obj
+fn put(o: *ir.Obj, key: str, v: json.Value)
+fn get(v: json.Value, key: str) -> (json.Value, bool)
+fn items(v: json.Value) -> []const json.Value
+fn push_value(l: *list.List[json.Value], v: json.Value)
+fn empty_list(a: *mem.Arena) -> list.List[json.Value]
+fn unset(o: *ir.Obj, key: str)
+fn as_text(v: json.Value) -> str
+fn nan() -> f64
+fn neg_infinity() -> f64
+fn to_ms(v: json.Value) -> f64
+fn is_present(v: json.Value, key: str) -> bool
+fn or_null(v: json.Value, key: str) -> json.Value
+fn strict_equal(x: json.Value, y: json.Value) -> bool
+fn spread(a: *mem.Arena, x: json.Value) -> ir.Obj
+fn set_presence(a: *mem.Arena, presence: json.Value, user_id: str, info: json.Value) -> json.Value
+fn clear_presence(a: *mem.Arena, presence: json.Value, user_id: str) -> json.Value
+fn active_users(a: *mem.Arena, presence: json.Value, now: json.Value, ttl_ms: f64) -> json.Value
+fn resolve_edit(a: *mem.Arena, cell: json.Value, has_cell: bool, edit: json.Value) -> json.Value
+fn merge_record(a: *mem.Arena, base: json.Value, edits: []const json.Value) -> json.Value
+fn filter_presence_for_viewer(a: *mem.Arena, users: []const json.Value, policy: json.Value) -> json.Value
+fn realtime_status(a: *mem.Arena, state: json.Value) -> json.Value
+fn new_topic_auth(a: *mem.Arena, clock: *const Clock) -> TopicAuth
+fn find_index(names: *const list.List[json.Value], key: str) -> usize
+fn remove_at(names: *list.List[json.Value], values: *list.List[json.Value], index: usize)
+fn register_token(t: *TopicAuth, token: str, info: json.Value)
+fn revoke_token(t: *TopicAuth, token: str) -> json.Value
+fn table_of(topic: str) -> (str, bool)
+fn scope_has(scopes: json.Value, name: str) -> bool
+fn subscribe(t: *TopicAuth, topic: str, token: str, user_id: json.Value) -> json.Value
+fn unsubscribe(t: *TopicAuth, topic: str) -> bool
+fn evict_user(t: *TopicAuth, user_id: json.Value) -> json.Value
+fn may_receive(t: *const TopicAuth, user_id: json.Value, topic: str) -> bool
+fn active_subscriptions(t: *const TopicAuth, user_id: json.Value, has_user: bool) -> json.Value
+fn new_lifecycle(a: *mem.Arena, clock: *const Clock) -> Lifecycle
+fn emit(l: *Lifecycle, next: str)
+fn heartbeat(l: *Lifecycle)
+fn disconnected(l: *Lifecycle) -> json.Value
+fn plan_reconnect(l: *Lifecycle) -> json.Value
+fn reconnected(l: *Lifecycle, last_known_seq: i64) -> json.Value
+fn advance_seq(l: *Lifecycle) -> i64
+fn is_stale(l: *const Lifecycle, ttl_ms: i64) -> bool
+fn should_reconnect(l: *const Lifecycle, min_interval_ms: i64) -> bool
+fn new_telemetry(a: *mem.Arena, clock: *const Clock) -> Telemetry
+fn base36(a: *mem.Arena, n: i64) -> str
+fn count_or(v: json.Value, key: str, fallback: i64) -> i64
+fn start_trace(t: *Telemetry, publish_at: i64) -> json.Value
+fn counter_value(t: *const Telemetry, index: usize) -> i64
+fn set_counter(t: *Telemetry, name: str, value: i64)
+fn record_delivery(t: *Telemetry, correlation_id: str, info: json.Value) -> json.Value
+fn record_degradation(t: *Telemetry, reason: json.Value)
+fn record_coalesce(t: *Telemetry, input_count: i64, output_count: i64)
+fn record_connection_count(t: *Telemetry, count: i64)
+fn export_telemetry(t: *const Telemetry, since: i64) -> json.Value
+fn in_strings(values: json.Value, name: str) -> bool
+fn trim_record(a: *mem.Arena, r: json.Value, readable: json.Value) -> json.Value
+fn trim_event_payload(a: *mem.Arena, payload: json.Value, permissions: json.Value) -> (json.Value, bool)
+fn passes_filter(r: json.Value, filter: json.Value) -> bool
+fn evaluate_view_membership(a: *mem.Arena, record: json.Value, filter: json.Value, previous: json.Value, has_previous: bool) -> json.Value
+fn affected_views(a: *mem.Arena, record: json.Value, previous: json.Value, has_previous: bool, views: []const json.Value) -> json.Value
+fn take_events(l: *Lifecycle) -> []const json.Value
+```
+
+Real-time collaboration semantics (L037), after appdor's `src/realtime/index.js`: presence with a heartbeat window and pseudonymous viewing for portal users, version-based cell resolution with last-write-wins on a stale edit (`resolve_edit`), per-field record merge with provenance (`merge_record`), the degradation status, topic and subscription authorization with token scopes and eviction (`TopicAuth`), the connection lifecycle with doubling reconnect delay, jitter and gap repair (`Lifecycle`), delivery telemetry (`Telemetry`), event payload trimming to readable rows and fields, and view-membership evaluation. The transport, the clock and the jitter are the host's. Checked against appdor's own module over 220 random operation scripts on both hosts (D2338).
+
 ### `e.algo.fulltext`
 
 ```neper
