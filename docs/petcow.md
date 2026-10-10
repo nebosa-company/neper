@@ -43,6 +43,7 @@ ic`, `${…}`→template mapping. Warn on registry sources, splats, `self/path/t
 | — | `src/vault.rs:1` `PETCOW_VAULT;v1;hex(salt‖nonce‖ct)` | rule only | Design (Argon2id + ChaCha20-Poly1305, random salt/nonce, fail-closed) maps onto existing `e.crypto.kdf/aead`. No new format. |
 | — | tfplugin protobuf wire, zip | skip | Have zip/protobuf; wire format stays out of the library. |
 
+F1 landed (D2344): `e.fmt.hcl` (read-only HCL2 parser, `lib/e/fmt/hcl.e`) and `x.migrate.terraform` (`lib/x/migrate/terraform.e`), differential against `migrate_hcl` over 530 random documents; the reference crate is `src/migrate.rs` lines 1-988 with the `PetcowError`/`Result` and `modulesrc::parse` shims over `hcl-rs` 0.18 and `serde_yaml` 0.9.
 F4 landed (D2318): `x.migrate.migrate` (`lib/x/migrate/migrate.e`), differential against the reference importers over 372 cases.
 
 Order: F1 → F2/F3 → F4.

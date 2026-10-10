@@ -15482,6 +15482,70 @@ fn build_tree(a: *mem.Arena, doc: *const html.Document, root: html.NodeId) -> No
 
 The accessibility tree of an HTML document (L040), after Vaper's `a11y/accessibility_builder.dart`: each element's role (an explicit `role` from a known set first, else its native role), its accessible name in the order the standard fixes (`aria-labelledby` over `aria-label` over the native source -- `alt`, `<label>`, placeholder, caption, title -- over text content for the roles that name from content), its states, heading level, value range and link target, and the tree with `aria-hidden` subtrees dropped, a nameless stateless generic container flattened and the redundant text leaves of a name-from-content role removed (`build_tree`). Checked against Vaper's own builder over 220 random documents on both hosts (D2343).
 
+### `e.fmt.hcl`
+
+```neper
+error Invalid
+error TooDeep
+
+type Kind = enum u8 { Null, Bool, Number, String, Array, Object, Template, Variable, Traversal, FuncCall, Parens, Conditional, Unary, Binary, For }
+type OpKind = enum u8 { GetAttr, LegacyIndex, Index, AttrSplat, FullSplat }
+type PartKind = enum u8 { Literal, Interpolation, Directive }
+type Operator = struct { kind: OpKind, name: str, index: []const Expr }
+type Key = struct { identifier: bool, name: str, expr: []const Expr }
+type Part = struct { kind: PartKind, text: str, expr: []const Expr }
+type Expr = struct { kind: Kind, text: str, flag: bool, items: []const Expr, keys: []const Key, ops: []const Operator, parts: []const Part, names: []const str }
+type Item = struct { is_block: bool, name: str, labels: []const str, value: []const Expr, body: []const Item }
+type Parser = struct { a: *mem.Arena, src: str, at: usize, depth: usize, nest: usize }
+
+fn blank(kind: Kind) -> Expr
+fn peek(p: *const Parser) -> u8
+fn peek_at(p: *const Parser, offset: usize) -> u8
+fn at_end(p: *const Parser) -> bool
+fn is_ident_start(c: u8) -> bool
+fn is_ident_char(c: u8) -> bool
+fn is_digit(c: u8) -> bool
+fn skip(p: *Parser, newlines: bool)
+fn identifier(p: *Parser) -> (str, bool)
+fn expect(p: *Parser, c: u8) -> bool
+fn new_exprs(a: *mem.Arena) -> list.List[Expr]
+fn one(a: *mem.Arena, e: Expr) -> []const Expr
+fn push_byte(b: *list.List[u8], c: u8)
+fn new_bytes(a: *mem.Arena) -> list.List[u8]
+fn bytes_text(b: *const list.List[u8]) -> str
+fn push_text(b: *list.List[u8], t: str)
+fn push_code_point(b: *list.List[u8], c: u32)
+fn hex_value(c: u8) -> i64
+
+type Template = struct { good: bool, parts: []const Part }
+
+fn new_parts(a: *mem.Arena) -> list.List[Part]
+fn parse_template(p: *Parser, quoted: bool) -> Template
+fn template_expr(parts: []const Part) -> Expr
+fn parse_quoted(p: *Parser) -> (Expr, bool)
+fn parse_heredoc(p: *Parser) -> (Expr, bool)
+fn parse_number(p: *Parser, negative: bool) -> (Expr, bool)
+fn cat2(a: *mem.Arena, x: str, y: str) -> str
+fn parse_for(p: *Parser, object: bool) -> (Expr, bool)
+fn is_for(p: *const Parser) -> bool
+fn parse_array(p: *Parser) -> (Expr, bool)
+fn new_keys(a: *mem.Arena) -> list.List[Key]
+fn parse_object(p: *Parser) -> (Expr, bool)
+fn parse_args(p: *Parser) -> (list.List[Expr], bool, bool)
+fn parse_postfix(p: *Parser, root: Expr) -> (Expr, bool)
+fn parse_primary(p: *Parser) -> (Expr, bool)
+fn parse_prefix(p: *Parser) -> (Expr, bool)
+fn parse_unary(p: *Parser) -> (Expr, bool)
+fn binary_operator(p: *const Parser) -> str
+fn parse_expression(p: *Parser) -> (Expr, bool)
+fn parse_binary_tail(p: *Parser) -> (Expr, bool)
+fn parse_label(p: *Parser) -> (str, bool)
+fn parse_body(p: *Parser, nested: bool) -> ([]const Item, bool)
+fn parse(a: *mem.Arena, source: str) -> ([]const Item, err)
+```
+
+A read-only HCL2 parser (L041), enough of the native syntax to read Terraform: a body of attributes and blocks with the expression forms the language has -- null, booleans, numbers, quoted strings and heredocs as templates with `${ }` interpolations and `%{ }` directives, tuples, objects, `for` expressions, function calls (with a namespace and a spread final argument), variables, traversals (attributes, `.0` legacy indexes, `[expr]` indexes, `.*` and `[*]` splats), parentheses, conditionals and unary and binary operators (`parse`). It follows `hcl-rs` where that differs from the specification: a chain of binary operators nests to the right without precedence, a minus before a number literal is the negative number, a prefix operator applies to the next primary and the postfix operators then apply to the result, and a heredoc's indent is stripped when it is read. Checked through petcow's own `migrate_hcl` over 530 random Terraform documents on both hosts (D2344).
+
 ### `e.fmt.csv`
 
 ```neper

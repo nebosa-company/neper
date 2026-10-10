@@ -490,7 +490,8 @@
     "x_agent_policy",
     "x_agent_receipt",
     "x_agent_task",
-    "x_migrate"
+    "x_migrate",
+    "x_migrate_terraform"
    ]
   },
   {
@@ -679,7 +680,8 @@
    "fixtures": [
     "fmt_encode",
     "fmt_yaml",
-    "x_migrate"
+    "x_migrate",
+    "x_migrate_terraform"
    ]
   },
   {

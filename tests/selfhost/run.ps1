@@ -3808,6 +3808,18 @@ $htmlAccessibleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $htmlAccessibleWritten -ne 'executable written') { throw 'html_accessible emission failed' }
 $htmlAccessibleOutput = & $htmlAccessiblePath
 if ($LASTEXITCODE -ne 0 -or $htmlAccessibleOutput -ne 'html accessible ok') { throw "html_accessible answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.hcl`: the HCL2 parser over documents with a known shape (the differential check is x_migrate_terraform, D2344).
+$fmtHclPath = Join-Path $testBuild 'fmt-hcl-selfhost.exe'
+$fmtHclWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_hcl\src\main.e') $repo 'x64' 'windows' $fmtHclPath -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtHclWritten -ne 'executable written') { throw 'fmt_hcl emission failed' }
+$fmtHclOutput = & $fmtHclPath
+if ($LASTEXITCODE -ne 0 -or $fmtHclOutput -ne 'fmt hcl ok') { throw "fmt_hcl answered wrongly: exit $LASTEXITCODE" }
+# `x.migrate.terraform`: Terraform to PetCow against petcow's own migrate_hcl over 530 random documents (D2344).
+$xMigrateTerraformPath = Join-Path $testBuild 'x-migrate-terraform-selfhost.exe'
+$xMigrateTerraformWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate_terraform\src\main.e') $repo 'x64' 'windows' $xMigrateTerraformPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xMigrateTerraformWritten -ne 'executable written') { throw 'x_migrate_terraform emission failed' }
+$xMigrateTerraformOutput = & $xMigrateTerraformPath
+if ($LASTEXITCODE -ne 0 -or $xMigrateTerraformOutput -ne 'x migrate terraform ok') { throw "x_migrate_terraform answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

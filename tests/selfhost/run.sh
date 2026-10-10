@@ -3391,6 +3391,18 @@ html_accessible_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/html-accessible-selfhost"
 html_accessible_output=$("$test_build/html-accessible-selfhost")
 [ "$html_accessible_output" = 'html accessible ok' ]
+# `e.fmt.hcl`: the HCL2 parser over documents with a known shape (the differential check is x_migrate_terraform, D2344).
+fmt_hcl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_hcl/src/main.e" "$repo" x64 linux "$test_build/fmt-hcl-selfhost" -j 2)
+[ "$fmt_hcl_written" = 'executable written' ]
+chmod +x "$test_build/fmt-hcl-selfhost"
+fmt_hcl_output=$("$test_build/fmt-hcl-selfhost")
+[ "$fmt_hcl_output" = 'fmt hcl ok' ]
+# `x.migrate.terraform`: Terraform to PetCow against petcow's own migrate_hcl over 530 random documents (D2344).
+x_migrate_terraform_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate_terraform/src/main.e" "$repo" x64 linux "$test_build/x-migrate-terraform-selfhost" -j 2)
+[ "$x_migrate_terraform_written" = 'executable written' ]
+chmod +x "$test_build/x-migrate-terraform-selfhost"
+x_migrate_terraform_output=$("$test_build/x-migrate-terraform-selfhost")
+[ "$x_migrate_terraform_output" = 'x migrate terraform ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
