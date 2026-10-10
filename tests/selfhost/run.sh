@@ -3313,6 +3313,13 @@ x_agent_policy_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/x-agent-policy-selfhost"
 x_agent_policy_output=$("$test_build/x-agent-policy-selfhost")
 [ "$x_agent_policy_output" = 'x agent policy ok' ]
+# `x.agent.bundle` (T042, H38): change bundles and their integration verdict -- overlap, shared semantic identity,
+# stale base, missing receipt and mismatched policy or environment -- against an independent reference (364 cases, D2326).
+x_agent_bundle_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_agent_bundle/src/main.e" "$repo" x64 linux "$test_build/x-agent-bundle-selfhost" -j 2)
+[ "$x_agent_bundle_written" = 'executable written' ]
+chmod +x "$test_build/x-agent-bundle-selfhost"
+x_agent_bundle_output=$("$test_build/x-agent-bundle-selfhost")
+[ "$x_agent_bundle_output" = 'x agent bundle ok' ]
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 algo_trigger_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_trigger/src/main.e" "$repo" x64 linux "$test_build/algo-trigger-selfhost")
 [ "$algo_trigger_written" = 'executable written' ]

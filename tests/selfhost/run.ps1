@@ -3730,6 +3730,13 @@ $xAgentPolicyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $xAgentPolicyWritten -ne 'executable written') { throw 'x_agent_policy emission failed' }
 $xAgentPolicyOutput = & $xAgentPolicyPath
 if ($LASTEXITCODE -ne 0 -or $xAgentPolicyOutput -ne 'x agent policy ok') { throw "x_agent_policy answered wrongly: exit $LASTEXITCODE" }
+# `x.agent.bundle` (T042, H38): change bundles and their integration verdict -- overlap, shared semantic identity,
+# stale base, missing receipt and mismatched policy or environment -- against an independent reference (364 cases, D2326).
+$xAgentBundlePath = Join-Path $testBuild 'x-agent-bundle-selfhost.exe'
+$xAgentBundleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_agent_bundle\src\main.e') $repo 'x64' 'windows' $xAgentBundlePath -j 2
+if ($LASTEXITCODE -ne 0 -or $xAgentBundleWritten -ne 'executable written') { throw 'x_agent_bundle emission failed' }
+$xAgentBundleOutput = & $xAgentBundlePath
+if ($LASTEXITCODE -ne 0 -or $xAgentBundleOutput -ne 'x agent bundle ok') { throw "x_agent_bundle answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.trigger`: zoned cron, schedule normalization, missed-fire policies and trigger plans against appdor (1377 cases, D2306).
 $algoTriggerPath = Join-Path $testBuild 'algo-trigger-selfhost.exe'
 $algoTriggerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_trigger\src\main.e') $repo 'x64' 'windows' $algoTriggerPath
