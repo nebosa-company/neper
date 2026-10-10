@@ -2093,4 +2093,5 @@ D2335	392	L036 closed: no dag module
 D2336	1033	L037 part one: e.algo.chain, the tamper-evident history checked against appdor's
 D2336	1033	L037 part one: e.algo.chain, the tamper-evident history checked against appdor's
 D2337	1122	L037 part two: e.algo.sync, the offline outbox and delta sync checked against appdor's
-D2338	929	L037 part three: e.algo.realtime, collaboration semantics checked against appdor's
+D2338	930	L037 part three: e.algo.realtime, collaboration semantics checked against appdor's
+D2339	1104	L037 part four: e.algo.syncjob, scheduled sync planning checked against appdor's

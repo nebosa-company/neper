@@ -6087,6 +6087,78 @@ fn take_events(l: *Lifecycle) -> []const json.Value
 
 Real-time collaboration semantics (L037), after appdor's `src/realtime/index.js`: presence with a heartbeat window and pseudonymous viewing for portal users, version-based cell resolution with last-write-wins on a stale edit (`resolve_edit`), per-field record merge with provenance (`merge_record`), the degradation status, topic and subscription authorization with token scopes and eviction (`TopicAuth`), the connection lifecycle with doubling reconnect delay, jitter and gap repair (`Lifecycle`), delivery telemetry (`Telemetry`), event payload trimming to readable rows and fields, and view-membership evaluation. The transport, the clock and the jitter are the host's. Checked against appdor's own module over 220 random operation scripts on both hosts (D2338).
 
+### `e.algo.syncjob`
+
+```neper
+error Invalid
+
+fn sync_lease_ms() -> f64
+fn min_interval_minutes() -> f64
+fn max_backoff_minutes() -> f64
+fn failing_after() -> f64
+
+type Translate = struct { ctx: *void, run: fn(*void, str, str) -> str }
+
+fn text(s: str) -> json.Value
+fn flag(b: bool) -> json.Value
+fn number(a: *mem.Arena, n: i64) -> json.Value
+fn cat(a: *mem.Arena, x: str, y: str) -> str
+fn obj(a: *mem.Arena) -> ir.Obj
+fn put(o: *ir.Obj, key: str, v: json.Value)
+fn get(v: json.Value, key: str) -> (json.Value, bool)
+fn items(v: json.Value) -> []const json.Value
+fn push_value(l: *list.List[json.Value], v: json.Value)
+fn empty_list(a: *mem.Arena) -> list.List[json.Value]
+fn nan() -> f64
+fn is_finite(x: f64) -> bool
+fn as_text(v: json.Value) -> str
+fn has_value(v: json.Value, key: str) -> bool
+fn to_ms(v: json.Value) -> f64
+fn iso_ms(a: *mem.Arena, ms: f64) -> (str, err)
+fn number_or(v: json.Value, fallback: f64) -> f64
+fn parse_decimal(s: str) -> f64
+fn max_f(x: f64, y: f64) -> f64
+fn min_f(x: f64, y: f64) -> f64
+fn lease_available(row: json.Value, me: str, now: json.Value) -> bool
+fn status_of(row: json.Value) -> str
+fn next_run_text(row: json.Value) -> str
+fn due_bindings(a: *mem.Arena, rows: []const json.Value, now: json.Value) -> []const json.Value
+fn backoff_minutes(consecutive_failures: json.Value, interval_minutes: json.Value) -> f64
+fn schedule_after_run(a: *mem.Arena, row: json.Value, failed: bool, now: json.Value) -> (json.Value, err)
+fn trunc(x: f64) -> f64
+fn number_value(a: *mem.Arena, x: f64) -> json.Value
+fn binding_health(a: *mem.Arena, row: json.Value) -> json.Value
+fn apply_deletion_policy(a: *mem.Arena, deletes: []const json.Value, policy: str) -> json.Value
+fn flag_plan(a: *mem.Arena, flagged: []const json.Value) -> json.Value
+fn strict_true(v: json.Value) -> bool
+fn plain(a: *mem.Arena, v: json.Value) -> str
+fn write_plain(b: *str.Builder, v: json.Value) -> err
+fn unflag_plan(a: *mem.Arena, local_rows: []const json.Value, remote_rows: []const json.Value, sync_key: str) -> json.Value
+fn is_sql_address_code(code: str) -> bool
+fn sync_refusal_key(code: str) -> (str, bool)
+fn describe_sync_refusal(code: str, translate: *const Translate) -> str
+fn coerce_value(a: *mem.Arena, structured: bool, value: json.Value, has: bool) -> json.Value
+fn in_values(values: []const json.Value, v: json.Value) -> bool
+fn same_scalar(x: json.Value, y: json.Value) -> bool
+fn validate_sync_key(a: *mem.Arena, columns: []const json.Value, sync_key: str, has_key: bool, sample: []const json.Value) -> json.Value
+fn quarantine_by_key(a: *mem.Arena, remote_rows: []const json.Value, sync_key: str) -> json.Value
+fn count_of(v: json.Value) -> i64
+fn row_field(row: json.Value, key: str) -> (json.Value, bool)
+fn row_differs(a: *mem.Arena, x: json.Value, y: json.Value, fields: []const str, has_fields: bool) -> bool
+fn key_equal(x: json.Value, hx: bool, y: json.Value, hy: bool) -> bool
+fn sync_plan(a: *mem.Arena, local_rows: []const json.Value, remote_rows: []const json.Value, key_field: str, fields: []const str, has_fields: bool, bulk_load: bool) -> json.Value
+fn plan_pull(a: *mem.Arena, local_rows: []const json.Value, remote_rows: []const json.Value, sync_key: str, fields: []const str, partial: bool) -> json.Value
+fn pull_write_origin(plan: json.Value) -> str
+fn run_ledger_row(a: *mem.Arena, synced_table_id: json.Value, trigger: json.Value, plan: json.Value, failure: json.Value, started: json.Value, finished: json.Value) -> json.Value
+fn next_run_at(a: *mem.Arena, row: json.Value, now: json.Value) -> (str, err)
+fn records_from_body(body: json.Value) -> (json.Value, bool)
+fn find_named(rows: []const json.Value, name: str) -> (json.Value, bool)
+fn drift_report(a: *mem.Arena, stored: []const json.Value, observed: []const json.Value) -> json.Value
+fn accept_drift(a: *mem.Arena, stored: []const json.Value, report: json.Value, add: []const str) -> json.Value
+```
+
+Scheduled external sync (L037), after appdor's `src/sync/sync-schedule.js`, `sync-refusal.js` and the pure half of `synced-table.js`: the lease a worker holds on a binding (`lease_available`), which bindings are due (`due_bindings`), the doubling retry delay and the next run (`backoff_minutes`, `schedule_after_run`, `next_run_at`), binding health, what a deletion policy and flag plans do to rows the source lost, the sync-key check, quarantine of rows with no usable key, the insert, update and delete plan of one pull (`sync_plan`, `plan_pull`), the run ledger row, and schema drift against a stored column mapping with its acceptance (`drift_report`, `accept_drift`). Words come back as appdor's catalogue fallbacks; refusals are translated by an injected hook. Checked against appdor's own modules over 700 random inputs on both hosts (D2339).
+
 ### `e.algo.fulltext`
 
 ```neper

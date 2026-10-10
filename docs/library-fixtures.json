@@ -466,6 +466,7 @@
     "algo_project",
     "algo_realtime",
     "algo_sync",
+    "algo_syncjob",
     "algo_transpile",
     "algo_trigger",
     "algo_view",

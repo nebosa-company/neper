@@ -3335,6 +3335,13 @@ algo_realtime_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/algo-realtime-selfhost"
 algo_realtime_output=$("$test_build/algo-realtime-selfhost")
 [ "$algo_realtime_output" = 'algo realtime ok' ]
+# `e.algo.syncjob`: leases, due bindings, backoff, schedules, health, deletion policy, sync-key checks,
+# # quarantine, pull plans, ledger rows and schema drift against appdor's src/sync (700 inputs, D2339).
+algo_syncjob_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_syncjob/src/main.e" "$repo" x64 linux "$test_build/algo-syncjob-selfhost" -j 2)
+[ "$algo_syncjob_written" = 'executable written' ]
+chmod +x "$test_build/algo-syncjob-selfhost"
+algo_syncjob_output=$("$test_build/algo-syncjob-selfhost")
+[ "$algo_syncjob_output" = 'algo syncjob ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
