@@ -17594,6 +17594,50 @@ fn registered_types(a: *mem.Arena, r: Registry) -> []const str
 
 Declarative REST resources and the provider registry (L047), after Petcow's `provider/declarative.rs` (its pure half) and `provider/mod.rs`: a `Def` describes a CRUD-shaped REST resource, and `render_with` (placeholders from the resource name, its scalar attributes, then the cloud context), `get_by_path`/`set_by_path`/`list_items`, `build_body`/`apply_create_body_vars`/`wrap_create_body`, `parse_attrs`, `scope_from_real_id`, `update_url`/`effective_update_mask`, the three operation dialects (`lro_operation_name`, `operation_status_for`, `operation_poll_target`: Google long-running, Compute self-link, OCI work request), `observed_name`/`is_managed`/`to_observed`, `lro_max_polls`/`settle_waits` and a `Registry` with alias keys and native-versus-bridged precedence are everything that needs no network. Checked against Petcow's own Rust (compiled with thin shims) over 1,051 cases on both hosts (D2352).
 
+### `x.cloud.manifest`
+
+```neper
+type Resource = struct { type_name: str, cloud: str, create_method: str, item_url: str, create_url: str, list_url: str, list_items_field: str, has_marker: bool, marker: rest.Marker, copy_attrs: []const rest.Pair, output_attrs: []const str, real_id_field: str, has_name_field: bool, name_field: str, has_name_value_template: bool, name_value_template: str, has_update_method: bool, update_method: str, has_update_mask: bool, update_mask: str, has_operation_url: bool, operation_url: str, has_timeout: bool, timeout_minutes: u32, operation_style: u8, has_create_wrapper: bool, wrapper_key: str, has_wrapper_id: bool, wrapper_id_field: str, server_named: bool, has_name_suffix: bool, name_suffix: str, has_read_method: bool, read_method: str, has_list_method: bool, list_method: str, has_delete_method: bool, delete_method: str, has_update_target_url: bool, update_target_url: str, has_delete_url: bool, delete_url: str, has_parent: bool, parent: rest.Parent, create_body_vars: []const rest.Pair, has_observed_name_field: bool, observed_name_field: str }
+type Manifest = struct { valid: bool, message: str, resources: []const Resource }
+type Rpc = struct { endpoint: str, version: str, method: str, create_action: str, create_params: []const rest.Pair, read_action: str, read_params: []const rest.Pair, list_action: str, list_params: []const rest.Pair, delete_action: str, delete_params: []const rest.Pair, has_update: bool, update_action: str, update_params: []const rest.Pair }
+
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn shape_error(a: *mem.Arena, what: str) -> str
+fn doc_error(a: *mem.Arena, what: str) -> str
+fn failed(message: str) -> Manifest
+fn key_text(v: yaml.Value) -> (str, bool)
+fn scalar_text(a: *mem.Arena, v: yaml.Value) -> (str, bool)
+
+type Reader = struct { a: *mem.Arena, message: str, failed: bool }
+
+fn bad(r: *Reader, what: str)
+fn mapping(v: yaml.Value) -> ([]const yaml.Pair, bool)
+fn sequence(v: yaml.Value) -> ([]const yaml.Value, bool)
+fn is_null(v: yaml.Value) -> bool
+fn opt_text(r: *Reader, m: []const yaml.Pair, name: str) -> (str, bool)
+fn req_text(r: *Reader, m: []const yaml.Pair, name: str) -> str
+fn text_or(r: *Reader, m: []const yaml.Pair, name: str, fallback: str) -> str
+fn find(m: []const yaml.Pair, name: str) -> (yaml.Value, bool)
+fn text_map(r: *Reader, m: []const yaml.Pair, name: str) -> []const rest.Pair
+fn allowed_keys(r: *Reader, m: []const yaml.Pair, allowed: []const str, owner: str)
+fn op_of(r: *Reader, v: yaml.Value, owner: str) -> (str, []const rest.Pair)
+fn debug_char(a: *mem.Arena, c: u8) -> str
+fn str_of_byte(c: u8) -> str
+fn check_query_safe(a: *mem.Arena, kind: str, text: str) -> (str, bool)
+
+type Url = struct { valid: bool, message: str, value: str }
+
+fn rpc_url(a: *mem.Arena, rpc: Rpc, action: str, params: []const rest.Pair) -> Url
+fn rsplit_dot(s: str) -> (str, bool)
+fn check_pair_marker_stamped(a: *mem.Arena, type_name: str, managed_key: str, name_key: str, params: []const rest.Pair) -> (str, bool)
+fn empty_marker() -> rest.Marker
+fn declarative_clouds() -> str
+fn convert(a: *mem.Arena, r: *Reader, m: []const yaml.Pair) -> (Resource, str, bool)
+fn parse_manifest(a: *mem.Arena, source: str) -> Manifest
+```
+
+External resource manifests (L047), after Petcow's `provider/manifest.rs`: `parse_manifest` reads a YAML file of `resources:` (known keys only, typed values, string maps in key order) into definitions bound to a cloud, with the reference's validations in its order: the cloud must be declarative and agree with the type's prefix; an `rpc:` block lowers to the item, list, create, delete and update URLs and the verbs (and refuses explicit URLs beside it; each action, version and parameter is checked for characters that would split the query string); a marker and `observed_name_field` cannot both name the resource; `create_body_vars` may not collide with what `copy_attrs` or `name_field` writes; a pair-list marker must be stamped by the RPC create's params. Checked against Petcow's own `manifest.rs` over 117 manifests on both hosts (D2353).
+
 ### `e.fmt.xml`
 
 ```neper

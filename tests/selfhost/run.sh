@@ -3457,6 +3457,12 @@ x_cloud_rest_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/x-cloud-rest-selfhost"
 x_cloud_rest_output=$("$test_build/x-cloud-rest-selfhost")
 [ "$x_cloud_rest_output" = 'x cloud rest ok' ]
+# x.cloud.manifest against Petcow's manifest.rs (117 manifests, D2353).
+x_cloud_manifest_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_cloud_manifest/src/main.e" "$repo" x64 linux "$test_build/x-cloud-manifest-selfhost" -j 2)
+[ "$x_cloud_manifest_written" = 'executable written' ]
+chmod +x "$test_build/x-cloud-manifest-selfhost"
+x_cloud_manifest_output=$("$test_build/x-cloud-manifest-selfhost")
+[ "$x_cloud_manifest_output" = 'x cloud manifest ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

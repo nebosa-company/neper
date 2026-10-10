@@ -620,17 +620,6 @@
       "evidence": "Vaper css/container_query.dart (Kleene and/or/not plus scope proximity), style_resolver id/class/tag rule-index buckets with origin/importance/specificity/order/proximity sort, selector_matcher right-to-left combinator walk (adapted off the package:html DOM), a11y role map with aria-labelledby over aria-label over native over content. Port logic kernels into e.algo.logic and e.ui.accessibility. PART ONE (D2343): lib/e/fmt/css/container.e, e.fmt.css.container -- container_query.dart; fixture text_css_container, 400 trees. PART TWO (D2343): lib/e/fmt/css/match.e, e.fmt.css.match -- selector_matcher.dart over an e.fmt.html document; fixture text_css_match, 560 cases. PART THREE (D2343): lib/e/fmt/html/accessible.e, e.fmt.html.accessible -- accessibility_builder.dart over an e.fmt.html document; fixture html_accessible, 220 documents. NOT DONE: the style_resolver kernels with no public surface to compare against (rule-index buckets, @scope proximity, declaration precedence incl. hints and layers, containersMatch over a container stack)."
     },
     {
-      "id": "L047",
-      "category": "library",
-      "group": "Drivers",
-      "order": 145,
-      "title": "Declarative REST driver core with provider-trait shape",
-      "score": 0.6,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Petcow src/provider/mod.rs:122 Provider trait (read/read_scoped/create/update/delete/discover/discover_scoped/discover_unmanaged, parent_link) plus Registry with alias keys and native-vs-bridged precedence, and declarative.rs/manifest.rs/http.rs (list_url/item_url manifests, name- vs id-addressed parents). Highest-leverage driver pattern: new clouds via manifest data over e.net.http/tls. Mirrors the e.db driver contract. Plan: docs/petcow.md D1/D2. Part one landed: x.cloud.rest (declarative helpers, operation dialects, registry), 1,051 differential cases against Petcow's Rust on Windows and Linux (D2352). Remaining: manifest.rs (YAML manifest to Def with its validations) and the HTTP execution loop (host code)."
-    },
-    {
       "id": "L048",
       "category": "library",
       "group": "Drivers",

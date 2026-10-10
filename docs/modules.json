@@ -141,6 +141,7 @@
     "x.identity.xml",
     "x.identity.saml",
     "x.cloud.rest",
+    "x.cloud.manifest",
     "e.fmt.xml",
     "e.fmt.xsd",
     "e.fmt.xsd.schema",
@@ -2329,6 +2330,21 @@
     "e.fmt.json",
     "e.mem",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.cloud.manifest",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.fmt.yaml",
+    "e.mem",
+    "e.str",
+    "x.cloud.rest"
    ],
    "blocked_by": []
   },
