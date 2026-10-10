@@ -17131,6 +17131,91 @@ fn build_logout_url(a: *mem.Arena, config: Config, id_token_hint: str, post_logo
 
 OpenID Connect relying party with PKCE (L045), after Appdor's `src/identity/oidc.js`: `parse_discovery` and `discovery_url`, `pkce_challenge`/`verify_pkce`/`create_pkce_pair`, `build_authorization_url` and `build_token_request` (values, form-urlencoded in the reference's parameter order, `client_secret_basic` when a secret is given), `parse_callback`, `validate_id_token` in the order of OpenID Connect Core 3.1.3.7 (signature, issuer, audience and `azp`, time, nonce, `max_age`), `profile_from_claims`, `link_policy` and `build_logout_url`. Checked against Appdor's own functions over 536 cases on both hosts (D2348).
 
+### `x.identity.scim`
+
+```neper
+type Token = struct { kind: u8, value: str }
+type Node = struct { kind: u8, op: u8, attribute: str, path: str, left: usize, right: usize, value: json.Value }
+type Parser = struct { tokens: []const Token, pos: usize, nodes: []Node, count: usize, failed: bool, message: str }
+type Filter = struct { valid: bool, message: str, nodes: []const Node, root: usize }
+type PatchPath = struct { attribute: str, has_filter: bool, filter: Filter, has_sub: bool, sub: str, has_error: bool, message: str }
+type Patched = struct { valid: bool, message: str, resource: json.Value }
+type Page = struct { start_index: f64, total: json.Value, resources: []const json.Value }
+
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn sv(s: str) -> json.Value
+fn is_sep(c: u8) -> bool
+fn lower(a: *mem.Arena, s: str) -> str
+fn same_lower(a: *mem.Arena, x: str, y: str) -> bool
+fn tokenize(a: *mem.Arena, s: str) -> []const Token
+fn fail(p: *Parser, message: str) -> usize
+fn new_node(p: *Parser, n: Node) -> usize
+fn blank(kind: u8) -> Node
+fn is_number_literal(s: str) -> bool
+fn literal(t: Token) -> json.Value
+fn op_code(a: *mem.Arena, s: str) -> i32
+fn peek_value_is(p: *Parser, v: str) -> bool
+fn peek_word_is(a: *mem.Arena, p: *Parser, v: str) -> bool
+fn parse_value_path(a: *mem.Arena, p: *Parser, attr: str) -> usize
+fn parse_primary(a: *mem.Arena, p: *Parser) -> usize
+fn parse_and(a: *mem.Arena, p: *Parser) -> usize
+fn parse_or(a: *mem.Arena, p: *Parser) -> usize
+fn parse_filter(a: *mem.Arena, input: str) -> Filter
+fn find_key(a: *mem.Arena, object: json.Value, key: str) -> (json.Value, bool)
+fn get_attribute(a: *mem.Arena, resource: json.Value, path: str) -> (json.Value, bool)
+fn number_of(v: json.Value) -> f64
+fn text_value(a: *mem.Arena, v: json.Value) -> str
+fn to_number(v: json.Value) -> f64
+fn is_string(v: json.Value) -> bool
+fn strict_equal(x: json.Value, y: json.Value) -> bool
+fn lowered_value(a: *mem.Arena, v: json.Value) -> json.Value
+fn less(x: json.Value, y: json.Value) -> bool
+fn compare_values(a: *mem.Arena, actual: json.Value, found: bool, op: u8, expected: json.Value) -> bool
+fn eval(a: *mem.Arena, nodes: []const Node, at: usize, resource: json.Value) -> bool
+fn evaluate(a: *mem.Arena, filter: Filter, resource: json.Value) -> bool
+fn index_of(s: str, c: u8) -> i64
+fn last_index_of(s: str, c: u8) -> i64
+fn slice_of(s: str, from: i64, to: i64) -> str
+fn no_filter() -> Filter
+fn parse_patch_path(a: *mem.Arena, raw: str) -> PatchPath
+fn object_of(a: *mem.Arena, v: json.Value) -> ir.Obj
+fn without(a: *mem.Arena, v: json.Value, key: str) -> json.Value
+fn set_path(a: *mem.Arena, base: json.Value, parts: []const str, at: usize, value: json.Value, has_value: bool) -> json.Value
+fn split_dots(a: *mem.Arena, attribute: str, sub: str, has_sub: bool) -> []const str
+fn patch_failed(msg: str) -> Patched
+fn apply_patch_op(a: *mem.Arena, resource: json.Value, operation: json.Value) -> Patched
+fn apply_patch(a: *mem.Arena, resource: json.Value, body: json.Value) -> Patched
+fn escape_into(a: *mem.Arena, s: str) -> str
+fn s_of(c: u8) -> str
+fn stringify(a: *mem.Arena, v: json.Value, keys: []const str) -> str
+fn hex_text(a: *mem.Arena, x: u32) -> str
+fn resource_version(a: *mem.Arena, resource: json.Value) -> str
+fn truthy_text(v: json.Value, key: str) -> (str, bool)
+fn put_opt(o: *ir.Obj, key: str, v: json.Value, has: bool)
+fn sub_text(a: *mem.Arena, v: json.Value, key: str) -> str
+fn first_truthy(a: *mem.Arena, v: json.Value, k1: str, k2: str, k3: str) -> (json.Value, bool)
+fn to_scim_user(a: *mem.Arena, user: json.Value, base_url: str) -> json.Value
+fn id_or_self(a: *mem.Arena, m: json.Value) -> (json.Value, str)
+fn to_scim_group(a: *mem.Arena, group: json.Value, base_url: str) -> json.Value
+fn split_list(a: *mem.Arena, v: json.Value) -> []const str
+fn js_trim(s: str) -> str
+fn listed(names: []const str, key: str) -> bool
+fn head_of(s: str) -> str
+fn project_attributes(a: *mem.Arena, resource: json.Value, attributes: json.Value, excluded: json.Value) -> json.Value
+fn trunc_f64(x: f64) -> f64
+fn list_response(a: *mem.Arena, resources: []const json.Value, start_index: json.Value, has_start: bool, count: json.Value, has_count: bool, total_results: json.Value, has_total: bool) -> json.Value
+fn scim_error(a: *mem.Arena, status: str, detail: str, scim_type: str) -> json.Value
+fn one_array(a: *mem.Arena, s: str) -> json.Value
+fn flag(a: *mem.Arena, supported: bool) -> json.Value
+fn int_value(a: *mem.Arena, n: i64) -> json.Value
+fn service_provider_config(a: *mem.Arena, base_url: str, documentation_uri: str) -> json.Value
+fn resource_type(a: *mem.Arena, base_url: str, name: str, endpoint: str, schema: str) -> json.Value
+fn resource_types(a: *mem.Arena, base_url: str) -> json.Value
+fn sort_resources(a: *mem.Arena, resources: []const json.Value, sort_by: str, descending: bool) -> []const json.Value
+```
+
+SCIM 2.0 protocol core, RFC 7643 and RFC 7644 (L045), after Appdor's `src/identity/scim-protocol.js`, over JSON values: the filter grammar (`parse_filter`, `evaluate`: `eq ne co sw ew gt ge lt le pr`, `and`, `or`, `not`, groups and value paths, case-insensitive, with the reference's own error messages), `get_attribute`, the PATCH path grammar and `add`/`replace`/`remove` applied immutably (`parse_patch_path`, `apply_patch_op`, `apply_patch`), `project_attributes`, `list_response`, `scim_error`, the content-derived `resource_version`, `to_scim_user` and `to_scim_group`, `service_provider_config`, `resource_types` and `sort_resources`. Checked against Appdor's own functions over 594 cases on both hosts (D2349).
+
 ### `e.fmt.xml`
 
 ```neper

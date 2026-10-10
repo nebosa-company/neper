@@ -3844,6 +3844,12 @@ $xIdentityOidcWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $xIdentityOidcWritten -ne 'executable written') { throw 'x_identity_oidc emission failed' }
 $xIdentityOidcOutput = & $xIdentityOidcPath
 if ($LASTEXITCODE -ne 0 -or $xIdentityOidcOutput -ne 'x identity oidc ok') { throw "x_identity_oidc answered wrongly: exit $LASTEXITCODE" }
+# x.identity.scim against Appdor's scim-protocol.js (594 cases, D2349).
+$xIdentityScimPath = Join-Path $testBuild 'x-identity-scim-selfhost.exe'
+$xIdentityScimWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_identity_scim\src\main.e') $repo 'x64' 'windows' $xIdentityScimPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xIdentityScimWritten -ne 'executable written') { throw 'x_identity_scim emission failed' }
+$xIdentityScimOutput = & $xIdentityScimPath
+if ($LASTEXITCODE -ne 0 -or $xIdentityScimOutput -ne 'x identity scim ok') { throw "x_identity_scim answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

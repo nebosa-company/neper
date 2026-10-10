@@ -3427,6 +3427,12 @@ x_identity_oidc_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/x-identity-oidc-selfhost"
 x_identity_oidc_output=$("$test_build/x-identity-oidc-selfhost")
 [ "$x_identity_oidc_output" = 'x identity oidc ok' ]
+# x.identity.scim against Appdor's scim-protocol.js (594 cases, D2349).
+x_identity_scim_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_identity_scim/src/main.e" "$repo" x64 linux "$test_build/x-identity-scim-selfhost" -j 2)
+[ "$x_identity_scim_written" = 'executable written' ]
+chmod +x "$test_build/x-identity-scim-selfhost"
+x_identity_scim_output=$("$test_build/x-identity-scim-selfhost")
+[ "$x_identity_scim_output" = 'x identity scim ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

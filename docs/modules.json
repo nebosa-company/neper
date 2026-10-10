@@ -135,6 +135,7 @@
     "e.fmt.xlsx",
     "x.identity.jose",
     "x.identity.oidc",
+    "x.identity.scim",
     "e.fmt.xml",
     "e.fmt.xsd",
     "e.fmt.xsd.schema",
@@ -2256,6 +2257,23 @@
     "e.mem",
     "e.str",
     "x.identity.jose"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.identity.scim",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.chain",
+    "e.algo.formula",
+    "e.algo.formula.text",
+    "e.algo.ir",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },
