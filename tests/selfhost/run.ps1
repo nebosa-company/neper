@@ -3731,6 +3731,13 @@ $algoFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $algoFlowWritten -ne 'executable written') { throw 'algo_flow emission failed' }
 $algoFlowOutput = & $algoFlowPath
 if ($LASTEXITCODE -ne 0 -or $algoFlowOutput -ne 'algo flow ok') { throw "algo_flow answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.chain`: the tamper-evident history chain, diff, WAS and CHANGED predicates, retention and export
+# against appdor's src/history/tamper-evident.js (220 scripts, D2336).
+$algoChainPath = Join-Path $testBuild 'algo-chain-selfhost.exe'
+$algoChainWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_chain\src\main.e') $repo 'x64' 'windows' $algoChainPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoChainWritten -ne 'executable written') { throw 'algo_chain emission failed' }
+$algoChainOutput = & $algoChainPath
+if ($LASTEXITCODE -ne 0 -or $algoChainOutput -ne 'algo chain ok') { throw "algo_chain answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

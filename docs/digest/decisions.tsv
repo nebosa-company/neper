@@ -2089,4 +2089,6 @@ D2331	2016	L036 (runtime half, first piece): `e.algo.journal`, the run journal a
 D2332	2001	L036 (runtime half, second piece): `e.algo.ir`, the definition a durable run executes
 D2333	2365	L036 (runtime half, third piece): `e.algo.workflow`, the interpreter, with everything outside it injected
 D2334	1260	L036 part five: e.algo.flow, the inline interpreter checked against flow-engine.js
-D2335	391	L036 closed: no dag module
+D2335	392	L036 closed: no dag module
+D2336	1033	L037 part one: e.algo.chain, the tamper-evident history checked against appdor's
+D2336	1032	L037 part one: e.algo.chain, the tamper-evident history checked against appdor's

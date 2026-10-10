@@ -3314,6 +3314,13 @@ algo_flow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/algo-flow-selfhost"
 algo_flow_output=$("$test_build/algo-flow-selfhost")
 [ "$algo_flow_output" = 'algo flow ok' ]
+# `e.algo.chain`: the tamper-evident history chain, diff, WAS and CHANGED predicates, retention and export
+# against appdor's src/history/tamper-evident.js (220 scripts, D2336).
+algo_chain_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_chain/src/main.e" "$repo" x64 linux "$test_build/algo-chain-selfhost" -j 2)
+[ "$algo_chain_written" = 'executable written' ]
+chmod +x "$test_build/algo-chain-selfhost"
+algo_chain_output=$("$test_build/algo-chain-selfhost")
+[ "$algo_chain_output" = 'algo chain ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

@@ -5891,6 +5891,51 @@ fn run_flow(a: *mem.Arena, hooks: *const Hooks, flow: json.Value, trigger: json.
 
 The inline flow interpreter (L036), after appdor's `src/workflow/flow-engine.js`: a flat flow -- a trigger and an ordered graph of `condition`, `branch`, `loop`, `find`, `set`, `create`/`update`/`delete`, `email`/`notification`/`http`, `script`, `ai` and `run-workflow` steps -- executed synchronously against a trigger and answered as a step-level run log (`run_flow`). It is what transition post-functions run on: a graph executed now, inside a transaction the caller holds, with the step budget (`budget_exceeded`, status `terminated`), the cascade guard and the trace; durable waits are `e.algo.workflow`'s. Conditions and `formula` values are `e.algo.formula` over the trigger, the loop item and the variables; filter trees, the dataset, script and AI steps and every effect handler (retried, secrets redacted from the log) are injected as `Hooks`. A step type it does not know ends the run `failed` with reason `unknown_step`. Checked against the real engine over 400 random flows on both hosts (D2334).
 
+### `e.algo.chain`
+
+```neper
+error Invalid
+
+fn text(s: str) -> json.Value
+fn hex_digit(n: u8) -> u8
+fn write_string(b: *str.Builder, s: str) -> err
+fn write_value(a: *mem.Arena, b: *str.Builder, v: json.Value, sorted: bool) -> err
+fn canonical_json(a: *mem.Arena, v: json.Value) -> (str, err)
+fn plain_json(a: *mem.Arena, v: json.Value) -> (str, err)
+fn sha256_hex(a: *mem.Arena, s: str) -> (str, err)
+fn get(v: json.Value, key: str) -> (json.Value, bool)
+fn member_text(v: json.Value, key: str) -> (str, bool)
+fn items(v: json.Value) -> []const json.Value
+fn obj(a: *mem.Arena) -> ir.Obj
+fn put(o: *ir.Obj, key: str, v: json.Value)
+fn number(a: *mem.Arena, n: i64) -> json.Value
+fn last_hash(chain: *const list.List[json.Value]) -> str
+fn chain_append(a: *mem.Arena, chain: *list.List[json.Value], entry: json.Value) -> (json.Value, err)
+fn bare(a: *mem.Arena, record: json.Value) -> json.Value
+fn verify_chain(a: *mem.Arena, chain: []const json.Value) -> (json.Value, err)
+fn is_object_value(v: json.Value) -> bool
+fn same_value(a: *mem.Arena, x: json.Value, y: json.Value) -> bool
+fn in_list(names: []const str, key: str) -> bool
+fn diff_records(a: *mem.Arena, before: json.Value, after: json.Value, ignore: []const str) -> ([]const json.Value, err)
+fn default_ignore(a: *mem.Arena) -> []const str
+fn record_change(a: *mem.Arena, chain: *list.List[json.Value], change: json.Value) -> (json.Value, err)
+fn at_of(rev: json.Value) -> str
+fn revisions_of(a: *mem.Arena, revisions: []const json.Value, record_id: json.Value) -> ([]const json.Value, err)
+fn json_equal(a: *mem.Arena, x: json.Value, y: json.Value) -> bool
+fn changes_field(rev: json.Value, field: str) -> bool
+fn was(a: *mem.Arena, revisions: []const json.Value, record_id: json.Value, field: str, value: json.Value, options: json.Value) -> bool
+fn changed(a: *mem.Arena, revisions: []const json.Value, record_id: json.Value, field: str, options: json.Value) -> bool
+fn filter_by_history(a: *mem.Arena, records: []const json.Value, revisions: []const json.Value, predicate: json.Value) -> ([]const json.Value, err)
+fn field_history(a: *mem.Arena, revisions: []const json.Value, record_id: json.Value, fields: []const str) -> ([]const json.Value, err)
+fn window_days(plan: str, windows: json.Value, has_windows: bool) -> (f64, bool)
+fn parse_ms(s: str) -> (i64, bool)
+fn iso_ms(a: *mem.Arena, ms: i64) -> (str, err)
+fn apply_history_retention(a: *mem.Arena, chain: []const json.Value, plan: str, now_ms: i64, windows: json.Value, has_windows: bool) -> (json.Value, err)
+fn export_history(a: *mem.Arena, chain: []const json.Value, record_id: json.Value, has_record_id: bool) -> (json.Value, err)
+```
+
+Tamper-evident record history (L037), after appdor's `src/history/tamper-evident.js` and `diffRecords`: a SHA-256 hash chain over an audit stream (`chain_append`, `verify_chain` naming the first broken link), the field-level diff that makes a revision (`diff_records`, `record_change`), the WAS and CHANGED temporal predicates and the history filter built on them (`was`, `changed`, `filter_by_history`, `field_history`), plan-tiered retention that rebuilds the retained suffix behind a `retention-truncation` marker, and a portable export. Values are JSON; the canonical text has keys in byte order and no whitespace. Checked against appdor's own module over 220 random operation scripts on both hosts (D2336).
+
 ### `e.algo.fulltext`
 
 ```neper
