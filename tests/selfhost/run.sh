@@ -6866,6 +6866,15 @@ test_short_project_status=0
 sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_build/conformance-tools-test-project-short.jsonl"
 cmp -s "$test_build/conformance-tools-test-project-short.jsonl" "$conformance_root/tools/test_project.expected.jsonl" || { printf '%s
 ' "the operand-less test differs from test-project" >&2; exit 1; }
+# `test-project ... --json --compact` (T041, H32): the same run without its passing `test`
+# records -- one failing record, the summary still counting all three, nothing else.
+compact_status=0
+$test_build/neper-self test-project "$conformance_root/tools/test_project" "$repo" x64 linux "$test_build" --json --compact > "$test_build/conformance-tools-test-project-compact.jsonl" || compact_status=$?
+[ "$compact_status" = 1 ]
+[ "$(wc -l < "$test_build/conformance-tools-test-project-compact.jsonl")" = 4 ]
+grep -q '"name":"is_odd".*"outcome":"failed"' "$test_build/conformance-tools-test-project-compact.jsonl"
+grep -q '"passed":2,"failed":1,"crashed":0,"timeout":0,"total":3' "$test_build/conformance-tools-test-project-compact.jsonl"
+! grep -q '"outcome":"passed"' "$test_build/conformance-tools-test-project-compact.jsonl"
 # `fmt FILE` formats the file in place, and `fmt` / `fmt --check` with no operand cover
 # every `.e` under the project's src/ and lib/ (D295): a project of one non-canonical
 # file fails the check, is formatted to the corpus's canonical text, then passes.

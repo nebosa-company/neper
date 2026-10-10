@@ -1703,10 +1703,10 @@
       "group": "Tooling",
       "order": 41,
       "title": "T2.2 edit and test evidence: plans, contracts, structured tests",
-      "score": 0,
+      "score": 0.05,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Planning only (D1954). T2.2 slice missing: transactional semantic plans, structured tests, change contracts, flaky-test semantics, runtime failures and compatibility diffs. Terminal state without T2.3 trust evidence is incomplete, never verified. Pickup immediately after the chart cluster."
+      "evidence": "Planning only (D1954). T2.2 slice missing: transactional semantic plans, structured tests, change contracts, flaky-test semantics, runtime failures and compatibility diffs. Terminal state without T2.3 trust evidence is incomplete, never verified. Pickup immediately after the chart cluster. FIRST SLICE (D2320): `test-file`/`test-project ... --json --compact` leaves passing `test` records out of the v1 stream, summary unchanged; conformance row in both suites. NOT DONE: test plans with identities and selection reasons, executed/cached/not-run evidence, structured expected/actual, setup/cancellation outcomes, output artifacts, change contract, flaky semantics, runtime failures, compatibility diff."
     },
     {
       "id": "T042",

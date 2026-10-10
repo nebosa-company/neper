@@ -2343,7 +2343,7 @@ fn json_usize_after(line: str, key: str) -> usize {
 // byte order, each in its own process, the children's streams merged -- the header once,
 // every `test` record and every diagnostic, one `test_summary` adding the children's up,
 // one result. A module with no tests contributes nothing but its count.
-fn test_project_command(a: *mem.Arena, args: []str) -> err {
+fn test_project_command(a: *mem.Arena, args: []str, compact: bool) -> err {
     var report = stderr_sink()
     report.json = true
     report.file = os.stdout()
@@ -2412,8 +2412,11 @@ fn test_project_command(a: *mem.Arena, args: []str) -> err {
                 duration += json_usize_after(line, "\"duration_ms\":")
             } else {
                 if (line.len > 16usize && same(line[0usize..16usize], "{\"record\":\"test\"")) || (line.len > 22usize && same(line[0usize..22usize], "{\"record\":\"diagnostic\"")) {
-                    try write_all(&report, line)
-                    try write_all(&report, "\n")
+                    // `--compact` (T041, H32): a passing test is in the summary, not listed.
+                    if !(compact && contains_text(line, "\"outcome\":\"passed\"")) {
+                        try write_all(&report, line)
+                        try write_all(&report, "\n")
+                    }
                 }
             }
             line_at = end + 1usize
@@ -2581,7 +2584,7 @@ fn nptest_stem(path: str) -> str {
 
 // `test-file PATH ROOT ARCH OS WORKDIR --json` (D240): compile a runner that carries the
 // operand's @test functions, run each in its own process, and report section 7's stream.
-fn test_command(a: *mem.Arena, given: []str) -> err {
+fn test_command(a: *mem.Arena, given: []str, compact: bool) -> err {
     var no_lines: [1]usize = zero
     // `--only n1,n2,...` last (D424, H10): the tests to run, by name or by
     // `module.name`; the rest of the arguments are as they were without it.
@@ -2756,7 +2759,7 @@ fn test_command(a: *mem.Arena, given: []str) -> err {
     if timeout_s == 0usize { timeout_s = 1usize }
     // The child prints the runner by its reproducible spelling (D337), the basename
     // for a file under no source root.
-    try tool.test_json(a, module_name, shown_root, identity, text, basename(runner_path), names[0usize..count], lines[0usize..count], outcomes[0usize..count], statuses[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms, timeout_s)
+    try tool.test_json(a, module_name, shown_root, identity, text, basename(runner_path), names[0usize..count], lines[0usize..count], outcomes[0usize..count], statuses[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms, timeout_s, compact)
     var any = false
     at = 0usize
     while at < count {
@@ -13661,17 +13664,25 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if args.len == 8usize && same(args[1usize], "check-project") && same(args[7usize], "--json") { ret check_project_command(a, args) }
     if args.len == 7usize && same(args[1usize], "build-manifest-file") && same(args[6usize], "--json") { ret manifest_command(a, args) }
     if args.len >= 4usize && same(args[1usize], "manifest-em") && same(args[args.len - 1usize], "--json") { ret artifact_manifest_command(a, args) }
+    // `--compact` last (T041, H32): the same test stream without its passing `test` records;
+    // `test_summary` still counts them, so an all-pass stream is its header, summary and result.
+    var compact = false
+    var targs = args
+    if args.len >= 9usize && same(args[args.len - 1usize], "--compact") && (same(args[1usize], "test-file") || same(args[1usize], "test-project")) {
+        compact = true
+        targs = args[0usize..args.len - 1usize]
+    }
     // `test-file ... --json [--path REL] --only n1,n2` (D424, H10): the named tests alone.
-    if args.len >= 10usize && same(args[1usize], "test-file") && same(args[args.len - 2usize], "--only") && (same(args[7usize], "--json") || same(args[8usize], "--json")) { ret test_command(a, args) }
-    if args.len == 8usize && same(args[1usize], "test-file") && same(args[7usize], "--json") { ret test_command(a, args) }
-    if args.len == 9usize && same(args[1usize], "test-file") && same(args[8usize], "--json") { ret test_command(a, args) }
+    if targs.len >= 10usize && same(targs[1usize], "test-file") && same(targs[targs.len - 2usize], "--only") && (same(targs[7usize], "--json") || same(targs[8usize], "--json")) { ret test_command(a, targs, compact) }
+    if targs.len == 8usize && same(targs[1usize], "test-file") && same(targs[7usize], "--json") { ret test_command(a, targs, compact) }
+    if targs.len == 9usize && same(targs[1usize], "test-file") && same(targs[8usize], "--json") { ret test_command(a, targs, compact) }
     // `... --json --path REL` (D263): the operand's identity under its project's src.
-    if args.len == 10usize && same(args[1usize], "test-file") && same(args[7usize], "--json") && (same(args[8usize], "--path") || same(args[8usize], "--project-path")) { ret test_command(a, args) }
-    if args.len == 11usize && same(args[1usize], "test-file") && same(args[8usize], "--json") && (same(args[9usize], "--path") || same(args[9usize], "--project-path")) { ret test_command(a, args) }
+    if targs.len == 10usize && same(targs[1usize], "test-file") && same(targs[7usize], "--json") && (same(targs[8usize], "--path") || same(targs[8usize], "--project-path")) { ret test_command(a, targs, compact) }
+    if targs.len == 11usize && same(targs[1usize], "test-file") && same(targs[8usize], "--json") && (same(targs[9usize], "--path") || same(targs[9usize], "--project-path")) { ret test_command(a, targs, compact) }
     // `test-project DIR TOOLCHAIN_ROOT ARCH OS WORKDIR [TIMEOUT_MS] --json` (D263): every
     // module under DIR/src, one stream.
-    if args.len == 8usize && same(args[1usize], "test-project") && same(args[7usize], "--json") { ret test_project_command(a, args) }
-    if args.len == 9usize && same(args[1usize], "test-project") && same(args[8usize], "--json") { ret test_project_command(a, args) }
+    if targs.len == 8usize && same(targs[1usize], "test-project") && same(targs[7usize], "--json") { ret test_project_command(a, targs, compact) }
+    if targs.len == 9usize && same(targs[1usize], "test-project") && same(targs[8usize], "--json") { ret test_project_command(a, targs, compact) }
     // `emit-executable FILE ROOT spv none OUT` (D1610): the program's kernels as one
     // SPIR-V module, and no executable.
     if args.len == 7usize && same(args[1usize], "emit-executable") && same(args[4usize], "spv") { ret spirv_command(a, args) }

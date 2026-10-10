@@ -44,6 +44,10 @@ harnesses never scrape `--help`.
 Collections are sorted by UTF-8 bytes and the record does not depend on the host. A new member
 is a new `schema_revision`; an old one never changes meaning.
 
+`neper test-file ... --json --compact` and `test-project ... --json --compact` (D2320) emit the
+same v1 stream without the `test` record of any passing test. `test_summary` counts them and the
+result is unchanged, so an all-pass run is its header, summary and result whatever the test count.
+
 `--language-version MAJOR.MINOR` selects one advertised version and defaults to the
 newest non-experimental version. An unsupported value is `E-CLI-9999` before source
 is read. The selected version fixes its grammar revision, stream versions and

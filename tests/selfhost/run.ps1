@@ -7020,6 +7020,13 @@ cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\test_project')`" && `"$short
 if ($LASTEXITCODE -ne 1) { throw "the operand-less test exited $LASTEXITCODE, expected 1" }
 [IO.File]::WriteAllText($testShortProjectActual, ([IO.File]::ReadAllText($testShortProjectActual) -replace '"duration_ms":\d+', '"duration_ms":0'), (New-Object Text.UTF8Encoding($false)))
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testShortProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\test_project.expected.jsonl')).Hash) { throw 'the operand-less test differs from test-project' }
+# `test-project ... --json --compact` (T041, H32): the same run without its passing `test`
+# records -- one failing record, the summary still counting all three, nothing else.
+$compactActual = Join-Path $testBuild 'conformance-tools-test-project-compact.jsonl'
+cmd /c "`"$compiler`" test-project `"$(Join-Path $conformanceRoot 'tools\test_project')`" `"$repo`" x64 windows `"$testBuild`" --json --compact > `"$compactActual`""
+if ($LASTEXITCODE -ne 1) { throw "test-project --compact exited $LASTEXITCODE, expected 1" }
+$compactLines = [IO.File]::ReadAllLines($compactActual)
+if ($compactLines.Count -ne 4 -or $compactLines[1] -notmatch '"name":"is_odd".*"outcome":"failed"' -or $compactLines[2] -notmatch '"passed":2,"failed":1,"crashed":0,"timeout":0,"total":3' -or ([IO.File]::ReadAllText($compactActual) -match '"outcome":"passed"')) { throw "test-project --compact is not the failing record and the full summary: $($compactLines -join '|')" }
 # `fmt FILE` formats the file in place, and `fmt` / `fmt --check` with no operand cover
 # every `.e` under the project's src/ and lib/ (D295): a project of one non-canonical
 # file fails the check, is formatted to the corpus's canonical text, then passes.
