@@ -3710,6 +3710,13 @@ $algoJournalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $algoJournalWritten -ne 'executable written') { throw 'algo_journal emission failed' }
 $algoJournalOutput = & $algoJournalPath
 if ($LASTEXITCODE -ne 0 -or $algoJournalOutput -ne 'algo journal ok') { throw "algo_journal answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.ir`: the workflow definition IR -- step and trigger catalogues, normalization, traversal, validation, the plugin
+# registry and execution keys -- against appdor's src/workflow/ir.js (180 operation scripts, D2332).
+$algoIrPath = Join-Path $testBuild 'algo-ir-selfhost.exe'
+$algoIrWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_ir\src\main.e') $repo 'x64' 'windows' $algoIrPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoIrWritten -ne 'executable written') { throw 'algo_ir emission failed' }
+$algoIrOutput = & $algoIrPath
+if ($LASTEXITCODE -ne 0 -or $algoIrOutput -ne 'algo ir ok') { throw "algo_ir answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

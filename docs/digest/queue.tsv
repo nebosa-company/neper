@@ -53,7 +53,7 @@ T028	tooling	0.85	2807	Repeated diagnostics: fixtures and fingerprints for the c
 T029	tooling	0.85	1768	Rename fix for a local that collides with a module-scope name (E-NAME-0003)	lang-stats.py over transcripts written after D1678 showing E-NAME-0003 no longer the top repeated code. Follow-on (D1898): same measurement must include OpenCode rows; a Claude-only reading cannot clo
 C082	compiler	0.75	2079	Work-stealing pool, parallel parse and codegen	the front end runs in waves of eight workers (D321);
 C098	compiler	0	1097	AES-GCM at OpenSSL's speed: AES and carry-less multiply instructions for e.crypto.aead	e.crypto.aead's AES-GCM is portable Neper, a bitsliced AES (BearSSL's aes_ct64) and a GHASH from masked integer products (ghash_ctmul64), D1645.
-L036	library	0.55	1329	Durable workflow runtime with FSM guard	ir.js, runtime.js (the interpreter), flow-engine.js, the Jinja engine, e.algo.dag.
+L036	library	0.65	1772	Durable workflow runtime with FSM guard	runtime.js (the interpreter), flow-engine.js, the Jinja engine, e.algo.dag.
 L037	library	0	461	Offline-first sync, conflict merge, presence, verifiable history	Appdor src/offline (coalescing enqueue, cursor pullChanges, field-level conflict detect with manual/LWW/field-merge resolve, durable queue with dead letters), src/sync (mapping propose, lease claim, d
 L038	library	0	397	CSS tokenizer, grammar, and selector parser	Vaper engine_core css/css_tokenizer.dart (Syntax-3 section 4 state machine with offsets and never-throw recovery), css_syntax.dart (section 5 grammar to rules/blocks/declarations), selector_parser.dar
 L039	library	0	372	CSS value microsyntax and animation interpolation	Vaper vaper_css_values value.dart (parseColor incl.

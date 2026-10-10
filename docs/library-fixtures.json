@@ -457,6 +457,7 @@
     "algo_formula_text",
     "algo_fsm",
     "algo_fulltext",
+    "algo_ir",
     "algo_journal",
     "algo_page_batch",
     "algo_predicate",

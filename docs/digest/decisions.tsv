@@ -2085,4 +2085,5 @@ D2327	1612	T042: `x.agent.receipt`, the one record that says a change was verifi
 D2328	1645	T042: `x.agent.task`, a long operation as a durable, authorized state machine
 D2329	1387	T021: `e.crypto.hash` builds under the bootstrap, which was what blocked the compiler from using it
 D2330	1674	T027 (first step): the measurement's inputs are frozen before any model runs
-D2331	2015	L036 (runtime half, first piece): `e.algo.journal`, the run journal as the program counter
+D2331	2016	L036 (runtime half, first piece): `e.algo.journal`, the run journal as the program counter
+D2332	2000	L036 (runtime half, second piece): `e.algo.ir`, the definition a durable run executes

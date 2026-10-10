@@ -3293,6 +3293,13 @@ algo_journal_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/algo-journal-selfhost"
 algo_journal_output=$("$test_build/algo-journal-selfhost")
 [ "$algo_journal_output" = 'algo journal ok' ]
+# `e.algo.ir`: the workflow definition IR -- step and trigger catalogues, normalization, traversal, validation, the plugin
+# registry and execution keys -- against appdor's src/workflow/ir.js (180 operation scripts, D2332).
+algo_ir_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_ir/src/main.e" "$repo" x64 linux "$test_build/algo-ir-selfhost" -j 2)
+[ "$algo_ir_written" = 'executable written' ]
+chmod +x "$test_build/algo-ir-selfhost"
+algo_ir_output=$("$test_build/algo-ir-selfhost")
+[ "$algo_ir_output" = 'algo ir ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

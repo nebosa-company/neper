@@ -5561,6 +5561,97 @@ fn template(a: *mem.Arena, key: str, table_id: str, status_field: str, generated
 
 Status workflows after appdor's workflow definition, rule registries and guard: the definition model with draft-only editing, open workflow and built-in templates, pre-publish validation (initial state, duplicates, dangling transitions, rule config checks, reachability, dead ends, lock-outs), version diffs, and the guard — allowed transitions and why-not, permissions, conditions, screen inputs, validators, optimistic concurrency, history and event, compiled post-functions, raw status write resolution, bulk partial/atomic, simulation and time in state. Checked by `algo_fsm` against appdor's engine.
 
+### `e.algo.ir`
+
+```neper
+type RoutingCheck = fn(json.Value) -> str
+type Plugin = struct { key: str, label: str }
+type Plugins = struct { items: list.List[Plugin] }
+type StepInfo = struct { found: bool, kind: str, suspends: bool, mutates: bool, body: str, raw: str, output: str, installed: bool, runnable: bool }
+type Problem = struct { path: str, message: str }
+
+fn output_types() -> str
+fn info(kind: str, suspends: bool, mutates: bool, body: str, raw: str, output: str) -> StepInfo
+fn not_found() -> StepInfo
+fn core_step(name: str) -> StepInfo
+
+type TriggerInfo = struct { found: bool, ingress: str, config: str, output: str }
+
+fn trigger_type(name: str) -> TriggerInfo
+fn metadata_objects() -> str
+fn metadata_events() -> str
+fn run_statuses() -> str
+fn terminal_statuses() -> str
+fn in_csv(csv: str, name: str) -> bool
+fn new_plugins(a: *mem.Arena) -> (Plugins, err)
+fn register_plugin_step(a: *mem.Arena, p: *Plugins, namespace: str, id: str, label: str) -> (str, str, err)
+fn plugin_label(p: *const Plugins, key: str) -> str
+fn unregister_plugin_step(p: *Plugins, key: str) -> bool
+fn step_type(p: *const Plugins, name: str) -> StepInfo
+fn text(s: str) -> json.Value
+fn members_of(v: json.Value) -> ([]const json.Member, bool)
+fn items_of(v: json.Value) -> ([]const json.Value, bool)
+fn string_of(v: json.Value) -> (str, bool)
+fn is_null(v: json.Value) -> bool
+fn truthy(v: json.Value) -> bool
+fn get(v: json.Value, key: str) -> (json.Value, bool)
+fn or_falsy(v: json.Value, key: str, fallback: json.Value) -> json.Value
+fn value_of(v: json.Value, key: str) -> json.Value
+
+type Obj = list.List[json.Member]
+
+fn new_obj(a: *mem.Arena) -> (Obj, err)
+fn put(o: *Obj, key: str, value: json.Value) -> err
+fn obj_value(o: *const Obj) -> json.Value
+fn assign(o: *Obj, source: json.Value) -> err
+fn empty_object() -> json.Value
+fn empty_array() -> json.Value
+fn number_lexeme(s: str) -> json.Value
+fn normalize_trigger(a: *mem.Arena, trigger_value: json.Value) -> (json.Value, err)
+fn normalize_steps(a: *mem.Arena, steps: []const json.Value) -> (json.Value, err)
+fn normalize_group(a: *mem.Arena, group: json.Value, with_when: bool) -> (json.Value, err)
+fn normalize_step(a: *mem.Arena, step: json.Value) -> (json.Value, err)
+fn normalize_workflow(a: *mem.Arena, definition: json.Value) -> (json.Value, err)
+
+type Visit = struct { step: json.Value, path: []const str }
+type Visits = struct { items: list.List[Visit], failed: bool }
+
+fn id_text(step: json.Value) -> str
+fn walk_into(a: *mem.Arena, out: *Visits, steps: json.Value, path: []const str)
+fn walk_steps(a: *mem.Arena, steps: json.Value) -> ([]const Visit, err)
+
+error Exhausted
+
+fn collect_step_ids(a: *mem.Arena, definition: json.Value) -> ([]const str, err)
+fn uuid_shape(s: str) -> bool
+fn is_name_char(c: u8) -> bool
+fn event_type_pattern(s: str) -> bool
+fn step_id_charset(s: str) -> bool
+fn to_number(v: json.Value) -> (f64, bool)
+fn is_integer(v: json.Value) -> bool
+fn trunc(x: f64) -> f64
+fn floor_pos(x: f64) -> f64
+fn value_number(v: json.Value) -> f64
+
+type Errors = struct { items: list.List[Problem], failed: bool }
+
+fn problem(e: *Errors, path: str, message: str)
+fn join_dots(a: *mem.Arena, parts: []const str) -> str
+fn cat(a: *mem.Arena, x: str, y: str) -> str
+fn index_text(a: *mem.Arena, n: usize) -> str
+fn record_values_present(config: json.Value) -> bool
+fn array_has(v: json.Value) -> bool
+fn array_len(v: json.Value) -> usize
+fn validate_workflow(a: *mem.Arena, clock: *const trigger.Clock, plugins: *const Plugins, routing: RoutingCheck, definition: json.Value) -> (json.Value, err)
+fn same_scalar(x: json.Value, y: json.Value) -> bool
+fn render(a: *mem.Arena, e: *const Errors) -> json.Value
+fn execution_key(a: *mem.Arena, step_id: str, frames: []const str) -> (str, err)
+fn loop_frame(a: *mem.Arena, step_id: str, index: usize) -> (str, err)
+fn fork_frame(a: *mem.Arena, step_id: str, branch_name: str) -> (str, err)
+```
+
+The workflow definition IR of L036's runtime half, checked against appdor's `src/workflow/ir.js`: the step catalogue (`core_step`: kind, whether it suspends or mutates, the child arrays its body walks, the config fields that are never templates, its output type) with the installed apps' step registry, the trigger catalogue, `normalize_workflow` (defaults without inventing ids, never throws), `walk_steps` and `collect_step_ids`, `validate_workflow` (every problem rather than the first, over every step and trigger type, with the schedule check delegated to `e.algo.trigger` and the routing matcher's verdict on a rule injected as a `RoutingCheck`), and the execution keys a journal entry is matched by (`execution_key`, `loop_frame`, `fork_frame`). Messages are appdor's catalogue keys humanized, which is what `t()` answers under plain Node. A step type is found in the catalogue and the registry only, not on an object's prototype.
+
 ### `e.algo.journal`
 
 ```neper

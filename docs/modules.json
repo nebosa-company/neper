@@ -163,6 +163,7 @@
     "e.algo.project",
     "e.algo.trigger",
     "e.algo.fsm",
+    "e.algo.ir",
     "e.algo.journal",
     "e.algo.fulltext",
     "e.algo.search",
@@ -712,6 +713,21 @@
     "e.algo.formula",
     "e.algo.view",
     "e.math",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.ir",
+   "layer": 5,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.trigger",
+    "e.data.list",
+    "e.fmt.json",
     "e.mem",
     "e.str"
    ],
