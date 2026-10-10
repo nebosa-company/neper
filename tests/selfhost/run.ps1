@@ -3868,6 +3868,12 @@ $netSsrfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $netSsrfWritten -ne 'executable written') { throw 'net_ssrf emission failed' }
 $netSsrfOutput = & $netSsrfPath
 if ($LASTEXITCODE -ne 0 -or $netSsrfOutput -ne 'net ssrf ok') { throw "net_ssrf answered wrongly: exit $LASTEXITCODE" }
+# x.cloud.rest against Petcow's declarative.rs and provider registry (1,051 cases, D2352).
+$xCloudRestPath = Join-Path $testBuild 'x-cloud-rest-selfhost.exe'
+$xCloudRestWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_cloud_rest\src\main.e') $repo 'x64' 'windows' $xCloudRestPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xCloudRestWritten -ne 'executable written') { throw 'x_cloud_rest emission failed' }
+$xCloudRestOutput = & $xCloudRestPath
+if ($LASTEXITCODE -ne 0 -or $xCloudRestOutput -ne 'x cloud rest ok') { throw "x_cloud_rest answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

@@ -625,10 +625,10 @@
       "group": "Drivers",
       "order": 145,
       "title": "Declarative REST driver core with provider-trait shape",
-      "score": 0,
+      "score": 0.6,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Petcow src/provider/mod.rs:122 Provider trait (read/read_scoped/create/update/delete/discover/discover_scoped/discover_unmanaged, parent_link) plus Registry with alias keys and native-vs-bridged precedence, and declarative.rs/manifest.rs/http.rs (list_url/item_url manifests, name- vs id-addressed parents). Highest-leverage driver pattern: new clouds via manifest data over e.net.http/tls. Mirrors the e.db driver contract. Plan: docs/petcow.md D1/D2."
+      "evidence": "Petcow src/provider/mod.rs:122 Provider trait (read/read_scoped/create/update/delete/discover/discover_scoped/discover_unmanaged, parent_link) plus Registry with alias keys and native-vs-bridged precedence, and declarative.rs/manifest.rs/http.rs (list_url/item_url manifests, name- vs id-addressed parents). Highest-leverage driver pattern: new clouds via manifest data over e.net.http/tls. Mirrors the e.db driver contract. Plan: docs/petcow.md D1/D2. Part one landed: x.cloud.rest (declarative helpers, operation dialects, registry), 1,051 differential cases against Petcow's Rust on Windows and Linux (D2352). Remaining: manifest.rs (YAML manifest to Def with its validations) and the HTTP execution loop (host code)."
     },
     {
       "id": "L048",

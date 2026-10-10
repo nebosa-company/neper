@@ -140,6 +140,7 @@
     "x.identity.scim",
     "x.identity.xml",
     "x.identity.saml",
+    "x.cloud.rest",
     "e.fmt.xml",
     "e.fmt.xsd",
     "e.fmt.xsd.schema",
@@ -2312,6 +2313,22 @@
     "x.identity.jose",
     "x.identity.oidc",
     "x.identity.xml"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.cloud.rest",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.chain",
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },
