@@ -53,3 +53,5 @@ Full layout/paint/render ports; JS execution; encrypted-cache driver (primitives
 - Docs: module API rows in `docs/module-apis.md` + `docs/modules.json` surface flags; this plan file tracks intent, `docs/progress.html` (generated) tracks readiness.
 
 F1 landed (D2346): `e.fmt.woff` (`lib/e/fmt/woff.e`) and `e.fmt.woff2` (`lib/e/fmt/woff2.e`), differential against `woffToSfnt`/`woff2ToSfnt` over 480 cases (`scripts/woff_vectors.mjs`).
+
+L046 landed (D2351): `e.net.policy` (`lib/e/net/policy.e`) and `e.net.ssrf` (`lib/e/net/ssrf.e`), differential against Vaper's `net/` policy Dart and Appdor's `ssrf-guard.js`.

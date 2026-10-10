@@ -104,6 +104,8 @@
     "e.async.io",
     "e.net",
     "e.net.tls",
+    "e.net.policy",
+    "e.net.ssrf",
     "e.net.http",
     "e.net.smtp",
     "e.net.pop3",
@@ -3255,6 +3257,32 @@
     "e.mem",
     "e.os",
     "e.time"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.policy",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.ssrf",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },

@@ -3856,6 +3856,18 @@ $xIdentitySamlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $xIdentitySamlWritten -ne 'executable written') { throw 'x_identity_saml emission failed' }
 $xIdentitySamlOutput = & $xIdentitySamlPath
 if ($LASTEXITCODE -ne 0 -or $xIdentitySamlOutput -ne 'x identity saml ok') { throw "x_identity_saml answered wrongly: exit $LASTEXITCODE" }
+# e.net.policy against Vaper's HTTP cache, cookie jar, CORS, CSP, private-network and filter-list Dart (771 cases, D2351).
+$netPolicyPath = Join-Path $testBuild 'net-policy-selfhost.exe'
+$netPolicyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_policy\src\main.e') $repo 'x64' 'windows' $netPolicyPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netPolicyWritten -ne 'executable written') { throw 'net_policy emission failed' }
+$netPolicyOutput = & $netPolicyPath
+if ($LASTEXITCODE -ne 0 -or $netPolicyOutput -ne 'net policy ok') { throw "net_policy answered wrongly: exit $LASTEXITCODE" }
+# e.net.ssrf against Appdor's ssrf-guard.js (226 cases, D2351).
+$netSsrfPath = Join-Path $testBuild 'net-ssrf-selfhost.exe'
+$netSsrfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_ssrf\src\main.e') $repo 'x64' 'windows' $netSsrfPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netSsrfWritten -ne 'executable written') { throw 'net_ssrf emission failed' }
+$netSsrfOutput = & $netSsrfPath
+if ($LASTEXITCODE -ne 0 -or $netSsrfOutput -ne 'net ssrf ok') { throw "net_ssrf answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

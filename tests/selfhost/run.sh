@@ -3439,6 +3439,18 @@ x_identity_saml_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/x-identity-saml-selfhost"
 x_identity_saml_output=$("$test_build/x-identity-saml-selfhost")
 [ "$x_identity_saml_output" = 'x identity saml ok' ]
+# e.net.policy against Vaper's HTTP cache, cookie jar, CORS, CSP, private-network and filter-list Dart (771 cases, D2351).
+net_policy_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_policy/src/main.e" "$repo" x64 linux "$test_build/net-policy-selfhost" -j 2)
+[ "$net_policy_written" = 'executable written' ]
+chmod +x "$test_build/net-policy-selfhost"
+net_policy_output=$("$test_build/net-policy-selfhost")
+[ "$net_policy_output" = 'net policy ok' ]
+# e.net.ssrf against Appdor's ssrf-guard.js (226 cases, D2351).
+net_ssrf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_ssrf/src/main.e" "$repo" x64 linux "$test_build/net-ssrf-selfhost" -j 2)
+[ "$net_ssrf_written" = 'executable written' ]
+chmod +x "$test_build/net-ssrf-selfhost"
+net_ssrf_output=$("$test_build/net-ssrf-selfhost")
+[ "$net_ssrf_output" = 'net ssrf ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

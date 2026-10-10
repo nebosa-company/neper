@@ -481,6 +481,8 @@
     "fmt_xlsx",
     "gfx_cssvalue",
     "html_accessible",
+    "net_policy",
+    "net_ssrf",
     "text_css_container",
     "text_css_match",
     "text_css_selector",

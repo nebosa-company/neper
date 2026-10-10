@@ -12334,6 +12334,188 @@ from a caller's generator for tests, `pkce_challenge`, `pkce`) and WebAuthn asse
 (`parse_authenticator_data`, `webauthn_verify` over ES256 or EdDSA keys with the rpId hash,
 user-presence flag, sign count and client-data type, challenge and origin checked).
 
+### `e.net.policy`
+
+```neper
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn lower(a: *mem.Arena, s: str) -> str
+fn is_ws(c: u8) -> bool
+fn trim(s: str) -> str
+fn hex_val(c: u8) -> i32
+fn int_try_parse(text: str) -> (i64, bool)
+fn days_from_civil(y_in: i64, m: i64, d: i64) -> i64
+fn utc_ms(year: i64, month: i64, day: i64, hour: i64, minute: i64, second: i64) -> i64
+fn text_at_no_case(s: str, at: usize, want: str) -> bool
+fn weekday_abbr(i: usize) -> str
+fn weekday_full(i: usize) -> str
+fn month_abbr(i: usize) -> str
+
+type DateScan = struct { s: str, at: usize, bad: bool }
+
+fn scan_expect(d: *DateScan, c: u8)
+fn scan_maybe(d: *DateScan, c: u8) -> bool
+fn scan_month(d: *DateScan) -> i64
+fn scan_num(d: *DateScan, max_len: usize) -> i64
+fn parse_http_date(s: str) -> (i64, bool)
+
+type Url = struct { valid: bool, scheme: str, userinfo: str, has_authority: bool, host: str, has_port: bool, port: i64, path: str, has_query: bool, query: str, has_fragment: bool, fragment: str }
+
+fn bad_url() -> Url
+fn parse_url(a: *mem.Arena, source: str) -> Url
+fn index_of(s: str, c: u8) -> i64
+fn last_index_of(s: str, c: u8) -> i64
+fn port_str(a: *mem.Arena, n: i64) -> str
+fn url_text(a: *mem.Arena, u: Url) -> str
+fn norm_origin(a: *mem.Arena, source: str) -> (str, bool)
+
+type Headers = struct { names: []const str, values: []const str }
+
+fn header_get(h: Headers, key: str) -> (str, bool)
+
+type Directives = struct { names: []const str, values: []const str }
+
+fn directive_get(d: Directives, key: str) -> (str, bool)
+fn has_directive(d: Directives, key: str) -> bool
+fn strip_quotes(a: *mem.Arena, s: str) -> str
+fn parse_cache_control(a: *mem.Arena, value: str, has: bool) -> Directives
+fn cache_control(a: *mem.Arena, h: Headers) -> Directives
+
+type Freshness = struct { fresh: bool, must_revalidate: bool }
+
+fn truthy_header(h: Headers, key: str) -> bool
+fn http_is_cacheable(a: *mem.Arena, status: i64, h: Headers) -> bool
+fn seconds_between(later_ms: i64, earlier_ms: i64) -> i64
+fn freshness_lifetime(a: *mem.Arena, h: Headers, now_ms: i64) -> (i64, bool)
+fn heuristic_lifetime(h: Headers, now_ms: i64) -> (i64, bool)
+fn current_age(h: Headers, created_ms: i64, now_ms: i64) -> i64
+fn http_freshness(a: *mem.Arena, h: Headers, created_ms: i64, now_ms: i64) -> Freshness
+fn http_can_serve_stale_on_error(a: *mem.Arena, h: Headers, created_ms: i64, now_ms: i64) -> bool
+
+type Conditional = struct { has_none_match: bool, if_none_match: str, has_modified_since: bool, if_modified_since: str }
+
+fn conditional_headers(h: Headers) -> Conditional
+fn parse_ipv4(s: str) -> (i64, i64, bool)
+fn is_private_network_host(a: *mem.Arena, host: str) -> bool
+
+type FilterRules = struct { domains: []const str, selectors: []const str }
+
+fn add_unique(out: []str, n: *usize, v: str)
+fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules
+
+type SourceSet = struct { present: bool, items: []const str }
+type Csp = struct { blocks_scripts: bool, connect: SourceSet, image: SourceSet, style: SourceSet, font: SourceSet }
+
+fn no_sources() -> SourceSet
+fn words(a: *mem.Arena, s: str) -> []const str
+fn expand_sources(a: *mem.Arena, sources: str, has: bool, document_url: str) -> SourceSet
+fn directive_value(a: *mem.Arena, names: []const str, values: []const str, key: str) -> (str, bool)
+fn parse_csp(a: *mem.Arena, header: str, has_header: bool, document_url: str) -> Csp
+fn source_allows(a: *mem.Arena, source: str, dest: Url, dest_origin: str, has_target_origin: bool) -> bool
+fn blocked_by(a: *mem.Arena, target_url: str, s: SourceSet) -> bool
+fn csp_blocks_connect(a: *mem.Arena, p: Csp, url: str) -> bool
+fn csp_blocks_image(a: *mem.Arena, p: Csp, url: str) -> bool
+fn csp_blocks_style(a: *mem.Arena, p: Csp, url: str) -> bool
+fn csp_blocks_font(a: *mem.Arena, p: Csp, url: str) -> bool
+fn is_safelisted_method(a: *mem.Arena, method: str) -> bool
+fn upper(a: *mem.Arena, s: str) -> str
+fn is_cors_safelisted_request_header(a: *mem.Arena, name: str, value: str) -> bool
+fn cors_unsafe_header_names(a: *mem.Arena, h: Headers) -> []const str
+fn is_simple_cors_request(a: *mem.Arena, method: str, h: Headers) -> bool
+fn split_header_list(a: *mem.Arena, value: str, has: bool) -> []const str
+fn list_contains(xs: []const str, v: str) -> bool
+fn cors_serialize_origin(a: *mem.Arena, url: str) -> (str, bool)
+
+type Reason = struct { blocked: bool, text: str }
+
+fn allowed() -> Reason
+fn blocked(text: str) -> Reason
+fn cors_response_block_reason(a: *mem.Arena, document_origin: str, response: Headers, credentialed: bool) -> Reason
+fn cors_preflight_block_reason(a: *mem.Arena, document_origin: str, method: str, unsafe_names: []const str, status: i64, response: Headers, credentialed: bool) -> Reason
+
+type PreflightEntry = struct { key: str, methods: []const str, method_wildcard: bool, header_names: []const str, header_wildcard: bool, expires_ms: i64 }
+type PreflightCache = struct { entries: []PreflightEntry, count: usize }
+
+fn new_preflight_cache(a: *mem.Arena) -> PreflightCache
+fn preflight_key(a: *mem.Arena, origin: str, url: str, credentialed: bool) -> str
+fn preflight_store(a: *mem.Arena, c: *PreflightCache, origin: str, url: str, response: Headers, credentialed: bool, now_ms: i64)
+fn preflight_is_allowed(a: *mem.Arena, c: *PreflightCache, origin: str, url: str, method: str, unsafe_names: []const str, credentialed: bool, now_ms: i64) -> bool
+fn parse_corp(a: *mem.Arena, value: str, has: bool) -> i32
+fn parse_coep(a: *mem.Arena, value: str, has: bool) -> i32
+fn parse_coop(a: *mem.Arena, value: str, has: bool) -> i32
+fn all_numeric_labels(labels: []const str, count: usize) -> bool
+fn split_dots(a: *mem.Arena, s: str) -> []const str
+fn join_labels(a: *mem.Arena, labels: []const str, from: usize) -> str
+fn registrable_domain_cors(a: *mem.Arena, host: str) -> str
+fn corp_block_reason(a: *mem.Arena, document_origin: str, has_document: bool, resource_url: str, corp_header: str, has_corp: bool, embedder_requires_corp: bool) -> Reason
+fn no_cors_response_block_reason(a: *mem.Arena, document_origin: str, has_document: bool, resource_url: str, response: Headers, embedder_requires_corp: bool) -> Reason
+
+type Cookie = struct { name: str, value: str, domain: str, path: str, has_partition: bool, partition: str, has_expires: bool, expires_ms: i64, secure: bool, http_only: bool, same_site: u8, created_ms: i64 }
+type CookieJar = struct { cookies: []Cookie, count: usize, block_third_party: bool }
+
+fn new_cookie_jar(a: *mem.Arena, block_third_party: bool) -> CookieJar
+fn jar_remove_at(j: *CookieJar, at: usize)
+fn jar_find(j: *CookieJar, c: Cookie) -> i64
+fn domain_matches(a: *mem.Arena, host: str, domain: str) -> bool
+fn registrable_domain_jar(a: *mem.Arena, host: str) -> str
+fn partition_key_for(a: *mem.Arena, u: Url) -> (str, bool)
+fn is_third_party(a: *mem.Arena, u: Url, partition_key: str, has_partition: bool) -> bool
+fn digit_run(s: str, at: usize, min: usize, max: usize) -> usize
+fn parse_cookie_date(a: *mem.Arena, raw: str) -> (i64, bool)
+fn num_of(s: str) -> i64
+fn split_set_cookie(a: *mem.Arena, raw: str) -> []const str
+fn same_site_allowed(ss: u8, is_top_level: bool) -> bool
+fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, partition_key: str, has_partition_key: bool, now_ms: i64)
+fn jar_process_response(a: *mem.Arena, j: *CookieJar, url: str, set_cookie: str, partition_key: str, has_partition_key: bool, now_ms: i64)
+
+type CookieHeader = struct { present: bool, value: str }
+
+fn jar_cookie_header(a: *mem.Arena, j: *CookieJar, url: str, is_top_level: bool, partition_key: str, has_partition_key: bool, now_ms: i64) -> CookieHeader
+fn jar_clear(j: *CookieJar)
+fn jar_clear_origin(a: *mem.Arena, j: *CookieJar, origin_host: str)
+```
+
+HTTP policy helpers (L046), after Vaper's pure `net/` policy files: RFC 9111 caching (`http_is_cacheable`, `http_freshness`, `current_age`, `freshness_lifetime`, `heuristic_lifetime`, `http_can_serve_stale_on_error`, `conditional_headers`, with `HttpDate.parse`'s three formats), the RFC 6265bis cookie jar (`CookieJar`: Secure, SameSite, `__Host-`/`__Secure-` prefixes, CHIPS partitions, third-party blocking, per-domain and global caps, `Set-Cookie` splitting that spares `Expires` dates), CORS and cross-origin policies (simple requests, preflight and response checks, the preflight cache with `Access-Control-Max-Age`, CORP, COEP, COOP), Content-Security-Policy source lists, the IP-literal private-network classifier and the Adblock Plus filter-list subset. Time is a parameter in milliseconds. Checked against Vaper's own Dart over 771 cases on both hosts (D2351).
+
+### `e.net.ssrf`
+
+```neper
+type Verdict = struct { valid: bool, message: str, host: str, addresses: []const str, resolved: bool }
+
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn lower(a: *mem.Arena, s: str) -> str
+fn is_ws(c: u8) -> bool
+fn trimmed(s: str) -> str
+fn is_digit(c: u8) -> bool
+fn hex_val(c: u8) -> i32
+fn contains_colon(s: str) -> bool
+fn strip_brackets(s: str) -> str
+fn ipv4_to_int(s: str) -> (u64, bool)
+fn blocked_v4(addr: u64) -> (str, bool)
+fn mapped_ipv4(a: *mem.Arena, value: str) -> (str, bool)
+fn index_of(s: str, c: u8) -> i64
+fn is_blocked_address(a: *mem.Arena, ip: str) -> bool
+fn block_reason(a: *mem.Arena, ip: str) -> str
+fn hex4(a: *mem.Arena, n: u64) -> str
+fn parse_ipv6(a: *mem.Arena, s: str) -> (str, bool)
+fn parse_number_part(s: str) -> (u64, bool)
+fn ends_in_number(parts: []const str, count: usize) -> bool
+fn parse_ipv4_host(a: *mem.Arena, host: str) -> (str, bool)
+fn percent_decode(a: *mem.Arena, s: str) -> str
+fn forbidden_host_char(c: u8) -> bool
+
+type Parsed = struct { valid: bool, scheme: str, host: str, special: bool }
+
+fn parse_href(a: *mem.Arena, text: str) -> Parsed
+fn last_index_of(s: str, c: u8) -> i64
+fn refused(msg: str) -> Verdict
+fn one(a: *mem.Arena, s: str) -> []const str
+fn all_digits_dots(s: str) -> bool
+fn check_url_sync(a: *mem.Arena, url: str) -> Verdict
+fn check_url(a: *mem.Arena, url: str, has_lookup: bool, lookup_failed: bool, answers: []const str) -> Verdict
+```
+
+The outbound-URL guard (L046), after Appdor's `src/io/ssrf-guard.js`: `is_blocked_address` and `block_reason` classify an IP literal (private, loopback, link-local, carrier-grade NAT, multicast and reserved IPv4 ranges; IPv6 loopback, unique-local and link-local; the `::ffff:` mapped forms in dotted and hex spellings), `check_url_sync` judges what needs no resolver with the WHATWG host normalisation (`2130706433` and `0x7f.1` are loopback), and `check_url` adds the resolver's answers, every one of which must be public, returning exactly the answers it approved so a connection can be pinned to them. Checked against Appdor's own functions over 226 cases on both hosts (D2351).
+
 ### `e.net.http`
 
 ```neper

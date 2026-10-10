@@ -620,17 +620,6 @@
       "evidence": "Vaper css/container_query.dart (Kleene and/or/not plus scope proximity), style_resolver id/class/tag rule-index buckets with origin/importance/specificity/order/proximity sort, selector_matcher right-to-left combinator walk (adapted off the package:html DOM), a11y role map with aria-labelledby over aria-label over native over content. Port logic kernels into e.algo.logic and e.ui.accessibility. PART ONE (D2343): lib/e/fmt/css/container.e, e.fmt.css.container -- container_query.dart; fixture text_css_container, 400 trees. PART TWO (D2343): lib/e/fmt/css/match.e, e.fmt.css.match -- selector_matcher.dart over an e.fmt.html document; fixture text_css_match, 560 cases. PART THREE (D2343): lib/e/fmt/html/accessible.e, e.fmt.html.accessible -- accessibility_builder.dart over an e.fmt.html document; fixture html_accessible, 220 documents. NOT DONE: the style_resolver kernels with no public surface to compare against (rule-index buckets, @scope proximity, declaration precedence incl. hints and layers, containersMatch over a container stack)."
     },
     {
-      "id": "L046",
-      "category": "library",
-      "group": "Drivers",
-      "order": 144,
-      "title": "HTTP policy helpers: cache, cookies, SSRF gate, CORS/CSP, filter lists",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Vaper net/http_cache.dart (RFC9111 freshness/age/conditional headers), cookie_jar.dart (RFC6265 plus Host/Secure prefixes, CHIPS, caps; neper http.e encodes only), private_network.dart (IP-literal SSRF classifier; DNS-rebinding deferred), cors.dart, csp_policy.dart (response-header parse; neper builds only), filter_list_parser.dart (ABP subset). Port pure policy into e.net.http; appdor ssrf-guard pinning rides along."
-    },
-    {
       "id": "L047",
       "category": "library",
       "group": "Drivers",
