@@ -478,6 +478,7 @@
     "fmt_gaps_a",
     "fmt_json",
     "fmt_woff",
+    "fmt_xlsx",
     "gfx_cssvalue",
     "html_accessible",
     "text_css_container",

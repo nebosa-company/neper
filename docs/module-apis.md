@@ -17005,6 +17005,58 @@ fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err)
 
 A WOFF 1.0 font decoder (L043): `to_sfnt` reads the 44-byte header and the 20-byte table directory, inflates each table whose compressed length is below its original length (zlib framing and Adler-32 checked over `e.algo.deflate`), and rebuilds the sfnt with the offset table, tag-sorted directory entries and tables padded to four bytes. A short, inconsistent or uncompressible input is `Invalid`. Checked against Vaper's `woffToSfnt` over 160 random and damaged fonts on both hosts (D2346).
 
+### `x.migrate.typemaps`
+
+```neper
+fn monday_type(key: str) -> (str, bool)
+fn airtable_type(key: str) -> (str, bool)
+fn quickbase_type(key: str) -> (str, bool)
+fn airtable_view_type(key: str) -> str
+fn monday_view_type(key: str) -> str
+```
+
+The importer type maps (L044), generated from Appdor's `src/importers` by `scripts/typemaps_gen.mjs`: `monday_type`, `airtable_type` and `quickbase_type` map a source field type to an Appdor field type (false when unlisted, where the importer falls back to text), and `monday_view_type` and `airtable_view_type` map a view type, anything unlisted being a `grid`. Checked against the maps themselves on both hosts (D2347).
+
+### `e.fmt.xlsx`
+
+```neper
+type Kind = enum u8 { Empty, Text, Number, Bool, Date, BadDate }
+type Cell = struct { kind: Kind, text: str, number: f64, flag: bool, year: i64, month: u32, day: u32, hour: u32, minute: u32, second: u32 }
+type Renamed = struct { index: usize, from: str, to: str }
+type Table = struct { headers: []const str, rows: []const []const str, header_row: usize, skipped_rows: usize, renamed: []const Renamed }
+type Sheet = struct { name: str, grid: []const []const Cell }
+type Pin = struct { name: str, row: i64 }
+type Named = struct { name: str, table: Table }
+type Formula = struct { reference: str, column: i64, row: i64, formula: str }
+type FormulaCell = struct { reference: str, has_formula: bool, formula: str }
+type Description = struct { names: []const str, chosen: str, has_chosen: bool, ignored: []const str, needs_choice: bool }
+
+const HEADER_SCAN_ROWS: usize = 10usize
+
+fn empty_cell() -> Cell
+fn text_cell(s: str) -> Cell
+fn number_cell(n: f64) -> Cell
+fn bool_cell(b: bool) -> Cell
+fn date_cell(year: i64, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> Cell
+fn bad_date_cell() -> Cell
+fn js_trim(s: str) -> str
+fn pad2(a: *mem.Arena, n: u32) -> str
+fn normalize_cell(a: *mem.Arena, c: Cell) -> str
+fn filled_cells(a: *mem.Arena, row: []const Cell) -> usize
+fn detect_header_row(a: *mem.Arena, grid: []const []const Cell) -> usize
+fn last_filled(a: *mem.Arena, row: []const Cell) -> usize
+fn last_filled_text(row: []const str) -> usize
+fn resolve_headers(a: *mem.Arena, raw: []const str, width: usize) -> ([]str, err)
+fn empty_table() -> Table
+fn sheet_to_table(a: *mem.Arena, grid: []const []const Cell, pin: i64) -> (Table, err)
+fn workbook_to_tables(a: *mem.Arena, sheets: []const Sheet, pins: []const Pin) -> ([]Named, err)
+fn parse_cell_ref(ref: str) -> (i64, i64, bool)
+fn sheet_formulas(a: *mem.Arena, cells: []const FormulaCell) -> ([]Formula, err)
+fn describe_sheets(a: *mem.Arena, names_in: []const str, requested: str) -> (Description, err)
+```
+
+Spreadsheet sheet-to-table normalisation (L044), after Appdor's `src/io/xlsx.js`: a sheet already read into typed `Cell` values becomes headers and string rows (`sheet_to_table`, `workbook_to_tables`), with a zero kept as `0`, a boolean as `true`/`false`, a date as its local `YYYY-MM-DD` (and ` HH:MM:SS` off midnight), the header row found by `detect_header_row` (the first of the first ten rows filling more than half of the widest), blank and duplicate headings renamed by the CSV rule (`resolve_headers`), and the width taken from the last filled column. Also `parse_cell_ref`, `sheet_formulas` and `describe_sheets`. The OOXML container is not read: Appdor leaves that to SheetJS. Checked against Appdor's own functions over 700 cases (with `x.migrate.typemaps`) on both hosts (D2347).
+
 ### `e.fmt.xml`
 
 ```neper

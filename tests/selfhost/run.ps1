@@ -3832,6 +3832,12 @@ $fmtWoffWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtWoffWritten -ne 'executable written') { throw 'fmt_woff emission failed' }
 $fmtWoffOutput = & $fmtWoffPath
 if ($LASTEXITCODE -ne 0 -or $fmtWoffOutput -ne 'fmt woff ok') { throw "fmt_woff answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.xlsx and x.migrate.typemaps against Appdor's xlsx.js and importer maps (700 cases, D2347).
+$fmtXlsxPath = Join-Path $testBuild 'fmt-xlsx-selfhost.exe'
+$fmtXlsxWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_xlsx\src\main.e') $repo 'x64' 'windows' $fmtXlsxPath -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtXlsxWritten -ne 'executable written') { throw 'fmt_xlsx emission failed' }
+$fmtXlsxOutput = & $fmtXlsxPath
+if ($LASTEXITCODE -ne 0 -or $fmtXlsxOutput -ne 'fmt xlsx ok') { throw "fmt_xlsx answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

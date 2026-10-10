@@ -131,6 +131,8 @@
     "e.fmt.yaml",
     "e.fmt.woff2",
     "e.fmt.woff",
+    "x.migrate.typemaps",
+    "e.fmt.xlsx",
     "e.fmt.xml",
     "e.fmt.xsd",
     "e.fmt.xsd.schema",
@@ -2191,6 +2193,32 @@
     "e.mem",
     "e.algo.deflate",
     "e.algo.hash"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.migrate.typemaps",
+   "layer": 3,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.xlsx",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.formula.text",
+    "e.mem",
+    "e.str",
+    "e.text.utf8"
    ],
    "blocked_by": []
   },

@@ -3415,6 +3415,12 @@ fmt_woff_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/fmt-woff-selfhost"
 fmt_woff_output=$("$test_build/fmt-woff-selfhost")
 [ "$fmt_woff_output" = 'fmt woff ok' ]
+# e.fmt.xlsx and x.migrate.typemaps against Appdor's xlsx.js and importer maps (700 cases, D2347).
+fmt_xlsx_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xlsx/src/main.e" "$repo" x64 linux "$test_build/fmt-xlsx-selfhost" -j 2)
+[ "$fmt_xlsx_written" = 'executable written' ]
+chmod +x "$test_build/fmt-xlsx-selfhost"
+fmt_xlsx_output=$("$test_build/fmt-xlsx-selfhost")
+[ "$fmt_xlsx_output" = 'fmt xlsx ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
