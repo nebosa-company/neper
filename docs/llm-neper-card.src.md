@@ -101,6 +101,93 @@ fn main(a: *mem.Arena, args: []str) -> err {
 }
 ```
 
+## Traps
+
+These ended most failed builds in the measured transcripts; each is refused with the
+code shown, and the fix is always a rename or a rewrite, never a flag.
+
+A local or parameter may not reuse a name that is reserved, a module-scope function,
+a `use` qualifier or a builtin (D66). The reserved names include `target`, `Vec`,
+`i8` and the other builtin type names; common nouns that big modules use as functions
+(`text`, `level`, `row`, `at`, `cell`) and qualifiers (`str`, `mem`, `bytes`) collide
+the same way. Rename the local (`target_len`, `row_value`); the diagnostic carries a
+machine-applicable rename:
+
+```neper reject E-NAME-0003
+use e.mem
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let target = 3usize
+    if target > 4usize { ret mem.Exhausted }
+    ret ok
+}
+```
+
+```neper reject E-NAME-0003
+use e.mem
+
+fn width(n: usize) -> usize { ret n }
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let width = 3usize
+    if width > 4usize { ret mem.Exhausted }
+    ret ok
+}
+```
+
+`ok`, `err` and `error` are not names a struct field, local or parameter may take:
+`ok` is the success value of `err`. Write `good`, `found` or `valid`:
+
+```neper reject E-SYNTAX-9999
+use e.mem
+
+type Result = struct { ok: bool, count: usize }
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let r = Result { ok: true, count: 1usize }
+    if r.count > 4usize { ret mem.Exhausted }
+    ret ok
+}
+```
+
+A call that returns a tuple is not returned directly: bind the elements, then return
+the tuple literal.
+
+```neper reject E-TYPE-0003
+use e.mem
+
+fn pair() -> (usize, bool) { ret (1usize, true) }
+
+fn first() -> (usize, bool) {
+    ret pair()
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let (n, good) = first()
+    if n > 4usize && good { ret mem.Exhausted }
+    ret ok
+}
+```
+
+String escapes are `\n \t \r \\ \" \' \0` and `\xHH`; there is no `\u`. A control
+character is written `\x0F`:
+
+```neper reject E-LEX-0003
+use e.mem
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let text = "\u000F"
+    if text.len > 4usize { ret mem.Exhausted }
+    ret ok
+}
+```
+
+Bootstrap-only rules, until the C bootstrap is retired (C088): code under `src/` must
+also build with the C bootstrap, which refuses `-=` and `x > CONST {` shapes, truncates
+a function past 256 locals silently and has fixed pools (declarations, tokens). A clean
+bootstrap build is therefore not proof, and a pool that is full blames the change that
+filled it; run the self-host build, not only `check-file`.
+
 ## Diagnostics
 
 Codes are `E-<FAMILY>-<NNNN>`; the registry is `diagnostics.md`, and the code, not
