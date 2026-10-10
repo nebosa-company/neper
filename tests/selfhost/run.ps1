@@ -3880,6 +3880,12 @@ $xCloudManifestWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $xCloudManifestWritten -ne 'executable written') { throw 'x_cloud_manifest emission failed' }
 $xCloudManifestOutput = & $xCloudManifestPath
 if ($LASTEXITCODE -ne 0 -or $xCloudManifestOutput -ne 'x cloud manifest ok') { throw "x_cloud_manifest answered wrongly: exit $LASTEXITCODE" }
+# x.cloud.aws and x.ssh.args against Petcow's cloudcontrol.rs helpers and ssh.rs (311 cases, D2354).
+$xCloudAwsPath = Join-Path $testBuild 'x-cloud-aws-selfhost.exe'
+$xCloudAwsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_cloud_aws\src\main.e') $repo 'x64' 'windows' $xCloudAwsPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xCloudAwsWritten -ne 'executable written') { throw 'x_cloud_aws emission failed' }
+$xCloudAwsOutput = & $xCloudAwsPath
+if ($LASTEXITCODE -ne 0 -or $xCloudAwsOutput -ne 'x cloud aws ok') { throw "x_cloud_aws answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

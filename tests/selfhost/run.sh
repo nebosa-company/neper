@@ -3463,6 +3463,12 @@ x_cloud_manifest_written=$($test_build/neper-self emit-executable "$repo/tests/s
 chmod +x "$test_build/x-cloud-manifest-selfhost"
 x_cloud_manifest_output=$("$test_build/x-cloud-manifest-selfhost")
 [ "$x_cloud_manifest_output" = 'x cloud manifest ok' ]
+# x.cloud.aws and x.ssh.args against Petcow's cloudcontrol.rs helpers and ssh.rs (311 cases, D2354).
+x_cloud_aws_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_cloud_aws/src/main.e" "$repo" x64 linux "$test_build/x-cloud-aws-selfhost" -j 2)
+[ "$x_cloud_aws_written" = 'executable written' ]
+chmod +x "$test_build/x-cloud-aws-selfhost"
+x_cloud_aws_output=$("$test_build/x-cloud-aws-selfhost")
+[ "$x_cloud_aws_output" = 'x cloud aws ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

@@ -17638,6 +17638,62 @@ fn parse_manifest(a: *mem.Arena, source: str) -> Manifest
 
 External resource manifests (L047), after Petcow's `provider/manifest.rs`: `parse_manifest` reads a YAML file of `resources:` (known keys only, typed values, string maps in key order) into definitions bound to a cloud, with the reference's validations in its order: the cloud must be declarative and agree with the type's prefix; an `rpc:` block lowers to the item, list, create, delete and update URLs and the verbs (and refuses explicit URLs beside it; each action, version and parameter is checked for characters that would split the query string); a marker and `observed_name_field` cannot both name the resource; `create_body_vars` may not collide with what `copy_attrs` or `name_field` writes; a pair-list marker must be stamped by the RPC create's params. Checked against Petcow's own `manifest.rs` over 117 manifests on both hosts (D2353).
 
+### `x.cloud.aws`
+
+```neper
+type Parent = struct { petcow_type: str, property: str }
+type Def = struct { petcow_type: str, cfn_type: str, has_name_property: bool, name_property: str, tag_map: bool, has_tag_property: bool, tag_property: str, has_identity: bool, identity: []const str, has_derived: bool, derived: []const str, has_parent: bool, parent: Parent }
+type Defs = struct { valid: bool, message: str, defs: []const Def }
+type Text = struct { valid: bool, message: str, value: str }
+
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn sv(s: str) -> json.Value
+fn managed_tag() -> str
+fn name_tag() -> str
+fn is_throttle(msg: str) -> bool
+fn failed_defs(a: *mem.Arena, what: str) -> Defs
+fn text_field(v: yaml.Value) -> (str, bool, bool)
+fn map_find(m: []const yaml.Pair, name: str) -> (yaml.Value, bool)
+fn string_list(a: *mem.Arena, v: yaml.Value) -> ([]const str, bool)
+fn def_of(a: *mem.Arena, v: yaml.Value) -> (Def, str, bool)
+fn parse_defs(a: *mem.Arena, source: str) -> Defs
+fn merge_defs(a: *mem.Arena, defaults: []const Def, extra: []const Def) -> []const Def
+fn scalar_string(v: json.Value) -> (str, bool)
+fn compose_identifier(a: *mem.Arena, identity: []const str, name_property: str, name: str, attrs: json.Value, petcow_type: str) -> Text
+fn name_from_identifier(a: *mem.Arena, identity: []const str, name_property: str, identifier: str) -> (str, bool)
+fn compact(a: *mem.Arena, v: json.Value) -> str
+fn copy_without(a: *mem.Arena, attrs: json.Value, skip: str) -> ir.Obj
+fn desired_state_json(a: *mem.Arena, name_property: str, name: str, attrs: json.Value) -> str
+fn merged_tags(a: *mem.Arena, name: str, user_tags: json.Value, has_user: bool, map_shape: bool) -> json.Value
+fn desired_state_tagged(a: *mem.Arena, name: str, attrs: json.Value, map_shape: bool, tag_prop: str) -> str
+fn managed_name_from_attrs(attrs: json.Value, map_shape: bool, tag_prop: str) -> (str, bool)
+fn sorted_members(a: *mem.Arena, attrs: json.Value) -> []const json.Member
+fn patch_op(a: *mem.Arena, key: str, value: json.Value) -> json.Value
+fn patch_document(a: *mem.Arena, name_property: str, has_name_property: bool, attrs: json.Value) -> str
+fn listed(xs: []const str, key: str) -> bool
+fn patch_document_skipping(a: *mem.Arena, identity: []const str, attrs: json.Value) -> str
+fn patch_document_tagged(a: *mem.Arena, name: str, attrs: json.Value, map_shape: bool, tag_prop: str) -> str
+fn strip_petcow_tags(a: *mem.Arena, attrs: json.Value, map_shape: bool, tag_prop: str) -> json.Value
+fn properties_have_key(a: *mem.Arena, props: str, has_props: bool, key: str) -> bool
+fn parse_properties(a: *mem.Arena, props: str, has_props: bool) -> (json.Value, str, bool)
+```
+
+AWS Cloud Control identity and request shaping (L048), after Petcow's `provider/aws/cloudcontrol.rs`: the catalogue `Def` read from an operator manifest and merged over the built-ins by type (`parse_defs`, `merge_defs`); the composite identifier joined with `|` in schema order and read back (`compose_identifier`, `name_from_identifier`); the `DesiredState` documents for name-addressable and tag-indexed types; tags with the `petcow:managed`/`petcow:name` identity stamped in under both tag shapes (`merged_tags`, `managed_name_from_attrs`, `strip_petcow_tags`); the RFC 6902 patch documents for update; `properties_have_key`, `parse_properties` and `is_throttle`. The SDK calls are host code. Checked against Petcow's own Rust (extracted behind thin shims) over 311 cases with `x.ssh.args` on both hosts (D2354).
+
+### `x.ssh.args`
+
+```neper
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn trimmed_empty(s: str) -> bool
+fn host_str(vars: json.Value, keys: []const str) -> (str, bool)
+fn lower_trim(a: *mem.Arena, s: str) -> str
+fn host_bool(a: *mem.Arena, vars: json.Value, key: str) -> (bool, bool)
+fn remote_command(a: *mem.Arena, command: str, powershell: bool) -> str
+fn ssh_args(a: *mem.Arena, address: str, vars: json.Value, command: str, powershell: bool) -> []const str
+```
+
+The OpenSSH command line a host's variables describe (L048), after Petcow's `transport/ssh.rs`: `ssh_args` builds key-based, never-prompting arguments (`BatchMode=yes`, a 15-second connect timeout, host-key checking on unless the host says otherwise, an optional pinned known-hosts file, identity file with `IdentitiesOnly=yes`, port, `user@address`) and the remote command, wrapped for PowerShell on a Windows target; host variables answer to PetCow's and Ansible's names. Checked against Petcow's own Rust with `x.cloud.aws` on both hosts (D2354).
+
 ### `e.fmt.xml`
 
 ```neper

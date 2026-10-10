@@ -494,6 +494,7 @@
     "x_agent_policy",
     "x_agent_receipt",
     "x_agent_task",
+    "x_cloud_aws",
     "x_cloud_manifest",
     "x_cloud_rest",
     "x_identity_oidc",

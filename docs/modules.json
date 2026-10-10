@@ -142,6 +142,8 @@
     "x.identity.saml",
     "x.cloud.rest",
     "x.cloud.manifest",
+    "x.cloud.aws",
+    "x.ssh.args",
     "e.fmt.xml",
     "e.fmt.xsd",
     "e.fmt.xsd.schema",
@@ -2345,6 +2347,38 @@
     "e.mem",
     "e.str",
     "x.cloud.rest"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.cloud.aws",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.chain",
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.fmt.json",
+    "e.fmt.yaml",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.ssh.args",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },
