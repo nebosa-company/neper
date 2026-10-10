@@ -2099,4 +2099,5 @@ D2340	1118	L038 closed: the CSS tokenizer, grammar and selector parser, checked 
 D2341	790	L039 part one: e.ui.interpolate, the animation kernels checked against Vaper's Dart
 D2342	1263	L039 closed: e.gfx.cssvalue, the CSS value microsyntax checked against Vaper's Dart parsers
 D2343	1505	L040 part one to three: container queries, selector matching and the accessibility tree
-D2344	1609	L041 closed: e.fmt.hcl and x.migrate.terraform, checked against petcow's migrate_hcl
+D2344	1610	L041 closed: e.fmt.hcl and x.migrate.terraform, checked against petcow's migrate_hcl
+D2345	490	L042 closed: scanner finding parsers and the Mermaid emitter, checked against petcow's scan.rs and diagram.rs

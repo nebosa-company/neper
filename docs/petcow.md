@@ -70,3 +70,5 @@ tfbridge gRPC bridge; full multi-cloud fleet parity; `transport/ssm,winrm` in co
 - Fixture-driven goldens in-repo (inputs + expected outputs, incl. error/warn cases named above); deterministic byte-equal reruns; Linux + Windows where shell/platform matters (cf. `facts.rs:113` CRLF control).
 - No `unsafe`, no new native deps, no network in `e.*` tests (fake transports/HTTP only).
 - Docs: module API rows in `docs/module-apis.md` + `docs/modules.json` surface flags; this plan file tracks intent, `docs/progress.html` (generated) tracks readiness.
+
+F2/F3 landed (D2345): `x.lint.scan` (`lib/x/lint/scan.e`) and `e.fmt.mermaid` (`lib/e/fmt/mermaid.e`), differential against `scan.rs` and `diagram.rs` over 610 random cases.

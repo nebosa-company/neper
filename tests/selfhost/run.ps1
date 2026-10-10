@@ -3820,6 +3820,12 @@ $xMigrateTerraformWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $xMigrateTerraformWritten -ne 'executable written') { throw 'x_migrate_terraform emission failed' }
 $xMigrateTerraformOutput = & $xMigrateTerraformPath
 if ($LASTEXITCODE -ne 0 -or $xMigrateTerraformOutput -ne 'x migrate terraform ok') { throw "x_migrate_terraform answered wrongly: exit $LASTEXITCODE" }
+# x.lint.scan and e.fmt.mermaid against petcow's scan.rs and diagram.rs (610 cases, D2345).
+$xLintScanPath = Join-Path $testBuild 'x-lint-scan-selfhost.exe'
+$xLintScanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_lint_scan\src\main.e') $repo 'x64' 'windows' $xLintScanPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xLintScanWritten -ne 'executable written') { throw 'x_lint_scan emission failed' }
+$xLintScanOutput = & $xLintScanPath
+if ($LASTEXITCODE -ne 0 -or $xLintScanOutput -ne 'x lint scan ok') { throw "x_lint_scan answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

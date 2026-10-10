@@ -15546,6 +15546,19 @@ fn parse(a: *mem.Arena, source: str) -> ([]const Item, err)
 
 A read-only HCL2 parser (L041), enough of the native syntax to read Terraform: a body of attributes and blocks with the expression forms the language has -- null, booleans, numbers, quoted strings and heredocs as templates with `${ }` interpolations and `%{ }` directives, tuples, objects, `for` expressions, function calls (with a namespace and a spread final argument), variables, traversals (attributes, `.0` legacy indexes, `[expr]` indexes, `.*` and `[*]` splats), parentheses, conditionals and unary and binary operators (`parse`). It follows `hcl-rs` where that differs from the specification: a chain of binary operators nests to the right without precedence, a minus before a number literal is the negative number, a prefix operator applies to the next primary and the postfix operators then apply to the result, and a heredoc's indent is stripped when it is read. Checked through petcow's own `migrate_hcl` over 530 random Terraform documents on both hosts (D2344).
 
+### `e.fmt.mermaid`
+
+```neper
+type Node = struct { id: str, kind: str, depends_on: []const str, blocked: bool }
+
+fn push(b: *str.Builder, s: str)
+fn push_label(b: *str.Builder, s: str)
+fn push_index(b: *str.Builder, n: usize)
+fn flowchart(a: *mem.Arena, project: str, nodes: []const Node) -> (str, err)
+```
+
+A Mermaid flowchart emitter (L042): `flowchart` writes the `flowchart LR` text for a project's resource graph from `Node` values (an id, a kind, the ids it depends on and whether it is blocked), with petcow's node-id mangling, escaped labels and a dashed edge for a dependency that names no node. Checked against petcow's own `to_mermaid` over random graphs on both hosts (D2345).
+
 ### `e.fmt.csv`
 
 ```neper

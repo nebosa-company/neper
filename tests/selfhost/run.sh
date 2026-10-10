@@ -3403,6 +3403,12 @@ x_migrate_terraform_written=$($test_build/neper-self emit-executable "$repo/test
 chmod +x "$test_build/x-migrate-terraform-selfhost"
 x_migrate_terraform_output=$("$test_build/x-migrate-terraform-selfhost")
 [ "$x_migrate_terraform_output" = 'x migrate terraform ok' ]
+# x.lint.scan and e.fmt.mermaid against petcow's scan.rs and diagram.rs (610 cases, D2345).
+x_lint_scan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_lint_scan/src/main.e" "$repo" x64 linux "$test_build/x-lint-scan-selfhost" -j 2)
+[ "$x_lint_scan_written" = 'executable written' ]
+chmod +x "$test_build/x-lint-scan-selfhost"
+x_lint_scan_output=$("$test_build/x-lint-scan-selfhost")
+[ "$x_lint_scan_output" = 'x lint scan ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

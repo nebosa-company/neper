@@ -46,6 +46,7 @@
     "e.fmt.css.match",
     "e.fmt.html.accessible",
     "e.fmt.hcl",
+    "e.fmt.mermaid",
     "e.fmt.csv",
     "e.fmt.ini",
     "e.text.utf8",
@@ -1861,6 +1862,18 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.data.list",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.mermaid",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
     "e.mem",
     "e.str"
    ],
