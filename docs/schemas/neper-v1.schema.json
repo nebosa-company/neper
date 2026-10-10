@@ -1512,6 +1512,40 @@
         }
       }
     },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record", "schema_revision", "tool_version", "stream_versions", "commands", "flags", "environment", "snapshot"],
+      "properties": {
+        "record": { "const": "capabilities" },
+        "schema_revision": { "type": "integer", "minimum": 1 },
+        "tool_version": { "type": "string" },
+        "stream_versions": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "group"],
+            "properties": {
+              "name": { "type": "string" },
+              "group": { "enum": ["build", "check", "edit", "format", "inspect", "parse", "query", "run", "test", "tool"] }
+            }
+          }
+        },
+        "flags": { "type": "array", "items": { "type": "string" } },
+        "environment": { "type": "array", "items": { "type": "string" } },
+        "snapshot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field", "named_by"],
+          "properties": {
+            "field": { "type": "string" },
+            "named_by": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
     "impact": {
       "type": "object",
       "additionalProperties": false,
@@ -2179,6 +2213,9 @@
         },
         {
           "$ref": "#/$defs/info"
+        },
+        {
+          "$ref": "#/$defs/capabilities"
         },
         {
           "$ref": "#/$defs/inline"

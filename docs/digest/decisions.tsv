@@ -2073,4 +2073,4 @@ D2315	1143	T035: UI resource and command consistency audits over declared manife
 D2316	843	T040 (first step): tooling latency budgets frozen from a measurement
 D2317	1466	C147 (second part): `NEPER_JOBS`, and the Windows suite reaches its last fixtures
 D2318	1281	T031: `x.migrate.migrate`, the four-way configuration-management importer
-D2319	1192	T039 (first slice): `info --json --capabilities`, version and capability discovery beyond the closed v1 `info`
+D2319	1343	T039 (first slice): `info --json --capabilities`, version and capability discovery beyond the closed v1 `info`
