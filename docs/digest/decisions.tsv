@@ -2140,4 +2140,5 @@ D2381	591	C125 part seven: a Recent view
 D2382	1180	C125 part eight: Open hands a file to the app for its type
 D2383	1635	C124 part one: the app package format and its verifier
 D2384	1900	C124 part two: an installed app starts from memory, and the shell verifies the package
-D2385	1211	C124 part three: an installed app gets only the capabilities its manifest declares
+D2385	1212	C124 part three: an installed app gets only the capabilities its manifest declares
+D2386	801	C124 part four: the first run asks

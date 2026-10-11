@@ -267,6 +267,8 @@ var installed_va: usize = 0usize
 var installed_pages: usize = 0usize
 // The capabilities the manifest declared: bit 0 network, bit 1 storage.
 var installed_caps: usize = 0usize
+// Whether the user allowed the installed app's capabilities this boot (the first run asks).
+var installed_allowed: bool = false
 
 fn visible_count() -> usize {
     var count = 0usize
@@ -399,6 +401,50 @@ fn show_home(a: *mem.Arena, renderer: *scene.Renderer, w: *window.Window, drawab
     }
     if draw_home(a, &builder, faces, has_fonts, clock, snap) != ok { ret false }
     if dim_layer(&builder, logical_h) != ok { ret false }
+    let restore: scene.Command = .Restore
+    if scene.push(&builder, restore) != ok { ret false }
+    ret show(renderer, w, drawable, scene.finish(&builder))
+}
+
+// (C124) The first-run prompt for the installed app: the home screen under a scrim and a card that names the app,
+// says it was generated, lists the capabilities its manifest declared and offers Allow and Cancel (the rects the
+// tap handler tests: Allow x 56..184, Cancel x 228..356, both y 490..538).
+fn show_prompt(a: *mem.Arena, renderer: *scene.Renderer, w: *window.Window, drawable: scene.Target, faces: text.Faces, has_fonts: bool, clock: str, snap: [5]usize, wallpapered: bool, wall_texture: scene.TextureId, wall_w: f32, wall_h: f32, logical_h: f32, scale: f32) -> bool {
+    let (builder_value, builder_error) = scene.builder(a, 4096usize)
+    if builder_error != ok { ret false }
+    var builder = builder_value
+    let save: scene.Command = .Save
+    if scene.push(&builder, save) != ok { ret false }
+    if scene.push(&builder, scene.Command { Transform: geometry.transform_scale(scale, scale) }) != ok { ret false }
+    if wallpapered {
+        if wallpaper_layer(&builder, wall_texture, wall_w, wall_h, logical_h) != ok { ret false }
+    } else {
+        if fill(&builder, 0.0, 0.0, 412.0, logical_h, paint.Color { red: 0.09, green: 0.11, blue: 0.18, alpha: 1.0 }) != ok { ret false }
+    }
+    if draw_home(a, &builder, faces, has_fonts, clock, snap) != ok { ret false }
+    if fill(&builder, 0.0, 0.0, 412.0, logical_h, paint.Color { red: 0.0, green: 0.0, blue: 0.0, alpha: 0.6 }) != ok { ret false }
+    let cream = paint.Color { red: 0.97, green: 0.96, blue: 0.94, alpha: 1.0 }
+    let ink = paint.Color { red: 0.13, green: 0.13, blue: 0.14, alpha: 1.0 }
+    let muted = paint.Color { red: 0.36, green: 0.35, blue: 0.34, alpha: 1.0 }
+    if card(a, &builder, 36.0, 270.0, 340.0, 300.0, 24.0, cream) != ok { ret false }
+    if centred(a, &builder, faces.jost_bold, 22.0, installed_name[0usize..installed_len], 206.0, 292.0, ink) != ok { ret false }
+    if centred(a, &builder, faces.grotesk, 13.0, "A generated app. It asks for:", 206.0, 328.0, muted) != ok { ret false }
+    var line: f32 = 364.0
+    if (installed_caps & 1usize) != 0usize {
+        if centred(a, &builder, faces.jost, 18.0, "The network", 206.0, line, ink) != ok { ret false }
+        line += 30.0
+    }
+    if (installed_caps & 2usize) != 0usize {
+        if centred(a, &builder, faces.jost, 18.0, "Storage", 206.0, line, ink) != ok { ret false }
+        line += 30.0
+    }
+    if installed_caps == 0usize {
+        if centred(a, &builder, faces.jost, 18.0, "Nothing beyond its own screen", 206.0, line, ink) != ok { ret false }
+    }
+    if card(a, &builder, 56.0, 490.0, 128.0, 48.0, 24.0, paint.Color { red: 0.88, green: 0.70, blue: 0.42, alpha: 1.0 }) != ok { ret false }
+    if centred(a, &builder, faces.jost, 18.0, "Allow", 120.0, 503.0, ink) != ok { ret false }
+    if card(a, &builder, 228.0, 490.0, 128.0, 48.0, 24.0, paint.Color { red: 0.80, green: 0.79, blue: 0.77, alpha: 1.0 }) != ok { ret false }
+    if centred(a, &builder, faces.jost, 18.0, "Cancel", 292.0, 503.0, ink) != ok { ret false }
     let restore: scene.Command = .Restore
     if scene.push(&builder, restore) != ok { ret false }
     ret show(renderer, w, drawable, scene.finish(&builder))
@@ -702,6 +748,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var pointer_x = 0usize
     var pointer_y = 0usize
     var launched_test = false
+    var prompting = false
     // (C126) The Screen timeout setting, from the settings server (index 7), and the ticks since the last touch.
     var (timeout_step, timeout_known) = sysettings.get(7usize)
     if !timeout_known { timeout_step = 1usize }
@@ -745,7 +792,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 say("shell home presented\n")
             } else if tapped {
                 var app = 99usize
-                if by_key {
+                if prompting {
+                    // The first-run prompt: Allow starts the app, anything else puts the home screen back.
+                    let px = f32(pointer_x) * 412.0 / 32768.0
+                    let py = f32(pointer_y) * logical_h / 32768.0
+                    prompting = false
+                    if px >= 56.0 && px < 184.0 && py >= 490.0 && py < 538.0 {
+                        installed_allowed = true
+                        app = 97usize
+                        say("shell allowed ")
+                        say(installed_name[0usize..installed_len])
+                        say("\n")
+                    } else {
+                        if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
+                        framed = true
+                        say("shell prompt cancelled\n")
+                    }
+                } else if by_key {
                     if !launched_test { app = 98usize }
                 } else {
                     let position = icon_at(f32(pointer_x) * 412.0 / 32768.0, f32(pointer_y) * logical_h / 32768.0)
@@ -759,7 +822,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         say("shell tap ")
                         say(installed_name[0usize..installed_len])
                         say("\n")
-                        app = 97usize
+                        if installed_allowed {
+                            app = 97usize
+                        } else if show_prompt(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) {
+                            prompting = true
+                            framed = true
+                            say("shell prompt ")
+                            say(installed_name[0usize..installed_len])
+                            say("\n")
+                        }
                     }
                 }
                 if app == 98usize {
