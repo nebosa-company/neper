@@ -158,6 +158,8 @@ type State = struct {
     moving: usize,
     // Recent: the files of the whole tree, newest first.
     recent: bool,
+    // A file handed over: the program to start for it (0 when none); main leaves with 20000 + it.
+    handover: usize,
     // Select mode: items are ticked by a tap; Delete and Move then act on all of them.
     select_mode: bool,
     move_many: bool,
@@ -1217,6 +1219,25 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             say("files open ")
             say_text(text_of_static(s, s.selected))
             say("\n")
+            if s.real {
+                // Hand the file over: its path in /handover, and the app for its type started by the shell
+                // when this one leaves (an image goes to Photos, anything else to Document).
+                let shared_path = path_of(a, s, s.selected)
+                var program = 40usize
+                if s.nodes[s.selected].kind == 6usize { program = 22usize }
+                var buffer: [64]u8 = zero
+                var n = 0usize
+                while n < shared_path.len && n < 63usize {
+                    buffer[n] = shared_path[n]
+                    n += 1usize
+                }
+                if vaultfs.write("/handover", mem.address_of(&buffer[0usize]), n) {
+                    s.handover = program
+                    say("files handover ")
+                    say_text(shared_path)
+                    say("\n")
+                }
+            }
             ret true
         }
         if id == 611usize {
@@ -1484,7 +1505,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else {
             let id = hit_at(&s, tap.x, tap.y)
             if id != NONE && act(a, &s, id) {
-                if !show(a, &kit, &s) {
+                if s.handover != 0usize {
+                    appkit.leave()
+                    running = false
+                } else if !show(a, &kit, &s) {
                     say("files present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)
                 }
@@ -1493,5 +1517,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
         }
     }
+    if s.handover != 0usize { os.exit(i32(20000usize + s.handover)) }
     ret ok
 }

@@ -768,6 +768,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
                             say_num(theme_word)
                             say("\n")
                         }
+                        // (C125) Hand-over: an app that exits with 20000 + a program asks for that program next
+                        // (Files, to open a file in the app for its type); the file's path is in /handover.
+                        if code_app >= 20000usize && code_app < 20100usize {
+                            say("shell handover ")
+                            say_num(code_app - 20000usize)
+                            say("\n")
+                            let child_next = os.launch((code_app - 20000usize) + theme_word * 256usize)
+                            let code_next = os.reap(child_next)
+                            say("shell app code ")
+                            say_num(code_next)
+                            say("\n")
+                        }
                         // The last scene is released first, so nothing refers to the memory that is given back.
                         if has_last_scene {
                             let released_scene = scene.release_scene(&renderer, last_scene)

@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-C125	compiler	0.55	1939	NeperOS Files: real storage through the filesystem server, file hand-over between apps	files over 4 KB, grid and thumbnails, (2), (3), (5), (6).
+C125	compiler	0.6	2059	NeperOS Files: real storage through the filesystem server, file hand-over between apps	files over 4 KB, grid and thumbnails, (2), (3) Share and the saving apps, (5), (6).
 C124	compiler	0	2252	NeperOS Dynamic: apps from a prompt, compiled in Neper on a server, scanned, installed	Dynamic is the app that makes apps: the user writes a prompt that says what app they need;
 C123	compiler	0	1202	NeperOS Document: a viewer for PDF, Word, PowerPoint, Markdown and text, with syntax highlighting	The Document icon (home index 25, a page with angle brackets) has no app yet.
 C122	compiler	0	895	NeperOS Camera: a real sensor feed, files in Photos, video, focus and exposure	The Camera app (D2217) shows drawn sample scenes and keeps captures in the process.

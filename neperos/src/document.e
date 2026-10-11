@@ -23,6 +23,7 @@ use e.text.shape
 use appkit
 use text
 use ui
+use vaultfs
 
 const NONE: usize = 99usize
 const FILES: usize = 13usize
@@ -36,6 +37,11 @@ const DOCX: usize = 4usize
 const PPTX: usize = 5usize
 
 type State = struct {
+    // A file handed over by Files (C125): its name and text, shown as entry FILES of the list.
+    hand_name: [24]u8,
+    hand_name_len: usize,
+    hand_text: [2048]u8,
+    hand_len: usize,
     screen: usize,
     open: usize,
     page: usize,
@@ -59,6 +65,7 @@ fn file_name(i: usize) -> str {
 }
 
 fn file_kind(i: usize) -> usize {
+    if i == FILES { ret TXT }
     if i == 0usize { ret MD }
     if i == 1usize { ret TXT }
     if i == 3usize { ret PDF }
@@ -326,10 +333,12 @@ fn draw_md(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces)
 
 fn draw_txt(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try ui.card(a, builder, 12.0, 84.0, 388.0, 730.0, 18.0, ui.cream())
-    let content = body(s.open)
+    var content = body(s.open)
+    if s.open == FILES { content = ui.text_of(a, s.hand_text[0usize..], s.hand_len) }
     var n = 0usize
     let total = line_total(content)
-    while n < total {
+    // Only the lines that fit the page are drawn.
+    while n < total && n < 27usize {
         try ui.put(a, builder, faces.grotesk, 15.0, splitter(a, content, n), 28.0, 100.0 + f32(n) * 26.0, ui.ink())
         n += 1usize
     }
@@ -437,7 +446,9 @@ fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     let kind = file_kind(s.open)
     try svg.draw(a, builder, ui.back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), ui.light())
     ui.hit(&s.hits, 500usize, 0.0, 10.0, 66.0, 56.0)
-    try ui.put(a, builder, faces.jost_bold, 22.0, file_name(s.open), 62.0, 20.0, ui.light())
+    var shown = file_name(s.open)
+    if s.open == FILES { shown = ui.text_of(a, s.hand_name[0usize..], s.hand_name_len) }
+    try ui.put(a, builder, faces.jost_bold, 22.0, shown, 62.0, 20.0, ui.light())
     if kind == CODE { try ui.pill(a, builder, &s.hits, faces, 501usize, 300.0, 18.0, 96.0, 32.0, lang_name(s.open), ui.amber(), 14.0) }
     if kind == MD { try draw_md(a, builder, s, faces) }
     if kind == TXT { try draw_txt(a, builder, s, faces) }
@@ -525,6 +536,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var s: State = zero
     s.open = NONE
+    // A file handed over by Files: its path is in /handover; read it and open it.
+    var path_bytes: [64]u8 = zero
+    let (path_len, has_path) = vaultfs.read("/handover", mem.address_of(&path_bytes[0usize]), 63usize)
+    if has_path && path_len > 0usize {
+        let (text_len, has_text) = vaultfs.read(ui.text_of(a, path_bytes[0usize..], path_len), mem.address_of(&s.hand_text[0usize]), 2000usize)
+        if has_text {
+            s.hand_len = text_len
+            var leaf = 0usize
+            var i = 0usize
+            while i < path_len {
+                if path_bytes[i] == 47u8 { leaf = i + 1usize }
+                i += 1usize
+            }
+            var n = 0usize
+            while leaf + n < path_len && n < 24usize {
+                s.hand_name[n] = path_bytes[leaf + n]
+                n += 1usize
+            }
+            s.hand_name_len = n
+            s.open = FILES
+            s.screen = VIEW_SCREEN
+            ui.say("document handed ")
+            ui.say_text(ui.text_of(a, s.hand_name[0usize..], n))
+            ui.say("\n")
+        }
+        let cleared = vaultfs.remove("/handover")
+    }
     if !show(a, &kit, &s) {
         ui.say("document present failed\n")
         ret ok
