@@ -3583,6 +3583,12 @@ algo_fulltext_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/algo-fulltext-selfhost"
 algo_fulltext_output=$("$test_build/algo-fulltext-selfhost")
 [ "$algo_fulltext_output" = 'algo fulltext ok' ]
+# e.algo.tidy (L064): tidy-select, mutate, the six joins over e.db.query, pivot_wider/longer, window functions and missing-value verbs against pandas (178 cases, D2543).
+algo_tidy_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_tidy/src/main.e" "$repo" x64 linux "$test_build/algo-tidy-selfhost" -j 2)
+[ "${algo_tidy_written}" = 'executable written' ]
+chmod +x "$test_build/algo-tidy-selfhost"
+algo_tidy_output=$("$test_build/algo-tidy-selfhost")
+[ "${algo_tidy_output}" = 'algo tidy ok' ]
 # `e.algo.view` and `e.algo.pivot`: the table query engine against appdor (1698 cases, TZ=UTC, D2303).
 algo_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_view/src/main.e" "$repo" x64 linux "$test_build/algo-view-selfhost" -j 2)
 [ "$algo_view_written" = 'executable written' ]

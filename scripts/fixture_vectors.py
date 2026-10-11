@@ -79,7 +79,7 @@ fn run_chunk(block: str) -> u32 {
 '''
 
 
-def emit(fixture, header, uses, harness, lines, ok_text, per_chunk=40):
+def emit(fixture, header, uses, harness, lines, ok_text, per_chunk=40, arena=False):
     """Write tests/selfhost/fixtures/link/<fixture>/src/main.e."""
     only = os.environ.get("FIXTURE_ONLY")
     if only:
@@ -87,7 +87,12 @@ def emit(fixture, header, uses, harness, lines, ok_text, per_chunk=40):
     out = [header.rstrip() + "\n"]
     uses = sorted(set(uses) | {"use e.io", "use e.mem", "use e.os", "use e.str"})
     out += [u + "\n" for u in uses]
-    out.append(COMMON)
+    common = COMMON
+    if arena:
+        common = common.replace('fn run_chunk(block: str) -> u32 {', 'fn run_chunk(a: *mem.Arena, block: str) -> u32 {')
+        common = common.replace('if !check(fields[..], nf) {',
+                                'let mark = mem.mark(a)\n        let passed = check(a, fields[..], nf)\n        mem.reset(a, mark)\n        if !passed {')
+    out.append(common)
     out.append(harness)
     chunks = [lines[i:i + per_chunk] for i in range(0, len(lines), per_chunk)]
     for n, chunk in enumerate(chunks):
@@ -96,7 +101,7 @@ def emit(fixture, header, uses, harness, lines, ok_text, per_chunk=40):
     main = ["\nfn main(a: *mem.Arena, args: []str) -> err {\n"]
     main.append("    var failed = 0u32\n")
     for n in range(len(chunks)):
-        main.append(f"    failed += run_chunk(vectors_{n}())\n")
+        main.append(f"    failed += run_chunk({'a, ' if arena else ''}vectors_{n}())\n")
     main.append("    if failed != 0u32 { os.exit(1i32) }\n")
     main.append(f'    try io.print("{ok_text}")\n    ret ok\n}}\n')
     out.append("".join(main))

@@ -4000,6 +4000,12 @@ $algoFulltextWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $algoFulltextWritten -ne 'executable written') { throw 'algo_fulltext emission failed' }
 $algoFulltextOutput = & $algoFulltextPath
 if ($LASTEXITCODE -ne 0 -or $algoFulltextOutput -ne 'algo fulltext ok') { throw "algo_fulltext answered wrongly: exit $LASTEXITCODE" }
+# e.algo.tidy (L064): tidy-select, mutate, the six joins over e.db.query, pivot_wider/longer, window functions and missing-value verbs against pandas (178 cases, D2543).
+$algoTidyPath = Join-Path $testBuild 'algo-tidy-selfhost.exe'
+$algoTidyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_tidy\src\main.e') $repo 'x64' 'windows' $algoTidyPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoTidyWritten -ne 'executable written') { throw 'algo_tidy emission failed' }
+$algoTidyOutput = & $algoTidyPath
+if ($LASTEXITCODE -ne 0 -or $algoTidyOutput -ne 'algo tidy ok') { throw "algo_tidy answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.view` and `e.algo.pivot`: the table query engine against appdor (1698 cases, TZ=UTC, D2303).
 $algoViewPath = Join-Path $testBuild 'algo-view-selfhost.exe'
 $algoViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_view\src\main.e') $repo 'x64' 'windows' $algoViewPath -j 2

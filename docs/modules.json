@@ -390,6 +390,7 @@
     "e.algo.checksum",
     "e.algo.view",
     "e.algo.pivot",
+    "e.algo.tidy",
     "e.algo.page",
     "e.algo.batch",
     "e.algo.geo",
@@ -5277,6 +5278,22 @@
     "e.str",
     "e.text.utf8",
     "e.time"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.tidy",
+   "layer": 5,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.view",
+    "e.db.query",
+    "e.math",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },

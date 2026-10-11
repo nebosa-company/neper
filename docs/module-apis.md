@@ -3064,6 +3064,103 @@ fn is_multi_sorted(sorts: []const SortSpec) -> bool
 
 The view query pipeline: nested AND/OR filters over field-type operator tables (text, number, select, multiselect, checkbox, date with relative operands and ranges, user, bucket and formula conditions), a stable multi-level sort with empty cells last and select options in option order, grouping with an explicit "No value" group, the grid footer's summary functions (count, filled, unique, sum, average, median, min, max, range, stdev, distribution, totalSize, ...), row coloring, quick search and `apply_view` over a saved view config; the immutable filter-tree edits (add, remove, replace, toggle, prune, count, depth) and the multi-column sort-level edits. Text order is a root-collation approximation (ASCII punctuation, digits, letters with case as the last tie-break, Latin-1 accents secondary). Checked against appdor's own engine over 1,698 cases together with `e.algo.pivot`.
 
+### `e.algo.tidy`
+
+```neper
+error Invalid
+error Missing
+error Duplicates
+const SELECT_NAME: u8 = 0u8
+const SELECT_RANGE: u8 = 1u8
+const SELECT_STARTS: u8 = 2u8
+const SELECT_ENDS: u8 = 3u8
+const SELECT_CONTAINS: u8 = 4u8
+const SELECT_EVERYTHING: u8 = 5u8
+const SELECT_TYPE: u8 = 6u8
+const JOIN_INNER: u8 = 0u8
+const JOIN_LEFT: u8 = 1u8
+const JOIN_RIGHT: u8 = 2u8
+const JOIN_FULL: u8 = 3u8
+const JOIN_SEMI: u8 = 4u8
+const JOIN_ANTI: u8 = 5u8
+const WINDOW_ROW_NUMBER: u8 = 0u8
+const WINDOW_RANK: u8 = 1u8
+const WINDOW_DENSE_RANK: u8 = 2u8
+const WINDOW_LAG: u8 = 3u8
+const WINDOW_LEAD: u8 = 4u8
+const WINDOW_CUMSUM: u8 = 5u8
+const WINDOW_CUMMEAN: u8 = 6u8
+const WINDOW_CUMMAX: u8 = 7u8
+const WINDOW_CUMMIN: u8 = 8u8
+const WINDOW_ROLLSUM: u8 = 9u8
+const WINDOW_ROLLMEAN: u8 = 10u8
+const WINDOW_DIFF: u8 = 11u8
+const FILL_DOWN: u8 = 0u8
+const FILL_UP: u8 = 1u8
+type Selector = struct { kind: u8, first: str, second: str, negate: bool }
+type Window = struct { function: u8, input: str, output: str, partition: []const str, order_by: str, descending: bool, size: usize }
+fn by_name(name: str) -> Selector
+fn by_range(from: str, to: str) -> Selector
+fn starts_with(prefix: str) -> Selector
+fn ends_with(suffix: str) -> Selector
+fn contains(part: str) -> Selector
+fn everything() -> Selector
+fn of_type(type_name: str) -> Selector
+fn without(s: Selector) -> Selector
+fn is_missing(v: f.Value) -> bool
+fn cell_value(row: view.Row, name: str) -> f.Value
+fn has_column(names: []const str, name: str) -> bool
+fn column_index(names: []const str, name: str) -> usize
+fn column_names(a: *mem.Arena, rows: []const view.Row) -> ([]str, err)
+fn kind_name(v: f.Value) -> str
+fn matches_type(rows: []const view.Row, name: str, type_name: str) -> bool
+fn term_matches(s: Selector, names: []const str, rows: []const view.Row, i: usize, range_from: usize, range_to: usize) -> bool
+fn select_columns(a: *mem.Arena, rows: []const view.Row, selectors: []const Selector) -> ([]str, err)
+fn make_row(a: *mem.Arena, names: []const str, values: []const f.Value) -> (view.Row, err)
+fn project(a: *mem.Arena, rows: []const view.Row, names: []const str) -> ([]view.Row, err)
+fn select(a: *mem.Arena, rows: []const view.Row, selectors: []const Selector) -> ([]view.Row, err)
+fn rename(a: *mem.Arena, rows: []const view.Row, from: []const str, to: []const str) -> ([]view.Row, err)
+fn relocate(a: *mem.Arena, rows: []const view.Row, selectors: []const Selector, before: str, after: str) -> ([]view.Row, err)
+fn mutate[Ctx: type](a: *mem.Arena, rows: []const view.Row, name: str, ctx: *Ctx, compute: fn(*Ctx, view.Row, usize) -> f.Value) -> ([]view.Row, err)
+fn value_key(a: *mem.Arena, v: f.Value) -> str
+fn value_text(a: *mem.Arena, v: f.Value) -> str
+fn row_key(a: *mem.Arena, row: view.Row, cols: []const str) -> str
+fn hash_text(s: str) -> u64
+fn intern(a: *mem.Arena, keys: []const str) -> ([]usize, usize, err)
+fn group_ids(a: *mem.Arena, rows: []const view.Row, cols: []const str) -> ([]usize, usize, err)
+fn sort_pairs(values: []u64)
+fn join_pairs(a: *mem.Arena, left_ids: []const usize, right_ids: []const usize, out: []u64) -> (usize, err)
+fn unmatched(a: *mem.Arena, from_ids: []const usize, against_ids: []const usize, out: []usize) -> (usize, err)
+fn join(a: *mem.Arena, left: []const view.Row, right: []const view.Row, by_left: []const str, by_right: []const str, kind: u8, suffix_left: str, suffix_right: str) -> ([]view.Row, err)
+fn group_ids_pair(a: *mem.Arena, left: []const view.Row, right: []const view.Row, by_left: []const str, by_right: []const str) -> ([]usize, usize, err)
+fn pivot_wider(a: *mem.Arena, rows: []const view.Row, id_cols: []const str, names_from: str, values_from: str, fill_value: f.Value) -> ([]view.Row, err)
+fn pivot_longer(a: *mem.Arena, rows: []const view.Row, selectors: []const Selector, names_to: str, values_to: str, omit_missing: bool) -> ([]view.Row, err)
+fn order_rows(order: []usize, part: []const usize, key: []const f64, descending: bool)
+fn row_after(x: usize, y: usize, part: []const usize, key: []const f64, descending: bool) -> bool
+fn number_or_nan(v: f.Value) -> f64
+fn window(a: *mem.Arena, rows: []const view.Row, spec: Window) -> ([]view.Row, err)
+fn drop_na(a: *mem.Arena, rows: []const view.Row, columns: []const str) -> ([]view.Row, err)
+fn replace_na(a: *mem.Arena, rows: []const view.Row, column: str, value: f.Value) -> ([]view.Row, err)
+fn fill(a: *mem.Arena, rows: []const view.Row, columns: []const str, partition: []const str, direction: u8) -> ([]view.Row, err)
+```
+
+Tidy-data verbs over `e.algo.view` rows. Selection uses `Selector` terms built with
+`by_name`, `by_range`, `starts_with`, `ends_with`, `contains`, `everything` and
+`of_type`, each removable with `without` (dplyr's `-x`): terms add in the order
+written, negated terms remove, and a leading negated term starts from every column.
+`select`, `rename`, `relocate` (to the front, `before` or `after` a column) and
+`mutate` (a callback per row) keep the input rows and answer new ones. `join` plans
+inner, left, right, full, semi and anti joins over `e.db.query`'s hash join and anti
+join on interned integer keys (a missing key matches a missing key; colliding
+non-key names take the two suffixes; row order follows dplyr). `pivot_wider` and
+`pivot_longer` follow tidyr, with `Duplicates` for a repeated cell. `window` adds a
+column by a `Window` spec: row number, rank, dense rank, lag, lead, cumulative
+sum/mean/max/min, rolling sum/mean (blank until the window is full of non-missing
+values) and difference per partition in `order_by` order, the output in the input's
+row order. `drop_na`, `replace_na` and `fill` (down or up per partition) handle
+missing values; a value is missing when it is blank or NaN. Every verb takes the
+arena that will own its result.
+
 ### `e.algo.pivot`
 
 ```neper
