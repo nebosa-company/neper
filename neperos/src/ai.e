@@ -5,10 +5,11 @@
 // provider or the key and one to start a new chat. Dark ground, cream bubbles for the assistant and amber
 // for you, like the other apps (appkit.e, taps from the compositor, the five fonts as args[1..5]). A tap on
 // the bar at the bottom leaves the app.
-// ponytail: there is no network, so nothing is sent to a provider: the replies are CANNED (a few keywords
-// get a fixed answer, anything else is echoed with a note), the key stays in this process, in memory, and
-// is not checked. A real client (HTTPS to the provider's API with the key, streaming the reply, the key
-// kept in Secure, conversations kept in storage, tools and files) is queued as C141.
+// (C141) The replies are real: each message sends the conversation to the provider's API over HTTPS (httpc, the
+// shape of Anthropic's, OpenAI's, Google's and the OpenAI-compatible local server's) with the key typed in setup,
+// and the answer's text is read from the reply; a refused key, a rate limit, no network and the rest are said in
+// plain words. The key stays in this process's memory, is never logged and is not kept. Left (C171): streaming,
+// the key in Secure, conversations in storage, files, images and tools.
 use e.mem
 use e.os
 use e.gfx.geometry
@@ -20,6 +21,7 @@ use e.text.shape
 use appkit
 use text
 use ui
+use httpc
 
 const NONE: usize = 99usize
 const MAX_MSGS: usize = 12usize
@@ -95,33 +97,251 @@ fn add_msg(s: *State, mine: bool, body: str) {
     s.msg_total += 1usize
 }
 
-// Does `hay` contain `needle`, ignoring case?
-fn contains(a: *mem.Arena, hay: str, needle: str) -> bool {
-    if needle.len > hay.len { ret false }
-    var at = 0usize
-    while at + needle.len <= hay.len {
-        var k = 0usize
-        var match_all = true
-        while k < needle.len {
-            var c = hay[at + k]
-            if c >= 65u8 && c <= 90u8 { c = c + 32u8 }
-            if c != needle[k] { match_all = false }
-            k += 1usize
-        }
-        if match_all { ret true }
-        at += 1usize
+// ----------------------------------------------------------------------------------------------
+// The provider client (C141): one HTTPS request per message over httpc, the whole conversation as the body.
+
+fn model_id(p: usize, m: usize) -> str {
+    if p == 0usize {
+        if m == 0usize { ret "claude-opus-5-5" }
+        if m == 1usize { ret "claude-sonnet-5-5" }
+        ret "claude-haiku-5-5"
     }
-    ret false
+    if p == 1usize {
+        if m == 0usize { ret "gpt-5" }
+        if m == 1usize { ret "gpt-5-mini" }
+        ret "gpt-5-nano"
+    }
+    if p == 2usize {
+        if m == 0usize { ret "gemini-2.5-pro" }
+        if m == 1usize { ret "gemini-2.5-flash" }
+        ret "gemini-2.5-flash-lite"
+    }
+    if m == 0usize { ret "llama-7b" }
+    if m == 1usize { ret "llama-3b" }
+    ret "llama-1b"
 }
 
-// The canned answer to `message`.
-fn answer(a: *mem.Arena, s: *State, message: str) -> str {
-    if contains(a, message, "haiku") { ret "Craters in the dusk / amber light on quiet screens / small apps, one by one." }
-    if contains(a, message, "neper") { ret "Neper is a compiled systems language with its own toolchain, libraries and operating system. This phone runs on it." }
-    if contains(a, message, "weather") { ret "I cannot see the weather without a network, but the Weather app has a sample forecast." }
-    if contains(a, message, "help") { ret "Try asking about Neper, or ask me for a haiku. I am a demo until the network exists." }
-    if contains(a, message, "hello") || contains(a, message, "hi") { ret "Hello! I am a demo assistant. There is no network yet, so my answers are canned." }
-    ret ui.join(a, ui.join(a, "I heard: \"", message, "\". With a real key and a network I would send this to "), provider_name(s.provider), " and answer for real.")
+// `piece` into `buf` at `at` as the inside of a JSON string; the new end.
+fn put_escaped(buf: []u8, at: usize, piece: []const u8, length: usize) -> usize {
+    var n = at
+    var i = 0usize
+    while i < length && n + 6usize < buf.len {
+        let c = piece[i]
+        if c == 34u8 || c == 92u8 {
+            buf[n] = 92u8
+            buf[n + 1usize] = c
+            n += 2usize
+        } else if c == 10u8 {
+            buf[n] = 92u8
+            buf[n + 1usize] = 110u8
+            n += 2usize
+        } else if c >= 32u8 {
+            buf[n] = c
+            n += 1usize
+        }
+        i += 1usize
+    }
+    ret n
+}
+
+// The request body for the conversation so far, in the shape of the provider; the length.
+fn build_body(s: *State, buf: []u8) -> usize {
+    var n = 0usize
+    let google = s.provider == 2usize
+    if google {
+        n = httpc.put(buf, n, "{\"contents\":[")
+    } else {
+        n = httpc.put(buf, n, "{\"model\":\"")
+        n = httpc.put(buf, n, model_id(s.provider, s.model))
+        if s.provider == 0usize { n = httpc.put(buf, n, "\",\"max_tokens\":1024,\"messages\":[") } else { n = httpc.put(buf, n, "\",\"messages\":[") }
+    }
+    var k = 0usize
+    while k < s.msg_total {
+        if k > 0usize { n = httpc.put(buf, n, ",") }
+        var role = "assistant"
+        if s.msgs[k].mine { role = "user" }
+        if google {
+            if !s.msgs[k].mine { role = "model" }
+            n = httpc.put(buf, n, "{\"role\":\"")
+            n = httpc.put(buf, n, role)
+            n = httpc.put(buf, n, "\",\"parts\":[{\"text\":\"")
+        } else {
+            n = httpc.put(buf, n, "{\"role\":\"")
+            n = httpc.put(buf, n, role)
+            n = httpc.put(buf, n, "\",\"content\":\"")
+        }
+        n = put_escaped(buf, n, s.msgs[k].body[0usize..], s.msgs[k].body_len)
+        if google { n = httpc.put(buf, n, "\"}]}") } else { n = httpc.put(buf, n, "\"}") }
+        k += 1usize
+    }
+    n = httpc.put(buf, n, "]}")
+    ret n
+}
+
+fn hex4(body: str, at: usize) -> usize {
+    var v = 0usize
+    var i = 0usize
+    while i < 4usize && at + i < body.len {
+        let d = httpc.hex_digit(body[at + i])
+        if d == 99usize { ret 0usize }
+        v = v * 16usize + d
+        i += 1usize
+    }
+    ret v
+}
+
+// Whether `body` holds `"key":` at `at`.
+fn key_at(body: str, at: usize, key: str) -> bool {
+    if at + key.len + 3usize > body.len { ret false }
+    if body[at] != 34u8 || body[at + 1usize + key.len] != 34u8 || body[at + 2usize + key.len] != 58u8 { ret false }
+    var i = 0usize
+    while i < key.len {
+        if body[at + 1usize + i] != key[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// The first JSON string value of `key` in `body` into `out`; its length (0 when the key is absent).
+fn extract_text(body: str, key: str, out: []u8) -> usize {
+    var at = 0usize
+    var found = false
+    while at + key.len + 3usize < body.len && !found {
+        var next = at + 1usize
+        if key_at(body, at, key) {
+            var v = at + 3usize + key.len
+            while v < body.len && body[v] == 32u8 { v += 1usize }
+            if v < body.len && body[v] == 34u8 {
+                next = v + 1usize
+                found = true
+            }
+        }
+        at = next
+    }
+    if !found { ret 0usize }
+    var n = 0usize
+    var done = false
+    while at < body.len && !done && n + 4usize < out.len {
+        let c = body[at]
+        if c == 34u8 {
+            done = true
+        } else if c == 92u8 && at + 1usize < body.len {
+            let e = body[at + 1usize]
+            at += 2usize
+            if e == 110u8 {
+                out[n] = 10u8
+                n += 1usize
+            } else if e == 116u8 {
+                out[n] = 32u8
+                n += 1usize
+            } else if e == 117u8 && at + 4usize <= body.len {
+                let cp = hex4(body, at)
+                at += 4usize
+                if cp < 128usize {
+                    out[n] = u8(cp)
+                    n += 1usize
+                } else if cp < 2048usize {
+                    out[n] = u8(192usize | (cp >> 6usize))
+                    out[n + 1usize] = u8(128usize | (cp & 63usize))
+                    n += 2usize
+                } else {
+                    out[n] = u8(224usize | (cp >> 12usize))
+                    out[n + 1usize] = u8(128usize | ((cp >> 6usize) & 63usize))
+                    out[n + 2usize] = u8(128usize | (cp & 63usize))
+                    n += 3usize
+                }
+            } else {
+                out[n] = e
+                n += 1usize
+            }
+        } else {
+            out[n] = c
+            n += 1usize
+            at += 1usize
+        }
+    }
+    ret n
+}
+
+fn set_reply(s: *State, message: str) {
+    var i = 0usize
+    while i < message.len && i < 220usize {
+        s.reply[i] = message[i]
+        i += 1usize
+    }
+    s.reply_len = i
+}
+
+// Ask the provider for the next reply: its text into s.reply and true; or, when there is none, the plain-words
+// reason there and false.
+fn ask(a: *mem.Arena, s: *State) -> bool {
+    let (buf, buf_error) = mem.alloc[u8](a, 8192usize)
+    if buf_error != ok {
+        set_reply(s, "I ran out of memory.")
+        ret false
+    }
+    let body_len = build_body(s, buf)
+    let body: str = buf[0usize..body_len]
+    let key = ui.field_text(a, &s.key)
+    var host = "neper.test"
+    var path = "/v1/chat/completions"
+    var extra = ""
+    var reply_key = "content"
+    if s.provider == 0usize {
+        host = "api.anthropic.com"
+        path = "/v1/messages"
+        extra = ui.join(a, ui.join(a, "x-api-key: ", key, "\r\n"), "anthropic-version: 2023-06-01\r\n", "")
+        reply_key = "text"
+    } else if s.provider == 1usize {
+        host = "api.openai.com"
+        extra = ui.join(a, "Authorization: Bearer ", key, "\r\n")
+    } else if s.provider == 2usize {
+        host = "generativelanguage.googleapis.com"
+        path = ui.join(a, ui.join(a, "/v1beta/models/", model_id(s.provider, s.model), ":generateContent?key="), key, "")
+        reply_key = "text"
+    } else if key.len > 0usize {
+        extra = ui.join(a, "Authorization: Bearer ", key, "\r\n")
+    }
+    let (reply, request_error) = httpc.post(a, host, path, extra, body)
+    if request_error == httpc.NoNetwork {
+        set_reply(s, "There is no network, so I cannot reach the model.")
+        ret false
+    }
+    if request_error == httpc.Unreachable {
+        set_reply(s, ui.join(a, "I could not reach ", provider_name(s.provider), "."))
+        ret false
+    }
+    if request_error == httpc.TlsFailed {
+        set_reply(s, ui.join(a, "The secure connection to ", provider_name(s.provider), " failed."))
+        ret false
+    }
+    if request_error != ok {
+        set_reply(s, "The reply did not arrive whole.")
+        ret false
+    }
+    if reply.status == 401usize || reply.status == 403usize {
+        set_reply(s, "The provider refused the key. Check it in setup.")
+        ret false
+    }
+    if reply.status == 429usize {
+        set_reply(s, "The rate limit was reached. Try again in a moment.")
+        ret false
+    }
+    if reply.status == 404usize {
+        set_reply(s, "The provider does not know this model.")
+        ret false
+    }
+    if reply.status != 200usize {
+        set_reply(s, ui.join(a, "The provider answered with status ", ui.number(a, reply.status), "."))
+        ret false
+    }
+    let n = extract_text(reply.body, reply_key, s.reply[0usize..])
+    if n == 0usize {
+        set_reply(s, "The reply held no text.")
+        ret false
+    }
+    s.reply_len = n
+    ret true
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -176,7 +396,7 @@ fn draw_chat(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     try ui.put(a, builder, faces.jost_bold, 24.0, "AI", 56.0, 18.0, ui.light())
     try ui.pill(a, builder, &s.hits, faces, 200usize, 160.0, 18.0, 160.0, 34.0, ui.join(a, ui.join(a, provider_name(s.provider), " ", ""), model_name(s.provider, s.model), ""), ui.soft(), 13.0)
     try ui.pill(a, builder, &s.hits, faces, 201usize, 328.0, 18.0, 68.0, 34.0, "New", ui.soft(), 13.0)
-    try ui.put(a, builder, faces.grotesk, 11.0, "Demo: no network, replies are canned", 24.0, 60.0, ui.light_muted())
+    try ui.put(a, builder, faces.grotesk, 11.0, "Your messages go to the provider you chose", 24.0, 60.0, ui.light_muted())
     // The messages from the bottom up.
     var bottom: f32 = 780.0
     if s.typing { bottom = 440.0 }
@@ -264,23 +484,27 @@ fn send(a: *mem.Arena, s: *State) {
     let message = ui.field_text(a, &s.draft)
     add_msg(s, true, message)
     s.draft.len = 0usize
-    let text_out = answer(a, s, message)
-    var i = 0usize
-    while i < text_out.len && i < 220usize {
-        s.reply[i] = text_out[i]
-        i += 1usize
+    let answered = ask(a, s)
+    if answered {
+        ui.say("ai text ")
+        ui.say_text(ui.text_of(a, s.reply[0usize..], s.reply_len))
+        ui.say("\n")
+    } else {
+        ui.say("ai failed ")
+        ui.say_text(ui.text_of(a, s.reply[0usize..], s.reply_len))
+        ui.say("\n")
     }
-    s.reply_len = i
-    s.reply_shown = 0usize
-    s.replying = true
+    // The answer is whole when the request returns, so it goes straight in as a bubble.
+    add_msg(s, false, ui.text_of(a, s.reply[0usize..], s.reply_len))
     ui.say("ai sent\n")
+    ui.say("ai reply\n")
 }
 
 fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if s.screen == SETUP_SCREEN {
         if ui.is_key(id) {
             if id == 1205usize {
-                s.key_saved = s.key.len > 0usize
+                s.key_saved = s.key.len > 0usize || s.provider == 3usize
                 if s.key_saved {
                     s.screen = CHAT_SCREEN
                     ui.say("ai key saved\n")
@@ -302,7 +526,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             ret true
         }
         if id == 120usize {
-            s.key_saved = s.key.len > 0usize
+            s.key_saved = s.key.len > 0usize || s.provider == 3usize
             if s.key_saved {
                 s.screen = CHAT_SCREEN
                 ui.say("ai key saved\n")

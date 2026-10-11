@@ -2,7 +2,7 @@
 // (netclient.e), the reply read to its end into the caller's arena and split into the status and the
 // body. The request asks for `Accept-Encoding: identity` and `Connection: close`, so the reply is plain
 // bytes that end when the peer closes; a chunked body (HTTP/1.1 servers answer that way) is joined in
-// place. Not a general client: no redirects, no cookies, no request bodies, 96 KB of reply at most.
+// place. Not a general client: no redirects, no cookies, a JSON request body only for `post`, 96 KB of reply at most.
 use e.mem
 use e.os
 use netclient
@@ -85,6 +85,18 @@ fn dechunk(raw: []u8, start: usize, end: usize) -> usize {
 
 // GET https://`host``path`, with `extra` appended to the request's headers (each ending in CRLF).
 fn get(a: *mem.Arena, host: str, path: str, extra: str) -> (Reply, err) {
+    let (reply, request_error) = request(a, "GET", host, path, extra, "")
+    ret (reply, request_error)
+}
+
+// POST `body` (JSON) to https://`host``path`; `extra` as for `get`. The request, headers and body, shares the reply's
+// buffer, so it must fit in 96 KB.
+fn post(a: *mem.Arena, host: str, path: str, extra: str, body: str) -> (Reply, err) {
+    let (reply, request_error) = request(a, "POST", host, path, extra, body)
+    ret (reply, request_error)
+}
+
+fn request(a: *mem.Arena, method: str, host: str, path: str, extra: str, body: str) -> (Reply, err) {
     var empty: Reply = zero
     let (raw, alloc_error) = mem.alloc[u8](a, REPLY_MAX)
     if alloc_error != ok { ret (empty, TooLarge) }
@@ -95,13 +107,20 @@ fn get(a: *mem.Arena, host: str, path: str, extra: str) -> (Reply, err) {
     if connected != netproto.R_OK { ret (empty, Io) }
     // The request goes into the same buffer; the reply overwrites it once the request is sent.
     var n = 0usize
-    n = put(raw, n, "GET ")
+    n = put(raw, n, method)
+    n = put(raw, n, " ")
     n = put(raw, n, path)
     n = put(raw, n, " HTTP/1.1\r\nHost: ")
     n = put(raw, n, host)
     n = put(raw, n, "\r\nUser-Agent: NeperOS/1.0\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: close\r\n")
     n = put(raw, n, extra)
+    if body.len > 0usize {
+        n = put(raw, n, "Content-Type: application/json\r\nContent-Length: ")
+        n = put_number(raw, n, body.len)
+        n = put(raw, n, "\r\n")
+    }
     n = put(raw, n, "\r\n")
+    n = put(raw, n, body)
     if netclient.send(mem.address_of(&raw[0usize]), n) != netproto.R_OK {
         let closed = netclient.close()
         ret (empty, Io)
@@ -170,6 +189,28 @@ fn get(a: *mem.Arena, host: str, path: str, extra: str) -> (Reply, err) {
     }
     if failed { ret (empty, Io) }
     ret (Reply { status: status, body: raw[body_start..body_start + body_len] }, ok)
+}
+
+fn put_number(buffer: []u8, at: usize, value: usize) -> usize {
+    var digits: [20]u8 = zero
+    var count = 0usize
+    var rest = value
+    if rest == 0usize {
+        digits[0usize] = 48u8
+        count = 1usize
+    }
+    while rest > 0usize {
+        digits[count] = u8(48usize + rest % 10usize)
+        rest = rest / 10usize
+        count += 1usize
+    }
+    var n = at
+    while count > 0usize && n < buffer.len {
+        count -= 1usize
+        buffer[n] = digits[count]
+        n += 1usize
+    }
+    ret n
 }
 
 // Append `piece` to `buffer` at `at`; the new end.

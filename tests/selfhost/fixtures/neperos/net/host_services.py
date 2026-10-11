@@ -163,6 +163,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         self.reply(200, BODY)
 
+    def do_POST(self):
+        # (C141) The AI app's local model: an OpenAI-compatible chat endpoint. It answers with the last user
+        # message it was sent (so the test sees the conversation reach the server), a 401 for the key `bad`.
+        import json
+        length = int(self.headers.get('Content-Length') or 0)
+        raw = self.rfile.read(length)
+        host = (self.headers.get('Host') or '').split(':')[0]
+        if host == 'neper.test' and self.path == '/v1/chat/completions':
+            if self.headers.get('Authorization') == 'Bearer bad':
+                self.reply(401, b'{"error":{"message":"bad key"}}', 'application/json')
+                return
+            messages = json.loads(raw.decode('utf-8')).get('messages', [])
+            last = ''
+            for m in messages:
+                if m.get('role') == 'user':
+                    last = m.get('content', '')
+            text = 'Echo from the neper test model (%d messages): %s' % (len(messages), last)
+            answer = {'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': text}, 'finish_reason': 'stop'}]}
+            self.reply(200, json.dumps(answer).encode('utf-8'), 'application/json')
+            return
+        self.reply(404, b'{"error":"not found"}', 'application/json')
+
     def log_message(self, *args):
         pass
 
