@@ -48,6 +48,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if valid.card_expiry(12u32, 2026u32, 10u32, 2026u32) != true || valid.card_expiry(9u32, 2026u32, 10u32, 2026u32) != false || valid.card_expiry(10u32, 2026u32, 10u32, 2026u32) != true || valid.card_expiry(1u32, 27u32, 10u32, 2026u32) != true || valid.card_expiry(13u32, 2027u32, 10u32, 2026u32) != false || valid.card_expiry(0u32, 2027u32, 10u32, 2026u32) != false || valid.card_expiry(6u32, 2047u32, 10u32, 2026u32) != false || valid.card_expiry(6u32, 2046u32, 10u32, 2026u32) != true || valid.card_expiry(12u32, 25u32, 10u32, 2026u32) != false { os.exit(10i32) }
     if valid.isin("us0378331005") || valid.bic("deutdeff") || valid.verhoeff("0") || valid.lei("5493001kjtiigc8y1r12") { os.exit(11i32) }
 
+    // 12: the machine-readable zone of ICAO 9303's specimen passport, and the same with one digit changed.
+    if !valid.mrz_td3("P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<", "L898902C36UTO7408122F1204159ZE184226B<<<<<10") { os.exit(12i32) }
+    if valid.mrz_td3("P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<", "L898902C37UTO7408122F1204159ZE184226B<<<<<10") { os.exit(12i32) }
+    if valid.mrz_td3("P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<", "L898902C36UTO7408123F1204159ZE184226B<<<<<10") { os.exit(12i32) }
+    if valid.mrz_td3("P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<", "L898902C36UTO7408122F1204159ZE184226B<<<<<11") { os.exit(12i32) }
+    if valid.mrz_td3("P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<", "L898902C36UTO7408122F1204159ZE184226B<<<<<10") { os.exit(12i32) }
+
     try io.print("valid ok\n")
     ret ok
 }

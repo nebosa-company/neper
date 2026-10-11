@@ -317,3 +317,78 @@ fn card_expiry(month: u32, year: u32, now_month: u32, now_year: u32) -> bool {
     if full == now_year && month < now_month { ret false }
     ret true
 }
+
+// ---- machine-readable zone (ICAO 9303) ----------------------------------------------------------------------
+
+// The value of a character in an MRZ: a digit is itself, A to Z are 10 to 35, the filler `<` is 0; 99 for any
+// other.
+fn mrz_value(c: u8) -> usize {
+    if is_digit(c) { ret usize(c - 48u8) }
+    if is_upper(c) { ret usize(c) - 55usize }
+    if c == 60u8 { ret 0usize }
+    ret 99usize
+}
+
+// The check digit of `s`: the sum of each value times 7, 3, 1 repeating, mod 10; 99 when a character is not
+// one an MRZ holds.
+fn mrz_check(s: str) -> usize {
+    var total = 0usize
+    var i = 0usize
+    while i < s.len {
+        let v = mrz_value(s[i])
+        if v == 99usize { ret 99usize }
+        var weight = 7usize
+        if i % 3usize == 1usize { weight = 3usize }
+        if i % 3usize == 2usize { weight = 1usize }
+        total += v * weight
+        i += 1usize
+    }
+    ret total % 10usize
+}
+
+// One field of line 2 followed by its check digit (a `<` check digit stands for 0 on an empty field).
+fn mrz_field_ok(line: str, from: usize, to: usize) -> bool {
+    let want = mrz_check(line[from..to])
+    if want == 99usize { ret false }
+    let c = line[to]
+    if c == 60u8 { ret want == 0usize }
+    ret is_digit(c) && usize(c - 48u8) == want
+}
+
+// A passport's (TD3) two 44-character lines: line 1 starts with P, and on line 2 the document number, date of
+// birth, expiry, personal number and the composite check digits all agree.
+fn mrz_td3(line1: str, line2: str) -> bool {
+    if line1.len != 44usize || line2.len != 44usize { ret false }
+    if line1[0usize] != 80u8 { ret false }
+    var i = 0usize
+    while i < 44usize {
+        if mrz_value(line1[i]) == 99usize || mrz_value(line2[i]) == 99usize { ret false }
+        i += 1usize
+    }
+    if !mrz_field_ok(line2, 0usize, 9usize) { ret false }
+    if !mrz_field_ok(line2, 13usize, 19usize) { ret false }
+    if !mrz_field_ok(line2, 21usize, 27usize) { ret false }
+    if !mrz_field_ok(line2, 28usize, 42usize) { ret false }
+    var composite: [44]u8 = zero
+    var n = 0usize
+    i = 0usize
+    while i < 10usize {
+        composite[n] = line2[i]
+        n += 1usize
+        i += 1usize
+    }
+    i = 13usize
+    while i < 20usize {
+        composite[n] = line2[i]
+        n += 1usize
+        i += 1usize
+    }
+    i = 21usize
+    while i < 43usize {
+        composite[n] = line2[i]
+        n += 1usize
+        i += 1usize
+    }
+    let want = mrz_check(composite[0usize..n])
+    ret want != 99usize && is_digit(line2[43usize]) && usize(line2[43usize] - 48u8) == want
+}
