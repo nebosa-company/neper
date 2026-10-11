@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-C121	compiler	0.6	3053	NeperOS Wallet: real codes, scanning with the Camera, encrypted storage, more validators	The Wallet app (D2216) holds payment cards, tickets, certificates, loyalty and transit cards, bank accounts and documents (a passport, a visa, a driving license, birth, marriage, address and tax certi
 C120	compiler	0	1059	NeperOS SSH: a real SSH client behind the Termius-style app	The SSH app (D2215) has the hosts list, the host form and a terminal screen, but Connect opens a local demo shell because NeperOS has no network (C117).
 C119	compiler	0.9	1397	NeperOS Weather live data: a keyless forecast source, places and units	places and units are not kept (storage: C116, C125); no current location (GPS: C131); no alerts (Open-Meteo has none).
 C127	compiler	0	898	NeperOS Call: a real telephony stack, the contact store, voicemail	The Call app (D2222) has a keypad, recents, contacts and a call screen on sample data;
@@ -141,3 +140,4 @@ T042	tooling	0.6	3058	T2.3+T2.4 trusted host: policy, verified receipts, durable
 L162	library	0	492	Chart benchmarks against ggplot2, base R graphics and lattice	Backlog from L061 (D2109).
 L163	library	0	1019	Fast, small PNG encoding: dynamic Huffman, lazy matching and table CRC	Backlog from the chart benchmark (D2108, D2110).
 C153	compiler	0	760	NeperOS Camera remainder: the sensor feed, video files, flash and exposure hardware, the QR reader	Split from C122 (D2397): the Camera writes photos and straightened scans as PNG files in /DCIM that Photos lists, with focus ring, exposure steps and a timer.
+C154	compiler	0	852	NeperOS Wallet remainder: encrypted storage, MRZ from an image, editing, camera scanning	Split from C121 (D2402): Wallet draws real QR and Code 128 symbols, validates its form with e.valid, and shows the newest Camera scan on a document.

@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C121",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 121,
-      "title": "NeperOS Wallet: real codes, scanning with the Camera, encrypted storage, more validators",
-      "score": 0.6,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued by the user (2026-10-08). The Wallet app (D2216) holds payment cards, tickets, certificates, loyalty and transit cards, bank accounts and documents (a passport, a visa, a driving license, birth, marriage, address and tax certificates, a social security card, notary acts, employment contracts, non-disclosure agreements, vehicle registrations) on sample data. Acceptance: (1) real QR and barcode encoding and decoding in the library (L137 has QR; add Code 128 and EAN/UPC from e.valid's families) so a ticket or pass shows a code that scans and the Camera can read one; (2) document scanning: the Camera app (not yet written) takes a page, e.gfx.vision straightens and crops it, and the page is kept with the document and shown full screen; (3) the cards kept encrypted at rest in Secure (C116) behind the master password, with no card number kept beyond the last four digits unless the user asks; (4) validators stay in the library, not the app: e.valid gained card_brand (D2216); the rest of the identifier checksum suite (L030: LEI, ISIN, VIN, Verhoeff, BIC) and an expiry check join it; (5) a machine-readable zone reader for passports and driving-license barcodes; (6) add and edit a document or a bank account with full validation messages; (7) a fixture on QEMU for add, edit, remove and the encrypted round trip. Not queued here: tap-to-pay, issuer provisioning, government verification of a certificate. Done (D2399): item (1) -- e.barcode: QR Code versions 1-10 encode (four levels, eight masks, checked module for module against the qrcode package) and decode (format word, Reed-Solomon correction, byte/alphanumeric/numeric), Code 128 sets B and C and EAN-13 (against python-barcode); Wallet draws a real QR symbol of a pass's payload and a real Code 128 of a loyalty card's number (fixture wallet_code). Not here: reading a symbol from an image (finder search, sampling), Code 39, UPC-E, PDF417, versions above 10. Done (D2400): item (4) -- e.valid gained isin, lei, vin, verhoeff, bic and card_expiry (against python-stdnum and the NHTSA rule); item (6) -- the add form refuses a card number with the wrong length or check digit, an expiry that is not MM/YY and an IBAN that is not valid, with the message on the form (fixture wallet_form). Not here: (2) scanning, (3) encryption at rest, (5) the machine-readable zone, edit of an existing card, an expiry checked against the clock. Also done (D2401): item (5)'s check-digit half -- e.valid.mrz_td3 verifies a passport's two machine-readable lines against ICAO 9303's specimen; reading the zone out of a scanned image is not. Done (D2402): item (2) as far as software goes -- e.barcode.qr_scan finds a QR symbol in a luminance image (Otsu, finder runs, affine grid; six symbols turned up to 25 degrees read, blank and noise find nothing), and Wallet shows the newest Camera scan (/DCIM/SCAN_nnnn.png) on a document (fixture camera_scan_more). Not here: the Camera feeding frames to qr_scan, a scan kept per document, the page cropped by e.gfx.vision's corner search on a real photo."
-    },
-    {
       "id": "C120",
       "category": "compiler",
       "group": "NeperOS",
@@ -1564,6 +1553,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C122 (D2397): the Camera writes photos and straightened scans as PNG files in /DCIM that Photos lists, with focus ring, exposure steps and a timer. Acceptance: (1) a camera driver server (virtio-video or USB video under QEMU, the Pixel camera later) delivering frames to the viewfinder at a steady rate, front and rear chosen from the devices found; (2) video recording with a codec from the library and audio from e.audio, written as a file Photos plays; (3) focus, exposure, flash and HDR stacking as far as the hardware has them; (4) Scan mode's QR reading (L137) opening the code's content, and a scan offered to Wallet documents (C121); (5) a fixture on QEMU against a test video source. Not queued here: portrait blur, night mode, RAW capture."
+    },
+    {
+      "id": "C154",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 154,
+      "title": "NeperOS Wallet remainder: encrypted storage, MRZ from an image, editing, camera scanning",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C121 (D2402): Wallet draws real QR and Code 128 symbols, validates its form with e.valid, and shows the newest Camera scan on a document. Acceptance: (1) the cards kept encrypted at rest under the Secure vault's master password (the vault module's derive/seal over the filesystem server), with no card number beyond the last four digits unless the user asks, loaded at start and fixture-tested through an encrypted round trip on a disk; (2) editing an existing card or document with the same validation; (3) Camera Scan mode feeding frames to e.barcode.qr_scan and offering the decoded text (a pass, a URL) to Wallet or the browser; (4) a machine-readable zone read from a scanned page (the OCR-B glyphs) and checked by e.valid.mrz_td3; (5) a scan stored with its own document instead of the newest one; (6) expiry checked against the clock."
     }
   ]
 }
