@@ -161,6 +161,14 @@ type State = struct {
     cap_total: usize,
     // A photo was just taken and its file is still to be written (main does it from the frame on the screen).
     save_photo: bool,
+    // (C122) Tap to focus: the ring's centre; the exposure step (0 to 4, 2 is neutral); the timer (0 off, 1 is 3 s,
+    // 2 is 10 s) and the half-seconds left of a countdown.
+    focused: bool,
+    fx: f32,
+    fy: f32,
+    ev: usize,
+    timer: usize,
+    count: usize,
     review: bool,
     view: usize,
     hits: [32]Hit,
@@ -177,6 +185,24 @@ fn flash_name(flash: usize) -> str {
     if flash == 0usize { ret "Off" }
     if flash == 1usize { ret "Auto" }
     ret "On"
+}
+
+fn timer_name(timer: usize) -> str {
+    if timer == 1usize { ret "3 s" }
+    if timer == 2usize { ret "10 s" }
+    ret "Timer"
+}
+
+fn number_text(a: *mem.Arena, value: usize) -> str {
+    let (out, out_error) = mem.alloc[u8](a, 2usize)
+    if out_error != ok { ret "" }
+    if value >= 10usize {
+        out[0usize] = u8(value / 10usize) + 48u8
+        out[1usize] = u8(value % 10usize) + 48u8
+        ret out[0usize..2usize]
+    }
+    out[0usize] = u8(value) + 48u8
+    ret out[0usize..1usize]
 }
 
 fn toast_text(toast: usize) -> str {
@@ -321,6 +347,24 @@ fn draw_camera(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     var seed = 2usize
     if s.cap_total > 0usize { seed = s.cap_total * 13usize + 5usize }
     try picture(a, builder, scenes.scene_svg(a, kind, seed, s.zoom, s.zoom == 0usize, 412usize, 560usize), geometry.rect(0.0, 84.0, 412.0, 560.0), light())
+    // A tap on the viewfinder is a focus point; the exposure step darkens or brightens what the sensor sees.
+    hit(s, 540usize, 0.0, 84.0, 412.0, 560.0)
+    if s.ev < 2usize {
+        try card(a, builder, 0.0, 84.0, 412.0, 560.0, 0.0, paint.Color { red: 0.0, green: 0.0, blue: 0.0, alpha: f32(2usize - s.ev) * 0.16 })
+    }
+    if s.ev > 2usize {
+        try card(a, builder, 0.0, 84.0, 412.0, 560.0, 0.0, paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: f32(s.ev - 2usize) * 0.14 })
+    }
+    if s.focused {
+        let ring = amber()
+        try card(a, builder, s.fx - 32.0, s.fy - 32.0, 64.0, 2.0, 0.0, ring)
+        try card(a, builder, s.fx - 32.0, s.fy + 30.0, 64.0, 2.0, 0.0, ring)
+        try card(a, builder, s.fx - 32.0, s.fy - 32.0, 2.0, 64.0, 0.0, ring)
+        try card(a, builder, s.fx + 30.0, s.fy - 32.0, 2.0, 64.0, 0.0, ring)
+    }
+    if s.count > 0usize {
+        try centred(a, builder, faces.jost, 120.0, number_text(a, (s.count + 1usize) / 2usize), 206.0, 280.0, light())
+    }
     if s.grid {
         try card(a, builder, 137.0, 84.0, 1.0, 560.0, 0.5, paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 0.4 })
         try card(a, builder, 275.0, 84.0, 1.0, 560.0, 0.5, paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 0.4 })
@@ -340,6 +384,15 @@ fn draw_camera(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     try svg.draw(a, builder, grid_icon(), geometry.rect(362.0, 22.0, 26.0, 26.0), grid_tone)
     try put(a, builder, faces.grotesk, 11.0, "Grid", 364.0, 52.0, light_muted())
     hit(s, 510usize, 340.0, 10.0, 66.0, 66.0)
+    // The timer and the exposure steps, in the bar's free corners.
+    var timer_tone = light_muted()
+    if s.timer > 0usize { timer_tone = amber() }
+    try put(a, builder, faces.jost, 14.0, timer_name(s.timer), 76.0, 30.0, timer_tone)
+    hit(s, 520usize, 68.0, 14.0, 60.0, 56.0)
+    try put(a, builder, faces.jost, 15.0, "EV-", 288.0, 30.0, light_muted())
+    hit(s, 530usize, 282.0, 14.0, 36.0, 56.0)
+    try put(a, builder, faces.jost, 15.0, "EV+", 324.0, 30.0, light_muted())
+    hit(s, 531usize, 318.0, 14.0, 36.0, 56.0)
     if s.recording {
         try disc(a, builder, 182.0, 40.0, 6.0, paint.Color { red: 0.9, green: 0.2, blue: 0.2, alpha: 1.0 })
         try put(a, builder, faces.jost, 20.0, duration_text(a, s.rec_ticks / 2usize), 196.0, 28.0, light())
@@ -486,7 +539,7 @@ fn remove_cap(s: *State, index: usize) {
 fn save_photo(a: *mem.Arena) -> bool {
     let step = 8usize
     let width = 160usize
-    let height = 217usize
+    let height = 190usize
     let top = 261usize
     let (pixels, pixels_error) = mem.alloc[u8](a, width * height * 4usize)
     if pixels_error != ok { ret false }
@@ -562,7 +615,38 @@ fn number_pad(a: *mem.Arena, value: usize) -> str {
     ret out[0usize..4usize]
 }
 
+// A photo is taken: its file is written by main from the frame on the screen.
+fn take_photo(s: *State) {
+    s.save_photo = true
+    add_cap(s, 0usize, 0usize)
+    s.toast = 1usize
+    s.count = 0usize
+    say("camera photo ")
+    say_num(s.cap_total)
+    say("\n")
+}
+
 fn act(s: *State, id: usize) -> bool {
+    if id == 540usize && !s.review {
+        s.focused = true
+        say("camera focus\n")
+        ret true
+    }
+    if id == 520usize && !s.review {
+        s.timer = (s.timer + 1usize) % 3usize
+        say("camera timer ")
+        say(timer_name(s.timer))
+        say("\n")
+        ret true
+    }
+    if (id == 530usize || id == 531usize) && !s.review {
+        if id == 530usize && s.ev > 0usize { s.ev -= 1usize }
+        if id == 531usize && s.ev < 4usize { s.ev += 1usize }
+        say("camera exposure ")
+        say_num(s.ev)
+        say("\n")
+        ret true
+    }
     if s.review {
         if id == 700usize {
             s.review = false
@@ -591,12 +675,16 @@ fn act(s: *State, id: usize) -> bool {
     }
     if id == 100usize {
         if s.mode == PHOTO {
-            s.save_photo = true
-            add_cap(s, 0usize, 0usize)
-            s.toast = 1usize
-            say("camera photo ")
-            say_num(s.cap_total)
-            say("\n")
+            if s.count > 0usize {
+                s.count = 0usize
+                say("camera timer cancelled\n")
+            } else if s.timer > 0usize {
+                if s.timer == 1usize { s.count = 6usize } else { s.count = 20usize }
+                s.toast = 0usize
+                say("camera timer started\n")
+            } else {
+                take_photo(s)
+            }
         } else if s.mode == SCAN {
             add_cap(s, 2usize, 0usize)
             s.toast = 3usize
@@ -692,6 +780,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var s: State = zero
     s.mode = PHOTO
     s.zoom = 1usize
+    s.ev = 2usize
     if !show(a, &kit, &s) {
         say("camera present failed\n")
         ret ok
@@ -703,8 +792,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if tap.ended {
             running = false
         } else if tap.tick {
-            // While a video records, the time shown follows the ticks (two a second).
-            if s.recording {
+            // A countdown runs on the ticks (two a second) and takes the photo at zero; while a video records, the
+            // time shown follows them.
+            if s.count > 0usize {
+                s.count -= 1usize
+                if s.count == 0usize { take_photo(&s) }
+                if s.count % 2usize == 0usize {
+                    if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }
+                    if s.save_photo {
+                        s.save_photo = false
+                        let kept = save_photo(a)
+                    }
+                } else {
+                    appkit.answer(appkit.ANSWER_NONE)
+                }
+            } else if s.recording {
                 s.rec_ticks += 1usize
                 if s.rec_ticks % 2usize == 0usize {
                     if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }
@@ -720,6 +822,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             running = false
         } else {
             let id = hit_at(&s, tap.x, tap.y)
+            if id == 540usize {
+                s.fx = tap.x
+                s.fy = tap.y
+            }
             if id != NONE && act(&s, id) {
                 // A photo was taken: its file is written from the frame still on the screen.
                 if s.save_photo {
