@@ -1153,6 +1153,13 @@ $vaultTestWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\va
 if ($LASTEXITCODE -ne 0 -or $vaultTestWritten -ne 'executable written') { throw 'vault_test emission failed' }
 & $vaultTestPath
 if ($LASTEXITCODE -ne 0) { throw "a vault_test check failed: exit $LASTEXITCODE" }
+# The NeperOS app package (neperos/src/package.e, C124): a package signed with Ed25519 by Python's cryptography
+# package parses, verifies, answers its manifest and is refused when changed, with another key or too new.
+$packageTestPath = Join-Path $testBuild 'package-test-selfhost.exe'
+$packageTestWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\package_test.e') $repo 'x64' 'windows' $packageTestPath
+if ($LASTEXITCODE -ne 0 -or $packageTestWritten -ne 'executable written') { throw 'package_test emission failed' }
+& $packageTestPath
+if ($LASTEXITCODE -ne 0) { throw "a package_test check failed: exit $LASTEXITCODE" }
 # `e.fmt.pem`: blocks with a suffix and with headers, encode in 64 columns, five refusals.
 $fmtPemPath = Join-Path $testBuild 'fmt-pem-selfhost.exe'
 $fmtPemWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pem\src\main.e') $repo 'x64' 'windows' $fmtPemPath

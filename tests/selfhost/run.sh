@@ -1077,6 +1077,12 @@ vault_test_written=$($test_build/neper-self emit-executable "$repo/neperos/src/v
 [ "$vault_test_written" = 'executable written' ]
 chmod +x "$test_build/vault-test-selfhost"
 "$test_build/vault-test-selfhost"
+# The NeperOS app package (neperos/src/package.e, C124): a package signed with Ed25519 by Python's cryptography
+# package parses, verifies, answers its manifest and is refused when changed, with another key or too new.
+package_test_written=$($test_build/neper-self emit-executable "$repo/neperos/src/package_test.e" "$repo" x64 linux "$test_build/package-test-selfhost")
+[ "$package_test_written" = 'executable written' ]
+chmod +x "$test_build/package-test-selfhost"
+"$test_build/package-test-selfhost"
 # `e.fmt.pem`: blocks with a suffix and with headers, encode in 64 columns, five refusals.
 fmt_pem_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pem/src/main.e" "$repo" x64 linux "$test_build/fmt-pem-selfhost")
 [ "$fmt_pem_written" = 'executable written' ]
