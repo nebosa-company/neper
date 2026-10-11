@@ -15,10 +15,12 @@ use e.gfx.scene
 use e.gfx.svg
 use e.text.layout
 use e.text.shape
+use e.fmt.html as html
 use appkit
 use text
 use ui
 use scenes
+use httpc
 
 const NONE: usize = 99usize
 const MAX_TABS: usize = 4usize
@@ -33,6 +35,16 @@ const DOCS: usize = 3usize
 const RESULTS: usize = 4usize
 const ERROR: usize = 5usize
 const WEATHER: usize = 6usize
+// (C129) A page fetched over the network: LIVE_BASE plus its slot in the address table.
+const LIVE_BASE: usize = 100usize
+const URLS: usize = 8usize
+const PAGE_LINES: usize = 64usize
+const KIND_BODY: usize = 0usize
+const KIND_H1: usize = 1usize
+const KIND_H2: usize = 2usize
+const KIND_LINK: usize = 3usize
+const KIND_BULLET: usize = 4usize
+const KIND_PRE: usize = 5usize
 
 type Tab = struct {
     pages: [10]usize,
@@ -43,7 +55,26 @@ type Tab = struct {
     used: bool,
 }
 
+// A line of the loaded page: its text (wrapped to what a line holds), its kind and the link it leads to.
+type PageLine = struct { text: [56]u8, len: usize, kind: usize, href: [48]u8, href_len: usize }
+
+type Url = struct { host: [40]u8, host_len: usize, path: [64]u8, path_len: usize, used: bool }
+
 type State = struct {
+    // (C129) The addresses of the pages fetched, the page now loaded (its lines, which address it is, how far it
+    // is scrolled, its title) and what is being gathered while a document is read.
+    urls: [8]Url,
+    url_total: usize,
+    page: [64]PageLine,
+    page_total: usize,
+    loaded: usize,
+    scroll: usize,
+    title: [40]u8,
+    title_len: usize,
+    load_error: usize,
+    cur: [56]u8,
+    cur_len: usize,
+    pending_space: bool,
     tabs: [4]Tab,
     tab_total: usize,
     current: usize,
@@ -53,6 +84,7 @@ type State = struct {
 }
 
 fn page_host(page: usize) -> str {
+    if page >= LIVE_BASE { ret "Web page" }
     if page == START { ret "Start page" }
     if page == NEPER { ret "neper.dev" }
     if page == NEWS { ret "news.example" }
@@ -70,6 +102,267 @@ fn page_title(page: usize) -> str {
     if page == RESULTS { ret "Search" }
     if page == WEATHER { ret "Weather" }
     ret "Error"
+}
+
+// ----------------------------------------------------------------------------------------------
+// Live pages: fetched over HTTPS, parsed as HTML and laid out as lines of text.
+
+fn limit_of(kind: usize) -> usize {
+    if kind == KIND_H1 { ret 24usize }
+    if kind == KIND_H2 { ret 30usize }
+    if kind == KIND_LINK { ret 40usize }
+    if kind == KIND_PRE { ret 52usize }
+    ret 46usize
+}
+
+// End the line being gathered: it becomes a line of the page.
+fn flush_line(s: *State, kind: usize, href: str) {
+    if s.cur_len == 0usize { ret }
+    if s.page_total < PAGE_LINES {
+        var line: PageLine = zero
+        var i = 0usize
+        while i < s.cur_len && i < 56usize {
+            line.text[i] = s.cur[i]
+            i += 1usize
+        }
+        line.len = i
+        line.kind = kind
+        var h = 0usize
+        while h < href.len && h < 48usize {
+            line.href[h] = href[h]
+            h += 1usize
+        }
+        line.href_len = h
+        s.page[s.page_total] = line
+        s.page_total += 1usize
+    }
+    s.cur_len = 0usize
+    s.pending_space = false
+}
+
+// Add text to the line being gathered: whitespace collapses to one space and a line breaks at its limit.
+fn add_text(s: *State, text_in: str, kind: usize, href: str) {
+    let limit = limit_of(kind)
+    var i = 0usize
+    while i < text_in.len {
+        let c = text_in[i]
+        if c == 32u8 || c == 10u8 || c == 13u8 || c == 9u8 {
+            if s.cur_len > 0usize { s.pending_space = true }
+            i += 1usize
+        } else {
+            // A word, up to the next whitespace.
+            var end = i
+            while end < text_in.len && text_in[end] != 32u8 && text_in[end] != 10u8 && text_in[end] != 13u8 && text_in[end] != 9u8 { end += 1usize }
+            var word_len = end - i
+            // Break long words at the limit.
+            while word_len > 0usize {
+                var room = limit - s.cur_len
+                var need = word_len
+                if s.pending_space && s.cur_len > 0usize { need += 1usize }
+                if need > room && s.cur_len > 0usize {
+                    flush_line(s, kind, href)
+                    room = limit
+                }
+                var take = word_len
+                if take > limit { take = limit }
+                if s.pending_space && s.cur_len > 0usize && s.cur_len < 55usize {
+                    s.cur[s.cur_len] = 32u8
+                    s.cur_len += 1usize
+                }
+                s.pending_space = false
+                var k = 0usize
+                while k < take && s.cur_len < 56usize {
+                    s.cur[s.cur_len] = text_in[i + k]
+                    s.cur_len += 1usize
+                    k += 1usize
+                }
+                i += take
+                word_len -= take
+                if word_len > 0usize { flush_line(s, kind, href) }
+            }
+        }
+    }
+}
+
+fn is_block(name: str) -> bool {
+    ret ui.same(name, "p") || ui.same(name, "div") || ui.same(name, "ul") || ui.same(name, "ol") || ui.same(name, "li") || ui.same(name, "br") || ui.same(name, "section") || ui.same(name, "article") || ui.same(name, "header") || ui.same(name, "footer") || ui.same(name, "nav") || ui.same(name, "main") || ui.same(name, "table") || ui.same(name, "tr") || ui.same(name, "hr") || ui.same(name, "blockquote") || ui.same(name, "pre") || ui.same(name, "h1") || ui.same(name, "h2") || ui.same(name, "h3") || ui.same(name, "h4") || ui.same(name, "h5") || ui.same(name, "h6")
+}
+
+// Walk the document below `id`, gathering lines. `kind` and `href` come from the elements around.
+fn walk(s: *State, doc: *const html.Document, id: html.NodeId, kind: usize, href: str) {
+    let n = html.node(doc, id)
+    if n.kind == .Text {
+        add_text(s, n.value, kind, href)
+        ret
+    }
+    if n.kind != .Element && n.kind != .Document { ret }
+    var child_kind = kind
+    var child_href = href
+    if n.kind == .Element {
+        let name = n.name
+        if ui.same(name, "script") || ui.same(name, "style") || ui.same(name, "head") { ret }
+        if ui.same(name, "title") { ret }
+        if is_block(name) { flush_line(s, kind, href) }
+        if ui.same(name, "h1") { child_kind = KIND_H1 }
+        if ui.same(name, "h2") || ui.same(name, "h3") || ui.same(name, "h4") || ui.same(name, "h5") || ui.same(name, "h6") { child_kind = KIND_H2 }
+        if ui.same(name, "pre") { child_kind = KIND_PRE }
+        if ui.same(name, "li") {
+            child_kind = KIND_BULLET
+            add_text(s, "-", KIND_BULLET, "")
+        }
+        if ui.same(name, "a") {
+            let (destination, has_destination) = html.attribute(n, "href")
+            if has_destination {
+                flush_line(s, kind, href)
+                child_kind = KIND_LINK
+                child_href = destination
+            }
+        }
+    }
+    var it = html.children(doc, id)
+    var more = true
+    while more {
+        let (child, has_child) = html.children_next(&it)
+        if !has_child { more = false } else { walk(s, doc, child, child_kind, child_href) }
+    }
+    if n.kind == .Element {
+        if is_block(n.name) || ui.same(n.name, "a") { flush_line(s, child_kind, child_href) }
+    }
+}
+
+// The page title: the text of the first <title>.
+fn find_title(a: *mem.Arena, s: *State, doc: *const html.Document) {
+    var i = 0usize
+    while i < doc.nodes.len {
+        let n = doc.nodes[i]
+        if n.kind == .Element && ui.same(n.name, "title") {
+            let (value, value_error) = html.text_content(a, doc, u32(i))
+            if value_error == ok {
+                var k = 0usize
+                while k < value.len && k < 40usize {
+                    s.title[k] = value[k]
+                    k += 1usize
+                }
+                s.title_len = k
+            }
+            ret
+        }
+        i += 1usize
+    }
+}
+
+// Fetch and lay out the page of address slot `slot`: false (with `load_error` set) when it could not be had.
+fn load_live(a: *mem.Arena, s: *State, slot: usize) -> bool {
+    let u = s.urls[slot]
+    let host = ui.text_of(a, u.host[0usize..], u.host_len)
+    let path = ui.text_of(a, u.path[0usize..], u.path_len)
+    s.page_total = 0usize
+    s.cur_len = 0usize
+    s.pending_space = false
+    s.scroll = 0usize
+    s.title_len = 0usize
+    s.loaded = NONE
+    let (reply, get_error) = httpc.get(a, host, path, "")
+    if get_error != ok {
+        s.load_error = 1usize
+        ret false
+    }
+    if reply.status != 200usize {
+        s.load_error = 2usize
+        ret false
+    }
+    let (doc, parse_error) = html.parse(a, reply.body, html.Options { max_bytes: 98304usize, max_nodes: 2048usize, max_attributes: 16usize, max_depth: 40u16, preserve_comments: false })
+    if parse_error != ok {
+        s.load_error = 3usize
+        ret false
+    }
+    find_title(a, s, &doc)
+    walk(s, &doc, doc.root, KIND_BODY, "")
+    flush_line(s, KIND_BODY, "")
+    s.loaded = slot
+    s.load_error = 0usize
+    ui.say("browser live ")
+    ui.say_text(host)
+    ui.say_text(path)
+    ui.say(" ")
+    ui.say_text(ui.number(a, s.page_total))
+    ui.say("\n")
+    ret true
+}
+
+// An address slot for host and path (the same one when it is known).
+fn url_slot(s: *State, host: str, path: str) -> usize {
+    var i = 0usize
+    while i < s.url_total {
+        let u = s.urls[i]
+        if u.host_len == host.len && u.path_len == path.len {
+            var same = true
+            var k = 0usize
+            while k < host.len {
+                if u.host[k] != host[k] { same = false }
+                k += 1usize
+            }
+            k = 0usize
+            while k < path.len {
+                if u.path[k] != path[k] { same = false }
+                k += 1usize
+            }
+            if same { ret i }
+        }
+        i += 1usize
+    }
+    var slot = s.url_total
+    if slot >= URLS {
+        // The table is full: the oldest is reused.
+        slot = 0usize
+        var k = 1usize
+        while k < URLS {
+            s.urls[k - 1usize] = s.urls[k]
+            k += 1usize
+        }
+        slot = URLS - 1usize
+    } else {
+        s.url_total += 1usize
+    }
+    var u: Url = zero
+    var h = 0usize
+    while h < host.len && h < 40usize {
+        u.host[h] = host[h]
+        h += 1usize
+    }
+    u.host_len = h
+    var p = 0usize
+    while p < path.len && p < 64usize {
+        u.path[p] = path[p]
+        p += 1usize
+    }
+    u.path_len = p
+    u.used = true
+    s.urls[slot] = u
+    ret slot
+}
+
+// Split a typed or linked address into host and path against the current page's host.
+fn split_address(a: *mem.Arena, s: *State, address_in: str, current_host: str) -> (str, str) {
+    var rest = address_in
+    var host = current_host
+    var has_scheme = false
+    if rest.len >= 8usize && ui.same(rest[0usize..8usize], "https://") {
+        rest = rest[8usize..rest.len]
+        has_scheme = true
+    } else if rest.len >= 7usize && ui.same(rest[0usize..7usize], "http://") {
+        rest = rest[7usize..rest.len]
+        has_scheme = true
+    }
+    if has_scheme || (rest.len > 0usize && rest[0usize] != 47u8 && current_host.len == 0usize) {
+        var end = 0usize
+        while end < rest.len && rest[end] != 47u8 { end += 1usize }
+        host = rest[0usize..end]
+        rest = rest[end..rest.len]
+    }
+    if rest.len == 0usize { ret (host, "/") }
+    if rest[0usize] != 47u8 { ret (host, ui.join(a, "/", rest, "")) }
+    ret (host, rest)
 }
 
 // The page of a typed address, or RESULTS for a search, ERROR for a site that does not exist here.
@@ -297,6 +590,42 @@ fn draw_results(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.F
     ret ok
 }
 
+// A live page: its lines from the scroll position, links as amber lines that can be tapped.
+fn draw_live(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    var y: f32 = 92.0
+    var i = s.scroll
+    while i < s.page_total && y < 800.0 {
+        let line = s.page[i]
+        let text_line = ui.text_of(a, line.text[0usize..], line.len)
+        if line.kind == KIND_H1 {
+            try ui.put(a, builder, faces.jost_bold, 30.0, text_line, 20.0, y, ui.light())
+            y += 44.0
+        } else if line.kind == KIND_H2 {
+            try ui.put(a, builder, faces.jost_bold, 22.0, text_line, 20.0, y, ui.light())
+            y += 34.0
+        } else if line.kind == KIND_LINK {
+            try ui.put(a, builder, faces.jost, 17.0, text_line, 20.0, y, ui.amber())
+            try ui.card(a, builder, 20.0, y + 22.0, 8.0 * f32(line.len) * 0.9, 1.0, 0.0, ui.amber())
+            ui.hit(&s.hits, 900usize + i, 12.0, y - 4.0, 388.0, 32.0)
+            y += 32.0
+        } else if line.kind == KIND_PRE {
+            try ui.put(a, builder, faces.grotesk, 13.0, text_line, 20.0, y, ui.light())
+            y += 20.0
+        } else {
+            try ui.put(a, builder, faces.jost, 17.0, text_line, 20.0, y, ui.light())
+            y += 26.0
+        }
+        i += 1usize
+    }
+    if i < s.page_total {
+        try ui.pill(a, builder, &s.hits, faces, 890usize, 300.0, 780.0, 96.0, 36.0, "More", ui.soft(), 15.0)
+    }
+    if s.scroll > 0usize {
+        try ui.pill(a, builder, &s.hits, faces, 891usize, 16.0, 780.0, 96.0, 36.0, "Top", ui.soft(), 15.0)
+    }
+    ret ok
+}
+
 fn draw_error(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try ui.centred(a, builder, faces.jost_bold, 26.0, "This site can't be reached", 206.0, 220.0, ui.light())
     try ui.centred(a, builder, faces.jost, 17.0, "There is no network yet.", 206.0, 270.0, ui.light_muted())
@@ -334,9 +663,15 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
         try ui.put(a, builder, faces.jost, 17.0, "Search or type a web address", 40.0, 33.0, ui.muted())
     } else {
         try svg.draw(a, builder, lock_icon(), geometry.rect(32.0, 34.0, 20.0, 20.0), ui.muted())
-        try ui.put(a, builder, faces.jost, 17.0, page_host(page), 62.0, 33.0, ui.ink())
+        var shown = page_host(page)
+        if page >= LIVE_BASE {
+            let u = s.urls[page - LIVE_BASE]
+            shown = ui.join(a, ui.text_of(a, u.host[0usize..], u.host_len), ui.text_of(a, u.path[0usize..], u.path_len), "")
+        }
+        try ui.put(a, builder, faces.jost, 17.0, shown, 62.0, 33.0, ui.ink())
     }
     ui.hit(&s.hits, 700usize, 16.0, 22.0, 380.0, 46.0)
+    if page >= LIVE_BASE { try draw_live(a, builder, s, faces) }
     if page == START { try draw_start(a, builder, s, faces) }
     if page == NEPER { try draw_neper(a, builder, s, faces) }
     if page == NEWS { try draw_news(a, builder, s, faces) }
@@ -425,8 +760,25 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
 // ----------------------------------------------------------------------------------------------
 // Behaviour.
 
+// Make sure the page the tab is at is the one loaded (a live page is fetched again when it is not).
+fn ensure_live(a: *mem.Arena, s: *State) {
+    let page = current_page(s)
+    if page >= LIVE_BASE && s.loaded != page - LIVE_BASE {
+        if !load_live(a, s, page - LIVE_BASE) {
+            let t = &s.tabs[s.current]
+            t.pages[t.at] = ERROR
+        }
+    }
+}
+
 fn submit(a: *mem.Arena, s: *State, address: str) {
-    let page = resolve(address)
+    var page = resolve(address)
+    if page == ERROR {
+        // Not one of the sample sites: a real address, fetched over the network.
+        let (host, path) = split_address(a, s, address, "")
+        let slot = url_slot(s, host, path)
+        if load_live(a, s, slot) { page = LIVE_BASE + slot }
+    }
     if page == RESULTS {
         var t = &s.tabs[s.current]
         var i = 0usize
@@ -468,6 +820,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             if id - 510usize < s.tab_total {
                 s.current = id - 510usize
                 s.screen = BROWSE_SCREEN
+                ensure_live(a, s)
             }
             ret true
         }
@@ -505,6 +858,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if t.at > 0usize {
             t.at -= 1usize
             ui.say("browser back\n")
+            ensure_live(a, s)
         }
         ret true
     }
@@ -513,6 +867,26 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if t.at + 1usize < t.count {
             t.at += 1usize
             ui.say("browser forward\n")
+            ensure_live(a, s)
+        }
+        ret true
+    }
+    if id == 890usize {
+        if s.scroll + 12usize < s.page_total { s.scroll += 12usize }
+        ret true
+    }
+    if id == 891usize {
+        s.scroll = 0usize
+        ret true
+    }
+    // A link on a live page.
+    if id >= 900usize && id < 900usize + PAGE_LINES {
+        let line = s.page[id - 900usize]
+        if line.href_len > 0usize {
+            let current = s.urls[current_page(s) - LIVE_BASE]
+            let (host, path) = split_address(a, s, ui.text_of(a, line.href[0usize..], line.href_len), ui.text_of(a, current.host[0usize..], current.host_len))
+            let slot = url_slot(s, host, path)
+            if load_live(a, s, slot) { go(s, LIVE_BASE + slot) } else { go(s, ERROR) }
         }
         ret true
     }
@@ -526,6 +900,15 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     }
     if id == 804usize {
         ui.say("browser reload\n")
+        let page = current_page(s)
+        if page >= LIVE_BASE {
+            let slot = page - LIVE_BASE
+            s.loaded = NONE
+            if !load_live(a, s, slot) {
+                let t = &s.tabs[s.current]
+                t.pages[t.at] = ERROR
+            }
+        }
         ret true
     }
     if id >= 400usize && id < 404usize {

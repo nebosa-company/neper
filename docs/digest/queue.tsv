@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-C129	compiler	0	915	NeperOS Browser: a real engine: HTTP over TLS, HTML and CSS, images, forms	The Browser app (D2224) shows sample pages that live in the app.
+C129	compiler	0.15	1552	NeperOS Browser: a real engine: HTTP over TLS, HTML and CSS, images, forms	The Browser app (D2224) shows sample pages that live in the app.
 C130	compiler	0	1034	NeperOS Maps: real map data, location, search and navigation	The Maps app (D2225) draws a procedural sample city with six made-up places.
 C131	compiler	0	802	NeperOS Compass: the magnetometer, GPS and the declination	The Compass app (D2226) swings a sample heading.
 C132	compiler	0	687	NeperOS Level: the accelerometer and gyroscope for the bubble level and protractor	The Level app (D2227) shows a sample tilt.

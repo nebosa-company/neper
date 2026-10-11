@@ -24,6 +24,16 @@ import threading
 
 here = pathlib.Path(__file__).resolve().parent
 BODY = b'hello from the neper test server\n'
+PAGE_INDEX = (b'<!doctype html><html><head><title>Neper test page</title><style>p{color:red}</style></head><body>'
+              b'<h1>Neper test page</h1>'
+              b'<p>This page is served by the test boot and laid out by the browser from real HTML, '
+              b'with a paragraph long enough to wrap onto more than one line.</p>'
+              b'<h2>A list</h2><ul><li>first item</li><li>second item</li><li>third item</li></ul>'
+              b'<p>Read more on the <a href="/pages/about.html">about page</a> or go <a href="https://neper.test/">home</a>.</p>'
+              b'</body></html>')
+PAGE_ABOUT = (b'<!doctype html><html><head><title>About</title></head><body>'
+              b'<h1>About</h1><p>Neper is a language and an operating system.</p>'
+              b'<p><a href="/pages/index.html">Back to the index</a></p></body></html>')
 
 
 def recorded(name):
@@ -102,6 +112,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.reply(200, known.read_bytes(), 'application/json')
             else:
                 self.reply(200, b'{"code":400,"message":"**symbol** not found","status":"error"}', 'application/json')
+            return
+        if host == 'neper.test' and url.path == '/pages/index.html':
+            self.reply(200, PAGE_INDEX, 'text/html')
+            return
+        if host == 'neper.test' and url.path == '/pages/about.html':
+            self.reply(200, PAGE_ABOUT, 'text/html')
             return
         self.reply(200, BODY)
 
