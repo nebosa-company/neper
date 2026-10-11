@@ -384,6 +384,34 @@ fn show_home(a: *mem.Arena, renderer: *scene.Renderer, w: *window.Window, drawab
     ret show(renderer, w, drawable, scene.finish(&builder))
 }
 
+// (C126) The lock screen again, for the Screen timeout setting.
+fn show_lock(a: *mem.Arena, renderer: *scene.Renderer, w: *window.Window, drawable: scene.Target, faces: text.Faces, wallpapered: bool, wall_texture: scene.TextureId, wall_w: f32, wall_h: f32, logical_h: f32, scale: f32, hour: usize, minute: usize, seconds: usize) -> bool {
+    let (builder_value, builder_error) = scene.builder(a, 4096usize)
+    if builder_error != ok { ret false }
+    var builder = builder_value
+    let save: scene.Command = .Save
+    if scene.push(&builder, save) != ok { ret false }
+    if scene.push(&builder, scene.Command { Transform: geometry.transform_scale(scale, scale) }) != ok { ret false }
+    if wallpapered {
+        if wallpaper_layer(&builder, wall_texture, wall_w, wall_h, logical_h) != ok { ret false }
+    } else {
+        if fill(&builder, 0.0, 0.0, 412.0, logical_h, paint.Color { red: 0.09, green: 0.11, blue: 0.18, alpha: 1.0 }) != ok { ret false }
+    }
+    if draw_lock(a, &builder, faces, hour, minute, seconds) != ok { ret false }
+    if dim_layer(&builder, logical_h) != ok { ret false }
+    let restore: scene.Command = .Restore
+    if scene.push(&builder, restore) != ok { ret false }
+    ret show(renderer, w, drawable, scene.finish(&builder))
+}
+
+// The Screen timeout setting (0 to 3) as the number of 500 ms ticks of no touch before the lock screen returns.
+fn timeout_ticks(step: usize) -> usize {
+    if step == 0usize { ret 30usize }
+    if step == 1usize { ret 60usize }
+    if step == 2usize { ret 120usize }
+    ret 600usize
+}
+
 // The icon under a tap (dp) on the home screen, or 99 outside every icon and its name.
 fn icon_at(x: f32, y: f32) -> usize {
     if y < 70.0 || x < 0.0 || x >= 412.0 { ret 99usize }
@@ -602,6 +630,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var pointer_x = 0usize
     var pointer_y = 0usize
     var launched_test = false
+    // (C126) The Screen timeout setting, from the settings server (index 7), and the ticks since the last touch.
+    var (timeout_step, timeout_known) = sysettings.get(7usize)
+    if !timeout_known { timeout_step = 1usize }
+    var idle_ticks = 0usize
     var listening = true
     while listening {
         let word = os.recv(ROUTED, NO_SLOT)
@@ -621,6 +653,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if code != BTN_LEFT { by_key = true }
             }
             var framed = false
+            if tapped { idle_ticks = 0usize }
+            if etype == 241usize && home_shown && theme.screen_lock() != 0usize {
+                idle_ticks += 1usize
+                if idle_ticks >= timeout_ticks(timeout_step) {
+                    if show_lock(a, &renderer, &w, drawable, faces, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale, hour, minute, seconds) {
+                        home_shown = false
+                        framed = true
+                        idle_ticks = 0usize
+                        say("shell screen timeout\n")
+                    }
+                }
+            }
             if tapped && !home_shown {
                 if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
                 home_shown = true
@@ -666,6 +710,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         say("shell app code ")
                         say_num(code_app)
                         say("\n")
+                        idle_ticks = 0usize
+                        let (step_now, step_known) = sysettings.get(7usize)
+                        if step_known { timeout_step = step_now }
                         let hidden_now = sysettings.hidden()
                         if hidden_now != hidden_mask {
                             hidden_mask = hidden_now
