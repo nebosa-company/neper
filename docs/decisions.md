@@ -39132,3 +39132,7 @@ C129 closes at score 1 on the live text browser (D2415). What a browser needs be
 ## D2417 — C130 part one: routes over a road graph
 
 The Maps app's city is a 6 x 6 grid of crossings; `plan_route` builds `e.data.graph` from it (a 150 m edge between neighbours, undirected, two segments closed: west of the starting crossing and north of it), runs `e.algo.graph.dijkstra` from the crossing you stand on and walks `previous` back from the place's crossing into at most 24 map positions, which the map draws as the route polyline; the closed segments are drawn as red bars across the road. The card and the places list use the planned length (`metres_for`) and walking time at 80 m a minute; before a route is planned they still show the blocks as the crow flies. Fixture `maps` now expects `maps route 9 min 750 m` (five blocks around the closures instead of the three of the L). Not here: map data read from storage or tiles, labels and rotation, a location service, drag and pinch, turn-by-turn text, other modes, saved places.
+
+## D2418 — C130 closed; map data, location and navigation are C160
+
+C130 closes at score 1 on the road-graph routing (D2417). Map data and its renderer, the location service, search, turn-by-turn navigation and saved places are C160.

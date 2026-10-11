@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C130",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 130,
-      "title": "NeperOS Maps: real map data, location, search and navigation",
-      "score": 0.1,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Maps app (D2225) draws a procedural sample city with six made-up places. Acceptance: (1) map data on the device: vector tiles (OpenStreetMap extracts) rendered through e.gfx.scene with labels, icons, zoom levels and rotation, offline regions kept in Files (C125), and drag and pinch (the touch layer needs both, not only taps); (2) a location service: GPS and network location on the Pixel, a simulated provider under QEMU, with permission tied to Settings (C126); (3) search by name and category with suggestions, place cards with hours and photos from the network (C117); (4) routing: walking, cycling, driving and transit over a road graph (the library has graph algorithms), with turn-by-turn instructions, rerouting and voice; (5) saved places, recent searches and a Home and Work shortcut, shared with Wallet and Weather; (6) a fixture on QEMU that loads a small offline region, finds a place and routes to it, checking the route length. Not queued here: street-level imagery, live traffic, indoor maps. Done (D2417): a part of (4) -- routes are the shortest path over a road graph built from the grid with closed segments (e.algo.graph.dijkstra), drawn crossing by crossing with the closed roads marked, and the card's distance and time come from it (fixture maps: 750 m, 9 min around two closures). Not here: map data from files or tiles, labels and rotation, drag and pinch, a location service, search by name, turn-by-turn instructions, driving and transit, saved places."
-    },
-    {
       "id": "C131",
       "category": "compiler",
       "group": "NeperOS",
@@ -1564,6 +1553,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C129 (D2415): the Browser fetches an address over HTTPS and shows its HTML as lines of text with links. Acceptance: (1) HTTP/1.1 redirects, cookies, a cache, HTTP/2 and plain HTTP, the system proxy settings; (2) a CSS layout engine over e.fmt.css and e.fmt.html (block, inline, flex, grid, the common properties) painting through e.gfx.scene with shaped text, images (PNG, JPEG, SVG) and fonts; (3) forms and their submission, history, bookmarks, tabs that survive a restart (C125 storage), incognito, search suggestions and a chosen search engine; (4) downloads into Files and opening files in their apps; (5) permissions per site tied to Settings (C126); (6) a fixture against a local web server with a page that has an image and a form and a redirect."
+    },
+    {
+      "id": "C160",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 160,
+      "title": "NeperOS Maps remainder: map data, location, search and turn-by-turn navigation",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C130 (D2417): Maps routes over a small road graph with the library's Dijkstra and draws the way. Acceptance: (1) map data on the device: vector tiles or OpenStreetMap extracts rendered through e.gfx.scene with labels, icons, zoom levels and rotation, offline regions kept in Files, and drag and pinch (the touch layer needs both); (2) a location service (GPS and network location on the Pixel, a simulated provider under QEMU) with its permission in Settings (C126); (3) search by name and category with suggestions, place cards with hours and photos from the network; (4) routing for walking, cycling, driving and transit over the road graph with turn-by-turn instructions, rerouting and voice; (5) saved places, recent searches and a Home and Work shortcut shared with Wallet and Weather; (6) a fixture that loads a small offline region, finds a place and routes to it, checking the route length."
     }
   ]
 }

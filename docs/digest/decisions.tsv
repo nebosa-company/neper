@@ -2172,4 +2172,5 @@ D2413	713	C128 part three: TLS for IMAP and SMTP
 D2414	384	C128 closed; accounts, threads, rich messages and push are C158
 D2415	1404	C129 part one: a page typed in is fetched, parsed and laid out
 D2416	323	C129 closed; the layout engine, images, forms and storage are C159
-D2417	948	C130 part one: routes over a road graph
+D2417	949	C130 part one: routes over a road graph
+D2418	236	C130 closed; map data, location and navigation are C160
