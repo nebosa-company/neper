@@ -2118,4 +2118,5 @@ D2359	1432	L053 closed: e.text.sig, a YARA-lite subset checked against an indepe
 D2360	1619	C118 crypto search: Coinbase /products matched in the Add sheet, and a key-gated Polygon recording
 D2361	1197	C126 part one: Settings keeps its values in /settings, through the filesystem server
 D2362	1149	C126 part two: search across the settings, by name and keyword, opening the page on the match
-D2363	2021	C126 part three: the Dark theme, font size and contrast apply to every app, through the app kit
+D2363	2022	C126 part three: the Dark theme, font size and contrast apply to every app, through the app kit
+D2364	1646	C126 part four: the system theme is read at boot, so it holds across a restart

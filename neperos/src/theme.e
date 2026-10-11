@@ -35,6 +35,19 @@ fn word_of(dark: usize, contrast: usize, font: usize) -> usize {
     ret value
 }
 
+// The word for the bytes Settings stored in /settings (settings.e's numbering: Dark theme 5, Font size 8, High
+// contrast text 21; one byte per value, 40 values), or 0 when the file is not one: another length, or a value
+// past 10.
+fn stored_word(raw: []const u8) -> usize {
+    if raw.len != 40usize { ret 0usize }
+    var i = 0usize
+    while i < raw.len {
+        if raw[i] > 10u8 { ret 0usize }
+        i += 1usize
+    }
+    ret word_of(usize(raw[5usize]), usize(raw[21usize]), usize(raw[8usize]))
+}
+
 fn is_dark() -> bool {
     ret (word & DARK_BIT) != 0usize
 }

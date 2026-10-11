@@ -32,6 +32,8 @@ use e.ui.window
 use icons
 use text
 use lunar
+use fsproto
+use theme
 
 const ROUTED: usize = 2usize
 const NO_SLOT: usize = 99usize
@@ -43,6 +45,9 @@ const EV_ABS: usize = 3usize
 const BTN_LEFT: usize = 272usize
 const APP_INDEX: usize = 3usize
 const WALL_FROM: usize = 5usize
+// (C126) The filesystem's two endpoints, when the machine has a disk: requests out, replies in.
+const FS_REQ: usize = 6usize
+const FS_REP: usize = 7usize
 const STATUS_REQ: usize = 3usize
 const STATUS_REPLY: usize = 4usize
 const OP_QUIT: usize = 0usize
@@ -361,6 +366,19 @@ fn program_of(icon: usize) -> usize {
     ret 0usize
 }
 
+// The system theme Settings stored (C126, theme.e), or 0 when there is no disk or no file. The first send is
+// refused on a machine without the endpoints.
+fn stored_theme() -> usize {
+    let sent = os.send(FS_REQ, fsproto.OP_READ, fsproto.NO_SLOT)
+    if sent == 18446744073709551615usize { ret 0usize }
+    fsproto.send_str(FS_REQ, "/settings")
+    let result = os.recv(FS_REP, fsproto.NO_SLOT)
+    var raw: [48]u8 = zero
+    let count = fsproto.recv_bytes(FS_REP, mem.address_of(&raw[0usize]), 48usize)
+    if result != fsproto.RESULT_OK { ret 0usize }
+    ret theme.stored_word(raw[0usize..count])
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, gpu.Backend.Cpu, 0u32)
     if open_error != ok {
@@ -432,6 +450,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
         say("from fs\n")
     } else {
         say("fallback\n")
+    }
+    let stored = stored_theme()
+    if stored != 0usize {
+        theme_word = stored
+        say("shell theme from fs ")
+        say_num(stored)
+        say("\n")
     }
     // Live status, from the C111 status service: subscribe, post a notification, read the snapshot,
     // then stop the service (this shell is its only client).

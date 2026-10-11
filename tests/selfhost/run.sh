@@ -10102,8 +10102,8 @@ greeting"
     while IFS='|' read -r kind fixture port delay taps markers note; do
         [ "$kind" = diskfixture ] || continue
         if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
-        fixture_disk="$test_build/shell-$fixture.disk"
-        dd if=/dev/zero of="$fixture_disk" bs=1M count=1 status=none
+        fixture_disk="$test_build/shell-${fixture%_again}.disk"
+        if [ "$fixture" = "${fixture%_again}" ]; then dd if=/dev/zero of="$fixture_disk" bs=1M count=1 status=none; fi
         last_marker="${markers##*;;}"
         boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$fixture_disk" 0 "$taps" 2>&1 < /dev/null)
         remaining="$boot"

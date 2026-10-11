@@ -1128,6 +1128,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     thread.grant(last_server_index, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 6usize)
                     thread.grant(last_server_index, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 7usize)
                     fs_present = true
+                    // (C126) The shell reads the stored system theme at boot, over the same two endpoints
+                    // (slots 6 and 7 in the shell; the apps it launches have their own).
+                    thread.grant(comp_app, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
+                    thread.grant(comp_app, 7usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
                 }
                 // Launched apps take ASIDs above the servers'.
                 next_asid = 9usize
