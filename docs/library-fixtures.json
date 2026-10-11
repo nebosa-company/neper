@@ -722,6 +722,7 @@
    "delivered": 11,
    "pending": [],
    "fixtures": [
+    "fmt_xlsx_book",
     "fmt_zip"
    ]
   },

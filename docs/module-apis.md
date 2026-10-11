@@ -18063,6 +18063,26 @@ Version 1 reads stored and DEFLATE entries, ZIP64 sizes and UTF-8 names. It reje
 encrypted entries, absolute paths and names containing a `..` segment. CRC and all
 per-entry/aggregate limits are checked before successful extraction.
 
+### `e.fmt.zip.write`
+
+```neper
+error BadName
+error TooLarge
+
+type Part = struct { name: str, data: []const u8 }
+
+const MAX_PARTS: usize = 65535usize
+const MAX_TOTAL: usize = 4294967295usize
+
+fn put16(out: []u8, at: usize, v: u32)
+fn put32(out: []u8, at: usize, v: u32)
+fn put_bytes(out: []u8, at: usize, src: []const u8)
+fn store(a: *mem.Arena, parts: []const Part) -> ([]u8, err)
+```
+
+ZIP writing (L100): `store` lays named parts out as stored (method 0) entries, local headers then the central directory and end record, the layout `e.fmt.zip` reads and Python's zipfile writes for `ZIP_STORED`. The DOS date is fixed at 1980-01-01 so the same parts always give the same bytes. Limits are the classic ones (65535 parts, 4 GiB - 1, a 65535-byte name); a name `e.fmt.zip` would refuse is `BadName`, no parts or an over-size package `TooLarge`. Nothing is compressed; DEFLATE output is a later slice. Checked byte for byte against Python's zipfile and read back through `e.fmt.zip` in the `fmt_xlsx_book` fixture.
+
+
 ### `e.fmt.sevenzip`
 
 ```neper
@@ -18360,6 +18380,75 @@ fn describe_sheets(a: *mem.Arena, names_in: []const str, requested: str) -> (Des
 ```
 
 Spreadsheet sheet-to-table normalisation (L044), after Appdor's `src/io/xlsx.js`: a sheet already read into typed `Cell` values becomes headers and string rows (`sheet_to_table`, `workbook_to_tables`), with a zero kept as `0`, a boolean as `true`/`false`, a date as its local `YYYY-MM-DD` (and ` HH:MM:SS` off midnight), the header row found by `detect_header_row` (the first of the first ten rows filling more than half of the widest), blank and duplicate headings renamed by the CSV rule (`resolve_headers`), and the width taken from the last filled column. Also `parse_cell_ref`, `sheet_formulas` and `describe_sheets`. The OOXML container is not read: Appdor leaves that to SheetJS. Checked against Appdor's own functions over 700 cases (with `x.migrate.typemaps`) on both hosts (D2347).
+
+### `e.fmt.xlsx.book`
+
+```neper
+error BadSheetName
+error BadLayout
+error BadCell
+error BadText
+error TooLarge
+error NoWorkbook
+error BadWorkbook
+
+type Width = struct { column: u32, chars: f64 }
+type Merge = struct { row: u32, column: u32, rows: u32, columns: u32 }
+type Layout = struct { widths: []const Width, merges: []const Merge, bold_header: bool }
+type Shared = struct { slots: []u32, strings: []str, unique: usize, references: usize }
+
+const MAX_ROWS: usize = 1048576usize
+const MAX_COLUMNS: usize = 16384usize
+const MAX_TEXT_POINTS: usize = 32767usize
+const MAX_NAME_POINTS: usize = 31usize
+const MAX_SHEETS: usize = 255usize
+const FREE: u32 = 4294967295u32
+
+fn ns_main() -> str
+fn no_layout() -> Layout
+fn days_from_civil(year: i64, month: u32, day: u32) -> i64
+fn civil_from_days(days: i64) -> (i64, u32, u32)
+fn leap_year(year: i64) -> bool
+fn month_days(year: i64, month: u32) -> u32
+fn serial_days(year: i64, month: u32, day: u32) -> (i64, bool)
+fn push_escaped(b: *str.Builder, s: str, attribute: bool) -> err
+fn push_ref(b: *str.Builder, column: usize, row: usize) -> err
+fn push_number(b: *str.Builder, v: f64) -> err
+fn finite(v: f64) -> bool
+fn clean_text(s: str) -> bool
+fn valid_sheet_name(name: str) -> bool
+fn shared_index(s: *Shared, value: str) -> u32
+fn needs_preserve(value: str) -> bool
+fn check_sheet(sheet: xlsx.Sheet, layout: Layout) -> (usize, err)
+fn sheet_xml(a: *mem.Arena, sheet: xlsx.Sheet, layout: Layout, sst_table: *Shared) -> (str, err)
+fn styles_xml() -> str
+fn content_types_xml(a: *mem.Arena, sheet_count: usize) -> (str, err)
+fn root_rels_xml() -> str
+fn workbook_xml(a: *mem.Arena, sheets: []const xlsx.Sheet) -> (str, err)
+fn workbook_rels_xml(a: *mem.Arena, sheet_count: usize) -> (str, err)
+fn shared_strings_xml(a: *mem.Arena, sst_table: *const Shared) -> (str, err)
+fn encode(a: *mem.Arena, sheets: []const xlsx.Sheet, layouts: []const Layout) -> ([]u8, err)
+fn sheet_part_name(a: *mem.Arena, index: usize) -> (str, err)
+fn local(name: str) -> str
+fn is_element(nodes: []const xml.Node, n: usize, name: str) -> bool
+fn attr(node: *const xml.Node, name: str) -> (str, bool)
+fn parent_index(nodes: []const xml.Node, n: usize) -> usize
+fn code_is_date(code: str) -> bool
+fn builtin_date_format(id: u64) -> bool
+fn date_styles(a: *mem.Arena, nodes: []const xml.Node) -> ([]bool, err)
+fn shared_strings(a: *mem.Arena, nodes: []const xml.Node) -> ([]str, err)
+fn part_of(a: *mem.Arena, archive: *zip.Archive, name: str) -> ([]u8, bool, err)
+fn floor_f64(v: f64) -> f64
+fn date_from_serial(serial: f64) -> xlsx.Cell
+
+type Raw = struct { column: usize, row: usize, kind: str, style: usize, value: str, inline: str }
+
+fn read_sheet(a: *mem.Arena, part: []const u8, sst_table: []const str, dates: []const bool) -> ([]const []const xlsx.Cell, err)
+fn decode(a: *mem.Arena, data: []const u8) -> ([]xlsx.Sheet, err)
+```
+
+XLSX workbook encode and decode over the `e.fmt.xlsx` cell model (L100). `encode` turns `[]xlsx.Sheet` into a SpreadsheetML package for DataGrid and report export: text through a shared-strings table, numbers, booleans, dates (serials with a date number format, Excel's 1900 leap-year quirk kept, 1900-01-01 to 9999-12-31), an optional bold header row, column widths and merged ranges (`Layout` per sheet). `decode` reads such a package back to the same model and also what Excel, openpyxl and XlsxWriter write: shared, inline and formula-string cells, DEFLATE parts, date cells found by their number format; a formula cell decodes as its cached value. Bounds are Excel's (1,048,576 rows, 16,384 columns, a 31-character sheet name without `: \ / ? * [ ]`, unique ignoring case, 32,767 characters of text without XML-illegal control characters, merges inside the sheet and not overlapping): `BadSheetName`, `BadText`, `BadCell`, `BadLayout`, `TooLarge`. Charts, pivots, rich text runs, styles beyond the bold header and the date format, and compression of what is written are not here; a `BadDate` cell is written empty. Checked against an independent Python writer (byte equality, loaded back by openpyxl) and workbooks written by openpyxl and XlsxWriter (`scripts/gen_xlsx_book_test.py`).
+
 
 ### `x.identity.jose`
 

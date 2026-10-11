@@ -1162,6 +1162,11 @@ fmt_zip_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_zip_written" = 'executable written' ]
 chmod +x "$test_build/fmt-zip-selfhost"
 "$test_build/fmt-zip-selfhost"
+# `e.fmt.xlsx.book` and `e.fmt.zip.write`: a workbook encoded byte for byte against an independent writer, decoded back, openpyxl and XlsxWriter files decoded, the refusals.
+fmt_xlsx_book_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xlsx_book/src/main.e" "$repo" x64 linux "$test_build/fmt-xlsx-book-selfhost")
+[ "$fmt_xlsx_book_written" = 'executable written' ]
+chmod +x "$test_build/fmt-xlsx-book-selfhost"
+"$test_build/fmt-xlsx-book-selfhost"
 # `e.fmt.ooxml`: a Word document and a PowerPoint deck made with Python's zipfile read back, three refusals.
 fmt_ooxml_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_ooxml/src/main.e" "$repo" x64 linux "$test_build/fmt-ooxml-selfhost")
 [ "$fmt_ooxml_written" = 'executable written' ]

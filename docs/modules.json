@@ -145,6 +145,7 @@
     "e.fmt.lzw",
     "e.fmt.zlib",
     "e.fmt.zip",
+    "e.fmt.zip.write",
     "e.fmt.sevenzip",
     "e.fmt.rar",
     "e.fmt.tar",
@@ -153,6 +154,7 @@
     "e.fmt.woff",
     "x.migrate.typemaps",
     "e.fmt.xlsx",
+    "e.fmt.xlsx.book",
     "x.identity.jose",
     "x.identity.oidc",
     "x.identity.scim",
@@ -2510,6 +2512,24 @@
    "blocked_by": []
   },
   {
+   "name": "e.fmt.xlsx.book",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.fmt.ooxml",
+    "e.fmt.xlsx",
+    "e.fmt.xml",
+    "e.fmt.zip",
+    "e.fmt.zip.write",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "x.identity.jose",
    "layer": 6,
    "surface": "source",
@@ -2846,6 +2866,19 @@
     "e.io",
     "e.mem",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.zip.write",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.fmt.zip",
+    "e.mem"
    ],
    "blocked_by": []
   },

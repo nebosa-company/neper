@@ -1252,6 +1252,12 @@ $fmtZipWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtZipWritten -ne 'executable written') { throw 'fmt_zip emission failed' }
 & $fmtZipPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_zip check failed: exit $LASTEXITCODE" }
+# `e.fmt.xlsx.book` and `e.fmt.zip.write`: a workbook encoded byte for byte against an independent writer, decoded back, openpyxl and XlsxWriter files decoded, the refusals.
+$fmtXlsxBookPath = Join-Path $testBuild 'fmt-xlsx-book-selfhost.exe'
+$fmtXlsxBookWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_xlsx_book\src\main.e') $repo 'x64' 'windows' $fmtXlsxBookPath
+if ($LASTEXITCODE -ne 0 -or $fmtXlsxBookWritten -ne 'executable written') { throw 'fmt_xlsx_book emission failed' }
+& $fmtXlsxBookPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_xlsx_book check failed: exit $LASTEXITCODE" }
 # `e.fmt.ooxml`: a Word document and a PowerPoint deck made with Python's zipfile read back, three refusals.
 $fmtOoxmlPath = Join-Path $testBuild 'fmt-ooxml-selfhost.exe'
 $fmtOoxmlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_ooxml\src\main.e') $repo 'x64' 'windows' $fmtOoxmlPath
