@@ -22,6 +22,8 @@ use appkit
 use text
 use ui
 use httpc
+use sysettings
+use e.time
 
 const NONE: usize = 99usize
 const MAX_MSGS: usize = 12usize
@@ -45,6 +47,8 @@ type State = struct {
     reply_len: usize,
     reply_shown: usize,
     replying: bool,
+    // (C148) How much text the clipboard holds (0 when none): the Paste button shows when there is some.
+    clip_len: usize,
     hits: ui.Hits,
 }
 
@@ -447,6 +451,7 @@ fn draw_chat(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     if s.msg_total == 0usize && !s.replying { try ui.centred(a, builder, faces.jost, 18.0, "Ask me anything", 206.0, 260.0, ui.light_muted()) }
     var box_y: f32 = 800.0
     if s.typing { box_y = 446.0 }
+    if s.clip_len > 0usize { try ui.pill(a, builder, &s.hits, faces, 212usize, 16.0, box_y - 44.0, 96.0, 36.0, "Paste", ui.soft(), 14.0) }
     try ui.card(a, builder, 16.0, box_y, 322.0, 46.0, 23.0, ui.cream())
     if s.draft.len == 0usize { try ui.put(a, builder, faces.jost, 16.0, "Message", 34.0, box_y + 13.0, ui.muted()) } else { try ui.clipped(a, builder, faces.jost, 16.0, ui.field_text(a, &s.draft), 34.0, box_y + 13.0, 290.0, ui.ink()) }
     ui.hit(&s.hits, 210usize, 16.0, box_y, 322.0, 46.0)
@@ -459,8 +464,18 @@ fn draw_chat(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     ret ok
 }
 
+// The wall-clock second now, 0 when there is no clock.
+fn wall_seconds() -> usize {
+    let (wall, wall_error) = time.now()
+    if wall_error != ok || wall.nanos < 0i64 { ret 0usize }
+    ret usize(wall.nanos / 1000000000i64)
+}
+
 fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> err {
     s.hits.total = 0usize
+    var clip_bytes: [32]u8 = zero
+    let (clip_length, clip_owner) = sysettings.clip_get(wall_seconds(), clip_bytes[0usize..])
+    s.clip_len = clip_length
     let faces = kit.faces
     try ui.ground(builder, kit.frame, kit.logical_h, 0.08, 0.09, 0.11)
     if s.screen == SETUP_SCREEN { try draw_setup(a, builder, s, faces) } else { try draw_chat(a, builder, s, faces) }
@@ -551,6 +566,17 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     }
     if id == 210usize {
         s.typing = true
+        ret true
+    }
+    if id == 212usize {
+        var clip_bytes: [32]u8 = zero
+        let (clip_length, clip_owner) = sysettings.clip_get(wall_seconds(), clip_bytes[0usize..])
+        if clip_length == 0usize { ret true }
+        let pasted = ui.field_paste(&s.draft, clip_bytes[0usize..], clip_length)
+        s.typing = true
+        ui.say("ai pasted ")
+        ui.say_num(pasted)
+        ui.say(" bytes\n")
         ret true
     }
     if id == 211usize {

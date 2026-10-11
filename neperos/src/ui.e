@@ -436,6 +436,21 @@ fn field_text(a: *mem.Arena, f: *Field) -> str {
 }
 
 // Apply a keyboard id to a field; true if it was a typing key or delete (not enter).
+// Paste `count` bytes of `source` into the field (control bytes are dropped; what does not fit is cut).
+fn field_paste(f: *Field, source: []const u8, count: usize) -> usize {
+    var pasted = 0usize
+    var i = 0usize
+    while i < count && i < source.len {
+        if source[i] >= 32u8 && f.len < 160usize {
+            f.bytes[f.len] = source[i]
+            f.len += 1usize
+            pasted += 1usize
+        }
+        i += 1usize
+    }
+    ret pasted
+}
+
 fn field_key(f: *Field, id: usize, capital: bool) -> bool {
     if id == 1201usize {
         field_back(f)

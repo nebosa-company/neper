@@ -15,17 +15,6 @@
       "evidence": "Split from C115 (2026-10-08). Neither full suite finishes here: tests/selfhost/run.ps1 trips on PowerShell's Stop preference when a native command writes to stderr, and the Linux run.sh builds with neper build, which crashes the WSL2 VM on this host. Per-feature fixtures have been run by hand on both hosts. Acceptance: (1) run.ps1 runs to its end on this Windows host without manual patching; (2) run.sh runs to its end in WSL, with the memory it needs set down in the script's header and the VM left alive; (3) each reports its last line and the count of checks, and the totals feed docs/test-results.json, the tile on the readiness page. PART (D2313): NEPER_SEED in run.ps1 (the bootstrap cannot build src/main.e under this host's commit), stale assertions fixed, fix_module_surfaces.py, -j 2 for the two huge fixtures; run.ps1 passes stage 1 and about 3,700 lines. PART 2 (D2317): NEPER_JOBS caps default workers from the environment; stale NeperOS and determinism assertions fixed; the seeded Windows run passes to line 9914 of 9937 (stops at the Flashlight timing fixture; sc500k static gate needs >3 GB free commit; network check hits a live API). NOT DONE: a complete run on either host (run.sh under WSL not run) and the test-results.json totals. RUN 17 (2026-10-10, seeded, with the sc500k static gate and the live-API network assertion excluded through an untracked copy): every row passes through the NeperOS app fixtures, including x_migrate, the capabilities golden and the --compact rows; the only stop is the Flashlight fixture's `morse done` marker, which waits on wall-clock ticks the emulated frames delay on a loaded host."
     },
     {
-      "id": "C148",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 148,
-      "title": "NeperOS clipboard: Copy in Secure puts text on it, text fields paste from it",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Split from C116 (2026-10-08). Secure's Copy says it copied but there is no clipboard, so a password or a code cannot leave the app. Acceptance: (1) a clipboard service holding one text value with an owner, started by the kernel, with endpoints granted to apps that copy or paste; (2) Secure's Copy on a password and on a one-time code puts it there and clears it after a short time (30 s) or when another copy replaces it; (3) the on-screen keyboard's text fields (ui.Field) offer Paste when the clipboard holds text; (4) a copied secret is never written to the console; (5) a fixture that copies a code in Secure and pastes it in another app's field."
-    },
-    {
       "id": "C149",
       "category": "compiler",
       "group": "NeperOS",
@@ -1311,6 +1300,17 @@
           "model": "opus",
           "thinking": "high",
           "evidence": "Split from C145 (D2433): the Clock's alarms, timer and stopwatch persist in /clock. Acceptance: (1) a background service started by the kernel in the unified boot reads /clock, owns the schedule and, when an alarm or timer is due, raises a notification through the status server (C111) and starts the ringer even with another app or the home screen in front; (2) Snooze and Dismiss from the notification, written back to /clock; (3) a fixture on QEMU that sets an alarm, leaves the Clock, and sees it ring."
+    },
+    {
+          "id": "C175",
+          "category": "compiler",
+          "group": "NeperOS",
+          "order": 175,
+          "title": "NeperOS clipboard remainder: Paste in every field, a lifetime setting, clear on lock",
+          "score": 0,
+          "model": "opus",
+          "thinking": "medium",
+          "evidence": "Split from C148 (D2435): the clipboard holds text, Secure copies to it and AI pastes from it. Acceptance: (1) every ui.Field offers Paste when the clipboard holds text (a pill the keyboard draws, not a per-app one); (2) the lifetime (30 s by default) is a setting in Settings, and a fixture that checks a copy is gone after it; (3) the clipboard is cleared when its owner locks (Secure's lock) or leaves; (4) copy from Browser, Mail and Messages text."
     }
   ]
 }

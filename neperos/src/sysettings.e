@@ -43,6 +43,13 @@ const SENSOR_BIAS: i64 = 2147483648i64
 // The torch (C133): TORCH level (0 off, 1 to 5 the brightness steps) -> the level now set. The server holds the
 // device (a simulated LED under QEMU, the camera's flash on the Pixel).
 const OP_TORCH: usize = 11usize
+// The clipboard (C148): one text value of up to 32 bytes with the owner that put it there (a small id) and the time
+// it was put (the caller's wall-clock seconds); a value older than CLIP_SECONDS (ninety seconds) when asked for is gone.
+// CLIP_SET owner now length w0 w1 w2 w3 -> 1; CLIP_GET now -> length owner w0 w1 w2 w3 (length 0 is empty).
+const OP_CLIP_SET: usize = 12usize
+const OP_CLIP_GET: usize = 13usize
+const CLIP_SECONDS: usize = 90usize
+const CLIP_BYTES: usize = 32usize
 
 // A sensor's reading at `tick` in milli-units (x, y, z) and whether the server answered.
 fn sensor(kind: usize, tick: usize) -> (i64, i64, i64, bool) {
@@ -62,6 +69,54 @@ fn torch(level: usize) -> (usize, bool) {
     if sent == REFUSED { ret (0usize, false) }
     let sent_level = os.send(REQ, level, NO_SLOT)
     ret (os.recv(REP, NO_SLOT), true)
+}
+
+// Put `value` (at most 32 bytes) on the clipboard as `owner`, at wall-clock second `now`; whether the server took it.
+fn clip_set(owner: usize, now: usize, value: str) -> bool {
+    let sent = os.send(REQ, OP_CLIP_SET, NO_SLOT)
+    if sent == REFUSED { ret false }
+    var length = value.len
+    if length > CLIP_BYTES { length = CLIP_BYTES }
+    let s0 = os.send(REQ, owner, NO_SLOT)
+    let s1 = os.send(REQ, now, NO_SLOT)
+    let s2 = os.send(REQ, length, NO_SLOT)
+    var w = 0usize
+    while w < 4usize {
+        var word_value = 0usize
+        var b = 0usize
+        while b < 8usize {
+            let at = w * 8usize + b
+            if at < length { word_value = word_value | (usize(value[at]) << (8usize * b)) }
+            b += 1usize
+        }
+        let sent_word = os.send(REQ, word_value, NO_SLOT)
+        w += 1usize
+    }
+    let ack = os.recv(REP, NO_SLOT)
+    ret true
+}
+
+// The clipboard's text into `out` (32 bytes at least) at wall-clock second `now`: its length (0 when empty, expired or
+// there is no server) and its owner.
+fn clip_get(now: usize, out: []u8) -> (usize, usize) {
+    let sent = os.send(REQ, OP_CLIP_GET, NO_SLOT)
+    if sent == REFUSED { ret (0usize, 0usize) }
+    let sent_now = os.send(REQ, now, NO_SLOT)
+    let length = os.recv(REP, NO_SLOT)
+    let owner = os.recv(REP, NO_SLOT)
+    var w = 0usize
+    while w < 4usize {
+        let word_value = os.recv(REP, NO_SLOT)
+        var b = 0usize
+        while b < 8usize {
+            let at = w * 8usize + b
+            if at < out.len { out[at] = u8((word_value >> (8usize * b)) & 255usize) }
+            b += 1usize
+        }
+        w += 1usize
+    }
+    if length > CLIP_BYTES { ret (0usize, 0usize) }
+    ret (length, owner)
 }
 
 // The system word, or 0 when there is no server.

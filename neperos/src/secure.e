@@ -18,6 +18,7 @@ use e.crypto.mac as mac
 use e.crypto.otp as otp
 use vault
 use vaultfs
+use sysettings
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -167,6 +168,20 @@ fn entry_code(a: *mem.Arena, s: *State, i: usize) -> usize {
     let (value, value_error) = otp.totp(algorithm, key[0usize..n], u64(s.now), 0u64, u32(entry_period(s, i)), u32(entry_digits(s, i)))
     if value_error != ok { ret 0usize }
     ret usize(value)
+}
+
+// A code as plain digits, zero-padded: "123456", "12345678" (what a paste needs).
+fn code_digits(a: *mem.Arena, code: usize, digits: usize) -> str {
+    let (out, out_error) = mem.alloc[u8](a, 12usize)
+    if out_error != ok { ret "" }
+    var rest = code
+    var i = digits
+    while i > 0usize {
+        i -= 1usize
+        out[i] = u8(48usize + rest % 10usize)
+        rest = rest / 10usize
+    }
+    ret out[0usize..digits]
 }
 
 // A code with its digits zero-padded and a space in the middle: "123 456", "1234 5678".
@@ -742,6 +757,7 @@ fn draw_code(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     try ui.put(a, builder, faces.grotesk, 12.0, ui.join(a, ui.join(a, "Changes in ", ui.number(a, left), " s"), "", ""), 32.0, 238.0, ui.muted())
     try ui.pill(a, builder, &s.hits, faces, 524usize, 16.0, 300.0, 120.0, 46.0, "Edit", ui.soft(), 16.0)
     try ui.pill(a, builder, &s.hits, faces, 522usize, 146.0, 300.0, 120.0, 46.0, "Delete", ui.soft(), 16.0)
+    try ui.pill(a, builder, &s.hits, faces, 525usize, 276.0, 300.0, 120.0, 46.0, "Copy", ui.amber(), 16.0)
     ret ok
 }
 
@@ -1054,6 +1070,15 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             s.screen = LIST_SCREEN
             ret true
         }
+        if id == 525usize {
+            // Copy the code as plain digits; the clipboard clears itself after ninety seconds.
+            let digits = code_digits(a, entry_code(a, s, s.open), entry_digits(s, s.open))
+            let taken = sysettings.clip_set(1usize, clock_now(), digits)
+            ui.say("secure copied code ")
+            ui.say_num(digits.len)
+            ui.say(" digits\n")
+            ret true
+        }
         if id == 524usize {
             s.edit = s.open
             s.add_kind = 1usize
@@ -1083,6 +1108,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             ret true
         }
         if id == 520usize {
+            let taken = sysettings.clip_set(1usize, clock_now(), pass_of(a, s, s.open))
             ui.say("secure copied\n")
             ret true
         }

@@ -173,6 +173,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var registry: Registry = zero
     load_registry(&registry)
     var torch_level = 0usize
+    // (C148) The clipboard: the text as four words, its length, owner and the second it was put.
+    var clip: [4]usize = zero
+    var clip_len = 0usize
+    var clip_owner = 0usize
+    var clip_stamp = 0usize
     var radios = radios_allowed(&store)
     if !radios { push_radio(false) }
     say("settings server up\n")
@@ -271,6 +276,40 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 say("\n")
             }
             let sent = os.send(REP, torch_level, sysettings.NO_SLOT)
+        } else if op == sysettings.OP_CLIP_SET {
+            clip_owner = os.recv(REQ, sysettings.NO_SLOT)
+            clip_stamp = os.recv(REQ, sysettings.NO_SLOT)
+            clip_len = os.recv(REQ, sysettings.NO_SLOT)
+            if clip_len > sysettings.CLIP_BYTES { clip_len = sysettings.CLIP_BYTES }
+            var cw = 0usize
+            while cw < 4usize {
+                clip[cw] = os.recv(REQ, sysettings.NO_SLOT)
+                cw += 1usize
+            }
+            // Only the length and owner are said, never the text.
+            say("clipboard set by ")
+            say_num(clip_owner)
+            say(" length ")
+            say_num(clip_len)
+            say("\n")
+            let sent = os.send(REP, 1usize, sysettings.NO_SLOT)
+        } else if op == sysettings.OP_CLIP_GET {
+            let asked_at = os.recv(REQ, sysettings.NO_SLOT)
+            if clip_len > 0usize && asked_at >= clip_stamp && asked_at - clip_stamp > sysettings.CLIP_SECONDS {
+                clip_len = 0usize
+                clip[0usize] = 0usize
+                clip[1usize] = 0usize
+                clip[2usize] = 0usize
+                clip[3usize] = 0usize
+                say("clipboard cleared\n")
+            }
+            let sent_length = os.send(REP, clip_len, sysettings.NO_SLOT)
+            let sent_owner = os.send(REP, clip_owner, sysettings.NO_SLOT)
+            var gw = 0usize
+            while gw < 4usize {
+                let sent_word = os.send(REP, clip[gw], sysettings.NO_SLOT)
+                gw += 1usize
+            }
         } else if op == sysettings.OP_GET_HIDDEN {
             let sent = os.send(REP, hidden, sysettings.NO_SLOT)
         } else if op == sysettings.OP_SET_HIDDEN {
