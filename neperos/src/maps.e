@@ -15,6 +15,8 @@ use e.gfx.scene
 use e.gfx.svg
 use e.text.layout
 use e.text.shape
+use e.data.graph as graph
+use e.algo.graph as algo
 use appkit
 use text
 use ui
@@ -27,7 +29,37 @@ fn road_at() -> f32 {
 }
 
 
+// (C130) The road network is a 6 x 6 grid of crossings, a block of 150 m between neighbours, with two segments
+// closed ("road works") so the way is not simply an L. Routes are the shortest path over that graph (the
+// library's Dijkstra); the places stand on crossings.
+const GRID: usize = 6usize
+
+type Cost = struct { unused: u8 }
+
+fn cost_of(ctx: *Cost, e: graph.Edge[i64]) -> f64 { ret f64(e.value) }
+
+// The crossing of grid column `col` and row `row`.
+fn node_id(col: usize, row: usize) -> u32 { ret u32(row * GRID + col) }
+
+// Is the road between neighbouring crossings `p` and `q` closed? West of you and north of you.
+fn closed(p: u32, q: u32) -> bool {
+    var lo = p
+    var hi = q
+    if q < p {
+        lo = q
+        hi = p
+    }
+    if lo == node_id(1usize, 2usize) && hi == node_id(2usize, 2usize) { ret true }
+    if lo == node_id(2usize, 1usize) && hi == node_id(2usize, 2usize) { ret true }
+    ret false
+}
+
 type State = struct {
+    // The planned route: the crossings it passes (as map positions), their count, its length in metres.
+    route_x: [24]f32,
+    route_y: [24]f32,
+    route_n: usize,
+    route_m: usize,
     cx: f32,
     cy: f32,
     zoom: usize,
@@ -83,24 +115,89 @@ fn me_y() -> f32 {
     ret 460.0
 }
 
+// The crossing nearest a map position.
+fn node_at(x: f32, y: f32) -> u32 {
+    let col = usize((x - 100.0) / 180.0 + 0.5)
+    let row = usize((y - 100.0) / 180.0 + 0.5)
+    ret node_id(col, row)
+}
+
+// Plan the way from you to place `index`: false when there is none.
+fn plan_route(a: *mem.Arena, s: *State, index: usize) -> bool {
+    s.route_n = 0usize
+    s.route_m = 0usize
+    let (b0, b_error) = graph.builder[i64](a, GRID * GRID, GRID * GRID * 4usize)
+    if b_error != ok { ret false }
+    var b = b0
+    var row = 0usize
+    while row < GRID {
+        var col = 0usize
+        while col < GRID {
+            let here = node_id(col, row)
+            if col + 1usize < GRID && !closed(here, node_id(col + 1usize, row)) {
+                if graph.add_undirected[i64](&b, here, node_id(col + 1usize, row), 150i64) != ok { ret false }
+            }
+            if row + 1usize < GRID && !closed(here, node_id(col, row + 1usize)) {
+                if graph.add_undirected[i64](&b, here, node_id(col, row + 1usize), 150i64) != ok { ret false }
+            }
+            col += 1usize
+        }
+        row += 1usize
+    }
+    let (g, g_error) = graph.finish[i64](a, &b)
+    if g_error != ok { ret false }
+    var cost = Cost { unused: 0u8 }
+    let start = node_at(me_x(), me_y())
+    let goal = node_at(place_x(index), place_y(index))
+    let (paths, paths_error) = algo.dijkstra[i64, Cost](a, &g, start, &cost, cost_of)
+    if paths_error != ok { ret false }
+    if usize(goal) >= paths.previous.len { ret false }
+    // Back from the goal along the previous crossings, then forwards into the route.
+    var chain: [36]u32 = zero
+    var count = 0usize
+    var at = goal
+    while at != start && count < 35usize {
+        chain[count] = at
+        count += 1usize
+        let before = paths.previous[usize(at)]
+        if before == graph.NONE { ret false }
+        at = before
+    }
+    chain[count] = start
+    count += 1usize
+    if count > 24usize { ret false }
+    var i = 0usize
+    while i < count {
+        let node = usize(chain[count - 1usize - i])
+        s.route_x[i] = 100.0 + f32(node % GRID) * 180.0
+        s.route_y[i] = 100.0 + f32(node / GRID) * 180.0
+        i += 1usize
+    }
+    s.route_n = count
+    s.route_m = (count - 1usize) * 150usize
+    ret true
+}
+
 fn abs(v: f32) -> f32 {
     if v < 0.0 { ret 0.0 - v }
     ret v
 }
 
-// The distance along the roads from you to a place, in metres (a block is 150 m).
-fn metres(index: usize) -> usize {
+// The distance along the roads from you to a place, in metres (a block is 150 m): the planned route's when
+// there is one, else as the crow flies over the blocks.
+fn metres_for(s: *State, index: usize) -> usize {
+    if s.route_n > 0usize && s.selected == index { ret s.route_m }
     ret usize((abs(place_x(index) - me_x()) + abs(place_y(index) - me_y())) * 150.0 / 180.0)
 }
 
-fn minutes(index: usize) -> usize {
-    let m = metres(index) / 80usize
+fn minutes_for(s: *State, index: usize) -> usize {
+    let m = metres_for(s, index) / 80usize
     if m < 1usize { ret 1usize }
     ret m
 }
 
-fn distance_text(a: *mem.Arena, index: usize) -> str {
-    let m = metres(index)
+fn distance_text(a: *mem.Arena, s: *State, index: usize) -> str {
+    let m = metres_for(s, index)
     if m < 1000usize { ret ui.join(a, ui.number(a, m), " m", "") }
     ret ui.join(a, ui.join(a, ui.number(a, m / 1000usize), ".", ui.number(a, (m % 1000usize) / 100usize)), " km", "")
 }
@@ -173,10 +270,21 @@ fn draw_map(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
         bx += 1usize
     }
     // The route along the roads: you, then along x to the place's column, then along y.
-    if s.route && s.selected != NONE {
-        let xs: [3]f32 = [3]f32{ sx(s, me_x()), sx(s, me_x()), sx(s, place_x(s.selected)) }
-        let ys: [3]f32 = [3]f32{ sy(s, me_y()), sy(s, place_y(s.selected)), sy(s, place_y(s.selected)) }
-        try ui.polyline(a, builder, xs[0usize..3usize], ys[0usize..3usize], 3usize, 7.0, paint.Color { red: 0.20, green: 0.45, blue: 0.85, alpha: 1.0 })
+    // The closed roads, a red bar across each.
+    // (1,2)-(2,2): the segment between those crossings, and (2,1)-(2,2).
+    try ui.card(a, builder, sx(s, 100.0 + 1.5 * 180.0) - 3.0 * k, sy(s, 100.0 + 2.0 * 180.0) - 9.0 * k, 6.0 * k, 18.0 * k, 2.0, paint.Color { red: 0.85, green: 0.25, blue: 0.22, alpha: 1.0 })
+    try ui.card(a, builder, sx(s, 100.0 + 2.0 * 180.0) - 9.0 * k, sy(s, 100.0 + 1.5 * 180.0) - 3.0 * k, 18.0 * k, 6.0 * k, 2.0, paint.Color { red: 0.85, green: 0.25, blue: 0.22, alpha: 1.0 })
+    // The route along the roads, crossing by crossing.
+    if s.route && s.selected != NONE && s.route_n > 1usize {
+        var xs: [24]f32 = zero
+        var ys: [24]f32 = zero
+        var r = 0usize
+        while r < s.route_n {
+            xs[r] = sx(s, s.route_x[r])
+            ys[r] = sy(s, s.route_y[r])
+            r += 1usize
+        }
+        try ui.polyline(a, builder, xs[0usize..s.route_n], ys[0usize..s.route_n], s.route_n, 7.0, paint.Color { red: 0.20, green: 0.45, blue: 0.85, alpha: 1.0 })
     }
     // The places.
     var i = 0usize
@@ -230,7 +338,7 @@ fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
         let y: f32 = 470.0 + f32(i) * 58.0
         try ui.disc(a, builder, 46.0, y + 28.0, 18.0, ui.tint(i))
         try ui.put(a, builder, faces.jost, 18.0, place_name(i), 80.0, y + 8.0, ui.ink())
-        try ui.put(a, builder, faces.grotesk, 12.0, ui.join(a, place_kind(i), "  ", distance_text(a, i)), 80.0, y + 32.0, ui.muted())
+        try ui.put(a, builder, faces.grotesk, 12.0, ui.join(a, place_kind(i), "  ", distance_text(a, s, i)), 80.0, y + 32.0, ui.muted())
         ui.hit(&s.hits, 400usize + i, 16.0, y, 380.0, 56.0)
         i += 1usize
     }
@@ -240,7 +348,7 @@ fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
 fn draw_card(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try ui.card(a, builder, 0.0, 664.0, 412.0, 232.0, 24.0, ui.cream())
     try ui.put(a, builder, faces.jost_bold, 24.0, place_name(s.selected), 24.0, 678.0, ui.ink())
-    try ui.put(a, builder, faces.grotesk, 14.0, ui.join(a, place_kind(s.selected), "  ", ui.join(a, distance_text(a, s.selected), ", ", ui.join(a, ui.number(a, minutes(s.selected)), " min on foot", ""))), 24.0, 712.0, ui.muted())
+    try ui.put(a, builder, faces.grotesk, 14.0, ui.join(a, place_kind(s.selected), "  ", ui.join(a, distance_text(a, s, s.selected), ", ", ui.join(a, ui.number(a, minutes_for(s, s.selected)), " min on foot", ""))), 24.0, 712.0, ui.muted())
     if s.started {
         try ui.put(a, builder, faces.jost, 17.0, "Head along the road, then turn at the crossing", 24.0, 744.0, ui.amber_dark())
     }
@@ -301,6 +409,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             s.selected = id - 400usize
             s.sheet = false
             s.route = false
+            s.route_n = 0usize
             s.started = false
             s.cx = place_x(s.selected)
             s.cy = place_y(s.selected)
@@ -359,9 +468,12 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if id == 500usize {
             if !s.route {
                 s.route = true
+                let planned = plan_route(a, s, s.selected)
                 ui.say("maps route ")
-                ui.say_num(minutes(s.selected))
-                ui.say(" min\n")
+                ui.say_num(minutes_for(s, s.selected))
+                ui.say(" min ")
+                ui.say_num(metres_for(s, s.selected))
+                ui.say(" m\n")
             } else {
                 s.started = true
                 ui.say("maps start\n")
@@ -371,6 +483,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if id == 501usize {
             s.selected = NONE
             s.route = false
+            s.route_n = 0usize
             s.started = false
             ret true
         }
