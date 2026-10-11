@@ -26,6 +26,7 @@ use e.text.shape
 use appkit
 use text
 use lunar
+use vaultfs
 
 const ALARM_TAB: usize = 0usize
 const CLOCK_TAB: usize = 1usize
@@ -1273,6 +1274,133 @@ fn on_tick(s: *State) -> bool {
     ret changed
 }
 
+// ----------------------------------------------------------------------------------------------
+// Kept state (C145): the alarms, cities, bedtime, timer and stopwatch live in /clock, so they survive leaving the
+// app and a reboot. 64 bytes: version, alarm count, five alarms of four bytes (minutes, on, days), city count and six
+// cities, wake minutes, sleep half-hours, bedtime on, the timer (flags, total ms, end wall seconds, left ms) and the
+// stopwatch (running, start wall ms, accumulated ms). The timer's end and the stopwatch's start are wall-clock times,
+// so what ran while the app was away is counted when it comes back.
+
+fn put_word(buf: []u8, at: usize, value: usize) {
+    var i = 0usize
+    while i < 4usize {
+        buf[at + i] = u8((value >> (8usize * i)) & 255usize)
+        i += 1usize
+    }
+}
+
+fn get_word(buf: []const u8, at: usize) -> usize {
+    var v = 0usize
+    var i = 0usize
+    while i < 4usize {
+        v = v | (usize(buf[at + i]) << (8usize * i))
+        i += 1usize
+    }
+    ret v
+}
+
+fn wall_ms_now() -> i64 {
+    let (wall, wall_error) = time.now()
+    if wall_error != ok { ret 0i64 }
+    ret wall.nanos / 1000000i64
+}
+
+fn save_state(s: *State) {
+    var buf: [64]u8 = zero
+    buf[0usize] = 1u8
+    buf[1usize] = u8(s.alarm_total)
+    var i = 0usize
+    while i < 5usize {
+        buf[2usize + i * 4usize] = u8(s.alarms[i].minutes & 255usize)
+        buf[3usize + i * 4usize] = u8(s.alarms[i].minutes >> 8usize)
+        if s.alarms[i].on { buf[4usize + i * 4usize] = 1u8 }
+        buf[5usize + i * 4usize] = u8(s.alarms[i].days)
+        i += 1usize
+    }
+    buf[22usize] = u8(s.city_total)
+    i = 0usize
+    while i < 6usize {
+        buf[23usize + i] = u8(s.cities[i])
+        i += 1usize
+    }
+    buf[29usize] = u8(s.wake_minutes & 255usize)
+    buf[30usize] = u8(s.wake_minutes >> 8usize)
+    buf[31usize] = u8(s.sleep_half_hours)
+    if s.bedtime_on { buf[32usize] = 1u8 }
+    let wall_ms = wall_ms_now()
+    var flags = 0usize
+    if s.timer_running { flags = flags | 1usize }
+    if s.timer_paused { flags = flags | 2usize }
+    if s.timer_done { flags = flags | 4usize }
+    buf[33usize] = u8(flags)
+    put_word(buf[0usize..64usize], 34usize, usize(s.timer_total_ms))
+    var left_ms = s.timer_left_ms
+    if s.timer_running { left_ms = timer_remaining_ms(s) }
+    if left_ms < 0i64 { left_ms = 0i64 }
+    put_word(buf[0usize..64usize], 38usize, usize(wall_ms / 1000i64 + left_ms / 1000i64))
+    put_word(buf[0usize..64usize], 42usize, usize(left_ms))
+    if s.sw_running { buf[46usize] = 1u8 }
+    let started = wall_ms - (s.now_ms - s.sw_start_ms)
+    put_word(buf[0usize..64usize], 47usize, usize(started / 4294967296i64))
+    put_word(buf[0usize..64usize], 51usize, usize(started % 4294967296i64))
+    put_word(buf[0usize..64usize], 55usize, usize(s.sw_acc_ms))
+    let kept = vaultfs.write("/clock", mem.address_of(&buf[0usize]), 64usize)
+}
+
+// Read /clock into `s`; true when there was a file of this version.
+fn load_state(s: *State) -> bool {
+    var buf: [64]u8 = zero
+    let (n, found) = vaultfs.read("/clock", mem.address_of(&buf[0usize]), 64usize)
+    if !found || n < 59usize || buf[0usize] != 1u8 { ret false }
+    var total = usize(buf[1usize])
+    if total > 5usize { total = 5usize }
+    s.alarm_total = total
+    var i = 0usize
+    while i < 5usize {
+        s.alarms[i] = Alarm { minutes: usize(buf[2usize + i * 4usize]) + usize(buf[3usize + i * 4usize]) * 256usize, on: buf[4usize + i * 4usize] != 0u8, days: usize(buf[5usize + i * 4usize]) }
+        i += 1usize
+    }
+    var cities = usize(buf[22usize])
+    if cities > 6usize { cities = 6usize }
+    if cities > 0usize {
+        s.city_total = cities
+        i = 0usize
+        while i < 6usize {
+            s.cities[i] = usize(buf[23usize + i])
+            i += 1usize
+        }
+    }
+    s.wake_minutes = usize(buf[29usize]) + usize(buf[30usize]) * 256usize
+    s.sleep_half_hours = usize(buf[31usize])
+    s.bedtime_on = buf[32usize] != 0u8
+    let flags = usize(buf[33usize])
+    let wall_ms = wall_ms_now()
+    s.timer_total_ms = i64(get_word(buf[0usize..64usize], 34usize))
+    s.timer_left_ms = i64(get_word(buf[0usize..64usize], 42usize))
+    if (flags & 1usize) != 0usize {
+        let end_s = i64(get_word(buf[0usize..64usize], 38usize))
+        let left = (end_s - wall_ms / 1000i64) * 1000i64
+        if left > 0i64 {
+            s.timer_running = true
+            s.timer_end_ms = s.now_ms + left
+        } else {
+            s.timer_done = true
+        }
+    } else {
+        s.timer_paused = (flags & 2usize) != 0usize
+        s.timer_done = (flags & 4usize) != 0usize
+    }
+    if buf[46usize] != 0u8 {
+        let started = i64(get_word(buf[0usize..64usize], 47usize)) * 4294967296i64 + i64(get_word(buf[0usize..64usize], 51usize))
+        var elapsed = wall_ms - started
+        if elapsed < 0i64 { elapsed = 0i64 }
+        s.sw_running = true
+        s.sw_start_ms = s.now_ms - elapsed
+    }
+    s.sw_acc_ms = i64(get_word(buf[0usize..64usize], 55usize))
+    ret true
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (kit_value, kit_error) = appkit.open(a, args, 1usize, "clock")
     if kit_error != ok {
@@ -1307,6 +1435,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.fired = 0usize
     s.wake_minutes = 420usize
     s.sleep_half_hours = 16usize
+    if load_state(&s) {
+        say("clock loaded ")
+        say_num(s.alarm_total)
+        say(" alarms first ")
+        say_hhmm(s.alarms[0usize].minutes)
+        say("\n")
+    }
     if !show(a, &kit, &s) {
         say("clock present failed\n")
         ret ok
@@ -1320,6 +1455,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             running = false
         } else if tap.tick {
             let alarmed = on_tick(&s)
+            if alarmed { save_state(&s) }
             if (alarmed || display_key(&s) != s.shown) && show(a, &kit, &s) {
                 var unused = 0usize
             } else {
@@ -1332,6 +1468,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else {
             let id = hit_at(&s, tap.x, tap.y)
             if id != NONE && act(&s, id) {
+                save_state(&s)
                 if !show(a, &kit, &s) {
                     say("clock present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)

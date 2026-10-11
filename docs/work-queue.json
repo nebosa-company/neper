@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C145",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 145,
-      "title": "NeperOS Clock: alarms ring with the app closed",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Split from C115 (2026-10-08). Alarms and timers only ring while the Clock app is open: nothing keeps them across the app's exit and no background ringer exists. Acceptance: (1) alarms, timers and the stopwatch state persist through the filesystem server (C106) across app exit and reboot; (2) a background service started by the kernel in the unified boot owns the schedule and, when an alarm is due, raises a notification through the status server (C111) and starts the ringer even with another app or the home screen in front; (3) Snooze and Dismiss from the notification; (4) a fixture on QEMU that sets an alarm, leaves the Clock, and sees it ring."
-    },
-    {
       "id": "C146",
       "category": "compiler",
       "group": "NeperOS",
@@ -1322,6 +1311,17 @@
           "model": "opus",
           "thinking": "high",
           "evidence": "Split from C143 (D2432): packages are signed, verified, revocable and installed. Acceptance: (1) the scanner as a library over the NIR of a built app: it rejects raw syscalls and MMIO, network or storage use the manifest does not declare, and unbounded loops over input, with a report the Dynamic Details screen shows; (2) the app kit as a stable versioned API (appkit, ui, text, scenes and the e.* subset the scanner allows) with the compiler's diagnostics made readable for a model and the card of traps in docs/llm-neper-card.md as a prompt prefix; (3) the revocation list signed by the server and fetched, not only read from disk; (4) removing an installed app (its package in /apps and its icon) from the home grid; (5) a fixture that builds one hand-written app to a package, signs it, installs it on QEMU, launches it from its new icon and removes it. The prompt and server pieces follow in C124. Not queued here: a store, sharing."
+    },
+    {
+          "id": "C174",
+          "category": "compiler",
+          "group": "NeperOS",
+          "order": 174,
+          "title": "NeperOS Clock remainder: a background ringer with the app closed",
+          "score": 0,
+          "model": "opus",
+          "thinking": "high",
+          "evidence": "Split from C145 (D2433): the Clock's alarms, timer and stopwatch persist in /clock. Acceptance: (1) a background service started by the kernel in the unified boot reads /clock, owns the schedule and, when an alarm or timer is due, raises a notification through the status server (C111) and starts the ringer even with another app or the home screen in front; (2) Snooze and Dismiss from the notification, written back to /clock; (3) a fixture on QEMU that sets an alarm, leaves the Clock, and sees it ring."
     }
   ]
 }
