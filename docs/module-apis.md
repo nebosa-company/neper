@@ -19543,11 +19543,22 @@ const BRAND_JCB: usize = 6usize
 const BRAND_UNIONPAY: usize = 7usize
 fn card_brand(s: str) -> usize
 fn card_brand_name(brand: usize) -> str
+fn is_upper(c: u8) -> bool
+fn is_alnum_upper(c: u8) -> bool
+fn isin(s: str) -> bool
+fn lei(s: str) -> bool
+fn vin(s: str) -> bool
+fn verhoeff(s: str) -> bool
+fn bic(s: str) -> bool
+fn card_expiry(month: u32, year: u32, now_month: u32, now_year: u32) -> bool
 ```
 
 Identifier checks: `luhn` and `luhn_check_digit`, `isbn13`, `isbn10`, `ean13`, `ean8`,
 `upc_a` (one weighted mod-10 helper) and `iban` (mod 97 digit by digit with a country
-length table).
+length table). C121 adds `isin` (letters expanded, then Luhn), `lei` (ISO 7064 mod 97-10),
+`vin` (the North American check digit, no I, O or Q), `verhoeff`, `bic` (format only, not
+the country list) and `card_expiry` (a month and a two- or four-digit year against today,
+at most twenty years out). Upper case and no separators for the letter forms.
 
 ### `e.control`
 

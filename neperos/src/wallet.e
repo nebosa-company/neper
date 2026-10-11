@@ -184,6 +184,8 @@ type State = struct {
     fields: [180]u8,
     field_len: [5]usize,
     focus: usize,
+    // (C121) What is wrong with the form when Save was tapped (0 nothing, see `problem_text`).
+    problem: usize,
     hits: [96]Hit,
     hit_total: usize,
 }
@@ -878,6 +880,9 @@ fn draw_add(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
         try field(a, builder, s, faces, slot, 154.0 + f32(slot) * 56.0)
         slot += 1usize
     }
+    if s.problem != 0usize {
+        try put(a, builder, faces.grotesk, 13.0, problem_text(s.problem), 16.0, 414.0, paint.Color { red: 0.96, green: 0.45, blue: 0.42, alpha: 1.0 })
+    }
     try pill(a, builder, s, faces, 1300usize, 16.0, 436.0, 186.0, 46.0, "Save", amber(), 17.0)
     try pill(a, builder, s, faces, 1302usize, 210.0, 436.0, 186.0, 46.0, "Cancel", soft(), 17.0)
     try draw_keyboard(a, builder, s, faces)
@@ -942,6 +947,47 @@ fn open_add(s: *State) {
 }
 
 // Is there enough to save: the name, and for a bank the IBAN, for a document the holder?
+fn problem_text(code: usize) -> str {
+    if code == 1usize { ret "The card number fails its check digit" }
+    if code == 2usize { ret "The expiry must be a month 01-12 and a year, MM/YY" }
+    if code == 3usize { ret "The IBAN is not valid" }
+    if code == 4usize { ret "The card number needs 12 to 19 digits" }
+    if code == 5usize { ret "The member number has to be digits and spaces" }
+    ret ""
+}
+
+// What is wrong with the form's values, by `problem_text` code: 0 when it can be saved.
+fn form_problem(a: *mem.Arena, s: *State) -> usize {
+    if s.pick == 0usize {
+        let number = field_text(a, s, 1usize)
+        var d: [24]u8 = zero
+        let count = valid.digits(number, d[..])
+        if count < 12usize || count > 19usize { ret 4usize }
+        if !valid.luhn(number) { ret 1usize }
+        let expiry = field_text(a, s, 2usize)
+        if expiry.len > 0usize {
+            // MM/YY: two digits, a slash, two digits.
+            if expiry.len != 5usize || expiry[2usize] != 47u8 { ret 2usize }
+            var i = 0usize
+            while i < 5usize {
+                if i != 2usize && (expiry[i] < 48u8 || expiry[i] > 57u8) { ret 2usize }
+                i += 1usize
+            }
+            let month = usize(expiry[0usize] - 48u8) * 10usize + usize(expiry[1usize] - 48u8)
+            if month < 1usize || month > 12usize { ret 2usize }
+        }
+    }
+    if s.pick == 3usize {
+        let member = field_text(a, s, 1usize)
+        var d2: [32]u8 = zero
+        if valid.digits(member, d2[..]) > 30usize { ret 5usize }
+    }
+    if s.pick == 4usize {
+        if !valid.iban(field_text(a, s, 2usize)) { ret 3usize }
+    }
+    ret 0usize
+}
+
 fn can_save(s: *State) -> bool {
     if s.pick == 5usize { ret s.field_len[1usize] > 0usize }
     if s.pick == 4usize { ret s.field_len[0usize] > 0usize && s.field_len[1usize] > 0usize && s.field_len[2usize] > 0usize }
@@ -1027,7 +1073,8 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         }
         ret false
     }
-    // The add form.
+    // The add form. A problem shown stays until the next tap on anything but Save.
+    if id != 1300usize { s.problem = 0usize }
     if id >= 1000usize && id < 1026usize {
         type_byte(s, u8(97usize + id - 1000usize))
         ret true
@@ -1075,7 +1122,16 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         ret true
     }
     if id == 1300usize {
+        s.problem = 0usize
         if can_save(s) {
+            let found = form_problem(a, s)
+            if found != 0usize {
+                s.problem = found
+                say("wallet problem ")
+                say(problem_text(found))
+                say("\n")
+                ret true
+            }
             let index = add_card(s, built_card(a, s))
             if index != NONE { say("wallet added\n") }
             s.screen = STACK_SCREEN

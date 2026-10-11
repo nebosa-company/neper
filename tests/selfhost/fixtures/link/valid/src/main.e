@@ -39,6 +39,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !valid.upc_a("036000291452") || valid.upc_a("036000391452") || valid.upc_a("306000291452") { os.exit(4i32) }
     if valid.ean13("73513537") || valid.ean8("4006381333931") { os.exit(4i32) }
 
+    // 5 to 10: ISIN, LEI, VIN, Verhoeff, BIC and a card's expiry, against python-stdnum (VIN: the NHTSA rule).
+    if valid.isin("US0378331005") != true || valid.isin("US0378331006") != false || valid.isin("DE000BAY0017") != true || valid.isin("DE000BAY0018") != false || valid.isin("GB0002634946") != true || valid.isin("GB0002634947") != false || valid.isin("AU0000XVGZA3") != true || valid.isin("XS0000000009") != true || valid.isin("US037833100") != false || valid.isin("US03783310055") != false { os.exit(5i32) }
+    if valid.lei("5493001KJTIIGC8Y1R12") != true || valid.lei("5493001KJTIIGC8Y1R13") != false || valid.lei("529900T8BM49AURSDO55") != true || valid.lei("529900T8BM49AURSDO56") != false || valid.lei("HWUPKR0MPOU8FGXBT394") != true || valid.lei("HWUPKR0MPOU8FGXBT395") != false || valid.lei("5493001KJTIIGC8Y1R1") != false || valid.lei("5493001KJTIIGC8Y1R123") != false { os.exit(6i32) }
+    if valid.vin("1M8GDM9AXKP042788") != true || valid.vin("1M8GDM9A1KP042788") != false || valid.vin("11111111111111111") != true || valid.vin("1HGCM82633A004352") != true || valid.vin("1HGCM82633A004353") != false || valid.vin("JH4KA7561PC008269") != true || valid.vin("JH4KA7561PC008260") != false || valid.vin("1HGCM82633A00435") != false || valid.vin("1HGCM82633A0043521") != false || valid.vin("1HGCM82O33A004352") != false { os.exit(7i32) }
+    if valid.verhoeff("2363") != true || valid.verhoeff("2364") != false || valid.verhoeff("12345") != false || valid.verhoeff("123451") != true || valid.verhoeff("00") != false || valid.verhoeff("1234567890123456") != false || valid.verhoeff("75872") != false || valid.verhoeff("758723") != false { os.exit(8i32) }
+    if valid.bic("DEUTDEFF") != true || valid.bic("DEUTDEFF500") != true || valid.bic("DEUTDEF") != false || valid.bic("NEPER1E2XXX") != false || valid.bic("DEUT1EFF") != false || valid.bic("BOFAUS3N") != true || valid.bic("BOFAUS3NXXX1") != false { os.exit(9i32) }
+    if valid.card_expiry(12u32, 2026u32, 10u32, 2026u32) != true || valid.card_expiry(9u32, 2026u32, 10u32, 2026u32) != false || valid.card_expiry(10u32, 2026u32, 10u32, 2026u32) != true || valid.card_expiry(1u32, 27u32, 10u32, 2026u32) != true || valid.card_expiry(13u32, 2027u32, 10u32, 2026u32) != false || valid.card_expiry(0u32, 2027u32, 10u32, 2026u32) != false || valid.card_expiry(6u32, 2047u32, 10u32, 2026u32) != false || valid.card_expiry(6u32, 2046u32, 10u32, 2026u32) != true || valid.card_expiry(12u32, 25u32, 10u32, 2026u32) != false { os.exit(10i32) }
+    if valid.isin("us0378331005") || valid.bic("deutdeff") || valid.verhoeff("0") || valid.lei("5493001kjtiigc8y1r12") { os.exit(11i32) }
+
     try io.print("valid ok\n")
     ret ok
 }
