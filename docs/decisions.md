@@ -39116,3 +39116,7 @@ Opening an unread message from the server sets `\Seen` on its UID and deleting o
 ## D2413 — C128 part three: TLS for IMAP and SMTP
 
 `mail_connect(tls_port, plain_port)` asks the network server for a TLS 1.3 connection first (`secure` set: the server checks the chain against the bundled roots and the fixture CA, and the name `neper.test`) and falls back to the plain port when it is not answered, so the same code serves a real provider's 993 and 465 and the bare test ports. The fixture host services serve IMAP on 8993 and SMTP on 8465 over TLS with the HTTPS service's leaf certificate. The app prints `mail imap tls` and `mail smtp tls` when the link was secure. Passwords still sit in the code (`neper`/`secret`), which is the next thing: accounts typed in the app and kept in Secure.
+
+## D2414 — C128 closed; accounts, threads, rich messages and push are C158
+
+C128 closes at score 1 on what a fixed account on a loopback server can show: the IMAP inbox, SMTP send, TLS with plain fallback and server-side read and delete (D2411-D2413). The account form with Secure, OAuth, folders and threads, search, HTML and attachments, drafts, notifications and push are C158.

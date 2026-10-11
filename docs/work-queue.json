@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C128",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 128,
-      "title": "NeperOS Mail: a real mail client over IMAP and SMTP",
-      "score": 0.35,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Mail app (D2223) shows a sample mailbox in the process. Acceptance: (1) IMAP and SMTP over TLS on C117, with accounts added in the app (the passwords kept in Secure, C116), OAuth for the large providers, folder sync and push; (2) threads, labels, search, archive, mark read and unread, swipe actions; (3) rich messages: HTML rendering through the Document engine (C123), inline images, attachments saved into Files (C125) and opened in their apps; (4) compose with attachments from Files, Photos and Camera, drafts, signatures and the contact picker (C127); (5) notifications through the status server and a badge on the icon; (6) a fixture on QEMU against a local IMAP and SMTP test server that fetches, reads, replies and checks the sent message. Not queued here: calendar invites, PGP. Done (D2411): part of (1) and (6) -- the Mail app fetches its INBOX over IMAP (e.net.imap through the network server: LOGIN, SELECT, FETCH of whole messages read by e.fmt.mail: sender name, subject, date as the age, the start of the body, unread by the \\Seen flag) and sends a composed message over SMTP (e.net.smtp), against the test boot's IMAP and SMTP server (mail_services.py); fixture mail_live. Not here: accounts added in the app and their passwords in Secure, TLS and OAuth, folders beyond the INBOX, threads and labels, search, mark read and archive on the server, HTML rendering, attachments, drafts, push and notifications. Done (D2412): flags on the server -- opening an unread message sets \\Seen and deleting one sets \\Deleted and expunges (UID STORE and EXPUNGE), seen again by a later session (fixtures mail_live, mail_live_delete, mail_live_after). Done (D2413): IMAP and SMTP over TLS 1.3 -- the app tries the TLS ports first (chain checked against the roots and the fixture CA) and falls back to plain text; fixtures print mail imap tls and mail smtp tls."
-    },
-    {
       "id": "C129",
       "category": "compiler",
       "group": "NeperOS",
@@ -1564,6 +1553,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C127 (D2409): the Call app keeps contacts as a vCard file with New, Edit and Delete. Acceptance: (1) a telephony server over the modem or a SIP/VoIP stack on C117 networking (needs UDP in the network server): dial, answer, reject, hold, mute, speaker, DTMF, call waiting and conference; (2) the in-call audio path through e.audio with the earpiece, speaker and Bluetooth routes; (3) the contact store read by Messages, Mail and Wallet, with favorites, search, and vCard import and export through Files; (4) recents kept across restarts, missed-call notifications through the status server, Do Not Disturb honoured; (5) voicemail and visual voicemail; (6) emergency numbers always dialable; (7) a fixture on QEMU against a loopback SIP server that dials, answers and ends a call and checks the audio frames."
+    },
+    {
+      "id": "C158",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 158,
+      "title": "NeperOS Mail remainder: accounts, folders and threads, HTML and attachments, notifications",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C128 (D2413): Mail syncs the INBOX of a fixed test account over IMAP and sends over SMTP, on TLS, and marks read and deleted on the server. Acceptance: (1) accounts added in the app (server, user, password kept in Secure, C116), OAuth for the large providers, several accounts, folder list and sync, IDLE or polling for push; (2) threads, labels, search, archive, mark unread and swipe actions done on the server; (3) rich messages: MIME multipart, HTML rendering through the Document engine (C123), inline images, attachments saved into Files (C125) and opened in their apps; (4) compose with attachments from Files, Photos and Camera, drafts, signatures and the contact picker (the vCard store, C127/C157); (5) notifications through the status server and a badge on the icon; (6) a fixture against the test IMAP and SMTP server that fetches, threads, searches, replies with an attachment and checks the sent message."
     }
   ]
 }
