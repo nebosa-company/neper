@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C123",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 123,
-      "title": "NeperOS Document: a viewer for PDF, Word, PowerPoint, Markdown and text, with syntax highlighting",
-      "score": 0.75,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Queued by the user (2026-10-08). The Document icon (home index 25, a page with angle brackets) has no app yet. Acceptance: (1) a viewer for PDF (text, images and vector graphics, outline, page jump, search), Word (.docx), PowerPoint (.pptx, one slide per screen), Markdown (rendered: headings, lists, tables, code, links) and plain text, built on library parsers (the e.fmt family; a PDF and an Office Open XML reader are new library modules), with zoom, a page or slide strip and find; (2) a code view with syntax highlighting for the 30 languages that lead the current TIOBE index at the time of building (the list changes, so the item records the index month it used) plus Neper: highlighters are table-driven token rules in the library (reusing the Neper tokenizer for Neper), one rule table per language, picked by file extension and shebang, with a fixture of snippets per language; (3) opened from Files and from other apps (Mail attachments, Wallet document pages), read only; (4) large files paged, not loaded whole; (5) a fixture on QEMU that opens a Markdown file and a Neper source file and checks the highlighted token classes. Not queued here: editing, annotation, signing, printing, DRM. Delivered (D2389): e.fmt.ooxml (docx paragraphs, pptx slides) and Document showing a handed Word or PowerPoint file; fixture document_office on a seeded disk. Delivered (D2390): e.fmt.pdf (page text) and Document showing a handed PDF. Not yet: PDF images, vectors, outline and search, Markdown rendering of real files, highlighting tables for 30 languages, paging, find, zoom. Delivered (D2391): handed Markdown and code shown by extension (the eight languages' rules). Delivered (D2392): e.text.highlight, 32 languages' rule tables with a per-language snippet fixture (the TIOBE month from memory: refresh). Delivered (D2393): paging a handed file (16 KB, 26 lines a page). Delivered (D2394): find, text size, the disk file list. Not yet: highlighting the match, pinch zoom, code/Markdown zoom, shebang detection, files over 16 KB, the PDF outline and images."
-    },
-    {
       "id": "C122",
       "category": "compiler",
       "group": "NeperOS",
@@ -585,6 +574,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C124 (D2388): the device can verify, install, keep, ask about and launch a signed package and refuses what it did not declare. Acceptance: (1) the protocol over C117's TLS: a request carries the prompt, the app's identity and the device's API level; the answer carries the package (manifest, image, source, signature), streamed into the filesystem (a GET larger than httpc.e's 96 KB, with a request body); (2) a local test server with a canned model answer (no live model in the suite) that goes prompt to installed icon to launch to extension, as an installfixture; (3) the Dynamic app (D2238) calling it in place of its three templates and showing the stages from the server's progress; (4) the compile step on the server (the Neper compiler against the app kit, diagnostics fed back to the model until it builds or gives up readably), the scan before signing, a reproducible build, signing and revocation, an audit log; (5) many installed apps (the shell's single slot becomes a list from /apps), removal, update and rollback, and the manifest icon on the grid; (6) the NIR walk of the scanner (raw syscalls, undeclared capabilities, unbounded loops over input), with its report on the Details screen. Delivered by C124 and not to redo: D2383-D2388."
+    },
+    {
+      "id": "C152",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 152,
+      "title": "NeperOS Document remainder: PDF images and vectors, Office layout, pinch zoom, attachments",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C123 (D2394): Document shows the text of PDF, Word and PowerPoint files, rendered Markdown and highlighted code from the disk, with paging, find and text size. Acceptance: (1) PDF pages painted, not only their text: vector paths, images (DCT through e.fmt.jpeg, Flate images), fonts with their own encodings, the outline and search with the match highlighted; (2) Word tables, images and styles and PowerPoint shapes laid out; (3) pinch zoom and a page or slide strip once the touch layer carries more than taps; (4) opening from Mail attachments and Wallet pages (C128, C121) and Share; (5) shebang detection and the TIOBE list refreshed from tiobe.com with the month recorded; (6) files over 16 KB paged from the disk, not read whole. Delivered by C123 and not to redo: D2389-D2394."
     },
     {
       "id": "L037",
