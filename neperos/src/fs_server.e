@@ -60,9 +60,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     say("fs server up\n")
     var pathbuf: [64]u8 = zero
-    var databuf: [512]u8 = zero
+    var databuf: [4096]u8 = zero
     var namebuf: [512]u8 = zero
-    var filebuf: [512]u8 = zero
+    var filebuf: [4096]u8 = zero
     let path_addr = mem.address_of(&pathbuf[0usize])
     let data_addr = mem.address_of(&databuf[0usize])
     let name_addr = mem.address_of(&namebuf[0usize])
@@ -97,7 +97,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 reply(fs.mkdir(blk, path))
             } else {
                 if op == fsproto.OP_WRITE {
-                    let dlen = fsproto.recv_bytes(REQ, data_addr, 512usize)
+                    let dlen = fsproto.recv_bytes(REQ, data_addr, 4096usize)
                     reply(fs.write(blk, path, data_addr, dlen))
                 } else {
                     if op == fsproto.OP_REMOVE {
@@ -116,7 +116,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                                 let size_sent = os.send(REP, size, fsproto.NO_SLOT)
                             } else {
                                 if op == fsproto.OP_READ {
-                                    let (count, read_error) = fs.read(blk, path, file_addr, 512usize)
+                                    let (count, read_error) = fs.read(blk, path, file_addr, 4096usize)
                                     var n = count
                                     if read_error == ok {
                                         let sent = os.send(REP, fsproto.RESULT_OK, fsproto.NO_SLOT)

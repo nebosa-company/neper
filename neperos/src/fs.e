@@ -204,8 +204,27 @@ fn create(blk: virtio.Block, path: str) -> err {
     ret add_error
 }
 
-// Write `len` bytes from `src` to the file `path`, creating it if absent, capped at a block, and
-// record the size.
+// (C125) A file is a run of consecutive blocks from its entry's block, as many as its size needs; at most
+// MAX_FILE bytes.
+const MAX_FILE: usize = 4096usize
+
+// Set the first block of `name` in `dir_block` (a file that outgrew its run moves to a new one).
+fn set_block(blk: virtio.Block, dir_block: u64, name: str, data_block: u64) -> err {
+    if virtio.block_read(blk, dir_block) != ok { ret NotFormatted }
+    var i = 0usize
+    while i < ENTRIES {
+        let off = i * ENTRY_SIZE
+        if os.load8(blk.data + off + KIND_OFF) != KIND_EMPTY && name_eq(blk.data + off + NAME_OFF, name) {
+            os.store32(blk.data + off + BLOCK_OFF, u32(data_block))
+            ret virtio.block_write(blk, dir_block)
+        }
+        i += 1usize
+    }
+    ret NotFound
+}
+
+// Write `len` bytes from `src` to the file `path`, creating it if absent, capped at MAX_FILE: the file keeps its
+// run of blocks when the new content fits it and takes a new run at the end of the disk when it does not.
 fn write(blk: virtio.Block, path: str, src: usize, len: usize) -> err {
     let (parent, leaf) = parent_leaf(path)
     let (dir_block, resolve_error) = resolve_dir(blk, parent)
@@ -218,15 +237,44 @@ fn write(blk: virtio.Block, path: str, src: usize, len: usize) -> err {
         data_block = new_block
     }
     var count = len
-    if count > BLOCK_SIZE { count = BLOCK_SIZE }
-    zero_data(blk)
-    var i = 0usize
-    while i < count {
-        os.store8(blk.data + i, os.load8(src + i))
-        i += 1usize
+    if count > MAX_FILE { count = MAX_FILE }
+    var needed = (count + BLOCK_SIZE - 1usize) / BLOCK_SIZE
+    if needed == 0usize { needed = 1usize }
+    let have = (size + BLOCK_SIZE - 1usize) / BLOCK_SIZE
+    if found && needed > have && needed > 1usize {
+        // A larger run: the first block of it is the one the entry has, so take the first and the rest follow.
+        let (first, first_error) = alloc_block(blk)
+        if first_error != ok { ret first_error }
+        data_block = first
+        var extra = 1usize
+        while extra < needed {
+            let (more, more_error) = alloc_block(blk)
+            if more_error != ok { ret more_error }
+            extra += 1usize
+        }
+        let moved = set_block(blk, dir_block, leaf, data_block)
+        if moved != ok { ret moved }
+    } else if !found && needed > 1usize {
+        // A new file got one block from add_entry; the rest of the run is allocated after it.
+        var extra = 1usize
+        while extra < needed {
+            let (more, more_error) = alloc_block(blk)
+            if more_error != ok { ret more_error }
+            extra += 1usize
+        }
     }
-    let write_error = virtio.block_write(blk, data_block)
-    if write_error != ok { ret write_error }
+    var block_index = 0usize
+    while block_index < needed {
+        zero_data(blk)
+        var i = 0usize
+        while i < BLOCK_SIZE && block_index * BLOCK_SIZE + i < count {
+            os.store8(blk.data + i, os.load8(src + block_index * BLOCK_SIZE + i))
+            i += 1usize
+        }
+        let write_error = virtio.block_write(blk, data_block + u64(block_index))
+        if write_error != ok { ret write_error }
+        block_index += 1usize
+    }
     ret set_size(blk, dir_block, leaf, count)
 }
 
@@ -239,11 +287,17 @@ fn read(blk: virtio.Block, path: str, dst: usize, max: usize) -> (usize, err) {
     if !found { ret (0usize, NotFound) }
     var count = size
     if count > max { count = max }
-    if virtio.block_read(blk, data_block) != ok { ret (0usize, NotFormatted) }
-    var i = 0usize
-    while i < count {
-        os.store8(dst + i, os.load8(blk.data + i))
-        i += 1usize
+    var done = 0usize
+    var block_index = 0usize
+    while done < count {
+        if virtio.block_read(blk, data_block + u64(block_index)) != ok { ret (0usize, NotFormatted) }
+        var i = 0usize
+        while i < BLOCK_SIZE && done < count {
+            os.store8(dst + done, os.load8(blk.data + i))
+            i += 1usize
+            done += 1usize
+        }
+        block_index += 1usize
     }
     ret (count, ok)
 }

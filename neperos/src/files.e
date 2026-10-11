@@ -651,7 +651,12 @@ fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
     try pill(a, builder, s, faces, 610usize, 16.0, 690.0, 118.0, 48.0, "Open", amber(), 16.0)
     try pill(a, builder, s, faces, 611usize, 147.0, 690.0, 118.0, 48.0, "Rename", soft(), 16.0)
     try pill(a, builder, s, faces, 612usize, 278.0, 690.0, 118.0, 48.0, "Delete", soft(), 16.0)
-    try pill(a, builder, s, faces, 613usize, 16.0, 754.0, 380.0, 48.0, "Close", soft(), 16.0)
+    if s.real && !node.is_dir {
+        try pill(a, builder, s, faces, 613usize, 16.0, 754.0, 180.0, 48.0, "Close", soft(), 16.0)
+        try pill(a, builder, s, faces, 616usize, 216.0, 754.0, 180.0, 48.0, "Copy", soft(), 16.0)
+    } else {
+        try pill(a, builder, s, faces, 613usize, 16.0, 754.0, 380.0, 48.0, "Close", soft(), 16.0)
+    }
     ret ok
 }
 
@@ -853,15 +858,16 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
                     }
                 } else if s.entry_mode == NEW_FILE {
                     // A file with one line in it, written through the filesystem server.
+                    // A hundred lines (1700 bytes): more than one block of the filesystem.
                     let line = "Created in Files\n"
-                    var content: [24]u8 = zero
+                    var content: [2048]u8 = zero
                     var c = 0usize
-                    while c < line.len {
-                        content[c] = line[c]
+                    while c < 100usize * line.len {
+                        content[c] = line[c % line.len]
                         c += 1usize
                     }
-                    if vaultfs.write(child_path(a, s, s.cwd, typed), mem.address_of(&content[0usize]), line.len) {
-                        let made = add_node(s, typed, s.cwd, false, line.len, 0usize)
+                    if vaultfs.write(child_path(a, s, s.cwd, typed), mem.address_of(&content[0usize]), 100usize * line.len) {
+                        let made = add_node(s, typed, s.cwd, false, 100usize * line.len, 0usize)
                         if made != NONE {
                             say("files created ")
                             say_text(typed)
@@ -926,6 +932,44 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             say("\n")
             if s.real { let removed = vaultfs.remove(path_of(a, s, s.selected)) }
             remove_node(s, s.selected)
+            s.selected = NONE
+            s.note = 0usize
+            ret true
+        }
+        if id == 616usize && s.real && !s.nodes[s.selected].is_dir {
+            // Copy: read the file through the filesystem server and write it under "Copy of <name>" here.
+            var data: [4096]u8 = zero
+            let data_addr = mem.address_of(&data[0usize])
+            let source_path = path_of(a, s, s.selected)
+            let (got, read_ok) = vaultfs.read(source_path, data_addr, 4096usize)
+            var made_name: [24]u8 = zero
+            let prefix = "Copy of "
+            var n = 0usize
+            while n < prefix.len {
+                made_name[n] = prefix[n]
+                n += 1usize
+            }
+            var k = 0usize
+            while k < s.nodes[s.selected].name_len && n < 20usize {
+                made_name[n] = s.nodes[s.selected].name[k]
+                n += 1usize
+                k += 1usize
+            }
+            let new_name = made_name[0usize..n]
+            var copied = false
+            if read_ok && name_free(s, new_name, NONE) {
+                if vaultfs.write(child_path(a, s, s.cwd, new_name), data_addr, got) {
+                    let made = add_node(s, new_name, s.cwd, false, got, 0usize)
+                    copied = made != NONE
+                }
+            }
+            if copied {
+                say("files copied ")
+                say_text(new_name)
+                say("\n")
+            } else {
+                say("files copy failed\n")
+            }
             s.selected = NONE
             s.note = 0usize
             ret true
