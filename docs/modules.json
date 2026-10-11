@@ -52,6 +52,7 @@
     "e.fmt.ooxml",
     "e.fmt.odf",
     "e.fmt.pdf",
+    "e.fmt.pdf.write",
     "e.fmt.vcard",
     "e.text.highlight",
     "e.barcode",
@@ -2057,6 +2058,18 @@
     "e.io",
     "e.mem",
     "e.os",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.pdf.write",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
     "e.str"
    ],
    "blocked_by": []

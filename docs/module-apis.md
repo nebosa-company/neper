@@ -24287,6 +24287,55 @@ fn pages(a: *mem.Arena, data: []const u8) -> ([]str, err)
 The text of a PDF held in a byte slice (C123): `pages` gives each page's text in page-tree order. The objects are found by scanning for `N G obj` (a file with its objects in object streams, or with an xref stream, is `NoPages`), the page order is the catalog's tree, a page's content streams are joined and `/FlateDecode` is undone through `e.fmt.zlib`, and the text operators `Tj`, `TJ` (a kern of -200 or more is a word space), `'`, `"`, `T*`, `Td`, `TD`, `Tm` and `ET` give the lines; literal strings keep their escapes and octal codes, hex strings are read, Latin-1 bytes are written as UTF-8. Not a renderer and not a font reader: an embedded font with its own encoding gives its codes. Checked against PDFs written by the fixture's generator.
 
 
+### `e.fmt.pdf.write`
+
+```neper
+error Invalid
+error Unsupported
+error TooLarge
+error NoPage
+error PageOpen
+
+type Font = enum u8 { Regular, Bold }
+type Color = struct { red: u8, green: u8, blue: u8 }
+type Document = struct { store: mem.Arena, pages: []str, count: usize, open: bool, content: str.Builder, width: f64, height: f64, title: str }
+
+fn black() -> Color
+fn rgb(red: u8, green: u8, blue: u8) -> Color
+fn winansi(code: u32) -> u8
+fn decode_at(s: str, at: usize) -> (u32, usize)
+fn width_units(font: Font, byte: u8) -> u32
+fn supported(s: str) -> bool
+fn span_units(s: str, from: usize, to: usize, font: Font) -> u64
+fn text_width(s: str, size: f64, font: Font) -> (f64, err)
+fn push_real(b: *str.Builder, v: f64, decimals: u32) -> err
+fn real(b: *str.Builder, v: f64) -> err
+fn finite(v: f64) -> bool
+fn color_op(b: *str.Builder, c: Color, stroke: bool) -> err
+fn literal(b: *str.Builder, s: str, from: usize, to: usize) -> err
+fn font_name(font: Font) -> str
+fn document(a: *mem.Arena, max_pages: usize, capacity: usize, width: f64, height: f64, title: str) -> (Document, err)
+fn begin_page(d: *Document) -> err
+fn end_page(d: *Document) -> err
+fn full(e: err) -> err
+fn put_text(d: *Document, x: f64, y: f64, size: f64, font: Font, ink: Color, s: str) -> err
+fn next_line(s: str, from: usize, limit: f64, size: f64, font: Font) -> (usize, usize, u64)
+fn count_lines(s: str, limit: f64, size: f64, font: Font) -> usize
+fn put_paragraph(d: *Document, x: f64, y: f64, width: f64, size: f64, leading: f64, font: Font, ink: Color, s: str) -> (f64, usize, err)
+fn fill_rect(d: *Document, x: f64, y: f64, w: f64, h: f64, ink: Color) -> err
+fn stroke_rect(d: *Document, x: f64, y: f64, w: f64, h: f64, line_width: f64, ink: Color) -> err
+fn draw_line(d: *Document, x1: f64, y1: f64, x2: f64, y2: f64, line_width: f64, ink: Color) -> err
+fn draw_path(d: *Document, xs: []const f64, ys: []const f64, filled: bool, line_width: f64, ink: Color) -> err
+fn fill_circle(d: *Document, cx: f64, cy: f64, r: f64, ink: Color) -> err
+fn put_table(d: *Document, x: f64, y: f64, widths: []const f64, rows: []const []const str, size: f64, leading: f64, pad: f64, header: bool, ink: Color, rule: Color) -> (f64, err)
+fn push_padded(b: *str.Builder, v: usize, digits: usize) -> err
+fn push_utf16_hex(b: *str.Builder, s: str) -> err
+fn finish(a: *mem.Arena, d: *Document) -> (str, err)
+```
+
+PDF document generation (L145), the writing half beside the `e.fmt.pdf` text reader: a page model in points (origin top left, y down, a text's `y` its baseline) over the built-in Helvetica and Helvetica-Bold in WinAnsi, nothing embedded. `document` fixes the page size, title, page limit and a private content region; `begin_page` / `end_page` bracket each page; `put_text`, `put_paragraph` (greedy word wrap at spaces and `\n`, returning the next baseline and the line count), `put_table` (column widths, wrapped cells, a ruled grid, a shaded bold header row, returning the bottom edge), `fill_rect`, `stroke_rect`, `draw_line`, `draw_path` (open polyline or closed filled polygon) and `fill_circle` draw in RGB; `finish` writes a PDF 1.4 file (catalog, page tree, two fonts, information dictionary with a UTF-16 title, pages with plain content streams, cross-reference table). `text_width` measures with the Adobe metrics, so a line that fits here fits in the viewer. A character outside WinAnsi is `Unsupported` (no font embedding, so no CJK or emoji), a call outside a page `NoPage`, a second `begin_page` `PageOpen`, an exhausted page region or page limit `TooLarge`, a non-finite or non-positive argument `Invalid`. Not here: embedded fonts, images, links, outlines, content compression, automatic page breaks (`put_table` reports where it stopped), tagged PDF, and `e.text.layout` shaping, which needs a font file this writer does not carry. Checked byte for byte against an independent Python writer that breaks lines with reportlab's metrics, accepted by pypdf (strict) and pdfminer when generated, and read back through `e.fmt.pdf.pages` (`scripts/gen_pdf_write_test.py`).
+
+
 ### `e.text.highlight`
 
 ```neper

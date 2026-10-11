@@ -1182,6 +1182,11 @@ fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_pdf_written" = 'executable written' ]
 chmod +x "$test_build/fmt-pdf-selfhost"
 "$test_build/fmt-pdf-selfhost"
+# `e.fmt.pdf.write`: a one-page and a two-page report compared byte for byte with an independent writer (reportlab metrics), read back through e.fmt.pdf, widths against reportlab, the state errors.
+fmt_pdf_write_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf_write/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-write-selfhost")
+[ "$fmt_pdf_write_written" = 'executable written' ]
+chmod +x "$test_build/fmt-pdf-write-selfhost"
+"$test_build/fmt-pdf-write-selfhost"
 # `e.fmt.vcard`: vCard texts parsed and compared with vobject, the cards written again and compared with a reference writer.
 fmt_vcard_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_vcard/src/main.e" "$repo" x64 linux "$test_build/fmt-vcard-selfhost")
 [ "$fmt_vcard_written" = 'executable written' ]

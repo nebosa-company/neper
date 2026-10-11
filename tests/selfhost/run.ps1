@@ -1276,6 +1276,12 @@ $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtPdfWritten -ne 'executable written') { throw 'fmt_pdf emission failed' }
 & $fmtPdfPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_pdf check failed: exit $LASTEXITCODE" }
+# `e.fmt.pdf.write`: a one-page and a two-page report compared byte for byte with an independent writer (reportlab metrics), read back through e.fmt.pdf, widths against reportlab, the state errors.
+$fmtPdfWritePath = Join-Path $testBuild 'fmt-pdf-write-selfhost.exe'
+$fmtPdfWriteWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf_write\src\main.e') $repo 'x64' 'windows' $fmtPdfWritePath
+if ($LASTEXITCODE -ne 0 -or $fmtPdfWriteWritten -ne 'executable written') { throw 'fmt_pdf_write emission failed' }
+& $fmtPdfWritePath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_pdf_write check failed: exit $LASTEXITCODE" }
 # `e.fmt.vcard`: vCard texts parsed and compared with vobject, the cards written again and compared with a reference writer.
 $fmtVcardPath = Join-Path $testBuild 'fmt-vcard-selfhost.exe'
 $fmtVcardWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_vcard\src\main.e') $repo 'x64' 'windows' $fmtVcardPath
