@@ -63,6 +63,8 @@ const BLUETOOTH: usize = 24usize
 const ROTATE: usize = 25usize
 const NOTIFY: usize = 26usize
 const SETTINGS: usize = 40usize
+// Time zone: 0 UTC, 1 Berlin (+1), 2 New York (-5), 3 Tokyo (+9). The shell's clock and date follow it.
+const TIMEZONE: usize = 34usize
 // The Settings icon's index on the home screen: the one app that cannot be uninstalled.
 const SETTINGS_ICON: usize = 19usize
 
@@ -209,12 +211,14 @@ fn setting_name(setting: usize) -> str {
     if setting == NETWORK { ret "Network" }
     if setting == BLUETOOTH { ret "Bluetooth" }
     if setting == ROTATE { ret "Auto-rotate" }
+    if setting == TIMEZONE { ret "Time zone" }
     ret "Notifications"
 }
 
 // (C126) What a setting is called in search, the words that also find it, and the page it lives on. The
 // notification switches (NOTIFY + app) are listed under the app's name.
 fn setting_label(setting: usize) -> str {
+    if setting == TIMEZONE { ret "Time zone" }
     if setting >= NOTIFY { ret notify_app(setting - NOTIFY) }
     ret setting_name(setting)
 }
@@ -246,6 +250,7 @@ fn setting_words(setting: usize) -> str {
     if setting == NETWORK { ret "wifi networks ssid" }
     if setting == BLUETOOTH { ret "pair wireless headphones devices" }
     if setting == ROTATE { ret "orientation landscape portrait screen" }
+    if setting == TIMEZONE { ret "region utc berlin new york tokyo clock date" }
     ret "alerts messages"
 }
 
@@ -255,6 +260,7 @@ fn setting_page(setting: usize) -> usize {
     if setting == BRIGHTNESS || setting == DARK || setting == ADAPTIVE || setting == TIMEOUT || setting == FONT { ret 1usize }
     if setting == MEDIA || setting == RING || setting == ALARM || setting == DND || setting == VIBRATE { ret 2usize }
     if setting == SAVER { ret 3usize }
+    if setting == TIMEZONE { ret 9usize }
     if setting >= NOTIFY { ret 5usize }
     if setting == LOCATION || setting == CAMERA_ACCESS || setting == MIC_ACCESS || setting == FINGERPRINT || setting == LOCK { ret 7usize }
     if setting == HOUR24 { ret 9usize }
@@ -301,7 +307,7 @@ fn setting_matches(q: *ui.Field, setting: usize) -> bool {
 fn find_settings(s: *State) {
     s.found_total = 0usize
     var setting = 0usize
-    while setting < NOTIFY + 8usize && s.found_total < FOUND_MAX {
+    while setting < NOTIFY + 9usize && s.found_total < FOUND_MAX {
         if setting_matches(&s.search, setting) {
             s.found[s.found_total] = setting
             s.found_total += 1usize
@@ -475,6 +481,13 @@ fn notify_count(s: *State) -> usize {
         n += 1usize
     }
     ret count
+}
+
+fn zone_name(zone: usize) -> str {
+    if zone == 0usize { ret "UTC" }
+    if zone == 1usize { ret "Berlin" }
+    if zone == 2usize { ret "New York" }
+    ret "Tokyo"
 }
 
 fn lock_name(lock: usize) -> str {
@@ -933,8 +946,8 @@ fn draw_system(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     y += 68.0
     try info_row(a, builder, faces, "Language", "English (United States)", y)
     y += 54.0
-    try info_row(a, builder, faces, "Time zone", "UTC", y)
-    y += 54.0
+    try chips_row(a, builder, s, faces, TIMEZONE, y, "UTC", "Berlin", "New York", "Tokyo")
+    y += 92.0
     try card(a, builder, 16.0, y + 8.0, 380.0, 52.0, 26.0, amber())
     try centred(a, builder, faces.jost, 17.0, "Reset settings", 206.0, y + 22.0, ink())
     hit(s, 5000usize, 16.0, y + 8.0, 380.0, 52.0)
@@ -1426,6 +1439,7 @@ fn act(s: *State, id: usize, x: f32) -> bool {
         if setting == LOCK { say(lock_name(s.values[setting])) }
         if setting == FONT { say(font_name(s.values[setting])) }
         if setting == TIMEOUT { say(timeout_name(s.values[setting])) }
+        if setting == TIMEZONE { say(zone_name(s.values[setting])) }
         say("\n")
         ret true
     }

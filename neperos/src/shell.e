@@ -404,6 +404,15 @@ fn show_lock(a: *mem.Arena, renderer: *scene.Renderer, w: *window.Window, drawab
     ret show(renderer, w, drawable, scene.finish(&builder))
 }
 
+// (C126) The Time zone setting (0 UTC, 1 Berlin +1, 2 New York -5, 3 Tokyo +9) applied to UTC seconds.
+fn zone_seconds(utc: usize, step: usize) -> usize {
+    var hours = 24usize
+    if step == 1usize { hours = 25usize }
+    if step == 2usize { hours = 19usize }
+    if step == 3usize { hours = 33usize }
+    ret utc + hours * 3600usize - 86400usize
+}
+
 // The Screen timeout setting (0 to 3) as the number of 500 ms ticks of no touch before the lock screen returns.
 fn timeout_ticks(step: usize) -> usize {
     if step == 0usize { ret 30usize }
@@ -543,15 +552,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let stopped = os.send(STATUS_REQ, OP_QUIT, NO_SLOT)
     }
     var seconds = 0usize
+    var utc_seconds = 0usize
     var hour = 0usize
     var minute = 0usize
+    // (C126) The Time zone setting, from the settings server (index 34).
+    var (zone_step, zone_known) = sysettings.get(34usize)
+    if !zone_known { zone_step = 0usize }
+    if zone_step != 0usize {
+        say("shell time zone ")
+        say_num(zone_step)
+        say("\n")
+    }
     if snap[3usize] > 0usize {
-        seconds = snap[3usize] / 1000000000usize
+        utc_seconds = snap[3usize] / 1000000000usize
+        seconds = zone_seconds(utc_seconds, zone_step)
         let day = seconds % 86400usize
         hour = day / 3600usize
         minute = (day % 3600usize) / 60usize
     }
-    let clock = clock_text(a, hour, minute)
+    var clock = clock_text(a, hour, minute)
     let scale = f32(os.SURFACE_W) / 412.0
     let logical_h = f32(os.SURFACE_H) / scale
     let ground = paint.Color { red: 0.09, green: 0.11, blue: 0.18, alpha: 1.0 }
@@ -713,6 +732,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         idle_ticks = 0usize
                         let (step_now, step_known) = sysettings.get(7usize)
                         if step_known { timeout_step = step_now }
+                        let (zone_now, zone_ok) = sysettings.get(34usize)
+                        if zone_ok && zone_now != zone_step && utc_seconds > 0usize {
+                            zone_step = zone_now
+                            seconds = zone_seconds(utc_seconds, zone_step)
+                            let day_now = seconds % 86400usize
+                            hour = day_now / 3600usize
+                            minute = (day_now % 3600usize) / 60usize
+                            clock = clock_text(a, hour, minute)
+                            say("shell zone ")
+                            say_num(hour)
+                            say(":")
+                            say_num(minute)
+                            say("\n")
+                        }
                         let hidden_now = sysettings.hidden()
                         if hidden_now != hidden_mask {
                             hidden_mask = hidden_now
