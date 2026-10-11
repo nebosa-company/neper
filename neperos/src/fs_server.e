@@ -81,7 +81,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else {
             let plen = fsproto.recv_bytes(REQ, path_addr, 64usize)
             let path = pathbuf[0usize..plen]
-            if op == fsproto.OP_MKDIR {
+            if op == fsproto.OP_RENAME {
+                let nlen = fsproto.recv_bytes(REQ, data_addr, 64usize)
+                reply(fs.rename(blk, path, databuf[0usize..nlen]))
+            } else if op == fsproto.OP_STAT {
+                let (size, kind, found) = fs.stat(blk, path)
+                if found {
+                    let sent = os.send(REP, fsproto.RESULT_OK, fsproto.NO_SLOT)
+                } else {
+                    let sent = os.send(REP, fsproto.RESULT_ERR, fsproto.NO_SLOT)
+                }
+                let size_sent = os.send(REP, size, fsproto.NO_SLOT)
+                let kind_sent = os.send(REP, usize(kind), fsproto.NO_SLOT)
+            } else if op == fsproto.OP_MKDIR {
                 reply(fs.mkdir(blk, path))
             } else {
                 if op == fsproto.OP_WRITE {

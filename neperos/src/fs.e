@@ -16,6 +16,7 @@ error DirFull
 error NotFound
 error NotDirectory
 error NameTooLong
+error NameTaken
 
 const SUPER_MAGIC: u32 = 0x4653454Eu32
 const ROOT_DIR: u64 = 1u64
@@ -288,6 +289,36 @@ fn list(blk: virtio.Block, path: str, dst: usize, max: usize) -> (usize, usize, 
     }
     if at > max { at = max }
     ret (count, at, ok)
+}
+
+// Give the file or directory `path` a new leaf name in the same directory; NameTaken when that name exists.
+fn rename(blk: virtio.Block, path: str, new_name: str) -> err {
+    if new_name.len == 0usize || new_name.len > NAME_MAX { ret NameTooLong }
+    let (parent, leaf) = parent_leaf(path)
+    let (dir_block, resolve_error) = resolve_dir(blk, parent)
+    if resolve_error != ok { ret resolve_error }
+    if virtio.block_read(blk, dir_block) != ok { ret NotFormatted }
+    var i = 0usize
+    while i < ENTRIES {
+        let off = i * ENTRY_SIZE
+        if os.load8(blk.data + off + KIND_OFF) != KIND_EMPTY && name_eq(blk.data + off + NAME_OFF, new_name) { ret NameTaken }
+        i += 1usize
+    }
+    i = 0usize
+    while i < ENTRIES {
+        let off = i * ENTRY_SIZE
+        if os.load8(blk.data + off + KIND_OFF) != KIND_EMPTY && name_eq(blk.data + off + NAME_OFF, leaf) {
+            var j = 0usize
+            while j < NAME_MAX {
+                os.store8(blk.data + off + NAME_OFF + j, 0u8)
+                j += 1usize
+            }
+            store_name(blk.data + off + NAME_OFF, new_name)
+            ret virtio.block_write(blk, dir_block)
+        }
+        i += 1usize
+    }
+    ret NotFound
 }
 
 // Remove the file or directory `path` by clearing its directory entry (its blocks are not

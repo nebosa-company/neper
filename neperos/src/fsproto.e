@@ -18,6 +18,10 @@ const OP_REMOVE: usize = 7usize
 // (C126) The space in use and the device's size, in blocks: no path follows the op; the reply is a result
 // word, the blocks allocated (the superblock's counter) and the blocks the device holds.
 const OP_STATS: usize = 8usize
+// (C125) RENAME path, new name (a leaf, in the same directory) -> result; STAT path -> result, size, kind
+// (0 none, 1 file, 2 directory).
+const OP_RENAME: usize = 9usize
+const OP_STAT: usize = 10usize
 
 const RESULT_OK: usize = 0usize
 const RESULT_ERR: usize = 1usize

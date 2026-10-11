@@ -21,6 +21,7 @@ use e.text.shape
 use appkit
 use text
 use lunar
+use vaultfs
 
 const NONE: usize = 99usize
 const MAX_NODES: usize = 48usize
@@ -29,6 +30,7 @@ const BROWSE_SCREEN: usize = 0usize
 const ENTRY_SCREEN: usize = 1usize
 const NEW_FOLDER: usize = 0usize
 const RENAME: usize = 1usize
+const NEW_FILE: usize = 2usize
 const FOLDER_KIND: usize = 12usize
 
 fn say(line: str) {
@@ -130,7 +132,9 @@ fn size_text(a: *mem.Arena, kb: usize) -> str {
 // ----------------------------------------------------------------------------------------------
 // State.
 
-type Node = struct { name: [24]u8, name_len: usize, parent: usize, is_dir: bool, kb: usize, days_ago: usize, kind: usize, used: bool }
+// In a real tree (State.real) `kb` holds the file's size in BYTES, as the filesystem server reports it, and
+// `loaded` says a folder's children have been listed.
+type Node = struct { name: [24]u8, name_len: usize, parent: usize, is_dir: bool, kb: usize, days_ago: usize, kind: usize, used: bool, loaded: bool }
 
 type Hit = struct { id: usize, x: f32, y: f32, w: f32, h: f32 }
 
@@ -148,6 +152,9 @@ type State = struct {
     scroll: f32,
     today: usize,
     note: usize,
+    real: bool,
+    store_used: usize,
+    store_total: usize,
     hits: [96]Hit,
     hit_total: usize,
 }
@@ -252,6 +259,25 @@ fn add_node(s: *State, name: str, parent: usize, is_dir: bool, kb: usize, days_a
     ret NONE
 }
 
+// (C125) A size in bytes as B, KB or MB.
+fn bytes_text(a: *mem.Arena, bytes: usize) -> str {
+    if bytes >= 1048576usize {
+        let tenths = bytes * 10usize / 1048576usize
+        ret join(a, join(a, number(a, tenths / 10usize), ".", number(a, tenths % 10usize)), " MB", "")
+    }
+    if bytes >= 1024usize {
+        let tenths = bytes * 10usize / 1024usize
+        ret join(a, join(a, number(a, tenths / 10usize), ".", number(a, tenths % 10usize)), " KB", "")
+    }
+    ret join(a, number(a, bytes), " B", "")
+}
+
+// The size of a node as shown: bytes from the real filesystem, or the sample tree's kilobytes.
+fn size_label(a: *mem.Arena, s: *State, node: Node) -> str {
+    if s.real { ret bytes_text(a, node.kb) }
+    ret size_text(a, node.kb)
+}
+
 fn name_of(a: *mem.Arena, s: *State, index: usize) -> str {
     ret text_of(a, s.nodes[index].name[0usize..], s.nodes[index].name_len)
 }
@@ -319,6 +345,46 @@ fn date_text(a: *mem.Arena, s: *State, days_ago: usize) -> str {
     if days_ago == 1usize { ret "Yesterday" }
     let (month, date) = lunar.month_day((s.today - days_ago) * 86400usize)
     ret join(a, month_short(month), " ", number(a, date))
+}
+
+// (C125) The filesystem path of node `index` (the root is "/"), and of a child of `parent` called `name`.
+fn path_of(a: *mem.Arena, s: *State, index: usize) -> str {
+    if index == 0usize || s.nodes[index].parent == NONE { ret "/" }
+    let parent = s.nodes[index].parent
+    if parent == 0usize { ret join(a, "/", text_of(a, s.nodes[index].name[0usize..], s.nodes[index].name_len), "") }
+    ret join(a, path_of(a, s, parent), "/", text_of(a, s.nodes[index].name[0usize..], s.nodes[index].name_len))
+}
+
+fn child_path(a: *mem.Arena, s: *State, parent: usize, name: str) -> str {
+    if parent == 0usize { ret join(a, "/", name, "") }
+    ret join(a, path_of(a, s, parent), "/", name)
+}
+
+// Read the tree from the filesystem server: every folder's entries, with their sizes and kinds, in the node
+// table (the first MAX_NODES; the filesystem keeps sixteen entries a directory).
+fn load_tree(a: *mem.Arena, s: *State) {
+    var folder = 0usize
+    while folder < MAX_NODES {
+        if s.nodes[folder].used && s.nodes[folder].is_dir && !s.nodes[folder].loaded {
+            s.nodes[folder].loaded = true
+            var names: [512]u8 = zero
+            let (count, listed) = vaultfs.list(path_of(a, s, folder), mem.address_of(&names[0usize]), 512usize)
+            if listed {
+                var start = 0usize
+                var at = 0usize
+                while at < count {
+                    if names[at] == 10u8 {
+                        let name = names[start..at]
+                        let (size, kind, found) = vaultfs.stat(child_path(a, s, folder, name))
+                        if found { let made = add_node(s, name, folder, kind == 2usize, size, 0usize) }
+                        start = at + 1usize
+                    }
+                    at += 1usize
+                }
+            }
+        }
+        folder += 1usize
+    }
 }
 
 // Delete a node and everything below it.
@@ -448,6 +514,16 @@ fn sort_name(sort: usize) -> str {
 fn draw_storage(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try card(a, builder, 16.0, 92.0, 380.0, 104.0, 20.0, cream())
     try put(a, builder, faces.jost, 17.0, "Internal storage", 32.0, 104.0, ink())
+    if s.real {
+        // The disk's own numbers: blocks allocated of the blocks it holds (the filesystem's OP_STATS).
+        try put_right(a, builder, faces.grotesk, 13.0, join(a, join(a, bytes_text(a, s.store_used * 512usize), " used of ", ""), bytes_text(a, s.store_total * 512usize), ""), 380.0, 108.0, muted())
+        try card(a, builder, 32.0, 138.0, 348.0, 12.0, 6.0, soft())
+        var share: f32 = 0.0
+        if s.store_total > 0usize { share = f32(s.store_used) / f32(s.store_total) }
+        try card(a, builder, 32.0, 138.0, 348.0 * share + 4.0, 12.0, 6.0, amber())
+        try put(a, builder, faces.grotesk, 11.0, "The real filesystem on this disk", 32.0, 160.0, muted())
+        ret ok
+    }
     try put_right(a, builder, faces.grotesk, 13.0, "42.7 GB used of 128 GB", 380.0, 108.0, muted())
     // The bar: images, video, audio, documents, other.
     try card(a, builder, 32.0, 138.0, 348.0, 12.0, 6.0, soft())
@@ -472,7 +548,7 @@ fn draw_row(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
         try centred(a, builder, faces.grotesk, 11.0, kind_tag(node.kind), 46.0, y + 24.0, ink())
     }
     try clipped(a, builder, faces.jost, 17.0, name_of(a, s, index), 78.0, y + 10.0, 250.0, ink())
-    var detail = join(a, size_text(a, node.kb), "  ", date_text(a, s, node.days_ago))
+    var detail = join(a, size_label(a, s, node), "  ", date_text(a, s, node.days_ago))
     if node.is_dir {
         var count = " items"
         if count_in(s, index) == 1usize { count = " item" }
@@ -521,6 +597,8 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
             hit(s, 801usize, 352.0, 764.0, 56.0, 56.0)
         }
     }
+    // New file (a small text file; the real filesystem only).
+    if s.real { try pill(a, builder, s, faces, 151usize, 16.0, 836.0, 144.0, 52.0, "New file", soft(), 16.0) }
     // New folder.
     try card(a, builder, 252.0, 836.0, 144.0, 52.0, 26.0, amber())
     try card(a, builder, 274.0 - 8.0, 862.0 - 1.5, 16.0, 3.0, 1.5, ink())
@@ -551,7 +629,7 @@ fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
         var value = kind_name(node.kind)
         if row == 1usize {
             label = "Size"
-            value = size_text(a, node.kb)
+            value = size_label(a, s, node)
             if node.is_dir {
                 value = join(a, number(a, count_in(s, s.selected)), " items", "")
             }
@@ -641,6 +719,7 @@ fn draw_keyboard(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.
 fn draw_entry(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     var heading = "New folder"
     if s.entry_mode == RENAME { heading = "Rename" }
+    if s.entry_mode == NEW_FILE { heading = "New file" }
     try put(a, builder, faces.jost_bold, 30.0, heading, 24.0, 28.0, light())
     try put(a, builder, faces.grotesk, 12.0, join(a, "In ", path_text(a, s, s.cwd), ""), 24.0, 74.0, light_muted())
     let value = text_of(a, s.entry[0usize..], s.entry_len)
@@ -761,13 +840,43 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             let except = s.selected
             if s.entry_len > 0usize && name_free(s, typed, except) {
                 if s.entry_mode == NEW_FOLDER {
-                    let made = add_node(s, typed, s.cwd, true, 0usize, 0usize)
+                    var made = NONE
+                    if s.real {
+                        if vaultfs.mkdir(child_path(a, s, s.cwd, typed)) { made = add_node(s, typed, s.cwd, true, 0usize, 0usize) }
+                    } else {
+                        made = add_node(s, typed, s.cwd, true, 0usize, 0usize)
+                    }
                     if made != NONE {
                         say("files created ")
                         say_text(typed)
                         say("\n")
                     }
+                } else if s.entry_mode == NEW_FILE {
+                    // A file with one line in it, written through the filesystem server.
+                    let line = "Created in Files\n"
+                    var content: [24]u8 = zero
+                    var c = 0usize
+                    while c < line.len {
+                        content[c] = line[c]
+                        c += 1usize
+                    }
+                    if vaultfs.write(child_path(a, s, s.cwd, typed), mem.address_of(&content[0usize]), line.len) {
+                        let made = add_node(s, typed, s.cwd, false, line.len, 0usize)
+                        if made != NONE {
+                            say("files created ")
+                            say_text(typed)
+                            say("\n")
+                        }
+                    }
                 } else {
+                    if s.real {
+                        if !vaultfs.rename(path_of(a, s, except), typed) {
+                            say("files rename failed\n")
+                            s.selected = NONE
+                            s.screen = BROWSE_SCREEN
+                            ret true
+                        }
+                    }
                     var k = 0usize
                     while k < s.entry_len {
                         s.nodes[except].name[k] = s.entry[k]
@@ -815,6 +924,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             say("files deleted ")
             say_text(text_of_static(s, s.selected))
             say("\n")
+            if s.real { let removed = vaultfs.remove(path_of(a, s, s.selected)) }
             remove_node(s, s.selected)
             s.selected = NONE
             s.note = 0usize
@@ -865,6 +975,11 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if id == 150usize {
         s.selected = NONE
         open_entry(s, NEW_FOLDER)
+        ret true
+    }
+    if id == 151usize && s.real {
+        s.selected = NONE
+        open_entry(s, NEW_FILE)
         ret true
     }
     if id == 800usize {
@@ -940,6 +1055,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let r1 = add_node(&s, "hello.ne", projects, false, 2usize, 3usize)
     let r2 = add_node(&s, "calc.ne", projects, false, 41usize, 5usize)
     let r3 = add_node(&s, "README.md", projects, false, 3usize, 5usize)
+    // (C125) With the filesystem server reachable (a disk), the tree is the real one: the sample is dropped and
+    // the root's folders are read, down to the node table's size.
+    var probe: [8]u8 = zero
+    let (probe_count, probe_ok) = vaultfs.list("/", mem.address_of(&probe[0usize]), 8usize)
+    if probe_ok {
+        var drop = 0usize
+        while drop < MAX_NODES {
+            s.nodes[drop].used = false
+            drop += 1usize
+        }
+        s.real = true
+        let real_root = add_node(&s, "Internal storage", NONE, true, 0usize, 0usize)
+        s.cwd = real_root
+        load_tree(a, &s)
+        let (used, total, answered) = vaultfs.stats()
+        s.store_used = used
+        s.store_total = total
+        say("files real ")
+        say_text(number(a, s.store_used))
+        say("\n")
+        var loaded_nodes = 0usize
+        var count_node = 0usize
+        while count_node < MAX_NODES {
+            if s.nodes[count_node].used { loaded_nodes += 1usize }
+            count_node += 1usize
+        }
+        say("files tree ")
+        say_text(number(a, loaded_nodes))
+        say("\n")
+    }
     if !show(a, &kit, &s) {
         say("files present failed\n")
         ret ok

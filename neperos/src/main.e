@@ -752,7 +752,8 @@ fn launch(frame: *a64.Frame) {
         }
         // (D2252) The Secure app (archive entry 38, the table's `secure`) alone reaches storage and the random server.
         // (C126) Settings (entry 24) keeps its values in the filesystem too.
-        if index == 38usize || index == 24usize {
+        // (C125) The Files app (entry 23) holds the whole tree through the same endpoints.
+        if index == 38usize || index == 24usize || index == 23usize {
             if fs_present {
                 thread.grant(child, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                 thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
