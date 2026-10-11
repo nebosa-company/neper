@@ -18,9 +18,13 @@ use e.gfx.scene
 use e.gfx.svg
 use e.text.layout
 use e.text.shape
+use e.algo.pedometer as ped
 use appkit
 use text
 use ui
+use sysettings
+use sensor_sim
+use vaultfs
 
 const NONE: usize = 99usize
 
@@ -31,6 +35,11 @@ type State = struct {
     walking: bool,
     ticks: usize,
     reached: bool,
+    // (C138) The step detector over the accelerometer stream (25 Hz, twelve samples a tick), the next sample's
+    // index, and today's count when walking began (the detector's steps are added to it).
+    pedometer: ped.Pedometer,
+    sample: usize,
+    base: usize,
     hits: ui.Hits,
 }
 
@@ -159,16 +168,55 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
     ret appkit.present(kit, &builder)
 }
 
+// One sample of the walking accelerometer: from the settings server's sensor service, else the same function here.
+fn walk_sample(index: usize) -> f64 {
+    let (x, y, z, served) = sysettings.sensor(sysettings.SENSOR_WALK, index)
+    if served { ret f64(x) / 1000.0f64 }
+    ret sensor_sim.walk_magnitude(index)
+}
+
+// Today's count and the goal are kept in /steps: two words, little end.
+fn save_today(s: *State) {
+    var buf: [8]u8 = zero
+    var i = 0usize
+    while i < 4usize {
+        buf[i] = u8((s.today >> (8usize * i)) & 255usize)
+        buf[4usize + i] = u8((s.goal >> (8usize * i)) & 255usize)
+        i += 1usize
+    }
+    let kept = vaultfs.write("/steps", mem.address_of(&buf[0usize]), 8usize)
+}
+
+fn load_today(s: *State) -> bool {
+    var buf: [8]u8 = zero
+    let (n, found) = vaultfs.read("/steps", mem.address_of(&buf[0usize]), 8usize)
+    if !found || n < 8usize { ret false }
+    var today = 0usize
+    var goal = 0usize
+    var i = 0usize
+    while i < 4usize {
+        today = today | (usize(buf[i]) << (8usize * i))
+        goal = goal | (usize(buf[4usize + i]) << (8usize * i))
+        i += 1usize
+    }
+    s.today = today
+    if goal >= 1000usize && goal <= 100000usize { s.goal = goal }
+    ret true
+}
+
 fn act(s: *State, id: usize) -> bool {
     if id == 100usize {
         s.walking = !s.walking
         if s.walking {
+            s.pedometer = ped.new(25usize)
+            s.base = s.today
             ui.say("steps walking on\n")
         } else {
             ui.say("steps walking off\n")
             ui.say("steps total ")
             ui.say_num(s.today)
             ui.say("\n")
+            save_today(s)
         }
         ret true
     }
@@ -180,6 +228,7 @@ fn act(s: *State, id: usize) -> bool {
         ui.say("steps goal ")
         ui.say_num(s.goal)
         ui.say("\n")
+        save_today(s)
         s.reached = s.today >= s.goal
         ret true
     }
@@ -206,6 +255,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.days[5usize] = 8210usize
     s.today = 3412usize
     s.goal = 8000usize
+    if load_today(&s) {
+        ui.say("steps loaded ")
+        ui.say_num(s.today)
+        ui.say("\n")
+    }
     if !show(a, &kit, &s) {
         ui.say("steps present failed\n")
         ret ok
@@ -217,9 +271,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if tap.ended {
             running = false
         } else if tap.tick {
-            // Walking adds two steps a tick; the goal is announced once.
+            // Walking: twelve samples of the accelerometer a tick go to the detector, and what it counts is added
+            // to today; the goal is announced once.
             if s.walking {
-                s.today += 2usize
+                var k = 0usize
+                while k < 12usize {
+                    let counted = ped.feed(&s.pedometer, walk_sample(s.sample))
+                    s.sample += 1usize
+                    k += 1usize
+                }
+                s.today = s.base + ped.steps(&s.pedometer)
                 if s.today >= s.goal && !s.reached {
                     s.reached = true
                     ui.say("steps reached goal\n")

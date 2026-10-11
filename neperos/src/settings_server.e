@@ -244,6 +244,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 y = ay
                 z = az
             }
+            if kind == sysettings.SENSOR_WALK {
+                x = sensor_sim.walk_magnitude(tick)
+                y = 0.0f64
+                z = 0.0f64
+            }
             if kind == sysettings.SENSOR_GYROSCOPE {
                 let (gp, gq, gr) = sensor_sim.gyro(tick)
                 x = gp

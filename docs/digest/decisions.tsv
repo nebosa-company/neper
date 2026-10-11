@@ -2181,4 +2181,5 @@ D2422	1023	C133: a simulated torch behind the settings server; C133 closed, C163
 D2423	1184	C134: Chat over a WebSocket; closed, C164 remains
 D2424	728	C135: Meet signals over the WebSocket; closed, C165 remains
 D2425	931	C136: recordings are WAV files; closed, C166 remains
-D2426	795	C137: Translate asks a server for what the book lacks; closed, C167 remains
+D2426	796	C137: Translate asks a server for what the book lacks; closed, C167 remains
+D2427	1158	C138: a step detector in the library and the Steps app on it; closed, C168 remains

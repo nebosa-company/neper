@@ -990,6 +990,11 @@ algo_magnetic_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$algo_magnetic_written" = 'executable written' ]
 chmod +x "$test_build/algo-magnetic-selfhost"
 "$test_build/algo-magnetic-selfhost"
+# `e.algo.pedometer`: synthetic accelerometer walks of known cadence counted within two per cent, running told from walking, a phone on a table counting nothing.
+algo_pedometer_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_pedometer/src/main.e" "$repo" x64 linux "$test_build/algo-pedometer-selfhost")
+[ "$algo_pedometer_written" = 'executable written' ]
+chmod +x "$test_build/algo-pedometer-selfhost"
+"$test_build/algo-pedometer-selfhost"
 # `e.fmt.uri`: RFC 3986 parsing, the section 5.4 resolution examples, normalisation, escapes.
 fmt_uri_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_uri/src/main.e" "$repo" x64 linux "$test_build/fmt-uri-selfhost")
 [ "$fmt_uri_written" = 'executable written' ]

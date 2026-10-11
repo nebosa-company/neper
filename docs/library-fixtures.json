@@ -3,6 +3,17 @@
  "version": 1,
  "modules": [
   {
+   "module": "e.algo.pedometer",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 1,
+   "delivered": 1,
+   "pending": [],
+   "fixtures": [
+    "algo_pedometer"
+   ]
+  },
+  {
    "module": "e.algo.magnetic",
    "milestone": null,
    "schedule": "later",
@@ -23,6 +34,7 @@
    "fixtures": [
     "algo_bignum",
     "algo_magnetic",
+    "algo_pedometer",
     "algo_gaps_a"
    ]
   },

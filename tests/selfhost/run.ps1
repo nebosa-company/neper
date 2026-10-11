@@ -1047,6 +1047,12 @@ $algoMagneticWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $algoMagneticWritten -ne 'executable written') { throw 'algo_magnetic emission failed' }
 & $algoMagneticPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_magnetic check failed: exit $LASTEXITCODE" }
+# `e.algo.pedometer`: synthetic accelerometer walks of known cadence counted within two per cent, running told from walking, a phone on a table counting nothing.
+$algoPedometerPath = Join-Path $testBuild 'algo-pedometer-selfhost.exe'
+$algoPedometerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_pedometer\src\main.e') $repo 'x64' 'windows' $algoPedometerPath
+if ($LASTEXITCODE -ne 0 -or $algoPedometerWritten -ne 'executable written') { throw 'algo_pedometer emission failed' }
+& $algoPedometerPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_pedometer check failed: exit $LASTEXITCODE" }
 # `e.fmt.uri`: RFC 3986 parsing, the section 5.4 resolution examples, normalisation, escapes.
 $fmtUriPath = Join-Path $testBuild 'fmt-uri-selfhost.exe'
 $fmtUriWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_uri\src\main.e') $repo 'x64' 'windows' $fmtUriPath

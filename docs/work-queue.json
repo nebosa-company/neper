@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C138",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 138,
-      "title": "NeperOS Steps: the step sensor, history and goals in storage",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Steps app (D2233) counts sample steps (two a tick while Walk is on). Acceptance: (1) a step detector fed by the accelerometer through the sensor server (C131, C132) with a peak-and-threshold filter in the library and a run and walk classifier, counting in the background with a low-power rate; (2) the history of days, weeks and months kept in storage (C125), with the goal, streaks and a weekly report; (3) calories from the user's height and weight (a profile in Settings, C126) rather than the fixed 0.04 kcal per step; (4) a notification when the goal is reached through the status server and a widget on the home screen; (5) a fixture on QEMU that replays a recorded accelerometer walk and checks the count within two per cent. Not queued here: heart rate, workouts with GPS routes, sharing."
-    },
-    {
       "id": "C139",
       "category": "compiler",
       "group": "NeperOS",
@@ -1564,6 +1553,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C137 (D2426): Translate asks a dictionary server for text outside its phrase book. Acceptance: (1) translation by an on-device model from the ml modules or a real server, at least forty languages with auto-detect and offline packs kept in Files (C125); (2) fonts and shaping for Arabic, Devanagari, CJK, Cyrillic, Greek, Thai and Hebrew added to the font set the apps load; (3) input by voice (C166's speech engine), by camera (text recognition in e.gfx.vision on a Camera frame, C153) and by handwriting; (4) history and saved phrases, copy and share, speak the result through e.audio; (5) conversation mode with two languages on the two halves of the screen; (6) a fixture that translates a fixed sentence with a small test model and checks the output text."
+    },
+    {
+      "id": "C168",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 168,
+      "title": "NeperOS Steps remainder: background counting, history, profile, notifications",
+      "score": 0,
+      "model": "opus",
+      "thinking": "medium",
+      "evidence": "Split from C138 (D2427): Steps counts a walk with the library's pedometer from a scripted accelerometer stream and keeps today's total. Acceptance: (1) counting in the background at a low-power sensor rate from the sensor server (C161), with the run and walk classification shown; (2) the history of days, weeks and months in storage (C125), the goal, streaks and a weekly report; (3) calories from the user's height and weight (a profile in Settings, C126) rather than a fixed figure per step; (4) a notification when the goal is reached through the status server and a widget on the home screen; (5) a fixture that replays a recorded accelerometer walk and checks the count within two per cent."
     }
   ]
 }

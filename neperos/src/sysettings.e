@@ -37,6 +37,8 @@ const SENSOR_MAGNETOMETER: usize = 0usize
 const SENSOR_ACCELEROMETER: usize = 1usize
 // Kind 2: the gyroscope's rates (p, q, r) in mrad/s.
 const SENSOR_GYROSCOPE: usize = 2usize
+// Kind 3: the walking accelerometer's magnitude (x, in m/s^2; y and z zero) at sample `tick` of a 25 Hz stream.
+const SENSOR_WALK: usize = 3usize
 const SENSOR_BIAS: i64 = 2147483648i64
 // The torch (C133): TORCH level (0 off, 1 to 5 the brightness steps) -> the level now set. The server holds the
 // device (a simulated LED under QEMU, the camera's flash on the Pixel).

@@ -23120,3 +23120,18 @@ fn heading(mx: f64, my: f64, mz: f64, ax: f64, ay: f64, az: f64) -> f64
 ```
 
 The Earth's magnetic field (C131): `field` evaluates the World Magnetic Model WMM2025 (degree and order 12, the 2025.0 epoch and its secular variation) at a geodetic latitude, longitude, height in km and decimal year: declination, inclination, horizontal and total intensity, north, east and down components (degrees, nT), by spherical-harmonic synthesis as NOAA's reference code does. `heading` is the tilt-compensated heading in degrees from magnetometer and accelerometer vectors (x forward, y right, z down), `calibrate_hard_iron` the centre of the box around magnetometer samples. Checked against pygeomag at fourteen places and dates and against orientations from rotation matrices.
+
+
+### `e.algo.pedometer`
+
+```neper
+const WINDOW: usize = 64usize
+type Pedometer = struct {
+fn new(rate: usize) -> Pedometer
+fn history_mean_deviation(p: *Pedometer) -> (f64, f64)
+fn feed(p: *Pedometer, magnitude: f64) -> bool
+fn steps(p: *Pedometer) -> usize
+fn is_running(p: *Pedometer) -> bool
+```
+
+A step detector (C138): `new(rate)` makes a pedometer for a sample rate of 20 to 100 Hz, `feed` takes one acceleration magnitude (m/s^2, gravity included) and answers true when it completed a step, `steps` the count and `is_running` whether the cadence over the last steps is above 2.6 a second. Steps are local maxima of a three-sample moving average that rise above the mean plus half a standard deviation of the last 64 smoothed samples and come at least 250 ms apart. No allocation. Checked on synthetic walks (slow, normal, brisk, a run) within two per cent and a phone on a table.

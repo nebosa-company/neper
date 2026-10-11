@@ -19,6 +19,20 @@ fn swing_yaw(ticks: usize) -> f64 {
     ret 40.0f64 + 28.0f64 * math.sin[f64](t) + 9.0f64 * math.sin[f64](t * 2.7f64)
 }
 
+// The accelerometer magnitude (m/s^2) of a phone in the pocket of someone walking, at sample `n` of a 25 Hz
+// stream: gravity, a stride oscillation at 1.9 steps a second with its second harmonic, a slow sway and a little
+// noise from an integer hash (so the same sample is the same everywhere).
+fn walk_magnitude(n: usize) -> f64 {
+    let t = f64(n) / 25.0f64
+    var h = (n * 2654435761usize + 12345usize) % 4294967296usize
+    h = (h ^ (h >> 13usize)) * 1274126177usize % 4294967296usize
+    let noise = (f64(h % 1000usize) / 1000.0f64 - 0.5f64) * 0.6f64
+    let stride = 3.0f64 * math.sin[f64](2.0f64 * 3.141592653589793f64 * 1.9f64 * t)
+    let harmonic = 1.05f64 * math.sin[f64](2.0f64 * 3.141592653589793f64 * 3.8f64 * t + 0.7f64)
+    let sway = 0.6f64 * math.sin[f64](2.0f64 * 3.141592653589793f64 * 0.3f64 * t)
+    ret 9.81f64 + stride + harmonic + sway + noise
+}
+
 // The gyroscope: the device's angular rates (p about the forward axis, q about the right axis, r about the down
 // axis) in rad/s at tick `ticks`: the derivatives of the roll, pitch and yaw the other sensors follow.
 fn gyro(ticks: usize) -> (f64, f64, f64) {
