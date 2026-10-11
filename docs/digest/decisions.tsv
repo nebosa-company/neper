@@ -2158,4 +2158,5 @@ D2399	1776	C121 part one: `e.barcode`, and Wallet's codes are real
 D2400	1345	C121 part two: the identifier suite in e.valid and validation in Wallet's add form
 D2401	731	C121 part three: the passport's machine-readable zone check
 D2402	1508	C121 part four: reading a QR symbol out of an image, and the scan on a document
-D2403	458	C121 closed; the encrypted store, MRZ from an image, editing and camera scanning are C154
+D2403	459	C121 closed; the encrypted store, MRZ from an image, editing and camera scanning are C154
+D2404	1381	C120 part one: `e.text.terminal`, a terminal emulator in the library

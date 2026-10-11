@@ -484,6 +484,7 @@
     "text_highlight",
     "barcode",
     "barcode_scan",
+    "text_terminal",
     "fmt_xlsx",
     "gfx_cssvalue",
     "html_accessible",
@@ -704,6 +705,17 @@
     "x_lint_scan",
     "x_migrate",
     "x_migrate_terraform"
+   ]
+  },
+  {
+   "module": "e.text.terminal",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 1,
+   "delivered": 1,
+   "pending": [],
+   "fixtures": [
+    "text_terminal"
    ]
   },
   {

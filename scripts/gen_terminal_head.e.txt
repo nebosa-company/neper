@@ -1,0 +1,100 @@
+// `e.text.terminal`: byte streams fed to the emulator and to pyte (scripts/gen_terminal_test.py) and the screens
+// compared cell by cell -- character (non-ASCII shown as 3f), foreground, background and attribute bits -- with the
+// scrollback line by line and the cursor; the alternate screen, a reset and a resize have hand-written checks.
+// A check's exit code is eight times its position plus the stage that failed.
+use e.os
+use e.mem
+use e.text.terminal as term
+
+fn hex_digit(c: u8) -> usize {
+    if c >= 48u8 && c <= 57u8 { ret usize(c - 48u8) }
+    ret usize(c - 87u8)
+}
+
+// `width` hex digits of `s` from `at` as a number.
+fn hex_at(s: str, at: usize, width: usize) -> usize {
+    var v = 0usize
+    var i = 0usize
+    while i < width {
+        v = v * 16usize + hex_digit(s[at + i])
+        i += 1usize
+    }
+    ret v
+}
+
+fn shown(ch: u32) -> usize {
+    if ch >= 32u32 && ch < 127u32 { ret usize(ch) }
+    ret 63usize
+}
+
+// One cell is 18 hex digits: character (2), foreground (7), background (7), attributes (2).
+fn same_cell(c: term.Cell, dump: str, at: usize) -> bool {
+    if shown(c.ch) != hex_at(dump, at, 2usize) { ret false }
+    if usize(c.fg) != hex_at(dump, at + 2usize, 7usize) { ret false }
+    if usize(c.bg) != hex_at(dump, at + 9usize, 7usize) { ret false }
+    ret usize(c.attrs) == hex_at(dump, at + 16usize, 2usize)
+}
+
+fn run_case(a: *mem.Arena, data: str, cols: usize, rows: usize, history: usize, screen: str, hist_lines: usize, hist: str, cx: usize, cy: usize, hidden: usize) -> usize {
+    let (t, t_error) = term.open(a, cols, rows, history)
+    if t_error != ok { ret 1usize }
+    var tm = t
+    term.feed(&tm, data)
+    var y = 0usize
+    while y < rows {
+        var x = 0usize
+        while x < cols {
+            if !same_cell(term.cell(&tm, x, y), screen, (y * cols + x) * 18usize) { ret 2usize }
+            x += 1usize
+        }
+        y += 1usize
+    }
+    if tm.cx != cx || tm.cy != cy { ret 3usize }
+    if history > 0usize {
+        if term.history_lines(&tm) != hist_lines { ret 4usize }
+        var line = 0usize
+        while line < hist_lines {
+            var x = 0usize
+            while x < cols {
+                if !same_cell(term.history_cell(&tm, line, x), hist, (line * cols + x) * 18usize) { ret 5usize }
+                x += 1usize
+            }
+            line += 1usize
+        }
+    }
+    var visible = 1usize
+    if !tm.cursor_visible { visible = 0usize }
+    if visible + hidden != 1usize { ret 6usize }
+    ret 0usize
+}
+
+fn char_at(t: *term.Terminal, x: usize, y: usize) -> u32 { ret term.cell(t, x, y).ch }
+
+fn alt_case(a: *mem.Arena) -> usize {
+    let (t, t_error) = term.open(a, 10usize, 4usize, 0usize)
+    if t_error != ok { ret 1usize }
+    var tm = t
+    term.feed(&tm, "main\x1b[?1049hALT\x1b[2J\x1b[Hq")
+    if char_at(&tm, 0usize, 0usize) != 113u32 || char_at(&tm, 1usize, 0usize) != 32u32 { ret 2usize }
+    term.feed(&tm, "\x1b[?1049l")
+    if char_at(&tm, 0usize, 0usize) != 109u32 || char_at(&tm, 3usize, 0usize) != 110u32 { ret 3usize }
+    term.feed(&tm, "\x1b[?25l")
+    if tm.cursor_visible { ret 4usize }
+    term.feed(&tm, "\x1b[?25h")
+    if !tm.cursor_visible { ret 5usize }
+    let resized = term.resize(a, &tm, 6usize, 2usize)
+    if resized != ok { ret 6usize }
+    if tm.cols != 6usize || tm.rows != 2usize || char_at(&tm, 0usize, 0usize) != 109u32 { ret 7usize }
+    term.feed(&tm, "\x1bc")
+    if char_at(&tm, 0usize, 0usize) != 32u32 || tm.cx != 0usize { ret 8usize }
+    // SU and SD scroll the region without moving the cursor.
+    term.feed(&tm, "1\r\n2")
+    term.feed(&tm, "\x1b[1S")
+    if char_at(&tm, 0usize, 0usize) != 50u32 || char_at(&tm, 0usize, 1usize) != 32u32 || tm.cy != 1usize { ret 9usize }
+    term.feed(&tm, "\x1b[1T")
+    if char_at(&tm, 0usize, 0usize) != 32u32 || char_at(&tm, 0usize, 1usize) != 50u32 { ret 10usize }
+    ret 0usize
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    var r = 0usize

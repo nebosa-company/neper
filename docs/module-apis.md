@@ -22925,3 +22925,62 @@ fn qr_scan(a: *mem.Arena, luma: []const u8, width: usize, height: usize) -> ([]u
 ```
 
 QR Code, Code 128 and EAN-13 (C121, L137). `qr_encode` makes the smallest QR symbol of versions 1 to 10 for the bytes at an error-correction level (0 L, 1 M, 2 Q, 3 H) with the lowest-penalty mask, `qr_encode_with` takes a mask 0 to 7; a `Matrix` is `size` x `size` bytes, 1 for dark. `qr_decode` reads a matrix already found and sampled: the format word within three bit errors, Reed-Solomon correction per block (Berlekamp-Massey, Chien search, Forney), byte, alphanumeric and numeric segments; more damage than the code corrects is `Uncorrectable`. `code128` gives set B text or set C digit pairs as a row of modules (1 for a bar), `ean13` the 95 modules of twelve digits (check digit added) or thirteen (checked). `qr_scan` finds a symbol in an 8-bit luminance image (Otsu threshold, the three finder patterns by their 1:1:3:1:1 runs checked in both directions, an affine grid so a turn is fine and a perspective is not) and reads it, `NotFound` otherwise. Checked against the qrcode and python-barcode packages, symbols with damaged modules read back, and the refusals.
+
+
+### `e.text.terminal`
+
+```neper
+type Cell = struct { ch: u32, fg: u32, bg: u32, attrs: u32 }
+type Terminal = struct {
+const BOLD: u32 = 1u32
+const UNDERLINE: u32 = 2u32
+const REVERSE: u32 = 4u32
+const ITALIC: u32 = 8u32
+const BLINK: u32 = 16u32
+const STRIKE: u32 = 32u32
+const GROUND: u32 = 0u32
+const ESCAPE: u32 = 1u32
+const CSI: u32 = 2u32
+const OSC: u32 = 3u32
+const OSC_ESC: u32 = 4u32
+const CHARSET: u32 = 5u32
+const IGNORE_CSI: u32 = 6u32
+const BLANK: u32 = 32u32
+fn blank_cell() -> Cell
+fn open(a: *mem.Arena, cols: usize, rows: usize, scrollback: usize) -> (Terminal, err)
+fn cells_of(t: *Terminal) -> []Cell
+fn cell(t: *Terminal, x: usize, y: usize) -> Cell
+fn history_cell(t: *Terminal, line: usize, x: usize) -> Cell
+fn history_lines(t: *Terminal) -> usize
+fn clear_cells(cells: []Cell, from: usize, to: usize, fill: Cell)
+fn erase_fill(t: *Terminal) -> Cell
+fn push_history(t: *Terminal, row: usize)
+fn scroll_up(t: *Terminal, n: usize)
+fn scroll_down(t: *Terminal, n: usize)
+fn linefeed(t: *Terminal)
+fn reverse_index(t: *Terminal)
+fn put_char(t: *Terminal, cp: u32)
+fn cursor_back(t: *Terminal, count: usize)
+fn clamp_x(t: *Terminal)
+fn clamp_y(t: *Terminal)
+fn param(t: *Terminal, i: usize, fallback: i32) -> i32
+fn count_param(t: *Terminal, i: usize) -> usize
+fn erase_in_line(t: *Terminal, how: i32)
+fn erase_in_display(t: *Terminal, how: i32)
+fn insert_chars(t: *Terminal, n: usize)
+fn delete_chars(t: *Terminal, n: usize)
+fn erase_chars(t: *Terminal, n: usize)
+fn insert_lines(t: *Terminal, n: usize)
+fn delete_lines(t: *Terminal, n: usize)
+fn sgr(t: *Terminal)
+fn switch_screen(t: *Terminal, alt: bool)
+fn set_mode(t: *Terminal, on: bool)
+fn reset(t: *Terminal)
+fn dispatch_csi(t: *Terminal, final: u8)
+fn control(t: *Terminal, byte: u8)
+fn feed_byte(t: *Terminal, byte: u8)
+fn feed(t: *Terminal, data: []const u8)
+fn resize(a: *mem.Arena, t: *Terminal, cols: usize, rows: usize) -> err
+```
+
+A terminal emulator (C120): `open` makes a terminal of columns x rows with a scrollback, `feed` reads output bytes (UTF-8, BS HT LF CR, CSI cursor movement, erase, insert and delete of characters and lines, scroll up and down, scroll region, SGR with 8, 16, 256 and true colours, save and restore, cursor visibility, the alternate screen, ESC D E M c, OSC dropped), `cell` and `history_cell` read the grid and the scrollback, `resize` keeps the overlap. A colour is 0 default, 1-8 ANSI 30-37, 9-16 bright, 0x100 | n for a palette entry, 0x1000000 | rgb. Wrapping is deferred; erase fills with the current rendition, scrolling with the default. No double-width characters. Checked cell by cell against pyte on twenty-one streams.

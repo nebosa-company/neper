@@ -1153,6 +1153,11 @@ barcode_scan_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$barcode_scan_written" = 'executable written' ]
 chmod +x "$test_build/barcode-scan-selfhost"
 "$test_build/barcode-scan-selfhost"
+# e.text.terminal: bytes fed to the emulator and to pyte, the screens compared cell by cell, the scrollback and the cursor.
+text_terminal_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_terminal/src/main.e" "$repo" x64 linux "$test_build/text-terminal-selfhost")
+[ "$text_terminal_written" = 'executable written' ]
+chmod +x "$test_build/text-terminal-selfhost"
+"$test_build/text-terminal-selfhost"
 "$test_build/text-highlight-selfhost"
 # `e.test.support`: the clock, the scripted reader and writer, the schedule.
 test_support_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_support/src/main.e" "$repo" x64 linux "$test_build/test-support-selfhost")

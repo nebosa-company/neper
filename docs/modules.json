@@ -53,6 +53,7 @@
     "e.fmt.pdf",
     "e.text.highlight",
     "e.barcode",
+    "e.text.terminal",
     "e.fmt.csv",
     "e.fmt.ini",
     "e.text.utf8",
@@ -1968,6 +1969,17 @@
   },
   {
    "name": "e.barcode",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.terminal",
    "layer": 2,
    "surface": "source",
    "milestone": null,

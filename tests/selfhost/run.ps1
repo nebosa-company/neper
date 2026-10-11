@@ -1245,6 +1245,12 @@ $barcodeScanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $barcodeScanWritten -ne 'executable written') { throw 'barcode_scan emission failed' }
 & $barcodeScanPath
 if ($LASTEXITCODE -ne 0) { throw "a barcode_scan check failed: exit $LASTEXITCODE" }
+# e.text.terminal: bytes fed to the emulator and to pyte, the screens compared cell by cell, the scrollback and the cursor.
+$textterminalPath = Join-Path $testBuild 'text-terminal-selfhost.exe'
+$textterminalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_terminal\src\main.e') $repo 'x64' 'windows' $textterminalPath
+if ($LASTEXITCODE -ne 0 -or $textterminalWritten -ne 'executable written') { throw 'text_terminal emission failed' }
+& $textterminalPath
+if ($LASTEXITCODE -ne 0) { throw "a text_terminal check failed: exit $LASTEXITCODE" }
 # `e.test.support`: the clock, the scripted reader and writer, the schedule.
 $testSupportPath = Join-Path $testBuild 'test-support-selfhost.exe'
 $testSupportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_support\src\main.e') $repo 'x64' 'windows' $testSupportPath
