@@ -3916,6 +3916,12 @@ $textSigWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $textSigWritten -ne 'executable written') { throw 'text_sig emission failed' }
 $textSigOutput = & $textSigPath
 if ($LASTEXITCODE -ne 0 -or $textSigOutput -ne 'text sig ok') { throw "text_sig answered wrongly: exit $LASTEXITCODE" }
+# e.text.encoding.detect_legacy: byte-frequency charset detection against a Python port of the model (258 vectors, D2720).
+$textCharsetPath = Join-Path $testBuild 'text-charset-selfhost.exe'
+$textCharsetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_charset\src\main.e') $repo 'x64' 'windows' $textCharsetPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textCharsetWritten -ne 'executable written') { throw 'text_charset emission failed' }
+$textCharsetOutput = & $textCharsetPath
+if ($LASTEXITCODE -ne 0 -or $textCharsetOutput -ne 'text charset ok') { throw "text_charset answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

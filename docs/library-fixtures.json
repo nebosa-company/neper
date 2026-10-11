@@ -2728,10 +2728,11 @@
    "module": "e.text.encoding",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 29,
-   "delivered": 29,
+   "catalogue": 36,
+   "delivered": 36,
    "pending": [],
    "fixtures": [
+    "text_charset",
     "text_encoding",
     "text_gaps",
     "text_io"

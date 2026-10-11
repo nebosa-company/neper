@@ -3499,6 +3499,12 @@ text_sig_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/text-sig-selfhost"
 text_sig_output=$("$test_build/text-sig-selfhost")
 [ "$text_sig_output" = 'text sig ok' ]
+# e.text.encoding.detect_legacy: byte-frequency charset detection against a Python port of the model (258 vectors, D2720).
+text_charset_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_charset/src/main.e" "$repo" x64 linux "$test_build/text-charset-selfhost" -j 2)
+[ "$text_charset_written" = 'executable written' ]
+chmod +x "$test_build/text-charset-selfhost"
+text_charset_output=$("$test_build/text-charset-selfhost")
+[ "$text_charset_output" = 'text charset ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

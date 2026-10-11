@@ -431,3 +431,127 @@ fn detect(src: []const u8) -> Guess {
     }
     ret Guess { encoding: .Utf8, confidence: 0u8 }
 }
+
+// Legacy single-byte detection: a unigram byte-frequency model per charset, trained by
+// scripts/gen_charset_test.py on the languages that charset serves. Only bytes past
+// 0x7F carry information. Each candidate's cost is the sum of its per-byte costs
+// (half-bits, -2*log2 of a smoothed frequency); with the cost of a byte standing beside another high byte or alone; the cheapest wins, and the confidence
+// is a naive-Bayes posterior with every gap tempered (a gap of one half-bit is worth
+// a factor 0.917, not 0.707), so a handful of bytes never reads as certain. Pure
+// ASCII answers `LEGACY_COUNT` ("us-ascii") at 60: every candidate shares it.
+// ponytail: unigram only and no multi-byte CJK charsets (Shift_JIS, GBK, Big5,
+// EUC-*); windows-1252 stands for ISO-8859-1 and -15 as well, and ISO-8859-9 and
+// -13 are not told from windows-1254 and -1257.
+type LegacyGuess = struct { charset: u8, confidence: u8 }
+
+fn detect_legacy(src: []const u8) -> LegacyGuess {
+    var counts: [128]u32 = zero
+    var high = 0usize
+    var joined = 0u64
+    var i = 0usize
+    while i < src.len {
+        if src[i] >= 128u8 {
+            counts[usize(src[i] - 128u8)] += 1u32
+            high += 1usize
+            if i > 0usize && src[i - 1usize] >= 128u8 { joined += 1u64 }
+        }
+        i += 1usize
+    }
+    let lone = u64(high) - joined
+    if high == 0usize { ret LegacyGuess { charset: u8(LEGACY_COUNT), confidence: 60u8 } }
+    var cost: [16]u64 = zero
+    var c = 0usize
+    while c < LEGACY_COUNT {
+        let t = legacy_table(c)
+        var b = 0usize
+        var sum = 0u64
+        while b < 128usize {
+            sum += u64(counts[b]) * u64(t[b] - 48u8)
+            b += 1usize
+        }
+        // A script of its own (Cyrillic, Greek, Hebrew, Arabic) runs its high bytes
+        // together; an accent inside Latin text stands alone. Two more costs per model.
+        sum += joined * u64(t[128] - 48u8) + lone * u64(t[129] - 48u8)
+        cost[c] = sum
+        c += 1usize
+    }
+    var best = 0usize
+    c = 1usize
+    while c < LEGACY_COUNT {
+        if cost[c] < cost[best] { best = c }
+        c += 1usize
+    }
+    var rest = 0u64
+    c = 0usize
+    while c < LEGACY_COUNT {
+        if c != best {
+            var gap = cost[c] - cost[best]
+            if gap > 400u64 { gap = 400u64 }
+            var w = 100000u64
+            var s = 0u64
+            while s < gap {
+                w = w * 917u64 / 1000u64
+                s += 1u64
+            }
+            rest += w
+        }
+        c += 1usize
+    }
+    var conf = 10000000u64 / (100000u64 + rest)
+    if conf > 99u64 { conf = 99u64 }
+    ret LegacyGuess { charset: u8(best), confidence: u8(conf) }
+}
+
+fn encoding_name(encoding: Encoding) -> str {
+    if encoding == .Utf8 { ret "utf-8" }
+    if encoding == .Utf16Le { ret "utf-16le" }
+    if encoding == .Utf16Be { ret "utf-16be" }
+    if encoding == .Utf32Le { ret "utf-32le" }
+    ret "utf-32be"
+}
+
+// The one-call answer: this module's own `detect` where it is sure, else the legacy
+// model. A name and a confidence.
+fn detect_name(src: []const u8) -> (str, u8) {
+    let g = detect(src)
+    if g.confidence != 0u8 { ret (encoding_name(g.encoding), g.confidence) }
+    let l = detect_legacy(src)
+    ret (legacy_name(usize(l.charset)), l.confidence)
+}
+
+// BEGIN generated tables (scripts/gen_charset_test.py)
+const LEGACY_COUNT: usize = 12usize
+
+fn legacy_name(id: usize) -> str {
+    if id == 0usize { ret "windows-1252" }
+    if id == 1usize { ret "windows-1250" }
+    if id == 2usize { ret "iso-8859-2" }
+    if id == 3usize { ret "windows-1251" }
+    if id == 4usize { ret "koi8-r" }
+    if id == 5usize { ret "iso-8859-5" }
+    if id == 6usize { ret "ibm866" }
+    if id == 7usize { ret "iso-8859-7" }
+    if id == 8usize { ret "windows-1254" }
+    if id == 9usize { ret "windows-1255" }
+    if id == 10usize { ret "windows-1256" }
+    if id == 11usize { ret "windows-1257" }
+    ret "us-ascii"
+}
+
+// Per-byte cost of 0x80..0xFF under each model: the character is '0' plus the cost.
+fn legacy_table(id: usize) -> str {
+    if id == 0usize { ret "@RNBNNNNNNDNDRDRRN@@@=@@NNBNBRBDNNNNNNNNNNDNNNNNNNNNNBNNNNDNNNN@@DDD@DD@DD@DDDDDDDDDDDDNDDDD>DD;9;?9779:86;B=:B?B:=:B?8N:;??9BBB90" }
+    if id == 1usize { ret "MRMRMMMMRMDMDDD?RMMMMMMMRM;M=A;>MMM?MDMMMMDMMMM?MMM8MAMMM;9MDMA;DDDDDDDDDDDDDDDDDDDDD?DM?DDDDD?AA7;7AA;A;7<A99:AA>A9A=:M:;=A;==M80" }
+    if id == 2usize { ret "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMDM?MDDMMDDD?MD?M;M8MA=MM;9A>M;;DDDDDDDDDDDDDDDDDDDDD?DM?DDDDD?AA7;7AA;A;7<A99:AA>A9A=:M:;=A;==M80" }
+    if id == 3usize { ret "HHRFRRRRRRHRHHHHFRRRRRRRVRFRFFFFRHFHRHRRHRHRRRRHRRH;FFRRAR?RFHF>HHDHHHHBHHDH@HHDHBDBHDDHHHHHHDHD7=9;98=<8>9;996;9:8:C?@;=???>B>;14" }
+    if id == 4usize { ret "OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO>OOOOOOOOOOOOOOOFOOOOOOOOOOOO=7=C98C:?8>::996;;9:7:=:<=<=?@<@FFFFFFFFFFFFF>FFAAFFFFFFFFAFAFFF15" }
+    if id == 5usize { ret "QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQGGGGGGGGGGGGQGGGGCGGGGCGGGG?GGCGACCGGGGGGGGGCGC6=:;97=<8>:;:96;997:B@B;=?>>>A?;Q@EEEEEEEEEEEQEE14" }
+    if id == 6usize { ret "FFFFFFFAFFFF>FFAFFFFFFFFFFFFFAFA7=::98=<8>::996;OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO9:7:C?C<=@@=<?=;F>FCFCFCOOOOOOOO15" }
+    if id == 7usize { ret "OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOSOOOOOOOFOFFFOFOFFC?FFFAFAFFFFFFFAFFSFAFFFFFFF<;<:C6=;<8>;=8:::8?799;98:>>C>CC;<@S14" }
+    if id == 8usize { ret "JNJ>JJJJJJ@J@NNNNJJJJJJJJJ>J>NN@JJJJJJJJJJ@JJJJJJJJJJ>JJJJ@JJJJJ@@@@@@@<@@@@@@@@@@@@@@@J@@@@@<@>>>>>>>>6>>>>>>>>7>>>>>:J>>>>667>60" }
+    if id == 9usize { ret "MRMBMMMMMMRMRRRRRMMMMMMMMMRMRRRRMMMMMMMMMMMMMMMMMMMMMBMMMMMMMMMMMMMMMMMMMMRMMMMMMMMMDDDMMRRRRRRR99>976=9?6?:899>:;:D<D>=7:9RRMMR14" }
+    if id == 10usize { ret "NDNBNNNNNNDNDDDDDNNNNNNNDNDNBNNDN@NNNNNNNNDNNNNNNNNNNBNNNNNNNNNND=@;D>@69:9<<:>:=:D;D@@N=@:@N:;<B6B88::BBBBB=8BBNNNNBNNNNBNBBNND14" }
+    if id == 11usize { ret "JOJOJJJJOJOJOJJJOJJJJJJJOJOJOJJOJOJJJOJJAJAJJJJAJJJJJ?JJ?J?JJJJ?AAAAAAAAAAAAAAAA:AAAAAAJAAAAAAA?995????7???7??7<9?9????J<??9??9J80" }
+    ret "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+}
+// END generated tables

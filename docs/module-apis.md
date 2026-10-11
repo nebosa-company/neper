@@ -6819,10 +6819,12 @@ type InvalidPolicy = enum u8 { Reject, Replace }
 type Decoder = struct { encoding: Encoding, policy: InvalidPolicy, pending: [4]u8, pending_len: u8, bom_seen: bool }
 type Encoder = struct { encoding: Encoding, emit_bom: bool, started: bool }
 type Guess = struct { encoding: Encoding, confidence: u8 }
+type LegacyGuess = struct { charset: u8, confidence: u8 }
 error Invalid
 error Incomplete
 error TooSmall
 const REPLACEMENT: u32 = 65533u32
+const LEGACY_COUNT: usize = 12usize
 
 fn detect_bom(src: []const u8) -> (Encoding, usize, bool)
 fn decoder(encoding: Encoding, policy: InvalidPolicy, consume_bom: bool) -> Decoder
@@ -6844,13 +6846,27 @@ fn to_utf8(a: *mem.Arena, encoding: Encoding, src: []const u8, policy: InvalidPo
 fn from_utf8(a: *mem.Arena, encoding: Encoding, src: str, emit_bom: bool) -> ([]u8, err)
 fn decodes(encoding: Encoding, src: []const u8) -> bool
 fn detect(src: []const u8) -> Guess
+fn detect_legacy(src: []const u8) -> LegacyGuess
+fn encoding_name(encoding: Encoding) -> str
+fn detect_name(src: []const u8) -> (str, u8)
+fn legacy_name(id: usize) -> str
+fn legacy_table(id: usize) -> str
 ```
 
 The streaming calls return consumed source bytes followed by written destination
 bytes. `TooSmall` is resumable and consumes only complete scalar values. `final`
 reports a trailing partial sequence as `Incomplete`; `Replace` emits U+FFFD for each
 maximal invalid subsequence. This toolchain module intentionally excludes locale and
-legacy code pages.
+legacy code pages as decoders.
+
+`detect_legacy` names the likeliest single-byte charset of bytes that are not UTF
+(`legacy_name`: windows-1252, windows-1250, iso-8859-2, windows-1251, koi8-r,
+iso-8859-5, ibm866, iso-8859-7, windows-1254, windows-1255, windows-1256,
+windows-1257; `us-ascii` when no byte passes 0x7F) with a tempered naive-Bayes
+confidence from per-charset byte-frequency tables (`scripts/gen_charset_test.py`
+regenerates them from `scripts/charset_corpus.py`). `detect_name` is the one-call
+form over `detect` and `detect_legacy`. Not here: CJK multi-byte charsets, bigram
+models, and a decoder for any legacy page.
 
 ### `e.text.utf8`
 
