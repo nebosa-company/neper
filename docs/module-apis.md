@@ -7562,6 +7562,67 @@ block shares these budgets; empty repeats consume steps and oversized writes fai
 before reaching the sink. The explicit-limit APIs accept larger budgets; zero selects
 the defaults. A `TooLarge` error can leave already-written output in the caller's sink.
 
+### `e.text.report`
+
+```neper
+type Severity = enum u8 { Error, Warning, Advice }
+type Label = struct { start: usize, end: usize, message: str, primary: bool }
+type Note = struct { kind: str, text: str }
+type Report = struct { severity: Severity, code: str, message: str, source_name: str, source: str, labels: []const Label, notes: []const Note }
+type Options = struct { context: usize, tab_width: usize, wrap: usize, color: bool }
+type Segment = struct { line: usize, from: usize, to: usize, primary: bool, message: str }
+error Invalid
+error TooSmall
+type Work = struct { segments: []Segment, count: usize, order: []usize, shown: []bool, row: []u8, kinds: []u8, bounds: []usize, scratch: []usize, w: usize, total: usize }
+
+fn options_default() -> Options
+fn is_continuation(b: u8) -> bool
+fn decode_at(s: str, at: usize) -> (u32, usize)
+fn char_width(cp: u32) -> usize
+fn line_count(source: str) -> usize
+fn line_bounds(source: str, n: usize) -> (usize, usize)
+fn line_of(source: str, offset: usize) -> usize
+fn span_width(source: str, from: usize, to: usize, tab_width: usize) -> usize
+fn valid_offset(source: str, offset: usize) -> bool
+fn validate(r: *const Report) -> err
+fn digits_of(n: usize) -> usize
+fn indent_cols(source: str, start: usize, end: usize, tab_width: usize) -> usize
+fn label_segments(source: str, l: Label, tab_width: usize, out: []Segment, at: usize) -> usize
+fn push_spaces(b: *str.Builder, n: usize) -> err
+fn push_expanded(b: *str.Builder, line: str, tab_width: usize) -> err
+fn paint(b: *str.Builder, on: bool, code: str) -> err
+fn severity_name(s: Severity) -> str
+fn severity_code(s: Severity) -> str
+fn push_gutter_row(b: *str.Builder, w: usize, body: str, color: bool) -> err
+fn push_marks(b: *str.Builder, row: []const u8, kinds: []const u8, used: usize, color: bool) -> err
+fn put_text(row: []u8, kinds: []u8, at: usize, s: str, kind: u8) -> usize
+fn digits_row(b: *str.Builder, w: usize, number: usize, color: bool) -> err
+fn blank(row: []u8, kinds: []u8, n: usize)
+fn kind_of(primary: bool) -> u8
+fn push_row(b: *str.Builder, wk: *const Work, used: usize, color: bool) -> err
+fn annotate(b: *str.Builder, wk: *Work, line: usize, color: bool) -> err
+fn notes_out(b: *str.Builder, r: *const Report, wk: *Work, wrap_width: usize, color: bool) -> err
+fn emit(b: *str.Builder, r: *const Report, o: Options, wk: *Work) -> err
+fn push_blank_gutter(b: *str.Builder, w: usize, color: bool) -> err
+fn render(a: *mem.Arena, r: *const Report, o: Options) -> (str, err)
+```
+
+Diagnostic reports for applications, in the manner of miette and rustc, as plain text on a
+terminal grid: a severity, a code and a message; the location of the first primary label
+(`--> name:line:col`); the source lines the labels point into with the underline and message
+beneath; then notes (`= help: ...`) word-wrapped with `e.text.wrap` and aligned under the
+first line. A `Label` is a byte range with a message and a primary flag (`^` marks for primary,
+`-` for others). Labels on one line share an underline row: the rightmost message is written
+after its marks and the others hang below on `|` connectors, right to left; a label across
+lines marks the rest of its first line and the start of its last, with the message there.
+`context` lines beside a labelled line are shown and a gap between shown groups is `...`.
+Tabs expand to `tab_width` spaces and a column is a code point except East Asian wide and
+emoji (two) and combining marks (zero) (`char_width`); the location column counts a tab as one.
+`Options.color` wraps the header and marks in ANSI SGR. Offsets must lie on UTF-8 boundaries
+inside the source, ordered start to end, or `render` answers `Invalid`. Columns are those of
+a terminal grid, not a shaped layout: proportional text is `e.text.layout`'s job, and no new
+diagnostic codes are defined here.
+
 ### `e.text.regex`
 
 ```neper

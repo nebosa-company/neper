@@ -3952,6 +3952,12 @@ $cliLineWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $cliLineWritten -ne 'executable written') { throw 'cli_line emission failed' }
 $cliLineOutput = & $cliLinePath
 if ($LASTEXITCODE -ne 0 -or $cliLineOutput -ne 'cli line ok') { throw "cli_line answered wrongly: exit $LASTEXITCODE" }
+# e.text.report: diagnostic reports against a second canvas-based renderer, 150 reports plus hand cases (D2566).
+$textReportPath = Join-Path $testBuild 'text-report-selfhost.exe'
+$textReportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_report\src\main.e') $repo 'x64' 'windows' $textReportPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textReportWritten -ne 'executable written') { throw 'text_report emission failed' }
+$textReportOutput = & $textReportPath
+if ($LASTEXITCODE -ne 0 -or $textReportOutput -ne 'text report ok') { throw "text_report answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2
