@@ -10,6 +10,10 @@
 // Real capture and playback through e.audio, files in storage and a speech-to-text model are queued as
 // C136.
 use e.mem
+use e.math
+use e.audio as audio
+use e.fmt.wav as wav
+use vaultfs
 use e.os
 use e.gfx.geometry
 use e.gfx.paint
@@ -28,9 +32,14 @@ const LIST_SCREEN: usize = 0usize
 const RECORD_SCREEN: usize = 1usize
 const PLAY_SCREEN: usize = 2usize
 
-type Rec = struct { name: [24]u8, name_len: usize, seconds: usize, ago: usize, seed: usize, sample: bool, used: bool }
+// `real` recordings are WAV files in /Recordings (file `file_no`): their wave is `peaks` (the loudest sample of
+// each 1/48 of the recording, 0 to 100) and `checksum` the sum of their sample bytes modulo 65521.
+type Rec = struct { name: [24]u8, name_len: usize, seconds: usize, ago: usize, seed: usize, sample: bool, used: bool, real: bool, file_no: usize, peaks: [48]u8, checksum: usize }
 
 type State = struct {
+    // The wave being drawn for a recording that has peaks.
+    view: [48]u8,
+    use_view: bool,
     recs: [10]Rec,
     rec_total: usize,
     screen: usize,
@@ -73,6 +82,164 @@ fn mmss(a: *mem.Arena, seconds: usize) -> str {
     ret ui.join(a, ui.number(a, seconds / 60usize), ":", ui.two(a, seconds % 60usize))
 }
 
+// ----------------------------------------------------------------------------------------------
+// Recordings as files (C136): 8 kHz mono 16-bit WAV in /Recordings.
+
+const RATE: usize = 8000usize
+
+// The scripted microphone: a tone whose pitch depends on `seed` under a slow swell, as 16-bit little-endian
+// samples, `seconds` of them.
+fn scripted_mic(seed: usize, seconds: usize, out: []u8) {
+    let frames = seconds * RATE
+    let pitch = 220.0 + 40.0 * f32(seed % 7usize)
+    var n = 0usize
+    while n < frames && 2usize * n + 1usize < out.len {
+        let t = f32(n) / 8000.0
+        let swell = 0.55 + 0.45 * math.sin(t * 2.1)
+        let v = i32(9000.0 * swell * math.sin(t * pitch * 6.2831853))
+        let u = u32(v + 65536) & 65535u32
+        out[2usize * n] = u8(u & 255u32)
+        out[2usize * n + 1usize] = u8(u >> 8u32)
+        n += 1usize
+    }
+}
+
+// The 16-bit sample at frame `n` of little-endian bytes.
+fn sample_at(bytes: []const u8, n: usize) -> i32 {
+    let u = u32(bytes[2usize * n]) | (u32(bytes[2usize * n + 1usize]) << 8u32)
+    if u >= 32768u32 { ret i32(u) - 65536i32 }
+    ret i32(u)
+}
+
+// The 48 peaks (0 to 100) and the byte checksum of `frames` samples.
+fn analyse(bytes: []const u8, frames: usize, peaks: []u8) -> usize {
+    var sum = 0usize
+    var i = 0usize
+    while i < 48usize {
+        var top = 0i32
+        let from = i * frames / 48usize
+        let to = (i + 1usize) * frames / 48usize
+        var n = from
+        while n < to {
+            var v = sample_at(bytes, n)
+            if v < 0i32 { v = 0i32 - v }
+            if v > top { top = v }
+            n += 1usize
+        }
+        var h = usize(top) * 100usize / 10000usize
+        if h > 100usize { h = 100usize }
+        if h < 6usize { h = 6usize }
+        peaks[i] = u8(h)
+        i += 1usize
+    }
+    var k = 0usize
+    while k < 2usize * frames {
+        sum = (sum + usize(bytes[k])) % 65521usize
+        k += 1usize
+    }
+    ret sum
+}
+
+fn file_path(a: *mem.Arena, number: usize) -> str {
+    var digits: [4]u8 = zero
+    var rest = number
+    var i = 4usize
+    while i > 0usize {
+        i -= 1usize
+        digits[i] = u8(48usize + rest % 10usize)
+        rest = rest / 10usize
+    }
+    ret ui.join(a, "/Recordings/REC_", ui.text_of(a, digits[0usize..], 4usize), ".wav")
+}
+
+// The number of the first REC_nnnn.wav not there yet.
+fn next_number(a: *mem.Arena) -> usize {
+    var n = 1usize
+    while n < 10000usize {
+        let (size, kind, day, found) = vaultfs.stat(file_path(a, n))
+        if !found { ret n }
+        n += 1usize
+    }
+    ret n
+}
+
+// Record `seconds` from the scripted microphone and keep them as a WAV file: the file number, or 0.
+fn save_recording(a: *mem.Arena, s: *State, seconds: usize) -> usize {
+    var length = seconds
+    if length > 20usize { length = 20usize }
+    let data_len = length * RATE * 2usize
+    let (pcm, pcm_error) = mem.alloc[u8](a, data_len)
+    if pcm_error != ok { ret 0usize }
+    scripted_mic(s.rec_total + 3usize, length, pcm)
+    let frames = audio.Frames { bytes: pcm, format: audio.Format { rate: u32(RATE), channels: 1u8, sample: .I16 }, count: length * RATE }
+    let (file, encode_error) = wav.encode(a, frames)
+    if encode_error != ok { ret 0usize }
+    let made = vaultfs.mkdir("/Recordings")
+    let number = next_number(a)
+    if !vaultfs.write_big(file_path(a, number), mem.address_of(&file[0usize]), file.len) { ret 0usize }
+    var peaks: [48]u8 = zero
+    let checksum = analyse(pcm, length * RATE, peaks[0usize..48usize])
+    add_rec(s, ui.join(a, "Recording ", ui.number(a, number), ""), length, 0usize, number, false)
+    s.recs[0usize].real = true
+    s.recs[0usize].file_no = number
+    s.recs[0usize].checksum = checksum
+    var p = 0usize
+    while p < 48usize {
+        s.recs[0usize].peaks[p] = peaks[p]
+        p += 1usize
+    }
+    ret number
+}
+
+// The files already in /Recordings, newest numbers first: their length and wave from the WAV itself.
+fn load_recordings(a: *mem.Arena, s: *State) -> usize {
+    var names: [512]u8 = zero
+    let (listed, has_list) = vaultfs.list("/Recordings", mem.address_of(&names[0usize]), 512usize)
+    if !has_list { ret 0usize }
+    var loaded = 0usize
+    var start = 0usize
+    var at = 0usize
+    while at < listed {
+        if names[at] == 10u8 {
+            let name = names[start..at]
+            // REC_nnnn.wav
+            if name.len == 12usize && name[0usize] == 82u8 && name[1usize] == 69u8 && name[2usize] == 67u8 {
+                let number = usize(name[4usize] - 48u8) * 1000usize + usize(name[5usize] - 48u8) * 100usize + usize(name[6usize] - 48u8) * 10usize + usize(name[7usize] - 48u8)
+                let path = file_path(a, number)
+                let (size, kind, day, found) = vaultfs.stat(path)
+                if found && size > 44usize && size <= 400000usize {
+                    let (raw, raw_error) = mem.alloc[u8](a, size)
+                    if raw_error == ok {
+                        let (got, read_ok) = vaultfs.read_big(path, mem.address_of(&raw[0usize]), size)
+                        if read_ok && got == size {
+                            let (decoder, open_error) = wav.open(a, raw[0usize..got])
+                            if open_error == ok && decoder.format.sample == .I16 && decoder.format.channels == 1u8 {
+                                let frames = wav.frame_count(decoder)
+                                let seconds = frames / usize(decoder.format.rate)
+                                var peaks: [48]u8 = zero
+                                let checksum = analyse(raw[decoder.data_start..got], frames, peaks[0usize..48usize])
+                                add_rec(s, ui.join(a, "Recording ", ui.number(a, number), ""), seconds, 1440usize, number, false)
+                                s.recs[0usize].real = true
+                                s.recs[0usize].file_no = number
+                                s.recs[0usize].checksum = checksum
+                                var p = 0usize
+                                while p < 48usize {
+                                    s.recs[0usize].peaks[p] = peaks[p]
+                                    p += 1usize
+                                }
+                                loaded += 1usize
+                            }
+                        }
+                    }
+                }
+            }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    ret loaded
+}
+
 // The height (0..100) of bar `i` of a recording's wave.
 fn wave_at(seed: usize, i: usize) -> usize {
     var x = (seed * 7919usize + i * 104729usize + 12345usize) & 2147483647usize
@@ -103,7 +270,7 @@ fn bars(a: *mem.Arena, builder: *scene.Builder, s: *State, seed: usize, count: u
     let pitch: f32 = w / f32(count)
     while i < count {
         var height: f32 = 0.0
-        if live { height = f32(s.live[i]) } else { height = f32(wave_at(seed, i)) }
+        if live { height = f32(s.live[i]) } else if s.use_view { height = f32(s.view[i]) } else { height = f32(wave_at(seed, i)) }
         height = height / 100.0 * h
         if height < 4.0 { height = 4.0 }
         var tone = ui.soft()
@@ -202,7 +369,15 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if id == 110usize {
             var seconds = s.ticks / 2usize
             if seconds < 1usize { seconds = 1usize }
-            add_rec(s, ui.join(a, "Recording ", ui.number(a, s.rec_total + 1usize), ""), seconds, 0usize, s.rec_total * 7usize + 3usize, false)
+            let number = save_recording(a, s, seconds)
+            if number == 0usize {
+                add_rec(s, ui.join(a, "Recording ", ui.number(a, s.rec_total + 1usize), ""), seconds, 0usize, s.rec_total * 7usize + 3usize, false)
+            } else {
+                // The checksum and the wave of what was just written: read from the scripted source again.
+                ui.say("recorder wrote /Recordings/REC_")
+                ui.say_text(ui.number(a, number))
+                ui.say(".wav\n")
+            }
             ui.say("recorder saved ")
             ui.say_num(seconds)
             ui.say("s\n")
@@ -219,7 +394,16 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         }
         if id == 300usize {
             s.playing = !s.playing
-            if s.playing { ui.say("recorder playing\n") } else { ui.say("recorder paused\n") }
+            if s.playing {
+                ui.say("recorder playing\n")
+                if s.recs[s.open].real {
+                    ui.say("recorder bytes ")
+                    ui.say_text(ui.number(a, s.recs[s.open].checksum))
+                    ui.say("\n")
+                }
+            } else {
+                ui.say("recorder paused\n")
+            }
             ret true
         }
         if id == 301usize {
@@ -232,6 +416,9 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             ret true
         }
         if id == 310usize {
+            if s.recs[s.open].real {
+                let gone = vaultfs.remove(file_path(a, s.recs[s.open].file_no))
+            }
             var k = s.open + 1usize
             while k < s.rec_total {
                 s.recs[k - 1usize] = s.recs[k]
@@ -262,6 +449,14 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             s.screen = PLAY_SCREEN
             s.head = 0usize
             s.playing = false
+            s.use_view = s.recs[s.open].real
+            if s.use_view {
+                var p = 0usize
+                while p < 48usize {
+                    s.view[p] = s.recs[s.open].peaks[p]
+                    p += 1usize
+                }
+            }
             ui.say("recorder open ")
             ui.say_text(rec_name(a, s, s.open))
             ui.say("\n")
@@ -287,6 +482,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     add_rec(&s, "Ideas", 62usize, 14400usize, 5usize, true)
     add_rec(&s, "Shopping list", 18usize, 2000usize, 6usize, true)
     add_rec(&s, "Weekly plan", 134usize, 300usize, 4usize, true)
+    let kept = load_recordings(a, &s)
+    if kept > 0usize {
+        ui.say("recorder loaded ")
+        ui.say_text(ui.number(a, kept))
+        ui.say("\n")
+    }
     if !show(a, &kit, &s) {
         ui.say("recorder present failed\n")
         ret ok

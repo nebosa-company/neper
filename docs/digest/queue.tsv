@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-C136	compiler	0	797	NeperOS Recorder: real capture and playback, storage and transcription	The Recorder app (D2231) draws a sample wave and keeps recordings in the process.
 C137	compiler	0	916	NeperOS Translate: a real translation model, more languages, camera and voice input	The Translate app (D2232) uses a sample book of eight phrases in six languages.
 C138	compiler	0	821	NeperOS Steps: the step sensor, history and goals in storage	The Steps app (D2233) counts sample steps (two a tick while Walk is on).
 C139	compiler	0	968	NeperOS Blocks: held keys, hold, a ghost piece, high scores, sound	The Blocks app (D2234, called Lunatris until D2241) plays a falling-blocks game on tap buttons with the piece falling on the 500 ms tick.
@@ -141,3 +140,4 @@ C162	compiler	0	700	NeperOS Level remainder: fast sensor stream, self-test, orie
 C163	compiler	0	588	NeperOS Flashlight remainder: a finer timer, quick toggles, patterns, torch policy	Split from C133 (D2422): the Flashlight drives a simulated torch through the settings server.
 C164	compiler	0	714	NeperOS Chat remainder: TLS, accounts and presence, history, files, encryption	Split from C134 (D2423): the Chat app talks to a loopback WebSocket server for the general room.
 C165	compiler	0	771	NeperOS Meet remainder: media transport, capture, codecs, screen sharing	Split from C135 (D2424): Meet signals over a WebSocket and shows the people and the speaker the server names.
+C166	compiler	0	717	NeperOS Recorder remainder: the microphone and speaker, transcription, background recording	Split from C136 (D2425): the Recorder keeps WAV files of a scripted microphone and plays their bytes back.

@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C136",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 136,
-      "title": "NeperOS Recorder: real capture and playback, storage and transcription",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Recorder app (D2231) draws a sample wave and keeps recordings in the process. Acceptance: (1) capture from the microphone and playback to the speaker through e.audio (C122's server family), with the level meter driven by the real samples and the wave built from them; (2) recordings saved as files (Opus or WAV from the library) in Files (C125) with rename, share and delete, search by name; (3) a speech-to-text model run on the device or on a server (C117) for the transcript, with words timed to the playhead and tap-to-seek; (4) recording in the background with a notification and the lock-screen control; (5) a fixture on QEMU that records from a scripted audio source and plays it back checking the bytes. Not queued here: speaker labels, translation, noise removal."
-    },
-    {
       "id": "C137",
       "category": "compiler",
       "group": "NeperOS",
@@ -1564,6 +1553,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C135 (D2424): Meet signals over a WebSocket and shows the people and the speaker the server names. Acceptance: (1) media over C117 (needs UDP in the network server): a WebRTC-style stack (ICE, DTLS-SRTP) or a simple SFU protocol; (2) capture: the camera frames from the camera server (C153) and the microphone from e.audio, encoded and sent with a codec from the library, the received streams decoded into the tiles; (3) the speaker and grid layouts follow the audio levels; (4) screen sharing from the compositor, raise hand visible to others, chat in the meeting (C134/C164), captions; (5) echo cancellation, noise suppression and bandwidth adaptation; (6) a fixture with two clients in one machine against a relay that exchanges test frames and checks them."
+    },
+    {
+      "id": "C166",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 166,
+      "title": "NeperOS Recorder remainder: the microphone and speaker, transcription, background recording",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C136 (D2425): the Recorder keeps WAV files of a scripted microphone and plays their bytes back. Acceptance: (1) capture from the microphone and playback to the speaker through e.audio (an audio server with a device under QEMU and the Pixel's later), the level meter driven by the real samples; (2) Opus or a compressed format from the library, rename, share and delete, search by name; (3) a speech-to-text model on the device or on a server (C117) for the transcript with words timed to the playhead and tap-to-seek; (4) recording in the background with a notification and the lock-screen control; (5) a fixture that records from a scripted audio source and plays it back checking the bytes at the device."
     }
   ]
 }
