@@ -1545,6 +1545,12 @@ $algoStatTestWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $algoStatTestWritten -ne 'executable written') { throw 'algo_stat_test emission failed' }
 & $algoStatTestPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_stat_test check failed: exit $LASTEXITCODE" }
+# e.algo.stat.infer (L056): z and proportion tests, chi-squared independence, Levene, Bartlett, studentized range, Tukey HSD, noncentral t power and sample size, mode and weighted descriptives against SciPy, statsmodels and NumPy (119 cases, D2540).
+$algoStatInferPath = Join-Path $testBuild 'algo-stat-infer-selfhost.exe'
+$algoStatInferWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_infer\src\main.e') $repo 'x64' 'windows' $algoStatInferPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoStatInferWritten -ne 'executable written') { throw 'algo_stat_infer emission failed' }
+$algoStatInferOutput = & $algoStatInferPath
+if ($LASTEXITCODE -ne 0 -or $algoStatInferOutput -ne 'algo stat infer ok') { throw "algo_stat_infer answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.stat.safety` (L016): ROR/PRR with intervals and signal rules, the BCPNN information component and Apriori rules over comedication masks, with refusals.
 $algoStatSafetyPath = Join-Path $testBuild 'algo-stat-safety-selfhost.exe'
 $algoStatSafetyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_safety\src\main.e') $repo 'x64' 'windows' $algoStatSafetyPath
@@ -1827,6 +1833,12 @@ $parseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $parseWritten -ne 'executable written') { throw 'parse emission failed' }
 & $parsePath
 if ($LASTEXITCODE -ne 0) { throw "a parse check failed: exit $LASTEXITCODE" }
+# e.ml.linear: elastic net, polynomial features, quantile regression and Huber against scikit-learn and statsmodels (24 cases, D2541).
+$mlLinearRobustPath = Join-Path $testBuild 'ml-linear-robust-selfhost.exe'
+$mlLinearRobustWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_linear_robust\src\main.e') $repo 'x64' 'windows' $mlLinearRobustPath -j 2
+if ($LASTEXITCODE -ne 0 -or $mlLinearRobustWritten -ne 'executable written') { throw 'ml_linear_robust emission failed' }
+$mlLinearRobustOutput = & $mlLinearRobustPath
+if ($LASTEXITCODE -ne 0 -or $mlLinearRobustOutput -ne 'ml linear robust ok') { throw "ml_linear_robust answered wrongly: exit $LASTEXITCODE" }
 # `e.ml.linear`: OLS, ridge, lasso and logistic regression against scikit-learn, the singular and storage cases (D846).
 $mlLinearPath = Join-Path $testBuild 'ml-linear-selfhost.exe'
 $mlLinearWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_linear\src\main.e') $repo 'x64' 'windows' $mlLinearPath
@@ -1857,6 +1869,24 @@ $mlBayesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $mlBayesWritten -ne 'executable written') { throw 'ml_bayes emission failed' }
 & $mlBayesPath
 if ($LASTEXITCODE -ne 0) { throw "a ml_bayes check failed: exit $LASTEXITCODE" }
+# e.ml.hgb (L063): histogram gradient boosting with leaf-wise growth, missing-value routing and the regression and log-loss objectives against scikit-learn HistGradientBoosting (8 cases, D2544).
+$mlHgbPath = Join-Path $testBuild 'ml-hgb-selfhost.exe'
+$mlHgbWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_hgb\src\main.e') $repo 'x64' 'windows' $mlHgbPath -j 2
+if ($LASTEXITCODE -ne 0 -or $mlHgbWritten -ne 'executable written') { throw 'ml_hgb emission failed' }
+$mlHgbOutput = & $mlHgbPath
+if ($LASTEXITCODE -ne 0 -or $mlHgbOutput -ne 'ml hgb ok') { throw "ml_hgb answered wrongly: exit $LASTEXITCODE" }
+# e.ml.select (L063): KFold/StratifiedKFold, imputer-scaler pipelines and grid/random search against scikit-learn (18 cases, D2545).
+$mlSelectPath = Join-Path $testBuild 'ml-select-selfhost.exe'
+$mlSelectWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_select\src\main.e') $repo 'x64' 'windows' $mlSelectPath -j 2
+if ($LASTEXITCODE -ne 0 -or $mlSelectWritten -ne 'executable written') { throw 'ml_select emission failed' }
+$mlSelectOutput = & $mlSelectPath
+if ($LASTEXITCODE -ne 0 -or $mlSelectOutput -ne 'ml select ok') { throw "ml_select answered wrongly: exit $LASTEXITCODE" }
+# e.ml.calibrate (L063): Platt scaling, isotonic regression, Brier, log loss and reliability bins against scikit-learn (9 cases, D2546).
+$mlCalibratePath = Join-Path $testBuild 'ml-calibrate-selfhost.exe'
+$mlCalibrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_calibrate\src\main.e') $repo 'x64' 'windows' $mlCalibratePath -j 2
+if ($LASTEXITCODE -ne 0 -or $mlCalibrateWritten -ne 'executable written') { throw 'ml_calibrate emission failed' }
+$mlCalibrateOutput = & $mlCalibratePath
+if ($LASTEXITCODE -ne 0 -or $mlCalibrateOutput -ne 'ml calibrate ok') { throw "ml_calibrate answered wrongly: exit $LASTEXITCODE" }
 # `e.ml.tree`: a regression tree and a classifier splitting where scikit-learn splits, a random forest classifying three groups, and gradient boosting driving the error down with the rounds (D847).
 $mlTreePath = Join-Path $testBuild 'ml-tree-selfhost.exe'
 $mlTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_tree\src\main.e') $repo 'x64' 'windows' $mlTreePath
@@ -1947,6 +1977,12 @@ $mlRlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $mlRlWritten -ne 'executable written') { throw 'ml_rl emission failed' }
 & $mlRlPath
 if ($LASTEXITCODE -ne 0) { throw "a ml_rl check failed: exit $LASTEXITCODE" }
+# e.ml.multivariate (L058): LDA/QDA posteriors, maximum-likelihood factor analysis with varimax, canonical correlation with Bartlett's test and one-way MANOVA against scikit-learn, statsmodels and a SciPy whitening-SVD (30 cases, D2542).
+$mlMultivariatePath = Join-Path $testBuild 'ml-multivariate-selfhost.exe'
+$mlMultivariateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_multivariate\src\main.e') $repo 'x64' 'windows' $mlMultivariatePath -j 2
+if ($LASTEXITCODE -ne 0 -or $mlMultivariateWritten -ne 'executable written') { throw 'ml_multivariate emission failed' }
+$mlMultivariateOutput = & $mlMultivariatePath
+if ($LASTEXITCODE -ne 0 -or $mlMultivariateOutput -ne 'ml multivariate ok') { throw "ml_multivariate answered wrongly: exit $LASTEXITCODE" }
 # `e.ml.reduce`: PCA against NumPy, Oja's rule converging on the leading component, frequent directions keeping the dominant direction, and t-SNE keeping three groups apart (D848).
 $mlReducePath = Join-Path $testBuild 'ml-reduce-selfhost.exe'
 $mlReduceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_reduce\src\main.e') $repo 'x64' 'windows' $mlReducePath
@@ -4128,6 +4164,12 @@ $algoFulltextWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $algoFulltextWritten -ne 'executable written') { throw 'algo_fulltext emission failed' }
 $algoFulltextOutput = & $algoFulltextPath
 if ($LASTEXITCODE -ne 0 -or $algoFulltextOutput -ne 'algo fulltext ok') { throw "algo_fulltext answered wrongly: exit $LASTEXITCODE" }
+# e.algo.tidy (L064): tidy-select, mutate, the six joins over e.db.query, pivot_wider/longer, window functions and missing-value verbs against pandas (178 cases, D2543).
+$algoTidyPath = Join-Path $testBuild 'algo-tidy-selfhost.exe'
+$algoTidyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_tidy\src\main.e') $repo 'x64' 'windows' $algoTidyPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoTidyWritten -ne 'executable written') { throw 'algo_tidy emission failed' }
+$algoTidyOutput = & $algoTidyPath
+if ($LASTEXITCODE -ne 0 -or $algoTidyOutput -ne 'algo tidy ok') { throw "algo_tidy answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.view` and `e.algo.pivot`: the table query engine against appdor (1698 cases, TZ=UTC, D2303).
 $algoViewPath = Join-Path $testBuild 'algo-view-selfhost.exe'
 $algoViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_view\src\main.e') $repo 'x64' 'windows' $algoViewPath -j 2

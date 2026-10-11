@@ -1410,6 +1410,12 @@ algo_stat_test_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$algo_stat_test_written" = 'executable written' ]
 chmod +x "$test_build/algo-stat-test-selfhost"
 "$test_build/algo-stat-test-selfhost"
+# e.algo.stat.infer (L056): z and proportion tests, chi-squared independence, Levene, Bartlett, studentized range, Tukey HSD, noncentral t power and sample size, mode and weighted descriptives against SciPy, statsmodels and NumPy (119 cases, D2540).
+algo_stat_infer_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_infer/src/main.e" "$repo" x64 linux "$test_build/algo-stat-infer-selfhost" -j 2)
+[ "${algo_stat_infer_written}" = 'executable written' ]
+chmod +x "$test_build/algo-stat-infer-selfhost"
+algo_stat_infer_output=$("$test_build/algo-stat-infer-selfhost")
+[ "${algo_stat_infer_output}" = 'algo stat infer ok' ]
 # `e.algo.stat.safety` (L016): ROR/PRR with intervals and signal rules, the BCPNN information component and Apriori rules over comedication masks, with refusals.
 algo_stat_safety_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_safety/src/main.e" "$repo" x64 linux "$test_build/algo-stat-safety-selfhost")
 [ "$algo_stat_safety_written" = 'executable written' ]
@@ -1645,6 +1651,12 @@ parse_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 [ "$parse_written" = 'executable written' ]
 chmod +x "$test_build/parse-selfhost"
 "$test_build/parse-selfhost"
+# e.ml.linear: elastic net, polynomial features, quantile regression and Huber against scikit-learn and statsmodels (24 cases, D2541).
+ml_linear_robust_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_linear_robust/src/main.e" "$repo" x64 linux "$test_build/ml-linear-robust-selfhost" -j 2)
+[ "${ml_linear_robust_written}" = 'executable written' ]
+chmod +x "$test_build/ml-linear-robust-selfhost"
+ml_linear_robust_output=$("$test_build/ml-linear-robust-selfhost")
+[ "${ml_linear_robust_output}" = 'ml linear robust ok' ]
 # `e.ml.linear`: OLS, ridge, lasso and logistic regression against scikit-learn, the singular and storage cases (D846).
 ml_linear_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_linear/src/main.e" "$repo" x64 linux "$test_build/ml-linear-selfhost")
 [ "$ml_linear_written" = 'executable written' ]
@@ -1670,6 +1682,24 @@ ml_bayes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$ml_bayes_written" = 'executable written' ]
 chmod +x "$test_build/ml-bayes-selfhost"
 "$test_build/ml-bayes-selfhost"
+# e.ml.hgb (L063): histogram gradient boosting with leaf-wise growth, missing-value routing and the regression and log-loss objectives against scikit-learn HistGradientBoosting (8 cases, D2544).
+ml_hgb_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_hgb/src/main.e" "$repo" x64 linux "$test_build/ml-hgb-selfhost" -j 2)
+[ "${ml_hgb_written}" = 'executable written' ]
+chmod +x "$test_build/ml-hgb-selfhost"
+ml_hgb_output=$("$test_build/ml-hgb-selfhost")
+[ "${ml_hgb_output}" = 'ml hgb ok' ]
+# e.ml.select (L063): KFold/StratifiedKFold, imputer-scaler pipelines and grid/random search against scikit-learn (18 cases, D2545).
+ml_select_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_select/src/main.e" "$repo" x64 linux "$test_build/ml-select-selfhost" -j 2)
+[ "${ml_select_written}" = 'executable written' ]
+chmod +x "$test_build/ml-select-selfhost"
+ml_select_output=$("$test_build/ml-select-selfhost")
+[ "${ml_select_output}" = 'ml select ok' ]
+# e.ml.calibrate (L063): Platt scaling, isotonic regression, Brier, log loss and reliability bins against scikit-learn (9 cases, D2546).
+ml_calibrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_calibrate/src/main.e" "$repo" x64 linux "$test_build/ml-calibrate-selfhost" -j 2)
+[ "${ml_calibrate_written}" = 'executable written' ]
+chmod +x "$test_build/ml-calibrate-selfhost"
+ml_calibrate_output=$("$test_build/ml-calibrate-selfhost")
+[ "${ml_calibrate_output}" = 'ml calibrate ok' ]
 # `e.ml.tree`: a regression tree and a classifier splitting where scikit-learn splits, a random forest classifying three groups, and gradient boosting driving the error down with the rounds (D847).
 ml_tree_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_tree/src/main.e" "$repo" x64 linux "$test_build/ml-tree-selfhost")
 [ "$ml_tree_written" = 'executable written' ]
@@ -1745,6 +1775,12 @@ ml_rl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 [ "$ml_rl_written" = 'executable written' ]
 chmod +x "$test_build/ml-rl-selfhost"
 "$test_build/ml-rl-selfhost"
+# e.ml.multivariate (L058): LDA/QDA posteriors, maximum-likelihood factor analysis with varimax, canonical correlation with Bartlett's test and one-way MANOVA against scikit-learn, statsmodels and a SciPy whitening-SVD (30 cases, D2542).
+ml_multivariate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_multivariate/src/main.e" "$repo" x64 linux "$test_build/ml-multivariate-selfhost" -j 2)
+[ "${ml_multivariate_written}" = 'executable written' ]
+chmod +x "$test_build/ml-multivariate-selfhost"
+ml_multivariate_output=$("$test_build/ml-multivariate-selfhost")
+[ "${ml_multivariate_output}" = 'ml multivariate ok' ]
 # `e.ml.reduce`: PCA against NumPy, Oja's rule converging on the leading component, frequent directions keeping the dominant direction, and t-SNE keeping three groups apart (D848).
 ml_reduce_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_reduce/src/main.e" "$repo" x64 linux "$test_build/ml-reduce-selfhost")
 [ "$ml_reduce_written" = 'executable written' ]
@@ -3694,6 +3730,12 @@ algo_fulltext_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/algo-fulltext-selfhost"
 algo_fulltext_output=$("$test_build/algo-fulltext-selfhost")
 [ "$algo_fulltext_output" = 'algo fulltext ok' ]
+# e.algo.tidy (L064): tidy-select, mutate, the six joins over e.db.query, pivot_wider/longer, window functions and missing-value verbs against pandas (178 cases, D2543).
+algo_tidy_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_tidy/src/main.e" "$repo" x64 linux "$test_build/algo-tidy-selfhost" -j 2)
+[ "${algo_tidy_written}" = 'executable written' ]
+chmod +x "$test_build/algo-tidy-selfhost"
+algo_tidy_output=$("$test_build/algo-tidy-selfhost")
+[ "${algo_tidy_output}" = 'algo tidy ok' ]
 # `e.algo.view` and `e.algo.pivot`: the table query engine against appdor (1698 cases, TZ=UTC, D2303).
 algo_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_view/src/main.e" "$repo" x64 linux "$test_build/algo-view-selfhost" -j 2)
 [ "$algo_view_written" = 'executable written' ]

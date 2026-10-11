@@ -3096,6 +3096,103 @@ fn is_multi_sorted(sorts: []const SortSpec) -> bool
 
 The view query pipeline: nested AND/OR filters over field-type operator tables (text, number, select, multiselect, checkbox, date with relative operands and ranges, user, bucket and formula conditions), a stable multi-level sort with empty cells last and select options in option order, grouping with an explicit "No value" group, the grid footer's summary functions (count, filled, unique, sum, average, median, min, max, range, stdev, distribution, totalSize, ...), row coloring, quick search and `apply_view` over a saved view config; the immutable filter-tree edits (add, remove, replace, toggle, prune, count, depth) and the multi-column sort-level edits. Text order is a root-collation approximation (ASCII punctuation, digits, letters with case as the last tie-break, Latin-1 accents secondary). Checked against appdor's own engine over 1,698 cases together with `e.algo.pivot`.
 
+### `e.algo.tidy`
+
+```neper
+error Invalid
+error Missing
+error Duplicates
+const SELECT_NAME: u8 = 0u8
+const SELECT_RANGE: u8 = 1u8
+const SELECT_STARTS: u8 = 2u8
+const SELECT_ENDS: u8 = 3u8
+const SELECT_CONTAINS: u8 = 4u8
+const SELECT_EVERYTHING: u8 = 5u8
+const SELECT_TYPE: u8 = 6u8
+const JOIN_INNER: u8 = 0u8
+const JOIN_LEFT: u8 = 1u8
+const JOIN_RIGHT: u8 = 2u8
+const JOIN_FULL: u8 = 3u8
+const JOIN_SEMI: u8 = 4u8
+const JOIN_ANTI: u8 = 5u8
+const WINDOW_ROW_NUMBER: u8 = 0u8
+const WINDOW_RANK: u8 = 1u8
+const WINDOW_DENSE_RANK: u8 = 2u8
+const WINDOW_LAG: u8 = 3u8
+const WINDOW_LEAD: u8 = 4u8
+const WINDOW_CUMSUM: u8 = 5u8
+const WINDOW_CUMMEAN: u8 = 6u8
+const WINDOW_CUMMAX: u8 = 7u8
+const WINDOW_CUMMIN: u8 = 8u8
+const WINDOW_ROLLSUM: u8 = 9u8
+const WINDOW_ROLLMEAN: u8 = 10u8
+const WINDOW_DIFF: u8 = 11u8
+const FILL_DOWN: u8 = 0u8
+const FILL_UP: u8 = 1u8
+type Selector = struct { kind: u8, first: str, second: str, negate: bool }
+type Window = struct { function: u8, input: str, output: str, partition: []const str, order_by: str, descending: bool, size: usize }
+fn by_name(name: str) -> Selector
+fn by_range(from: str, to: str) -> Selector
+fn starts_with(prefix: str) -> Selector
+fn ends_with(suffix: str) -> Selector
+fn contains(part: str) -> Selector
+fn everything() -> Selector
+fn of_type(type_name: str) -> Selector
+fn without(s: Selector) -> Selector
+fn is_missing(v: f.Value) -> bool
+fn cell_value(row: view.Row, name: str) -> f.Value
+fn has_column(names: []const str, name: str) -> bool
+fn column_index(names: []const str, name: str) -> usize
+fn column_names(a: *mem.Arena, rows: []const view.Row) -> ([]str, err)
+fn kind_name(v: f.Value) -> str
+fn matches_type(rows: []const view.Row, name: str, type_name: str) -> bool
+fn term_matches(s: Selector, names: []const str, rows: []const view.Row, i: usize, range_from: usize, range_to: usize) -> bool
+fn select_columns(a: *mem.Arena, rows: []const view.Row, selectors: []const Selector) -> ([]str, err)
+fn make_row(a: *mem.Arena, names: []const str, values: []const f.Value) -> (view.Row, err)
+fn project(a: *mem.Arena, rows: []const view.Row, names: []const str) -> ([]view.Row, err)
+fn select(a: *mem.Arena, rows: []const view.Row, selectors: []const Selector) -> ([]view.Row, err)
+fn rename(a: *mem.Arena, rows: []const view.Row, from: []const str, to: []const str) -> ([]view.Row, err)
+fn relocate(a: *mem.Arena, rows: []const view.Row, selectors: []const Selector, before: str, after: str) -> ([]view.Row, err)
+fn mutate[Ctx: type](a: *mem.Arena, rows: []const view.Row, name: str, ctx: *Ctx, compute: fn(*Ctx, view.Row, usize) -> f.Value) -> ([]view.Row, err)
+fn value_key(a: *mem.Arena, v: f.Value) -> str
+fn value_text(a: *mem.Arena, v: f.Value) -> str
+fn row_key(a: *mem.Arena, row: view.Row, cols: []const str) -> str
+fn hash_text(s: str) -> u64
+fn intern(a: *mem.Arena, keys: []const str) -> ([]usize, usize, err)
+fn group_ids(a: *mem.Arena, rows: []const view.Row, cols: []const str) -> ([]usize, usize, err)
+fn sort_pairs(values: []u64)
+fn join_pairs(a: *mem.Arena, left_ids: []const usize, right_ids: []const usize, out: []u64) -> (usize, err)
+fn unmatched(a: *mem.Arena, from_ids: []const usize, against_ids: []const usize, out: []usize) -> (usize, err)
+fn join(a: *mem.Arena, left: []const view.Row, right: []const view.Row, by_left: []const str, by_right: []const str, kind: u8, suffix_left: str, suffix_right: str) -> ([]view.Row, err)
+fn group_ids_pair(a: *mem.Arena, left: []const view.Row, right: []const view.Row, by_left: []const str, by_right: []const str) -> ([]usize, usize, err)
+fn pivot_wider(a: *mem.Arena, rows: []const view.Row, id_cols: []const str, names_from: str, values_from: str, fill_value: f.Value) -> ([]view.Row, err)
+fn pivot_longer(a: *mem.Arena, rows: []const view.Row, selectors: []const Selector, names_to: str, values_to: str, omit_missing: bool) -> ([]view.Row, err)
+fn order_rows(order: []usize, part: []const usize, key: []const f64, descending: bool)
+fn row_after(x: usize, y: usize, part: []const usize, key: []const f64, descending: bool) -> bool
+fn number_or_nan(v: f.Value) -> f64
+fn window(a: *mem.Arena, rows: []const view.Row, spec: Window) -> ([]view.Row, err)
+fn drop_na(a: *mem.Arena, rows: []const view.Row, columns: []const str) -> ([]view.Row, err)
+fn replace_na(a: *mem.Arena, rows: []const view.Row, column: str, value: f.Value) -> ([]view.Row, err)
+fn fill(a: *mem.Arena, rows: []const view.Row, columns: []const str, partition: []const str, direction: u8) -> ([]view.Row, err)
+```
+
+Tidy-data verbs over `e.algo.view` rows. Selection uses `Selector` terms built with
+`by_name`, `by_range`, `starts_with`, `ends_with`, `contains`, `everything` and
+`of_type`, each removable with `without` (dplyr's `-x`): terms add in the order
+written, negated terms remove, and a leading negated term starts from every column.
+`select`, `rename`, `relocate` (to the front, `before` or `after` a column) and
+`mutate` (a callback per row) keep the input rows and answer new ones. `join` plans
+inner, left, right, full, semi and anti joins over `e.db.query`'s hash join and anti
+join on interned integer keys (a missing key matches a missing key; colliding
+non-key names take the two suffixes; row order follows dplyr). `pivot_wider` and
+`pivot_longer` follow tidyr, with `Duplicates` for a repeated cell. `window` adds a
+column by a `Window` spec: row number, rank, dense rank, lag, lead, cumulative
+sum/mean/max/min, rolling sum/mean (blank until the window is full of non-missing
+values) and difference per partition in `order_by` order, the output in the input's
+row order. `drop_na`, `replace_na` and `fill` (down or up per partition) handle
+missing values; a value is missing when it is blank or NaN. Every verb takes the
+arena that will own its result.
+
 ### `e.algo.pivot`
 
 ```neper
@@ -4825,6 +4922,57 @@ sorts its inputs and uses the Numerical Recipes small-sample correction;
 `fisher_exact` sums every table at least as unlikely as the observed one.
 Scratch: `mann_whitney` `2 * (a.len + b.len)` floats, `wilcoxon` `3 * a.len`,
 `kruskal_wallis` the total, each with as many indices in `order`.
+
+### `e.algo.stat.infer`
+
+```neper
+type Outcome = struct { statistic: f64, p_value: f64, df: f64 }
+type Center = enum u8 { Mean, Median, Trimmed }
+type Design = enum u8 { OneSample, Paired, TwoSample }
+type Pair = struct { first: usize, second: usize, mean_diff: f64, statistic: f64, p_value: f64, ci_low: f64, ci_high: f64 }
+error TooSmall
+error Invalid
+fn two_sided_normal(z: f64) -> f64
+fn chi_squared_sf(x: f64, df: f64) -> f64
+fn sample_mean(values: []const f64) -> f64
+fn sort_ascending(values: []f64)
+fn z_test(values: []const f64, mu: f64, sigma: f64) -> (Outcome, err)
+fn z_test_two(a: []const f64, b: []const f64, sigma_a: f64, sigma_b: f64) -> (Outcome, err)
+fn proportion_z(successes: u64, n: u64, p0: f64) -> (Outcome, err)
+fn proportion_z_two(x1: u64, n1: u64, x2: u64, n2: u64) -> (Outcome, err)
+fn chi_squared_independence(table: []const f64, rows: usize, cols: usize, yates: bool, expected: []f64) -> (Outcome, err)
+fn cramers_v(statistic: f64, total: f64, rows: usize, cols: usize) -> f64
+fn centre_of(group: []const f64, kind: Center, scratch: []f64) -> f64
+fn levene(values: []const f64, sizes: []const usize, kind: Center, scratch: []f64) -> (Outcome, err)
+fn bartlett(values: []const f64, sizes: []const usize) -> (Outcome, err)
+fn gauss_legendre16(x: []f64, w: []f64)
+fn range_cdf(w: f64, k: f64, nodes: []const f64, weights: []const f64) -> f64
+fn studentized_range_cdf(q: f64, k: f64, df: f64) -> f64
+fn studentized_range_quantile(p: f64, k: f64, df: f64) -> f64
+fn tukey_hsd(values: []const f64, sizes: []const usize, confidence: f64, out: []Pair) -> (usize, err)
+fn t_quantile(p: f64, df: f64) -> f64
+fn noncentral_t_cdf(t: f64, df: f64, ncp: f64) -> f64
+fn power_t(design: Design, n: usize, effect: f64, alpha: f64, two_sided: bool) -> f64
+fn power_z(design: Design, n: usize, effect: f64, alpha: f64, two_sided: bool) -> f64
+fn sample_size_t(design: Design, effect: f64, alpha: f64, power: f64, two_sided: bool) -> (usize, err)
+fn sample_size_z(design: Design, effect: f64, alpha: f64, power: f64, two_sided: bool) -> (usize, err)
+fn mode(values: []const f64, scratch: []f64) -> (f64, usize, err)
+fn weighted_mean(values: []const f64, weights: []const f64) -> (f64, err)
+fn weighted_variance(values: []const f64, weights: []const f64, unbiased: bool) -> (f64, err)
+fn weighted_quantile(values: []const f64, weights: []const f64, p: f64, order: []usize) -> (f64, err)
+```
+
+Elementary inferential completions beside `e.algo.stat.test`: `z_test`/`z_test_two`
+(known sigma) and `proportion_z`/`proportion_z_two`; `chi_squared_independence` on
+a row-major table (Yates only at one degree of freedom, as `scipy.stats.chi2_contingency`)
+with `cramers_v`; `levene` (`Mean`, `Median`, `Trimmed` centres) and `bartlett`;
+`studentized_range_cdf`/`studentized_range_quantile` and `tukey_hsd` with
+confidence intervals; `noncentral_t_cdf`, `power_t`, `power_z`, `sample_size_t` and
+`sample_size_z` (`Design` is the one-sample, paired or equal-n two-sample test and
+the effect is Cohen's d); `mode` and the reliability-weighted `weighted_mean`,
+`weighted_variance` and inverted-CDF `weighted_quantile`. Scratch: `levene` twice the
+total, `mode` the sample size, `weighted_quantile` one index per value, `tukey_hsd`
+one `Pair` per group pair in `out`.
 
 ### `e.algo.stat.mixed`
 
@@ -21779,19 +21927,27 @@ caller's (`scratch_len`, `slot_len`).
 error TooSmall
 error Singular
 error Invalid
-
 fn solve(matrix: []f64, rhs: []f64, k: usize) -> err
 fn at(x: []const f64, d: usize, i: usize, j: usize) -> f64
 fn normal_equations(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, matrix: []f64, rhs: []f64)
 fn ols(x: []const f64, y: []const f64, n: usize, d: usize, coefficients: []f64, scratch: []f64) -> err
 fn ridge(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, coefficients: []f64, scratch: []f64) -> err
 fn lasso(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, tolerance: f64, max_sweeps: u32, coefficients: []f64, scratch: []f64) -> err
+fn elastic_net(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, l1_ratio: f64, tolerance: f64, max_sweeps: u32, coefficients: []f64, scratch: []f64) -> err
 fn sigmoid(z: f64) -> f64
 fn predict(x: []const f64, d: usize, i: usize, coefficients: []const f64) -> f64
 fn predict_probability(x: []const f64, d: usize, i: usize, coefficients: []const f64) -> f64
 fn logistic(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, tolerance: f64, max_iterations: u32, coefficients: []f64, scratch: []f64) -> (u32, err)
 fn pls_solve(matrix: []f64, rhs: []f64, c: usize) -> err
 fn pls(x: []const f64, y: []const f64, n: usize, d: usize, components: usize, coefficients: []f64, scratch: []f64) -> err
+fn next_combination(idx: []usize, d: usize, repeat: bool) -> bool
+fn polynomial_width(d: usize, degree: usize, interaction_only: bool, include_bias: bool) -> usize
+fn polynomial_features(x: []const f64, n: usize, d: usize, degree: usize, interaction_only: bool, include_bias: bool, out: []f64) -> (usize, err)
+fn weighted_normal(x: []const f64, y: []const f64, w: []const f64, n: usize, d: usize, lambda: f64, matrix: []f64, rhs: []f64)
+fn pinball_loss(x: []const f64, y: []const f64, n: usize, d: usize, tau: f64, coefficients: []const f64) -> f64
+fn quantile_regression(x: []const f64, y: []const f64, n: usize, d: usize, tau: f64, tolerance: f64, max_iterations: u32, coefficients: []f64, scratch: []f64) -> (u32, err)
+fn median_in_place(values: []f64, m: usize) -> f64
+fn huber(x: []const f64, y: []const f64, n: usize, d: usize, threshold: f64, tolerance: f64, max_iterations: u32, coefficients: []f64, scratch: []f64) -> (u32, err)
 ```
 
 Row-major samples (`n` rows of `d`), coefficients `d + 1` with the intercept last:
@@ -21801,6 +21957,16 @@ Row-major samples (`n` rows of `d`), coefficients `d + 1` with the intercept las
 of `lambda`; `predict` and `predict_probability` apply the coefficients; `pls` is
 NIPALS partial least squares over `components` directions (`pls_solve` the principal
 regression in place).
+
+`elastic_net` is the same coordinate descent with scikit-learn's mixed penalty
+`lambda (l1_ratio |β|₁ + (1 - l1_ratio) / 2 |β|²)` (`lasso` is `l1_ratio = 1`).
+`polynomial_width` and `polynomial_features` expand `n` rows into every monomial
+of degree 1..`degree` in scikit-learn's column order (`next_combination` is the
+enumerator), `weighted_normal` and `pinball_loss` are the building blocks of
+`quantile_regression` (IRLS on the check loss, then a vertex polish that lands on
+the linear-programming optimum) and `huber` (IRLS M-estimation, scale by the median
+absolute residual, `median_in_place` the selector). Scratch is documented on each
+function in source.
 
 ### `e.ml.cluster`
 
@@ -21900,6 +22066,103 @@ fn naive(x: []const f64, labels: []const usize, n: usize, d: usize, classes: usi
 (a floor keeps a constant feature usable); `multinomial_fit`/`multinomial_predict` keep
 Laplace-smoothed feature log probabilities from count features; both predict the
 largest log posterior.
+
+### `e.ml.hgb`
+
+```neper
+type Params = struct { rounds: usize, learning_rate: f64, max_leaf_nodes: usize, max_depth: usize, min_samples_leaf: usize, l2: f64, max_bins: usize, min_hessian: f64, logistic: bool }
+type Model = struct { features: usize, trees: usize, stride: usize, base: f64, logistic: bool, feature: []i32, threshold: []f64, left: []u32, right: []u32, missing_left: []bool, value: []f64 }
+error Invalid
+fn default_params() -> Params
+fn sigmoid(z: f64) -> f64
+fn sort_values(values: []f64)
+fn bin_thresholds(sorted: []const f64, max_bins: usize, out: []f64) -> usize
+fn bin_of(thresholds: []const f64, x: f64) -> usize
+fn fit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, d: usize, p: Params) -> (Model, err)
+fn find_split(binned: []const u16, d: usize, rows: []const usize, lo: usize, hi: usize, grad: []const f64, hess: []const f64, thr_count: []const usize, has_missing: []const bool, bins_per: usize, p: Params, node: usize, node_g: []const f64, node_h: []const f64, node_depth: []const usize, best_gain: []f64, best_feature: []usize, best_bin: []usize, best_missing_left: []bool, hist_g: []f64, hist_h: []f64, hist_c: []usize)
+fn predict_raw(m: *const Model, row: []const f64) -> f64
+fn predict(m: *const Model, row: []const f64) -> f64
+```
+
+Histogram gradient boosting after LightGBM and scikit-learn's
+`HistGradientBoosting*`. `fit` bins every feature once (midpoints between at most
+`max_bins` distinct values, else NumPy's averaged-inverted-CDF percentiles), grows
+`rounds` trees leaf-wise to `max_leaf_nodes` (optional `max_depth`,
+`min_samples_leaf`, `min_hessian`, `l2`), and answers a `Model` whose arrays come
+from the arena. NaN is a missing value: a feature with missing training values
+learns, per split, which side they take (left-to-right then right-to-left scan, a
+tie keeping the first), and a feature without any sends unseen missing values to the
+larger child. The objective is squared error or, with `logistic`, the binary log
+loss on 0/1 labels. `predict_raw` is the margin (log-odds) and `predict` the value or
+probability. Gradients are `f64`, so predictions agree with scikit-learn's float32
+gradients to about 1e-5 relative; near-tied splits can still flip with very small
+`min_samples_leaf`.
+
+### `e.ml.select`
+
+```neper
+type Step = struct { kind: u8, constant: f64 }
+type ParamRange = struct { low: f64, high: f64, log_scale: bool, integer: bool }
+const IMPUTE_MEAN: u8 = 0u8
+const IMPUTE_MEDIAN: u8 = 1u8
+const IMPUTE_CONSTANT: u8 = 2u8
+const STANDARDIZE: u8 = 3u8
+const MIN_MAX: u8 = 4u8
+error Invalid
+error TooSmall
+fn kfold_assign(n: usize, k: usize, fold_of: []usize) -> err
+fn kfold_shuffled(r: *rand.Pcg64, n: usize, k: usize, fold_of: []usize, order: []usize) -> err
+fn stratified_assign(labels: []const usize, n: usize, classes: usize, k: usize, fold_of: []usize, scratch: []usize) -> err
+fn split_fold(fold_of: []const usize, n: usize, fold: usize, train: []usize, test: []usize) -> (usize, usize)
+fn cross_validate[Ctx: type](ctx: *Ctx, n: usize, folds: usize, fold_of: []const usize, train: []usize, test: []usize, evaluate: fn(*Ctx, []const usize, []const usize) -> f64, scores: []f64) -> (f64, err)
+fn grid_search[Ctx: type](ctx: *Ctx, points: usize, n: usize, folds: usize, fold_of: []const usize, train: []usize, test: []usize, evaluate: fn(*Ctx, usize, []const usize, []const usize) -> f64, means: []f64) -> (usize, err)
+fn draw_parameter(r: *rand.Pcg64, spec: ParamRange) -> f64
+fn random_search[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, ranges: []const ParamRange, draws: usize, n: usize, folds: usize, fold_of: []const usize, train: []usize, test: []usize, evaluate: fn(*Ctx, []const f64, []const usize, []const usize) -> f64, candidate: []f64, best_params: []f64, means: []f64) -> (f64, err)
+fn nan_median(values: []f64) -> f64
+fn pipeline_fit(steps: []const Step, x: []const f64, n: usize, d: usize, rows: []const usize, params: []f64, work: []f64) -> err
+fn apply_step(kind: u8, v: f64, centre: f64, scale: f64) -> f64
+fn pipeline_transform(steps: []const Step, params: []const f64, x: []const f64, d: usize, rows: []const usize, out: []f64) -> err
+```
+
+Model selection over caller callbacks. `kfold_assign`, `kfold_shuffled` and
+`stratified_assign` give every row a fold number (scikit-learn's `KFold` sizes and
+`StratifiedKFold` allocation, classes ordered by first appearance); `split_fold`
+lists a fold's training and test rows. `cross_validate`, `grid_search` and
+`random_search` take an `evaluate` callback that fits on the training rows and
+scores on the test rows (higher is better) and answer the mean score per fold,
+candidate or draw; a `ParamRange` is uniform, log-uniform or integer. The
+preprocessing pipeline is a slice of `Step` (`IMPUTE_MEAN`, `IMPUTE_MEDIAN`,
+`IMPUTE_CONSTANT`, `STANDARDIZE`, `MIN_MAX`): `pipeline_fit` learns two numbers per
+step and feature from the training rows (each step sees the previous step's output,
+NaN ignored, a constant column scaled by 1) and `pipeline_transform` applies them
+to any rows, so statistics never leak across a fold.
+
+### `e.ml.calibrate`
+
+```neper
+type Sigmoid = struct { a: f64, b: f64 }
+error Invalid
+error TooSmall
+fn expit(z: f64) -> f64
+fn platt_apply(s: Sigmoid, score: f64) -> f64
+fn platt_loss(scores: []const f64, targets: []const f64, n: usize, a: f64, b: f64) -> f64
+fn softplus(z: f64) -> f64
+fn platt_fit(scores: []const f64, labels: []const f64, n: usize, tolerance: f64, max_iterations: u32, targets: []f64) -> (Sigmoid, err)
+fn isotonic_fit(x: []const f64, y: []const f64, n: usize, order: []usize, weight: []f64, knots_x: []f64, knots_y: []f64) -> (usize, err)
+fn isotonic_predict(knots_x: []const f64, knots_y: []const f64, count: usize, v: f64) -> f64
+fn brier_score(prob: []const f64, labels: []const f64) -> f64
+fn log_loss(prob: []const f64, labels: []const f64, eps: f64) -> f64
+fn reliability(prob: []const f64, labels: []const f64, bins: usize, count: []usize, mean_predicted: []f64, fraction_positive: []f64) -> err
+fn expected_calibration_error(count: []const usize, mean_predicted: []const f64, fraction_positive: []const f64, bins: usize) -> f64
+```
+
+Probability calibration and its scores. `platt_fit` fits `P = 1 / (1 + exp(a s + b))`
+by Newton's method on scikit-learn's smoothed-target log loss (`Sigmoid`, applied by
+`platt_apply`); `isotonic_fit` merges tied scores by weighted mean and pools adjacent
+violators, `isotonic_predict` interpolates linearly between knots and clips outside
+the data. `brier_score`, `log_loss`, `reliability` (equal-width bins, scikit-learn's
+`uniform` strategy) and `expected_calibration_error` score a probabilistic classifier.
+Labels are 0/1 floats and storage is the caller's.
 
 ### `e.ml.tree`
 
@@ -22152,6 +22415,52 @@ fn sarsa(q: []f64, actions: usize, state: usize, action: usize, reward: f64, nex
 
 Tabular action values (`states × actions`): `q_learning` and `sarsa` apply one
 temporal-difference update, `epsilon_greedy` and `greedy` choose actions.
+
+### `e.ml.multivariate`
+
+```neper
+error TooSmall
+error Invalid
+error Singular
+type Discriminant = struct { classes: usize, features: usize, quadratic: bool, means: []f64, priors: []f64, factors: []f64, log_det: []f64 }
+type FactorFit = struct { iterations: u32, log_likelihood: f64 }
+type ManovaTest = struct { statistic: f64, f: f64, df1: f64, df2: f64, p_value: f64 }
+type Manova = struct { wilks: ManovaTest, pillai: ManovaTest, hotelling: ManovaTest, roy: ManovaTest }
+fn cholesky_in_place(a: []f64, d: usize) -> err
+fn solve_lower(l: []const f64, d: usize, b: []f64)
+fn solve_lower_transpose(l: []const f64, d: usize, b: []f64)
+fn covariance_matrix(x: []const f64, n: usize, d: usize, unbiased: bool, mean: []f64, cov: []f64) -> err
+fn normalize_signs(values: []f64, rows: usize, width: usize)
+fn discriminant_fit(x: []const f64, labels: []const usize, n: usize, d: usize, classes: usize, quadratic: bool, unbiased: bool, reg: f64, class_priors: []const f64, model: *Discriminant, scratch: []f64) -> err
+fn discriminant_scores(model: *const Discriminant, sample: []const f64, out: []f64, work: []f64) -> err
+fn discriminant_posterior(model: *const Discriminant, sample: []const f64, out: []f64, work: []f64) -> err
+fn discriminant_predict(model: *const Discriminant, sample: []const f64, out: []f64, work: []f64) -> (usize, err)
+fn polar_factor(m: []const f64, c: usize, rotation: []f64, scratch: []f64) -> (f64, err)
+fn factor_analysis(x: []const f64, n: usize, d: usize, components: usize, tolerance: f64, max_iterations: u32, loadings: []f64, noise: []f64, scratch: []f64) -> (FactorFit, err)
+fn varimax(loadings: []f64, c: usize, d: usize, tolerance: f64, max_iterations: u32, scratch: []f64) -> err
+fn canonical_correlation(x: []const f64, y: []const f64, n: usize, p: usize, q: usize, correlations: []f64, x_weights: []f64, y_weights: []f64, scratch: []f64) -> err
+fn canonical_test(correlations: []const f64, n: usize, p: usize, q: usize, first: usize) -> (f64, f64, f64)
+fn manova_oneway(x: []const f64, labels: []const usize, n: usize, p: usize, groups: usize, result: *Manova, eigenvalues: []f64, scratch: []f64) -> err
+```
+
+Classical multivariate analysis on the `e.ml.reduce` eigen solver. `discriminant_fit`
+fills a `Discriminant` whose slices the caller owns (`means`, `priors`, `factors`
+holding Cholesky factors of the pooled or per-class covariances, `log_det`) for linear
+or quadratic Gaussian discriminant analysis (`unbiased` picks the `n - classes` /
+`n_k - 1` divisor over scikit-learn's maximum-likelihood `n` / `n_k`; `reg` shrinks
+the quadratic covariances toward the identity); `discriminant_scores`,
+`discriminant_posterior` and `discriminant_predict` evaluate a sample.
+`factor_analysis` is scikit-learn's SVD iteration for maximum-likelihood factor
+analysis (loadings `components x d`, noise variances, log-likelihood) and `varimax`
+its orthogonal rotation. `canonical_correlation` answers `min(p, q)` correlations
+with unit-variance variate weights and `canonical_test` Bartlett's chi-squared test
+from a given pair on. `manova_oneway` answers the eigenvalues of `E^-1 H` and the
+Wilks (Rao F), Pillai, Hotelling-Lawley (McKeon F) and Roy (upper-bound F)
+statistics with p-values. Eigenvectors are defined up to sign, so loadings and
+weights are normalised with the entry of largest magnitude positive
+(`normalize_signs`); `cholesky_in_place`, `solve_lower`, `solve_lower_transpose`,
+`covariance_matrix` and `polar_factor` are the shared building blocks. Scratch sizes
+are on each function in source.
 
 ### `e.ml.reduce`
 
