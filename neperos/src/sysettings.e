@@ -17,6 +17,9 @@ const OP_GET_WORD: usize = 1usize
 const OP_GET: usize = 2usize
 const OP_SET: usize = 3usize
 const OP_RESET: usize = 4usize
+// The uninstalled apps, one bit per home-screen icon: GET_HIDDEN -> mask; SET_HIDDEN index flag -> mask.
+const OP_GET_HIDDEN: usize = 5usize
+const OP_SET_HIDDEN: usize = 6usize
 
 // The system word, or 0 when there is no server.
 fn word() -> usize {
@@ -39,6 +42,22 @@ fn set(index: usize, value: usize) -> usize {
     if sent == REFUSED { ret 0usize }
     let sent_index = os.send(REQ, index, NO_SLOT)
     let sent_value = os.send(REQ, value, NO_SLOT)
+    ret os.recv(REP, NO_SLOT)
+}
+
+// The mask of uninstalled apps (bit n is the icon with index n), or 0 when there is no server.
+fn hidden() -> usize {
+    let sent = os.send(REQ, OP_GET_HIDDEN, NO_SLOT)
+    if sent == REFUSED { ret 0usize }
+    ret os.recv(REP, NO_SLOT)
+}
+
+// Uninstall (flag 1) or reinstall (flag 0) icon `index`; the mask after it, or 0 when there is no server.
+fn set_hidden(index: usize, flag: usize) -> usize {
+    let sent = os.send(REQ, OP_SET_HIDDEN, NO_SLOT)
+    if sent == REFUSED { ret 0usize }
+    let sent_index = os.send(REQ, index, NO_SLOT)
+    let sent_flag = os.send(REQ, flag, NO_SLOT)
     ret os.recv(REP, NO_SLOT)
 }
 

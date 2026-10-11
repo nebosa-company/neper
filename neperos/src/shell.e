@@ -253,19 +253,48 @@ fn draw_lock(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, hour: us
 }
 
 // The home screen: the status bar and every app icon with its name under it.
+// (C126) The icons Settings uninstalled, one bit per icon index (the settings server's mask): the home screen lays
+// out the rest in order, and a tap on a position starts the icon that stands there.
+var hidden_mask: usize = 0usize
+
+fn visible_count() -> usize {
+    var count = 0usize
+    var i = 0usize
+    while i < icons.APP_COUNT {
+        if ((hidden_mask >> i) & 1usize) == 0usize { count += 1usize }
+        i += 1usize
+    }
+    ret count
+}
+
+// The icon at grid position `position`, or 99.
+fn visible_icon(position: usize) -> usize {
+    var seen = 0usize
+    var i = 0usize
+    while i < icons.APP_COUNT {
+        if ((hidden_mask >> i) & 1usize) == 0usize {
+            if seen == position { ret i }
+            seen += 1usize
+        }
+        i += 1usize
+    }
+    ret 99usize
+}
+
 fn draw_home(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, has_fonts: bool, clock: str, snap: [5]usize) -> err {
     try status_bar(a, builder, faces, has_fonts, clock, snap)
     let white = paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }
     var idx = 0usize
-    while idx < icons.APP_COUNT {
+    while idx < visible_count() {
+        let icon = visible_icon(idx)
         let col = idx % 4usize
         let row = idx / 4usize
         let cx = 51.5 + f32(col) * 103.0
         let y = 70.0 + f32(row) * 104.0
-        try svg.draw(a, builder, icons.app(idx), geometry.rect(cx - 30.0, y, 60.0, 60.0), white)
+        try svg.draw(a, builder, icons.app(icon), geometry.rect(cx - 30.0, y, 60.0, 60.0), white)
         if has_fonts {
             // A dark pill under the name keeps it readable on bright terrain.
-            let label = icons.app_label(idx)
+            let label = icons.app_label(icon)
             let label_width = text.measure(a, faces.jost, 14.5, label)
             var label_height: f32 = 17.0
             let (label_layout, label_error) = text.lay_out(a, faces.jost, 14.5, label, 0.0, 0u32, layout.Align.Start)
@@ -467,6 +496,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         say_num(stored)
         say("\n")
     }
+    hidden_mask = sysettings.hidden()
+    if hidden_mask != 0usize {
+        say("shell hidden ")
+        say_num(hidden_mask)
+        say("\n")
+    }
     // Live status, from the C111 status service: subscribe, post a notification, read the snapshot,
     // then stop the service (this shell is its only client).
     var snap: [5]usize = zero
@@ -593,7 +628,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if by_key {
                     if !launched_test { app = 98usize }
                 } else {
-                    let icon = icon_at(f32(pointer_x) * 412.0 / 32768.0, f32(pointer_y) * logical_h / 32768.0)
+                    let icon = visible_icon(icon_at(f32(pointer_x) * 412.0 / 32768.0, f32(pointer_y) * logical_h / 32768.0))
                     if icon < icons.APP_COUNT {
                         say("shell tap ")
                         say(icons.app_label(icon))
@@ -627,6 +662,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         say("shell app code ")
                         say_num(code_app)
                         say("\n")
+                        let hidden_now = sysettings.hidden()
+                        if hidden_now != hidden_mask {
+                            hidden_mask = hidden_now
+                            say("shell hidden ")
+                            say_num(hidden_mask)
+                            say("\n")
+                        }
                         let fresh = sysettings.word()
                         if theme.valid(fresh) && fresh != theme_word {
                             theme_word = fresh

@@ -32,6 +32,7 @@ const PAGES: usize = 11usize
 const MAIN: usize = 99usize
 const SEARCH: usize = 98usize
 const SHEET: usize = 97usize
+const DETAIL: usize = 96usize
 const FOUND_MAX: usize = 6usize
 // The settings, by number.
 const WIFI: usize = 0usize
@@ -62,6 +63,8 @@ const BLUETOOTH: usize = 24usize
 const ROTATE: usize = 25usize
 const NOTIFY: usize = 26usize
 const SETTINGS: usize = 40usize
+// The Settings icon's index on the home screen: the one app that cannot be uninstalled.
+const SETTINGS_ICON: usize = 19usize
 
 // The light or dark look of the app itself: one switch, three colours.
 var dark_theme: bool = true
@@ -387,6 +390,8 @@ type State = struct {
     hit_total: usize,
     search: ui.Field,
     mirror: [48]usize,
+    hidden: usize,
+    detail: usize,
     net_names: [192]u8,
     net_len: [8]usize,
     net_flags: [8]usize,
@@ -505,7 +510,15 @@ fn summary(a: *mem.Arena, s: *State, page: usize) -> str {
         ret join(a, size_text(a, s.storage_used * 512usize), " used of ", size_text(a, s.storage_total * 512usize))
     }
     if page == 5usize { ret join(a, number(a, notify_count(s)), " of 8 apps allowed", "") }
-    if page == 6usize { ret join(a, number(a, icons.APP_COUNT), " apps", "") }
+    if page == 6usize {
+        var installed = 0usize
+        var i = 0usize
+        while i < icons.APP_COUNT {
+            if ((s.hidden >> i) & 1usize) == 0usize { installed += 1usize }
+            i += 1usize
+        }
+        ret join(a, number(a, installed), " apps", "")
+    }
     if page == 7usize { ret join(a, "Screen lock: ", lock_name(s.values[LOCK]), "") }
     if page == 8usize { ret join(a, "Font size: ", font_name(s.values[FONT]), "") }
     if page == 9usize { ret "Date and time, reset" }
@@ -828,10 +841,15 @@ fn draw_apps(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
             try card(a, builder, 16.0, y + 2.0, 380.0, 50.0, 16.0, surface())
             try svg.draw(a, builder, icons.app(pos), geometry.rect(26.0, y + 8.0, 38.0, 38.0), ink())
             try put(a, builder, faces.jost, 17.0, icons.app_label(pos), 78.0, y + 14.0, ink())
+            hit(s, 7000usize + pos, 16.0, y + 2.0, 380.0, 50.0)
+            if ((s.hidden >> pos) & 1usize) != 0usize {
+                try put_right(a, builder, faces.grotesk, 13.0, "Uninstalled", 380.0, y + 18.0, muted())
+            } else {
             // The size of the app's program in the archive, handed to this app by the kernel (entries 13 to 44).
             let program = icons.program_of(pos)
             if program >= 13usize && program < 45usize && s.app_sizes[program - 13usize] > 0usize {
                 try put_right(a, builder, faces.grotesk, 13.0, size_text(a, s.app_sizes[program - 13usize]), 380.0, y + 18.0, muted())
+            }
             }
         }
         pos += 1usize
@@ -983,6 +1001,51 @@ fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
     ret ok
 }
 
+// One app: its icon, name and size, its notification switch when it has one, the access the system grants all
+// apps (the camera, microphone and location switches under Security), and Uninstall or Reinstall.
+fn draw_detail(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    let pos = s.detail
+    try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), fg())
+    hit(s, 500usize, 0.0, 10.0, 66.0, 56.0)
+    try put(a, builder, faces.jost_bold, 24.0, "App info", 62.0, 20.0, fg())
+    try card(a, builder, 16.0, 78.0, 380.0, 96.0, 18.0, surface())
+    try svg.draw(a, builder, icons.app(pos), geometry.rect(30.0, 94.0, 64.0, 64.0), ink())
+    try put(a, builder, faces.jost_bold, 22.0, icons.app_label(pos), 112.0, 96.0, ink())
+    let program = icons.program_of(pos)
+    var size_line = "Not installed in this build"
+    if program >= 13usize && program < 45usize && s.app_sizes[program - 13usize] > 0usize { size_line = size_text(a, s.app_sizes[program - 13usize]) }
+    if ((s.hidden >> pos) & 1usize) != 0usize { size_line = "Uninstalled" }
+    try put(a, builder, faces.grotesk, 14.0, size_line, 112.0, 130.0, muted())
+    var y: f32 = 190.0
+    let notify = notify_of(icons.app_label(pos))
+    if notify != 99usize {
+        try toggle_row(a, builder, s, faces, notify, "Notifications from this app", y)
+        y += 68.0
+    }
+    try section(a, builder, faces, "Access", y)
+    y += 34.0
+    try info_row(a, builder, faces, "Camera", on_off(is_on(s, CAMERA_ACCESS)), y)
+    y += 54.0
+    try info_row(a, builder, faces, "Microphone", on_off(is_on(s, MIC_ACCESS)), y)
+    y += 54.0
+    try info_row(a, builder, faces, "Location", on_off(is_on(s, LOCATION)), y)
+    y += 70.0
+    if pos == SETTINGS_ICON {
+        try put(a, builder, faces.grotesk, 14.0, "A system app: it cannot be uninstalled.", 20.0, y + 14.0, fg_dim())
+    } else {
+        var label = "Uninstall"
+        var fill = paint.Color { red: 0.86, green: 0.36, blue: 0.32, alpha: 1.0 }
+        if ((s.hidden >> pos) & 1usize) != 0usize {
+            label = "Reinstall"
+            fill = amber()
+        }
+        try card(a, builder, 16.0, y, 380.0, 54.0, 27.0, fill)
+        try centred(a, builder, faces.jost, 20.0, label, 206.0, y + 15.0, ink())
+        hit(s, 7500usize, 16.0, y, 380.0, 54.0)
+    }
+    ret ok
+}
+
 fn draw_page(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), fg())
     hit(s, 500usize, 0.0, 10.0, 66.0, 56.0)
@@ -1013,6 +1076,8 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
         try draw_search(a, builder, s, faces)
     } else if s.page == SHEET {
         try draw_sheet(a, builder, s, faces)
+    } else if s.page == DETAIL {
+        try draw_detail(a, builder, s, faces)
     } else {
         try draw_page(a, builder, s, faces)
     }
@@ -1052,7 +1117,47 @@ fn flip(s: *State, setting: usize) {
 }
 
 // What a tap at `x` on button `id` did: true when the screen changed.
+// The notification switch an app has in this app's list (NOTIFY + n), by its name, or 99.
+fn notify_of(label: str) -> usize {
+    var k = 0usize
+    while k < 8usize {
+        if ui.same(notify_app(k), label) { ret NOTIFY + k }
+        k += 1usize
+    }
+    ret 99usize
+}
+
 fn act(s: *State, id: usize, x: f32) -> bool {
+    if s.page == DETAIL {
+        if id == 500usize {
+            s.page = 6usize
+            say("settings back\n")
+            ret true
+        }
+        if id == 7500usize && s.detail != SETTINGS_ICON {
+            var flag = 1usize
+            if ((s.hidden >> s.detail) & 1usize) != 0usize { flag = 0usize }
+            s.hidden = sysettings.set_hidden(s.detail, flag)
+            if s.hidden == 0usize && flag != 0usize { s.hidden = 1usize << s.detail }
+            if flag != 0usize { say("settings uninstalled ") } else { say("settings reinstalled ") }
+            say(icons.app_label(s.detail))
+            say("\n")
+            ret true
+        }
+        if id >= 1000usize && id < 1000usize + SETTINGS {
+            flip(s, id - 1000usize)
+            ret true
+        }
+        ret false
+    }
+    if s.page == 6usize && id >= 7000usize && id < 7000usize + icons.APP_COUNT {
+        s.detail = id - 7000usize
+        s.page = DETAIL
+        say("settings app ")
+        say(icons.app_label(s.detail))
+        say("\n")
+        ret true
+    }
     if s.page == SHEET {
         if id == 500usize {
             s.page = 0usize
@@ -1130,6 +1235,7 @@ fn act(s: *State, id: usize, x: f32) -> bool {
             say(page_name(s.page))
             say("\n")
             if s.page == 0usize && s.values[WIFI] != 0usize { scan_networks(s) }
+            if s.page == 6usize { s.hidden = sysettings.hidden() }
             if s.page == 4usize {
                 let (used, total, answered) = vaultfs.stats()
                 s.have_storage = answered
@@ -1288,6 +1394,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     sync_theme(&s)
     s.page = MAIN
+    s.hidden = sysettings.hidden()
     if s.values[WIFI] != 0usize { scan_networks(&s) }
     let (stored_used, stored_total, stored_answered) = vaultfs.stats()
     s.have_storage = stored_answered

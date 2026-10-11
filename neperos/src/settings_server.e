@@ -49,6 +49,31 @@ fn save(store: *Store) {
     let result = os.recv(FS_REP, fsproto.NO_SLOT)
 }
 
+// The uninstalled apps, from /hidden (four bytes, little end first), or none.
+fn load_hidden() -> usize {
+    let sent = os.send(FS_REQ, fsproto.OP_READ, fsproto.NO_SLOT)
+    if sent == REFUSED { ret 0usize }
+    fsproto.send_str(FS_REQ, "/hidden")
+    let result = os.recv(FS_REP, fsproto.NO_SLOT)
+    var raw: [8]u8 = zero
+    let count = fsproto.recv_bytes(FS_REP, mem.address_of(&raw[0usize]), 8usize)
+    if result != fsproto.RESULT_OK || count < 4usize { ret 0usize }
+    ret usize(raw[0usize]) + usize(raw[1usize]) * 256usize + usize(raw[2usize]) * 65536usize + usize(raw[3usize]) * 16777216usize
+}
+
+fn save_hidden(mask: usize) {
+    var raw: [8]u8 = zero
+    raw[0usize] = u8(mask & 255usize)
+    raw[1usize] = u8((mask >> 8usize) & 255usize)
+    raw[2usize] = u8((mask >> 16usize) & 255usize)
+    raw[3usize] = u8((mask >> 24usize) & 255usize)
+    let sent = os.send(FS_REQ, fsproto.OP_WRITE, fsproto.NO_SLOT)
+    if sent == REFUSED { ret }
+    fsproto.send_str(FS_REQ, "/hidden")
+    fsproto.send_bytes(FS_REQ, mem.address_of(&raw[0usize]), 4usize)
+    let result = os.recv(FS_REP, fsproto.NO_SLOT)
+}
+
 fn defaults(store: *Store) {
     var i = 0usize
     while i < COUNT {
@@ -65,6 +90,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var store: Store = zero
     defaults(&store)
     if load(&store) { say("settings server loaded\n") }
+    var hidden = load_hidden()
     say("settings server up\n")
     var running = true
     while running {
@@ -86,6 +112,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 save(&store)
             }
             let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
+        } else if op == sysettings.OP_GET_HIDDEN {
+            let sent = os.send(REP, hidden, sysettings.NO_SLOT)
+        } else if op == sysettings.OP_SET_HIDDEN {
+            let index = os.recv(REQ, sysettings.NO_SLOT)
+            let flag = os.recv(REQ, sysettings.NO_SLOT)
+            if index < 29usize {
+                if flag != 0usize { hidden = hidden | (1usize << index) } else { hidden = hidden & ~(1usize << index) }
+                save_hidden(hidden)
+            }
+            let sent = os.send(REP, hidden, sysettings.NO_SLOT)
         } else if op == sysettings.OP_RESET {
             defaults(&store)
             save(&store)
