@@ -108,6 +108,7 @@
     "e.net.tls",
     "e.net.policy",
     "e.net.ssrf",
+    "e.net.nats",
     "e.net.tls.roots",
     "e.net.tls.hoststore",
     "e.net.tls.mozilla",
@@ -3502,6 +3503,18 @@
    "direct_dependencies": [
     "e.mem",
     "e.net.tls.roots"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.nats",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },

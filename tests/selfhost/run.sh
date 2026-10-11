@@ -2222,6 +2222,11 @@ net_tls_roots_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$net_tls_roots_written" = 'executable written' ]
 chmod +x "$test_build/net-tls-roots-selfhost"
 "$test_build/net-tls-roots-selfhost"
+# `e.net.nats` against nats-py: 533 stream, command and header vectors plus a scripted session (D2642).
+net_nats_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_nats/src/main.e" "$repo" x64 linux "$test_build/net-nats-selfhost")
+[ "$net_nats_written" = 'executable written' ]
+chmod +x "$test_build/net-nats-selfhost"
+"$test_build/net-nats-selfhost"
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 net_http_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http_pool/src/main.e" "$repo" x64 linux "$test_build/net-http-pool-selfhost")
 [ "$net_http_pool_written" = 'executable written' ]

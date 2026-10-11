@@ -2515,6 +2515,12 @@ $netTlsRootsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $netTlsRootsWritten -ne 'executable written') { throw 'net_tls_roots emission failed' }
 & $netTlsRootsPath
 if ($LASTEXITCODE -ne 0) { throw "a net_tls_roots check failed: exit $LASTEXITCODE" }
+# `e.net.nats` against nats-py: 533 stream, command and header vectors plus a scripted session (D2642).
+$netNatsPath = Join-Path $testBuild 'net-nats-selfhost.exe'
+$netNatsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_nats\src\main.e') $repo 'x64' 'windows' $netNatsPath
+if ($LASTEXITCODE -ne 0 -or $netNatsWritten -ne 'executable written') { throw 'net_nats emission failed' }
+& $netNatsPath
+if ($LASTEXITCODE -ne 0) { throw "a net_nats check failed: exit $LASTEXITCODE" }
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 $netHttpPoolPath = Join-Path $testBuild 'net-http-pool-selfhost.exe'
 $netHttpPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http_pool\src\main.e') $repo 'x64' 'windows' $netHttpPoolPath
