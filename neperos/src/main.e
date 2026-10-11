@@ -829,7 +829,8 @@ fn launch(frame: *a64.Frame) {
         // (C132) The Level app (entry 30) keeps its calibration in /level.
         // (C136) The Recorder (entry 34) keeps its recordings as WAV files in /Recordings.
         // (C138) The Steps app (entry 36) keeps today's count and the goal in /steps.
-        if index == 38usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize {
+        // (C139) The Blocks app (entry 37) keeps the best score in /blocks.
+        if index == 38usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize || index == 37usize {
             if fs_present {
                 thread.grant(child, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                 thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)

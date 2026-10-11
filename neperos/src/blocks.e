@@ -19,6 +19,7 @@ use e.text.shape
 use appkit
 use text
 use ui
+use vaultfs
 
 const NONE: usize = 99usize
 const COLS: usize = 10usize
@@ -43,6 +44,11 @@ type State = struct {
     paused: bool,
     over: bool,
     pieces: usize,
+    // (C139) The piece held back (NONE when none) and whether it was swapped in for this piece already, and the
+    // best score kept in /blocks.
+    hold: usize,
+    hold_used: bool,
+    best: usize,
     hits: ui.Hits,
 }
 
@@ -145,6 +151,7 @@ fn spawn(s: *State) {
     s.rot = 0usize
     s.px = 3i32
     s.py = -1i32
+    s.hold_used = false
     s.pieces += 1usize
     if !fits(s, s.piece, s.rot, s.px, s.py) {
         s.over = true
@@ -161,6 +168,8 @@ fn restart(s: *State) {
     s.score = 0usize
     s.lines = 0usize
     s.level = 1usize
+    s.hold = NONE
+    s.hold_used = false
     s.over = false
     s.paused = false
     s.pieces = 0usize
@@ -238,6 +247,43 @@ fn step_down(s: *State) -> bool {
 // ----------------------------------------------------------------------------------------------
 // Drawing.
 
+// The best score is kept in /blocks (four bytes, little end).
+fn save_best(s: *State) {
+    if s.score <= s.best { ret }
+    s.best = s.score
+    var buf: [4]u8 = zero
+    var i = 0usize
+    while i < 4usize {
+        buf[i] = u8((s.best >> (8usize * i)) & 255usize)
+        i += 1usize
+    }
+    let kept = vaultfs.write("/blocks", mem.address_of(&buf[0usize]), 4usize)
+}
+
+fn load_best(s: *State) {
+    var buf: [4]u8 = zero
+    let (n, found) = vaultfs.read("/blocks", mem.address_of(&buf[0usize]), 4usize)
+    if !found || n < 4usize { ret }
+    var v = 0usize
+    var i = 0usize
+    while i < 4usize {
+        v = v | (usize(buf[i]) << (8usize * i))
+        i += 1usize
+    }
+    s.best = v
+}
+
+// The row the piece in play would stop at if dropped now.
+fn ghost_y(s: *State) -> i32 {
+    var y = s.py
+    var guard = 0usize
+    while fits(s, s.piece, s.rot, s.px, y + 1i32) && guard < 30usize {
+        y += 1i32
+        guard += 1usize
+    }
+    ret y
+}
+
 fn cell(a: *mem.Arena, builder: *scene.Builder, x: f32, y: f32, c: paint.Color) -> err {
     try ui.card(a, builder, x + 1.0, y + 1.0, cell_size() - 2.0, cell_size() - 2.0, 5.0, c)
     ret ok
@@ -260,8 +306,17 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
         }
         r += 1usize
     }
-    // The piece in play.
+    // Where the piece will land, then the piece in play.
     if !s.over {
+        let gy = ghost_y(s)
+        var g = 0usize
+        while g < 16usize {
+            if filled(s.piece, s.rot, g) {
+                let cy = gy + i32(g / 4usize)
+                if cy >= 0i32 && gy != s.py { try ui.card(a, builder, 16.0 + f32(s.px + i32(g % 4usize)) * cell_size() + 1.0, 88.0 + f32(cy) * cell_size() + 1.0, cell_size() - 3.0, cell_size() - 3.0, 4.0, paint.Color { red: 0.35, green: 0.37, blue: 0.42, alpha: 0.7 }) }
+            }
+            g += 1usize
+        }
         var i = 0usize
         while i < 16usize {
             if filled(s.piece, s.rot, i) {
@@ -285,6 +340,17 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
         if filled(s.next, 0usize, n) { try ui.card(a, builder, 288.0 + f32(n % 4usize) * 20.0, 308.0 + f32(n / 4usize) * 20.0, 18.0, 18.0, 4.0, piece_color(s.next)) }
         n += 1usize
     }
+    // The held piece and the best score.
+    try ui.put(a, builder, faces.grotesk, 11.0, "Hold", 284.0, 400.0, ui.muted())
+    if s.hold != NONE {
+        var h = 0usize
+        while h < 16usize {
+            if filled(s.hold, 0usize, h) { try ui.card(a, builder, 288.0 + f32(h % 4usize) * 20.0, 420.0 + f32(h / 4usize) * 20.0, 18.0, 18.0, 4.0, piece_color(s.hold)) }
+            h += 1usize
+        }
+    }
+    try ui.put(a, builder, faces.grotesk, 11.0, "Best", 284.0, 516.0, ui.muted())
+    try ui.put(a, builder, faces.jost_bold, 18.0, ui.number(a, s.best), 284.0, 532.0, ui.ink())
     if s.paused { try ui.centred(a, builder, faces.jost_bold, 20.0, "Paused", 334.0, 420.0, ui.amber_dark()) }
     if s.over {
         try ui.card(a, builder, 28.0, 250.0, 216.0, 130.0, 18.0, ui.cream())
@@ -301,7 +367,8 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
     var pause_label = "Pause"
     if s.paused { pause_label = "Resume" }
     try ui.pill(a, builder, &s.hits, faces, 105usize, 276.0, 664.0, 120.0, 52.0, pause_label, ui.soft(), 18.0)
-    try ui.pill(a, builder, &s.hits, faces, 106usize, 106.0, 732.0, 200.0, 44.0, "Restart", ui.soft(), 16.0)
+    try ui.pill(a, builder, &s.hits, faces, 107usize, 16.0, 732.0, 90.0, 44.0, "Hold", ui.soft(), 16.0)
+    try ui.pill(a, builder, &s.hits, faces, 106usize, 116.0, 732.0, 180.0, 44.0, "Restart", ui.soft(), 16.0)
     try ui.handle(a, builder)
     ret ok
 }
@@ -349,15 +416,19 @@ fn act(s: *State, id: usize) -> bool {
     }
     if id == 101usize {
         let turned = (s.rot + 1usize) % 4usize
-        // A turn that does not fit may be pushed a cell to either side.
-        if fits(s, s.piece, turned, s.px, s.py) {
-            s.rot = turned
-        } else if fits(s, s.piece, turned, s.px - 1i32, s.py) {
-            s.rot = turned
-            s.px -= 1i32
-        } else if fits(s, s.piece, turned, s.px + 1i32, s.py) {
-            s.rot = turned
-            s.px += 1i32
+        // A turn that does not fit is kicked: a cell or two to either side, then a cell up.
+        let kicks_x: [6]i32 = [6]i32{ 0i32, -1i32, 1i32, -2i32, 2i32, 0i32 }
+        let kicks_y: [6]i32 = [6]i32{ 0i32, 0i32, 0i32, 0i32, 0i32, -1i32 }
+        var k = 0usize
+        var done = false
+        while k < 6usize && !done {
+            if fits(s, s.piece, turned, s.px + kicks_x[k], s.py + kicks_y[k]) {
+                s.rot = turned
+                s.px += kicks_x[k]
+                s.py += kicks_y[k]
+                done = true
+            }
+            k += 1usize
         }
         ui.say("blocks rotate\n")
         ret true
@@ -372,8 +443,29 @@ fn act(s: *State, id: usize) -> bool {
             s.py += 1i32
             guard += 1usize
         }
+        // Two points a row for a hard drop.
+        s.score += 2usize * guard
         lock(s)
+        save_best(s)
         ui.say("blocks drop\n")
+        ret true
+    }
+    if id == 107usize {
+        if s.hold_used { ret false }
+        if s.hold == NONE {
+            s.hold = s.piece
+            spawn(s)
+        } else {
+            let swapped = s.hold
+            s.hold = s.piece
+            s.piece = swapped
+            s.rot = 0usize
+            s.px = 3i32
+            s.py = -1i32
+            if !fits(s, s.piece, s.rot, s.px, s.py) { s.over = true }
+        }
+        s.hold_used = true
+        ui.say("blocks hold\n")
         ret true
     }
     ret false
@@ -392,6 +484,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var s: State = zero
     s.seed = 20261008usize
+    load_best(&s)
+    if s.best > 0usize {
+        ui.say("blocks best ")
+        ui.say_num(s.best)
+        ui.say("\n")
+    }
     restart(&s)
     if !show(a, &kit, &s) {
         ui.say("blocks present failed\n")
