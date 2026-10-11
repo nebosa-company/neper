@@ -2135,4 +2135,5 @@ D2376	1236	C125 part two: files of several blocks (up to 4 KB) and Copy
 D2377	1423	C125 part three: Move, and Delete goes to a Trash
 D2378	1246	C125 part four: entries have times, and the Trash empties after thirty days
 D2379	1140	C125 part five: search by name and by type
-D2380	944	C125 part six: multi-select with Delete and Move
+D2380	945	C125 part six: multi-select with Delete and Move
+D2381	590	C125 part seven: a Recent view

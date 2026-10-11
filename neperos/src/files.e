@@ -156,6 +156,8 @@ type State = struct {
     real: bool,
     // The item being moved (NONE when none): the browse screen then offers Move here and Cancel.
     moving: usize,
+    // Recent: the files of the whole tree, newest first.
+    recent: bool,
     // Select mode: items are ticked by a tap; Delete and Move then act on all of them.
     select_mode: bool,
     move_many: bool,
@@ -358,10 +360,14 @@ fn matches(s: *State, i: usize) -> bool {
 
 fn build_children(s: *State) {
     s.child_total = 0usize
+    var kept_sort = s.sort
+    if s.recent { s.sort = 1usize }
     var i = 0usize
     while i < MAX_NODES {
         var shown = false
-        if s.query_len > 0usize {
+        if s.recent {
+            shown = s.nodes[i].used && i != 0usize && !s.nodes[i].is_dir
+        } else if s.query_len > 0usize {
             shown = s.nodes[i].used && i != 0usize && matches(s, i)
         } else {
             shown = s.nodes[i].used && s.nodes[i].parent == s.cwd && i != s.cwd
@@ -378,6 +384,7 @@ fn build_children(s: *State) {
         }
         i += 1usize
     }
+    s.sort = kept_sort
 }
 
 // "Internal storage / Documents / Taxes".
@@ -647,7 +654,12 @@ fn draw_row(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
 fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     build_children(s)
     var list_y: f32 = 96.0
-    if s.query_len > 0usize {
+    if s.recent {
+        try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), light())
+        hit(s, 623usize, 0.0, 10.0, 66.0, 56.0)
+        try put(a, builder, faces.jost_bold, 26.0, "Recent", 62.0, 14.0, light())
+        try put(a, builder, faces.grotesk, 12.0, "Files, newest first", 62.0, 54.0, light_muted())
+    } else if s.query_len > 0usize {
         try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), light())
         hit(s, 622usize, 0.0, 10.0, 66.0, 56.0)
         try put(a, builder, faces.jost_bold, 26.0, "Search", 62.0, 14.0, light())
@@ -663,7 +675,7 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
         try clipped(a, builder, faces.grotesk, 12.0, path_text(a, s, s.cwd), 62.0, 54.0, 290.0, light_muted())
     }
     try pill(a, builder, s, faces, 700usize, 312.0, 20.0, 84.0, 34.0, sort_name(s.sort), soft(), 14.0)
-    if s.query_len == 0usize { try pill(a, builder, s, faces, 152usize, 220.0, 20.0, 84.0, 34.0, "Search", soft(), 14.0) }
+    if s.query_len == 0usize && !s.recent { try pill(a, builder, s, faces, 152usize, 220.0, 20.0, 84.0, 34.0, "Search", soft(), 14.0) }
     if s.query_len == 0usize && s.moving == NONE && s.real && !s.select_mode { try pill(a, builder, s, faces, 153usize, 128.0, 20.0, 84.0, 34.0, "Select", soft(), 14.0) }
     // The rows, shifted by the scroll; only whole rows are drawn.
     var pos = 0usize
@@ -708,10 +720,12 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
         try pill(a, builder, s, faces, 621usize, 216.0, 836.0, 180.0, 52.0, "Move here", amber(), 16.0)
         ret ok
     }
-    if s.query_len > 0usize {
+    if s.query_len > 0usize || s.recent {
         if s.selected != NONE { try draw_sheet(a, builder, s, faces) }
         ret ok
     }
+    // Recent files, across the tree.
+    if s.real { try pill(a, builder, s, faces, 154usize, 170.0, 836.0, 76.0, 52.0, "Recent", soft(), 14.0) }
     // New file (a small text file; the real filesystem only).
     if s.real { try pill(a, builder, s, faces, 151usize, 16.0, 836.0, 144.0, 52.0, "New file", soft(), 16.0) }
     // New folder.
@@ -1313,6 +1327,21 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if id == 152usize {
         s.selected = NONE
         open_entry(s, SEARCH_MODE)
+        ret true
+    }
+    if id == 154usize && s.real {
+        s.recent = true
+        s.scroll = 0.0
+        build_children(s)
+        say("files recent ")
+        say_text(number(a, s.child_total))
+        say("\n")
+        ret true
+    }
+    if id == 623usize {
+        s.recent = false
+        s.scroll = 0.0
+        say("files recent cleared\n")
         ret true
     }
     if id == 622usize {
