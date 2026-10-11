@@ -3928,6 +3928,12 @@ $textTerminalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $textTerminalWritten -ne 'executable written') { throw 'text_terminal emission failed' }
 $textTerminalOutput = & $textTerminalPath
 if ($LASTEXITCODE -ne 0 -or $textTerminalOutput -ne 'terminal ok') { throw "text_terminal answered wrongly: exit $LASTEXITCODE" }
+# e.proc.sys: /proc parsers against a regex reader plus the live host by shape (261 records, D2722).
+$procSysPath = Join-Path $testBuild 'proc-sys-selfhost.exe'
+$procSysWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\proc_sys\src\main.e') $repo 'x64' 'windows' $procSysPath -j 2
+if ($LASTEXITCODE -ne 0 -or $procSysWritten -ne 'executable written') { throw 'proc_sys emission failed' }
+$procSysOutput = & $procSysPath
+if ($LASTEXITCODE -ne 0 -or $procSysOutput -ne 'proc sys ok') { throw "proc_sys answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

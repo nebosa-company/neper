@@ -32,6 +32,9 @@
     "e.io",
     "e.fs",
     "e.proc",
+    "e.proc.sys.format",
+    "e.proc.sys.host",
+    "e.proc.sys",
     "e.thread",
     "e.sync",
     "e.channel",
@@ -3777,6 +3780,46 @@
     "e.mem",
     "e.os",
     "e.time"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.proc.sys.format",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.proc.sys.host",
+   "layer": 4,
+   "surface": "spec",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.os",
+    "e.proc.sys.format",
+    "e.str",
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.proc.sys",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.os",
+    "e.proc.sys.format",
+    "e.proc.sys.host"
    ],
    "blocked_by": []
   },

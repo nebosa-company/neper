@@ -10333,6 +10333,63 @@ supported containment facility established before child code executes; unsupport
 containment is rejected before spawning. No shell is inserted. Child-only mode
 does not promise descendant cleanup. See SL05 for platform limits and test cases.
 
+### `e.proc.sys.format`
+
+```neper
+error Malformed
+type CpuTimes = struct { user_ms: u64, system_ms: u64, idle_ms: u64, iowait_ms: u64 }
+type MemoryInfo = struct { total: u64, available: u64, swap_total: u64, swap_free: u64 }
+type ProcessInfo = struct { pid: u32, parent: u32, threads: u32, state: u8, name: str }
+
+fn is_digit(c: u8) -> bool
+fn read_number(src: str, at: usize) -> (u64, usize, bool)
+fn line_end(src: str, from: usize) -> usize
+fn meminfo_field(src: str, key: str) -> (u64, bool)
+fn parse_meminfo(src: str) -> (MemoryInfo, err)
+fn parse_cpu_times(src: str, hz: u64) -> (CpuTimes, err)
+fn count_cpus(src: str) -> u32
+fn parse_uptime_ms(src: str) -> (u64, err)
+fn parse_stat(src: str) -> (ProcessInfo, err)
+```
+
+Pure parsers for the Linux text files `e.proc.sys.host` reads: `parse_meminfo` (`MemTotal`, `MemAvailable` or free plus buffers plus cache, swap; kilobytes to bytes), `parse_cpu_times` (the aggregate `cpu ` line of `/proc/stat` from ticks of `1/hz` second to milliseconds: user plus nice, system plus irq plus softirq, idle, iowait), `count_cpus` (the `cpuN` lines), `parse_uptime_ms` (`/proc/uptime`, up to three decimals) and `parse_stat` (`pid (comm) state ppid ...` with the name running to the last `)`, thread count from field 20; the name borrows from the input). A malformed file is `Malformed`.
+
+### `e.proc.sys`
+
+```neper
+type CpuTimes = struct { user_ms: u64, system_ms: u64, idle_ms: u64, iowait_ms: u64 }
+type MemoryInfo = struct { total: u64, available: u64, swap_total: u64, swap_free: u64 }
+type DiskUsage = struct { total: u64, free: u64, used: u64 }
+type ProcessInfo = struct { pid: u32, parent: u32, threads: u32, state: u8, name: str }
+
+fn cpu_count(a: *mem.Arena) -> (u32, err)
+fn cpu_times(a: *mem.Arena) -> (CpuTimes, err)
+fn memory(a: *mem.Arena) -> (MemoryInfo, err)
+fn uptime_ms(a: *mem.Arena) -> (u64, err)
+fn boot_time(a: *mem.Arena) -> (i64, err)
+fn disk_usage(a: *mem.Arena, path: str) -> (DiskUsage, err)
+fn process_id() -> u32
+fn self_memory(a: *mem.Arena) -> (u64, err)
+fn processes(a: *mem.Arena, limit: usize) -> ([]ProcessInfo, err)
+```
+
+psutil-shaped system and process information: `cpu_count` (logical processors), `cpu_times` (cumulative milliseconds), `memory` (physical total and available, swap), `uptime_ms`, `boot_time` (Unix seconds: wall clock less uptime), `disk_usage` (total, free to the caller, used of the volume holding a path), `process_id`, `self_memory` (resident or working-set bytes of this process) and `processes` (up to `limit` entries of the process table with parent, thread count, state and name; names borrow from the arena). The per-OS readers are `e.proc.sys.host` (kernel32 on Windows; `/proc` and `statfs` on Linux, where `statfs` is the x86-64 syscall number). Every figure is a snapshot. Not here: another process's CPU and memory, open files, connections, network interface addresses and counters, sensors, per-CPU times; Windows swap is the commit limit less physical memory and iowait is zero there.
+
+### `e.proc.sys.host`
+
+```neper
+fn cpu_count(a: *mem.Arena) -> (u32, err)
+fn cpu_times(a: *mem.Arena) -> (format.CpuTimes, err)
+fn memory(a: *mem.Arena) -> (format.MemoryInfo, err)
+fn uptime_ms(a: *mem.Arena) -> (u64, err)
+fn disk_usage(a: *mem.Arena, path: str) -> (u64, u64, u64, err)
+fn process_id() -> u32
+fn self_memory(a: *mem.Arena) -> (u64, err)
+fn processes(a: *mem.Arena, limit: usize) -> ([]format.ProcessInfo, err)
+```
+
+The host half of `e.proc.sys`, composed of per-target variants only (`host.windows.e`, `host.linux.e`). Windows reads kernel32 (`GetActiveProcessorCount`, `GetSystemTimes`, `GlobalMemoryStatusEx`, `GetTickCount64`, `GetDiskFreeSpaceExW`, a Toolhelp process snapshot, `K32GetProcessMemoryInfo`); Linux reads `/proc/stat`, `/proc/meminfo`, `/proc/uptime`, `/proc/<pid>/stat` and `/proc/self/statm` whole and hands them to `e.proc.sys.format`, plus one `statfs`. `disk_usage` answers (total, free, used).
+
 ### `e.thread.pool`
 
 ```neper

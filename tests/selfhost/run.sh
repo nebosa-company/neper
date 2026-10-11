@@ -3511,6 +3511,12 @@ text_terminal_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/text-terminal-selfhost"
 text_terminal_output=$("$test_build/text-terminal-selfhost")
 [ "$text_terminal_output" = 'terminal ok' ]
+# e.proc.sys: /proc parsers against a regex reader plus the live host by shape (261 records, D2722).
+proc_sys_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/proc_sys/src/main.e" "$repo" x64 linux "$test_build/proc-sys-selfhost" -j 2)
+[ "$proc_sys_written" = 'executable written' ]
+chmod +x "$test_build/proc-sys-selfhost"
+proc_sys_output=$("$test_build/proc-sys-selfhost")
+[ "$proc_sys_output" = 'proc sys ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
