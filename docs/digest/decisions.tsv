@@ -2217,4 +2217,12 @@ D2434	1125	C146: the world clock follows each city's daylight-saving rule
 D2435	1630	C148: a clipboard in the settings server, Copy in Secure, Paste in AI
 D2436	1460	C149: per-app notification permission is enforced at the status service
 D2437	1698	C114 and C113 closed: Tasks keeps its list; the Clock and Calculator milestone is met by the full apps
-D2438	1802	L137: DHCP, SNMP and the small text protocols as codecs
+D2438	1803	L137: DHCP, SNMP and the small text protocols as codecs
+D2680	1649	L113: e.db.migrate, a versioned SQL migration runner over e.db
+D2681	1912	L112: e.db.orm, struct-to-row mapping, relations and hooks over e.db
+D2682	1612	L159: e.test.match, composable value matchers with mismatch descriptions
+D2683	1829	L118: e.test.mock, scripted expectations with matchers and ordered verification
+D2684	1936	L142: e.test.bdd, a Gherkin parser and a runner with e.meta step binding
+D2685	1912	L143: e.test.mutate, source mutants and suite kill/survive scoring
+D2686	1579	L144: e.test.arch, architecture rules over the module graph
+D2687	1829	L158: e.data.objpool, a generic object pool with eviction

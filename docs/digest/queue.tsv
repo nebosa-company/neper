@@ -47,12 +47,9 @@ L104	library	0	470	Terminal kit: progress meters and rich text tables	tqdm/rich/
 L107	library	0	251	HTTP keep-alive connection pooling in e.net.http	urllib3-pool parity missing (verified: no pool surface in http.e): keep-alive connection reuse with per-host limits and idle eviction under caller storage.
 L109	library	0	276	TLS trust-root provisioning for e.net.tls	certifi parity gap (verified: no store readers or bundle found): OS trust-store readers per host plus an optional bundled Mozilla set feeding the existing caller-roots config.
 L110	library	0	282	Statistical legacy-charset detection in e.text.encoding	chardet parity gap: detect() covers BOM plus zero-byte/UTF-8 heuristics only, with no statistical disambiguation of legacy 8-bit encodings.
-L112	library	0	455	ORM layer over e.db: struct mapping, relations, hooks	gorm/ent parity missing: struct-to-row mapping via e.meta, belongs-to/has-many relations with preloading, lifecycle hooks and auto-migrate DDL over e.db.query.
-L113	library	0	252	SQL migration runner over e.db	goose/migrate parity missing: ordered versioned migrations with checksums, up/down transactions and a dialect-aware journal table over e.db.
 L114	library	0	261	NoSQL wire clients: Redis, MongoDB, Elasticsearch	go-redis/mongo-driver/elastic parity missing (verified: only false positives found): RESP, OP_MSG and ES REST codecs with loopback fixtures.
 L115	library	0	322	NATS client in e.net	Messaging-client gap, NATS first: text-protocol codec with pub/sub, request-reply and queue groups over e.net, loopback fixtures against scripted servers.
 L116	library	0	374	Prometheus exposition and OTLP export for e.metrics/e.trace	Observability-export gap (verified: no exposition surface): OpenMetrics text exposition with a scrape handler plus OTLP/HTTP metric and span export over e.net.http.
-L118	library	0	286	Mock and stub framework for e.test	testify-mock/gomock parity missing (verified: no mock surface in e.test): scripted call expectations with argument matchers and ordered verification over comptime interfaces.
 L125	library	0	276	SVG document rendering in e.gfx	resvg parity gap (verified: SVG output exists, render does not): SVG path/shape/text document rendering into the scene backend over e.gfx.geometry and text layout.
 L126	library	0	284	D-Bus message codec and client for Linux desktop	zbus parity gap (verified: e.dbus is only a forward reference;
 L127	library	0	254	Object-store abstraction over fs, http and memory	opendal parity at the portable layer: unified put/get/list/delete over L119 virtual FS, e.net.http clients and memory backends.
@@ -64,9 +61,6 @@ L138	library	0	398	Mediator: requests, notifications and pipeline behaviors	Medi
 L139	library	0	380	Object-object mapper with conventions and projections	AutoMapper/Mapster parity missing: convention-based member mapping with flattening, null substitution and queryable projections over e.meta field reflection.
 L140	library	0	393	Persistent background jobs with retries and cron triggers	Hangfire/Quartz parity missing: durable job queues with at-least-once retries, cron triggers over e.time.cron and recurring schedules over e.db storage.
 L141	library	0	277	Virtual-actor framework over e.dist	Orleans/Akka parity missing: virtual actors with lifecycle, timers, reminders and persisted state over e.dist placement plus e.db storage.
-L142	library	0	327	BDD/Gherkin runner with e.meta step binding	SpecFlow/Reqnroll/Gauge parity missing: feature-file parsing with step-definition binding via e.meta over the e.test runner.
-L143	library	0	236	Mutation testing in e.test	Stryker parity missing: source mutants (operator, constant, branch) with suite kill/survive scoring over e.test.
-L144	library	0	255	Architecture-rule testing over module dependencies	ArchUnitNET parity missing as a library (repo scripts validate the plan, not library code): layer, naming and dependency rules over the module graph for suite assertions.
 L145	library	0	259	PDF document generation in e.fmt	QuestPDF/PdfSharp parity missing: fills the hole L089 itself names (no PDF writer in e.fmt).
 L146	library	0	237	Word document generation over OOXML	DocX parity missing: friendly .docx generation (paragraphs, tables, styles, images) over the zip writer.
 L147	library	0	278	Embedded document and event store	LiteDB/Marten parity missing: single-file document collections plus an append-only event journal with projections and subscriptions over e.db.storage.
@@ -80,8 +74,6 @@ L154	library	0	277	Symbolic math: expression trees, diff, integrate, solve	SymPy
 L155	library	0	205	Graph interchange formats: GraphML, GEXF, GML	Gephi/JGraphT-IO parity missing: GraphML, GEXF and GML read/write over e.data.graph with attribute round-trips.
 L156	library	0	260	Brokerless messaging patterns: ZeroMQ and NNG	ZeroMQ/NNG parity missing (verified: no matches): pub/sub, push/pull, router/dealer and survey patterns over TCP via e.net, with ZMTP-style framing.
 L157	library	0	269	Expression languages: JEXL, SpEL and MVEL parity	JEXL/SpEL/MVEL parity missing: property navigation, method calls and operators over caller objects with sandboxed evaluation.
-L158	library	0	259	Generic object pool with eviction	commons-pool2 parity missing (db.pool is DB-specific): generic borrow/return pools with idle eviction and exhaustion policy over e.mem arenas.
-L159	library	0	258	Composable test matcher library	Hamcrest parity missing (verified: no matcher surface in e.test): composable value matchers with mismatch descriptions over e.test assertions.
 L160	library	0	278	Micro-slivers IV: robots, sitemap, test polling, fixed-width, keystores	Fourth small-completions item: robots.txt and sitemap parsing, Awaitility-style async test-condition polling, FileHelpers-style fixed-width record mapping and PKCS#12/JKS keystores.
 L161	library	0	238	Rules engine: Rete plus decision tables	Drools parity missing (L025 is a predicate subset): Rete network with decision tables and a rule DSL over e.algo.logic.
 T036	tooling	0.8	567	OpenCode harness skill and agent routing	a live OpenCode first-run smoke (static routing check only).

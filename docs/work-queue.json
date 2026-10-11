@@ -532,28 +532,6 @@
       "evidence": "Planning only (D1873). chardet parity gap: detect() covers BOM plus zero-byte/UTF-8 heuristics only, with no statistical disambiguation of legacy 8-bit encodings. Add frequency-table scoring with confidence calibration over the existing Guess type. Fixtures on multilingual corpora."
     },
     {
-      "id": "L112",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 210,
-      "title": "ORM layer over e.db: struct mapping, relations, hooks",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1877). gorm/ent parity missing: struct-to-row mapping via e.meta, belongs-to/has-many relations with preloading, lifecycle hooks and auto-migrate DDL over e.db.query. L032/L064 cover relational ops, not the model layer. Fixtures on sqlite with relation graphs and hook ordering. Follow-on (D1890): Dapper/RepoDb/PetaPoco-style micro-mapping and Linq2Db expression notes ride the struct-mapping half; bulk-copy protocols stay driver detail."
-    },
-    {
-      "id": "L113",
-      "category": "library",
-      "group": "Drivers",
-      "order": 211,
-      "title": "SQL migration runner over e.db",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1877). goose/migrate parity missing: ordered versioned migrations with checksums, up/down transactions and a dialect-aware journal table over e.db. Fixtures for ordering, checksum mismatch refusal and failed-migration locking on sqlite."
-    },
-    {
       "id": "L114",
       "category": "library",
       "group": "Drivers",
@@ -585,17 +563,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1877). Observability-export gap (verified: no exposition surface): OpenMetrics text exposition with a scrape handler plus OTLP/HTTP metric and span export over e.net.http. Registries and sampling stay in e.metrics/e.trace. Golden-body fixtures; no collector dependency. Follow-on (D1891): JMX-style management beans (attributes/operations) as a second slice."
-    },
-    {
-      "id": "L118",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 216,
-      "title": "Mock and stub framework for e.test",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1877). testify-mock/gomock parity missing (verified: no mock surface in e.test): scripted call expectations with argument matchers and ordered verification over comptime interfaces. e.test.sim covers simulation, not doubles. Fixtures for expectation failure diagnostics."
     },
     {
       "id": "L125",
@@ -717,39 +684,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1890). Orleans/Akka parity missing: virtual actors with lifecycle, timers, reminders and persisted state over e.dist placement plus e.db storage. e.task covers tasks, not grains. Fixtures for activation, timer firing, reminder durability and reentrancy refusal."
-    },
-    {
-      "id": "L142",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 240,
-      "title": "BDD/Gherkin runner with e.meta step binding",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1890). SpecFlow/Reqnroll/Gauge parity missing: feature-file parsing with step-definition binding via e.meta over the e.test runner. Fixtures for tag filtering, table arguments and pending-step reporting; living-doc output stays app-side. Follow-on (D1891): Cucumber-JVM, Spock and Serenity ride the same runner."
-    },
-    {
-      "id": "L143",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 241,
-      "title": "Mutation testing in e.test",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1890). Stryker parity missing: source mutants (operator, constant, branch) with suite kill/survive scoring over e.test. Fixtures pin mutant counts and score math on a sample module; equivalent-mutant detection stays out."
-    },
-    {
-      "id": "L144",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 242,
-      "title": "Architecture-rule testing over module dependencies",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1890). ArchUnitNET parity missing as a library (repo scripts validate the plan, not library code): layer, naming and dependency rules over the module graph for suite assertions. Fixtures with intentional violations; rule DSL stays minimal."
     },
     {
       "id": "L145",
@@ -893,28 +827,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1891). JEXL/SpEL/MVEL parity missing: property navigation, method calls and operators over caller objects with sandboxed evaluation. L026 covers cell formulas, a different shape. Fixtures against reference evaluations; compilation to bytecode stays out."
-    },
-    {
-      "id": "L158",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 256,
-      "title": "Generic object pool with eviction",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1891). commons-pool2 parity missing (db.pool is DB-specific): generic borrow/return pools with idle eviction and exhaustion policy over e.mem arenas. Fixtures for contention, eviction timing and leak detection; no JMX exposure (see L116 note)."
-    },
-    {
-      "id": "L159",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 257,
-      "title": "Composable test matcher library",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1891). Hamcrest parity missing (verified: no matcher surface in e.test): composable value matchers with mismatch descriptions over e.test assertions. Assertion style itself exists; matchers do not. Fixtures for description quality on failure."
     },
     {
       "id": "L160",

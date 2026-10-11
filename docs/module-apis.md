@@ -1769,6 +1769,40 @@ edges; it reserves both first and leaves the builder unchanged on error. Nodes a
 dense `0..node_count`; node counts that do not fit `u32` return `TooLarge`.
 Graphs own no resources beyond their caller arena.
 
+### `e.data.objpool`
+
+```neper
+type Config = struct { max_total: usize, max_idle: usize, min_idle: usize, idle_ticks: u64, leak_ticks: u64, lifo: bool, wait: bool }
+type Pool[T: type] = struct { items: []T, state: []u8, since: []u64, uses: []u32, waiters: []u32, waiter_at: []u64, wait_head: usize, wait_len: usize, cfg: Config, created: u64, destroyed: u64, evicted: u64, leaked: u64 }
+type Outcome = enum u8 { Reused, NeedsCreate, Queued, Exhausted }
+type Grant = struct { outcome: Outcome, slot: u32 }
+type Release = struct { destroy: bool, handoff: bool, who: u32, slot: u32, needs_create: bool }
+error Invalid
+error TooSmall
+const EMPTY: u8 = 0u8
+const PENDING: u8 = 1u8
+const IDLE: u8 = 2u8
+const BORROWED: u8 = 3u8
+const NONE: u32 = 0xffffffffu32
+
+fn pool[T: type](items: []T, state: []u8, since: []u64, uses: []u32, waiters: []u32, waiter_at: []u64, cfg: Config) -> (Pool[T], err)
+fn pool_in[T: type](a: *mem.Arena, cfg: Config, queue: usize) -> (Pool[T], err)
+fn count[T: type](p: *const Pool[T], s: u8) -> usize
+fn object[T: type](p: *Pool[T], slot: u32) -> *T
+fn pick_idle[T: type](p: *const Pool[T], newest: bool) -> u32
+fn acquire[T: type](p: *Pool[T], now: u64, who: u32) -> Grant
+fn attach[T: type](p: *Pool[T], slot: u32, obj: T, now: u64) -> err
+fn hand_to_waiter[T: type](p: *Pool[T], slot: u32, now: u64, needs_create: bool) -> Release
+fn release[T: type](p: *Pool[T], slot: u32, now: u64, healthy: bool) -> (Release, err)
+fn abort_create[T: type](p: *Pool[T], slot: u32, now: u64) -> (Release, err)
+fn evict[T: type](p: *Pool[T], now: u64, out: []u32) -> usize
+fn leaks[T: type](p: *const Pool[T], now: u64, out: []u32) -> usize
+fn reclaim[T: type](p: *Pool[T], slot: u32, now: u64) -> (Release, err)
+fn expire_waiters[T: type](p: *Pool[T], now: u64, max_wait: u64, out: []u32) -> usize
+```
+
+A generic object pool with idle eviction (commons-pool2 shape) as a state machine over caller storage or an arena: `acquire` reuses the newest or oldest idle object, reserves a slot the caller must create (`attach`), queues the requester FIFO under the wait policy or answers `Exhausted`; `release` hands the object to the head waiter, keeps it idle up to `max_idle` or destroys it; `evict` retires idle objects past `idle_ticks` oldest first down to `min_idle`; `leaks` and `reclaim` find and take back borrowed objects held past `leak_ticks`; `expire_waiters` drops stale waiters. Time is the caller's `now`.
+
 ### `e.data.slot_map`
 
 ```neper
@@ -11895,6 +11929,202 @@ caller's policy. `render_json` fixes the report schema (name, iters, samples, ke
 stddev, min, max, q1, q3, mad, ci_low, ci_high, outliers) and `render_text` a criterion-like block.
 A builder must be the arena's top allocation, so render into a fresh one.
 
+### `e.test.match`
+
+```neper
+type Subject = union enum u8 { Int: i64, Float: f64, Text: str, Bool: bool, Ints: []const i64 }
+type Kind = enum u8 { Anything, EqInt, NeInt, Gt, Ge, Lt, Le, Between, OneOf, EqFloat, Near, EqText, Contains, StartsWith, EndsWith, Len, IsTrue, IsFalse, Not, AllOf, AnyOf, HasItem, Every }
+type Matcher = struct { kind: Kind, lo: i64, hi: i64, real: f64, tol: f64, text: str, ints: []const i64, kids: []const Matcher, inner: *const Matcher }
+
+fn blank(kind: Kind) -> Matcher
+fn anything() -> Matcher
+fn int_matcher(kind: Kind, v: i64) -> Matcher
+fn eq_int(v: i64) -> Matcher
+fn ne_int(v: i64) -> Matcher
+fn gt(v: i64) -> Matcher
+fn ge(v: i64) -> Matcher
+fn lt(v: i64) -> Matcher
+fn le(v: i64) -> Matcher
+fn between(lo: i64, hi: i64) -> Matcher
+fn one_of(values: []const i64) -> Matcher
+fn eq_float(v: f64) -> Matcher
+fn near(v: f64, tol: f64) -> Matcher
+fn text_matcher(kind: Kind, t: str) -> Matcher
+fn eq_text(t: str) -> Matcher
+fn contains(t: str) -> Matcher
+fn starts_with(t: str) -> Matcher
+fn ends_with(t: str) -> Matcher
+fn is_true() -> Matcher
+fn is_false() -> Matcher
+fn inner_matcher(kind: Kind, inner: *const Matcher) -> Matcher
+fn len_is(inner: *const Matcher) -> Matcher
+fn negate(inner: *const Matcher) -> Matcher
+fn has_item(inner: *const Matcher) -> Matcher
+fn every(inner: *const Matcher) -> Matcher
+fn all_of(kids: []const Matcher) -> Matcher
+fn any_of(kids: []const Matcher) -> Matcher
+fn contains_text(hay: str, needle: str) -> bool
+fn matches(m: *const Matcher, v: Subject) -> bool
+fn put(b: *str.Builder, s: str)
+fn put_int(b: *str.Builder, n: i64)
+fn put_quoted(b: *str.Builder, s: str)
+fn put_ints(b: *str.Builder, items: []const i64)
+fn put_show(b: *str.Builder, v: Subject)
+fn put_describe(b: *str.Builder, m: *const Matcher)
+fn put_explain(b: *str.Builder, m: *const Matcher, v: Subject)
+fn describe(m: *const Matcher, out: []u8) -> str
+fn explain(m: *const Matcher, v: Subject, out: []u8) -> str
+fn message(m: *const Matcher, v: Subject, out: []u8) -> str
+fn assert_that(v: Subject, m: *const Matcher, buf: []u8) -> err
+```
+
+Composable Hamcrest-style value matchers as plain data over `Subject` (int, float, text, bool, int list): comparison, `between`, `one_of`, `near`, text `contains`/`starts_with`/`ends_with`, `len_is`, `has_item`/`every`, `negate`, `all_of`/`any_of`. `describe` writes the expectation, `explain` the mismatch (a composite names the failing part), `message` joins them as `expected: ...` / `     but: ...`, and `assert_that` fails the running test with that text built in the caller's buffer.
+
+### `e.test.mock`
+
+```neper
+const MAX_ARGS: usize = 4usize
+const UNBOUNDED: u32 = 0xffffffffu32
+const NO_MATCH: i64 = -1i64
+type Expectation = struct { method: u32, name: str, args: [4]match.Matcher, nargs: usize, ret_value: i64, rets: []const i64, min: u32, max: u32, seq: u32, called: u32 }
+type Call = struct { method: u32, nargs: usize, args: [4]i64, matched: i64, late: bool }
+type Mock = struct { expectations: []Expectation, count: usize, calls: []Call, logged: usize, chain: u32 }
+error Full
+error Unexpected
+error Order
+error Unmet
+error BadIndex
+
+fn mock(expectations: []Expectation, calls: []Call) -> Mock
+fn expect(m: *Mock, method: u32, name: str) -> (usize, err)
+fn allow(m: *Mock, method: u32, name: str, value: i64) -> (usize, err)
+fn with_arg(m: *Mock, index: usize, pos: usize, matcher: match.Matcher) -> err
+fn returns(m: *Mock, index: usize, value: i64) -> err
+fn returns_list(m: *Mock, index: usize, values: []const i64) -> err
+fn times(m: *Mock, index: usize, min: u32, max: u32) -> err
+fn in_order(m: *Mock, index: usize) -> err
+fn accepts(e: *const Expectation, args: []const i64) -> bool
+fn prior_met(m: *const Mock, index: usize) -> bool
+fn scripted(e: *const Expectation) -> i64
+fn call(m: *Mock, method: u32, args: []const i64) -> (i64, err)
+fn call_count(m: *const Mock, method: u32) -> usize
+fn put(b: *str.Builder, s: str)
+fn put_usize(b: *str.Builder, n: usize)
+fn put_call(b: *str.Builder, name: str, c: *const Call)
+fn put_expectation(b: *str.Builder, e: *const Expectation)
+fn name_of(m: *const Mock, method: u32) -> str
+fn put_difference(b: *str.Builder, e: *const Expectation, c: *const Call)
+fn verify(m: *const Mock, out: []u8) -> (str, err)
+fn assert_verified(m: *const Mock, buf: []u8) -> err
+```
+
+Mocks, stubs and spies as a table (no runtime reflection): a call is a method number plus up to four integer arguments checked by `e.test.match` matchers; `expect`, `with_arg`, `returns`/`returns_list`, `times`, `in_order` script it, `allow` is a stub, `call` is the double's method body, and `verify`/`assert_verified` produce the failure diagnostics (unexpected calls with the first differing argument, out-of-order calls, missing calls).
+
+### `e.test.bdd`
+
+```neper
+type Keyword = enum u8 { Given, When, Then, And, But }
+type Outcome = enum u8 { Passed, Failed, Pending, Skipped, Filtered }
+type Step = struct { keyword: Keyword, text: str, cell_start: usize, rows: usize, cols: usize, line: u32 }
+type Scenario = struct { name: str, tag_start: usize, tag_count: usize, step_start: usize, step_count: usize, line: u32 }
+type Document = struct { feature: str, feature_tag_count: usize, scenarios: []Scenario, steps: []Step, cells: []str, tags: []str, n_scenarios: usize, n_steps: usize, n_cells: usize, n_tags: usize, error_line: u32 }
+type Filter = struct { include: []const str, exclude: []const str }
+type Word = struct { text: str, quoted: bool }
+type Args = struct { text: str, values: [4]str, count: usize, cells: []const str, rows: usize, cols: usize }
+type Summary = struct { scenarios: usize, passed: usize, failed: usize, pending: usize, filtered: usize, steps_passed: usize, steps_failed: usize, steps_pending: usize, steps_skipped: usize }
+error Invalid
+error Unsupported
+error TooSmall
+error Pending
+const MAX_WORDS: usize = 24usize
+const MAX_TAGS_PER_LINE: usize = 16usize
+const MAX_EXAMPLE_COLUMNS: usize = 8usize
+
+fn document(scenarios: []Scenario, steps: []Step, cells: []str, tags: []str) -> Document
+fn push_tag(d: *Document, tag: str) -> err
+fn push_step(d: *Document, s: Step) -> err
+fn push_cell(d: *Document, value: str) -> err
+fn push_scenario(d: *Document, s: Scenario) -> err
+fn step_line(line: str) -> (Keyword, str, bool)
+fn table_row(line: str, out: []str) -> (usize, err)
+fn substitute(a: *mem.Arena, text: str, heads: []const str, values: []const str) -> (str, err)
+fn expand_row(a: *mem.Arena, d: *Document, name: str, line: u32, tag_start: usize, tag_count: usize, template_start: usize, template_end: usize, heads: []const str, values: []const str, ordinal: usize) -> err
+fn parse(a: *mem.Arena, source: str, d: *Document) -> err
+fn has_tag(d: *const Document, scenario: usize, tag: str) -> bool
+fn selected(d: *const Document, scenario: usize, filter: Filter) -> bool
+fn split_words(text: str, out: []Word) -> usize
+fn matches_pattern(name: str, words: []const Word, args: *Args) -> bool
+fn int_at(args: *const Args, i: usize) -> i64
+fn cell(args: *const Args, row: usize, col: usize) -> str
+fn dispatch[W: type, S: type](world: *W, steps: *const S, d: *const Document, index: usize) -> Outcome
+fn run[W: type, S: type](world: *W, reset: fn(*W), steps: *const S, d: *const Document, filter: Filter, results: []Outcome, scenario_results: []Outcome) -> (Summary, err)
+fn outcome_name(o: Outcome) -> str
+fn keyword_name(k: Keyword) -> str
+fn put(b: *str.Builder, s: str)
+fn put_count(b: *str.Builder, n: usize)
+fn report(d: *const Document, scenario_results: []const Outcome, results: []const Outcome, sum: Summary, out: []u8) -> str
+```
+
+A Gherkin parser and BDD runner. `parse` reads Feature/Background/Scenario/Scenario Outline with Examples, step tables, tags and comments into caller arrays (outline rows expand to scenarios); `run` binds each step to a field of a step-definition struct through `meta.fields` (the field name is the pattern, with `int`, `word` and `quoted` words capturing arguments), skips a scenario's remaining steps after the first that is not passed, filters by tag include/exclude lists and fills per-step and per-scenario outcomes; `report` lists failed and pending steps and the totals.
+
+### `e.test.mutate`
+
+```neper
+type Kind = enum u8 { Operator, Constant, Branch }
+type Verdict = enum u8 { Killed, Survived, Invalid, Timeout }
+type Mutant = struct { kind: Kind, offset: usize, len: usize, replacement: str, line: u32 }
+type Score = struct { total: usize, killed: usize, timeout: usize, survived: usize, invalid: usize }
+error TooSmall
+
+fn add(out: []Mutant, n: *usize, kind: Kind, offset: usize, len: usize, replacement: str, line: u32) -> err
+fn is_word_byte(b: u8) -> bool
+fn after_operand(source: str, at: usize) -> bool
+fn line_end(source: str, from: usize) -> usize
+fn scan(a: *mem.Arena, source: str, out: []Mutant, n: *usize) -> err
+fn discover(a: *mem.Arena, source: str, out: []Mutant) -> (usize, err)
+fn if_next(source: str, at: usize) -> u8
+fn apply(a: *mem.Arena, source: str, m: Mutant) -> (str, err)
+fn run[Ctx: type](a: *mem.Arena, source: str, mutants: []const Mutant, ctx: *Ctx, suite: fn(*Ctx, Mutant, str) -> Verdict, verdicts: []Verdict) -> (Score, err)
+fn score_permille(s: Score) -> u32
+fn meets(s: Score, threshold_permille: u32) -> bool
+fn put(b: *str.Builder, s: str)
+fn put_count(b: *str.Builder, n: usize)
+fn report(source: str, mutants: []const Mutant, verdicts: []const Verdict, s: Score, out: []u8) -> str
+```
+
+Mutation testing over source text: `discover` enumerates operator, constant and branch mutants (comments, strings, `->`, shifts, floats and unary minus skipped), `apply` makes one mutated program, `run` hands each to the caller's suite (`Killed`, `Survived`, `Invalid`, `Timeout`) rewinding the arena after each, `score_permille`/`meets` give the Stryker-style killed-or-timeout share of valid mutants, and `report` lists survivors. Equivalent-mutant detection is out.
+
+### `e.test.arch`
+
+```neper
+const NONE: u32 = 0xffffffffu32
+type Graph = struct { names: []str, layers: []u8, deps_from: []u32, deps_to: []u32, mark: []u8, stack: []u32, modules: usize, edges: usize }
+type RuleKind = enum u8 { Layering, Forbid, OnlyDepend, NoCycles, LayerRange, Naming }
+type Rule = struct { kind: RuleKind, from: str, to: str, lo: u8, hi: u8 }
+type Violation = struct { rule: usize, module: u32, other: u32 }
+error TooSmall
+error Unknown
+
+fn graph(names: []str, layers: []u8, deps_from: []u32, deps_to: []u32, mark: []u8, stack: []u32) -> Graph
+fn add_module(g: *Graph, name: str, layer: u8) -> (u32, err)
+fn index_of(g: *const Graph, name: str) -> u32
+fn add_dep(g: *Graph, from: str, to: str) -> err
+fn uses(source: str, out: []str) -> usize
+fn under(name: str, prefix: str) -> bool
+fn under_any(name: str, prefixes: str) -> bool
+fn add_violation(out: []Violation, n: *usize, rule: usize, module: u32, other: u32) -> err
+fn on_cycle(g: *Graph, start: u32) -> bool
+fn scan(g: *Graph, rules: []const Rule, out: []Violation, n: *usize) -> err
+fn check(g: *Graph, rules: []const Rule, out: []Violation) -> (usize, err)
+fn put(b: *str.Builder, s: str)
+fn put_layer(b: *str.Builder, layer: u8)
+fn put_violation(b: *str.Builder, g: *const Graph, rules: []const Rule, v: Violation)
+fn describe(g: *const Graph, rules: []const Rule, vs: []const Violation, out: []u8) -> str
+fn assert_holds(g: *Graph, rules: []const Rule, scratch: []Violation, buf: []u8) -> err
+```
+
+Architecture rules over a module dependency graph, ArchUnit-style: build a `Graph` by hand or with `uses` (the `use` lines of a source), state `Layering`, `Forbid`, `OnlyDepend`, `NoCycles`, `LayerRange` and `Naming` rules as data, `check` lists every violation and `assert_holds` fails the running test with one line per violation. Prefix matching is by name component.
+
 ### `e.debug`
 
 ```neper
@@ -14293,6 +14523,83 @@ extendible hashing, an LSM (`memtable_flush`, `sstable_find`, `lsm_compact`), a 
 (`wal_append`, `wal_truncate`, `recover` stopping at a torn tail), a buffer pool with LRU,
 CLOCK and LRU-K eviction, and transactions: 2PL with deadlock detection, MVCC with
 `vacuum`, OCC validation.
+
+### `e.db.migrate`
+
+```neper
+type Dialect = enum u8 { Sqlite, Postgres, Mysql }
+type Migration = struct { version: i64, name: str, up: str, down: str }
+type Entry = struct { version: i64, checksum: i64, dirty: bool }
+error Order
+error Checksum
+error Missing
+error Dirty
+error Failed
+error Irreversible
+error TooSmall
+
+fn checksum(m: Migration) -> i64
+fn journal_ddl(d: Dialect) -> str
+fn lock_sql(d: Dialect) -> str
+fn clean_sql(d: Dialect) -> str
+fn dirty_sql(d: Dialect) -> str
+fn remove_sql(d: Dialect) -> str
+fn int_of(v: db.Value) -> i64
+fn ensure_journal(c: *db.Connection, d: Dialect) -> err
+fn read_journal(c: *db.Connection, out: []Entry) -> (usize, err)
+fn validate(ms: []const Migration) -> err
+fn verify(ms: []const Migration, entries: []const Entry) -> err
+fn applied(entries: []const Entry, version: i64) -> bool
+fn status(c: *db.Connection, d: Dialect, out: []Entry) -> (usize, err)
+fn one_version(c: *db.Connection, sql: str, version: i64) -> err
+fn lock_up(c: *db.Connection, d: Dialect, m: Migration, now: i64) -> err
+fn in_transaction(c: *db.Connection, body: str, finish: str, version: i64) -> err
+fn up(c: *db.Connection, d: Dialect, ms: []const Migration, buf: []Entry, limit_version: i64, now: i64) -> (usize, err)
+fn down(c: *db.Connection, d: Dialect, ms: []const Migration, buf: []Entry, steps: usize) -> (usize, err)
+fn unlock(c: *db.Connection, d: Dialect, version: i64) -> err
+```
+
+A versioned SQL migration runner over `e.db`: strictly ascending versions, a `schema_migrations` journal with a dialect-aware DDL and placeholders (`Sqlite`, `Postgres`, `Mysql`), `up` to a version, `down` by steps, and `verify` refusing a dirty journal, a changed `up` checksum (FNV-1a 64), a missing applied version or an out-of-order pending one. A migration locks its journal row dirty before it runs and clears it in the same transaction as its SQL; a failure leaves the lock until `unlock`.
+
+### `e.db.orm`
+
+```neper
+type Session = struct { c: *db.Connection, a: *mem.Arena, d: migrate.Dialect, queries: u64 }
+type Hooks[T: type] = struct { before_save: fn(*T) -> err, after_save: fn(*T) -> err, before_create: fn(*T) -> err, after_create: fn(*T) -> err, before_update: fn(*T) -> err, after_update: fn(*T) -> err, before_delete: fn(*T) -> err, after_delete: fn(*T) -> err }
+type Span = struct { start: usize, len: usize }
+error Invalid
+error NoKey
+error NotFound
+error TooSmall
+
+fn session(c: *db.Connection, a: *mem.Arena, d: migrate.Dialect) -> Session
+fn hook_ok[T: type](row: *T) -> err
+fn type_sql(d: migrate.Dialect, kind: meta.TypeKind) -> str
+fn push_placeholder(b: *str.Builder, d: migrate.Dialect, n: usize) -> err
+fn to_value[F: type](slot: F) -> db.Value
+fn copy_text(a: *mem.Arena, text: str) -> (str, err)
+fn from_value[F: type](a: *mem.Arena, v: db.Value) -> (F, err)
+fn key_of[T: type](row: *const T) -> (i64, err)
+fn set_key[T: type](row: *T, key: i64) -> err
+fn int_field[T: type](row: *const T, name: str) -> (i64, bool)
+fn field_count[T: type]() -> usize
+fn push_columns[T: type](b: *str.Builder) -> err
+fn run(s: *Session, sql: str, params: []const db.Parameter) -> (u64, err)
+fn check_key[T: type]() -> err
+fn create_sql[T: type](s: *Session, table: str) -> (str, err)
+fn create_table[T: type](s: *Session, table: str) -> err
+fn last_id(s: *Session) -> (i64, err)
+fn insert[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err
+fn update[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err
+fn delete[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err
+fn read_row[T: type](s: *Session, rows: *db.Rows, cells: []db.Value, out: *T) -> (bool, err)
+fn select[T: type](s: *Session, table: str, where_sql: str, order_sql: str, params: []const db.Parameter, out: []T) -> (usize, err)
+fn find[T: type](s: *Session, table: str, id: i64, out: *T) -> (bool, err)
+fn belongs_to[C: type, P: type](s: *Session, parent_table: str, child: *const C, fk: str, out: *P) -> (bool, err)
+fn has_many[P: type, C: type](s: *Session, child_table: str, fk: str, parents: []const P, out: []C, spans: []Span) -> (usize, err)
+```
+
+A struct-to-row mapper over `e.db` via `e.meta`: the first field is the integer `id` key, integers/floats/bools/`str` are columns in field order. `Session` carries the connection, arena, dialect and a statement counter; `create_table`/`create_sql` derive the DDL, `insert` (id 0 is database-generated and written back), `update`, `delete`, `find` and `select` map rows, eight `Hooks` run in gorm's order, `belongs_to` follows a foreign-key field, and `has_many` preloads every parent's children in one `IN` query into per-parent `Span`s.
 
 ### `e.db`
 

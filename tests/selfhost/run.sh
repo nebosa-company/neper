@@ -2019,6 +2019,46 @@ test_linearize_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$test_linearize_written" = 'executable written' ]
 chmod +x "$test_build/test-linearize-selfhost"
 "$test_build/test-linearize-selfhost"
+# `e.test.match`: every matcher kind's truth table, a 12x12 grid of composition against the plain boolean expression, and exact Hamcrest-style description, mismatch and assert_that texts (D2682).
+test_match_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_match/src/main.e" "$repo" x64 linux "$test_build/test-match-selfhost")
+[ "$test_match_written" = 'executable written' ]
+chmod +x "$test_build/test-match-selfhost"
+"$test_build/test-match-selfhost"
+# `e.test.mock`: exactly-once default and its report, argument-matcher mismatch, missing call, times with a returns list, stubs, ordered expectations, spy log and limits, assert_verified (D2683).
+test_mock_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_mock/src/main.e" "$repo" x64 linux "$test_build/test-mock-selfhost")
+[ "$test_mock_written" = 'executable written' ]
+chmod +x "$test_build/test-mock-selfhost"
+"$test_build/test-mock-selfhost"
+# `e.test.bdd`: a Gherkin feature (tags, background, outline over two example rows, step table, undefined and failing steps) parsed and run through an e.meta-bound step struct: shape, summary, tag filters, report text and parse refusals (D2684).
+test_bdd_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_bdd/src/main.e" "$repo" x64 linux "$test_build/test-bdd-selfhost")
+[ "$test_bdd_written" = 'executable written' ]
+chmod +x "$test_build/test-bdd-selfhost"
+"$test_build/test-bdd-selfhost"
+# `e.test.mutate`: 32 mutants of a sample module equal to an independent regex enumeration (kind, offset, length, replacement), three mutated texts, a scripted suite's score math and the exact survivor report (D2685).
+test_mutate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_mutate/src/main.e" "$repo" x64 linux "$test_build/test-mutate-selfhost")
+[ "$test_mutate_written" = 'executable written' ]
+chmod +x "$test_build/test-mutate-selfhost"
+"$test_build/test-mutate-selfhost"
+# `e.test.arch`: an 11-module graph with an intentional violation of each rule kind (8 violations, exact text), prefix matching by component, use-line extraction, a clean graph, TooSmall cuts and assert_holds (D2686).
+test_arch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_arch/src/main.e" "$repo" x64 linux "$test_build/test-arch-selfhost")
+[ "$test_arch_written" = 'executable written' ]
+chmod +x "$test_build/test-arch-selfhost"
+"$test_build/test-arch-selfhost"
+# `e.data.objpool`: exhaustion, LIFO/FIFO idle choice, FIFO waiter hand-off, max_idle destruction, eviction timing and min_idle, leaks and reclaim, waiter expiry, and a 400-operation hash differential against an independent Python model (D2687).
+data_objpool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_objpool/src/main.e" "$repo" x64 linux "$test_build/data-objpool-selfhost")
+[ "$data_objpool_written" = 'executable written' ]
+chmod +x "$test_build/data-objpool-selfhost"
+"$test_build/data-objpool-selfhost"
+# `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
+db_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_migrate/src/main.e" "$repo" x64 linux "$test_build/db-migrate-selfhost")
+[ "$db_migrate_written" = 'executable written' ]
+chmod +x "$test_build/db-migrate-selfhost"
+"$test_build/db-migrate-selfhost"
+# `e.db.orm`: DDL per dialect, generated and explicit keys, every column kind round-tripped on sqlite, update/delete NotFound, hook order and a vetoing hook, belongs-to and a one-statement has-many preload (D2681).
+db_orm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_orm/src/main.e" "$repo" x64 linux "$test_build/db-orm-selfhost")
+[ "$db_orm_written" = 'executable written' ]
+chmod +x "$test_build/db-orm-selfhost"
+"$test_build/db-orm-selfhost"
 # `e.fmt.pretty`: Wadler's tree at four widths and soft-line cases byte-exact against a replica, plus the lazy-versus-strict group case (D863).
 fmt_pretty_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pretty/src/main.e" "$repo" x64 linux "$test_build/fmt-pretty-selfhost")
 [ "$fmt_pretty_written" = 'executable written' ]

@@ -469,7 +469,15 @@
     "e.net.auth",
     "e.debug.dump.host",
     "e.math.pkpd",
-    "e.math.units"
+    "e.math.units",
+    "e.db.migrate",
+    "e.db.orm",
+    "e.test.match",
+    "e.test.mock",
+    "e.test.bdd",
+    "e.test.mutate",
+    "e.test.arch",
+    "e.data.objpool"
    ]
   },
   {
@@ -6817,6 +6825,110 @@
     "e.mem",
     "e.text.utf8",
     "e.debug.dump.host"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.objpool",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.match",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str",
+    "e.test"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.mock",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str",
+    "e.test",
+    "e.test.match"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.bdd",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.meta",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.mutate",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.arch",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str",
+    "e.test"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.db.migrate",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.db",
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.db.orm",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.db",
+    "e.db.migrate",
+    "e.mem",
+    "e.meta",
+    "e.str"
    ],
    "blocked_by": []
   }

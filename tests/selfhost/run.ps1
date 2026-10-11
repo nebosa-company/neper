@@ -2266,6 +2266,54 @@ $testLinearizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $testLinearizeWritten -ne 'executable written') { throw 'test_linearize emission failed' }
 & $testLinearizePath
 if ($LASTEXITCODE -ne 0) { throw "a test_linearize check failed: exit $LASTEXITCODE" }
+# `e.test.match`: every matcher kind's truth table, a 12x12 grid of composition against the plain boolean expression, and exact Hamcrest-style description, mismatch and assert_that texts (D2682).
+$testMatchPath = Join-Path $testBuild 'test-match-selfhost.exe'
+$testMatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_match\src\main.e') $repo 'x64' 'windows' $testMatchPath
+if ($LASTEXITCODE -ne 0 -or $testMatchWritten -ne 'executable written') { throw 'test_match emission failed' }
+& $testMatchPath
+if ($LASTEXITCODE -ne 0) { throw "a test_match check failed: exit $LASTEXITCODE" }
+# `e.test.mock`: exactly-once default and its report, argument-matcher mismatch, missing call, times with a returns list, stubs, ordered expectations, spy log and limits, assert_verified (D2683).
+$testMockPath = Join-Path $testBuild 'test-mock-selfhost.exe'
+$testMockWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_mock\src\main.e') $repo 'x64' 'windows' $testMockPath
+if ($LASTEXITCODE -ne 0 -or $testMockWritten -ne 'executable written') { throw 'test_mock emission failed' }
+& $testMockPath
+if ($LASTEXITCODE -ne 0) { throw "a test_mock check failed: exit $LASTEXITCODE" }
+# `e.test.bdd`: a Gherkin feature (tags, background, outline over two example rows, step table, undefined and failing steps) parsed and run through an e.meta-bound step struct: shape, summary, tag filters, report text and parse refusals (D2684).
+$testBddPath = Join-Path $testBuild 'test-bdd-selfhost.exe'
+$testBddWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_bdd\src\main.e') $repo 'x64' 'windows' $testBddPath
+if ($LASTEXITCODE -ne 0 -or $testBddWritten -ne 'executable written') { throw 'test_bdd emission failed' }
+& $testBddPath
+if ($LASTEXITCODE -ne 0) { throw "a test_bdd check failed: exit $LASTEXITCODE" }
+# `e.test.mutate`: 32 mutants of a sample module equal to an independent regex enumeration (kind, offset, length, replacement), three mutated texts, a scripted suite's score math and the exact survivor report (D2685).
+$testMutatePath = Join-Path $testBuild 'test-mutate-selfhost.exe'
+$testMutateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_mutate\src\main.e') $repo 'x64' 'windows' $testMutatePath
+if ($LASTEXITCODE -ne 0 -or $testMutateWritten -ne 'executable written') { throw 'test_mutate emission failed' }
+& $testMutatePath
+if ($LASTEXITCODE -ne 0) { throw "a test_mutate check failed: exit $LASTEXITCODE" }
+# `e.test.arch`: an 11-module graph with an intentional violation of each rule kind (8 violations, exact text), prefix matching by component, use-line extraction, a clean graph, TooSmall cuts and assert_holds (D2686).
+$testArchPath = Join-Path $testBuild 'test-arch-selfhost.exe'
+$testArchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_arch\src\main.e') $repo 'x64' 'windows' $testArchPath
+if ($LASTEXITCODE -ne 0 -or $testArchWritten -ne 'executable written') { throw 'test_arch emission failed' }
+& $testArchPath
+if ($LASTEXITCODE -ne 0) { throw "a test_arch check failed: exit $LASTEXITCODE" }
+# `e.data.objpool`: exhaustion, LIFO/FIFO idle choice, FIFO waiter hand-off, max_idle destruction, eviction timing and min_idle, leaks and reclaim, waiter expiry, and a 400-operation hash differential against an independent Python model (D2687).
+$dataObjpoolPath = Join-Path $testBuild 'data-objpool-selfhost.exe'
+$dataObjpoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_objpool\src\main.e') $repo 'x64' 'windows' $dataObjpoolPath
+if ($LASTEXITCODE -ne 0 -or $dataObjpoolWritten -ne 'executable written') { throw 'data_objpool emission failed' }
+& $dataObjpoolPath
+if ($LASTEXITCODE -ne 0) { throw "a data_objpool check failed: exit $LASTEXITCODE" }
+# `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
+$dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
+$dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath
+if ($LASTEXITCODE -ne 0 -or $dbMigrateWritten -ne 'executable written') { throw 'db_migrate emission failed' }
+& $dbMigratePath
+if ($LASTEXITCODE -ne 0) { throw "a db_migrate check failed: exit $LASTEXITCODE" }
+# `e.db.orm`: DDL per dialect, generated and explicit keys, every column kind round-tripped on sqlite, update/delete NotFound, hook order and a vetoing hook, belongs-to and a one-statement has-many preload (D2681).
+$dbOrmPath = Join-Path $testBuild 'db-orm-selfhost.exe'
+$dbOrmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_orm\src\main.e') $repo 'x64' 'windows' $dbOrmPath
+if ($LASTEXITCODE -ne 0 -or $dbOrmWritten -ne 'executable written') { throw 'db_orm emission failed' }
+& $dbOrmPath
+if ($LASTEXITCODE -ne 0) { throw "a db_orm check failed: exit $LASTEXITCODE" }
 # `e.fmt.pretty`: Wadler's tree at four widths and soft-line cases byte-exact against a replica, plus the lazy-versus-strict group case (D863).
 $fmtPrettyPath = Join-Path $testBuild 'fmt-pretty-selfhost.exe'
 $fmtPrettyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pretty\src\main.e') $repo 'x64' 'windows' $fmtPrettyPath
