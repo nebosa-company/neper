@@ -26,6 +26,7 @@ use ui
 use vaultfs
 use e.fmt.ooxml as ooxml
 use e.fmt.pdf as pdf
+use e.text.highlight as hl
 
 const NONE: usize = 99usize
 const FILES: usize = 13usize
@@ -47,6 +48,10 @@ type State = struct {
     // How the handed file is shown (MD, TXT or CODE) and, for code, which sample's highlighter rules it uses.
     hand_kind: usize,
     hand_lang: usize,
+    // The language the table-driven highlighter (e.text.highlight) picked by extension, and its classes per byte.
+    hand_hl: usize,
+    hand_has_hl: bool,
+    hand_classes: [2048]u8,
     screen: usize,
     open: usize,
     page: usize,
@@ -161,6 +166,12 @@ fn kind_by_name(name: str) -> (usize, usize) {
     if ends_with(name, ".go") { ret (CODE, 11usize) }
     if ends_with(name, ".java") { ret (CODE, 12usize) }
     ret (TXT, 0usize)
+}
+
+// The language shown on the code view's pill.
+fn shown_language(s: *State) -> str {
+    if s.open == FILES && s.hand_has_hl { ret hl.name(s.hand_hl) }
+    ret lang_name(code_lang(s))
 }
 
 fn file_name(i: usize) -> str {
@@ -460,6 +471,32 @@ fn draw_txt(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
     ret ok
 }
 
+// One line of a handed file with its token classes (0 plain, 1 keyword, 2 string, 3 number, 4 comment, 5 type):
+// each run of one class drawn in its colour, at its measured offset.
+fn draw_class_line(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, row: str, classes: []const u8, x: f32, y: f32) -> err {
+    let size: f32 = 13.0
+    var i = 0usize
+    while i < row.len {
+        if row[i] == 32u8 || row[i] == 9u8 {
+            i += 1usize
+        } else {
+            let klass = classes[i]
+            var end = i + 1usize
+            while end < row.len && classes[end] == klass && row[end] != 32u8 && row[end] != 9u8 { end += 1usize }
+            let prefix = text.measure(a, faces.grotesk, size, ui.join(a, row[0usize..i], "|", "")) - text.measure(a, faces.grotesk, size, "|")
+            var color_kind = 0usize
+            if klass == 1u8 { color_kind = 1usize }
+            if klass == 2u8 { color_kind = 2usize }
+            if klass == 3u8 { color_kind = 3usize }
+            if klass == 4u8 { color_kind = 4usize }
+            if klass == 5u8 { color_kind = 5usize }
+            try ui.put(a, builder, faces.grotesk, size, row[i..end], x + prefix, y, token_color(color_kind))
+            i = end
+        }
+    }
+    ret ok
+}
+
 fn draw_code(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try ui.card(a, builder, 12.0, 84.0, 388.0, 730.0, 18.0, paint.Color { red: 0.12, green: 0.13, blue: 0.16, alpha: 1.0 })
     let content = content_of(a, s)
@@ -468,7 +505,21 @@ fn draw_code(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     while n < total {
         let y: f32 = 100.0 + f32(n) * 22.0
         try ui.put_right(a, builder, faces.grotesk, 12.0, ui.number(a, n + 1usize), 44.0, y + 1.0, ui.light_muted())
-        try draw_code_line(a, builder, faces, code_lang(s), splitter(a, content, n), 56.0, y)
+        if s.open == FILES && s.hand_has_hl {
+            // The classes of this line: the bytes before it are the lines before plus their newlines.
+            var offset = 0usize
+            var before = 0usize
+            while before < n {
+                offset += splitter(a, content, before).len + 1usize
+                before += 1usize
+            }
+            let line = splitter(a, content, n)
+            if offset + line.len <= s.hand_len {
+                try draw_class_line(a, builder, faces, line, s.hand_classes[offset..offset + line.len], 56.0, y)
+            }
+        } else {
+            try draw_code_line(a, builder, faces, code_lang(s), splitter(a, content, n), 56.0, y)
+        }
         n += 1usize
     }
     // The legend of the colours.
@@ -565,7 +616,7 @@ fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     var shown = file_name(s.open)
     if s.open == FILES { shown = ui.text_of(a, s.hand_name[0usize..], s.hand_name_len) }
     try ui.put(a, builder, faces.jost_bold, 22.0, shown, 62.0, 20.0, ui.light())
-    if kind == CODE { try ui.pill(a, builder, &s.hits, faces, 501usize, 300.0, 18.0, 96.0, 32.0, lang_name(code_lang(s)), ui.amber(), 14.0) }
+    if kind == CODE { try ui.pill(a, builder, &s.hits, faces, 501usize, 300.0, 18.0, 96.0, 32.0, shown_language(s), ui.amber(), 14.0) }
     if kind == MD { try draw_md(a, builder, s, faces) }
     if kind == TXT { try draw_txt(a, builder, s, faces) }
     if kind == CODE { try draw_code(a, builder, s, faces) }
@@ -701,10 +752,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
             s.hand_kind = shown_kind
             s.hand_lang = shown_lang
             if hand_path.len > 4usize && ends_with(hand_path, ".pdf") { s.hand_kind = TXT }
+            // The table-driven highlighter takes any extension it knows that is not a document format.
+            let (hl_index, hl_found) = hl.language_for(ui.text_of(a, s.hand_name[0usize..], n))
+            if hl_found && s.hand_kind != MD && !ends_with(hand_path, ".pdf") && !ends_with(hand_path, ".docx") && !ends_with(hand_path, ".pptx") {
+                s.hand_kind = CODE
+                s.hand_hl = hl_index
+                s.hand_has_hl = true
+                let classified = hl.classify(hl_index, ui.text_of(a, s.hand_text[0usize..], s.hand_len), s.hand_classes[0usize..])
+            }
             if s.hand_kind == MD { ui.say("document kind markdown\n") }
             if s.hand_kind == CODE {
                 ui.say("document kind code ")
-                ui.say(lang_name(s.hand_lang))
+                ui.say(shown_language(&s))
                 ui.say("\n")
             }
             ui.say("document handed ")

@@ -1227,6 +1227,12 @@ $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtPdfWritten -ne 'executable written') { throw 'fmt_pdf emission failed' }
 & $fmtPdfPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_pdf check failed: exit $LASTEXITCODE" }
+# `e.text.highlight`: a snippet in each of 32 languages classified byte by byte against an independent implementation.
+$textHighlightPath = Join-Path $testBuild 'text-highlight-selfhost.exe'
+$textHighlightWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_highlight\src\main.e') $repo 'x64' 'windows' $textHighlightPath
+if ($LASTEXITCODE -ne 0 -or $textHighlightWritten -ne 'executable written') { throw 'text_highlight emission failed' }
+& $textHighlightPath
+if ($LASTEXITCODE -ne 0) { throw "a text_highlight check failed: exit $LASTEXITCODE" }
 # `e.test.support`: the clock, the scripted reader and writer, the schedule.
 $testSupportPath = Join-Path $testBuild 'test-support-selfhost.exe'
 $testSupportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_support\src\main.e') $repo 'x64' 'windows' $testSupportPath

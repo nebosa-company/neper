@@ -1139,6 +1139,11 @@ fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_pdf_written" = 'executable written' ]
 chmod +x "$test_build/fmt-pdf-selfhost"
 "$test_build/fmt-pdf-selfhost"
+# `e.text.highlight`: a snippet in each of 32 languages classified byte by byte against an independent implementation.
+text_highlight_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_highlight/src/main.e" "$repo" x64 linux "$test_build/text-highlight-selfhost")
+[ "$text_highlight_written" = 'executable written' ]
+chmod +x "$test_build/text-highlight-selfhost"
+"$test_build/text-highlight-selfhost"
 # `e.test.support`: the clock, the scripted reader and writer, the schedule.
 test_support_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_support/src/main.e" "$repo" x64 linux "$test_build/test-support-selfhost")
 [ "$test_support_written" = 'executable written' ]

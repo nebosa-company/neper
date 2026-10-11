@@ -481,6 +481,7 @@
     "fmt_ooxml",
     "fmt_pdf",
     "fmt_woff",
+    "text_highlight",
     "fmt_xlsx",
     "gfx_cssvalue",
     "html_accessible",
@@ -701,6 +702,17 @@
     "x_lint_scan",
     "x_migrate",
     "x_migrate_terraform"
+   ]
+  },
+  {
+   "module": "e.text.highlight",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 1,
+   "delivered": 1,
+   "pending": [],
+   "fixtures": [
+    "text_highlight"
    ]
   },
   {

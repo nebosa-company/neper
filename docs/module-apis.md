@@ -22808,3 +22808,36 @@ fn pages(a: *mem.Arena, data: []const u8) -> ([]str, err)
 ```
 
 The text of a PDF held in a byte slice (C123): `pages` gives each page's text in page-tree order. The objects are found by scanning for `N G obj` (a file with its objects in object streams, or with an xref stream, is `NoPages`), the page order is the catalog's tree, a page's content streams are joined and `/FlateDecode` is undone through `e.fmt.zlib`, and the text operators `Tj`, `TJ` (a kern of -200 or more is a word space), `'`, `"`, `T*`, `Td`, `TD`, `Tm` and `ET` give the lines; literal strings keep their escapes and octal codes, hex strings are read, Latin-1 bytes are written as UTF-8. Not a renderer and not a font reader: an embedded font with its own encoding gives its codes. Checked against PDFs written by the fixture's generator.
+
+
+### `e.text.highlight`
+
+```neper
+const COBOL_INDEX: usize = 21usize
+const PLAIN: u8 = 0u8
+const KEYWORD: u8 = 1u8
+const STRING: u8 = 2u8
+const NUMBER: u8 = 3u8
+const COMMENT: u8 = 4u8
+const TYPE: u8 = 5u8
+const LANGUAGES: usize = 32usize
+fn name(i: usize) -> str
+fn extensions(i: usize) -> str
+fn line_comment_1(i: usize) -> str
+fn line_comment_2(i: usize) -> str
+fn block_open(i: usize) -> str
+fn block_close(i: usize) -> str
+fn quotes(i: usize) -> str
+fn caseless(i: usize) -> bool
+fn keywords(i: usize) -> str
+fn lower(c: u8) -> u8
+fn is_alpha(c: u8) -> bool
+fn is_digit(c: u8) -> bool
+fn starts(text: str, at: usize, marker: str) -> bool
+fn is_keyword(i: usize, word: str) -> bool
+fn language_for(file: str) -> (usize, bool)
+fn has_quote(i: usize, c: u8) -> bool
+fn classify(i: usize, text: str, out: []u8) -> usize
+```
+
+Table-driven syntax highlighting (C123, C142): 32 languages (the leading ones of the TIOBE index as remembered for October 2025, plus Neper), each a row of rules -- its file extensions, up to two line-comment markers, a block-comment pair, its string quote characters, whether its keywords ignore case, its keyword list -- and one classifier for all of them: `classify` writes, for every byte of a text, plain, keyword, string, number, comment or type (a capitalised name that is not a keyword); `language_for` picks a language by a file name's extension. Written by `scripts/gen_highlight.py`, whose own Python implementation of the rules gave the expected classes of the fixture's snippet in each language.

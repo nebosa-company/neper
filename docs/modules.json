@@ -51,6 +51,7 @@
     "e.fmt.pe",
     "e.fmt.ooxml",
     "e.fmt.pdf",
+    "e.text.highlight",
     "e.fmt.csv",
     "e.fmt.ini",
     "e.text.utf8",
@@ -1953,6 +1954,15 @@
     "e.os",
     "e.str"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.highlight",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {
