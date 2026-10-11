@@ -226,6 +226,7 @@
     "e.algo.geom.clip",
     "e.math.special",
     "e.algo.rand.dist",
+    "e.algo.rand.fake",
     "e.algo.stat.test",
     "e.algo.stat.mixed",
     "e.algo.stat.survival_trial",
@@ -4697,6 +4698,18 @@
     "e.algo.rand",
     "e.math",
     "e.math.special"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.rand.fake",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.str"
    ],
    "blocked_by": []
   },

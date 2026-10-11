@@ -3499,6 +3499,12 @@ text_sig_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/text-sig-selfhost"
 text_sig_output=$("$test_build/text-sig-selfhost")
 [ "$text_sig_output" = 'text sig ok' ]
+# e.algo.rand.fake: seeded fake-data generators against an independent PCG and generator, 5 seeds across 4 locales plus shape rules (D2560).
+algoRandFake_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rand_fake/src/main.e" "$repo" x64 linux "$test_build/algo-rand-fake-selfhost" -j 2)
+[ "$algoRandFake_written" = 'executable written' ]
+chmod +x "$test_build/algo-rand-fake-selfhost"
+algoRandFake_output=$("$test_build/algo-rand-fake-selfhost")
+[ "$algoRandFake_output" = 'algo rand fake ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

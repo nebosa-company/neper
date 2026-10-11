@@ -3916,6 +3916,12 @@ $textSigWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $textSigWritten -ne 'executable written') { throw 'text_sig emission failed' }
 $textSigOutput = & $textSigPath
 if ($LASTEXITCODE -ne 0 -or $textSigOutput -ne 'text sig ok') { throw "text_sig answered wrongly: exit $LASTEXITCODE" }
+# e.algo.rand.fake: seeded fake-data generators against an independent PCG and generator, 5 seeds across 4 locales plus shape rules (D2560).
+$algoRandFakePath = Join-Path $testBuild 'algo-rand-fake-selfhost.exe'
+$algoRandFakeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rand_fake\src\main.e') $repo 'x64' 'windows' $algoRandFakePath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoRandFakeWritten -ne 'executable written') { throw 'algo_rand_fake emission failed' }
+$algoRandFakeOutput = & $algoRandFakePath
+if ($LASTEXITCODE -ne 0 -or $algoRandFakeOutput -ne 'algo rand fake ok') { throw "algo_rand_fake answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

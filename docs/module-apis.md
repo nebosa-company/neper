@@ -4651,6 +4651,69 @@ and uses the normal approximation above; `poisson` likewise past 500. The alias
 table and weighted reservoir live in caller storage; `sobol` covers four
 dimensions from Joe-Kuo direction numbers and `halton` sixteen.
 
+### `e.algo.rand.fake`
+
+```neper
+type Locale = enum u8 { En, De, Fr, Es }
+type Faker = struct { rng: rand.Pcg64, locale: Locale }
+
+fn faker(seed: u64, locale: Locale) -> Faker
+fn below(f: *Faker, n: usize) -> usize
+fn int_between(f: *Faker, lo: i64, hi: i64) -> i64
+fn chance(f: *Faker, percent: u32) -> bool
+fn blob_count(blob: str) -> usize
+fn blob_item(blob: str, index: usize) -> str
+fn pick(f: *Faker, blob: str) -> str
+fn first_names(l: Locale) -> str
+fn last_names(l: Locale) -> str
+fn cities(l: Locale) -> str
+fn streets(l: Locale) -> str
+fn countries(l: Locale) -> str
+fn company_suffixes(l: Locale) -> str
+fn domains() -> str
+fn lorem_words() -> str
+fn first_name(f: *Faker) -> str
+fn last_name(f: *Faker) -> str
+fn city(f: *Faker) -> str
+fn country(f: *Faker) -> str
+fn word(f: *Faker) -> str
+fn push_slug(b: *str.Builder, s: str) -> err
+fn push_digits(f: *Faker, b: *str.Builder, count: usize) -> err
+fn hex_digit(v: u8) -> u8
+fn push_hex_byte(b: *str.Builder, v: u8) -> err
+fn name(f: *Faker, b: *str.Builder) -> err
+fn company(f: *Faker, b: *str.Builder) -> err
+fn username(f: *Faker, b: *str.Builder) -> err
+fn email(f: *Faker, b: *str.Builder) -> err
+fn address(f: *Faker, b: *str.Builder) -> err
+fn phone(f: *Faker, b: *str.Builder) -> err
+fn uuid4(f: *Faker, b: *str.Builder) -> err
+fn ipv4(f: *Faker, b: *str.Builder) -> err
+fn mac_address(f: *Faker, b: *str.Builder) -> err
+fn hex_color(f: *Faker, b: *str.Builder) -> err
+fn luhn_check_digit(s: str) -> u8
+fn luhn_valid(s: str) -> bool
+fn credit_card(f: *Faker, b: *str.Builder) -> err
+fn civil(days: i64) -> (i64, i64, i64)
+fn push_padded(b: *str.Builder, v: i64, width: usize) -> err
+fn date(f: *Faker, b: *str.Builder, from_day: i64, to_day: i64) -> err
+fn lorem_sentence(f: *Faker, b: *str.Builder, count: usize) -> err
+fn lorem_paragraph(f: *Faker, b: *str.Builder, sentences: usize) -> err
+```
+
+Seeded fake-data generators over the PCG of `e.algo.rand`; one `Faker` is one stream, so the
+same seed and call sequence answer the same text on every host. Lookup tables are
+comma-separated strings picked by `pick` (module-scope string constants do not check, so each
+table is a function); `Locale` overlays the name, city, street, country and company-suffix
+tables and the address and phone patterns (En, De, Fr, Es, ASCII-transliterated). Text is
+pushed into the caller's `str.Builder` (`name`, `email`, `username`, `company`, `address`,
+`phone`, `uuid4`, `ipv4`, `mac_address`, `hex_color`, `credit_card`, `date`, `lorem_sentence`,
+`lorem_paragraph`); single picks answer borrowed table text. `uuid4` is RFC 4122 version 4,
+`credit_card` a sixteen digit number with a Luhn check digit (`luhn_valid` verifies one),
+`mac_address` a locally administered unicast address and `date` an ISO date drawn from a
+range of days since 1970-01-01. `civil` is the day-count to calendar conversion. No network
+data sources; anonymous object graphs over `e.meta` are a follow-on.
+
 ### `e.algo.stat.test`
 
 ```neper
