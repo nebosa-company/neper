@@ -49,6 +49,15 @@ fn recv(dst: usize, max: usize) -> (usize, usize) {
     ret (netproto.recv_bytes(REP, dst, max), netproto.R_OK)
 }
 
+// Like `recv`, but waits only a moment: R_EMPTY when nothing has arrived (plain TCP only).
+fn poll(dst: usize, max: usize) -> (usize, usize) {
+    let op = os.send(REQ, netproto.OP_POLL, netproto.NO_SLOT)
+    let want = os.send(REQ, max, netproto.NO_SLOT)
+    let r = result()
+    if r != netproto.R_OK { ret (0usize, r) }
+    ret (netproto.recv_bytes(REP, dst, max), netproto.R_OK)
+}
+
 fn close() -> usize {
     let op = os.send(REQ, netproto.OP_CLOSE, netproto.NO_SLOT)
     ret result()

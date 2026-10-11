@@ -322,6 +322,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
                             }
                             if failed { reply(netproto.R_IO) } else { reply(netproto.R_OK) }
                         }
+                    } else if op == netproto.OP_POLL {
+                        var want = os.recv(REQ, netproto.NO_SLOT)
+                        if want > 2048usize { want = 2048usize }
+                        if !s.connected {
+                            reply(netproto.R_NOT_CONNECTED)
+                        } else if s.secure {
+                            reply(netproto.R_BAD)
+                        } else {
+                            let (n, read_error) = tcp.read_for(&s.conn, chunk_addr, want, 20000usize)
+                            if read_error == ok {
+                                reply(netproto.R_OK)
+                                netproto.send_bytes(REP, chunk_addr, n)
+                            } else if s.conn.reset {
+                                reply(netproto.R_IO)
+                            } else {
+                                reply(netproto.R_EMPTY)
+                            }
+                        }
                     } else {
                         if op == netproto.OP_RECV {
                             var want = os.recv(REQ, netproto.NO_SLOT)

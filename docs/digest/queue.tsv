@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-C120	compiler	0.3	1878	NeperOS SSH: a real SSH client behind the Termius-style app	The SSH app (D2215) has the hosts list, the host form and a terminal screen, but Connect opens a local demo shell because NeperOS has no network (C117).
+C120	compiler	0.5	2529	NeperOS SSH: a real SSH client behind the Termius-style app	The SSH app (D2215) has the hosts list, the host form and a terminal screen, but Connect opens a local demo shell because NeperOS has no network (C117).
 C119	compiler	0.9	1397	NeperOS Weather live data: a keyless forecast source, places and units	places and units are not kept (storage: C116, C125); no current location (GPS: C131); no alerts (Open-Meteo has none).
 C127	compiler	0	898	NeperOS Call: a real telephony stack, the contact store, voicemail	The Call app (D2222) has a keypad, recents, contacts and a call screen on sample data;
 C128	compiler	0	813	NeperOS Mail: a real mail client over IMAP and SMTP	The Mail app (D2223) shows a sample mailbox in the process.

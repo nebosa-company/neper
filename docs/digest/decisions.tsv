@@ -2160,4 +2160,5 @@ D2401	731	C121 part three: the passport's machine-readable zone check
 D2402	1508	C121 part four: reading a QR symbol out of an image, and the scan on a document
 D2403	459	C121 closed; the encrypted store, MRZ from an image, editing and camera scanning are C154
 D2404	1382	C120 part one: `e.text.terminal`, a terminal emulator in the library
-D2405	1761	C120 part two: `e.net.ssh`, an SSH-2 client without I/O
+D2405	1762	C120 part two: `e.net.ssh`, an SSH-2 client without I/O
+D2406	2037	C120 part three: the SSH app runs a live session

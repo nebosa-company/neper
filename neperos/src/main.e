@@ -834,6 +834,11 @@ fn launch(frame: *a64.Frame) {
                 thread.grant(child, 8usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 11usize)
             }
         }
+        // (C120) The SSH app (entry 19) needs random bytes for its key exchange, and nothing else of the disk.
+        if rng_present && index == 19usize {
+            thread.grant(child, 7usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 10usize)
+            thread.grant(child, 8usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 11usize)
+        }
     }
     frame.x[0usize] = u64(child)
 }

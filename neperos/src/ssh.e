@@ -17,9 +17,14 @@ use e.gfx.scene
 use e.gfx.svg
 use e.text.layout
 use e.text.shape
+use e.net.ssh as sshc
+use e.text.terminal as term
 use appkit
 use text
 use lunar
+use netclient
+use netproto
+use vaultfs
 
 const NONE: usize = 99usize
 const MAX_HOSTS: usize = 8usize
@@ -29,6 +34,13 @@ const MAX_HITS: usize = 96usize
 const HOSTS_SCREEN: usize = 0usize
 const FORM_SCREEN: usize = 1usize
 const TERMINAL_SCREEN: usize = 2usize
+// A live session's phases: the password, the host key question, running, over.
+const PHASE_PASSWORD: usize = 1usize
+const PHASE_HOST_KEY: usize = 2usize
+const PHASE_RUNNING: usize = 3usize
+const PHASE_OVER: usize = 4usize
+const TERM_COLS: usize = 46usize
+const TERM_ROWS: usize = 18usize
 
 fn say(line: str) {
     let (written, write_error) = os.write(os.stdout(), line)
@@ -168,6 +180,20 @@ type State = struct {
     history_len: [4]usize,
     history_total: usize,
     history_at: usize,
+    // (C120) A live session over the network: its phase (0 is the local demo), the password being typed, the SSH
+    // session and the terminal it draws, the host key's fingerprint shown to the user, and what is kept of the
+    // keys accepted this run.
+    live_arena: mem.Arena,
+    live: bool,
+    phase: usize,
+    password: [64]u8,
+    pw_len: usize,
+    session: sshc.Session,
+    tm: term.Terminal,
+    net_buf: [2048]u8,
+    announced: bool,
+    known_keys: [256]u8,
+    known: [8]bool,
     hits: [96]Hit,
     hit_total: usize,
 }
@@ -347,6 +373,165 @@ fn run_command(a: *mem.Arena, s: *State) {
     s.cmd_len = 0usize
 }
 
+// ----------------------------------------------------------------------------------------------
+// A live session.
+
+// Send what the SSH session has queued; false when the network refused it.
+fn live_flush(s: *State) -> bool {
+    if s.session.out_len == 0usize { ret true }
+    let r = netclient.send(mem.address_of(&s.session.outbuf[0usize]), s.session.out_len)
+    if r != netproto.R_OK { ret false }
+    sshc.sent(&s.session, s.session.out_len)
+    ret true
+}
+
+fn live_end(s: *State, why: str) {
+    if s.phase == PHASE_OVER { ret }
+    s.phase = PHASE_OVER
+    push_line(s, why, 2usize)
+    say("ssh live over\n")
+}
+
+// What the session's state means for the screen: the host key to confirm, the shell ready, the output to draw.
+fn live_settle(a: *mem.Arena, s: *State) {
+    let status = sshc.status(&s.session)
+    if status == sshc.HOST_KEY_PENDING && s.phase == PHASE_PASSWORD {
+        var fp: [64]u8 = zero
+        let n = sshc.host_fingerprint(&s.session, fp[0usize..64usize])
+        // A key accepted before in this run is trusted again; a different one for the same host is refused.
+        let key = sshc.host_key(&s.session)
+        if s.known[s.current] {
+            var same = true
+            var i = 0usize
+            while i < 32usize {
+                if s.known_keys[s.current * 32usize + i] != key[i] { same = false }
+                i += 1usize
+            }
+            if same {
+                sshc.trust(&s.session)
+                s.phase = PHASE_RUNNING
+            } else {
+                live_end(s, "HOST KEY CHANGED: connection refused")
+                say("ssh live host key changed\n")
+                ret
+            }
+        } else {
+            push_line(s, "The authenticity of this host", 2usize)
+            push_line(s, "is unknown. Its key is:", 2usize)
+            push_line(s, text_of(a, fp[0usize..], n), 0usize)
+            push_line(s, "Trust it? Type yes and Enter.", 2usize)
+            s.phase = PHASE_HOST_KEY
+            s.cmd_len = 0usize
+            say("ssh live host key ")
+            say_text(text_of(a, fp[0usize..], n))
+            say("\n")
+        }
+    }
+    if status == sshc.READY && !s.announced {
+        s.announced = true
+        s.phase = PHASE_RUNNING
+        say("ssh live ready\n")
+    }
+    if status == sshc.FAILED {
+        if s.session.failure == sshc.FAIL_AUTH {
+            live_end(s, "Permission denied (wrong password)")
+        } else {
+            live_end(s, "The session failed")
+        }
+    }
+    if status == sshc.CLOSED {
+        live_end(s, "Connection closed")
+        if s.session.has_exit_status {
+            say("ssh live exit ")
+            say_text(number(a, usize(s.session.exit_status)))
+            say("\n")
+        }
+    }
+    // The program's output goes to the terminal.
+    var chunk: [512]u8 = zero
+    var more = true
+    while more {
+        let n = sshc.read(&s.session, chunk[0usize..512usize])
+        if n == 0usize { more = false } else { term.feed(&s.tm, chunk[0usize..n]) }
+    }
+}
+
+// Receive what the server has sent (waiting a moment) and settle; `tries` polls at most.
+fn live_poll(a: *mem.Arena, s: *State, tries: usize) {
+    var t = 0usize
+    while t < tries && s.phase != PHASE_OVER {
+        let (n, r) = netclient.poll(mem.address_of(&s.net_buf[0usize]), 2048usize)
+        if r == netproto.R_EMPTY {
+            t = tries
+        } else if r != netproto.R_OK {
+            live_end(s, "Network error")
+            ret
+        } else if n == 0usize {
+            live_end(s, "Connection closed by the host")
+            ret
+        } else {
+            let fed = sshc.feed(&s.session, s.net_buf[0usize..n])
+            if !live_flush(s) {
+                live_end(s, "Network error")
+                ret
+            }
+            live_settle(a, s)
+            t += 1usize
+        }
+    }
+}
+
+// Start the session once the password is typed: random bytes, then the version exchange.
+fn live_start(a: *mem.Arena, s: *State) {
+    var random: [64]u8 = zero
+    if !vaultfs.random(mem.address_of(&random[0usize]), 8usize) {
+        live_end(s, "No random source")
+        ret
+    }
+    let h = s.hosts[s.current]
+    let (opened, open_error) = sshc.open(&s.live_arena, random[0usize..64usize], user_of(a, h), text_of(a, s.password[0usize..], s.pw_len), u32(TERM_COLS), u32(TERM_ROWS))
+    if open_error != ok {
+        live_end(s, "Could not start the session")
+        ret
+    }
+    s.session = opened
+    s.pw_len = 0usize
+    s.announced = false
+    if !live_flush(s) {
+        live_end(s, "Network error")
+        ret
+    }
+    // The handshake: poll until it settles at the host key question, the shell, or a failure.
+    var rounds = 0usize
+    while rounds < 40usize && s.phase == PHASE_PASSWORD {
+        live_poll(a, s, 1usize)
+        rounds += 1usize
+        if sshc.status(&s.session) == sshc.FAILED { rounds = 40usize }
+    }
+}
+
+// Keys to the remote program.
+fn live_send(a: *mem.Arena, s: *State, bytes: []const u8) {
+    if s.phase != PHASE_RUNNING { ret }
+    let taken = sshc.write(&s.session, bytes)
+    if !live_flush(s) {
+        live_end(s, "Network error")
+        ret
+    }
+    live_poll(a, s, 4usize)
+}
+
+fn live_close(s: *State) {
+    if !s.live { ret }
+    if s.phase != PHASE_OVER {
+        sshc.close(&s.session)
+        let flushed = live_flush(s)
+    }
+    let closed = netclient.close()
+    s.live = false
+    s.phase = 0usize
+}
+
 fn connect(a: *mem.Arena, s: *State, index: usize) {
     s.current = index
     s.hosts[index].seen = true
@@ -354,7 +539,29 @@ fn connect(a: *mem.Arena, s: *State, index: usize) {
     s.line_total = 0usize
     s.cmd_len = 0usize
     s.history_at = 0usize
+    s.live = false
+    s.phase = 0usize
     let h = s.hosts[index]
+    let r = netclient.connect(addr_of(a, h), u16(h.port), false)
+    if r == netproto.R_OK {
+        // The session and the terminal live outside the per-frame arena: their memory is reserved at start.
+        s.live_arena.off = 0usize
+        let (t, t_error) = term.open(&s.live_arena, TERM_COLS, TERM_ROWS, 200usize)
+        if t_error == ok {
+            s.tm = t
+            s.live = true
+            s.phase = PHASE_PASSWORD
+            s.pw_len = 0usize
+            push_line(s, join(a, "Connected to ", addr_of(a, h), ""), 2usize)
+            push_line(s, join(a, user_of(a, h), "'s password:", ""), 2usize)
+            say("ssh connected ")
+            say_text(alias_of(a, h))
+            say("\n")
+            say("ssh live connected\n")
+            ret
+        }
+        let closed = netclient.close()
+    }
     push_line(s, "Local demo session: no network yet.", 2usize)
     push_line(s, join(a, join(a, "Connected to ", alias_of(a, h), " ("), join(a, user_of(a, h), "@", join(a, addr_of(a, h), ":", join(a, number(a, h.port), ")", ""))), ""), 2usize)
     push_line(s, "Type help for commands.", 2usize)
@@ -521,7 +728,7 @@ fn draw_keyboard(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.
 
 fn draw_hosts(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try put(a, builder, faces.jost_bold, 34.0, "Hosts", 24.0, 40.0, light())
-    try put(a, builder, faces.grotesk, 12.0, "Local demo sessions, no network yet", 24.0, 86.0, light_muted())
+    try put(a, builder, faces.grotesk, 12.0, "Saved hosts: a live SSH session, or a local demo", 24.0, 86.0, light_muted())
     var row = 0usize
     var i = 0usize
     while i < MAX_HOSTS {
@@ -621,8 +828,15 @@ fn draw_terminal(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.
     hit(s, 500usize, 0.0, 14.0, 66.0, 56.0)
     try put(a, builder, faces.jost_bold, 22.0, alias_of(a, h), 64.0, 16.0, light())
     try disc(a, builder, 72.0, 56.0, 4.0, paint.Color { red: 0.45, green: 0.80, blue: 0.55, alpha: 1.0 })
-    try put(a, builder, faces.grotesk, 12.0, "demo session", 82.0, 49.0, light_muted())
+    var mode_label = "demo session"
+    if s.live { mode_label = "live session" }
+    try put(a, builder, faces.grotesk, 12.0, mode_label, 82.0, 49.0, light_muted())
     try card(a, builder, 16.0, 80.0, 380.0, 362.0, 16.0, paint.Color { red: 0.04, green: 0.05, blue: 0.06, alpha: 1.0 })
+    if s.live && (s.phase == PHASE_RUNNING || (s.phase == PHASE_OVER && s.announced)) {
+        try draw_grid(a, builder, s, faces)
+        try draw_extra_keys(a, builder, s, faces)
+        ret ok
+    }
     var first = 0usize
     if s.line_total > VISIBLE { first = s.line_total - VISIBLE }
     var row = 0usize
@@ -632,19 +846,126 @@ fn draw_terminal(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.
         row += 1usize
     }
     // The prompt with what is typed and a block cursor.
-    let prompt = join(a, prompt_text(a, s), text_of(a, s.cmd[0usize..], s.cmd_len), "")
+    var prompt = join(a, prompt_text(a, s), text_of(a, s.cmd[0usize..], s.cmd_len), "")
+    if s.live && s.phase == PHASE_PASSWORD {
+        // The password is never shown: a dot for each character.
+        var dots: [64]u8 = zero
+        var d = 0usize
+        while d < s.pw_len && d < 64usize {
+            dots[d] = 42u8
+            d += 1usize
+        }
+        prompt = text_of(a, dots[0usize..], s.pw_len)
+    }
+    if s.live && s.phase == PHASE_HOST_KEY { prompt = join(a, "> ", text_of(a, s.cmd[0usize..], s.cmd_len), "") }
     let y: f32 = 92.0 + f32(row) * 18.0
     try clipped(a, builder, faces.grotesk, 13.0, prompt, 28.0, y, 356.0, line_color(1usize))
     var cursor_x = 28.0 + text.measure(a, faces.grotesk, 13.0, prompt) + 1.0
     if cursor_x > 380.0 { cursor_x = 380.0 }
     try card(a, builder, cursor_x, y + 1.0, 7.0, 15.0, 1.0, amber())
-    // The extra keys.
+    try draw_extra_keys(a, builder, s, faces)
+    ret ok
+}
+
+fn draw_extra_keys(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try extra_key(a, builder, s, faces, 1211usize, 16.0, 56.0, "~")
     try extra_key(a, builder, s, faces, 1212usize, 78.0, 56.0, "Up")
     try extra_key(a, builder, s, faces, 1213usize, 140.0, 56.0, "Down")
     try extra_key(a, builder, s, faces, 1214usize, 202.0, 92.0, "Ctrl-C")
     try extra_key(a, builder, s, faces, 1215usize, 300.0, 96.0, "Clear")
     try draw_keyboard(a, builder, s, faces)
+    ret ok
+}
+
+// A terminal colour code (see e.text.terminal) as a paint colour; `fallback` for the default.
+fn term_colour(code: u32, fallback: paint.Color) -> paint.Color {
+    if code == 0u32 { ret fallback }
+    if code >= 16777216u32 {
+        ret paint.Color { red: f32((code >> 16u32) & 255u32) / 255.0, green: f32((code >> 8u32) & 255u32) / 255.0, blue: f32(code & 255u32) / 255.0, alpha: 1.0 }
+    }
+    var index = 0u32
+    if code >= 256u32 { index = code & 255u32 } else { index = code - 1u32 }
+    if index < 16u32 {
+        var bright: f32 = 0.0
+        var base = index
+        if index >= 8u32 {
+            bright = 0.25
+            base = index - 8u32
+        }
+        // black, red, green, yellow, blue, magenta, cyan, white
+        let r: f32 = f32(base & 1u32) * 0.62 + bright
+        let g: f32 = f32((base >> 1u32) & 1u32) * 0.62 + bright
+        let b: f32 = f32((base >> 2u32) & 1u32) * 0.62 + bright
+        if base == 0u32 { ret paint.Color { red: 0.1 + bright, green: 0.1 + bright, blue: 0.1 + bright, alpha: 1.0 } }
+        if base == 7u32 { ret paint.Color { red: 0.78 + bright * 0.8, green: 0.78 + bright * 0.8, blue: 0.78 + bright * 0.8, alpha: 1.0 } }
+        ret paint.Color { red: r, green: g, blue: b, alpha: 1.0 }
+    }
+    if index >= 232u32 {
+        let v: f32 = (8.0 + f32(index - 232u32) * 10.0) / 255.0
+        ret paint.Color { red: v, green: v, blue: v, alpha: 1.0 }
+    }
+    // The 6 x 6 x 6 cube.
+    let c = index - 16u32
+    let steps = "\x00\x5f\x87\xaf\xd7\xff"
+    let r2 = f32(u32(steps[usize(c / 36u32)])) / 255.0
+    let g2 = f32(u32(steps[usize((c / 6u32) % 6u32)])) / 255.0
+    let b2 = f32(u32(steps[usize(c % 6u32)])) / 255.0
+    ret paint.Color { red: r2, green: g2, blue: b2, alpha: 1.0 }
+}
+
+// A code point as UTF-8 in the arena (a question mark for what is out of range).
+fn char_text(a: *mem.Arena, cp: u32) -> str {
+    let (out, out_error) = mem.alloc[u8](a, 4usize)
+    if out_error != ok { ret "?" }
+    if cp < 128u32 {
+        out[0usize] = u8(cp)
+        ret out[0usize..1usize]
+    }
+    if cp < 2048u32 {
+        out[0usize] = u8(192u32 | (cp >> 6u32))
+        out[1usize] = u8(128u32 | (cp & 63u32))
+        ret out[0usize..2usize]
+    }
+    if cp < 65536u32 {
+        out[0usize] = u8(224u32 | (cp >> 12u32))
+        out[1usize] = u8(128u32 | ((cp >> 6u32) & 63u32))
+        out[2usize] = u8(128u32 | (cp & 63u32))
+        ret out[0usize..3usize]
+    }
+    ret "?"
+}
+
+// The terminal's cells, one at a time on a fixed grid, with its cursor.
+fn draw_grid(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    let cell_w: f32 = 7.7
+    let cell_h: f32 = 19.0
+    var y = 0usize
+    while y < s.tm.rows {
+        var x = 0usize
+        while x < s.tm.cols {
+            let c = term.cell(&s.tm, x, y)
+            var fg = term_colour(c.fg, paint.Color { red: 0.86, green: 0.88, blue: 0.86, alpha: 1.0 })
+            var bg = term_colour(c.bg, paint.Color { red: 0.04, green: 0.05, blue: 0.06, alpha: 1.0 })
+            if (c.attrs & term.REVERSE) != 0u32 {
+                let swap = fg
+                fg = bg
+                bg = swap
+            }
+            let px: f32 = 26.0 + f32(x) * cell_w
+            let py: f32 = 88.0 + f32(y) * cell_h
+            if c.bg != 0u32 || (c.attrs & term.REVERSE) != 0u32 {
+                try card(a, builder, px, py, cell_w + 0.5, cell_h, 0.0, bg)
+            }
+            if c.ch > 32u32 {
+                try put(a, builder, faces.grotesk, 13.0, char_text(a, c.ch), px, py + 1.0, fg)
+            }
+            x += 1usize
+        }
+        y += 1usize
+    }
+    if s.tm.cursor_visible && s.phase == PHASE_RUNNING {
+        try card(a, builder, 26.0 + f32(s.tm.cx) * cell_w, 88.0 + f32(s.tm.cy) * cell_h + 14.0, cell_w, 3.0, 1.0, amber())
+    }
     ret ok
 }
 
@@ -669,7 +990,11 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
     let (next, next_error) = appkit.begin(a, kit)
     if next_error != ok { ret false }
     var builder = next
-    if draw(a, &builder, kit, s) != ok { ret false }
+    let draw_error = draw(a, &builder, kit, s)
+    if draw_error != ok {
+        say("ssh draw failed\n")
+        ret false
+    }
     ret appkit.present(kit, &builder)
 }
 
@@ -678,6 +1003,16 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
 
 // A character from the keyboard goes to the command in the terminal, or to the field in focus.
 fn type_byte(s: *State, byte: u8) {
+    if s.screen == TERMINAL_SCREEN && s.live {
+        if s.phase == PHASE_PASSWORD && s.pw_len < 64usize {
+            s.password[s.pw_len] = byte
+            s.pw_len += 1usize
+        } else if s.phase == PHASE_HOST_KEY && s.cmd_len < 40usize {
+            s.cmd[s.cmd_len] = byte
+            s.cmd_len += 1usize
+        }
+        ret
+    }
     if s.screen == TERMINAL_SCREEN {
         if s.cmd_len < 40usize {
             s.cmd[s.cmd_len] = byte
@@ -700,6 +1035,11 @@ fn type_byte(s: *State, byte: u8) {
 }
 
 fn backspace(s: *State) {
+    if s.screen == TERMINAL_SCREEN && s.live {
+        if s.phase == PHASE_PASSWORD && s.pw_len > 0usize { s.pw_len -= 1usize }
+        if s.phase == PHASE_HOST_KEY && s.cmd_len > 0usize { s.cmd_len -= 1usize }
+        ret
+    }
     if s.screen == TERMINAL_SCREEN {
         if s.cmd_len > 0usize { s.cmd_len -= 1usize }
         ret
@@ -766,7 +1106,99 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     // The back arrow.
     if id == 500usize {
         s.screen = HOSTS_SCREEN
+        if s.live {
+            live_close(s)
+            say("ssh live closed\n")
+        }
         if s.line_total > 0usize || s.cmd_len > 0usize { say("ssh closed\n") }
+        ret true
+    }
+    // A live session sends its keys to the host as they are tapped.
+    if s.screen == TERMINAL_SCREEN && s.live && s.phase == PHASE_RUNNING {
+        var one: [3]u8 = zero
+        var n = 0usize
+        if id >= 1000usize && id < 1026usize {
+            one[0usize] = u8(97usize + id - 1000usize)
+            n = 1usize
+        } else if id >= 1100usize && id < 1110usize {
+            one[0usize] = u8(48usize + (id - 1100usize + 1usize) % 10usize)
+            n = 1usize
+        } else if id == 1200usize {
+            one[0usize] = 32u8
+            n = 1usize
+        } else if id == 1201usize {
+            one[0usize] = 127u8
+            n = 1usize
+        } else if id == 1202usize {
+            one[0usize] = 46u8
+            n = 1usize
+        } else if id == 1203usize {
+            one[0usize] = 45u8
+            n = 1usize
+        } else if id == 1204usize {
+            one[0usize] = 47u8
+            n = 1usize
+        } else if id == 1205usize {
+            one[0usize] = 13u8
+            n = 1usize
+        } else if id == 1211usize {
+            one[0usize] = 126u8
+            n = 1usize
+        } else if id == 1212usize {
+            one[0usize] = 27u8
+            one[1usize] = 91u8
+            one[2usize] = 65u8
+            n = 3usize
+        } else if id == 1213usize {
+            one[0usize] = 27u8
+            one[1usize] = 91u8
+            one[2usize] = 66u8
+            n = 3usize
+        } else if id == 1214usize {
+            one[0usize] = 3u8
+            n = 1usize
+        } else if id == 1215usize {
+            one[0usize] = 12u8
+            n = 1usize
+        }
+        if n > 0usize {
+            live_send(a, s, one[0usize..n])
+            if id == 1205usize { live_say_above(a, s) }
+            ret true
+        }
+        ret false
+    }
+    if s.screen == TERMINAL_SCREEN && s.live && id == 1205usize {
+        if s.phase == PHASE_PASSWORD {
+            live_start(a, s)
+            ret true
+        }
+        if s.phase == PHASE_HOST_KEY {
+            if s.cmd_len == 3usize && s.cmd[0usize] == 121u8 && s.cmd[1usize] == 101u8 && s.cmd[2usize] == 115u8 {
+                var i = 0usize
+                let key = sshc.host_key(&s.session)
+                while i < 32usize {
+                    s.known_keys[s.current * 32usize + i] = key[i]
+                    i += 1usize
+                }
+                s.known[s.current] = true
+                sshc.trust(&s.session)
+                s.phase = PHASE_RUNNING
+                s.cmd_len = 0usize
+                if !live_flush(s) { live_end(s, "Network error") }
+                // Authentication and the shell come next.
+                var rounds = 0usize
+                while rounds < 40usize && !s.announced && s.phase == PHASE_RUNNING {
+                    live_poll(a, s, 1usize)
+                    rounds += 1usize
+                }
+            } else {
+                sshc.close(&s.session)
+                let flushed = live_flush(s)
+                live_end(s, "Host key not trusted")
+            }
+            ret true
+        }
         ret true
     }
     if id >= 1000usize && id < 1026usize {
@@ -887,6 +1319,26 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     ret false
 }
 
+// The terminal line above the cursor, for the test boot's log: what a command just printed.
+fn live_say_above(a: *mem.Arena, s: *State) {
+    if s.tm.cy == 0usize { ret }
+    var line: [64]u8 = zero
+    var n = 0usize
+    var x = 0usize
+    while x < s.tm.cols && n < 63usize {
+        let c = term.cell(&s.tm, x, s.tm.cy - 1usize)
+        var ch = 63u8
+        if c.ch >= 32u32 && c.ch < 127u32 { ch = u8(c.ch) }
+        line[n] = ch
+        n += 1usize
+        x += 1usize
+    }
+    while n > 0usize && line[n - 1usize] == 32u8 { n -= 1usize }
+    say("ssh live above ")
+    say_text(text_of(a, line[0usize..], n))
+    say("\n")
+}
+
 fn hit_at(s: *State, x: f32, y: f32) -> usize {
     var i = s.hit_total
     while i > 0usize {
@@ -898,6 +1350,13 @@ fn hit_at(s: *State, x: f32, y: f32) -> usize {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // (C120) A live session's buffers (the SSH session's 160 KB, the terminal's screens and 200 lines of history)
+    // are taken before the app's per-frame arena mark, so a frame does not take them back.
+    let (persist, persist_error) = mem.alloc[u8](a, 524288usize)
+    if persist_error != ok {
+        say("ssh no memory\n")
+        ret ok
+    }
     let (kit_value, kit_error) = appkit.open(a, args, 1usize, "ssh")
     if kit_error != ok {
         say("ssh open failed\n")
@@ -909,12 +1368,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var s: State = zero
+    s.live_arena = mem.arena_from(persist)
     s.editing = NONE
     let h1 = add_host(&s, make_host("web-01", "10.0.1.21", "deploy", 22usize, true, true))
     let h2 = add_host(&s, make_host("db-primary", "10.0.2.5", "postgres", 22usize, true, false))
     let h3 = add_host(&s, make_host("lab-pi", "192.168.1.40", "pi", 22usize, false, true))
     let h4 = add_host(&s, make_host("build-runner", "ci.example.com", "runner", 2222usize, true, false))
     let h5 = add_host(&s, make_host("backup-nas", "nas.local", "admin", 22usize, false, false))
+    // (C120) The test boot's own SSH server, at the host the guest's DNS answers for neper.test.
+    let h6 = add_host(&s, make_host("neper-test", "neper.test", "neper", 8022usize, false, false))
     if !show(a, &kit, &s) {
         say("ssh present failed\n")
         ret ok
@@ -926,7 +1388,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if tap.ended {
             running = false
         } else if tap.tick {
-            appkit.answer(appkit.ANSWER_NONE)
+            // A live shell's output arrives when the host sends it.
+            if s.live && s.phase == PHASE_RUNNING && s.screen == TERMINAL_SCREEN {
+                live_poll(a, &s, 2usize)
+                if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }
+            } else {
+                appkit.answer(appkit.ANSWER_NONE)
+            }
         } else if tap.y >= 896.0 {
             say("ssh home\n")
             appkit.leave()

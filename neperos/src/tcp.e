@@ -178,8 +178,14 @@ fn write(c: *Conn, data: usize, len: usize) -> err {
 
 // Read up to `max` bytes into `dst`. Zero bytes with ok is the peer's close; Timeout is silence.
 fn read(c: *Conn, dst: usize, max: usize) -> (usize, err) {
+    let (n, read_error) = read_for(c, dst, max, inet.POLLS * 8usize)
+    ret (n, read_error)
+}
+
+// The same, giving up after `polls` receive attempts without data (a short wait for an interactive client).
+fn read_for(c: *Conn, dst: usize, max: usize, polls: usize) -> (usize, err) {
     var spins = 0usize
-    while c.count == 0usize && !c.peer_fin && !c.reset && spins < inet.POLLS * 8usize {
+    while c.count == 0usize && !c.peer_fin && !c.reset && spins < polls {
         pump(c)
         spins += 1usize
     }

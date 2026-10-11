@@ -5,6 +5,7 @@
   UDP 5300  a DNS responder answering every A query with 10.0.2.2 (the guest names the resolver
             explicitly, so the fixture needs no internet and no privileged port)
   TCP 8081  HTTP
+  TCP 8022  SSH (asyncssh): user neper, password secret, a shell that upper-cases a line, `exit` ends with 7
   TCP 8443  HTTPS, TLS 1.3 only, the leaf certificate signed by the fixture CA (names neper.test,
             api.exchange.coinbase.com, api.twelvedata.com, www.alphavantage.co, api.polygon.io); besides the plain
             page it answers the Stocks fixture's APIs from the recordings made by record.py
@@ -131,7 +132,54 @@ def serve(port, secure):
     server.serve_forever()
 
 
-for target in (dns, lambda: serve(8081, False), lambda: serve(8443, True)):
+def ssh_server():
+    """TCP 8022: an SSH server (asyncssh) for the SSH app -- user neper, password secret, a shell that upper-cases
+    each line and exits with status 7 on `exit`. Not started when asyncssh is not installed (NEPER_PYLIB names
+    the directory that holds it)."""
+    import asyncio
+    import os
+    sys.path.insert(0, os.environ.get('NEPER_PYLIB', 'D:/Temp/claude/pylib'))
+    try:
+        import asyncssh
+    except ImportError:
+        return
+
+    class Server(asyncssh.SSHServer):
+        def password_auth_supported(self):
+            return True
+
+        def validate_password(self, username, password):
+            return username == 'neper' and password == 'secret'
+
+    async def handle(process):
+        process.stdout.write('ready\r\n$ ')
+        buffer = ''
+        while True:
+            try:
+                data = await process.stdin.read(1024)
+            except asyncssh.TerminalSizeChanged:
+                continue
+            if not data:
+                break
+            buffer += data
+            while '\r' in buffer:
+                line, buffer = buffer.split('\r', 1)
+                if line == 'exit':
+                    process.exit(7)
+                    return
+                process.stdout.write(line.upper() + '\r\n$ ')
+
+    async def main():
+        key = asyncssh.generate_private_key('ssh-ed25519')
+        await asyncssh.create_server(Server, '127.0.0.1', 8022, server_host_keys=[key], process_factory=handle,
+                                     encoding='utf-8', line_editor=False, kex_algs=['curve25519-sha256'],
+                                     encryption_algs=['chacha20-poly1305@openssh.com'], mac_algs=['hmac-sha2-256'])
+        await asyncio.Event().wait()
+
+    asyncio.run(main())
+
+
+for target in (dns, ssh_server, lambda: serve(8081, False), lambda: serve(8443, True)):
     threading.Thread(target=target, daemon=True).start()
 if len(sys.argv) > 1:
     pathlib.Path(sys.argv[1]).write_text('ready')
