@@ -1251,6 +1251,12 @@ $textterminalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $textterminalWritten -ne 'executable written') { throw 'text_terminal emission failed' }
 & $textterminalPath
 if ($LASTEXITCODE -ne 0) { throw "a text_terminal check failed: exit $LASTEXITCODE" }
+# `e.net.ssh`: a client session against a real SSH server (asyncssh) on loopback, driven by drive.py: password and key login, a shell, resize, exit status, a wrong password and a wrong host key.
+$netSshPath = Join-Path $testBuild 'net-ssh-selfhost.exe'
+$netSshWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_ssh\src\main.e') $repo 'x64' 'windows' $netSshPath
+if ($LASTEXITCODE -ne 0 -or $netSshWritten -ne 'executable written') { throw 'net_ssh emission failed' }
+& python (Join-Path $PSScriptRoot 'fixtures\link\net_ssh\drive.py') $netSshPath
+if ($LASTEXITCODE -ne 0) { throw "a net_ssh check failed: exit $LASTEXITCODE" }
 # `e.test.support`: the clock, the scripted reader and writer, the schedule.
 $testSupportPath = Join-Path $testBuild 'test-support-selfhost.exe'
 $testSupportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_support\src\main.e') $repo 'x64' 'windows' $testSupportPath

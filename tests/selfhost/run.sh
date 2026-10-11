@@ -1158,6 +1158,11 @@ text_terminal_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$text_terminal_written" = 'executable written' ]
 chmod +x "$test_build/text-terminal-selfhost"
 "$test_build/text-terminal-selfhost"
+# `e.net.ssh`: a client session against a real SSH server (asyncssh) on loopback, driven by drive.py.
+net_ssh_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_ssh/src/main.e" "$repo" x64 linux "$test_build/net-ssh-selfhost")
+[ "$net_ssh_written" = 'executable written' ]
+chmod +x "$test_build/net-ssh-selfhost"
+python3 "$repo/tests/selfhost/fixtures/link/net_ssh/drive.py" "$test_build/net-ssh-selfhost"
 "$test_build/text-highlight-selfhost"
 # `e.test.support`: the clock, the scripted reader and writer, the schedule.
 test_support_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_support/src/main.e" "$repo" x64 linux "$test_build/test-support-selfhost")

@@ -22984,3 +22984,86 @@ fn resize(a: *mem.Arena, t: *Terminal, cols: usize, rows: usize) -> err
 ```
 
 A terminal emulator (C120): `open` makes a terminal of columns x rows with a scrollback, `feed` reads output bytes (UTF-8, BS HT LF CR, CSI cursor movement, erase, insert and delete of characters and lines, scroll up and down, scroll region, SGR with 8, 16, 256 and true colours, save and restore, cursor visibility, the alternate screen, ESC D E M c, OSC dropped), `cell` and `history_cell` read the grid and the scrollback, `resize` keeps the overlap. A colour is 0 default, 1-8 ANSI 30-37, 9-16 bright, 0x100 | n for a palette entry, 0x1000000 | rgb. Wrapping is deferred; erase fills with the current rendition, scrolling with the default. No double-width characters. Checked cell by cell against pyte on twenty-one streams.
+
+
+### `e.net.ssh`
+
+```neper
+error Protocol
+error HostKey
+error AuthFailed
+error TooLong
+error Closed
+error Unsupported
+const VERSION: u32 = 0u32
+const KEX: u32 = 1u32
+const HOST_KEY_PENDING: u32 = 2u32
+const AUTH: u32 = 3u32
+const CHANNEL: u32 = 4u32
+const READY: u32 = 5u32
+const CLOSED: u32 = 6u32
+const FAILED: u32 = 7u32
+const FAIL_NONE: u32 = 0u32
+const FAIL_PROTOCOL: u32 = 1u32
+const FAIL_UNSUPPORTED: u32 = 2u32
+const FAIL_HOST_KEY: u32 = 3u32
+const FAIL_AUTH: u32 = 4u32
+const FAIL_MAC: u32 = 5u32
+const FAIL_DISCONNECT: u32 = 6u32
+const FAIL_CHANNEL: u32 = 7u32
+const BUFFER: usize = 65536usize
+const DATA: usize = 32768usize
+const METHOD_PASSWORD: u32 = 0u32
+const METHOD_KEY: u32 = 1u32
+type Session = struct {
+fn put_u32(buf: []u8, at: usize, value: u32)
+fn get_u32(buf: []const u8, at: usize) -> u32
+type Writer = struct { buf: []u8, len: usize, over: bool }
+fn w_byte(w: *Writer, b: u8)
+fn w_u32(w: *Writer, v: u32)
+fn w_raw(w: *Writer, data: []const u8)
+fn w_string(w: *Writer, data: []const u8)
+fn w_mpint(w: *Writer, data: []const u8)
+type Reader = struct { buf: []const u8, pos: usize, bad: bool }
+fn r_byte(r: *Reader) -> u8
+fn r_u32(r: *Reader) -> u32
+fn r_string(r: *Reader) -> []const u8
+fn same_text(a: []const u8, b: str) -> bool
+fn in_list(list: []const u8, name: str) -> bool
+fn open(a: *mem.Arena, random: []const u8, user: str, password: str, cols: u32, rows: u32) -> (Session, err)
+fn use_key(s: *Session, seed: [32]u8)
+fn set_command(s: *Session, command: str)
+fn fail(s: *Session, code: u32)
+fn chacha_nonce(seq: u32) -> [12]u8
+fn send_packet(s: *Session, payload: []const u8)
+fn name_list(w: *Writer, names: str)
+fn send_kexinit(s: *Session)
+fn compute_exchange_hash(s: *Session)
+fn derive_key(s: *Session, letter: u8, out: []u8)
+fn install_keys(s: *Session)
+fn handle_kexinit(s: *Session, payload: []const u8)
+fn handle_kex_reply(s: *Session, payload: []const u8)
+fn trust(s: *Session)
+fn host_key(s: *Session) -> [32]u8
+fn b64_char(v: usize) -> u8
+fn host_fingerprint(s: *Session, out: []u8) -> usize
+fn start_auth(s: *Session)
+fn send_userauth(s: *Session)
+fn open_channel(s: *Session)
+fn channel_request(s: *Session, kind: str, want_reply: bool, extra: []const u8)
+fn request_pty(s: *Session)
+fn request_shell(s: *Session)
+fn resize(s: *Session, cols: u32, rows: u32)
+fn write(s: *Session, data: []const u8) -> usize
+fn read(s: *Session, out: []u8) -> usize
+fn handle_channel_data(s: *Session, data: []const u8)
+fn close(s: *Session)
+fn dispatch(s: *Session, payload: []const u8)
+fn take_packet(s: *Session) -> bool
+fn feed(s: *Session, data: []const u8) -> err
+fn outgoing(s: *Session) -> []const u8
+fn sent(s: *Session, n: usize)
+fn status(s: *Session) -> u32
+```
+
+An SSH-2 client, sans-IO (C120): `open` makes a session for a user and password (or `use_key` an ed25519 seed), `outgoing` and `sent` move the bytes to send, `feed` takes the bytes received, `status` follows the connection (version, key exchange, host key pending, authentication, channel, ready, closed, failed). It speaks curve25519-sha256 with an ssh-ed25519 host key, chacha20-poly1305@openssh.com, password and public-key authentication, one session channel with a pty and a shell or an exec command, flow control and exit status. At `HOST_KEY_PENDING` the caller reads `host_key` and `host_fingerprint` and calls `trust`. Nothing else: no other algorithms, rekeying, forwarding, SFTP. Checked against a real server (asyncssh) on loopback: password and key login, a shell, resize, exit status, a wrong password and a wrong host key.

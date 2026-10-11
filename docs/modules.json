@@ -54,6 +54,7 @@
     "e.text.highlight",
     "e.barcode",
     "e.text.terminal",
+    "e.net.ssh",
     "e.fmt.csv",
     "e.fmt.ini",
     "e.text.utf8",
@@ -1985,6 +1986,22 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.ssh",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.crypto.cipher",
+    "e.crypto.hash",
+    "e.crypto.kx",
+    "e.crypto.mac",
+    "e.crypto.sign",
     "e.mem"
    ],
    "blocked_by": []

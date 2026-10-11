@@ -485,6 +485,7 @@
     "barcode",
     "barcode_scan",
     "text_terminal",
+    "net_ssh",
     "fmt_xlsx",
     "gfx_cssvalue",
     "html_accessible",
@@ -705,6 +706,17 @@
     "x_lint_scan",
     "x_migrate",
     "x_migrate_terraform"
+   ]
+  },
+  {
+   "module": "e.net.ssh",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 1,
+   "delivered": 1,
+   "pending": [],
+   "fixtures": [
+    "net_ssh"
    ]
   },
   {
