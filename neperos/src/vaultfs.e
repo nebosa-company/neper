@@ -52,6 +52,47 @@ fn stats() -> (usize, usize, bool) {
     ret (used, total, result == fsproto.RESULT_OK)
 }
 
+// (C150) A file of any size in pieces: reserve it, then write 2 KB at a time from [addr, addr + len).
+fn write_big(path: str, addr: usize, len: usize) -> bool {
+    let sent = os.send(FS_REQ, fsproto.OP_RESERVE, fsproto.NO_SLOT)
+    if sent == REFUSED { ret false }
+    fsproto.send_str(FS_REQ, path)
+    let size_sent = os.send(FS_REQ, len, fsproto.NO_SLOT)
+    if os.recv(FS_REP, fsproto.NO_SLOT) != fsproto.RESULT_OK { ret false }
+    var at = 0usize
+    while at < len {
+        var piece = len - at
+        if piece > 2048usize { piece = 2048usize }
+        let op_sent = os.send(FS_REQ, fsproto.OP_WRITE_AT, fsproto.NO_SLOT)
+        fsproto.send_str(FS_REQ, path)
+        let offset_sent = os.send(FS_REQ, at, fsproto.NO_SLOT)
+        fsproto.send_packed(FS_REQ, addr + at, piece)
+        if os.recv(FS_REP, fsproto.NO_SLOT) != fsproto.RESULT_OK { ret false }
+        at += piece
+    }
+    ret true
+}
+
+// (C150) A file of any size in pieces into [addr, addr + cap): the bytes read, and whether it read.
+fn read_big(path: str, addr: usize, cap: usize) -> (usize, bool) {
+    var at = 0usize
+    while at < cap {
+        var want = cap - at
+        if want > 2048usize { want = 2048usize }
+        let sent = os.send(FS_REQ, fsproto.OP_READ_AT, fsproto.NO_SLOT)
+        if sent == REFUSED { ret (0usize, false) }
+        fsproto.send_str(FS_REQ, path)
+        let offset_sent = os.send(FS_REQ, at, fsproto.NO_SLOT)
+        let want_sent = os.send(FS_REQ, want, fsproto.NO_SLOT)
+        let result = os.recv(FS_REP, fsproto.NO_SLOT)
+        let got = fsproto.recv_packed(FS_REP, addr + at, want)
+        if result != fsproto.RESULT_OK { ret (at, false) }
+        at += got
+        if got < want { ret (at, true) }
+    }
+    ret (at, true)
+}
+
 // (C125) The size and kind (1 file, 2 directory) of `path`, and whether the filesystem answered and has it.
 fn stat(path: str) -> (usize, usize, usize, bool) {
     let sent = os.send(FS_REQ, fsproto.OP_STAT, fsproto.NO_SLOT)

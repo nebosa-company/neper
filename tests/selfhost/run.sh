@@ -10102,6 +10102,32 @@ greeting"
             esac
         done
     done < <(grep -v '^#' "$apps_table")
+    # The install-on-disk fixtures: the package archive on a fresh disk (the shell keeps the package in /apps), and
+    # a row named <base>_again boots the plain archive on that disk (the shell finds the app there).
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = installdiskfixture ] || continue
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        install_base="${fixture%_again}"
+        install_disk="$test_build/shell-$install_base.disk"
+        install_archive="$package_archive"
+        if [ "$fixture" = "$install_base" ]; then
+            dd if=/dev/zero of="$install_disk" bs=1M count=8 status=none
+        else
+            install_archive="$crater_archive"
+        fi
+        last_marker="${markers##*;;}"
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$install_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$install_disk" 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) printf 'NeperOS %s fixture did not reach "%s" (%s): %s\n' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
     # The live fixtures: the same, on a user-mode network with the host side (DNS, HTTP, HTTPS with the recorded API
     # replies) running, the network server in test mode (`nettest`) and the fixture's root as the 46th archive entry.
     live_ready="$test_build/live-hosts.ready"

@@ -88,6 +88,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if op == fsproto.OP_RENAME {
                 let nlen = fsproto.recv_bytes(REQ, data_addr, 64usize)
                 reply(fs.rename(blk, path, databuf[0usize..nlen]))
+            } else if op == fsproto.OP_RESERVE {
+                let size_word = os.recv(REQ, fsproto.NO_SLOT)
+                reply(fs.reserve(blk, path, size_word))
+            } else if op == fsproto.OP_WRITE_AT {
+                let offset_word = os.recv(REQ, fsproto.NO_SLOT)
+                let piece = fsproto.recv_packed(REQ, data_addr, 4096usize)
+                reply(fs.write_at(blk, path, offset_word, data_addr, piece))
+            } else if op == fsproto.OP_READ_AT {
+                let offset_word = os.recv(REQ, fsproto.NO_SLOT)
+                var want = os.recv(REQ, fsproto.NO_SLOT)
+                if want > 4096usize { want = 4096usize }
+                let (got, read_error) = fs.read_at(blk, path, offset_word, file_addr, want)
+                var n = got
+                if read_error == ok {
+                    let sent = os.send(REP, fsproto.RESULT_OK, fsproto.NO_SLOT)
+                } else {
+                    let sent = os.send(REP, fsproto.RESULT_ERR, fsproto.NO_SLOT)
+                    n = 0usize
+                }
+                fsproto.send_packed(REP, file_addr, n)
             } else if op == fsproto.OP_MOVE {
                 let dlen = fsproto.recv_bytes(REQ, data_addr, 64usize)
                 reply(fs.move(blk, path, databuf[0usize..dlen]))

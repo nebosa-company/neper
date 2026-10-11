@@ -498,6 +498,87 @@ fn icon_at(x: f32, y: f32) -> usize {
 }
 
 
+// (C124) Take a signed package: check it against the server's key, keep the manifest's name and capabilities and the
+// image in a page-aligned buffer, and (when `persist`) write the package to /apps so the next boot has it. True when it
+// was adopted.
+fn adopt(a: *mem.Arena, data: str, persist: bool) -> bool {
+    let (pkg, pkg_error) = package.check(data, server_key.public())
+    if pkg_error != ok {
+        say("shell package refused\n")
+        ret false
+    }
+    let (pkg_name, has_pkg_name) = package.value(pkg, "name")
+    var n = 0usize
+    while n < pkg_name.len && n < 24usize {
+        installed_name[n] = pkg_name[n]
+        n += 1usize
+    }
+    let pages = (pkg.image.len + 4095usize) / 4096usize
+    let (image_buf, image_error) = mem.alloc[u8](a, pages * 4096usize + 4096usize)
+    if image_error != ok { ret false }
+    let base = (mem.address_of(&image_buf[0usize]) + 4095usize) & ~4095usize
+    var b = 0usize
+    while b < pkg.image.len {
+        os.store8(base + b, pkg.image[b])
+        b += 1usize
+    }
+    installed_va = base
+    installed_pages = pages
+    installed_len = n
+    installed_caps = 0usize
+    if package.declares(pkg, "network") { installed_caps = installed_caps | 1usize }
+    if package.declares(pkg, "storage") { installed_caps = installed_caps | 2usize }
+    say("shell installed ")
+    say(installed_name[0usize..installed_len])
+    say("\n")
+    if persist {
+        // /apps/<the name's letters and digits, lower case>.npkg
+        let made_dir = fsproto.mkdir(FS_REQ, FS_REP, "/apps")
+        var file: [24]u8 = zero
+        var f = 0usize
+        var k = 0usize
+        while k < installed_len && f < 14usize {
+            var c = installed_name[k]
+            if c >= 65u8 && c <= 90u8 { c = c + 32u8 }
+            if (c >= 97u8 && c <= 122u8) || (c >= 48u8 && c <= 57u8) {
+                file[f] = c
+                f += 1usize
+            }
+            k += 1usize
+        }
+        let suffix = ".npkg"
+        var s = 0usize
+        while s < suffix.len {
+            file[f + s] = suffix[s]
+            s += 1usize
+        }
+        let path = join3(a, "/apps/", file[0usize..f + suffix.len], "")
+        if fsproto.write_big(FS_REQ, FS_REP, path, mem.address_of(&data[0usize]), data.len) {
+            say("shell package kept ")
+            say(path)
+            say("\n")
+        }
+    }
+    ret true
+}
+
+// (C124) The first package in /apps, read from the disk, when the archive carried none.
+fn adopt_from_disk(a: *mem.Arena) -> bool {
+    var names: [256]u8 = zero
+    let (count, listed) = fsproto.list(FS_REQ, FS_REP, "/apps", mem.address_of(&names[0usize]), 256usize)
+    if !listed || count == 0usize { ret false }
+    var at = 0usize
+    while at < count && names[at] != 10u8 { at += 1usize }
+    let path = join3(a, "/apps/", names[0usize..at], "")
+    let (size, kind, day, found) = fsproto.stat(FS_REQ, FS_REP, path)
+    if !found || size == 0usize || size > 4194304usize { ret false }
+    let (buffer, buffer_error) = mem.alloc[u8](a, size)
+    if buffer_error != ok { ret false }
+    let (got, read_ok) = fsproto.read_big(FS_REQ, FS_REP, path, mem.address_of(&buffer[0usize]), size)
+    if !read_ok || got != size { ret false }
+    ret adopt(a, buffer[0usize..got], false)
+}
+
 // The system theme Settings stored (C126, theme.e), or 0 when there is no disk or no file. The first send is
 // refused on a machine without the endpoints.
 fn stored_theme() -> usize {
@@ -599,39 +680,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         say_num(stored)
         say("\n")
     }
-    // (C124) A signed app package the kernel mapped after the files (args[7]): checked against the server's
-    // key and, when it passes, held for the last icon of the grid.
-    if args.len >= 8usize {
-        let (pkg, pkg_error) = package.check(args[7usize], server_key.public())
-        if pkg_error == ok {
-            let (pkg_name, has_pkg_name) = package.value(pkg, "name")
-            var n = 0usize
-            while n < pkg_name.len && n < 24usize {
-                installed_name[n] = pkg_name[n]
-                n += 1usize
-            }
-            let pages = (pkg.image.len + 4095usize) / 4096usize
-            let (image_buf, image_error) = mem.alloc[u8](a, pages * 4096usize + 4096usize)
-            if image_error == ok {
-                let base = (mem.address_of(&image_buf[0usize]) + 4095usize) & ~4095usize
-                var b = 0usize
-                while b < pkg.image.len {
-                    os.store8(base + b, pkg.image[b])
-                    b += 1usize
-                }
-                installed_va = base
-                installed_pages = pages
-                if package.declares(pkg, "network") { installed_caps = installed_caps | 1usize }
-                if package.declares(pkg, "storage") { installed_caps = installed_caps | 2usize }
-                installed_len = n
-                say("shell installed ")
-                say(installed_name[0usize..installed_len])
-                say("\n")
-            }
-        } else {
-            say("shell package refused\n")
-        }
-    }
+    // (C124) A signed app package the kernel mapped after the files (args[7]), else the first one kept in /apps:
+    // checked against the server's key and, when it passes, held for the last icon of the grid.
+    var adopted = false
+    if args.len >= 8usize { adopted = adopt(a, args[7usize], true) }
+    if !adopted { adopted = adopt_from_disk(a) }
     hidden_mask = sysettings.hidden()
     if hidden_mask != 0usize {
         say("shell hidden ")

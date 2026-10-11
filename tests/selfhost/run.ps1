@@ -10241,6 +10241,22 @@ if ($neperosQemu) {
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
         if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
     }
+    # The install-on-disk fixtures: the package archive on a fresh disk (the shell keeps the package in /apps), and
+    # a row named <base>_again boots the plain archive on that disk (the shell finds the app there).
+    foreach ($row in $appsTable) {
+        $fields = $row.Split('|', 7)
+        if ($fields[0] -ne 'installdiskfixture') { continue }
+        $fixture = $fields[1]
+        $again = $fixture -match '_again$'
+        $installDisk = Join-Path $testBuild ("shell-" + ($fixture -replace '_again$', '') + ".disk")
+        if (-not $again) { $diskStream = [IO.File]::Create($installDisk); $diskStream.SetLength(8MB); $diskStream.Close() }
+        $installArchive = $packageArchive
+        if ($again) { $installArchive = $craterArchive }
+        if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
+        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $installArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $installDisk 0 $fields[4] 2>&1) -join "`n"
+        $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+        if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+    }
     # The live fixtures: the same, on a user-mode network with the host side (DNS, HTTP, HTTPS with the recorded API
     # replies) running, the network server in test mode (`nettest`) and the fixture's root as the 46th archive entry.
     $liveReady = Join-Path $testBuild 'live-hosts.ready'

@@ -24,6 +24,121 @@ const OP_RENAME: usize = 9usize
 const OP_STAT: usize = 10usize
 // MOVE path, destination directory -> result (the entry keeps its name and its blocks).
 const OP_MOVE: usize = 11usize
+// (C150) Files of any size, in pieces. RESERVE path, size word -> result: the file is made (or kept when its run
+// is big enough) with a run of blocks for `size` bytes and that size. WRITE_AT path, offset word, packed bytes ->
+// result. READ_AT path, offset word, max word -> result, packed bytes (eight bytes a word, little end first, so a
+// kilobyte costs 130 rendezvous rather than 1025).
+const OP_RESERVE: usize = 12usize
+const OP_WRITE_AT: usize = 13usize
+const OP_READ_AT: usize = 14usize
+
+// A client's calls over its own two endpoint slots (`req` out, `rep` in), for processes that are not in vaultfs.e's
+// fixed slots (the shell uses 6 and 7).
+const REFUSED_SEND: usize = 18446744073709551615usize
+
+fn mkdir(req: usize, rep: usize, path: str) -> bool {
+    let sent = os.send(req, OP_MKDIR, NO_SLOT)
+    if sent == REFUSED_SEND { ret false }
+    send_str(req, path)
+    ret os.recv(rep, NO_SLOT) == RESULT_OK
+}
+
+fn stat(req: usize, rep: usize, path: str) -> (usize, usize, usize, bool) {
+    let sent = os.send(req, OP_STAT, NO_SLOT)
+    if sent == REFUSED_SEND { ret (0usize, 0usize, 0usize, false) }
+    send_str(req, path)
+    let result = os.recv(rep, NO_SLOT)
+    let size = os.recv(rep, NO_SLOT)
+    let kind = os.recv(rep, NO_SLOT)
+    let day = os.recv(rep, NO_SLOT)
+    ret (size, kind, day, result == RESULT_OK)
+}
+
+fn list(req: usize, rep: usize, path: str, addr: usize, cap: usize) -> (usize, bool) {
+    let sent = os.send(req, OP_LIST, NO_SLOT)
+    if sent == REFUSED_SEND { ret (0usize, false) }
+    send_str(req, path)
+    let result = os.recv(rep, NO_SLOT)
+    let count = recv_bytes(rep, addr, cap)
+    ret (count, result == RESULT_OK)
+}
+
+// A file of any size, reserved and then written 2 KB at a time.
+fn write_big(req: usize, rep: usize, path: str, addr: usize, len: usize) -> bool {
+    let sent = os.send(req, OP_RESERVE, NO_SLOT)
+    if sent == REFUSED_SEND { ret false }
+    send_str(req, path)
+    let size_sent = os.send(req, len, NO_SLOT)
+    if os.recv(rep, NO_SLOT) != RESULT_OK { ret false }
+    var at = 0usize
+    while at < len {
+        var piece = len - at
+        if piece > 2048usize { piece = 2048usize }
+        let op_sent = os.send(req, OP_WRITE_AT, NO_SLOT)
+        send_str(req, path)
+        let offset_sent = os.send(req, at, NO_SLOT)
+        send_packed(req, addr + at, piece)
+        if os.recv(rep, NO_SLOT) != RESULT_OK { ret false }
+        at += piece
+    }
+    ret true
+}
+
+// A file of any size into [addr, addr + cap), 2 KB at a time: the bytes read, and whether it read.
+fn read_big(req: usize, rep: usize, path: str, addr: usize, cap: usize) -> (usize, bool) {
+    var at = 0usize
+    while at < cap {
+        var want = cap - at
+        if want > 2048usize { want = 2048usize }
+        let sent = os.send(req, OP_READ_AT, NO_SLOT)
+        if sent == REFUSED_SEND { ret (0usize, false) }
+        send_str(req, path)
+        let offset_sent = os.send(req, at, NO_SLOT)
+        let want_sent = os.send(req, want, NO_SLOT)
+        let result = os.recv(rep, NO_SLOT)
+        let got = recv_packed(rep, addr + at, want)
+        if result != RESULT_OK { ret (at, false) }
+        at += got
+        if got < want { ret (at, true) }
+    }
+    ret (at, true)
+}
+
+// Send `len` bytes at `addr` over `ep_slot` packed eight to a word: the length word, then the words.
+fn send_packed(ep_slot: usize, addr: usize, len: usize) {
+    let header = os.send(ep_slot, len, NO_SLOT)
+    var at = 0usize
+    while at < len {
+        var word = 0usize
+        var j = 0usize
+        while j < 8usize && at + j < len {
+            word = word | (usize(os.load8(addr + at + j)) << (8usize * j))
+            j += 1usize
+        }
+        let sent = os.send(ep_slot, word, NO_SLOT)
+        at += 8usize
+    }
+}
+
+// Receive a packed byte string into [addr, addr + cap); the byte count kept (the rest is drained).
+fn recv_packed(ep_slot: usize, addr: usize, cap: usize) -> usize {
+    let len = os.recv(ep_slot, NO_SLOT)
+    var kept = 0usize
+    var at = 0usize
+    while at < len {
+        let word = os.recv(ep_slot, NO_SLOT)
+        var j = 0usize
+        while j < 8usize && at + j < len {
+            if kept < cap {
+                os.store8(addr + kept, u8((word >> (8usize * j)) & 255usize))
+                kept += 1usize
+            }
+            j += 1usize
+        }
+        at += 8usize
+    }
+    ret kept
+}
 
 const RESULT_OK: usize = 0usize
 const RESULT_ERR: usize = 1usize

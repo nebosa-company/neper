@@ -298,6 +298,94 @@ fn write(blk: virtio.Block, path: str, src: usize, len: usize) -> err {
     ret set_size(blk, dir_block, leaf, count)
 }
 
+// (C150) Make the file `path` with a run of blocks for `size` bytes (any size the disk has), its size set; an
+// existing file whose run is big enough keeps it, a smaller one takes a new run at the end.
+fn reserve(blk: virtio.Block, path: str, size: usize) -> err {
+    let (parent, leaf) = parent_leaf(path)
+    let (dir_block, resolve_error) = resolve_dir(blk, parent)
+    if resolve_error != ok { ret resolve_error }
+    let (off, found_block, old_size, kind, found) = dir_lookup(blk, dir_block, leaf)
+    var needed = (size + BLOCK_SIZE - 1usize) / BLOCK_SIZE
+    if needed == 0usize { needed = 1usize }
+    if !found {
+        let (new_block, add_error) = add_entry(blk, dir_block, leaf, KIND_FILE)
+        if add_error != ok { ret add_error }
+        var extra = 1usize
+        while extra < needed {
+            let (more, more_error) = alloc_block(blk)
+            if more_error != ok { ret more_error }
+            extra += 1usize
+        }
+    } else {
+        let have = (old_size + BLOCK_SIZE - 1usize) / BLOCK_SIZE
+        if needed > have && needed > 1usize {
+            let (first, first_error) = alloc_block(blk)
+            if first_error != ok { ret first_error }
+            var extra = 1usize
+            while extra < needed {
+                let (more, more_error) = alloc_block(blk)
+                if more_error != ok { ret more_error }
+                extra += 1usize
+            }
+            let moved = set_block(blk, dir_block, leaf, first)
+            if moved != ok { ret moved }
+        }
+    }
+    ret set_size(blk, dir_block, leaf, size)
+}
+
+// (C150) Write `len` bytes of `src` at byte `offset` of the file `path` (inside the size it was reserved for).
+fn write_at(blk: virtio.Block, path: str, offset: usize, src: usize, len: usize) -> err {
+    let (parent, leaf) = parent_leaf(path)
+    let (dir_block, resolve_error) = resolve_dir(blk, parent)
+    if resolve_error != ok { ret resolve_error }
+    let (off, data_block, size, kind, found) = dir_lookup(blk, dir_block, leaf)
+    if !found { ret NotFound }
+    if offset + len > size { ret DirFull }
+    var done = 0usize
+    while done < len {
+        let position = offset + done
+        let block_index = position / BLOCK_SIZE
+        let inside = position % BLOCK_SIZE
+        if virtio.block_read(blk, data_block + u64(block_index)) != ok { ret NotFormatted }
+        var i = inside
+        while i < BLOCK_SIZE && done < len {
+            os.store8(blk.data + i, os.load8(src + done))
+            i += 1usize
+            done += 1usize
+        }
+        let write_error = virtio.block_write(blk, data_block + u64(block_index))
+        if write_error != ok { ret write_error }
+    }
+    ret ok
+}
+
+// (C150) Read up to `max` bytes of the file `path` from byte `offset` into `dst`; the count read.
+fn read_at(blk: virtio.Block, path: str, offset: usize, dst: usize, max: usize) -> (usize, err) {
+    let (parent, leaf) = parent_leaf(path)
+    let (dir_block, resolve_error) = resolve_dir(blk, parent)
+    if resolve_error != ok { ret (0usize, resolve_error) }
+    let (off, data_block, size, kind, found) = dir_lookup(blk, dir_block, leaf)
+    if !found { ret (0usize, NotFound) }
+    if offset >= size { ret (0usize, ok) }
+    var count = size - offset
+    if count > max { count = max }
+    var done = 0usize
+    while done < count {
+        let position = offset + done
+        let block_index = position / BLOCK_SIZE
+        let inside = position % BLOCK_SIZE
+        if virtio.block_read(blk, data_block + u64(block_index)) != ok { ret (0usize, NotFormatted) }
+        var i = inside
+        while i < BLOCK_SIZE && done < count {
+            os.store8(dst + done, os.load8(blk.data + i))
+            i += 1usize
+            done += 1usize
+        }
+    }
+    ret (count, ok)
+}
+
 // Read the file `path` into `dst`, up to `max` bytes; the number read comes back.
 fn read(blk: virtio.Block, path: str, dst: usize, max: usize) -> (usize, err) {
     let (parent, leaf) = parent_leaf(path)
