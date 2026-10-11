@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C137",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 137,
-      "title": "NeperOS Translate: a real translation model, more languages, camera and voice input",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Translate app (D2232) uses a sample book of eight phrases in six languages. Acceptance: (1) translation by an on-device model from the library (the ml modules) or a server over C117, with at least forty languages, auto-detect, and offline packs kept in Files (C125); (2) fonts and shaping for the scripts those languages need (Arabic, Devanagari, CJK, Cyrillic, Greek, Thai, Hebrew), added to the font set the apps load; (3) input by voice (Recorder's speech engine, C136), by camera (text recognition in e.gfx.vision on a Camera frame, C122) and by handwriting; (4) history and saved phrases, copy and share, speak the result (text to speech through e.audio); (5) conversation mode with two languages on the two halves of the screen; (6) a fixture on QEMU that translates a fixed sentence with a small test model and checks the output text. Not queued here: document translation, subtitles."
-    },
-    {
       "id": "C138",
       "category": "compiler",
       "group": "NeperOS",
@@ -1564,6 +1553,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C136 (D2425): the Recorder keeps WAV files of a scripted microphone and plays their bytes back. Acceptance: (1) capture from the microphone and playback to the speaker through e.audio (an audio server with a device under QEMU and the Pixel's later), the level meter driven by the real samples; (2) Opus or a compressed format from the library, rename, share and delete, search by name; (3) a speech-to-text model on the device or on a server (C117) for the transcript with words timed to the playhead and tap-to-seek; (4) recording in the background with a notification and the lock-screen control; (5) a fixture that records from a scripted audio source and plays it back checking the bytes at the device."
+    },
+    {
+      "id": "C167",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 167,
+      "title": "NeperOS Translate remainder: a real model, more scripts and inputs, history and speech",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C137 (D2426): Translate asks a dictionary server for text outside its phrase book. Acceptance: (1) translation by an on-device model from the ml modules or a real server, at least forty languages with auto-detect and offline packs kept in Files (C125); (2) fonts and shaping for Arabic, Devanagari, CJK, Cyrillic, Greek, Thai and Hebrew added to the font set the apps load; (3) input by voice (C166's speech engine), by camera (text recognition in e.gfx.vision on a Camera frame, C153) and by handwriting; (4) history and saved phrases, copy and share, speak the result through e.audio; (5) conversation mode with two languages on the two halves of the screen; (6) a fixture that translates a fixed sentence with a small test model and checks the output text."
     }
   ]
 }

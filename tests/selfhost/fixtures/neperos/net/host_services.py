@@ -25,6 +25,44 @@ import threading
 
 here = pathlib.Path(__file__).resolve().parent
 BODY = b'hello from the neper test server\n'
+
+# The test boot's translation "model": a word-for-word dictionary through English, six languages.
+WORDS = [
+    ('hello', 'hola', 'bonjour', 'hallo', 'ciao', 'ola'),
+    ('good', 'bueno', 'bon', 'gut', 'buono', 'bom'),
+    ('morning', 'manana', 'matin', 'morgen', 'mattina', 'manha'),
+    ('night', 'noche', 'nuit', 'nacht', 'notte', 'noite'),
+    ('thank', 'gracias', 'merci', 'danke', 'grazie', 'obrigado'),
+    ('you', 'tu', 'vous', 'du', 'tu', 'voce'),
+    ('where', 'donde', 'ou', 'wo', 'dove', 'onde'),
+    ('is', 'es', 'est', 'ist', 'e', 'e'),
+    ('the', 'el', 'le', 'der', 'il', 'o'),
+    ('library', 'biblioteca', 'bibliotheque', 'bibliothek', 'biblioteca', 'biblioteca'),
+    ('coffee', 'cafe', 'cafe', 'kaffee', 'caffe', 'cafe'),
+    ('water', 'agua', 'eau', 'wasser', 'acqua', 'agua'),
+    ('friend', 'amigo', 'ami', 'freund', 'amico', 'amigo'),
+    ('house', 'casa', 'maison', 'haus', 'casa', 'casa'),
+    ('book', 'libro', 'livre', 'buch', 'libro', 'livro'),
+    ('please', 'por favor', 'sil vous plait', 'bitte', 'per favore', 'por favor'),
+]
+CODES = ['en', 'es', 'fr', 'de', 'it', 'pt']
+
+
+def translate(source, target, text):
+    if source not in CODES or target not in CODES:
+        return text
+    a, b = CODES.index(source), CODES.index(target)
+    out = []
+    for word in text.lower().split():
+        for row in WORDS:
+            if row[a] == word:
+                out.append(row[b])
+                break
+        else:
+            out.append(word)
+    return ' '.join(out)
+
+
 PAGE_INDEX = (b'<!doctype html><html><head><title>Neper test page</title><style>p{color:red}</style></head><body>'
               b'<h1>Neper test page</h1>'
               b'<p>This page is served by the test boot and laid out by the browser from real HTML, '
@@ -113,6 +151,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.reply(200, known.read_bytes(), 'application/json')
             else:
                 self.reply(200, b'{"code":400,"message":"**symbol** not found","status":"error"}', 'application/json')
+            return
+        if host == 'neper.test' and url.path == '/translate':
+            self.reply(200, translate(query.get('from', ['en'])[0], query.get('to', ['en'])[0], query.get('q', [''])[0]).encode('utf-8'), 'text/plain; charset=utf-8')
             return
         if host == 'neper.test' and url.path == '/pages/index.html':
             self.reply(200, PAGE_INDEX, 'text/html')

@@ -19,6 +19,7 @@ use e.text.shape
 use appkit
 use text
 use ui
+use httpc
 
 const NONE: usize = 99usize
 const LANGS: usize = 6usize
@@ -30,6 +31,13 @@ type State = struct {
     from: usize,
     to: usize,
     typed: ui.Field,
+    // (C137) What the translation server answered for the last text it was asked: the text, the languages and the answer.
+    remote_src: [64]u8,
+    remote_src_len: usize,
+    remote_from: usize,
+    remote_to: usize,
+    remote: [96]u8,
+    remote_len: usize,
     screen: usize,
     picking_to: bool,
     hits: ui.Hits,
@@ -120,6 +128,74 @@ fn lowered(a: *mem.Arena, value: str) -> str {
     ret buffer[0usize..value.len]
 }
 
+// The code the translation server knows a language by.
+fn lang_code(index: usize) -> str {
+    if index == 0usize { ret "en" }
+    if index == 1usize { ret "es" }
+    if index == 2usize { ret "fr" }
+    if index == 3usize { ret "de" }
+    if index == 4usize { ret "it" }
+    ret "pt"
+}
+
+// Ask the server to translate the typed text (spaces as %20; only letters and spaces are sent): true when it did.
+fn ask_server(a: *mem.Arena, s: *State) -> bool {
+    let value = lowered(a, ui.field_text(a, &s.typed))
+    if value.len == 0usize || value.len > 60usize { ret false }
+    var path: [160]u8 = zero
+    var n = 0usize
+    let head = ui.join(a, ui.join(a, "/translate?from=", lang_code(s.from), "&to="), lang_code(s.to), "&q=")
+    var i = 0usize
+    while i < head.len {
+        path[n] = head[i]
+        n += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < value.len && n + 3usize < 160usize {
+        let c = value[i]
+        if c == 32u8 {
+            path[n] = 37u8
+            path[n + 1usize] = 50u8
+            path[n + 2usize] = 48u8
+            n += 3usize
+        } else if c >= 97u8 && c <= 122u8 {
+            path[n] = c
+            n += 1usize
+        }
+        i += 1usize
+    }
+    let (reply, get_error) = httpc.get(a, "neper.test", ui.text_of(a, path[0usize..], n), "")
+    if get_error != ok || reply.status != 200usize { ret false }
+    var k = 0usize
+    while k < reply.body.len && k < 96usize {
+        s.remote[k] = reply.body[k]
+        k += 1usize
+    }
+    s.remote_len = k
+    k = 0usize
+    while k < value.len && k < 64usize {
+        s.remote_src[k] = value[k]
+        k += 1usize
+    }
+    s.remote_src_len = k
+    s.remote_from = s.from
+    s.remote_to = s.to
+    ui.say("translate server ")
+    ui.say_text(ui.text_of(a, s.remote[0usize..], s.remote_len))
+    ui.say("\n")
+    ret true
+}
+
+// The server's answer for the text now typed, when it was asked for exactly this text and these languages.
+fn remote_answer(a: *mem.Arena, s: *State) -> str {
+    let value = lowered(a, ui.field_text(a, &s.typed))
+    if s.remote_len > 0usize && s.remote_from == s.from && s.remote_to == s.to && ui.same(value, ui.text_of(a, s.remote_src[0usize..], s.remote_src_len)) {
+        ret ui.text_of(a, s.remote[0usize..], s.remote_len)
+    }
+    ret ""
+}
+
 // The phrase of the book that `value` is in language `lang`, or NONE.
 fn find(a: *mem.Arena, lang: usize, value: str) -> usize {
     let probe = lowered(a, value)
@@ -167,7 +243,12 @@ fn draw_main(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     var out = ""
     if value.len > 0usize {
         let at = find(a, s.from, value)
-        if at != NONE { out = phrase(s.to, at) } else { out = "Not in the sample phrase book" }
+        if at != NONE {
+            out = phrase(s.to, at)
+        } else {
+            out = remote_answer(a, s)
+            if out.len == 0usize { out = "Not in the phrase book: Done asks the server" }
+        }
     }
     var tone = ui.amber()
     if out.len > 28usize { tone = ui.light_muted() }
@@ -249,7 +330,13 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         ret false
     }
     if ui.is_key(id) {
-        if id == 1205usize { ret true }
+        if id == 1205usize {
+            // Done: a text the book does not have goes to the translation server.
+            if s.typed.len > 0usize && find(a, s.from, ui.field_text(a, &s.typed)) == NONE {
+                let asked = ask_server(a, s)
+            }
+            ret true
+        }
         let changed = ui.field_key(&s.typed, id, false)
         if changed { report(a, s) }
         ret changed
