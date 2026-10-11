@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-C127	compiler	0.2	1389	NeperOS Call: a real telephony stack, the contact store, voicemail	The Call app (D2222) has a keypad, recents, contacts and a call screen on sample data;
 C128	compiler	0	813	NeperOS Mail: a real mail client over IMAP and SMTP	The Mail app (D2223) shows a sample mailbox in the process.
 C129	compiler	0	915	NeperOS Browser: a real engine: HTTP over TLS, HTML and CSS, images, forms	The Browser app (D2224) shows sample pages that live in the app.
 C130	compiler	0	1034	NeperOS Maps: real map data, location, search and navigation	The Maps app (D2225) draws a procedural sample city with six made-up places.
@@ -141,3 +140,4 @@ C153	compiler	0	760	NeperOS Camera remainder: the sensor feed, video files, flas
 C154	compiler	0	852	NeperOS Wallet remainder: encrypted storage, MRZ from an image, editing, camera scanning	Split from C121 (D2402): Wallet draws real QR and Code 128 symbols, validates its form with e.valid, and shows the newest Camera scan on a document.
 C155	compiler	0	756	NeperOS SSH remainder: Secure credentials and Keychain, saved hosts, port forwarding, SFTP, keys	Split from C120 (D2406): the SSH app opens a live session (password login, host key confirmation for the run, a terminal grid).
 C156	compiler	0	482	NeperOS Weather remainder: the current location and weather alerts	Split from C119 (D2408): Weather shows live Open-Meteo forecasts for places the user adds, kept in storage with the unit.
+C157	compiler	0	817	NeperOS Call remainder: telephony and audio, shared contacts, voicemail, notifications	Split from C127 (D2409): the Call app keeps contacts as a vCard file with New, Edit and Delete.
