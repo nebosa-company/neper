@@ -675,17 +675,6 @@
       "evidence": "Planning only (D1889). ghostty/wezterm/kitty parity gap (verified: only false-positive matches anywhere): pty ownership, VT/ECMA-48 parser and cell grid with scrollback over e.ui.collection virtualization and text layout. Fixtures replay byte streams into grid assertions; shell integration and GPU rendering stay out."
     },
     {
-      "id": "L137",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 235,
-      "title": "Micro-slivers II: DHCP, SNMP, Gemini, gopher, finger, QR",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1889). Second small-completions item (all verified absent): DHCP client, SNMP codec, Gemini/gopher/finger clients and QR encode/decode. Each lands with table or loopback fixtures; split out any that grows, mirroring L135."
-    },
-    {
       "id": "L138",
       "category": "library",
       "group": "Algorithms",

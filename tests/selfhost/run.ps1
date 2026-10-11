@@ -1264,6 +1264,24 @@ $fmtOdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtOdfWritten -ne 'executable written') { throw 'fmt_odf emission failed' }
 & $fmtOdfPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_odf check failed: exit $LASTEXITCODE" }
+# `e.net.dhcp` (L137): see the module's fence.
+$netdhcpPath = Join-Path $testBuild 'net-dhcp-selfhost.exe'
+$netdhcpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_dhcp\src\main.e') $repo 'x64' 'windows' $netdhcpPath
+if ($LASTEXITCODE -ne 0 -or $netdhcpWritten -ne 'executable written') { throw 'net_dhcp emission failed' }
+& $netdhcpPath
+if ($LASTEXITCODE -ne 0) { throw "a net_dhcp check failed: exit $LASTEXITCODE" }
+# `e.net.snmp` (L137): see the module's fence.
+$netsnmpPath = Join-Path $testBuild 'net-snmp-selfhost.exe'
+$netsnmpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_snmp\src\main.e') $repo 'x64' 'windows' $netsnmpPath
+if ($LASTEXITCODE -ne 0 -or $netsnmpWritten -ne 'executable written') { throw 'net_snmp emission failed' }
+& $netsnmpPath
+if ($LASTEXITCODE -ne 0) { throw "a net_snmp check failed: exit $LASTEXITCODE" }
+# `e.net.retro` (L137): see the module's fence.
+$netretroPath = Join-Path $testBuild 'net-retro-selfhost.exe'
+$netretroWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_retro\src\main.e') $repo 'x64' 'windows' $netretroPath
+if ($LASTEXITCODE -ne 0 -or $netretroWritten -ne 'executable written') { throw 'net_retro emission failed' }
+& $netretroPath
+if ($LASTEXITCODE -ne 0) { throw "a net_retro check failed: exit $LASTEXITCODE" }
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 $fmtPdfPath = Join-Path $testBuild 'fmt-pdf-selfhost.exe'
 $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf\src\main.e') $repo 'x64' 'windows' $fmtPdfPath

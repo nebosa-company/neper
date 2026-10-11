@@ -1172,6 +1172,21 @@ fmt_odf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_odf_written" = 'executable written' ]
 chmod +x "$test_build/fmt-odf-selfhost"
 "$test_build/fmt-odf-selfhost"
+# `e.net.dhcp` (L137): see the module's fence.
+net_dhcp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_dhcp/src/main.e" "$repo" x64 linux "$test_build/net-dhcp-selfhost")
+[ "$net_dhcp_written" = 'executable written' ]
+chmod +x "$test_build/net-dhcp-selfhost"
+"$test_build/net-dhcp-selfhost"
+# `e.net.snmp` (L137): see the module's fence.
+net_snmp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_snmp/src/main.e" "$repo" x64 linux "$test_build/net-snmp-selfhost")
+[ "$net_snmp_written" = 'executable written' ]
+chmod +x "$test_build/net-snmp-selfhost"
+"$test_build/net-snmp-selfhost"
+# `e.net.retro` (L137): see the module's fence.
+net_retro_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_retro/src/main.e" "$repo" x64 linux "$test_build/net-retro-selfhost")
+[ "$net_retro_written" = 'executable written' ]
+chmod +x "$test_build/net-retro-selfhost"
+"$test_build/net-retro-selfhost"
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-selfhost")
 [ "$fmt_pdf_written" = 'executable written' ]

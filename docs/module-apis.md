@@ -24165,6 +24165,130 @@ fn slides(a: *mem.Arena, data: []const u8) -> ([]ooxml.Slide, err)
 The text of an OpenDocument package, read over `e.fmt.zip` and `e.fmt.xml` the way `e.fmt.ooxml` reads Office Open XML (C142): `paragraphs` gives an `.odt`'s `text:p` and `text:h` in order (the text of each, its style name or `Heading<level>`, whether it sits in a list item, `text:s` spaces, tabs and line breaks as characters, entities decoded), `slides` an `.odp`'s `draw:page`s in order with each page's paragraphs. Tables and frames are not laid out; their text is a paragraph like any other. A package with no `content.xml` is `NoContent`, bytes that are not a zip `NotAPackage` (from `e.fmt.ooxml`). Checked against packages made with Python's zipfile and an ElementTree walk (`scripts/gen_odf_test.py`).
 
 
+### `e.net.dhcp`
+
+```neper
+error Truncated
+error BadMagic
+error BadOption
+error TooSmall
+
+type Message = struct { op: u8, htype: u8, hlen: u8, hops: u8, xid: u32, secs: u16, flags: u16, ciaddr: [4]u8, yiaddr: [4]u8, siaddr: [4]u8, giaddr: [4]u8, chaddr: [16]u8, message_type: u8, server_id: [4]u8, has_server_id: bool, requested_ip: [4]u8, has_requested_ip: bool, lease_seconds: u32, has_lease: bool, subnet_mask: [4]u8, has_subnet: bool, router: [4]u8, has_router: bool, dns: [16]u8, dns_count: usize, hostname: [64]u8, hostname_len: usize, client_id: [17]u8, client_id_len: usize }
+
+const OP_REQUEST: u8 = 1u8
+const OP_REPLY: u8 = 2u8
+const DISCOVER: u8 = 1u8
+const OFFER: u8 = 2u8
+const REQUEST: u8 = 3u8
+const DECLINE: u8 = 4u8
+const ACK: u8 = 5u8
+const NAK: u8 = 6u8
+const RELEASE: u8 = 7u8
+const INFORM: u8 = 8u8
+const FIXED: usize = 236usize
+const MIN_SIZE: usize = 300usize
+
+fn put32(out: []u8, at: usize, value: u32)
+fn get32(data: []const u8, at: usize) -> u32
+fn copy4(from: []const u8, at: usize, to: []u8)
+fn client_message(mac: [6]u8, xid: u32, kind: u8) -> Message
+fn discover(mac: [6]u8, xid: u32) -> Message
+fn request(mac: [6]u8, xid: u32, requested: [4]u8, server: [4]u8) -> Message
+fn put_option(out: []u8, at: usize, code: u8, body: []const u8) -> usize
+fn encode(m: *Message, out: []u8) -> (usize, err)
+fn decode(data: []const u8) -> (Message, err)
+fn lease_time(m: Message) -> u32
+```
+
+DHCP messages (RFC 2131 and the options of RFC 2132) as bytes (L137): `encode` writes a BOOTP message with the magic cookie and the options of a plain lease, `decode` reads one back; `discover` and `request` build the two client messages. Options understood: subnet mask, router, up to four DNS servers, host name, requested address, lease time, message type, server identifier, parameter request list and client identifier; any other is skipped by its length. Padded to the 300-byte BOOTP minimum. No socket: the caller sends the bytes over UDP 68 to 67. Checked byte for byte against packets built with Python struct.
+
+
+### `e.net.snmp`
+
+```neper
+error Malformed
+error TooSmall
+error TooMany
+
+type Message = struct { version: u8, community: [64]u8, community_len: usize, pdu: u8, request_id: i64, error_status: i64, error_index: i64, count: usize, oid_arcs: [128]u32, oid_len: [8]usize, kind: [8]u8, number: [8]i64, bytes: [512]u8, bytes_at: [8]usize, bytes_len: [8]usize }
+
+const V1: u8 = 0u8
+const V2C: u8 = 1u8
+const GET: u8 = 160u8
+const GET_NEXT: u8 = 161u8
+const RESPONSE: u8 = 162u8
+const SET: u8 = 163u8
+const TRAP_V2: u8 = 167u8
+const T_INTEGER: u8 = 2u8
+const T_OCTETS: u8 = 4u8
+const T_NULL: u8 = 5u8
+const T_OID: u8 = 6u8
+const T_SEQUENCE: u8 = 48u8
+const T_IPADDRESS: u8 = 64u8
+const T_COUNTER32: u8 = 65u8
+const T_GAUGE32: u8 = 66u8
+const T_TIMETICKS: u8 = 67u8
+const T_COUNTER64: u8 = 70u8
+const T_NO_SUCH_OBJECT: u8 = 128u8
+const T_NO_SUCH_INSTANCE: u8 = 129u8
+const T_END_OF_MIB: u8 = 130u8
+const MAX_BINDINGS: usize = 8usize
+const MAX_ARCS: usize = 16usize
+
+fn put_length(out: []u8, at: usize, length: usize) -> usize
+fn length_size(length: usize) -> usize
+fn integer_bytes(value: i64, tmp: []u8) -> usize
+fn put_integer(out: []u8, at: usize, tag: u8, value: i64) -> usize
+fn base128_size(v: u32) -> usize
+fn put_base128(out: []u8, at: usize, v: u32) -> usize
+fn oid_content_size(arcs: []const u32) -> usize
+fn put_oid(out: []u8, at: usize, arcs: []const u32) -> usize
+fn oid_total(arcs: []const u32) -> usize
+fn integer_total(value: i64) -> usize
+fn build_request(out: []u8, version: u8, community: str, kind: u8, request_id: i64, oid: []const u32, has_text: bool, text: str, number: i64) -> (usize, err)
+fn read_header(data: []const u8, at: usize, limit: usize) -> (u8, usize, usize, err)
+fn read_integer(data: []const u8, start: usize, length: usize) -> i64
+fn decode(data: []const u8) -> (Message, err)
+```
+
+SNMP v1 and v2c messages (RFC 1157, RFC 3416) over a small BER codec (L137): `build_request` writes a GetRequest, GetNextRequest or SetRequest for one binding, `decode` reads a message of any PDU (a GetResponse above all) with up to eight bindings of INTEGER, Gauge32, Counter32, TimeTicks, Counter64 (saturating), octet string, IpAddress, OID, NULL and the v2c exceptions. Lengths are definite, short or long form. No UDP; SNMPv3 is not covered. Checked against messages built by an independent BER encoder written in Python.
+
+
+### `e.net.retro`
+
+```neper
+error TooLong
+error BadHeader
+error BadItem
+
+type GeminiResponse = struct { status: u8, meta: str, body_at: usize }
+type GopherItem = struct { kind: u8, display: str, selector: str, host: str, port: usize }
+
+const GEMINI_MAX_URL: usize = 1024usize
+const LINE_TEXT: u8 = 0u8
+const LINE_LINK: u8 = 1u8
+const LINE_HEADING1: u8 = 2u8
+const LINE_HEADING2: u8 = 3u8
+const LINE_HEADING3: u8 = 4u8
+const LINE_LIST: u8 = 5u8
+const LINE_QUOTE: u8 = 6u8
+const LINE_PRE_TOGGLE: u8 = 7u8
+
+fn put_text(out: []u8, at: usize, text: str) -> usize
+fn gemini_request(out: []u8, url: str) -> (usize, err)
+fn gemini_response(data: str) -> (GeminiResponse, err)
+fn gemini_line_kind(line: str, in_pre: bool) -> u8
+fn gemini_link(line: str) -> (str, str)
+fn gopher_request(out: []u8, selector: str, query: str, has_query: bool) -> (usize, err)
+fn gopher_item(line: str) -> (GopherItem, err)
+fn gopher_is_end(line: str) -> bool
+fn finger_request(out: []u8, user: str, verbose: bool) -> (usize, err)
+fn finger_target(spec: str) -> (str, str)
+```
+
+The small text protocols (L137): Gemini (`gemini_request`, `gemini_response` with its status, meta and body offset, `gemini_line_kind` and `gemini_link` for gemtext), Gopher (`gopher_request`, `gopher_item` for menu lines, `gopher_is_end`) and Finger (`finger_request`, verbose or not, and `finger_target` splitting user@host). Codecs only; the caller dials ports 1965 (over TLS), 70 and 79. Checked against cases written out from the gemini 0.16 spec, RFC 1436 and RFC 1288.
+
+
 ### `e.fmt.pdf`
 
 ```neper
