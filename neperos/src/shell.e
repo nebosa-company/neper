@@ -32,6 +32,8 @@ use e.ui.window
 use icons
 use text
 use lunar
+use package
+use server_key
 use fsproto
 use theme
 use sysettings
@@ -257,8 +259,16 @@ fn draw_lock(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, hour: us
 // out the rest in order, and a tap on a position starts the icon that stands there.
 var hidden_mask: usize = 0usize
 
+// (C124) The one installed app: a signed package the kernel handed the shell (its last archive entry), verified
+// against the server's key. Its name, and its image in a page-aligned buffer, until it is launched from memory.
+var installed_name: [24]u8 = zero
+var installed_len: usize = 0usize
+var installed_va: usize = 0usize
+var installed_pages: usize = 0usize
+
 fn visible_count() -> usize {
     var count = 0usize
+    // (not counting the installed app, which has the position after the last one)
     var i = 0usize
     while i < icons.APP_COUNT {
         if ((hidden_mask >> i) & 1usize) == 0usize { count += 1usize }
@@ -285,16 +295,24 @@ fn draw_home(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, has_font
     try status_bar(a, builder, faces, has_fonts, clock, snap)
     let white = paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }
     var idx = 0usize
-    while idx < visible_count() {
+    var extra = 0usize
+    if installed_len > 0usize { extra = 1usize }
+    while idx < visible_count() + extra {
         let icon = visible_icon(idx)
+        var glyph = icons.app(icon)
+        var caption = icons.app_label(icon)
+        if icon == 99usize {
+            glyph = icons.app(26usize)
+            caption = installed_name[0usize..installed_len]
+        }
         let col = idx % 4usize
         let row = idx / 4usize
         let cx = 51.5 + f32(col) * 103.0
         let y = 70.0 + f32(row) * 104.0
-        try svg.draw(a, builder, icons.app(icon), geometry.rect(cx - 30.0, y, 60.0, 60.0), white)
+        try svg.draw(a, builder, glyph, geometry.rect(cx - 30.0, y, 60.0, 60.0), white)
         if has_fonts {
             // A dark pill under the name keeps it readable on bright terrain.
-            let label = icons.app_label(icon)
+            let label = caption
             let label_width = text.measure(a, faces.jost, 14.5, label)
             var label_height: f32 = 17.0
             let (label_layout, label_error) = text.lay_out(a, faces.jost, 14.5, label, 0.0, 0u32, layout.Align.Start)
@@ -533,6 +551,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
         say_num(stored)
         say("\n")
     }
+    // (C124) A signed app package the kernel mapped after the files (args[7]): checked against the server's
+    // key and, when it passes, held for the last icon of the grid.
+    if args.len >= 8usize {
+        let (pkg, pkg_error) = package.check(args[7usize], server_key.public())
+        if pkg_error == ok {
+            let (pkg_name, has_pkg_name) = package.value(pkg, "name")
+            var n = 0usize
+            while n < pkg_name.len && n < 24usize {
+                installed_name[n] = pkg_name[n]
+                n += 1usize
+            }
+            let pages = (pkg.image.len + 4095usize) / 4096usize
+            let (image_buf, image_error) = mem.alloc[u8](a, pages * 4096usize + 4096usize)
+            if image_error == ok {
+                let base = (mem.address_of(&image_buf[0usize]) + 4095usize) & ~4095usize
+                var b = 0usize
+                while b < pkg.image.len {
+                    os.store8(base + b, pkg.image[b])
+                    b += 1usize
+                }
+                installed_va = base
+                installed_pages = pages
+                installed_len = n
+                say("shell installed ")
+                say(installed_name[0usize..installed_len])
+                say("\n")
+            }
+        } else {
+            say("shell package refused\n")
+        }
+    }
     hidden_mask = sysettings.hidden()
     if hidden_mask != 0usize {
         say("shell hidden ")
@@ -695,12 +744,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if by_key {
                     if !launched_test { app = 98usize }
                 } else {
-                    let icon = visible_icon(icon_at(f32(pointer_x) * 412.0 / 32768.0, f32(pointer_y) * logical_h / 32768.0))
+                    let position = icon_at(f32(pointer_x) * 412.0 / 32768.0, f32(pointer_y) * logical_h / 32768.0)
+                    let icon = visible_icon(position)
                     if icon < icons.APP_COUNT {
                         say("shell tap ")
                         say(icons.app_label(icon))
                         say("\n")
                         app = icon
+                    } else if installed_len > 0usize && position == visible_count() {
+                        say("shell tap ")
+                        say(installed_name[0usize..installed_len])
+                        say("\n")
+                        app = 97usize
                     }
                 }
                 if app == 98usize {
@@ -713,6 +768,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     say("shell app code ")
                     say_num(code_test)
                     say("\n")
+                    say("shell home\n")
+                } else if app == 97usize {
+                    // The installed app: started from its image in this process's memory (the kernel copies
+                    // the pages), as a full-screen app with the capabilities every app has.
+                    say("shell launching ")
+                    say(installed_name[0usize..installed_len])
+                    say("\n")
+                    let install_word = (1usize << 63usize) | (installed_pages << 40usize) | ((installed_va >> 12usize) << 8usize)
+                    let child_installed = os.launch(install_word)
+                    let code_installed = os.reap(child_installed)
+                    say("shell app code ")
+                    say_num(code_installed)
+                    say("\n")
+                    if has_last_scene {
+                        let released_installed = scene.release_scene(&renderer, last_scene)
+                        has_last_scene = false
+                    }
+                    mem.reset(a, home_mark)
+                    if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
+                    framed = true
                     say("shell home\n")
                 } else if app < icons.APP_COUNT {
                     let program = icons.program_of(app)

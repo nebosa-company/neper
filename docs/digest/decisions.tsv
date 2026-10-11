@@ -2138,4 +2138,5 @@ D2379	1140	C125 part five: search by name and by type
 D2380	945	C125 part six: multi-select with Delete and Move
 D2381	591	C125 part seven: a Recent view
 D2382	1180	C125 part eight: Open hands a file to the app for its type
-D2383	1634	C124 part one: the app package format and its verifier
+D2383	1635	C124 part one: the app package format and its verifier
+D2384	1899	C124 part two: an installed app starts from memory, and the shell verifies the package

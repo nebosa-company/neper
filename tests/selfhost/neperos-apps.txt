@@ -9,6 +9,8 @@
 #     the same, with a user-mode network and the host side of tests/selfhost/fixtures/neperos/net running
 #     (DNS, HTTP, and HTTPS with recorded Coinbase and Twelve Data replies), the network server in test mode
 #     (the fixture root, that DNS, port 443 dialled as 8443) -- an app's live data against recorded replies.
+#   installfixture|<name>|<port>|<tap delay s>|<taps>|<markers joined by ;;>|<note>
+#     the same, on the archive with a signed app package (the Level app, scripts/make_package.py) as its last entry.
 #   diskfixture|<name>|<port>|<tap delay s>|<taps>|<markers joined by ;;>|<note>
 #     a row named <base>_again, <base>_more or <base>_later boots again on the disk the row <base> left (a restart, more taps, or
 #     forty days later: the guest clock is moved on), not on a fresh one.
@@ -88,6 +90,7 @@ diskfixture|files_move_more|55210|8|16384,16361;28673,10970;20838,1318;4295,2279
 diskfixture|files_sel|55211|8|16384,16361;28673,10970;25770,30699;4295,22796;8669,7266;25770,30699;19009,24861;8669,7266;13550,1318;11930,8762;11930,11041;5727,30702;16384,32259|files real 2;;files created A;;files created B;;files deleted 2 items|(C125) Select mode: two folders ticked and deleted together (into the Trash).
 diskfixture|files_sel_again|55212|8|16384,16361;28673,10970|files real 5;;files tree 4|(C125) A restart: both are in the Trash on the disk.
 diskfixture|files_open|55213|8|16384,16361;28673,10970;25770,30699;10340,22796;26962,20729;12964,24861;7317,22796;8669,7266;7000,30699;4295,22796;8669,7266;11930,11041;5965,25430|files real 2;;files created a;;files handover /a;;shell handover 40;;document handed a|(C125) Open hands the file to the app for its type: Files leaves, the shell starts Document, which shows it.
+installfixture|install|55214|8|16384,16361;12288,29490;16384,32259|shell installed Lab level;;shell tap Lab level;;shell launching Lab level;;level shown;;level home|(C124) A signed app package is the archive's last entry: the shell verifies it, adds its icon after the built-in apps, and a tap starts the app from memory.
 fixture|settings_search|55181|8|16384,16361;28631,18395;27360,1531;5806,20728;23940,20728;13362,22796;23940,20728;16384,5735;16384,32259|settings shown;;settings search;;settings search wifi 2;;settings found Wi-Fi;;settings home|(C126) Settings search: open the search page, type wifi, two settings match, open the first, leave.
 fixture|call|55151|8|16384,16361;4096,3565;16384,11479;16384,11479;16384,11479;16384,18039;6522,8200;16384,18039;6522,8200;16384,22816;16384,24955;16384,32259|call shown;;call dialed 5550101;;call connected;;call ended;;call home|(D2222 Call: dial 5550101 on the keypad, call, wait for it to connect, end, leave)
 fixture|mail|55152|8|16384,16361;20440,3565;15906,5418;6840,30445;19405,22816;23939,20748;8669,13227;16384,32259|mail shown;;mail opened Lunch on Friday?;;mail composing;;mail sent;;mail home|(D2223 Mail: open the first message, reply, type Hi, send, leave)

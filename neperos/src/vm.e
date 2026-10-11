@@ -350,6 +350,21 @@ fn map_stack(a: *mem.Arena, ttbr: usize, pages: usize) -> (usize, usize, err) {
     ret (stack_va, stack_va + pages * PAGE, ok)
 }
 
+// The physical address behind user VA `va` in the address space rooted at `ttbr`, or 0 when the page is not
+// mapped (the same three-level walk as `protect`).
+fn translate(ttbr: usize, va: usize) -> usize {
+    let l1 = ttbr & TABLE_MASK
+    let l1_entry = usize(os.load64(l1 + ((va >> 30usize) & 511usize) * 8usize))
+    if (l1_entry & 1usize) == 0usize { ret 0usize }
+    let l2 = l1_entry & TABLE_MASK
+    let l2_entry = usize(os.load64(l2 + ((va >> 21usize) & 511usize) * 8usize))
+    if (l2_entry & 1usize) == 0usize { ret 0usize }
+    let l3 = l2_entry & TABLE_MASK
+    let entry = usize(os.load64(l3 + ((va >> 12usize) & 511usize) * 8usize))
+    if (entry & 1usize) == 0usize { ret 0usize }
+    ret (entry & TABLE_MASK) + (va & (PAGE - 1usize))
+}
+
 // Re-protect the page at user VA `va` in the address space rooted at `ttbr`: writable clears
 // AP[1], read-only sets it, so an EL0 store into a read-only page faults. The walk follows
 // the three table levels the map uses; a flush makes the change take effect.

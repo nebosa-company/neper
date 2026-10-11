@@ -101,6 +101,9 @@ var theme_arg: usize = 0usize
 var sizes_arg: bool = false
 // (C126) Whether the settings server runs: every full-screen app is then granted its two endpoints (slots 9 and 10).
 var settings_present: bool = false
+// (C124) One more archive entry mapped into the process started next, after its extra files: the shell's
+// signed app package (an entry that begins "NPKG"), or 0 for none.
+var tail_file: usize = 0usize
 // (D2205) The compositor's shared frame, once it exists: a process launched from the shell that is a
 // full-screen app (an archive entry from 13 on) gets it mapped, a frame endpoint to send on and the
 // routed-input endpoint to receive on, and the five fonts as its arguments.
@@ -451,6 +454,7 @@ fn setup_args_files(space: vm.Space, name: str) -> (usize, usize, err) {
     var count = 1usize + extra_count
     if theme_arg != 0usize { count += 1usize }
     if sizes_arg { count += 1usize }
+    if tail_file != 0usize { count += 1usize }
     let arg_off = space.arg_off
     let strings = arg_off + count * 16usize
     var i = 0usize
@@ -494,6 +498,16 @@ fn setup_args_files(space: vm.Space, name: str) -> (usize, usize, err) {
         let map_error = vm.map_range_el0(kernel_arena, space.ttbr, first_page, last_page - first_page, false)
         if map_error != ok { ret (0usize, 0usize, map_error) }
         file += 1usize
+    }
+    if tail_file != 0usize {
+        let tail_pa = archive_base + archive_offset[tail_file]
+        let tail_len = archive_length[tail_file]
+        vm.put_word(space, arg_off + (1usize + extra_count) * 16usize, tail_pa)
+        vm.put_word(space, arg_off + (1usize + extra_count) * 16usize + 8usize, tail_len)
+        let tail_first = tail_pa & ~4095usize
+        let tail_last = (tail_pa + tail_len + 4095usize) & ~4095usize
+        let tail_error = vm.map_range_el0(kernel_arena, space.ttbr, tail_first, tail_last - tail_first, false)
+        if tail_error != ok { ret (0usize, 0usize, tail_error) }
     }
     ret (vm.address(arg_off), count, ok)
 }
@@ -706,11 +720,52 @@ fn start_process(image_addr: usize, image_len: usize, name: str) -> (usize, err)
 // the all-ones sentinel.
 fn launch(frame: *a64.Frame) {
     // (C126) The program index in the low byte and the system theme word above it.
-    let index = usize(frame.x[0usize]) & 255usize
-    let theme_word = usize(frame.x[0usize]) >> 8usize
-    if index >= archive_count {
-        frame.x[0usize] = 18446744073709551615u64
-        ret
+    var index = usize(frame.x[0usize]) & 255usize
+    let theme_word = (usize(frame.x[0usize]) >> 8usize) & 16383usize
+    // (C124) An installed app: bit 63 set, the page count of its image in bits 40..55 and the page number of
+    // the image in the caller's address space in bits 8..34 (the caller keeps it page aligned). The kernel
+    // copies it out of the caller's pages into its own buffer and starts it as a full-screen app.
+    var image_addr = 0usize
+    var image_len = 0usize
+    let installed = (usize(frame.x[0usize]) >> 63usize) != 0usize
+    if installed {
+        let pages = (usize(frame.x[0usize]) >> 40usize) & 65535usize
+        let first_va = ((usize(frame.x[0usize]) >> 8usize) & 134217727usize) << 12usize
+        if pages == 0usize || pages > 1024usize || shared_frame_phys == 0usize {
+            frame.x[0usize] = 18446744073709551615u64
+            ret
+        }
+        let (staging, staging_error) = mem.alloc[u8](kernel_arena, pages * 4096usize + 4096usize)
+        if staging_error != ok {
+            frame.x[0usize] = 18446744073709551615u64
+            ret
+        }
+        let base = (mem.address_of(&staging[0usize]) + 4095usize) & ~4095usize
+        let caller_ttbr = thread.ttbr_of(thread.current)
+        var page = 0usize
+        while page < pages {
+            let pa = vm.translate(caller_ttbr, first_va + page * 4096usize)
+            if pa == 0usize {
+                frame.x[0usize] = 18446744073709551615u64
+                ret
+            }
+            var w = 0usize
+            while w < 4096usize {
+                os.store64(base + page * 4096usize + w, os.load64(pa + w))
+                w += 8usize
+            }
+            page += 1usize
+        }
+        image_addr = base
+        image_len = pages * 4096usize
+        index = 99usize
+    } else {
+        if index >= archive_count {
+            frame.x[0usize] = 18446744073709551615u64
+            ret
+        }
+        image_addr = archive_base + archive_offset[index]
+        image_len = archive_length[index]
     }
     // A full-screen app (D2205): a big arena for its renderer, the fonts as arguments, then the
     // shared frame and the two endpoints once it exists.
@@ -724,7 +779,7 @@ fn launch(frame: *a64.Frame) {
         if index == 24usize && theme_arg != 0usize { sizes_arg = true }
     }
     reuse_app_arena = screen_app
-    let (child, child_error) = start_process(archive_base + archive_offset[index], archive_length[index], "child")
+    let (child, child_error) = start_process(image_addr, image_len, "child")
     reuse_app_arena = false
     driver_arena_bytes = 0usize
     extra_count = 0usize
@@ -1073,7 +1128,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // The wallpaper and the five fonts; anything after is an app, launched on demand.
             if extra_count > 6usize { extra_count = 6usize }
         }
+        // (C124) A signed app package as the archive's last entry goes to the shell, after its files.
+        if has_word(bootargs, "unified") && archive_count >= 15usize {
+            let last = archive_count - 1usize
+            let at = archive_base + archive_offset[last]
+            if os.load8(at) == 78u8 && os.load8(at + 1usize) == 80u8 && os.load8(at + 2usize) == 75u8 && os.load8(at + 3usize) == 71u8 { tail_file = last }
+        }
         let (comp_app, comp_app_error) = start_process(archive_base + archive_offset[1usize], archive_length[1usize], "app")
+        tail_file = 0usize
         extra_count = 0usize
         driver_arena_bytes = 0usize
         if comp_app_error != ok { ret comp_app_error }

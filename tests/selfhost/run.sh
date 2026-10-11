@@ -10079,6 +10079,29 @@ greeting"
             esac
         done
     done < <(grep -v '^#' "$apps_table")
+    # The install fixtures (C124): the crater archive with a signed app package as its last entry (the Level app,
+    # signed with the development server's key by scripts/make_package.py), so the shell installs it and a tap on
+    # its new icon starts it from memory.
+    package_file="$test_build/level.npkg"
+    python3 "$repo/scripts/make_package.py" pack "$test_build/neperos-app-level.img" "$package_file" 'Lab level' storage > /dev/null
+    package_archive="$test_build/shell-package-archive.img"
+    python3 "$repo/scripts/build-shell-archive.py" "$package_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$settings_server_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "${app_images[@]}" "$assets/roots/mozilla.der" "$package_file"
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = installfixture ] || continue
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        last_marker="${markers##*;;}"
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$package_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" - 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) printf 'NeperOS %s fixture did not reach "%s" (%s): %s\n' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
     # The live fixtures: the same, on a user-mode network with the host side (DNS, HTTP, HTTPS with the recorded API
     # replies) running, the network server in test mode (`nettest`) and the fixture's root as the 46th archive entry.
     live_ready="$test_build/live-hosts.ready"
