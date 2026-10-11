@@ -156,6 +156,10 @@ type State = struct {
     real: bool,
     // The item being moved (NONE when none): the browse screen then offers Move here and Cancel.
     moving: usize,
+    // Select mode: items are ticked by a tap; Delete and Move then act on all of them.
+    select_mode: bool,
+    move_many: bool,
+    checked: [48]bool,
     // A search in progress: the lower-case text, matched against names (anywhere in the tree) and file types.
     query: [24]u8,
     query_len: usize,
@@ -609,6 +613,13 @@ fn draw_storage(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.F
     ret ok
 }
 
+// A tick box centred at (cx, cy): a ring, filled when ticked.
+fn tick_mark(a: *mem.Arena, builder: *scene.Builder, cx: f32, cy: f32, on: bool) -> err {
+    try card(a, builder, cx - 11.0, cy - 11.0, 22.0, 22.0, 11.0, soft())
+    if on { try card(a, builder, cx - 8.0, cy - 8.0, 16.0, 16.0, 8.0, amber()) }
+    ret ok
+}
+
 fn draw_row(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, index: usize, y: f32) -> err {
     let node = s.nodes[index]
     try card(a, builder, 16.0, y + 4.0, 380.0, 56.0, 16.0, cream())
@@ -626,9 +637,10 @@ fn draw_row(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
         detail = join(a, join(a, number(a, count_in(s, index)), count, "  "), date_text(a, s, node.days_ago), "")
     }
     try put(a, builder, faces.grotesk, 12.0, detail, 78.0, y + 36.0, muted())
-    try put_right(a, builder, faces.jost_bold, 20.0, "...", 380.0, y + 18.0, muted())
+    if !s.select_mode { try put_right(a, builder, faces.jost_bold, 20.0, "...", 380.0, y + 18.0, muted()) }
     hit(s, 300usize + index, 330.0, y + 4.0, 66.0, 56.0)
     hit(s, 200usize + index, 16.0, y + 4.0, 314.0, 56.0)
+    if s.select_mode { try tick_mark(a, builder, 372.0, y + 32.0, s.checked[index]) }
     ret ok
 }
 
@@ -652,6 +664,7 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     }
     try pill(a, builder, s, faces, 700usize, 312.0, 20.0, 84.0, 34.0, sort_name(s.sort), soft(), 14.0)
     if s.query_len == 0usize { try pill(a, builder, s, faces, 152usize, 220.0, 20.0, 84.0, 34.0, "Search", soft(), 14.0) }
+    if s.query_len == 0usize && s.moving == NONE && s.real && !s.select_mode { try pill(a, builder, s, faces, 153usize, 128.0, 20.0, 84.0, 34.0, "Select", soft(), 14.0) }
     // The rows, shifted by the scroll; only whole rows are drawn.
     var pos = 0usize
     while pos < s.child_total {
@@ -674,8 +687,23 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
             hit(s, 801usize, 352.0, 764.0, 56.0, 56.0)
         }
     }
+    if s.select_mode {
+        var ticked = 0usize
+        var c = 0usize
+        while c < MAX_NODES {
+            if s.checked[c] { ticked += 1usize }
+            c += 1usize
+        }
+        try put(a, builder, faces.grotesk, 13.0, join(a, number(a, ticked), " selected", ""), 20.0, 800.0, light_muted())
+        try pill(a, builder, s, faces, 630usize, 16.0, 836.0, 112.0, 52.0, "Delete", soft(), 16.0)
+        try pill(a, builder, s, faces, 631usize, 150.0, 836.0, 112.0, 52.0, "Move", soft(), 16.0)
+        try pill(a, builder, s, faces, 632usize, 284.0, 836.0, 112.0, 52.0, "Done", amber(), 16.0)
+        ret ok
+    }
     if s.moving != NONE {
-        try clipped(a, builder, faces.grotesk, 13.0, join(a, "Moving ", name_of(a, s, s.moving), ""), 20.0, 800.0, 370.0, amber())
+        var title = join(a, "Moving ", name_of(a, s, s.moving), "")
+        if s.move_many { title = "Moving the selected items" }
+        try clipped(a, builder, faces.grotesk, 13.0, title, 20.0, 800.0, 370.0, amber())
         try pill(a, builder, s, faces, 620usize, 16.0, 836.0, 180.0, 52.0, "Cancel", soft(), 16.0)
         try pill(a, builder, s, faces, 621usize, 216.0, 836.0, 180.0, 52.0, "Move here", amber(), 16.0)
         ret ok
@@ -896,6 +924,36 @@ fn text_of_static(s: *State, index: usize) -> str {
     ret s.nodes[index].name[0usize..s.nodes[index].name_len]
 }
 
+// (C125) Delete item `index`: into /Trash, or for good when it is already there (or the Trash has its name).
+fn delete_item(a: *mem.Arena, s: *State, index: usize) {
+    say("files deleted ")
+    say_text(text_of_static(s, index))
+    say("\n")
+    var trashed = false
+    if s.real {
+        // Delete moves an item into /Trash; an item already there, or one whose name the Trash has, is
+        // removed for good. (The Trash is not emptied by the clock yet: the filesystem keeps no times.)
+        var trash = NONE
+        var t = 0usize
+        while t < MAX_NODES {
+            if s.nodes[t].used && s.nodes[t].parent == 0usize && s.nodes[t].is_dir && same(text_of_static(s, t), "Trash") { trash = t }
+            t += 1usize
+        }
+        if s.nodes[index].parent != trash {
+            if trash == NONE && vaultfs.mkdir("/Trash") { trash = add_node(s, "Trash", 0usize, true, 0usize, 0usize) }
+            if trash != NONE && vaultfs.move(path_of(a, s, index), "/Trash") {
+                s.nodes[index].parent = trash
+                trashed = true
+                say("files trashed ")
+                say_text(text_of_static(s, index))
+                say("\n")
+            }
+        }
+        if !trashed { let removed = vaultfs.remove(path_of(a, s, index)) }
+    }
+    if !trashed { remove_node(s, index) }
+}
+
 // What a tap on button `id` did: true when the screen changed.
 fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if s.screen == ENTRY_SCREEN {
@@ -1016,12 +1074,100 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         }
         ret false
     }
+    if s.select_mode {
+        if id >= 200usize && id < 200usize + MAX_NODES {
+            s.checked[id - 200usize] = !s.checked[id - 200usize]
+            ret true
+        }
+        if id >= 300usize && id < 300usize + MAX_NODES {
+            s.checked[id - 300usize] = !s.checked[id - 300usize]
+            ret true
+        }
+        if id == 630usize {
+            var n = 0usize
+            var i = 0usize
+            while i < MAX_NODES {
+                if s.checked[i] && s.nodes[i].used {
+                    s.checked[i] = false
+                    delete_item(a, s, i)
+                    n += 1usize
+                }
+                i += 1usize
+            }
+            s.select_mode = false
+            say("files deleted ")
+            say_text(number(a, n))
+            say(" items\n")
+            ret true
+        }
+        if id == 631usize {
+            var first = NONE
+            var i = 0usize
+            while i < MAX_NODES {
+                if s.checked[i] && s.nodes[i].used && first == NONE { first = i }
+                i += 1usize
+            }
+            if first != NONE {
+                s.moving = first
+                s.move_many = true
+                s.select_mode = false
+                s.cwd = 0usize
+                s.scroll = 0.0
+            }
+            ret true
+        }
+        if id == 632usize {
+            var i = 0usize
+            while i < MAX_NODES {
+                s.checked[i] = false
+                i += 1usize
+            }
+            s.select_mode = false
+            ret true
+        }
+        ret false
+    }
+    if id == 153usize && s.real && s.moving == NONE {
+        s.select_mode = true
+        s.selected = NONE
+        ret true
+    }
     if s.moving != NONE {
         // While choosing a destination only folders open; a file or an item menu does nothing.
         if id >= 300usize && id < 300usize + MAX_NODES { ret false }
         if id >= 200usize && id < 200usize + MAX_NODES && !s.nodes[id - 200usize].is_dir { ret false }
         if id == 620usize {
             s.moving = NONE
+            ret true
+        }
+        if id == 621usize && s.move_many {
+            s.moving = NONE
+            s.move_many = false
+            var moved = 0usize
+            var i = 0usize
+            while i < MAX_NODES {
+                if s.checked[i] && s.nodes[i].used {
+                    s.checked[i] = false
+                    if s.nodes[i].parent != s.cwd && i != s.cwd && vaultfs.move(path_of(a, s, i), path_of(a, s, s.cwd)) {
+                        s.nodes[i].parent = s.cwd
+                        moved += 1usize
+                    }
+                }
+                i += 1usize
+            }
+            say("files moved ")
+            say_text(number(a, moved))
+            say(" items\n")
+            ret true
+        }
+        if id == 620usize && s.move_many {
+            s.moving = NONE
+            s.move_many = false
+            var i = 0usize
+            while i < MAX_NODES {
+                s.checked[i] = false
+                i += 1usize
+            }
             ret true
         }
         if id == 621usize {
@@ -1064,32 +1210,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             ret true
         }
         if id == 612usize {
-            say("files deleted ")
-            say_text(text_of_static(s, s.selected))
-            say("\n")
-            var trashed = false
-            if s.real {
-                // Delete moves an item into /Trash; an item already there, or one whose name the Trash has, is
-                // removed for good. (The Trash is not emptied by the clock yet: the filesystem keeps no times.)
-                var trash = NONE
-                var t = 0usize
-                while t < MAX_NODES {
-                    if s.nodes[t].used && s.nodes[t].parent == 0usize && s.nodes[t].is_dir && same(text_of_static(s, t), "Trash") { trash = t }
-                    t += 1usize
-                }
-                if s.nodes[s.selected].parent != trash {
-                    if trash == NONE && vaultfs.mkdir("/Trash") { trash = add_node(s, "Trash", 0usize, true, 0usize, 0usize) }
-                    if trash != NONE && vaultfs.move(path_of(a, s, s.selected), "/Trash") {
-                        s.nodes[s.selected].parent = trash
-                        trashed = true
-                        say("files trashed ")
-                        say_text(text_of_static(s, s.selected))
-                        say("\n")
-                    }
-                }
-                if !trashed { let removed = vaultfs.remove(path_of(a, s, s.selected)) }
-            }
-            if !trashed { remove_node(s, s.selected) }
+            delete_item(a, s, s.selected)
             s.selected = NONE
             s.note = 0usize
             ret true
