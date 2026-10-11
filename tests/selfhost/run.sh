@@ -1878,6 +1878,11 @@ test_linearize_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$test_linearize_written" = 'executable written' ]
 chmod +x "$test_build/test-linearize-selfhost"
 "$test_build/test-linearize-selfhost"
+# `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
+db_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_migrate/src/main.e" "$repo" x64 linux "$test_build/db-migrate-selfhost")
+[ "$db_migrate_written" = 'executable written' ]
+chmod +x "$test_build/db-migrate-selfhost"
+"$test_build/db-migrate-selfhost"
 # `e.fmt.pretty`: Wadler's tree at four widths and soft-line cases byte-exact against a replica, plus the lazy-versus-strict group case (D863).
 fmt_pretty_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pretty/src/main.e" "$repo" x64 linux "$test_build/fmt-pretty-selfhost")
 [ "$fmt_pretty_written" = 'executable written' ]

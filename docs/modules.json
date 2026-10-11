@@ -436,7 +436,8 @@
     "e.net.auth",
     "e.debug.dump.host",
     "e.math.pkpd",
-    "e.math.units"
+    "e.math.units",
+    "e.db.migrate"
    ]
   },
   {
@@ -6178,6 +6179,19 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.algo.sort"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.db.migrate",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.db",
+    "e.mem"
    ],
    "blocked_by": []
   },

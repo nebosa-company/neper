@@ -2107,6 +2107,12 @@ $testLinearizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $testLinearizeWritten -ne 'executable written') { throw 'test_linearize emission failed' }
 & $testLinearizePath
 if ($LASTEXITCODE -ne 0) { throw "a test_linearize check failed: exit $LASTEXITCODE" }
+# `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
+$dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
+$dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath
+if ($LASTEXITCODE -ne 0 -or $dbMigrateWritten -ne 'executable written') { throw 'db_migrate emission failed' }
+& $dbMigratePath
+if ($LASTEXITCODE -ne 0) { throw "a db_migrate check failed: exit $LASTEXITCODE" }
 # `e.fmt.pretty`: Wadler's tree at four widths and soft-line cases byte-exact against a replica, plus the lazy-versus-strict group case (D863).
 $fmtPrettyPath = Join-Path $testBuild 'fmt-pretty-selfhost.exe'
 $fmtPrettyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pretty\src\main.e') $repo 'x64' 'windows' $fmtPrettyPath

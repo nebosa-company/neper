@@ -13544,6 +13544,43 @@ extendible hashing, an LSM (`memtable_flush`, `sstable_find`, `lsm_compact`), a 
 CLOCK and LRU-K eviction, and transactions: 2PL with deadlock detection, MVCC with
 `vacuum`, OCC validation.
 
+### `e.db.migrate`
+
+```neper
+type Dialect = enum u8 { Sqlite, Postgres, Mysql }
+type Migration = struct { version: i64, name: str, up: str, down: str }
+type Entry = struct { version: i64, checksum: i64, dirty: bool }
+error Order
+error Checksum
+error Missing
+error Dirty
+error Failed
+error Irreversible
+error TooSmall
+
+fn checksum(m: Migration) -> i64
+fn journal_ddl(d: Dialect) -> str
+fn lock_sql(d: Dialect) -> str
+fn clean_sql(d: Dialect) -> str
+fn dirty_sql(d: Dialect) -> str
+fn remove_sql(d: Dialect) -> str
+fn int_of(v: db.Value) -> i64
+fn ensure_journal(c: *db.Connection, d: Dialect) -> err
+fn read_journal(c: *db.Connection, out: []Entry) -> (usize, err)
+fn validate(ms: []const Migration) -> err
+fn verify(ms: []const Migration, entries: []const Entry) -> err
+fn applied(entries: []const Entry, version: i64) -> bool
+fn status(c: *db.Connection, d: Dialect, out: []Entry) -> (usize, err)
+fn one_version(c: *db.Connection, sql: str, version: i64) -> err
+fn lock_up(c: *db.Connection, d: Dialect, m: Migration, now: i64) -> err
+fn in_transaction(c: *db.Connection, body: str, finish: str, version: i64) -> err
+fn up(c: *db.Connection, d: Dialect, ms: []const Migration, buf: []Entry, limit_version: i64, now: i64) -> (usize, err)
+fn down(c: *db.Connection, d: Dialect, ms: []const Migration, buf: []Entry, steps: usize) -> (usize, err)
+fn unlock(c: *db.Connection, d: Dialect, version: i64) -> err
+```
+
+A versioned SQL migration runner over `e.db`: strictly ascending versions, a `schema_migrations` journal with a dialect-aware DDL and placeholders (`Sqlite`, `Postgres`, `Mysql`), `up` to a version, `down` by steps, and `verify` refusing a dirty journal, a changed `up` checksum (FNV-1a 64), a missing applied version or an out-of-order pending one. A migration locks its journal row dirty before it runs and clears it in the same transaction as its SQL; a failure leaves the lock until `unlock`.
+
 ### `e.db`
 
 ```neper
