@@ -73,6 +73,15 @@ fn list(path: str, addr: usize, cap: usize) -> (usize, bool) {
     ret (count, result == fsproto.RESULT_OK)
 }
 
+// (C125) Move `path` into directory `dest`.
+fn move(path: str, dest: str) -> bool {
+    let sent = os.send(FS_REQ, fsproto.OP_MOVE, fsproto.NO_SLOT)
+    if sent == REFUSED { ret false }
+    fsproto.send_str(FS_REQ, path)
+    fsproto.send_str(FS_REQ, dest)
+    ret os.recv(FS_REP, fsproto.NO_SLOT) == fsproto.RESULT_OK
+}
+
 fn rename(path: str, new_name: str) -> bool {
     let sent = os.send(FS_REQ, fsproto.OP_RENAME, fsproto.NO_SLOT)
     if sent == REFUSED { ret false }

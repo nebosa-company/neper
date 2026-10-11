@@ -345,6 +345,41 @@ fn list(blk: virtio.Block, path: str, dst: usize, max: usize) -> (usize, usize, 
     ret (count, at, ok)
 }
 
+// Move the file or directory `path` into the directory `dest`, keeping its blocks and its name: NameTaken when
+// `dest` has that name or is where it already is, DirFull when `dest` has no free entry.
+fn move(blk: virtio.Block, path: str, dest: str) -> err {
+    let (parent, leaf) = parent_leaf(path)
+    let (src_dir, src_error) = resolve_dir(blk, parent)
+    if src_error != ok { ret src_error }
+    let (dst_dir, dst_error) = resolve_dir(blk, dest)
+    if dst_error != ok { ret dst_error }
+    if src_dir == dst_dir { ret NameTaken }
+    let (src_off, data_block, size, kind, found) = dir_lookup(blk, src_dir, leaf)
+    if !found { ret NotFound }
+    if kind == KIND_DIR && dst_dir == data_block { ret NotDirectory }
+    if virtio.block_read(blk, dst_dir) != ok { ret NotFormatted }
+    var slot = ENTRIES
+    var i = 0usize
+    while i < ENTRIES {
+        let off = i * ENTRY_SIZE
+        let entry_kind = os.load8(blk.data + off + KIND_OFF)
+        if entry_kind != KIND_EMPTY && name_eq(blk.data + off + NAME_OFF, leaf) { ret NameTaken }
+        if entry_kind == KIND_EMPTY && slot == ENTRIES { slot = i }
+        i += 1usize
+    }
+    if slot == ENTRIES { ret DirFull }
+    let at = slot * ENTRY_SIZE
+    store_name(blk.data + at + NAME_OFF, leaf)
+    os.store8(blk.data + at + KIND_OFF, kind)
+    os.store32(blk.data + at + BLOCK_OFF, u32(data_block))
+    os.store32(blk.data + at + SIZE_OFF, u32(size))
+    let dst_write = virtio.block_write(blk, dst_dir)
+    if dst_write != ok { ret dst_write }
+    if virtio.block_read(blk, src_dir) != ok { ret NotFormatted }
+    os.store8(blk.data + src_off + KIND_OFF, KIND_EMPTY)
+    ret virtio.block_write(blk, src_dir)
+}
+
 // Give the file or directory `path` a new leaf name in the same directory; NameTaken when that name exists.
 fn rename(blk: virtio.Block, path: str, new_name: str) -> err {
     if new_name.len == 0usize || new_name.len > NAME_MAX { ret NameTooLong }

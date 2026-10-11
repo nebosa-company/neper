@@ -84,6 +84,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if op == fsproto.OP_RENAME {
                 let nlen = fsproto.recv_bytes(REQ, data_addr, 64usize)
                 reply(fs.rename(blk, path, databuf[0usize..nlen]))
+            } else if op == fsproto.OP_MOVE {
+                let dlen = fsproto.recv_bytes(REQ, data_addr, 64usize)
+                reply(fs.move(blk, path, databuf[0usize..dlen]))
             } else if op == fsproto.OP_STAT {
                 let (size, kind, found) = fs.stat(blk, path)
                 if found {

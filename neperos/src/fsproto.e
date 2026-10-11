@@ -22,6 +22,8 @@ const OP_STATS: usize = 8usize
 // (0 none, 1 file, 2 directory).
 const OP_RENAME: usize = 9usize
 const OP_STAT: usize = 10usize
+// MOVE path, destination directory -> result (the entry keeps its name and its blocks).
+const OP_MOVE: usize = 11usize
 
 const RESULT_OK: usize = 0usize
 const RESULT_ERR: usize = 1usize

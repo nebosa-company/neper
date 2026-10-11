@@ -153,6 +153,8 @@ type State = struct {
     today: usize,
     note: usize,
     real: bool,
+    // The item being moved (NONE when none): the browse screen then offers Move here and Cancel.
+    moving: usize,
     store_used: usize,
     store_total: usize,
     hits: [96]Hit,
@@ -597,6 +599,12 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
             hit(s, 801usize, 352.0, 764.0, 56.0, 56.0)
         }
     }
+    if s.moving != NONE {
+        try clipped(a, builder, faces.grotesk, 13.0, join(a, "Moving ", name_of(a, s, s.moving), ""), 20.0, 800.0, 370.0, amber())
+        try pill(a, builder, s, faces, 620usize, 16.0, 836.0, 180.0, 52.0, "Cancel", soft(), 16.0)
+        try pill(a, builder, s, faces, 621usize, 216.0, 836.0, 180.0, 52.0, "Move here", amber(), 16.0)
+        ret ok
+    }
     // New file (a small text file; the real filesystem only).
     if s.real { try pill(a, builder, s, faces, 151usize, 16.0, 836.0, 144.0, 52.0, "New file", soft(), 16.0) }
     // New folder.
@@ -652,8 +660,12 @@ fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
     try pill(a, builder, s, faces, 611usize, 147.0, 690.0, 118.0, 48.0, "Rename", soft(), 16.0)
     try pill(a, builder, s, faces, 612usize, 278.0, 690.0, 118.0, 48.0, "Delete", soft(), 16.0)
     if s.real && !node.is_dir {
+        try pill(a, builder, s, faces, 613usize, 16.0, 754.0, 118.0, 48.0, "Close", soft(), 16.0)
+        try pill(a, builder, s, faces, 616usize, 147.0, 754.0, 118.0, 48.0, "Copy", soft(), 16.0)
+        try pill(a, builder, s, faces, 617usize, 278.0, 754.0, 118.0, 48.0, "Move", soft(), 16.0)
+    } else if s.real {
         try pill(a, builder, s, faces, 613usize, 16.0, 754.0, 180.0, 48.0, "Close", soft(), 16.0)
-        try pill(a, builder, s, faces, 616usize, 216.0, 754.0, 180.0, 48.0, "Copy", soft(), 16.0)
+        try pill(a, builder, s, faces, 617usize, 216.0, 754.0, 180.0, 48.0, "Move", soft(), 16.0)
     } else {
         try pill(a, builder, s, faces, 613usize, 16.0, 754.0, 380.0, 48.0, "Close", soft(), 16.0)
     }
@@ -906,6 +918,33 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         }
         ret false
     }
+    if s.moving != NONE {
+        // While choosing a destination only folders open; a file or an item menu does nothing.
+        if id >= 300usize && id < 300usize + MAX_NODES { ret false }
+        if id >= 200usize && id < 200usize + MAX_NODES && !s.nodes[id - 200usize].is_dir { ret false }
+        if id == 620usize {
+            s.moving = NONE
+            ret true
+        }
+        if id == 621usize {
+            let item = s.moving
+            s.moving = NONE
+            if s.nodes[item].parent == s.cwd || item == s.cwd {
+                say("files move failed\n")
+                ret true
+            }
+            if vaultfs.move(path_of(a, s, item), path_of(a, s, s.cwd)) {
+                // The cached tree follows: the node is under the folder now.
+                say("files moved ")
+                say_text(text_of_static(s, item))
+                say("\n")
+                s.nodes[item].parent = s.cwd
+            } else {
+                say("files move failed\n")
+            }
+            ret true
+        }
+    }
     // A sheet is open: its buttons, or a tap outside closes it.
     if s.selected != NONE {
         if id == 610usize {
@@ -930,10 +969,40 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             say("files deleted ")
             say_text(text_of_static(s, s.selected))
             say("\n")
-            if s.real { let removed = vaultfs.remove(path_of(a, s, s.selected)) }
-            remove_node(s, s.selected)
+            var trashed = false
+            if s.real {
+                // Delete moves an item into /Trash; an item already there, or one whose name the Trash has, is
+                // removed for good. (The Trash is not emptied by the clock yet: the filesystem keeps no times.)
+                var trash = NONE
+                var t = 0usize
+                while t < MAX_NODES {
+                    if s.nodes[t].used && s.nodes[t].parent == 0usize && s.nodes[t].is_dir && same(text_of_static(s, t), "Trash") { trash = t }
+                    t += 1usize
+                }
+                if s.nodes[s.selected].parent != trash {
+                    if trash == NONE && vaultfs.mkdir("/Trash") { trash = add_node(s, "Trash", 0usize, true, 0usize, 0usize) }
+                    if trash != NONE && vaultfs.move(path_of(a, s, s.selected), "/Trash") {
+                        s.nodes[s.selected].parent = trash
+                        trashed = true
+                        say("files trashed ")
+                        say_text(text_of_static(s, s.selected))
+                        say("\n")
+                    }
+                }
+                if !trashed { let removed = vaultfs.remove(path_of(a, s, s.selected)) }
+            }
+            if !trashed { remove_node(s, s.selected) }
             s.selected = NONE
             s.note = 0usize
+            ret true
+        }
+        if id == 617usize && s.real {
+            // Move: pick the destination by browsing, then Move here.
+            s.moving = s.selected
+            s.selected = NONE
+            s.note = 0usize
+            s.cwd = 0usize
+            s.scroll = 0.0
             ret true
         }
         if id == 616usize && s.real && !s.nodes[s.selected].is_dir {
@@ -1061,6 +1130,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var s: State = zero
     s.selected = NONE
+    s.moving = NONE
     let (wall, wall_error) = time.now()
     if wall_error == ok { s.today = usize(wall.nanos / 1000000000i64) / 86400usize }
     if s.today < 400usize { s.today = 400usize }
