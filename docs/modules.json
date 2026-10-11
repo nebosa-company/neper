@@ -440,7 +440,8 @@
     "e.db.migrate",
     "e.db.orm",
     "e.test.match",
-    "e.test.mock"
+    "e.test.mock",
+    "e.test.bdd"
    ]
   },
   {
@@ -3949,6 +3950,19 @@
     "e.str",
     "e.test",
     "e.test.match"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.bdd",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.meta",
+    "e.str"
    ],
    "blocked_by": []
   },

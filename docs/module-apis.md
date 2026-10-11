@@ -11409,6 +11409,53 @@ fn assert_verified(m: *const Mock, buf: []u8) -> err
 
 Mocks, stubs and spies as a table (no runtime reflection): a call is a method number plus up to four integer arguments checked by `e.test.match` matchers; `expect`, `with_arg`, `returns`/`returns_list`, `times`, `in_order` script it, `allow` is a stub, `call` is the double's method body, and `verify`/`assert_verified` produce the failure diagnostics (unexpected calls with the first differing argument, out-of-order calls, missing calls).
 
+### `e.test.bdd`
+
+```neper
+type Keyword = enum u8 { Given, When, Then, And, But }
+type Outcome = enum u8 { Passed, Failed, Pending, Skipped, Filtered }
+type Step = struct { keyword: Keyword, text: str, cell_start: usize, rows: usize, cols: usize, line: u32 }
+type Scenario = struct { name: str, tag_start: usize, tag_count: usize, step_start: usize, step_count: usize, line: u32 }
+type Document = struct { feature: str, feature_tag_count: usize, scenarios: []Scenario, steps: []Step, cells: []str, tags: []str, n_scenarios: usize, n_steps: usize, n_cells: usize, n_tags: usize, error_line: u32 }
+type Filter = struct { include: []const str, exclude: []const str }
+type Word = struct { text: str, quoted: bool }
+type Args = struct { text: str, values: [4]str, count: usize, cells: []const str, rows: usize, cols: usize }
+type Summary = struct { scenarios: usize, passed: usize, failed: usize, pending: usize, filtered: usize, steps_passed: usize, steps_failed: usize, steps_pending: usize, steps_skipped: usize }
+error Invalid
+error Unsupported
+error TooSmall
+error Pending
+const MAX_WORDS: usize = 24usize
+const MAX_TAGS_PER_LINE: usize = 16usize
+const MAX_EXAMPLE_COLUMNS: usize = 8usize
+
+fn document(scenarios: []Scenario, steps: []Step, cells: []str, tags: []str) -> Document
+fn push_tag(d: *Document, tag: str) -> err
+fn push_step(d: *Document, s: Step) -> err
+fn push_cell(d: *Document, value: str) -> err
+fn push_scenario(d: *Document, s: Scenario) -> err
+fn step_line(line: str) -> (Keyword, str, bool)
+fn table_row(line: str, out: []str) -> (usize, err)
+fn substitute(a: *mem.Arena, text: str, heads: []const str, values: []const str) -> (str, err)
+fn expand_row(a: *mem.Arena, d: *Document, name: str, line: u32, tag_start: usize, tag_count: usize, template_start: usize, template_end: usize, heads: []const str, values: []const str, ordinal: usize) -> err
+fn parse(a: *mem.Arena, source: str, d: *Document) -> err
+fn has_tag(d: *const Document, scenario: usize, tag: str) -> bool
+fn selected(d: *const Document, scenario: usize, filter: Filter) -> bool
+fn split_words(text: str, out: []Word) -> usize
+fn matches_pattern(name: str, words: []const Word, args: *Args) -> bool
+fn int_at(args: *const Args, i: usize) -> i64
+fn cell(args: *const Args, row: usize, col: usize) -> str
+fn dispatch[W: type, S: type](world: *W, steps: *const S, d: *const Document, index: usize) -> Outcome
+fn run[W: type, S: type](world: *W, reset: fn(*W), steps: *const S, d: *const Document, filter: Filter, results: []Outcome, scenario_results: []Outcome) -> (Summary, err)
+fn outcome_name(o: Outcome) -> str
+fn keyword_name(k: Keyword) -> str
+fn put(b: *str.Builder, s: str)
+fn put_count(b: *str.Builder, n: usize)
+fn report(d: *const Document, scenario_results: []const Outcome, results: []const Outcome, sum: Summary, out: []u8) -> str
+```
+
+A Gherkin parser and BDD runner. `parse` reads Feature/Background/Scenario/Scenario Outline with Examples, step tables, tags and comments into caller arrays (outline rows expand to scenarios); `run` binds each step to a field of a step-definition struct through `meta.fields` (the field name is the pattern, with `int`, `word` and `quoted` words capturing arguments), skips a scenario's remaining steps after the first that is not passed, filters by tag include/exclude lists and fills per-step and per-scenario outcomes; `report` lists failed and pending steps and the totals.
+
 ### `e.debug`
 
 ```neper

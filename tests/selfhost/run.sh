@@ -1888,6 +1888,11 @@ test_mock_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$test_mock_written" = 'executable written' ]
 chmod +x "$test_build/test-mock-selfhost"
 "$test_build/test-mock-selfhost"
+# `e.test.bdd`: a Gherkin feature (tags, background, outline over two example rows, step table, undefined and failing steps) parsed and run through an e.meta-bound step struct: shape, summary, tag filters, report text and parse refusals (D2684).
+test_bdd_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_bdd/src/main.e" "$repo" x64 linux "$test_build/test-bdd-selfhost")
+[ "$test_bdd_written" = 'executable written' ]
+chmod +x "$test_build/test-bdd-selfhost"
+"$test_build/test-bdd-selfhost"
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 db_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_migrate/src/main.e" "$repo" x64 linux "$test_build/db-migrate-selfhost")
 [ "$db_migrate_written" = 'executable written' ]

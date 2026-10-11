@@ -2119,6 +2119,12 @@ $testMockWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $testMockWritten -ne 'executable written') { throw 'test_mock emission failed' }
 & $testMockPath
 if ($LASTEXITCODE -ne 0) { throw "a test_mock check failed: exit $LASTEXITCODE" }
+# `e.test.bdd`: a Gherkin feature (tags, background, outline over two example rows, step table, undefined and failing steps) parsed and run through an e.meta-bound step struct: shape, summary, tag filters, report text and parse refusals (D2684).
+$testBddPath = Join-Path $testBuild 'test-bdd-selfhost.exe'
+$testBddWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_bdd\src\main.e') $repo 'x64' 'windows' $testBddPath
+if ($LASTEXITCODE -ne 0 -or $testBddWritten -ne 'executable written') { throw 'test_bdd emission failed' }
+& $testBddPath
+if ($LASTEXITCODE -ne 0) { throw "a test_bdd check failed: exit $LASTEXITCODE" }
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 $dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
 $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath
