@@ -1795,6 +1795,24 @@ $mlBayesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $mlBayesWritten -ne 'executable written') { throw 'ml_bayes emission failed' }
 & $mlBayesPath
 if ($LASTEXITCODE -ne 0) { throw "a ml_bayes check failed: exit $LASTEXITCODE" }
+# e.ml.hgb (L063): histogram gradient boosting with leaf-wise growth, missing-value routing and the regression and log-loss objectives against scikit-learn HistGradientBoosting (8 cases, D2544).
+$mlHgbPath = Join-Path $testBuild 'ml-hgb-selfhost.exe'
+$mlHgbWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_hgb\src\main.e') $repo 'x64' 'windows' $mlHgbPath -j 2
+if ($LASTEXITCODE -ne 0 -or $mlHgbWritten -ne 'executable written') { throw 'ml_hgb emission failed' }
+$mlHgbOutput = & $mlHgbPath
+if ($LASTEXITCODE -ne 0 -or $mlHgbOutput -ne 'ml hgb ok') { throw "ml_hgb answered wrongly: exit $LASTEXITCODE" }
+# e.ml.select (L063): KFold/StratifiedKFold, imputer-scaler pipelines and grid/random search against scikit-learn (18 cases, D2545).
+$mlSelectPath = Join-Path $testBuild 'ml-select-selfhost.exe'
+$mlSelectWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_select\src\main.e') $repo 'x64' 'windows' $mlSelectPath -j 2
+if ($LASTEXITCODE -ne 0 -or $mlSelectWritten -ne 'executable written') { throw 'ml_select emission failed' }
+$mlSelectOutput = & $mlSelectPath
+if ($LASTEXITCODE -ne 0 -or $mlSelectOutput -ne 'ml select ok') { throw "ml_select answered wrongly: exit $LASTEXITCODE" }
+# e.ml.calibrate (L063): Platt scaling, isotonic regression, Brier, log loss and reliability bins against scikit-learn (9 cases, D2546).
+$mlCalibratePath = Join-Path $testBuild 'ml-calibrate-selfhost.exe'
+$mlCalibrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_calibrate\src\main.e') $repo 'x64' 'windows' $mlCalibratePath -j 2
+if ($LASTEXITCODE -ne 0 -or $mlCalibrateWritten -ne 'executable written') { throw 'ml_calibrate emission failed' }
+$mlCalibrateOutput = & $mlCalibratePath
+if ($LASTEXITCODE -ne 0 -or $mlCalibrateOutput -ne 'ml calibrate ok') { throw "ml_calibrate answered wrongly: exit $LASTEXITCODE" }
 # `e.ml.tree`: a regression tree and a classifier splitting where scikit-learn splits, a random forest classifying three groups, and gradient boosting driving the error down with the rounds (D847).
 $mlTreePath = Join-Path $testBuild 'ml-tree-selfhost.exe'
 $mlTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_tree\src\main.e') $repo 'x64' 'windows' $mlTreePath

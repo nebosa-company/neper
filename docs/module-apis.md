@@ -21457,6 +21457,103 @@ fn naive(x: []const f64, labels: []const usize, n: usize, d: usize, classes: usi
 Laplace-smoothed feature log probabilities from count features; both predict the
 largest log posterior.
 
+### `e.ml.hgb`
+
+```neper
+type Params = struct { rounds: usize, learning_rate: f64, max_leaf_nodes: usize, max_depth: usize, min_samples_leaf: usize, l2: f64, max_bins: usize, min_hessian: f64, logistic: bool }
+type Model = struct { features: usize, trees: usize, stride: usize, base: f64, logistic: bool, feature: []i32, threshold: []f64, left: []u32, right: []u32, missing_left: []bool, value: []f64 }
+error Invalid
+fn default_params() -> Params
+fn sigmoid(z: f64) -> f64
+fn sort_values(values: []f64)
+fn bin_thresholds(sorted: []const f64, max_bins: usize, out: []f64) -> usize
+fn bin_of(thresholds: []const f64, x: f64) -> usize
+fn fit(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, d: usize, p: Params) -> (Model, err)
+fn find_split(binned: []const u16, d: usize, rows: []const usize, lo: usize, hi: usize, grad: []const f64, hess: []const f64, thr_count: []const usize, has_missing: []const bool, bins_per: usize, p: Params, node: usize, node_g: []const f64, node_h: []const f64, node_depth: []const usize, best_gain: []f64, best_feature: []usize, best_bin: []usize, best_missing_left: []bool, hist_g: []f64, hist_h: []f64, hist_c: []usize)
+fn predict_raw(m: *const Model, row: []const f64) -> f64
+fn predict(m: *const Model, row: []const f64) -> f64
+```
+
+Histogram gradient boosting after LightGBM and scikit-learn's
+`HistGradientBoosting*`. `fit` bins every feature once (midpoints between at most
+`max_bins` distinct values, else NumPy's averaged-inverted-CDF percentiles), grows
+`rounds` trees leaf-wise to `max_leaf_nodes` (optional `max_depth`,
+`min_samples_leaf`, `min_hessian`, `l2`), and answers a `Model` whose arrays come
+from the arena. NaN is a missing value: a feature with missing training values
+learns, per split, which side they take (left-to-right then right-to-left scan, a
+tie keeping the first), and a feature without any sends unseen missing values to the
+larger child. The objective is squared error or, with `logistic`, the binary log
+loss on 0/1 labels. `predict_raw` is the margin (log-odds) and `predict` the value or
+probability. Gradients are `f64`, so predictions agree with scikit-learn's float32
+gradients to about 1e-5 relative; near-tied splits can still flip with very small
+`min_samples_leaf`.
+
+### `e.ml.select`
+
+```neper
+type Step = struct { kind: u8, constant: f64 }
+type ParamRange = struct { low: f64, high: f64, log_scale: bool, integer: bool }
+const IMPUTE_MEAN: u8 = 0u8
+const IMPUTE_MEDIAN: u8 = 1u8
+const IMPUTE_CONSTANT: u8 = 2u8
+const STANDARDIZE: u8 = 3u8
+const MIN_MAX: u8 = 4u8
+error Invalid
+error TooSmall
+fn kfold_assign(n: usize, k: usize, fold_of: []usize) -> err
+fn kfold_shuffled(r: *rand.Pcg64, n: usize, k: usize, fold_of: []usize, order: []usize) -> err
+fn stratified_assign(labels: []const usize, n: usize, classes: usize, k: usize, fold_of: []usize, scratch: []usize) -> err
+fn split_fold(fold_of: []const usize, n: usize, fold: usize, train: []usize, test: []usize) -> (usize, usize)
+fn cross_validate[Ctx: type](ctx: *Ctx, n: usize, folds: usize, fold_of: []const usize, train: []usize, test: []usize, evaluate: fn(*Ctx, []const usize, []const usize) -> f64, scores: []f64) -> (f64, err)
+fn grid_search[Ctx: type](ctx: *Ctx, points: usize, n: usize, folds: usize, fold_of: []const usize, train: []usize, test: []usize, evaluate: fn(*Ctx, usize, []const usize, []const usize) -> f64, means: []f64) -> (usize, err)
+fn draw_parameter(r: *rand.Pcg64, spec: ParamRange) -> f64
+fn random_search[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, ranges: []const ParamRange, draws: usize, n: usize, folds: usize, fold_of: []const usize, train: []usize, test: []usize, evaluate: fn(*Ctx, []const f64, []const usize, []const usize) -> f64, candidate: []f64, best_params: []f64, means: []f64) -> (f64, err)
+fn nan_median(values: []f64) -> f64
+fn pipeline_fit(steps: []const Step, x: []const f64, n: usize, d: usize, rows: []const usize, params: []f64, work: []f64) -> err
+fn apply_step(kind: u8, v: f64, centre: f64, scale: f64) -> f64
+fn pipeline_transform(steps: []const Step, params: []const f64, x: []const f64, d: usize, rows: []const usize, out: []f64) -> err
+```
+
+Model selection over caller callbacks. `kfold_assign`, `kfold_shuffled` and
+`stratified_assign` give every row a fold number (scikit-learn's `KFold` sizes and
+`StratifiedKFold` allocation, classes ordered by first appearance); `split_fold`
+lists a fold's training and test rows. `cross_validate`, `grid_search` and
+`random_search` take an `evaluate` callback that fits on the training rows and
+scores on the test rows (higher is better) and answer the mean score per fold,
+candidate or draw; a `ParamRange` is uniform, log-uniform or integer. The
+preprocessing pipeline is a slice of `Step` (`IMPUTE_MEAN`, `IMPUTE_MEDIAN`,
+`IMPUTE_CONSTANT`, `STANDARDIZE`, `MIN_MAX`): `pipeline_fit` learns two numbers per
+step and feature from the training rows (each step sees the previous step's output,
+NaN ignored, a constant column scaled by 1) and `pipeline_transform` applies them
+to any rows, so statistics never leak across a fold.
+
+### `e.ml.calibrate`
+
+```neper
+type Sigmoid = struct { a: f64, b: f64 }
+error Invalid
+error TooSmall
+fn expit(z: f64) -> f64
+fn platt_apply(s: Sigmoid, score: f64) -> f64
+fn platt_loss(scores: []const f64, targets: []const f64, n: usize, a: f64, b: f64) -> f64
+fn softplus(z: f64) -> f64
+fn platt_fit(scores: []const f64, labels: []const f64, n: usize, tolerance: f64, max_iterations: u32, targets: []f64) -> (Sigmoid, err)
+fn isotonic_fit(x: []const f64, y: []const f64, n: usize, order: []usize, weight: []f64, knots_x: []f64, knots_y: []f64) -> (usize, err)
+fn isotonic_predict(knots_x: []const f64, knots_y: []const f64, count: usize, v: f64) -> f64
+fn brier_score(prob: []const f64, labels: []const f64) -> f64
+fn log_loss(prob: []const f64, labels: []const f64, eps: f64) -> f64
+fn reliability(prob: []const f64, labels: []const f64, bins: usize, count: []usize, mean_predicted: []f64, fraction_positive: []f64) -> err
+fn expected_calibration_error(count: []const usize, mean_predicted: []const f64, fraction_positive: []const f64, bins: usize) -> f64
+```
+
+Probability calibration and its scores. `platt_fit` fits `P = 1 / (1 + exp(a s + b))`
+by Newton's method on scikit-learn's smoothed-target log loss (`Sigmoid`, applied by
+`platt_apply`); `isotonic_fit` merges tied scores by weighted mean and pools adjacent
+violators, `isotonic_predict` interpolates linearly between knots and clips outside
+the data. `brier_score`, `log_loss`, `reliability` (equal-width bins, scikit-learn's
+`uniform` strategy) and `expected_calibration_error` score a probabilistic classifier.
+Labels are 0/1 floats and storage is the caller's.
+
 ### `e.ml.tree`
 
 ```neper

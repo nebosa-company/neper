@@ -1620,6 +1620,24 @@ ml_bayes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$ml_bayes_written" = 'executable written' ]
 chmod +x "$test_build/ml-bayes-selfhost"
 "$test_build/ml-bayes-selfhost"
+# e.ml.hgb (L063): histogram gradient boosting with leaf-wise growth, missing-value routing and the regression and log-loss objectives against scikit-learn HistGradientBoosting (8 cases, D2544).
+ml_hgb_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_hgb/src/main.e" "$repo" x64 linux "$test_build/ml-hgb-selfhost" -j 2)
+[ "${ml_hgb_written}" = 'executable written' ]
+chmod +x "$test_build/ml-hgb-selfhost"
+ml_hgb_output=$("$test_build/ml-hgb-selfhost")
+[ "${ml_hgb_output}" = 'ml hgb ok' ]
+# e.ml.select (L063): KFold/StratifiedKFold, imputer-scaler pipelines and grid/random search against scikit-learn (18 cases, D2545).
+ml_select_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_select/src/main.e" "$repo" x64 linux "$test_build/ml-select-selfhost" -j 2)
+[ "${ml_select_written}" = 'executable written' ]
+chmod +x "$test_build/ml-select-selfhost"
+ml_select_output=$("$test_build/ml-select-selfhost")
+[ "${ml_select_output}" = 'ml select ok' ]
+# e.ml.calibrate (L063): Platt scaling, isotonic regression, Brier, log loss and reliability bins against scikit-learn (9 cases, D2546).
+ml_calibrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_calibrate/src/main.e" "$repo" x64 linux "$test_build/ml-calibrate-selfhost" -j 2)
+[ "${ml_calibrate_written}" = 'executable written' ]
+chmod +x "$test_build/ml-calibrate-selfhost"
+ml_calibrate_output=$("$test_build/ml-calibrate-selfhost")
+[ "${ml_calibrate_output}" = 'ml calibrate ok' ]
 # `e.ml.tree`: a regression tree and a classifier splitting where scikit-learn splits, a random forest classifying three groups, and gradient boosting driving the error down with the rounds (D847).
 ml_tree_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_tree/src/main.e" "$repo" x64 linux "$test_build/ml-tree-selfhost")
 [ "$ml_tree_written" = 'executable written' ]

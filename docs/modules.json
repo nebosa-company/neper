@@ -284,6 +284,9 @@
     "e.ml.knn",
     "e.ml.bayes",
     "e.ml.tree",
+    "e.ml.calibrate",
+    "e.ml.select",
+    "e.ml.hgb",
     "e.ml.svm",
     "e.ml.optim",
     "e.ml.loss",
@@ -5623,6 +5626,41 @@
   {
    "name": "e.ml.bayes",
    "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.hgb",
+   "layer": 3,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.select",
+   "layer": 3,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.rand",
+    "e.math"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.calibrate",
+   "layer": 3,
    "surface": "source",
    "milestone": null,
    "schedule": "later",

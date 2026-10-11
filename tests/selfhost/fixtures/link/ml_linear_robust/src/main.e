@@ -52,9 +52,9 @@ fn run_chunk(block: str) -> u32 {
         let (parts0, pe) = str.split(line, "|")
         if pe != ok { ret 98u32 }
         var parts = parts0
-        var fields: [8]str = zero
+        var fields: [12]str = zero
         var nf = 0usize
-        while nf < 8usize {
+        while nf < 12usize {
             let (piece, got) = str.split_next(&parts)
             if !got { break }
             fields[nf] = piece
