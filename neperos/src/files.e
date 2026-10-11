@@ -31,6 +31,7 @@ const ENTRY_SCREEN: usize = 1usize
 const NEW_FOLDER: usize = 0usize
 const RENAME: usize = 1usize
 const NEW_FILE: usize = 2usize
+const SEARCH_MODE: usize = 3usize
 const FOLDER_KIND: usize = 12usize
 
 fn say(line: str) {
@@ -155,6 +156,9 @@ type State = struct {
     real: bool,
     // The item being moved (NONE when none): the browse screen then offers Move here and Cancel.
     moving: usize,
+    // A search in progress: the lower-case text, matched against names (anywhere in the tree) and file types.
+    query: [24]u8,
+    query_len: usize,
     store_used: usize,
     store_total: usize,
     hits: [96]Hit,
@@ -318,11 +322,47 @@ fn comes_before(s: *State, x: usize, y: usize) -> bool {
 }
 
 // The children of the folder shown, sorted.
+// (C125) Does node `i` match the search: the query is in its name, or is its file type ("pdf", "jpg", "zip").
+fn matches(s: *State, i: usize) -> bool {
+    let node = s.nodes[i]
+    if s.query_len == 0usize { ret true }
+    var at = 0usize
+    while at + s.query_len <= node.name_len {
+        var k = 0usize
+        var same_run = true
+        while k < s.query_len && same_run {
+            if lower(node.name[at + k]) != s.query[k] { same_run = false }
+            k += 1usize
+        }
+        if same_run { ret true }
+        at += 1usize
+    }
+    if !node.is_dir {
+        let tag = kind_tag(node.kind)
+        if tag.len == s.query_len {
+            var k = 0usize
+            var tag_same = true
+            while k < tag.len {
+                if lower(tag[k]) != s.query[k] { tag_same = false }
+                k += 1usize
+            }
+            if tag_same { ret true }
+        }
+    }
+    ret false
+}
+
 fn build_children(s: *State) {
     s.child_total = 0usize
     var i = 0usize
     while i < MAX_NODES {
-        if s.nodes[i].used && s.nodes[i].parent == s.cwd && i != s.cwd {
+        var shown = false
+        if s.query_len > 0usize {
+            shown = s.nodes[i].used && i != 0usize && matches(s, i)
+        } else {
+            shown = s.nodes[i].used && s.nodes[i].parent == s.cwd && i != s.cwd
+        }
+        if shown {
             // An insertion sort into the list.
             var at = s.child_total
             s.child_total += 1usize
@@ -595,7 +635,12 @@ fn draw_row(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
 fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     build_children(s)
     var list_y: f32 = 96.0
-    if s.cwd == 0usize {
+    if s.query_len > 0usize {
+        try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), light())
+        hit(s, 622usize, 0.0, 10.0, 66.0, 56.0)
+        try put(a, builder, faces.jost_bold, 26.0, "Search", 62.0, 14.0, light())
+        try clipped(a, builder, faces.grotesk, 12.0, join(a, join(a, "Results for ", text_of(a, s.query[0usize..], s.query_len), ""), "", ""), 62.0, 54.0, 240.0, light_muted())
+    } else if s.cwd == 0usize {
         try put(a, builder, faces.jost_bold, 30.0, "Files", 20.0, 22.0, light())
         try draw_storage(a, builder, s, faces)
         list_y = 214.0
@@ -606,6 +651,7 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
         try clipped(a, builder, faces.grotesk, 12.0, path_text(a, s, s.cwd), 62.0, 54.0, 290.0, light_muted())
     }
     try pill(a, builder, s, faces, 700usize, 312.0, 20.0, 84.0, 34.0, sort_name(s.sort), soft(), 14.0)
+    if s.query_len == 0usize { try pill(a, builder, s, faces, 152usize, 220.0, 20.0, 84.0, 34.0, "Search", soft(), 14.0) }
     // The rows, shifted by the scroll; only whole rows are drawn.
     var pos = 0usize
     while pos < s.child_total {
@@ -632,6 +678,10 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
         try clipped(a, builder, faces.grotesk, 13.0, join(a, "Moving ", name_of(a, s, s.moving), ""), 20.0, 800.0, 370.0, amber())
         try pill(a, builder, s, faces, 620usize, 16.0, 836.0, 180.0, 52.0, "Cancel", soft(), 16.0)
         try pill(a, builder, s, faces, 621usize, 216.0, 836.0, 180.0, 52.0, "Move here", amber(), 16.0)
+        ret ok
+    }
+    if s.query_len > 0usize {
+        if s.selected != NONE { try draw_sheet(a, builder, s, faces) }
         ret ok
     }
     // New file (a small text file; the real filesystem only).
@@ -766,6 +816,7 @@ fn draw_entry(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
     var heading = "New folder"
     if s.entry_mode == RENAME { heading = "Rename" }
     if s.entry_mode == NEW_FILE { heading = "New file" }
+    if s.entry_mode == SEARCH_MODE { heading = "Search" }
     try put(a, builder, faces.jost_bold, 30.0, heading, 24.0, 28.0, light())
     try put(a, builder, faces.grotesk, 12.0, join(a, "In ", path_text(a, s, s.cwd), ""), 24.0, 74.0, light_muted())
     let value = text_of(a, s.entry[0usize..], s.entry_len)
@@ -874,6 +925,24 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         }
         if id == 1204usize {
             type_byte(s, 95u8)
+            ret true
+        }
+        if (id == 1300usize || id == 1205usize) && s.entry_mode == SEARCH_MODE {
+            // Search: the typed text, lower case, becomes the query.
+            var q = 0usize
+            while q < s.entry_len && q < 24usize {
+                s.query[q] = lower(s.entry[q])
+                q += 1usize
+            }
+            s.query_len = q
+            s.screen = BROWSE_SCREEN
+            s.scroll = 0.0
+            build_children(s)
+            say("files search ")
+            say_text(text_of(a, s.query[0usize..], s.query_len))
+            say(" ")
+            say_text(number(a, s.child_total))
+            say("\n")
             ret true
         }
         if id == 1300usize || id == 1205usize {
@@ -1083,6 +1152,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         let index = id - 200usize
         if s.nodes[index].is_dir {
             s.cwd = index
+            s.query_len = 0usize
             s.scroll = 0.0
             say("files folder ")
             say_text(text_of_static(s, index))
@@ -1117,6 +1187,17 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if id == 150usize {
         s.selected = NONE
         open_entry(s, NEW_FOLDER)
+        ret true
+    }
+    if id == 152usize {
+        s.selected = NONE
+        open_entry(s, SEARCH_MODE)
+        ret true
+    }
+    if id == 622usize {
+        s.query_len = 0usize
+        s.scroll = 0.0
+        say("files search cleared\n")
         ret true
     }
     if id == 151usize && s.real {
