@@ -39052,3 +39052,7 @@ A tap on the viewfinder puts a focus ring at the point (`camera focus`); EV- and
 ## D2397 — C122 part three: Scan straightens the page into a file
 
 Scan's shutter reads the viewfinder frame at one pixel in four (rows above the zoom chips), takes the bright paper region and its four corners (the extremes of x + y and x - y), solves `e.gfx.vision.homography` from a 186 x 300 sheet onto them, samples the frame through it (nearest pixel) and writes `/DCIM/SCAN_nnnn.png` with the same PNG writer the photos use (now `write_png`, whose buffer is 320 KB: 196 KB failed on the sheet, and a failed encode is reported as `camera png encode failed`). Photos lists the file like any picture. A frame with under 3000 bright pixels is no page (`camera scan found no page`). Fixture `camera_scan`. Not here: the QR reader (L137) and the hand-over of a scan to Wallet (C121); the corner rule assumes one bright page against a dark desk.
+
+## D2398 — C122 closed; the sensor, video and QR remainder is C153
+
+C122 closes at score 1 on what software on QEMU can deliver (D2395-D2397): photos and straightened scans as PNG files in /DCIM that Photos lists, focus, exposure and the timer. The camera driver and its frames, video files, the flash and HDR, the QR reader and the hand-over to Wallet are C153 (the QR reader is L137's; Wallet's side is C121), so the record keeps what is not done in the queue.

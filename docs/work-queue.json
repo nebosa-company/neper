@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C122",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 122,
-      "title": "NeperOS Camera: a real sensor feed, files in Photos, video, focus and exposure",
-      "score": 0.4,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Queued by the user (2026-10-08). The Camera app (D2217) shows drawn sample scenes and keeps captures in the process. Acceptance: (1) a camera driver server (a virtio-video or USB video device under QEMU, the Pixel camera path later) delivering frames to the viewfinder at a steady rate; (2) a photo written as a file (PNG or JPEG through the image library) that the Photos app lists; (3) video recording with a codec from the library and audio from e.audio; (4) tap to focus and exposure, the timer, HDR-style stacking and the flash as far as the hardware has them; (5) Scan mode finds the page edges (e.gfx.vision), straightens it and offers it to Wallet documents (C121) and to a QR reader (L137) that opens the code's content; (6) front and rear cameras chosen from the devices found; (7) a fixture on QEMU against a test video source. Not queued here: portrait blur, night mode, RAW capture. Done (D2395): item (2) -- the Camera's shutter encodes the viewfinder frame to a PNG (e.fmt.png) and writes /DCIM/IMG_nnnn.png through the filesystem server; Photos reads /DCIM at start, decodes each file (up to eight, 256 KB), uploads it as a texture and lists it as the newest picture, drawn centre-cropped in the grid and the viewer (fixtures camera_file, photos_file). The picture is the sample scene: there is no sensor (item 1). Done (D2396): item (4) as far as software goes -- a tap on the viewfinder sets a focus ring, EV- and EV+ step the exposure (a darkening or brightening layer, in the saved file too), a 3 s or 10 s timer counts down on the input server's ticks and takes the photo at zero (the shutter cancels it); fixture camera_timer. No hardware focus, HDR stacking or flash. Done (D2397): the page half of item (5) -- Scan's shutter finds the paper in the frame (bright region, corners by the x+y and x-y extremes), solves e.gfx.vision.homography to a 186x300 sheet, samples it bilinear-free (nearest) and writes /DCIM/SCAN_nnnn.png, which Photos lists; fixture camera_scan. Still open: the QR reader (L137) and offering a scan to Wallet (C121)."
-    },
-    {
       "id": "C121",
       "category": "compiler",
       "group": "NeperOS",
@@ -1564,6 +1553,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Backlog from the chart benchmark (D2108, D2110). On the same 360x240 chart raster, e.fmt.png at .Balanced takes about 18 ms and writes 14,004 B, while zlib level 6 with the same filter-0 rows takes 1.74 ms for 11,283 B; rasterizing takes 2.0 ms, so the encoder is the whole PNG gap to matplotlib. e.algo.deflate writes fixed-Huffman blocks only (zlib restricted to fixed Huffman gives 12,903 B, so dynamic trees are worth about 1.6 KB here), has no lazy matching and restarts its 16-deep hash chain at every 32 KiB block (about 1.1 KB more), and e.fmt.png computes CRC-32 bit by bit. Done when: e.algo.deflate writes dynamic-Huffman blocks with lazy matching and a window that spans blocks, round-tripping through its own decoder and Python's zlib on a corpus; e.fmt.png uses a table-driven CRC; the chart benchmark's PNG pass is at least as fast as matplotlib's with files no larger than zlib level 6 on the same rows; both suites pass. Adaptive per-row filters are optional: Pillow's heuristic made this chart larger."
+    },
+    {
+      "id": "C153",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 153,
+      "title": "NeperOS Camera remainder: the sensor feed, video files, flash and exposure hardware, the QR reader",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C122 (D2397): the Camera writes photos and straightened scans as PNG files in /DCIM that Photos lists, with focus ring, exposure steps and a timer. Acceptance: (1) a camera driver server (virtio-video or USB video under QEMU, the Pixel camera later) delivering frames to the viewfinder at a steady rate, front and rear chosen from the devices found; (2) video recording with a codec from the library and audio from e.audio, written as a file Photos plays; (3) focus, exposure, flash and HDR stacking as far as the hardware has them; (4) Scan mode's QR reading (L137) opening the code's content, and a scan offered to Wallet documents (C121); (5) a fixture on QEMU against a test video source. Not queued here: portrait blur, night mode, RAW capture."
     }
   ]
 }
