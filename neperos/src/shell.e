@@ -331,40 +331,6 @@ fn icon_at(x: f32, y: f32) -> usize {
     ret row * 4usize + col
 }
 
-// The archive program an icon starts, or 0 when its app is not written yet (the archive's apps
-// follow the wallpaper and the five fonts: entry 13 is Calc, 14 is Clock, 15 is Tasks, 16 is Messages, 17 is Stocks, 18 is Weather, 19 is SSH, 20 is Wallet, 21 is Camera, 22 is Photos, 23 is Files, 24 is Settings).
-fn program_of(icon: usize) -> usize {
-    if icon == 9usize { ret 13usize }
-    if icon == 8usize { ret 14usize }
-    if icon == 10usize { ret 15usize }
-    if icon == 1usize { ret 16usize }
-    if icon == 20usize { ret 17usize }
-    if icon == 21usize { ret 18usize }
-    if icon == 22usize { ret 19usize }
-    if icon == 24usize { ret 20usize }
-    if icon == 4usize { ret 21usize }
-    if icon == 5usize { ret 22usize }
-    if icon == 11usize { ret 23usize }
-    if icon == 19usize { ret 24usize }
-    if icon == 0usize { ret 25usize }
-    if icon == 2usize { ret 26usize }
-    if icon == 3usize { ret 27usize }
-    if icon == 6usize { ret 28usize }
-    if icon == 7usize { ret 29usize }
-    if icon == 27usize { ret 30usize }
-    if icon == 28usize { ret 31usize }
-    if icon == 12usize { ret 32usize }
-    if icon == 13usize { ret 33usize }
-    if icon == 14usize { ret 34usize }
-    if icon == 15usize { ret 35usize }
-    if icon == 16usize { ret 36usize }
-    if icon == 17usize { ret 37usize }
-    if icon == 18usize { ret 38usize }
-    if icon == 23usize { ret 39usize }
-    if icon == 25usize { ret 40usize }
-    if icon == 26usize { ret 41usize }
-    ret 0usize
-}
 
 // The system theme Settings stored (C126, theme.e), or 0 when there is no disk or no file. The first send is
 // refused on a machine without the endpoints.
@@ -595,7 +561,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     say("\n")
                     say("shell home\n")
                 } else if app < icons.APP_COUNT {
-                    let program = program_of(app)
+                    let program = icons.program_of(app)
                     if program == 0usize {
                         say("shell no app yet\n")
                     } else {

@@ -15,6 +15,9 @@ const OP_LIST: usize = 4usize
 const OP_OPEN: usize = 5usize
 const OP_CLOSE: usize = 6usize
 const OP_REMOVE: usize = 7usize
+// (C126) The space in use and the device's size, in blocks: no path follows the op; the reply is a result
+// word, the blocks allocated (the superblock's counter) and the blocks the device holds.
+const OP_STATS: usize = 8usize
 
 const RESULT_OK: usize = 0usize
 const RESULT_ERR: usize = 1usize

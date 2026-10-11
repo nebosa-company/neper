@@ -334,6 +334,10 @@ type State = struct {
     hits: [96]Hit,
     hit_total: usize,
     search: ui.Field,
+    have_storage: bool,
+    storage_used: usize,
+    storage_total: usize,
+    app_sizes: [32]usize,
     found: [8]usize,
     found_total: usize,
     keys: ui.Hits,
@@ -453,8 +457,11 @@ fn summary(a: *mem.Arena, s: *State, page: usize) -> str {
     }
     if page == 1usize { ret join(a, join(a, "Brightness ", number(a, s.values[BRIGHTNESS] * 10usize), "%"), ", dark theme ", on_off(is_on(s, DARK))) }
     if page == 2usize { ret join(a, "Media volume ", number(a, s.values[MEDIA] * 10usize), "%") }
-    if page == 3usize { ret join(a, "78%, battery saver ", on_off(is_on(s, SAVER)), "") }
-    if page == 4usize { ret "42.7 GB used of 128 GB" }
+    if page == 3usize { ret join(a, "Level unavailable, battery saver ", on_off(is_on(s, SAVER)), "") }
+    if page == 4usize {
+        if !s.have_storage { ret "No storage" }
+        ret join(a, size_text(a, s.storage_used * 512usize), " used of ", size_text(a, s.storage_total * 512usize))
+    }
     if page == 5usize { ret join(a, number(a, notify_count(s)), " of 8 apps allowed", "") }
     if page == 6usize { ret join(a, number(a, icons.APP_COUNT), " apps", "") }
     if page == 7usize { ret join(a, "Screen lock: ", lock_name(s.values[LOCK]), "") }
@@ -688,84 +695,60 @@ fn draw_sound(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
     ret ok
 }
 
+// (C126) The battery's level and use are the status service's and no app is granted it yet, so the page says
+// so rather than show made-up numbers; the battery saver switch is kept.
 fn draw_battery(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     var y: f32 = 92.0
-    try card(a, builder, 16.0, y + 2.0, 380.0, 104.0, 18.0, surface())
-    try put(a, builder, faces.jost_bold, 40.0, "78%", 32.0, y + 12.0, ink())
-    try put(a, builder, faces.grotesk, 13.0, "About 1 day 4 hours left", 32.0, y + 66.0, muted())
-    try card(a, builder, 32.0, y + 88.0, 348.0, 8.0, 4.0, soft())
-    try card(a, builder, 32.0, y + 88.0, 348.0 * 0.78, 8.0, 4.0, amber())
-    y += 112.0
+    try card(a, builder, 16.0, y + 2.0, 380.0, 76.0, 18.0, surface())
+    try put(a, builder, faces.jost, 20.0, "Battery level unavailable", 32.0, y + 12.0, ink())
+    try put(a, builder, faces.grotesk, 13.0, "The system does not report it to apps yet.", 32.0, y + 46.0, muted())
+    y += 88.0
     try toggle_row(a, builder, s, faces, SAVER, "Limits background activity", y)
-    y += 72.0
-    try section(a, builder, faces, "Battery use since full charge", y)
-    y += 34.0
-    var n = 0usize
-    while n < 5usize {
-        var name = "Screen"
-        var share: f32 = 0.34
-        if n == 1usize {
-            name = "Camera"
-            share = 0.18
-        }
-        if n == 2usize {
-            name = "Maps"
-            share = 0.12
-        }
-        if n == 3usize {
-            name = "Messages"
-            share = 0.08
-        }
-        if n == 4usize {
-            name = "Music"
-            share = 0.05
-        }
-        try card(a, builder, 16.0, y + 2.0, 380.0, 50.0, 16.0, surface())
-        try put(a, builder, faces.jost, 16.0, name, 32.0, y + 14.0, ink())
-        try card(a, builder, 170.0, y + 22.0, 150.0, 6.0, 3.0, soft())
-        try card(a, builder, 170.0, y + 22.0, 150.0 * share * 2.5, 6.0, 3.0, amber())
-        try put_right(a, builder, faces.grotesk, 13.0, join(a, number(a, usize(share * 100.0 + 0.5)), "%", ""), 380.0, y + 17.0, muted())
-        y += 54.0
-        n += 1usize
-    }
     ret ok
 }
 
+// (C126) A size in B, KB or MB with one decimal.
+fn size_text(a: *mem.Arena, bytes: usize) -> str {
+    if bytes >= 1048576usize {
+        let tenths = bytes * 10usize / 1048576usize
+        ret join(a, join(a, number(a, tenths / 10usize), ".", number(a, tenths % 10usize)), " MB", "")
+    }
+    if bytes >= 1024usize {
+        let tenths = bytes * 10usize / 1024usize
+        ret join(a, join(a, number(a, tenths / 10usize), ".", number(a, tenths % 10usize)), " KB", "")
+    }
+    ret join(a, number(a, bytes), " B", "")
+}
+
+// The disk's real numbers, from the filesystem server's OP_STATS: blocks allocated and blocks held.
 fn draw_storage(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     var y: f32 = 92.0
-    try card(a, builder, 16.0, y + 2.0, 380.0, 96.0, 18.0, surface())
-    try put(a, builder, faces.jost_bold, 28.0, "42.7 GB", 32.0, y + 10.0, ink())
-    try put(a, builder, faces.grotesk, 13.0, "used of 128 GB", 32.0, y + 48.0, muted())
-    try card(a, builder, 32.0, y + 74.0, 348.0, 12.0, 6.0, soft())
-    try card(a, builder, 32.0, y + 74.0, 116.0, 12.0, 6.0, paint.Color { red: 0.60, green: 0.80, blue: 0.70, alpha: 1.0 })
-    try card(a, builder, 148.0, y + 74.0, 90.0, 12.0, 0.0, paint.Color { red: 0.72, green: 0.58, blue: 0.85, alpha: 1.0 })
-    try card(a, builder, 238.0, y + 74.0, 34.0, 12.0, 0.0, paint.Color { red: 0.50, green: 0.64, blue: 0.88, alpha: 1.0 })
-    try card(a, builder, 272.0, y + 74.0, 28.0, 12.0, 0.0, amber())
-    y += 104.0
-    var n = 0usize
-    while n < 5usize {
-        var name = "Images"
-        var size = "14.6 GB"
-        if n == 1usize {
-            name = "Video and audio"
-            size = "11.3 GB"
-        }
-        if n == 2usize {
-            name = "Apps"
-            size = "8.2 GB"
-        }
-        if n == 3usize {
-            name = "Documents"
-            size = "3.9 GB"
-        }
-        if n == 4usize {
-            name = "System"
-            size = "4.7 GB"
-        }
-        try info_row(a, builder, faces, name, size, y)
-        y += 54.0
-        n += 1usize
+    if !s.have_storage {
+        try card(a, builder, 16.0, y + 2.0, 380.0, 70.0, 18.0, surface())
+        try put(a, builder, faces.jost, 20.0, "No storage on this machine", 32.0, y + 12.0, ink())
+        try put(a, builder, faces.grotesk, 13.0, "The system has no disk to report.", 32.0, y + 42.0, muted())
+        ret ok
     }
+    let used_bytes = s.storage_used * 512usize
+    let total_bytes = s.storage_total * 512usize
+    var share: f32 = 0.0
+    if s.storage_total > 0usize { share = f32(s.storage_used) / f32(s.storage_total) }
+    if share > 1.0 { share = 1.0 }
+    try card(a, builder, 16.0, y + 2.0, 380.0, 96.0, 18.0, surface())
+    try put(a, builder, faces.jost_bold, 28.0, size_text(a, used_bytes), 32.0, y + 10.0, ink())
+    try put(a, builder, faces.grotesk, 13.0, join(a, "used of ", size_text(a, total_bytes), ""), 32.0, y + 48.0, muted())
+    try card(a, builder, 32.0, y + 74.0, 348.0, 12.0, 6.0, soft())
+    if share > 0.0 { try card(a, builder, 32.0, y + 74.0, 348.0 * share + 4.0, 12.0, 6.0, amber()) }
+    y += 104.0
+    try info_row(a, builder, faces, "Used", size_text(a, used_bytes), y)
+    y += 54.0
+    var free_bytes = 0usize
+    if total_bytes > used_bytes { free_bytes = total_bytes - used_bytes }
+    try info_row(a, builder, faces, "Free", size_text(a, free_bytes), y)
+    y += 54.0
+    try info_row(a, builder, faces, "Disk size", size_text(a, total_bytes), y)
+    y += 54.0
+    try info_row(a, builder, faces, "Blocks in use", number(a, s.storage_used), y)
     ret ok
 }
 
@@ -796,7 +779,11 @@ fn draw_apps(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
             try card(a, builder, 16.0, y + 2.0, 380.0, 50.0, 16.0, surface())
             try svg.draw(a, builder, icons.app(pos), geometry.rect(26.0, y + 8.0, 38.0, 38.0), ink())
             try put(a, builder, faces.jost, 17.0, icons.app_label(pos), 78.0, y + 14.0, ink())
-            try put_right(a, builder, faces.grotesk, 13.0, join(a, number(a, 6usize + (pos * 37usize) % 90usize), " MB", ""), 380.0, y + 18.0, muted())
+            // The size of the app's program in the archive, handed to this app by the kernel (entries 13 to 44).
+            let program = icons.program_of(pos)
+            if program >= 13usize && program < 45usize && s.app_sizes[program - 13usize] > 0usize {
+                try put_right(a, builder, faces.grotesk, 13.0, size_text(a, s.app_sizes[program - 13usize]), 380.0, y + 18.0, muted())
+            }
         }
         pos += 1usize
     }
@@ -1032,6 +1019,21 @@ fn act(s: *State, id: usize, x: f32) -> bool {
             say("settings page ")
             say(page_name(s.page))
             say("\n")
+            if s.page == 4usize {
+                let (used, total, answered) = vaultfs.stats()
+                s.have_storage = answered
+                s.storage_used = used
+                s.storage_total = total
+                if answered {
+                    say("settings storage used ")
+                    say_num(used)
+                    say(" of ")
+                    say_num(total)
+                    say(" blocks\n")
+                } else {
+                    say("settings storage none\n")
+                }
+            }
             ret true
         }
         ret false
@@ -1116,6 +1118,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var s: State = zero
     defaults(&s)
+    // The Settings app's last argument is the archive entries' sizes (a 32-bit word each) when the kernel gave it.
+    if args.len >= 8usize && args[7usize].len == 128usize {
+        var entry = 0usize
+        while entry < 32usize {
+            let b = args[7usize]
+            s.app_sizes[entry] = usize(b[entry * 4usize]) + usize(b[entry * 4usize + 1usize]) * 256usize + usize(b[entry * 4usize + 2usize]) * 65536usize + usize(b[entry * 4usize + 3usize]) * 16777216usize
+            entry += 1usize
+        }
+    }
     if load(&s) {
         say("settings loaded dark ")
         say_num(s.values[DARK])
@@ -1131,6 +1142,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     sync_theme(&s)
     s.page = MAIN
+    let (stored_used, stored_total, stored_answered) = vaultfs.stats()
+    s.have_storage = stored_answered
+    s.storage_used = stored_used
+    s.storage_total = stored_total
     if !show(a, &kit, &s) {
         say("settings present failed\n")
         ret ok

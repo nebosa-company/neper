@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-C126	compiler	0.55	2378	NeperOS Settings: settings that act on the system, kept across restarts, searchable	(1) acting on the system, (3) live in a running app, (5) real list pages.
+C126	compiler	0.7	2670	NeperOS Settings: settings that act on the system, kept across restarts, searchable	(1) acting on the system, (3) live in a running app, (5) Wi-Fi scan and password sheet, Uninstall and Dynamic apps, real battery numbers.
 C125	compiler	0	1219	NeperOS Files: real storage through the filesystem server, file hand-over between apps	The Files app (D2219) browses a sample tree kept in the process.
 C124	compiler	0	2252	NeperOS Dynamic: apps from a prompt, compiled in Neper on a server, scanned, installed	Dynamic is the app that makes apps: the user writes a prompt that says what app they need;
 C123	compiler	0	1202	NeperOS Document: a viewer for PDF, Word, PowerPoint, Markdown and text, with syntax highlighting	The Document icon (home index 25, a page with angle brackets) has no app yet.

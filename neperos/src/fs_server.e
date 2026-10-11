@@ -72,6 +72,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let op = os.recv(REQ, fsproto.NO_SLOT)
         if op == fsproto.OP_QUIT {
             running = false
+        } else if op == fsproto.OP_STATS {
+            var used = 0usize
+            if virtio.block_read(blk, 0u64) == ok { used = usize(os.load32(blk.data + 4usize)) }
+            let sent = os.send(REP, fsproto.RESULT_OK, fsproto.NO_SLOT)
+            let used_sent = os.send(REP, used, fsproto.NO_SLOT)
+            let total_sent = os.send(REP, usize(blk.sectors), fsproto.NO_SLOT)
         } else {
             let plen = fsproto.recv_bytes(REQ, path_addr, 64usize)
             let path = pathbuf[0usize..plen]

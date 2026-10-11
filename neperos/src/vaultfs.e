@@ -42,6 +42,16 @@ fn write(path: str, addr: usize, len: usize) -> bool {
     ret os.recv(FS_REP, fsproto.NO_SLOT) == fsproto.RESULT_OK
 }
 
+// (C126) The blocks allocated and the blocks the disk holds, and whether the filesystem answered.
+fn stats() -> (usize, usize, bool) {
+    let sent = os.send(FS_REQ, fsproto.OP_STATS, fsproto.NO_SLOT)
+    if sent == REFUSED { ret (0usize, 0usize, false) }
+    let result = os.recv(FS_REP, fsproto.NO_SLOT)
+    let used = os.recv(FS_REP, fsproto.NO_SLOT)
+    let total = os.recv(FS_REP, fsproto.NO_SLOT)
+    ret (used, total, result == fsproto.RESULT_OK)
+}
+
 fn remove(path: str) -> bool {
     let sent = os.send(FS_REQ, fsproto.OP_REMOVE, fsproto.NO_SLOT)
     if sent == REFUSED { ret false }

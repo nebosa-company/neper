@@ -344,7 +344,7 @@ fn block_rw(device: Device, sector: u64) -> (usize, err) {
 // (D2152, C106) A block device opened for many reads and writes, for the filesystem server. One
 // request is in flight at a time; `header`, `data` (one sector) and `status` are allocated once and
 // reused, so the DMA pool does not grow per operation. The caller reads from and writes to `data`.
-type Block = struct { ring: Ring, header: usize, data: usize, status: usize }
+type Block = struct { ring: Ring, header: usize, data: usize, status: usize, sectors: u64 }
 
 // The free-running request index: the virtqueue's available and used indices count operations
 // across the whole run, and a slot is index-mod-size. One device at a time holds the block, so a
@@ -365,7 +365,8 @@ fn block_open(device: Device) -> (Block, err) {
     if data_error != ok { ret (zero, data_error) }
     let (status, status_error) = dma_region(1usize)
     if status_error != ok { ret (zero, status_error) }
-    ret (Block { ring: ring, header: header, data: data, status: status }, ok)
+    // The device's capacity in 512-byte sectors is the first word of its configuration space.
+    ret (Block { ring: ring, header: header, data: data, status: status, sectors: u64(os.load32(device.config)) }, ok)
 }
 
 // One block request: the three-descriptor chain (header the device reads, the sector, the status

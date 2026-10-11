@@ -63,7 +63,7 @@ fn open(a: *mem.Arena, args: []str, first_font: usize, title: str) -> (Kit, err)
     var renderer = renderer_value
     let (faces, has_fonts) = text.load_faces(&renderer, args, first_font)
     // (C126) The kernel's last argument for an app is the system theme (theme.e).
-    if args.len > first_font + 5usize { theme.from_arg(args[args.len - 1usize]) }
+    if args.len > first_font + 5usize { theme.from_arg(args[first_font + 5usize]) }
     if theme.word != theme.DEFAULT {
         say("appkit theme ")
         say_num(theme.word)

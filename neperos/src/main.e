@@ -97,6 +97,8 @@ var extra_first: usize = 0usize
 var extra_count: usize = 0usize
 // (C126) The system theme as one more argument for a full-screen app: 'a' + the word's low four bits, or 0 for none.
 var theme_arg: usize = 0usize
+// (C126) The Settings app also gets the archive entries' sizes (entries 13 to 44, a 32-bit word each) as its last argument.
+var sizes_arg: bool = false
 // (D2205) The compositor's shared frame, once it exists: a process launched from the shell that is a
 // full-screen app (an archive entry from 13 on) gets it mapped, a frame endpoint to send on and the
 // routed-input endpoint to receive on, and the five fonts as its arguments.
@@ -446,6 +448,7 @@ fn setup_args(space: vm.Space, name: str, kernel_pointer: usize, hostile: bool) 
 fn setup_args_files(space: vm.Space, name: str) -> (usize, usize, err) {
     var count = 1usize + extra_count
     if theme_arg != 0usize { count += 1usize }
+    if sizes_arg { count += 1usize }
     let arg_off = space.arg_off
     let strings = arg_off + count * 16usize
     var i = 0usize
@@ -459,6 +462,21 @@ fn setup_args_files(space: vm.Space, name: str) -> (usize, usize, err) {
         vm.put_byte(space, strings + name.len, u8(theme_arg))
         vm.put_word(space, arg_off + (1usize + extra_count) * 16usize, vm.address(strings + name.len))
         vm.put_word(space, arg_off + (1usize + extra_count) * 16usize + 8usize, 1usize)
+    }
+    if sizes_arg {
+        let at = strings + name.len + 1usize
+        var entry = 0usize
+        while entry < 32usize {
+            var size = 0usize
+            if 13usize + entry < archive_count { size = archive_length[13usize + entry] }
+            vm.put_byte(space, at + entry * 4usize, u8(size & 255usize))
+            vm.put_byte(space, at + entry * 4usize + 1usize, u8((size >> 8usize) & 255usize))
+            vm.put_byte(space, at + entry * 4usize + 2usize, u8((size >> 16usize) & 255usize))
+            vm.put_byte(space, at + entry * 4usize + 3usize, u8((size >> 24usize) & 255usize))
+            entry += 1usize
+        }
+        vm.put_word(space, arg_off + (2usize + extra_count) * 16usize, vm.address(at))
+        vm.put_word(space, arg_off + (2usize + extra_count) * 16usize + 8usize, 128usize)
     }
     var file = 0usize
     while file < extra_count {
@@ -697,6 +715,8 @@ fn launch(frame: *a64.Frame) {
         extra_first = 8usize
         extra_count = 5usize
         if theme_word >= 16usize && theme_word < 32usize { theme_arg = 97usize + (theme_word & 15usize) }
+        // The Settings app (entry 24) also lists the apps with their sizes.
+        if index == 24usize && theme_arg != 0usize { sizes_arg = true }
     }
     reuse_app_arena = screen_app
     let (child, child_error) = start_process(archive_base + archive_offset[index], archive_length[index], "child")
@@ -704,6 +724,7 @@ fn launch(frame: *a64.Frame) {
     driver_arena_bytes = 0usize
     extra_count = 0usize
     theme_arg = 0usize
+    sizes_arg = false
     if child_error != ok {
         frame.x[0usize] = 18446744073709551615u64
         ret
