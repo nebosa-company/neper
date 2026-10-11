@@ -2357,6 +2357,12 @@ crypto_kdf_plan_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$crypto_kdf_plan_written" = 'executable written' ]
 chmod +x "$test_build/crypto-kdf-plan-selfhost"
 "$test_build/crypto-kdf-plan-selfhost"
+# `e.crypto.kdf` password hashing: Argon2d/i/id at both versions and their PHC strings against argon2-cffi, scrypt PHC against hashlib, bcrypt `$2a$`/`$2b$`/`$2y$` against the bcrypt package, hostile-string bounds and every-prefix/every-bit refusal (186 checks, D2520).
+crypto_kdf_phc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_kdf_phc/src/main.e" "$repo" x64 linux "$test_build/crypto-kdf-phc-selfhost")
+[ "$crypto_kdf_phc_written" = 'executable written' ]
+chmod +x "$test_build/crypto-kdf-phc-selfhost"
+crypto_kdf_phc_output=$("$test_build/crypto-kdf-phc-selfhost")
+[ "$crypto_kdf_phc_output" = 'crypto kdf phc ok' ]
 # `e.crypto.sign` planned functions: RFC 6979 P-256 signing on the RFC's vectors, BIP-340 Schnorr over secp256k1 on all nineteen published rows, RSA-PSS byte-equal to a replica and verified by cryptography, ffdhe2048 DH, Poly1305 on the RFC 8439 vector, BLAKE3 on the official vectors in all three modes (D884).
 crypto_sign_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_sign_plan/src/main.e" "$repo" x64 linux "$test_build/crypto-sign-plan-selfhost")
 [ "$crypto_sign_plan_written" = 'executable written' ]

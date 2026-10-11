@@ -17,6 +17,7 @@ error Invalid
 
 type Hash = enum u8 { Sha256, Sha512 }
 type Blowfish = struct { p: [18]u32, s: [1024]u32 }
+type Argon2Kind = enum u8 { D, I, Id }
 
 fn hkdf_sha256_extract(salt: []const u8, input_key: []const u8) -> [32]u8 {
     if salt.len == 0usize {
@@ -738,13 +739,30 @@ fn argon2id(password: []const u8, salt: []const u8, t: u32, m_kib: u32, p: u32, 
     ret argon2id_keyed(password, salt, none[0..], none[0..], t, m_kib, p, out, memory)
 }
 
-// ponytail: Argon2id only (type 2); Argon2i/Argon2d differ solely in the `independent`
-// test and the type word, add a variant parameter when a caller needs them.
 // Argon2id with the optional secret K and associated data X of RFC 9106; `memory` holds
 // at least `argon2_memory_required(m_kib)` bytes, `t` passes, `p` lanes, `m_kib` at least
 // 8 p, a tag of at least 4 bytes.
 fn argon2id_keyed(password: []const u8, salt: []const u8, secret: []const u8, ad: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err {
-    if t == 0u32 || p == 0u32 || m_kib < 8u32 * p || out.len < 4usize || salt.len < 8usize { ret Invalid }
+    ret argon2_run(.Id, 19u32, password, salt, secret, ad, t, m_kib, p, out, memory)
+}
+
+// Argon2d, Argon2i or Argon2id (version 0x13) without a secret or associated data.
+fn argon2(kind: Argon2Kind, password: []const u8, salt: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err {
+    let none: [0]u8 = zero
+    ret argon2_run(kind, 19u32, password, salt, none[0..], none[0..], t, m_kib, p, out, memory)
+}
+
+fn argon2_type_word(kind: Argon2Kind) -> u32 {
+    if kind == .D { ret 0u32 }
+    if kind == .I { ret 1u32 }
+    ret 2u32
+}
+
+// The one Argon2 engine: `version` is 16 (0x10, a later pass overwrites a block) or 19
+// (0x13, a later pass XORs into it).
+fn argon2_run(kind: Argon2Kind, version: u32, password: []const u8, salt: []const u8, secret: []const u8, ad: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err {
+    if version != 16u32 && version != 19u32 { ret Invalid }
+    if t == 0u32 || p == 0u32 || p > 16777215u32 || m_kib < 8u32 * p || out.len < 4usize || salt.len < 8usize { ret Invalid }
     if memory.len < argon2_memory_required(m_kib) { ret TooSmall }
     let none: [0]u8 = zero
     var h = hash.blake2b_init(64usize, none[0..])
@@ -752,8 +770,8 @@ fn argon2id_keyed(password: []const u8, salt: []const u8, secret: []const u8, ad
     argon2_update_le32(&h, u32(out.len))
     argon2_update_le32(&h, m_kib)
     argon2_update_le32(&h, t)
-    argon2_update_le32(&h, 19u32)
-    argon2_update_le32(&h, 2u32)
+    argon2_update_le32(&h, version)
+    argon2_update_le32(&h, argon2_type_word(kind))
     argon2_update_sized(&h, password)
     argon2_update_sized(&h, salt)
     argon2_update_sized(&h, secret)
@@ -785,7 +803,8 @@ fn argon2id_keyed(password: []const u8, salt: []const u8, secret: []const u8, ad
         while slice < 4usize {
             lane = 0usize
             while lane < lanes {
-                let independent = pass == 0usize && slice < 2usize
+                var independent = kind == .I
+                if kind == .Id { independent = pass == 0usize && slice < 2usize }
                 var input: [128]u64 = zero
                 var addresses: [128]u64 = zero
                 input[0] = u64(pass)
@@ -793,7 +812,7 @@ fn argon2id_keyed(password: []const u8, salt: []const u8, secret: []const u8, ad
                 input[2] = u64(slice)
                 input[3] = u64(blocks)
                 input[4] = u64(t)
-                input[5] = 2u64
+                input[5] = u64(argon2_type_word(kind))
                 var start = 0usize
                 if pass == 0usize && slice == 0usize {
                     start = 2usize
@@ -836,7 +855,7 @@ fn argon2id_keyed(password: []const u8, salt: []const u8, secret: []const u8, ad
                     let ref_column = (start_position + relative) % q
                     let ref = (ref_lane * q + ref_column) * 1024usize
                     let cur = (lane * q + column) * 1024usize
-                    argon2_fill(memory, prev, ref, cur, pass != 0usize)
+                    argon2_fill(memory, prev, ref, cur, pass != 0usize && version == 19u32)
                     index += 1usize
                 }
                 lane += 1usize
@@ -858,4 +877,314 @@ fn argon2id_keyed(password: []const u8, salt: []const u8, secret: []const u8, ad
     }
     argon2_h_prime(out, last_blocks[0..])
     ret ok
+}
+
+// --- PHC strings: `$argon2id$v=19$m=M,t=T,p=P$salt$tag` and `$scrypt$ln=L,r=R,p=P$salt$tag`
+// with the salt and the tag in unpadded standard Base64. A verifier recomputes the tag
+// and compares it in constant time; a hostile string's cost is bounded by the memory the
+// caller offers and by caps on `t` (one million passes), the scrypt exponent (32), r and p
+// (1024), the salt (64 bytes) and the tag (64 bytes).
+
+fn phc_b64_char(v: u8) -> u8 {
+    if v < 26u8 { ret 65u8 + v }
+    if v < 52u8 { ret 97u8 + (v - 26u8) }
+    if v < 62u8 { ret 48u8 + (v - 52u8) }
+    if v == 62u8 { ret 43u8 }
+    ret 47u8
+}
+
+fn phc_b64_value(c: u8) -> u8 {
+    if c >= 65u8 && c <= 90u8 { ret c - 65u8 }
+    if c >= 97u8 && c <= 122u8 { ret c - 97u8 + 26u8 }
+    if c >= 48u8 && c <= 57u8 { ret c - 48u8 + 52u8 }
+    if c == 43u8 { ret 62u8 }
+    if c == 47u8 { ret 63u8 }
+    ret 255u8
+}
+
+fn phc_b64_length(n: usize) -> usize { ret n / 3usize * 4usize + (n % 3usize * 4usize + 2usize) / 3usize }
+
+// Writes the unpadded Base64 of `data` to `out` (at least `phc_b64_length(data.len)`
+// bytes) and returns the count written.
+fn phc_b64_encode(out: []u8, data: []const u8) -> usize {
+    var o = 0usize
+    var i = 0usize
+    while i + 3usize <= data.len {
+        let w = (u32(data[i]) << 16u32) | (u32(data[i + 1usize]) << 8u32) | u32(data[i + 2usize])
+        out[o] = phc_b64_char(u8((w >> 18u32) & 63u32))
+        out[o + 1usize] = phc_b64_char(u8((w >> 12u32) & 63u32))
+        out[o + 2usize] = phc_b64_char(u8((w >> 6u32) & 63u32))
+        out[o + 3usize] = phc_b64_char(u8(w & 63u32))
+        o += 4usize
+        i += 3usize
+    }
+    let left = data.len - i
+    if left == 1usize {
+        let w = u32(data[i]) << 16u32
+        out[o] = phc_b64_char(u8((w >> 18u32) & 63u32))
+        out[o + 1usize] = phc_b64_char(u8((w >> 12u32) & 63u32))
+        o += 2usize
+    }
+    if left == 2usize {
+        let w = (u32(data[i]) << 16u32) | (u32(data[i + 1usize]) << 8u32)
+        out[o] = phc_b64_char(u8((w >> 18u32) & 63u32))
+        out[o + 1usize] = phc_b64_char(u8((w >> 12u32) & 63u32))
+        out[o + 2usize] = phc_b64_char(u8((w >> 6u32) & 63u32))
+        o += 3usize
+    }
+    ret o
+}
+
+// Decodes unpadded standard Base64 into `out`; false for a character outside the
+// alphabet, a length of 1 mod 4, non-zero trailing bits or an `out` that is too short.
+fn phc_b64_decode(out: []u8, encoded: []const u8) -> (usize, bool) {
+    let rem = encoded.len % 4usize
+    if rem == 1usize { ret (0usize, false) }
+    let need = encoded.len / 4usize * 3usize + rem * 3usize / 4usize
+    if out.len < need { ret (0usize, false) }
+    var o = 0usize
+    var i = 0usize
+    while i + 4usize <= encoded.len {
+        let a0 = phc_b64_value(encoded[i])
+        let a1 = phc_b64_value(encoded[i + 1usize])
+        let a2 = phc_b64_value(encoded[i + 2usize])
+        let a3 = phc_b64_value(encoded[i + 3usize])
+        if a0 == 255u8 || a1 == 255u8 || a2 == 255u8 || a3 == 255u8 { ret (0usize, false) }
+        let w = (u32(a0) << 18u32) | (u32(a1) << 12u32) | (u32(a2) << 6u32) | u32(a3)
+        out[o] = u8(w >> 16u32)
+        out[o + 1usize] = u8((w >> 8u32) & 255u32)
+        out[o + 2usize] = u8(w & 255u32)
+        o += 3usize
+        i += 4usize
+    }
+    if rem == 2usize {
+        let a0 = phc_b64_value(encoded[i])
+        let a1 = phc_b64_value(encoded[i + 1usize])
+        if a0 == 255u8 || a1 == 255u8 || (a1 & 15u8) != 0u8 { ret (0usize, false) }
+        out[o] = (a0 << 2u32) | (a1 >> 4u32)
+        o += 1usize
+    }
+    if rem == 3usize {
+        let a0 = phc_b64_value(encoded[i])
+        let a1 = phc_b64_value(encoded[i + 1usize])
+        let a2 = phc_b64_value(encoded[i + 2usize])
+        if a0 == 255u8 || a1 == 255u8 || a2 == 255u8 || (a2 & 3u8) != 0u8 { ret (0usize, false) }
+        out[o] = (a0 << 2u32) | (a1 >> 4u32)
+        out[o + 1usize] = (a1 << 4u32) | (a2 >> 2u32)
+        o += 2usize
+    }
+    ret (o, true)
+}
+
+// A decimal number at `pos`: no sign, no leading zero, at most nine digits.
+fn phc_number(s: []const u8, pos: usize) -> (u32, usize, bool) {
+    var i = pos
+    var value = 0u32
+    while i < s.len && s[i] >= 48u8 && s[i] <= 57u8 {
+        if i - pos >= 9usize { ret (0u32, pos, false) }
+        value = value * 10u32 + u32(s[i] - 48u8)
+        i += 1usize
+    }
+    if i == pos { ret (0u32, pos, false) }
+    if s[pos] == 48u8 && i - pos > 1usize { ret (0u32, pos, false) }
+    ret (value, i, true)
+}
+
+fn phc_expect(s: []const u8, pos: usize, lit: str) -> (usize, bool) {
+    if pos + lit.len > s.len { ret (pos, false) }
+    var i = 0usize
+    while i < lit.len {
+        if s[pos + i] != lit[i] { ret (pos, false) }
+        i += 1usize
+    }
+    ret (pos + lit.len, true)
+}
+
+// The index of the next `$` at or after `pos`, or `s.len`.
+fn phc_segment_end(s: []const u8, pos: usize) -> usize {
+    var i = pos
+    while i < s.len && s[i] != 36u8 { i += 1usize }
+    ret i
+}
+
+fn phc_put(out: []u8, pos: usize, lit: str) -> usize {
+    var i = 0usize
+    while i < lit.len {
+        out[pos + i] = lit[i]
+        i += 1usize
+    }
+    ret pos + lit.len
+}
+
+fn phc_put_number(out: []u8, pos: usize, value: u32) -> usize {
+    var digits: [10]u8 = zero
+    var n = 0usize
+    var rest = value
+    while true {
+        digits[n] = 48u8 + u8(rest % 10u32)
+        n += 1usize
+        rest = rest / 10u32
+        if rest == 0u32 { break }
+    }
+    var i = 0usize
+    while i < n {
+        out[pos + i] = digits[n - 1usize - i]
+        i += 1usize
+    }
+    ret pos + n
+}
+
+// Writes the Argon2 PHC string (version 19) to `out` and returns its length; `TooSmall`
+// when `out` is shorter than 56 + the Base64 lengths of the salt and the tag.
+fn argon2_encode(out: []u8, kind: Argon2Kind, t: u32, m_kib: u32, p: u32, salt: []const u8, tag: []const u8) -> (usize, err) {
+    if out.len < 56usize + phc_b64_length(salt.len) + phc_b64_length(tag.len) { ret (0usize, TooSmall) }
+    var pos = phc_put(out, 0usize, "$argon2")
+    if kind == .D { pos = phc_put(out, pos, "d") }
+    if kind == .I { pos = phc_put(out, pos, "i") }
+    if kind == .Id { pos = phc_put(out, pos, "id") }
+    pos = phc_put(out, pos, "$v=19$m=")
+    pos = phc_put_number(out, pos, m_kib)
+    pos = phc_put(out, pos, ",t=")
+    pos = phc_put_number(out, pos, t)
+    pos = phc_put(out, pos, ",p=")
+    pos = phc_put_number(out, pos, p)
+    pos = phc_put(out, pos, "$")
+    pos += phc_b64_encode(out[pos..], salt)
+    pos = phc_put(out, pos, "$")
+    pos += phc_b64_encode(out[pos..], tag)
+    ret (pos, ok)
+}
+
+// Whether `password` is the one `phc` (an Argon2d, Argon2i or Argon2id string, version
+// 16 or 19; a missing `v=` is version 16) was made from. `Invalid` for text that is not a
+// well-formed string or whose parameters Argon2 refuses, `TooLarge` past the caps above,
+// `TooSmall` when `memory` is shorter than `m` kibibytes.
+fn argon2_verify(password: []const u8, phc: []const u8, memory: []u8) -> (bool, err) {
+    let (after_prefix, prefix_ok) = phc_expect(phc, 0usize, "$argon2")
+    if !prefix_ok { ret (false, Invalid) }
+    var pos = after_prefix
+    var kind: Argon2Kind = .Id
+    let (after_id, is_id) = phc_expect(phc, pos, "id$")
+    let (after_i, is_i) = phc_expect(phc, pos, "i$")
+    let (after_d, is_d) = phc_expect(phc, pos, "d$")
+    var matched = false
+    if is_id {
+        pos = after_id
+        matched = true
+    }
+    if is_i {
+        kind = .I
+        pos = after_i
+        matched = true
+    }
+    if is_d {
+        kind = .D
+        pos = after_d
+        matched = true
+    }
+    if !matched { ret (false, Invalid) }
+    var version = 16u32
+    let (after_v, has_v) = phc_expect(phc, pos, "v=")
+    if has_v {
+        let (v, after_number, v_ok) = phc_number(phc, after_v)
+        if !v_ok { ret (false, Invalid) }
+        let (after_sep, sep_ok) = phc_expect(phc, after_number, "$")
+        if !sep_ok { ret (false, Invalid) }
+        version = v
+        pos = after_sep
+    }
+    let (after_m, m_label) = phc_expect(phc, pos, "m=")
+    if !m_label { ret (false, Invalid) }
+    let (m_kib, after_m_number, m_ok) = phc_number(phc, after_m)
+    if !m_ok { ret (false, Invalid) }
+    let (after_t, t_label) = phc_expect(phc, after_m_number, ",t=")
+    if !t_label { ret (false, Invalid) }
+    let (t, after_t_number, t_ok) = phc_number(phc, after_t)
+    if !t_ok { ret (false, Invalid) }
+    let (after_p, p_label) = phc_expect(phc, after_t_number, ",p=")
+    if !p_label { ret (false, Invalid) }
+    let (p, after_p_number, p_ok) = phc_number(phc, after_p)
+    if !p_ok { ret (false, Invalid) }
+    let (after_dollar, dollar_ok) = phc_expect(phc, after_p_number, "$")
+    if !dollar_ok { ret (false, Invalid) }
+    let salt_end = phc_segment_end(phc, after_dollar)
+    if salt_end >= phc.len { ret (false, Invalid) }
+    if salt_end - after_dollar > 86usize { ret (false, TooLarge) }
+    var salt: [64]u8 = zero
+    let (salt_len, salt_ok) = phc_b64_decode(salt[0..], phc[after_dollar..salt_end])
+    if !salt_ok { ret (false, Invalid) }
+    let tag_start = salt_end + 1usize
+    let tag_end = phc_segment_end(phc, tag_start)
+    if tag_end != phc.len { ret (false, Invalid) }
+    if tag_end - tag_start > 86usize { ret (false, TooLarge) }
+    var expected: [64]u8 = zero
+    let (tag_len, tag_ok) = phc_b64_decode(expected[0..], phc[tag_start..tag_end])
+    if !tag_ok { ret (false, Invalid) }
+    if t > 1000000u32 { ret (false, TooLarge) }
+    let none: [0]u8 = zero
+    var computed: [64]u8 = zero
+    let run_error = argon2_run(kind, version, password, salt[..salt_len], none[0..], none[0..], t, m_kib, p, computed[..tag_len], memory)
+    if run_error != ok { ret (false, run_error) }
+    ret (hash.equal_constant_time(computed[..tag_len], expected[..tag_len]), ok)
+}
+
+// The scrypt PHC string `$scrypt$ln=L,r=R,p=P$salt$tag` for `n` a power of two.
+fn scrypt_encode(out: []u8, n: usize, r: usize, p: usize, salt: []const u8, tag: []const u8) -> (usize, err) {
+    if n < 2usize || (n & (n - 1usize)) != 0usize || r == 0usize || p == 0usize || r > 1024usize || p > 1024usize { ret (0usize, Invalid) }
+    if out.len < 48usize + phc_b64_length(salt.len) + phc_b64_length(tag.len) { ret (0usize, TooSmall) }
+    var ln = 0u32
+    var rest = n
+    while rest > 1usize {
+        rest = rest / 2usize
+        ln += 1u32
+    }
+    var pos = phc_put(out, 0usize, "$scrypt$ln=")
+    pos = phc_put_number(out, pos, ln)
+    pos = phc_put(out, pos, ",r=")
+    pos = phc_put_number(out, pos, u32(r))
+    pos = phc_put(out, pos, ",p=")
+    pos = phc_put_number(out, pos, u32(p))
+    pos = phc_put(out, pos, "$")
+    pos += phc_b64_encode(out[pos..], salt)
+    pos = phc_put(out, pos, "$")
+    pos += phc_b64_encode(out[pos..], tag)
+    ret (pos, ok)
+}
+
+// Whether `password` is the one an scrypt PHC string was made from; `scratch` is the
+// caller's `scrypt_scratch_required` bytes. Errors as `argon2_verify`.
+fn scrypt_verify(password: []const u8, phc: []const u8, scratch: []u8) -> (bool, err) {
+    let (after_prefix, prefix_ok) = phc_expect(phc, 0usize, "$scrypt$ln=")
+    if !prefix_ok { ret (false, Invalid) }
+    let (ln, after_ln, ln_ok) = phc_number(phc, after_prefix)
+    if !ln_ok { ret (false, Invalid) }
+    let (after_r, r_label) = phc_expect(phc, after_ln, ",r=")
+    if !r_label { ret (false, Invalid) }
+    let (r, after_r_number, r_ok) = phc_number(phc, after_r)
+    if !r_ok { ret (false, Invalid) }
+    let (after_p, p_label) = phc_expect(phc, after_r_number, ",p=")
+    if !p_label { ret (false, Invalid) }
+    let (p, after_p_number, p_ok) = phc_number(phc, after_p)
+    if !p_ok { ret (false, Invalid) }
+    let (after_dollar, dollar_ok) = phc_expect(phc, after_p_number, "$")
+    if !dollar_ok { ret (false, Invalid) }
+    if ln == 0u32 || r == 0u32 || p == 0u32 { ret (false, Invalid) }
+    if ln > 32u32 || r > 1024u32 || p > 1024u32 { ret (false, TooLarge) }
+    let salt_end = phc_segment_end(phc, after_dollar)
+    if salt_end >= phc.len { ret (false, Invalid) }
+    if salt_end - after_dollar > 86usize { ret (false, TooLarge) }
+    var salt: [64]u8 = zero
+    let (salt_len, salt_ok) = phc_b64_decode(salt[0..], phc[after_dollar..salt_end])
+    if !salt_ok { ret (false, Invalid) }
+    let tag_start = salt_end + 1usize
+    let tag_end = phc_segment_end(phc, tag_start)
+    if tag_end != phc.len { ret (false, Invalid) }
+    if tag_end - tag_start > 86usize { ret (false, TooLarge) }
+    var expected: [64]u8 = zero
+    let (tag_len, tag_ok) = phc_b64_decode(expected[0..], phc[tag_start..tag_end])
+    if !tag_ok || tag_len == 0usize { ret (false, Invalid) }
+    var computed: [64]u8 = zero
+    let run_error = scrypt(password, salt[..salt_len], 1usize << usize(ln), usize(r), usize(p), computed[..tag_len], scratch)
+    if run_error != ok { ret (false, run_error) }
+    ret (hash.equal_constant_time(computed[..tag_len], expected[..tag_len]), ok)
 }

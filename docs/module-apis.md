@@ -8749,6 +8749,7 @@ counter so a caller can refuse a replay. `format` writes the zero-padded decimal
 ```neper
 type Hash = enum u8 { Sha256, Sha512 }
 type Blowfish = struct { p: [18]u32, s: [1024]u32 }
+type Argon2Kind = enum u8 { D, I, Id }
 error TooLarge
 error TooSmall
 error Invalid
@@ -8797,7 +8798,26 @@ fn argon2_update_le32(s: *hash.Blake2b, value: u32)
 fn argon2_update_sized(s: *hash.Blake2b, data: []const u8)
 fn argon2id(password: []const u8, salt: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err
 fn argon2id_keyed(password: []const u8, salt: []const u8, secret: []const u8, ad: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err
+fn argon2(kind: Argon2Kind, password: []const u8, salt: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err
+fn argon2_type_word(kind: Argon2Kind) -> u32
+fn argon2_run(kind: Argon2Kind, version: u32, password: []const u8, salt: []const u8, secret: []const u8, ad: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err
+fn phc_b64_char(v: u8) -> u8
+fn phc_b64_value(c: u8) -> u8
+fn phc_b64_length(n: usize) -> usize
+fn phc_b64_encode(out: []u8, data: []const u8) -> usize
+fn phc_b64_decode(out: []u8, encoded: []const u8) -> (usize, bool)
+fn phc_number(s: []const u8, pos: usize) -> (u32, usize, bool)
+fn phc_expect(s: []const u8, pos: usize, lit: str) -> (usize, bool)
+fn phc_segment_end(s: []const u8, pos: usize) -> usize
+fn phc_put(out: []u8, pos: usize, lit: str) -> usize
+fn phc_put_number(out: []u8, pos: usize, value: u32) -> usize
+fn argon2_encode(out: []u8, kind: Argon2Kind, t: u32, m_kib: u32, p: u32, salt: []const u8, tag: []const u8) -> (usize, err)
+fn argon2_verify(password: []const u8, phc: []const u8, memory: []u8) -> (bool, err)
+fn scrypt_encode(out: []u8, n: usize, r: usize, p: usize, salt: []const u8, tag: []const u8) -> (usize, err)
+fn scrypt_verify(password: []const u8, phc: []const u8, scratch: []u8) -> (bool, err)
 ```
+
+Password hashing (L117, D2520): `argon2` runs Argon2d, Argon2i or Argon2id (`Argon2Kind`) at version 0x13 over the caller's `memory` of `m_kib` kibibytes, and `argon2_run` also takes a version (16 or 19) and the optional secret and associated data. `argon2_encode`/`scrypt_encode` write the PHC strings `$argon2id$v=19$m=M,t=T,p=P$salt$tag` and `$scrypt$ln=L,r=R,p=P$salt$tag` (unpadded standard Base64); `argon2_verify`/`scrypt_verify` parse one (a missing `v=` is version 16, a non-canonical Base64 tail, a padding character, a leading zero or an extra segment is `Invalid`), recompute the tag and compare it with `e.crypto.hash.equal_constant_time`. A hostile string is bounded: `t` over one million, an scrypt exponent over 32, `r` or `p` over 1024, and a salt or tag over 64 bytes answer `TooLarge`, and a memory demand beyond the caller's buffer answers `TooSmall` before any work. bcrypt's `bcrypt_verify` accepts `$2a$`, `$2b$` and `$2y$`; bcrypt, scrypt and Argon2 cost is the caller's to cap before accepting a stored string.
 
 HKDF follows RFC 5869. Expand rejects output longer than 255 hash blocks before
 writing dst; salt omission has the RFC-defined zero-salt behavior. Output aliases

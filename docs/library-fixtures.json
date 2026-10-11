@@ -224,6 +224,7 @@
    "pending": [],
    "fixtures": [
     "crypto_hash",
+    "crypto_kdf_phc",
     "crypto_kdf_plan",
     "crypto_pq",
     "crypto_sign_plan",

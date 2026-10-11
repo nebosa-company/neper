@@ -2677,6 +2677,12 @@ $cryptoKdfPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $cryptoKdfPlanWritten -ne 'executable written') { throw 'crypto_kdf_plan emission failed' }
 & $cryptoKdfPlanPath
 if ($LASTEXITCODE -ne 0) { throw "a crypto_kdf_plan check failed: exit $LASTEXITCODE" }
+# `e.crypto.kdf` password hashing: Argon2d/i/id at both versions and their PHC strings against argon2-cffi, scrypt PHC against hashlib, bcrypt `$2a$`/`$2b$`/`$2y$` against the bcrypt package, hostile-string bounds and every-prefix/every-bit refusal (186 checks, D2520).
+$cryptoKdfPhcPath = Join-Path $testBuild 'crypto-kdf-phc-selfhost.exe'
+$cryptoKdfPhcWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_kdf_phc\src\main.e') $repo 'x64' 'windows' $cryptoKdfPhcPath
+if ($LASTEXITCODE -ne 0 -or $cryptoKdfPhcWritten -ne 'executable written') { throw 'crypto_kdf_phc emission failed' }
+$cryptoKdfPhcOutput = & $cryptoKdfPhcPath
+if ($LASTEXITCODE -ne 0 -or $cryptoKdfPhcOutput -ne 'crypto kdf phc ok') { throw "crypto_kdf_phc answered wrongly: exit $LASTEXITCODE" }
 # `e.crypto.sign` planned functions: RFC 6979 P-256 signing on the RFC's vectors, BIP-340 Schnorr over secp256k1 on all nineteen published rows, RSA-PSS byte-equal to a replica and verified by cryptography, ffdhe2048 DH, Poly1305 on the RFC 8439 vector, BLAKE3 on the official vectors in all three modes (D884).
 $cryptoSignPlanPath = Join-Path $testBuild 'crypto-sign-plan-selfhost.exe'
 $cryptoSignPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_sign_plan\src\main.e') $repo 'x64' 'windows' $cryptoSignPlanPath
