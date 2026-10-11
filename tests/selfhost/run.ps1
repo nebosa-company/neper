@@ -1103,6 +1103,12 @@ try {
 } finally {
     Pop-Location
 }
+# `e.fs.vfs`: four 450-step traces recorded from the host's own filesystem replayed on Mem, Sub, Overlay and Host, path cleaning against posixpath.normpath, layering and isolation scenarios, and an overlay-versus-plain-copy differential (L119, D2522).
+$fsVfsPath = Join-Path $testBuild 'fs-vfs-selfhost.exe'
+$fsVfsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fs_vfs\src\main.e') $repo 'x64' 'windows' $fsVfsPath
+if ($LASTEXITCODE -ne 0 -or $fsVfsWritten -ne 'executable written') { throw 'fs_vfs emission failed' }
+$fsVfsOutput = & $fsVfsPath
+if ($LASTEXITCODE -ne 0 -or $fsVfsOutput -ne 'fs vfs ok') { throw "fs_vfs answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.msgpack`: every family byte-exact against the specification, the tree reader, the typed codec.
 $fmtMsgpackPath = Join-Path $testBuild 'fmt-msgpack-selfhost.exe'
 $fmtMsgpackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_msgpack\src\main.e') $repo 'x64' 'windows' $fmtMsgpackPath

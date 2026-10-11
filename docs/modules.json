@@ -89,6 +89,7 @@
     "e.text.io",
     "e.fs.mmap",
     "e.fs.watch",
+    "e.fs.vfs",
     "e.concurrent.queue",
     "e.concurrent.map",
     "e.task",
@@ -2715,6 +2716,18 @@
    "direct_dependencies": [
     "e.mem",
     "e.os"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fs.vfs",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fs",
+    "e.mem"
    ],
    "blocked_by": []
   },

@@ -10242,6 +10242,124 @@ Paths are relative to the watched root. `Renamed` supplies both paths when the h
 can pair them and otherwise appears as remove/add. `Overflow` means callers must
 rescan. Events may coalesce and no operation assumes one event per host change.
 
+### `e.fs.vfs`
+
+```neper
+type Vfs = struct { ctx: *void, stat_fn: fn(*void, *mem.Arena, str) -> (fs.Entry, err), read_fn: fn(*void, *mem.Arena, str, usize) -> ([]u8, err), write_fn: fn(*void, *mem.Arena, str, []const u8) -> err, make_dir_fn: fn(*void, *mem.Arena, str) -> err, remove_fn: fn(*void, *mem.Arena, str) -> err, list_fn: fn(*void, *mem.Arena, str) -> ([]fs.Entry, err) }
+type Node = struct { path: str, kind: fs.EntryKind, data: []u8, size: usize }
+type Mem = struct { a: *mem.Arena, nodes: []Node, count: usize }
+type Mark = struct { path: str, opaque: bool }
+type Overlay = struct { a: *mem.Arena, upper: Vfs, lower: Vfs, marks: []Mark, count: usize }
+type Union = struct { a: *mem.Arena, branches: []Vfs }
+type Sub = struct { inner: Vfs, prefix: str }
+type Host = struct { root: str }
+error NotEmpty
+error NotDirectory
+error IsDirectory
+error TooLarge
+fn same_text(x: []const u8, y: []const u8) -> bool
+fn is_root(path: str) -> bool
+fn clean(a: *mem.Arena, text: str) -> (str, err)
+fn parent_of(path: str) -> str
+fn base_of(path: str) -> str
+fn is_child(dir: str, path: str) -> bool
+fn strictly_below(path: str, base: str) -> bool
+fn join_path(a: *mem.Arena, dir: str, name: str) -> (str, err)
+fn copy_text(a: *mem.Arena, text: str) -> (str, err)
+fn text_less(x: str, y: str) -> bool
+fn sort_entries(entries: []fs.Entry)
+fn root_entry() -> fs.Entry
+fn no_entry() -> fs.Entry
+fn mem_new(a: *mem.Arena, capacity: usize) -> (Mem, err)
+fn mem_find(m: *Mem, path: str) -> (usize, bool)
+fn mem_has_children(m: *Mem, path: str) -> bool
+fn mem_add(m: *Mem, path: str, kind: fs.EntryKind) -> (usize, err)
+fn node_entry(n: Node) -> fs.Entry
+fn mem_check_parent(m: *Mem, path: str) -> err
+fn mem_stat(ctx: *void, a: *mem.Arena, path: str) -> (fs.Entry, err)
+fn mem_read(ctx: *void, a: *mem.Arena, path: str, limit: usize) -> ([]u8, err)
+fn mem_write(ctx: *void, a: *mem.Arena, path: str, data: []const u8) -> err
+fn mem_make_dir(ctx: *void, a: *mem.Arena, path: str) -> err
+fn mem_remove(ctx: *void, a: *mem.Arena, path: str) -> err
+fn mem_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err)
+fn mem_vfs(m: *Mem) -> Vfs
+fn stat(a: *mem.Arena, v: *Vfs, path: str) -> (fs.Entry, err)
+fn read_file(a: *mem.Arena, v: *Vfs, path: str, limit: usize) -> ([]u8, err)
+fn write_file(a: *mem.Arena, v: *Vfs, path: str, data: []const u8) -> err
+fn make_dir(a: *mem.Arena, v: *Vfs, path: str) -> err
+fn remove(a: *mem.Arena, v: *Vfs, path: str) -> err
+fn list(a: *mem.Arena, v: *Vfs, path: str) -> ([]fs.Entry, err)
+fn exists(a: *mem.Arena, v: *Vfs, path: str) -> (bool, err)
+fn make_dirs(a: *mem.Arena, v: *Vfs, path: str) -> err
+fn append_file(a: *mem.Arena, v: *Vfs, path: str, data: []const u8, limit: usize) -> err
+fn copy_file(a: *mem.Arena, from: *Vfs, src: str, to: *Vfs, dst: str, limit: usize) -> err
+fn move(a: *mem.Arena, v: *Vfs, src: str, dst: str, limit: usize) -> err
+fn overlay_new(a: *mem.Arena, upper: Vfs, lower: Vfs, capacity: usize) -> (Overlay, err)
+fn mark_find(o: *Overlay, path: str) -> (usize, bool)
+fn hidden(o: *Overlay, path: str) -> bool
+fn is_opaque(o: *Overlay, path: str) -> bool
+fn mark_set(o: *Overlay, path: str, opaque: bool) -> err
+fn mark_clear(o: *Overlay, path: str)
+fn mark_prune_below(o: *Overlay, base: str)
+fn overlay_lookup(o: *Overlay, a: *mem.Arena, p: str) -> (fs.Entry, err)
+fn overlay_stat(ctx: *void, a: *mem.Arena, path: str) -> (fs.Entry, err)
+fn overlay_read(ctx: *void, a: *mem.Arena, path: str, limit: usize) -> ([]u8, err)
+fn overlay_copy_up_dirs(o: *Overlay, a: *mem.Arena, dir: str) -> err
+fn overlay_settle(o: *Overlay, a: *mem.Arena, p: str) -> err
+fn overlay_write(ctx: *void, a: *mem.Arena, path: str, data: []const u8) -> err
+fn overlay_make_dir(ctx: *void, a: *mem.Arena, path: str) -> err
+fn overlay_children(o: *Overlay, a: *mem.Arena, p: str) -> ([]fs.Entry, err)
+fn overlay_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err)
+fn overlay_remove(ctx: *void, a: *mem.Arena, path: str) -> err
+fn overlay_vfs(o: *Overlay) -> Vfs
+fn union_new(a: *mem.Arena, branches: []const Vfs) -> (Union, err)
+fn union_stat(ctx: *void, a: *mem.Arena, path: str) -> (fs.Entry, err)
+fn union_read(ctx: *void, a: *mem.Arena, path: str, limit: usize) -> ([]u8, err)
+fn union_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err)
+fn union_write(ctx: *void, a: *mem.Arena, path: str, data: []const u8) -> err
+fn union_make_dir(ctx: *void, a: *mem.Arena, path: str) -> err
+fn union_remove(ctx: *void, a: *mem.Arena, path: str) -> err
+fn union_vfs(u: *Union) -> Vfs
+fn sub_new(a: *mem.Arena, inner: Vfs, prefix: str) -> (Sub, err)
+fn sub_inner_path(s: *Sub, a: *mem.Arena, path: str) -> (str, err)
+fn sub_outer_entry(s: *Sub, e: fs.Entry) -> fs.Entry
+fn sub_stat(ctx: *void, a: *mem.Arena, path: str) -> (fs.Entry, err)
+fn sub_read(ctx: *void, a: *mem.Arena, path: str, limit: usize) -> ([]u8, err)
+fn sub_write(ctx: *void, a: *mem.Arena, path: str, data: []const u8) -> err
+fn sub_make_dir(ctx: *void, a: *mem.Arena, path: str) -> err
+fn sub_remove(ctx: *void, a: *mem.Arena, path: str) -> err
+fn sub_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err)
+fn sub_vfs(s: *Sub) -> Vfs
+fn host_new(root: str) -> Host
+fn host_path(h: *Host, a: *mem.Arena, path: str) -> (str, str, err)
+fn host_stat(ctx: *void, a: *mem.Arena, path: str) -> (fs.Entry, err)
+fn host_read(ctx: *void, a: *mem.Arena, path: str, limit: usize) -> ([]u8, err)
+fn host_write(ctx: *void, a: *mem.Arena, path: str, data: []const u8) -> err
+fn host_make_dir(ctx: *void, a: *mem.Arena, path: str) -> err
+fn host_remove(ctx: *void, a: *mem.Arena, path: str) -> err
+fn host_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err)
+fn host_vfs(h: *Host) -> Vfs
+```
+
+Virtual filesystems (L119) behind one interface in the shape of e.fs. `Vfs` is a context and six operations
+(stat, read_file, write_file, make_dir, remove, list) taking the caller's arena for what they return, and the
+free functions `stat`, `read_file`, `write_file`, `make_dir`, `remove`, `list`, `exists`, `make_dirs`,
+`append_file`, `copy_file` and `move` (a file or a whole directory within one Vfs) work on any of them.
+`Mem` is an in-memory tree; `Overlay` is a writable upper over a read-only lower with copy-up of parent
+directories, whiteouts for removed lower entries (kept in the overlay, not in the upper) and opaque
+directories for one made again over a whiteout; `Union` is a read-only merge of branches where the first that
+has a path answers for it and directory entries merge by name (`fs.Denied` for any change); `Sub` is another
+Vfs rooted at a directory of it; `Host` is the real filesystem below a root through e.fs. Layers compose: an
+overlay's lower may be a union, a host directory or another overlay. Paths are cleaned lexically first: empty
+and `.` segments vanish, `..` pops, a `..` past the root or a NUL byte is `fs.Invalid`, and `Host` also
+refuses a backslash or a colon, so nothing outside a `Sub` or a `Host` root can be named (symbolic links
+inside a host directory are the host's). Errors are e.fs's (`fs.NotFound`, `fs.Exists`, `fs.Denied`,
+`fs.Invalid`) plus `NotEmpty`, `NotDirectory`, `IsDirectory` and `TooLarge`. Nothing is freed: tables and file
+bodies grow in the layer's arena and a replaced body stays until the arena is reset; lookups scan, so a Mem is
+for thousands of entries. Checked against four 450-step traces recorded from the host's own filesystem
+replayed on Mem, Sub, Overlay and Host, against `posixpath.normpath`, and by a differential run of an overlay
+over a random lower against a plain copy (D2522).
+
 ### `e.proc`
 
 ```neper

@@ -1035,6 +1035,12 @@ fs_mmap_watch_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$fs_mmap_watch_written" = 'executable written' ]
 chmod +x "$test_build/fs-mmap-watch-selfhost"
 (cd "$fs_watch_scratch" && "$test_build/fs-mmap-watch-selfhost")
+# `e.fs.vfs`: four 450-step traces recorded from the host's own filesystem replayed on Mem, Sub, Overlay and Host, path cleaning against posixpath.normpath, layering and isolation scenarios, and an overlay-versus-plain-copy differential (L119, D2522).
+fs_vfs_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fs_vfs/src/main.e" "$repo" x64 linux "$test_build/fs-vfs-selfhost")
+[ "$fs_vfs_written" = 'executable written' ]
+chmod +x "$test_build/fs-vfs-selfhost"
+fs_vfs_output=$("$test_build/fs-vfs-selfhost")
+[ "$fs_vfs_output" = 'fs vfs ok' ]
 # `e.fmt.msgpack`: every family byte-exact against the specification, the tree reader, the typed codec.
 fmt_msgpack_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_msgpack/src/main.e" "$repo" x64 linux "$test_build/fmt-msgpack-selfhost")
 [ "$fmt_msgpack_written" = 'executable written' ]

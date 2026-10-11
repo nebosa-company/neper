@@ -224,7 +224,6 @@
    "pending": [],
    "fixtures": [
     "crypto_hash",
-    "crypto_kdf_phc",
     "crypto_kdf_plan",
     "crypto_pq",
     "crypto_sign_plan",
@@ -748,6 +747,7 @@
     "differential",
     "error_detail",
     "fs_basics",
+    "fs_vfs",
     "gfx_chart_clipped_annotation",
     "gfx_chart_composition",
     "gfx_chart_labels",
