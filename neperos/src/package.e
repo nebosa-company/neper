@@ -9,10 +9,15 @@
 // `capabilities` (comma-separated: `network`, `storage`, `camera`, ...), `icon` (an SVG file name in the
 // image's own directory, optional). The device verifies the signature against the server's public key
 // (kept in the OS image, e.crypto.sign), checks `api`, and shows the capabilities before the first run.
+//
+// Revocation (C143): the device may keep a text list (`/revoked` on its disk; a line each: `Name` revokes every
+// version of the app called Name, `Name=N` its versions up to and including N). `check_revocable` answers
+// Revoked for an app on it, whatever its signature.
 use e.crypto.sign as sign
 
 error BadPackage
 error TooNew
+error Revoked
 
 const MAGIC: u32 = 1196770382u32
 const FORMAT: u8 = 1u8
@@ -126,5 +131,64 @@ fn check(data: []const u8, public: sign.Ed25519PublicKey) -> (Package, err) {
     if parse_error != ok { ret (p, parse_error) }
     if !verify(p, data, public) { ret (p, BadPackage) }
     if api_of(p) == 0usize || api_of(p) > API_LEVEL { ret (p, TooNew) }
+    ret (p, ok)
+}
+
+// The `version` of the manifest as a number (0 when absent or not a number).
+fn version_of(p: Package) -> usize {
+    let (text, found) = value(p, "version")
+    if !found || text.len == 0usize { ret 0usize }
+    var n = 0usize
+    var i = 0usize
+    while i < text.len {
+        if text[i] < 48u8 || text[i] > 57u8 { ret 0usize }
+        n = n * 10usize + usize(text[i] - 48u8)
+        i += 1usize
+    }
+    ret n
+}
+
+// Whether the revocation list (a line each: `Name` for every version, `Name=N` for versions up to and including N)
+// names this package's app and version.
+fn revoked(p: Package, list: []const u8) -> bool {
+    let (name, has_name) = value(p, "name")
+    if !has_name { ret false }
+    let version = version_of(p)
+    var at = 0usize
+    while at < list.len {
+        var end = at
+        while end < list.len && list[end] != 10u8 { end += 1usize }
+        var line_end = end
+        if line_end > at && list[line_end - 1usize] == 13u8 { line_end -= 1usize }
+        var eq = at
+        while eq < line_end && list[eq] != 61u8 { eq += 1usize }
+        if eq - at == name.len && eq > at {
+            var same = true
+            var k = 0usize
+            while k < name.len {
+                if list[at + k] != name[k] { same = false }
+                k += 1usize
+            }
+            if same {
+                if eq == line_end { ret true }
+                var limit = 0usize
+                var d = eq + 1usize
+                while d < line_end && list[d] >= 48u8 && list[d] <= 57u8 && limit < 100000000usize {
+                    limit = limit * 10usize + usize(list[d] - 48u8)
+                    d += 1usize
+                }
+                if version <= limit { ret true }
+            }
+        }
+        at = end + 1usize
+    }
+    ret false
+}
+
+// `check`, then the revocation list: Revoked when the app is on it.
+fn check_revocable(data: []const u8, public: sign.Ed25519PublicKey, list: []const u8) -> (Package, err) {
+    let (p, check_error) = check(data, public)
+    if check_error != ok { ret (p, check_error) }
+    if revoked(p, list) { ret (p, Revoked) }
     ret (p, ok)
 }

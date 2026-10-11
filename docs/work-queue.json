@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C143",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 143,
-      "title": "NeperOS Dynamic, step one: the prompt client and the app kit contract",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Dynamic app (D2238) makes apps from three templates inside itself. This item is the first real step of C124 that does not need a model: the contract between a generated app and the system. Acceptance: (1) an app manifest format (name, icon, capabilities, entry, API level, version) and a package format (manifest, image, signature) with a loader in the shell that installs a package under its own directory (C125), adds its icon to the home grid after the built-in apps and launches it with only its declared capabilities; (2) the app kit as a stable API (appkit, ui, text, scenes and the e.* subset the scanner allows), versioned, with the diagnostics of the compiler made readable for a model (the card of traps in docs/llm-neper-card.md as a prompt prefix); (3) a signing key held by the server and a verifier on the device (e.crypto.sign), with revocation; (4) the scanner as a library: it walks the NIR of the built app and rejects raw syscalls and MMIO, undeclared network or storage use, and unbounded loops over input, with a report the Details screen shows; (5) a fixture that builds one hand-written app to a package, signs it, installs it on QEMU, launches it from its new icon and removes it; the prompt and server pieces follow in C124. Not queued here: a store, sharing."
-    },
-    {
       "id": "C145",
       "category": "compiler",
       "group": "NeperOS",
@@ -1322,6 +1311,17 @@
           "model": "opus",
           "thinking": "high",
           "evidence": "Split from C142 (D2431): Document reads the text of PDF, Word, PowerPoint and OpenDocument files and renders Markdown and highlighted code. Acceptance: (1) PDF pages painted, not just their text: fonts and text positioning, vector paths and images through e.gfx.scene, with the outline, search and page jump; (2) pinch zoom and pan (the touch layer needs press, move and release events); (3) CommonMark with tables in the Markdown parser and an HTML view shared with Mail (C128) and the Browser (C129); (4) Word and PowerPoint tables, images and slide shapes, and spreadsheets (.ods, .xlsx) as grids; (5) open from Mail attachments and the Browser's downloads, an open-with and share sheet, and Dynamic's source view using the code view; (6) a fixture on QEMU that opens a real PDF, DOCX and PPTX and checks what is drawn. Not queued here: editing, annotation, signing."
+    },
+    {
+          "id": "C173",
+          "category": "compiler",
+          "group": "NeperOS",
+          "order": 173,
+          "title": "NeperOS Dynamic step-one remainder: the scanner, the versioned app kit, removal",
+          "score": 0,
+          "model": "opus",
+          "thinking": "high",
+          "evidence": "Split from C143 (D2432): packages are signed, verified, revocable and installed. Acceptance: (1) the scanner as a library over the NIR of a built app: it rejects raw syscalls and MMIO, network or storage use the manifest does not declare, and unbounded loops over input, with a report the Dynamic Details screen shows; (2) the app kit as a stable versioned API (appkit, ui, text, scenes and the e.* subset the scanner allows) with the compiler's diagnostics made readable for a model and the card of traps in docs/llm-neper-card.md as a prompt prefix; (3) the revocation list signed by the server and fetched, not only read from disk; (4) removing an installed app (its package in /apps and its icon) from the home grid; (5) a fixture that builds one hand-written app to a package, signs it, installs it on QEMU, launches it from its new icon and removes it. The prompt and server pieces follow in C124. Not queued here: a store, sharing."
     }
   ]
 }

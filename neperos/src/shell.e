@@ -502,7 +502,19 @@ fn icon_at(x: f32, y: f32) -> usize {
 // image in a page-aligned buffer, and (when `persist`) write the package to /apps so the next boot has it. True when it
 // was adopted.
 fn adopt(a: *mem.Arena, data: str, persist: bool) -> bool {
-    let (pkg, pkg_error) = package.check(data, server_key.public())
+    // (C143) The revocation list on the disk, if there is one: an app on it is refused whatever its signature.
+    var revocations: [1024]u8 = zero
+    var revocation_len = 0usize
+    let (rev_size, rev_kind, rev_day, rev_found) = fsproto.stat(FS_REQ, FS_REP, "/revoked")
+    if rev_found && rev_size > 0usize && rev_size <= 1024usize {
+        let (rev_got, rev_ok) = fsproto.read_big(FS_REQ, FS_REP, "/revoked", mem.address_of(&revocations[0usize]), rev_size)
+        if rev_ok { revocation_len = rev_got }
+    }
+    let (pkg, pkg_error) = package.check_revocable(data, server_key.public(), revocations[0usize..revocation_len])
+    if pkg_error == package.Revoked {
+        say("shell package revoked\n")
+        ret false
+    }
     if pkg_error != ok {
         say("shell package refused\n")
         ret false

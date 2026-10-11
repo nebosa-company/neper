@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-C143	compiler	0	1309	NeperOS Dynamic, step one: the prompt client and the app kit contract	The Dynamic app (D2238) makes apps from three templates inside itself.
 C145	compiler	0	652	NeperOS Clock: alarms ring with the app closed	Split from C115 (2026-10-08).
 C146	compiler	0	546	NeperOS Clock: daylight saving in the world-clock cities	Split from C115 (2026-10-08).
 C147	compiler	0.5	1643	Full suites complete on this machine: Windows run.ps1 and Linux run.sh	a complete run on either host (run.sh under WSL not run) and the test-results.json totals. RUN 17 (2026-10-10, seeded, with the sc500k static gate and the live-API network assertion excluded through a
@@ -119,3 +118,4 @@ C169	compiler	0	540	NeperOS Blocks remainder: fast fall, held keys and drags, sc
 C170	compiler	0	759	NeperOS Secure remainder: HOTP, QR and export, clipboard and autofill, biometrics, breach check	Split from C140 (D2429): Secure has the encrypted vault, SHA-1/256/512 codes of 6 to 8 digits with their own period, and otpauth import from /otpauth.txt.
 C171	compiler	0	987	NeperOS AI remainder: streaming, keys in Secure, conversations, files and tools	Split from C141 (D2430): AI sends a conversation to a provider and shows the answer.
 C172	compiler	0	869	NeperOS Document remainder: PDF painting, zoom, tables, HTML view, spreadsheets	Split from C142 (D2431): Document reads the text of PDF, Word, PowerPoint and OpenDocument files and renders Markdown and highlighted code.
+C173	compiler	0	938	NeperOS Dynamic step-one remainder: the scanner, the versioned app kit, removal	Split from C143 (D2432): packages are signed, verified, revocable and installed.

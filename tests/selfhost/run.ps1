@@ -10489,6 +10489,21 @@ if ($neperosQemu) {
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
         if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
     }
+    # The revoked-package fixture (C143): the package archive on a disk whose /revoked names the app; the shell
+    # refuses it (`shell package revoked`).
+    foreach ($row in $appsTable) {
+        $fields = $row.Split('|', 7)
+        if ($fields[0] -ne 'installseedfixture') { continue }
+        $fixture = $fields[1]
+        $revokedList = Join-Path $testBuild 'revoked.txt'
+        [IO.File]::WriteAllText($revokedList, "Lab level" + [char]10)
+        $revokedDisk = Join-Path $testBuild "shell-$fixture.disk"
+        & python (Join-Path $repo 'scripts\make_fs_image.py') $revokedDisk 8 ('/revoked=' + $revokedList) | Out-Null
+        if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
+        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $packageArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $revokedDisk 0 $fields[4] 2>&1) -join "`n"
+        $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+        if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+    }
     # The live fixtures: the same, on a user-mode network with the host side (DNS, HTTP, HTTPS with the recorded API
     # replies) running, the network server in test mode (`nettest`) and the fixture's root as the 46th archive entry.
     $liveReady = Join-Path $testBuild 'live-hosts.ready'

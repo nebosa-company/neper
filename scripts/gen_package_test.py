@@ -40,6 +40,15 @@ out.append(array("good", good))
 out.append(array("newer", newer))
 out.append(array("public_bytes", public))
 out.append(array("other_bytes", other))
+LISTS = (
+    ("rev_all", b"Tip calculator\n"),
+    ("rev_upto1", b"Other\nTip calculator=1\r\n"),
+    ("rev_upto0", b"Tip calculator=0\n"),
+    ("rev_prefix", b"Tip calcul\nTip calculator2\n=1\n"),
+    ("rev_other", b"Other=9\nAnother app\n"),
+)
+for list_name, list_text in LISTS:
+    out.append(array(list_name, list_text))
 out.append("""    let key = sign.Ed25519PublicKey { bytes: public_bytes }
     let wrong = sign.Ed25519PublicKey { bytes: other_bytes }
     let (p, parse_error) = package.parse(good[0..])
@@ -72,6 +81,19 @@ out.append("""    let key = sign.Ed25519PublicKey { bytes: public_bytes }
     if n_error != package.TooNew { os.exit(14) }
     let (w, w_error) = package.check(good[0..], wrong)
     if w_error != package.BadPackage { os.exit(15) }
+    if package.version_of(p) != 1usize { os.exit(16) }
+    if !package.revoked(p, rev_all[0..]) { os.exit(17) }
+    if !package.revoked(p, rev_upto1[0..]) { os.exit(18) }
+    if package.revoked(p, rev_upto0[0..]) { os.exit(19) }
+    if package.revoked(p, rev_prefix[0..]) { os.exit(20) }
+    if package.revoked(p, rev_other[0..]) { os.exit(21) }
+    if package.revoked(p, good[0..0]) { os.exit(22) }
+    let (r, r_error) = package.check_revocable(good[0..], key, rev_all[0..])
+    if r_error != package.Revoked { os.exit(23) }
+    let (ok_p, ok_error) = package.check_revocable(good[0..], key, rev_other[0..])
+    if ok_error != ok { os.exit(24) }
+    let (bad_p, bad_error) = package.check_revocable(damaged[0..], key, rev_other[0..])
+    if bad_error != package.BadPackage { os.exit(25) }
     ret ok
 }
 """ % (len(good), 7 + len(manifest) + 4 + 10, 7 + len(manifest) + 4 + 10, len(good) - 5))
