@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C135",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 135,
-      "title": "NeperOS Meet: real video calls: signalling, media transport, capture",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Meet app (D2230) runs a demo meeting with made-up people. Acceptance: (1) signalling and media over C117: a WebRTC-style stack (ICE, DTLS-SRTP) or a simple SFU protocol, with the room codes and the calendar of upcoming meetings from the account service; (2) capture: the camera frames from the camera server (C122) and the microphone from e.audio, encoded and sent with a codec from the library (video and Opus-style audio), the received streams decoded into the tiles; (3) the grid and speaker layouts follow who speaks from the audio levels; (4) screen sharing from the compositor, raise hand, chat in the meeting (Chat, C134), captions; (5) echo cancellation, noise suppression and the bandwidth adaptation; (6) a fixture on QEMU with two clients in one machine against a local relay that exchanges test frames and checks them. Not queued here: recording, large webinars, breakout rooms."
-    },
-    {
       "id": "C136",
       "category": "compiler",
       "group": "NeperOS",
@@ -1564,6 +1553,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C134 (D2423): the Chat app talks to a loopback WebSocket server for the general room. Acceptance: (1) wss with a way to poll a TLS connection from an app (the network server's poll is plain TCP only), accounts, rooms and direct messages as the server has them, presence and typing indicators, delivery and read marks; (2) message history in storage (C125), search, threads, mentions, reactions kept on the server, edit and delete; (3) files and images from Files and Camera, link previews; (4) notifications through the status server with per-room settings (C126); (5) voice and video from a room opens Meet (C135); (6) end-to-end encryption with keys in Secure (C116); (7) a fixture across two clients."
+    },
+    {
+      "id": "C165",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 165,
+      "title": "NeperOS Meet remainder: media transport, capture, codecs, screen sharing",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C135 (D2424): Meet signals over a WebSocket and shows the people and the speaker the server names. Acceptance: (1) media over C117 (needs UDP in the network server): a WebRTC-style stack (ICE, DTLS-SRTP) or a simple SFU protocol; (2) capture: the camera frames from the camera server (C153) and the microphone from e.audio, encoded and sent with a codec from the library, the received streams decoded into the tiles; (3) the speaker and grid layouts follow the audio levels; (4) screen sharing from the compositor, raise hand visible to others, chat in the meeting (C134/C164), captions; (5) echo cancellation, noise suppression and bandwidth adaptation; (6) a fixture with two clients in one machine against a relay that exchanges test frames and checks them."
     }
   ]
 }

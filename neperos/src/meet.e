@@ -19,6 +19,10 @@ use e.text.shape
 use appkit
 use text
 use ui
+use netclient
+use netproto
+use netio
+use wsc
 use scenes
 
 const NONE: usize = 99usize
@@ -28,6 +32,14 @@ const JOIN_SCREEN: usize = 2usize
 const CALL_SCREEN: usize = 3usize
 
 type State = struct {
+    // (C135) The meeting's signalling connection (a WebSocket to the room server): its reader, the people the
+    // server says are in the room, and who is speaking (an index into them, NONE when nobody).
+    live: bool,
+    nb: netio.NetBuf,
+    peer_name: [3][12]u8,
+    peer_len: [3]usize,
+    peer_total: usize,
+    speaker: usize,
     screen: usize,
     title: [24]u8,
     title_len: usize,
@@ -44,6 +56,101 @@ fn person(who: usize) -> str {
     if who == 1usize { ret "Alex" }
     if who == 2usize { ret "Priya" }
     ret "You"
+}
+
+// The name shown on a tile: the person the server named, else the sample one.
+fn tile_name(a: *mem.Arena, s: *State, who: usize) -> str {
+    if s.live && who < s.peer_total { ret ui.text_of(a, s.peer_name[who][0usize..], s.peer_len[who]) }
+    ret person(who)
+}
+
+// Open the signalling connection for the meeting called `title` and join it; false when there is no server.
+fn live_open(s: *State) -> bool {
+    if netclient.connect("neper.test", 8090u16, false) != netproto.R_OK { ret false }
+    s.nb.pos = 0usize
+    s.nb.len = 0usize
+    s.nb.closed = false
+    if !wsc.upgrade(&s.nb, "neper.test", "/meet") {
+        let closed = netclient.close()
+        ret false
+    }
+    s.live = true
+    s.peer_total = 0usize
+    s.speaker = NONE
+    if !wsc.send_text("JOIN|neper") { s.live = false }
+    ui.say("meet live\n")
+    ret s.live
+}
+
+fn live_close(s: *State) {
+    if !s.live { ret }
+    let said = wsc.send_text("BYE")
+    let closed = netclient.close()
+    s.live = false
+}
+
+fn same_text(a: []const u8, b: str) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// What the room server has sent since last time: PEER|name adds a person, SPEAK|name says who is speaking.
+// True when the picture changed.
+fn live_poll(a: *mem.Arena, s: *State) -> bool {
+    if !s.live { ret false }
+    if netio.poll(&s.nb) == 0usize {
+        if s.nb.closed { s.live = false }
+        ret false
+    }
+    var changed = false
+    var payload: [64]u8 = zero
+    var guard = 0usize
+    while s.nb.pos < s.nb.len && guard < 16usize {
+        let (opcode, n, received) = wsc.receive(&s.nb, payload[0usize..64usize])
+        if !received {
+            s.live = false
+            ret changed
+        }
+        if opcode == 1u8 && n > 5usize {
+            var bar = 0usize
+            while bar < n && payload[bar] != 124u8 { bar += 1usize }
+            if bar < n {
+                let kind = payload[0usize..bar]
+                let name = payload[bar + 1usize..n]
+                if same_text(kind, "PEER") && s.peer_total < 3usize && name.len <= 12usize {
+                    var k = 0usize
+                    while k < name.len {
+                        s.peer_name[s.peer_total][k] = name[k]
+                        k += 1usize
+                    }
+                    s.peer_len[s.peer_total] = name.len
+                    s.peer_total += 1usize
+                    ui.say("meet peer ")
+                    ui.say_text(ui.text_of(a, name, name.len))
+                    ui.say("\n")
+                    changed = true
+                }
+                if same_text(kind, "SPEAK") {
+                    var who = 0usize
+                    while who < s.peer_total {
+                        if s.peer_len[who] == name.len && same_text(name, ui.text_of(a, s.peer_name[who][0usize..], s.peer_len[who])) { s.speaker = who }
+                        who += 1usize
+                    }
+                    ui.say("meet speaker ")
+                    ui.say_text(ui.text_of(a, name, name.len))
+                    ui.say("\n")
+                    changed = true
+                }
+            }
+        }
+        guard += 1usize
+    }
+    ret changed
 }
 
 fn meeting_title(index: usize) -> str {
@@ -175,11 +282,16 @@ fn draw_call(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     let seconds = s.ticks / 2usize
     try ui.put(a, builder, faces.jost, 18.0, title_of(a, s), 20.0, 18.0, ui.light())
     try ui.put_right(a, builder, faces.grotesk, 14.0, ui.join(a, ui.number(a, seconds / 60usize), ":", ui.two(a, seconds % 60usize)), 392.0, 22.0, ui.light_muted())
-    // Who is in the meeting: Maya at once, Alex after two seconds, Priya after four; you.
+    // Who is in the meeting: Maya at once, Alex after two seconds, Priya after four; you. From a room server the
+    // people it named, and the one it says is speaking.
     var joined: usize = 1usize
     if s.ticks >= 4usize { joined = 2usize }
     if s.ticks >= 8usize { joined = 3usize }
-    let speaker = (s.ticks / 6usize) % joined
+    var speaker = (s.ticks / 6usize) % joined
+    if s.live {
+        joined = s.peer_total
+        speaker = s.speaker
+    }
     var tile = 0usize
     while tile < 4usize {
         let x: f32 = 12.0 + f32(tile % 2usize) * 196.0
@@ -197,12 +309,12 @@ fn draw_call(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
             try picture(a, builder, scenes.scene_svg(a, 1usize, 2usize, 5usize, false, 188usize, 292usize), geometry.rect(x, y, 188.0, 292.0), ui.light())
         } else {
             try ui.disc(a, builder, x + 94.0, y + 130.0, 42.0, ui.tint(tile))
-            let name = person(who)
+            let name = tile_name(a, s, who)
             try ui.centred(a, builder, faces.jost_bold, 40.0, name[0usize..1usize], x + 94.0, y + 106.0, ui.ink())
         }
         if present {
             try ui.card(a, builder, x + 8.0, y + 262.0, 100.0, 22.0, 11.0, ui.shade(0.55))
-            try ui.put(a, builder, faces.jost, 13.0, person(who), x + 16.0, y + 265.0, ui.light())
+            try ui.put(a, builder, faces.jost, 13.0, tile_name(a, s, who), x + 16.0, y + 265.0, ui.light())
             if tile == 3usize && !s.mic { try ui.disc(a, builder, x + 170.0, y + 273.0, 9.0, ui.loss()) }
         }
         tile += 1usize
@@ -252,6 +364,9 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if id == 700usize {
             s.mic = !s.mic
             if s.mic { ui.say("meet mic on\n") } else { ui.say("meet mic off\n") }
+            if s.live {
+                if s.mic { let said = wsc.send_text("MUTE|0") } else { let said = wsc.send_text("MUTE|1") }
+            }
             ret true
         }
         if id == 701usize {
@@ -267,6 +382,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             ui.say("meet ended ")
             ui.say_num(s.ticks / 2usize)
             ui.say("s\n")
+            live_close(s)
             s.screen = HOME_SCREEN
             ret true
         }
@@ -284,6 +400,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if id == 710usize {
             s.screen = CALL_SCREEN
             s.ticks = 0usize
+            let connected = live_open(s)
             ui.say("meet joined\n")
             ret true
         }
@@ -353,7 +470,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // In a meeting the timer, the people joining and the speaker follow the ticks.
             if s.screen == CALL_SCREEN {
                 s.ticks += 1usize
-                if s.ticks % 2usize == 0usize {
+                let moved = live_poll(a, &s)
+                if s.ticks % 2usize == 0usize || moved {
                     if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }
                 } else {
                     appkit.answer(appkit.ANSWER_NONE)
