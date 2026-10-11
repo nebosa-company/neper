@@ -13097,6 +13097,58 @@ address and takes only the port from the reply, so a server cannot redirect it; 
 fresh derived entropy. A 4xx/5xx reply is `Rejected` with the reply in `Session.last`; a transfer that fails
 midway kills the session (`Closed`). No active mode, MLSD, resume or server side.
 
+### `e.net.socks`
+
+```neper
+type Reply = struct { code: u8, atyp: u8, address: net.Address, name: [255]u8, name_len: usize, port: u16 }
+type Datagram = struct { fragment: u8, atyp: u8, address: net.Address, name: [255]u8, name_len: usize, port: u16, payload: usize }
+
+error Protocol
+error Rejected
+error Unsupported
+error AuthFailed
+error Invalid
+error Closed
+error TooSmall
+
+const VERSION: u8 = 5u8
+const CMD_CONNECT: u8 = 1u8
+const CMD_BIND: u8 = 2u8
+const CMD_UDP_ASSOCIATE: u8 = 3u8
+const ATYP_IPV4: u8 = 1u8
+const ATYP_DOMAIN: u8 = 3u8
+const ATYP_IPV6: u8 = 4u8
+const METHOD_NONE: u8 = 0u8
+const METHOD_PASSWORD: u8 = 2u8
+const METHOD_REFUSED: u8 = 255u8
+
+fn no_address() -> net.Address
+fn empty_reply() -> Reply
+fn reply_text(code: u8) -> str
+fn read_bytes(source: *io.Reader, dst: []u8) -> err
+fn negotiate(source: *io.Reader, sink: *io.Writer, user: str, password: str) -> err
+fn put_port(buf: []u8, at: usize, port: u16)
+fn send_request(sink: *io.Writer, cmd: u8, atyp: u8, host: []const u8, port: u16) -> err
+fn address_atyp(address: net.Address, bytes: []u8) -> (u8, usize)
+fn read_reply(source: *io.Reader) -> (Reply, err)
+fn command_domain(source: *io.Reader, sink: *io.Writer, cmd: u8, host: str, port: u16) -> (Reply, err)
+fn command_address(source: *io.Reader, sink: *io.Writer, cmd: u8, address: net.Address, port: u16) -> (Reply, err)
+fn connect_domain(source: *io.Reader, sink: *io.Writer, host: str, port: u16) -> (Reply, err)
+fn connect_address(source: *io.Reader, sink: *io.Writer, address: net.Address, port: u16) -> (Reply, err)
+fn bind_address(source: *io.Reader, sink: *io.Writer, address: net.Address, port: u16) -> (Reply, err)
+fn udp_associate(source: *io.Reader, sink: *io.Writer, address: net.Address, port: u16) -> (Reply, err)
+fn relay_endpoint(reply: Reply, proxy: net.Address) -> (net.Endpoint, bool)
+fn establish(connection: *net.Socket, user: str, password: str, host: str, port: u16, udp: bool) -> (Reply, err)
+fn dial(proxy: net.Endpoint, user: str, password: str, host: str, port: u16) -> (net.Socket, Reply, err)
+fn dial_udp(proxy: net.Endpoint, user: str, password: str) -> (net.Socket, Reply, err)
+fn udp_encode_domain(out: []u8, host: str, port: u16, payload: []const u8) -> (usize, err)
+fn udp_encode(out: []u8, address: net.Address, port: u16, payload: []const u8) -> (usize, err)
+fn empty_datagram() -> Datagram
+fn udp_decode(datagram: []const u8) -> (Datagram, err)
+```
+
+SOCKS5 client (L121, RFC 1928 and RFC 1929) over any `io.Reader`/`io.Writer` pair. `negotiate` offers "no authentication" and, when `user` is non-empty, "username/password" and runs the sub-negotiation (`Unsupported` for method 0xFF, `AuthFailed` for a refused login or for a server that insists on credentials the caller has none of, `Protocol` for a bad version or an unrequested method). `connect_domain` and `connect_address` send CONNECT, `bind_address` BIND (the second reply is a further `read_reply`), `udp_associate` UDP ASSOCIATE; each answers the server's `Reply` (bound address as `address` or a `name`, and `port`). A non-zero reply code is `Rejected` with `Reply.code` set (`reply_text` names it); a short stream is `Closed`; a host over 255 bytes, an empty host or a credential over 255 bytes is `Invalid` before anything is written. `dial` connects over e.net, negotiates and CONNECTs to a name the proxy resolves and returns the tunnel socket (closed on failure); `dial_udp` does the same for an association and `relay_endpoint` turns its reply into the datagram endpoint (an unspecified relay address means the proxy's own). `udp_encode`/`udp_encode_domain` and `udp_decode` build and read the RFC 1928 section 7 datagram header; a non-zero `fragment` is reported for the caller to drop, not reassembled. Reads are exact and protocol-sized, so a transport carries on past the replies untouched. Checked against PySocks' request bytes and outcomes for 41 scripted proxy transcripts, its datagram encoder and decoder, and five live loopback sessions (D2521). No GSSAPI, no server side, no HTTP CONNECT (L046).
+
 ### `e.net.ldap`
 
 ```neper

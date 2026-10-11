@@ -3781,6 +3781,12 @@ net_ftp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 chmod +x "$test_build/net-ftp-selfhost"
 net_ftp_output=$("$test_build/net-ftp-selfhost")
 [ "$net_ftp_output" = 'net ftp ok' ]
+# e.net.socks: PySocks' request bytes and outcomes for 41 scripted proxy transcripts, its UDP datagram encoder and decoder, and five live loopback sessions (L121, D2521)
+net_socks_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_socks/src/main.e" "$repo" x64 linux "$test_build/net-socks-selfhost")
+[ "$net_socks_written" = 'executable written' ]
+chmod +x "$test_build/net-socks-selfhost"
+net_socks_output=$("$test_build/net-socks-selfhost")
+[ "$net_socks_output" = 'net socks ok' ]
 # e.net.imap: scripted server byte for byte plus a live STARTTLS session (L083, D2276)
 net_imap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_imap/src/main.e" "$repo" x64 linux "$test_build/net-imap-selfhost")
 [ "$net_imap_written" = 'executable written' ]

@@ -4198,6 +4198,12 @@ $netFtpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $netFtpWritten -ne 'executable written') { throw 'net_ftp emission failed' }
 $netFtpOutput = & $netFtpPath
 if ($LASTEXITCODE -ne 0 -or $netFtpOutput -ne 'net ftp ok') { throw "net_ftp answered wrongly: exit $LASTEXITCODE" }
+# e.net.socks: PySocks' request bytes and outcomes for 41 scripted proxy transcripts, its UDP datagram encoder and decoder, and five live loopback sessions (L121, D2521)
+$netSocksPath = Join-Path $testBuild 'net-socks-selfhost.exe'
+$netSocksWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_socks\src\main.e') $repo 'x64' 'windows' $netSocksPath
+if ($LASTEXITCODE -ne 0 -or $netSocksWritten -ne 'executable written') { throw 'net_socks emission failed' }
+$netSocksOutput = & $netSocksPath
+if ($LASTEXITCODE -ne 0 -or $netSocksOutput -ne 'net socks ok') { throw "net_socks answered wrongly: exit $LASTEXITCODE" }
 # e.net.imap: scripted server byte for byte plus a live STARTTLS session (L083, D2276)
 $netImapPath = Join-Path $testBuild 'net-imap-selfhost.exe'
 $netImapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_imap\src\main.e') $repo 'x64' 'windows' $netImapPath

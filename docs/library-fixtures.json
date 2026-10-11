@@ -2560,6 +2560,7 @@
     "net_ftp",
     "net_http",
     "net_mdns",
+    "net_socks",
     "net_tls"
    ]
   },
