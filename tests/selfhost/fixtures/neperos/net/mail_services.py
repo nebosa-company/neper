@@ -3,6 +3,7 @@
   TCP 8143  IMAP: CAPABILITY, LOGIN (neper / secret), LIST, SELECT, (UID) FETCH, (UID) STORE, EXPUNGE, NOOP,
             LOGOUT over a three-message INBOX; flags and deletions are kept for the life of the process, so a
             later session sees what an earlier one did
+  TCP 8993  the IMAP service over TLS 1.3 and 8465 the SMTP one (the client tries these first)
   TCP 8025  SMTP: EHLO, MAIL FROM, RCPT TO, DATA, RSET, QUIT; every accepted message is kept in SENT
 
 The guest reaches both at 10.0.2.2 (the name neper.test resolves there). Plain text: the TLS paths of the client
@@ -165,6 +166,17 @@ class Server(socketserver.ThreadingTCPServer):
 
 
 def start():
+    import pathlib
+    import ssl
+    here = pathlib.Path(__file__).resolve().parent
     for port, handler in ((8143, Imap), (8025, Smtp)):
         server = Server(("127.0.0.1", port), handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+    # The same two over TLS 1.3 (the leaf certificate of the fixture CA, as the HTTPS service uses).
+    for port, handler in ((8993, Imap), (8465, Smtp)):
+        server = Server(("127.0.0.1", port), handler)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_3
+        context.load_cert_chain(str(here / "server.pem"), str(here / "server.key"))
+        server.socket = context.wrap_socket(server.socket, server_side=True)
         threading.Thread(target=server.serve_forever, daemon=True).start()

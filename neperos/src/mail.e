@@ -130,10 +130,20 @@ fn net_reader() -> io.Reader { ret io.Reader { ctx: nil, read: net_read } }
 
 fn net_writer() -> io.Writer { ret io.Writer { ctx: nil, write: net_write, flush: net_flush } }
 
+// Connect to the test mail host: TLS first (the chain is checked against the roots and the test CA), plain text
+// when that port is not answered. The result is the network result and whether the link is TLS.
+fn mail_connect(tls_port: u16, plain_port: u16) -> (usize, bool) {
+    let secure_result = netclient.connect("neper.test", tls_port, true)
+    if secure_result == netproto.R_OK { ret (secure_result, true) }
+    let plain_result = netclient.connect("neper.test", plain_port, false)
+    ret (plain_result, false)
+}
+
 // Fetch the INBOX over IMAP and make it the app's inbox: the number of messages, or 0 when there is no server or
 // the login fails (the sample inbox stays).
 fn sync_inbox(a: *mem.Arena, s: *State) -> usize {
-    if netclient.connect("neper.test", 8143u16, false) != netproto.R_OK { ret 0usize }
+    let (link, secure) = mail_connect(8993u16, 8143u16)
+    if link != netproto.R_OK { ret 0usize }
     var loaded = 0usize
     let (session, connect_error) = imap.connect(a, net_reader(), net_writer(), 65536usize)
     if connect_error == ok {
@@ -197,12 +207,14 @@ fn sync_inbox(a: *mem.Arena, s: *State) -> usize {
         }
     }
     let closed = netclient.close()
+    if loaded > 0usize && secure { ui.say("mail imap tls\n") }
     ret loaded
 }
 
 // Set a flag on the server's copy of a message (and expunge when it is deleted): true when the server took it.
 fn remote_flag(a: *mem.Arena, uid: usize, action: str, expunge_after: bool) -> bool {
-    if netclient.connect("neper.test", 8143u16, false) != netproto.R_OK { ret false }
+    let (link, secure) = mail_connect(8993u16, 8143u16)
+    if link != netproto.R_OK { ret false }
     var done = false
     let (session, connect_error) = imap.connect(a, net_reader(), net_writer(), 65536usize)
     if connect_error == ok {
@@ -259,7 +271,8 @@ fn address_of(a: *mem.Arena, typed: str) -> str {
 
 // Send the composed message over SMTP: the server's three-digit reply, or 0 when it could not be sent.
 fn send_message(a: *mem.Arena, s: *State) -> usize {
-    if netclient.connect("neper.test", 8025u16, false) != netproto.R_OK { ret 0usize }
+    let (link, secure) = mail_connect(8465u16, 8025u16)
+    if link != netproto.R_OK { ret 0usize }
     var code = 0usize
     let (session, connect_error) = smtp.connect(a, net_reader(), net_writer(), "neper.test")
     if connect_error == ok {
@@ -277,6 +290,7 @@ fn send_message(a: *mem.Arena, s: *State) -> usize {
         }
     }
     let closed = netclient.close()
+    if code != 0usize && secure { ui.say("mail smtp tls\n") }
     ret code
 }
 
