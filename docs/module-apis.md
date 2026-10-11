@@ -17439,6 +17439,117 @@ Version 1 reads stored and DEFLATE entries, ZIP64 sizes and UTF-8 names. It reje
 encrypted entries, absolute paths and names containing a `..` segment. CRC and all
 per-entry/aggregate limits are checked before successful extraction.
 
+### `e.fmt.sevenzip`
+
+```neper
+type Limits = struct { entries: usize, name_bytes: usize, header_bytes: usize, folder_bytes: usize }
+type Entry = struct { name: str, size: u64, crc32: u32, has_crc: bool, directory: bool, has_stream: bool, folder: usize, offset: u64 }
+type Coder = struct { id: u64, props: [8]u8, props_len: usize }
+type Folder = struct { coders: [4]Coder, ncoders: usize, bind_in: [3]usize, bind_out: [3]usize, nbind: usize, main_out: usize, sizes: [4]u64, crc: u32, has_crc: bool, nsub: usize, first_sub: usize }
+type Cur = struct { data: []const u8, at: usize, bad: bool }
+type State = struct { a: *mem.Arena, data: []const u8, limits: Limits, folders: []Folder, pack_pos: []u64, pack_size: []u64, sub_size: []u64, sub_crc: []u32, sub_has: []bool, entries: []Entry, cache_folder: usize, cache: []u8, cached: bool }
+type Archive = struct { state: *void }
+error Invalid
+error Unsupported
+error Checksum
+error TooLarge
+error Unsafe
+fn default_limits() -> Limits
+fn rd_byte(c: *Cur) -> u8
+fn rd_u32(c: *Cur) -> u32
+fn rd_number(c: *Cur) -> u64
+fn left(c: *Cur) -> usize
+fn rd_count(c: *Cur, limit: usize) -> usize
+fn rd_bits(c: *Cur, n: usize, out: []bool)
+fn rd_digests(a: *mem.Arena, c: *Cur, n: usize, has: []bool, crc: []u32) -> err
+fn parse_pack_info(c: *Cur, st: *State) -> err
+fn parse_folder(c: *Cur, f: *Folder) -> err
+fn parse_unpack_info(c: *Cur, st: *State) -> err
+fn folder_size(f: *Folder) -> u64
+fn default_substreams(st: *State) -> err
+fn parse_substreams(c: *Cur, st: *State) -> err
+fn parse_streams_info(c: *Cur, st: *State) -> err
+fn bcj_x86(buf: []u8)
+fn run_deflate(a: *mem.Arena, input: []const u8, out_size: usize) -> ([]u8, err)
+fn run_bzip2(a: *mem.Arena, input: []const u8, out_size: usize) -> ([]u8, err)
+fn run_coder(a: *mem.Arena, coder: Coder, input: []const u8, out_size: usize) -> ([]u8, err)
+fn decode_out(st: *State, f: *Folder, folder_index: usize, out_index: usize, depth: usize) -> ([]u8, err)
+fn decode_folder(st: *State, index: usize) -> ([]u8, err)
+fn unsafe_name(name: str) -> bool
+fn rd_name(a: *mem.Arena, c: *Cur, end: usize, budget: *usize) -> (str, err)
+fn parse_files_info(c: *Cur, st: *State) -> err
+fn parse_header(c: *Cur, st: *State) -> err
+fn le32_at(data: []const u8, at: usize) -> u32
+fn le64_at(data: []const u8, at: usize) -> u64
+fn open(a: *mem.Arena, data: []const u8, limits: Limits) -> (Archive, err)
+fn entries(archive: *const Archive) -> []const Entry
+fn extract(a: *mem.Arena, archive: *Archive, index: usize) -> ([]u8, err)
+```
+
+7z archive reader (L120), decode only, over an archive held in memory. `open` verifies the signature header's
+CRCs, reads the header (an encoded header is decoded first, to a depth of four) and lists the entries;
+`extract` runs one file's folder through its coder chain -- Copy, LZMA, LZMA2, Deflate, BZip2, Delta and the
+x86 BCJ filter, every coder one input and one output, wired by the folder's bind pairs in either order -- and
+checks the file's CRC-32 and the folder's when the header records one. A solid folder is decoded once and
+cached, so a sweep over its files does not decode it again; the cache and the header live in the caller's
+arena. Bounded before allocation: every count must fit the bytes left in the header and `Limits`, a declared
+unpacked size above `folder_bytes` is `TooLarge`, a coder whose output is not exactly the declared size is
+`Invalid`, and a name that is absolute, has a drive, a NUL or a `..` segment is `Unsafe`. AES, PPMd, BCJ2, the
+other branch filters, multi-volume archives, additional streams and external property data are `Unsupported`.
+Checked against archives written by py7zr and by a small Python writer built on liblzma, hostile headers, and
+every truncation and one-byte change of two small archives (D2523).
+
+### `e.fmt.rar`
+
+```neper
+type Limits = struct { entries: usize, name_bytes: usize, file_bytes: usize, chain_bytes: usize }
+type Entry = struct { name: str, size: u64, crc32: u32, has_crc: bool, directory: bool, method: u8, solid: bool, dict_log: u32, data_offset: usize, packed: usize }
+type Archive = struct { state: *void }
+type Huff = struct { count: [16]u16, symbol: [306]u16 }
+type Bits = struct { data: []const u8, pos: usize, end: usize, bad: bool }
+type State = struct { a: *mem.Arena, data: []const u8, limits: Limits, entries: []Entry, count: usize, name_budget: usize, chain_start: usize, chain_end: usize, chain: []u8, chain_has: bool, chain_offsets: []u64 }
+error Invalid
+error Unsupported
+error Checksum
+error TooLarge
+error Unsafe
+const NC: usize = 306usize
+const DC: usize = 64usize
+const LDC: usize = 16usize
+const RC: usize = 44usize
+const BC: usize = 20usize
+fn default_limits() -> Limits
+type Cur = struct { data: []const u8, at: usize, bad: bool }
+fn rd_vint(c: *Cur) -> u64
+fn rd_u32(c: *Cur) -> u32
+fn unsafe_name(name: str) -> bool
+fn open(a: *mem.Arena, data: []const u8, limits: Limits) -> (Archive, err)
+fn entries(archive: *const Archive) -> []const Entry
+fn take(b: *Bits, n: u32) -> u32
+fn huff_build(h: *Huff, lengths: []const u8) -> err
+fn huff_decode(h: *Huff, b: *Bits) -> u32
+fn read_tables(b: *Bits, main: *Huff, dist: *Huff, low: *Huff, lens: *Huff) -> err
+fn code_length(b: *Bits, slot: u32) -> u32
+fn unpack(src: []const u8, out: []u8, start: usize, size: usize, dict: u64) -> err
+fn compressed(e: Entry) -> bool
+fn decode_chain(st: *State, index: usize) -> err
+fn extract(a: *mem.Arena, archive: *Archive, index: usize) -> ([]u8, err)
+```
+
+RAR5 archive reader (L120), decode only, over an archive held in memory. `open` walks the block headers (each
+CRC-32 checked) and lists the files; `extract` returns a stored file as it is and decodes a compressed one
+(the RAR5 LZ77 + Huffman stream: block headers with their checksum byte, the 20-symbol bit-length code that
+codes 430 lengths for the main, distance, low-distance and length codes, four repeat distances, a length that
+grows with the distance) and checks the file's CRC-32. A solid chain is decoded as one stream into one buffer
+so a match may reach into an earlier file; the chain is cached. Bounded before allocation: each unpacked size
+and the sum over a chain are checked against `Limits`, a block never reads past its declared size, a distance
+past the bytes produced or the dictionary is `Invalid`, and names that are absolute, have a drive, a NUL or
+a `..` segment are `Unsafe`. RAR 1.5-4.x archives, encryption, the E8/E8E9/ARM/delta filters (main symbol
+256), the version-7 dictionary extension and multi-volume sets are `Unsupported`. Checked against archives
+from a small RAR5 encoder that libarchive's reader (bsdtar) must extract byte for byte before they are used;
+one solid chain whose second file matches into the first is the exception, because libarchive's answer for it
+differs from the format description, so only the CRC vouches for it (D2523).
+
 ### `e.fmt.snappy`
 
 ```neper

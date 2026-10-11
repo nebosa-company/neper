@@ -1109,6 +1109,12 @@ $fsVfsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $fsVfsWritten -ne 'executable written') { throw 'fs_vfs emission failed' }
 $fsVfsOutput = & $fsVfsPath
 if ($LASTEXITCODE -ne 0 -or $fsVfsOutput -ne 'fs vfs ok') { throw "fs_vfs answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.sevenzip` and `e.fmt.rar`: py7zr and liblzma-written 7z archives (every coder chain, encoded headers, solid and multi-folder), RAR5 streams from an encoder libarchive must accept, hostile headers and every truncation and byte change of two small archives (L120, D2523).
+$fmtArchivePath = Join-Path $testBuild 'fmt-archive-selfhost.exe'
+$fmtArchiveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_archive\src\main.e') $repo 'x64' 'windows' $fmtArchivePath
+if ($LASTEXITCODE -ne 0 -or $fmtArchiveWritten -ne 'executable written') { throw 'fmt_archive emission failed' }
+$fmtArchiveOutput = & $fmtArchivePath
+if ($LASTEXITCODE -ne 0 -or $fmtArchiveOutput -ne 'fmt archive ok') { throw "fmt_archive answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.msgpack`: every family byte-exact against the specification, the tree reader, the typed codec.
 $fmtMsgpackPath = Join-Path $testBuild 'fmt-msgpack-selfhost.exe'
 $fmtMsgpackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_msgpack\src\main.e') $repo 'x64' 'windows' $fmtMsgpackPath

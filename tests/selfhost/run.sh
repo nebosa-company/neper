@@ -1041,6 +1041,12 @@ fs_vfs_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 chmod +x "$test_build/fs-vfs-selfhost"
 fs_vfs_output=$("$test_build/fs-vfs-selfhost")
 [ "$fs_vfs_output" = 'fs vfs ok' ]
+# `e.fmt.sevenzip` and `e.fmt.rar`: py7zr and liblzma-written 7z archives (every coder chain, encoded headers, solid and multi-folder), RAR5 streams from an encoder libarchive must accept, hostile headers and every truncation and byte change of two small archives (L120, D2523).
+fmt_archive_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_archive/src/main.e" "$repo" x64 linux "$test_build/fmt-archive-selfhost")
+[ "$fmt_archive_written" = 'executable written' ]
+chmod +x "$test_build/fmt-archive-selfhost"
+fmt_archive_output=$("$test_build/fmt-archive-selfhost")
+[ "$fmt_archive_output" = 'fmt archive ok' ]
 # `e.fmt.msgpack`: every family byte-exact against the specification, the tree reader, the typed codec.
 fmt_msgpack_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_msgpack/src/main.e" "$repo" x64 linux "$test_build/fmt-msgpack-selfhost")
 [ "$fmt_msgpack_written" = 'executable written' ]

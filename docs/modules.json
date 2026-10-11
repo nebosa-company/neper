@@ -135,6 +135,8 @@
     "e.fmt.lzw",
     "e.fmt.zlib",
     "e.fmt.zip",
+    "e.fmt.sevenzip",
+    "e.fmt.rar",
     "e.fmt.tar",
     "e.fmt.yaml",
     "e.fmt.woff2",
@@ -2600,6 +2602,34 @@
     "e.io",
     "e.mem",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.sevenzip",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.deflate",
+    "e.algo.hash",
+    "e.fmt.bzip2",
+    "e.fmt.lzma",
+    "e.io",
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.rar",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.mem"
    ],
    "blocked_by": []
   },
