@@ -11381,6 +11381,50 @@ fn check(history: []const Event, model: Model, initial: i64, placed: []u8) -> (b
 `check`: Wing-Gong backtracking linearizability of a history of timed calls against a
 register, counter or set model.
 
+### `e.test.snapshot`
+
+```neper
+type Mode = enum u8 { Ci, Review, Accept }
+type Outcome = enum u8 { Matched, Created, Updated, Unreviewed, Differs, Missing, Mismatch }
+error InvalidName
+error TooSmall
+
+fn valid_name(name: str) -> bool
+fn path_of(a: *mem.Arena, dir: str, name: str, pending: bool) -> (str, err)
+fn normalized(a: *mem.Arena, s: str) -> (str, err)
+fn body_of(stored: str) -> str
+fn same_text(a: *mem.Arena, x: str, y: str) -> (bool, err)
+fn file_text(a: *mem.Arena, name: str, actual: str) -> (str, err)
+fn write_text(a: *mem.Arena, dir: str, path: str, text: str) -> err
+fn remove_if_present(a: *mem.Arena, path: str) -> err
+fn mode_from_env(a: *mem.Arena) -> Mode
+fn assert_text(a: *mem.Arena, dir: str, name: str, actual: str, mode: Mode) -> (Outcome, err)
+fn count_newlines(s: str) -> usize
+fn split_into(s: str, out: []str) -> usize
+fn diff_text(a: *mem.Arena, expected: str, actual: str) -> (str, err)
+fn describe(a: *mem.Arena, dir: str, name: str, outcome: Outcome, actual: str) -> (str, err)
+fn check(a: *mem.Arena, dir: str, name: str, actual: str, mode: Mode) -> err
+fn check_doc(a: *mem.Arena, dir: str, name: str, p: *const pretty.Pool, root: u32, width: usize, capacity: usize, mode: Mode) -> err
+fn accept(a: *mem.Arena, dir: str, name: str) -> err
+fn reject(a: *mem.Arena, dir: str, name: str) -> err
+fn has_pending(a: *mem.Arena, dir: str, name: str) -> (bool, err)
+```
+
+Snapshot testing with a review-and-accept workflow, in the manner of insta and pytest-snapshot.
+`check` compares a rendered value with `<dir>/<name>.snap` and acts per `Mode`: `Ci` never writes
+(`Missing`, `Mismatch`), `Review` writes the candidate to `<name>.snap.new` and fails (`Unreviewed`
+for a new snapshot, `Differs` for a changed one) until `accept` promotes it or `reject` drops it,
+`Accept` writes `.snap` and passes (`Created`, `Updated`). `mode_from_env` reads NEPER_SNAPSHOT
+(`ci`, `review`, `accept`) and otherwise `Ci` when CI is set, `Review` when not. A stored file is a
+three-line header and the body; one without a header is all body, so files written by other
+tools match. Comparison ignores CR bytes and trailing whitespace at the end of the whole text and
+nothing inside it. A failure goes through `test.fail`, carrying the outcome, the pending path and
+a line diff (`-` expected, `+` actual); `check_doc` snapshots an `e.fmt.pretty` layout at a width.
+A name is a file stem (letters, digits, `_`, `-`, `.`; `InvalidName` otherwise). Text only:
+binary snapshots stay out. Every function is in the surface because the language has no
+visibility; callers use `check`, `assert_text`, `accept`, `reject`, `has_pending` and
+`mode_from_env`.
+
 ### `e.debug`
 
 ```neper

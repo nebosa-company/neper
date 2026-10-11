@@ -332,6 +332,7 @@
     "e.test.prop",
     "e.test.sim",
     "e.test.linearize",
+    "e.test.snapshot",
     "e.fmt.pretty",
     "e.fmt.json.schema",
     "e.fmt.css",
@@ -3921,6 +3922,23 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.snapshot",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.pretty",
+    "e.fs",
+    "e.mem",
+    "e.os",
+    "e.str",
+    "e.test",
+    "e.text.diff"
+   ],
    "blocked_by": []
   },
   {

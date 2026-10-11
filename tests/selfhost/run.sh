@@ -3511,6 +3511,12 @@ parseComb_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/parse-comb-selfhost"
 parseComb_output=$("$test_build/parse-comb-selfhost")
 [ "$parseComb_output" = 'parse comb ok' ]
+# e.test.snapshot: review-and-accept snapshots, 60 pairs checked against pytest-snapshot plus the full mode workflow (D2562).
+testSnapshot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_snapshot/src/main.e" "$repo" x64 linux "$test_build/test-snapshot-selfhost" -j 2)
+[ "$testSnapshot_written" = 'executable written' ]
+chmod +x "$test_build/test-snapshot-selfhost"
+testSnapshot_output=$("$test_build/test-snapshot-selfhost")
+[ "$testSnapshot_output" = 'test snapshot ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
