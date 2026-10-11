@@ -18,6 +18,7 @@ use e.text.shape
 use appkit
 use text
 use lunar
+use vaultfs
 
 const NONE: usize = 99usize
 const MAX_TASKS: usize = 16usize
@@ -694,6 +695,80 @@ fn count_tasks(s: *State) -> usize {
     ret n
 }
 
+// (C114) The tasks are kept in /tasks: a version byte, then for each task its title length and bytes, the due day
+// (four bytes), a flag byte (starred 1, done 2) and its list. Written after every change, read at start.
+fn save_tasks(s: *State) {
+    var buf: [1024]u8 = zero
+    buf[0usize] = 1u8
+    var n = 1usize
+    var i = 0usize
+    while i < MAX_TASKS {
+        if s.tasks[i].used && n + 52usize < 1024usize {
+            buf[n] = u8(s.tasks[i].length)
+            var k = 0usize
+            while k < s.tasks[i].length {
+                buf[n + 1usize + k] = s.tasks[i].title[k]
+                k += 1usize
+            }
+            n += 1usize + s.tasks[i].length
+            var d = 0usize
+            while d < 4usize {
+                buf[n + d] = u8((s.tasks[i].due >> (8usize * d)) & 255usize)
+                d += 1usize
+            }
+            var flags = 0usize
+            if s.tasks[i].starred { flags = flags | 1usize }
+            if s.tasks[i].done { flags = flags | 2usize }
+            buf[n + 4usize] = u8(flags)
+            buf[n + 5usize] = u8(s.tasks[i].list)
+            n += 6usize
+        }
+        i += 1usize
+    }
+    let kept = vaultfs.write_big("/tasks", mem.address_of(&buf[0usize]), n)
+}
+
+// Replace the tasks with the ones in /tasks; true when there was a file of this version.
+fn load_tasks(s: *State) -> bool {
+    var buf: [1024]u8 = zero
+    let (n, found) = vaultfs.read_big("/tasks", mem.address_of(&buf[0usize]), 1024usize)
+    if !found || n < 1usize || buf[0usize] != 1u8 { ret false }
+    var i = 0usize
+    while i < MAX_TASKS {
+        s.tasks[i].used = false
+        i += 1usize
+    }
+    var at = 1usize
+    var slot = 0usize
+    while at < n && slot < MAX_TASKS {
+        let length = usize(buf[at])
+        if length > MAX_TITLE || at + 1usize + length + 6usize > n { ret slot > 0usize }
+        var task: Task = zero
+        var k = 0usize
+        while k < length {
+            task.title[k] = buf[at + 1usize + k]
+            k += 1usize
+        }
+        task.length = length
+        var due = 0usize
+        var d = 0usize
+        while d < 4usize {
+            due = due | (usize(buf[at + 1usize + length + d]) << (8usize * d))
+            d += 1usize
+        }
+        task.due = due
+        let flags = usize(buf[at + 1usize + length + 4usize])
+        task.starred = (flags & 1usize) != 0usize
+        task.done = (flags & 2usize) != 0usize
+        task.list = usize(buf[at + 1usize + length + 5usize])
+        task.used = true
+        s.tasks[slot] = task
+        slot += 1usize
+        at += 1usize + length + 6usize
+    }
+    ret true
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (kit_value, kit_error) = appkit.open(a, args, 1usize, "tasks")
     if kit_error != ok {
@@ -718,6 +793,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var done_task = make_task("Charge the batteries", s.today - 1usize, false, 0usize)
     done_task.done = true
     let t6 = add_task(&s, done_task)
+    if load_tasks(&s) {
+        say("tasks loaded ")
+        say_num(count_tasks(&s))
+        say("\n")
+    }
     if !show(a, &kit, &s) {
         say("tasks present failed\n")
         ret ok
@@ -737,6 +817,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else {
             let id = hit_at(&s, tap.x, tap.y)
             if id != NONE && act(&s, id) {
+                save_tasks(&s)
                 if !show(a, &kit, &s) {
                     say("tasks present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)

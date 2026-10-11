@@ -2215,4 +2215,5 @@ D2432	1518	C143: revocation, checked on install
 D2433	1210	C145: the Clock keeps its alarms, timer and stopwatch
 D2434	1125	C146: the world clock follows each city's daylight-saving rule
 D2435	1630	C148: a clipboard in the settings server, Copy in Secure, Paste in AI
-D2436	1459	C149: per-app notification permission is enforced at the status service
+D2436	1460	C149: per-app notification permission is enforced at the status service
+D2437	1697	C114 and C113 closed: Tasks keeps its list; the Clock and Calculator milestone is met by the full apps

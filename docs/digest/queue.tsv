@@ -2,8 +2,6 @@ id	category	score	evidence_bytes	title	status
 C147	compiler	0.5	1643	Full suites complete on this machine: Windows run.ps1 and Linux run.sh	a complete run on either host (run.sh under WSL not run) and the test-results.json totals. RUN 17 (2026-10-10, seeded, with the sc500k static gate and the live-API network assertion excluded through a
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C107	compiler	0.9	6770	NeperOS shell 3: the e.os surface on NeperOS (os.neperos.e)	Queued by D2148.
-C113	compiler	0.7	2252	NeperOS shell 9: the Clock and Calculator apps	live/interactive behavior (clock ticking, calculator button taps computing) and hosting the apps in the shell with tap input, which waits on C112's unified launcher (blocked prodshell). D2188: the Clo
-C114	compiler	0.7	1668	NeperOS shell 10: the Tasks and Settings apps; the shell milestone closes	interactive behavior (toggling, editing) and hosting the apps in the shell, which wait on C112's unified launcher. D2190: the Tasks app now COMPUTES its done-state through a toggle engine -- starts 3-
 C092	compiler	0.95	2360	M3-04: e.gpu runtime surface: Device, Queue, Buf[T], launch, sync, barrier	full-suite verification. The prior Windows suite reached its final function/type-renamed compiler image, which crashed with an access violation when compiling the original sources. Linux's bootstrap c
 C093	compiler	0.4	450	M3-05: device selection: devices, DeviceInfo/DeviceKind/DeviceKey, open_id, info	Vulkan and CUDA enumeration, stable keys and `AmbiguousDevice`, memory capacity.
 C094	compiler	0.0	0	M3-06: device-callable inference into the kernel-owning module's .em	
