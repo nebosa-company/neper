@@ -3922,6 +3922,12 @@ $algoRandFakeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $algoRandFakeWritten -ne 'executable written') { throw 'algo_rand_fake emission failed' }
 $algoRandFakeOutput = & $algoRandFakePath
 if ($LASTEXITCODE -ne 0 -or $algoRandFakeOutput -ne 'algo rand fake ok') { throw "algo_rand_fake answered wrongly: exit $LASTEXITCODE" }
+# e.parse.comb: parser combinators with furthest-failure offsets and rollback-safe events against parsy (325 expression and 212 key/value cases, D2561).
+$parseCombPath = Join-Path $testBuild 'parse-comb-selfhost.exe'
+$parseCombWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\parse_comb\src\main.e') $repo 'x64' 'windows' $parseCombPath -j 2
+if ($LASTEXITCODE -ne 0 -or $parseCombWritten -ne 'executable written') { throw 'parse_comb emission failed' }
+$parseCombOutput = & $parseCombPath
+if ($LASTEXITCODE -ne 0 -or $parseCombOutput -ne 'parse comb ok') { throw "parse_comb answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

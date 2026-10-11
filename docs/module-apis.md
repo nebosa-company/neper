@@ -19917,6 +19917,61 @@ LR(0) and LR(1) canonical collections over caller item pools (`items`, `items1`)
 `slr_table`, `canonical_table` and `lalr_table` (LR(1) states merged on equal cores)
 with shift-preferring conflict counts, and `parse` answering the reduce sequence.
 
+### `e.parse.comb`
+
+```neper
+type Event = struct { kind: u32, start: usize, end: usize }
+type Cx = struct { src: str, furthest: usize, expected: str, noted: bool, events: []Event, count: usize, overflow: bool }
+
+fn context(src: str, events: []Event) -> Cx
+fn reset(cx: *Cx)
+fn note(cx: *Cx, off: usize, expected: str)
+fn line_col(src: str, off: usize) -> (usize, usize)
+fn lit(cx: *Cx, off: usize, s: str) -> (usize, bool)
+fn byte_range(cx: *Cx, off: usize, lo: u8, hi: u8, name: str) -> (usize, bool)
+fn one_of(cx: *Cx, off: usize, set: str, name: str) -> (usize, bool)
+fn none_of(cx: *Cx, off: usize, set: str, name: str) -> (usize, bool)
+fn any_byte(cx: *Cx, off: usize) -> (usize, bool)
+fn take_while(cx: *Cx, off: usize, pred: fn(u8) -> bool) -> (usize, bool)
+fn take_while1(cx: *Cx, off: usize, pred: fn(u8) -> bool, name: str) -> (usize, bool)
+fn eof(cx: *Cx, off: usize) -> (usize, bool)
+fn seq2(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn seq3(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool), r: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn choice2(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn choice3(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool), r: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn choice4(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool), r: fn(*Cx, usize) -> (usize, bool), s: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn many0(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn many1(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn opt(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn delimited(cx: *Cx, off: usize, open: fn(*Cx, usize) -> (usize, bool), inner: fn(*Cx, usize) -> (usize, bool), close: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn preceded(cx: *Cx, off: usize, first: fn(*Cx, usize) -> (usize, bool), second: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn terminated(cx: *Cx, off: usize, first: fn(*Cx, usize) -> (usize, bool), second: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn separated0(cx: *Cx, off: usize, item: fn(*Cx, usize) -> (usize, bool), sep: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn separated1(cx: *Cx, off: usize, item: fn(*Cx, usize) -> (usize, bool), sep: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn count(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), n: usize) -> (usize, bool)
+fn peek(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn not(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), name: str) -> (usize, bool)
+fn node(cx: *Cx, off: usize, kind: u32, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn label(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), name: str) -> (usize, bool)
+fn chainl1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn(*Cx, usize) -> (usize, bool), kind: u32) -> (usize, bool)
+fn chainr1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn(*Cx, usize) -> (usize, bool), kind: u32) -> (usize, bool)
+fn parse_all(cx: *Cx, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+```
+
+A parser-combinator kit over a caller's string, in nom's style. A parser is a function
+`fn(*Cx, usize) -> (usize, bool)`: it reads `cx.src` from an offset and answers the offset
+after what it matched (a match is the byte range between the two, so nothing is copied) or
+`false`. `Cx` also carries the furthest failure (`furthest`, the first label noted there in
+`expected`, reported by `parse_all` and the primitives through `note`) so an error names where
+the input stopped being parseable, as parsy's `furthest` does. `node` appends an `Event` to the
+caller's buffer after its children's events (post-order: an expression grammar yields reverse
+Polish) and every backtracking combinator restores the event count, so an abandoned branch
+leaves nothing; a full buffer fails the parse and sets `overflow`. `many0` stops on an
+iteration that consumed nothing. `chainl1` and `chainr1` record one event of the given kind
+per application spanning the operator. Left recursion and memoisation are not provided;
+`e.parse.ll` and `e.parse.lr` cover grammars that need them and `e.meta` generation covers
+derived parsers.
+
 ### `e.dist.consensus`
 
 ```neper

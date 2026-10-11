@@ -327,6 +327,7 @@
     "e.dist.failure_detector",
     "e.parse.ll",
     "e.parse.lr",
+    "e.parse.comb",
     "e.text.collab",
     "e.test.prop",
     "e.test.sim",
@@ -5941,6 +5942,15 @@
     "e.parse",
     "e.parse.ll"
    ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.parse.comb",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
    "blocked_by": []
   },
   {

@@ -3505,6 +3505,12 @@ algoRandFake_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/algo-rand-fake-selfhost"
 algoRandFake_output=$("$test_build/algo-rand-fake-selfhost")
 [ "$algoRandFake_output" = 'algo rand fake ok' ]
+# e.parse.comb: parser combinators with furthest-failure offsets and rollback-safe events against parsy (325 expression and 212 key/value cases, D2561).
+parseComb_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/parse_comb/src/main.e" "$repo" x64 linux "$test_build/parse-comb-selfhost" -j 2)
+[ "$parseComb_written" = 'executable written' ]
+chmod +x "$test_build/parse-comb-selfhost"
+parseComb_output=$("$test_build/parse-comb-selfhost")
+[ "$parseComb_output" = 'parse comb ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
