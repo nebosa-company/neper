@@ -1215,6 +1215,12 @@ $fmtZipWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtZipWritten -ne 'executable written') { throw 'fmt_zip emission failed' }
 & $fmtZipPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_zip check failed: exit $LASTEXITCODE" }
+# `e.fmt.ooxml`: a Word document and a PowerPoint deck made with Python's zipfile read back, three refusals.
+$fmtOoxmlPath = Join-Path $testBuild 'fmt-ooxml-selfhost.exe'
+$fmtOoxmlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_ooxml\src\main.e') $repo 'x64' 'windows' $fmtOoxmlPath
+if ($LASTEXITCODE -ne 0 -or $fmtOoxmlWritten -ne 'executable written') { throw 'fmt_ooxml emission failed' }
+& $fmtOoxmlPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_ooxml check failed: exit $LASTEXITCODE" }
 # `e.test.support`: the clock, the scripted reader and writer, the schedule.
 $testSupportPath = Join-Path $testBuild 'test-support-selfhost.exe'
 $testSupportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_support\src\main.e') $repo 'x64' 'windows' $testSupportPath
@@ -10245,6 +10251,21 @@ if ($neperosQemu) {
         $fixture = $fields[1]
         if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
         $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $packageArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) '-' 0 $fields[4] 2>&1) -join "`n"
+        $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+        if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+    }
+    # The seeded-disk fixtures (C123): a disk with files already on it (scripts/make_fs_image.py: a Word document and a
+    # PowerPoint deck from scripts/make_office_samples.py), the crater archive, run to the row's last marker.
+    $officeDir = Join-Path $testBuild 'office'
+    & python (Join-Path $repo 'scripts\make_office_samples.py') $officeDir | Out-Null
+    foreach ($row in $appsTable) {
+        $fields = $row.Split('|', 7)
+        if ($fields[0] -ne 'seedfixture') { continue }
+        $fixture = $fields[1]
+        $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
+        & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 ('/report.docx=' + (Join-Path $officeDir 'report.docx')) ('/deck.pptx=' + (Join-Path $officeDir 'deck.pptx')) | Out-Null
+        if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
+        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $seedDisk 0 $fields[4] 2>&1) -join "`n"
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
         if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
     }

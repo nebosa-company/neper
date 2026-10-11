@@ -1129,6 +1129,11 @@ fmt_zip_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_zip_written" = 'executable written' ]
 chmod +x "$test_build/fmt-zip-selfhost"
 "$test_build/fmt-zip-selfhost"
+# `e.fmt.ooxml`: a Word document and a PowerPoint deck made with Python's zipfile read back, three refusals.
+fmt_ooxml_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_ooxml/src/main.e" "$repo" x64 linux "$test_build/fmt-ooxml-selfhost")
+[ "$fmt_ooxml_written" = 'executable written' ]
+chmod +x "$test_build/fmt-ooxml-selfhost"
+"$test_build/fmt-ooxml-selfhost"
 # `e.test.support`: the clock, the scripted reader and writer, the schedule.
 test_support_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_support/src/main.e" "$repo" x64 linux "$test_build/test-support-selfhost")
 [ "$test_support_written" = 'executable written' ]
@@ -10097,6 +10102,28 @@ greeting"
         if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
         last_marker="${markers##*;;}"
         boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$package_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" - 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) printf 'NeperOS %s fixture did not reach "%s" (%s): %s\n' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
+    # The seeded-disk fixtures (C123): a disk with files already on it (scripts/make_fs_image.py: a Word document and a
+    # PowerPoint deck from scripts/make_office_samples.py), the crater archive, run to the row's last marker.
+    office_dir="$test_build/office"
+    python3 "$repo/scripts/make_office_samples.py" "$office_dir" > /dev/null
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = seedfixture ] || continue
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        seed_disk="$test_build/shell-$fixture.disk"
+        python3 "$repo/scripts/make_fs_image.py" "$seed_disk" 8 "/report.docx=$office_dir/report.docx" "/deck.pptx=$office_dir/deck.pptx" > /dev/null
+        last_marker="${markers##*;;}"
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$seed_disk" 0 "$taps" 2>&1 < /dev/null)
         remaining="$boot"
         pending="$markers"
         while [ -n "$pending" ]; do

@@ -24,6 +24,7 @@ use appkit
 use text
 use ui
 use vaultfs
+use e.fmt.ooxml as ooxml
 
 const NONE: usize = 99usize
 const FILES: usize = 13usize
@@ -46,6 +47,65 @@ type State = struct {
     open: usize,
     page: usize,
     hits: ui.Hits,
+}
+
+// (C123) Append `line` and a newline to the handed file's text (up to its 2000 bytes); the new length.
+fn add_line(s: *State, at: usize, line: str) -> usize {
+    var n = at
+    var i = 0usize
+    while i < line.len && n < 1999usize {
+        s.hand_text[n] = line[i]
+        n += 1usize
+        i += 1usize
+    }
+    if n < 1999usize {
+        s.hand_text[n] = 10u8
+        n += 1usize
+    }
+    ret n
+}
+
+// The text of a Word document (a paragraph a line, a list item after "- ") or a PowerPoint deck ("Slide n" and
+// its paragraphs) into the handed file's text, through e.fmt.ooxml; the length, 0 when it did not read.
+fn office_text(a: *mem.Arena, s: *State, is_deck: bool, raw: []const u8) -> usize {
+    var n = 0usize
+    if is_deck {
+        let (slides, slides_error) = ooxml.slides(a, raw)
+        if slides_error != ok { ret 0usize }
+        var i = 0usize
+        while i < slides.len {
+            n = add_line(s, n, ui.join(a, "Slide ", ui.number(a, i + 1usize), ""))
+            var j = 0usize
+            while j < slides[i].paragraphs.len {
+                n = add_line(s, n, ui.join(a, "  ", slides[i].paragraphs[j], ""))
+                j += 1usize
+            }
+            i += 1usize
+        }
+    } else {
+        let (paragraphs, paragraphs_error) = ooxml.paragraphs(a, raw)
+        if paragraphs_error != ok { ret 0usize }
+        var i = 0usize
+        while i < paragraphs.len {
+            if paragraphs[i].list {
+                n = add_line(s, n, ui.join(a, "- ", paragraphs[i].text, ""))
+            } else {
+                n = add_line(s, n, paragraphs[i].text)
+            }
+            i += 1usize
+        }
+    }
+    ret n
+}
+
+fn ends_with(whole: str, suffix: str) -> bool {
+    if whole.len < suffix.len { ret false }
+    var i = 0usize
+    while i < suffix.len {
+        if whole[whole.len - suffix.len + i] != suffix[i] { ret false }
+        i += 1usize
+    }
+    ret true
 }
 
 fn file_name(i: usize) -> str {
@@ -540,7 +600,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var path_bytes: [64]u8 = zero
     let (path_len, has_path) = vaultfs.read("/handover", mem.address_of(&path_bytes[0usize]), 63usize)
     if has_path && path_len > 0usize {
-        let (text_len, has_text) = vaultfs.read(ui.text_of(a, path_bytes[0usize..], path_len), mem.address_of(&s.hand_text[0usize]), 2000usize)
+        let hand_path = ui.text_of(a, path_bytes[0usize..], path_len)
+        var text_len = 0usize
+        var has_text = false
+        if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") {
+            // An Office file: read it whole (up to 256 KB, in pieces) and take its text.
+            let (size, kind, day, found) = vaultfs.stat(hand_path)
+            if found && size > 0usize && size <= 262144usize {
+                let (raw, raw_error) = mem.alloc[u8](a, size)
+                if raw_error == ok {
+                    let (got, read_ok) = vaultfs.read_big(hand_path, mem.address_of(&raw[0usize]), size)
+                    if read_ok && got == size {
+                        text_len = office_text(a, &s, ends_with(hand_path, ".pptx"), raw[0usize..got])
+                        has_text = text_len > 0usize
+                    }
+                }
+            }
+        } else {
+            let (plain_len, plain_ok) = vaultfs.read(hand_path, mem.address_of(&s.hand_text[0usize]), 2000usize)
+            text_len = plain_len
+            has_text = plain_ok
+        }
         if has_text {
             s.hand_len = text_len
             var leaf = 0usize
@@ -559,6 +639,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
             s.screen = VIEW_SCREEN
             ui.say("document handed ")
             ui.say_text(ui.text_of(a, s.hand_name[0usize..], n))
+            ui.say("\n")
+            // The first line of what was read, so a fixture can check the text.
+            var first = 0usize
+            while first < s.hand_len && s.hand_text[first] != 10u8 { first += 1usize }
+            ui.say("document first line ")
+            ui.say_text(ui.text_of(a, s.hand_text[0usize..], first))
             ui.say("\n")
         }
         let cleared = vaultfs.remove("/handover")

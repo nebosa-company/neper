@@ -478,6 +478,7 @@
     "fmt_exe",
     "fmt_gaps_a",
     "fmt_json",
+    "fmt_ooxml",
     "fmt_woff",
     "fmt_xlsx",
     "gfx_cssvalue",
@@ -699,6 +700,17 @@
     "x_lint_scan",
     "x_migrate",
     "x_migrate_terraform"
+   ]
+  },
+  {
+   "module": "e.fmt.ooxml",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 2,
+   "delivered": 2,
+   "pending": [],
+   "fixtures": [
+    "fmt_ooxml"
    ]
   },
   {

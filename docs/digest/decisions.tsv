@@ -2143,4 +2143,5 @@ D2384	1900	C124 part two: an installed app starts from memory, and the shell ver
 D2385	1212	C124 part three: an installed app gets only the capabilities its manifest declares
 D2386	802	C124 part four: the first run asks
 D2387	1722	C124 and C150: files of any size in pieces, and an installed app that survives a restart
-D2388	1512	C124 part six: the security scan, at the source
+D2388	1513	C124 part six: the security scan, at the source
+D2389	1636	C123 part one: Word and PowerPoint text in the library, and in the Document app

@@ -49,6 +49,7 @@
     "e.fmt.mermaid",
     "e.fmt.elf",
     "e.fmt.pe",
+    "e.fmt.ooxml",
     "e.fmt.csv",
     "e.fmt.ini",
     "e.text.utf8",
@@ -1920,6 +1921,22 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.ooxml",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.xml",
+    "e.fmt.zip",
+    "e.io",
+    "e.mem",
+    "e.os",
+    "e.str"
+   ],
    "blocked_by": []
   },
   {

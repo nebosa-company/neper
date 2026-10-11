@@ -22746,3 +22746,32 @@ fn text_width(text: str, size: f32) -> (f32, err)
 fn append_labels(doc: *Document, labels: []const chart.Label, ink: paint.Color, size: f32) -> err
 fn finish(doc: *Document, w: *io.Writer) -> err
 ```
+
+### `e.fmt.ooxml`
+
+```neper
+error NotAPackage
+error NoMainPart
+
+type Source = struct { data: []const u8, off: usize }
+type Paragraph = struct { text: str, style: str, list: bool }
+type Slide = struct { paragraphs: []const str }
+type Collected = struct { texts: []str, styles: []str, lists: []bool }
+
+const LIMIT_ENTRIES: usize = 512usize
+const LIMIT_NAME: usize = 256usize
+const LIMIT_ENTRY: u64 = 8388608u64
+const LIMIT_TOTAL: u64 = 33554432u64
+
+fn source_read(ctx: *void, dst: []u8) -> (usize, err)
+fn source_seek(ctx: *void, off: i64, whence: os.SeekWhence) -> (u64, err)
+fn local(name: str) -> str
+fn open_package(a: *mem.Arena, data: []const u8) -> (zip.Archive, err)
+fn find(archive: *zip.Archive, name: str) -> (usize, bool)
+fn collect(a: *mem.Arena, part: []const u8) -> (Collected, err)
+fn paragraphs(a: *mem.Arena, data: []const u8) -> ([]Paragraph, err)
+fn slide_number(name: str) -> usize
+fn slides(a: *mem.Arena, data: []const u8) -> ([]Slide, err)
+```
+
+The text of an Office Open XML package, read over `e.fmt.zip` and `e.fmt.xml` from a byte slice (C123): `paragraphs` gives a `.docx`'s paragraphs in order (the text of each, its style name such as `Heading1`, whether it is a list item, tabs and breaks as characters, entities decoded), `slides` a `.pptx`'s slides in slide-number order with each slide's text paragraphs. Namespace prefixes are ignored; runs, tables, images and shapes are not laid out, and the text of a table cell or a shape is a paragraph like any other. A zip with no main part is `NoMainPart`, bytes that are not a zip `NotAPackage`. Checked against packages made with Python's zipfile.
