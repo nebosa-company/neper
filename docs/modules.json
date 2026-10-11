@@ -3959,7 +3959,7 @@
   },
   {
    "name": "e.test.bench",
-   "layer": 2,
+   "layer": 4,
    "surface": "source",
    "milestone": null,
    "schedule": "later",
@@ -3972,7 +3972,7 @@
   },
   {
    "name": "e.test.snapshot",
-   "layer": 2,
+   "layer": 5,
    "surface": "source",
    "milestone": null,
    "schedule": "later",
