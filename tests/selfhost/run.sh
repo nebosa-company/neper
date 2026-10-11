@@ -10166,7 +10166,7 @@ greeting"
         [ "$kind" = seedfixture ] || continue
         if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
         seed_disk="$test_build/shell-$fixture.disk"
-        python3 "$repo/scripts/make_fs_image.py" "$seed_disk" 8 "/report.docx=$office_dir/report.docx" "/deck.pptx=$office_dir/deck.pptx" "/zz.pdf=$office_dir/zz.pdf" "/zzcode.py=$office_dir/zzcode.py" "/zznotes.md=$office_dir/zznotes.md" "/zzzlong.txt=$office_dir/zzzlong.txt" > /dev/null
+        python3 "$repo/scripts/make_fs_image.py" "$seed_disk" 8 "/report.docx=$office_dir/report.docx" "/deck.pptx=$office_dir/deck.pptx" "/zz.pdf=$office_dir/zz.pdf" "/zzcode.py=$office_dir/zzcode.py" "/zznotes.md=$office_dir/zznotes.md" "/zzzlong.txt=$office_dir/zzzlong.txt" "/otpauth.txt=$office_dir/otpauth.txt" > /dev/null
         last_marker="${markers##*;;}"
         boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$seed_disk" 0 "$taps" 2>&1 < /dev/null)
         remaining="$boot"

@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-C140	compiler	0	1240	NeperOS Secure (C116's remainder): an encrypted store, the clipboard, autofill, biometrics	The Secure app (D2235) is the vault's face with real one-time passwords (RFC 6238, checked at start) on sample logins held in memory.
 C141	compiler	0	1185	NeperOS AI: a real bring-your-own-key client	The AI app (D2236) has the provider and key setup and a chat whose replies are canned.
 C142	compiler	0	1479	NeperOS Document: real PDF, Office and Markdown readers; highlighting for the 30 leading languages	The Document app (D2237) shows sample files: a Markdown renderer for headings, bullets and code, a code view with a one-rule-set highlighter and keyword lists for eight languages, and hand-drawn PDF, 
 C143	compiler	0	1309	NeperOS Dynamic, step one: the prompt client and the app kit contract	The Dynamic app (D2238) makes apps from three templates inside itself.
@@ -141,3 +140,4 @@ C166	compiler	0	717	NeperOS Recorder remainder: the microphone and speaker, tran
 C167	compiler	0	770	NeperOS Translate remainder: a real model, more scripts and inputs, history and speech	Split from C137 (D2426): Translate asks a dictionary server for text outside its phrase book.
 C168	compiler	0	696	NeperOS Steps remainder: background counting, history, profile, notifications	Split from C138 (D2427): Steps counts a walk with the library's pedometer from a scripted accelerometer stream and keeps today's total.
 C169	compiler	0	540	NeperOS Blocks remainder: fast fall, held keys and drags, score board, sound	Split from C139 (D2428): Blocks has hold, ghost, kicks and a saved best score.
+C170	compiler	0	759	NeperOS Secure remainder: HOTP, QR and export, clipboard and autofill, biometrics, breach check	Split from C140 (D2429): Secure has the encrypted vault, SHA-1/256/512 codes of 6 to 8 digits with their own period, and otpauth import from /otpauth.txt.

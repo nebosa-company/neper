@@ -254,6 +254,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if f4_error != otp.Invalid { try report("format-refusal", 3usize) }
     let (top, top_error) = otp.hotp(.Sha1, rfc_key, 18446744073709551615u64, 6u32)
     if top_error != ok || top != 94451u32 { try report("top-counter", 0usize) }
+    // otpauth URIs as pyotp writes them: label, issuer, secret, algorithm, digits, period, counter; refusals.
+    let (u1, u1_error) = otp.parse_uri("otpauth://totp/Example%20Co:alice%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=Example%20Co")
+    if u1_error != ok || !u1.totp || u1.algorithm != .Sha1 || u1.digits != 6u32 || u1.period != 30u32 || !otp.same_text(u1.secret, "JBSWY3DPEHPK3PXP") || !otp.same_text(u1.issuer, "Example%20Co") { try report("uri", 1usize) }
+    var decoded: [40]u8 = zero
+    let (decoded_len, decode_error) = otp.percent_decode(u1.label, decoded[0usize..40usize])
+    if decode_error != ok || decoded_len != 28usize || decoded[10usize] != 58u8 || decoded[11usize] != 97u8 || decoded[16usize] != 64u8 { try report("uri", 2usize) }
+    let (u2, u2_error) = otp.parse_uri("otpauth://totp/Bank:bob?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Bank&algorithm=SHA256&digits=8&period=60")
+    if u2_error != ok || u2.algorithm != .Sha256 || u2.digits != 8u32 || u2.period != 60u32 || !otp.same_text(u2.issuer, "Bank") { try report("uri", 3usize) }
+    let (u3, u3_error) = otp.parse_uri("otpauth://hotp/Mail:carol?secret=JBSWY3DPEHPK3PXP&issuer=Mail&counter=7")
+    if u3_error != ok || u3.totp || u3.counter != 7u64 { try report("uri", 4usize) }
+    let (u4, u4_error) = otp.parse_uri("otpauth://totp/x?issuer=Y")
+    if u4_error != otp.Invalid { try report("uri", 5usize) }
+    let (u5, u5_error) = otp.parse_uri("otpauth://hotp/x?secret=AAAA")
+    if u5_error != otp.Invalid { try report("uri", 6usize) }
+    let (u6, u6_error) = otp.parse_uri("https://example.com/")
+    if u6_error != otp.Invalid { try report("uri", 7usize) }
+    let (u7, u7_error) = otp.parse_uri("otpauth://totp/x?secret=AAAA&digits=12")
+    if u7_error != otp.Invalid { try report("uri", 8usize) }
     try io.print("crypto otp ok\n")
     ret ok
 }

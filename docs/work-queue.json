@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C140",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 140,
-      "title": "NeperOS Secure (C116's remainder): an encrypted store, the clipboard, autofill, biometrics",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Secure app (D2235) is the vault's face with real one-time passwords (RFC 6238, checked at start) on sample logins held in memory. Acceptance: (1) the store encrypted at rest: a key from the master password with PBKDF2 or Argon2 (e.crypto.kdf) and an AEAD (e.crypto.aead) per entry, kept in Files' protected directory (C125) with a version and an integrity tag, a wrong password taking constant time, auto-lock on timeout and when the app leaves; (2) add and edit entries for logins and codes, import and export (an encrypted file, and the common authenticator formats), the otpauth:// URI from a QR scan (L137, C122), the SHA-256 and SHA-512 and eight-digit variants of TOTP, and HOTP; (3) a clipboard service with a timed clear, and autofill of a login into the Browser (C129) and other apps through a capability; (4) fingerprint and face unlock (C126 settings) with the master password as the fallback; (5) a password generator with options and a breach check by hash prefix over C117; (6) Wallet's cards and Dynamic's API keys can be kept here; (7) a fixture on QEMU that creates a vault, restarts and checks the entries decrypt, and the RFC 4226 and RFC 6238 vectors. Not queued here: sharing a vault, passkeys."
-    },
-    {
       "id": "C141",
       "category": "compiler",
       "group": "NeperOS",
@@ -1564,6 +1553,17 @@
       "model": "opus",
       "thinking": "medium",
       "evidence": "Split from C139 (D2428): Blocks has hold, ghost, kicks and a saved best score. Acceptance: (1) a finer timer (C163) so the fall reaches 20 rows a second at high levels, and auto-repeat on held buttons plus drags and swipes (the touch layer needs press, move and release events); (2) a score board of the best games and the last game kept in storage; (3) sound effects and music through e.audio (C166); (4) a fixture that plays a scripted sequence with the fixed seed and checks the score and the lines; the name stays Blocks (never Tetris)."
+    },
+    {
+          "id": "C170",
+          "category": "compiler",
+          "group": "NeperOS",
+          "order": 170,
+          "title": "NeperOS Secure remainder: HOTP, QR and export, clipboard and autofill, biometrics, breach check",
+          "score": 0,
+          "model": "opus",
+          "thinking": "high",
+          "evidence": "Split from C140 (D2429): Secure has the encrypted vault, SHA-1/256/512 codes of 6 to 8 digits with their own period, and otpauth import from /otpauth.txt. Acceptance: (1) HOTP entries with a counter that advances on use; (2) the otpauth URI from a QR scan (L137, C122) and an export (an encrypted file and the common authenticator formats); (3) a clipboard service with a timed clear and autofill of a login into the Browser (C129) and other apps through a capability; (4) fingerprint and face unlock (C126 settings) with the master password as the fallback, and auto-lock on timeout; (5) a password generator with options and a breach check by hash prefix over C117; (6) Wallet's cards and Dynamic's API keys kept here; not queued: sharing a vault, passkeys."
     }
   ]
 }

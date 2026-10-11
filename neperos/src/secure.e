@@ -15,6 +15,7 @@ use e.mem
 use e.os
 use e.time
 use e.crypto.mac as mac
+use e.crypto.otp as otp
 use vault
 use vaultfs
 use e.gfx.geometry
@@ -50,7 +51,8 @@ const JOB_UNLOCK: usize = 2usize
 
 type Login = struct { site: [20]u8, site_len: usize, user: [24]u8, user_len: usize, pass: [24]u8, pass_len: usize, used: bool }
 
-type Code = struct { issuer: [16]u8, issuer_len: usize, account: [24]u8, account_len: usize, secret: [32]u8, secret_len: usize, used: bool }
+// `algo` 0 SHA-1, 1 SHA-256, 2 SHA-512; `digits` and `period` 0 mean the defaults, 6 and 30 (C140).
+type Code = struct { issuer: [16]u8, issuer_len: usize, account: [24]u8, account_len: usize, secret: [32]u8, secret_len: usize, used: bool, algo: usize, digits: usize, period: usize }
 
 type State = struct {
     logins: [10]Login,
@@ -142,6 +144,86 @@ fn totp(secret: str, unix_seconds: usize, digits: usize) -> usize {
         d += 1usize
     }
     ret binary % modulus
+}
+
+fn entry_period(s: *State, i: usize) -> usize {
+    if s.codes[i].period == 0usize { ret 30usize }
+    ret s.codes[i].period
+}
+
+fn entry_digits(s: *State, i: usize) -> usize {
+    if s.codes[i].digits == 0usize { ret 6usize }
+    ret s.codes[i].digits
+}
+
+// The code of entry `i` now: its algorithm, digit count and period (otp.totp); 0 when the secret is not base32.
+fn entry_code(a: *mem.Arena, s: *State, i: usize) -> usize {
+    var key: [40]u8 = zero
+    let n = decode_secret(secret_of(a, s, i), key[0usize..40usize])
+    if n == 0usize { ret 0usize }
+    var algorithm = otp.Algorithm.Sha1
+    if s.codes[i].algo == 1usize { algorithm = .Sha256 }
+    if s.codes[i].algo == 2usize { algorithm = .Sha512 }
+    let (value, value_error) = otp.totp(algorithm, key[0usize..n], u64(s.now), 0u64, u32(entry_period(s, i)), u32(entry_digits(s, i)))
+    if value_error != ok { ret 0usize }
+    ret usize(value)
+}
+
+// A code with its digits zero-padded and a space in the middle: "123 456", "1234 5678".
+fn code_text_n(a: *mem.Arena, code: usize, digits: usize) -> str {
+    let (out, out_error) = mem.alloc[u8](a, 12usize)
+    if out_error != ok { ret "" }
+    let half = (digits + 1usize) / 2usize
+    var rest = code
+    var i = digits
+    while i > 0usize {
+        i -= 1usize
+        var at = i
+        if i >= half { at = i + 1usize }
+        out[at] = u8(48usize + rest % 10usize)
+        rest = rest / 10usize
+    }
+    out[half] = 32u8
+    ret out[0usize..digits + 1usize]
+}
+
+// Read the first otpauth URI of /otpauth.txt and add it as a code: the index, or NONE.
+fn import_uri(a: *mem.Arena, s: *State) -> usize {
+    var buf: [320]u8 = zero
+    let (n, found) = vaultfs.read("/otpauth.txt", mem.address_of(&buf[0usize]), 320usize)
+    if !found || n == 0usize { ret NONE }
+    var end = 0usize
+    while end < n && buf[end] != 10u8 && buf[end] != 13u8 { end += 1usize }
+    let (p, parse_error) = otp.parse_uri(ui.text_of(a, buf[0usize..], end))
+    if parse_error != ok || !p.totp { ret NONE }
+    // The label is "Issuer:account" or "account", percent-encoded; the issuer parameter wins.
+    var label: [64]u8 = zero
+    let (label_len, label_error) = otp.percent_decode(p.label, label[0usize..64usize])
+    if label_error != ok { ret NONE }
+    var colon = label_len
+    var k = 0usize
+    while k < label_len {
+        if label[k] == 58u8 && colon == label_len { colon = k }
+        k += 1usize
+    }
+    var account = ui.text_of(a, label[0usize..], label_len)
+    var issuer = ""
+    if colon < label_len {
+        issuer = ui.text_of(a, label[0usize..], colon)
+        account = ui.text_of(a, label[colon + 1usize..], label_len - colon - 1usize)
+    }
+    if p.issuer.len > 0usize {
+        var issuer_bytes: [32]u8 = zero
+        let (issuer_len, issuer_error) = otp.percent_decode(p.issuer, issuer_bytes[0usize..32usize])
+        if issuer_error == ok { issuer = ui.text_of(a, issuer_bytes[0usize..], issuer_len) }
+    }
+    let index = add_code(s, issuer, account, p.secret)
+    if index == NONE { ret NONE }
+    if p.algorithm == .Sha256 { s.codes[index].algo = 1usize }
+    if p.algorithm == .Sha512 { s.codes[index].algo = 2usize }
+    s.codes[index].digits = usize(p.digits)
+    s.codes[index].period = usize(p.period)
+    ret index
 }
 
 fn code_text(a: *mem.Arena, code: usize) -> str {
@@ -311,7 +393,12 @@ fn pack_code(s: *State, i: usize, out: []u8) -> usize {
     out[0] = 2u8
     var n = put_field(out, 1usize, s.codes[i].issuer[0usize..], s.codes[i].issuer_len)
     n = put_field(out, n, s.codes[i].account[0usize..], s.codes[i].account_len)
-    ret put_field(out, n, s.codes[i].secret[0usize..], s.codes[i].secret_len)
+    n = put_field(out, n, s.codes[i].secret[0usize..], s.codes[i].secret_len)
+    // Then algorithm, digits and period, one byte each (records written before had none).
+    out[n] = u8(s.codes[i].algo)
+    out[n + 1usize] = u8(s.codes[i].digits)
+    out[n + 2usize] = u8(s.codes[i].period)
+    ret n + 3usize
 }
 
 // The field at `at` into `dst` (at most `cap` bytes): the offset after it (0 when malformed) and its length.
@@ -356,6 +443,11 @@ fn unpack_code(s: *State, i: usize, plain: []const u8) -> bool {
     c.issuer_len = n1
     c.account_len = n2
     c.secret_len = n3
+    if plain.len >= a3 + 3usize {
+        c.algo = usize(plain[a3])
+        c.digits = usize(plain[a3 + 1usize])
+        c.period = usize(plain[a3 + 2usize])
+    }
     c.used = true
     s.codes[i] = c
     ret true
@@ -566,18 +658,18 @@ fn draw_list(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         }
     } else {
         // The one-time codes: six digits, the seconds left in this window and a ring that empties.
-        let left = 30usize - s.now % 30usize
         var row = 0usize
         var i = 0usize
         while i < MAX_CODES {
             if s.codes[i].used {
+                let left = entry_period(s, i) - s.now % entry_period(s, i)
                 let y: f32 = 120.0 + f32(row) * 100.0
                 try ui.card(a, builder, 16.0, y + 2.0, 380.0, 92.0, 18.0, ui.cream())
                 try ui.put(a, builder, faces.jost, 16.0, issuer_of(a, s, i), 32.0, y + 10.0, ui.ink())
                 try ui.put(a, builder, faces.grotesk, 12.0, account_of(a, s, i), 32.0, y + 34.0, ui.muted())
                 var tone = ui.amber_dark()
                 if left <= 5usize { tone = ui.loss() }
-                try ui.put(a, builder, faces.jost_bold, 32.0, code_text(a, totp(secret_of(a, s, i), s.now, 6usize)), 32.0, y + 48.0, tone)
+                try ui.put(a, builder, faces.jost_bold, 32.0, code_text_n(a, entry_code(a, s, i), entry_digits(s, i)), 32.0, y + 48.0, tone)
                 // The ring: an arc of 30 segments, as many as there are seconds left.
                 let cx: f32 = 354.0
                 let cy: f32 = y + 48.0
@@ -595,6 +687,7 @@ fn draw_list(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     try ui.card(a, builder, 274.0 - 1.5, 848.0 - 9.0, 3.0, 18.0, 1.5, ui.ink())
     try ui.put(a, builder, faces.jost, 17.0, "Add", 300.0, 837.0, ui.ink())
     ui.hit(&s.hits, 400usize, 252.0, 820.0, 144.0, 56.0)
+    if s.tab == 1usize { try ui.pill(a, builder, &s.hits, faces, 410usize, 16.0, 820.0, 120.0, 56.0, "Import", ui.soft(), 16.0) }
     ret ok
 }
 
@@ -639,13 +732,13 @@ fn draw_code(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     try svg.draw(a, builder, ui.back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), ui.light())
     ui.hit(&s.hits, 500usize, 0.0, 10.0, 66.0, 56.0)
     try ui.put(a, builder, faces.jost_bold, 24.0, issuer_of(a, s, s.open), 62.0, 20.0, ui.light())
-    let left = 30usize - s.now % 30usize
+    let left = entry_period(s, s.open) - s.now % entry_period(s, s.open)
     var tone = ui.amber_dark()
     if left <= 5usize { tone = ui.loss() }
     try ui.card(a, builder, 16.0, 84.0, 380.0, 190.0, 20.0, ui.cream())
     try ui.put(a, builder, faces.grotesk, 12.0, "Account", 32.0, 98.0, ui.muted())
     try ui.put(a, builder, faces.jost, 19.0, account_of(a, s, s.open), 32.0, 116.0, ui.ink())
-    try ui.put(a, builder, faces.jost_bold, 52.0, code_text(a, totp(secret_of(a, s, s.open), s.now, 6usize)), 32.0, 160.0, tone)
+    try ui.put(a, builder, faces.jost_bold, 52.0, code_text_n(a, entry_code(a, s, s.open), entry_digits(s, s.open)), 32.0, 160.0, tone)
     try ui.put(a, builder, faces.grotesk, 12.0, ui.join(a, ui.join(a, "Changes in ", ui.number(a, left), " s"), "", ""), 32.0, 238.0, ui.muted())
     try ui.pill(a, builder, &s.hits, faces, 524usize, 16.0, 300.0, 120.0, 46.0, "Edit", ui.soft(), 16.0)
     try ui.pill(a, builder, &s.hits, faces, 522usize, 146.0, 300.0, 120.0, 46.0, "Delete", ui.soft(), 16.0)
@@ -1058,6 +1151,25 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         s.now = clock_now()
         s.screen = CODE_SCREEN
         ui.say("secure opened code\n")
+        ret true
+    }
+    if id == 410usize {
+        let index = import_uri(a, s)
+        if index == NONE {
+            ui.say("secure import failed\n")
+            ret false
+        }
+        save_record(a, s, true, index)
+        s.now = clock_now()
+        ui.say("secure imported ")
+        ui.say_text(issuer_of(a, s, index))
+        ui.say(" algo ")
+        ui.say_num(s.codes[index].algo)
+        ui.say(" digits ")
+        ui.say_num(entry_digits(s, index))
+        ui.say(" period ")
+        ui.say_num(entry_period(s, index))
+        ui.say("\n")
         ret true
     }
     if id == 400usize {

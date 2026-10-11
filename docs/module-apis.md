@@ -8735,7 +8735,16 @@ fn totp(algorithm: Algorithm, key: []const u8, seconds: u64, start: u64, period:
 fn verify_hotp(algorithm: Algorithm, key: []const u8, counter: u64, window: u32, digits: u32, candidate: u32) -> (u64, bool, err)
 fn verify_totp(algorithm: Algorithm, key: []const u8, seconds: u64, start: u64, period: u32, digits: u32, skew: u32, candidate: u32) -> (u64, bool, err)
 fn format(code: u32, digits: u32, out: []u8) -> (str, err)
+type Provisioning = struct { totp: bool, label: str, issuer: str, secret: str, algorithm: Algorithm, digits: u32, period: u32, counter: u64 }
+fn starts_with(text: str, prefix: str) -> bool
+fn same_text(a: str, b: str) -> bool
+fn parse_number(text: str) -> (u64, bool)
+fn parse_uri(uri: str) -> (Provisioning, err)
+fn percent_decode(text: str, out: []u8) -> (usize, err)
+fn hex_nibble(c: u8) -> u8
 ```
+
+`parse_uri` reads an `otpauth://totp|hotp/Label?secret=...&issuer=...&algorithm=SHA1|SHA256|SHA512&digits=6-9&period=...&counter=...` URI (C140): views into the URI, `percent_decode` for the label and issuer; a missing secret, a bad algorithm, digit count or period, or a hotp without a counter is `Invalid`.
 
 HOTP (RFC 4226) and TOTP (RFC 6238) over HMAC-SHA1, -SHA256 and -SHA512: the 31-bit dynamic
 truncation of HMAC(key, 8-byte big-endian counter) modulo 10^digits, 6 to 9 digits. The key
