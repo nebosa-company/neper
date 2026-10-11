@@ -43,6 +43,22 @@ def main():
     (out / "deck.pptx").write_bytes(zipped([("[Content_Types].xml", "<Types/>"),
                                             ("ppt/slides/slide1.xml", slide("Neper phone", "Everything runs on Neper")),
                                             ("ppt/slides/slide2.xml", slide("Apps", "Calc, Clock, Files"))]))
+    # A two-page PDF, written by hand (no library): the Document app's PDF fixture.
+    c1 = b"BT /F1 12 Tf 72 700 Td (Neper phone handbook) Tj 0 -16 Td (Chapter one) Tj ET"
+    c2 = b"BT /F1 12 Tf 72 700 Td (Chapter two) Tj ET"
+    objects = {
+        1: b"<< /Type /Catalog /Pages 2 0 R >>",
+        2: b"<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>",
+        3: b"<< /Type /Page /Parent 2 0 R /Contents 4 0 R >>",
+        4: b"<< /Length %d >>\nstream\n" % len(c1) + c1 + b"\nendstream",
+        5: b"<< /Type /Page /Parent 2 0 R /Contents 6 0 R >>",
+        6: b"<< /Length %d >>\nstream\n" % len(c2) + c2 + b"\nendstream",
+    }
+    pdf = bytearray(b"%PDF-1.4\n")
+    for number in sorted(objects):
+        pdf += b"%d 0 obj\n" % number + objects[number] + b"\nendobj\n"
+    pdf += b"trailer\n<< /Root 1 0 R >>\n%%EOF\n"
+    (out / "zz.pdf").write_bytes(bytes(pdf))
     print("wrote", out)
 
 

@@ -2144,4 +2144,5 @@ D2385	1212	C124 part three: an installed app gets only the capabilities its mani
 D2386	802	C124 part four: the first run asks
 D2387	1722	C124 and C150: files of any size in pieces, and an installed app that survives a restart
 D2388	1513	C124 part six: the security scan, at the source
-D2389	1636	C123 part one: Word and PowerPoint text in the library, and in the Document app
+D2389	1637	C123 part one: Word and PowerPoint text in the library, and in the Document app
+D2390	1547	C123 part two: PDF text in the library and in the Document app

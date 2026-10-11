@@ -25,6 +25,7 @@ use text
 use ui
 use vaultfs
 use e.fmt.ooxml as ooxml
+use e.fmt.pdf as pdf
 
 const NONE: usize = 99usize
 const FILES: usize = 13usize
@@ -94,6 +95,30 @@ fn office_text(a: *mem.Arena, s: *State, is_deck: bool, raw: []const u8) -> usiz
             }
             i += 1usize
         }
+    }
+    ret n
+}
+
+// The text of a PDF (a "Page n" heading and its lines for each page) into the handed file's text, through
+// e.fmt.pdf; the length, 0 when it did not read.
+fn pdf_text(a: *mem.Arena, s: *State, raw: []const u8) -> usize {
+    let (found, pages_error) = pdf.pages(a, raw)
+    if pages_error != ok { ret 0usize }
+    var n = 0usize
+    var i = 0usize
+    while i < found.len {
+        n = add_line(s, n, ui.join(a, "Page ", ui.number(a, i + 1usize), ""))
+        // The page's lines.
+        var start = 0usize
+        var at = 0usize
+        while at <= found[i].len {
+            if at == found[i].len || found[i][at] == 10u8 {
+                n = add_line(s, n, ui.join(a, "  ", found[i][start..at], ""))
+                start = at + 1usize
+            }
+            at += 1usize
+        }
+        i += 1usize
     }
     ret n
 }
@@ -603,7 +628,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let hand_path = ui.text_of(a, path_bytes[0usize..], path_len)
         var text_len = 0usize
         var has_text = false
-        if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") {
+        if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") || ends_with(hand_path, ".pdf") {
             // An Office file: read it whole (up to 256 KB, in pieces) and take its text.
             let (size, kind, day, found) = vaultfs.stat(hand_path)
             if found && size > 0usize && size <= 262144usize {
@@ -611,7 +636,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if raw_error == ok {
                     let (got, read_ok) = vaultfs.read_big(hand_path, mem.address_of(&raw[0usize]), size)
                     if read_ok && got == size {
-                        text_len = office_text(a, &s, ends_with(hand_path, ".pptx"), raw[0usize..got])
+                        if ends_with(hand_path, ".pdf") {
+                            text_len = pdf_text(a, &s, raw[0usize..got])
+                        } else {
+                            text_len = office_text(a, &s, ends_with(hand_path, ".pptx"), raw[0usize..got])
+                        }
                         has_text = text_len > 0usize
                     }
                 }

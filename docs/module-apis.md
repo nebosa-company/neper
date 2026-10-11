@@ -22775,3 +22775,36 @@ fn slides(a: *mem.Arena, data: []const u8) -> ([]Slide, err)
 ```
 
 The text of an Office Open XML package, read over `e.fmt.zip` and `e.fmt.xml` from a byte slice (C123): `paragraphs` gives a `.docx`'s paragraphs in order (the text of each, its style name such as `Heading1`, whether it is a list item, tabs and breaks as characters, entities decoded), `slides` a `.pptx`'s slides in slide-number order with each slide's text paragraphs. Namespace prefixes are ignored; runs, tables, images and shapes are not laid out, and the text of a table cell or a shape is a paragraph like any other. A zip with no main part is `NoMainPart`, bytes that are not a zip `NotAPackage`. Checked against packages made with Python's zipfile.
+
+
+### `e.fmt.pdf`
+
+```neper
+error NotPdf
+error NoPages
+type Object = struct { number: usize, start: usize, end: usize }
+const MAX_OBJECTS: usize = 4096usize
+const MAX_PAGES: usize = 512usize
+const MAX_STREAM: u64 = 8388608u64
+fn is_space(c: u8) -> bool
+fn is_delim(c: u8) -> bool
+fn is_digit(c: u8) -> bool
+fn at_word(data: []const u8, at: usize, word: str) -> bool
+fn find(data: []const u8, word: str, from: usize, until: usize) -> usize
+fn number_at(data: []const u8, from: usize, until: usize) -> (usize, usize, bool)
+fn objects(a: *mem.Arena, data: []const u8) -> ([]Object, usize, err)
+fn object_span(table: []const Object, count: usize, number: usize) -> (usize, usize, bool)
+fn has_pair(data: []const u8, from: usize, until: usize, key: str, value: str) -> bool
+fn ref_after(data: []const u8, from: usize, until: usize, key: str) -> (usize, bool)
+fn refs_in_array(data: []const u8, from: usize, until: usize, key: str, out: []usize) -> usize
+fn walk(a: *mem.Arena, data: []const u8, table: []const Object, count: usize, root: usize, found_pages: []usize) -> (usize, err)
+fn stream_of(a: *mem.Arena, data: []const u8, s: usize, e: usize) -> ([]const u8, err)
+type Mem = struct { data: []const u8, off: usize }
+fn mem_read(ctx: *void, dst: []u8) -> (usize, err)
+fn put_latin1(out: []u8, at: usize, c: u8) -> usize
+fn newline(out: []u8, at: usize) -> usize
+fn text_of(a: *mem.Arena, content: []const u8) -> (str, err)
+fn pages(a: *mem.Arena, data: []const u8) -> ([]str, err)
+```
+
+The text of a PDF held in a byte slice (C123): `pages` gives each page's text in page-tree order. The objects are found by scanning for `N G obj` (a file with its objects in object streams, or with an xref stream, is `NoPages`), the page order is the catalog's tree, a page's content streams are joined and `/FlateDecode` is undone through `e.fmt.zlib`, and the text operators `Tj`, `TJ` (a kern of -200 or more is a word space), `'`, `"`, `T*`, `Td`, `TD`, `Tm` and `ET` give the lines; literal strings keep their escapes and octal codes, hex strings are read, Latin-1 bytes are written as UTF-8. Not a renderer and not a font reader: an embedded font with its own encoding gives its codes. Checked against PDFs written by the fixture's generator.
