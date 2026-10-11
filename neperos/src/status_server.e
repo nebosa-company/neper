@@ -18,6 +18,12 @@ const OP_QUIT: usize = 0usize
 const OP_QUERY: usize = 1usize
 const OP_POST: usize = 2usize
 const OP_SUBSCRIBE: usize = 3usize
+// (C149) A notification from app `n` (a word follows; 0 to 7, the order of Settings' notification list): counted only
+// when the app is allowed, and the snapshot is pushed either way. SET_ALLOWED mask (bit n for app n) is what the
+// settings server sends when a notification switch changes and at start; no reply. A plain POST is the system's and
+// is never blocked.
+const OP_POST_APP: usize = 4usize
+const OP_SET_ALLOWED: usize = 5usize
 // A field's present bit; absent providers send 0, so a client reads them as unavailable.
 const PRESENT: usize = 2147483648usize
 
@@ -41,6 +47,17 @@ fn push_snapshot(notes: usize, battery: usize) {
     let n = os.send(REPLY, notes, NO_SLOT)
 }
 
+fn digit_text(n: usize) -> str {
+    if n == 0usize { ret "0" }
+    if n == 1usize { ret "1" }
+    if n == 2usize { ret "2" }
+    if n == 3usize { ret "3" }
+    if n == 4usize { ret "4" }
+    if n == 5usize { ret "5" }
+    if n == 6usize { ret "6" }
+    ret "7"
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     say("status server up\n")
     var notes = 0usize
@@ -48,10 +65,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // they record the Wi-Fi air: QEMU virt has no battery, and a real provider would fill this word.
     var battery = 0usize
     if args.len > 0usize && args[0usize].len == 9usize { battery = PRESENT | 78usize }
+    var allowed = 255usize
     var running = true
     while running {
         let op = os.recv(REQ, NO_SLOT)
         if op == OP_QUIT { running = false }
+        if op == OP_SET_ALLOWED { allowed = os.recv(REQ, NO_SLOT) & 255usize }
+        if op == OP_POST_APP {
+            let app = os.recv(REQ, NO_SLOT)
+            if app < 8usize && ((allowed >> app) & 1usize) == 0usize {
+                say("status notification blocked ")
+                say(digit_text(app))
+                say("\n")
+            } else {
+                notes += 1usize
+            }
+            push_snapshot(notes, battery)
+        }
         if op == OP_SUBSCRIBE { push_snapshot(notes, battery) }
         if op == OP_QUERY { push_snapshot(notes, battery) }
         if op == OP_POST {

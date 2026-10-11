@@ -10052,7 +10052,7 @@ if ($neperosQemu) {
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $statusArchive $statusServer $statusClient
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS status archive did not assemble' }
     $statusBoot = Invoke-NeperOS $neperosImage @('-initrd', $statusArchive, '-append', 'statussvc')
-    foreach ($statusMark in @('status server up', 'status battery unavailable', 'status wifi unavailable', 'status cellular unavailable', 'status clock ', 'status notifications 0', 'status notifications 1', 'status client done', 'neperos: exit 0x0000000000000000')) {
+    foreach ($statusMark in @('status server up', 'status battery unavailable', 'status wifi unavailable', 'status cellular unavailable', 'status clock ', 'status notifications 0', 'status notifications 1', 'status notification blocked 2', 'status app 2 count 1', 'status app 3 count 2', 'status client done', 'neperos: exit 0x0000000000000000')) {
         if ($statusBoot -notmatch [regex]::Escape($statusMark)) { throw "NeperOS status service missing (${statusMark}): $statusBoot" }
     }
     # (D2175, C112) The launcher's top bar driven by the live C111 status: launcher_status subscribes

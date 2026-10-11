@@ -147,6 +147,20 @@ fn push_radio(allowed: bool) {
     let result = os.recv(NET_REP, sysettings.NO_SLOT)
 }
 
+// (C149) The notification switches (settings 26 to 33, the order of Settings' notification list) as a mask, one bit
+// per app, sent to the status service, which counts a notification only from an app whose bit is set.
+fn push_notify_mask(store: *Store) {
+    var mask = 0usize
+    var n = 0usize
+    while n < 8usize {
+        if store.v[26usize + n] != 0u8 { mask = mask | (1usize << n) }
+        n += 1usize
+    }
+    let sent = os.send(STATUS_REQ, 5usize, sysettings.NO_SLOT)
+    if sent == REFUSED { ret }
+    let mask_sent = os.send(STATUS_REQ, mask, sysettings.NO_SLOT)
+}
+
 fn system_word(store: *Store) -> usize {
     ret theme.stored_word(store.v[0usize..COUNT])
 }
@@ -180,6 +194,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var clip_stamp = 0usize
     var radios = radios_allowed(&store)
     if !radios { push_radio(false) }
+    push_notify_mask(&store)
     say("settings server up\n")
     var running = true
     while running {
@@ -203,6 +218,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     radios = radios_allowed(&store)
                     push_radio(radios)
                 }
+                if index >= 26usize && index < 34usize { push_notify_mask(&store) }
             }
             let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
         } else if op == sysettings.OP_GET_BATTERY {
@@ -327,6 +343,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 radios = radios_allowed(&store)
                 push_radio(radios)
             }
+            push_notify_mask(&store)
             let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
         }
     }

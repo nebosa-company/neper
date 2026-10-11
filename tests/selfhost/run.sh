@@ -9864,7 +9864,7 @@ greeting"
     status_archive="$test_build/status-archive.img"
     python3 "$repo/scripts/build-shell-archive.py" "$status_archive" "$status_server_img" "$status_client_img"
     status_boot=$(timeout 60 qemu-system-aarch64 -M virt,gic-version=3 -cpu cortex-a76 -m 256M -nic none -nographic -no-reboot -kernel "$neperos_image" -initrd "$status_archive" -append statussvc < /dev/null 2>&1 | tr -d '\r')
-    for status_mark in 'status server up' 'status battery unavailable' 'status wifi unavailable' 'status cellular unavailable' 'status clock ' 'status notifications 0' 'status notifications 1' 'status client done' 'neperos: exit 0x0000000000000000'; do
+    for status_mark in 'status server up' 'status battery unavailable' 'status wifi unavailable' 'status cellular unavailable' 'status clock ' 'status notifications 0' 'status notifications 1' 'status notification blocked 2' 'status app 2 count 1' 'status app 3 count 2' 'status client done' 'neperos: exit 0x0000000000000000'; do
         case "$status_boot" in *"$status_mark"*) ;; *) printf '%s\n' "NeperOS status service missing ($status_mark): $status_boot" >&2; exit 1 ;; esac
     done
     # (D2175, C112) The launcher's top bar driven by the live C111 status: launcher_status subscribes,

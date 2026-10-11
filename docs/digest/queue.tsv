@@ -1,6 +1,5 @@
 id	category	score	evidence_bytes	title	status
 C147	compiler	0.5	1643	Full suites complete on this machine: Windows run.ps1 and Linux run.sh	a complete run on either host (run.sh under WSL not run) and the test-results.json totals. RUN 17 (2026-10-10, seeded, with the sc500k static gate and the live-API network assertion excluded through a
-C149	compiler	0	1064	NeperOS parts that receive settings: audio volumes, fingerprint, per-app notification permission, Bluetooth and hotspot, a battery provider	Split from C126 (D2374): the settings server (settings_server.e, sysettings.e) already holds every value and forwards the ones that have a recipient;
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C107	compiler	0.9	6770	NeperOS shell 3: the e.os surface on NeperOS (os.neperos.e)	Queued by D2148.
 C113	compiler	0.7	2252	NeperOS shell 9: the Clock and Calculator apps	live/interactive behavior (clock ticking, calculator button taps computing) and hosting the apps in the shell with tap input, which waits on C112's unified launcher (blocked prodshell). D2188: the Clo
@@ -118,3 +117,4 @@ C172	compiler	0	869	NeperOS Document remainder: PDF painting, zoom, tables, HTML
 C173	compiler	0	938	NeperOS Dynamic step-one remainder: the scanner, the versioned app kit, removal	Split from C143 (D2432): packages are signed, verified, revocable and installed.
 C174	compiler	0	506	NeperOS Clock remainder: a background ringer with the app closed	Split from C145 (D2433): the Clock's alarms, timer and stopwatch persist in /clock.
 C175	compiler	0	451	NeperOS clipboard remainder: Paste in every field, a lifetime setting, clear on lock	Split from C148 (D2435): the clipboard holds text, Secure copies to it and AI pastes from it.
+C176	compiler	0	752	NeperOS settings recipients remainder: audio, fingerprint, radios, battery	Split from C149 (D2436): notification permission is enforced at the status service.
