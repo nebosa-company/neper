@@ -2113,6 +2113,12 @@ $testMatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $testMatchWritten -ne 'executable written') { throw 'test_match emission failed' }
 & $testMatchPath
 if ($LASTEXITCODE -ne 0) { throw "a test_match check failed: exit $LASTEXITCODE" }
+# `e.test.mock`: exactly-once default and its report, argument-matcher mismatch, missing call, times with a returns list, stubs, ordered expectations, spy log and limits, assert_verified (D2683).
+$testMockPath = Join-Path $testBuild 'test-mock-selfhost.exe'
+$testMockWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_mock\src\main.e') $repo 'x64' 'windows' $testMockPath
+if ($LASTEXITCODE -ne 0 -or $testMockWritten -ne 'executable written') { throw 'test_mock emission failed' }
+& $testMockPath
+if ($LASTEXITCODE -ne 0) { throw "a test_mock check failed: exit $LASTEXITCODE" }
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 $dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
 $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath

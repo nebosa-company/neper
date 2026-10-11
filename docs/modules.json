@@ -439,7 +439,8 @@
     "e.math.units",
     "e.db.migrate",
     "e.db.orm",
-    "e.test.match"
+    "e.test.match",
+    "e.test.mock"
    ]
   },
   {
@@ -3934,6 +3935,20 @@
     "e.mem",
     "e.str",
     "e.test"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.mock",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str",
+    "e.test",
+    "e.test.match"
    ],
    "blocked_by": []
   },

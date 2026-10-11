@@ -11369,6 +11369,46 @@ fn assert_that(v: Subject, m: *const Matcher, buf: []u8) -> err
 
 Composable Hamcrest-style value matchers as plain data over `Subject` (int, float, text, bool, int list): comparison, `between`, `one_of`, `near`, text `contains`/`starts_with`/`ends_with`, `len_is`, `has_item`/`every`, `negate`, `all_of`/`any_of`. `describe` writes the expectation, `explain` the mismatch (a composite names the failing part), `message` joins them as `expected: ...` / `     but: ...`, and `assert_that` fails the running test with that text built in the caller's buffer.
 
+### `e.test.mock`
+
+```neper
+const MAX_ARGS: usize = 4usize
+const UNBOUNDED: u32 = 0xffffffffu32
+const NO_MATCH: i64 = -1i64
+type Expectation = struct { method: u32, name: str, args: [4]match.Matcher, nargs: usize, ret_value: i64, rets: []const i64, min: u32, max: u32, seq: u32, called: u32 }
+type Call = struct { method: u32, nargs: usize, args: [4]i64, matched: i64, late: bool }
+type Mock = struct { expectations: []Expectation, count: usize, calls: []Call, logged: usize, chain: u32 }
+error Full
+error Unexpected
+error Order
+error Unmet
+error BadIndex
+
+fn mock(expectations: []Expectation, calls: []Call) -> Mock
+fn expect(m: *Mock, method: u32, name: str) -> (usize, err)
+fn allow(m: *Mock, method: u32, name: str, value: i64) -> (usize, err)
+fn with_arg(m: *Mock, index: usize, pos: usize, matcher: match.Matcher) -> err
+fn returns(m: *Mock, index: usize, value: i64) -> err
+fn returns_list(m: *Mock, index: usize, values: []const i64) -> err
+fn times(m: *Mock, index: usize, min: u32, max: u32) -> err
+fn in_order(m: *Mock, index: usize) -> err
+fn accepts(e: *const Expectation, args: []const i64) -> bool
+fn prior_met(m: *const Mock, index: usize) -> bool
+fn scripted(e: *const Expectation) -> i64
+fn call(m: *Mock, method: u32, args: []const i64) -> (i64, err)
+fn call_count(m: *const Mock, method: u32) -> usize
+fn put(b: *str.Builder, s: str)
+fn put_usize(b: *str.Builder, n: usize)
+fn put_call(b: *str.Builder, name: str, c: *const Call)
+fn put_expectation(b: *str.Builder, e: *const Expectation)
+fn name_of(m: *const Mock, method: u32) -> str
+fn put_difference(b: *str.Builder, e: *const Expectation, c: *const Call)
+fn verify(m: *const Mock, out: []u8) -> (str, err)
+fn assert_verified(m: *const Mock, buf: []u8) -> err
+```
+
+Mocks, stubs and spies as a table (no runtime reflection): a call is a method number plus up to four integer arguments checked by `e.test.match` matchers; `expect`, `with_arg`, `returns`/`returns_list`, `times`, `in_order` script it, `allow` is a stub, `call` is the double's method body, and `verify`/`assert_verified` produce the failure diagnostics (unexpected calls with the first differing argument, out-of-order calls, missing calls).
+
 ### `e.debug`
 
 ```neper

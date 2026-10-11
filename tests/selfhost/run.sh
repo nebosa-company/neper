@@ -1883,6 +1883,11 @@ test_match_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$test_match_written" = 'executable written' ]
 chmod +x "$test_build/test-match-selfhost"
 "$test_build/test-match-selfhost"
+# `e.test.mock`: exactly-once default and its report, argument-matcher mismatch, missing call, times with a returns list, stubs, ordered expectations, spy log and limits, assert_verified (D2683).
+test_mock_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_mock/src/main.e" "$repo" x64 linux "$test_build/test-mock-selfhost")
+[ "$test_mock_written" = 'executable written' ]
+chmod +x "$test_build/test-mock-selfhost"
+"$test_build/test-mock-selfhost"
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 db_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_migrate/src/main.e" "$repo" x64 linux "$test_build/db-migrate-selfhost")
 [ "$db_migrate_written" = 'executable written' ]
