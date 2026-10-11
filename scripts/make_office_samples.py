@@ -61,6 +61,8 @@ def main():
     (out / "zz.pdf").write_bytes(bytes(pdf))
     # A Markdown file and a Python file: shown as rendered Markdown and highlighted code.
     (out / "zznotes.md").write_text("# Handbook\n\nWelcome to **Neper**.\n\n## Apps\n- Calc\n- Files\n", encoding="utf-8")
+    # A long text file (120 lines, a few pages in Document).
+    (out / "zzzlong.txt").write_text("".join(f"line {i + 1} of a long file\n" for i in range(120)), encoding="utf-8")
     (out / "zzcode.py").write_text("# count words\nimport sys\n\nclass Counter:\n    def add(self, word):\n        return 1\n", encoding="utf-8")
     print("wrote", out)
 

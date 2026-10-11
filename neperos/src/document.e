@@ -43,7 +43,7 @@ type State = struct {
     // A file handed over by Files (C125): its name and text, shown as entry FILES of the list.
     hand_name: [24]u8,
     hand_name_len: usize,
-    hand_text: [2048]u8,
+    hand_text: [16384]u8,
     hand_len: usize,
     // How the handed file is shown (MD, TXT or CODE) and, for code, which sample's highlighter rules it uses.
     hand_kind: usize,
@@ -51,7 +51,7 @@ type State = struct {
     // The language the table-driven highlighter (e.text.highlight) picked by extension, and its classes per byte.
     hand_hl: usize,
     hand_has_hl: bool,
-    hand_classes: [2048]u8,
+    hand_classes: [16384]u8,
     screen: usize,
     open: usize,
     page: usize,
@@ -62,12 +62,12 @@ type State = struct {
 fn add_line(s: *State, at: usize, line: str) -> usize {
     var n = at
     var i = 0usize
-    while i < line.len && n < 1999usize {
+    while i < line.len && n < 16383usize {
         s.hand_text[n] = line[i]
         n += 1usize
         i += 1usize
     }
-    if n < 1999usize {
+    if n < 16383usize {
         s.hand_text[n] = 10u8
         n += 1usize
     }
@@ -139,6 +139,43 @@ fn ends_with(whole: str, suffix: str) -> bool {
         i += 1usize
     }
     ret true
+}
+
+// A page of a handed file is this many lines.
+const PAGE_LINES: usize = 26usize
+
+// The lines in the handed file's text.
+fn hand_lines(s: *State) -> usize {
+    var n = 1usize
+    var i = 0usize
+    while i < s.hand_len {
+        if s.hand_text[i] == 10u8 { n += 1usize }
+        i += 1usize
+    }
+    ret n
+}
+
+// The pages of what is open: a handed file's lines in pages, or a sample's own count.
+fn pages_of(s: *State) -> usize {
+    if s.open == FILES { ret (hand_lines(s) + PAGE_LINES - 1usize) / PAGE_LINES }
+    ret page_count(s.open)
+}
+
+// The first line the open text shows: the page's, for a handed file.
+fn first_line(s: *State) -> usize {
+    if s.open == FILES { ret s.page * PAGE_LINES }
+    ret 0usize
+}
+
+// The byte offset of line `n` of the handed text.
+fn line_offset(s: *State, n: usize) -> usize {
+    var line = 0usize
+    var i = 0usize
+    while i < s.hand_len && line < n {
+        if s.hand_text[i] == 10u8 { line += 1usize }
+        i += 1usize
+    }
+    ret i
 }
 
 // The text a screen draws: the handed file's, or entry `i`'s sample.
@@ -424,9 +461,10 @@ fn draw_md(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces)
     let content = content_of(a, s)
     var y: f32 = 100.0
     var in_code = false
-    var n = 0usize
+    var n = first_line(s)
     let total = line_total(content)
-    while n < total {
+    let last = n + PAGE_LINES
+    while n < total && n < last {
         let row = splitter(a, content, n)
         if row.len >= 3usize && ui.same(row[0usize..3usize], "```") {
             in_code = !in_code
@@ -461,11 +499,12 @@ fn draw_txt(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
     try ui.card(a, builder, 12.0, 84.0, 388.0, 730.0, 18.0, ui.cream())
     var content = body(s.open)
     if s.open == FILES { content = ui.text_of(a, s.hand_text[0usize..], s.hand_len) }
-    var n = 0usize
+    let first = first_line(s)
+    var n = first
     let total = line_total(content)
-    // Only the lines that fit the page are drawn.
-    while n < total && n < 27usize {
-        try ui.put(a, builder, faces.grotesk, 15.0, splitter(a, content, n), 28.0, 100.0 + f32(n) * 26.0, ui.ink())
+    // Only the lines of the page are drawn.
+    while n < total && n < first + 27usize {
+        try ui.put(a, builder, faces.grotesk, 15.0, splitter(a, content, n), 28.0, 100.0 + f32(n - first) * 26.0, ui.ink())
         n += 1usize
     }
     ret ok
@@ -501,18 +540,14 @@ fn draw_code(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     try ui.card(a, builder, 12.0, 84.0, 388.0, 730.0, 18.0, paint.Color { red: 0.12, green: 0.13, blue: 0.16, alpha: 1.0 })
     let content = content_of(a, s)
     let total = line_total(content)
-    var n = 0usize
-    while n < total {
-        let y: f32 = 100.0 + f32(n) * 22.0
+    let first = first_line(s)
+    var n = first
+    while n < total && n < first + 30usize {
+        let y: f32 = 100.0 + f32(n - first) * 22.0
         try ui.put_right(a, builder, faces.grotesk, 12.0, ui.number(a, n + 1usize), 44.0, y + 1.0, ui.light_muted())
         if s.open == FILES && s.hand_has_hl {
             // The classes of this line: the bytes before it are the lines before plus their newlines.
-            var offset = 0usize
-            var before = 0usize
-            while before < n {
-                offset += splitter(a, content, before).len + 1usize
-                before += 1usize
-            }
+            let offset = line_offset(s, n)
             let line = splitter(a, content, n)
             if offset + line.len <= s.hand_len {
                 try draw_class_line(a, builder, faces, line, s.hand_classes[offset..offset + line.len], 56.0, y)
@@ -622,10 +657,10 @@ fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     if kind == CODE { try draw_code(a, builder, s, faces) }
     if kind == PDF || kind == DOCX { try draw_page(a, builder, s, faces) }
     if kind == PPTX { try draw_slide(a, builder, s, faces) }
-    if page_count(s.open) > 1usize {
+    if pages_of(s) > 1usize {
         try ui.card(a, builder, 0.0, 828.0, 412.0, 68.0, 0.0, paint.Color { red: 0.11, green: 0.12, blue: 0.14, alpha: 1.0 })
         try ui.pill(a, builder, &s.hits, faces, 600usize, 40.0, 838.0, 110.0, 46.0, "Previous", ui.soft(), 15.0)
-        try ui.centred(a, builder, faces.jost, 17.0, ui.join(a, ui.number(a, s.page + 1usize), " / ", ui.number(a, page_count(s.open))), 206.0, 850.0, ui.light())
+        try ui.centred(a, builder, faces.jost, 17.0, ui.join(a, ui.number(a, s.page + 1usize), " / ", ui.number(a, pages_of(s))), 206.0, 850.0, ui.light())
         try ui.pill(a, builder, &s.hits, faces, 601usize, 262.0, 838.0, 110.0, 46.0, "Next", ui.amber(), 15.0)
     }
     ret ok
@@ -665,7 +700,7 @@ fn act(s: *State, id: usize) -> bool {
             ret true
         }
         if id == 601usize {
-            if s.page + 1usize < page_count(s.open) { s.page += 1usize }
+            if s.page + 1usize < pages_of(s) { s.page += 1usize }
             ui.say("document page ")
             ui.say_num(s.page + 1usize)
             ui.say("\n")
@@ -728,9 +763,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 }
             }
         } else {
-            let (plain_len, plain_ok) = vaultfs.read(hand_path, mem.address_of(&s.hand_text[0usize]), 2000usize)
-            text_len = plain_len
-            has_text = plain_ok
+            // A text or source file: up to 16 KB of it, in pieces; the rest is not shown.
+            let (plain_size, plain_kind, plain_day, plain_found) = vaultfs.stat(hand_path)
+            if plain_found {
+                var want = plain_size
+                if want > 16000usize { want = 16000usize }
+                let (plain_len, plain_ok) = vaultfs.read_big(hand_path, mem.address_of(&s.hand_text[0usize]), want)
+                text_len = plain_len
+                has_text = plain_ok
+            }
         }
         if has_text {
             s.hand_len = text_len

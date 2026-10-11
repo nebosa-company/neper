@@ -10275,7 +10275,7 @@ if ($neperosQemu) {
         if ($fields[0] -ne 'seedfixture') { continue }
         $fixture = $fields[1]
         $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
-        & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 ('/report.docx=' + (Join-Path $officeDir 'report.docx')) ('/deck.pptx=' + (Join-Path $officeDir 'deck.pptx')) ('/zz.pdf=' + (Join-Path $officeDir 'zz.pdf')) ('/zzcode.py=' + (Join-Path $officeDir 'zzcode.py')) ('/zznotes.md=' + (Join-Path $officeDir 'zznotes.md')) | Out-Null
+        & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 ('/report.docx=' + (Join-Path $officeDir 'report.docx')) ('/deck.pptx=' + (Join-Path $officeDir 'deck.pptx')) ('/zz.pdf=' + (Join-Path $officeDir 'zz.pdf')) ('/zzcode.py=' + (Join-Path $officeDir 'zzcode.py')) ('/zznotes.md=' + (Join-Path $officeDir 'zznotes.md')) ('/zzzlong.txt=' + (Join-Path $officeDir 'zzzlong.txt')) | Out-Null
         if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
         $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $seedDisk 0 $fields[4] 2>&1) -join "`n"
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
