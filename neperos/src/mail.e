@@ -49,6 +49,9 @@ type Mail = struct {
     starred: bool,
     ago: usize,
     used: bool,
+    // (C128) The message's UID on the server, when it came from there.
+    uid: usize,
+    remote: bool,
 }
 
 type State = struct {
@@ -179,7 +182,11 @@ fn sync_inbox(a: *mem.Arena, s: *State) -> usize {
                                 if body_error == ok { body_len = got }
                                 let unread = !imap.has_flag(items[i], "\\Seen")
                                 let made = add_mail(s, from_name, subject, ui.text_of(a, body_buf[0usize..], body_len), INBOX, unread, ago)
-                                if made != NONE { loaded += 1usize }
+                                if made != NONE {
+                                    s.mails[made].uid = usize(items[i].uid)
+                                    s.mails[made].remote = true
+                                    loaded += 1usize
+                                }
                             }
                         }
                         i += 1usize
@@ -191,6 +198,31 @@ fn sync_inbox(a: *mem.Arena, s: *State) -> usize {
     }
     let closed = netclient.close()
     ret loaded
+}
+
+// Set a flag on the server's copy of a message (and expunge when it is deleted): true when the server took it.
+fn remote_flag(a: *mem.Arena, uid: usize, action: str, expunge_after: bool) -> bool {
+    if netclient.connect("neper.test", 8143u16, false) != netproto.R_OK { ret false }
+    var done = false
+    let (session, connect_error) = imap.connect(a, net_reader(), net_writer(), 65536usize)
+    if connect_error == ok {
+        var sess = session
+        if imap.login(&sess, "neper", "secret") == ok {
+            let (box, select_error) = imap.select(&sess, "INBOX")
+            if select_error == ok {
+                if imap.store(&sess, ui.number(a, uid), action, true) == ok {
+                    done = true
+                    if expunge_after {
+                        let (removed, expunge_error) = imap.expunge(&sess)
+                        if expunge_error != ok { done = false }
+                    }
+                }
+            }
+            let out = imap.logout(&sess)
+        }
+    }
+    let closed = netclient.close()
+    ret done
 }
 
 // An address for what was typed in To: itself when it has an @, else the name without spaces at the test domain.
@@ -523,6 +555,13 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             s.mails[s.open].folder = TRASH
             s.screen = LIST_SCREEN
             ui.say("mail deleted\n")
+            if s.mails[s.open].remote {
+                if remote_flag(a, s.mails[s.open].uid, "+FLAGS.SILENT (\\Deleted)", true) {
+                    ui.say("mail server deleted ")
+                    ui.say_text(ui.number(a, s.mails[s.open].uid))
+                    ui.say("\n")
+                }
+            }
             ret true
         }
         if id == 530usize {
@@ -540,8 +579,16 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     }
     if id >= 200usize && id < 200usize + MAX_MAILS {
         s.open = id - 200usize
+        let was_unread = s.mails[s.open].unread
         s.mails[s.open].unread = false
         s.screen = VIEW_SCREEN
+        if was_unread && s.mails[s.open].remote {
+            if remote_flag(a, s.mails[s.open].uid, "+FLAGS.SILENT (\\Seen)", false) {
+                ui.say("mail server read ")
+                ui.say_text(ui.number(a, s.mails[s.open].uid))
+                ui.say("\n")
+            }
+        }
         ui.say("mail opened ")
         ui.say_text(subject_of(a, s, s.open))
         ui.say("\n")

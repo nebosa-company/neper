@@ -1,9 +1,9 @@
 """A small IMAP4rev1 and SMTP server for the Mail app's fixture (C128), on loopback.
 
-  TCP 8143  IMAP: CAPABILITY, LOGIN (neper / secret), LIST, SELECT, (UID) FETCH, STORE, NOOP, LOGOUT over a
-            three-message INBOX
-  TCP 8025  SMTP: EHLO, MAIL FROM, RCPT TO, DATA, RSET, QUIT; every accepted message is appended to SENT and,
-            so a test can see it, is also available as the INBOX's fourth message after delivery
+  TCP 8143  IMAP: CAPABILITY, LOGIN (neper / secret), LIST, SELECT, (UID) FETCH, (UID) STORE, EXPUNGE, NOOP,
+            LOGOUT over a three-message INBOX; flags and deletions are kept for the life of the process, so a
+            later session sees what an earlier one did
+  TCP 8025  SMTP: EHLO, MAIL FROM, RCPT TO, DATA, RSET, QUIT; every accepted message is kept in SENT
 
 The guest reaches both at 10.0.2.2 (the name neper.test resolves there). Plain text: the TLS paths of the client
 libraries have their own fixtures.
@@ -20,7 +20,11 @@ MESSAGES = [
      b"The nightly build passed all tests."),
 ]
 SENT = []
+SEEN = set()
+DELETED = set()
+EXPUNGED = set()
 LOCK = threading.Lock()
+CRLF = b"\r\n"
 
 
 def render(sender, subject, date, body):
@@ -34,58 +38,81 @@ class Imap(socketserver.StreamRequestHandler):
         self.wfile.write(data)
         self.wfile.flush()
 
+    def view(self):
+        """The INBOX as a client sees it: (uid, message) for what is not expunged, in order."""
+        with LOCK:
+            return [(i + 1, m) for i, m in enumerate(MESSAGES) if (i + 1) not in EXPUNGED]
+
     def handle(self):
-        self.reply(b"* OK IMAP4rev1 neper test server ready\r\n")
-        flags = {}
+        self.reply(b"* OK IMAP4rev1 neper test server ready" + CRLF)
         while True:
             line = self.rfile.readline()
             if not line:
                 return
             parts = line.decode("latin-1").rstrip("\r\n").split(" ", 2)
-            tag = parts[0]
+            tag = parts[0].encode()
             command = parts[1].upper() if len(parts) > 1 else ""
             rest = parts[2] if len(parts) > 2 else ""
-            with LOCK:
-                inbox = list(MESSAGES)
+            by_uid = False
+            if command == "UID":
+                by_uid = True
+                sub = rest.split(" ", 1)
+                command = sub[0].upper()
+                rest = sub[1] if len(sub) > 1 else ""
+            inbox = self.view()
             if command == "CAPABILITY":
-                self.reply(b"* CAPABILITY IMAP4rev1 UIDPLUS\r\n" + tag.encode() + b" OK CAPABILITY completed\r\n")
+                self.reply(b"* CAPABILITY IMAP4rev1 UIDPLUS" + CRLF + tag + b" OK CAPABILITY completed" + CRLF)
             elif command == "LOGIN":
                 ok = rest.replace('"', "").split(" ") == ["neper", "secret"]
-                self.reply(tag.encode() + (b" OK LOGIN completed\r\n" if ok else b" NO LOGIN failed\r\n"))
+                self.reply(tag + (b" OK LOGIN completed" if ok else b" NO LOGIN failed") + CRLF)
             elif command == "LIST":
-                self.reply(b'* LIST (\\HasNoChildren) "/" "INBOX"\r\n' + tag.encode() + b" OK LIST completed\r\n")
-            elif command == "SELECT" or command == "EXAMINE":
+                self.reply(b'* LIST (\\HasNoChildren) "/" "INBOX"' + CRLF + tag + b" OK LIST completed" + CRLF)
+            elif command in ("SELECT", "EXAMINE"):
                 n = len(inbox)
                 self.reply(("* %d EXISTS\r\n* 0 RECENT\r\n* OK [UIDVALIDITY 1] valid\r\n* OK [UIDNEXT %d] next\r\n"
-                            "* FLAGS (\\Seen \\Flagged)\r\n" % (n, n + 1)).encode() + tag.encode() +
-                           b" OK [READ-WRITE] SELECT completed\r\n")
-            elif command in ("FETCH", "UID"):
-                text = rest if command == "FETCH" else rest.split(" ", 1)[1] if " " in rest else rest
-                by_uid = command == "UID"
-                if by_uid:
-                    sub = rest.split(" ", 2)
-                    text = " ".join(sub[1:])
-                spec = text.split(" ", 1)[0]
+                            "* FLAGS (\\Seen \\Flagged \\Deleted)\r\n" % (n, len(MESSAGES) + 1)).encode() + tag +
+                           b" OK [READ-WRITE] SELECT completed" + CRLF)
+            elif command == "FETCH":
+                spec = rest.split(" ", 1)[0]
                 first, _, last = spec.partition(":")
                 low = int(first)
-                high = len(inbox) if last in ("*", "") and ":" in spec else int(last or first)
+                high = (10 ** 6 if last == "*" else int(last)) if ":" in spec else low
                 out = b""
-                for n in range(low, min(high, len(inbox)) + 1):
-                    sender, subject, date, body = inbox[n - 1]
-                    raw = render(sender, subject, date, body)
-                    seen = b"\\Seen" if flags.get(n) else b""
-                    out += (b"* %d FETCH (" % n) + (b"UID %d " % n if by_uid or b"UID" in text.encode() else b"") + \
-                        b"FLAGS (" + seen + b") BODY[] {%d}\r\n" % len(raw) + raw + b")\r\n"
-                self.reply(out + tag.encode() + b" OK FETCH completed\r\n")
+                for position, (uid, message) in enumerate(inbox, 1):
+                    key = uid if by_uid else position
+                    if not low <= key <= high:
+                        continue
+                    raw = render(*message)
+                    with LOCK:
+                        flags = b"\\Seen" if uid in SEEN else b""
+                    out += (b"* %d FETCH (UID %d FLAGS (" % (position, uid)) + flags + b") BODY[] {%d}\r\n" % len(raw) + raw + b")\r\n"
+                self.reply(out + tag + b" OK FETCH completed" + CRLF)
             elif command == "STORE":
-                self.reply(tag.encode() + b" OK STORE completed\r\n")
+                spec, _, action = rest.partition(" ")
+                wanted = {int(x) for x in spec.split(",") if x.isdigit()}
+                for position, (uid, message) in enumerate(inbox, 1):
+                    if (uid if by_uid else position) in wanted:
+                        with LOCK:
+                            if "\\Seen" in action:
+                                SEEN.add(uid)
+                            if "\\Deleted" in action:
+                                DELETED.add(uid)
+                self.reply(tag + b" OK STORE completed" + CRLF)
+            elif command == "EXPUNGE":
+                out = b""
+                with LOCK:
+                    for position, (uid, message) in enumerate(inbox, 1):
+                        if uid in DELETED:
+                            EXPUNGED.add(uid)
+                            out += b"* %d EXPUNGE\r\n" % position
+                self.reply(out + tag + b" OK EXPUNGE completed" + CRLF)
             elif command == "NOOP":
-                self.reply(tag.encode() + b" OK NOOP completed\r\n")
+                self.reply(tag + b" OK NOOP completed" + CRLF)
             elif command == "LOGOUT":
-                self.reply(b"* BYE logging out\r\n" + tag.encode() + b" OK LOGOUT completed\r\n")
+                self.reply(b"* BYE logging out" + CRLF + tag + b" OK LOGOUT completed" + CRLF)
                 return
             else:
-                self.reply(tag.encode() + b" BAD unknown command\r\n")
+                self.reply(tag + b" BAD unknown command" + CRLF)
 
 
 class Smtp(socketserver.StreamRequestHandler):
@@ -94,7 +121,7 @@ class Smtp(socketserver.StreamRequestHandler):
         self.wfile.flush()
 
     def handle(self):
-        self.reply(b"220 neper.test ESMTP ready\r\n")
+        self.reply(b"220 neper.test ESMTP ready" + CRLF)
         sender = b""
         recipients = []
         while True:
@@ -108,12 +135,12 @@ class Smtp(socketserver.StreamRequestHandler):
             elif upper.startswith("MAIL FROM"):
                 sender = text.split(":", 1)[1].strip().encode()
                 recipients = []
-                self.reply(b"250 2.1.0 ok\r\n")
+                self.reply(b"250 2.1.0 ok" + CRLF)
             elif upper.startswith("RCPT TO"):
                 recipients.append(text.split(":", 1)[1].strip().encode())
-                self.reply(b"250 2.1.5 ok\r\n")
+                self.reply(b"250 2.1.5 ok" + CRLF)
             elif upper == "DATA":
-                self.reply(b"354 end data with <CR><LF>.<CR><LF>\r\n")
+                self.reply(b"354 end data with <CR><LF>.<CR><LF>" + CRLF)
                 data = b""
                 while True:
                     chunk = self.rfile.readline()
@@ -123,15 +150,13 @@ class Smtp(socketserver.StreamRequestHandler):
                 with LOCK:
                     SENT.append((sender, recipients, data))
                 self.reply(b"250 2.0.0 queued as %d\r\n" % len(SENT))
-            elif upper == "RSET":
-                self.reply(b"250 ok\r\n")
-            elif upper == "NOOP":
-                self.reply(b"250 ok\r\n")
+            elif upper in ("RSET", "NOOP"):
+                self.reply(b"250 ok" + CRLF)
             elif upper == "QUIT":
-                self.reply(b"221 bye\r\n")
+                self.reply(b"221 bye" + CRLF)
                 return
             else:
-                self.reply(b"500 unknown command\r\n")
+                self.reply(b"500 unknown command" + CRLF)
 
 
 class Server(socketserver.ThreadingTCPServer):
