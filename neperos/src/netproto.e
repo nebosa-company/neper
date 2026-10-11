@@ -9,6 +9,11 @@
 //   RECV     max                           -> result, byte string  (an empty string is the peer's close)
 //   CLOSE                                  -> result
 //   SET_DNS  address word, port            -> result       (the resolver to ask; DHCP's by default)
+//   SCAN                                   -> result, count, then per network: name string, secured,
+//                                                            signal (0 to 100), flags (bit 0 connected,
+//                                                            bit 1 saved this boot)
+//   JOIN     name string, password string  -> result       (R_AUTH for a wrong password, R_NO_NETWORK
+//                                                            for a name nothing hears or no radio)
 //   QUIT                                    ends the server
 //
 // One connection is open at a time: apps run one at a time on the phone, and the server refuses a
@@ -21,6 +26,8 @@ const OP_SEND: usize = 2usize
 const OP_RECV: usize = 3usize
 const OP_CLOSE: usize = 4usize
 const OP_SET_DNS: usize = 5usize
+const OP_SCAN: usize = 6usize
+const OP_JOIN: usize = 7usize
 
 const R_OK: usize = 0usize
 const R_NO_NETWORK: usize = 1usize
@@ -31,6 +38,7 @@ const R_IO: usize = 5usize
 const R_NOT_CONNECTED: usize = 6usize
 const R_BUSY: usize = 7usize
 const R_BAD: usize = 8usize
+const R_AUTH: usize = 9usize
 
 const NO_SLOT: usize = 99usize
 

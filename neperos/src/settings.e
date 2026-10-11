@@ -24,12 +24,14 @@ use vaultfs
 use ui
 use theme
 use sysettings
+use netproto
 
 const NONE: usize = 99usize
 const MAX_HITS: usize = 96usize
 const PAGES: usize = 11usize
 const MAIN: usize = 99usize
 const SEARCH: usize = 98usize
+const SHEET: usize = 97usize
 const FOUND_MAX: usize = 6usize
 // The settings, by number.
 const WIFI: usize = 0usize
@@ -305,11 +307,60 @@ fn find_settings(s: *State) {
     }
 }
 
-fn network_name(index: usize) -> str {
-    if index == 0usize { ret "Home-5G" }
-    if index == 1usize { ret "CafeGuest" }
-    if index == 2usize { ret "Neighbour-2G" }
-    ret "Office"
+// (C126) The networks the network server hears (its SCAN: a name, secured, signal, flags), through the two
+// endpoints every app is granted when the machine has a network device; and joining one, with the password
+// from the sheet. A machine without the capability gets the kernel's refusal and shows "no networks".
+fn scan_networks(s: *State) {
+    s.net_total = 0usize
+    s.net_ok = false
+    let sent = os.send(3usize, netproto.OP_SCAN, netproto.NO_SLOT)
+    if sent == 18446744073709551615usize { ret }
+    let result = os.recv(4usize, netproto.NO_SLOT)
+    let count = os.recv(4usize, netproto.NO_SLOT)
+    var scratch: [32]u8 = zero
+    var i = 0usize
+    while i < count {
+        var kept = 0usize
+        if i < 8usize {
+            kept = netproto.recv_bytes(4usize, mem.address_of(&s.net_names[i * 24usize]), 24usize)
+        } else {
+            kept = netproto.recv_bytes(4usize, mem.address_of(&scratch[0usize]), 24usize)
+        }
+        let secured = os.recv(4usize, netproto.NO_SLOT)
+        let signal = os.recv(4usize, netproto.NO_SLOT)
+        let flags = os.recv(4usize, netproto.NO_SLOT)
+        if i < 8usize {
+            s.net_len[i] = kept
+            s.net_secured[i] = secured
+            s.net_signal[i] = signal
+            s.net_flags[i] = flags
+        }
+        i += 1usize
+    }
+    if count > 8usize { s.net_total = 8usize } else { s.net_total = count }
+    s.net_ok = result == netproto.R_OK
+    say("settings wifi scan ")
+    say_num(s.net_total)
+    say("\n")
+}
+
+// The first network with its connected flag, or 99.
+fn connected_net(s: *State) -> usize {
+    var i = 0usize
+    while i < s.net_total {
+        if (s.net_flags[i] & 1usize) != 0usize { ret i }
+        i += 1usize
+    }
+    ret 99usize
+}
+
+// Join network `n` with the password typed on the sheet; a netproto.R_* result (a refused send counts as R_NO_NETWORK).
+fn join_network(s: *State, n: usize) -> usize {
+    let sent = os.send(3usize, netproto.OP_JOIN, netproto.NO_SLOT)
+    if sent == 18446744073709551615usize { ret netproto.R_NO_NETWORK }
+    netproto.send_bytes(3usize, mem.address_of(&s.net_names[n * 24usize]), s.net_len[n])
+    netproto.send_bytes(3usize, mem.address_of(&s.pass.bytes[0usize]), s.pass.len)
+    ret os.recv(4usize, netproto.NO_SLOT)
 }
 
 fn notify_app(index: usize) -> str {
@@ -336,6 +387,16 @@ type State = struct {
     hit_total: usize,
     search: ui.Field,
     mirror: [48]usize,
+    net_names: [192]u8,
+    net_len: [8]usize,
+    net_flags: [8]usize,
+    net_secured: [8]usize,
+    net_signal: [8]usize,
+    net_total: usize,
+    net_ok: bool,
+    sheet: usize,
+    pass: ui.Field,
+    join_note: usize,
     have_storage: bool,
     storage_used: usize,
     storage_total: usize,
@@ -429,7 +490,11 @@ fn timeout_name(timeout: usize) -> str {
 fn summary(a: *mem.Arena, s: *State, page: usize) -> str {
     if page == 0usize {
         if is_on(s, AIRPLANE) { ret "Airplane mode is on" }
-        if is_on(s, WIFI) { ret join(a, "Wi-Fi on, ", network_name(s.values[NETWORK]), "") }
+        if is_on(s, WIFI) {
+            let connected = connected_net(s)
+            if connected != 99usize { ret join(a, "Wi-Fi on, ", ui.text_of(a, s.net_names[connected * 24usize..], s.net_len[connected]), "") }
+            ret "Wi-Fi on"
+        }
         ret "Wi-Fi off"
     }
     if page == 1usize { ret join(a, join(a, "Brightness ", number(a, s.values[BRIGHTNESS] * 10usize), "%"), ", dark theme ", on_off(is_on(s, DARK))) }
@@ -618,17 +683,24 @@ fn draw_network(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.F
     if is_on(s, WIFI) {
         try section(a, builder, faces, "Available networks", y)
         y += 34.0
-        var n = 0usize
-        while n < 4usize {
+        if s.net_total == 0usize {
             try card(a, builder, 16.0, y + 2.0, 380.0, 54.0, 16.0, surface())
-            try put(a, builder, faces.jost, 17.0, network_name(n), 32.0, y + 8.0, ink())
-            var line = "Saved"
-            if n == 1usize { line = "Open" }
-            if n == 2usize { line = "Secured" }
-            if n == 3usize { line = "Secured, saved" }
-            if n == s.values[NETWORK] { line = "Connected" }
+            try put(a, builder, faces.jost, 17.0, "No networks found", 32.0, y + 8.0, ink())
+            try put(a, builder, faces.grotesk, 12.0, "This machine has no network device.", 32.0, y + 32.0, muted())
+            y += 58.0
+        }
+        var n = 0usize
+        while n < s.net_total {
+            let connected = (s.net_flags[n] & 1usize) != 0usize
+            try card(a, builder, 16.0, y + 2.0, 380.0, 54.0, 16.0, surface())
+            try put(a, builder, faces.jost, 17.0, ui.text_of(a, s.net_names[n * 24usize..], s.net_len[n]), 32.0, y + 8.0, ink())
+            var line = "Open"
+            if s.net_secured[n] != 0usize { line = "Secured" }
+            if (s.net_flags[n] & 2usize) != 0usize { line = "Secured, saved" }
+            if connected { line = "Connected" }
             try put(a, builder, faces.grotesk, 12.0, line, 32.0, y + 32.0, muted())
-            if n == s.values[NETWORK] { try disc(a, builder, 372.0, y + 29.0, 6.0, amber()) }
+            try put_right(a, builder, faces.grotesk, 12.0, join(a, number(a, s.net_signal[n]), "%", ""), 346.0, y + 32.0, muted())
+            if connected { try disc(a, builder, 372.0, y + 29.0, 6.0, amber()) }
             hit(s, 4000usize + n, 16.0, y + 2.0, 380.0, 54.0)
             y += 58.0
             n += 1usize
@@ -886,6 +958,31 @@ fn draw_search(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     ret ok
 }
 
+fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), fg())
+    hit(s, 500usize, 0.0, 10.0, 66.0, 56.0)
+    try put(a, builder, faces.jost_bold, 24.0, join(a, "Join ", ui.text_of(a, s.net_names[s.sheet * 24usize..], s.net_len[s.sheet]), ""), 62.0, 20.0, fg())
+    try put(a, builder, faces.grotesk, 14.0, "Password", 20.0, 84.0, fg_dim())
+    try card(a, builder, 16.0, 108.0, 380.0, 50.0, 14.0, cream())
+    if s.pass.len == 0usize {
+        try put(a, builder, faces.jost, 20.0, "Enter the password", 30.0, 120.0, muted())
+    } else {
+        let (dots, dots_error) = mem.alloc[u8](a, s.pass.len)
+        if dots_error != ok { ret dots_error }
+        var i = 0usize
+        while i < s.pass.len {
+            dots[i] = 42u8
+            i += 1usize
+        }
+        try put(a, builder, faces.jost, 22.0, ui.text_of(a, dots[0usize..], s.pass.len), 30.0, 120.0, ink())
+    }
+    if s.join_note == 1usize { try put(a, builder, faces.grotesk, 14.0, "Wrong password", 20.0, 170.0, paint.Color { red: 0.95, green: 0.45, blue: 0.40, alpha: 1.0 }) }
+    if s.join_note == 2usize { try put(a, builder, faces.grotesk, 14.0, "Could not connect", 20.0, 170.0, paint.Color { red: 0.95, green: 0.45, blue: 0.40, alpha: 1.0 }) }
+    s.keys.total = 0usize
+    try ui.keyboard(a, builder, &s.keys, faces, "Join")
+    ret ok
+}
+
 fn draw_page(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), fg())
     hit(s, 500usize, 0.0, 10.0, 66.0, 56.0)
@@ -914,6 +1011,8 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
         try draw_main(a, builder, s, faces)
     } else if s.page == SEARCH {
         try draw_search(a, builder, s, faces)
+    } else if s.page == SHEET {
+        try draw_sheet(a, builder, s, faces)
     } else {
         try draw_page(a, builder, s, faces)
     }
@@ -938,6 +1037,7 @@ fn flip(s: *State, setting: usize) {
     if s.values[setting] == 0usize { s.values[setting] = 1usize } else { s.values[setting] = 0usize }
     if setting == DARK { dark_theme = s.values[DARK] != 0usize }
     // Airplane mode turns the radios off.
+    if setting == WIFI && s.values[WIFI] != 0usize { scan_networks(s) }
     if setting == AIRPLANE && s.values[AIRPLANE] != 0usize {
         s.values[WIFI] = 0usize
         s.values[MOBILE] = 0usize
@@ -953,6 +1053,39 @@ fn flip(s: *State, setting: usize) {
 
 // What a tap at `x` on button `id` did: true when the screen changed.
 fn act(s: *State, id: usize, x: f32) -> bool {
+    if s.page == SHEET {
+        if id == 500usize {
+            s.page = 0usize
+            say("settings back\n")
+            ret true
+        }
+        if id == 1205usize {
+            let n = s.sheet
+            let result = join_network(s, n)
+            if result == netproto.R_OK {
+                say("settings wifi connected ")
+                say(s.net_names[n * 24usize..n * 24usize + s.net_len[n]])
+                say("\n")
+                scan_networks(s)
+                s.page = 0usize
+            } else if result == netproto.R_AUTH {
+                s.join_note = 1usize
+                say("settings wifi wrong password\n")
+            } else {
+                s.join_note = 2usize
+                say("settings wifi join failed\n")
+            }
+            ret true
+        }
+        if ui.is_key(id) && ui.field_key(&s.pass, id, false) {
+            s.join_note = 0usize
+            say("settings wifi password ")
+            say_num(s.pass.len)
+            say(" chars\n")
+            ret true
+        }
+        ret false
+    }
     if s.page == SEARCH {
         var open = NONE
         if id >= 6000usize && id < 6000usize + s.found_total { open = id - 6000usize }
@@ -996,6 +1129,7 @@ fn act(s: *State, id: usize, x: f32) -> bool {
             say("settings page ")
             say(page_name(s.page))
             say("\n")
+            if s.page == 0usize && s.values[WIFI] != 0usize { scan_networks(s) }
             if s.page == 4usize {
                 let (used, total, answered) = vaultfs.stats()
                 s.have_storage = answered
@@ -1048,11 +1182,29 @@ fn act(s: *State, id: usize, x: f32) -> bool {
         say("\n")
         ret true
     }
-    if id >= 4000usize && id < 4004usize {
-        s.values[NETWORK] = id - 4000usize
-        say("settings network ")
-        say(network_name(s.values[NETWORK]))
-        say("\n")
+    if id >= 4000usize && id < 4008usize && id - 4000usize < s.net_total {
+        let n = id - 4000usize
+        if (s.net_flags[n] & 1usize) != 0usize { ret false }
+        if s.net_secured[n] != 0usize {
+            s.sheet = n
+            s.pass.len = 0usize
+            s.join_note = 0usize
+            s.page = SHEET
+            say("settings wifi password sheet ")
+            say(s.net_names[n * 24usize..n * 24usize + s.net_len[n]])
+            say("\n")
+            ret true
+        }
+        s.pass.len = 0usize
+        let result = join_network(s, n)
+        if result == netproto.R_OK {
+            say("settings wifi connected ")
+            say(s.net_names[n * 24usize..n * 24usize + s.net_len[n]])
+            say("\n")
+        } else {
+            say("settings wifi join failed\n")
+        }
+        scan_networks(s)
         ret true
     }
     if id == 5000usize {
@@ -1136,6 +1288,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     sync_theme(&s)
     s.page = MAIN
+    if s.values[WIFI] != 0usize { scan_networks(&s) }
     let (stored_used, stored_total, stored_answered) = vaultfs.stats()
     s.have_storage = stored_answered
     s.storage_used = stored_used
@@ -1158,11 +1311,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             running = false
         } else {
             var id = NONE
-            if s.page == SEARCH { id = ui.hit_at(&s.keys, tap.x, tap.y) }
+            if s.page == SEARCH || s.page == SHEET { id = ui.hit_at(&s.keys, tap.x, tap.y) }
             if id == NONE { id = hit_at(&s, tap.x, tap.y) }
             if id != NONE && act(&s, id, tap.x) {
                 sync_theme(&s)
-                if id >= 1000usize && id < 6000usize && s.page != SEARCH {
+                if id >= 1000usize && id < 6000usize && s.page != SEARCH && s.page != SHEET {
                     if served {
                         var changed = false
                         var index = 0usize

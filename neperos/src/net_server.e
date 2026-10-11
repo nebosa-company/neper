@@ -155,6 +155,59 @@ fn connect(s: *Session, a: *mem.Arena, host: str, port: u16, secure: bool) -> us
     ret netproto.R_OK
 }
 
+// (C126) What the machine hears. There is no radio on this machine's network device: it has one wired link, which
+// is listed as "Ethernet" and is always the connection to fall back on. The test boots add a recorded air, the way
+// they record DNS and the API hosts, so the Settings app's scan, password sheet and join can be exercised: three
+// networks, two of them secured. A real radio driver would put its scan results in this list.
+fn air_name(index: usize) -> str {
+    if index == 1usize { ret "Neper-Lab" }
+    if index == 2usize { ret "Cafe-Free" }
+    if index == 3usize { ret "Neighbour-5G" }
+    ret "Ethernet"
+}
+
+fn air_secured(index: usize) -> usize {
+    if index == 1usize || index == 3usize { ret 1usize }
+    ret 0usize
+}
+
+fn air_signal(index: usize) -> usize {
+    if index == 1usize { ret 82usize }
+    if index == 2usize { ret 61usize }
+    if index == 3usize { ret 34usize }
+    ret 100usize
+}
+
+fn air_password(index: usize) -> str {
+    if index == 1usize { ret "neperlab1" }
+    ret "wallhugger"
+}
+
+fn air_count(s: *Session) -> usize {
+    if s.test { ret 4usize }
+    if s.present { ret 1usize }
+    ret 0usize
+}
+
+// The network joined since boot ("" none: the wired link is the connection), in a buffer of its own.
+var joined_text: [32]u8 = zero
+var joined_len: usize = 0usize
+
+fn named(text: str, bytes: []u8) -> bool {
+    if text.len != bytes.len { ret false }
+    var i = 0usize
+    while i < text.len {
+        if text[i] != bytes[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn joined_is(index: usize) -> bool {
+    if joined_len == 0usize { ret index == 0usize }
+    ret named(air_name(index), joined_text[0usize..joined_len])
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let device = read_device()
     var s: Session = zero
@@ -187,6 +240,46 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let op = os.recv(REQ, netproto.NO_SLOT)
         if op == netproto.OP_QUIT {
             running = false
+        } else if op == netproto.OP_SCAN {
+            reply(netproto.R_OK)
+            let count = air_count(&s)
+            let count_sent = os.send(REP, count, netproto.NO_SLOT)
+            var i = 0usize
+            while i < count {
+                netproto.send_text(REP, air_name(i))
+                let secured_sent = os.send(REP, air_secured(i), netproto.NO_SLOT)
+                let signal_sent = os.send(REP, air_signal(i), netproto.NO_SLOT)
+                var flags = 0usize
+                if joined_is(i) { flags = 3usize }
+                if i == 0usize && joined_len != 0usize { flags = 0usize }
+                let flags_sent = os.send(REP, flags, netproto.NO_SLOT)
+                i += 1usize
+            }
+        } else if op == netproto.OP_JOIN {
+            let name_len = netproto.recv_bytes(REQ, host_addr, 255usize)
+            let password_len = netproto.recv_bytes(REQ, chunk_addr, 64usize)
+            var found = 99usize
+            var i = 0usize
+            while i < air_count(&s) {
+                if named(air_name(i), hostbuf[0usize..name_len]) { found = i }
+                i += 1usize
+            }
+            if found == 99usize {
+                reply(netproto.R_NO_NETWORK)
+            } else if found == 0usize {
+                joined_len = 0usize
+                reply(netproto.R_OK)
+            } else if air_secured(found) != 0usize && !named(air_password(found), chunk[0usize..password_len]) {
+                reply(netproto.R_AUTH)
+            } else {
+                var k = 0usize
+                while k < name_len && k < 32usize {
+                    joined_text[k] = hostbuf[k]
+                    k += 1usize
+                }
+                joined_len = k
+                reply(netproto.R_OK)
+            }
         } else {
             if op == netproto.OP_SET_DNS {
                 let ip_word = os.recv(REQ, netproto.NO_SLOT)
