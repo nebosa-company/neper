@@ -459,12 +459,15 @@ fn setup_args_files(space: vm.Space, name: str) -> (usize, usize, err) {
     vm.put_word(space, arg_off, vm.address(strings))
     vm.put_word(space, arg_off + 8usize, name.len)
     if theme_arg != 0usize {
-        vm.put_byte(space, strings + name.len, u8(theme_arg))
+        // Three letters, a nibble each of the word's low twelve bits.
+        vm.put_byte(space, strings + name.len, u8(97usize + (theme_arg & 15usize)))
+        vm.put_byte(space, strings + name.len + 1usize, u8(97usize + ((theme_arg >> 4usize) & 15usize)))
+        vm.put_byte(space, strings + name.len + 2usize, u8(97usize + ((theme_arg >> 8usize) & 15usize)))
         vm.put_word(space, arg_off + (1usize + extra_count) * 16usize, vm.address(strings + name.len))
-        vm.put_word(space, arg_off + (1usize + extra_count) * 16usize + 8usize, 1usize)
+        vm.put_word(space, arg_off + (1usize + extra_count) * 16usize + 8usize, 3usize)
     }
     if sizes_arg {
-        let at = strings + name.len + 1usize
+        let at = strings + name.len + 3usize
         var entry = 0usize
         while entry < 32usize {
             var size = 0usize
@@ -714,7 +717,7 @@ fn launch(frame: *a64.Frame) {
         driver_arena_bytes = vm.SHARED_FRAME_BYTES * 14usize
         extra_first = 8usize
         extra_count = 5usize
-        if theme_word >= 16usize && theme_word < 32usize { theme_arg = 97usize + (theme_word & 15usize) }
+        if theme_word >= 4096usize && theme_word < 8192usize { theme_arg = theme_word }
         // The Settings app (entry 24) also lists the apps with their sizes.
         if index == 24usize && theme_arg != 0usize { sizes_arg = true }
     }

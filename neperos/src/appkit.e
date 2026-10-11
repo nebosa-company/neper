@@ -97,6 +97,12 @@ fn begin(a: *mem.Arena, kit: *Kit) -> (scene.Builder, err) {
 // Finish `builder`, compile and render it into the window and present it (the compositor takes the
 // frame signal as its answer to the event being handled). The scene before it is released.
 fn present(kit: *Kit, builder: *scene.Builder) -> bool {
+    // (C126) The brightness setting: a dimming layer over the frame, nothing at the system's starting level.
+    let dim = theme.dim_alpha()
+    if dim > 0.0 {
+        let layer = scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 412.0, kit.logical_h), brush: paint.Brush { Solid: paint.Color { red: 0.0, green: 0.0, blue: 0.0, alpha: dim } } } }
+        if scene.push(builder, layer) != ok { ret false }
+    }
     let restore: scene.Command = .Restore
     if scene.push(builder, restore) != ok {
         say("appkit push failed\n")

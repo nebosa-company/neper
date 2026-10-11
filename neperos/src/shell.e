@@ -103,6 +103,23 @@ fn number_text(a: *mem.Arena, value: usize) -> str {
     ret buffer[0usize..20usize - at]
 }
 
+// (C126) The time of day as the 24-hour clock or the 12-hour one with AM or PM, by the system setting.
+fn clock_text(a: *mem.Arena, hour: usize, minute: usize) -> str {
+    if theme.is_24h() { ret join3(a, two_digits(a, hour), ":", two_digits(a, minute)) }
+    var hour12 = hour % 12usize
+    if hour12 == 0usize { hour12 = 12usize }
+    var suffix = " AM"
+    if hour >= 12usize { suffix = " PM" }
+    ret join3(a, join3(a, number_text(a, hour12), ":", two_digits(a, minute)), suffix, "")
+}
+
+// (C126) The brightness setting as a dimming layer over the whole screen, nothing at the level the system starts at.
+fn dim_layer(builder: *scene.Builder, logical_h: f32) -> err {
+    let alpha = theme.dim_alpha()
+    if alpha > 0.0 { try fill(builder, 0.0, 0.0, 412.0, logical_h, paint.Color { red: 0.0, green: 0.0, blue: 0.0, alpha: alpha }) }
+    ret ok
+}
+
 fn join3(a: *mem.Arena, first: str, second: str, third: str) -> str {
     let (buffer, buffer_error) = mem.alloc[u8](a, first.len + second.len + third.len)
     if buffer_error != ok { ret first }
@@ -185,8 +202,23 @@ fn draw_lock(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, hour: us
     let white = paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }
     let soft = paint.Color { red: 0.86, green: 0.87, blue: 0.9, alpha: 1.0 }
     let glass = paint.Color { red: 0.1, green: 0.1, blue: 0.11, alpha: 0.62 }
-    let clock = join3(a, two_digits(a, hour), ":", two_digits(a, minute))
-    try centred(a, builder, faces.jost_bold, 104.0, clock, 206.0, 28.0, white)
+    if theme.is_24h() {
+        try centred(a, builder, faces.jost_bold, 104.0, clock_text(a, hour, minute), 206.0, 28.0, white)
+    } else {
+        // The 12-hour clock: the digits at the large size and AM or PM small beside them, so it fits the screen.
+        var hour12 = hour % 12usize
+        if hour12 == 0usize { hour12 = 12usize }
+        var suffix = "AM"
+        if hour >= 12usize { suffix = "PM" }
+        let digits = join3(a, number_text(a, hour12), ":", two_digits(a, minute))
+        let digits_width = text.measure(a, faces.jost_bold, 104.0, digits)
+        let suffix_width = text.measure(a, faces.jost_bold, 34.0, suffix)
+        let left = 206.0 - (digits_width + 10.0 + suffix_width) / 2.0
+        let (digits_box, digits_error) = text.draw(a, builder, faces.jost_bold, 104.0, digits, left, 28.0, 0.0, 0u32, layout.Align.Start, white)
+        if digits_error != ok { ret digits_error }
+        let (suffix_box, suffix_error) = text.draw(a, builder, faces.jost_bold, 34.0, suffix, left + digits_width + 10.0, 40.0, 0.0, 0u32, layout.Align.Start, white)
+        if suffix_error != ok { ret suffix_error }
+    }
     let (month, day) = lunar.month_day(seconds)
     let date_text = join3(a, lunar.month_name(month), " ", number_text(a, day))
     try centred(a, builder, faces.jost, 30.0, date_text, 206.0, 150.0, white)
@@ -273,7 +305,7 @@ fn read_snapshot(into: *[5]usize) {
 // Compile `list` as a scene of its own and draw it into the window, then present it.
 // (C126) The system theme word (theme.e): handed to every app launched, above its program index, and replaced by
 // the exit code the Settings app (archive entry 24) returns.
-var theme_word: usize = 21usize
+var theme_word: usize = 5365usize
 const SETTINGS_PROGRAM: usize = 24usize
 var last_scene: scene.SceneId = zero
 var has_last_scene: bool = false
@@ -316,6 +348,7 @@ fn show_home(a: *mem.Arena, renderer: *scene.Renderer, w: *window.Window, drawab
         if fill(&builder, 0.0, 0.0, 412.0, logical_h, paint.Color { red: 0.09, green: 0.11, blue: 0.18, alpha: 1.0 }) != ok { ret false }
     }
     if draw_home(a, &builder, faces, has_fonts, clock, snap) != ok { ret false }
+    if dim_layer(&builder, logical_h) != ok { ret false }
     let restore: scene.Command = .Restore
     if scene.push(&builder, restore) != ok { ret false }
     ret show(renderer, w, drawable, scene.finish(&builder))
@@ -420,6 +453,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let stored = stored_theme()
     if stored != 0usize {
         theme_word = stored
+        theme.set(theme_word)
         say("shell theme from fs ")
         say_num(stored)
         say("\n")
@@ -441,7 +475,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         hour = day / 3600usize
         minute = (day % 3600usize) / 60usize
     }
-    let clock = join3(a, two_digits(a, hour), ":", two_digits(a, minute))
+    let clock = clock_text(a, hour, minute)
     let scale = f32(os.SURFACE_W) / 412.0
     let logical_h = f32(os.SURFACE_H) / scale
     let ground = paint.Color { red: 0.09, green: 0.11, blue: 0.18, alpha: 1.0 }
@@ -452,7 +486,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
     // The lock screen, when there are fonts to draw it with.
     var locked = false
-    if has_fonts {
+    // (C126) The Screen lock setting: None goes straight to the home screen.
+    if theme.screen_lock() == 0usize { say("shell lock none\n") }
+    if has_fonts && theme.screen_lock() != 0usize {
         let (builder_value, builder_error) = scene.builder(a, 4096usize)
         if builder_error != ok { ret builder_error }
         var builder = builder_value
@@ -461,6 +497,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try scene.push(&builder, scene.Command { Transform: geometry.transform_scale(scale, scale) })
         if wallpapered { try wallpaper_layer(&builder, wall_texture, wall_w, wall_h, logical_h) } else { try fill(&builder, 0.0, 0.0, 412.0, logical_h, ground) }
         try draw_lock(a, &builder, faces, hour, minute, seconds)
+        try dim_layer(&builder, logical_h)
         let restore: scene.Command = .Restore
         try scene.push(&builder, restore)
         if !show(&renderer, &w, drawable, scene.finish(&builder)) { ret ok }
@@ -481,6 +518,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     say("shell status service notes ")
     say_num(snap[4usize])
     say("\n")
+    // (C126) Do Not Disturb: no notification count on the status bar or the lock screen.
+    if theme.do_not_disturb() {
+        snap[4usize] = 0usize
+        say("shell dnd on\n")
+    }
 
     // The home screen, drawn at once when there is no lock screen, else on the first key.
     var home_shown = false
@@ -493,6 +535,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try scene.push(&builder, scene.Command { Transform: geometry.transform_scale(scale, scale) })
         if wallpapered { try wallpaper_layer(&builder, wall_texture, wall_w, wall_h, logical_h) } else { try fill(&builder, 0.0, 0.0, 412.0, logical_h, ground) }
         try draw_home(a, &builder, faces, has_fonts, clock, snap)
+        try dim_layer(&builder, logical_h)
         let restore: scene.Command = .Restore
         try scene.push(&builder, restore)
         if !show(&renderer, &w, drawable, scene.finish(&builder)) { ret ok }
@@ -575,8 +618,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         say("shell app code ")
                         say_num(code_app)
                         say("\n")
-                        if program == SETTINGS_PROGRAM && code_app >= 16usize && code_app < 32usize {
+                        if program == SETTINGS_PROGRAM && theme.valid(code_app) {
                             theme_word = code_app
+                            theme.set(theme_word)
                             say("shell theme ")
                             say_num(theme_word)
                             say("\n")

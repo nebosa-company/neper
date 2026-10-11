@@ -365,7 +365,7 @@ fn defaults(s: *State) {
     s.values[MIC_ACCESS] = 1usize
     s.values[FINGERPRINT] = 1usize
     s.values[LOCK] = 2usize
-    s.values[HOUR24] = 0usize
+    s.values[HOUR24] = 1usize
     s.values[NETWORK] = 0usize
     s.values[BLUETOOTH] = 1usize
     s.values[ROTATE] = 1usize
@@ -412,7 +412,7 @@ fn load(s: *State) -> bool {
 // (C126) The three settings every app follows go out as the theme word: to this app's own text and ground at
 // once, and to the shell as the exit code, which hands it to the apps it launches next.
 fn sync_theme(s: *State) {
-    theme.set(theme.word_of(s.values[DARK], s.values[CONTRAST], s.values[FONT]))
+    theme.set(theme.word_of(s.values[DARK], s.values[CONTRAST], s.values[FONT], s.values[HOUR24], s.values[BRIGHTNESS], s.values[LOCK], s.values[DND]))
 }
 
 fn is_on(s: *State, setting: usize) -> bool {
@@ -1138,6 +1138,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if theme.is_dark() { s.values[DARK] = 1usize } else { s.values[DARK] = 0usize }
         if theme.high_contrast() { s.values[CONTRAST] = 1usize } else { s.values[CONTRAST] = 0usize }
         s.values[FONT] = theme.word & 3usize
+        if theme.is_24h() { s.values[HOUR24] = 1usize } else { s.values[HOUR24] = 0usize }
+        s.values[BRIGHTNESS] = theme.brightness_step()
+        s.values[LOCK] = theme.screen_lock()
+        if theme.do_not_disturb() { s.values[DND] = 1usize } else { s.values[DND] = 0usize }
         dark_theme = s.values[DARK] != 0usize
     }
     sync_theme(&s)

@@ -154,6 +154,8 @@ fn month_short(month: usize) -> str {
 // "6:42 PM" from a minute of the day.
 fn clock_text(a: *mem.Arena, minute: usize) -> str {
     let hour24 = minute / 60usize
+    // (C126) The 24-hour format setting.
+    if theme.is_24h() { ret join(a, two(a, hour24), ":", two(a, minute % 60usize)) }
     var hour12 = hour24 % 12usize
     if hour12 == 0usize { hour12 = 12usize }
     var suffix = " AM"
