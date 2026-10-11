@@ -22912,6 +22912,16 @@ fn code128(a: *mem.Arena, text_in: str) -> ([]u8, err)
 fn ean_l_table() -> str
 fn ean_parity_table() -> str
 fn ean13(a: *mem.Arena, digits_in: str) -> ([]u8, err)
+error NotFound
+type Finder = struct { x: f64, y: f64, module: f64, votes: usize }
+const MAX_FINDERS: usize = 48usize
+fn otsu(luma: []const u8, count: usize) -> usize
+fn finder_ratio(r0: usize, r1: usize, r2: usize, r3: usize, r4: usize) -> bool
+fn run_length(bin: []const u8, width: usize, height: usize, x: usize, y: usize, dx: i64, dy: i64, want: u8) -> usize
+fn cross_check(bin: []const u8, width: usize, height: usize, x: usize, y: usize, dx: i64, dy: i64) -> (usize, i64, bool)
+fn add_finder(list: []Finder, count: usize, x: f64, y: f64, module: f64) -> usize
+fn dist2(p: Finder, q: Finder) -> f64
+fn qr_scan(a: *mem.Arena, luma: []const u8, width: usize, height: usize) -> ([]u8, err)
 ```
 
-QR Code, Code 128 and EAN-13 (C121, L137). `qr_encode` makes the smallest QR symbol of versions 1 to 10 for the bytes at an error-correction level (0 L, 1 M, 2 Q, 3 H) with the lowest-penalty mask, `qr_encode_with` takes a mask 0 to 7; a `Matrix` is `size` x `size` bytes, 1 for dark. `qr_decode` reads a matrix already found and sampled: the format word within three bit errors, Reed-Solomon correction per block (Berlekamp-Massey, Chien search, Forney), byte, alphanumeric and numeric segments; more damage than the code corrects is `Uncorrectable`. `code128` gives set B text or set C digit pairs as a row of modules (1 for a bar), `ean13` the 95 modules of twelve digits (check digit added) or thirteen (checked). Checked against the qrcode and python-barcode packages, symbols with damaged modules read back, and the refusals.
+QR Code, Code 128 and EAN-13 (C121, L137). `qr_encode` makes the smallest QR symbol of versions 1 to 10 for the bytes at an error-correction level (0 L, 1 M, 2 Q, 3 H) with the lowest-penalty mask, `qr_encode_with` takes a mask 0 to 7; a `Matrix` is `size` x `size` bytes, 1 for dark. `qr_decode` reads a matrix already found and sampled: the format word within three bit errors, Reed-Solomon correction per block (Berlekamp-Massey, Chien search, Forney), byte, alphanumeric and numeric segments; more damage than the code corrects is `Uncorrectable`. `code128` gives set B text or set C digit pairs as a row of modules (1 for a bar), `ean13` the 95 modules of twelve digits (check digit added) or thirteen (checked). `qr_scan` finds a symbol in an 8-bit luminance image (Otsu threshold, the three finder patterns by their 1:1:3:1:1 runs checked in both directions, an affine grid so a turn is fine and a perspective is not) and reads it, `NotFound` otherwise. Checked against the qrcode and python-barcode packages, symbols with damaged modules read back, and the refusals.

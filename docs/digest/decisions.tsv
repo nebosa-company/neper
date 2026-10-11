@@ -2156,4 +2156,5 @@ D2397	848	C122 part three: Scan straightens the page into a file
 D2398	466	C122 closed; the sensor, video and QR remainder is C153
 D2399	1776	C121 part one: `e.barcode`, and Wallet's codes are real
 D2400	1345	C121 part two: the identifier suite in e.valid and validation in Wallet's add form
-D2401	730	C121 part three: the passport's machine-readable zone check
+D2401	731	C121 part three: the passport's machine-readable zone check
+D2402	1507	C121 part four: reading a QR symbol out of an image, and the scan on a document

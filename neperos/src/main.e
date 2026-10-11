@@ -823,7 +823,8 @@ fn launch(frame: *a64.Frame) {
         // (C125) The Files app (entry 23) holds the whole tree through the same endpoints.
         // (C125) The Document app (entry 40) reads the file Files hands it over the same endpoints.
         // (C122) The Camera (entry 21) writes its photos to /DCIM and Photos (entry 22) reads them.
-        if index == 38usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize {
+        // (C121) The Wallet (entry 20) reads the newest scan the Camera wrote to /DCIM.
+        if index == 38usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize {
             if fs_present {
                 thread.grant(child, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                 thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)

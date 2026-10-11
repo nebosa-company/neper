@@ -1239,6 +1239,12 @@ $barcodeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $barcodeWritten -ne 'executable written') { throw 'barcode emission failed' }
 & $barcodePath
 if ($LASTEXITCODE -ne 0) { throw "a barcode check failed: exit $LASTEXITCODE" }
+# `e.barcode.qr_scan`: symbols drawn, turned and thresholded, found by their finder patterns and read.
+$barcodeScanPath = Join-Path $testBuild 'barcode-scan-selfhost.exe'
+$barcodeScanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\barcode_scan\src\main.e') $repo 'x64' 'windows' $barcodeScanPath
+if ($LASTEXITCODE -ne 0 -or $barcodeScanWritten -ne 'executable written') { throw 'barcode_scan emission failed' }
+& $barcodeScanPath
+if ($LASTEXITCODE -ne 0) { throw "a barcode_scan check failed: exit $LASTEXITCODE" }
 # `e.test.support`: the clock, the scripted reader and writer, the schedule.
 $testSupportPath = Join-Path $testBuild 'test-support-selfhost.exe'
 $testSupportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_support\src\main.e') $repo 'x64' 'windows' $testSupportPath

@@ -483,6 +483,7 @@
     "fmt_woff",
     "text_highlight",
     "barcode",
+    "barcode_scan",
     "fmt_xlsx",
     "gfx_cssvalue",
     "html_accessible",
@@ -713,7 +714,8 @@
    "delivered": 1,
    "pending": [],
    "fixtures": [
-    "barcode"
+    "barcode",
+    "barcode_scan"
    ]
   },
   {

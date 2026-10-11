@@ -1143,3 +1143,312 @@ fn ean13(a: *mem.Arena, digits_in: str) -> ([]u8, err) {
     out[n + 2usize] = 1u8
     ret (out[0usize..95usize], ok)
 }
+
+// ---- QR: finding a symbol in an image -----------------------------------------------------------------------
+
+error NotFound
+
+type Finder = struct { x: f64, y: f64, module: f64, votes: usize }
+
+const MAX_FINDERS: usize = 48usize
+
+// The Otsu threshold of an 8-bit luminance image: pixels below it are dark.
+fn otsu(luma: []const u8, count: usize) -> usize {
+    var histogram: [256]usize = zero
+    var i = 0usize
+    while i < count {
+        histogram[usize(luma[i])] += 1usize
+        i += 1usize
+    }
+    var sum_all = 0usize
+    i = 0usize
+    while i < 256usize {
+        sum_all += i * histogram[i]
+        i += 1usize
+    }
+    var weight_back = 0usize
+    var sum_back = 0usize
+    var best = 0usize
+    var best_between = 0.0f64
+    var t = 0usize
+    while t < 256usize {
+        weight_back += histogram[t]
+        if weight_back != 0usize && weight_back != count {
+            sum_back += t * histogram[t]
+            let weight_fore = count - weight_back
+            let mean_back = f64(sum_back) / f64(weight_back)
+            let mean_fore = f64(sum_all - sum_back) / f64(weight_fore)
+            let between = f64(weight_back) * f64(weight_fore) * (mean_back - mean_fore) * (mean_back - mean_fore)
+            if between > best_between {
+                best_between = between
+                best = t
+            }
+        }
+        t += 1usize
+    }
+    ret best + 1usize
+}
+
+// Do five run lengths (dark, light, dark, light, dark) have the finder's 1:1:3:1:1 proportions?
+fn finder_ratio(r0: usize, r1: usize, r2: usize, r3: usize, r4: usize) -> bool {
+    let total = r0 + r1 + r2 + r3 + r4
+    if total < 7usize { ret false }
+    let unit = total
+    // Each of the four ones is within half a unit of total / 7, the centre within 3/2 units of 3 total / 7.
+    var d0 = r0 * 7usize
+    if d0 >= unit { d0 = d0 - unit } else { d0 = unit - d0 }
+    var d1 = r1 * 7usize
+    if d1 >= unit { d1 = d1 - unit } else { d1 = unit - d1 }
+    var d3 = r3 * 7usize
+    if d3 >= unit { d3 = d3 - unit } else { d3 = unit - d3 }
+    var d4 = r4 * 7usize
+    if d4 >= unit { d4 = d4 - unit } else { d4 = unit - d4 }
+    var d2 = r2 * 7usize
+    if d2 >= 3usize * unit { d2 = d2 - 3usize * unit } else { d2 = 3usize * unit - d2 }
+    let limit = unit / 2usize
+    ret d0 < limit && d1 < limit && d3 < limit && d4 < limit && d2 < 3usize * limit
+}
+
+// Count the run of `want` pixels from (x, y) along (dx, dy); stops at the image's edge.
+fn run_length(bin: []const u8, width: usize, height: usize, x: usize, y: usize, dx: i64, dy: i64, want: u8) -> usize {
+    var n = 0usize
+    var cx = i64(x)
+    var cy = i64(y)
+    while cx >= 0i64 && cy >= 0i64 && cx < i64(width) && cy < i64(height) && bin[usize(cy) * width + usize(cx)] == want {
+        n += 1usize
+        cx += dx
+        cy += dy
+    }
+    ret n
+}
+
+// Check a candidate at (x, y) in the other direction (dx, dy is the direction to check): the five runs through
+// it must have the finder's proportions. Returns the total length and the centre offset along the line.
+fn cross_check(bin: []const u8, width: usize, height: usize, x: usize, y: usize, dx: i64, dy: i64) -> (usize, i64, bool) {
+    // The dark centre run, both ways from the point.
+    let up = run_length(bin, width, height, x, y, 0i64 - dx, 0i64 - dy, 1u8)
+    let down = run_length(bin, width, height, x, y, dx, dy, 1u8)
+    if up == 0usize || down == 0usize { ret (0usize, 0i64, false) }
+    let centre = up + down - 1usize
+    // The light run before it and the dark run before that.
+    let sx = i64(x) - dx * i64(up)
+    let sy = i64(y) - dy * i64(up)
+    if sx < 0i64 || sy < 0i64 || sx >= i64(width) || sy >= i64(height) { ret (0usize, 0i64, false) }
+    let l1 = run_length(bin, width, height, usize(sx), usize(sy), 0i64 - dx, 0i64 - dy, 0u8)
+    if l1 == 0usize { ret (0usize, 0i64, false) }
+    let sx2 = sx - dx * i64(l1)
+    let sy2 = sy - dy * i64(l1)
+    if sx2 < 0i64 || sy2 < 0i64 || sx2 >= i64(width) || sy2 >= i64(height) { ret (0usize, 0i64, false) }
+    let d1 = run_length(bin, width, height, usize(sx2), usize(sy2), 0i64 - dx, 0i64 - dy, 1u8)
+    if d1 == 0usize { ret (0usize, 0i64, false) }
+    // And after it.
+    let ex = i64(x) + dx * i64(down)
+    let ey = i64(y) + dy * i64(down)
+    if ex < 0i64 || ey < 0i64 || ex >= i64(width) || ey >= i64(height) { ret (0usize, 0i64, false) }
+    let l2 = run_length(bin, width, height, usize(ex), usize(ey), dx, dy, 0u8)
+    if l2 == 0usize { ret (0usize, 0i64, false) }
+    let ex2 = ex + dx * i64(l2)
+    let ey2 = ey + dy * i64(l2)
+    if ex2 < 0i64 || ey2 < 0i64 || ex2 >= i64(width) || ey2 >= i64(height) { ret (0usize, 0i64, false) }
+    let d2 = run_length(bin, width, height, usize(ex2), usize(ey2), dx, dy, 1u8)
+    if d2 == 0usize { ret (0usize, 0i64, false) }
+    if !finder_ratio(d1, l1, centre, l2, d2) { ret (0usize, 0i64, false) }
+    // The centre of the middle run relative to the point: (down - up) / 2.
+    let shift = (i64(down) - i64(up)) / 2i64
+    ret (d1 + l1 + centre + l2 + d2, shift, true)
+}
+
+fn add_finder(list: []Finder, count: usize, x: f64, y: f64, module: f64) -> usize {
+    var i = 0usize
+    while i < count {
+        let dx = list[i].x - x
+        let dy = list[i].y - y
+        let near = list[i].module * 2.0f64
+        if dx * dx + dy * dy < near * near {
+            let v = f64(list[i].votes)
+            list[i].x = (list[i].x * v + x) / (v + 1.0f64)
+            list[i].y = (list[i].y * v + y) / (v + 1.0f64)
+            list[i].module = (list[i].module * v + module) / (v + 1.0f64)
+            list[i].votes += 1usize
+            ret count
+        }
+        i += 1usize
+    }
+    if count >= list.len { ret count }
+    list[count] = Finder { x: x, y: y, module: module, votes: 1usize }
+    ret count + 1usize
+}
+
+fn dist2(p: Finder, q: Finder) -> f64 {
+    let dx = p.x - q.x
+    let dy = p.y - q.y
+    ret dx * dx + dy * dy
+}
+
+// Finds a QR symbol in an 8-bit luminance image (rows of `width` bytes) and reads it. The three finder patterns
+// are found by their 1:1:3:1:1 runs along rows and checked down the columns; the symbol's grid is the affine
+// frame they give (so a turn or a shear is fine, a perspective is not), sampled at the module centres and read
+// by `qr_decode`. `NotFound` when there is no symbol or it cannot be read.
+fn qr_scan(a: *mem.Arena, luma: []const u8, width: usize, height: usize) -> ([]u8, err) {
+    var none: []u8 = zero
+    if width < 21usize || height < 21usize || luma.len < width * height { ret (none, NotFound) }
+    let (bin, bin_error) = mem.alloc[u8](a, width * height)
+    if bin_error != ok { ret (none, bin_error) }
+    let threshold = otsu(luma, width * height)
+    var k = 0usize
+    while k < width * height {
+        if usize(luma[k]) < threshold { bin[k] = 1u8 } else { bin[k] = 0u8 }
+        k += 1usize
+    }
+    var list: [48]Finder = zero
+    var count = 0usize
+    var y = 0usize
+    while y < height {
+        var runs: [5]usize = zero
+        var have = 0usize
+        var x = 0usize
+        var start = 0usize
+        while x <= width {
+            var edge = x == width
+            if !edge { edge = x > 0usize && bin[y * width + x] != bin[y * width + x - 1usize] }
+            if edge && x > 0usize {
+                let finished = x - start
+                let colour = bin[y * width + x - 1usize]
+                runs[0usize] = runs[1usize]
+                runs[1usize] = runs[2usize]
+                runs[2usize] = runs[3usize]
+                runs[3usize] = runs[4usize]
+                runs[4usize] = finished
+                have += 1usize
+                start = x
+                if colour == 1u8 && have >= 5usize && finder_ratio(runs[0usize], runs[1usize], runs[2usize], runs[3usize], runs[4usize]) {
+                    let centre_x = x - runs[4usize] - runs[3usize] - runs[2usize] + runs[2usize] / 2usize
+                    let (vertical, shift, vertical_ok) = cross_check(bin, width, height, centre_x, y, 0i64, 1i64)
+                    if vertical_ok {
+                        var centre_y = i64(y) + shift
+                        if centre_y < 0i64 { centre_y = 0i64 }
+                        // And back across the row through the refined centre.
+                        let (horizontal, hshift, horizontal_ok) = cross_check(bin, width, height, centre_x, usize(centre_y), 1i64, 0i64)
+                        if horizontal_ok {
+                            let module = f64(vertical + horizontal) / 14.0f64
+                            count = add_finder(list[0usize..48usize], count, f64(i64(centre_x) + hshift), f64(centre_y), module)
+                        }
+                    }
+                }
+            }
+            x += 1usize
+        }
+        y += 1usize
+    }
+    if count < 3usize { ret (none, NotFound) }
+    // A triple whose long side is the hypotenuse of a right isosceles triangle, the modules alike.
+    var i = 0usize
+    while i < count {
+        var j = i + 1usize
+        while j < count {
+            var l = j + 1usize
+            while l < count {
+                let d_ij = dist2(list[i], list[j])
+                let d_il = dist2(list[i], list[l])
+                let d_jl = dist2(list[j], list[l])
+                // The corner is the point opposite the longest side.
+                var corner = i
+                var p = j
+                var q = l
+                var side_p = d_ij
+                var side_q = d_il
+                var hyp = d_jl
+                if d_ij >= d_il && d_ij >= d_jl {
+                    corner = l
+                    p = i
+                    q = j
+                    side_p = d_il
+                    side_q = d_jl
+                    hyp = d_ij
+                } else if d_il >= d_ij && d_il >= d_jl {
+                    corner = j
+                    p = i
+                    q = l
+                    side_p = d_ij
+                    side_q = d_jl
+                    hyp = d_il
+                }
+                let ratio = side_p / side_q
+                let m_ratio = list[p].module / list[q].module
+                let m_corner = list[corner].module / list[p].module
+                if ratio > 0.7f64 && ratio < 1.43f64 && hyp > 1.6f64 * side_p && hyp < 2.5f64 * side_p && m_ratio > 0.6f64 && m_ratio < 1.67f64 && m_corner > 0.6f64 && m_corner < 1.67f64 {
+                    // Which of p and q is on the right: the cross product of the two sides from the corner.
+                    let ax = list[p].x - list[corner].x
+                    let ay = list[p].y - list[corner].y
+                    let bx = list[q].x - list[corner].x
+                    let by = list[q].y - list[corner].y
+                    var right = p
+                    var down = q
+                    if ax * by - ay * bx < 0.0f64 {
+                        right = q
+                        down = p
+                    }
+                    let module = (list[corner].module + list[p].module + list[q].module) / 3.0f64
+                    let rx = list[right].x - list[corner].x
+                    let ry = list[right].y - list[corner].y
+                    let side = rx * rx + ry * ry
+                    // side / module^2 is (n - 7)^2; the sizes tried are the nearest and its neighbours.
+                    let modules_across = side / (module * module)
+                    var guess = 21usize
+                    var best_gap = 1000000.0f64
+                    var size = 21usize
+                    while size <= 57usize {
+                        let want = f64((size - 7usize) * (size - 7usize))
+                        var gap = want - modules_across
+                        if gap < 0.0f64 { gap = 0.0f64 - gap }
+                        if gap < best_gap {
+                            best_gap = gap
+                            guess = size
+                        }
+                        size += 4usize
+                    }
+                    var attempt = 0usize
+                    while attempt < 3usize {
+                        var n = guess
+                        if attempt == 1usize && guess + 4usize <= 57usize { n = guess + 4usize }
+                        if attempt == 2usize && guess >= 25usize { n = guess - 4usize }
+                        if attempt == 0usize || n != guess {
+                            let span = f64(n - 7usize)
+                            let ux_x = rx / span
+                            let ux_y = ry / span
+                            let uy_x = (list[down].x - list[corner].x) / span
+                            let uy_y = (list[down].y - list[corner].y) / span
+                            let (grid, grid_error) = mem.alloc[u8](a, n * n)
+                            if grid_error == ok {
+                                var row = 0usize
+                                while row < n {
+                                    var col = 0usize
+                                    while col < n {
+                                        let fx = list[corner].x + (f64(col) - 3.0f64) * ux_x + (f64(row) - 3.0f64) * uy_x
+                                        let fy = list[corner].y + (f64(col) - 3.0f64) * ux_y + (f64(row) - 3.0f64) * uy_y
+                                        var px = i64(fx + 0.5f64)
+                                        var py = i64(fy + 0.5f64)
+                                        if px < 0i64 { px = 0i64 }
+                                        if py < 0i64 { py = 0i64 }
+                                        if px >= i64(width) { px = i64(width) - 1i64 }
+                                        if py >= i64(height) { py = i64(height) - 1i64 }
+                                        grid[row * n + col] = bin[usize(py) * width + usize(px)]
+                                        col += 1usize
+                                    }
+                                    row += 1usize
+                                }
+                                let (found, found_error) = qr_decode(a, Matrix { size: n, modules: grid })
+                                if found_error == ok { ret (found, ok) }
+                            }
+                        }
+                        attempt += 1usize
+                    }
+                }
+                l += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (none, NotFound)
+}

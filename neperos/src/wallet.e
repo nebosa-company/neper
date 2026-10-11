@@ -15,6 +15,10 @@ use e.mem
 use e.os
 use e.valid
 use e.barcode
+use e.io
+use e.gfx.image
+use e.fmt.png
+use vaultfs
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -186,6 +190,13 @@ type State = struct {
     focus: usize,
     // (C121) What is wrong with the form when Save was tapped (0 nothing, see `problem_text`).
     problem: usize,
+    // (C121) The newest Camera scan in /DCIM, shown on a document: asked for when a document is opened, loaded by
+    // main (it has the renderer), its texture and size.
+    want_scan: bool,
+    has_scan: bool,
+    scan_tex: scene.TextureId,
+    scan_w: f32,
+    scan_h: f32,
     hits: [96]Hit,
     hit_total: usize,
 }
@@ -678,17 +689,31 @@ fn draw_detail(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
         try centred(a, builder, faces.grotesk, 12.0, "Demo card, not usable for payments", 206.0, below + 172.0, muted())
     } else if c.kind == DOC {
         // The page of the scan: a sheet with lines of text, and what is missing.
-        try card(a, builder, 16.0, below, 380.0, 250.0, 20.0, cream())
-        try card(a, builder, 136.0, below + 18.0, 140.0, 140.0, 8.0, soft())
-        var line = 0usize
-        while line < 6usize {
-            var w: f32 = 100.0
-            if line % 3usize == 2usize { w = 70.0 }
-            try card(a, builder, 152.0, below + 34.0 + f32(line) * 18.0, w, 6.0, 3.0, muted())
-            line += 1usize
+        try card(a, builder, 16.0, below, 380.0, 258.0, 20.0, cream())
+        if !s.has_scan {
+            try card(a, builder, 136.0, below + 18.0, 140.0, 140.0, 8.0, soft())
+            var line = 0usize
+            while line < 6usize {
+                var lw: f32 = 100.0
+                if line % 3usize == 2usize { lw = 70.0 }
+                try card(a, builder, 152.0, below + 34.0 + f32(line) * 18.0, lw, 6.0, 3.0, muted())
+                line += 1usize
+            }
         }
-        try centred(a, builder, faces.jost, 17.0, "No scan added yet", 206.0, below + 172.0, ink())
-        try centred(a, builder, faces.grotesk, 12.0, "Scanning needs the Camera app", 206.0, below + 200.0, muted())
+        if s.has_scan {
+            // The Camera's newest scan, whole, inside the sheet (it keeps its own proportions).
+            var w: f32 = 140.0
+            var h: f32 = w * s.scan_h / s.scan_w
+            if h > 226.0 {
+                h = 226.0
+                w = h * s.scan_w / s.scan_h
+            }
+            try scene.push(builder, scene.Command { Image: scene.DrawImage { texture: s.scan_tex, source: geometry.rect(0.0, 0.0, s.scan_w, s.scan_h), destination: geometry.rect(206.0 - w / 2.0, below + 12.0, w, h), opacity: 1.0 } })
+            try centred(a, builder, faces.grotesk, 12.0, "Newest scan from the Camera", 206.0, below + 236.0, muted())
+        } else {
+            try centred(a, builder, faces.jost, 17.0, "No scan added yet", 206.0, below + 172.0, ink())
+            try centred(a, builder, faces.grotesk, 12.0, "Scan a page with the Camera app", 206.0, below + 200.0, muted())
+        }
     } else if c.kind == LOYALTY || c.kind == TRANSIT {
         try card(a, builder, 16.0, below, 380.0, 230.0, 20.0, cream())
         // The member number as a Code 128 barcode; a value that is not printable ASCII falls back to the title.
@@ -1032,6 +1057,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
                 if s.cards[s.open].kind == BANK {
                     if valid.iban(value_of(a, s.cards[s.open], 2usize)) { say("wallet iban valid\n") } else { say("wallet iban invalid\n") }
                 }
+                s.want_scan = s.cards[s.open].kind == DOC
                 // (C121) The code the card shows is real: its size (a QR symbol's side, a barcode's modules).
                 let shown_kind = s.cards[s.open].kind
                 if shown_kind == LOYALTY || shown_kind == TRANSIT {
@@ -1146,6 +1172,52 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     ret false
 }
 
+// (C121) The newest SCAN_nnnn.png in /DCIM (the Camera's straightened pages), decoded and uploaded as a texture.
+fn load_scan(a: *mem.Arena, kit: *appkit.Kit, s: *State) {
+    s.has_scan = false
+    var names: [512]u8 = zero
+    let (name_bytes, listed) = vaultfs.list("/DCIM", mem.address_of(&names[0usize]), 512usize)
+    if !listed { ret }
+    var newest = ""
+    var start = 0usize
+    var pos = 0usize
+    while pos < name_bytes {
+        if names[pos] == 10u8 {
+            let file_name = names[start..pos]
+            if file_name.len > 5usize && file_name[0usize] == 83u8 && file_name[1usize] == 67u8 && file_name[2usize] == 65u8 && file_name[3usize] == 78u8 && file_name[4usize] == 95u8 {
+                newest = join(a, "/DCIM/", file_name, "")
+            }
+            start = pos + 1usize
+        }
+        pos += 1usize
+    }
+    if newest.len == 0usize { ret }
+    let (size, kind, day, found) = vaultfs.stat(newest)
+    if !found || size == 0usize || size > 262144usize { ret }
+    let (raw, raw_error) = mem.alloc[u8](a, size)
+    if raw_error != ok { ret }
+    let (got, read_ok) = vaultfs.read_big(newest, mem.address_of(&raw[0usize]), size)
+    if !read_ok || got != size { ret }
+    var reader_state: io.SliceReader = zero
+    reader_state.data = raw[0usize..got]
+    reader_state.off = 0usize
+    let (decoded, decode_error) = png.decode(a, io.slice_reader(&reader_state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
+    if decode_error != ok { ret }
+    let (view, view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
+    if view_error != ok { ret }
+    let (texture, upload_error) = scene.upload_image(&kit.renderer, view)
+    if upload_error != ok { ret }
+    s.scan_tex = texture
+    s.scan_w = f32(decoded.width)
+    s.scan_h = f32(decoded.height)
+    s.has_scan = true
+    say("wallet scan ")
+    say_num(usize(decoded.width))
+    say("x")
+    say_num(usize(decoded.height))
+    say("\n")
+}
+
 fn hit_at(s: *State, x: f32, y: f32) -> usize {
     var i = s.hit_total
     while i > 0usize {
@@ -1210,6 +1282,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else {
             let id = hit_at(&s, tap.x, tap.y)
             if id != NONE && act(a, &s, id) {
+                if s.want_scan {
+                    s.want_scan = false
+                    load_scan(a, &kit, &s)
+                }
                 if !show(a, &kit, &s) {
                     say("wallet present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)
