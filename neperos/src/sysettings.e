@@ -38,6 +38,9 @@ const SENSOR_ACCELEROMETER: usize = 1usize
 // Kind 2: the gyroscope's rates (p, q, r) in mrad/s.
 const SENSOR_GYROSCOPE: usize = 2usize
 const SENSOR_BIAS: i64 = 2147483648i64
+// The torch (C133): TORCH level (0 off, 1 to 5 the brightness steps) -> the level now set. The server holds the
+// device (a simulated LED under QEMU, the camera's flash on the Pixel).
+const OP_TORCH: usize = 11usize
 
 // A sensor's reading at `tick` in milli-units (x, y, z) and whether the server answered.
 fn sensor(kind: usize, tick: usize) -> (i64, i64, i64, bool) {
@@ -49,6 +52,14 @@ fn sensor(kind: usize, tick: usize) -> (i64, i64, i64, bool) {
     let wy = os.recv(REP, NO_SLOT)
     let wz = os.recv(REP, NO_SLOT)
     ret (i64(wx) - SENSOR_BIAS, i64(wy) - SENSOR_BIAS, i64(wz) - SENSOR_BIAS, true)
+}
+
+// Set the torch to `level`; the level the server now holds, and whether it answered.
+fn torch(level: usize) -> (usize, bool) {
+    let sent = os.send(REQ, OP_TORCH, NO_SLOT)
+    if sent == REFUSED { ret (0usize, false) }
+    let sent_level = os.send(REQ, level, NO_SLOT)
+    ret (os.recv(REP, NO_SLOT), true)
 }
 
 // The system word, or 0 when there is no server.

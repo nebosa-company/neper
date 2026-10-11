@@ -20,6 +20,7 @@ use e.text.shape
 use appkit
 use text
 use ui
+use sysettings
 
 const NONE: usize = 99usize
 const STEADY_TAB: usize = 0usize
@@ -40,6 +41,8 @@ type State = struct {
     pattern: usize,
     message: ui.Field,
     lit: bool,
+    // The torch level last sent to the device (99 before the first), so a change is sent once.
+    torch_sent: usize,
     hits: ui.Hits,
 }
 
@@ -267,6 +270,13 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
     let faces = kit.faces
     var lit = s.lit
     if s.tab == STEADY_TAB && s.steady_on { lit = true }
+    // (C133) The device follows the light: off, or the brightness step.
+    var torch_level = 0usize
+    if lit { torch_level = s.brightness }
+    if torch_level != s.torch_sent {
+        s.torch_sent = torch_level
+        let (applied, served) = sysettings.torch(torch_level)
+    }
     if lit {
         // The "light": the whole screen turns bright, by the brightness.
         let level = 0.55 + f32(s.brightness) * 0.09
@@ -403,6 +413,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var s: State = zero
     s.brightness = 5usize
+    s.torch_sent = 99usize
     if !show(a, &kit, &s) {
         ui.say("flashlight present failed\n")
         ret ok

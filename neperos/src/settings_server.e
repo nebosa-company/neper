@@ -151,6 +151,20 @@ fn system_word(store: *Store) -> usize {
     ret theme.stored_word(store.v[0usize..COUNT])
 }
 
+fn say_num(value: usize) {
+    var digits: [20]u8 = zero
+    var at = 20usize
+    var rest = value
+    var more = true
+    while more {
+        at -= 1usize
+        digits[at] = u8(48usize + rest % 10usize)
+        rest = rest / 10usize
+        if rest == 0usize { more = false }
+    }
+    say(digits[at..20usize])
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var store: Store = zero
     defaults(&store)
@@ -158,6 +172,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var hidden = load_hidden()
     var registry: Registry = zero
     load_registry(&registry)
+    var torch_level = 0usize
     var radios = radios_allowed(&store)
     if !radios { push_radio(false) }
     say("settings server up\n")
@@ -242,6 +257,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let sent_x = os.send(REP, usize(bx), sysettings.NO_SLOT)
             let sent_y = os.send(REP, usize(by), sysettings.NO_SLOT)
             let sent_z = os.send(REP, usize(bz), sysettings.NO_SLOT)
+        } else if op == sysettings.OP_TORCH {
+            let level = os.recv(REQ, sysettings.NO_SLOT)
+            if level <= 5usize && level != torch_level {
+                torch_level = level
+                say("torch level ")
+                say_num(level)
+                say("\n")
+            }
+            let sent = os.send(REP, torch_level, sysettings.NO_SLOT)
         } else if op == sysettings.OP_GET_HIDDEN {
             let sent = os.send(REP, hidden, sysettings.NO_SLOT)
         } else if op == sysettings.OP_SET_HIDDEN {
