@@ -3529,6 +3529,12 @@ cliConfig_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/cli-config-selfhost"
 cliConfig_output=$("$test_build/cli-config-selfhost")
 [ "$cliConfig_output" = 'cli config ok' ]
+# e.cli.line: terminal line editor against a readline-semantics model, 120 key sessions plus the documented behaviours (D2565).
+cliLine_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/cli_line/src/main.e" "$repo" x64 linux "$test_build/cli-line-selfhost" -j 2)
+[ "$cliLine_written" = 'executable written' ]
+chmod +x "$test_build/cli-line-selfhost"
+cliLine_output=$("$test_build/cli-line-selfhost")
+[ "$cliLine_output" = 'cli line ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

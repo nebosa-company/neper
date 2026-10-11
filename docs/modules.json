@@ -103,6 +103,7 @@
     "e.log",
     "e.cli",
     "e.cli.config",
+    "e.cli.line",
     "e.async",
     "e.async.io",
     "e.net",
@@ -1177,6 +1178,17 @@
     "e.fs.watch",
     "e.mem",
     "e.os",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.cli.line",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
     "e.str"
    ],
    "blocked_by": []

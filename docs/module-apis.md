@@ -11694,6 +11694,69 @@ path carries the watched folder). Storage is the arena the configuration was mad
 reload allocates again there, so give a long-lived watcher an arena of its own. A watch on a
 filesystem that reports no changes never returns.
 
+### `e.cli.line`
+
+```neper
+type KeyKind = enum u8 { Char, Left, Right, Up, Down, Home, End, Backspace, Delete, Enter, Tab, Escape, Unknown }
+type Key = struct { kind: KeyKind, ch: u32, ctrl: bool, alt: bool }
+type Action = enum u8 { None, Changed, Accept, Interrupt, Eof, Tab, ClearScreen }
+type Editor = struct { buf: []u8, len: usize, cursor: usize, draft: []u8, draft_len: usize, kill: []u8, kill_len: usize, last_was_kill: bool, hist_data: []u8, hist_used: usize, hist_starts: []usize, hist_lens: []usize, hist_count: usize, hist_pos: usize, cands: []str, cand_n: usize, cand_i: usize, cand_start: usize, cand_len: usize, cycling: bool }
+error TooSmall
+
+fn editor(buf: []u8, draft: []u8, kill: []u8, hist_data: []u8, hist_starts: []usize, hist_lens: []usize, cands: []str) -> Editor
+fn text(e: *const Editor) -> str
+fn is_continuation(b: u8) -> bool
+fn is_word_byte(b: u8) -> bool
+fn is_space(b: u8) -> bool
+fn prev_boundary(e: *const Editor, at: usize) -> usize
+fn next_boundary(e: *const Editor, at: usize) -> usize
+fn word_start(e: *const Editor, from: usize) -> usize
+fn word_end(e: *const Editor, from: usize) -> usize
+fn insert_at(e: *Editor, at: usize, bytes: str) -> bool
+fn delete_range(e: *Editor, start: usize, end: usize)
+fn set_text(e: *Editor, s: str) -> bool
+fn clear(e: *Editor)
+fn kill_range(e: *Editor, start: usize, end: usize, forward: bool)
+fn history_add(e: *Editor, line: str)
+fn history_entry(e: *const Editor, index: usize) -> str
+fn submit(e: *Editor) -> str
+fn insert_newline(e: *Editor) -> bool
+fn history_prev(e: *Editor) -> bool
+fn history_next(e: *Editor) -> bool
+fn history_hint(e: *const Editor) -> str
+fn accept_hint(e: *Editor, hint: str) -> bool
+fn token_start(e: *const Editor) -> usize
+fn replace_range(e: *Editor, start: usize, end: usize, replacement: str) -> bool
+fn tab[Ctx: type](e: *Editor, ctx: *Ctx, complete: fn(*Ctx, str, []str) -> usize) -> Action
+fn transpose(e: *Editor) -> bool
+fn utf8_encode(cp: u32, out: []u8) -> usize
+fn handle(e: *Editor, key: Key) -> Action
+fn plain(kind: KeyKind) -> Key
+fn decode(bytes: []const u8, at: usize) -> (Key, usize)
+fn feed[Ctx: type](e: *Editor, bytes: []const u8, ctx: *Ctx, complete: fn(*Ctx, str, []str) -> usize) -> (usize, Action)
+fn push_cols(b: *str.Builder, n: usize) -> err
+fn render(b: *str.Builder, e: *const Editor, prompt: str, prompt_cols: usize, hint: str) -> err
+```
+
+A line editor for CLI REPLs in the manner of readline and reedline, as a state machine with no
+terminal in it. Keys go in, the buffer, cursor, kill buffer and history change, and `render`
+answers the bytes that redraw the line; the caller owns the terminal and every buffer
+(`editor` takes the line, draft and kill buffers, the history bytes with its entry arrays, and
+the candidate slice). `decode` turns raw terminal bytes into a `Key` (UTF-8 text, Ctrl letters,
+CSI and SS3 arrows, Home/End/Delete and the xterm modifier parameter, Alt as an ESC prefix);
+`handle` applies one key and answers an `Action` (`Changed`, `Accept`, `Interrupt`, `Eof`,
+`ClearScreen`, or `Tab` for the caller to complete); `feed` decodes and handles a byte run,
+completing on Tab through the caller's `fn(*Ctx, str, []str) -> usize` and stopping after the
+key that accepts, interrupts, ends the input or asks for a clear. Bindings are readline's
+emacs set: character and word motion, Ctrl-A/E, Backspace and Delete by code point, kill and
+yank (consecutive kills accumulate, forward appended and backward prepended), Ctrl-T
+transpose, Up/Down and Ctrl-P/N through a bounded history that keeps the line being edited
+as a draft, and Tab with the common prefix first and cycling after. `history_hint` is the
+fish-style suffix of the newest matching entry (`accept_hint` appends it); `submit` records
+the line and clears the editor; validators stay with the caller, who answers an incomplete
+entry with `insert_newline`. Words are alphanumeric runs (bytes of 128 and up count as word
+bytes); a code point is one column; a full buffer ignores further input.
+
 ### `e.async`
 
 ```neper
