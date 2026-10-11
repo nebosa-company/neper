@@ -14,6 +14,7 @@
 use e.mem
 use e.os
 use e.valid
+use e.barcode
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -42,6 +43,20 @@ const DOC_TYPES: usize = 12usize
 
 fn say(line: str) {
     let (written, write_error) = os.write(os.stdout(), line)
+}
+
+fn say_num(value: usize) {
+    var digits: [20]u8 = zero
+    var at = 20usize
+    var rest = value
+    var more = true
+    while more {
+        at -= 1usize
+        digits[at] = u8(rest % 10usize) + 48u8
+        rest = rest / 10usize
+        if rest == 0usize { more = false }
+    }
+    say(digits[at..20usize])
 }
 
 fn say_text(value: str) {
@@ -497,78 +512,79 @@ fn draw_face(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, c: Card,
     ret ok
 }
 
-// A QR-looking square of 25 x 25 cells from `seed`, three finder squares in the corners: an svg.
-fn qr_svg(a: *mem.Arena, seed: usize) -> str {
-    let (buffer, buffer_error) = mem.alloc[u8](a, 24000usize)
+// (C121) The card's real code: a QR symbol (error correction level M) of `payload` as an svg, one square per dark
+// module. Empty when the text does not fit a symbol.
+fn real_qr_svg(a: *mem.Arena, payload: str) -> str {
+    let (symbol, symbol_error) = barcode.qr_encode(a, payload, 1usize)
+    if symbol_error != ok { ret "" }
+    let (buffer, buffer_error) = mem.alloc[u8](a, symbol.size * symbol.size * 16usize + 96usize)
     if buffer_error != ok { ret "" }
     var n = 0usize
-    n = emit(buffer, n, "<svg viewBox='0 0 25 25'><path d='")
-    var state = seed + 7usize
-    var row = 0usize
-    while row < 25usize {
-        var col = 0usize
-        while col < 25usize {
-            state = (state * 1103515245usize + 12345usize) & 2147483647usize
-            var dark = ((state >> 12usize) & 1usize) == 1usize
-            // The finder squares: a 7 x 7 ring with a 3 x 3 centre, in three corners.
-            var fr = 99usize
-            var fc = 99usize
-            if row < 7usize && col < 7usize {
-                fr = row
-                fc = col
-            } else if row < 7usize && col >= 18usize {
-                fr = row
-                fc = col - 18usize
-            } else if row >= 18usize && col < 7usize {
-                fr = row - 18usize
-                fc = col
-            }
-            if fr != 99usize {
-                dark = fr == 0usize || fr == 6usize || fc == 0usize || fc == 6usize || (fr >= 2usize && fr <= 4usize && fc >= 2usize && fc <= 4usize)
-            } else if (row == 7usize && col < 8usize) || (col == 7usize && row < 8usize) || (row == 7usize && col >= 17usize) || (col == 17usize && row < 8usize) || (row == 17usize && col < 8usize) || (col == 7usize && row >= 17usize) {
-                dark = false
-            }
-            if dark {
+    n = emit(buffer, n, "<svg viewBox='0 0 ")
+    n = emit_num(buffer, n, symbol.size)
+    n = emit(buffer, n, " ")
+    n = emit_num(buffer, n, symbol.size)
+    n = emit(buffer, n, "'><path d='")
+    var y = 0usize
+    while y < symbol.size {
+        var x = 0usize
+        while x < symbol.size {
+            if symbol.modules[y * symbol.size + x] == 1u8 {
                 n = emit(buffer, n, "M")
-                n = emit_num(buffer, n, col)
+                n = emit_num(buffer, n, x)
                 n = emit(buffer, n, " ")
-                n = emit_num(buffer, n, row)
+                n = emit_num(buffer, n, y)
                 n = emit(buffer, n, "h1v1h-1z")
             }
-            col += 1usize
+            x += 1usize
         }
-        row += 1usize
+        y += 1usize
     }
     n = emit(buffer, n, "' fill='currentColor'/></svg>")
     ret buffer[0usize..n]
 }
 
-// A barcode of bars of one to three units from `seed`, 120 units wide: an svg.
-fn barcode_svg(a: *mem.Arena, seed: usize) -> str {
-    let (buffer, buffer_error) = mem.alloc[u8](a, 4000usize)
+// A Code 128 barcode of `payload` as an svg: a bar for each run of dark modules, 30 units tall.
+fn real_barcode_svg(a: *mem.Arena, payload: str) -> str {
+    let (row, row_error) = barcode.code128(a, payload)
+    if row_error != ok { ret "" }
+    let (buffer, buffer_error) = mem.alloc[u8](a, row.len * 24usize + 96usize)
     if buffer_error != ok { ret "" }
     var n = 0usize
-    n = emit(buffer, n, "<svg viewBox='0 0 120 30'><path d='")
-    var state = seed + 3usize
+    n = emit(buffer, n, "<svg viewBox='0 0 ")
+    n = emit_num(buffer, n, row.len)
+    n = emit(buffer, n, " 30' preserveAspectRatio='none'><path d='")
     var x = 0usize
-    var drawing = true
-    while x < 118usize {
-        state = (state * 1103515245usize + 12345usize) & 2147483647usize
-        let width = 1usize + (state >> 14usize) % 3usize
-        if drawing {
+    while x < row.len {
+        if row[x] == 1u8 {
+            var run = 1usize
+            while x + run < row.len && row[x + run] == 1u8 { run += 1usize }
             n = emit(buffer, n, "M")
             n = emit_num(buffer, n, x)
             n = emit(buffer, n, " 0h")
-            n = emit_num(buffer, n, width)
+            n = emit_num(buffer, n, run)
             n = emit(buffer, n, "v30h-")
-            n = emit_num(buffer, n, width)
+            n = emit_num(buffer, n, run)
             n = emit(buffer, n, "z")
+            x += run
+        } else {
+            x += 1usize
         }
-        drawing = !drawing
-        x += width
     }
     n = emit(buffer, n, "' fill='currentColor'/></svg>")
     ret buffer[0usize..n]
+}
+
+// What a loyalty or transit card's barcode says: its number (the fourth value), else the first value.
+fn bar_text(a: *mem.Arena, c: Card) -> str {
+    let number = value_of(a, c, 3usize)
+    if number.len > 0usize { ret number }
+    ret value_of(a, c, 0usize)
+}
+
+// What a card's code says: its title and first value, e.g. "Concert ticket|Row 4 seat 12".
+fn code_payload(a: *mem.Arena, c: Card) -> str {
+    ret join(a, title_of(a, c), "|", value_of(a, c, 0usize))
 }
 
 fn draw_stack(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
@@ -673,13 +689,25 @@ fn draw_detail(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
         try centred(a, builder, faces.grotesk, 12.0, "Scanning needs the Camera app", 206.0, below + 200.0, muted())
     } else if c.kind == LOYALTY || c.kind == TRANSIT {
         try card(a, builder, 16.0, below, 380.0, 230.0, 20.0, cream())
-        try svg.draw(a, builder, barcode_svg(a, c.seed), geometry.rect(56.0, below + 24.0, 300.0, 120.0), ink())
-        try centred(a, builder, faces.grotesk, 13.0, "Scan at the counter", 206.0, below + 160.0, muted())
-        try centred(a, builder, faces.grotesk, 12.0, "Sample code, not scannable", 206.0, below + 186.0, muted())
+        // The member number as a Code 128 barcode; a value that is not printable ASCII falls back to the title.
+        var number_text = bar_text(a, c)
+        var picture = real_barcode_svg(a, number_text)
+        if picture.len == 0usize {
+            number_text = title_of(a, c)
+            picture = real_barcode_svg(a, number_text)
+        }
+        try svg.draw(a, builder, picture, geometry.rect(40.0, below + 24.0, 332.0, 110.0), ink())
+        try centred(a, builder, faces.grotesk, 14.0, number_text, 206.0, below + 144.0, ink())
+        try centred(a, builder, faces.grotesk, 13.0, "Scan at the counter", 206.0, below + 172.0, muted())
+        try centred(a, builder, faces.grotesk, 12.0, "Code 128", 206.0, below + 196.0, muted())
     } else {
         try card(a, builder, 16.0, below, 380.0, 250.0, 20.0, cream())
-        try svg.draw(a, builder, qr_svg(a, c.seed), geometry.rect(106.0, below + 12.0, 200.0, 200.0), ink())
-        try centred(a, builder, faces.grotesk, 12.0, "Sample code, not scannable", 206.0, below + 222.0, muted())
+        // The payload as a real QR symbol; the first sixty characters are shown under it.
+        let payload = code_payload(a, c)
+        try svg.draw(a, builder, real_qr_svg(a, payload), geometry.rect(106.0, below + 12.0, 200.0, 200.0), ink())
+        var caption = payload
+        if caption.len > 44usize { caption = payload[0usize..44usize] }
+        try centred(a, builder, faces.grotesk, 12.0, caption, 206.0, below + 222.0, muted())
     }
     try pill(a, builder, s, faces, 600usize, 16.0, 824.0, 150.0, 44.0, "Remove card", soft(), 16.0)
     ret ok
@@ -957,6 +985,23 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
                 say("\n")
                 if s.cards[s.open].kind == BANK {
                     if valid.iban(value_of(a, s.cards[s.open], 2usize)) { say("wallet iban valid\n") } else { say("wallet iban invalid\n") }
+                }
+                // (C121) The code the card shows is real: its size (a QR symbol's side, a barcode's modules).
+                let shown_kind = s.cards[s.open].kind
+                if shown_kind == LOYALTY || shown_kind == TRANSIT {
+                    let (bars, bars_error) = barcode.code128(a, bar_text(a, s.cards[s.open]))
+                    if bars_error == ok {
+                        say("wallet code 128 ")
+                        say_num(bars.len)
+                        say("\n")
+                    }
+                } else if shown_kind != PAYMENT && shown_kind != BANK && shown_kind != DOC {
+                    let (symbol, symbol_error) = barcode.qr_encode(a, code_payload(a, s.cards[s.open]), 1usize)
+                    if symbol_error == ok {
+                        say("wallet code qr ")
+                        say_num(symbol.size)
+                        say("\n")
+                    }
                 }
                 ret true
             }

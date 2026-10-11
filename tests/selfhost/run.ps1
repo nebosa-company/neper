@@ -1233,6 +1233,12 @@ $textHighlightWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $textHighlightWritten -ne 'executable written') { throw 'text_highlight emission failed' }
 & $textHighlightPath
 if ($LASTEXITCODE -ne 0) { throw "a text_highlight check failed: exit $LASTEXITCODE" }
+# `e.barcode`: QR matrices checked against the qrcode package, read back with damage; Code 128 and EAN-13 against python-barcode.
+$barcodePath = Join-Path $testBuild 'barcode-selfhost.exe'
+$barcodeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\barcode\src\main.e') $repo 'x64' 'windows' $barcodePath
+if ($LASTEXITCODE -ne 0 -or $barcodeWritten -ne 'executable written') { throw 'barcode emission failed' }
+& $barcodePath
+if ($LASTEXITCODE -ne 0) { throw "a barcode check failed: exit $LASTEXITCODE" }
 # `e.test.support`: the clock, the scripted reader and writer, the schedule.
 $testSupportPath = Join-Path $testBuild 'test-support-selfhost.exe'
 $testSupportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_support\src\main.e') $repo 'x64' 'windows' $testSupportPath

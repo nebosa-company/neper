@@ -1,0 +1,164 @@
+// `e.barcode`: symbols made by the qrcode and python-barcode packages (scripts/gen_barcode_test.py) -- thirteen QR
+// matrices with a fixed mask, the best mask chosen, numeric and alphanumeric segments, damaged modules and a damaged
+// format word read back, Code 128 sets B and C, EAN-13 -- checked module for module, and the refusals.
+// A check's exit code is six times its position plus the stage that failed (1 to 5).
+use e.os
+use e.mem
+use e.barcode as bar
+
+fn same(m: bar.Matrix, expected: str) -> bool {
+    if m.size * m.size != expected.len { ret false }
+    var i = 0usize
+    while i < expected.len {
+        if (m.modules[i] == 1u8) != (expected[i] == 49u8) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn row_eq(row: []const u8, expected: str) -> bool {
+    if row.len != expected.len { ret false }
+    var i = 0usize
+    while i < expected.len {
+        if (row[i] == 1u8) != (expected[i] == 49u8) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn bytes_eq(x: []const u8, y: str) -> bool {
+    if x.len != y.len { ret false }
+    var i = 0usize
+    while i < x.len {
+        if x[i] != y[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn from_bits(a: *mem.Arena, bits: str, size: usize) -> (bar.Matrix, err) {
+    var none: bar.Matrix = zero
+    let (store, store_error) = mem.alloc[u8](a, size * size)
+    if store_error != ok { ret (none, store_error) }
+    var i = 0usize
+    while i < size * size {
+        if bits[i] == 49u8 { store[i] = 1u8 } else { store[i] = 0u8 }
+        i += 1usize
+    }
+    ret (bar.Matrix { size: size, modules: store }, ok)
+}
+
+// A copy of `m` with the modules in "x,y;x,y" turned over.
+fn damaged(a: *mem.Arena, m: bar.Matrix, spec: str) -> (bar.Matrix, err) {
+    var none: bar.Matrix = zero
+    let (store, store_error) = mem.alloc[u8](a, m.size * m.size)
+    if store_error != ok { ret (none, store_error) }
+    var i = 0usize
+    while i < m.size * m.size {
+        store[i] = m.modules[i]
+        i += 1usize
+    }
+    var x = 0usize
+    var y = 0usize
+    var in_y = false
+    var k = 0usize
+    while k <= spec.len {
+        var c = 59u8
+        if k < spec.len { c = spec[k] }
+        if c >= 48u8 && c <= 57u8 {
+            if in_y { y = y * 10usize + usize(c - 48u8) } else { x = x * 10usize + usize(c - 48u8) }
+        } else if c == 44u8 {
+            in_y = true
+        } else {
+            if in_y { store[y * m.size + x] = store[y * m.size + x] ^ 1u8 }
+            x = 0usize
+            y = 0usize
+            in_y = false
+        }
+        k += 1usize
+    }
+    ret (bar.Matrix { size: m.size, modules: store }, ok)
+}
+
+// Fixed mask: encode, compare with the reference, read back clean and with `flips` damaged modules.
+fn qr_case(a: *mem.Arena, data: str, bits: str, size: usize, level: usize, mask: usize, flips: str) -> usize {
+    let (m, m_error) = bar.qr_encode_with(a, data, level, mask)
+    if m_error != ok || m.size != size { ret 1usize }
+    if !same(m, bits) { ret 2usize }
+    let (r, r_error) = bar.qr_decode(a, m)
+    if r_error != ok || !bytes_eq(r, data) { ret 3usize }
+    let (c, c_error) = damaged(a, m, flips)
+    if c_error != ok { ret 4usize }
+    let (q, q_error) = bar.qr_decode(a, c)
+    if q_error != ok || !bytes_eq(q, data) { ret 5usize }
+    ret 0usize
+}
+
+// The best mask: the symbol is one of the eight renderings (each checked against the reference above), and
+// reads back.
+fn auto_case(a: *mem.Arena, data: str, level: usize) -> usize {
+    let (m, m_error) = bar.qr_encode(a, data, level)
+    if m_error != ok { ret 1usize }
+    var found = false
+    var mask = 0usize
+    while mask < 8usize {
+        let (other, other_error) = bar.qr_encode_with(a, data, level, mask)
+        if other_error == ok && other.size == m.size {
+            var same_bits = true
+            var i = 0usize
+            while i < m.size * m.size {
+                if other.modules[i] != m.modules[i] { same_bits = false }
+                i += 1usize
+            }
+            if same_bits { found = true }
+        }
+        mask += 1usize
+    }
+    if !found { ret 2usize }
+    let (r, r_error) = bar.qr_decode(a, m)
+    if r_error != ok || !bytes_eq(r, data) { ret 3usize }
+    ret 0usize
+}
+
+// A reference matrix read, after turning over `flips`.
+fn read_case(a: *mem.Arena, bits: str, size: usize, expected: str, flips: str) -> usize {
+    let (m, m_error) = from_bits(a, bits, size)
+    if m_error != ok { ret 1usize }
+    let (c, c_error) = damaged(a, m, flips)
+    if c_error != ok { ret 2usize }
+    let (r, r_error) = bar.qr_decode(a, c)
+    if r_error != ok { ret 3usize }
+    if !bytes_eq(r, expected) { ret 4usize }
+    ret 0usize
+}
+
+// Too many damaged modules: refused, not misread.
+fn wreck_case(a: *mem.Arena, bits: str, size: usize, flips: str) -> usize {
+    let (m, m_error) = from_bits(a, bits, size)
+    if m_error != ok { ret 1usize }
+    let (c, c_error) = damaged(a, m, flips)
+    if c_error != ok { ret 2usize }
+    let (r, r_error) = bar.qr_decode(a, c)
+    if r_error != bar.Uncorrectable { ret 3usize }
+    ret 0usize
+}
+
+fn code_case(a: *mem.Arena, data: str, modules: str) -> usize {
+    let (row, row_error) = bar.code128(a, data)
+    if row_error != ok { ret 1usize }
+    if !row_eq(row, modules) { ret 2usize }
+    ret 0usize
+}
+
+fn ean_case(a: *mem.Arena, digits: str, full: str, modules: str) -> usize {
+    let (row, row_error) = bar.ean13(a, digits)
+    if row_error != ok { ret 1usize }
+    if !row_eq(row, modules) { ret 2usize }
+    let (again, again_error) = bar.ean13(a, full)
+    if again_error != ok { ret 3usize }
+    if !row_eq(again, modules) { ret 4usize }
+    ret 0usize
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    var r = 0usize

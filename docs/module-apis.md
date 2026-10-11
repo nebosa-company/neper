@@ -22841,3 +22841,60 @@ fn classify(i: usize, text: str, out: []u8) -> usize
 ```
 
 Table-driven syntax highlighting (C123, C142): 32 languages (the leading ones of the TIOBE index as remembered for October 2025, plus Neper), each a row of rules -- its file extensions, up to two line-comment markers, a block-comment pair, its string quote characters, whether its keywords ignore case, its keyword list -- and one classifier for all of them: `classify` writes, for every byte of a text, plain, keyword, string, number, comment or type (a capitalised name that is not a keyword); `language_for` picks a language by a file name's extension. Written by `scripts/gen_highlight.py`, whose own Python implementation of the rules gave the expected classes of the fixture's snippet in each language.
+
+
+### `e.barcode`
+
+```neper
+error TooLong
+error Invalid
+error Uncorrectable
+type Matrix = struct { size: usize, modules: []u8 }
+type Gf = struct { exp: [512]u8, log: [256]u8 }
+type BitBuf = struct { data: []u8, pos: usize }
+type Work = struct { size: usize, dark: []u8, fixed: []u8 }
+const MAX_VERSION: usize = 10usize
+fn blocks_table() -> str
+fn block_field(v: usize, ecl: usize, field: usize) -> usize
+fn raw_codewords(v: usize) -> usize
+fn data_codewords(v: usize, ecl: usize) -> usize
+fn gf_init(g: *Gf)
+fn gf_mul(g: *Gf, x: usize, y: usize) -> usize
+fn gf_div(g: *Gf, x: usize, y: usize) -> usize
+fn rs_divisor(g: *Gf, degree: usize, out: []u8)
+fn rs_remainder(g: *Gf, data: []const u8, divisor: []const u8, degree: usize, out: []u8)
+fn rs_correct(g: *Gf, block: []u8, n: usize, nsym: usize) -> bool
+fn fixed_set(w: *Work, x: usize, y: usize, is_dark: bool)
+fn finder(w: *Work, cx: usize, cy: usize)
+fn alignment(w: *Work, cx: usize, cy: usize)
+fn alignment_positions(v: usize, out: []usize) -> usize
+fn format_bits(ecl: usize) -> usize
+fn format_word(ecl: usize, mask: usize) -> usize
+fn version_word(v: usize) -> usize
+fn bit_of(value: usize, i: usize) -> bool
+fn draw_format(w: *Work, ecl: usize, mask: usize)
+fn draw_function(w: *Work, v: usize)
+fn mask_hit(mask: usize, x: usize, y: usize) -> bool
+fn apply_mask(w: *Work, mask: usize)
+fn walk_data(w: *Work, buf: []u8, store: bool, bits: usize)
+fn line_dark(w: *Work, pass: usize, i: usize, j: usize) -> usize
+fn penalty(w: *Work) -> usize
+fn put_bits(buf: *BitBuf, value: usize, count: usize)
+fn qr_encode(a: *mem.Arena, data: []const u8, ecl: usize) -> (Matrix, err)
+fn qr_encode_with(a: *mem.Arena, data: []const u8, ecl: usize, mask: usize) -> (Matrix, err)
+fn popcount(value: usize) -> usize
+fn module_at(m: Matrix, x: usize, y: usize) -> usize
+fn read_format(m: Matrix, which: usize) -> usize
+fn match_format(bits: usize) -> usize
+fn alnum_char(v: usize) -> u8
+fn qr_decode(a: *mem.Arena, m: Matrix) -> ([]u8, err)
+fn take_bits(data: []const u8, pos: usize, count: usize) -> usize
+fn qr_dark(m: Matrix, x: usize, y: usize) -> bool
+fn code128_table() -> str
+fn code128(a: *mem.Arena, text_in: str) -> ([]u8, err)
+fn ean_l_table() -> str
+fn ean_parity_table() -> str
+fn ean13(a: *mem.Arena, digits_in: str) -> ([]u8, err)
+```
+
+QR Code, Code 128 and EAN-13 (C121, L137). `qr_encode` makes the smallest QR symbol of versions 1 to 10 for the bytes at an error-correction level (0 L, 1 M, 2 Q, 3 H) with the lowest-penalty mask, `qr_encode_with` takes a mask 0 to 7; a `Matrix` is `size` x `size` bytes, 1 for dark. `qr_decode` reads a matrix already found and sampled: the format word within three bit errors, Reed-Solomon correction per block (Berlekamp-Massey, Chien search, Forney), byte, alphanumeric and numeric segments; more damage than the code corrects is `Uncorrectable`. `code128` gives set B text or set C digit pairs as a row of modules (1 for a bar), `ean13` the 95 modules of twelve digits (check digit added) or thirteen (checked). Checked against the qrcode and python-barcode packages, symbols with damaged modules read back, and the refusals.

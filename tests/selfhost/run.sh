@@ -1143,6 +1143,11 @@ chmod +x "$test_build/fmt-pdf-selfhost"
 text_highlight_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_highlight/src/main.e" "$repo" x64 linux "$test_build/text-highlight-selfhost")
 [ "$text_highlight_written" = 'executable written' ]
 chmod +x "$test_build/text-highlight-selfhost"
+# `e.barcode`: QR matrices checked against the qrcode package, read back with damage; Code 128 and EAN-13 against python-barcode.
+barcode_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/barcode/src/main.e" "$repo" x64 linux "$test_build/barcode-selfhost")
+[ "$barcode_written" = 'executable written' ]
+chmod +x "$test_build/barcode-selfhost"
+"$test_build/barcode-selfhost"
 "$test_build/text-highlight-selfhost"
 # `e.test.support`: the clock, the scripted reader and writer, the schedule.
 test_support_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_support/src/main.e" "$repo" x64 linux "$test_build/test-support-selfhost")
