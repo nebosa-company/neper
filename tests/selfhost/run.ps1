@@ -2509,6 +2509,12 @@ $netCoapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $netCoapWritten -ne 'executable written') { throw 'net_coap emission failed' }
 & $netCoapPath
 if ($LASTEXITCODE -ne 0) { throw "a net_coap check failed: exit $LASTEXITCODE" }
+# `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
+$netHttpPoolPath = Join-Path $testBuild 'net-http-pool-selfhost.exe'
+$netHttpPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http_pool\src\main.e') $repo 'x64' 'windows' $netHttpPoolPath
+if ($LASTEXITCODE -ne 0 -or $netHttpPoolWritten -ne 'executable written') { throw 'net_http_pool emission failed' }
+& $netHttpPoolPath
+if ($LASTEXITCODE -ne 0) { throw "a net_http_pool check failed: exit $LASTEXITCODE" }
 # `e.net.mqtt`: the specification's CONNECT bytes, remaining-length limits, fourteen topic-filter cases, QoS 1 and 2 flows producing the replica's byte stream, a duplicated QoS 2 publish delivered once (D877).
 $netMqttPath = Join-Path $testBuild 'net-mqtt-selfhost.exe'
 $netMqttWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_mqtt\src\main.e') $repo 'x64' 'windows' $netMqttPath

@@ -2558,6 +2558,7 @@
     "net",
     "net_ftp",
     "net_http",
+    "net_http_pool",
     "net_mdns",
     "net_tls"
    ]
@@ -2566,12 +2567,13 @@
    "module": "e.net.http",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 104,
-   "delivered": 104,
+   "catalogue": 121,
+   "delivered": 121,
    "pending": [],
    "fixtures": [
     "misc_gaps",
     "net_http",
+    "net_http_pool",
     "net_tls",
     "net_ws"
    ]

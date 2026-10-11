@@ -12686,6 +12686,9 @@ error Invalid
 error TooLarge
 error Unsupported
 error Denied
+error PoolFull
+type PoolSlot = struct { used: bool, idle: bool, has_decoder: bool, key: net.Endpoint, network: NetworkIo, decoder: Reader, last_ms: u64, served: u32 }
+type Pool = struct { slots: []PoolSlot, arena: *mem.Arena, limits: Limits, max_per_host: usize, idle_ms: u64, opened: usize, reused: usize, evicted: usize, retried: usize }
 const INPUT_CAPACITY: usize = 4096usize
 const CR: u8 = 13u8
 const LF: u8 = 10u8
@@ -12740,6 +12743,20 @@ fn valid_start_value(value: str) -> bool
 fn write_request(w: *Writer, req: *const Request) -> err
 fn write_response(w: *Writer, response: *const Response) -> err
 fn reason(status: u16) -> str
+fn pool_new(arena: *mem.Arena, slots: []PoolSlot, limits: Limits, max_per_host: usize, idle_ms: u64) -> Pool
+fn endpoint_same(left: net.Endpoint, right: net.Endpoint) -> bool
+fn pool_drop(p: *Pool, at: usize)
+fn pool_evict(p: *Pool, now_ms: u64) -> usize
+fn pool_idle(p: *const Pool) -> usize
+fn pool_open(p: *const Pool) -> usize
+fn pool_hold(p: *Pool, endpoint: net.Endpoint, now_ms: u64, control: cancel.Control) -> (usize, bool, err)
+fn pool_release(p: *Pool, at: usize, now_ms: u64, keep: bool)
+fn pool_close(p: *Pool)
+fn has_token(value: str, token: str) -> bool
+fn keeps_alive(version: Version, headers: []const Header) -> bool
+fn idempotent(method: Method) -> bool
+fn pool_exchange(p: *Pool, at: usize, a: *mem.Arena, req: *const Request) -> (Response, bool, err)
+fn pool_request(p: *Pool, a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, now_ms: u64, control: cancel.Control) -> (Response, err)
 fn take(s: *SseReaderState) -> (u8, bool, err)
 fn unread(s: *SseReaderState)
 fn read_line(s: *SseReaderState) -> (str, bool, err)
@@ -12769,7 +12786,20 @@ fn csp_header(policy: *const CspPolicy, dst: []u8) -> (str, err)
 
 Chunked transfer encoding is supported. `request_tls` performs and verifies one TLS
 connection using the explicit configuration. Automatic redirects, cookies,
-compression and connection pooling remain outside the version-1 surface.
+and compression remain outside the version-1 surface; connection pooling is the
+keep-alive pool below (L107).
+
+The keep-alive pool (L107) is caller storage: `pool_new(arena, slots, limits, max_per_host,
+idle_ms)` over a `[]PoolSlot` array, one reader buffer per slot kept in the pool's arena.
+`pool_request` holds the most recently used idle connection to the endpoint (else opens
+one), exchanges one request, and keeps the connection only when the response was framed by
+length, chunks or status and neither side said `Connection: close` (HTTP/1.0 needs
+`keep-alive`). The caller supplies the clock, so `idle_ms` eviction is deterministic;
+`max_per_host` bounds the connections held to one endpoint (`PoolFull`), and a full slot
+array closes the oldest idle connection to make room. `pool_hold`/`pool_release` are the
+checkout pair for a caller that streams. A reused connection that fails is retried once on
+a fresh one for idempotent methods only. One thread owns a pool; plain TCP only (TLS
+session reuse follows). Checked over real loopback servers that count accepts (D2640).
 
 The delivered plain `request` opens one TCP connection, writes one request, reads one
 bounded full response and closes the connection on every path. HEAD retains response

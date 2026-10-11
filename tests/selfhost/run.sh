@@ -2217,6 +2217,11 @@ net_coap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$net_coap_written" = 'executable written' ]
 chmod +x "$test_build/net-coap-selfhost"
 "$test_build/net-coap-selfhost"
+# `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
+net_http_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http_pool/src/main.e" "$repo" x64 linux "$test_build/net-http-pool-selfhost")
+[ "$net_http_pool_written" = 'executable written' ]
+chmod +x "$test_build/net-http-pool-selfhost"
+"$test_build/net-http-pool-selfhost"
 # `e.net.mqtt`: the specification's CONNECT bytes, remaining-length limits, fourteen topic-filter cases, QoS 1 and 2 flows producing the replica's byte stream, a duplicated QoS 2 publish delivered once (D877).
 net_mqtt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_mqtt/src/main.e" "$repo" x64 linux "$test_build/net-mqtt-selfhost")
 [ "$net_mqtt_written" = 'executable written' ]
