@@ -22,6 +22,7 @@ use e.text.shape
 use appkit
 use text
 use ui
+use sysettings
 
 const NONE: usize = 99usize
 const MAX_APPS: usize = 6usize
@@ -104,6 +105,61 @@ fn add_app(s: *State, name: str, template: usize) -> usize {
     s.apps[s.app_total] = m
     s.app_total += 1usize
     ret s.app_total - 1usize
+}
+
+// (C126) The apps made are kept by the settings server, so they survive leaving the app and a restart, and
+// Settings lists them: entry i of the registry is apps[i + 1] (apps[0] is the sample the app starts with).
+fn persist(s: *State) {
+    var i = 0usize
+    while i < 5usize {
+        var w0 = 0usize
+        var w1 = 0usize
+        var w2 = 0usize
+        var w3 = 0usize
+        if i + 1usize < s.app_total {
+            let m = s.apps[i + 1usize]
+            var j = 0usize
+            while j < m.name_len && j < 24usize {
+                let byte = usize(m.name[j]) << ((j % 8usize) * 8usize)
+                if j < 8usize { w0 = w0 | byte } else if j < 16usize { w1 = w1 | byte } else { w2 = w2 | byte }
+                j += 1usize
+            }
+            w3 = m.name_len | (m.template << 8usize) | (m.version << 16usize) | (m.extras << 24usize)
+        }
+        let stored = sysettings.dyn_set(i, w0, w1, w2, w3)
+        i += 1usize
+    }
+}
+
+fn restore(s: *State) {
+    var i = 0usize
+    while i < 5usize {
+        let (w0, w1, w2, w3, answered) = sysettings.dyn_get(i)
+        let length = w3 & 255usize
+        if answered && length > 0usize && length <= 24usize && s.app_total < MAX_APPS {
+            var m: Made = zero
+            var j = 0usize
+            while j < length {
+                var word = w2
+                if j < 8usize { word = w0 } else if j < 16usize { word = w1 }
+                m.name[j] = u8((word >> ((j % 8usize) * 8usize)) & 255usize)
+                j += 1usize
+            }
+            m.name_len = length
+            m.template = (w3 >> 8usize) & 255usize
+            m.version = (w3 >> 16usize) & 255usize
+            m.extras = (w3 >> 24usize) & 255usize
+            m.used = true
+            s.apps[s.app_total] = m
+            s.app_total += 1usize
+        }
+        i += 1usize
+    }
+    if s.app_total > 1usize {
+        ui.say("dynamic restored ")
+        ui.say_num(s.app_total - 1usize)
+        ui.say("\n")
+    }
 }
 
 fn stage_name(stage: usize) -> str {
@@ -350,6 +406,7 @@ fn finish_making(a: *mem.Arena, s: *State) {
     }
     s.extending = false
     s.screen = READY_SCREEN
+    persist(s)
 }
 
 fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
@@ -479,6 +536,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.seed = 424242usize
     s.current = NONE
     let first = add_app(&s, "Counter", COUNTER)
+    restore(&s)
     if !show(a, &kit, &s) {
         ui.say("dynamic present failed\n")
         ret ok

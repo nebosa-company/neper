@@ -10245,8 +10245,8 @@ if ($neperosQemu) {
         $fixture = $fields[1]
         if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
         # A row named <base>_again boots again on the disk <base> left (a restart).
-        $fixtureDisk = Join-Path $testBuild ("shell-" + ($fixture -replace '_again$', '') + ".disk")
-        if ($fixture -notmatch '_again$') { $diskStream = [IO.File]::Create($fixtureDisk); $diskStream.SetLength(1MB); $diskStream.Close() }
+        $fixtureDisk = Join-Path $testBuild ("shell-" + ($fixture -replace '(_again|_more)$', '') + ".disk")
+        if ($fixture -notmatch '(_again|_more)$') { $diskStream = [IO.File]::Create($fixtureDisk); $diskStream.SetLength(1MB); $diskStream.Close() }
         $lastMarker = ($fields[5] -split ';;')[-1]
         $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' $lastMarker $fixtureDisk 0 $fields[4] 2>&1) -join "`n"
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')

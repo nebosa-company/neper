@@ -2125,4 +2125,5 @@ D2366	2134	C126 part six: four settings act on the system (24-hour clock, bright
 D2367	2294	C126 part seven: the settings server holds the settings and every part reads the word from it
 D2368	2041	C126 part eight: Wi-Fi networks from a scan, a password sheet, and joining
 D2369	1897	C126 part nine: Uninstall, from an app info page, held by the settings server
-D2370	1619	C126 part ten: the battery reaches the Battery page through the status service; this machine has no provider
+D2370	1620	C126 part ten: the battery reaches the Battery page through the status service; this machine has no provider
+D2371	1760	C126 part eleven: dynamic apps are in the settings server's registry and on the Apps page

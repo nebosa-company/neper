@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-C126	compiler	0.96	3810	NeperOS Settings: settings that act on the system, kept across restarts, searchable	(1) volumes (no audio server), Wi-Fi/Bluetooth/mobile/airplane (no radio ops), screen timeout, fingerprint, time zone, per-app notification permission, each a recipient the server would forward to; (5
+C126	compiler	0.97	3866	NeperOS Settings: settings that act on the system, kept across restarts, searchable	(1) volumes (no audio server), Wi-Fi/Bluetooth/mobile/airplane (no radio ops), screen timeout, fingerprint, time zone, per-app notification permission, each a recipient the server would forward to; (5
 C125	compiler	0	1219	NeperOS Files: real storage through the filesystem server, file hand-over between apps	The Files app (D2219) browses a sample tree kept in the process.
 C124	compiler	0	2252	NeperOS Dynamic: apps from a prompt, compiled in Neper on a server, scanned, installed	Dynamic is the app that makes apps: the user writes a prompt that says what app they need;
 C123	compiler	0	1202	NeperOS Document: a viewer for PDF, Word, PowerPoint, Markdown and text, with syntax highlighting	The Document icon (home index 25, a page with angle brackets) has no app yet.

@@ -392,6 +392,10 @@ type State = struct {
     mirror: [48]usize,
     hidden: usize,
     battery: usize,
+    dyn_total: usize,
+    dyn_names: [144]u8,
+    dyn_len: [6]usize,
+    dyn_version: [6]usize,
     detail: usize,
     net_names: [192]u8,
     net_len: [8]usize,
@@ -521,7 +525,7 @@ fn summary(a: *mem.Arena, s: *State, page: usize) -> str {
             if ((s.hidden >> i) & 1usize) == 0usize { installed += 1usize }
             i += 1usize
         }
-        ret join(a, number(a, installed), " apps", "")
+        ret join(a, number(a, installed + s.dyn_total), " apps", "")
     }
     if page == 7usize { ret join(a, "Screen lock: ", lock_name(s.values[LOCK]), "") }
     if page == 8usize { ret join(a, "Font size: ", font_name(s.values[FONT]), "") }
@@ -870,7 +874,20 @@ fn draw_apps(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         }
         pos += 1usize
     }
-    let content = f32(icons.APP_COUNT) * 56.0
+    // The dynamic apps follow the system ones, with the Dynamic icon and their version.
+    var dyn = 0usize
+    while dyn < s.dyn_total {
+        let y: f32 = 92.0 - s.scroll + f32(icons.APP_COUNT + dyn) * 56.0
+        if y >= 90.0 && y + 56.0 <= 826.0 {
+            try card(a, builder, 16.0, y + 2.0, 380.0, 50.0, 16.0, surface())
+            try svg.draw(a, builder, icons.app(26usize), geometry.rect(26.0, y + 8.0, 38.0, 38.0), ink())
+            try put(a, builder, faces.jost, 17.0, ui.text_of(a, s.dyn_names[dyn * 24usize..], s.dyn_len[dyn]), 78.0, y + 14.0, ink())
+            try put_right(a, builder, faces.grotesk, 13.0, join(a, "Dynamic, v", number(a, s.dyn_version[dyn]), ""), 380.0, y + 18.0, muted())
+            hit(s, 7100usize + dyn, 16.0, y + 2.0, 380.0, 50.0)
+        }
+        dyn += 1usize
+    }
+    let content = f32(icons.APP_COUNT + s.dyn_total) * 56.0
     if s.scroll > 0.0 {
         try card(a, builder, 360.0, 98.0, 40.0, 40.0, 20.0, paint.Color { red: 0.0, green: 0.0, blue: 0.0, alpha: 0.65 })
         try svg.draw(a, builder, chevron_icon(true), geometry.rect(368.0, 106.0, 24.0, 24.0), paint.Color { red: 0.94, green: 0.93, blue: 0.90, alpha: 1.0 })
@@ -1021,6 +1038,21 @@ fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
 // apps (the camera, microphone and location switches under Security), and Uninstall or Reinstall.
 fn draw_detail(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     let pos = s.detail
+    if pos >= icons.APP_COUNT {
+        // A dynamic app, from the registry: its name and version, and Remove.
+        let k = pos - icons.APP_COUNT
+        try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), fg())
+        hit(s, 500usize, 0.0, 10.0, 66.0, 56.0)
+        try put(a, builder, faces.jost_bold, 24.0, "App info", 62.0, 20.0, fg())
+        try card(a, builder, 16.0, 78.0, 380.0, 96.0, 18.0, surface())
+        try svg.draw(a, builder, icons.app(26usize), geometry.rect(30.0, 94.0, 64.0, 64.0), ink())
+        try put(a, builder, faces.jost_bold, 22.0, ui.text_of(a, s.dyn_names[k * 24usize..], s.dyn_len[k]), 112.0, 96.0, ink())
+        try put(a, builder, faces.grotesk, 14.0, join(a, "Dynamic app, version ", number(a, s.dyn_version[k]), ""), 112.0, 130.0, muted())
+        try card(a, builder, 16.0, 214.0, 380.0, 54.0, 27.0, paint.Color { red: 0.86, green: 0.36, blue: 0.32, alpha: 1.0 })
+        try centred(a, builder, faces.jost, 20.0, "Remove", 206.0, 229.0, ink())
+        hit(s, 7500usize, 16.0, 214.0, 380.0, 54.0)
+        ret ok
+    }
     try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), fg())
     hit(s, 500usize, 0.0, 10.0, 66.0, 56.0)
     try put(a, builder, faces.jost_bold, 24.0, "App info", 62.0, 20.0, fg())
@@ -1133,6 +1165,30 @@ fn flip(s: *State, setting: usize) {
 }
 
 // What a tap at `x` on button `id` did: true when the screen changed.
+// The dynamic apps the settings server's registry holds (the Dynamic app's, C124's to come).
+fn load_dynamic(s: *State) {
+    s.dyn_total = 0usize
+    var i = 0usize
+    while i < 6usize {
+        let (w0, w1, w2, w3, answered) = sysettings.dyn_get(i)
+        let length = w3 & 255usize
+        if answered && length > 0usize && length <= 24usize {
+            let n = s.dyn_total
+            var j = 0usize
+            while j < length {
+                var word = w2
+                if j < 8usize { word = w0 } else if j < 16usize { word = w1 }
+                s.dyn_names[n * 24usize + j] = u8((word >> ((j % 8usize) * 8usize)) & 255usize)
+                j += 1usize
+            }
+            s.dyn_len[n] = length
+            s.dyn_version[n] = (w3 >> 16usize) & 255usize
+            s.dyn_total += 1usize
+        }
+        i += 1usize
+    }
+}
+
 // The notification switch an app has in this app's list (NOTIFY + n), by its name, or 99.
 fn notify_of(label: str) -> usize {
     var k = 0usize
@@ -1143,7 +1199,54 @@ fn notify_of(label: str) -> usize {
     ret 99usize
 }
 
+// Remove dynamic app `k` from the registry: the later entries move up one place.
+fn remove_dynamic(s: *State, k: usize) {
+    var i = k
+    while i < 5usize {
+        var w0 = 0usize
+        var w1 = 0usize
+        var w2 = 0usize
+        var w3 = 0usize
+        if i + 1usize < 6usize {
+            let (n0, n1, n2, n3, answered) = sysettings.dyn_get(i + 1usize)
+            w0 = n0
+            w1 = n1
+            w2 = n2
+            w3 = n3
+        }
+        let stored = sysettings.dyn_set(i, w0, w1, w2, w3)
+        i += 1usize
+    }
+    let cleared = sysettings.dyn_set(5usize, 0usize, 0usize, 0usize, 0usize)
+    load_dynamic(s)
+}
+
 fn act(s: *State, id: usize, x: f32) -> bool {
+    if s.page == DETAIL && s.detail >= icons.APP_COUNT {
+        if id == 500usize {
+            s.page = 6usize
+            say("settings back\n")
+            ret true
+        }
+        if id == 7500usize {
+            let k = s.detail - icons.APP_COUNT
+            say("settings dynamic removed ")
+            say(s.dyn_names[k * 24usize..k * 24usize + s.dyn_len[k]])
+            say("\n")
+            remove_dynamic(s, k)
+            s.page = 6usize
+            ret true
+        }
+        ret false
+    }
+    if s.page == 6usize && id >= 7100usize && id < 7100usize + s.dyn_total {
+        s.detail = icons.APP_COUNT + (id - 7100usize)
+        s.page = DETAIL
+        say("settings dynamic app ")
+        say(s.dyn_names[(id - 7100usize) * 24usize..(id - 7100usize) * 24usize + s.dyn_len[id - 7100usize]])
+        say("\n")
+        ret true
+    }
     if s.page == DETAIL {
         if id == 500usize {
             s.page = 6usize
@@ -1251,7 +1354,19 @@ fn act(s: *State, id: usize, x: f32) -> bool {
             say(page_name(s.page))
             say("\n")
             if s.page == 0usize && s.values[WIFI] != 0usize { scan_networks(s) }
-            if s.page == 6usize { s.hidden = sysettings.hidden() }
+            if s.page == 6usize {
+                s.hidden = sysettings.hidden()
+                load_dynamic(s)
+                var d = 0usize
+                while d < s.dyn_total {
+                    say("settings dynamic ")
+                    say(s.dyn_names[d * 24usize..d * 24usize + s.dyn_len[d]])
+                    say(" v")
+                    say_num(s.dyn_version[d])
+                    say("\n")
+                    d += 1usize
+                }
+            }
             if s.page == 3usize {
                 s.battery = sysettings.battery()
                 if (s.battery & 2147483648usize) != 0usize {
@@ -1422,6 +1537,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.page = MAIN
     s.hidden = sysettings.hidden()
     s.battery = sysettings.battery()
+    load_dynamic(&s)
     if s.values[WIFI] != 0usize { scan_networks(&s) }
     let (stored_used, stored_total, stored_answered) = vaultfs.stats()
     s.have_storage = stored_answered

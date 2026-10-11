@@ -23,6 +23,12 @@ const OP_SET_HIDDEN: usize = 6usize
 // The battery word of the status service (present bit 31, charging bit 8, level in the low byte; 0 when no
 // provider reports one): the server asks the status service for it.
 const OP_GET_BATTERY: usize = 7usize
+// The registry of dynamic apps (the Dynamic app's, C124's to come): six entries of four words, each entry
+// the name (24 bytes, three words, little end first) and a word of name length | template << 8 | version << 16
+// | extras << 24 (a name length of 0 is an empty entry). DYN_GET index -> four words; DYN_SET index and
+// four words -> an acknowledgement.
+const OP_DYN_GET: usize = 8usize
+const OP_DYN_SET: usize = 9usize
 
 // The system word, or 0 when there is no server.
 fn word() -> usize {
@@ -46,6 +52,31 @@ fn set(index: usize, value: usize) -> usize {
     let sent_index = os.send(REQ, index, NO_SLOT)
     let sent_value = os.send(REQ, value, NO_SLOT)
     ret os.recv(REP, NO_SLOT)
+}
+
+// Registry entry `index`: its four words, and whether the server answered.
+fn dyn_get(index: usize) -> (usize, usize, usize, usize, bool) {
+    let sent = os.send(REQ, OP_DYN_GET, NO_SLOT)
+    if sent == REFUSED { ret (0usize, 0usize, 0usize, 0usize, false) }
+    let sent_index = os.send(REQ, index, NO_SLOT)
+    let w0 = os.recv(REP, NO_SLOT)
+    let w1 = os.recv(REP, NO_SLOT)
+    let w2 = os.recv(REP, NO_SLOT)
+    let w3 = os.recv(REP, NO_SLOT)
+    ret (w0, w1, w2, w3, true)
+}
+
+// Store registry entry `index`; whether the server took it.
+fn dyn_set(index: usize, w0: usize, w1: usize, w2: usize, w3: usize) -> bool {
+    let sent = os.send(REQ, OP_DYN_SET, NO_SLOT)
+    if sent == REFUSED { ret false }
+    let sent_index = os.send(REQ, index, NO_SLOT)
+    let s0 = os.send(REQ, w0, NO_SLOT)
+    let s1 = os.send(REQ, w1, NO_SLOT)
+    let s2 = os.send(REQ, w2, NO_SLOT)
+    let s3 = os.send(REQ, w3, NO_SLOT)
+    let ack = os.recv(REP, NO_SLOT)
+    ret true
 }
 
 // The status service's battery word through the server, or 0 (no server, or no battery provider).

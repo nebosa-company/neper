@@ -77,6 +77,48 @@ fn save_hidden(mask: usize) {
     let result = os.recv(FS_REP, fsproto.NO_SLOT)
 }
 
+// The dynamic apps' registry, from /dyn (six entries of four words, little end first), or empty.
+type Registry = struct { w: [24]usize }
+
+fn load_registry(r: *Registry) {
+    let sent = os.send(FS_REQ, fsproto.OP_READ, fsproto.NO_SLOT)
+    if sent == REFUSED { ret }
+    fsproto.send_str(FS_REQ, "/dyn")
+    let result = os.recv(FS_REP, fsproto.NO_SLOT)
+    var raw: [192]u8 = zero
+    let count = fsproto.recv_bytes(FS_REP, mem.address_of(&raw[0usize]), 192usize)
+    if result != fsproto.RESULT_OK || count != 192usize { ret }
+    var i = 0usize
+    while i < 24usize {
+        var word = 0usize
+        var j = 0usize
+        while j < 8usize {
+            word = word | (usize(raw[i * 8usize + j]) << (j * 8usize))
+            j += 1usize
+        }
+        r.w[i] = word
+        i += 1usize
+    }
+}
+
+fn save_registry(r: *Registry) {
+    var raw: [192]u8 = zero
+    var i = 0usize
+    while i < 24usize {
+        var j = 0usize
+        while j < 8usize {
+            raw[i * 8usize + j] = u8((r.w[i] >> (j * 8usize)) & 255usize)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let sent = os.send(FS_REQ, fsproto.OP_WRITE, fsproto.NO_SLOT)
+    if sent == REFUSED { ret }
+    fsproto.send_str(FS_REQ, "/dyn")
+    fsproto.send_bytes(FS_REQ, mem.address_of(&raw[0usize]), 192usize)
+    let result = os.recv(FS_REP, fsproto.NO_SLOT)
+}
+
 fn defaults(store: *Store) {
     var i = 0usize
     while i < COUNT {
@@ -94,6 +136,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     defaults(&store)
     if load(&store) { say("settings server loaded\n") }
     var hidden = load_hidden()
+    var registry: Registry = zero
+    load_registry(&registry)
     say("settings server up\n")
     var running = true
     while running {
@@ -128,6 +172,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 }
             }
             let sent = os.send(REP, battery, sysettings.NO_SLOT)
+        } else if op == sysettings.OP_DYN_GET {
+            let index = os.recv(REQ, sysettings.NO_SLOT)
+            var k = 0usize
+            while k < 4usize {
+                var word = 0usize
+                if index < 6usize { word = registry.w[index * 4usize + k] }
+                let sent = os.send(REP, word, sysettings.NO_SLOT)
+                k += 1usize
+            }
+        } else if op == sysettings.OP_DYN_SET {
+            let index = os.recv(REQ, sysettings.NO_SLOT)
+            var k = 0usize
+            while k < 4usize {
+                let word = os.recv(REQ, sysettings.NO_SLOT)
+                if index < 6usize { registry.w[index * 4usize + k] = word }
+                k += 1usize
+            }
+            if index < 6usize { save_registry(&registry) }
+            let sent = os.send(REP, 0usize, sysettings.NO_SLOT)
         } else if op == sysettings.OP_GET_HIDDEN {
             let sent = os.send(REP, hidden, sysettings.NO_SLOT)
         } else if op == sysettings.OP_SET_HIDDEN {
