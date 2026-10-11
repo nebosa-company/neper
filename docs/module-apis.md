@@ -9101,6 +9101,7 @@ counter so a caller can refuse a replay. `format` writes the zero-padded decimal
 ```neper
 type Hash = enum u8 { Sha256, Sha512 }
 type Blowfish = struct { p: [18]u32, s: [1024]u32 }
+type Argon2Kind = enum u8 { D, I, Id }
 error TooLarge
 error TooSmall
 error Invalid
@@ -9149,7 +9150,26 @@ fn argon2_update_le32(s: *hash.Blake2b, value: u32)
 fn argon2_update_sized(s: *hash.Blake2b, data: []const u8)
 fn argon2id(password: []const u8, salt: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err
 fn argon2id_keyed(password: []const u8, salt: []const u8, secret: []const u8, ad: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err
+fn argon2(kind: Argon2Kind, password: []const u8, salt: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err
+fn argon2_type_word(kind: Argon2Kind) -> u32
+fn argon2_run(kind: Argon2Kind, version: u32, password: []const u8, salt: []const u8, secret: []const u8, ad: []const u8, t: u32, m_kib: u32, p: u32, out: []u8, memory: []u8) -> err
+fn phc_b64_char(v: u8) -> u8
+fn phc_b64_value(c: u8) -> u8
+fn phc_b64_length(n: usize) -> usize
+fn phc_b64_encode(out: []u8, data: []const u8) -> usize
+fn phc_b64_decode(out: []u8, encoded: []const u8) -> (usize, bool)
+fn phc_number(s: []const u8, pos: usize) -> (u32, usize, bool)
+fn phc_expect(s: []const u8, pos: usize, lit: str) -> (usize, bool)
+fn phc_segment_end(s: []const u8, pos: usize) -> usize
+fn phc_put(out: []u8, pos: usize, lit: str) -> usize
+fn phc_put_number(out: []u8, pos: usize, value: u32) -> usize
+fn argon2_encode(out: []u8, kind: Argon2Kind, t: u32, m_kib: u32, p: u32, salt: []const u8, tag: []const u8) -> (usize, err)
+fn argon2_verify(password: []const u8, phc: []const u8, memory: []u8) -> (bool, err)
+fn scrypt_encode(out: []u8, n: usize, r: usize, p: usize, salt: []const u8, tag: []const u8) -> (usize, err)
+fn scrypt_verify(password: []const u8, phc: []const u8, scratch: []u8) -> (bool, err)
 ```
+
+Password hashing (L117, D2520): `argon2` runs Argon2d, Argon2i or Argon2id (`Argon2Kind`) at version 0x13 over the caller's `memory` of `m_kib` kibibytes, and `argon2_run` also takes a version (16 or 19) and the optional secret and associated data. `argon2_encode`/`scrypt_encode` write the PHC strings `$argon2id$v=19$m=M,t=T,p=P$salt$tag` and `$scrypt$ln=L,r=R,p=P$salt$tag` (unpadded standard Base64); `argon2_verify`/`scrypt_verify` parse one (a missing `v=` is version 16, a non-canonical Base64 tail, a padding character, a leading zero or an extra segment is `Invalid`), recompute the tag and compare it with `e.crypto.hash.equal_constant_time`. A hostile string is bounded: `t` over one million, an scrypt exponent over 32, `r` or `p` over 1024, and a salt or tag over 64 bytes answer `TooLarge`, and a memory demand beyond the caller's buffer answers `TooSmall` before any work. bcrypt's `bcrypt_verify` accepts `$2a$`, `$2b$` and `$2y$`; bcrypt, scrypt and Argon2 cost is the caller's to cap before accepting a stored string.
 
 HKDF follows RFC 5869. Expand rejects output longer than 255 hash blocks before
 writing dst; salt omission has the RFC-defined zero-salt behavior. Output aliases
@@ -10573,6 +10593,124 @@ fn close(watch: own Watch) -> err
 Paths are relative to the watched root. `Renamed` supplies both paths when the host
 can pair them and otherwise appears as remove/add. `Overflow` means callers must
 rescan. Events may coalesce and no operation assumes one event per host change.
+
+### `e.fs.vfs`
+
+```neper
+type Vfs = struct { ctx: *void, stat_fn: fn(*void, *mem.Arena, str) -> (fs.Entry, err), read_fn: fn(*void, *mem.Arena, str, usize) -> ([]u8, err), write_fn: fn(*void, *mem.Arena, str, []const u8) -> err, make_dir_fn: fn(*void, *mem.Arena, str) -> err, remove_fn: fn(*void, *mem.Arena, str) -> err, list_fn: fn(*void, *mem.Arena, str) -> ([]fs.Entry, err) }
+type Node = struct { path: str, kind: fs.EntryKind, data: []u8, size: usize }
+type Mem = struct { a: *mem.Arena, nodes: []Node, count: usize }
+type Mark = struct { path: str, opaque: bool }
+type Overlay = struct { a: *mem.Arena, upper: Vfs, lower: Vfs, marks: []Mark, count: usize }
+type Union = struct { a: *mem.Arena, branches: []Vfs }
+type Sub = struct { inner: Vfs, prefix: str }
+type Host = struct { root: str }
+error NotEmpty
+error NotDirectory
+error IsDirectory
+error TooLarge
+fn same_text(x: []const u8, y: []const u8) -> bool
+fn is_root(path: str) -> bool
+fn clean(a: *mem.Arena, text: str) -> (str, err)
+fn parent_of(path: str) -> str
+fn base_of(path: str) -> str
+fn is_child(dir: str, path: str) -> bool
+fn strictly_below(path: str, base: str) -> bool
+fn join_path(a: *mem.Arena, dir: str, name: str) -> (str, err)
+fn copy_text(a: *mem.Arena, text: str) -> (str, err)
+fn text_less(x: str, y: str) -> bool
+fn sort_entries(entries: []fs.Entry)
+fn root_entry() -> fs.Entry
+fn no_entry() -> fs.Entry
+fn mem_new(a: *mem.Arena, capacity: usize) -> (Mem, err)
+fn mem_find(m: *Mem, path: str) -> (usize, bool)
+fn mem_has_children(m: *Mem, path: str) -> bool
+fn mem_add(m: *Mem, path: str, kind: fs.EntryKind) -> (usize, err)
+fn node_entry(n: Node) -> fs.Entry
+fn mem_check_parent(m: *Mem, path: str) -> err
+fn mem_stat(ctx: *void, a: *mem.Arena, path: str) -> (fs.Entry, err)
+fn mem_read(ctx: *void, a: *mem.Arena, path: str, limit: usize) -> ([]u8, err)
+fn mem_write(ctx: *void, a: *mem.Arena, path: str, data: []const u8) -> err
+fn mem_make_dir(ctx: *void, a: *mem.Arena, path: str) -> err
+fn mem_remove(ctx: *void, a: *mem.Arena, path: str) -> err
+fn mem_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err)
+fn mem_vfs(m: *Mem) -> Vfs
+fn stat(a: *mem.Arena, v: *Vfs, path: str) -> (fs.Entry, err)
+fn read_file(a: *mem.Arena, v: *Vfs, path: str, limit: usize) -> ([]u8, err)
+fn write_file(a: *mem.Arena, v: *Vfs, path: str, data: []const u8) -> err
+fn make_dir(a: *mem.Arena, v: *Vfs, path: str) -> err
+fn remove(a: *mem.Arena, v: *Vfs, path: str) -> err
+fn list(a: *mem.Arena, v: *Vfs, path: str) -> ([]fs.Entry, err)
+fn exists(a: *mem.Arena, v: *Vfs, path: str) -> (bool, err)
+fn make_dirs(a: *mem.Arena, v: *Vfs, path: str) -> err
+fn append_file(a: *mem.Arena, v: *Vfs, path: str, data: []const u8, limit: usize) -> err
+fn copy_file(a: *mem.Arena, from: *Vfs, src: str, to: *Vfs, dst: str, limit: usize) -> err
+fn move(a: *mem.Arena, v: *Vfs, src: str, dst: str, limit: usize) -> err
+fn overlay_new(a: *mem.Arena, upper: Vfs, lower: Vfs, capacity: usize) -> (Overlay, err)
+fn mark_find(o: *Overlay, path: str) -> (usize, bool)
+fn hidden(o: *Overlay, path: str) -> bool
+fn is_opaque(o: *Overlay, path: str) -> bool
+fn mark_set(o: *Overlay, path: str, opaque: bool) -> err
+fn mark_clear(o: *Overlay, path: str)
+fn mark_prune_below(o: *Overlay, base: str)
+fn overlay_lookup(o: *Overlay, a: *mem.Arena, p: str) -> (fs.Entry, err)
+fn overlay_stat(ctx: *void, a: *mem.Arena, path: str) -> (fs.Entry, err)
+fn overlay_read(ctx: *void, a: *mem.Arena, path: str, limit: usize) -> ([]u8, err)
+fn overlay_copy_up_dirs(o: *Overlay, a: *mem.Arena, dir: str) -> err
+fn overlay_settle(o: *Overlay, a: *mem.Arena, p: str) -> err
+fn overlay_write(ctx: *void, a: *mem.Arena, path: str, data: []const u8) -> err
+fn overlay_make_dir(ctx: *void, a: *mem.Arena, path: str) -> err
+fn overlay_children(o: *Overlay, a: *mem.Arena, p: str) -> ([]fs.Entry, err)
+fn overlay_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err)
+fn overlay_remove(ctx: *void, a: *mem.Arena, path: str) -> err
+fn overlay_vfs(o: *Overlay) -> Vfs
+fn union_new(a: *mem.Arena, branches: []const Vfs) -> (Union, err)
+fn union_stat(ctx: *void, a: *mem.Arena, path: str) -> (fs.Entry, err)
+fn union_read(ctx: *void, a: *mem.Arena, path: str, limit: usize) -> ([]u8, err)
+fn union_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err)
+fn union_write(ctx: *void, a: *mem.Arena, path: str, data: []const u8) -> err
+fn union_make_dir(ctx: *void, a: *mem.Arena, path: str) -> err
+fn union_remove(ctx: *void, a: *mem.Arena, path: str) -> err
+fn union_vfs(u: *Union) -> Vfs
+fn sub_new(a: *mem.Arena, inner: Vfs, prefix: str) -> (Sub, err)
+fn sub_inner_path(s: *Sub, a: *mem.Arena, path: str) -> (str, err)
+fn sub_outer_entry(s: *Sub, e: fs.Entry) -> fs.Entry
+fn sub_stat(ctx: *void, a: *mem.Arena, path: str) -> (fs.Entry, err)
+fn sub_read(ctx: *void, a: *mem.Arena, path: str, limit: usize) -> ([]u8, err)
+fn sub_write(ctx: *void, a: *mem.Arena, path: str, data: []const u8) -> err
+fn sub_make_dir(ctx: *void, a: *mem.Arena, path: str) -> err
+fn sub_remove(ctx: *void, a: *mem.Arena, path: str) -> err
+fn sub_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err)
+fn sub_vfs(s: *Sub) -> Vfs
+fn host_new(root: str) -> Host
+fn host_path(h: *Host, a: *mem.Arena, path: str) -> (str, str, err)
+fn host_stat(ctx: *void, a: *mem.Arena, path: str) -> (fs.Entry, err)
+fn host_read(ctx: *void, a: *mem.Arena, path: str, limit: usize) -> ([]u8, err)
+fn host_write(ctx: *void, a: *mem.Arena, path: str, data: []const u8) -> err
+fn host_make_dir(ctx: *void, a: *mem.Arena, path: str) -> err
+fn host_remove(ctx: *void, a: *mem.Arena, path: str) -> err
+fn host_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err)
+fn host_vfs(h: *Host) -> Vfs
+```
+
+Virtual filesystems (L119) behind one interface in the shape of e.fs. `Vfs` is a context and six operations
+(stat, read_file, write_file, make_dir, remove, list) taking the caller's arena for what they return, and the
+free functions `stat`, `read_file`, `write_file`, `make_dir`, `remove`, `list`, `exists`, `make_dirs`,
+`append_file`, `copy_file` and `move` (a file or a whole directory within one Vfs) work on any of them.
+`Mem` is an in-memory tree; `Overlay` is a writable upper over a read-only lower with copy-up of parent
+directories, whiteouts for removed lower entries (kept in the overlay, not in the upper) and opaque
+directories for one made again over a whiteout; `Union` is a read-only merge of branches where the first that
+has a path answers for it and directory entries merge by name (`fs.Denied` for any change); `Sub` is another
+Vfs rooted at a directory of it; `Host` is the real filesystem below a root through e.fs. Layers compose: an
+overlay's lower may be a union, a host directory or another overlay. Paths are cleaned lexically first: empty
+and `.` segments vanish, `..` pops, a `..` past the root or a NUL byte is `fs.Invalid`, and `Host` also
+refuses a backslash or a colon, so nothing outside a `Sub` or a `Host` root can be named (symbolic links
+inside a host directory are the host's). Errors are e.fs's (`fs.NotFound`, `fs.Exists`, `fs.Denied`,
+`fs.Invalid`) plus `NotEmpty`, `NotDirectory`, `IsDirectory` and `TooLarge`. Nothing is freed: tables and file
+bodies grow in the layer's arena and a replaced body stays until the arena is reset; lookups scan, so a Mem is
+for thousands of entries. Checked against four 450-step traces recorded from the host's own filesystem
+replayed on Mem, Sub, Overlay and Host, against `posixpath.normpath`, and by a differential run of an overlay
+over a random lower against a plain copy (D2522).
 
 ### `e.proc`
 
@@ -13636,6 +13774,58 @@ and `quit` are the control commands, and `list`, `retr` (streamed), `retrieve` (
 address and takes only the port from the reply, so a server cannot redirect it; each TLS data handshake gets
 fresh derived entropy. A 4xx/5xx reply is `Rejected` with the reply in `Session.last`; a transfer that fails
 midway kills the session (`Closed`). No active mode, MLSD, resume or server side.
+
+### `e.net.socks`
+
+```neper
+type Reply = struct { code: u8, atyp: u8, address: net.Address, name: [255]u8, name_len: usize, port: u16 }
+type Datagram = struct { fragment: u8, atyp: u8, address: net.Address, name: [255]u8, name_len: usize, port: u16, payload: usize }
+
+error Protocol
+error Rejected
+error Unsupported
+error AuthFailed
+error Invalid
+error Closed
+error TooSmall
+
+const VERSION: u8 = 5u8
+const CMD_CONNECT: u8 = 1u8
+const CMD_BIND: u8 = 2u8
+const CMD_UDP_ASSOCIATE: u8 = 3u8
+const ATYP_IPV4: u8 = 1u8
+const ATYP_DOMAIN: u8 = 3u8
+const ATYP_IPV6: u8 = 4u8
+const METHOD_NONE: u8 = 0u8
+const METHOD_PASSWORD: u8 = 2u8
+const METHOD_REFUSED: u8 = 255u8
+
+fn no_address() -> net.Address
+fn empty_reply() -> Reply
+fn reply_text(code: u8) -> str
+fn read_bytes(source: *io.Reader, dst: []u8) -> err
+fn negotiate(source: *io.Reader, sink: *io.Writer, user: str, password: str) -> err
+fn put_port(buf: []u8, at: usize, port: u16)
+fn send_request(sink: *io.Writer, cmd: u8, atyp: u8, host: []const u8, port: u16) -> err
+fn address_atyp(address: net.Address, bytes: []u8) -> (u8, usize)
+fn read_reply(source: *io.Reader) -> (Reply, err)
+fn command_domain(source: *io.Reader, sink: *io.Writer, cmd: u8, host: str, port: u16) -> (Reply, err)
+fn command_address(source: *io.Reader, sink: *io.Writer, cmd: u8, address: net.Address, port: u16) -> (Reply, err)
+fn connect_domain(source: *io.Reader, sink: *io.Writer, host: str, port: u16) -> (Reply, err)
+fn connect_address(source: *io.Reader, sink: *io.Writer, address: net.Address, port: u16) -> (Reply, err)
+fn bind_address(source: *io.Reader, sink: *io.Writer, address: net.Address, port: u16) -> (Reply, err)
+fn udp_associate(source: *io.Reader, sink: *io.Writer, address: net.Address, port: u16) -> (Reply, err)
+fn relay_endpoint(reply: Reply, proxy: net.Address) -> (net.Endpoint, bool)
+fn establish(connection: *net.Socket, user: str, password: str, host: str, port: u16, udp: bool) -> (Reply, err)
+fn dial(proxy: net.Endpoint, user: str, password: str, host: str, port: u16) -> (net.Socket, Reply, err)
+fn dial_udp(proxy: net.Endpoint, user: str, password: str) -> (net.Socket, Reply, err)
+fn udp_encode_domain(out: []u8, host: str, port: u16, payload: []const u8) -> (usize, err)
+fn udp_encode(out: []u8, address: net.Address, port: u16, payload: []const u8) -> (usize, err)
+fn empty_datagram() -> Datagram
+fn udp_decode(datagram: []const u8) -> (Datagram, err)
+```
+
+SOCKS5 client (L121, RFC 1928 and RFC 1929) over any `io.Reader`/`io.Writer` pair. `negotiate` offers "no authentication" and, when `user` is non-empty, "username/password" and runs the sub-negotiation (`Unsupported` for method 0xFF, `AuthFailed` for a refused login or for a server that insists on credentials the caller has none of, `Protocol` for a bad version or an unrequested method). `connect_domain` and `connect_address` send CONNECT, `bind_address` BIND (the second reply is a further `read_reply`), `udp_associate` UDP ASSOCIATE; each answers the server's `Reply` (bound address as `address` or a `name`, and `port`). A non-zero reply code is `Rejected` with `Reply.code` set (`reply_text` names it); a short stream is `Closed`; a host over 255 bytes, an empty host or a credential over 255 bytes is `Invalid` before anything is written. `dial` connects over e.net, negotiates and CONNECTs to a name the proxy resolves and returns the tunnel socket (closed on failure); `dial_udp` does the same for an association and `relay_endpoint` turns its reply into the datagram endpoint (an unspecified relay address means the proxy's own). `udp_encode`/`udp_encode_domain` and `udp_decode` build and read the RFC 1928 section 7 datagram header; a non-zero `fragment` is reported for the caller to drop, not reassembled. Reads are exact and protocol-sized, so a transport carries on past the replies untouched. Checked against PySocks' request bytes and outcomes for 41 scripted proxy transcripts, its datagram encoder and decoder, and five live loopback sessions (D2521). No GSSAPI, no server side, no HTTP CONNECT (L046).
 
 ### `e.net.ldap`
 
@@ -17873,6 +18063,117 @@ Version 1 reads stored and DEFLATE entries, ZIP64 sizes and UTF-8 names. It reje
 encrypted entries, absolute paths and names containing a `..` segment. CRC and all
 per-entry/aggregate limits are checked before successful extraction.
 
+### `e.fmt.sevenzip`
+
+```neper
+type Limits = struct { entries: usize, name_bytes: usize, header_bytes: usize, folder_bytes: usize }
+type Entry = struct { name: str, size: u64, crc32: u32, has_crc: bool, directory: bool, has_stream: bool, folder: usize, offset: u64 }
+type Coder = struct { id: u64, props: [8]u8, props_len: usize }
+type Folder = struct { coders: [4]Coder, ncoders: usize, bind_in: [3]usize, bind_out: [3]usize, nbind: usize, main_out: usize, sizes: [4]u64, crc: u32, has_crc: bool, nsub: usize, first_sub: usize }
+type Cur = struct { data: []const u8, at: usize, bad: bool }
+type State = struct { a: *mem.Arena, data: []const u8, limits: Limits, folders: []Folder, pack_pos: []u64, pack_size: []u64, sub_size: []u64, sub_crc: []u32, sub_has: []bool, entries: []Entry, cache_folder: usize, cache: []u8, cached: bool }
+type Archive = struct { state: *void }
+error Invalid
+error Unsupported
+error Checksum
+error TooLarge
+error Unsafe
+fn default_limits() -> Limits
+fn rd_byte(c: *Cur) -> u8
+fn rd_u32(c: *Cur) -> u32
+fn rd_number(c: *Cur) -> u64
+fn left(c: *Cur) -> usize
+fn rd_count(c: *Cur, limit: usize) -> usize
+fn rd_bits(c: *Cur, n: usize, out: []bool)
+fn rd_digests(a: *mem.Arena, c: *Cur, n: usize, has: []bool, crc: []u32) -> err
+fn parse_pack_info(c: *Cur, st: *State) -> err
+fn parse_folder(c: *Cur, f: *Folder) -> err
+fn parse_unpack_info(c: *Cur, st: *State) -> err
+fn folder_size(f: *Folder) -> u64
+fn default_substreams(st: *State) -> err
+fn parse_substreams(c: *Cur, st: *State) -> err
+fn parse_streams_info(c: *Cur, st: *State) -> err
+fn bcj_x86(buf: []u8)
+fn run_deflate(a: *mem.Arena, input: []const u8, out_size: usize) -> ([]u8, err)
+fn run_bzip2(a: *mem.Arena, input: []const u8, out_size: usize) -> ([]u8, err)
+fn run_coder(a: *mem.Arena, coder: Coder, input: []const u8, out_size: usize) -> ([]u8, err)
+fn decode_out(st: *State, f: *Folder, folder_index: usize, out_index: usize, depth: usize) -> ([]u8, err)
+fn decode_folder(st: *State, index: usize) -> ([]u8, err)
+fn unsafe_name(name: str) -> bool
+fn rd_name(a: *mem.Arena, c: *Cur, end: usize, budget: *usize) -> (str, err)
+fn parse_files_info(c: *Cur, st: *State) -> err
+fn parse_header(c: *Cur, st: *State) -> err
+fn le32_at(data: []const u8, at: usize) -> u32
+fn le64_at(data: []const u8, at: usize) -> u64
+fn open(a: *mem.Arena, data: []const u8, limits: Limits) -> (Archive, err)
+fn entries(archive: *const Archive) -> []const Entry
+fn extract(a: *mem.Arena, archive: *Archive, index: usize) -> ([]u8, err)
+```
+
+7z archive reader (L120), decode only, over an archive held in memory. `open` verifies the signature header's
+CRCs, reads the header (an encoded header is decoded first, to a depth of four) and lists the entries;
+`extract` runs one file's folder through its coder chain -- Copy, LZMA, LZMA2, Deflate, BZip2, Delta and the
+x86 BCJ filter, every coder one input and one output, wired by the folder's bind pairs in either order -- and
+checks the file's CRC-32 and the folder's when the header records one. A solid folder is decoded once and
+cached, so a sweep over its files does not decode it again; the cache and the header live in the caller's
+arena. Bounded before allocation: every count must fit the bytes left in the header and `Limits`, a declared
+unpacked size above `folder_bytes` is `TooLarge`, a coder whose output is not exactly the declared size is
+`Invalid`, and a name that is absolute, has a drive, a NUL or a `..` segment is `Unsafe`. AES, PPMd, BCJ2, the
+other branch filters, multi-volume archives, additional streams and external property data are `Unsupported`.
+Checked against archives written by py7zr and by a small Python writer built on liblzma, hostile headers, and
+every truncation and one-byte change of two small archives (D2523).
+
+### `e.fmt.rar`
+
+```neper
+type Limits = struct { entries: usize, name_bytes: usize, file_bytes: usize, chain_bytes: usize }
+type Entry = struct { name: str, size: u64, crc32: u32, has_crc: bool, directory: bool, method: u8, solid: bool, dict_log: u32, data_offset: usize, packed: usize }
+type Archive = struct { state: *void }
+type Huff = struct { count: [16]u16, symbol: [306]u16 }
+type Bits = struct { data: []const u8, pos: usize, end: usize, bad: bool }
+type State = struct { a: *mem.Arena, data: []const u8, limits: Limits, entries: []Entry, count: usize, name_budget: usize, chain_start: usize, chain_end: usize, chain: []u8, chain_has: bool, chain_offsets: []u64 }
+error Invalid
+error Unsupported
+error Checksum
+error TooLarge
+error Unsafe
+const NC: usize = 306usize
+const DC: usize = 64usize
+const LDC: usize = 16usize
+const RC: usize = 44usize
+const BC: usize = 20usize
+fn default_limits() -> Limits
+type Cur = struct { data: []const u8, at: usize, bad: bool }
+fn rd_vint(c: *Cur) -> u64
+fn rd_u32(c: *Cur) -> u32
+fn unsafe_name(name: str) -> bool
+fn open(a: *mem.Arena, data: []const u8, limits: Limits) -> (Archive, err)
+fn entries(archive: *const Archive) -> []const Entry
+fn take(b: *Bits, n: u32) -> u32
+fn huff_build(h: *Huff, lengths: []const u8) -> err
+fn huff_decode(h: *Huff, b: *Bits) -> u32
+fn read_tables(b: *Bits, main: *Huff, dist: *Huff, low: *Huff, lens: *Huff) -> err
+fn code_length(b: *Bits, slot: u32) -> u32
+fn unpack(src: []const u8, out: []u8, start: usize, size: usize, dict: u64) -> err
+fn compressed(e: Entry) -> bool
+fn decode_chain(st: *State, index: usize) -> err
+fn extract(a: *mem.Arena, archive: *Archive, index: usize) -> ([]u8, err)
+```
+
+RAR5 archive reader (L120), decode only, over an archive held in memory. `open` walks the block headers (each
+CRC-32 checked) and lists the files; `extract` returns a stored file as it is and decodes a compressed one
+(the RAR5 LZ77 + Huffman stream: block headers with their checksum byte, the 20-symbol bit-length code that
+codes 430 lengths for the main, distance, low-distance and length codes, four repeat distances, a length that
+grows with the distance) and checks the file's CRC-32. A solid chain is decoded as one stream into one buffer
+so a match may reach into an earlier file; the chain is cached. Bounded before allocation: each unpacked size
+and the sum over a chain are checked against `Limits`, a block never reads past its declared size, a distance
+past the bytes produced or the dictionary is `Invalid`, and names that are absolute, have a drive, a NUL or
+a `..` segment are `Unsafe`. RAR 1.5-4.x archives, encryption, the E8/E8E9/ARM/delta filters (main symbol
+256), the version-7 dictionary extension and multi-volume sets are `Unsupported`. Checked against archives
+from a small RAR5 encoder that libarchive's reader (bsdtar) must extract byte for byte before they are used;
+one solid chain whose second file matches into the first is the exception, because libarchive's answer for it
+differs from the format description, so only the CRC vouches for it (D2523).
+
 ### `e.fmt.snappy`
 
 ```neper
@@ -19873,6 +20174,153 @@ fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -
 
 Version 1 supports baseline and progressive Huffman JPEG with bounded dimensions.
 Arithmetic coding and embedded color-profile conversion return `Unsupported`.
+
+### `e.fmt.qoi`
+
+```neper
+type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64 }
+error Invalid
+error Unsupported
+error TooLarge
+const READ_LIMIT: usize = 1073741824usize
+fn be32(d: []const u8, at: usize) -> u32
+fn header(data: []const u8) -> (image.Info, u8, err)
+fn within(w: u32, h: u32, options: DecodeOptions) -> err
+fn inspect(source: io.Reader) -> (image.Info, err)
+fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
+```
+
+QOI decoder (L124): the 14-byte header and the six chunk kinds, to Rgba8 (`Opaque` for three channels,
+`Straight` for four). `inspect` reads the header; `decode` checks the dimensions against the options (zero
+selects 16,384 per side and 16,777,216 pixels, as for PNG) before any pixel is taken and answers `Invalid`
+for a stream that ends before the last pixel. Checked against the `qoi` package (D2524).
+
+### `e.fmt.bmp`
+
+```neper
+type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64 }
+type Header = struct { width: u32, height: u32, top_down: bool, bits: u32, compression: u32, colors: u32, header_size: u32, data_offset: u32, masks: [4]u32, has_alpha_mask: bool, palette_at: usize, palette_entry: usize }
+error Invalid
+error Unsupported
+error TooLarge
+const READ_LIMIT: usize = 1073741824usize
+fn le16(d: []const u8, at: usize) -> u32
+fn le32(d: []const u8, at: usize) -> u32
+fn within(w: u32, h: u32, options: DecodeOptions) -> err
+fn parse_header(d: []const u8) -> (Header, err)
+fn inspect(source: io.Reader) -> (image.Info, err)
+fn shift_of(mask: u32) -> u32
+fn bits_of(mask: u32) -> u32
+fn channel(pixel: u32, mask: u32, shift: u32, bits: u32) -> u8
+fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
+```
+
+BMP / DIB decoder (L124): the OS/2 core and the Windows INFO, V4 and V5 headers; 1, 4, 8, 16, 24 and 32 bits
+per pixel with palettes, 5-5-5, bit fields (scaled with `v * 255 / max`) and an alpha mask; BI_RGB, BI_RLE8,
+BI_RLE4, BI_BITFIELDS and BI_ALPHABITFIELDS; bottom-up and top-down rows; result Rgba8. The fourth byte of a
+32 bit BI_RGB pixel is unused, as in Pillow and the browsers. Embedded JPEG and PNG, CMYK and the OS/2 2.0
+compressions are `Unsupported`. Checked against Pillow's decode of its own files and of 4 bit, 16 bit, bit
+field, V4 alpha and RLE files from a small writer; Pillow's RLE4 reader drops a pixel from odd runs, so that
+case is checked against the pixels the writer meant (D2524).
+
+### `e.fmt.gif`
+
+```neper
+type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64, max_frames: u32, max_bytes: u64 }
+type Frame = struct { image: image.Image, delay: u32, disposal: u8, x: u32, y: u32, width: u32, height: u32 }
+error Invalid
+error Unsupported
+error TooLarge
+const READ_LIMIT: usize = 1073741824usize
+fn le16(d: []const u8, at: usize) -> u32
+fn within(w: u32, h: u32, options: DecodeOptions) -> err
+fn check_signature(d: []const u8) -> err
+fn sub_blocks(d: []const u8, at: usize) -> (usize, usize, err)
+fn copy_sub_blocks(d: []const u8, at: usize, out: []u8)
+fn count_frames(d: []const u8) -> (u32, usize, err)
+fn inspect(a: *mem.Arena, source: io.Reader) -> (image.Info, err)
+fn lzw(src: []const u8, root: u32, out: []u8) -> (usize, err)
+fn decode_frames(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> ([]Frame, err)
+fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
+```
+
+GIF decoder (L124) with animation: `decode` composes the first frame on the logical screen, `decode_frames`
+returns every frame as the full-canvas Rgba8 picture shown after it is drawn, with its delay in hundredths
+of a second and its disposal method, applying the previous frame's disposal (0 and 1 leave, 2 clears the
+rectangle to transparent, 3 restores) and the transparent index; interlaced images, local and global
+palettes and 2 to 8 bit LZW roots are read. `inspect` counts frames from the block structure and buffers the
+input in the arena. Frames, canvas and total bytes are bounded by `DecodeOptions` before any pixel is taken
+(zero selects 1,024 frames and 256 MiB); a frame outside the canvas or a short LZW stream is `Invalid`.
+Checked against Pillow's writer and decoder and the format's composition model (D2524).
+
+### `e.fmt.tiff`
+
+```neper
+type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64 }
+type Ifd = struct { width: u32, height: u32, bits: u32, compression: u32, photometric: u32, samples: u32, rows_per_strip: u32, planar: u32, predictor: u32, extra: u32, strips: usize, offsets_at: usize, offsets_type: u32, counts_at: usize, counts_type: u32, color_map_at: usize, color_map_len: usize, big: bool }
+error Invalid
+error Unsupported
+error TooLarge
+const READ_LIMIT: usize = 1073741824usize
+type Rd = struct { d: []const u8, big: bool }
+fn u16_at(r: *Rd, at: usize) -> u32
+fn u32_at(r: *Rd, at: usize) -> u32
+fn within(w: u32, h: u32, options: DecodeOptions) -> err
+fn type_size(t: u32) -> usize
+fn values_at(r: *Rd, entry: usize, t: u32, count: u32) -> (usize, err)
+fn nth(r: *Rd, at: usize, t: u32, i: usize) -> u32
+fn parse(r: *Rd) -> (Ifd, err)
+fn alpha_of(h: Ifd) -> image.Alpha
+fn inspect(a: *mem.Arena, source: io.Reader) -> (image.Info, err)
+fn packbits(src: []const u8, out: []u8) -> (usize, err)
+fn lzw(src: []const u8, out: []u8) -> (usize, err)
+fn inflate(a: *mem.Arena, src: []const u8, out: []u8) -> (usize, err)
+fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
+```
+
+TIFF decoder (L124): the first image of a baseline file in either byte order, stripped and chunky; no
+compression, LZW (MSB-first, early change), PackBits and Deflate; the horizontal predictor for 8-bit data;
+WhiteIsZero, BlackIsZero, RGB and palette photometrics at 1, 2, 4, 8 and 16 bits (16 keeps the high byte);
+alpha from ExtraSamples (`Premultiplied` for associated, `Straight` for unassociated). Result Rgba8. Tiles,
+BigTIFF, CMYK, YCbCr, planar files and JPEG compression are `Unsupported`. Checked against Pillow (libtiff) for
+every compression, mode, byte order and a many-strip LZW image that fills the code table (D2524).
+
+### `e.fmt.exif`
+
+```neper
+type Exif = struct { data: []const u8, big: bool, ifd0: usize }
+type Tag = struct { ifd: u8, tag: u16, kind: u16, count: u32, at: usize }
+error Invalid
+error TooLarge
+error NotFound
+const IFD_MAIN: u8 = 0u8
+const IFD_THUMBNAIL: u8 = 1u8
+const IFD_EXIF: u8 = 2u8
+const IFD_GPS: u8 = 3u8
+const IFD_INTEROP: u8 = 4u8
+fn rd16(e: *const Exif, at: usize) -> u32
+fn rd32(e: *const Exif, at: usize) -> u32
+fn begins(d: []const u8, at: usize, lit: str) -> bool
+fn block_of_jpeg(d: []const u8) -> ([]const u8, err)
+fn block_of_png(d: []const u8) -> ([]const u8, err)
+fn block_of_webp(d: []const u8) -> ([]const u8, err)
+fn open(block: []const u8) -> (Exif, err)
+fn kind_size(kind: u32) -> usize
+fn walk(e: *Exif, at: usize, ifd: u8, depth: usize, out: []Tag, used: *usize, seen: []usize, seen_count: *usize) -> err
+fn tags(a: *mem.Arena, e: *Exif, limit: usize) -> ([]Tag, err)
+fn find(all: []const Tag, ifd: u8, tag: u16) -> (Tag, bool)
+fn value_u32(e: *const Exif, t: Tag, index: usize) -> (u32, err)
+fn value_rational(e: *const Exif, t: Tag, index: usize) -> (u32, u32, err)
+fn value_text(e: *const Exif, t: Tag) -> (str, err)
+fn orientation(a: *mem.Arena, block: []const u8) -> u32
+```
+
+EXIF reader (L124): `block_of_jpeg`, `block_of_png` and `block_of_webp` find the TIFF-structured block, `open`
+validates its header and byte order, `tags` walks IFD0, the chained IFD1 and the Exif, GPS and
+Interoperability sub-IFDs (each IFD once, to a depth of four, to the caller's limit, every value range checked
+against the block), `find`, `value_u32`, `value_rational` and `value_text` read values, and `orientation` is
+the common question. A cyclic IFD chain, a wild count or a nested pointer back to IFD0 is an error, never
+followed. Checked against Pillow's writer in JPEG, PNG, WebP and TIFF containers (D2524).
 
 ### `e.fmt.webp`
 

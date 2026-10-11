@@ -1045,6 +1045,24 @@ fs_mmap_watch_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$fs_mmap_watch_written" = 'executable written' ]
 chmod +x "$test_build/fs-mmap-watch-selfhost"
 (cd "$fs_watch_scratch" && "$test_build/fs-mmap-watch-selfhost")
+# `e.fs.vfs`: four 450-step traces recorded from the host's own filesystem replayed on Mem, Sub, Overlay and Host, path cleaning against posixpath.normpath, layering and isolation scenarios, and an overlay-versus-plain-copy differential (L119, D2522).
+fs_vfs_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fs_vfs/src/main.e" "$repo" x64 linux "$test_build/fs-vfs-selfhost")
+[ "$fs_vfs_written" = 'executable written' ]
+chmod +x "$test_build/fs-vfs-selfhost"
+fs_vfs_output=$("$test_build/fs-vfs-selfhost")
+[ "$fs_vfs_output" = 'fs vfs ok' ]
+# `e.fmt.sevenzip` and `e.fmt.rar`: py7zr and liblzma-written 7z archives (every coder chain, encoded headers, solid and multi-folder), RAR5 streams from an encoder libarchive must accept, hostile headers and every truncation and byte change of two small archives (L120, D2523).
+fmt_archive_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_archive/src/main.e" "$repo" x64 linux "$test_build/fmt-archive-selfhost")
+[ "$fmt_archive_written" = 'executable written' ]
+chmod +x "$test_build/fmt-archive-selfhost"
+fmt_archive_output=$("$test_build/fmt-archive-selfhost")
+[ "$fmt_archive_output" = 'fmt archive ok' ]
+# `e.fmt.qoi`, `e.fmt.bmp`, `e.fmt.gif`, `e.fmt.tiff` and `e.fmt.exif`: Pillow- and qoi-written images decoded to the RGBA bytes Pillow decodes, GIF animation against the composition model, EXIF tags read from JPEG, PNG, WebP and TIFF, and truncated and flipped input without a trap (109 checks, L124, D2524).
+fmt_images_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_images/src/main.e" "$repo" x64 linux "$test_build/fmt-images-selfhost")
+[ "$fmt_images_written" = 'executable written' ]
+chmod +x "$test_build/fmt-images-selfhost"
+fmt_images_output=$("$test_build/fmt-images-selfhost")
+[ "$fmt_images_output" = 'fmt images ok' ]
 # `e.fmt.msgpack`: every family byte-exact against the specification, the tree reader, the typed codec.
 fmt_msgpack_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_msgpack/src/main.e" "$repo" x64 linux "$test_build/fmt-msgpack-selfhost")
 [ "$fmt_msgpack_written" = 'executable written' ]
@@ -2455,6 +2473,12 @@ crypto_kdf_plan_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$crypto_kdf_plan_written" = 'executable written' ]
 chmod +x "$test_build/crypto-kdf-plan-selfhost"
 "$test_build/crypto-kdf-plan-selfhost"
+# `e.crypto.kdf` password hashing: Argon2d/i/id at both versions and their PHC strings against argon2-cffi, scrypt PHC against hashlib, bcrypt `$2a$`/`$2b$`/`$2y$` against the bcrypt package, hostile-string bounds and every-prefix/every-bit refusal (186 checks, D2520).
+crypto_kdf_phc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_kdf_phc/src/main.e" "$repo" x64 linux "$test_build/crypto-kdf-phc-selfhost")
+[ "$crypto_kdf_phc_written" = 'executable written' ]
+chmod +x "$test_build/crypto-kdf-phc-selfhost"
+crypto_kdf_phc_output=$("$test_build/crypto-kdf-phc-selfhost")
+[ "$crypto_kdf_phc_output" = 'crypto kdf phc ok' ]
 # `e.crypto.sign` planned functions: RFC 6979 P-256 signing on the RFC's vectors, BIP-340 Schnorr over secp256k1 on all nineteen published rows, RSA-PSS byte-equal to a replica and verified by cryptography, ffdhe2048 DH, Poly1305 on the RFC 8439 vector, BLAKE3 on the official vectors in all three modes (D884).
 crypto_sign_plan_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_sign_plan/src/main.e" "$repo" x64 linux "$test_build/crypto-sign-plan-selfhost")
 [ "$crypto_sign_plan_written" = 'executable written' ]
@@ -3946,6 +3970,12 @@ net_ftp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 chmod +x "$test_build/net-ftp-selfhost"
 net_ftp_output=$("$test_build/net-ftp-selfhost")
 [ "$net_ftp_output" = 'net ftp ok' ]
+# e.net.socks: PySocks' request bytes and outcomes for 41 scripted proxy transcripts, its UDP datagram encoder and decoder, and five live loopback sessions (L121, D2521)
+net_socks_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_socks/src/main.e" "$repo" x64 linux "$test_build/net-socks-selfhost")
+[ "$net_socks_written" = 'executable written' ]
+chmod +x "$test_build/net-socks-selfhost"
+net_socks_output=$("$test_build/net-socks-selfhost")
+[ "$net_socks_output" = 'net socks ok' ]
 # e.net.imap: scripted server byte for byte plus a live STARTTLS session (L083, D2276)
 net_imap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_imap/src/main.e" "$repo" x64 linux "$test_build/net-imap-selfhost")
 [ "$net_imap_written" = 'executable written' ]

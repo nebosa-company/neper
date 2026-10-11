@@ -686,17 +686,6 @@
       "evidence": "Planning only (D1877). Observability-export gap (verified: no exposition surface): OpenMetrics text exposition with a scrape handler plus OTLP/HTTP metric and span export over e.net.http. Registries and sampling stay in e.metrics/e.trace. Golden-body fixtures; no collector dependency. Follow-on (D1891): JMX-style management beans (attributes/operations) as a second slice."
     },
     {
-      "id": "L117",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 215,
-      "title": "Password-hashing KDFs in e.crypto: bcrypt, argon2, scrypt",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1877). Auth-critical gap (verified absent): memory-hard password hashing with BKDF-style cost parameters and constant-time verification against reference vectors. e.crypto.kdf covers key derivation, not password storage. Side-channel and parameter-validation fixtures included."
-    },
-    {
       "id": "L118",
       "category": "library",
       "group": "Algorithms",
@@ -706,50 +695,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1877). testify-mock/gomock parity missing (verified: no mock surface in e.test): scripted call expectations with argument matchers and ordered verification over comptime interfaces. e.test.sim covers simulation, not doubles. Fixtures for expectation failure diagnostics."
-    },
-    {
-      "id": "L119",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 217,
-      "title": "Virtual filesystem: memory, overlay and union mounts",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1877). afero parity missing (verified: no virtual FS found): in-memory, overlay and union filesystems behind the e.fs surface with copy-up semantics. Pairs the fsspec note; remote backends ride their own clients. Fixtures for layering, whiteouts and path isolation."
-    },
-    {
-      "id": "L120",
-      "category": "library",
-      "group": "Formats",
-      "order": 218,
-      "title": "RAR and 7z archive decoders in e.fmt",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1877). Archiver parity gap: tar/zip exist, RAR and 7z do not. Decode-only with bounded allocation and hostile-archive fixtures (quines, overflows, solid-block limits). No multi-volume spanning in the first cut. Follow-on (D1891): ar/cpio ride the same archive item as legacy formats."
-    },
-    {
-      "id": "L121",
-      "category": "library",
-      "group": "Drivers",
-      "order": 219,
-      "title": "SOCKS5 client in e.net",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1877). Proxy-protocol gap (verified absent): SOCKS5 handshake with no-auth and username/password methods plus UDP ASSOCIATE, over e.net with loopback fixtures. HTTP CONNECT rides L046 policy helpers; Tor pluggable transports stay out."
-    },
-    {
-      "id": "L124",
-      "category": "library",
-      "group": "Formats",
-      "order": 222,
-      "title": "Extended image decoders: BMP, GIF, TIFF, QOI plus EXIF",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1881). image-crate parity gap (verified: png/jpeg/webp only): BMP, GIF (incl. animation frames), TIFF and QOI decoders plus an EXIF reader over e.gfx.image. Bounded-allocation fixtures incl. hostile files; encode stays out except where e.gfx.image already writes. Follow-on (D1889): extend encode to BMP/GIF/QOI/TIFF write for zigimg write parity. Follow-on (D1890): image-processing ops (resize, rotate, flip, blur) verified absent â€” only Porter-Duff compositing exists."
     },
     {
       "id": "L125",

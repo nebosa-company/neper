@@ -2203,4 +2203,9 @@ D2542	1914	L058 closed: e.ml.multivariate, discriminant analysis, factor analysi
 D2543	2024	L064 closed: e.algo.tidy, tidy-data verbs over L032's rows checked against pandas
 D2544	2012	L063 (1 of 3): e.ml.hgb, a histogram gradient booster checked against scikit-learn's HistGradientBoosting
 D2545	1571	L063 (2 of 3): e.ml.select, fold assignment, cross-validated search and a leak-free preprocessing pipeline
-D2546	1387	L063 (3 of 3, closes the item): e.ml.calibrate, Platt scaling, isotonic regression and calibration scores
+D2546	1388	L063 (3 of 3, closes the item): e.ml.calibrate, Platt scaling, isotonic regression and calibration scores
+D2520	1832	L117: Argon2d/i/id, PHC strings and bcrypt/scrypt verification checked against argon2-cffi, hashlib and the bcrypt package
+D2521	1909	L121 closed: e.net.socks, a SOCKS5 client checked against PySocks
+D2522	2302	L119 closed: e.fs.vfs, memory, overlay, union, sub and host filesystems behind one interface
+D2523	2624	L120 closed: e.fmt.sevenzip and e.fmt.rar, bounded decode-only readers for 7z and RAR5
+D2524	2311	L124 closed: e.fmt.qoi, e.fmt.bmp, e.fmt.gif, e.fmt.tiff and e.fmt.exif

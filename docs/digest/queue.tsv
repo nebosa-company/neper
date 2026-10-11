@@ -61,12 +61,7 @@ L113	library	0	252	SQL migration runner over e.db	goose/migrate parity missing: 
 L114	library	0	261	NoSQL wire clients: Redis, MongoDB, Elasticsearch	go-redis/mongo-driver/elastic parity missing (verified: only false positives found): RESP, OP_MSG and ES REST codecs with loopback fixtures.
 L115	library	0	322	NATS client in e.net	Messaging-client gap, NATS first: text-protocol codec with pub/sub, request-reply and queue groups over e.net, loopback fixtures against scripted servers.
 L116	library	0	374	Prometheus exposition and OTLP export for e.metrics/e.trace	Observability-export gap (verified: no exposition surface): OpenMetrics text exposition with a scrape handler plus OTLP/HTTP metric and span export over e.net.http.
-L117	library	0	293	Password-hashing KDFs in e.crypto: bcrypt, argon2, scrypt	Auth-critical gap (verified absent): memory-hard password hashing with BKDF-style cost parameters and constant-time verification against reference vectors.
 L118	library	0	286	Mock and stub framework for e.test	testify-mock/gomock parity missing (verified: no mock surface in e.test): scripted call expectations with argument matchers and ordered verification over comptime interfaces.
-L119	library	0	281	Virtual filesystem: memory, overlay and union mounts	afero parity missing (verified: no virtual FS found): in-memory, overlay and union filesystems behind the e.fs surface with copy-up semantics.
-L120	library	0	299	RAR and 7z archive decoders in e.fmt	Archiver parity gap: tar/zip exist, RAR and 7z do not.
-L121	library	0	250	SOCKS5 client in e.net	Proxy-protocol gap (verified absent): SOCKS5 handshake with no-auth and username/password methods plus UDP ASSOCIATE, over e.net with loopback fixtures.
-L124	library	0	494	Extended image decoders: BMP, GIF, TIFF, QOI plus EXIF	image-crate parity gap (verified: png/jpeg/webp only): BMP, GIF (incl.
 L125	library	0	276	SVG document rendering in e.gfx	resvg parity gap (verified: SVG output exists, render does not): SVG path/shape/text document rendering into the scene backend over e.gfx.geometry and text layout.
 L126	library	0	284	D-Bus message codec and client for Linux desktop	zbus parity gap (verified: e.dbus is only a forward reference;
 L127	library	0	254	Object-store abstraction over fs, http and memory	opendal parity at the portable layer: unified put/get/list/delete over L119 virtual FS, e.net.http clients and memory backends.

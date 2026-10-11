@@ -1115,6 +1115,24 @@ try {
 } finally {
     Pop-Location
 }
+# `e.fs.vfs`: four 450-step traces recorded from the host's own filesystem replayed on Mem, Sub, Overlay and Host, path cleaning against posixpath.normpath, layering and isolation scenarios, and an overlay-versus-plain-copy differential (L119, D2522).
+$fsVfsPath = Join-Path $testBuild 'fs-vfs-selfhost.exe'
+$fsVfsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fs_vfs\src\main.e') $repo 'x64' 'windows' $fsVfsPath
+if ($LASTEXITCODE -ne 0 -or $fsVfsWritten -ne 'executable written') { throw 'fs_vfs emission failed' }
+$fsVfsOutput = & $fsVfsPath
+if ($LASTEXITCODE -ne 0 -or $fsVfsOutput -ne 'fs vfs ok') { throw "fs_vfs answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.sevenzip` and `e.fmt.rar`: py7zr and liblzma-written 7z archives (every coder chain, encoded headers, solid and multi-folder), RAR5 streams from an encoder libarchive must accept, hostile headers and every truncation and byte change of two small archives (L120, D2523).
+$fmtArchivePath = Join-Path $testBuild 'fmt-archive-selfhost.exe'
+$fmtArchiveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_archive\src\main.e') $repo 'x64' 'windows' $fmtArchivePath
+if ($LASTEXITCODE -ne 0 -or $fmtArchiveWritten -ne 'executable written') { throw 'fmt_archive emission failed' }
+$fmtArchiveOutput = & $fmtArchivePath
+if ($LASTEXITCODE -ne 0 -or $fmtArchiveOutput -ne 'fmt archive ok') { throw "fmt_archive answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.qoi`, `e.fmt.bmp`, `e.fmt.gif`, `e.fmt.tiff` and `e.fmt.exif`: Pillow- and qoi-written images decoded to the RGBA bytes Pillow decodes, GIF animation against the composition model, EXIF tags read from JPEG, PNG, WebP and TIFF, and truncated and flipped input without a trap (109 checks, L124, D2524).
+$fmtImagesPath = Join-Path $testBuild 'fmt-images-selfhost.exe'
+$fmtImagesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_images\src\main.e') $repo 'x64' 'windows' $fmtImagesPath
+if ($LASTEXITCODE -ne 0 -or $fmtImagesWritten -ne 'executable written') { throw 'fmt_images emission failed' }
+$fmtImagesOutput = & $fmtImagesPath
+if ($LASTEXITCODE -ne 0 -or $fmtImagesOutput -ne 'fmt images ok') { throw "fmt_images answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.msgpack`: every family byte-exact against the specification, the tree reader, the typed codec.
 $fmtMsgpackPath = Join-Path $testBuild 'fmt-msgpack-selfhost.exe'
 $fmtMsgpackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_msgpack\src\main.e') $repo 'x64' 'windows' $fmtMsgpackPath
@@ -2787,6 +2805,12 @@ $cryptoKdfPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $cryptoKdfPlanWritten -ne 'executable written') { throw 'crypto_kdf_plan emission failed' }
 & $cryptoKdfPlanPath
 if ($LASTEXITCODE -ne 0) { throw "a crypto_kdf_plan check failed: exit $LASTEXITCODE" }
+# `e.crypto.kdf` password hashing: Argon2d/i/id at both versions and their PHC strings against argon2-cffi, scrypt PHC against hashlib, bcrypt `$2a$`/`$2b$`/`$2y$` against the bcrypt package, hostile-string bounds and every-prefix/every-bit refusal (186 checks, D2520).
+$cryptoKdfPhcPath = Join-Path $testBuild 'crypto-kdf-phc-selfhost.exe'
+$cryptoKdfPhcWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_kdf_phc\src\main.e') $repo 'x64' 'windows' $cryptoKdfPhcPath
+if ($LASTEXITCODE -ne 0 -or $cryptoKdfPhcWritten -ne 'executable written') { throw 'crypto_kdf_phc emission failed' }
+$cryptoKdfPhcOutput = & $cryptoKdfPhcPath
+if ($LASTEXITCODE -ne 0 -or $cryptoKdfPhcOutput -ne 'crypto kdf phc ok') { throw "crypto_kdf_phc answered wrongly: exit $LASTEXITCODE" }
 # `e.crypto.sign` planned functions: RFC 6979 P-256 signing on the RFC's vectors, BIP-340 Schnorr over secp256k1 on all nineteen published rows, RSA-PSS byte-equal to a replica and verified by cryptography, ffdhe2048 DH, Poly1305 on the RFC 8439 vector, BLAKE3 on the official vectors in all three modes (D884).
 $cryptoSignPlanPath = Join-Path $testBuild 'crypto-sign-plan-selfhost.exe'
 $cryptoSignPlanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_sign_plan\src\main.e') $repo 'x64' 'windows' $cryptoSignPlanPath
@@ -4380,6 +4404,12 @@ $netFtpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $netFtpWritten -ne 'executable written') { throw 'net_ftp emission failed' }
 $netFtpOutput = & $netFtpPath
 if ($LASTEXITCODE -ne 0 -or $netFtpOutput -ne 'net ftp ok') { throw "net_ftp answered wrongly: exit $LASTEXITCODE" }
+# e.net.socks: PySocks' request bytes and outcomes for 41 scripted proxy transcripts, its UDP datagram encoder and decoder, and five live loopback sessions (L121, D2521)
+$netSocksPath = Join-Path $testBuild 'net-socks-selfhost.exe'
+$netSocksWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_socks\src\main.e') $repo 'x64' 'windows' $netSocksPath
+if ($LASTEXITCODE -ne 0 -or $netSocksWritten -ne 'executable written') { throw 'net_socks emission failed' }
+$netSocksOutput = & $netSocksPath
+if ($LASTEXITCODE -ne 0 -or $netSocksOutput -ne 'net socks ok') { throw "net_socks answered wrongly: exit $LASTEXITCODE" }
 # e.net.imap: scripted server byte for byte plus a live STARTTLS session (L083, D2276)
 $netImapPath = Join-Path $testBuild 'net-imap-selfhost.exe'
 $netImapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_imap\src\main.e') $repo 'x64' 'windows' $netImapPath
