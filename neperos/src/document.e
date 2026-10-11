@@ -32,6 +32,8 @@ const NONE: usize = 99usize
 const FILES: usize = 13usize
 const LIST_SCREEN: usize = 0usize
 const VIEW_SCREEN: usize = 1usize
+const DISK_SCREEN: usize = 7usize
+const FIND_SCREEN: usize = 8usize
 const MD: usize = 0usize
 const TXT: usize = 1usize
 const CODE: usize = 2usize
@@ -52,6 +54,13 @@ type State = struct {
     hand_hl: usize,
     hand_has_hl: bool,
     hand_classes: [16384]u8,
+    // The files found on the device's disk (up to eight, names of 24 bytes), the text being searched for, and the
+    // text size step (0 small, 1 normal, 2 large).
+    disk_names: [192]u8,
+    disk_len: [8]usize,
+    disk_total: usize,
+    find: ui.Field,
+    zoom: usize,
     screen: usize,
     open: usize,
     page: usize,
@@ -144,6 +153,19 @@ fn ends_with(whole: str, suffix: str) -> bool {
 // A page of a handed file is this many lines.
 const PAGE_LINES: usize = 26usize
 
+// The lines of a page at the text size chosen, and the size's factor.
+fn lines_per_page(s: *State) -> usize {
+    if s.zoom == 0usize { ret 30usize }
+    if s.zoom == 2usize { ret 20usize }
+    ret PAGE_LINES
+}
+
+fn zoom_factor(s: *State) -> f32 {
+    if s.zoom == 0usize { ret 0.85 }
+    if s.zoom == 2usize { ret 1.3 }
+    ret 1.0
+}
+
 // The lines in the handed file's text.
 fn hand_lines(s: *State) -> usize {
     var n = 1usize
@@ -157,13 +179,13 @@ fn hand_lines(s: *State) -> usize {
 
 // The pages of what is open: a handed file's lines in pages, or a sample's own count.
 fn pages_of(s: *State) -> usize {
-    if s.open == FILES { ret (hand_lines(s) + PAGE_LINES - 1usize) / PAGE_LINES }
+    if s.open == FILES { ret (hand_lines(s) + lines_per_page(s) - 1usize) / lines_per_page(s) }
     ret page_count(s.open)
 }
 
 // The first line the open text shows: the page's, for a handed file.
 fn first_line(s: *State) -> usize {
-    if s.open == FILES { ret s.page * PAGE_LINES }
+    if s.open == FILES { ret s.page * lines_per_page(s) }
     ret 0usize
 }
 
@@ -435,6 +457,7 @@ fn line_total(content: str) -> usize {
 
 fn draw_list(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try ui.put(a, builder, faces.jost_bold, 30.0, "Document", 20.0, 16.0, ui.light())
+    try ui.pill(a, builder, &s.hits, faces, 700usize, 272.0, 18.0, 124.0, 34.0, "On this device", ui.amber(), 13.0)
     var i = 0usize
     while i < FILES {
         let y: f32 = 78.0 + f32(i) * 58.0
@@ -463,7 +486,7 @@ fn draw_md(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces)
     var in_code = false
     var n = first_line(s)
     let total = line_total(content)
-    let last = n + PAGE_LINES
+    let last = n + lines_per_page(s)
     while n < total && n < last {
         let row = splitter(a, content, n)
         if row.len >= 3usize && ui.same(row[0usize..3usize], "```") {
@@ -503,8 +526,9 @@ fn draw_txt(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
     var n = first
     let total = line_total(content)
     // Only the lines of the page are drawn.
-    while n < total && n < first + 27usize {
-        try ui.put(a, builder, faces.grotesk, 15.0, splitter(a, content, n), 28.0, 100.0 + f32(n - first) * 26.0, ui.ink())
+    let zf = zoom_factor(s)
+    while n < total && n < first + lines_per_page(s) + 1usize {
+        try ui.put(a, builder, faces.grotesk, 15.0 * zf, splitter(a, content, n), 28.0, 100.0 + f32(n - first) * 26.0 * zf, ui.ink())
         n += 1usize
     }
     ret ok
@@ -652,6 +676,11 @@ fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     if s.open == FILES { shown = ui.text_of(a, s.hand_name[0usize..], s.hand_name_len) }
     try ui.put(a, builder, faces.jost_bold, 22.0, shown, 62.0, 20.0, ui.light())
     if kind == CODE { try ui.pill(a, builder, &s.hits, faces, 501usize, 300.0, 18.0, 96.0, 32.0, shown_language(s), ui.amber(), 14.0) }
+    if s.open == FILES {
+        try ui.pill(a, builder, &s.hits, faces, 701usize, 16.0, 50.0, 70.0, 28.0, "Find", ui.soft(), 13.0)
+        try ui.pill(a, builder, &s.hits, faces, 702usize, 94.0, 50.0, 40.0, 28.0, "A-", ui.soft(), 13.0)
+        try ui.pill(a, builder, &s.hits, faces, 703usize, 142.0, 50.0, 40.0, 28.0, "A+", ui.soft(), 13.0)
+    }
     if kind == MD { try draw_md(a, builder, s, faces) }
     if kind == TXT { try draw_txt(a, builder, s, faces) }
     if kind == CODE { try draw_code(a, builder, s, faces) }
@@ -666,11 +695,53 @@ fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     ret ok
 }
 
+// The files of the device's disk the app can show (up to eight), by name.
+fn draw_disk(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try svg.draw(a, builder, ui.back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), ui.light())
+    ui.hit(&s.hits, 500usize, 0.0, 10.0, 66.0, 56.0)
+    try ui.put(a, builder, faces.jost_bold, 24.0, "On this device", 62.0, 20.0, ui.light())
+    if s.disk_total == 0usize {
+        try ui.centred(a, builder, faces.jost, 19.0, "No documents on the disk", 206.0, 200.0, ui.light_muted())
+    }
+    var i = 0usize
+    while i < s.disk_total {
+        let y: f32 = 84.0 + f32(i) * 58.0
+        try ui.card(a, builder, 16.0, y, 380.0, 52.0, 16.0, ui.cream())
+        try ui.put(a, builder, faces.jost, 17.0, ui.text_of(a, s.disk_names[i * 24usize..], s.disk_len[i]), 32.0, y + 14.0, ui.ink())
+        ui.hit(&s.hits, 800usize + i, 16.0, y, 380.0, 52.0)
+        i += 1usize
+    }
+    ret ok
+}
+
+// Find: a text field on the on-screen keyboard.
+fn draw_find(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try svg.draw(a, builder, ui.back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), ui.light())
+    ui.hit(&s.hits, 500usize, 0.0, 10.0, 66.0, 56.0)
+    try ui.put(a, builder, faces.jost_bold, 24.0, "Find in the document", 62.0, 20.0, ui.light())
+    try ui.card(a, builder, 16.0, 76.0, 380.0, 50.0, 14.0, ui.cream())
+    if s.find.len == 0usize {
+        try ui.put(a, builder, faces.jost, 20.0, "Type a word", 30.0, 88.0, ui.muted())
+    } else {
+        try ui.put(a, builder, faces.jost, 20.0, ui.field_text(a, &s.find), 30.0, 88.0, ui.ink())
+    }
+    try ui.keyboard(a, builder, &s.hits, faces, "Find")
+    ret ok
+}
+
 fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> err {
     s.hits.total = 0usize
     let faces = kit.faces
     try ui.ground(builder, kit.frame, kit.logical_h, 0.08, 0.09, 0.11)
-    if s.screen == LIST_SCREEN { try draw_list(a, builder, s, faces) } else { try draw_view(a, builder, s, faces) }
+    if s.screen == LIST_SCREEN {
+        try draw_list(a, builder, s, faces)
+    } else if s.screen == DISK_SCREEN {
+        try draw_disk(a, builder, s, faces)
+    } else if s.screen == FIND_SCREEN {
+        try draw_find(a, builder, s, faces)
+    } else {
+        try draw_view(a, builder, s, faces)
+    }
     try ui.handle(a, builder)
     ret ok
 }
@@ -686,7 +757,131 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
 // ----------------------------------------------------------------------------------------------
 // Behaviour.
 
-fn act(s: *State, id: usize) -> bool {
+// Whether `name` is a file the app can show: a document format, Markdown or text, or a language the highlighter knows.
+fn showable(name: str) -> bool {
+    if ends_with(name, ".md") || ends_with(name, ".txt") || ends_with(name, ".docx") || ends_with(name, ".pptx") || ends_with(name, ".pdf") { ret true }
+    let (index, found) = hl.language_for(name)
+    ret found
+}
+
+// The showable files in the disk's root, into the State.
+fn load_disk(s: *State) {
+    s.disk_total = 0usize
+    var names: [512]u8 = zero
+    let (count, listed) = vaultfs.list("/", mem.address_of(&names[0usize]), 512usize)
+    if !listed { ret }
+    var start = 0usize
+    var at = 0usize
+    while at < count && s.disk_total < 8usize {
+        if names[at] == 10u8 {
+            let name = names[start..at]
+            if showable(name) && name.len <= 24usize {
+                var k = 0usize
+                while k < name.len {
+                    s.disk_names[s.disk_total * 24usize + k] = name[k]
+                    k += 1usize
+                }
+                s.disk_len[s.disk_total] = name.len
+                s.disk_total += 1usize
+            }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+}
+
+// Look for the field's text (case-insensitively) in the handed text: the number of matches, and the page of the
+// first one (set on `s.page`).
+fn do_find(s: *State) -> usize {
+    var matches = 0usize
+    var found_line = 0usize
+    var line = 0usize
+    var i = 0usize
+    while i < s.hand_len {
+        if s.hand_text[i] == 10u8 { line += 1usize }
+        var same = s.find.len > 0usize && i + s.find.len <= s.hand_len
+        var k = 0usize
+        while same && k < s.find.len {
+            var c = s.hand_text[i + k]
+            if c >= 65u8 && c <= 90u8 { c = c + 32u8 }
+            var q = s.find.bytes[k]
+            if q >= 65u8 && q <= 90u8 { q = q + 32u8 }
+            if c != q { same = false }
+            k += 1usize
+        }
+        if same {
+            if matches == 0usize { found_line = line }
+            matches += 1usize
+        }
+        i += 1usize
+    }
+    if matches > 0usize { s.page = found_line / lines_per_page(s) }
+    ret matches
+}
+
+fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
+    if s.screen == DISK_SCREEN {
+        if id == 500usize {
+            s.screen = LIST_SCREEN
+            ret true
+        }
+        if id >= 800usize && id < 808usize && id - 800usize < s.disk_total {
+            let k = id - 800usize
+            let path = ui.join(a, "/", ui.text_of(a, s.disk_names[k * 24usize..], s.disk_len[k]), "")
+            if open_path(a, s, path) {
+                s.page = 0usize
+                ret true
+            }
+        }
+        ret false
+    }
+    if s.screen == FIND_SCREEN {
+        if id == 500usize {
+            s.screen = VIEW_SCREEN
+            ret true
+        }
+        if ui.is_key(id) && id != 1205usize {
+            if ui.field_key(&s.find, id, false) { ret true }
+            ret false
+        }
+        if id == 1205usize {
+            let count = do_find(s)
+            ui.say("document find ")
+            ui.say_text(ui.field_text(a, &s.find))
+            ui.say(" ")
+            ui.say_num(count)
+            ui.say(" page ")
+            ui.say_num(s.page + 1usize)
+            ui.say("\n")
+            s.screen = VIEW_SCREEN
+            ret true
+        }
+        ret false
+    }
+    if s.screen == LIST_SCREEN && id == 700usize {
+        load_disk(s)
+        s.screen = DISK_SCREEN
+        ui.say("document device ")
+        ui.say_num(s.disk_total)
+        ui.say("\n")
+        ret true
+    }
+    if s.screen == VIEW_SCREEN && s.open == FILES {
+        if id == 701usize {
+            s.find.len = 0usize
+            s.screen = FIND_SCREEN
+            ret true
+        }
+        if id == 702usize || id == 703usize {
+            if id == 702usize && s.zoom > 0usize { s.zoom -= 1usize }
+            if id == 703usize && s.zoom < 2usize { s.zoom += 1usize }
+            if s.page >= pages_of(s) { s.page = pages_of(s) - 1usize }
+            ui.say("document zoom ")
+            ui.say_num(s.zoom)
+            ui.say("\n")
+            ret true
+        }
+    }
     if s.screen == VIEW_SCREEN {
         if id == 500usize {
             s.screen = LIST_SCREEN
@@ -725,6 +920,86 @@ fn act(s: *State, id: usize) -> bool {
     ret false
 }
 
+// (C123) Read the file at `hand_path` and make it the open document: Office and PDF text through the readers, a
+// text or source file up to 16 KB, the kind and highlighter picked by its extension. True when it read.
+fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
+    var text_len = 0usize
+    var has_text = false
+    if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") || ends_with(hand_path, ".pdf") {
+        // An Office file: read it whole (up to 256 KB, in pieces) and take its text.
+        let (size, kind, day, found) = vaultfs.stat(hand_path)
+        if found && size > 0usize && size <= 262144usize {
+            let (raw, raw_error) = mem.alloc[u8](a, size)
+            if raw_error == ok {
+                let (got, read_ok) = vaultfs.read_big(hand_path, mem.address_of(&raw[0usize]), size)
+                if read_ok && got == size {
+                    if ends_with(hand_path, ".pdf") {
+                        text_len = pdf_text(a, s, raw[0usize..got])
+                    } else {
+                        text_len = office_text(a, s, ends_with(hand_path, ".pptx"), raw[0usize..got])
+                    }
+                    has_text = text_len > 0usize
+                }
+            }
+        }
+    } else {
+        // A text or source file: up to 16 KB of it, in pieces; the rest is not shown.
+        let (plain_size, plain_kind, plain_day, plain_found) = vaultfs.stat(hand_path)
+        if plain_found {
+            var want = plain_size
+            if want > 16000usize { want = 16000usize }
+            let (plain_len, plain_ok) = vaultfs.read_big(hand_path, mem.address_of(&s.hand_text[0usize]), want)
+            text_len = plain_len
+            has_text = plain_ok
+        }
+    }
+    if has_text {
+        s.hand_len = text_len
+        var leaf = 0usize
+        var i = 0usize
+        while i < hand_path.len {
+            if hand_path[i] == 47u8 { leaf = i + 1usize }
+            i += 1usize
+        }
+        var n = 0usize
+        while leaf + n < hand_path.len && n < 24usize {
+            s.hand_name[n] = hand_path[leaf + n]
+            n += 1usize
+        }
+        s.hand_name_len = n
+        s.open = FILES
+        s.screen = VIEW_SCREEN
+        let (shown_kind, shown_lang) = kind_by_name(ui.text_of(a, s.hand_name[0usize..], n))
+        s.hand_kind = shown_kind
+        s.hand_lang = shown_lang
+        if hand_path.len > 4usize && ends_with(hand_path, ".pdf") { s.hand_kind = TXT }
+        // The table-driven highlighter takes any extension it knows that is not a document format.
+        let (hl_index, hl_found) = hl.language_for(ui.text_of(a, s.hand_name[0usize..], n))
+        if hl_found && s.hand_kind != MD && !ends_with(hand_path, ".pdf") && !ends_with(hand_path, ".docx") && !ends_with(hand_path, ".pptx") {
+            s.hand_kind = CODE
+            s.hand_hl = hl_index
+            s.hand_has_hl = true
+            let classified = hl.classify(hl_index, ui.text_of(a, s.hand_text[0usize..], s.hand_len), s.hand_classes[0usize..])
+        }
+        if s.hand_kind == MD { ui.say("document kind markdown\n") }
+        if s.hand_kind == CODE {
+            ui.say("document kind code ")
+            ui.say(shown_language(s))
+            ui.say("\n")
+        }
+        ui.say("document handed ")
+        ui.say_text(ui.text_of(a, s.hand_name[0usize..], n))
+        ui.say("\n")
+        // The first line of what was read, so a fixture can check the text.
+        var first = 0usize
+        while first < s.hand_len && s.hand_text[first] != 10u8 { first += 1usize }
+        ui.say("document first line ")
+        ui.say_text(ui.text_of(a, s.hand_text[0usize..], first))
+        ui.say("\n")
+    }
+    ret has_text
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (kit_value, kit_error) = appkit.open(a, args, 1usize, "document")
     if kit_error != ok {
@@ -742,81 +1017,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var path_bytes: [64]u8 = zero
     let (path_len, has_path) = vaultfs.read("/handover", mem.address_of(&path_bytes[0usize]), 63usize)
     if has_path && path_len > 0usize {
-        let hand_path = ui.text_of(a, path_bytes[0usize..], path_len)
-        var text_len = 0usize
-        var has_text = false
-        if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") || ends_with(hand_path, ".pdf") {
-            // An Office file: read it whole (up to 256 KB, in pieces) and take its text.
-            let (size, kind, day, found) = vaultfs.stat(hand_path)
-            if found && size > 0usize && size <= 262144usize {
-                let (raw, raw_error) = mem.alloc[u8](a, size)
-                if raw_error == ok {
-                    let (got, read_ok) = vaultfs.read_big(hand_path, mem.address_of(&raw[0usize]), size)
-                    if read_ok && got == size {
-                        if ends_with(hand_path, ".pdf") {
-                            text_len = pdf_text(a, &s, raw[0usize..got])
-                        } else {
-                            text_len = office_text(a, &s, ends_with(hand_path, ".pptx"), raw[0usize..got])
-                        }
-                        has_text = text_len > 0usize
-                    }
-                }
-            }
-        } else {
-            // A text or source file: up to 16 KB of it, in pieces; the rest is not shown.
-            let (plain_size, plain_kind, plain_day, plain_found) = vaultfs.stat(hand_path)
-            if plain_found {
-                var want = plain_size
-                if want > 16000usize { want = 16000usize }
-                let (plain_len, plain_ok) = vaultfs.read_big(hand_path, mem.address_of(&s.hand_text[0usize]), want)
-                text_len = plain_len
-                has_text = plain_ok
-            }
-        }
-        if has_text {
-            s.hand_len = text_len
-            var leaf = 0usize
-            var i = 0usize
-            while i < path_len {
-                if path_bytes[i] == 47u8 { leaf = i + 1usize }
-                i += 1usize
-            }
-            var n = 0usize
-            while leaf + n < path_len && n < 24usize {
-                s.hand_name[n] = path_bytes[leaf + n]
-                n += 1usize
-            }
-            s.hand_name_len = n
-            s.open = FILES
-            s.screen = VIEW_SCREEN
-            let (shown_kind, shown_lang) = kind_by_name(ui.text_of(a, s.hand_name[0usize..], n))
-            s.hand_kind = shown_kind
-            s.hand_lang = shown_lang
-            if hand_path.len > 4usize && ends_with(hand_path, ".pdf") { s.hand_kind = TXT }
-            // The table-driven highlighter takes any extension it knows that is not a document format.
-            let (hl_index, hl_found) = hl.language_for(ui.text_of(a, s.hand_name[0usize..], n))
-            if hl_found && s.hand_kind != MD && !ends_with(hand_path, ".pdf") && !ends_with(hand_path, ".docx") && !ends_with(hand_path, ".pptx") {
-                s.hand_kind = CODE
-                s.hand_hl = hl_index
-                s.hand_has_hl = true
-                let classified = hl.classify(hl_index, ui.text_of(a, s.hand_text[0usize..], s.hand_len), s.hand_classes[0usize..])
-            }
-            if s.hand_kind == MD { ui.say("document kind markdown\n") }
-            if s.hand_kind == CODE {
-                ui.say("document kind code ")
-                ui.say(shown_language(&s))
-                ui.say("\n")
-            }
-            ui.say("document handed ")
-            ui.say_text(ui.text_of(a, s.hand_name[0usize..], n))
-            ui.say("\n")
-            // The first line of what was read, so a fixture can check the text.
-            var first = 0usize
-            while first < s.hand_len && s.hand_text[first] != 10u8 { first += 1usize }
-            ui.say("document first line ")
-            ui.say_text(ui.text_of(a, s.hand_text[0usize..], first))
-            ui.say("\n")
-        }
+        let opened = open_path(a, &s, ui.text_of(a, path_bytes[0usize..], path_len))
         let cleared = vaultfs.remove("/handover")
     }
     if !show(a, &kit, &s) {
@@ -837,7 +1038,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             running = false
         } else {
             let id = ui.hit_at(&s.hits, tap.x, tap.y)
-            if id != ui.NONE && act(&s, id) {
+            if id != ui.NONE && act(a, &s, id) {
                 if !show(a, &kit, &s) {
                     ui.say("document present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)

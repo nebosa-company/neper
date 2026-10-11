@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-C123	compiler	0.65	1962	NeperOS Document: a viewer for PDF, Word, PowerPoint, Markdown and text, with syntax highlighting	find, zoom, a file list from the disk, shebang detection, files over 16 KB.
+C123	compiler	0.75	2063	NeperOS Document: a viewer for PDF, Word, PowerPoint, Markdown and text, with syntax highlighting	highlighting the match, pinch zoom, code/Markdown zoom, shebang detection, files over 16 KB, the PDF outline and images.
 C122	compiler	0	895	NeperOS Camera: a real sensor feed, files in Photos, video, focus and exposure	The Camera app (D2217) shows drawn sample scenes and keeps captures in the process.
 C121	compiler	0	1419	NeperOS Wallet: real codes, scanning with the Camera, encrypted storage, more validators	The Wallet app (D2216) holds payment cards, tickets, certificates, loyalty and transit cards, bank accounts and documents (a passport, a visa, a driving license, birth, marriage, address and tax certi
 C120	compiler	0	1059	NeperOS SSH: a real SSH client behind the Termius-style app	The SSH app (D2215) has the hosts list, the host form and a terminal screen, but Connect opens a local demo shell because NeperOS has no network (C117).
