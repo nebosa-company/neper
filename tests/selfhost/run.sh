@@ -1047,6 +1047,12 @@ fmt_archive_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/fmt-archive-selfhost"
 fmt_archive_output=$("$test_build/fmt-archive-selfhost")
 [ "$fmt_archive_output" = 'fmt archive ok' ]
+# `e.fmt.qoi`, `e.fmt.bmp`, `e.fmt.gif`, `e.fmt.tiff` and `e.fmt.exif`: Pillow- and qoi-written images decoded to the RGBA bytes Pillow decodes, GIF animation against the composition model, EXIF tags read from JPEG, PNG, WebP and TIFF, and truncated and flipped input without a trap (109 checks, L124, D2524).
+fmt_images_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_images/src/main.e" "$repo" x64 linux "$test_build/fmt-images-selfhost")
+[ "$fmt_images_written" = 'executable written' ]
+chmod +x "$test_build/fmt-images-selfhost"
+fmt_images_output=$("$test_build/fmt-images-selfhost")
+[ "$fmt_images_output" = 'fmt images ok' ]
 # `e.fmt.msgpack`: every family byte-exact against the specification, the tree reader, the typed codec.
 fmt_msgpack_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_msgpack/src/main.e" "$repo" x64 linux "$test_build/fmt-msgpack-selfhost")
 [ "$fmt_msgpack_written" = 'executable written' ]

@@ -1115,6 +1115,12 @@ $fmtArchiveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $fmtArchiveWritten -ne 'executable written') { throw 'fmt_archive emission failed' }
 $fmtArchiveOutput = & $fmtArchivePath
 if ($LASTEXITCODE -ne 0 -or $fmtArchiveOutput -ne 'fmt archive ok') { throw "fmt_archive answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.qoi`, `e.fmt.bmp`, `e.fmt.gif`, `e.fmt.tiff` and `e.fmt.exif`: Pillow- and qoi-written images decoded to the RGBA bytes Pillow decodes, GIF animation against the composition model, EXIF tags read from JPEG, PNG, WebP and TIFF, and truncated and flipped input without a trap (109 checks, L124, D2524).
+$fmtImagesPath = Join-Path $testBuild 'fmt-images-selfhost.exe'
+$fmtImagesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_images\src\main.e') $repo 'x64' 'windows' $fmtImagesPath
+if ($LASTEXITCODE -ne 0 -or $fmtImagesWritten -ne 'executable written') { throw 'fmt_images emission failed' }
+$fmtImagesOutput = & $fmtImagesPath
+if ($LASTEXITCODE -ne 0 -or $fmtImagesOutput -ne 'fmt images ok') { throw "fmt_images answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.msgpack`: every family byte-exact against the specification, the tree reader, the typed codec.
 $fmtMsgpackPath = Join-Path $testBuild 'fmt-msgpack-selfhost.exe'
 $fmtMsgpackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_msgpack\src\main.e') $repo 'x64' 'windows' $fmtMsgpackPath

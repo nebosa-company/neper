@@ -19551,6 +19551,153 @@ fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -
 Version 1 supports baseline and progressive Huffman JPEG with bounded dimensions.
 Arithmetic coding and embedded color-profile conversion return `Unsupported`.
 
+### `e.fmt.qoi`
+
+```neper
+type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64 }
+error Invalid
+error Unsupported
+error TooLarge
+const READ_LIMIT: usize = 1073741824usize
+fn be32(d: []const u8, at: usize) -> u32
+fn header(data: []const u8) -> (image.Info, u8, err)
+fn within(w: u32, h: u32, options: DecodeOptions) -> err
+fn inspect(source: io.Reader) -> (image.Info, err)
+fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
+```
+
+QOI decoder (L124): the 14-byte header and the six chunk kinds, to Rgba8 (`Opaque` for three channels,
+`Straight` for four). `inspect` reads the header; `decode` checks the dimensions against the options (zero
+selects 16,384 per side and 16,777,216 pixels, as for PNG) before any pixel is taken and answers `Invalid`
+for a stream that ends before the last pixel. Checked against the `qoi` package (D2524).
+
+### `e.fmt.bmp`
+
+```neper
+type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64 }
+type Header = struct { width: u32, height: u32, top_down: bool, bits: u32, compression: u32, colors: u32, header_size: u32, data_offset: u32, masks: [4]u32, has_alpha_mask: bool, palette_at: usize, palette_entry: usize }
+error Invalid
+error Unsupported
+error TooLarge
+const READ_LIMIT: usize = 1073741824usize
+fn le16(d: []const u8, at: usize) -> u32
+fn le32(d: []const u8, at: usize) -> u32
+fn within(w: u32, h: u32, options: DecodeOptions) -> err
+fn parse_header(d: []const u8) -> (Header, err)
+fn inspect(source: io.Reader) -> (image.Info, err)
+fn shift_of(mask: u32) -> u32
+fn bits_of(mask: u32) -> u32
+fn channel(pixel: u32, mask: u32, shift: u32, bits: u32) -> u8
+fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
+```
+
+BMP / DIB decoder (L124): the OS/2 core and the Windows INFO, V4 and V5 headers; 1, 4, 8, 16, 24 and 32 bits
+per pixel with palettes, 5-5-5, bit fields (scaled with `v * 255 / max`) and an alpha mask; BI_RGB, BI_RLE8,
+BI_RLE4, BI_BITFIELDS and BI_ALPHABITFIELDS; bottom-up and top-down rows; result Rgba8. The fourth byte of a
+32 bit BI_RGB pixel is unused, as in Pillow and the browsers. Embedded JPEG and PNG, CMYK and the OS/2 2.0
+compressions are `Unsupported`. Checked against Pillow's decode of its own files and of 4 bit, 16 bit, bit
+field, V4 alpha and RLE files from a small writer; Pillow's RLE4 reader drops a pixel from odd runs, so that
+case is checked against the pixels the writer meant (D2524).
+
+### `e.fmt.gif`
+
+```neper
+type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64, max_frames: u32, max_bytes: u64 }
+type Frame = struct { image: image.Image, delay: u32, disposal: u8, x: u32, y: u32, width: u32, height: u32 }
+error Invalid
+error Unsupported
+error TooLarge
+const READ_LIMIT: usize = 1073741824usize
+fn le16(d: []const u8, at: usize) -> u32
+fn within(w: u32, h: u32, options: DecodeOptions) -> err
+fn check_signature(d: []const u8) -> err
+fn sub_blocks(d: []const u8, at: usize) -> (usize, usize, err)
+fn copy_sub_blocks(d: []const u8, at: usize, out: []u8)
+fn count_frames(d: []const u8) -> (u32, usize, err)
+fn inspect(a: *mem.Arena, source: io.Reader) -> (image.Info, err)
+fn lzw(src: []const u8, root: u32, out: []u8) -> (usize, err)
+fn decode_frames(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> ([]Frame, err)
+fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
+```
+
+GIF decoder (L124) with animation: `decode` composes the first frame on the logical screen, `decode_frames`
+returns every frame as the full-canvas Rgba8 picture shown after it is drawn, with its delay in hundredths
+of a second and its disposal method, applying the previous frame's disposal (0 and 1 leave, 2 clears the
+rectangle to transparent, 3 restores) and the transparent index; interlaced images, local and global
+palettes and 2 to 8 bit LZW roots are read. `inspect` counts frames from the block structure and buffers the
+input in the arena. Frames, canvas and total bytes are bounded by `DecodeOptions` before any pixel is taken
+(zero selects 1,024 frames and 256 MiB); a frame outside the canvas or a short LZW stream is `Invalid`.
+Checked against Pillow's writer and decoder and the format's composition model (D2524).
+
+### `e.fmt.tiff`
+
+```neper
+type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64 }
+type Ifd = struct { width: u32, height: u32, bits: u32, compression: u32, photometric: u32, samples: u32, rows_per_strip: u32, planar: u32, predictor: u32, extra: u32, strips: usize, offsets_at: usize, offsets_type: u32, counts_at: usize, counts_type: u32, color_map_at: usize, color_map_len: usize, big: bool }
+error Invalid
+error Unsupported
+error TooLarge
+const READ_LIMIT: usize = 1073741824usize
+type Rd = struct { d: []const u8, big: bool }
+fn u16_at(r: *Rd, at: usize) -> u32
+fn u32_at(r: *Rd, at: usize) -> u32
+fn within(w: u32, h: u32, options: DecodeOptions) -> err
+fn type_size(t: u32) -> usize
+fn values_at(r: *Rd, entry: usize, t: u32, count: u32) -> (usize, err)
+fn nth(r: *Rd, at: usize, t: u32, i: usize) -> u32
+fn parse(r: *Rd) -> (Ifd, err)
+fn alpha_of(h: Ifd) -> image.Alpha
+fn inspect(a: *mem.Arena, source: io.Reader) -> (image.Info, err)
+fn packbits(src: []const u8, out: []u8) -> (usize, err)
+fn lzw(src: []const u8, out: []u8) -> (usize, err)
+fn inflate(a: *mem.Arena, src: []const u8, out: []u8) -> (usize, err)
+fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
+```
+
+TIFF decoder (L124): the first image of a baseline file in either byte order, stripped and chunky; no
+compression, LZW (MSB-first, early change), PackBits and Deflate; the horizontal predictor for 8-bit data;
+WhiteIsZero, BlackIsZero, RGB and palette photometrics at 1, 2, 4, 8 and 16 bits (16 keeps the high byte);
+alpha from ExtraSamples (`Premultiplied` for associated, `Straight` for unassociated). Result Rgba8. Tiles,
+BigTIFF, CMYK, YCbCr, planar files and JPEG compression are `Unsupported`. Checked against Pillow (libtiff) for
+every compression, mode, byte order and a many-strip LZW image that fills the code table (D2524).
+
+### `e.fmt.exif`
+
+```neper
+type Exif = struct { data: []const u8, big: bool, ifd0: usize }
+type Tag = struct { ifd: u8, tag: u16, kind: u16, count: u32, at: usize }
+error Invalid
+error TooLarge
+error NotFound
+const IFD_MAIN: u8 = 0u8
+const IFD_THUMBNAIL: u8 = 1u8
+const IFD_EXIF: u8 = 2u8
+const IFD_GPS: u8 = 3u8
+const IFD_INTEROP: u8 = 4u8
+fn rd16(e: *const Exif, at: usize) -> u32
+fn rd32(e: *const Exif, at: usize) -> u32
+fn begins(d: []const u8, at: usize, lit: str) -> bool
+fn block_of_jpeg(d: []const u8) -> ([]const u8, err)
+fn block_of_png(d: []const u8) -> ([]const u8, err)
+fn block_of_webp(d: []const u8) -> ([]const u8, err)
+fn open(block: []const u8) -> (Exif, err)
+fn kind_size(kind: u32) -> usize
+fn walk(e: *Exif, at: usize, ifd: u8, depth: usize, out: []Tag, used: *usize, seen: []usize, seen_count: *usize) -> err
+fn tags(a: *mem.Arena, e: *Exif, limit: usize) -> ([]Tag, err)
+fn find(all: []const Tag, ifd: u8, tag: u16) -> (Tag, bool)
+fn value_u32(e: *const Exif, t: Tag, index: usize) -> (u32, err)
+fn value_rational(e: *const Exif, t: Tag, index: usize) -> (u32, u32, err)
+fn value_text(e: *const Exif, t: Tag) -> (str, err)
+fn orientation(a: *mem.Arena, block: []const u8) -> u32
+```
+
+EXIF reader (L124): `block_of_jpeg`, `block_of_png` and `block_of_webp` find the TIFF-structured block, `open`
+validates its header and byte order, `tags` walks IFD0, the chained IFD1 and the Exif, GPS and
+Interoperability sub-IFDs (each IFD once, to a depth of four, to the caller's limit, every value range checked
+against the block), `find`, `value_u32`, `value_rational` and `value_text` read values, and `orientation` is
+the common question. A cyclic IFD chain, a wild count or a nested pointer back to IFD0 is an error, never
+followed. Checked against Pillow's writer in JPEG, PNG, WebP and TIFF containers (D2524).
+
 ### `e.fmt.webp`
 
 ```neper

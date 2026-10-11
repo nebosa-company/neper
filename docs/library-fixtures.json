@@ -1717,6 +1717,7 @@
    "delivered": 31,
    "pending": [],
    "fixtures": [
+    "fmt_images",
     "fmt_jpeg",
     "fmt_png",
     "fmt_webp",
