@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-C124	compiler	0.25	2728	NeperOS Dynamic: apps from a prompt, compiled in Neper on a server, scanned, installed	persistence (files over 4 KB, C150), capabilities enforced, removal, the scanner, the protocol and the server, the compile loop, the fixture.
+C124	compiler	0.3	2821	NeperOS Dynamic: apps from a prompt, compiled in Neper on a server, scanned, installed	persistence (files over 4 KB, C150), the first-run prompt, removal, the scanner, the protocol and the server, the compile loop, the fixture.
 C123	compiler	0	1202	NeperOS Document: a viewer for PDF, Word, PowerPoint, Markdown and text, with syntax highlighting	The Document icon (home index 25, a page with angle brackets) has no app yet.
 C122	compiler	0	895	NeperOS Camera: a real sensor feed, files in Photos, video, focus and exposure	The Camera app (D2217) shows drawn sample scenes and keeps captures in the process.
 C121	compiler	0	1419	NeperOS Wallet: real codes, scanning with the Camera, encrypted storage, more validators	The Wallet app (D2216) holds payment cards, tickets, certificates, loyalty and transit cards, bank accounts and documents (a passport, a visa, a driving license, birth, marriage, address and tax certi

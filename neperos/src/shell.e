@@ -265,6 +265,8 @@ var installed_name: [24]u8 = zero
 var installed_len: usize = 0usize
 var installed_va: usize = 0usize
 var installed_pages: usize = 0usize
+// The capabilities the manifest declared: bit 0 network, bit 1 storage.
+var installed_caps: usize = 0usize
 
 fn visible_count() -> usize {
     var count = 0usize
@@ -573,6 +575,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 }
                 installed_va = base
                 installed_pages = pages
+                if package.declares(pkg, "network") { installed_caps = installed_caps | 1usize }
+                if package.declares(pkg, "storage") { installed_caps = installed_caps | 2usize }
                 installed_len = n
                 say("shell installed ")
                 say(installed_name[0usize..installed_len])
@@ -775,7 +779,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     say("shell launching ")
                     say(installed_name[0usize..installed_len])
                     say("\n")
-                    let install_word = (1usize << 63usize) | (installed_pages << 40usize) | ((installed_va >> 12usize) << 8usize)
+                    let install_word = (1usize << 63usize) | (installed_caps << 56usize) | (installed_pages << 40usize) | ((installed_va >> 12usize) << 8usize)
                     let child_installed = os.launch(install_word)
                     let code_installed = os.reap(child_installed)
                     say("shell app code ")

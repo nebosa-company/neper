@@ -728,6 +728,9 @@ fn launch(frame: *a64.Frame) {
     var image_addr = 0usize
     var image_len = 0usize
     let installed = (usize(frame.x[0usize]) >> 63usize) != 0usize
+    // The capabilities an installed app's manifest declared, as bits 56 (network) and 57 (storage); an archive
+    // app has what its entry always had.
+    let declared = (usize(frame.x[0usize]) >> 56usize) & 3usize
     if installed {
         let pages = (usize(frame.x[0usize]) >> 40usize) & 65535usize
         let first_va = ((usize(frame.x[0usize]) >> 8usize) & 134217727usize) << 12usize
@@ -759,6 +762,10 @@ fn launch(frame: *a64.Frame) {
         image_addr = base
         image_len = pages * 4096usize
         index = 99usize
+        console_write("launch installed capabilities ")
+        if (declared & 1usize) != 0usize { console_write("network ") }
+        if (declared & 2usize) != 0usize { console_write("storage ") }
+        console_write("\n")
     } else {
         if index >= archive_count {
             frame.x[0usize] = 18446744073709551615u64
@@ -801,9 +808,15 @@ fn launch(frame: *a64.Frame) {
             thread.grant(child, 9usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 12usize)
             thread.grant(child, 10usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 13usize)
         }
-        if net_present {
+        // An installed app reaches the network only when its manifest says so.
+        if net_present && (!installed || (declared & 1usize) != 0usize) {
             thread.grant(child, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 8usize)
             thread.grant(child, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 9usize)
+        }
+        // ... and storage (the filesystem's endpoints) only when it declared `storage`.
+        if installed && (declared & 2usize) != 0usize && fs_present {
+            thread.grant(child, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
+            thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
         }
         // (D2252) The Secure app (archive entry 38, the table's `secure`) alone reaches storage and the random server.
         // (C126) Settings (entry 24) keeps its values in the filesystem too.
