@@ -3185,6 +3185,12 @@ $fmtDotenvWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $fmtDotenvWritten -ne 'executable written') { throw 'e.fmt.dotenv emission failed' }
 $fmtDotenvOutput = & $fmtDotenvPath
 if ($LASTEXITCODE -ne 0 -or $fmtDotenvOutput -ne 'fmt dotenv ok') { throw "an e.fmt.dotenv parse or interpolation answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.semver.pep440` pins PEP 440 normalization, ordering, specifier sets and requirement lines against python packaging (L108).
+$fmtPepPath = Join-Path $testBuild 'fmt-semver-pep440-selfhost.exe'
+$fmtPepWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_semver_pep440\src\main.e') $repo 'x64' 'windows' $fmtPepPath
+if ($LASTEXITCODE -ne 0 -or $fmtPepWritten -ne 'executable written') { throw 'e.fmt.semver.pep440 emission failed' }
+$fmtPepOutput = & $fmtPepPath
+if ($LASTEXITCODE -ne 0 -or $fmtPepOutput -ne 'fmt semver pep440 ok') { throw "an e.fmt.semver.pep440 check answered wrongly: exit $LASTEXITCODE" }
 # `e.grep` pins recursive literal matches and its stateless index contract.
 $grepPath = Join-Path $testBuild 'grep-selfhost.exe'
 $grepWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\grep\src\main.e') $repo 'x64' 'windows' $grepPath

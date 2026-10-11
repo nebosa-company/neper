@@ -2769,6 +2769,11 @@ fmt_dotenv_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$fmt_dotenv_written" = 'executable written' ]
 chmod +x "$test_build/fmt-dotenv-selfhost"
 [ "$("$test_build/fmt-dotenv-selfhost")" = 'fmt dotenv ok' ]
+# `e.fmt.semver.pep440` pins PEP 440 normalization, ordering, specifier sets and requirement lines against python packaging (L108).
+fmt_pep_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_semver_pep440/src/main.e" "$repo" x64 linux "$test_build/fmt-semver-pep440-selfhost")
+[ "$fmt_pep_written" = 'executable written' ]
+chmod +x "$test_build/fmt-semver-pep440-selfhost"
+[ "$("$test_build/fmt-semver-pep440-selfhost")" = 'fmt semver pep440 ok' ]
 # `e.grep` pins recursive literal matches and its stateless index contract.
 grep_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/grep/src/main.e" "$repo" x64 linux "$test_build/grep-selfhost")
 [ "$grep_written" = 'executable written' ]

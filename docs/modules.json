@@ -481,6 +481,7 @@
     "e.time.parse",
     "e.path.dirs",
     "e.fmt.dotenv",
+    "e.fmt.semver.pep440",
     "e.grep"
    ]
   }
@@ -2650,6 +2651,17 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.semver.pep440",
+   "layer": 3,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.semver"
    ],
    "blocked_by": []
   },

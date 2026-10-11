@@ -16144,6 +16144,44 @@ ranges, whitespace AND, `||` OR) desugared as read.
 
 `at_least` and `cmp_loose` (L020) compare the loose dotted versions a package manager prints (`10.2` against `9.6`, `1.2-rc1` below `1.2`, a missing component 0) numerically, after petcow's `version_at_least`; a component past 64 bits saturates. Checked by `fmt_semver_loose`.
 
+### `e.fmt.semver.pep440`
+
+```neper
+type Version = struct { epoch: u64, release: [16]u64, release_len: usize, pre_kind: u8, pre_num: u64, has_post: bool, post_num: u64, has_dev: bool, dev_num: u64, local: str }
+type Specifier = struct { op: u8, version: Version, wildcard: bool, raw: str }
+type Requirement = struct { name: str, extras: str, specifiers: str, url: str, marker: str }
+error Invalid
+error TooSmall
+
+fn parse(text: str) -> (Version, err)
+fn is_prerelease(v: Version) -> bool
+fn is_postrelease(v: Version) -> bool
+fn base_version(v: Version) -> Version
+fn public(v: Version) -> Version
+fn cmp(a: Version, b: Version) -> i32
+fn format(v: Version, out: []u8) -> (usize, err)
+fn parse_specifier(text: str) -> (Specifier, err)
+fn matches(s: Specifier, v: Version) -> bool
+fn contains(version: str, specifiers: str, prereleases: bool) -> (bool, err)
+fn parse_requirement(text: str) -> (Requirement, err)
+```
+
+PEP 440 versions, specifiers and requirement lines (python `packaging` parity) beside
+the unchanged SemVer `Version`. `parse` accepts every spelling PEP 440 normalizes (a
+leading `v`, an epoch, `alpha beta c pre preview rev r`, `-N` posts, `._-` separators,
+any case) and borrows the local part from its text; the release holds up to sixteen
+numbers that fit 64 bits. `cmp` is the PEP 440 order (trailing release zeros ignored,
+dev < a < b < rc < final < post, local after public); `format` writes the normalized
+spelling. `parse_specifier` reads `~= == != <= >= < > ===` with `.*` prefixes for `==`
+and `!=` and refuses a local part where PEP 440 does; `matches` applies one operator
+alone, including the `<V` / `>V` exclusions of V's own pre- and post-releases;
+`contains` tests a version against a comma-separated set (up to sixteen) and, as
+packaging 26, lets a pre-release version match unless `prereleases` is false.
+`parse_requirement` splits `name[extras] specifiers ; marker` (specifiers optionally in
+parentheses, a trailing comma tolerated) or `name @ url ; marker`, validating the name,
+extras and every specifier; the marker is kept as text, neither evaluated nor
+validated.
+
 ### `e.fmt.cbor`
 
 ```neper
