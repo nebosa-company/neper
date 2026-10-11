@@ -50,6 +50,7 @@
     "e.fmt.elf",
     "e.fmt.pe",
     "e.fmt.ooxml",
+    "e.fmt.odf",
     "e.fmt.pdf",
     "e.fmt.vcard",
     "e.text.highlight",
@@ -2006,6 +2007,23 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.fmt.xml",
+    "e.fmt.zip",
+    "e.io",
+    "e.mem",
+    "e.os",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.odf",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.ooxml",
     "e.fmt.xml",
     "e.fmt.zip",
     "e.io",

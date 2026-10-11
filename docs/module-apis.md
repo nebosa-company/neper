@@ -24144,6 +24144,27 @@ fn slides(a: *mem.Arena, data: []const u8) -> ([]Slide, err)
 The text of an Office Open XML package, read over `e.fmt.zip` and `e.fmt.xml` from a byte slice (C123): `paragraphs` gives a `.docx`'s paragraphs in order (the text of each, its style name such as `Heading1`, whether it is a list item, tabs and breaks as characters, entities decoded), `slides` a `.pptx`'s slides in slide-number order with each slide's text paragraphs. Namespace prefixes are ignored; runs, tables, images and shapes are not laid out, and the text of a table cell or a shape is a paragraph like any other. A zip with no main part is `NoMainPart`, bytes that are not a zip `NotAPackage`. Checked against packages made with Python's zipfile.
 
 
+### `e.fmt.odf`
+
+```neper
+error NoContent
+
+const NO_OWNER: usize = 4294967295usize
+const MAX_SPACES: usize = 64usize
+
+type Parsed = struct { texts: []str, styles: []str, lists: []bool, pages: []usize }
+
+fn parent_of(nodes: []const xml.Node, n: usize) -> usize
+fn collect(a: *mem.Arena, part: []const u8) -> (Parsed, err)
+fn join(a: *mem.Arena, first: str, second: str) -> str
+fn content(a: *mem.Arena, data: []const u8) -> ([]const u8, err)
+fn paragraphs(a: *mem.Arena, data: []const u8) -> ([]ooxml.Paragraph, err)
+fn slides(a: *mem.Arena, data: []const u8) -> ([]ooxml.Slide, err)
+```
+
+The text of an OpenDocument package, read over `e.fmt.zip` and `e.fmt.xml` the way `e.fmt.ooxml` reads Office Open XML (C142): `paragraphs` gives an `.odt`'s `text:p` and `text:h` in order (the text of each, its style name or `Heading<level>`, whether it sits in a list item, `text:s` spaces, tabs and line breaks as characters, entities decoded), `slides` an `.odp`'s `draw:page`s in order with each page's paragraphs. Tables and frames are not laid out; their text is a paragraph like any other. A package with no `content.xml` is `NoContent`, bytes that are not a zip `NotAPackage` (from `e.fmt.ooxml`). Checked against packages made with Python's zipfile and an ElementTree walk (`scripts/gen_odf_test.py`).
+
+
 ### `e.fmt.pdf`
 
 ```neper

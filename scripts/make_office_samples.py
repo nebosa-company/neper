@@ -64,6 +64,12 @@ def main():
     # A long text file (120 lines, a few pages in Document).
     (out / "zzzlong.txt").write_text("".join(f"line {i + 1} of a long file\n" for i in range(120)), encoding="utf-8")
     (out / "otpauth.txt").write_text("otpauth://totp/Neper%20Bank:sam.rivera?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Neper%20Bank&algorithm=SHA256&digits=8&period=45\n", encoding="utf-8")
+    # An OpenDocument text file: a heading and two paragraphs (named to sort after the other samples).
+    odt = io.BytesIO()
+    with zipfile.ZipFile(odt, "w") as z:
+        z.writestr(zipfile.ZipInfo("mimetype"), "application/vnd.oasis.opendocument.text", compress_type=zipfile.ZIP_STORED)
+        z.writestr("content.xml", '<?xml version="1.0" encoding="UTF-8"?><office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><office:body><office:text><text:h text:outline-level="1">Open letter</text:h><text:p>Written in OpenDocument.</text:p></office:text></office:body></office:document-content>')
+    (out / "zzzzodf.odt").write_bytes(odt.getvalue())
     (out / "zzcode.py").write_text("# count words\nimport sys\n\nclass Counter:\n    def add(self, word):\n        return 1\n", encoding="utf-8")
     print("wrote", out)
 

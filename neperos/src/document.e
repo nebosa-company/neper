@@ -25,6 +25,7 @@ use text
 use ui
 use vaultfs
 use e.fmt.ooxml as ooxml
+use e.fmt.odf as odf
 use e.fmt.pdf as pdf
 use e.text.highlight as hl
 
@@ -85,10 +86,28 @@ fn add_line(s: *State, at: usize, line: str) -> usize {
 
 // The text of a Word document (a paragraph a line, a list item after "- ") or a PowerPoint deck ("Slide n" and
 // its paragraphs) into the handed file's text, through e.fmt.ooxml; the length, 0 when it did not read.
-fn office_text(a: *mem.Arena, s: *State, is_deck: bool, raw: []const u8) -> usize {
+fn deck_of(a: *mem.Arena, is_odf: bool, raw: []const u8) -> ([]ooxml.Slide, err) {
+    if is_odf {
+        let (found, found_error) = odf.slides(a, raw)
+        ret (found, found_error)
+    }
+    let (found, found_error) = ooxml.slides(a, raw)
+    ret (found, found_error)
+}
+
+fn text_of_file(a: *mem.Arena, is_odf: bool, raw: []const u8) -> ([]ooxml.Paragraph, err) {
+    if is_odf {
+        let (found, found_error) = odf.paragraphs(a, raw)
+        ret (found, found_error)
+    }
+    let (found, found_error) = ooxml.paragraphs(a, raw)
+    ret (found, found_error)
+}
+
+fn office_text(a: *mem.Arena, s: *State, is_deck: bool, is_odf: bool, raw: []const u8) -> usize {
     var n = 0usize
     if is_deck {
-        let (slides, slides_error) = ooxml.slides(a, raw)
+        let (slides, slides_error) = deck_of(a, is_odf, raw)
         if slides_error != ok { ret 0usize }
         var i = 0usize
         while i < slides.len {
@@ -101,7 +120,7 @@ fn office_text(a: *mem.Arena, s: *State, is_deck: bool, raw: []const u8) -> usiz
             i += 1usize
         }
     } else {
-        let (paragraphs, paragraphs_error) = ooxml.paragraphs(a, raw)
+        let (paragraphs, paragraphs_error) = text_of_file(a, is_odf, raw)
         if paragraphs_error != ok { ret 0usize }
         var i = 0usize
         while i < paragraphs.len {
@@ -759,7 +778,7 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
 
 // Whether `name` is a file the app can show: a document format, Markdown or text, or a language the highlighter knows.
 fn showable(name: str) -> bool {
-    if ends_with(name, ".md") || ends_with(name, ".txt") || ends_with(name, ".docx") || ends_with(name, ".pptx") || ends_with(name, ".pdf") { ret true }
+    if ends_with(name, ".md") || ends_with(name, ".txt") || ends_with(name, ".docx") || ends_with(name, ".pptx") || ends_with(name, ".pdf") || ends_with(name, ".odt") || ends_with(name, ".odp") { ret true }
     let (index, found) = hl.language_for(name)
     ret found
 }
@@ -925,7 +944,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
 fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
     var text_len = 0usize
     var has_text = false
-    if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") || ends_with(hand_path, ".pdf") {
+    if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") || ends_with(hand_path, ".pdf") || ends_with(hand_path, ".odt") || ends_with(hand_path, ".odp") {
         // An Office file: read it whole (up to 256 KB, in pieces) and take its text.
         let (size, kind, day, found) = vaultfs.stat(hand_path)
         if found && size > 0usize && size <= 262144usize {
@@ -936,7 +955,7 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
                     if ends_with(hand_path, ".pdf") {
                         text_len = pdf_text(a, s, raw[0usize..got])
                     } else {
-                        text_len = office_text(a, s, ends_with(hand_path, ".pptx"), raw[0usize..got])
+                        text_len = office_text(a, s, ends_with(hand_path, ".pptx") || ends_with(hand_path, ".odp"), ends_with(hand_path, ".odt") || ends_with(hand_path, ".odp"), raw[0usize..got])
                     }
                     has_text = text_len > 0usize
                 }
@@ -975,7 +994,7 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
         if hand_path.len > 4usize && ends_with(hand_path, ".pdf") { s.hand_kind = TXT }
         // The table-driven highlighter takes any extension it knows that is not a document format.
         let (hl_index, hl_found) = hl.language_for(ui.text_of(a, s.hand_name[0usize..], n))
-        if hl_found && s.hand_kind != MD && !ends_with(hand_path, ".pdf") && !ends_with(hand_path, ".docx") && !ends_with(hand_path, ".pptx") {
+        if hl_found && s.hand_kind != MD && !ends_with(hand_path, ".pdf") && !ends_with(hand_path, ".docx") && !ends_with(hand_path, ".pptx") && !ends_with(hand_path, ".odt") && !ends_with(hand_path, ".odp") {
             s.hand_kind = CODE
             s.hand_hl = hl_index
             s.hand_has_hl = true

@@ -1251,6 +1251,12 @@ $fmtOoxmlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $fmtOoxmlWritten -ne 'executable written') { throw 'fmt_ooxml emission failed' }
 & $fmtOoxmlPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_ooxml check failed: exit $LASTEXITCODE" }
+# `e.fmt.odf`: an OpenDocument text file and presentation made with Python's zipfile read back, two refusals.
+$fmtOdfPath = Join-Path $testBuild 'fmt-odf-selfhost.exe'
+$fmtOdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_odf\src\main.e') $repo 'x64' 'windows' $fmtOdfPath
+if ($LASTEXITCODE -ne 0 -or $fmtOdfWritten -ne 'executable written') { throw 'fmt_odf emission failed' }
+& $fmtOdfPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_odf check failed: exit $LASTEXITCODE" }
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 $fmtPdfPath = Join-Path $testBuild 'fmt-pdf-selfhost.exe'
 $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf\src\main.e') $repo 'x64' 'windows' $fmtPdfPath
@@ -10461,7 +10467,7 @@ if ($neperosQemu) {
         if ($fields[0] -ne 'seedfixture') { continue }
         $fixture = $fields[1]
         $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
-        & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 ('/report.docx=' + (Join-Path $officeDir 'report.docx')) ('/deck.pptx=' + (Join-Path $officeDir 'deck.pptx')) ('/zz.pdf=' + (Join-Path $officeDir 'zz.pdf')) ('/zzcode.py=' + (Join-Path $officeDir 'zzcode.py')) ('/zznotes.md=' + (Join-Path $officeDir 'zznotes.md')) ('/zzzlong.txt=' + (Join-Path $officeDir 'zzzlong.txt')) ('/otpauth.txt=' + (Join-Path $officeDir 'otpauth.txt')) | Out-Null
+        & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 ('/report.docx=' + (Join-Path $officeDir 'report.docx')) ('/deck.pptx=' + (Join-Path $officeDir 'deck.pptx')) ('/zz.pdf=' + (Join-Path $officeDir 'zz.pdf')) ('/zzcode.py=' + (Join-Path $officeDir 'zzcode.py')) ('/zznotes.md=' + (Join-Path $officeDir 'zznotes.md')) ('/zzzlong.txt=' + (Join-Path $officeDir 'zzzlong.txt')) ('/otpauth.txt=' + (Join-Path $officeDir 'otpauth.txt')) ('/zzzzodf.odt=' + (Join-Path $officeDir 'zzzzodf.odt')) | Out-Null
         if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
         $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $seedDisk 0 $fields[4] 2>&1) -join "`n"
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')

@@ -2209,4 +2209,5 @@ D2521	1909	L121 closed: e.net.socks, a SOCKS5 client checked against PySocks
 D2522	2302	L119 closed: e.fs.vfs, memory, overlay, union, sub and host filesystems behind one interface
 D2523	2624	L120 closed: e.fmt.sevenzip and e.fmt.rar, bounded decode-only readers for 7z and RAR5
 D2524	2312	L124 closed: e.fmt.qoi, e.fmt.bmp, e.fmt.gif, e.fmt.tiff and e.fmt.exif
-D2430	1366	C141: AI sends the conversation to a provider over HTTPS
+D2430	1367	C141: AI sends the conversation to a provider over HTTPS
+D2431	1279	C142: OpenDocument text and presentations through e.fmt.odf

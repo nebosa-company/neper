@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-C142	compiler	0	1479	NeperOS Document: real PDF, Office and Markdown readers; highlighting for the 30 leading languages	The Document app (D2237) shows sample files: a Markdown renderer for headings, bullets and code, a code view with a one-rule-set highlighter and keyword lists for eight languages, and hand-drawn PDF, 
 C143	compiler	0	1309	NeperOS Dynamic, step one: the prompt client and the app kit contract	The Dynamic app (D2238) makes apps from three templates inside itself.
 C145	compiler	0	652	NeperOS Clock: alarms ring with the app closed	Split from C115 (2026-10-08).
 C146	compiler	0	546	NeperOS Clock: daylight saving in the world-clock cities	Split from C115 (2026-10-08).
@@ -119,3 +118,4 @@ C168	compiler	0	696	NeperOS Steps remainder: background counting, history, profi
 C169	compiler	0	540	NeperOS Blocks remainder: fast fall, held keys and drags, score board, sound	Split from C139 (D2428): Blocks has hold, ghost, kicks and a saved best score.
 C170	compiler	0	759	NeperOS Secure remainder: HOTP, QR and export, clipboard and autofill, biometrics, breach check	Split from C140 (D2429): Secure has the encrypted vault, SHA-1/256/512 codes of 6 to 8 digits with their own period, and otpauth import from /otpauth.txt.
 C171	compiler	0	987	NeperOS AI remainder: streaming, keys in Secure, conversations, files and tools	Split from C141 (D2430): AI sends a conversation to a provider and shows the answer.
+C172	compiler	0	869	NeperOS Document remainder: PDF painting, zoom, tables, HTML view, spreadsheets	Split from C142 (D2431): Document reads the text of PDF, Word, PowerPoint and OpenDocument files and renders Markdown and highlighted code.
