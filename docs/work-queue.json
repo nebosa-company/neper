@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C126",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 126,
-      "title": "NeperOS Settings: settings that act on the system, kept across restarts, searchable",
-      "score": 0.97,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued by the user (2026-10-08). Acceptance: (1) a settings service holding the values, answering apps and sending changes to the parts that act on them; (2) kept across restarts, Reset restoring defaults; (3) Dark theme, font size and contrast in every app; (4) search; (5) real list pages (Wi-Fi scan and password sheet, Apps with Uninstall and Dynamic apps, Storage and Battery); (6) a QEMU fixture that changes a setting, restarts and checks it held. Delivered D2361-D2372: settings_server.e holds the 40 values and the system word (theme.e), serves GET/SET/RESET and the uninstalled mask and dynamic-app registry to the shell and every app, persists /settings, /hidden and /dyn; every app asks it each frame (live theme); the shell reads it at boot (restart pairs theme_kept, acts_kept, uninstall_kept, dynamic_kept, timeout_kept). Acting: 24-hour clock, brightness (dim layer), screen lock None, Do Not Disturb, Screen timeout, Time zone (fixed hour offsets), Airplane/Wi-Fi/Mobile gating the network server (D2374). Search, Storage (fs OP_STATS), Apps sizes, Uninstall (grid reflow), Wi-Fi (network server SCAN/JOIN, recorded air in test boots), Battery (status service via the server; recorded 78% in test boots), Dynamic apps in the registry. Not yet: acting recipients with no part to receive them on NeperOS: volumes (no audio server), Bluetooth and Hotspot (no recipient), fingerprint, per-app notification permission; a real installed Dynamic app (C124); a real battery provider; WSL runs of the new fixtures."
-    },
-    {
       "id": "C125",
       "category": "compiler",
       "group": "NeperOS",
@@ -321,6 +310,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C116 (2026-10-08). Secure's Copy says it copied but there is no clipboard, so a password or a code cannot leave the app. Acceptance: (1) a clipboard service holding one text value with an owner, started by the kernel, with endpoints granted to apps that copy or paste; (2) Secure's Copy on a password and on a one-time code puts it there and clears it after a short time (30 s) or when another copy replaces it; (3) the on-screen keyboard's text fields (ui.Field) offer Paste when the clipboard holds text; (4) a copied secret is never written to the console; (5) a fixture that copies a code in Secure and pastes it in another app's field."
+    },
+    {
+      "id": "C149",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 149,
+      "title": "NeperOS parts that receive settings: audio volumes, fingerprint, per-app notification permission, Bluetooth and hotspot, a battery provider",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C126 (D2374): the settings server (settings_server.e, sysettings.e) already holds every value and forwards the ones that have a recipient; these have none on NeperOS yet. Acceptance: (1) an audio server (virtio-sound or a software mixer behind e.audio) that takes the media, ring and alarm volumes and Vibrate from the settings server, with a fixture on QEMU; (2) a fingerprint or biometric unlock path on the lock screen, or a recorded sensor in the test boots, honouring the Fingerprint switch; (3) per-app notification permission enforced where notifications are posted (the status service), not only shown; (4) Bluetooth and Hotspot recipients in the network stack (a link layer that can be switched), gated like Airplane mode; (5) a real battery provider posting to the status service (the path to the Battery page exists, D2370), and per-app permissions as values per app. Delivered by C126 and not to redo: the server, the registry, the Settings pages, the shell's clock, brightness, lock, timeout, time zone and Do Not Disturb, the network gate."
     },
     {
       "id": "C104",
