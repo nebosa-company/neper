@@ -9,10 +9,10 @@
       "group": "NeperOS",
       "order": 128,
       "title": "NeperOS Mail: a real mail client over IMAP and SMTP",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Mail app (D2223) shows a sample mailbox in the process. Acceptance: (1) IMAP and SMTP over TLS on C117, with accounts added in the app (the passwords kept in Secure, C116), OAuth for the large providers, folder sync and push; (2) threads, labels, search, archive, mark read and unread, swipe actions; (3) rich messages: HTML rendering through the Document engine (C123), inline images, attachments saved into Files (C125) and opened in their apps; (4) compose with attachments from Files, Photos and Camera, drafts, signatures and the contact picker (C127); (5) notifications through the status server and a badge on the icon; (6) a fixture on QEMU against a local IMAP and SMTP test server that fetches, reads, replies and checks the sent message. Not queued here: calendar invites, PGP."
+      "evidence": "Queued (2026-10-08). The Mail app (D2223) shows a sample mailbox in the process. Acceptance: (1) IMAP and SMTP over TLS on C117, with accounts added in the app (the passwords kept in Secure, C116), OAuth for the large providers, folder sync and push; (2) threads, labels, search, archive, mark read and unread, swipe actions; (3) rich messages: HTML rendering through the Document engine (C123), inline images, attachments saved into Files (C125) and opened in their apps; (4) compose with attachments from Files, Photos and Camera, drafts, signatures and the contact picker (C127); (5) notifications through the status server and a badge on the icon; (6) a fixture on QEMU against a local IMAP and SMTP test server that fetches, reads, replies and checks the sent message. Not queued here: calendar invites, PGP. Done (D2411): part of (1) and (6) -- the Mail app fetches its INBOX over IMAP (e.net.imap through the network server: LOGIN, SELECT, FETCH of whole messages read by e.fmt.mail: sender name, subject, date as the age, the start of the body, unread by the \\Seen flag) and sends a composed message over SMTP (e.net.smtp), against the test boot's IMAP and SMTP server (mail_services.py); fixture mail_live. Not here: accounts added in the app and their passwords in Secure, TLS and OAuth, folders beyond the INBOX, threads and labels, search, mark read and archive on the server, HTML rendering, attachments, drafts, push and notifications."
     },
     {
       "id": "C129",

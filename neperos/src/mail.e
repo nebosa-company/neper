@@ -15,9 +15,17 @@ use e.gfx.scene
 use e.gfx.svg
 use e.text.layout
 use e.text.shape
+use e.io
+use e.time
+use e.fmt.mail as mailfmt
+use e.fmt.mime as mime
+use e.net.imap as imap
+use e.net.smtp as smtp
 use appkit
 use text
 use ui
+use netclient
+use netproto
 
 const NONE: usize = 99usize
 const MAX_MAILS: usize = 20usize
@@ -91,6 +99,153 @@ fn add_mail(s: *State, from: str, subject: str, body: str, folder: usize, unread
         i += 1usize
     }
     ret NONE
+}
+
+// ----------------------------------------------------------------------------------------------
+// The network (C128): IMAP and SMTP over the network server's connection.
+
+fn net_read(ctx: *void, dst: []u8) -> (usize, err) {
+    var want = dst.len
+    if want > netproto.CHUNK { want = netproto.CHUNK }
+    if want == 0usize { ret (0usize, ok) }
+    let (n, r) = netclient.recv(mem.address_of(&dst[0usize]), want)
+    if r != netproto.R_OK { ret (0usize, io.NoProgress) }
+    if n == 0usize { ret (0usize, io.End) }
+    ret (n, ok)
+}
+
+fn net_write(ctx: *void, src: []const u8) -> (usize, err) {
+    if src.len == 0usize { ret (0usize, ok) }
+    let r = netclient.send(mem.address_of(&src[0usize]), src.len)
+    if r != netproto.R_OK { ret (0usize, io.NoProgress) }
+    ret (src.len, ok)
+}
+
+fn net_flush(ctx: *void) -> err { ret ok }
+
+fn net_reader() -> io.Reader { ret io.Reader { ctx: nil, read: net_read } }
+
+fn net_writer() -> io.Writer { ret io.Writer { ctx: nil, write: net_write, flush: net_flush } }
+
+// Fetch the INBOX over IMAP and make it the app's inbox: the number of messages, or 0 when there is no server or
+// the login fails (the sample inbox stays).
+fn sync_inbox(a: *mem.Arena, s: *State) -> usize {
+    if netclient.connect("neper.test", 8143u16, false) != netproto.R_OK { ret 0usize }
+    var loaded = 0usize
+    let (session, connect_error) = imap.connect(a, net_reader(), net_writer(), 65536usize)
+    if connect_error == ok {
+        var sess = session
+        if imap.login(&sess, "neper", "secret") == ok {
+            let (box, select_error) = imap.select(&sess, "INBOX")
+            if select_error == ok && box.exists > 0u32 {
+                let (items, fetch_error) = imap.fetch(&sess, "1:*", "(FLAGS BODY.PEEK[])", false)
+                if fetch_error == ok {
+                    // What the server holds replaces the sample inbox.
+                    var k = 0usize
+                    while k < MAX_MAILS {
+                        if s.mails[k].used && s.mails[k].folder == INBOX { s.mails[k].used = false }
+                        k += 1usize
+                    }
+                    var now_seconds = 0i64
+                    let (wall, wall_error) = time.now()
+                    if wall_error == ok { now_seconds = wall.nanos / 1000000000i64 }
+                    var i = 0usize
+                    while i < items.len {
+                        let (raw, has_raw) = imap.section(items[i], "BODY[]")
+                        if has_raw {
+                            var state = io.SliceReader { data: raw, off: 0usize }
+                            let (message, message_error) = mailfmt.read_message(a, io.slice_reader(&state), 4096usize)
+                            if message_error == ok {
+                                let (from_header, has_from) = mime.header(message.headers, "From")
+                                let (subject, has_subject) = mime.header(message.headers, "Subject")
+                                let (date, has_date) = mime.header(message.headers, "Date")
+                                var from_name = "Unknown"
+                                if has_from {
+                                    let (addr, addr_error) = mailfmt.parse_address(a, from_header)
+                                    if addr_error == ok {
+                                        from_name = addr.name
+                                        if from_name.len == 0usize { from_name = addr.address }
+                                    }
+                                }
+                                var ago = 0usize
+                                if has_date {
+                                    let (stamp, date_error) = mailfmt.parse_date(date)
+                                    if date_error == ok && now_seconds > stamp.instant { ago = usize((now_seconds - stamp.instant) / 60i64) }
+                                }
+                                var body_buf: [160]u8 = zero
+                                var body = message.body
+                                let (got, body_error) = io.read(&body, body_buf[0usize..160usize])
+                                var body_len = 0usize
+                                if body_error == ok { body_len = got }
+                                let unread = !imap.has_flag(items[i], "\\Seen")
+                                let made = add_mail(s, from_name, subject, ui.text_of(a, body_buf[0usize..], body_len), INBOX, unread, ago)
+                                if made != NONE { loaded += 1usize }
+                            }
+                        }
+                        i += 1usize
+                    }
+                }
+            }
+            let out = imap.logout(&sess)
+        }
+    }
+    let closed = netclient.close()
+    ret loaded
+}
+
+// An address for what was typed in To: itself when it has an @, else the name without spaces at the test domain.
+fn address_of(a: *mem.Arena, typed: str) -> str {
+    var has_at = false
+    var i = 0usize
+    while i < typed.len {
+        if typed[i] == 64u8 { has_at = true }
+        i += 1usize
+    }
+    if has_at { ret typed }
+    let (out, out_error) = mem.alloc[u8](a, typed.len + 12usize)
+    if out_error != ok { ret typed }
+    var n = 0usize
+    i = 0usize
+    while i < typed.len {
+        var c = typed[i]
+        if c >= 65u8 && c <= 90u8 { c = c + 32u8 }
+        if c != 32u8 {
+            out[n] = c
+            n += 1usize
+        }
+        i += 1usize
+    }
+    let domain = "@neper.test"
+    i = 0usize
+    while i < domain.len {
+        out[n] = domain[i]
+        n += 1usize
+        i += 1usize
+    }
+    ret out[0usize..n]
+}
+
+// Send the composed message over SMTP: the server's three-digit reply, or 0 when it could not be sent.
+fn send_message(a: *mem.Arena, s: *State) -> usize {
+    if netclient.connect("neper.test", 8025u16, false) != netproto.R_OK { ret 0usize }
+    var code = 0usize
+    let (session, connect_error) = smtp.connect(a, net_reader(), net_writer(), "neper.test")
+    if connect_error == ok {
+        var sess = session
+        if smtp.ehlo(&sess) == ok {
+            let to = address_of(a, ui.field_text(a, &s.to))
+            var message_text = ui.join(a, "From: neper@neper.test\r\nTo: ", to, "")
+            message_text = ui.join(a, message_text, ui.join(a, "\r\nSubject: ", ui.field_text(a, &s.subject), ""), "")
+            message_text = ui.join(a, message_text, ui.join(a, "\r\n\r\n", ui.field_text(a, &s.message), "\r\n"), "")
+            var state = io.SliceReader { data: message_text, off: 0usize }
+            let recipients: [1]str = [1]str{ to }
+            let (sent, send_error) = smtp.send(&sess, "neper@neper.test", recipients[0usize..1usize], io.slice_reader(&state), u64(message_text.len))
+            if send_error == ok { code = usize(sent.reply.code) }
+            let bye = smtp.quit(&sess)
+        }
+    }
+    let closed = netclient.close()
+    ret code
 }
 
 fn from_of(a: *mem.Arena, s: *State, i: usize) -> str {
@@ -336,6 +491,13 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             if s.to.len > 0usize {
                 let made = add_mail(s, ui.field_text(a, &s.to), ui.field_text(a, &s.subject), ui.field_text(a, &s.message), SENT, false, 0usize)
                 if made != NONE { ui.say("mail sent\n") }
+                // Over the network when there is a server to take it.
+                let code = send_message(a, s)
+                if code != 0usize {
+                    ui.say("mail smtp ")
+                    ui.say_text(ui.number(a, code))
+                    ui.say("\n")
+                }
                 s.folder = SENT
                 s.screen = LIST_SCREEN
             }
@@ -419,6 +581,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     s.mails[m3].starred = true
     s.mails[m5].starred = true
     let s1 = add_mail(&s, "Maya Chen", "Re: Lunch on Friday?", "Friday works for me. See you at 12:30.", SENT, false, 5usize)
+    // With a mail server reachable, its inbox replaces the sample one.
+    let synced = sync_inbox(a, &s)
+    if synced > 0usize {
+        ui.say("mail synced ")
+        ui.say_text(ui.number(a, synced))
+        ui.say("\n")
+    }
     if !show(a, &kit, &s) {
         ui.say("mail present failed\n")
         ret ok

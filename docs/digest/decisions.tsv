@@ -2165,4 +2165,5 @@ D2406	2038	C120 part three: the SSH app runs a live session
 D2407	480	C120 closed; Secure credentials, saved hosts, forwarding and SFTP are C155
 D2408	865	C119 closed: Weather keeps its places and unit; location and alerts are C156
 D2409	1316	C127 part one: vCards and the contact store
-D2410	379	C127 closed; telephony, audio and the shared contact store are C157
+D2410	380	C127 closed; telephony, audio and the shared contact store are C157
+D2411	1617	C128 part one: the Mail app reads and sends over IMAP and SMTP

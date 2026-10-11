@@ -5,6 +5,7 @@
   UDP 5300  a DNS responder answering every A query with 10.0.2.2 (the guest names the resolver
             explicitly, so the fixture needs no internet and no privileged port)
   TCP 8081  HTTP
+  TCP 8143  IMAP and 8025  SMTP (mail_services.py): the Mail app's test accounts
   TCP 8022  SSH (asyncssh): user neper, password secret, a shell that upper-cases a line, `exit` ends with 7
   TCP 8443  HTTPS, TLS 1.3 only, the leaf certificate signed by the fixture CA (names neper.test,
             api.exchange.coinbase.com, api.twelvedata.com, www.alphavantage.co, api.polygon.io); besides the plain
@@ -181,6 +182,8 @@ def ssh_server():
 
 for target in (dns, ssh_server, lambda: serve(8081, False), lambda: serve(8443, True)):
     threading.Thread(target=target, daemon=True).start()
+import mail_services
+mail_services.start()
 if len(sys.argv) > 1:
     pathlib.Path(sys.argv[1]).write_text('ready')
 threading.Event().wait()
