@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C124",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 124,
-      "title": "NeperOS Dynamic: apps from a prompt, compiled in Neper on a server, scanned, installed",
-      "score": 0.45,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Queued by the user (2026-10-08). Dynamic is the app that makes apps: the user writes a prompt that says what app they need; the prompt goes to a NeperOS server that has a model write the app in the Neper language, compiles it, security scans it, and sends the result back to be installed on the device; no compiler, editor, IDE, debugger or linter on the phone; a Dynamic app can be extended later with extra features by another prompt. Acceptance: (1) the prompt screen (a text field on the on-screen keyboard, the apps already made, a progress view with the stages: written, compiled, scanned, ready), and the follow-up prompt on an existing app that sends its source and the request and gets a new version; (2) the server side as a documented protocol over C117's TLS: a request carries the prompt, the app's identity and the device's API level; the answer carries the app image, its source, its manifest (name, icon, the capabilities it asks for) and a signature; the source stays on the server and on the device for extension; (3) the compile step is the Neper compiler against the NeperOS app kit (appkit, text, scenes, the e.* library) with the diagnostics fed back to the model for repair until it builds or gives up with a readable message; (4) the security scan: the manifest's capabilities are checked against what the code calls (no raw syscall or MMIO outside the app kit; no network unless declared; no storage outside the app's own directory), the build is reproducible, the image is signed by the server, and the device verifies the signature and the manifest before installing; the first run shows the capabilities and asks; (5) install: the image lands under the app's own directory, the icon joins the home grid, an app can be removed, updated and rolled back; the kernel launches it with only the capabilities granted; (6) limits and honesty: a Dynamic app is generated code, labelled so; resource limits and a kill switch; the server keeps an audit log and can revoke a signature; (7) a fixture against a local test server with a canned model answer (no live model in the suite) that goes prompt to installed icon to launch to extension. Not queued here: sharing apps between users, a store, paid generation, on-device compilation. Delivered (D2383): the package format and its verifier (neperos/src/package.e: manifest, image, Ed25519 signature, api level, capabilities; checked against Python's cryptography). Delivered (D2384): launch from an image in the caller's memory, the shell verifying a package and adding its icon for the boot; fixture install. Delivered (D2385): the manifest's capabilities decide the kernel's grants (network, storage). Delivered (D2386): the first-run prompt (Allow/Cancel). Delivered (D2387): files of any size in pieces and the package kept in /apps, read back on the next boot. Delivered (D2388): the source scan (raw access, undeclared network/storage). Not yet: several installed apps, removal, the NIR walk, the protocol and the server, the compile loop, the fixture."
-    },
-    {
       "id": "C123",
       "category": "compiler",
       "group": "NeperOS",
@@ -585,6 +574,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C125 (D2382): the Files app is on the real filesystem with list, create, rename, move, copy, trash, search, recent and select, and hands a file to Document. Acceptance: (1) the capability model: the filesystem server tells its clients apart (badged endpoints from the kernel or a per-app request endpoint) so an app sees only its own directory and what Files shares to it; (2) Share to another app and the Camera, Wallet and Mail apps saving into Files once they exist (C121, C122, C128); (3) a grid view with image thumbnails (PNG/JPEG decode into e.gfx scenes); (4) browse and extract a zip with e.fmt.zip (the disk image seeded by scripts/make_fs_image.py so a fixture has one); (5) external storage: a second block device as a second root through a second filesystem server instance; (6) entries beyond sixteen a directory (files larger than 4 KB: done, D2387). Delivered by C125 and not to redo: everything in D2375-D2382."
+    },
+    {
+      "id": "C151",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 151,
+      "title": "NeperOS Dynamic, the server side: protocol, model, compile-and-repair, signing, many installed apps",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C124 (D2388): the device can verify, install, keep, ask about and launch a signed package and refuses what it did not declare. Acceptance: (1) the protocol over C117's TLS: a request carries the prompt, the app's identity and the device's API level; the answer carries the package (manifest, image, source, signature), streamed into the filesystem (a GET larger than httpc.e's 96 KB, with a request body); (2) a local test server with a canned model answer (no live model in the suite) that goes prompt to installed icon to launch to extension, as an installfixture; (3) the Dynamic app (D2238) calling it in place of its three templates and showing the stages from the server's progress; (4) the compile step on the server (the Neper compiler against the app kit, diagnostics fed back to the model until it builds or gives up readably), the scan before signing, a reproducible build, signing and revocation, an audit log; (5) many installed apps (the shell's single slot becomes a list from /apps), removal, update and rollback, and the manifest icon on the grid; (6) the NIR walk of the scanner (raw syscalls, undeclared capabilities, unbounded loops over input), with its report on the Details screen. Delivered by C124 and not to redo: D2383-D2388."
     },
     {
       "id": "L037",
