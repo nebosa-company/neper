@@ -1348,6 +1348,12 @@ algo_stat_test_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$algo_stat_test_written" = 'executable written' ]
 chmod +x "$test_build/algo-stat-test-selfhost"
 "$test_build/algo-stat-test-selfhost"
+# e.algo.stat.infer (L056): z and proportion tests, chi-squared independence, Levene, Bartlett, studentized range, Tukey HSD, noncentral t power and sample size, mode and weighted descriptives against SciPy, statsmodels and NumPy (119 cases, D2540).
+algo_stat_infer_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_infer/src/main.e" "$repo" x64 linux "$test_build/algo-stat-infer-selfhost" -j 2)
+[ "${algo_stat_infer_written}" = 'executable written' ]
+chmod +x "$test_build/algo-stat-infer-selfhost"
+algo_stat_infer_output=$("$test_build/algo-stat-infer-selfhost")
+[ "${algo_stat_infer_output}" = 'algo stat infer ok' ]
 # `e.algo.stat.safety` (L016): ROR/PRR with intervals and signal rules, the BCPNN information component and Apriori rules over comedication masks, with refusals.
 algo_stat_safety_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_stat_safety/src/main.e" "$repo" x64 linux "$test_build/algo-stat-safety-selfhost")
 [ "$algo_stat_safety_written" = 'executable written' ]

@@ -4692,6 +4692,57 @@ sorts its inputs and uses the Numerical Recipes small-sample correction;
 Scratch: `mann_whitney` `2 * (a.len + b.len)` floats, `wilcoxon` `3 * a.len`,
 `kruskal_wallis` the total, each with as many indices in `order`.
 
+### `e.algo.stat.infer`
+
+```neper
+type Outcome = struct { statistic: f64, p_value: f64, df: f64 }
+type Center = enum u8 { Mean, Median, Trimmed }
+type Design = enum u8 { OneSample, Paired, TwoSample }
+type Pair = struct { first: usize, second: usize, mean_diff: f64, statistic: f64, p_value: f64, ci_low: f64, ci_high: f64 }
+error TooSmall
+error Invalid
+fn two_sided_normal(z: f64) -> f64
+fn chi_squared_sf(x: f64, df: f64) -> f64
+fn sample_mean(values: []const f64) -> f64
+fn sort_ascending(values: []f64)
+fn z_test(values: []const f64, mu: f64, sigma: f64) -> (Outcome, err)
+fn z_test_two(a: []const f64, b: []const f64, sigma_a: f64, sigma_b: f64) -> (Outcome, err)
+fn proportion_z(successes: u64, n: u64, p0: f64) -> (Outcome, err)
+fn proportion_z_two(x1: u64, n1: u64, x2: u64, n2: u64) -> (Outcome, err)
+fn chi_squared_independence(table: []const f64, rows: usize, cols: usize, yates: bool, expected: []f64) -> (Outcome, err)
+fn cramers_v(statistic: f64, total: f64, rows: usize, cols: usize) -> f64
+fn centre_of(group: []const f64, kind: Center, scratch: []f64) -> f64
+fn levene(values: []const f64, sizes: []const usize, kind: Center, scratch: []f64) -> (Outcome, err)
+fn bartlett(values: []const f64, sizes: []const usize) -> (Outcome, err)
+fn gauss_legendre16(x: []f64, w: []f64)
+fn range_cdf(w: f64, k: f64, nodes: []const f64, weights: []const f64) -> f64
+fn studentized_range_cdf(q: f64, k: f64, df: f64) -> f64
+fn studentized_range_quantile(p: f64, k: f64, df: f64) -> f64
+fn tukey_hsd(values: []const f64, sizes: []const usize, confidence: f64, out: []Pair) -> (usize, err)
+fn t_quantile(p: f64, df: f64) -> f64
+fn noncentral_t_cdf(t: f64, df: f64, ncp: f64) -> f64
+fn power_t(design: Design, n: usize, effect: f64, alpha: f64, two_sided: bool) -> f64
+fn power_z(design: Design, n: usize, effect: f64, alpha: f64, two_sided: bool) -> f64
+fn sample_size_t(design: Design, effect: f64, alpha: f64, power: f64, two_sided: bool) -> (usize, err)
+fn sample_size_z(design: Design, effect: f64, alpha: f64, power: f64, two_sided: bool) -> (usize, err)
+fn mode(values: []const f64, scratch: []f64) -> (f64, usize, err)
+fn weighted_mean(values: []const f64, weights: []const f64) -> (f64, err)
+fn weighted_variance(values: []const f64, weights: []const f64, unbiased: bool) -> (f64, err)
+fn weighted_quantile(values: []const f64, weights: []const f64, p: f64, order: []usize) -> (f64, err)
+```
+
+Elementary inferential completions beside `e.algo.stat.test`: `z_test`/`z_test_two`
+(known sigma) and `proportion_z`/`proportion_z_two`; `chi_squared_independence` on
+a row-major table (Yates only at one degree of freedom, as `scipy.stats.chi2_contingency`)
+with `cramers_v`; `levene` (`Mean`, `Median`, `Trimmed` centres) and `bartlett`;
+`studentized_range_cdf`/`studentized_range_quantile` and `tukey_hsd` with
+confidence intervals; `noncentral_t_cdf`, `power_t`, `power_z`, `sample_size_t` and
+`sample_size_z` (`Design` is the one-sample, paired or equal-n two-sample test and
+the effect is Cohen's d); `mode` and the reliability-weighted `weighted_mean`,
+`weighted_variance` and inverted-CDF `weighted_quantile`. Scratch: `levene` twice the
+total, `mode` the sample size, `weighted_quantile` one index per value, `tukey_hsd`
+one `Pair` per group pair in `out`.
+
 ### `e.algo.stat.mixed`
 
 ```neper

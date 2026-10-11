@@ -1471,6 +1471,12 @@ $algoStatTestWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $algoStatTestWritten -ne 'executable written') { throw 'algo_stat_test emission failed' }
 & $algoStatTestPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_stat_test check failed: exit $LASTEXITCODE" }
+# e.algo.stat.infer (L056): z and proportion tests, chi-squared independence, Levene, Bartlett, studentized range, Tukey HSD, noncentral t power and sample size, mode and weighted descriptives against SciPy, statsmodels and NumPy (119 cases, D2540).
+$algoStatInferPath = Join-Path $testBuild 'algo-stat-infer-selfhost.exe'
+$algoStatInferWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_infer\src\main.e') $repo 'x64' 'windows' $algoStatInferPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoStatInferWritten -ne 'executable written') { throw 'algo_stat_infer emission failed' }
+$algoStatInferOutput = & $algoStatInferPath
+if ($LASTEXITCODE -ne 0 -or $algoStatInferOutput -ne 'algo stat infer ok') { throw "algo_stat_infer answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.stat.safety` (L016): ROR/PRR with intervals and signal rules, the BCPNN information component and Apriori rules over comedication masks, with refusals.
 $algoStatSafetyPath = Join-Path $testBuild 'algo-stat-safety-selfhost.exe'
 $algoStatSafetyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_stat_safety\src\main.e') $repo 'x64' 'windows' $algoStatSafetyPath

@@ -228,6 +228,7 @@
     "e.algo.rand.dist",
     "e.algo.stat.test",
     "e.algo.stat.mixed",
+    "e.algo.stat.infer",
     "e.algo.stat.survival_trial",
     "e.algo.stat.survival",
     "e.algo.stat.causal",
@@ -4717,6 +4718,19 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.algo.rand",
+    "e.math",
+    "e.math.special"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.stat.infer",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.stat.test",
     "e.math",
     "e.math.special"
    ],
