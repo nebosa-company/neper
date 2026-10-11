@@ -443,7 +443,8 @@
     "e.test.mock",
     "e.test.bdd",
     "e.test.mutate",
-    "e.test.arch"
+    "e.test.arch",
+    "e.data.objpool"
    ]
   },
   {
@@ -1505,6 +1506,17 @@
    "name": "e.data.slot_map",
    "layer": 2,
    "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.objpool",
+   "layer": 2,
+   "surface": "source",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [

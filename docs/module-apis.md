@@ -1737,6 +1737,40 @@ edges; it reserves both first and leaves the builder unchanged on error. Nodes a
 dense `0..node_count`; node counts that do not fit `u32` return `TooLarge`.
 Graphs own no resources beyond their caller arena.
 
+### `e.data.objpool`
+
+```neper
+type Config = struct { max_total: usize, max_idle: usize, min_idle: usize, idle_ticks: u64, leak_ticks: u64, lifo: bool, wait: bool }
+type Pool[T: type] = struct { items: []T, state: []u8, since: []u64, uses: []u32, waiters: []u32, waiter_at: []u64, wait_head: usize, wait_len: usize, cfg: Config, created: u64, destroyed: u64, evicted: u64, leaked: u64 }
+type Outcome = enum u8 { Reused, NeedsCreate, Queued, Exhausted }
+type Grant = struct { outcome: Outcome, slot: u32 }
+type Release = struct { destroy: bool, handoff: bool, who: u32, slot: u32, needs_create: bool }
+error Invalid
+error TooSmall
+const EMPTY: u8 = 0u8
+const PENDING: u8 = 1u8
+const IDLE: u8 = 2u8
+const BORROWED: u8 = 3u8
+const NONE: u32 = 0xffffffffu32
+
+fn pool[T: type](items: []T, state: []u8, since: []u64, uses: []u32, waiters: []u32, waiter_at: []u64, cfg: Config) -> (Pool[T], err)
+fn pool_in[T: type](a: *mem.Arena, cfg: Config, queue: usize) -> (Pool[T], err)
+fn count[T: type](p: *const Pool[T], s: u8) -> usize
+fn object[T: type](p: *Pool[T], slot: u32) -> *T
+fn pick_idle[T: type](p: *const Pool[T], newest: bool) -> u32
+fn acquire[T: type](p: *Pool[T], now: u64, who: u32) -> Grant
+fn attach[T: type](p: *Pool[T], slot: u32, obj: T, now: u64) -> err
+fn hand_to_waiter[T: type](p: *Pool[T], slot: u32, now: u64, needs_create: bool) -> Release
+fn release[T: type](p: *Pool[T], slot: u32, now: u64, healthy: bool) -> (Release, err)
+fn abort_create[T: type](p: *Pool[T], slot: u32, now: u64) -> (Release, err)
+fn evict[T: type](p: *Pool[T], now: u64, out: []u32) -> usize
+fn leaks[T: type](p: *const Pool[T], now: u64, out: []u32) -> usize
+fn reclaim[T: type](p: *Pool[T], slot: u32, now: u64) -> (Release, err)
+fn expire_waiters[T: type](p: *Pool[T], now: u64, max_wait: u64, out: []u32) -> usize
+```
+
+A generic object pool with idle eviction (commons-pool2 shape) as a state machine over caller storage or an arena: `acquire` reuses the newest or oldest idle object, reserves a slot the caller must create (`attach`), queues the requester FIFO under the wait policy or answers `Exhausted`; `release` hands the object to the head waiter, keeps it idle up to `max_idle` or destroys it; `evict` retires idle objects past `idle_ticks` oldest first down to `min_idle`; `leaks` and `reclaim` find and take back borrowed objects held past `leak_ticks`; `expire_waiters` drops stale waiters. Time is the caller's `now`.
+
 ### `e.data.slot_map`
 
 ```neper

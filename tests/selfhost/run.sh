@@ -1903,6 +1903,11 @@ test_arch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$test_arch_written" = 'executable written' ]
 chmod +x "$test_build/test-arch-selfhost"
 "$test_build/test-arch-selfhost"
+# `e.data.objpool`: exhaustion, LIFO/FIFO idle choice, FIFO waiter hand-off, max_idle destruction, eviction timing and min_idle, leaks and reclaim, waiter expiry, and a 400-operation hash differential against an independent Python model (D2687).
+data_objpool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_objpool/src/main.e" "$repo" x64 linux "$test_build/data-objpool-selfhost")
+[ "$data_objpool_written" = 'executable written' ]
+chmod +x "$test_build/data-objpool-selfhost"
+"$test_build/data-objpool-selfhost"
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 db_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_migrate/src/main.e" "$repo" x64 linux "$test_build/db-migrate-selfhost")
 [ "$db_migrate_written" = 'executable written' ]

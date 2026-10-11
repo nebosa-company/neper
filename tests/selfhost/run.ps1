@@ -2137,6 +2137,12 @@ $testArchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $testArchWritten -ne 'executable written') { throw 'test_arch emission failed' }
 & $testArchPath
 if ($LASTEXITCODE -ne 0) { throw "a test_arch check failed: exit $LASTEXITCODE" }
+# `e.data.objpool`: exhaustion, LIFO/FIFO idle choice, FIFO waiter hand-off, max_idle destruction, eviction timing and min_idle, leaks and reclaim, waiter expiry, and a 400-operation hash differential against an independent Python model (D2687).
+$dataObjpoolPath = Join-Path $testBuild 'data-objpool-selfhost.exe'
+$dataObjpoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_objpool\src\main.e') $repo 'x64' 'windows' $dataObjpoolPath
+if ($LASTEXITCODE -ne 0 -or $dataObjpoolWritten -ne 'executable written') { throw 'data_objpool emission failed' }
+& $dataObjpoolPath
+if ($LASTEXITCODE -ne 0) { throw "a data_objpool check failed: exit $LASTEXITCODE" }
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 $dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
 $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath
