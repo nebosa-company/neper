@@ -44,6 +44,9 @@ type State = struct {
     hand_name_len: usize,
     hand_text: [2048]u8,
     hand_len: usize,
+    // How the handed file is shown (MD, TXT or CODE) and, for code, which sample's highlighter rules it uses.
+    hand_kind: usize,
+    hand_lang: usize,
     screen: usize,
     open: usize,
     page: usize,
@@ -131,6 +134,33 @@ fn ends_with(whole: str, suffix: str) -> bool {
         i += 1usize
     }
     ret true
+}
+
+// The text a screen draws: the handed file's, or entry `i`'s sample.
+fn content_of(a: *mem.Arena, s: *State) -> str {
+    if s.open == FILES { ret ui.text_of(a, s.hand_text[0usize..], s.hand_len) }
+    ret body(s.open)
+}
+
+// The sample whose highlighter rules (keywords, comment marker) the open file uses.
+fn code_lang(s: *State) -> usize {
+    if s.open == FILES { ret s.hand_lang }
+    ret s.open
+}
+
+// How a file called `name` is shown, by its extension: Markdown, a language's code (the sample index whose rules
+// apply), or text.
+fn kind_by_name(name: str) -> (usize, usize) {
+    if ends_with(name, ".md") { ret (MD, 0usize) }
+    if ends_with(name, ".ne") || ends_with(name, ".e") { ret (CODE, 2usize) }
+    if ends_with(name, ".py") { ret (CODE, 6usize) }
+    if ends_with(name, ".c") || ends_with(name, ".h") { ret (CODE, 7usize) }
+    if ends_with(name, ".js") { ret (CODE, 8usize) }
+    if ends_with(name, ".sql") { ret (CODE, 9usize) }
+    if ends_with(name, ".rs") { ret (CODE, 10usize) }
+    if ends_with(name, ".go") { ret (CODE, 11usize) }
+    if ends_with(name, ".java") { ret (CODE, 12usize) }
+    ret (TXT, 0usize)
 }
 
 fn file_name(i: usize) -> str {
@@ -380,7 +410,7 @@ fn draw_list(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
 
 fn draw_md(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try ui.card(a, builder, 12.0, 84.0, 388.0, 730.0, 18.0, ui.cream())
-    let content = body(s.open)
+    let content = content_of(a, s)
     var y: f32 = 100.0
     var in_code = false
     var n = 0usize
@@ -432,13 +462,13 @@ fn draw_txt(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
 
 fn draw_code(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try ui.card(a, builder, 12.0, 84.0, 388.0, 730.0, 18.0, paint.Color { red: 0.12, green: 0.13, blue: 0.16, alpha: 1.0 })
-    let content = body(s.open)
+    let content = content_of(a, s)
     let total = line_total(content)
     var n = 0usize
     while n < total {
         let y: f32 = 100.0 + f32(n) * 22.0
         try ui.put_right(a, builder, faces.grotesk, 12.0, ui.number(a, n + 1usize), 44.0, y + 1.0, ui.light_muted())
-        try draw_code_line(a, builder, faces, s.open, splitter(a, content, n), 56.0, y)
+        try draw_code_line(a, builder, faces, code_lang(s), splitter(a, content, n), 56.0, y)
         n += 1usize
     }
     // The legend of the colours.
@@ -528,13 +558,14 @@ fn draw_slide(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
 }
 
 fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
-    let kind = file_kind(s.open)
+    var kind = file_kind(s.open)
+    if s.open == FILES { kind = s.hand_kind }
     try svg.draw(a, builder, ui.back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), ui.light())
     ui.hit(&s.hits, 500usize, 0.0, 10.0, 66.0, 56.0)
     var shown = file_name(s.open)
     if s.open == FILES { shown = ui.text_of(a, s.hand_name[0usize..], s.hand_name_len) }
     try ui.put(a, builder, faces.jost_bold, 22.0, shown, 62.0, 20.0, ui.light())
-    if kind == CODE { try ui.pill(a, builder, &s.hits, faces, 501usize, 300.0, 18.0, 96.0, 32.0, lang_name(s.open), ui.amber(), 14.0) }
+    if kind == CODE { try ui.pill(a, builder, &s.hits, faces, 501usize, 300.0, 18.0, 96.0, 32.0, lang_name(code_lang(s)), ui.amber(), 14.0) }
     if kind == MD { try draw_md(a, builder, s, faces) }
     if kind == TXT { try draw_txt(a, builder, s, faces) }
     if kind == CODE { try draw_code(a, builder, s, faces) }
@@ -666,6 +697,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
             s.hand_name_len = n
             s.open = FILES
             s.screen = VIEW_SCREEN
+            let (shown_kind, shown_lang) = kind_by_name(ui.text_of(a, s.hand_name[0usize..], n))
+            s.hand_kind = shown_kind
+            s.hand_lang = shown_lang
+            if hand_path.len > 4usize && ends_with(hand_path, ".pdf") { s.hand_kind = TXT }
+            if s.hand_kind == MD { ui.say("document kind markdown\n") }
+            if s.hand_kind == CODE {
+                ui.say("document kind code ")
+                ui.say(lang_name(s.hand_lang))
+                ui.say("\n")
+            }
             ui.say("document handed ")
             ui.say_text(ui.text_of(a, s.hand_name[0usize..], n))
             ui.say("\n")
