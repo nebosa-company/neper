@@ -3635,6 +3635,45 @@ Mo's algorithm: `mo_block_size`, `mo_order` (block of the left end, right end al
 by block parity), `mo_order_hilbert` over the 2-d Hilbert index, `mo_pointer_moves` and
 the generic driver `mo_run` over caller add/remove/answer callbacks.
 
+### `e.algo.query.jmespath`
+
+```neper
+type Expr = struct { nodes: []const Node, edges: []const i32, root: i32 }
+error Syntax
+error Type
+error Arity
+error UnknownFunction
+error InvalidValue
+error TooLarge
+
+fn kind_of(v: json.Value) -> u8
+fn as_array(v: json.Value) -> []const json.Value
+fn as_object(v: json.Value) -> []const json.Member
+fn equals(x: json.Value, y: json.Value) -> bool
+fn stringify(a: *mem.Arena, v: json.Value) -> (str, err)
+fn compile(a: *mem.Arena, source: str) -> (Expr, err)
+fn eval_expr(a: *mem.Arena, expr: Expr, data: json.Value) -> (json.Value, err)
+fn search(a: *mem.Arena, source: str, data: json.Value) -> (json.Value, err)
+```
+
+JMESPath queries (python-jmespath parity) over `e.fmt.json` values; this is document
+querying, where the rest of `e.algo.query` is offline range queries. `compile` turns an
+expression into a flat node table in the arena (at most 128 tokens, 64 deep) and
+`eval_expr` runs it against any document; `search` does both. The language is the
+specification's: identifiers and quoted identifiers, subexpressions, indexes and
+slices with python's step rules, `*` and `[*]` and `[]` projections, `[?filter]`,
+`|`, `||`, `&&`, `!`, `== != < <= > >=`, multi-select lists and hashes, `@`,
+`` `json` `` and `'raw'` literals, and the functions abs avg ceil contains ends_with
+floor join keys length map max max_by merge min min_by not_null reverse sort sort_by
+starts_with sum to_array to_number to_string type values. A null result is JSON null;
+a result is built in the arena and may borrow strings and subtrees from the input.
+Errors: `Syntax` (lexing and parsing), `Type` and `Arity` and `UnknownFunction`
+(evaluation, as python-jmespath raises them), `InvalidValue` (a slice step of zero or
+a result with no JSON spelling), `TooLarge`. `equals` is the language's `==`
+(numbers by value, objects as maps); `stringify` writes compact ASCII JSON as
+`to_string` does. Ordering comparators of a string and a number are null as the
+specification says, where python-jmespath raises.
+
 ### `e.algo.rand`
 
 ```neper

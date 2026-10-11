@@ -88,6 +88,17 @@
    ]
   },
   {
+   "module": "e.algo.query.jmespath",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 15,
+   "delivered": 15,
+   "pending": [],
+   "fixtures": [
+    "algo_query_jmespath"
+   ]
+  },
+  {
    "module": "e.async",
    "milestone": null,
    "schedule": "later",
@@ -466,6 +477,7 @@
     "algo_page_batch",
     "algo_predicate",
     "algo_project",
+    "algo_query_jmespath",
     "algo_realtime",
     "algo_sync",
     "algo_syncjob",

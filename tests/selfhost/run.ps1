@@ -3191,6 +3191,12 @@ $fmtPepWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtPepWritten -ne 'executable written') { throw 'e.fmt.semver.pep440 emission failed' }
 $fmtPepOutput = & $fmtPepPath
 if ($LASTEXITCODE -ne 0 -or $fmtPepOutput -ne 'fmt semver pep440 ok') { throw "an e.fmt.semver.pep440 check answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.query.jmespath` pins JMESPath expressions over JSON documents against python-jmespath (L111).
+$jmesPath = Join-Path $testBuild 'algo-query-jmespath-selfhost.exe'
+$jmesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_query_jmespath\src\main.e') $repo 'x64' 'windows' $jmesPath
+if ($LASTEXITCODE -ne 0 -or $jmesWritten -ne 'executable written') { throw 'e.algo.query.jmespath emission failed' }
+$jmesOutput = & $jmesPath
+if ($LASTEXITCODE -ne 0 -or $jmesOutput -ne 'algo query jmespath ok') { throw "an e.algo.query.jmespath query answered wrongly: exit $LASTEXITCODE" }
 # `e.grep` pins recursive literal matches and its stateless index contract.
 $grepPath = Join-Path $testBuild 'grep-selfhost.exe'
 $grepWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\grep\src\main.e') $repo 'x64' 'windows' $grepPath

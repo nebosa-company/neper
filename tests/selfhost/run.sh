@@ -2774,6 +2774,11 @@ fmt_pep_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_pep_written" = 'executable written' ]
 chmod +x "$test_build/fmt-semver-pep440-selfhost"
 [ "$("$test_build/fmt-semver-pep440-selfhost")" = 'fmt semver pep440 ok' ]
+# `e.algo.query.jmespath` pins JMESPath expressions over JSON documents against python-jmespath (L111).
+jmes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_query_jmespath/src/main.e" "$repo" x64 linux "$test_build/algo-query-jmespath-selfhost")
+[ "$jmes_written" = 'executable written' ]
+chmod +x "$test_build/algo-query-jmespath-selfhost"
+[ "$("$test_build/algo-query-jmespath-selfhost")" = 'algo query jmespath ok' ]
 # `e.grep` pins recursive literal matches and its stateless index contract.
 grep_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/grep/src/main.e" "$repo" x64 linux "$test_build/grep-selfhost")
 [ "$grep_written" = 'executable written' ]
