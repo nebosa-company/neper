@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-C129	compiler	0.15	1552	NeperOS Browser: a real engine: HTTP over TLS, HTML and CSS, images, forms	The Browser app (D2224) shows sample pages that live in the app.
 C130	compiler	0	1034	NeperOS Maps: real map data, location, search and navigation	The Maps app (D2225) draws a procedural sample city with six made-up places.
 C131	compiler	0	802	NeperOS Compass: the magnetometer, GPS and the declination	The Compass app (D2226) swings a sample heading.
 C132	compiler	0	687	NeperOS Level: the accelerometer and gyroscope for the bubble level and protractor	The Level app (D2227) shows a sample tilt.
@@ -141,3 +140,4 @@ C155	compiler	0	756	NeperOS SSH remainder: Secure credentials and Keychain, save
 C156	compiler	0	482	NeperOS Weather remainder: the current location and weather alerts	Split from C119 (D2408): Weather shows live Open-Meteo forecasts for places the user adds, kept in storage with the unit.
 C157	compiler	0	817	NeperOS Call remainder: telephony and audio, shared contacts, voicemail, notifications	Split from C127 (D2409): the Call app keeps contacts as a vCard file with New, Edit and Delete.
 C158	compiler	0	929	NeperOS Mail remainder: accounts, folders and threads, HTML and attachments, notifications	Split from C128 (D2413): Mail syncs the INBOX of a fixed test account over IMAP and sends over SMTP, on TLS, and marks read and deleted on the server.
+C159	compiler	0	765	NeperOS Browser remainder: CSS layout, images, forms, cookies, storage and downloads	Split from C129 (D2415): the Browser fetches an address over HTTPS and shows its HTML as lines of text with links.
