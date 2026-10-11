@@ -2764,6 +2764,11 @@ path_dirs_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$path_dirs_written" = 'executable written' ]
 chmod +x "$test_build/path-dirs-selfhost"
 [ "$("$test_build/path-dirs-selfhost")" = 'path dirs ok' ]
+# `e.fmt.dotenv` pins env-file parsing and interpolation against python-dotenv (L106).
+fmt_dotenv_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_dotenv/src/main.e" "$repo" x64 linux "$test_build/fmt-dotenv-selfhost")
+[ "$fmt_dotenv_written" = 'executable written' ]
+chmod +x "$test_build/fmt-dotenv-selfhost"
+[ "$("$test_build/fmt-dotenv-selfhost")" = 'fmt dotenv ok' ]
 # `e.grep` pins recursive literal matches and its stateless index contract.
 grep_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/grep/src/main.e" "$repo" x64 linux "$test_build/grep-selfhost")
 [ "$grep_written" = 'executable written' ]

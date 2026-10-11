@@ -3179,6 +3179,12 @@ $pathDirsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $pathDirsWritten -ne 'executable written') { throw 'e.path.dirs emission failed' }
 $pathDirsOutput = & $pathDirsPath
 if ($LASTEXITCODE -ne 0 -or $pathDirsOutput -ne 'path dirs ok') { throw "an e.path.dirs layout answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.dotenv` pins env-file parsing and interpolation against python-dotenv (L106).
+$fmtDotenvPath = Join-Path $testBuild 'fmt-dotenv-selfhost.exe'
+$fmtDotenvWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_dotenv\src\main.e') $repo 'x64' 'windows' $fmtDotenvPath
+if ($LASTEXITCODE -ne 0 -or $fmtDotenvWritten -ne 'executable written') { throw 'e.fmt.dotenv emission failed' }
+$fmtDotenvOutput = & $fmtDotenvPath
+if ($LASTEXITCODE -ne 0 -or $fmtDotenvOutput -ne 'fmt dotenv ok') { throw "an e.fmt.dotenv parse or interpolation answered wrongly: exit $LASTEXITCODE" }
 # `e.grep` pins recursive literal matches and its stateless index contract.
 $grepPath = Join-Path $testBuild 'grep-selfhost.exe'
 $grepWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\grep\src\main.e') $repo 'x64' 'windows' $grepPath

@@ -16014,6 +16014,32 @@ fn write_record(w: *Writer, fields: []const str) -> err
 fn flush(w: *Writer) -> err
 ```
 
+### `e.fmt.dotenv`
+
+```neper
+type Entry = struct { key: str, value: str, has_value: bool }
+error TooMany
+
+fn parse(a: *mem.Arena, text: str, out: []Entry) -> (usize, usize, err)
+fn get(entries: []const Entry, key: str) -> (Entry, bool)
+fn interpolate(a: *mem.Arena, entries: []Entry, external: []const Entry, override: bool) -> err
+```
+
+Env files read the way python-dotenv reads them, over caller storage. `parse` writes
+the bindings of `text` in order into `out` and returns how many it wrote and how many
+non-binding lines it skipped (`TooMany` when `out` is full). A binding is
+`[export ]KEY[=value]`: a key is a run of bytes other than `=`, `#` or white space, or a
+single-quoted string; a value is single-quoted (escapes `\\` and `\'`), double-quoted
+(`\\ \' \" \a \b \f \n \r \t \v`; both may span lines) or unquoted (to the end of the
+line, cut at the first white space followed by `#`, trailing white space removed);
+`KEY= # note` is empty, `KEY=#x` is `#x` and a bare `KEY` has `has_value` false. A
+leading byte-order mark is ignored and `\r`, `\n` and `\r\n` all end a line. `get`
+returns the last binding of a key. `interpolate` expands `${NAME}` and
+`${NAME:-default}` in place, in order: a binding sees the earlier ones and the
+`external` environment (which wins unless `override`); a name found nowhere is the
+default or empty, and a name bound without a value is empty. Neither function reads or
+writes the process environment; the caller applies the result.
+
 ### `e.fmt.ini`
 
 ```neper

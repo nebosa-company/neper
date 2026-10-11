@@ -736,6 +736,17 @@
    ]
   },
   {
+   "module": "e.fmt.dotenv",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 5,
+   "delivered": 5,
+   "pending": [],
+   "fixtures": [
+    "fmt_dotenv"
+   ]
+  },
+  {
    "module": "e.fs",
    "milestone": "M2",
    "schedule": "scheduled",
