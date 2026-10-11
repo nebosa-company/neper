@@ -126,9 +126,17 @@ fn ridge(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, coeffi
 // the intercept unpenalised, until no coefficient moves by more than
 // `tolerance` or `max_sweeps` pass; `scratch.len >= n`.
 fn lasso(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, tolerance: f64, max_sweeps: u32, coefficients: []f64, scratch: []f64) -> err {
+    ret elastic_net(x, y, n, d, lambda, 1.0f64, tolerance, max_sweeps, coefficients, scratch)
+}
+
+// Elastic net by cyclic coordinate descent on
+// `(1 / 2n) Σ (y - Xβ)² + lambda (l1_ratio Σ |β_j| + (1 - l1_ratio) / 2 Σ β_j²)`
+// (scikit-learn's `ElasticNet` with `alpha = lambda`), the intercept unpenalised;
+// `l1_ratio = 1` is the lasso. `scratch.len >= n`.
+fn elastic_net(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, l1_ratio: f64, tolerance: f64, max_sweeps: u32, coefficients: []f64, scratch: []f64) -> err {
     let k = d + 1usize
     if x.len < n * d || y.len < n || coefficients.len < k || scratch.len < n { ret TooSmall }
-    if lambda < 0.0f64 || n == 0usize { ret Invalid }
+    if lambda < 0.0f64 || n == 0usize || !(l1_ratio >= 0.0f64 && l1_ratio <= 1.0f64) { ret Invalid }
     var residual = scratch[..n]
     var j = 0usize
     while j < k {
@@ -161,11 +169,12 @@ fn lasso(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, tolera
                 if j == d {
                     updated = rho / energy
                 } else {
-                    let threshold = lambda * f64(n)
+                    let threshold = lambda * l1_ratio * f64(n)
+                    let denominator = energy + lambda * (1.0f64 - l1_ratio) * f64(n)
                     if rho > threshold {
-                        updated = (rho - threshold) / energy
+                        updated = (rho - threshold) / denominator
                     } else if rho < 0.0f64 - threshold {
-                        updated = (rho + threshold) / energy
+                        updated = (rho + threshold) / denominator
                     }
                 }
             }
@@ -491,4 +500,333 @@ fn pls(x: []const f64, y: []const f64, n: usize, d: usize, components: usize, co
     }
     coefficients[d] = mean_y - correction
     ret ok
+}
+
+// The next combination (with repetition when `repeat`) of `idx.len` indices in
+// `0..d`, in lexicographic order; `false` after the last.
+fn next_combination(idx: []usize, d: usize, repeat: bool) -> bool {
+    let r = idx.len
+    var i = r
+    while i > 0usize {
+        i -= 1usize
+        var limit = d - 1usize
+        if !repeat { limit = d - r + i }
+        if idx[i] < limit {
+            idx[i] += 1usize
+            var j = i + 1usize
+            while j < r {
+                if repeat { idx[j] = idx[i] } else { idx[j] = idx[j - 1usize] + 1usize }
+                j += 1usize
+            }
+            ret true
+        }
+    }
+    ret false
+}
+
+// The number of columns `polynomial_features` writes: every monomial of degree
+// 1..`degree` in `d` features (`interaction_only` keeps distinct features), and a
+// leading constant when `include_bias`. `degree` is at most 16.
+fn polynomial_width(d: usize, degree: usize, interaction_only: bool, include_bias: bool) -> usize {
+    var count = 0usize
+    if include_bias { count = 1usize }
+    if d == 0usize || degree > 16usize { ret count }
+    var idx: [16]usize = zero
+    var deg = 1usize
+    while deg <= degree {
+        if !interaction_only || deg <= d {
+            var j = 0usize
+            while j < deg {
+                if interaction_only { idx[j] = j } else { idx[j] = 0usize }
+                j += 1usize
+            }
+            count += 1usize
+            while next_combination(idx[..deg], d, !interaction_only) { count += 1usize }
+        }
+        deg += 1usize
+    }
+    ret count
+}
+
+// Polynomial feature expansion of `n` rows of `d` features in scikit-learn's
+// column order (bias, then each degree's combinations lexicographically), into
+// row-major `out` of `polynomial_width` columns; answers that width.
+fn polynomial_features(x: []const f64, n: usize, d: usize, degree: usize, interaction_only: bool, include_bias: bool, out: []f64) -> (usize, err) {
+    if d == 0usize || degree == 0usize || degree > 16usize { ret (0usize, Invalid) }
+    let width = polynomial_width(d, degree, interaction_only, include_bias)
+    if x.len < n * d || out.len < n * width { ret (0usize, TooSmall) }
+    var col = 0usize
+    var i = 0usize
+    if include_bias {
+        while i < n {
+            out[i * width] = 1.0f64
+            i += 1usize
+        }
+        col = 1usize
+    }
+    var idx: [16]usize = zero
+    var deg = 1usize
+    while deg <= degree {
+        if !interaction_only || deg <= d {
+            var j = 0usize
+            while j < deg {
+                if interaction_only { idx[j] = j } else { idx[j] = 0usize }
+                j += 1usize
+            }
+            var more = true
+            while more {
+                i = 0usize
+                while i < n {
+                    var product = 1.0f64
+                    j = 0usize
+                    while j < deg {
+                        product *= x[i * d + idx[j]]
+                        j += 1usize
+                    }
+                    out[i * width + col] = product
+                    i += 1usize
+                }
+                col += 1usize
+                more = next_combination(idx[..deg], d, !interaction_only)
+            }
+        }
+        deg += 1usize
+    }
+    ret (width, ok)
+}
+
+// Weighted normal equations: XᵀWX (+ `lambda` on the feature diagonal) and XᵀWy.
+fn weighted_normal(x: []const f64, y: []const f64, w: []const f64, n: usize, d: usize, lambda: f64, matrix: []f64, rhs: []f64) {
+    let k = d + 1usize
+    var i = 0usize
+    while i < k * k {
+        matrix[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        rhs[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var a = 0usize
+        while a < k {
+            let xa = w[i] * at(x, d, i, a)
+            rhs[a] += xa * y[i]
+            var b = 0usize
+            while b < k {
+                matrix[a * k + b] += xa * at(x, d, i, b)
+                b += 1usize
+            }
+            a += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < d {
+        matrix[i * k + i] += lambda
+        i += 1usize
+    }
+}
+
+// The check (pinball) loss of the fit: Σ rho_tau(y - Xβ).
+fn pinball_loss(x: []const f64, y: []const f64, n: usize, d: usize, tau: f64, coefficients: []const f64) -> f64 {
+    var loss = 0.0f64
+    var i = 0usize
+    while i < n {
+        let r = y[i] - predict(x, d, i, coefficients)
+        if r >= 0.0f64 { loss += tau * r } else { loss += (tau - 1.0f64) * r }
+        i += 1usize
+    }
+    ret loss
+}
+
+// Quantile regression at level `tau` in (0, 1): iteratively reweighted least
+// squares on the check loss from the OLS fit, then the exact vertex polish --
+// the `d + 1` rows with the smallest residuals are interpolated and kept while
+// the loss does not rise -- so the answer is the linear-programming optimum
+// (what scikit-learn's `QuantileRegressor(alpha=0, solver="highs")` returns)
+// when it is unique. Answers the IRLS iteration count.
+// `scratch.len >= (d + 1)^2 + 3 (d + 1) + 2 n`.
+fn quantile_regression(x: []const f64, y: []const f64, n: usize, d: usize, tau: f64, tolerance: f64, max_iterations: u32, coefficients: []f64, scratch: []f64) -> (u32, err) {
+    let k = d + 1usize
+    if x.len < n * d || y.len < n || coefficients.len < k || scratch.len < k * k + 3usize * k + 2usize * n { ret (0u32, TooSmall) }
+    if !(tau > 0.0f64 && tau < 1.0f64) || n < k { ret (0u32, Invalid) }
+    var matrix = scratch[..k * k]
+    var rhs = scratch[k * k..k * k + k]
+    var trial = scratch[k * k + k..k * k + 2usize * k]
+    var chosen = scratch[k * k + 2usize * k..k * k + 3usize * k]
+    var w = scratch[k * k + 3usize * k..k * k + 3usize * k + n]
+    var r = scratch[k * k + 3usize * k + n..k * k + 3usize * k + 2usize * n]
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    weighted_normal(x, y, w, n, d, 0.0f64, matrix, rhs)
+    if solve(matrix, rhs, k) != ok { ret (0u32, Singular) }
+    var j = 0usize
+    while j < k {
+        coefficients[j] = rhs[j]
+        j += 1usize
+    }
+    var iteration = 0u32
+    while iteration < max_iterations {
+        i = 0usize
+        while i < n {
+            let res = y[i] - predict(x, d, i, coefficients)
+            var scale = math.abs[f64](res)
+            if scale < 1.0e-7f64 { scale = 1.0e-7f64 }
+            if res >= 0.0f64 { w[i] = tau / scale } else { w[i] = (1.0f64 - tau) / scale }
+            i += 1usize
+        }
+        weighted_normal(x, y, w, n, d, 0.0f64, matrix, rhs)
+        if solve(matrix, rhs, k) != ok { break }
+        var moved = 0.0f64
+        j = 0usize
+        while j < k {
+            let change = math.abs[f64](rhs[j] - coefficients[j])
+            if change > moved { moved = change }
+            coefficients[j] = rhs[j]
+            j += 1usize
+        }
+        iteration += 1u32
+        if moved < tolerance { break }
+    }
+    // Vertex polish.
+    var pass = 0usize
+    while pass < 20usize {
+        i = 0usize
+        while i < n {
+            r[i] = math.abs[f64](y[i] - predict(x, d, i, coefficients))
+            i += 1usize
+        }
+        j = 0usize
+        while j < k {
+            var best = 0usize
+            i = 1usize
+            while i < n {
+                if r[i] < r[best] { best = i }
+                i += 1usize
+            }
+            chosen[j] = f64(best)
+            r[best] = 1.0e300f64
+            j += 1usize
+        }
+        j = 0usize
+        while j < k {
+            let row = usize(chosen[j])
+            var c = 0usize
+            while c < k {
+                matrix[j * k + c] = at(x, d, row, c)
+                c += 1usize
+            }
+            rhs[j] = y[row]
+            j += 1usize
+        }
+        if solve(matrix, rhs, k) != ok { break }
+        j = 0usize
+        while j < k {
+            trial[j] = rhs[j]
+            j += 1usize
+        }
+        let before = pinball_loss(x, y, n, d, tau, coefficients[..k])
+        let after = pinball_loss(x, y, n, d, tau, trial)
+        if after > before { break }
+        j = 0usize
+        while j < k {
+            coefficients[j] = trial[j]
+            j += 1usize
+        }
+        if after >= before - 1.0e-13f64 * (1.0f64 + before) { break }
+        pass += 1usize
+    }
+    ret (iteration, ok)
+}
+
+// Median of the first `m` entries of `values`, which it reorders.
+fn median_in_place(values: []f64, m: usize) -> f64 {
+    var gap = m / 2usize
+    while gap > 0usize {
+        var i = gap
+        while i < m {
+            let held = values[i]
+            var j = i
+            while j >= gap && values[j - gap] > held {
+                values[j] = values[j - gap]
+                j -= gap
+            }
+            values[j] = held
+            i += 1usize
+        }
+        gap = gap / 2usize
+    }
+    if m == 0usize { ret 0.0f64 }
+    if m % 2usize == 1usize { ret values[m / 2usize] }
+    ret 0.5f64 * (values[m / 2usize - 1usize] + values[m / 2usize])
+}
+
+// Huber M-estimation by iteratively reweighted least squares from the OLS fit
+// (statsmodels `RLM` with `HuberT(t=threshold)`, scale by the median absolute
+// residual over 0.6745): residuals within `threshold` scales get weight 1, the
+// rest `threshold / |z|`. Answers the iteration count.
+// `scratch.len >= (d + 1)^2 + 2 (d + 1) + 3 n`.
+fn huber(x: []const f64, y: []const f64, n: usize, d: usize, threshold: f64, tolerance: f64, max_iterations: u32, coefficients: []f64, scratch: []f64) -> (u32, err) {
+    let k = d + 1usize
+    if x.len < n * d || y.len < n || coefficients.len < k || scratch.len < k * k + 2usize * k + 3usize * n { ret (0u32, TooSmall) }
+    if !(threshold > 0.0f64) || n < k { ret (0u32, Invalid) }
+    var matrix = scratch[..k * k]
+    var rhs = scratch[k * k..k * k + k]
+    var previous = scratch[k * k + k..k * k + 2usize * k]
+    var w = scratch[k * k + 2usize * k..k * k + 2usize * k + n]
+    var r = scratch[k * k + 2usize * k + n..k * k + 2usize * k + 2usize * n]
+    var m = scratch[k * k + 2usize * k + 2usize * n..k * k + 2usize * k + 3usize * n]
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    weighted_normal(x, y, w, n, d, 0.0f64, matrix, rhs)
+    if solve(matrix, rhs, k) != ok { ret (0u32, Singular) }
+    var j = 0usize
+    while j < k {
+        coefficients[j] = rhs[j]
+        j += 1usize
+    }
+    var iteration = 0u32
+    while iteration < max_iterations {
+        i = 0usize
+        while i < n {
+            r[i] = y[i] - predict(x, d, i, coefficients)
+            m[i] = math.abs[f64](r[i])
+            i += 1usize
+        }
+        let scale = median_in_place(m, n) / 0.6744897501960817f64
+        if !(scale > 0.0f64) { break }
+        i = 0usize
+        while i < n {
+            let z = math.abs[f64](r[i]) / scale
+            if z <= threshold { w[i] = 1.0f64 } else { w[i] = threshold / z }
+            i += 1usize
+        }
+        weighted_normal(x, y, w, n, d, 0.0f64, matrix, rhs)
+        j = 0usize
+        while j < k {
+            previous[j] = coefficients[j]
+            j += 1usize
+        }
+        if solve(matrix, rhs, k) != ok { break }
+        var moved = 0.0f64
+        j = 0usize
+        while j < k {
+            let change = math.abs[f64](rhs[j] - previous[j])
+            if change > moved { moved = change }
+            coefficients[j] = rhs[j]
+            j += 1usize
+        }
+        iteration += 1u32
+        if moved < tolerance { break }
+    }
+    ret (iteration, ok)
 }

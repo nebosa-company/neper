@@ -1589,6 +1589,12 @@ parse_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 [ "$parse_written" = 'executable written' ]
 chmod +x "$test_build/parse-selfhost"
 "$test_build/parse-selfhost"
+# e.ml.linear: elastic net, polynomial features, quantile regression and Huber against scikit-learn and statsmodels (24 cases, D2541).
+ml_linear_robust_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_linear_robust/src/main.e" "$repo" x64 linux "$test_build/ml-linear-robust-selfhost" -j 2)
+[ "${ml_linear_robust_written}" = 'executable written' ]
+chmod +x "$test_build/ml-linear-robust-selfhost"
+ml_linear_robust_output=$("$test_build/ml-linear-robust-selfhost")
+[ "${ml_linear_robust_output}" = 'ml linear robust ok' ]
 # `e.ml.linear`: OLS, ridge, lasso and logistic regression against scikit-learn, the singular and storage cases (D846).
 ml_linear_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_linear/src/main.e" "$repo" x64 linux "$test_build/ml-linear-selfhost")
 [ "$ml_linear_written" = 'executable written' ]

@@ -21220,19 +21220,27 @@ caller's (`scratch_len`, `slot_len`).
 error TooSmall
 error Singular
 error Invalid
-
 fn solve(matrix: []f64, rhs: []f64, k: usize) -> err
 fn at(x: []const f64, d: usize, i: usize, j: usize) -> f64
 fn normal_equations(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, matrix: []f64, rhs: []f64)
 fn ols(x: []const f64, y: []const f64, n: usize, d: usize, coefficients: []f64, scratch: []f64) -> err
 fn ridge(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, coefficients: []f64, scratch: []f64) -> err
 fn lasso(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, tolerance: f64, max_sweeps: u32, coefficients: []f64, scratch: []f64) -> err
+fn elastic_net(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, l1_ratio: f64, tolerance: f64, max_sweeps: u32, coefficients: []f64, scratch: []f64) -> err
 fn sigmoid(z: f64) -> f64
 fn predict(x: []const f64, d: usize, i: usize, coefficients: []const f64) -> f64
 fn predict_probability(x: []const f64, d: usize, i: usize, coefficients: []const f64) -> f64
 fn logistic(x: []const f64, y: []const f64, n: usize, d: usize, lambda: f64, tolerance: f64, max_iterations: u32, coefficients: []f64, scratch: []f64) -> (u32, err)
 fn pls_solve(matrix: []f64, rhs: []f64, c: usize) -> err
 fn pls(x: []const f64, y: []const f64, n: usize, d: usize, components: usize, coefficients: []f64, scratch: []f64) -> err
+fn next_combination(idx: []usize, d: usize, repeat: bool) -> bool
+fn polynomial_width(d: usize, degree: usize, interaction_only: bool, include_bias: bool) -> usize
+fn polynomial_features(x: []const f64, n: usize, d: usize, degree: usize, interaction_only: bool, include_bias: bool, out: []f64) -> (usize, err)
+fn weighted_normal(x: []const f64, y: []const f64, w: []const f64, n: usize, d: usize, lambda: f64, matrix: []f64, rhs: []f64)
+fn pinball_loss(x: []const f64, y: []const f64, n: usize, d: usize, tau: f64, coefficients: []const f64) -> f64
+fn quantile_regression(x: []const f64, y: []const f64, n: usize, d: usize, tau: f64, tolerance: f64, max_iterations: u32, coefficients: []f64, scratch: []f64) -> (u32, err)
+fn median_in_place(values: []f64, m: usize) -> f64
+fn huber(x: []const f64, y: []const f64, n: usize, d: usize, threshold: f64, tolerance: f64, max_iterations: u32, coefficients: []f64, scratch: []f64) -> (u32, err)
 ```
 
 Row-major samples (`n` rows of `d`), coefficients `d + 1` with the intercept last:
@@ -21242,6 +21250,16 @@ Row-major samples (`n` rows of `d`), coefficients `d + 1` with the intercept las
 of `lambda`; `predict` and `predict_probability` apply the coefficients; `pls` is
 NIPALS partial least squares over `components` directions (`pls_solve` the principal
 regression in place).
+
+`elastic_net` is the same coordinate descent with scikit-learn's mixed penalty
+`lambda (l1_ratio |β|₁ + (1 - l1_ratio) / 2 |β|²)` (`lasso` is `l1_ratio = 1`).
+`polynomial_width` and `polynomial_features` expand `n` rows into every monomial
+of degree 1..`degree` in scikit-learn's column order (`next_combination` is the
+enumerator), `weighted_normal` and `pinball_loss` are the building blocks of
+`quantile_regression` (IRLS on the check loss, then a vertex polish that lands on
+the linear-programming optimum) and `huber` (IRLS M-estimation, scale by the median
+absolute residual, `median_in_place` the selector). Scratch is documented on each
+function in source.
 
 ### `e.ml.cluster`
 

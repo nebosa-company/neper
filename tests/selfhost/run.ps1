@@ -1759,6 +1759,12 @@ $parseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $parseWritten -ne 'executable written') { throw 'parse emission failed' }
 & $parsePath
 if ($LASTEXITCODE -ne 0) { throw "a parse check failed: exit $LASTEXITCODE" }
+# e.ml.linear: elastic net, polynomial features, quantile regression and Huber against scikit-learn and statsmodels (24 cases, D2541).
+$mlLinearRobustPath = Join-Path $testBuild 'ml-linear-robust-selfhost.exe'
+$mlLinearRobustWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_linear_robust\src\main.e') $repo 'x64' 'windows' $mlLinearRobustPath -j 2
+if ($LASTEXITCODE -ne 0 -or $mlLinearRobustWritten -ne 'executable written') { throw 'ml_linear_robust emission failed' }
+$mlLinearRobustOutput = & $mlLinearRobustPath
+if ($LASTEXITCODE -ne 0 -or $mlLinearRobustOutput -ne 'ml linear robust ok') { throw "ml_linear_robust answered wrongly: exit $LASTEXITCODE" }
 # `e.ml.linear`: OLS, ridge, lasso and logistic regression against scikit-learn, the singular and storage cases (D846).
 $mlLinearPath = Join-Path $testBuild 'ml-linear-selfhost.exe'
 $mlLinearWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_linear\src\main.e') $repo 'x64' 'windows' $mlLinearPath
