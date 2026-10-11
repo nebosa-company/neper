@@ -72,6 +72,10 @@ def main():
     if len(sys.argv) > 9 and sys.argv[9] != "-":
         args += ["-drive", "file=%s,format=raw,if=none,id=blk0" % sys.argv[9],
                  "-device", "virtio-blk-pci,disable-legacy=on,drive=blk0"]
+    # NEPEROS_RTC=<date> sets the guest's real-time clock base (QEMU -rtc base=2026-12-15 or an ISO time): a fixture
+    # that needs a later day, such as the Trash's thirty days (C125).
+    if os.environ.get("NEPEROS_RTC"):
+        args += ["-rtc", "base=" + os.environ["NEPEROS_RTC"]]
     # NEPEROS_TB=<MB> sizes QEMU's translation cache (its default of 1 GB is committed up front on Windows, which
     # a host short of memory cannot give next to the guest's RAM).
     if os.environ.get("NEPEROS_TB"):

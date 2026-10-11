@@ -2132,4 +2132,5 @@ D2373	893	C126 part thirteen: the Time zone setting acts on the shell's clock an
 D2374	1316	C126 part fourteen: Airplane mode and the Wi-Fi and Mobile switches gate the network server
 D2375	1662	C125 part one: the Files app browses and edits the real filesystem
 D2376	1236	C125 part two: files of several blocks (up to 4 KB) and Copy
-D2377	1422	C125 part three: Move, and Delete goes to a Trash
+D2377	1423	C125 part three: Move, and Delete goes to a Trash
+D2378	1245	C125 part four: entries have times, and the Trash empties after thirty days

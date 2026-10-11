@@ -377,8 +377,12 @@ fn load_tree(a: *mem.Arena, s: *State) {
                 while at < count {
                     if names[at] == 10u8 {
                         let name = names[start..at]
-                        let (size, kind, found) = vaultfs.stat(child_path(a, s, folder, name))
-                        if found { let made = add_node(s, name, folder, kind == 2usize, size, 0usize) }
+                        let (size, kind, day, found) = vaultfs.stat(child_path(a, s, folder, name))
+                        if found {
+                            var age = 0usize
+                            if day > 0usize && s.today > day { age = s.today - day }
+                            let made = add_node(s, name, folder, kind == 2usize, size, age)
+                        }
                         start = at + 1usize
                     }
                     at += 1usize
@@ -387,6 +391,31 @@ fn load_tree(a: *mem.Arena, s: *State) {
         }
         folder += 1usize
     }
+}
+
+// (C125) What stays in the Trash this many days is removed for good, when the app starts.
+const TRASH_DAYS: usize = 30usize
+
+fn purge_trash(a: *mem.Arena, s: *State) -> usize {
+    var trash = NONE
+    var t = 0usize
+    while t < MAX_NODES {
+        if s.nodes[t].used && s.nodes[t].parent == 0usize && s.nodes[t].is_dir && same(text_of_static(s, t), "Trash") { trash = t }
+        t += 1usize
+    }
+    if trash == NONE { ret 0usize }
+    var purged = 0usize
+    var i = 0usize
+    while i < MAX_NODES {
+        if s.nodes[i].used && s.nodes[i].parent == trash && s.nodes[i].days_ago >= TRASH_DAYS {
+            if vaultfs.remove(path_of(a, s, i)) {
+                remove_node(s, i)
+                purged += 1usize
+            }
+        }
+        i += 1usize
+    }
+    ret purged
 }
 
 // Delete a node and everything below it.
@@ -1183,6 +1212,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let real_root = add_node(&s, "Internal storage", NONE, true, 0usize, 0usize)
         s.cwd = real_root
         load_tree(a, &s)
+        let purged = purge_trash(a, &s)
+        if purged > 0usize {
+            say("files trash emptied ")
+            say_text(number(a, purged))
+            say("\n")
+        }
         let (used, total, answered) = vaultfs.stats()
         s.store_used = used
         s.store_total = total

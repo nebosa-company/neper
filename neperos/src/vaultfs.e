@@ -53,14 +53,15 @@ fn stats() -> (usize, usize, bool) {
 }
 
 // (C125) The size and kind (1 file, 2 directory) of `path`, and whether the filesystem answered and has it.
-fn stat(path: str) -> (usize, usize, bool) {
+fn stat(path: str) -> (usize, usize, usize, bool) {
     let sent = os.send(FS_REQ, fsproto.OP_STAT, fsproto.NO_SLOT)
-    if sent == REFUSED { ret (0usize, 0usize, false) }
+    if sent == REFUSED { ret (0usize, 0usize, 0usize, false) }
     fsproto.send_str(FS_REQ, path)
     let result = os.recv(FS_REP, fsproto.NO_SLOT)
     let size = os.recv(FS_REP, fsproto.NO_SLOT)
     let kind = os.recv(FS_REP, fsproto.NO_SLOT)
-    ret (size, kind, result == fsproto.RESULT_OK)
+    let day = os.recv(FS_REP, fsproto.NO_SLOT)
+    ret (size, kind, day, result == fsproto.RESULT_OK)
 }
 
 // The names in directory `path`, one per line, into [addr, addr + cap): the byte count, and whether it listed.

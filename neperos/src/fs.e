@@ -30,6 +30,24 @@ const NAME_OFF: usize = 0usize
 const KIND_OFF: usize = 20usize
 const BLOCK_OFF: usize = 24usize
 const SIZE_OFF: usize = 28usize
+// (C125) The day (since 1970) an entry was made or last written, in three bytes after the kind; the server sets
+// `now_day` before each request from its clock, and 0 means no clock.
+const STAMP_OFF: usize = 21usize
+var now_day: usize = 0usize
+
+fn set_day(day: usize) {
+    now_day = day
+}
+
+fn put_stamp(addr: usize) {
+    os.store8(addr, u8(now_day & 255usize))
+    os.store8(addr + 1usize, u8((now_day >> 8usize) & 255usize))
+    os.store8(addr + 2usize, u8((now_day >> 16usize) & 255usize))
+}
+
+fn get_stamp(addr: usize) -> usize {
+    ret usize(os.load8(addr)) + usize(os.load8(addr + 1usize)) * 256usize + usize(os.load8(addr + 2usize)) * 65536usize
+}
 const NAME_MAX: usize = 20usize
 const BLOCK_SIZE: usize = 512usize
 const SLASH: u8 = 47u8
@@ -166,6 +184,7 @@ fn add_entry(blk: virtio.Block, dir_block: u64, name: str, kind: u8) -> (u64, er
     os.store8(blk.data + off + KIND_OFF, kind)
     os.store32(blk.data + off + BLOCK_OFF, u32(data_block))
     os.store32(blk.data + off + SIZE_OFF, 0u32)
+    put_stamp(blk.data + off + STAMP_OFF)
     let write_error = virtio.block_write(blk, dir_block)
     if write_error != ok { ret (0u64, write_error) }
     ret (data_block, ok)
@@ -179,6 +198,7 @@ fn set_size(blk: virtio.Block, dir_block: u64, name: str, size: usize) -> err {
         let off = i * ENTRY_SIZE
         if os.load8(blk.data + off + KIND_OFF) != KIND_EMPTY && name_eq(blk.data + off + NAME_OFF, name) {
             os.store32(blk.data + off + SIZE_OFF, u32(size))
+            put_stamp(blk.data + off + STAMP_OFF)
             ret virtio.block_write(blk, dir_block)
         }
         i += 1usize
@@ -311,6 +331,17 @@ fn stat(blk: virtio.Block, path: str) -> (usize, u8, bool) {
     ret (size, kind, found)
 }
 
+// The day (since 1970) `path` was made or last written; 0 when it has none or is not there. (Reads the entry
+// again: the directory block is in the sector buffer after the lookup.)
+fn stat_day(blk: virtio.Block, path: str) -> usize {
+    let (parent, leaf) = parent_leaf(path)
+    let (dir_block, resolve_error) = resolve_dir(blk, parent)
+    if resolve_error != ok { ret 0usize }
+    let (off, data_block, size, kind, found) = dir_lookup(blk, dir_block, leaf)
+    if !found { ret 0usize }
+    ret get_stamp(blk.data + off + STAMP_OFF)
+}
+
 // List the directory `path` into `dst` (up to `max` bytes) as its entries' names, each followed by
 // a newline. The entry count and the bytes written come back.
 fn list(blk: virtio.Block, path: str, dst: usize, max: usize) -> (usize, usize, err) {
@@ -373,6 +404,7 @@ fn move(blk: virtio.Block, path: str, dest: str) -> err {
     os.store8(blk.data + at + KIND_OFF, kind)
     os.store32(blk.data + at + BLOCK_OFF, u32(data_block))
     os.store32(blk.data + at + SIZE_OFF, u32(size))
+    put_stamp(blk.data + at + STAMP_OFF)
     let dst_write = virtio.block_write(blk, dst_dir)
     if dst_write != ok { ret dst_write }
     if virtio.block_read(blk, src_dir) != ok { ret NotFormatted }

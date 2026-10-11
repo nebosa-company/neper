@@ -7,6 +7,7 @@
 // before it reaches the server.
 use e.mem
 use e.os
+use e.time
 use virtio
 use fs
 use fsproto
@@ -70,6 +71,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var running = true
     while running {
         let op = os.recv(REQ, fsproto.NO_SLOT)
+        // The clock for the entries this request makes or writes.
+        let (stamp, clock_error) = time.now()
+        if clock_error == ok { fs.set_day(usize(stamp.nanos / 1000000000i64) / 86400usize) }
         if op == fsproto.OP_QUIT {
             running = false
         } else if op == fsproto.OP_STATS {
@@ -96,6 +100,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 }
                 let size_sent = os.send(REP, size, fsproto.NO_SLOT)
                 let kind_sent = os.send(REP, usize(kind), fsproto.NO_SLOT)
+                let day_sent = os.send(REP, fs.stat_day(blk, path), fsproto.NO_SLOT)
             } else if op == fsproto.OP_MKDIR {
                 reply(fs.mkdir(blk, path))
             } else {

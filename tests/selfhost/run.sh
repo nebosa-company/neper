@@ -10105,7 +10105,9 @@ greeting"
     while IFS='|' read -r kind fixture port delay taps markers note; do
         [ "$kind" = diskfixture ] || continue
         if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
-        fixture_base="${fixture%_again}"; fixture_base="${fixture_base%_more}"
+        fixture_base="${fixture%_again}"; fixture_base="${fixture_base%_more}"; fixture_base="${fixture_base%_later}"
+        # A row named <base>_later boots with the guest clock forty days on (the Trash keeps thirty).
+        case "$fixture" in *_later) export NEPEROS_RTC="$(date -d "+40 days" +%F)" ;; *) unset NEPEROS_RTC ;; esac
         fixture_disk="$test_build/shell-$fixture_base.disk"
         if [ "$fixture" = "$fixture_base" ]; then dd if=/dev/zero of="$fixture_disk" bs=1M count=1 status=none; fi
         last_marker="${markers##*;;}"
