@@ -175,7 +175,8 @@
    "delivered": 15,
    "pending": [],
    "fixtures": [
-    "cli"
+    "cli",
+    "cli_config"
    ]
   },
   {
@@ -743,6 +744,7 @@
    "delivered": 56,
    "pending": [],
    "fixtures": [
+    "cli_config",
     "debug_dump",
     "differential",
     "error_detail",
@@ -777,6 +779,7 @@
    "delivered": 8,
    "pending": [],
    "fixtures": [
+    "cli_config",
     "fs_mmap_watch"
    ]
   },

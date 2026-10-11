@@ -3940,6 +3940,12 @@ $testBenchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $testBenchWritten -ne 'executable written') { throw 'test_bench emission failed' }
 $testBenchOutput = & $testBenchPath
 if ($LASTEXITCODE -ne 0 -or $testBenchOutput -ne 'test bench ok') { throw "test_bench answered wrongly: exit $LASTEXITCODE" }
+# e.cli.config: layered configuration against ChainMap, configparser and json (40 scenarios, 403 reads), reload counting and watcher coalescing (D2564).
+$cliConfigPath = Join-Path $testBuild 'cli-config-selfhost.exe'
+$cliConfigWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\cli_config\src\main.e') $repo 'x64' 'windows' $cliConfigPath -j 2
+if ($LASTEXITCODE -ne 0 -or $cliConfigWritten -ne 'executable written') { throw 'cli_config emission failed' }
+$cliConfigOutput = & $cliConfigPath
+if ($LASTEXITCODE -ne 0 -or $cliConfigOutput -ne 'cli config ok') { throw "cli_config answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

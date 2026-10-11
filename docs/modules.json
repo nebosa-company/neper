@@ -102,6 +102,7 @@
     "e.metrics",
     "e.log",
     "e.cli",
+    "e.cli.config",
     "e.async",
     "e.async.io",
     "e.net",
@@ -1157,6 +1158,24 @@
    "direct_dependencies": [
     "e.mem",
     "e.meta",
+    "e.os",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.cli.config",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.cli",
+    "e.fmt.ini",
+    "e.fmt.json",
+    "e.fs",
+    "e.fs.watch",
+    "e.mem",
     "e.os",
     "e.str"
    ],

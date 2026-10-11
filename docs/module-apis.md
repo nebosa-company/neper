@@ -11636,6 +11636,64 @@ fn help(a: *mem.Arena, command: *const Command, width: u16) -> (str, err)
 `parse_into` uses `e.meta` field shape and field-owned parsing protocols; it does not
 introduce runtime reflection.
 
+### `e.cli.config`
+
+```neper
+type Layer = enum u8 { Default, File, Env, Flag }
+type Format = enum u8 { Ini, Json }
+type Entry = struct { key: str, value: str, layer: Layer }
+type Config = struct { entries: []Entry, count: usize }
+error Full
+error Missing
+error Invalid
+
+fn config(a: *mem.Arena, capacity: usize) -> (Config, err)
+fn layer_rank(l: Layer) -> u8
+fn set(c: *Config, layer: Layer, key: str, value: str) -> err
+fn clear_layer(c: *Config, layer: Layer)
+fn lookup(c: *const Config, key: str) -> (Entry, bool)
+fn get_str(c: *const Config, key: str) -> (str, bool)
+fn layer_of(c: *const Config, key: str) -> (Layer, bool)
+fn get_i64(c: *const Config, key: str) -> (i64, err)
+fn get_u64(c: *const Config, key: str) -> (u64, err)
+fn get_f64(c: *const Config, key: str) -> (f64, err)
+fn get_bool(c: *const Config, key: str) -> (bool, err)
+fn layer_defaults(c: *Config, pairs: []const str) -> err
+fn join_key(a: *mem.Arena, prefix: str, name: str) -> (str, err)
+fn flatten_json(a: *mem.Arena, c: *Config, prefix: str, v: json.Value) -> err
+fn layer_json(a: *mem.Arena, c: *Config, source: str) -> err
+fn layer_ini(a: *mem.Arena, c: *Config, source: str) -> err
+fn env_name(a: *mem.Arena, prefix: str, key: str) -> (str, err)
+fn layer_env(a: *mem.Arena, c: *Config, prefix: str, entries: []const str) -> err
+fn layer_process_env(a: *mem.Arena, c: *Config, prefix: str) -> err
+fn value_text(a: *mem.Arena, v: cli.Value) -> (str, err)
+fn layer_flags(a: *mem.Arena, c: *Config, r: *const cli.Result) -> err
+fn read_text(a: *mem.Arena, path: str) -> (str, err)
+fn effective_changes(c: *const Config, keys: []const str, before: []const str, had: []const bool) -> usize
+fn reload(a: *mem.Arena, c: *Config, path: str, format: Format) -> (usize, err)
+fn split_path(path: str) -> (str, str)
+fn names_file(event_path: str, base: str) -> bool
+fn watch_poll(a: *mem.Arena, w: watch.Watch, c: *Config, dir: str, base: str, path: str, format: Format) -> (usize, usize, err)
+```
+
+Layered configuration in the manner of viper. A key's value is the one from the highest layer that
+sets it, flags over environment over file over defaults (`Layer` is `Default`, `File`, `Env`,
+`Flag`), and `layer_of` says which won. Keys are dotted: an INI section and key join with a dot, a
+JSON object nests, an array's elements are numbered (`tags.0`), `null` is skipped. Values are text
+and typed on the way out: `get_i64`, `get_u64`, `get_f64` and `get_bool` (true/false, yes/no,
+on/off in any case, 1/0) answer `Missing` or `Invalid`. Layers are filled by the caller in any
+order: `layer_defaults` (`key=value` strings), `layer_json` / `layer_ini` (replace the file layer;
+a document that does not parse leaves it as it was), `layer_env` over `NAME=value` entries or
+`layer_process_env` over the process environment (`PREFIX` plus the key upper-cased with `.` and
+`-` as `_`, and only keys already known are looked up), `layer_flags` over an `e.cli` result (the
+last value of an option, rendered as text). `reload` re-reads the file layer from a path and
+answers how many keys' effective values changed; `watch_poll` blocks on an `e.fs.watch` of the
+file's folder, coalesces however many events name the file into one reload and answers the event
+and change counts (`split_path` and `names_file` are its helpers; hosts differ on whether an event
+path carries the watched folder). Storage is the arena the configuration was made with: each
+reload allocates again there, so give a long-lived watcher an arena of its own. A watch on a
+filesystem that reports no changes never returns.
+
 ### `e.async`
 
 ```neper
