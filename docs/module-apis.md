@@ -4651,6 +4651,69 @@ and uses the normal approximation above; `poisson` likewise past 500. The alias
 table and weighted reservoir live in caller storage; `sobol` covers four
 dimensions from Joe-Kuo direction numbers and `halton` sixteen.
 
+### `e.algo.rand.fake`
+
+```neper
+type Locale = enum u8 { En, De, Fr, Es }
+type Faker = struct { rng: rand.Pcg64, locale: Locale }
+
+fn faker(seed: u64, locale: Locale) -> Faker
+fn below(f: *Faker, n: usize) -> usize
+fn int_between(f: *Faker, lo: i64, hi: i64) -> i64
+fn chance(f: *Faker, percent: u32) -> bool
+fn blob_count(blob: str) -> usize
+fn blob_item(blob: str, index: usize) -> str
+fn pick(f: *Faker, blob: str) -> str
+fn first_names(l: Locale) -> str
+fn last_names(l: Locale) -> str
+fn cities(l: Locale) -> str
+fn streets(l: Locale) -> str
+fn countries(l: Locale) -> str
+fn company_suffixes(l: Locale) -> str
+fn domains() -> str
+fn lorem_words() -> str
+fn first_name(f: *Faker) -> str
+fn last_name(f: *Faker) -> str
+fn city(f: *Faker) -> str
+fn country(f: *Faker) -> str
+fn word(f: *Faker) -> str
+fn push_slug(b: *str.Builder, s: str) -> err
+fn push_digits(f: *Faker, b: *str.Builder, count: usize) -> err
+fn hex_digit(v: u8) -> u8
+fn push_hex_byte(b: *str.Builder, v: u8) -> err
+fn name(f: *Faker, b: *str.Builder) -> err
+fn company(f: *Faker, b: *str.Builder) -> err
+fn username(f: *Faker, b: *str.Builder) -> err
+fn email(f: *Faker, b: *str.Builder) -> err
+fn address(f: *Faker, b: *str.Builder) -> err
+fn phone(f: *Faker, b: *str.Builder) -> err
+fn uuid4(f: *Faker, b: *str.Builder) -> err
+fn ipv4(f: *Faker, b: *str.Builder) -> err
+fn mac_address(f: *Faker, b: *str.Builder) -> err
+fn hex_color(f: *Faker, b: *str.Builder) -> err
+fn luhn_check_digit(s: str) -> u8
+fn luhn_valid(s: str) -> bool
+fn credit_card(f: *Faker, b: *str.Builder) -> err
+fn civil(days: i64) -> (i64, i64, i64)
+fn push_padded(b: *str.Builder, v: i64, width: usize) -> err
+fn date(f: *Faker, b: *str.Builder, from_day: i64, to_day: i64) -> err
+fn lorem_sentence(f: *Faker, b: *str.Builder, count: usize) -> err
+fn lorem_paragraph(f: *Faker, b: *str.Builder, sentences: usize) -> err
+```
+
+Seeded fake-data generators over the PCG of `e.algo.rand`; one `Faker` is one stream, so the
+same seed and call sequence answer the same text on every host. Lookup tables are
+comma-separated strings picked by `pick` (module-scope string constants do not check, so each
+table is a function); `Locale` overlays the name, city, street, country and company-suffix
+tables and the address and phone patterns (En, De, Fr, Es, ASCII-transliterated). Text is
+pushed into the caller's `str.Builder` (`name`, `email`, `username`, `company`, `address`,
+`phone`, `uuid4`, `ipv4`, `mac_address`, `hex_color`, `credit_card`, `date`, `lorem_sentence`,
+`lorem_paragraph`); single picks answer borrowed table text. `uuid4` is RFC 4122 version 4,
+`credit_card` a sixteen digit number with a Luhn check digit (`luhn_valid` verifies one),
+`mac_address` a locally administered unicast address and `date` an ISO date drawn from a
+range of days since 1970-01-01. `civil` is the day-count to calendar conversion. No network
+data sources; anonymous object graphs over `e.meta` are a follow-on.
+
 ### `e.algo.stat.test`
 
 ```neper
@@ -7498,6 +7561,67 @@ Execution defaults to 100,000 node/iteration steps and 16 MiB of output. Every n
 block shares these budgets; empty repeats consume steps and oversized writes fail
 before reaching the sink. The explicit-limit APIs accept larger budgets; zero selects
 the defaults. A `TooLarge` error can leave already-written output in the caller's sink.
+
+### `e.text.report`
+
+```neper
+type Severity = enum u8 { Error, Warning, Advice }
+type Label = struct { start: usize, end: usize, message: str, primary: bool }
+type Note = struct { kind: str, text: str }
+type Report = struct { severity: Severity, code: str, message: str, source_name: str, source: str, labels: []const Label, notes: []const Note }
+type Options = struct { context: usize, tab_width: usize, wrap: usize, color: bool }
+type Segment = struct { line: usize, from: usize, to: usize, primary: bool, message: str }
+error Invalid
+error TooSmall
+type Work = struct { segments: []Segment, count: usize, order: []usize, shown: []bool, row: []u8, kinds: []u8, bounds: []usize, scratch: []usize, w: usize, total: usize }
+
+fn options_default() -> Options
+fn is_continuation(b: u8) -> bool
+fn decode_at(s: str, at: usize) -> (u32, usize)
+fn char_width(cp: u32) -> usize
+fn line_count(source: str) -> usize
+fn line_bounds(source: str, n: usize) -> (usize, usize)
+fn line_of(source: str, offset: usize) -> usize
+fn span_width(source: str, from: usize, to: usize, tab_width: usize) -> usize
+fn valid_offset(source: str, offset: usize) -> bool
+fn validate(r: *const Report) -> err
+fn digits_of(n: usize) -> usize
+fn indent_cols(source: str, start: usize, end: usize, tab_width: usize) -> usize
+fn label_segments(source: str, l: Label, tab_width: usize, out: []Segment, at: usize) -> usize
+fn push_spaces(b: *str.Builder, n: usize) -> err
+fn push_expanded(b: *str.Builder, line: str, tab_width: usize) -> err
+fn paint(b: *str.Builder, on: bool, code: str) -> err
+fn severity_name(s: Severity) -> str
+fn severity_code(s: Severity) -> str
+fn push_gutter_row(b: *str.Builder, w: usize, body: str, color: bool) -> err
+fn push_marks(b: *str.Builder, row: []const u8, kinds: []const u8, used: usize, color: bool) -> err
+fn put_text(row: []u8, kinds: []u8, at: usize, s: str, kind: u8) -> usize
+fn digits_row(b: *str.Builder, w: usize, number: usize, color: bool) -> err
+fn blank(row: []u8, kinds: []u8, n: usize)
+fn kind_of(primary: bool) -> u8
+fn push_row(b: *str.Builder, wk: *const Work, used: usize, color: bool) -> err
+fn annotate(b: *str.Builder, wk: *Work, line: usize, color: bool) -> err
+fn notes_out(b: *str.Builder, r: *const Report, wk: *Work, wrap_width: usize, color: bool) -> err
+fn emit(b: *str.Builder, r: *const Report, o: Options, wk: *Work) -> err
+fn push_blank_gutter(b: *str.Builder, w: usize, color: bool) -> err
+fn render(a: *mem.Arena, r: *const Report, o: Options) -> (str, err)
+```
+
+Diagnostic reports for applications, in the manner of miette and rustc, as plain text on a
+terminal grid: a severity, a code and a message; the location of the first primary label
+(`--> name:line:col`); the source lines the labels point into with the underline and message
+beneath; then notes (`= help: ...`) word-wrapped with `e.text.wrap` and aligned under the
+first line. A `Label` is a byte range with a message and a primary flag (`^` marks for primary,
+`-` for others). Labels on one line share an underline row: the rightmost message is written
+after its marks and the others hang below on `|` connectors, right to left; a label across
+lines marks the rest of its first line and the start of its last, with the message there.
+`context` lines beside a labelled line are shown and a gap between shown groups is `...`.
+Tabs expand to `tab_width` spaces and a column is a code point except East Asian wide and
+emoji (two) and combining marks (zero) (`char_width`); the location column counts a tab as one.
+`Options.color` wraps the header and marks in ANSI SGR. Offsets must lie on UTF-8 boundaries
+inside the source, ordered start to end, or `render` answers `Invalid`. Columns are those of
+a terminal grid, not a shaped layout: proportional text is `e.text.layout`'s job, and no new
+diagnostic codes are defined here.
 
 ### `e.text.regex`
 
@@ -11327,6 +11451,93 @@ fn check(history: []const Event, model: Model, initial: i64, placed: []u8) -> (b
 `check`: Wing-Gong backtracking linearizability of a history of timed calls against a
 register, counter or set model.
 
+### `e.test.snapshot`
+
+```neper
+type Mode = enum u8 { Ci, Review, Accept }
+type Outcome = enum u8 { Matched, Created, Updated, Unreviewed, Differs, Missing, Mismatch }
+error InvalidName
+error TooSmall
+
+fn valid_name(name: str) -> bool
+fn path_of(a: *mem.Arena, dir: str, name: str, pending: bool) -> (str, err)
+fn normalized(a: *mem.Arena, s: str) -> (str, err)
+fn body_of(stored: str) -> str
+fn same_text(a: *mem.Arena, x: str, y: str) -> (bool, err)
+fn file_text(a: *mem.Arena, name: str, actual: str) -> (str, err)
+fn write_text(a: *mem.Arena, dir: str, path: str, text: str) -> err
+fn remove_if_present(a: *mem.Arena, path: str) -> err
+fn mode_from_env(a: *mem.Arena) -> Mode
+fn assert_text(a: *mem.Arena, dir: str, name: str, actual: str, mode: Mode) -> (Outcome, err)
+fn count_newlines(s: str) -> usize
+fn split_into(s: str, out: []str) -> usize
+fn diff_text(a: *mem.Arena, expected: str, actual: str) -> (str, err)
+fn describe(a: *mem.Arena, dir: str, name: str, outcome: Outcome, actual: str) -> (str, err)
+fn check(a: *mem.Arena, dir: str, name: str, actual: str, mode: Mode) -> err
+fn check_doc(a: *mem.Arena, dir: str, name: str, p: *const pretty.Pool, root: u32, width: usize, capacity: usize, mode: Mode) -> err
+fn accept(a: *mem.Arena, dir: str, name: str) -> err
+fn reject(a: *mem.Arena, dir: str, name: str) -> err
+fn has_pending(a: *mem.Arena, dir: str, name: str) -> (bool, err)
+```
+
+Snapshot testing with a review-and-accept workflow, in the manner of insta and pytest-snapshot.
+`check` compares a rendered value with `<dir>/<name>.snap` and acts per `Mode`: `Ci` never writes
+(`Missing`, `Mismatch`), `Review` writes the candidate to `<name>.snap.new` and fails (`Unreviewed`
+for a new snapshot, `Differs` for a changed one) until `accept` promotes it or `reject` drops it,
+`Accept` writes `.snap` and passes (`Created`, `Updated`). `mode_from_env` reads NEPER_SNAPSHOT
+(`ci`, `review`, `accept`) and otherwise `Ci` when CI is set, `Review` when not. A stored file is a
+three-line header and the body; one without a header is all body, so files written by other
+tools match. Comparison ignores CR bytes and trailing whitespace at the end of the whole text and
+nothing inside it. A failure goes through `test.fail`, carrying the outcome, the pending path and
+a line diff (`-` expected, `+` actual); `check_doc` snapshots an `e.fmt.pretty` layout at a width.
+A name is a file stem (letters, digits, `_`, `-`, `.`; `InvalidName` otherwise). Text only:
+binary snapshots stay out. Every function is in the surface because the language has no
+visibility; callers use `check`, `assert_text`, `accept`, `reject`, `has_pending` and
+`mode_from_env`.
+
+### `e.test.bench`
+
+```neper
+type Config = struct { warmup_ns: i64, target_sample_ns: i64, max_iters: u64, fence_x10: u32 }
+type Stats = struct { count: usize, kept: usize, mean: f64, median: f64, stddev: f64, min: f64, max: f64, q1: f64, q3: f64, mad: f64, std_err: f64, ci_low: f64, ci_high: f64, low_mild: usize, low_severe: usize, high_mild: usize, high_severe: usize }
+type Report = struct { name: str, iters: u64, stats: Stats }
+type Verdict = enum u8 { Improved, Regressed, NoChange }
+type Comparison = struct { change_pct: f64, t: f64, significant: bool, verdict: Verdict }
+error TooFew
+error TooSmall
+
+fn config_default() -> Config
+fn sort(values: []f64)
+fn quantile(sorted: []const f64, p: f64) -> f64
+fn t_table() -> str
+fn t_critical(df: usize) -> f64
+fn summarize(samples: []f64, fence_x10: u32) -> (Stats, err)
+fn compare(base: Stats, current: Stats, threshold_pct: f64) -> Comparison
+fn verdict_name(v: Verdict) -> str
+fn push_number(b: *str.Builder, v: f64) -> err
+fn render_json(b: *str.Builder, r: Report) -> err
+fn render_text(b: *str.Builder, r: Report) -> err
+fn render_comparison(b: *str.Builder, name: str, c: Comparison) -> err
+fn time_batch[Ctx: type](ctx: *Ctx, body: fn(*Ctx), iters: u64) -> (f64, err)
+fn calibrate[Ctx: type](ctx: *Ctx, body: fn(*Ctx), cfg: Config) -> (u64, err)
+fn run[Ctx: type](name: str, cfg: Config, ctx: *Ctx, body: fn(*Ctx), samples: []f64) -> (Report, err)
+```
+
+A criterion-style benchmark harness over `e.time`. `run` warms a body up for `warmup_ns` while
+doubling the batch, picks the iteration count whose batch lasts about `target_sample_ns` (at most
+`max_iters`), times one batch per sample into the caller's slice (nanoseconds per iteration) and
+summarizes it. Everything after the measurement is pure and works on any `[]f64` of per-iteration
+times: `summarize` sorts in place (a shell sort), classifies Tukey outliers (mild beyond
+`fence_x10 / 10` times the interquartile range, severe beyond twice that), drops the values outside the
+mild fence, and reports mean, median, sample standard deviation, MAD, quartiles (R-7), the standard
+error and a 95% Student-t interval of the kept values (`t_table` is exact to 30 degrees of freedom,
+1.96 beyond). `compare` is Welch's t over two kept sets against `threshold_pct`: `Improved` or
+`Regressed` only when the t statistic exceeds the critical value for the pooled degrees of freedom
+and the change in the mean is larger than the threshold, so what counts as a regression is the
+caller's policy. `render_json` fixes the report schema (name, iters, samples, kept, mean, median,
+stddev, min, max, q1, q3, mad, ci_low, ci_high, outliers) and `render_text` a criterion-like block.
+A builder must be the arena's top allocation, so render into a fresh one.
+
 ### `e.debug`
 
 ```neper
@@ -11494,6 +11705,127 @@ fn help(a: *mem.Arena, command: *const Command, width: u16) -> (str, err)
 
 `parse_into` uses `e.meta` field shape and field-owned parsing protocols; it does not
 introduce runtime reflection.
+
+### `e.cli.config`
+
+```neper
+type Layer = enum u8 { Default, File, Env, Flag }
+type Format = enum u8 { Ini, Json }
+type Entry = struct { key: str, value: str, layer: Layer }
+type Config = struct { entries: []Entry, count: usize }
+error Full
+error Missing
+error Invalid
+
+fn config(a: *mem.Arena, capacity: usize) -> (Config, err)
+fn layer_rank(l: Layer) -> u8
+fn set(c: *Config, layer: Layer, key: str, value: str) -> err
+fn clear_layer(c: *Config, layer: Layer)
+fn lookup(c: *const Config, key: str) -> (Entry, bool)
+fn get_str(c: *const Config, key: str) -> (str, bool)
+fn layer_of(c: *const Config, key: str) -> (Layer, bool)
+fn get_i64(c: *const Config, key: str) -> (i64, err)
+fn get_u64(c: *const Config, key: str) -> (u64, err)
+fn get_f64(c: *const Config, key: str) -> (f64, err)
+fn get_bool(c: *const Config, key: str) -> (bool, err)
+fn layer_defaults(c: *Config, pairs: []const str) -> err
+fn join_key(a: *mem.Arena, prefix: str, name: str) -> (str, err)
+fn flatten_json(a: *mem.Arena, c: *Config, prefix: str, v: json.Value) -> err
+fn layer_json(a: *mem.Arena, c: *Config, source: str) -> err
+fn layer_ini(a: *mem.Arena, c: *Config, source: str) -> err
+fn env_name(a: *mem.Arena, prefix: str, key: str) -> (str, err)
+fn layer_env(a: *mem.Arena, c: *Config, prefix: str, entries: []const str) -> err
+fn layer_process_env(a: *mem.Arena, c: *Config, prefix: str) -> err
+fn value_text(a: *mem.Arena, v: cli.Value) -> (str, err)
+fn layer_flags(a: *mem.Arena, c: *Config, r: *const cli.Result) -> err
+fn read_text(a: *mem.Arena, path: str) -> (str, err)
+fn effective_changes(c: *const Config, keys: []const str, before: []const str, had: []const bool) -> usize
+fn reload(a: *mem.Arena, c: *Config, path: str, format: Format) -> (usize, err)
+fn split_path(path: str) -> (str, str)
+fn names_file(event_path: str, base: str) -> bool
+fn watch_poll(a: *mem.Arena, w: watch.Watch, c: *Config, dir: str, base: str, path: str, format: Format) -> (usize, usize, err)
+```
+
+Layered configuration in the manner of viper. A key's value is the one from the highest layer that
+sets it, flags over environment over file over defaults (`Layer` is `Default`, `File`, `Env`,
+`Flag`), and `layer_of` says which won. Keys are dotted: an INI section and key join with a dot, a
+JSON object nests, an array's elements are numbered (`tags.0`), `null` is skipped. Values are text
+and typed on the way out: `get_i64`, `get_u64`, `get_f64` and `get_bool` (true/false, yes/no,
+on/off in any case, 1/0) answer `Missing` or `Invalid`. Layers are filled by the caller in any
+order: `layer_defaults` (`key=value` strings), `layer_json` / `layer_ini` (replace the file layer;
+a document that does not parse leaves it as it was), `layer_env` over `NAME=value` entries or
+`layer_process_env` over the process environment (`PREFIX` plus the key upper-cased with `.` and
+`-` as `_`, and only keys already known are looked up), `layer_flags` over an `e.cli` result (the
+last value of an option, rendered as text). `reload` re-reads the file layer from a path and
+answers how many keys' effective values changed; `watch_poll` blocks on an `e.fs.watch` of the
+file's folder, coalesces however many events name the file into one reload and answers the event
+and change counts (`split_path` and `names_file` are its helpers; hosts differ on whether an event
+path carries the watched folder). Storage is the arena the configuration was made with: each
+reload allocates again there, so give a long-lived watcher an arena of its own. A watch on a
+filesystem that reports no changes never returns.
+
+### `e.cli.line`
+
+```neper
+type KeyKind = enum u8 { Char, Left, Right, Up, Down, Home, End, Backspace, Delete, Enter, Tab, Escape, Unknown }
+type Key = struct { kind: KeyKind, ch: u32, ctrl: bool, alt: bool }
+type Action = enum u8 { None, Changed, Accept, Interrupt, Eof, Tab, ClearScreen }
+type Editor = struct { buf: []u8, len: usize, cursor: usize, draft: []u8, draft_len: usize, kill: []u8, kill_len: usize, last_was_kill: bool, hist_data: []u8, hist_used: usize, hist_starts: []usize, hist_lens: []usize, hist_count: usize, hist_pos: usize, cands: []str, cand_n: usize, cand_i: usize, cand_start: usize, cand_len: usize, cycling: bool }
+error TooSmall
+
+fn editor(buf: []u8, draft: []u8, kill: []u8, hist_data: []u8, hist_starts: []usize, hist_lens: []usize, cands: []str) -> Editor
+fn text(e: *const Editor) -> str
+fn is_continuation(b: u8) -> bool
+fn is_word_byte(b: u8) -> bool
+fn is_space(b: u8) -> bool
+fn prev_boundary(e: *const Editor, at: usize) -> usize
+fn next_boundary(e: *const Editor, at: usize) -> usize
+fn word_start(e: *const Editor, from: usize) -> usize
+fn word_end(e: *const Editor, from: usize) -> usize
+fn insert_at(e: *Editor, at: usize, bytes: str) -> bool
+fn delete_range(e: *Editor, start: usize, end: usize)
+fn set_text(e: *Editor, s: str) -> bool
+fn clear(e: *Editor)
+fn kill_range(e: *Editor, start: usize, end: usize, forward: bool)
+fn history_add(e: *Editor, line: str)
+fn history_entry(e: *const Editor, index: usize) -> str
+fn submit(e: *Editor) -> str
+fn insert_newline(e: *Editor) -> bool
+fn history_prev(e: *Editor) -> bool
+fn history_next(e: *Editor) -> bool
+fn history_hint(e: *const Editor) -> str
+fn accept_hint(e: *Editor, hint: str) -> bool
+fn token_start(e: *const Editor) -> usize
+fn replace_range(e: *Editor, start: usize, end: usize, replacement: str) -> bool
+fn tab[Ctx: type](e: *Editor, ctx: *Ctx, complete: fn(*Ctx, str, []str) -> usize) -> Action
+fn transpose(e: *Editor) -> bool
+fn utf8_encode(cp: u32, out: []u8) -> usize
+fn handle(e: *Editor, key: Key) -> Action
+fn plain(kind: KeyKind) -> Key
+fn decode(bytes: []const u8, at: usize) -> (Key, usize)
+fn feed[Ctx: type](e: *Editor, bytes: []const u8, ctx: *Ctx, complete: fn(*Ctx, str, []str) -> usize) -> (usize, Action)
+fn push_cols(b: *str.Builder, n: usize) -> err
+fn render(b: *str.Builder, e: *const Editor, prompt: str, prompt_cols: usize, hint: str) -> err
+```
+
+A line editor for CLI REPLs in the manner of readline and reedline, as a state machine with no
+terminal in it. Keys go in, the buffer, cursor, kill buffer and history change, and `render`
+answers the bytes that redraw the line; the caller owns the terminal and every buffer
+(`editor` takes the line, draft and kill buffers, the history bytes with its entry arrays, and
+the candidate slice). `decode` turns raw terminal bytes into a `Key` (UTF-8 text, Ctrl letters,
+CSI and SS3 arrows, Home/End/Delete and the xterm modifier parameter, Alt as an ESC prefix);
+`handle` applies one key and answers an `Action` (`Changed`, `Accept`, `Interrupt`, `Eof`,
+`ClearScreen`, or `Tab` for the caller to complete); `feed` decodes and handles a byte run,
+completing on Tab through the caller's `fn(*Ctx, str, []str) -> usize` and stopping after the
+key that accepts, interrupts, ends the input or asks for a clear. Bindings are readline's
+emacs set: character and word motion, Ctrl-A/E, Backspace and Delete by code point, kill and
+yank (consecutive kills accumulate, forward appended and backward prepended), Ctrl-T
+transpose, Up/Down and Ctrl-P/N through a bounded history that keeps the line being edited
+as a draft, and Tab with the common prefix first and cycling after. `history_hint` is the
+fish-style suffix of the newest matching entry (`accept_hint` appends it); `submit` records
+the line and clears the editor; validators stay with the caller, who answers an incomplete
+entry with `insert_newline`. Words are alphanumeric runs (bytes of 128 and up count as word
+bytes); a code point is one column; a full buffer ignores further input.
 
 ### `e.async`
 
@@ -19886,6 +20218,61 @@ fn parse(g: *const base.Grammar, action: []const u32, gotos: []const u32, senten
 LR(0) and LR(1) canonical collections over caller item pools (`items`, `items1`),
 `slr_table`, `canonical_table` and `lalr_table` (LR(1) states merged on equal cores)
 with shift-preferring conflict counts, and `parse` answering the reduce sequence.
+
+### `e.parse.comb`
+
+```neper
+type Event = struct { kind: u32, start: usize, end: usize }
+type Cx = struct { src: str, furthest: usize, expected: str, noted: bool, events: []Event, count: usize, overflow: bool }
+
+fn context(src: str, events: []Event) -> Cx
+fn reset(cx: *Cx)
+fn note(cx: *Cx, off: usize, expected: str)
+fn line_col(src: str, off: usize) -> (usize, usize)
+fn lit(cx: *Cx, off: usize, s: str) -> (usize, bool)
+fn byte_range(cx: *Cx, off: usize, lo: u8, hi: u8, name: str) -> (usize, bool)
+fn one_of(cx: *Cx, off: usize, set: str, name: str) -> (usize, bool)
+fn none_of(cx: *Cx, off: usize, set: str, name: str) -> (usize, bool)
+fn any_byte(cx: *Cx, off: usize) -> (usize, bool)
+fn take_while(cx: *Cx, off: usize, pred: fn(u8) -> bool) -> (usize, bool)
+fn take_while1(cx: *Cx, off: usize, pred: fn(u8) -> bool, name: str) -> (usize, bool)
+fn eof(cx: *Cx, off: usize) -> (usize, bool)
+fn seq2(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn seq3(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool), r: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn choice2(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn choice3(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool), r: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn choice4(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool), r: fn(*Cx, usize) -> (usize, bool), s: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn many0(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn many1(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn opt(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn delimited(cx: *Cx, off: usize, open: fn(*Cx, usize) -> (usize, bool), inner: fn(*Cx, usize) -> (usize, bool), close: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn preceded(cx: *Cx, off: usize, first: fn(*Cx, usize) -> (usize, bool), second: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn terminated(cx: *Cx, off: usize, first: fn(*Cx, usize) -> (usize, bool), second: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn separated0(cx: *Cx, off: usize, item: fn(*Cx, usize) -> (usize, bool), sep: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn separated1(cx: *Cx, off: usize, item: fn(*Cx, usize) -> (usize, bool), sep: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn count(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), n: usize) -> (usize, bool)
+fn peek(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn not(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), name: str) -> (usize, bool)
+fn node(cx: *Cx, off: usize, kind: u32, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+fn label(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), name: str) -> (usize, bool)
+fn chainl1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn(*Cx, usize) -> (usize, bool), kind: u32) -> (usize, bool)
+fn chainr1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn(*Cx, usize) -> (usize, bool), kind: u32) -> (usize, bool)
+fn parse_all(cx: *Cx, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool)
+```
+
+A parser-combinator kit over a caller's string, in nom's style. A parser is a function
+`fn(*Cx, usize) -> (usize, bool)`: it reads `cx.src` from an offset and answers the offset
+after what it matched (a match is the byte range between the two, so nothing is copied) or
+`false`. `Cx` also carries the furthest failure (`furthest`, the first label noted there in
+`expected`, reported by `parse_all` and the primitives through `note`) so an error names where
+the input stopped being parseable, as parsy's `furthest` does. `node` appends an `Event` to the
+caller's buffer after its children's events (post-order: an expression grammar yields reverse
+Polish) and every backtracking combinator restores the event count, so an abandoned branch
+leaves nothing; a full buffer fails the parse and sets `overflow`. `many0` stops on an
+iteration that consumed nothing. `chainl1` and `chainr1` record one event of the given kind
+per application spanning the operator. Left recursion and memoisation are not provided;
+`e.parse.ll` and `e.parse.lr` cover grammars that need them and `e.meta` generation covers
+derived parsers.
 
 ### `e.dist.consensus`
 

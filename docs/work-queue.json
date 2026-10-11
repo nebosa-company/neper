@@ -851,28 +851,6 @@
       "evidence": "Planning only (D1877). Proxy-protocol gap (verified absent): SOCKS5 handshake with no-auth and username/password methods plus UDP ASSOCIATE, over e.net with loopback fixtures. HTTP CONNECT rides L046 policy helpers; Tor pluggable transports stay out."
     },
     {
-      "id": "L122",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 220,
-      "title": "Seeded fake-data generators in e.algo.rand",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1877). gofakeit parity missing: e.algo.rand.dist covers distributions, not names/addresses/IDs/lorem fakers. Deterministic seeded lookup tables with locale overlays. Fixtures pin exact streams per seed; no network data sources. Follow-on (D1890): AutoFixture-style anonymous object graphs via e.meta."
-    },
-    {
-      "id": "L123",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 221,
-      "title": "Layered configuration with watch in e.cli",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1877). viper parity gap: ordered defaults, file, env and flag layers with precedence plus reload watch over e.fmt codecs, e.cli flags and e.fs.watch. Individual sources exist; layering and live reload do not. Fixtures for precedence and watch coalescing."
-    },
-    {
       "id": "L124",
       "category": "library",
       "group": "Formats",
@@ -917,50 +895,6 @@
       "evidence": "Planning only (D1881). opendal parity at the portable layer: unified put/get/list/delete over L119 virtual FS, e.net.http clients and memory backends. Vendor clouds stay out per the cloud ruling. Fixtures run every backend through one conformance script."
     },
     {
-      "id": "L128",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 226,
-      "title": "Snapshot testing in e.test",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1881). insta parity missing (verified: no snapshot surface): golden value snapshots with review-and-accept workflow over e.test and e.fmt.pretty. Fixtures for new-snapshot refusal in CI versus accept mode; binary snapshots stay out."
-    },
-    {
-      "id": "L129",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 227,
-      "title": "Statistical bench harness in e.test",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1881). criterion parity missing in-language (external measure.py exists): criterion-style benchmark runner with warmup, outlier rejection and comparison reports over e.time. Fixtures pin report schema, not timings; CI thresholds stay caller policy."
-    },
-    {
-      "id": "L130",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 228,
-      "title": "Diagnostic report rendering for applications",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1881). miette parity missing as a library (the compiler owns an internal writer): labeled spans with source snippets and notes over e.text.layout for application diagnostics. Fixtures pin golden rendering; no new diagnostic codes."
-    },
-    {
-      "id": "L131",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 229,
-      "title": "Parser-combinator kit in e.parse",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1881). nom parity gap in style (ll/lr exist): zero-copy combinators (sequence, choice, repeat, delimited) over caller slices with explicit error offsets. Fixtures on expression grammars; macro-derived parsers stay out, e.meta covers generation."
-    },
-    {
       "id": "L132",
       "category": "library",
       "group": "Formats",
@@ -970,17 +904,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1881). ammonia parity missing: allowlist-based HTML sanitization with URL-scheme policy over the e.fmt.html parser. Complements L066 safe-viewer work on the viewer side. Fixtures incl. event-handler, style and nesting attacks."
-    },
-    {
-      "id": "L133",
-      "category": "library",
-      "group": "UI",
-      "order": 231,
-      "title": "Terminal line editor with history and completion",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1881). reedline parity missing (P7 editor is GUI-only): line editing with history, completion callbacks and hints for CLI REPLs over e.cli. Fixtures replay key sequences into state assertions; validators stay caller-side."
     },
     {
       "id": "L134",

@@ -3990,6 +3990,48 @@ $textSigWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $textSigWritten -ne 'executable written') { throw 'text_sig emission failed' }
 $textSigOutput = & $textSigPath
 if ($LASTEXITCODE -ne 0 -or $textSigOutput -ne 'text sig ok') { throw "text_sig answered wrongly: exit $LASTEXITCODE" }
+# e.algo.rand.fake: seeded fake-data generators against an independent PCG and generator, 5 seeds across 4 locales plus shape rules (D2560).
+$algoRandFakePath = Join-Path $testBuild 'algo-rand-fake-selfhost.exe'
+$algoRandFakeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rand_fake\src\main.e') $repo 'x64' 'windows' $algoRandFakePath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoRandFakeWritten -ne 'executable written') { throw 'algo_rand_fake emission failed' }
+$algoRandFakeOutput = & $algoRandFakePath
+if ($LASTEXITCODE -ne 0 -or $algoRandFakeOutput -ne 'algo rand fake ok') { throw "algo_rand_fake answered wrongly: exit $LASTEXITCODE" }
+# e.parse.comb: parser combinators with furthest-failure offsets and rollback-safe events against parsy (325 expression and 212 key/value cases, D2561).
+$parseCombPath = Join-Path $testBuild 'parse-comb-selfhost.exe'
+$parseCombWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\parse_comb\src\main.e') $repo 'x64' 'windows' $parseCombPath -j 2
+if ($LASTEXITCODE -ne 0 -or $parseCombWritten -ne 'executable written') { throw 'parse_comb emission failed' }
+$parseCombOutput = & $parseCombPath
+if ($LASTEXITCODE -ne 0 -or $parseCombOutput -ne 'parse comb ok') { throw "parse_comb answered wrongly: exit $LASTEXITCODE" }
+# e.test.snapshot: review-and-accept snapshots, 60 pairs checked against pytest-snapshot plus the full mode workflow (D2562).
+$testSnapshotPath = Join-Path $testBuild 'test-snapshot-selfhost.exe'
+$testSnapshotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_snapshot\src\main.e') $repo 'x64' 'windows' $testSnapshotPath -j 2
+if ($LASTEXITCODE -ne 0 -or $testSnapshotWritten -ne 'executable written') { throw 'test_snapshot emission failed' }
+$testSnapshotOutput = & $testSnapshotPath
+if ($LASTEXITCODE -ne 0 -or $testSnapshotOutput -ne 'test snapshot ok') { throw "test_snapshot answered wrongly: exit $LASTEXITCODE" }
+# e.test.bench: statistics, report schema and comparison verdicts against Python statistics, plus a real run over two bodies (D2563).
+$testBenchPath = Join-Path $testBuild 'test-bench-selfhost.exe'
+$testBenchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_bench\src\main.e') $repo 'x64' 'windows' $testBenchPath -j 2
+if ($LASTEXITCODE -ne 0 -or $testBenchWritten -ne 'executable written') { throw 'test_bench emission failed' }
+$testBenchOutput = & $testBenchPath
+if ($LASTEXITCODE -ne 0 -or $testBenchOutput -ne 'test bench ok') { throw "test_bench answered wrongly: exit $LASTEXITCODE" }
+# e.cli.config: layered configuration against ChainMap, configparser and json (40 scenarios, 403 reads), reload counting and watcher coalescing (D2564).
+$cliConfigPath = Join-Path $testBuild 'cli-config-selfhost.exe'
+$cliConfigWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\cli_config\src\main.e') $repo 'x64' 'windows' $cliConfigPath -j 2
+if ($LASTEXITCODE -ne 0 -or $cliConfigWritten -ne 'executable written') { throw 'cli_config emission failed' }
+$cliConfigOutput = & $cliConfigPath
+if ($LASTEXITCODE -ne 0 -or $cliConfigOutput -ne 'cli config ok') { throw "cli_config answered wrongly: exit $LASTEXITCODE" }
+# e.cli.line: terminal line editor against a readline-semantics model, 120 key sessions plus the documented behaviours (D2565).
+$cliLinePath = Join-Path $testBuild 'cli-line-selfhost.exe'
+$cliLineWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\cli_line\src\main.e') $repo 'x64' 'windows' $cliLinePath -j 2
+if ($LASTEXITCODE -ne 0 -or $cliLineWritten -ne 'executable written') { throw 'cli_line emission failed' }
+$cliLineOutput = & $cliLinePath
+if ($LASTEXITCODE -ne 0 -or $cliLineOutput -ne 'cli line ok') { throw "cli_line answered wrongly: exit $LASTEXITCODE" }
+# e.text.report: diagnostic reports against a second canvas-based renderer, 150 reports plus hand cases (D2566).
+$textReportPath = Join-Path $testBuild 'text-report-selfhost.exe'
+$textReportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_report\src\main.e') $repo 'x64' 'windows' $textReportPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textReportWritten -ne 'executable written') { throw 'text_report emission failed' }
+$textReportOutput = & $textReportPath
+if ($LASTEXITCODE -ne 0 -or $textReportOutput -ne 'text report ok') { throw "text_report answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

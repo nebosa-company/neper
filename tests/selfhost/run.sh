@@ -3561,6 +3561,48 @@ text_sig_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/text-sig-selfhost"
 text_sig_output=$("$test_build/text-sig-selfhost")
 [ "$text_sig_output" = 'text sig ok' ]
+# e.algo.rand.fake: seeded fake-data generators against an independent PCG and generator, 5 seeds across 4 locales plus shape rules (D2560).
+algoRandFake_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rand_fake/src/main.e" "$repo" x64 linux "$test_build/algo-rand-fake-selfhost" -j 2)
+[ "$algoRandFake_written" = 'executable written' ]
+chmod +x "$test_build/algo-rand-fake-selfhost"
+algoRandFake_output=$("$test_build/algo-rand-fake-selfhost")
+[ "$algoRandFake_output" = 'algo rand fake ok' ]
+# e.parse.comb: parser combinators with furthest-failure offsets and rollback-safe events against parsy (325 expression and 212 key/value cases, D2561).
+parseComb_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/parse_comb/src/main.e" "$repo" x64 linux "$test_build/parse-comb-selfhost" -j 2)
+[ "$parseComb_written" = 'executable written' ]
+chmod +x "$test_build/parse-comb-selfhost"
+parseComb_output=$("$test_build/parse-comb-selfhost")
+[ "$parseComb_output" = 'parse comb ok' ]
+# e.test.snapshot: review-and-accept snapshots, 60 pairs checked against pytest-snapshot plus the full mode workflow (D2562).
+testSnapshot_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_snapshot/src/main.e" "$repo" x64 linux "$test_build/test-snapshot-selfhost" -j 2)
+[ "$testSnapshot_written" = 'executable written' ]
+chmod +x "$test_build/test-snapshot-selfhost"
+testSnapshot_output=$("$test_build/test-snapshot-selfhost")
+[ "$testSnapshot_output" = 'test snapshot ok' ]
+# e.test.bench: statistics, report schema and comparison verdicts against Python statistics, plus a real run over two bodies (D2563).
+testBench_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_bench/src/main.e" "$repo" x64 linux "$test_build/test-bench-selfhost" -j 2)
+[ "$testBench_written" = 'executable written' ]
+chmod +x "$test_build/test-bench-selfhost"
+testBench_output=$("$test_build/test-bench-selfhost")
+[ "$testBench_output" = 'test bench ok' ]
+# e.cli.config: layered configuration against ChainMap, configparser and json (40 scenarios, 403 reads), reload counting and watcher coalescing (D2564).
+cliConfig_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/cli_config/src/main.e" "$repo" x64 linux "$test_build/cli-config-selfhost" -j 2)
+[ "$cliConfig_written" = 'executable written' ]
+chmod +x "$test_build/cli-config-selfhost"
+cliConfig_output=$("$test_build/cli-config-selfhost")
+[ "$cliConfig_output" = 'cli config ok' ]
+# e.cli.line: terminal line editor against a readline-semantics model, 120 key sessions plus the documented behaviours (D2565).
+cliLine_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/cli_line/src/main.e" "$repo" x64 linux "$test_build/cli-line-selfhost" -j 2)
+[ "$cliLine_written" = 'executable written' ]
+chmod +x "$test_build/cli-line-selfhost"
+cliLine_output=$("$test_build/cli-line-selfhost")
+[ "$cliLine_output" = 'cli line ok' ]
+# e.text.report: diagnostic reports against a second canvas-based renderer, 150 reports plus hand cases (D2566).
+textReport_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_report/src/main.e" "$repo" x64 linux "$test_build/text-report-selfhost" -j 2)
+[ "$textReport_written" = 'executable written' ]
+chmod +x "$test_build/text-report-selfhost"
+textReport_output=$("$test_build/text-report-selfhost")
+[ "$textReport_output" = 'text report ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

@@ -2184,4 +2184,11 @@ D2425	931	C136: recordings are WAV files; closed, C166 remains
 D2426	796	C137: Translate asks a server for what the book lacks; closed, C167 remains
 D2427	1159	C138: a step detector in the library and the Steps app on it; closed, C168 remains
 D2428	714	C139: hold, ghost, kicks and a saved best; closed, C169 remains
-D2429	1005	C140: Secure takes its codes from e.crypto.otp, with otpauth import
+D2429	1006	C140: Secure takes its codes from e.crypto.otp, with otpauth import
+D2560	1257	L122 closed: e.algo.rand.fake, seeded fake-data generators checked against an independent PCG
+D2561	1560	L131 closed: e.parse.comb, nom-style combinators checked against parsy
+D2562	1551	L128 closed: e.test.snapshot, review-and-accept snapshots checked against pytest-snapshot
+D2563	1672	L129 closed: e.test.bench, a statistical bench harness whose numbers are checked against Python's statistics
+D2564	1826	L123 closed: e.cli.config, layered configuration with reload and watch, checked against ChainMap
+D2565	1859	L133 closed: e.cli.line, a terminal line editor as a state machine, checked against a readline-semantics model
+D2566	1807	L130 closed: e.text.report, miette-style diagnostic rendering checked against a second renderer
