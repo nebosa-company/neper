@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C120",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 120,
-      "title": "NeperOS SSH: a real SSH client behind the Termius-style app",
-      "score": 0.5,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Queued by the user (2026-10-08). The SSH app (D2215) has the hosts list, the host form and a terminal screen, but Connect opens a local demo shell because NeperOS has no network (C117). Acceptance: (1) an SSH-2 client over the C117 sockets: version exchange, key exchange (curve25519), host-key check against a known-hosts list the user confirms on first use, ciphers (chacha20-poly1305, aes-gcm), password and public-key authentication (ed25519), sessions with a pty and window size; (2) a terminal emulator behind the screen (ANSI colours, cursor movement, alternate screen, scrollback, resize) in place of the line-based demo, with Ctrl and Esc keys and a monospaced face; (3) keys and passwords kept in Secure (C116), a Keychain tab to create and import keys; (4) saved hosts kept in storage, groups and tags, snippets; (5) port forwarding (local and remote) and SFTP (browse, download, upload); (6) a fixture against an OpenSSH server in WSL or a local container, not the live internet. Not queued here: mosh, agent forwarding, jump hosts (a later item). Done (D2404): the emulator half of item (2) -- e.text.terminal (UTF-8, cursor movement and erase, insert and delete, scroll region and scrolling, SGR with 256 and true colours, alternate screen, scrollback, resize), checked cell by cell against pyte on twenty-one streams; the SSH app does not use it yet. Done (D2405): the protocol half of item (1) -- e.net.ssh, a sans-IO SSH-2 client (version exchange, curve25519-sha256, ssh-ed25519 host key shown for confirmation, chacha20-poly1305@openssh.com, password and ed25519 key login, pty and shell, resize, flow control, exit status), run against a real server (asyncssh) on loopback by the fixture net_ssh. Not here: aes-gcm and other algorithms, known-hosts storage, the app using it over NeperOS sockets, Secure for the keys, Keychain, saved hosts, forwarding, SFTP. Done (D2406): the app half of items (1) and (2) -- the SSH app connects over the NeperOS network server (the new POLL op), asks for the password, shows the host key's SHA256 fingerprint for confirmation (kept for the run; a changed key is refused), and runs the shell in an e.text.terminal grid with the keys sent as tapped and Up, Down, Ctrl-C and Clear; the livefixture ssh_live runs it against the test boot's asyncssh server (login, a line upper-cased, exit status 7). Not here: the keyboard's Ctrl and Esc, a monospaced face, scrollback view, saved known hosts, key login and Keychain, Secure for credentials, groups, snippets, forwarding, SFTP."
-    },
-    {
       "id": "C119",
       "category": "compiler",
       "group": "NeperOS",
@@ -1564,6 +1553,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C121 (D2402): Wallet draws real QR and Code 128 symbols, validates its form with e.valid, and shows the newest Camera scan on a document. Acceptance: (1) the cards kept encrypted at rest under the Secure vault's master password (the vault module's derive/seal over the filesystem server), with no card number beyond the last four digits unless the user asks, loaded at start and fixture-tested through an encrypted round trip on a disk; (2) editing an existing card or document with the same validation; (3) Camera Scan mode feeding frames to e.barcode.qr_scan and offering the decoded text (a pass, a URL) to Wallet or the browser; (4) a machine-readable zone read from a scanned page (the OCR-B glyphs) and checked by e.valid.mrz_td3; (5) a scan stored with its own document instead of the newest one; (6) expiry checked against the clock."
+    },
+    {
+      "id": "C155",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 155,
+      "title": "NeperOS SSH remainder: Secure credentials and Keychain, saved hosts, port forwarding, SFTP, keys",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C120 (D2406): the SSH app opens a live session (password login, host key confirmation for the run, a terminal grid). Acceptance: (1) the password and ed25519 keys kept in Secure (C116) behind the master password, a Keychain tab to create and import keys, and key login from the app; (2) known hosts and saved hosts kept in storage (C125) with groups, tags and snippets, and a host key changed after it was saved refused; (3) Esc, Ctrl and a symbols row on the keyboard, a monospaced face and a scrollback view, the terminal answering cursor position requests; (4) port forwarding (local and remote) and SFTP (browse, download, upload); (5) aes-gcm and rekeying in e.net.ssh; (6) a fixture on QEMU against an OpenSSH server in WSL or a container."
     }
   ]
 }

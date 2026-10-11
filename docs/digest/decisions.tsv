@@ -2161,4 +2161,5 @@ D2402	1508	C121 part four: reading a QR symbol out of an image, and the scan on 
 D2403	459	C121 closed; the encrypted store, MRZ from an image, editing and camera scanning are C154
 D2404	1382	C120 part one: `e.text.terminal`, a terminal emulator in the library
 D2405	1762	C120 part two: `e.net.ssh`, an SSH-2 client without I/O
-D2406	2037	C120 part three: the SSH app runs a live session
+D2406	2038	C120 part three: the SSH app runs a live session
+D2407	479	C120 closed; Secure credentials, saved hosts, forwarding and SFTP are C155
