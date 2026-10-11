@@ -600,6 +600,38 @@ Literal dotfiles are not implicitly excluded. Parent/absolute paths are Invalid;
 matching proves no filesystem containment. Work-limit exhaustion is TooLarge, not
 false. Ignore-file precedence/negation is application policy, not an implicit glob rule.
 
+### `e.path.dirs`
+
+```neper
+type Platform = enum u8 { Linux, MacOs, Windows }
+type Kind = enum u8 { Data, Config, Cache, State, Log, Runtime, SiteData, SiteConfig, SiteCache, SiteState, SiteLog, Documents, Downloads, Desktop, Pictures, Videos, Music }
+type Env = struct { home: str, user_profile: str, app_data: str, local_app_data: str, all_users_profile: str, xdg_data_home: str, xdg_config_home: str, xdg_cache_home: str, xdg_state_home: str, xdg_runtime_dir: str, xdg_data_dirs: str, xdg_config_dirs: str, xdg_documents_dir: str, xdg_download_dir: str, xdg_desktop_dir: str, xdg_pictures_dir: str, xdg_videos_dir: str, xdg_music_dir: str }
+type App = struct { name: str, author: str, version: str, roaming: bool, opinion: bool, multipath: bool, no_author: bool }
+error Invalid
+error Unset
+
+fn app_named(name: str) -> App
+fn platform_of(style: path.Style) -> Platform
+fn dir(a: *mem.Arena, platform: Platform, env: Env, kind: Kind, app: App) -> (str, err)
+fn env_from_process(a: *mem.Arena) -> (Env, err)
+```
+
+Platform directories (platformdirs parity) as pure functions of the platform and the
+environment values the caller supplies, so every platform's answer is testable on
+every host. `dir` returns the per-user data, config, cache, state, log and runtime
+directory, the per-machine site equivalents, or a user media folder, laid out the way
+platformdirs 4.x does: XDG on `Linux` (a variable counts only as an absolute path with
+blanks trimmed), `~/Library` on `MacOs` (XDG variables still take precedence), the
+environment-variable route (`APPDATA`, `LOCALAPPDATA`, `ALLUSERSPROFILE`, `USERPROFILE`)
+on `Windows`, with `author`, `version`, `roaming`, `opinion` (the `Cache`/`Logs` and
+`log` folders) and `multipath` (colon-joined site lists) as platformdirs defines them.
+An empty `Env` value is unset. `app_named` gives the platformdirs defaults for an
+application name; `no_author` is platformdirs' `appauthor=False`. A name that is a
+root, a drive or holds a `..` component is `Invalid`; a variable the platform needs is
+`Unset`, including a Linux runtime directory without `XDG_RUNTIME_DIR`. Nothing is
+created, probed or cached, and `user-dirs.dirs`, Homebrew prefixes and the root-user
+redirect are not read. `env_from_process` fills an `Env` from the process environment.
+
 ---
 
 ## 3. Containers and traversal
@@ -3602,6 +3634,45 @@ fn mo_run[Ctx: type](ctx: *Ctx, lefts: []const usize, rights: []const usize, ord
 Mo's algorithm: `mo_block_size`, `mo_order` (block of the left end, right end alternating
 by block parity), `mo_order_hilbert` over the 2-d Hilbert index, `mo_pointer_moves` and
 the generic driver `mo_run` over caller add/remove/answer callbacks.
+
+### `e.algo.query.jmespath`
+
+```neper
+type Expr = struct { nodes: []const Node, edges: []const i32, root: i32 }
+error Syntax
+error Type
+error Arity
+error UnknownFunction
+error InvalidValue
+error TooLarge
+
+fn kind_of(v: json.Value) -> u8
+fn as_array(v: json.Value) -> []const json.Value
+fn as_object(v: json.Value) -> []const json.Member
+fn equals(x: json.Value, y: json.Value) -> bool
+fn stringify(a: *mem.Arena, v: json.Value) -> (str, err)
+fn compile(a: *mem.Arena, source: str) -> (Expr, err)
+fn eval_expr(a: *mem.Arena, expr: Expr, data: json.Value) -> (json.Value, err)
+fn search(a: *mem.Arena, source: str, data: json.Value) -> (json.Value, err)
+```
+
+JMESPath queries (python-jmespath parity) over `e.fmt.json` values; this is document
+querying, where the rest of `e.algo.query` is offline range queries. `compile` turns an
+expression into a flat node table in the arena (at most 128 tokens, 64 deep) and
+`eval_expr` runs it against any document; `search` does both. The language is the
+specification's: identifiers and quoted identifiers, subexpressions, indexes and
+slices with python's step rules, `*` and `[*]` and `[]` projections, `[?filter]`,
+`|`, `||`, `&&`, `!`, `== != < <= > >=`, multi-select lists and hashes, `@`,
+`` `json` `` and `'raw'` literals, and the functions abs avg ceil contains ends_with
+floor join keys length map max max_by merge min min_by not_null reverse sort sort_by
+starts_with sum to_array to_number to_string type values. A null result is JSON null;
+a result is built in the arena and may borrow strings and subtrees from the input.
+Errors: `Syntax` (lexing and parsing), `Type` and `Arity` and `UnknownFunction`
+(evaluation, as python-jmespath raises them), `InvalidValue` (a slice step of zero or
+a result with no JSON spelling), `TooLarge`. `equals` is the language's `==`
+(numbers by value, objects as maps); `stringify` writes compact ASCII JSON as
+`to_string` does. Ordering comparators of a string and a number are null as the
+specification says, where python-jmespath raises.
 
 ### `e.algo.rand`
 
@@ -16323,6 +16394,32 @@ fn write_record(w: *Writer, fields: []const str) -> err
 fn flush(w: *Writer) -> err
 ```
 
+### `e.fmt.dotenv`
+
+```neper
+type Entry = struct { key: str, value: str, has_value: bool }
+error TooMany
+
+fn parse(a: *mem.Arena, text: str, out: []Entry) -> (usize, usize, err)
+fn get(entries: []const Entry, key: str) -> (Entry, bool)
+fn interpolate(a: *mem.Arena, entries: []Entry, external: []const Entry, override: bool) -> err
+```
+
+Env files read the way python-dotenv reads them, over caller storage. `parse` writes
+the bindings of `text` in order into `out` and returns how many it wrote and how many
+non-binding lines it skipped (`TooMany` when `out` is full). A binding is
+`[export ]KEY[=value]`: a key is a run of bytes other than `=`, `#` or white space, or a
+single-quoted string; a value is single-quoted (escapes `\\` and `\'`), double-quoted
+(`\\ \' \" \a \b \f \n \r \t \v`; both may span lines) or unquoted (to the end of the
+line, cut at the first white space followed by `#`, trailing white space removed);
+`KEY= # note` is empty, `KEY=#x` is `#x` and a bare `KEY` has `has_value` false. A
+leading byte-order mark is ignored and `\r`, `\n` and `\r\n` all end a line. `get`
+returns the last binding of a key. `interpolate` expands `${NAME}` and
+`${NAME:-default}` in place, in order: a binding sees the earlier ones and the
+`external` environment (which wins unless `override`); a name found nowhere is the
+default or empty, and a name bound without a value is empty. Neither function reads or
+writes the process environment; the caller applies the result.
+
 ### `e.fmt.ini`
 
 ```neper
@@ -16426,6 +16523,44 @@ fn at_least(have: str, want: str) -> bool
 ranges, whitespace AND, `||` OR) desugared as read.
 
 `at_least` and `cmp_loose` (L020) compare the loose dotted versions a package manager prints (`10.2` against `9.6`, `1.2-rc1` below `1.2`, a missing component 0) numerically, after petcow's `version_at_least`; a component past 64 bits saturates. Checked by `fmt_semver_loose`.
+
+### `e.fmt.semver.pep440`
+
+```neper
+type Version = struct { epoch: u64, release: [16]u64, release_len: usize, pre_kind: u8, pre_num: u64, has_post: bool, post_num: u64, has_dev: bool, dev_num: u64, local: str }
+type Specifier = struct { op: u8, version: Version, wildcard: bool, raw: str }
+type Requirement = struct { name: str, extras: str, specifiers: str, url: str, marker: str }
+error Invalid
+error TooSmall
+
+fn parse(text: str) -> (Version, err)
+fn is_prerelease(v: Version) -> bool
+fn is_postrelease(v: Version) -> bool
+fn base_version(v: Version) -> Version
+fn public(v: Version) -> Version
+fn cmp(a: Version, b: Version) -> i32
+fn format(v: Version, out: []u8) -> (usize, err)
+fn parse_specifier(text: str) -> (Specifier, err)
+fn matches(s: Specifier, v: Version) -> bool
+fn contains(version: str, specifiers: str, prereleases: bool) -> (bool, err)
+fn parse_requirement(text: str) -> (Requirement, err)
+```
+
+PEP 440 versions, specifiers and requirement lines (python `packaging` parity) beside
+the unchanged SemVer `Version`. `parse` accepts every spelling PEP 440 normalizes (a
+leading `v`, an epoch, `alpha beta c pre preview rev r`, `-N` posts, `._-` separators,
+any case) and borrows the local part from its text; the release holds up to sixteen
+numbers that fit 64 bits. `cmp` is the PEP 440 order (trailing release zeros ignored,
+dev < a < b < rc < final < post, local after public); `format` writes the normalized
+spelling. `parse_specifier` reads `~= == != <= >= < > ===` with `.*` prefixes for `==`
+and `!=` and refuses a local part where PEP 440 does; `matches` applies one operator
+alone, including the `<V` / `>V` exclusions of V's own pre- and post-releases;
+`contains` tests a version against a comma-separated set (up to sixteen) and, as
+packaging 26, lets a pre-release version match unless `prereleases` is false.
+`parse_requirement` splits `name[extras] specifiers ; marker` (specifiers optionally in
+parentheses, a trailing comma tolerated) or `name @ url ; marker`, validating the name,
+extras and every specifier; the marker is kept as text, neither evaluated nor
+validated.
 
 ### `e.fmt.cbor`
 
@@ -19775,6 +19910,61 @@ The delivered parser accepts six numeric fields with lists, inclusive ranges and
 Sunday is 0 or 7. Day-of-month and day-of-week use Vixie cron's OR rule when both are
 restricted. `next` is strictly after its input and searches no more than one complete
 400-year Gregorian cycle or the representable timestamp range.
+
+### `e.time.recur`
+
+```neper
+type Rule = struct { freq: u8, interval: i64, count: i64, has_until: bool, until: calendar.DateTime, wkst: i64, months: u64, mday_pos: u64, mday_neg: u64, any_day: bool, day_pos: [7]u64, day_neg: [7]u64, hours: u64, minutes: u64, seconds: u64, yday_n: usize, yday: [32]i64, setpos_n: usize, setpos: [32]i64 }
+error Invalid
+
+fn parse_stamp(s: str) -> (calendar.DateTime, err)
+fn parse_rule(text: str) -> (Rule, err)
+fn expand_from(rule: Rule, start: calendar.DateTime, from: calendar.DateTime, out: []calendar.DateTime) -> (usize, err)
+fn expand(rule: Rule, start: calendar.DateTime, out: []calendar.DateTime) -> (usize, err)
+```
+
+RFC 5545 recurrence rules over floating (zoneless, whole-second) `calendar.DateTime`
+values. `parse_rule` reads `FREQ=...;INTERVAL=...` text (an `RRULE:` prefix and lower
+case are accepted) into a `Rule` that owns no storage: FREQ is one of the constants
+`YEARLY MONTHLY WEEKLY DAILY HOURLY MINUTELY SECONDLY`, and INTERVAL, COUNT, UNTIL,
+WKST, BYMONTH, BYMONTHDAY, BYYEARDAY, BYDAY (an ordinal only for MONTHLY and YEARLY),
+BYHOUR, BYMINUTE, BYSECOND and BYSETPOS are read; BYWEEKNO, BYEASTER and unknown
+parts are `Invalid`. `parse_stamp` reads `YYYYMMDD` or `YYYYMMDDTHHMMSS[Z]`; a
+date-only UNTIL is midnight of that day, as python-dateutil reads it.
+
+`expand` writes the occurrences from `start` into `out` until it is full, COUNT or
+UNTIL ends the rule, or the search bound is met, and returns how many; `expand_from`
+writes only those at or after `from` (earlier ones still count toward COUNT).
+Occurrences before `start` are never produced and `start` is produced only when the
+rule matches it. A plain and an ordinal weekday in one BYDAY list are a union (RFC
+5545; python-dateutil intersects them). A rule whose periods stay empty ends quietly
+after the year 9999 or 4,000,000 sub-daily steps. Zones belong to `e.tz`.
+
+### `e.time.parse`
+
+```neper
+type Parsed = struct { value: calendar.DateTime, has_time: bool, has_offset: bool, offset_minutes: i32 }
+error Invalid
+
+fn parse_iso(text: str) -> (Parsed, err)
+fn parse_lenient(text: str, day_first: bool) -> (Parsed, err)
+fn parse_date(text: str, day_first: bool) -> (Parsed, err)
+fn parse_duration(text: str) -> (time.Duration, err)
+```
+
+Date-time and duration text. `parse_iso` is strict ISO 8601: a full date
+(`YYYY-MM-DD` or `YYYYMMDD`), then `T`, `t` or a space and `HH`, `HH:MM`, `HH:MM:SS`,
+`HHMM` or `HHMMSS` with a one-to-nine digit fraction, then `Z` or a `+HH[[:]MM]`
+offset. `parse_lenient` reads the shapes people write (month names, weekday names
+that are ignored, `5th`, `3:04 PM`, `10:30 UTC`, `/ . -` separators) with python-dateutil's
+numeric ordering: a first number above 31 or of four digits is the year, otherwise
+month first unless `day_first`; a date needs year, month and day, nothing is filled
+from a default, and unknown words are refused. `parse_date` is the fallback order: strict
+first, then lenient. A year of at most two digits is 2000-2068 or 1969-1999. The
+zone is reported in `has_offset` and `offset_minutes`, never applied. `parse_duration`
+reads humantime-style `15m30s` / `1h 30m` text into a `time.Duration`: whole numbers
+each followed by a unit (`ns us ms s m h d w` and long spellings, `M` months of 30.44
+days, `y` years of 365.25 days); a bare number, a fraction or an overflow is `Invalid`.
 
 ### `e.ratelimit`
 

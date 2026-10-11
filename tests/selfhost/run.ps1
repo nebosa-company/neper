@@ -3241,6 +3241,36 @@ $cronWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $cronWritten -ne 'executable written') { throw 'e.time.cron emission failed' }
 & $cronPath
 if ($LASTEXITCODE -ne 0) { throw "an e.time.cron parse or match answered wrongly: exit $LASTEXITCODE" }
+# `e.time.recur` and `e.time.parse` pin RFC 5545 expansion against python-dateutil rrule, and strict, lenient and duration text parsing (L103).
+$timeRecurPath = Join-Path $testBuild 'time-recur-selfhost.exe'
+$timeRecurWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_recur\src\main.e') $repo 'x64' 'windows' $timeRecurPath
+if ($LASTEXITCODE -ne 0 -or $timeRecurWritten -ne 'executable written') { throw 'e.time.recur emission failed' }
+$timeRecurOutput = & $timeRecurPath
+if ($LASTEXITCODE -ne 0 -or $timeRecurOutput -ne 'time recur ok') { throw "an e.time.recur or e.time.parse check failed: exit $LASTEXITCODE" }
+# `e.path.dirs` pins platformdirs layouts for Linux, macOS and Windows over seeded environments (L105).
+$pathDirsPath = Join-Path $testBuild 'path-dirs-selfhost.exe'
+$pathDirsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\path_dirs\src\main.e') $repo 'x64' 'windows' $pathDirsPath
+if ($LASTEXITCODE -ne 0 -or $pathDirsWritten -ne 'executable written') { throw 'e.path.dirs emission failed' }
+$pathDirsOutput = & $pathDirsPath
+if ($LASTEXITCODE -ne 0 -or $pathDirsOutput -ne 'path dirs ok') { throw "an e.path.dirs layout answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.dotenv` pins env-file parsing and interpolation against python-dotenv (L106).
+$fmtDotenvPath = Join-Path $testBuild 'fmt-dotenv-selfhost.exe'
+$fmtDotenvWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_dotenv\src\main.e') $repo 'x64' 'windows' $fmtDotenvPath
+if ($LASTEXITCODE -ne 0 -or $fmtDotenvWritten -ne 'executable written') { throw 'e.fmt.dotenv emission failed' }
+$fmtDotenvOutput = & $fmtDotenvPath
+if ($LASTEXITCODE -ne 0 -or $fmtDotenvOutput -ne 'fmt dotenv ok') { throw "an e.fmt.dotenv parse or interpolation answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.semver.pep440` pins PEP 440 normalization, ordering, specifier sets and requirement lines against python packaging (L108).
+$fmtPepPath = Join-Path $testBuild 'fmt-semver-pep440-selfhost.exe'
+$fmtPepWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_semver_pep440\src\main.e') $repo 'x64' 'windows' $fmtPepPath
+if ($LASTEXITCODE -ne 0 -or $fmtPepWritten -ne 'executable written') { throw 'e.fmt.semver.pep440 emission failed' }
+$fmtPepOutput = & $fmtPepPath
+if ($LASTEXITCODE -ne 0 -or $fmtPepOutput -ne 'fmt semver pep440 ok') { throw "an e.fmt.semver.pep440 check answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.query.jmespath` pins JMESPath expressions over JSON documents against python-jmespath (L111).
+$jmesPath = Join-Path $testBuild 'algo-query-jmespath-selfhost.exe'
+$jmesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_query_jmespath\src\main.e') $repo 'x64' 'windows' $jmesPath
+if ($LASTEXITCODE -ne 0 -or $jmesWritten -ne 'executable written') { throw 'e.algo.query.jmespath emission failed' }
+$jmesOutput = & $jmesPath
+if ($LASTEXITCODE -ne 0 -or $jmesOutput -ne 'algo query jmespath ok') { throw "an e.algo.query.jmespath query answered wrongly: exit $LASTEXITCODE" }
 # `e.grep` pins recursive literal matches and its stateless index contract.
 $grepPath = Join-Path $testBuild 'grep-selfhost.exe'
 $grepWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\grep\src\main.e') $repo 'x64' 'windows' $grepPath

@@ -2191,4 +2191,9 @@ D2562	1551	L128 closed: e.test.snapshot, review-and-accept snapshots checked aga
 D2563	1672	L129 closed: e.test.bench, a statistical bench harness whose numbers are checked against Python's statistics
 D2564	1826	L123 closed: e.cli.config, layered configuration with reload and watch, checked against ChainMap
 D2565	1859	L133 closed: e.cli.line, a terminal line editor as a state machine, checked against a readline-semantics model
-D2566	1807	L130 closed: e.text.report, miette-style diagnostic rendering checked against a second renderer
+D2566	1808	L130 closed: e.text.report, miette-style diagnostic rendering checked against a second renderer
+D2500	1673	L103: e.time.recur (RFC 5545 expansion) and e.time.parse (strict, lenient, duration text)
+D2501	1530	L105: e.path.dirs, platformdirs layouts as pure functions of an environment
+D2502	1413	L106: e.fmt.dotenv, python-dotenv parsing and interpolation over caller storage
+D2503	2036	L108: e.fmt.semver.pep440, PEP 440 versions, specifiers and requirement lines
+D2504	1938	L111: e.algo.query.jmespath, JMESPath over e.fmt.json values

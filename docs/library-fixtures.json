@@ -112,6 +112,17 @@
    ]
   },
   {
+   "module": "e.algo.query.jmespath",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 15,
+   "delivered": 15,
+   "pending": [],
+   "fixtures": [
+    "algo_query_jmespath"
+   ]
+  },
+  {
    "module": "e.async",
    "milestone": null,
    "schedule": "later",
@@ -491,6 +502,7 @@
     "algo_page_batch",
     "algo_predicate",
     "algo_project",
+    "algo_query_jmespath",
     "algo_realtime",
     "algo_sync",
     "algo_syncjob",
@@ -844,6 +856,28 @@
    "fixtures": [
     "fmt_gaps_b",
     "fmt_zstd"
+   ]
+  },
+  {
+   "module": "e.fmt.dotenv",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 5,
+   "delivered": 5,
+   "pending": [],
+   "fixtures": [
+    "fmt_dotenv"
+   ]
+  },
+  {
+   "module": "e.fmt.semver.pep440",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 16,
+   "delivered": 16,
+   "pending": [],
+   "fixtures": [
+    "fmt_semver_pep440"
    ]
   },
   {
@@ -2738,8 +2772,20 @@
    "pending": [],
    "fixtures": [
     "fs_basics",
+    "path_dirs",
     "path_glob",
     "path_pure"
+   ]
+  },
+  {
+   "module": "e.path.dirs",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 10,
+   "delivered": 10,
+   "pending": [],
+   "fixtures": [
+    "path_dirs"
    ]
   },
   {
@@ -3084,6 +3130,7 @@
     "text_regex_backtrack",
     "time_calendar",
     "time_cron",
+    "time_recur",
     "tz",
     "ui_a11y_controls",
     "ui_actions",
@@ -3192,7 +3239,8 @@
     "misc_gaps",
     "text_locale",
     "time_calendar",
-    "time_calendar_iso"
+    "time_calendar_iso",
+    "time_recur"
    ]
   },
   {
@@ -3204,6 +3252,28 @@
    "pending": [],
    "fixtures": [
     "time_cron"
+   ]
+  },
+  {
+   "module": "e.time.recur",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 6,
+   "delivered": 6,
+   "pending": [],
+   "fixtures": [
+    "time_recur"
+   ]
+  },
+  {
+   "module": "e.time.parse",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 6,
+   "delivered": 6,
+   "pending": [],
+   "fixtures": [
+    "time_recur"
    ]
   },
   {

@@ -2816,6 +2816,31 @@ cron_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixt
 [ "$cron_written" = 'executable written' ]
 chmod +x "$test_build/time-cron-selfhost"
 "$test_build/time-cron-selfhost"
+# `e.time.recur` and `e.time.parse` pin RFC 5545 expansion against python-dateutil rrule, and strict, lenient and duration text parsing (L103).
+time_recur_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_recur/src/main.e" "$repo" x64 linux "$test_build/time-recur-selfhost")
+[ "$time_recur_written" = 'executable written' ]
+chmod +x "$test_build/time-recur-selfhost"
+[ "$("$test_build/time-recur-selfhost")" = 'time recur ok' ]
+# `e.path.dirs` pins platformdirs layouts for Linux, macOS and Windows over seeded environments (L105).
+path_dirs_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/path_dirs/src/main.e" "$repo" x64 linux "$test_build/path-dirs-selfhost")
+[ "$path_dirs_written" = 'executable written' ]
+chmod +x "$test_build/path-dirs-selfhost"
+[ "$("$test_build/path-dirs-selfhost")" = 'path dirs ok' ]
+# `e.fmt.dotenv` pins env-file parsing and interpolation against python-dotenv (L106).
+fmt_dotenv_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_dotenv/src/main.e" "$repo" x64 linux "$test_build/fmt-dotenv-selfhost")
+[ "$fmt_dotenv_written" = 'executable written' ]
+chmod +x "$test_build/fmt-dotenv-selfhost"
+[ "$("$test_build/fmt-dotenv-selfhost")" = 'fmt dotenv ok' ]
+# `e.fmt.semver.pep440` pins PEP 440 normalization, ordering, specifier sets and requirement lines against python packaging (L108).
+fmt_pep_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_semver_pep440/src/main.e" "$repo" x64 linux "$test_build/fmt-semver-pep440-selfhost")
+[ "$fmt_pep_written" = 'executable written' ]
+chmod +x "$test_build/fmt-semver-pep440-selfhost"
+[ "$("$test_build/fmt-semver-pep440-selfhost")" = 'fmt semver pep440 ok' ]
+# `e.algo.query.jmespath` pins JMESPath expressions over JSON documents against python-jmespath (L111).
+jmes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_query_jmespath/src/main.e" "$repo" x64 linux "$test_build/algo-query-jmespath-selfhost")
+[ "$jmes_written" = 'executable written' ]
+chmod +x "$test_build/algo-query-jmespath-selfhost"
+[ "$("$test_build/algo-query-jmespath-selfhost")" = 'algo query jmespath ok' ]
 # `e.grep` pins recursive literal matches and its stateless index contract.
 grep_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/grep/src/main.e" "$repo" x64 linux "$test_build/grep-selfhost")
 [ "$grep_written" = 'executable written' ]

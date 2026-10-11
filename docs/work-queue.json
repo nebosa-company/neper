@@ -642,17 +642,6 @@
       "evidence": "Planning only (D1873). psutil parity missing (verified: no cpu/mem/disk/net counters anywhere): process listing, cpu times, memory, disk usage, network addresses and boot time over e.proc with per-OS readers. Fixtures assert shape and self-consistency on both hosts, not live values."
     },
     {
-      "id": "L103",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 201,
-      "title": "Recurrence rules and flexible date parsing in e.time",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1873). dateutil parity gap (verified: no RRULE or fuzzy parsing): RFC 5545 recurrence expansion over e.time.calendar plus a strict-then-lenient date parser with explicit format fallback order. e.time.cron covers a different use. Fixtures against python-dateutil vectors. Follow-on (D1881): humantime-style duration strings (`15m30s`) as an additional parser entry."
-    },
-    {
       "id": "L104",
       "category": "library",
       "group": "UI",
@@ -664,28 +653,6 @@
       "evidence": "Planning only (D1873). tqdm/rich/colorama parity missing on the terminal side (GUI ProgressBar exists): stderr progress meters with ETA, rich tables and markup for CLI apps, plus Windows VT-mode enable behind e.os. Pure layout fixtures plus golden byte streams; no GUI dependency. Follow-on (D1881): interactive prompts and selection lists (survey/inquire parity) as a second slice. Follow-on (D1890): Humanizer-style relative dates and quantities as display formatting."
     },
     {
-      "id": "L105",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 203,
-      "title": "Platform directories (platformdirs parity) in e.path",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1873). platformdirs parity missing (verified: no XDG/known-folder lookup): user data, config, cache and log directories per OS over e.path with per-host fixtures. No directory creation policy; callers create."
-    },
-    {
-      "id": "L106",
-      "category": "library",
-      "group": "Formats",
-      "order": 204,
-      "title": "Env-file loader (python-dotenv parity) in e.fmt",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1873). dotenv parity missing (verified: env-var reading exists, file parsing does not): KEY=value parsing with quoting, comments and interpolation over caller storage. Pure fixtures; no implicit process-env mutation, callers apply."
-    },
-    {
       "id": "L107",
       "category": "library",
       "group": "Drivers",
@@ -695,17 +662,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1873). urllib3-pool parity missing (verified: no pool surface in http.e): keep-alive connection reuse with per-host limits and idle eviction under caller storage. Loopback fixtures assert socket reuse counts; TLS session reuse follows."
-    },
-    {
-      "id": "L108",
-      "category": "library",
-      "group": "Formats",
-      "order": 206,
-      "title": "PEP 440 specifiers and requirements for e.fmt.semver",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1873). packaging parity gap: semver parses/compares only, with no ~=, ===, pre/post/dev ordering or requirement-line parsing for pacman. Pure fixtures against packaging vectors; version type itself unchanged. Follow-on (D1881): cargo caret/tilde/range requirements alongside PEP 440."
     },
     {
       "id": "L109",
@@ -728,17 +684,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1873). chardet parity gap: detect() covers BOM plus zero-byte/UTF-8 heuristics only, with no statistical disambiguation of legacy 8-bit encodings. Add frequency-table scoring with confidence calibration over the existing Guess type. Fixtures on multilingual corpora."
-    },
-    {
-      "id": "L111",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 209,
-      "title": "JSON-path queries (jmespath parity) in e.algo.query",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1873). e.algo.query holds offline range-query ordering (Mo/Hilbert), not document queries: jmespath-style field navigation, filters, projections and functions over e.fmt.json values. Pure fixtures against jmespath vectors; no query planning."
     },
     {
       "id": "L112",
