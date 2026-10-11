@@ -756,6 +756,7 @@
     "grep",
     "log_debug",
     "os_shell",
+    "test_snapshot",
     "ui_activation",
     "ui_drag_drop",
     "ui_file_access",

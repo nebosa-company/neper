@@ -333,6 +333,7 @@
     "e.test.sim",
     "e.test.linearize",
     "e.test.snapshot",
+    "e.test.bench",
     "e.fmt.pretty",
     "e.fmt.json.schema",
     "e.fmt.css",
@@ -3922,6 +3923,19 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.bench",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.str",
+    "e.time"
+   ],
    "blocked_by": []
   },
   {

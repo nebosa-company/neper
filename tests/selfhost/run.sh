@@ -3517,6 +3517,12 @@ testSnapshot_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/test-snapshot-selfhost"
 testSnapshot_output=$("$test_build/test-snapshot-selfhost")
 [ "$testSnapshot_output" = 'test snapshot ok' ]
+# e.test.bench: statistics, report schema and comparison verdicts against Python statistics, plus a real run over two bodies (D2563).
+testBench_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_bench/src/main.e" "$repo" x64 linux "$test_build/test-bench-selfhost" -j 2)
+[ "$testBench_written" = 'executable written' ]
+chmod +x "$test_build/test-bench-selfhost"
+testBench_output=$("$test_build/test-bench-selfhost")
+[ "$testBench_output" = 'test bench ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

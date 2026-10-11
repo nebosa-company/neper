@@ -11425,6 +11425,49 @@ binary snapshots stay out. Every function is in the surface because the language
 visibility; callers use `check`, `assert_text`, `accept`, `reject`, `has_pending` and
 `mode_from_env`.
 
+### `e.test.bench`
+
+```neper
+type Config = struct { warmup_ns: i64, target_sample_ns: i64, max_iters: u64, fence_x10: u32 }
+type Stats = struct { count: usize, kept: usize, mean: f64, median: f64, stddev: f64, min: f64, max: f64, q1: f64, q3: f64, mad: f64, std_err: f64, ci_low: f64, ci_high: f64, low_mild: usize, low_severe: usize, high_mild: usize, high_severe: usize }
+type Report = struct { name: str, iters: u64, stats: Stats }
+type Verdict = enum u8 { Improved, Regressed, NoChange }
+type Comparison = struct { change_pct: f64, t: f64, significant: bool, verdict: Verdict }
+error TooFew
+error TooSmall
+
+fn config_default() -> Config
+fn sort(values: []f64)
+fn quantile(sorted: []const f64, p: f64) -> f64
+fn t_table() -> str
+fn t_critical(df: usize) -> f64
+fn summarize(samples: []f64, fence_x10: u32) -> (Stats, err)
+fn compare(base: Stats, current: Stats, threshold_pct: f64) -> Comparison
+fn verdict_name(v: Verdict) -> str
+fn push_number(b: *str.Builder, v: f64) -> err
+fn render_json(b: *str.Builder, r: Report) -> err
+fn render_text(b: *str.Builder, r: Report) -> err
+fn render_comparison(b: *str.Builder, name: str, c: Comparison) -> err
+fn time_batch[Ctx: type](ctx: *Ctx, body: fn(*Ctx), iters: u64) -> (f64, err)
+fn calibrate[Ctx: type](ctx: *Ctx, body: fn(*Ctx), cfg: Config) -> (u64, err)
+fn run[Ctx: type](name: str, cfg: Config, ctx: *Ctx, body: fn(*Ctx), samples: []f64) -> (Report, err)
+```
+
+A criterion-style benchmark harness over `e.time`. `run` warms a body up for `warmup_ns` while
+doubling the batch, picks the iteration count whose batch lasts about `target_sample_ns` (at most
+`max_iters`), times one batch per sample into the caller's slice (nanoseconds per iteration) and
+summarizes it. Everything after the measurement is pure and works on any `[]f64` of per-iteration
+times: `summarize` sorts in place (a shell sort), classifies Tukey outliers (mild beyond
+`fence_x10 / 10` times the interquartile range, severe beyond twice that), drops the values outside the
+mild fence, and reports mean, median, sample standard deviation, MAD, quartiles (R-7), the standard
+error and a 95% Student-t interval of the kept values (`t_table` is exact to 30 degrees of freedom,
+1.96 beyond). `compare` is Welch's t over two kept sets against `threshold_pct`: `Improved` or
+`Regressed` only when the t statistic exceeds the critical value for the pooled degrees of freedom
+and the change in the mean is larger than the threshold, so what counts as a regression is the
+caller's policy. `render_json` fixes the report schema (name, iters, samples, kept, mean, median,
+stddev, min, max, q1, q3, mad, ci_low, ci_high, outliers) and `render_text` a criterion-like block.
+A builder must be the arena's top allocation, so render into a fresh one.
+
 ### `e.debug`
 
 ```neper

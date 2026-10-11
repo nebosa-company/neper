@@ -3934,6 +3934,12 @@ $testSnapshotWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $testSnapshotWritten -ne 'executable written') { throw 'test_snapshot emission failed' }
 $testSnapshotOutput = & $testSnapshotPath
 if ($LASTEXITCODE -ne 0 -or $testSnapshotOutput -ne 'test snapshot ok') { throw "test_snapshot answered wrongly: exit $LASTEXITCODE" }
+# e.test.bench: statistics, report schema and comparison verdicts against Python statistics, plus a real run over two bodies (D2563).
+$testBenchPath = Join-Path $testBuild 'test-bench-selfhost.exe'
+$testBenchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_bench\src\main.e') $repo 'x64' 'windows' $testBenchPath -j 2
+if ($LASTEXITCODE -ne 0 -or $testBenchWritten -ne 'executable written') { throw 'test_bench emission failed' }
+$testBenchOutput = & $testBenchPath
+if ($LASTEXITCODE -ne 0 -or $testBenchOutput -ne 'test bench ok') { throw "test_bench answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2
