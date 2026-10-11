@@ -3173,6 +3173,12 @@ $timeRecurWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $timeRecurWritten -ne 'executable written') { throw 'e.time.recur emission failed' }
 $timeRecurOutput = & $timeRecurPath
 if ($LASTEXITCODE -ne 0 -or $timeRecurOutput -ne 'time recur ok') { throw "an e.time.recur or e.time.parse check failed: exit $LASTEXITCODE" }
+# `e.path.dirs` pins platformdirs layouts for Linux, macOS and Windows over seeded environments (L105).
+$pathDirsPath = Join-Path $testBuild 'path-dirs-selfhost.exe'
+$pathDirsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\path_dirs\src\main.e') $repo 'x64' 'windows' $pathDirsPath
+if ($LASTEXITCODE -ne 0 -or $pathDirsWritten -ne 'executable written') { throw 'e.path.dirs emission failed' }
+$pathDirsOutput = & $pathDirsPath
+if ($LASTEXITCODE -ne 0 -or $pathDirsOutput -ne 'path dirs ok') { throw "an e.path.dirs layout answered wrongly: exit $LASTEXITCODE" }
 # `e.grep` pins recursive literal matches and its stateless index contract.
 $grepPath = Join-Path $testBuild 'grep-selfhost.exe'
 $grepWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\grep\src\main.e') $repo 'x64' 'windows' $grepPath

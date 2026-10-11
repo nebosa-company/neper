@@ -600,6 +600,38 @@ Literal dotfiles are not implicitly excluded. Parent/absolute paths are Invalid;
 matching proves no filesystem containment. Work-limit exhaustion is TooLarge, not
 false. Ignore-file precedence/negation is application policy, not an implicit glob rule.
 
+### `e.path.dirs`
+
+```neper
+type Platform = enum u8 { Linux, MacOs, Windows }
+type Kind = enum u8 { Data, Config, Cache, State, Log, Runtime, SiteData, SiteConfig, SiteCache, SiteState, SiteLog, Documents, Downloads, Desktop, Pictures, Videos, Music }
+type Env = struct { home: str, user_profile: str, app_data: str, local_app_data: str, all_users_profile: str, xdg_data_home: str, xdg_config_home: str, xdg_cache_home: str, xdg_state_home: str, xdg_runtime_dir: str, xdg_data_dirs: str, xdg_config_dirs: str, xdg_documents_dir: str, xdg_download_dir: str, xdg_desktop_dir: str, xdg_pictures_dir: str, xdg_videos_dir: str, xdg_music_dir: str }
+type App = struct { name: str, author: str, version: str, roaming: bool, opinion: bool, multipath: bool, no_author: bool }
+error Invalid
+error Unset
+
+fn app_named(name: str) -> App
+fn platform_of(style: path.Style) -> Platform
+fn dir(a: *mem.Arena, platform: Platform, env: Env, kind: Kind, app: App) -> (str, err)
+fn env_from_process(a: *mem.Arena) -> (Env, err)
+```
+
+Platform directories (platformdirs parity) as pure functions of the platform and the
+environment values the caller supplies, so every platform's answer is testable on
+every host. `dir` returns the per-user data, config, cache, state, log and runtime
+directory, the per-machine site equivalents, or a user media folder, laid out the way
+platformdirs 4.x does: XDG on `Linux` (a variable counts only as an absolute path with
+blanks trimmed), `~/Library` on `MacOs` (XDG variables still take precedence), the
+environment-variable route (`APPDATA`, `LOCALAPPDATA`, `ALLUSERSPROFILE`, `USERPROFILE`)
+on `Windows`, with `author`, `version`, `roaming`, `opinion` (the `Cache`/`Logs` and
+`log` folders) and `multipath` (colon-joined site lists) as platformdirs defines them.
+An empty `Env` value is unset. `app_named` gives the platformdirs defaults for an
+application name; `no_author` is platformdirs' `appauthor=False`. A name that is a
+root, a drive or holds a `..` component is `Invalid`; a variable the platform needs is
+`Unset`, including a Linux runtime directory without `XDG_RUNTIME_DIR`. Nothing is
+created, probed or cached, and `user-dirs.dirs`, Homebrew prefixes and the root-user
+redirect are not read. `env_from_process` fills an `Env` from the process environment.
+
 ---
 
 ## 3. Containers and traversal

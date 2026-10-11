@@ -2759,6 +2759,11 @@ time_recur_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$time_recur_written" = 'executable written' ]
 chmod +x "$test_build/time-recur-selfhost"
 [ "$("$test_build/time-recur-selfhost")" = 'time recur ok' ]
+# `e.path.dirs` pins platformdirs layouts for Linux, macOS and Windows over seeded environments (L105).
+path_dirs_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/path_dirs/src/main.e" "$repo" x64 linux "$test_build/path-dirs-selfhost")
+[ "$path_dirs_written" = 'executable written' ]
+chmod +x "$test_build/path-dirs-selfhost"
+[ "$("$test_build/path-dirs-selfhost")" = 'path dirs ok' ]
 # `e.grep` pins recursive literal matches and its stateless index contract.
 grep_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/grep/src/main.e" "$repo" x64 linux "$test_build/grep-selfhost")
 [ "$grep_written" = 'executable written' ]

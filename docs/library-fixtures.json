@@ -2624,8 +2624,20 @@
    "pending": [],
    "fixtures": [
     "fs_basics",
+    "path_dirs",
     "path_glob",
     "path_pure"
+   ]
+  },
+  {
+   "module": "e.path.dirs",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 10,
+   "delivered": 10,
+   "pending": [],
+   "fixtures": [
+    "path_dirs"
    ]
   },
   {
