@@ -2509,6 +2509,12 @@ $netCoapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $netCoapWritten -ne 'executable written') { throw 'net_coap emission failed' }
 & $netCoapPath
 if ($LASTEXITCODE -ne 0) { throw "a net_coap check failed: exit $LASTEXITCODE" }
+# `e.net.tls.roots`, `.hoststore` and `.mozilla`: a test PKI built by `cryptography`, chains through tls.verify_certificate_set, the bundled set against certifi (D2641).
+$netTlsRootsPath = Join-Path $testBuild 'net-tls-roots-selfhost.exe'
+$netTlsRootsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_tls_roots\src\main.e') $repo 'x64' 'windows' $netTlsRootsPath
+if ($LASTEXITCODE -ne 0 -or $netTlsRootsWritten -ne 'executable written') { throw 'net_tls_roots emission failed' }
+& $netTlsRootsPath
+if ($LASTEXITCODE -ne 0) { throw "a net_tls_roots check failed: exit $LASTEXITCODE" }
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 $netHttpPoolPath = Join-Path $testBuild 'net-http-pool-selfhost.exe'
 $netHttpPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http_pool\src\main.e') $repo 'x64' 'windows' $netHttpPoolPath

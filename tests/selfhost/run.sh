@@ -2217,6 +2217,11 @@ net_coap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$net_coap_written" = 'executable written' ]
 chmod +x "$test_build/net-coap-selfhost"
 "$test_build/net-coap-selfhost"
+# `e.net.tls.roots`, `.hoststore` and `.mozilla`: a test PKI built by `cryptography`, chains through tls.verify_certificate_set, the bundled set against certifi (D2641).
+net_tls_roots_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_tls_roots/src/main.e" "$repo" x64 linux "$test_build/net-tls-roots-selfhost")
+[ "$net_tls_roots_written" = 'executable written' ]
+chmod +x "$test_build/net-tls-roots-selfhost"
+"$test_build/net-tls-roots-selfhost"
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 net_http_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http_pool/src/main.e" "$repo" x64 linux "$test_build/net-http-pool-selfhost")
 [ "$net_http_pool_written" = 'executable written' ]

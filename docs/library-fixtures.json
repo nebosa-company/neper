@@ -152,7 +152,8 @@
     "fmt_jwt",
     "gfx_chart_svg_paint",
     "gfx_phash256",
-    "gp09_simd_hex"
+    "gp09_simd_hex",
+    "net_tls_roots"
    ]
   },
   {
@@ -228,7 +229,8 @@
     "crypto_pq",
     "crypto_sign_plan",
     "crypto_sign_wide",
-    "differential"
+    "differential",
+    "net_tls_roots"
    ]
   },
   {
@@ -284,7 +286,8 @@
     "crypto_sign_wide",
     "crypto_x509",
     "misc_gaps",
-    "net_tls"
+    "net_tls",
+    "net_tls_roots"
    ]
   },
   {
@@ -343,7 +346,8 @@
    "pending": [],
    "fixtures": [
     "fmt_asn1",
-    "fmt_gaps_a"
+    "fmt_gaps_a",
+    "net_tls_roots"
    ]
   },
   {
@@ -755,6 +759,7 @@
     "gpu_vulkan_raw",
     "grep",
     "log_debug",
+    "net_tls_roots",
     "os_shell",
     "ui_activation",
     "ui_drag_drop",
@@ -2603,6 +2608,7 @@
     "net_pop3",
     "net_smtp",
     "net_tls",
+    "net_tls_roots",
     "x_openssl"
    ]
   },
@@ -2962,6 +2968,7 @@
     "net_pop3",
     "net_smtp",
     "net_tls",
+    "net_tls_roots",
     "proc_output",
     "sync_semantics",
     "sync_threads",
