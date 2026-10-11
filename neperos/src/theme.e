@@ -68,6 +68,26 @@ fn stored_word(raw: []const u8) -> usize {
     ret word_of(usize(raw[5usize]), usize(raw[21usize]), font, usize(raw[20usize]), usize(raw[4usize]), lock, usize(raw[12usize]))
 }
 
+// A setting's value before anything was chosen (settings.e's numbering); the Settings app, the settings server
+// and Reset all start from here.
+fn default_value(index: usize) -> usize {
+    if index == 0usize || index == 1usize || index == 6usize || index == 7usize || index == 8usize { ret 1usize }
+    if index == 4usize { ret 7usize }
+    if index == 5usize { ret 1usize }
+    if index == 9usize { ret 6usize }
+    if index == 10usize { ret 8usize }
+    if index == 11usize { ret 7usize }
+    if index == 13usize || index == 15usize || index == 16usize || index == 17usize || index == 18usize { ret 1usize }
+    if index == 19usize { ret 2usize }
+    if index == 20usize || index == 24usize || index == 25usize { ret 1usize }
+    // The notification switches, one per app (Stocks is off).
+    if index >= 26usize && index < 34usize {
+        if index == 31usize { ret 0usize }
+        ret 1usize
+    }
+    ret 0usize
+}
+
 fn is_dark() -> bool {
     ret (word & DARK_BIT) != 0usize
 }

@@ -15,6 +15,7 @@ use e.gfx.scene
 use e.ui.window
 use text
 use theme
+use sysettings
 
 const ROUTED: usize = 2usize
 const FRAME: usize = 1usize
@@ -64,6 +65,7 @@ fn open(a: *mem.Arena, args: []str, first_font: usize, title: str) -> (Kit, err)
     let (faces, has_fonts) = text.load_faces(&renderer, args, first_font)
     // (C126) The kernel's last argument for an app is the system theme (theme.e).
     if args.len > first_font + 5usize { theme.from_arg(args[first_font + 5usize]) }
+    refresh_theme()
     if theme.word != theme.DEFAULT {
         say("appkit theme ")
         say_num(theme.word)
@@ -78,6 +80,7 @@ fn open(a: *mem.Arena, args: []str, first_font: usize, title: str) -> (Kit, err)
 
 // A builder whose scene is laid out in dp: a Save and the dp-to-pixel scale come first.
 fn begin(a: *mem.Arena, kit: *Kit) -> (scene.Builder, err) {
+    refresh_theme()
     // The scene drawn before is released first, so nothing refers to the memory that is given back; then the
     // arena returns to where it stood when the app opened (D2242), so a frame costs nothing for the next.
     if kit.has_previous {
@@ -145,6 +148,13 @@ fn say_num(value: usize) {
         if rest == 0usize { more = false }
     }
     say(digits[at..20usize])
+}
+
+// (C126) The settings server's word, when this process may ask it: asked at every frame, so a setting changed
+// while an app is open shows in its next frame.
+fn refresh_theme() {
+    let fresh = sysettings.word()
+    if theme.valid(fresh) { theme.set(fresh) }
 }
 
 // The theme's colours, for the apps that keep their own palette functions (C126).

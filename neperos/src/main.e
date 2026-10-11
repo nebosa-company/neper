@@ -99,6 +99,8 @@ var extra_count: usize = 0usize
 var theme_arg: usize = 0usize
 // (C126) The Settings app also gets the archive entries' sizes (entries 13 to 44, a 32-bit word each) as its last argument.
 var sizes_arg: bool = false
+// (C126) Whether the settings server runs: every full-screen app is then granted its two endpoints (slots 9 and 10).
+var settings_present: bool = false
 // (D2205) The compositor's shared frame, once it exists: a process launched from the shell that is a
 // full-screen app (an archive entry from 13 on) gets it mapped, a frame endpoint to send on and the
 // routed-input endpoint to receive on, and the five fonts as its arguments.
@@ -740,6 +742,10 @@ fn launch(frame: *a64.Frame) {
         }
         thread.grant(child, 1usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 0usize)
         thread.grant(child, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 2usize)
+        if settings_present {
+            thread.grant(child, 9usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 12usize)
+            thread.grant(child, 10usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 13usize)
+        }
         if net_present {
             thread.grant(child, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 8usize)
             thread.grant(child, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 9usize)
@@ -1157,8 +1163,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     thread.grant(comp_app, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                     thread.grant(comp_app, 7usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
                 }
+                // (C126) The settings server: archive entry 6 (the older boot's wallpaper loader), holding the
+                // settings and the system word. It serves endpoints 12 (requests) and 13 (replies), and reads and
+                // writes /settings through the filesystem server's endpoints (6 and 7) when there is a disk. The
+                // shell and every app it launches are granted its two ends.
+                next_asid = 10usize
+                let (settings_server, settings_server_error) = start_process(archive_base + archive_offset[6usize], archive_length[6usize], "settings")
+                if settings_server_error != ok { ret settings_server_error }
+                thread.grant(settings_server, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 12usize)
+                thread.grant(settings_server, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 13usize)
+                if fs_present {
+                    thread.grant(settings_server, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
+                    thread.grant(settings_server, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
+                }
+                thread.grant(comp_app, 9usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 12usize)
+                thread.grant(comp_app, 10usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 13usize)
+                settings_present = true
                 // Launched apps take ASIDs above the servers'.
-                next_asid = 9usize
+                next_asid = 11usize
             }
         }
     }

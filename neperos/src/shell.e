@@ -34,6 +34,7 @@ use text
 use lunar
 use fsproto
 use theme
+use sysettings
 
 const ROUTED: usize = 2usize
 const NO_SLOT: usize = 99usize
@@ -450,11 +451,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     } else {
         say("fallback\n")
     }
-    let stored = stored_theme()
-    if stored != 0usize {
+    // The settings server's word (C126), else what the file holds, else the default.
+    var stored = sysettings.word()
+    var source = "server"
+    if !theme.valid(stored) {
+        stored = stored_theme()
+        source = "fs"
+    }
+    if stored != 0usize && stored != theme.DEFAULT {
         theme_word = stored
         theme.set(theme_word)
-        say("shell theme from fs ")
+        say("shell theme from ")
+        say(source)
+        say(" ")
         say_num(stored)
         say("\n")
     }
@@ -618,7 +627,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         say("shell app code ")
                         say_num(code_app)
                         say("\n")
-                        if program == SETTINGS_PROGRAM && theme.valid(code_app) {
+                        let fresh = sysettings.word()
+                        if theme.valid(fresh) && fresh != theme_word {
+                            theme_word = fresh
+                            theme.set(fresh)
+                            say("shell theme ")
+                            say_num(fresh)
+                            say("\n")
+                        }
+                        if program == SETTINGS_PROGRAM && theme.valid(code_app) && code_app != theme_word {
                             theme_word = code_app
                             theme.set(theme_word)
                             say("shell theme ")

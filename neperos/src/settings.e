@@ -23,6 +23,7 @@ use icons
 use vaultfs
 use ui
 use theme
+use sysettings
 
 const NONE: usize = 99usize
 const MAX_HITS: usize = 96usize
@@ -334,6 +335,7 @@ type State = struct {
     hits: [96]Hit,
     hit_total: usize,
     search: ui.Field,
+    mirror: [48]usize,
     have_storage: bool,
     storage_used: usize,
     storage_total: usize,
@@ -343,38 +345,13 @@ type State = struct {
     keys: ui.Hits,
 }
 
+// (C126) Every setting at its default, from theme.e, the table the settings server uses too.
 fn defaults(s: *State) {
     var i = 0usize
     while i < SETTINGS {
-        s.values[i] = 0usize
+        s.values[i] = theme.default_value(i)
         i += 1usize
     }
-    s.values[WIFI] = 1usize
-    s.values[MOBILE] = 1usize
-    s.values[BRIGHTNESS] = 7usize
-    s.values[DARK] = 1usize
-    s.values[ADAPTIVE] = 1usize
-    s.values[TIMEOUT] = 1usize
-    s.values[FONT] = 1usize
-    s.values[MEDIA] = 6usize
-    s.values[RING] = 8usize
-    s.values[ALARM] = 7usize
-    s.values[VIBRATE] = 1usize
-    s.values[LOCATION] = 1usize
-    s.values[CAMERA_ACCESS] = 1usize
-    s.values[MIC_ACCESS] = 1usize
-    s.values[FINGERPRINT] = 1usize
-    s.values[LOCK] = 2usize
-    s.values[HOUR24] = 1usize
-    s.values[NETWORK] = 0usize
-    s.values[BLUETOOTH] = 1usize
-    s.values[ROTATE] = 1usize
-    var n = 0usize
-    while n < 8usize {
-        s.values[NOTIFY + n] = 1usize
-        n += 1usize
-    }
-    s.values[NOTIFY + 5usize] = 0usize
     dark_theme = true
 }
 
@@ -1127,7 +1104,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
             entry += 1usize
         }
     }
-    if load(&s) {
+    // (C126) The settings server, when this process was granted it, holds the values; else the file is read here.
+    var served = false
+    if sysettings.word() != 0usize {
+        served = true
+        var index = 0usize
+        while index < 40usize {
+            let (value, answered) = sysettings.get(index)
+            s.values[index] = value
+            s.mirror[index] = value
+            index += 1usize
+        }
+        dark_theme = s.values[DARK] != 0usize
+    }
+    if served || load(&s) {
         say("settings loaded dark ")
         say_num(s.values[DARK])
         say(" brightness ")
@@ -1172,7 +1162,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if id == NONE { id = hit_at(&s, tap.x, tap.y) }
             if id != NONE && act(&s, id, tap.x) {
                 sync_theme(&s)
-                if id >= 1000usize && id < 6000usize && s.page != SEARCH { save(&s) }
+                if id >= 1000usize && id < 6000usize && s.page != SEARCH {
+                    if served {
+                        var changed = false
+                        var index = 0usize
+                        while index < 40usize {
+                            if s.values[index] != s.mirror[index] {
+                                let word = sysettings.set(index, s.values[index])
+                                s.mirror[index] = s.values[index]
+                                changed = true
+                            }
+                            index += 1usize
+                        }
+                        if changed { say("settings saved\n") }
+                    } else {
+                        save(&s)
+                    }
+                }
                 if !show(a, &kit, &s) {
                     say("settings present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)

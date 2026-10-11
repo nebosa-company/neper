@@ -10004,6 +10004,9 @@ greeting"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/shell.e" "$repo" aarch64 neperos "$shell_img")" = 'executable written' ]
     wall_loader_img="$test_build/wall_loader.img"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/wall_loader.e" "$repo" aarch64 neperos "$wall_loader_img")" = 'executable written' ]
+    # (C126) The lunar boot starts the settings server from archive entry 6, where the older boot has the wallpaper loader.
+    settings_server_img="$test_build/settings_server.img"
+    [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/settings_server.e" "$repo" aarch64 neperos "$settings_server_img")" = 'executable written' ]
     shell_archive="$test_build/shell-archive.img"
     python3 "$repo/scripts/build-shell-archive.py" "$shell_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img"
     # (D2196) The wallpaper is read from the C106 filesystem: program 5 is the fs server on a blank
@@ -10040,9 +10043,9 @@ greeting"
         app_images+=("$test_build/neperos-app-$name.img")
     done < <(grep -v '^#' "$apps_table")
     crater_archive="$test_build/shell-crater-archive.img"
-    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "${app_images[@]}" "$assets/roots/mozilla.der"
+    python3 "$repo/scripts/build-shell-archive.py" "$crater_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$settings_server_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "${app_images[@]}" "$assets/roots/mozilla.der"
     # The same archive with the fixture's root as one more entry, for the fixtures that run on a network (livefixture rows).
-    python3 "$repo/scripts/build-shell-archive.py" "$live_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$wall_loader_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "${app_images[@]}" "$assets/roots/mozilla.der" "$repo/tests/selfhost/fixtures/neperos/net/ca.der"
+    python3 "$repo/scripts/build-shell-archive.py" "$live_archive" "$comp_img" "$shell_img" "$input_server_img" "$tap_app_img" "$status_server_img" "$fs_server_img" "$settings_server_img" "$assets/wallpaper/neper-crater.png" "$assets/fonts/jost-bold.ttf" "$assets/fonts/jost-regular.ttf" "$assets/fonts/sora-medium.ttf" "$assets/fonts/spacegrotesk-regular.ttf" "$assets/fonts/exo2-regular.ttf" "${app_images[@]}" "$assets/roots/mozilla.der" "$repo/tests/selfhost/fixtures/neperos/net/ca.der"
     crater_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" keyboard "$test_build/shell-crater.serial" 55136 "compositor bigarena unified" 'shell app code 5' - 2 2>&1)
     case "$crater_boot" in
         *'shell wallpaper from fs'*) printf '%s

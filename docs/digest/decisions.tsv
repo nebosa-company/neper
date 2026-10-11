@@ -2121,4 +2121,5 @@ D2362	1149	C126 part two: search across the settings, by name and keyword, openi
 D2363	2022	C126 part three: the Dark theme, font size and contrast apply to every app, through the app kit
 D2364	1647	C126 part four: the system theme is read at boot, so it holds across a restart
 D2365	2041	C126 part five: Storage and the app sizes are real; Battery stops showing made-up numbers
-D2366	2133	C126 part six: four settings act on the system (24-hour clock, brightness, screen lock, Do Not Disturb)
+D2366	2134	C126 part six: four settings act on the system (24-hour clock, brightness, screen lock, Do Not Disturb)
+D2367	2293	C126 part seven: the settings server holds the settings and every part reads the word from it

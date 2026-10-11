@@ -10162,6 +10162,10 @@ if ($neperosQemu) {
     $wallLoader = Join-Path $testBuild 'wall_loader.img'
     & $compiler emit-executable (Join-Path $repo 'neperos\src\wall_loader.e') $repo aarch64 neperos $wallLoader | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS wallpaper loader did not build' }
+    # (C126) The lunar boot starts the settings server from archive entry 6, where the older boot has the wallpaper loader.
+    $settingsServer = Join-Path $testBuild 'settings_server.img'
+    & $compiler emit-executable (Join-Path $repo 'neperos\src\settings_server.e') $repo aarch64 neperos $settingsServer | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'the NeperOS settings server did not build' }
     $shellArchive = Join-Path $testBuild 'shell-archive.img'
     & python (Join-Path $repo 'scripts\build-shell-archive.py') $shellArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS unified-shell archive did not assemble' }
@@ -10191,11 +10195,11 @@ if ($neperosQemu) {
         $appImages += $appImage
     }
     $craterArchive = Join-Path $testBuild 'shell-crater-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') @appImages (Join-Path $assets 'roots\mozilla.der')
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $craterArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $settingsServer (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') @appImages (Join-Path $assets 'roots\mozilla.der')
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS lunar-shell archive did not assemble' }
     # The same archive with the fixture's root as one more entry, for the fixtures that run on a network (livefixture rows).
     $liveArchive = Join-Path $testBuild 'shell-live-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $liveArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $wallLoader (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') @appImages (Join-Path $assets 'roots\mozilla.der') (Join-Path $repo 'tests\selfhost\fixtures\neperos\net\ca.der')
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $liveArchive $comp $shell $inputServer $tapApp $statusServer $fsServer $settingsServer (Join-Path $assets 'wallpaper\neper-crater.png') (Join-Path $assets 'fonts\jost-bold.ttf') (Join-Path $assets 'fonts\jost-regular.ttf') (Join-Path $assets 'fonts\sora-medium.ttf') (Join-Path $assets 'fonts\spacegrotesk-regular.ttf') (Join-Path $assets 'fonts\exo2-regular.ttf') @appImages (Join-Path $assets 'roots\mozilla.der') (Join-Path $repo 'tests\selfhost\fixtures\neperos\net\ca.der')
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS live-fixture archive did not assemble' }
     $craterBoot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive keyboard (Join-Path $testBuild 'shell-crater.serial') 55136 'compositor bigarena unified' 'shell app code 5' '-' 2 2>&1) -join "`n"
     if ($craterBoot -notmatch '(?s)shell fonts ok.*shell wallpaper bytes 1841605.*shell wallpaper from initrd.*shell lock presented.*shell moon .*comp composited flushed.*shell unlocked.*comp composited again.*shell tap.*shell app code 5' -or $craterBoot -match 'shell wallpaper from fs') { throw "NeperOS lunar shell did not lock, unlock and launch: $craterBoot" }
