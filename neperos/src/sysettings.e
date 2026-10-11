@@ -29,6 +29,25 @@ const OP_GET_BATTERY: usize = 7usize
 // four words -> an acknowledgement.
 const OP_DYN_GET: usize = 8usize
 const OP_DYN_SET: usize = 9usize
+// The sensors (C131): SENSOR kind tick -> three words, a reading's x, y and z in milli-units plus 2^31 (kind 0 the
+// magnetometer in nT, 1 the accelerometer in m/s^2, both in the device frame); the tick is the time in half
+// seconds, so the scripted source answers the same to every caller.
+const OP_SENSOR: usize = 10usize
+const SENSOR_MAGNETOMETER: usize = 0usize
+const SENSOR_ACCELEROMETER: usize = 1usize
+const SENSOR_BIAS: i64 = 2147483648i64
+
+// A sensor's reading at `tick` in milli-units (x, y, z) and whether the server answered.
+fn sensor(kind: usize, tick: usize) -> (i64, i64, i64, bool) {
+    let sent = os.send(REQ, OP_SENSOR, NO_SLOT)
+    if sent == REFUSED { ret (0i64, 0i64, 0i64, false) }
+    let sent_kind = os.send(REQ, kind, NO_SLOT)
+    let sent_tick = os.send(REQ, tick, NO_SLOT)
+    let wx = os.recv(REP, NO_SLOT)
+    let wy = os.recv(REP, NO_SLOT)
+    let wz = os.recv(REP, NO_SLOT)
+    ret (i64(wx) - SENSOR_BIAS, i64(wy) - SENSOR_BIAS, i64(wz) - SENSOR_BIAS, true)
+}
 
 // The system word, or 0 when there is no server.
 fn word() -> usize {

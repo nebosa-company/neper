@@ -2174,4 +2174,5 @@ D2415	1404	C129 part one: a page typed in is fetched, parsed and laid out
 D2416	323	C129 closed; the layout engine, images, forms and storage are C159
 D2417	949	C130 part one: routes over a road graph
 D2418	237	C130 closed; map data, location and navigation are C160
-D2419	1751	C131 part one: the magnetic model and a compass computed from sensors
+D2419	1752	C131 part one: the magnetic model and a compass computed from sensors
+D2420	915	C131: the sensors are a service of the settings server; C131 closed, C161 remains

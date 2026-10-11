@@ -10,6 +10,7 @@ use e.os
 use fsproto
 use sysettings
 use theme
+use sensor_sim
 
 const REQ: usize = 2usize
 const REP: usize = 3usize
@@ -216,6 +217,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             if index < 6usize { save_registry(&registry) }
             let sent = os.send(REP, 0usize, sysettings.NO_SLOT)
+        } else if op == sysettings.OP_SENSOR {
+            let kind = os.recv(REQ, sysettings.NO_SLOT)
+            let tick = os.recv(REQ, sysettings.NO_SLOT)
+            let (mx, my, mz, ax, ay, az) = sensor_sim.sensors(tick)
+            var x = mx
+            var y = my
+            var z = mz
+            if kind == sysettings.SENSOR_ACCELEROMETER {
+                x = ax
+                y = ay
+                z = az
+            }
+            // Milli-units, biased so the words are unsigned.
+            let bx = i64(x * 1000.0f64) + sysettings.SENSOR_BIAS
+            let by = i64(y * 1000.0f64) + sysettings.SENSOR_BIAS
+            let bz = i64(z * 1000.0f64) + sysettings.SENSOR_BIAS
+            let sent_x = os.send(REP, usize(bx), sysettings.NO_SLOT)
+            let sent_y = os.send(REP, usize(by), sysettings.NO_SLOT)
+            let sent_z = os.send(REP, usize(bz), sysettings.NO_SLOT)
         } else if op == sysettings.OP_GET_HIDDEN {
             let sent = os.send(REP, hidden, sysettings.NO_SLOT)
         } else if op == sysettings.OP_SET_HIDDEN {

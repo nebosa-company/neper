@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C131",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 131,
-      "title": "NeperOS Compass: the magnetometer, GPS and the declination",
-      "score": 0.35,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Compass app (D2226) swings a sample heading. Acceptance: (1) a sensor server for the magnetometer, accelerometer and gyroscope (virtio-input-style under QEMU with a scripted source, the Pixel's sensor hub later) delivering readings at a fixed rate through the capability model; (2) the heading from the tilt-compensated magnetometer with hard-iron calibration and the figure-eight routine driven by real data, and the accuracy shown from it; (3) the position from the location service shared with Maps (C130) and the declination from a world magnetic model table in the library; (4) the Level app (C132) and Maps use the same sensor server; (5) a fixture on QEMU feeding a scripted sensor trace and checking the heading to a degree. Not queued here: augmented-reality overlays. Done (D2419): (2) and (3) as far as software goes -- e.algo.magnetic (WMM2025 field, declination and intensities checked against pygeomag at fourteen places and dates; the tilt-compensated heading against rotation-matrix orientations; hard-iron calibration) and the Compass app computing its heading from simulated magnetometer and accelerometer vectors with a phone's hard-iron offset, calibrated by the Calibrate routine, with the true-north declination and the shown declination from the model (fixture compass). Not here: the sensor server and its capability, real GPS, the Level app and Maps sharing the server, a scripted trace fixture of the sensor server."
-    },
-    {
       "id": "C132",
       "category": "compiler",
       "group": "NeperOS",
@@ -1564,6 +1553,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C130 (D2417): Maps routes over a small road graph with the library's Dijkstra and draws the way. Acceptance: (1) map data on the device: vector tiles or OpenStreetMap extracts rendered through e.gfx.scene with labels, icons, zoom levels and rotation, offline regions kept in Files, and drag and pinch (the touch layer needs both); (2) a location service (GPS and network location on the Pixel, a simulated provider under QEMU) with its permission in Settings (C126); (3) search by name and category with suggestions, place cards with hours and photos from the network; (4) routing for walking, cycling, driving and transit over the road graph with turn-by-turn instructions, rerouting and voice; (5) saved places, recent searches and a Home and Work shortcut shared with Wallet and Weather; (6) a fixture that loads a small offline region, finds a place and routes to it, checking the route length."
+    },
+    {
+      "id": "C161",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 161,
+      "title": "NeperOS sensors remainder: a sensor server and drivers, the gyroscope, GPS and the location service",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C131 (D2420): the settings server serves a scripted magnetometer and accelerometer trace, the Compass computes its heading from it with calibration and the model's declination. Acceptance: (1) a sensor server of its own (not the settings server) for the magnetometer, accelerometer and gyroscope, with a scripted source under QEMU and the Pixel's sensor hub later, delivering readings at a fixed rate through its own capability, a rate per client and a permission per sensor; (2) the figure-eight calibration run on live data with the accuracy it reaches shown; (3) a location service (GPS and network) shared by Compass and Maps (C130/C160) with the permission in Settings and a simulated provider; (4) a fixture on QEMU feeding a recorded sensor trace and checking the heading to a degree."
     }
   ]
 }
