@@ -207,6 +207,7 @@
     "e.algo.fulltext",
     "e.algo.search",
     "e.text.sig",
+    "e.text.terminal",
     "e.text.search",
     "e.text.distance",
     "e.algo.sketch",
@@ -4079,6 +4080,18 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.terminal",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },

@@ -3505,6 +3505,12 @@ text_charset_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/text-charset-selfhost"
 text_charset_output=$("$test_build/text-charset-selfhost")
 [ "$text_charset_output" = 'text charset ok' ]
+# e.text.terminal: tqdm progress line, rich markup to SGR and rich boxed tables, vector by vector (517 cases, D2721).
+text_terminal_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_terminal/src/main.e" "$repo" x64 linux "$test_build/text-terminal-selfhost" -j 2)
+[ "$text_terminal_written" = 'executable written' ]
+chmod +x "$test_build/text-terminal-selfhost"
+text_terminal_output=$("$test_build/text-terminal-selfhost")
+[ "$text_terminal_output" = 'terminal ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

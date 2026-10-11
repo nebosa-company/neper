@@ -6960,6 +6960,59 @@ fn scan(s: *const Set, data: []const u8, counts: []u32, matched: []bool) -> err
 
 YARA-lite signature scanning: `compile` parses rule text (`meta:`, `strings:`, `condition:`) into arena tables and `scan` counts, per string, the offsets where it matches and evaluates every rule. Strings are quoted text (`ascii`, `wide`, `nocase`, `fullword`, `\xHH` escapes) or hex (`??`, nibble wildcards, `[n]`/`[n-m]` jumps); conditions have `and`/`or`/`not`, `$a`, `$a at N`, `#a OP N`, `filesize OP N`, and `any|all|none|N of them|($a, $b*)`. Overlapping occurrences count, ascii and wide hits at one offset count once; jumps backtrack, so cost per offset is bounded by the product of the jump widths. Capacities: 64 rules, 256 strings, 4096 tokens, 1024 condition nodes (`TooMany`). Not here: regexes, modules, imports, ranges beyond `at`, alternatives, tags, `for` loops, xor/base64.
 
+### `e.text.terminal`
+
+```neper
+error BadShape
+error BadMarkup
+type Align = enum u8 { Left, Right, Center }
+type BoxStyle = enum u8 { Ascii, Square, Rounded, HeavyHead }
+type Column = struct { header: str, align: Align }
+type Entry = struct { attrs: u16, fg: u8, bg: u8, name: str }
+const ATTR_BOLD: u16 = 1u16
+const ATTR_DIM: u16 = 2u16
+const ATTR_ITALIC: u16 = 4u16
+const ATTR_UNDERLINE: u16 = 8u16
+const ATTR_BLINK: u16 = 16u16
+const ATTR_REVERSE: u16 = 64u16
+const ATTR_CONCEAL: u16 = 128u16
+const ATTR_STRIKE: u16 = 256u16
+const MARKUP_DEPTH: usize = 16usize
+
+fn display_width(s: str) -> usize
+fn push_spaces(b: *str.Builder, n: usize) -> err
+fn push_two_digits(b: *str.Builder, v: u64) -> err
+fn digits(v: u64) -> usize
+fn round_half_even(x: f64) -> u64
+fn push_interval(b: *str.Builder, seconds: f64) -> err
+fn threshold(k: usize) -> f64
+fn push_fixed2(b: *str.Builder, v: f64) -> err
+fn push_rate(b: *str.Builder, n: u64, elapsed: f64, unit: str) -> err
+fn push_bar(b: *str.Builder, frac_in: f64, columns: usize, ascii: bool) -> err
+fn trim_columns(s: str, columns: usize) -> str
+fn meter_line(a: *mem.Arena, n: u64, total: u64, elapsed: f64, ncols: usize, prefix: str, unit: str, ascii: bool) -> (str, err)
+fn render_meter(a: *mem.Arena, n: u64, total: u64, elapsed: f64, ncols: usize, prefix: str, unit: str, ascii: bool) -> (str, err)
+fn push_cell(b: *str.Builder, s: str, w: usize, align: Align) -> err
+fn push_line(b: *str.Builder, style: BoxStyle, row: usize, widths: []const usize) -> err
+fn push_row(b: *str.Builder, style: BoxStyle, row: usize, cols: []const Column, cells: []const str, first: usize, widths: []const usize, header: bool) -> err
+fn render_table(a: *mem.Arena, cols: []const Column, cells: []const str, style: BoxStyle) -> (str, err)
+fn attribute_bit(w: str) -> u16
+fn base_color(w: str) -> i32
+fn color_index(w: str) -> i32
+fn is_tag_start(c: u8) -> bool
+fn parse_tag(body: str, e: *Entry) -> err
+fn push_sgr(b: *str.Builder, attrs: u16, fg: u8, bg: u8) -> err
+fn render_markup(a: *mem.Arena, src: str, color: bool) -> (str, err)
+fn box_ascii(row: usize, part: usize) -> str
+fn box_square(row: usize, part: usize) -> str
+fn box_rounded(row: usize, part: usize) -> str
+fn box_heavyhead(row: usize, part: usize) -> str
+fn box_part(style: BoxStyle, row: usize, part: usize) -> str
+fn bar_char(ascii: bool, k: u64) -> str
+```
+
+Terminal output as pure string builders: `render_meter` is tqdm's default progress line (`prefix: PPP%|bar| n/total [elapsed<left, rate]`, or `n unit [elapsed, rate]` with no total or past it; an ASCII or block-element bar; `ncols` trims the line, 0 means a ten-column bar), taking the elapsed seconds so the caller owns the clock. `render_markup` turns rich-style tags (`[bold red]`, `[on blue]`, `[/]`, `[/name]`, `\[` literal; attributes bold dim italic underline blink reverse conceal strike and their one-letter forms; the 16 ANSI colours) into one SGR run per text segment, or strips them with `color` false; anything else is `BadMarkup`. `render_table` draws a header, a rule and row-major cells in `Ascii`, `Square`, `Rounded` or `HeavyHead` boxes with per-column alignment, widths counted in scalars. Windows VT-mode enabling, interactive prompts, wide-character widths, 256-colour and truecolour, word wrapping and spinners are not here.
+
 ### `e.text.search`
 
 ```neper

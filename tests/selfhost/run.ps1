@@ -3922,6 +3922,12 @@ $textCharsetWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $textCharsetWritten -ne 'executable written') { throw 'text_charset emission failed' }
 $textCharsetOutput = & $textCharsetPath
 if ($LASTEXITCODE -ne 0 -or $textCharsetOutput -ne 'text charset ok') { throw "text_charset answered wrongly: exit $LASTEXITCODE" }
+# e.text.terminal: tqdm progress line, rich markup to SGR and rich boxed tables, vector by vector (517 cases, D2721).
+$textTerminalPath = Join-Path $testBuild 'text-terminal-selfhost.exe'
+$textTerminalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_terminal\src\main.e') $repo 'x64' 'windows' $textTerminalPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textTerminalWritten -ne 'executable written') { throw 'text_terminal emission failed' }
+$textTerminalOutput = & $textTerminalPath
+if ($LASTEXITCODE -ne 0 -or $textTerminalOutput -ne 'terminal ok') { throw "text_terminal answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2
