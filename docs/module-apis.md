@@ -24233,6 +24233,64 @@ fn slides(a: *mem.Arena, data: []const u8) -> ([]Slide, err)
 The text of an Office Open XML package, read over `e.fmt.zip` and `e.fmt.xml` from a byte slice (C123): `paragraphs` gives a `.docx`'s paragraphs in order (the text of each, its style name such as `Heading1`, whether it is a list item, tabs and breaks as characters, entities decoded), `slides` a `.pptx`'s slides in slide-number order with each slide's text paragraphs. Namespace prefixes are ignored; runs, tables, images and shapes are not laid out, and the text of a table cell or a shape is a paragraph like any other. A zip with no main part is `NoMainPart`, bytes that are not a zip `NotAPackage`. Checked against packages made with Python's zipfile.
 
 
+### `e.fmt.docx`
+
+```neper
+error BadText
+error BadColor
+error BadTable
+error BadImage
+error BadMeta
+error TooLarge
+
+type Style = enum u8 { Normal, Title, Heading1, Heading2, Heading3 }
+type Align = enum u8 { Left, Center, Right, Justify }
+type ListKind = enum u8 { None, Bullet, Number }
+type Page = enum u8 { A4, Letter }
+type Kind = enum u8 { Paragraph, Table, Image, PageBreak }
+type Run = struct { text: str, bold: bool, italic: bool, underline: bool, half_points: u32, color: str }
+type Para = struct { style: Style, align: Align, list: ListKind, list_id: u32, level: u32, runs: []const Run }
+type Cell = struct { paras: []const Para }
+type Row = struct { cells: []const Cell }
+type Table = struct { widths: []const u32, rows: []const Row, header: bool }
+type Image = struct { data: []const u8, width_emu: u32, height_emu: u32, alt: str }
+type Block = struct { kind: Kind, para: Para, table: Table, image: Image }
+type Meta = struct { title: str, creator: str, created: str, page: Page }
+
+const MAX_LISTS: u32 = 64u32
+const MAX_LEVEL: u32 = 8u32
+const MAX_HALF_POINTS: u32 = 1638u32
+const EMU_PER_PIXEL: u32 = 9525u32
+
+fn run(s: str) -> Run
+fn bold_run(s: str) -> Run
+fn para(style: Style, runs: []const Run) -> Para
+fn paragraph(p: Para) -> Block
+fn table(t: Table) -> Block
+fn image(i: Image) -> Block
+fn page_break() -> Block
+fn default_meta() -> Meta
+fn clean(s: str) -> bool
+fn hex_color(s: str) -> bool
+fn push_escaped(b: *str.Builder, s: str, attribute: bool) -> err
+fn style_id(style: Style) -> str
+fn image_info(data: []const u8) -> (u32, u32, bool, bool)
+fn push_run(b: *str.Builder, r: Run) -> err
+fn push_para(b: *str.Builder, p: Para) -> err
+fn push_image(b: *str.Builder, im: Image, number: usize, ext: str, cx: u32, cy: u32) -> err
+fn push_table(b: *str.Builder, t: Table) -> err
+fn check_para(p: Para) -> err
+fn styles_xml() -> str
+fn numbering_xml(a: *mem.Arena, numbered: u32) -> (str, err)
+fn core_xml(a: *mem.Arena, meta: Meta) -> (str, err)
+fn media_name(a: *mem.Arena, number: usize, ext: str) -> (str, err)
+fn encode(a: *mem.Arena, blocks: []const Block, meta: Meta) -> ([]u8, err)
+fn root_rels() -> str
+```
+
+Word document generation (L146), the writing half beside the `e.fmt.ooxml` reader: `encode` writes a `.docx` from `[]Block` and a `Meta` (title, creator, created, A4 or Letter). A block is a paragraph (`Style` Normal, Title, Heading1-3; `Align`; a bullet or numbered list item with a level, numbered lists restarting per `list_id`; `Run`s with bold, italic, underline, size in half points, an RGB colour, tabs and line breaks), a table (column widths in twips, rows of cells of paragraphs, an optional header row, a ruled `TableGrid`), an inline PNG or JPEG (sized in EMU or at 96 dpi from the pixel size, with alt text) or a page break. The package carries a styles part, a numbering part and core properties, so Word, LibreOffice and python-docx see named styles and real lists. Refusals: control characters `BadText`, a colour that is not six hex digits `BadColor`, a table with no widths or more cells than columns `BadTable`, bytes that are neither PNG nor JPEG `BadImage`, bad metadata `BadMeta`, a list id past 64, a level past 8 or a size past 1638 half points `TooLarge`. Not here: tracked changes, comments, fields and a contents table, headers and footers, footnotes, hyperlinks, run fonts, merged cells, section changes, GIF and other image types, compression of the package. Checked byte for byte against an independent Python writer, opened by python-docx (styles, runs, table, images, core properties, page size) when generated, and read back through `e.fmt.ooxml.paragraphs` (`scripts/gen_docx_test.py`).
+
+
 ### `e.fmt.odf`
 
 ```neper

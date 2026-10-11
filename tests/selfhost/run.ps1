@@ -1264,6 +1264,12 @@ $fmtOoxmlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $fmtOoxmlWritten -ne 'executable written') { throw 'fmt_ooxml emission failed' }
 & $fmtOoxmlPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_ooxml check failed: exit $LASTEXITCODE" }
+# `e.fmt.docx`: a document with styles, runs, lists, a table, a PNG and a JPEG compared byte for byte with an independent writer, read back through e.fmt.ooxml, the refusals.
+$fmtDocxPath = Join-Path $testBuild 'fmt-docx-selfhost.exe'
+$fmtDocxWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_docx\src\main.e') $repo 'x64' 'windows' $fmtDocxPath
+if ($LASTEXITCODE -ne 0 -or $fmtDocxWritten -ne 'executable written') { throw 'fmt_docx emission failed' }
+& $fmtDocxPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_docx check failed: exit $LASTEXITCODE" }
 # `e.fmt.odf`: an OpenDocument text file and presentation made with Python's zipfile read back, two refusals.
 $fmtOdfPath = Join-Path $testBuild 'fmt-odf-selfhost.exe'
 $fmtOdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_odf\src\main.e') $repo 'x64' 'windows' $fmtOdfPath

@@ -1172,6 +1172,11 @@ fmt_ooxml_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$fmt_ooxml_written" = 'executable written' ]
 chmod +x "$test_build/fmt-ooxml-selfhost"
 "$test_build/fmt-ooxml-selfhost"
+# `e.fmt.docx`: a document with styles, runs, lists, a table, a PNG and a JPEG compared byte for byte with an independent writer, read back through e.fmt.ooxml, the refusals.
+fmt_docx_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_docx/src/main.e" "$repo" x64 linux "$test_build/fmt-docx-selfhost")
+[ "$fmt_docx_written" = 'executable written' ]
+chmod +x "$test_build/fmt-docx-selfhost"
+"$test_build/fmt-docx-selfhost"
 # `e.fmt.odf`: an OpenDocument text file and presentation made with Python's zipfile read back, two refusals.
 fmt_odf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_odf/src/main.e" "$repo" x64 linux "$test_build/fmt-odf-selfhost")
 [ "$fmt_odf_written" = 'executable written' ]

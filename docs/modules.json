@@ -50,6 +50,7 @@
     "e.fmt.elf",
     "e.fmt.pe",
     "e.fmt.ooxml",
+    "e.fmt.docx",
     "e.fmt.odf",
     "e.fmt.pdf",
     "e.fmt.pdf.write",
@@ -2015,6 +2016,19 @@
     "e.io",
     "e.mem",
     "e.os",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.docx",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.zip.write",
+    "e.mem",
     "e.str"
    ],
    "blocked_by": []
