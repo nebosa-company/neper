@@ -2107,6 +2107,12 @@ $testLinearizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $testLinearizeWritten -ne 'executable written') { throw 'test_linearize emission failed' }
 & $testLinearizePath
 if ($LASTEXITCODE -ne 0) { throw "a test_linearize check failed: exit $LASTEXITCODE" }
+# `e.test.match`: every matcher kind's truth table, a 12x12 grid of composition against the plain boolean expression, and exact Hamcrest-style description, mismatch and assert_that texts (D2682).
+$testMatchPath = Join-Path $testBuild 'test-match-selfhost.exe'
+$testMatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_match\src\main.e') $repo 'x64' 'windows' $testMatchPath
+if ($LASTEXITCODE -ne 0 -or $testMatchWritten -ne 'executable written') { throw 'test_match emission failed' }
+& $testMatchPath
+if ($LASTEXITCODE -ne 0) { throw "a test_match check failed: exit $LASTEXITCODE" }
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 $dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
 $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath

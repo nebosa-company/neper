@@ -11318,6 +11318,57 @@ fn check(history: []const Event, model: Model, initial: i64, placed: []u8) -> (b
 `check`: Wing-Gong backtracking linearizability of a history of timed calls against a
 register, counter or set model.
 
+### `e.test.match`
+
+```neper
+type Subject = union enum u8 { Int: i64, Float: f64, Text: str, Bool: bool, Ints: []const i64 }
+type Kind = enum u8 { Anything, EqInt, NeInt, Gt, Ge, Lt, Le, Between, OneOf, EqFloat, Near, EqText, Contains, StartsWith, EndsWith, Len, IsTrue, IsFalse, Not, AllOf, AnyOf, HasItem, Every }
+type Matcher = struct { kind: Kind, lo: i64, hi: i64, real: f64, tol: f64, text: str, ints: []const i64, kids: []const Matcher, inner: *const Matcher }
+
+fn blank(kind: Kind) -> Matcher
+fn anything() -> Matcher
+fn int_matcher(kind: Kind, v: i64) -> Matcher
+fn eq_int(v: i64) -> Matcher
+fn ne_int(v: i64) -> Matcher
+fn gt(v: i64) -> Matcher
+fn ge(v: i64) -> Matcher
+fn lt(v: i64) -> Matcher
+fn le(v: i64) -> Matcher
+fn between(lo: i64, hi: i64) -> Matcher
+fn one_of(values: []const i64) -> Matcher
+fn eq_float(v: f64) -> Matcher
+fn near(v: f64, tol: f64) -> Matcher
+fn text_matcher(kind: Kind, t: str) -> Matcher
+fn eq_text(t: str) -> Matcher
+fn contains(t: str) -> Matcher
+fn starts_with(t: str) -> Matcher
+fn ends_with(t: str) -> Matcher
+fn is_true() -> Matcher
+fn is_false() -> Matcher
+fn inner_matcher(kind: Kind, inner: *const Matcher) -> Matcher
+fn len_is(inner: *const Matcher) -> Matcher
+fn negate(inner: *const Matcher) -> Matcher
+fn has_item(inner: *const Matcher) -> Matcher
+fn every(inner: *const Matcher) -> Matcher
+fn all_of(kids: []const Matcher) -> Matcher
+fn any_of(kids: []const Matcher) -> Matcher
+fn contains_text(hay: str, needle: str) -> bool
+fn matches(m: *const Matcher, v: Subject) -> bool
+fn put(b: *str.Builder, s: str)
+fn put_int(b: *str.Builder, n: i64)
+fn put_quoted(b: *str.Builder, s: str)
+fn put_ints(b: *str.Builder, items: []const i64)
+fn put_show(b: *str.Builder, v: Subject)
+fn put_describe(b: *str.Builder, m: *const Matcher)
+fn put_explain(b: *str.Builder, m: *const Matcher, v: Subject)
+fn describe(m: *const Matcher, out: []u8) -> str
+fn explain(m: *const Matcher, v: Subject, out: []u8) -> str
+fn message(m: *const Matcher, v: Subject, out: []u8) -> str
+fn assert_that(v: Subject, m: *const Matcher, buf: []u8) -> err
+```
+
+Composable Hamcrest-style value matchers as plain data over `Subject` (int, float, text, bool, int list): comparison, `between`, `one_of`, `near`, text `contains`/`starts_with`/`ends_with`, `len_is`, `has_item`/`every`, `negate`, `all_of`/`any_of`. `describe` writes the expectation, `explain` the mismatch (a composite names the failing part), `message` joins them as `expected: ...` / `     but: ...`, and `assert_that` fails the running test with that text built in the caller's buffer.
+
 ### `e.debug`
 
 ```neper

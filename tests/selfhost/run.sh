@@ -1878,6 +1878,11 @@ test_linearize_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$test_linearize_written" = 'executable written' ]
 chmod +x "$test_build/test-linearize-selfhost"
 "$test_build/test-linearize-selfhost"
+# `e.test.match`: every matcher kind's truth table, a 12x12 grid of composition against the plain boolean expression, and exact Hamcrest-style description, mismatch and assert_that texts (D2682).
+test_match_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_match/src/main.e" "$repo" x64 linux "$test_build/test-match-selfhost")
+[ "$test_match_written" = 'executable written' ]
+chmod +x "$test_build/test-match-selfhost"
+"$test_build/test-match-selfhost"
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 db_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_migrate/src/main.e" "$repo" x64 linux "$test_build/db-migrate-selfhost")
 [ "$db_migrate_written" = 'executable written' ]
