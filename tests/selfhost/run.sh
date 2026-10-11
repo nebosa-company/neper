@@ -1111,6 +1111,11 @@ package_test_written=$($test_build/neper-self emit-executable "$repo/neperos/src
 [ "$package_test_written" = 'executable written' ]
 chmod +x "$test_build/package-test-selfhost"
 "$test_build/package-test-selfhost"
+# The world clock's city rules (neperos/src/zones.e, C146) against Python's zoneinfo.
+zones_test_written=$($test_build/neper-self emit-executable "$repo/neperos/src/zones_test.e" "$repo" x64 linux "$test_build/zones-test-selfhost")
+[ "$zones_test_written" = 'executable written' ]
+chmod +x "$test_build/zones-test-selfhost"
+"$test_build/zones-test-selfhost"
 # The security scan for a generated app's source (neperos/src/scan.e, C124): raw machine access and an
 # undeclared network or storage module are found, a comment and a longer name are not.
 scan_test_written=$($test_build/neper-self emit-executable "$repo/neperos/src/scan_test.e" "$repo" x64 linux "$test_build/scan-test-selfhost")

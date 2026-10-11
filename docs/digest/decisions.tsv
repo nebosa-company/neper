@@ -2212,4 +2212,5 @@ D2524	2312	L124 closed: e.fmt.qoi, e.fmt.bmp, e.fmt.gif, e.fmt.tiff and e.fmt.ex
 D2430	1367	C141: AI sends the conversation to a provider over HTTPS
 D2431	1280	C142: OpenDocument text and presentations through e.fmt.odf
 D2432	1518	C143: revocation, checked on install
-D2433	1209	C145: the Clock keeps its alarms, timer and stopwatch
+D2433	1210	C145: the Clock keeps its alarms, timer and stopwatch
+D2434	1124	C146: the world clock follows each city's daylight-saving rule

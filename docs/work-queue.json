@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C146",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 146,
-      "title": "NeperOS Clock: daylight saving in the world-clock cities",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Split from C115 (2026-10-08). The Clock tab shows cities at standard-time offsets only, so a city in daylight time is an hour wrong for part of the year. Acceptance: (1) each city carries a rule (the northern and southern hemisphere transitions, the EU and US schedules, and no-DST zones) or a tz name resolved through e.tz; (2) the displayed offset and the day-boundary label follow the rule for the current wall time, including across a transition; (3) a fixture that pins offsets on both sides of the 2026 transitions for at least four cities."
-    },
-    {
       "id": "C147",
       "category": "compiler",
       "group": "Validation",

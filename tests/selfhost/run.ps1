@@ -1190,6 +1190,13 @@ $packageTestWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\
 if ($LASTEXITCODE -ne 0 -or $packageTestWritten -ne 'executable written') { throw 'package_test emission failed' }
 & $packageTestPath
 if ($LASTEXITCODE -ne 0) { throw "a package_test check failed: exit $LASTEXITCODE" }
+# The world clock's city rules (neperos/src/zones.e, C146): every city in January and July 2026 and the two sides of
+# each 2026 daylight-saving transition, against Python's zoneinfo.
+$zonesTestPath = Join-Path $testBuild 'zones-test-selfhost.exe'
+$zonesTestWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\zones_test.e') $repo 'x64' 'windows' $zonesTestPath
+if ($LASTEXITCODE -ne 0 -or $zonesTestWritten -ne 'executable written') { throw 'zones_test emission failed' }
+& $zonesTestPath
+if ($LASTEXITCODE -ne 0) { throw "a zones_test check failed: exit $LASTEXITCODE" }
 # The security scan for a generated app's source (neperos/src/scan.e, C124): raw machine access and an
 # undeclared network or storage module are found, a comment and a longer name are not.
 $scanTestPath = Join-Path $testBuild 'scan-test-selfhost.exe'

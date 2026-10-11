@@ -27,6 +27,7 @@ use appkit
 use text
 use lunar
 use vaultfs
+use zones
 
 const ALARM_TAB: usize = 0usize
 const CLOCK_TAB: usize = 1usize
@@ -148,7 +149,7 @@ fn day_letter(day: usize) -> str {
 }
 
 // ----------------------------------------------------------------------------------------------
-// The cities of the world clock: standard-time offsets from UTC, in minutes.
+// The cities of the world clock: offsets from UTC, in minutes, following each city's daylight-saving rule (zones.e).
 
 fn city_count() -> usize {
     ret 16usize
@@ -173,23 +174,9 @@ fn city_name(city: usize) -> str {
     ret "Sao Paulo"
 }
 
-fn city_offset(city: usize) -> i64 {
-    if city == 0usize { ret 0i64 }
-    if city == 1usize { ret 0i64 }
-    if city == 2usize { ret 60i64 }
-    if city == 3usize { ret 120i64 }
-    if city == 4usize { ret 180i64 }
-    if city == 5usize { ret 240i64 }
-    if city == 6usize { ret 330i64 }
-    if city == 7usize { ret 480i64 }
-    if city == 8usize { ret 540i64 }
-    if city == 9usize { ret 600i64 }
-    if city == 10usize { ret 720i64 }
-    if city == 11usize { ret 0i64 - 600i64 }
-    if city == 12usize { ret 0i64 - 480i64 }
-    if city == 13usize { ret 0i64 - 360i64 }
-    if city == 14usize { ret 0i64 - 300i64 }
-    ret 0i64 - 180i64
+// The city's offset from UTC in minutes at `instant` (UTC seconds), daylight time included (zones.e).
+fn city_offset(city: usize, instant: usize) -> i64 {
+    ret zones.offset_minutes(city, i64(instant))
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -533,13 +520,13 @@ fn draw_clock(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, s: *Sta
         try card(a, builder, 16.0, y, 380.0, 66.0, 20.0, panel())
         try put(a, builder, faces.jost, 20.0, city_name(city), 32.0, y + 9.0, ink())
         // The offset from UTC, and whether it is another day there.
-        let local = i64(now) + city_offset(city) * 60i64
+        let offset = city_offset(city, now)
+        let local = i64(now) + offset * 60i64
         var relative = "Today"
         let local_day = (local + 864000000i64) / 86400i64 - 10000i64
         let utc_day = i64(day)
         if local_day > utc_day { relative = "Tomorrow" }
         if local_day < utc_day { relative = "Yesterday" }
-        let offset = city_offset(city)
         var sign = "+"
         var shown_offset = offset
         if offset < 0i64 {
