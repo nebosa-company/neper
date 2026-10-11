@@ -51,6 +51,7 @@
     "e.fmt.pe",
     "e.fmt.ooxml",
     "e.fmt.pdf",
+    "e.fmt.vcard",
     "e.text.highlight",
     "e.barcode",
     "e.text.terminal",
@@ -1941,6 +1942,17 @@
     "e.mem",
     "e.os",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.vcard",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
    ],
    "blocked_by": []
   },

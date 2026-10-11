@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-C127	compiler	0	898	NeperOS Call: a real telephony stack, the contact store, voicemail	The Call app (D2222) has a keypad, recents, contacts and a call screen on sample data;
+C127	compiler	0.2	1389	NeperOS Call: a real telephony stack, the contact store, voicemail	The Call app (D2222) has a keypad, recents, contacts and a call screen on sample data;
 C128	compiler	0	813	NeperOS Mail: a real mail client over IMAP and SMTP	The Mail app (D2223) shows a sample mailbox in the process.
 C129	compiler	0	915	NeperOS Browser: a real engine: HTTP over TLS, HTML and CSS, images, forms	The Browser app (D2224) shows sample pages that live in the app.
 C130	compiler	0	1034	NeperOS Maps: real map data, location, search and navigation	The Maps app (D2225) draws a procedural sample city with six made-up places.

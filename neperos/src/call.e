@@ -16,9 +16,11 @@ use e.gfx.scene
 use e.gfx.svg
 use e.text.layout
 use e.text.shape
+use e.fmt.vcard as vcard
 use appkit
 use text
 use ui
+use vaultfs
 
 const NONE: usize = 99usize
 const KEYPAD_TAB: usize = 0usize
@@ -27,6 +29,7 @@ const CONTACTS_TAB: usize = 2usize
 const MAIN_SCREEN: usize = 0usize
 const CONTACT_SCREEN: usize = 1usize
 const CALL_SCREEN: usize = 2usize
+const FORM_SCREEN: usize = 3usize
 const MAX_CONTACTS: usize = 10usize
 const MAX_RECENTS: usize = 16usize
 
@@ -43,6 +46,12 @@ type State = struct {
     screen: usize,
     dial: ui.Field,
     open: usize,
+    // (C127) The contact form: the name and the number being typed, the one in focus, and the contact being
+    // edited (NONE for a new one).
+    form_name: ui.Field,
+    form_number: ui.Field,
+    form_focus: usize,
+    form_edit: usize,
     // The call: who (a contact or NONE) and the number dialled, the ticks since it began, the switches.
     callee: usize,
     number: [12]u8,
@@ -81,6 +90,47 @@ fn contact_number(a: *mem.Arena, s: *State, index: usize) -> str {
 }
 
 // The contact whose number is `digits`, or NONE.
+// (C127) The contacts are kept in /contacts.vcf as vCards (the format Messages, Mail and Wallet can share): the
+// display name and the number as a TEL.
+fn save_contacts(a: *mem.Arena, s: *State) {
+    var cards: [10]vcard.Card = zero
+    var i = 0usize
+    while i < s.contact_total {
+        cards[i].name = contact_name(a, s, i)
+        cards[i].family = ""
+        cards[i].given = ""
+        cards[i].org = ""
+        cards[i].note = ""
+        cards[i].tel[0usize] = contact_number(a, s, i)
+        cards[i].tel_type[0usize] = "cell"
+        cards[i].tel_count = 1usize
+        i += 1usize
+    }
+    var buf: [4096]u8 = zero
+    let (len, write_error) = vcard.write(cards[0usize..s.contact_total], buf[0usize..4096usize])
+    if write_error != ok { ret }
+    let kept = vaultfs.write_big("/contacts.vcf", mem.address_of(&buf[0usize]), len)
+}
+
+// The contacts kept, if there are any (false leaves the list as it is).
+fn load_contacts(a: *mem.Arena, s: *State) -> bool {
+    var buf: [4096]u8 = zero
+    let (n, found) = vaultfs.read_big("/contacts.vcf", mem.address_of(&buf[0usize]), 4096usize)
+    if !found || n == 0usize { ret false }
+    var cards: [10]vcard.Card = zero
+    let (count, parse_error) = vcard.parse(a, buf[0usize..n], cards[0usize..10usize])
+    if parse_error != ok || count == 0usize { ret false }
+    s.contact_total = 0usize
+    var i = 0usize
+    while i < count {
+        var number = ""
+        if cards[i].tel_count > 0usize { number = cards[i].tel[0usize] }
+        add_contact(s, cards[i].name, number)
+        i += 1usize
+    }
+    ret true
+}
+
 fn find_contact(a: *mem.Arena, s: *State, digits: str) -> usize {
     var i = 0usize
     while i < s.contact_total {
@@ -238,6 +288,7 @@ fn draw_recents(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.F
 
 fn draw_contacts(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try ui.put(a, builder, faces.jost_bold, 30.0, "Contacts", 20.0, 22.0, ui.light())
+    try ui.pill(a, builder, &s.hits, faces, 520usize, 300.0, 24.0, 96.0, 36.0, "New", ui.amber(), 15.0)
     var i = 0usize
     while i < s.contact_total {
         let y: f32 = 84.0 + f32(i) * 70.0
@@ -259,6 +310,33 @@ fn draw_contact(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.F
     try ui.centred(a, builder, faces.grotesk, 15.0, contact_number(a, s, s.open), 206.0, 282.0, ui.light_muted())
     try ui.pill(a, builder, &s.hits, faces, 601usize, 56.0, 340.0, 140.0, 52.0, "Call", ui.amber(), 18.0)
     try ui.pill(a, builder, &s.hits, faces, 602usize, 232.0, 340.0, 140.0, 52.0, "Message", ui.soft(), 18.0)
+    try ui.pill(a, builder, &s.hits, faces, 603usize, 56.0, 416.0, 140.0, 44.0, "Edit", ui.soft(), 16.0)
+    try ui.pill(a, builder, &s.hits, faces, 604usize, 232.0, 416.0, 140.0, 44.0, "Delete", ui.soft(), 16.0)
+    ret ok
+}
+
+// The contact form: a name and a number on the on-screen keyboard.
+fn draw_form(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try svg.draw(a, builder, ui.back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), ui.light())
+    ui.hit(&s.hits, 800usize, 0.0, 10.0, 66.0, 56.0)
+    var title = "New contact"
+    if s.form_edit != NONE { title = "Edit contact" }
+    try ui.put(a, builder, faces.jost_bold, 24.0, title, 62.0, 20.0, ui.light())
+    var label_tone = ui.light_muted()
+    if s.form_focus == 0usize { label_tone = ui.amber() }
+    try ui.put(a, builder, faces.grotesk, 12.0, "Name", 20.0, 74.0, label_tone)
+    try ui.card(a, builder, 16.0, 92.0, 380.0, 50.0, 14.0, ui.cream())
+    try ui.put(a, builder, faces.jost, 20.0, ui.field_text(a, &s.form_name), 30.0, 104.0, ui.ink())
+    ui.hit(&s.hits, 810usize, 16.0, 92.0, 380.0, 50.0)
+    label_tone = ui.light_muted()
+    if s.form_focus == 1usize { label_tone = ui.amber() }
+    try ui.put(a, builder, faces.grotesk, 12.0, "Number", 20.0, 156.0, label_tone)
+    try ui.card(a, builder, 16.0, 174.0, 380.0, 50.0, 14.0, ui.cream())
+    try ui.put(a, builder, faces.jost, 20.0, ui.field_text(a, &s.form_number), 30.0, 186.0, ui.ink())
+    ui.hit(&s.hits, 811usize, 16.0, 174.0, 380.0, 50.0)
+    var enter = "Next"
+    if s.form_focus == 1usize { enter = "Save" }
+    try ui.keyboard(a, builder, &s.hits, faces, enter)
     ret ok
 }
 
@@ -310,6 +388,8 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
         try draw_call(a, builder, s, faces)
     } else if s.screen == CONTACT_SCREEN {
         try draw_contact(a, builder, s, faces)
+    } else if s.screen == FORM_SCREEN {
+        try draw_form(a, builder, s, faces)
     } else {
         if s.tab == KEYPAD_TAB { try draw_keypad(a, builder, s, faces) }
         if s.tab == RECENTS_TAB { try draw_recents(a, builder, s, faces) }
@@ -358,7 +438,69 @@ fn end_call(a: *mem.Arena, s: *State) {
 }
 
 // What a tap on button `id` did: true when the screen changed.
+// Save the form's contact (a new one or the edited one) and go back to the list. False when a field is empty.
+fn save_form(a: *mem.Arena, s: *State) -> bool {
+    if s.form_name.len == 0usize || s.form_number.len == 0usize { ret false }
+    let name = ui.field_text(a, &s.form_name)
+    let number = ui.field_text(a, &s.form_number)
+    if s.form_edit == NONE {
+        if s.contact_total >= MAX_CONTACTS { ret false }
+        add_contact(s, name, number)
+    } else {
+        var c: Contact = zero
+        var i = 0usize
+        while i < name.len && i < 20usize {
+            c.name[i] = name[i]
+            i += 1usize
+        }
+        c.name_len = i
+        i = 0usize
+        while i < number.len && i < 12usize {
+            c.number[i] = number[i]
+            i += 1usize
+        }
+        c.number_len = i
+        s.contacts[s.form_edit] = c
+    }
+    save_contacts(a, s)
+    ui.say("call contact saved ")
+    ui.say_text(name)
+    ui.say("\n")
+    s.screen = MAIN_SCREEN
+    s.tab = CONTACTS_TAB
+    ret true
+}
+
 fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
+    if s.screen == FORM_SCREEN {
+        if id == 800usize {
+            s.screen = MAIN_SCREEN
+            ret true
+        }
+        if id == 810usize {
+            s.form_focus = 0usize
+            ret true
+        }
+        if id == 811usize {
+            s.form_focus = 1usize
+            ret true
+        }
+        if id == 1205usize {
+            if s.form_focus == 0usize {
+                s.form_focus = 1usize
+                ret true
+            }
+            ret save_form(a, s)
+        }
+        if ui.is_key(id) {
+            if s.form_focus == 0usize {
+                if s.form_name.len < 20usize || id == 1201usize { ret ui.field_key(&s.form_name, id, s.form_name.len == 0usize) }
+            } else if s.form_number.len < 12usize || id == 1201usize {
+                ret ui.field_key(&s.form_number, id, false)
+            }
+        }
+        ret false
+    }
     if s.screen == CALL_SCREEN {
         if id == 710usize {
             end_call(a, s)
@@ -381,6 +523,43 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         }
         if id == 601usize {
             start_call(a, s, s.open, contact_number(a, s, s.open))
+            ret true
+        }
+        if id == 603usize {
+            s.form_edit = s.open
+            s.form_name.len = 0usize
+            s.form_number.len = 0usize
+            let name = contact_name(a, s, s.open)
+            let number = contact_number(a, s, s.open)
+            var i = 0usize
+            while i < name.len {
+                s.form_name.bytes[i] = name[i]
+                i += 1usize
+            }
+            s.form_name.len = name.len
+            i = 0usize
+            while i < number.len {
+                s.form_number.bytes[i] = number[i]
+                i += 1usize
+            }
+            s.form_number.len = number.len
+            s.form_focus = 0usize
+            s.screen = FORM_SCREEN
+            ret true
+        }
+        if id == 604usize {
+            let name = contact_name(a, s, s.open)
+            var k = s.open
+            while k + 1usize < s.contact_total {
+                s.contacts[k] = s.contacts[k + 1usize]
+                k += 1usize
+            }
+            s.contact_total -= 1usize
+            save_contacts(a, s)
+            ui.say("call contact deleted ")
+            ui.say_text(name)
+            ui.say("\n")
+            s.screen = MAIN_SCREEN
             ret true
         }
         ret false
@@ -422,6 +601,15 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if r.used { start_call(a, s, r.contact, recent_number(a, r)) }
         ret true
     }
+    if s.tab == CONTACTS_TAB && id == 520usize {
+        if s.contact_total >= MAX_CONTACTS { ret false }
+        s.form_edit = NONE
+        s.form_name.len = 0usize
+        s.form_number.len = 0usize
+        s.form_focus = 0usize
+        s.screen = FORM_SCREEN
+        ret true
+    }
     if s.tab == CONTACTS_TAB && id >= 500usize && id < 510usize {
         s.open = id - 500usize
         s.screen = CONTACT_SCREEN
@@ -454,6 +642,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     add_contact(&s, "City Library", "5550105")
     add_contact(&s, "Sam", "5550106")
     add_contact(&s, "Dr. Okafor", "5550107")
+    // What was kept replaces the sample contacts; on a disk with none the samples are written.
+    if load_contacts(a, &s) {
+        ui.say("call contacts loaded ")
+        ui.say_text(ui.number(a, s.contact_total))
+        ui.say(" ")
+        ui.say_text(contact_name(a, &s, 0usize))
+        ui.say("\n")
+    } else {
+        save_contacts(a, &s)
+    }
     add_recent(&s, 5usize, "5550106", 0usize, 2900usize)
     add_recent(&s, 3usize, "5550104", 1usize, 1500usize)
     add_recent(&s, 2usize, "5550103", 2usize, 300usize)

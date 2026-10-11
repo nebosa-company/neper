@@ -2163,4 +2163,5 @@ D2404	1382	C120 part one: `e.text.terminal`, a terminal emulator in the library
 D2405	1762	C120 part two: `e.net.ssh`, an SSH-2 client without I/O
 D2406	2038	C120 part three: the SSH app runs a live session
 D2407	480	C120 closed; Secure credentials, saved hosts, forwarding and SFTP are C155
-D2408	864	C119 closed: Weather keeps its places and unit; location and alerts are C156
+D2408	865	C119 closed: Weather keeps its places and unit; location and alerts are C156
+D2409	1315	C127 part one: vCards and the contact store

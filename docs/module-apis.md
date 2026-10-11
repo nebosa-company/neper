@@ -23067,3 +23067,29 @@ fn status(s: *Session) -> u32
 ```
 
 An SSH-2 client, sans-IO (C120): `open` makes a session for a user and password (or `use_key` an ed25519 seed), `outgoing` and `sent` move the bytes to send, `feed` takes the bytes received, `status` follows the connection (version, key exchange, host key pending, authentication, channel, ready, closed, failed). It speaks curve25519-sha256 with an ssh-ed25519 host key, chacha20-poly1305@openssh.com, password and public-key authentication, one session channel with a pty and a shell or an exec command, flow control and exit status. At `HOST_KEY_PENDING` the caller reads `host_key` and `host_fingerprint` and calls `trust`. Nothing else: no other algorithms, rekeying, forwarding, SFTP. Checked against a real server (asyncssh) on loopback: password and key login, a shell, resize, exit status, a wrong password and a wrong host key.
+
+
+### `e.fmt.vcard`
+
+```neper
+error Malformed
+error TooLong
+type Card = struct {
+fn upper(c: u8) -> u8
+fn lower(c: u8) -> u8
+fn equals_fold(a: []const u8, b: str) -> bool
+fn empty_card() -> Card
+fn lower_text(a: *mem.Arena, value: str) -> (str, err)
+fn unescape(a: *mem.Arena, value: []const u8) -> (str, err)
+fn first_component(a: *mem.Arena, value: []const u8) -> (str, err)
+fn property(a: *mem.Arena, card: *Card, line: []const u8) -> err
+fn parse(a: *mem.Arena, data: []const u8, out: []Card) -> (usize, err)
+type Out = struct { buf: []u8, len: usize, column: usize, over: bool }
+fn out_byte(o: *Out, b: u8)
+fn out_raw(o: *Out, s: str)
+fn out_value(o: *Out, s: str)
+fn out_end(o: *Out)
+fn write(cards: []const Card, buf: []u8) -> (usize, err)
+```
+
+vCards (C127): `parse` reads the cards of a .vcf text (versions 2.1, 3.0 and 4.0) into `Card` values with the display name, the family and given names, up to four telephone numbers with their first TYPE (lower case), up to two e-mail addresses, the organisation and a note; lines are unfolded, groups and parameters read, values unescaped, everything else skipped; no BEGIN:VCARD is `Malformed`. `write` writes cards as vCard 3.0 with CRLF lines folded at 75 octets. Checked against vobject on its own output and on hand-made 2.1 and folded texts.

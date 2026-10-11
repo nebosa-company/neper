@@ -1139,6 +1139,11 @@ fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_pdf_written" = 'executable written' ]
 chmod +x "$test_build/fmt-pdf-selfhost"
 "$test_build/fmt-pdf-selfhost"
+# `e.fmt.vcard`: vCard texts parsed and compared with vobject, the cards written again and compared with a reference writer.
+fmt_vcard_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_vcard/src/main.e" "$repo" x64 linux "$test_build/fmt-vcard-selfhost")
+[ "$fmt_vcard_written" = 'executable written' ]
+chmod +x "$test_build/fmt-vcard-selfhost"
+"$test_build/fmt-vcard-selfhost"
 # `e.text.highlight`: a snippet in each of 32 languages classified byte by byte against an independent implementation.
 text_highlight_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_highlight/src/main.e" "$repo" x64 linux "$test_build/text-highlight-selfhost")
 [ "$text_highlight_written" = 'executable written' ]

@@ -480,6 +480,7 @@
     "fmt_json",
     "fmt_ooxml",
     "fmt_pdf",
+    "fmt_vcard",
     "fmt_woff",
     "text_highlight",
     "barcode",
@@ -751,6 +752,17 @@
    "pending": [],
    "fixtures": [
     "text_highlight"
+   ]
+  },
+  {
+   "module": "e.fmt.vcard",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 1,
+   "delivered": 1,
+   "pending": [],
+   "fixtures": [
+    "fmt_vcard"
    ]
   },
   {

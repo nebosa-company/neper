@@ -1,0 +1,102 @@
+// `e.fmt.vcard`: vCard texts (vobject's own output, and by hand: 2.1 bare types, folded lines, groups, escapes,
+// LF only) parsed and dumped as `name|family|given|org|note|tel:type,...|email,...` (a newline in a note shown as
+// ~) and compared with what vobject reads; the cards written again compared with a reference writer.
+// A check's exit code is eight times its position plus the stage that failed.
+use e.os
+use e.mem
+use e.fmt.vcard as vcard
+
+fn put(buf: []u8, at: usize, s: str) -> usize {
+    var n = at
+    var i = 0usize
+    while i < s.len && n < buf.len {
+        var c = s[i]
+        if c == 10u8 { c = 126u8 }
+        buf[n] = c
+        n += 1usize
+        i += 1usize
+    }
+    ret n
+}
+
+// The dump of one card, as the generator writes it.
+fn dump(card: vcard.Card, buf: []u8) -> usize {
+    var n = 0usize
+    n = put(buf, n, card.name)
+    n = put(buf, n, "|")
+    n = put(buf, n, card.family)
+    n = put(buf, n, "|")
+    n = put(buf, n, card.given)
+    n = put(buf, n, "|")
+    n = put(buf, n, card.org)
+    n = put(buf, n, "|")
+    n = put(buf, n, card.note)
+    n = put(buf, n, "|")
+    var t = 0usize
+    while t < card.tel_count {
+        if t > 0usize { n = put(buf, n, ",") }
+        n = put(buf, n, card.tel[t])
+        n = put(buf, n, ":")
+        n = put(buf, n, card.tel_type[t])
+        t += 1usize
+    }
+    n = put(buf, n, "|")
+    var m = 0usize
+    while m < card.email_count {
+        if m > 0usize { n = put(buf, n, ",") }
+        n = put(buf, n, card.email[m])
+        m += 1usize
+    }
+    ret n
+}
+
+fn parse_case(a: *mem.Arena, text_in: str, expected: str) -> usize {
+    var cards: [8]vcard.Card = zero
+    let (count, parse_error) = vcard.parse(a, text_in, cards[0usize..8usize])
+    if parse_error != ok { ret 1usize }
+    var buf: [4096]u8 = zero
+    var n = 0usize
+    var i = 0usize
+    while i < count {
+        if i > 0usize {
+            buf[n] = 10u8
+            n += 1usize
+        }
+        var one: [1024]u8 = zero
+        let len = dump(cards[i], one[0usize..1024usize])
+        var k = 0usize
+        while k < len {
+            buf[n] = one[k]
+            n += 1usize
+            k += 1usize
+        }
+        i += 1usize
+    }
+    if n != expected.len { ret 2usize }
+    i = 0usize
+    while i < n {
+        if buf[i] != expected[i] { ret 3usize }
+        i += 1usize
+    }
+    ret 0usize
+}
+
+fn write_case(a: *mem.Arena, text_in: str, expected: str) -> usize {
+    var cards: [8]vcard.Card = zero
+    let (count, parse_error) = vcard.parse(a, text_in, cards[0usize..8usize])
+    if parse_error != ok { ret 1usize }
+    var buf: [4096]u8 = zero
+    let (len, write_error) = vcard.write(cards[0usize..count], buf[0usize..4096usize])
+    if write_error != ok { ret 2usize }
+    if len != expected.len { ret 3usize }
+    var i = 0usize
+    while i < len {
+        if buf[i] != expected[i] { ret 4usize }
+        i += 1usize
+    }
+    ret 0usize
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    var r = 0usize
+    var cards: [4]vcard.Card = zero

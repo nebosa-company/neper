@@ -825,7 +825,8 @@ fn launch(frame: *a64.Frame) {
         // (C122) The Camera (entry 21) writes its photos to /DCIM and Photos (entry 22) reads them.
         // (C121) The Wallet (entry 20) reads the newest scan the Camera wrote to /DCIM.
         // (C119) The Weather app (entry 18) keeps its places and unit in /weather.
-        if index == 38usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize {
+        // (C127) The Call app (entry 25) keeps its contacts in /contacts.vcf.
+        if index == 38usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize {
             if fs_present {
                 thread.grant(child, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                 thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
