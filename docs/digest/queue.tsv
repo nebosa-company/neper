@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-C132	compiler	0	687	NeperOS Level: the accelerometer and gyroscope for the bubble level and protractor	The Level app (D2227) shows a sample tilt.
 C133	compiler	0	827	NeperOS Flashlight: the real LED, its levels and a faster beat	The Flashlight app (D2228) turns the SCREEN bright and beats once every 500 ms tick.
 C134	compiler	0	761	NeperOS Chat: a real team chat service	The Chat app (D2229) holds sample rooms in the process.
 C135	compiler	0	915	NeperOS Meet: real video calls: signalling, media transport, capture	The Meet app (D2230) runs a demo meeting with made-up people.
@@ -141,3 +140,4 @@ C158	compiler	0	929	NeperOS Mail remainder: accounts, folders and threads, HTML 
 C159	compiler	0	765	NeperOS Browser remainder: CSS layout, images, forms, cookies, storage and downloads	Split from C129 (D2415): the Browser fetches an address over HTTPS and shows its HTML as lines of text with links.
 C160	compiler	0	909	NeperOS Maps remainder: map data, location, search and turn-by-turn navigation	Split from C130 (D2417): Maps routes over a small road graph with the library's Dijkstra and draws the way.
 C161	compiler	0	802	NeperOS sensors remainder: a sensor server and drivers, the gyroscope, GPS and the location service	Split from C131 (D2420): the settings server serves a scripted magnetometer and accelerometer trace, the Compass computes its heading from it with calibration and the model's declination.
+C162	compiler	0	700	NeperOS Level remainder: fast sensor stream, self-test, orientation modes, feedback	Split from C132 (D2421): Level filters the accelerometer and gyroscope of the sensor service with a complementary filter and keeps its calibration.

@@ -338,3 +338,24 @@ fn observer(a: []const f64, b: []const f64, c: []const f64, l: []const f64, n: u
 fn observer_update(o: *Observer, u: []const f64, y: []const f64, scratch: []f64) -> err {
     ret observer_step(o.x_hat, o.a, o.b, o.c, o.l, o.n, o.m, o.p, u, y, scratch)
 }
+
+// ---- attitude from an inertial sensor (C132) ----------------------------------------------------------------
+
+// The roll in degrees (rotation about the forward axis) of a device at rest whose accelerometer reads (ay, az)
+// along its right and down axes: 0 flat, positive when the right side is down.
+fn roll_from_accel(ay: f64, az: f64) -> f64 {
+    ret math.atan2[f64](ay, az) * 180.0f64 / 3.141592653589793f64
+}
+
+// The pitch in degrees (rotation about the right axis) from the readings along all three axes: 0 flat, positive
+// when the front is up.
+fn pitch_from_accel(ax: f64, ay: f64, az: f64) -> f64 {
+    ret math.atan2[f64](0.0f64 - ax, math.sqrt[f64](ay * ay + az * az)) * 180.0f64 / 3.141592653589793f64
+}
+
+// A complementary filter step: the gyroscope's rate (degrees per second) carries the angle across `dt` seconds
+// and the accelerometer's angle pulls it back, weighted `alpha` (0.9 to 0.99) to the gyroscope: steady like the
+// accelerometer, quick like the gyroscope.
+fn complementary(angle: f64, rate: f64, measured: f64, dt: f64, alpha: f64) -> f64 {
+    ret alpha * (angle + rate * dt) + (1.0f64 - alpha) * measured
+}

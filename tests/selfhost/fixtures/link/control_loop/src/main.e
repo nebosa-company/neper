@@ -214,6 +214,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(control.sliding_mode(0.1f64, 0.05f64, 2.0f64, 3.0f64, 1.0f64), -0.75f64, 1.0e-12f64) { os.exit(10i32) }
     if control.sliding_mode(1.0f64, 0.5f64, 2.0f64, 3.0f64, 1.0f64) != -3.0f64 { os.exit(10i32) }
 
+    // 11: attitude: roll and pitch from gravity (a device tilted 10 degrees of roll and 20 of pitch reads
+    // (-g sin 20, g cos 20 sin 10, g cos 20 cos 10)), and the complementary filter settling on a constant tilt.
+    let g = 9.81f64
+    let ax = 0.0f64 - g * 0.3420201433256687f64
+    let ay = g * 0.9396926207859084f64 * 0.17364817766693033f64
+    let az = g * 0.9396926207859084f64 * 0.984807753012208f64
+    if !near(control.roll_from_accel(ay, az), 10.0f64, 1.0e-9f64) { os.exit(11i32) }
+    if !near(control.pitch_from_accel(ax, ay, az), 20.0f64, 1.0e-9f64) { os.exit(11i32) }
+    if !near(control.roll_from_accel(0.0f64, 9.81f64), 0.0f64, 1.0e-12f64) { os.exit(11i32) }
+    var filtered = 0.0f64
+    var k = 0usize
+    while k < 200usize {
+        // The true angle is 12 degrees; the gyroscope reads a rate of 0 and the accelerometer 12.
+        filtered = control.complementary(filtered, 0.0f64, 12.0f64, 0.02f64, 0.98f64)
+        k += 1usize
+    }
+    if !near(filtered, 12.0f64 * (1.0f64 - 0.98f64 * 0.0f64 - math.pow[f64](0.98f64, 200.0f64)), 1.0e-9f64) { os.exit(11i32) }
+    // A gyroscope rate carries the angle: 30 degrees per second for a second at alpha 1 is 30 degrees.
+    var carried = 0.0f64
+    k = 0usize
+    while k < 50usize {
+        carried = control.complementary(carried, 30.0f64, 0.0f64, 0.02f64, 1.0f64)
+        k += 1usize
+    }
+    if !near(carried, 30.0f64, 1.0e-9f64) { os.exit(11i32) }
+
     try io.print("control ok\n")
     ret ok
 }

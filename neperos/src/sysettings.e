@@ -35,6 +35,8 @@ const OP_DYN_SET: usize = 9usize
 const OP_SENSOR: usize = 10usize
 const SENSOR_MAGNETOMETER: usize = 0usize
 const SENSOR_ACCELEROMETER: usize = 1usize
+// Kind 2: the gyroscope's rates (p, q, r) in mrad/s.
+const SENSOR_GYROSCOPE: usize = 2usize
 const SENSOR_BIAS: i64 = 2147483648i64
 
 // A sensor's reading at `tick` in milli-units (x, y, z) and whether the server answered.

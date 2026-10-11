@@ -229,6 +229,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 y = ay
                 z = az
             }
+            if kind == sysettings.SENSOR_GYROSCOPE {
+                let (gp, gq, gr) = sensor_sim.gyro(tick)
+                x = gp
+                y = gq
+                z = gr
+            }
             // Milli-units, biased so the words are unsigned.
             let bx = i64(x * 1000.0f64) + sysettings.SENSOR_BIAS
             let by = i64(y * 1000.0f64) + sysettings.SENSOR_BIAS

@@ -19,6 +19,19 @@ fn swing_yaw(ticks: usize) -> f64 {
     ret 40.0f64 + 28.0f64 * math.sin[f64](t) + 9.0f64 * math.sin[f64](t * 2.7f64)
 }
 
+// The gyroscope: the device's angular rates (p about the forward axis, q about the right axis, r about the down
+// axis) in rad/s at tick `ticks`: the derivatives of the roll, pitch and yaw the other sensors follow.
+fn gyro(ticks: usize) -> (f64, f64, f64) {
+    let t = f64(ticks) * 0.5f64
+    let roll_rate = 0.0f64 - 0.07f64 * 0.8f64 * math.sin[f64](0.8f64 * t)
+    let pitch_rate = 0.10f64 * math.cos[f64](t)
+    // The yaw swing is a function of the tick (0.35 a tick); its rate per second is twice the change per tick.
+    let k = f64(ticks)
+    let per_tick = 28.0f64 * 0.35f64 * math.cos[f64](0.35f64 * k) + 9.0f64 * 0.35f64 * 2.7f64 * math.cos[f64](0.35f64 * 2.7f64 * k)
+    let yaw_rate = per_tick * 2.0f64 * 3.141592653589793f64 / 180.0f64
+    ret (roll_rate, pitch_rate, yaw_rate)
+}
+
 // Magnetometer (nT) and accelerometer (m/s^2) readings in the device frame (x forward, y right, z down), the
 // magnetometer with the hard-iron offset: (mx, my, mz, ax, ay, az).
 fn sensors(ticks: usize) -> (f64, f64, f64, f64, f64, f64) {

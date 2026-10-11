@@ -19594,7 +19594,14 @@ fn observer_gain(a: []const f64, c: []const f64, n: usize, poles_re: []const f64
 fn observer_step(x_hat: []f64, a: []const f64, b: []const f64, c: []const f64, l: []const f64, n: usize, m: usize, p: usize, u: []const f64, y: []const f64, scratch: []f64) -> err
 fn observer(a: []const f64, b: []const f64, c: []const f64, l: []const f64, n: usize, m: usize, p: usize, x_hat: []f64) -> Observer
 fn observer_update(o: *Observer, u: []const f64, y: []const f64, scratch: []f64) -> err
+fn roll_from_accel(ay: f64, az: f64) -> f64
+fn pitch_from_accel(ax: f64, ay: f64, az: f64) -> f64
+fn complementary(angle: f64, rate: f64, measured: f64, dt: f64, alpha: f64) -> f64
 ```
+
+Attitude (C132): `roll_from_accel` and `pitch_from_accel` give a device's roll and pitch in degrees from the
+accelerometer's gravity vector (x forward, y right, z down), and `complementary` one step of a complementary
+filter that carries an angle with the gyroscope's rate and pulls it to the accelerometer's.
 
 `pid` and `pid_step`, `pid_anti_windup` (clamped output with back-calculation),
 `pid_tune_ziegler_nichols`, `bang_bang`, `feedforward`, `sliding_mode`, `lqr` (discrete

@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C132",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 132,
-      "title": "NeperOS Level: the accelerometer and gyroscope for the bubble level and protractor",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Level app (D2227) shows a sample tilt. Acceptance: (1) the accelerometer and gyroscope read through the sensor server of C131 at 50 Hz or better; (2) a complementary or Kalman filter in the library (e.algo or e.control) giving a steady tilt, with calibration offsets kept in storage (C125) and a self-test on a flat surface; (3) Level, Angle and an edge mode (the phone on its side) switch from the real orientation; (4) the readings in degrees, per cent slope and a ratio, with a beep or vibration when level; (5) a fixture on QEMU that feeds a scripted trace and checks the reading to a tenth of a degree. Not queued here: augmented-reality measuring, a ruler."
-    },
-    {
       "id": "C133",
       "category": "compiler",
       "group": "NeperOS",
@@ -1564,6 +1553,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from C131 (D2420): the settings server serves a scripted magnetometer and accelerometer trace, the Compass computes its heading from it with calibration and the model's declination. Acceptance: (1) a sensor server of its own (not the settings server) for the magnetometer, accelerometer and gyroscope, with a scripted source under QEMU and the Pixel's sensor hub later, delivering readings at a fixed rate through its own capability, a rate per client and a permission per sensor; (2) the figure-eight calibration run on live data with the accuracy it reaches shown; (3) a location service (GPS and network) shared by Compass and Maps (C130/C160) with the permission in Settings and a simulated provider; (4) a fixture on QEMU feeding a recorded sensor trace and checking the heading to a degree."
+    },
+    {
+      "id": "C162",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 162,
+      "title": "NeperOS Level remainder: fast sensor stream, self-test, orientation modes, feedback",
+      "score": 0,
+      "model": "opus",
+      "thinking": "medium",
+      "evidence": "Split from C132 (D2421): Level filters the accelerometer and gyroscope of the sensor service with a complementary filter and keeps its calibration. Acceptance: (1) the sensors read at 50 Hz or better from the sensor server of C161 (the half-second tick of the scripted source is too slow for a real filter); (2) a Kalman filter in the library next to the complementary one, and a self-test on a flat surface that reports the sensor's noise and bias; (3) Level, Angle and an edge mode switched from the real orientation; (4) the readings in degrees, per cent slope and a ratio, and a beep or vibration when level; (5) a fixture feeding a recorded trace and checking the reading to a tenth of a degree."
     }
   ]
 }

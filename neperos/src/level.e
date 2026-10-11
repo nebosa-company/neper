@@ -11,6 +11,10 @@
 use e.mem
 use e.os
 use e.math
+use e.control as control
+use sysettings
+use sensor_sim
+use vaultfs
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -26,6 +30,11 @@ const LEVEL_MODE: usize = 0usize
 const ANGLE_MODE: usize = 1usize
 
 type State = struct {
+    // (C132) The tilt in degrees filtered from the accelerometer and the gyroscope (complementary filter), and
+    // whether the filter has a first reading.
+    fx: f64,
+    fy: f64,
+    filtering: bool,
     ticks: usize,
     mode: usize,
     held: bool,
@@ -42,23 +51,89 @@ fn pi() -> f32 {
     ret 3.14159265
 }
 
-// The sample tilt (degrees) of the phone along x and y.
-fn raw_x(ticks: usize) -> f32 {
-    ret 7.0 * math.sin(f32(ticks) * 0.31) + 1.2 * math.sin(f32(ticks) * 1.7)
+// The accelerometer's and the gyroscope's readings at a tick: from the settings server's sensor service when
+// there is one (milli-units), else the same scripted trace computed here.
+fn accel_at(ticks: usize) -> (f64, f64, f64) {
+    let (x, y, z, served) = sysettings.sensor(sysettings.SENSOR_ACCELEROMETER, ticks)
+    if served { ret (f64(x) / 1000.0f64, f64(y) / 1000.0f64, f64(z) / 1000.0f64) }
+    let (mx, my, mz, ax, ay, az) = sensor_sim.sensors(ticks)
+    ret (ax, ay, az)
 }
 
-fn raw_y(ticks: usize) -> f32 {
-    ret 4.5 * math.sin(f32(ticks) * 0.23 + 1.0)
+fn gyro_at(ticks: usize) -> (f64, f64, f64) {
+    let (x, y, z, served) = sysettings.sensor(sysettings.SENSOR_GYROSCOPE, ticks)
+    if served { ret (f64(x) / 1000.0f64, f64(y) / 1000.0f64, f64(z) / 1000.0f64) }
+    let (gx, gy, gz) = sensor_sim.gyro(ticks)
+    ret (gx, gy, gz)
+}
+
+// Take the reading of the present tick into the filter: the accelerometer's roll and pitch pull the angles that
+// the gyroscope's rates (degrees per second) carry across the half second since the last tick.
+fn step_filter(s: *State) {
+    let (ax, ay, az) = accel_at(s.ticks)
+    let roll = control.roll_from_accel(ay, az)
+    let pitch = control.pitch_from_accel(ax, ay, az)
+    if !s.filtering {
+        s.fx = roll
+        s.fy = pitch
+        s.filtering = true
+        ret
+    }
+    let (p, q, r) = gyro_at(s.ticks)
+    let to_degrees = 180.0f64 / 3.141592653589793f64
+    s.fx = control.complementary(s.fx, p * to_degrees, roll, 0.5f64, 0.92f64)
+    s.fy = control.complementary(s.fy, q * to_degrees, pitch, 0.5f64, 0.92f64)
+}
+
+// The tilt of the phone (degrees) along x (roll) and y (pitch), filtered.
+fn raw_x(s: *State) -> f32 {
+    ret f32(s.fx)
+}
+
+fn raw_y(s: *State) -> f32 {
+    ret f32(s.fy)
 }
 
 fn tilt_x(s: *State) -> f32 {
     if s.held { ret s.held_x - s.zero_x }
-    ret raw_x(s.ticks) - s.zero_x
+    ret raw_x(s) - s.zero_x
 }
 
 fn tilt_y(s: *State) -> f32 {
     if s.held { ret s.held_y - s.zero_y }
-    ret raw_y(s.ticks) - s.zero_y
+    ret raw_y(s) - s.zero_y
+}
+
+// The calibration (the angles taken as zero) is kept in /level: eight bytes, each angle in thousandths of a
+// degree plus 2^31, little end.
+fn save_zero(s: *State) {
+    var buf: [8]u8 = zero
+    let bx = u32(i64(s.zero_x * 1000.0) + 2147483648i64)
+    let by = u32(i64(s.zero_y * 1000.0) + 2147483648i64)
+    var i = 0usize
+    while i < 4usize {
+        buf[i] = u8((bx >> u32(8usize * i)) & 255u32)
+        buf[4usize + i] = u8((by >> u32(8usize * i)) & 255u32)
+        i += 1usize
+    }
+    let kept = vaultfs.write("/level", mem.address_of(&buf[0usize]), 8usize)
+}
+
+fn load_zero(s: *State) -> bool {
+    var buf: [8]u8 = zero
+    let (n, found) = vaultfs.read("/level", mem.address_of(&buf[0usize]), 8usize)
+    if !found || n < 8usize { ret false }
+    var bx = 0u32
+    var by = 0u32
+    var i = 0usize
+    while i < 4usize {
+        bx = bx | (u32(buf[i]) << u32(8usize * i))
+        by = by | (u32(buf[4usize + i]) << u32(8usize * i))
+        i += 1usize
+    }
+    s.zero_x = f32(i64(bx) - 2147483648i64) / 1000.0
+    s.zero_y = f32(i64(by) - 2147483648i64) / 1000.0
+    ret true
 }
 
 fn abs(v: f32) -> f32 {
@@ -231,8 +306,8 @@ fn act(s: *State, id: usize) -> bool {
     if id == 110usize {
         s.held = !s.held
         if s.held {
-            s.held_x = raw_x(s.ticks)
-            s.held_y = raw_y(s.ticks)
+            s.held_x = raw_x(s)
+            s.held_y = raw_y(s)
             ui.say("level hold on\n")
         } else {
             ui.say("level hold off\n")
@@ -240,12 +315,13 @@ fn act(s: *State, id: usize) -> bool {
         ret true
     }
     if id == 111usize {
-        s.zero_x = raw_x(s.ticks)
-        s.zero_y = raw_y(s.ticks)
+        s.zero_x = raw_x(s)
+        s.zero_y = raw_y(s)
         if s.held {
             s.zero_x = s.held_x
             s.zero_y = s.held_y
         }
+        save_zero(s)
         ui.say("level calibrate\n")
         ret true
     }
@@ -269,6 +345,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var s: State = zero
     s.shown = 9999usize
+    step_filter(&s)
+    if load_zero(&s) {
+        ui.say("level kept ")
+        ui.say_num(usize(s.zero_x * 10.0 + 1000.0))
+        ui.say("\n")
+    }
     if !show(a, &kit, &s) {
         ui.say("level present failed\n")
         ret ok
@@ -282,6 +364,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else if tap.tick {
             // The tilt follows the ticks; the screen is redrawn while it is live.
             s.ticks += 1usize
+            step_filter(&s)
             if !s.held {
                 if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }
             } else {
