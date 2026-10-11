@@ -11483,6 +11483,37 @@ fn report(source: str, mutants: []const Mutant, verdicts: []const Verdict, s: Sc
 
 Mutation testing over source text: `discover` enumerates operator, constant and branch mutants (comments, strings, `->`, shifts, floats and unary minus skipped), `apply` makes one mutated program, `run` hands each to the caller's suite (`Killed`, `Survived`, `Invalid`, `Timeout`) rewinding the arena after each, `score_permille`/`meets` give the Stryker-style killed-or-timeout share of valid mutants, and `report` lists survivors. Equivalent-mutant detection is out.
 
+### `e.test.arch`
+
+```neper
+const NONE: u32 = 0xffffffffu32
+type Graph = struct { names: []str, layers: []u8, deps_from: []u32, deps_to: []u32, mark: []u8, stack: []u32, modules: usize, edges: usize }
+type RuleKind = enum u8 { Layering, Forbid, OnlyDepend, NoCycles, LayerRange, Naming }
+type Rule = struct { kind: RuleKind, from: str, to: str, lo: u8, hi: u8 }
+type Violation = struct { rule: usize, module: u32, other: u32 }
+error TooSmall
+error Unknown
+
+fn graph(names: []str, layers: []u8, deps_from: []u32, deps_to: []u32, mark: []u8, stack: []u32) -> Graph
+fn add_module(g: *Graph, name: str, layer: u8) -> (u32, err)
+fn index_of(g: *const Graph, name: str) -> u32
+fn add_dep(g: *Graph, from: str, to: str) -> err
+fn uses(source: str, out: []str) -> usize
+fn under(name: str, prefix: str) -> bool
+fn under_any(name: str, prefixes: str) -> bool
+fn add_violation(out: []Violation, n: *usize, rule: usize, module: u32, other: u32) -> err
+fn on_cycle(g: *Graph, start: u32) -> bool
+fn scan(g: *Graph, rules: []const Rule, out: []Violation, n: *usize) -> err
+fn check(g: *Graph, rules: []const Rule, out: []Violation) -> (usize, err)
+fn put(b: *str.Builder, s: str)
+fn put_layer(b: *str.Builder, layer: u8)
+fn put_violation(b: *str.Builder, g: *const Graph, rules: []const Rule, v: Violation)
+fn describe(g: *const Graph, rules: []const Rule, vs: []const Violation, out: []u8) -> str
+fn assert_holds(g: *Graph, rules: []const Rule, scratch: []Violation, buf: []u8) -> err
+```
+
+Architecture rules over a module dependency graph, ArchUnit-style: build a `Graph` by hand or with `uses` (the `use` lines of a source), state `Layering`, `Forbid`, `OnlyDepend`, `NoCycles`, `LayerRange` and `Naming` rules as data, `check` lists every violation and `assert_holds` fails the running test with one line per violation. Prefix matching is by name component.
+
 ### `e.debug`
 
 ```neper

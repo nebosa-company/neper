@@ -2131,6 +2131,12 @@ $testMutateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $testMutateWritten -ne 'executable written') { throw 'test_mutate emission failed' }
 & $testMutatePath
 if ($LASTEXITCODE -ne 0) { throw "a test_mutate check failed: exit $LASTEXITCODE" }
+# `e.test.arch`: an 11-module graph with an intentional violation of each rule kind (8 violations, exact text), prefix matching by component, use-line extraction, a clean graph, TooSmall cuts and assert_holds (D2686).
+$testArchPath = Join-Path $testBuild 'test-arch-selfhost.exe'
+$testArchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_arch\src\main.e') $repo 'x64' 'windows' $testArchPath
+if ($LASTEXITCODE -ne 0 -or $testArchWritten -ne 'executable written') { throw 'test_arch emission failed' }
+& $testArchPath
+if ($LASTEXITCODE -ne 0) { throw "a test_arch check failed: exit $LASTEXITCODE" }
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 $dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
 $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath

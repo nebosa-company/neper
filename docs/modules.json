@@ -442,7 +442,8 @@
     "e.test.match",
     "e.test.mock",
     "e.test.bdd",
-    "e.test.mutate"
+    "e.test.mutate",
+    "e.test.arch"
    ]
   },
   {
@@ -3976,6 +3977,19 @@
    "direct_dependencies": [
     "e.mem",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.arch",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str",
+    "e.test"
    ],
    "blocked_by": []
   },
