@@ -119,6 +119,7 @@ fn teardown(s: *Session, a: *mem.Arena) {
 
 fn connect(s: *Session, a: *mem.Arena, host: str, port: u16, secure: bool) -> usize {
     if s.connected { ret netproto.R_BUSY }
+    if !radio_on { ret netproto.R_NO_NETWORK }
     if !ensure_lease(s) { ret netproto.R_NO_NETWORK }
     var address = 0u32
     let (literal, is_literal) = parse_ip(host)
@@ -183,7 +184,11 @@ fn air_password(index: usize) -> str {
     ret "wallhugger"
 }
 
+// Whether the radios may carry traffic (the settings server's word: Airplane mode and the Wi-Fi and Mobile switches).
+var radio_on: bool = true
+
 fn air_count(s: *Session) -> usize {
+    if !radio_on { ret 0usize }
     if s.test { ret 4usize }
     if s.present { ret 1usize }
     ret 0usize
@@ -240,6 +245,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let op = os.recv(REQ, netproto.NO_SLOT)
         if op == netproto.OP_QUIT {
             running = false
+        } else if op == netproto.OP_RADIO {
+            let flag = os.recv(REQ, netproto.NO_SLOT)
+            radio_on = flag != 0usize
+            if radio_on { say("net server radio on\n") } else { say("net server radio off\n") }
+            reply(netproto.R_OK)
         } else if op == netproto.OP_SCAN {
             reply(netproto.R_OK)
             let count = air_count(&s)

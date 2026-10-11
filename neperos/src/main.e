@@ -1176,6 +1176,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 thread.grant(settings_server, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 12usize)
                 thread.grant(settings_server, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 13usize)
                 // The status service's two endpoints (3 requests, 4 replies), shared with the shell.
+                if net_present {
+                    // The network server's clients' ends, to tell it whether the radios may carry traffic.
+                    thread.grant(settings_server, 8usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 8usize)
+                    thread.grant(settings_server, 9usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 9usize)
+                }
                 thread.grant(settings_server, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 3usize)
                 thread.grant(settings_server, 7usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 4usize)
                 if fs_present {

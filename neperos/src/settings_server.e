@@ -18,6 +18,10 @@ const FS_REP: usize = 5usize
 const REFUSED: usize = 18446744073709551615usize
 const COUNT: usize = 40usize
 // The status service's endpoints, granted when it runs: requests out (slot 6), replies in (slot 7).
+// The network server's endpoints (its clients' ends: 8 requests, 9 replies), granted when the machine has a network
+// device, for telling it whether the radios may carry traffic.
+const NET_REQ: usize = 8usize
+const NET_REP: usize = 9usize
 const STATUS_REQ: usize = 6usize
 const STATUS_REP: usize = 7usize
 
@@ -127,6 +131,21 @@ fn defaults(store: *Store) {
     }
 }
 
+// Airplane mode off and Wi-Fi or Mobile on: the radios may carry traffic.
+fn radios_allowed(store: *Store) -> bool {
+    ret store.v[2usize] == 0u8 && (store.v[0usize] != 0u8 || store.v[1usize] != 0u8)
+}
+
+// Tell the network server, when the answer changed; false when it has no network server.
+fn push_radio(allowed: bool) {
+    var flag = 0usize
+    if allowed { flag = 1usize }
+    let sent = os.send(NET_REQ, 8usize, sysettings.NO_SLOT)
+    if sent == REFUSED { ret }
+    let flag_sent = os.send(NET_REQ, flag, sysettings.NO_SLOT)
+    let result = os.recv(NET_REP, sysettings.NO_SLOT)
+}
+
 fn system_word(store: *Store) -> usize {
     ret theme.stored_word(store.v[0usize..COUNT])
 }
@@ -138,6 +157,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var hidden = load_hidden()
     var registry: Registry = zero
     load_registry(&registry)
+    var radios = radios_allowed(&store)
+    if !radios { push_radio(false) }
     say("settings server up\n")
     var running = true
     while running {
@@ -157,6 +178,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if index < COUNT && value <= 10usize {
                 store.v[index] = u8(value)
                 save(&store)
+                if index < 3usize && radios_allowed(&store) != radios {
+                    radios = radios_allowed(&store)
+                    push_radio(radios)
+                }
             }
             let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
         } else if op == sysettings.OP_GET_BATTERY {
@@ -204,6 +229,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else if op == sysettings.OP_RESET {
             defaults(&store)
             save(&store)
+            if radios_allowed(&store) != radios {
+                radios = radios_allowed(&store)
+                push_radio(radios)
+            }
             let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
         }
     }

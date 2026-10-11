@@ -28,6 +28,9 @@ const OP_CLOSE: usize = 4usize
 const OP_SET_DNS: usize = 5usize
 const OP_SCAN: usize = 6usize
 const OP_JOIN: usize = 7usize
+// RADIO flag -> result: the settings server says whether the radios may carry traffic (Airplane mode off and
+// Wi-Fi or Mobile on); with them off the server refuses CONNECT with R_NO_NETWORK and hears no networks.
+const OP_RADIO: usize = 8usize
 
 const R_OK: usize = 0usize
 const R_NO_NETWORK: usize = 1usize
