@@ -2113,6 +2113,12 @@ $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $dbMigrateWritten -ne 'executable written') { throw 'db_migrate emission failed' }
 & $dbMigratePath
 if ($LASTEXITCODE -ne 0) { throw "a db_migrate check failed: exit $LASTEXITCODE" }
+# `e.db.orm`: DDL per dialect, generated and explicit keys, every column kind round-tripped on sqlite, update/delete NotFound, hook order and a vetoing hook, belongs-to and a one-statement has-many preload (D2681).
+$dbOrmPath = Join-Path $testBuild 'db-orm-selfhost.exe'
+$dbOrmWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_orm\src\main.e') $repo 'x64' 'windows' $dbOrmPath
+if ($LASTEXITCODE -ne 0 -or $dbOrmWritten -ne 'executable written') { throw 'db_orm emission failed' }
+& $dbOrmPath
+if ($LASTEXITCODE -ne 0) { throw "a db_orm check failed: exit $LASTEXITCODE" }
 # `e.fmt.pretty`: Wadler's tree at four widths and soft-line cases byte-exact against a replica, plus the lazy-versus-strict group case (D863).
 $fmtPrettyPath = Join-Path $testBuild 'fmt-pretty-selfhost.exe'
 $fmtPrettyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pretty\src\main.e') $repo 'x64' 'windows' $fmtPrettyPath

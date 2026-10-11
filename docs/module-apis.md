@@ -13581,6 +13581,46 @@ fn unlock(c: *db.Connection, d: Dialect, version: i64) -> err
 
 A versioned SQL migration runner over `e.db`: strictly ascending versions, a `schema_migrations` journal with a dialect-aware DDL and placeholders (`Sqlite`, `Postgres`, `Mysql`), `up` to a version, `down` by steps, and `verify` refusing a dirty journal, a changed `up` checksum (FNV-1a 64), a missing applied version or an out-of-order pending one. A migration locks its journal row dirty before it runs and clears it in the same transaction as its SQL; a failure leaves the lock until `unlock`.
 
+### `e.db.orm`
+
+```neper
+type Session = struct { c: *db.Connection, a: *mem.Arena, d: migrate.Dialect, queries: u64 }
+type Hooks[T: type] = struct { before_save: fn(*T) -> err, after_save: fn(*T) -> err, before_create: fn(*T) -> err, after_create: fn(*T) -> err, before_update: fn(*T) -> err, after_update: fn(*T) -> err, before_delete: fn(*T) -> err, after_delete: fn(*T) -> err }
+type Span = struct { start: usize, len: usize }
+error Invalid
+error NoKey
+error NotFound
+error TooSmall
+
+fn session(c: *db.Connection, a: *mem.Arena, d: migrate.Dialect) -> Session
+fn hook_ok[T: type](row: *T) -> err
+fn type_sql(d: migrate.Dialect, kind: meta.TypeKind) -> str
+fn push_placeholder(b: *str.Builder, d: migrate.Dialect, n: usize) -> err
+fn to_value[F: type](slot: F) -> db.Value
+fn copy_text(a: *mem.Arena, text: str) -> (str, err)
+fn from_value[F: type](a: *mem.Arena, v: db.Value) -> (F, err)
+fn key_of[T: type](row: *const T) -> (i64, err)
+fn set_key[T: type](row: *T, key: i64) -> err
+fn int_field[T: type](row: *const T, name: str) -> (i64, bool)
+fn field_count[T: type]() -> usize
+fn push_columns[T: type](b: *str.Builder) -> err
+fn run(s: *Session, sql: str, params: []const db.Parameter) -> (u64, err)
+fn check_key[T: type]() -> err
+fn create_sql[T: type](s: *Session, table: str) -> (str, err)
+fn create_table[T: type](s: *Session, table: str) -> err
+fn last_id(s: *Session) -> (i64, err)
+fn insert[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err
+fn update[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err
+fn delete[T: type](s: *Session, table: str, row: *T, h: *const Hooks[T]) -> err
+fn read_row[T: type](s: *Session, rows: *db.Rows, cells: []db.Value, out: *T) -> (bool, err)
+fn select[T: type](s: *Session, table: str, where_sql: str, order_sql: str, params: []const db.Parameter, out: []T) -> (usize, err)
+fn find[T: type](s: *Session, table: str, id: i64, out: *T) -> (bool, err)
+fn belongs_to[C: type, P: type](s: *Session, parent_table: str, child: *const C, fk: str, out: *P) -> (bool, err)
+fn has_many[P: type, C: type](s: *Session, child_table: str, fk: str, parents: []const P, out: []C, spans: []Span) -> (usize, err)
+```
+
+A struct-to-row mapper over `e.db` via `e.meta`: the first field is the integer `id` key, integers/floats/bools/`str` are columns in field order. `Session` carries the connection, arena, dialect and a statement counter; `create_table`/`create_sql` derive the DDL, `insert` (id 0 is database-generated and written back), `update`, `delete`, `find` and `select` map rows, eight `Hooks` run in gorm's order, `belongs_to` follows a foreign-key field, and `has_many` preloads every parent's children in one `IN` query into per-parent `Span`s.
+
 ### `e.db`
 
 ```neper

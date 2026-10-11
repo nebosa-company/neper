@@ -1883,6 +1883,11 @@ db_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$db_migrate_written" = 'executable written' ]
 chmod +x "$test_build/db-migrate-selfhost"
 "$test_build/db-migrate-selfhost"
+# `e.db.orm`: DDL per dialect, generated and explicit keys, every column kind round-tripped on sqlite, update/delete NotFound, hook order and a vetoing hook, belongs-to and a one-statement has-many preload (D2681).
+db_orm_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_orm/src/main.e" "$repo" x64 linux "$test_build/db-orm-selfhost")
+[ "$db_orm_written" = 'executable written' ]
+chmod +x "$test_build/db-orm-selfhost"
+"$test_build/db-orm-selfhost"
 # `e.fmt.pretty`: Wadler's tree at four widths and soft-line cases byte-exact against a replica, plus the lazy-versus-strict group case (D863).
 fmt_pretty_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pretty/src/main.e" "$repo" x64 linux "$test_build/fmt-pretty-selfhost")
 [ "$fmt_pretty_written" = 'executable written' ]

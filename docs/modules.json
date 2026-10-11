@@ -437,7 +437,8 @@
     "e.debug.dump.host",
     "e.math.pkpd",
     "e.math.units",
-    "e.db.migrate"
+    "e.db.migrate",
+    "e.db.orm"
    ]
   },
   {
@@ -6192,6 +6193,21 @@
     "e.algo.hash",
     "e.db",
     "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.db.orm",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.db",
+    "e.db.migrate",
+    "e.mem",
+    "e.meta",
+    "e.str"
    ],
    "blocked_by": []
   },
