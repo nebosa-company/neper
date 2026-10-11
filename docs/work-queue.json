@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C125",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 125,
-      "title": "NeperOS Files: real storage through the filesystem server, file hand-over between apps",
-      "score": 0.6,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued by the user (2026-10-08). The Files app (D2219) browses a sample tree kept in the process. Acceptance: (1) the tree is the real one behind fs_server.e (a virtio-blk disk or the Pixel's storage later): list, create, rename, move, copy, delete (with a trash that empties after thirty days), file sizes and times from the filesystem, and the storage summary from the real free space and the real mix of types; (2) the capability model: an app sees only its own directory and what the user shares to it through Files; the Files app is the one that holds the whole tree; (3) hand-over: Open sends the file to the app for its type (Document C123, Photos, a media player) and Share sends it to another app; the Camera (C122), Wallet (C121) and Mail save into it; (4) search by name and by type, recent files, multi-select with copy, move and delete, a grid view with thumbnails for images (reusing e.gfx scene clipping); (5) archives: browse and extract a zip; (6) external storage: a USB disk or SD card appears as a second root; (7) a fixture on QEMU that creates, renames and deletes on a real disk image and checks the bytes after a reboot. Not queued here: cloud drives, sync, encryption of folders (Secure's job). Delivered (D2375): (1) in part -- the Files app browses and edits the real filesystem when there is a disk (list, create folder and file, rename, delete, sizes in bytes, the storage card from OP_STATS; fs OP_STAT and OP_RENAME); fixtures files_real, files_real_again, files_real_more, files_real_more_again. Delivered (D2376): files of up to 4 KB (a run of blocks) and Copy. Delivered (D2377): Move (choose a folder) and a Trash that Delete moves into. Delivered (D2378): entry times and the Trash emptying after thirty days (guest clock). Delivered (D2379): search by name and type. Delivered (D2380): multi-select with Delete and Move; a Recent view. Delivered (D2382): Open hands a file to Document (or Photos) through /handover and the shell. Not yet: files over 4 KB, grid and thumbnails, (2), (3) Share and the saving apps, (5), (6)."
-    },
-    {
       "id": "C124",
       "category": "compiler",
       "group": "NeperOS",
@@ -585,6 +574,17 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "e.crypto.aead's AES-GCM is portable Neper, a bitsliced AES (BearSSL's aes_ct64) and a GHASH from masked integer products (ghash_ctmul64), D1645. Measured 2026-09-28 on the Core i5-12500H, sealing one TLS record: 11.6 us for 100 bytes and 702 us for 16 KB (23 MB/s), against OpenSSL's 0.73 us and 3.19 us (5.1 GB/s, through Python's cryptography 48, whose call overhead is included): 16 times slower on small records and 220 times on large ones. It bounds every TLS user: x.microsoft.tds scans SQL Server at 28-35% of the fastest language (D1643), where OpenSSL, Go and rustls run AES-NI and PCLMULQDQ. Closing the gap needs the back end to emit AESENC/AESENCLAST and PCLMULQDQ (x64) behind a CPU check with the portable path as the fallback, as SHA-256 and CRC-32C already are in the link (D336), then a GCM that keeps its expanded key and H powers across records (e.net.tls expands the key for every record today) and runs four to eight blocks in flight. Until then, the portable path's own lever is codegen: the same bitsliced rounds run at about 130 cycles a byte, several times BearSSL's in C."
+    },
+    {
+      "id": "C150",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 150,
+      "title": "NeperOS storage remainder: per-app directories, Share, thumbnails, zip, external storage, large files",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C125 (D2382): the Files app is on the real filesystem with list, create, rename, move, copy, trash, search, recent and select, and hands a file to Document. Acceptance: (1) the capability model: the filesystem server tells its clients apart (badged endpoints from the kernel or a per-app request endpoint) so an app sees only its own directory and what Files shares to it; (2) Share to another app and the Camera, Wallet and Mail apps saving into Files once they exist (C121, C122, C128); (3) a grid view with image thumbnails (PNG/JPEG decode into e.gfx scenes); (4) browse and extract a zip with e.fmt.zip (the disk image seeded by scripts/make_fs_image.py so a fixture has one); (5) external storage: a second block device as a second root through a second filesystem server instance; (6) files larger than 4 KB (an indirect block or an extent list) and entries beyond sixteen a directory. Delivered by C125 and not to redo: everything in D2375-D2382."
     },
     {
       "id": "L037",
