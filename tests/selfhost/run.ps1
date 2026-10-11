@@ -1160,6 +1160,13 @@ $packageTestWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\
 if ($LASTEXITCODE -ne 0 -or $packageTestWritten -ne 'executable written') { throw 'package_test emission failed' }
 & $packageTestPath
 if ($LASTEXITCODE -ne 0) { throw "a package_test check failed: exit $LASTEXITCODE" }
+# The security scan for a generated app's source (neperos/src/scan.e, C124): raw machine access and an
+# undeclared network or storage module are found, a comment and a longer name are not.
+$scanTestPath = Join-Path $testBuild 'scan-test-selfhost.exe'
+$scanTestWritten = & $compiler emit-executable (Join-Path $repo 'neperos\src\scan_test.e') $repo 'x64' 'windows' $scanTestPath
+if ($LASTEXITCODE -ne 0 -or $scanTestWritten -ne 'executable written') { throw 'scan_test emission failed' }
+& $scanTestPath
+if ($LASTEXITCODE -ne 0) { throw "a scan_test check failed: exit $LASTEXITCODE" }
 # `e.fmt.pem`: blocks with a suffix and with headers, encode in 64 columns, five refusals.
 $fmtPemPath = Join-Path $testBuild 'fmt-pem-selfhost.exe'
 $fmtPemWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pem\src\main.e') $repo 'x64' 'windows' $fmtPemPath
