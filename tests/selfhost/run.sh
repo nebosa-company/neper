@@ -1893,6 +1893,11 @@ test_bdd_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$test_bdd_written" = 'executable written' ]
 chmod +x "$test_build/test-bdd-selfhost"
 "$test_build/test-bdd-selfhost"
+# `e.test.mutate`: 32 mutants of a sample module equal to an independent regex enumeration (kind, offset, length, replacement), three mutated texts, a scripted suite's score math and the exact survivor report (D2685).
+test_mutate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_mutate/src/main.e" "$repo" x64 linux "$test_build/test-mutate-selfhost")
+[ "$test_mutate_written" = 'executable written' ]
+chmod +x "$test_build/test-mutate-selfhost"
+"$test_build/test-mutate-selfhost"
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 db_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_migrate/src/main.e" "$repo" x64 linux "$test_build/db-migrate-selfhost")
 [ "$db_migrate_written" = 'executable written' ]

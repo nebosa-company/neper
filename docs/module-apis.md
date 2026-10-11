@@ -11456,6 +11456,33 @@ fn report(d: *const Document, scenario_results: []const Outcome, results: []cons
 
 A Gherkin parser and BDD runner. `parse` reads Feature/Background/Scenario/Scenario Outline with Examples, step tables, tags and comments into caller arrays (outline rows expand to scenarios); `run` binds each step to a field of a step-definition struct through `meta.fields` (the field name is the pattern, with `int`, `word` and `quoted` words capturing arguments), skips a scenario's remaining steps after the first that is not passed, filters by tag include/exclude lists and fills per-step and per-scenario outcomes; `report` lists failed and pending steps and the totals.
 
+### `e.test.mutate`
+
+```neper
+type Kind = enum u8 { Operator, Constant, Branch }
+type Verdict = enum u8 { Killed, Survived, Invalid, Timeout }
+type Mutant = struct { kind: Kind, offset: usize, len: usize, replacement: str, line: u32 }
+type Score = struct { total: usize, killed: usize, timeout: usize, survived: usize, invalid: usize }
+error TooSmall
+
+fn add(out: []Mutant, n: *usize, kind: Kind, offset: usize, len: usize, replacement: str, line: u32) -> err
+fn is_word_byte(b: u8) -> bool
+fn after_operand(source: str, at: usize) -> bool
+fn line_end(source: str, from: usize) -> usize
+fn scan(a: *mem.Arena, source: str, out: []Mutant, n: *usize) -> err
+fn discover(a: *mem.Arena, source: str, out: []Mutant) -> (usize, err)
+fn if_next(source: str, at: usize) -> u8
+fn apply(a: *mem.Arena, source: str, m: Mutant) -> (str, err)
+fn run[Ctx: type](a: *mem.Arena, source: str, mutants: []const Mutant, ctx: *Ctx, suite: fn(*Ctx, Mutant, str) -> Verdict, verdicts: []Verdict) -> (Score, err)
+fn score_permille(s: Score) -> u32
+fn meets(s: Score, threshold_permille: u32) -> bool
+fn put(b: *str.Builder, s: str)
+fn put_count(b: *str.Builder, n: usize)
+fn report(source: str, mutants: []const Mutant, verdicts: []const Verdict, s: Score, out: []u8) -> str
+```
+
+Mutation testing over source text: `discover` enumerates operator, constant and branch mutants (comments, strings, `->`, shifts, floats and unary minus skipped), `apply` makes one mutated program, `run` hands each to the caller's suite (`Killed`, `Survived`, `Invalid`, `Timeout`) rewinding the arena after each, `score_permille`/`meets` give the Stryker-style killed-or-timeout share of valid mutants, and `report` lists survivors. Equivalent-mutant detection is out.
+
 ### `e.debug`
 
 ```neper

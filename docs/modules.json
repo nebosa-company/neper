@@ -441,7 +441,8 @@
     "e.db.orm",
     "e.test.match",
     "e.test.mock",
-    "e.test.bdd"
+    "e.test.bdd",
+    "e.test.mutate"
    ]
   },
   {
@@ -3962,6 +3963,18 @@
    "direct_dependencies": [
     "e.mem",
     "e.meta",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.mutate",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
     "e.str"
    ],
    "blocked_by": []

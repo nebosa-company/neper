@@ -2125,6 +2125,12 @@ $testBddWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $testBddWritten -ne 'executable written') { throw 'test_bdd emission failed' }
 & $testBddPath
 if ($LASTEXITCODE -ne 0) { throw "a test_bdd check failed: exit $LASTEXITCODE" }
+# `e.test.mutate`: 32 mutants of a sample module equal to an independent regex enumeration (kind, offset, length, replacement), three mutated texts, a scripted suite's score math and the exact survivor report (D2685).
+$testMutatePath = Join-Path $testBuild 'test-mutate-selfhost.exe'
+$testMutateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_mutate\src\main.e') $repo 'x64' 'windows' $testMutatePath
+if ($LASTEXITCODE -ne 0 -or $testMutateWritten -ne 'executable written') { throw 'test_mutate emission failed' }
+& $testMutatePath
+if ($LASTEXITCODE -ne 0) { throw "a test_mutate check failed: exit $LASTEXITCODE" }
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 $dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
 $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath
