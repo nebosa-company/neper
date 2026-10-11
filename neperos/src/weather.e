@@ -30,6 +30,7 @@ use appkit
 use text
 use ui
 use httpc
+use vaultfs
 
 const PLACES: usize = 4usize
 const HOURS: usize = 24usize
@@ -637,6 +638,69 @@ fn round_centi(degrees: f32) -> i32 {
 // ----------------------------------------------------------------------------------------------
 // The places.
 
+// (C119) The places and the unit are kept in /weather: version 1, the unit (1 Fahrenheit), the count, the
+// selected place, then per place the name's length, 16 name bytes and the latitude and longitude in hundredths of
+// a degree plus 100000 (four bytes each, little end).
+fn save_places(s: *State) {
+    var buf: [112]u8 = zero
+    buf[0usize] = 1u8
+    if s.fahrenheit { buf[1usize] = 1u8 }
+    buf[2usize] = u8(s.count)
+    buf[3usize] = u8(s.place)
+    var at = 4usize
+    var p = 0usize
+    while p < s.count {
+        buf[at] = u8(s.name_len[p])
+        var n = 0usize
+        while n < NAME_BYTES {
+            buf[at + 1usize + n] = s.names[p * NAME_BYTES + n]
+            n += 1usize
+        }
+        let la = u32(s.lat[p] + 100000i32)
+        let lo = u32(s.lon[p] + 100000i32)
+        var b = 0usize
+        while b < 4usize {
+            buf[at + 17usize + b] = u8((la >> u32(8usize * b)) & 255u32)
+            buf[at + 21usize + b] = u8((lo >> u32(8usize * b)) & 255u32)
+            b += 1usize
+        }
+        at += 25usize
+        p += 1usize
+    }
+    let kept = vaultfs.write("/weather", mem.address_of(&buf[0usize]), at)
+}
+
+// The places kept, if there are any: false leaves the sample places.
+fn load_places(s: *State) -> bool {
+    var buf: [112]u8 = zero
+    let (n, found) = vaultfs.read("/weather", mem.address_of(&buf[0usize]), 112usize)
+    if !found || n < 4usize || buf[0usize] != 1u8 { ret false }
+    let count = usize(buf[2usize])
+    if count < 1usize || count > PLACES || n < 4usize + 25usize * count { ret false }
+    var at = 4usize
+    var p = 0usize
+    while p < count {
+        let len = usize(buf[at])
+        if len > NAME_BYTES { ret false }
+        var la = 0u32
+        var lo = 0u32
+        var b = 0usize
+        while b < 4usize {
+            la = la | (u32(buf[at + 17usize + b]) << u32(8usize * b))
+            lo = lo | (u32(buf[at + 21usize + b]) << u32(8usize * b))
+            b += 1usize
+        }
+        set_place(s, p, buf[at + 1usize..at + 1usize + len], i32(la) - 100000i32, i32(lo) - 100000i32)
+        at += 25usize
+        p += 1usize
+    }
+    s.count = count
+    s.place = usize(buf[3usize])
+    if s.place >= count { s.place = 0usize }
+    s.fahrenheit = buf[1usize] == 1u8
+    ret true
+}
+
 fn remove_place(s: *State, p: usize) {
     var q = p
     while q + 1usize < s.count {
@@ -699,6 +763,7 @@ fn job_step(a: *mem.Arena, s: *State) {
             s.count += 1usize
             s.place = p
             s.screen = MAIN_SCREEN
+            save_places(s)
             say_status(s, ui.join(a, "Updated ", minute_text(a, s.fc[p].updated), ""))
             ui.say("weather added ")
             ui.say_text(place_name(s, p))
@@ -958,6 +1023,7 @@ fn act(s: *State, id: usize) -> bool {
     }
     if id >= ID_CHIP && id < ID_CHIP + s.count {
         s.place = id - ID_CHIP
+        save_places(s)
         ui.say("weather place ")
         ui.say_text(place_name(s, s.place))
         ui.say("\n")
@@ -970,6 +1036,7 @@ fn act(s: *State, id: usize) -> bool {
     }
     if id == ID_UNIT {
         s.fahrenheit = !s.fahrenheit
+        save_places(s)
         if s.fahrenheit { ui.say("weather unit F\n") } else { ui.say("weather unit C\n") }
         ret true
     }
@@ -987,6 +1054,7 @@ fn act(s: *State, id: usize) -> bool {
         ui.say_text(place_name(s, s.place))
         ui.say("\n")
         remove_place(s, s.place)
+        save_places(s)
         s.status_len = 0usize
         ret true
     }
@@ -1017,8 +1085,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     set_place(&s, 1usize, "Cairo", 3004i32, 3124i32)
     set_place(&s, 2usize, "Tokyo", 3568i32, 13969i32)
     set_place(&s, 3usize, "Oslo", 5991i32, 1075i32)
+    if load_places(&s) {
+        // What was kept: the unit, the places and the one that was open.
+        ui.say("weather kept ")
+        if s.fahrenheit { ui.say("F ") } else { ui.say("C ") }
+        ui.say_num(s.count)
+        ui.say(" ")
+        ui.say_text(place_name(&s, s.place))
+        ui.say("\n")
+    }
     s.job = JOB_FETCH
-    s.job_place = 0usize
+    s.job_place = s.place
     if !show(a, &kit, &s) {
         ui.say("weather present failed\n")
         ret ok

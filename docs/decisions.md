@@ -39092,3 +39092,7 @@ The SSH app's Connect now tries the network first (`netclient.connect`); when th
 ## D2407 — C120 closed; Secure credentials, saved hosts, forwarding and SFTP are C155
 
 C120 closes at score 1 on what runs and is checked: the terminal emulator in the library against pyte, the SSH client against asyncssh, and the app's live session on QEMU against the test boot's server (D2404-D2406). What needs the Secure vault in the SSH app, persistent saved and known hosts, the keyboard's Esc and Ctrl, forwarding and SFTP, other ciphers, or an OpenSSH server is C155.
+
+## D2408 — C119 closed: Weather keeps its places and unit; location and alerts are C156
+
+Weather gets the filesystem grant (entry 18) and keeps `/weather`: version 1, the unit, the count, the place that was open, then per place its name length, 16 name bytes and the latitude and longitude in hundredths of a degree plus 100000 (four bytes each, little end; the offset keeps the stored numbers positive so no signed narrowing is needed). It is written on every change (a place added or removed, a chip tapped, the unit toggled) and read before the first fetch; `weather kept F 3 Cairo` names what came back. A missing or malformed file leaves the four sample places. Fixtures `weather_kept` (Seattle removed, Fahrenheit chosen) and `weather_kept_again`. The current location depends on C131, and no keyless source the app uses has alerts, so those two are C156.
