@@ -509,7 +509,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     read_snapshot(&snap)
     let posted = os.send(STATUS_REQ, OP_POST, NO_SLOT)
     read_snapshot(&snap)
-    let stopped = os.send(STATUS_REQ, OP_QUIT, NO_SLOT)
+    // The settings server reads the status service for the apps (the battery), so with it running the service is
+    // left running; the older boots stop it here as before.
+    if !theme.valid(sysettings.word()) {
+        let stopped = os.send(STATUS_REQ, OP_QUIT, NO_SLOT)
+    }
     var seconds = 0usize
     var hour = 0usize
     var minute = 0usize

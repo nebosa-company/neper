@@ -17,6 +17,9 @@ const FS_REQ: usize = 4usize
 const FS_REP: usize = 5usize
 const REFUSED: usize = 18446744073709551615usize
 const COUNT: usize = 40usize
+// The status service's endpoints, granted when it runs: requests out (slot 6), replies in (slot 7).
+const STATUS_REQ: usize = 6usize
+const STATUS_REP: usize = 7usize
 
 type Store = struct { v: [48]u8 }
 
@@ -112,6 +115,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 save(&store)
             }
             let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
+        } else if op == sysettings.OP_GET_BATTERY {
+            var battery = 0usize
+            let asked = os.send(STATUS_REQ, 1usize, sysettings.NO_SLOT)
+            if asked != REFUSED {
+                battery = os.recv(STATUS_REP, sysettings.NO_SLOT)
+                // wifi, cellular, clock, notifications: not needed here, but drained so the service stays in step.
+                var drained = 0usize
+                while drained < 4usize {
+                    let word = os.recv(STATUS_REP, sysettings.NO_SLOT)
+                    drained += 1usize
+                }
+            }
+            let sent = os.send(REP, battery, sysettings.NO_SLOT)
         } else if op == sysettings.OP_GET_HIDDEN {
             let sent = os.send(REP, hidden, sysettings.NO_SLOT)
         } else if op == sysettings.OP_SET_HIDDEN {

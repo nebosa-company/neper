@@ -391,6 +391,7 @@ type State = struct {
     search: ui.Field,
     mirror: [48]usize,
     hidden: usize,
+    battery: usize,
     detail: usize,
     net_names: [192]u8,
     net_len: [8]usize,
@@ -504,7 +505,10 @@ fn summary(a: *mem.Arena, s: *State, page: usize) -> str {
     }
     if page == 1usize { ret join(a, join(a, "Brightness ", number(a, s.values[BRIGHTNESS] * 10usize), "%"), ", dark theme ", on_off(is_on(s, DARK))) }
     if page == 2usize { ret join(a, "Media volume ", number(a, s.values[MEDIA] * 10usize), "%") }
-    if page == 3usize { ret join(a, "Level unavailable, battery saver ", on_off(is_on(s, SAVER)), "") }
+    if page == 3usize {
+        if (s.battery & 2147483648usize) != 0usize { ret join(a, join(a, number(a, s.battery & 255usize), "%, battery saver ", ""), on_off(is_on(s, SAVER)), "") }
+        ret join(a, "Level unavailable, battery saver ", on_off(is_on(s, SAVER)), "")
+    }
     if page == 4usize {
         if !s.have_storage { ret "No storage" }
         ret join(a, size_text(a, s.storage_used * 512usize), " used of ", size_text(a, s.storage_total * 512usize))
@@ -761,10 +765,22 @@ fn draw_sound(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
 // so rather than show made-up numbers; the battery saver switch is kept.
 fn draw_battery(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     var y: f32 = 92.0
-    try card(a, builder, 16.0, y + 2.0, 380.0, 76.0, 18.0, surface())
-    try put(a, builder, faces.jost, 20.0, "Battery level unavailable", 32.0, y + 12.0, ink())
-    try put(a, builder, faces.grotesk, 13.0, "The system does not report it to apps yet.", 32.0, y + 46.0, muted())
-    y += 88.0
+    if (s.battery & 2147483648usize) != 0usize {
+        let level = s.battery & 255usize
+        try card(a, builder, 16.0, y + 2.0, 380.0, 96.0, 18.0, surface())
+        try put(a, builder, faces.jost_bold, 40.0, join(a, number(a, level), "%", ""), 32.0, y + 10.0, ink())
+        var state_line = "Not charging"
+        if (s.battery & 256usize) != 0usize { state_line = "Charging" }
+        try put(a, builder, faces.grotesk, 13.0, state_line, 32.0, y + 58.0, muted())
+        try card(a, builder, 32.0, y + 78.0, 348.0, 8.0, 4.0, soft())
+        try card(a, builder, 32.0, y + 78.0, 348.0 * f32(level) / 100.0, 8.0, 4.0, amber())
+        y += 108.0
+    } else {
+        try card(a, builder, 16.0, y + 2.0, 380.0, 76.0, 18.0, surface())
+        try put(a, builder, faces.jost, 20.0, "Battery level unavailable", 32.0, y + 12.0, ink())
+        try put(a, builder, faces.grotesk, 13.0, "No battery provider reports to the system.", 32.0, y + 46.0, muted())
+        y += 88.0
+    }
     try toggle_row(a, builder, s, faces, SAVER, "Limits background activity", y)
     ret ok
 }
@@ -1236,6 +1252,16 @@ fn act(s: *State, id: usize, x: f32) -> bool {
             say("\n")
             if s.page == 0usize && s.values[WIFI] != 0usize { scan_networks(s) }
             if s.page == 6usize { s.hidden = sysettings.hidden() }
+            if s.page == 3usize {
+                s.battery = sysettings.battery()
+                if (s.battery & 2147483648usize) != 0usize {
+                    say("settings battery ")
+                    say_num(s.battery & 255usize)
+                    say("\n")
+                } else {
+                    say("settings battery unavailable\n")
+                }
+            }
             if s.page == 4usize {
                 let (used, total, answered) = vaultfs.stats()
                 s.have_storage = answered
@@ -1395,6 +1421,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     sync_theme(&s)
     s.page = MAIN
     s.hidden = sysettings.hidden()
+    s.battery = sysettings.battery()
     if s.values[WIFI] != 0usize { scan_networks(&s) }
     let (stored_used, stored_total, stored_answered) = vaultfs.stats()
     s.have_storage = stored_answered

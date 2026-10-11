@@ -1083,7 +1083,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if has_word(bootargs, "unified") {
             // The input server holds ASID 3, so the status process starts above it.
             next_asid = 3usize
-            let (unified_status, unified_status_error) = start_process(archive_base + archive_offset[4usize], archive_length[4usize], "status")
+            // (C126) The test boots (nettest) give the status service a recorded battery: the name says so.
+            var status_name = "status"
+            if has_word(bootargs, "nettest") { status_name = "statusbat" }
+            let (unified_status, unified_status_error) = start_process(archive_base + archive_offset[4usize], archive_length[4usize], status_name)
             if unified_status_error != ok { ret unified_status_error }
             thread.grant(unified_status, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 3usize)
             thread.grant(unified_status, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 4usize)
@@ -1172,6 +1175,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if settings_server_error != ok { ret settings_server_error }
                 thread.grant(settings_server, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 12usize)
                 thread.grant(settings_server, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 13usize)
+                // The status service's two endpoints (3 requests, 4 replies), shared with the shell.
+                thread.grant(settings_server, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 3usize)
+                thread.grant(settings_server, 7usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 4usize)
                 if fs_present {
                     thread.grant(settings_server, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                     thread.grant(settings_server, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)

@@ -20,6 +20,9 @@ const OP_RESET: usize = 4usize
 // The uninstalled apps, one bit per home-screen icon: GET_HIDDEN -> mask; SET_HIDDEN index flag -> mask.
 const OP_GET_HIDDEN: usize = 5usize
 const OP_SET_HIDDEN: usize = 6usize
+// The battery word of the status service (present bit 31, charging bit 8, level in the low byte; 0 when no
+// provider reports one): the server asks the status service for it.
+const OP_GET_BATTERY: usize = 7usize
 
 // The system word, or 0 when there is no server.
 fn word() -> usize {
@@ -42,6 +45,13 @@ fn set(index: usize, value: usize) -> usize {
     if sent == REFUSED { ret 0usize }
     let sent_index = os.send(REQ, index, NO_SLOT)
     let sent_value = os.send(REQ, value, NO_SLOT)
+    ret os.recv(REP, NO_SLOT)
+}
+
+// The status service's battery word through the server, or 0 (no server, or no battery provider).
+fn battery() -> usize {
+    let sent = os.send(REQ, OP_GET_BATTERY, NO_SLOT)
+    if sent == REFUSED { ret 0usize }
     ret os.recv(REP, NO_SLOT)
 }
 

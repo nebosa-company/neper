@@ -28,8 +28,7 @@ fn say(text: str) {
 // Push the five-word snapshot: battery, Wi-Fi, cellular, wall-clock nanoseconds, notification count.
 // Battery packs present | charging<<8 | level; Wi-Fi present | signal; cellular present | kind<<8 |
 // signal. QEMU virt has none of the three, so each is 0 (present bit clear). The clock is read fresh.
-fn push_snapshot(notes: usize) {
-    let battery = 0usize
+fn push_snapshot(notes: usize, battery: usize) {
     let wifi = 0usize
     let cellular = 0usize
     var clock_ns = 0usize
@@ -45,15 +44,19 @@ fn push_snapshot(notes: usize) {
 fn main(a: *mem.Arena, args: []str) -> err {
     say("status server up\n")
     var notes = 0usize
+    // (C126) The test boots name this process "statusbat" and give it a recorded battery (78%, not charging), the way
+    // they record the Wi-Fi air: QEMU virt has no battery, and a real provider would fill this word.
+    var battery = 0usize
+    if args.len > 0usize && args[0usize].len == 9usize { battery = PRESENT | 78usize }
     var running = true
     while running {
         let op = os.recv(REQ, NO_SLOT)
         if op == OP_QUIT { running = false }
-        if op == OP_SUBSCRIBE { push_snapshot(notes) }
-        if op == OP_QUERY { push_snapshot(notes) }
+        if op == OP_SUBSCRIBE { push_snapshot(notes, battery) }
+        if op == OP_QUERY { push_snapshot(notes, battery) }
         if op == OP_POST {
             notes += 1usize
-            push_snapshot(notes)
+            push_snapshot(notes, battery)
         }
     }
     say("status server done\n")
