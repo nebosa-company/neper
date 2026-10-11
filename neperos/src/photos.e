@@ -17,6 +17,10 @@ use e.gfx.scene
 use e.gfx.svg
 use e.text.layout
 use e.text.shape
+use e.io
+use e.gfx.image
+use e.fmt.png
+use vaultfs
 use appkit
 use text
 use scenes
@@ -144,11 +148,16 @@ fn album_name(album: usize) -> str {
 // ----------------------------------------------------------------------------------------------
 // State.
 
-type Photo = struct { kind: usize, seed: usize, days_ago: usize, minute: usize, album: usize, favorite: bool, used: bool }
+// `file` is the index of a picture read from /DCIM (its texture in the State), or NONE for a sample scene.
+type Photo = struct { kind: usize, seed: usize, days_ago: usize, minute: usize, album: usize, favorite: bool, used: bool, file: usize }
 
 type Hit = struct { id: usize, x: f32, y: f32, w: f32, h: f32 }
 
 type State = struct {
+    // The pictures read from /DCIM: texture, width and height of each.
+    tex: [8]scene.TextureId,
+    tw: [8]f32,
+    th: [8]f32,
     photos: [24]Photo,
     today: usize,
     tab: usize,
@@ -168,7 +177,7 @@ fn add_photo(s: *State, kind: usize, seed: usize, days_ago: usize, minute: usize
     var i = 0usize
     while i < MAX_PHOTOS {
         if !s.photos[i].used {
-            s.photos[i] = Photo { kind: kind, seed: seed, days_ago: days_ago, minute: minute, album: album, favorite: favorite, used: true }
+            s.photos[i] = Photo { kind: kind, seed: seed, days_ago: days_ago, minute: minute, album: album, favorite: favorite, used: true, file: NONE }
             ret
         }
         i += 1usize
@@ -306,6 +315,23 @@ fn pill(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, id
     ret ok
 }
 
+// A photo as a picture: the file's pixels, centre-cropped to the rectangle's shape, or the sample scene.
+fn photo_picture(a: *mem.Arena, builder: *scene.Builder, s: *State, p: Photo, depth: usize, w: usize, h: usize, r: geometry.Rect) -> err {
+    if p.file != NONE {
+        let tw = s.tw[p.file]
+        let th = s.th[p.file]
+        var sw = tw
+        var sh = tw * r.height / r.width
+        if sh > th {
+            sh = th
+            sw = th * r.width / r.height
+        }
+        try scene.push(builder, scene.Command { Image: scene.DrawImage { texture: s.tex[p.file], source: geometry.rect((tw - sw) / 2.0, (th - sh) / 2.0, sw, sh), destination: r, opacity: 1.0 } })
+        ret ok
+    }
+    ret picture(a, builder, scenes.scene_svg(a, p.kind, p.seed, depth, false, w, h), r, light())
+}
+
 // A picture drawn inside its own rectangle: nothing of the scene shows outside it.
 fn picture(a: *mem.Arena, builder: *scene.Builder, doc: str, r: geometry.Rect, c: paint.Color) -> err {
     let save: scene.Command = .Save
@@ -400,7 +426,7 @@ fn draw_grid(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         }
         let x: f32 = 7.0 + f32(column) * 100.0
         if y >= 84.0 && y + 97.0 <= 826.0 {
-            try picture(a, builder, scenes.scene_svg(a, p.kind, p.seed, 4usize, false, 97usize, 97usize), geometry.rect(x, y, 97.0, 97.0), light())
+            try photo_picture(a, builder, s, p, 4usize, 97usize, 97usize, geometry.rect(x, y, 97.0, 97.0))
             if p.favorite { try svg.draw(a, builder, heart_icon(true), geometry.rect(x + 71.0, y + 71.0, 20.0, 20.0), amber()) }
             hit(s, 200usize + index, x, y, 97.0, 97.0)
         }
@@ -443,7 +469,7 @@ fn draw_albums(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
         let cover = album_cover(s, album)
         if cover != NONE {
             let p = s.photos[cover]
-            try picture(a, builder, scenes.scene_svg(a, p.kind, p.seed, 5usize, false, 190usize, 150usize), geometry.rect(x, y, 190.0, 150.0), light())
+            try photo_picture(a, builder, s, p, 5usize, 190usize, 150usize, geometry.rect(x, y, 190.0, 150.0))
         }
         try put(a, builder, faces.jost, 17.0, album_name(album), x + 14.0, y + 158.0, ink())
         try put(a, builder, faces.grotesk, 13.0, join(a, number(a, album_count(s, album)), " items", ""), x + 14.0, y + 182.0, muted())
@@ -457,7 +483,7 @@ fn draw_albums(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
 fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     let index = s.list[s.view]
     let p = s.photos[index]
-    try picture(a, builder, scenes.scene_svg(a, p.kind, p.seed, 1usize, false, 412usize, 560usize), geometry.rect(0.0, 84.0, 412.0, 560.0), light())
+    try photo_picture(a, builder, s, p, 1usize, 412usize, 560usize, geometry.rect(0.0, 84.0, 412.0, 560.0))
     try card(a, builder, 0.0, 0.0, 412.0, 84.0, 0.0, paint.Color { red: 0.02, green: 0.02, blue: 0.03, alpha: 1.0 })
     try svg.draw(a, builder, back_icon(), geometry.rect(18.0, 28.0, 28.0, 28.0), light())
     hit(s, 500usize, 0.0, 14.0, 66.0, 56.0)
@@ -674,6 +700,63 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (wall, wall_error) = time.now()
     if wall_error == ok { s.today = usize(wall.nanos / 1000000000i64) / 86400usize }
     if s.today < 40usize { s.today = 40usize }
+    // The pictures in /DCIM (the Camera's photos), newest numbers first: decoded and uploaded as textures.
+    var names: [512]u8 = zero
+    let (name_bytes, dcim_listed) = vaultfs.list("/DCIM", mem.address_of(&names[0usize]), 512usize)
+    var loaded = 0usize
+    if dcim_listed {
+        var start = 0usize
+        var at = 0usize
+        while at < name_bytes && loaded < 8usize {
+            if names[at] == 10u8 {
+                let file_name = names[start..at]
+                let path = join(a, "/DCIM/", file_name, "")
+                let (size, kind, day, found) = vaultfs.stat(path)
+                if found && size > 0usize && size <= 262144usize && file_name.len > 4usize {
+                    let (raw, raw_error) = mem.alloc[u8](a, size)
+                    if raw_error == ok {
+                        let (got, read_ok) = vaultfs.read_big(path, mem.address_of(&raw[0usize]), size)
+                        if read_ok && got == size {
+                            var reader_state: io.SliceReader = zero
+                            reader_state.data = raw[0usize..got]
+                            reader_state.off = 0usize
+                            let (decoded, decode_error) = png.decode(a, io.slice_reader(&reader_state), png.DecodeOptions { max_width: 0u32, max_height: 0u32, max_pixels: 0u64, verify_crc: true })
+                            if decode_error == ok {
+                                let (view, view_error) = image.make_const(decoded.pixels, decoded.width, decoded.height, decoded.stride, decoded.format, decoded.alpha)
+                                if view_error == ok {
+                                    let (texture, upload_error) = scene.upload_image(&kit.renderer, view)
+                                    if upload_error == ok {
+                                        s.tex[loaded] = texture
+                                        s.tw[loaded] = f32(decoded.width)
+                                        s.th[loaded] = f32(decoded.height)
+                                        add_photo(&s, 0usize, 0usize, 0usize, 1439usize - loaded, 1usize, false)
+                                        // The photo just added is the first unused slot's predecessor: mark its file.
+                                        var slot = 0usize
+                                        while slot < MAX_PHOTOS {
+                                            if s.photos[slot].used && s.photos[slot].file == NONE && s.photos[slot].minute == 1439usize - loaded && s.photos[slot].days_ago == 0usize {
+                                                s.photos[slot].file = loaded
+                                                slot = MAX_PHOTOS
+                                            } else {
+                                                slot += 1usize
+                                            }
+                                        }
+                                        loaded += 1usize
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                start = at + 1usize
+            }
+            at += 1usize
+        }
+    }
+    if loaded > 0usize {
+        say("photos from disk ")
+        say_num(loaded)
+        say("\n")
+    }
     // Twenty sample pictures, newest first, over two weeks.
     let days: [20]usize = [20]usize{ 0usize, 0usize, 0usize, 1usize, 1usize, 1usize, 2usize, 2usize, 3usize, 3usize, 5usize, 5usize, 5usize, 8usize, 8usize, 9usize, 12usize, 12usize, 12usize, 14usize }
     var i = 0usize

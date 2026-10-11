@@ -11,6 +11,10 @@
 // exposure are queued as C122. The zoom scales the scene about its centre (0.5x draws a wider world).
 use e.mem
 use e.os
+use e.io
+use e.gfx.image
+use e.fmt.png
+use vaultfs
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -155,6 +159,8 @@ type State = struct {
     toast: usize,
     caps: [24]Cap,
     cap_total: usize,
+    // A photo was just taken and its file is still to be written (main does it from the frame on the screen).
+    save_photo: bool,
     review: bool,
     view: usize,
     hits: [32]Hit,
@@ -473,6 +479,89 @@ fn remove_cap(s: *State, index: usize) {
 }
 
 // What a tap on button `id` did: true when the screen changed.
+// (C122) The photo as a file: the viewfinder's pixels as the last frame left them in the shared surface (the
+// 412 x 560 dp region under the top bar, one pixel in eight), encoded to PNG and written to /DCIM/IMG_nnnn.png
+// through the filesystem server. There is no sensor, so what the viewfinder shows is the sample scene; the file
+// is exactly that picture. The first free number from 1 is used.
+fn save_photo(a: *mem.Arena) -> bool {
+    let step = 8usize
+    let width = 160usize
+    let height = 217usize
+    let top = 261usize
+    let (pixels, pixels_error) = mem.alloc[u8](a, width * height * 4usize)
+    if pixels_error != ok { ret false }
+    var y = 0usize
+    while y < height {
+        var x = 0usize
+        while x < width {
+            let px = usize(os.load32(os.SHARED_FRAME_VA + ((top + y * step) * os.SURFACE_W + x * step) * 4usize))
+            let o = (y * width + x) * 4usize
+            pixels[o] = u8((px >> 16usize) & 255usize)
+            pixels[o + 1usize] = u8((px >> 8usize) & 255usize)
+            pixels[o + 2usize] = u8(px & 255usize)
+            pixels[o + 3usize] = 255u8
+            x += 1usize
+        }
+        y += 1usize
+    }
+    let (source, source_error) = image.make_const(pixels, u32(width), u32(height), width * 4usize, image.Format.Rgba8, image.Alpha.Straight)
+    if source_error != ok { ret false }
+    let (buffer, buffer_error) = mem.alloc[u8](a, 196608usize)
+    if buffer_error != ok { ret false }
+    var sink = io.SliceWriter { data: buffer, off: 0usize }
+    var encoder = io.slice_writer(&sink)
+    if png.encode(&encoder, source, png.EncodeOptions { compression: .Fast, interlace: false }) != ok { ret false }
+    let made_dir = vaultfs.mkdir("/DCIM")
+    var index = 1usize
+    var free = 0usize
+    while index < 10000usize {
+        let candidate = join(a, "/DCIM/IMG_", join(a, number_pad(a, index), ".png", ""), "")
+        let (size, kind, day, found) = vaultfs.stat(candidate)
+        if !found {
+            free = index
+            index = 10000usize
+        } else {
+            index += 1usize
+        }
+    }
+    if free == 0usize { ret false }
+    let path = join(a, "/DCIM/IMG_", join(a, number_pad(a, free), ".png", ""), "")
+    if vaultfs.write_big(path, mem.address_of(&buffer[0usize]), sink.off) {
+        say("camera saved ")
+        // (os.write reads from the stack, so the arena's text is copied there first.)
+        var shown: [40]u8 = zero
+        var n = 0usize
+        while n < path.len && n < 40usize {
+            shown[n] = path[n]
+            n += 1usize
+        }
+        say(shown[0usize..n])
+        say("\n")
+        ret true
+    }
+    ret false
+}
+
+// A number as four digits, zero padded.
+fn number_pad(a: *mem.Arena, value: usize) -> str {
+    var digits: [4]u8 = zero
+    var rest = value
+    var i = 4usize
+    while i > 0usize {
+        i -= 1usize
+        digits[i] = u8(rest % 10usize) + 48u8
+        rest = rest / 10usize
+    }
+    let (out, out_error) = mem.alloc[u8](a, 4usize)
+    if out_error != ok { ret "0000" }
+    var k = 0usize
+    while k < 4usize {
+        out[k] = digits[k]
+        k += 1usize
+    }
+    ret out[0usize..4usize]
+}
+
 fn act(s: *State, id: usize) -> bool {
     if s.review {
         if id == 700usize {
@@ -502,6 +591,7 @@ fn act(s: *State, id: usize) -> bool {
     }
     if id == 100usize {
         if s.mode == PHOTO {
+            s.save_photo = true
             add_cap(s, 0usize, 0usize)
             s.toast = 1usize
             say("camera photo ")
@@ -631,6 +721,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else {
             let id = hit_at(&s, tap.x, tap.y)
             if id != NONE && act(&s, id) {
+                // A photo was taken: its file is written from the frame still on the screen.
+                if s.save_photo {
+                    s.save_photo = false
+                    let kept = save_photo(a)
+                }
                 if !show(a, &kit, &s) {
                     say("camera present failed\n")
                     appkit.answer(appkit.ANSWER_NONE)
