@@ -2754,6 +2754,11 @@ cron_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixt
 [ "$cron_written" = 'executable written' ]
 chmod +x "$test_build/time-cron-selfhost"
 "$test_build/time-cron-selfhost"
+# `e.time.recur` and `e.time.parse` pin RFC 5545 expansion against python-dateutil rrule, and strict, lenient and duration text parsing (L103).
+time_recur_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_recur/src/main.e" "$repo" x64 linux "$test_build/time-recur-selfhost")
+[ "$time_recur_written" = 'executable written' ]
+chmod +x "$test_build/time-recur-selfhost"
+[ "$("$test_build/time-recur-selfhost")" = 'time recur ok' ]
 # `e.grep` pins recursive literal matches and its stateless index contract.
 grep_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/grep/src/main.e" "$repo" x64 linux "$test_build/grep-selfhost")
 [ "$grep_written" = 'executable written' ]

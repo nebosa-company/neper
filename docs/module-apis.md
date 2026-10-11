@@ -19435,6 +19435,61 @@ Sunday is 0 or 7. Day-of-month and day-of-week use Vixie cron's OR rule when bot
 restricted. `next` is strictly after its input and searches no more than one complete
 400-year Gregorian cycle or the representable timestamp range.
 
+### `e.time.recur`
+
+```neper
+type Rule = struct { freq: u8, interval: i64, count: i64, has_until: bool, until: calendar.DateTime, wkst: i64, months: u64, mday_pos: u64, mday_neg: u64, any_day: bool, day_pos: [7]u64, day_neg: [7]u64, hours: u64, minutes: u64, seconds: u64, yday_n: usize, yday: [32]i64, setpos_n: usize, setpos: [32]i64 }
+error Invalid
+
+fn parse_stamp(s: str) -> (calendar.DateTime, err)
+fn parse_rule(text: str) -> (Rule, err)
+fn expand_from(rule: Rule, start: calendar.DateTime, from: calendar.DateTime, out: []calendar.DateTime) -> (usize, err)
+fn expand(rule: Rule, start: calendar.DateTime, out: []calendar.DateTime) -> (usize, err)
+```
+
+RFC 5545 recurrence rules over floating (zoneless, whole-second) `calendar.DateTime`
+values. `parse_rule` reads `FREQ=...;INTERVAL=...` text (an `RRULE:` prefix and lower
+case are accepted) into a `Rule` that owns no storage: FREQ is one of the constants
+`YEARLY MONTHLY WEEKLY DAILY HOURLY MINUTELY SECONDLY`, and INTERVAL, COUNT, UNTIL,
+WKST, BYMONTH, BYMONTHDAY, BYYEARDAY, BYDAY (an ordinal only for MONTHLY and YEARLY),
+BYHOUR, BYMINUTE, BYSECOND and BYSETPOS are read; BYWEEKNO, BYEASTER and unknown
+parts are `Invalid`. `parse_stamp` reads `YYYYMMDD` or `YYYYMMDDTHHMMSS[Z]`; a
+date-only UNTIL is midnight of that day, as python-dateutil reads it.
+
+`expand` writes the occurrences from `start` into `out` until it is full, COUNT or
+UNTIL ends the rule, or the search bound is met, and returns how many; `expand_from`
+writes only those at or after `from` (earlier ones still count toward COUNT).
+Occurrences before `start` are never produced and `start` is produced only when the
+rule matches it. A plain and an ordinal weekday in one BYDAY list are a union (RFC
+5545; python-dateutil intersects them). A rule whose periods stay empty ends quietly
+after the year 9999 or 4,000,000 sub-daily steps. Zones belong to `e.tz`.
+
+### `e.time.parse`
+
+```neper
+type Parsed = struct { value: calendar.DateTime, has_time: bool, has_offset: bool, offset_minutes: i32 }
+error Invalid
+
+fn parse_iso(text: str) -> (Parsed, err)
+fn parse_lenient(text: str, day_first: bool) -> (Parsed, err)
+fn parse_date(text: str, day_first: bool) -> (Parsed, err)
+fn parse_duration(text: str) -> (time.Duration, err)
+```
+
+Date-time and duration text. `parse_iso` is strict ISO 8601: a full date
+(`YYYY-MM-DD` or `YYYYMMDD`), then `T`, `t` or a space and `HH`, `HH:MM`, `HH:MM:SS`,
+`HHMM` or `HHMMSS` with a one-to-nine digit fraction, then `Z` or a `+HH[[:]MM]`
+offset. `parse_lenient` reads the shapes people write (month names, weekday names
+that are ignored, `5th`, `3:04 PM`, `10:30 UTC`, `/ . -` separators) with python-dateutil's
+numeric ordering: a first number above 31 or of four digits is the year, otherwise
+month first unless `day_first`; a date needs year, month and day, nothing is filled
+from a default, and unknown words are refused. `parse_date` is the fallback order: strict
+first, then lenient. A year of at most two digits is 2000-2068 or 1969-1999. The
+zone is reported in `has_offset` and `offset_minutes`, never applied. `parse_duration`
+reads humantime-style `15m30s` / `1h 30m` text into a `time.Duration`: whole numbers
+each followed by a unit (`ns us ms s m h d w` and long spellings, `M` months of 30.44
+days, `y` years of 365.25 days); a bare number, a fraction or an overflow is `Invalid`.
+
 ### `e.ratelimit`
 
 ```neper

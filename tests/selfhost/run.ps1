@@ -3167,6 +3167,12 @@ $cronWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $cronWritten -ne 'executable written') { throw 'e.time.cron emission failed' }
 & $cronPath
 if ($LASTEXITCODE -ne 0) { throw "an e.time.cron parse or match answered wrongly: exit $LASTEXITCODE" }
+# `e.time.recur` and `e.time.parse` pin RFC 5545 expansion against python-dateutil rrule, and strict, lenient and duration text parsing (L103).
+$timeRecurPath = Join-Path $testBuild 'time-recur-selfhost.exe'
+$timeRecurWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_recur\src\main.e') $repo 'x64' 'windows' $timeRecurPath
+if ($LASTEXITCODE -ne 0 -or $timeRecurWritten -ne 'executable written') { throw 'e.time.recur emission failed' }
+$timeRecurOutput = & $timeRecurPath
+if ($LASTEXITCODE -ne 0 -or $timeRecurOutput -ne 'time recur ok') { throw "an e.time.recur or e.time.parse check failed: exit $LASTEXITCODE" }
 # `e.grep` pins recursive literal matches and its stateless index contract.
 $grepPath = Join-Path $testBuild 'grep-selfhost.exe'
 $grepWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\grep\src\main.e') $repo 'x64' 'windows' $grepPath
