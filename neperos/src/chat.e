@@ -18,6 +18,10 @@ use e.text.shape
 use appkit
 use text
 use ui
+use netclient
+use netproto
+use netio
+use wsc
 
 const NONE: usize = 99usize
 const MAX_ROOMS: usize = 6usize
@@ -30,6 +34,12 @@ type Post = struct { who: usize, body: [100]u8, body_len: usize, minute: usize, 
 type Room = struct { name: [20]u8, name_len: usize, direct: bool, posts: [12]Post, post_total: usize, unread: usize }
 
 type State = struct {
+    // (C134) The live connection: a WebSocket to the chat server, its buffered network reader, the memory it keeps
+    // its state in (outside the per-frame arena), and the name of the last person who was not one of the sample ones.
+    live: bool,
+    nb: netio.NetBuf,
+    other_name: [12]u8,
+    other_len: usize,
     rooms: [6]Room,
     room_total: usize,
     screen: usize,
@@ -47,6 +57,7 @@ fn person_name(who: usize) -> str {
     if who == 3usize { ret "Priya" }
     ret "Sam"
 }
+
 
 fn add_room(s: *State, name: str, direct: bool, unread: usize) -> usize {
     if s.room_total >= MAX_ROOMS { ret NONE }
@@ -227,9 +238,131 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
 // ----------------------------------------------------------------------------------------------
 // Behaviour.
 
+// ----------------------------------------------------------------------------------------------
+// The server (C134): one WebSocket text frame a message, fields separated by |.
+
+fn live_say(s: *State, line: str) {
+    if !s.live { ret }
+    if !wsc.send_text(line) { s.live = false }
+}
+
+// The index of room `name`, or NONE.
+fn find_room(s: *State, name: []const u8) -> usize {
+    var i = 0usize
+    while i < s.room_total {
+        let r = s.rooms[i]
+        if r.name_len == name.len {
+            var same = true
+            var k = 0usize
+            while k < name.len {
+                if r.name[k] != name[k] { same = false }
+                k += 1usize
+            }
+            if same { ret i }
+        }
+        i += 1usize
+    }
+    ret NONE
+}
+
+fn text_is(a: []const u8, b: str) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// One message from the server: MSG|room|who|text puts a post in the room (our own echo is skipped).
+fn live_message(a: *mem.Arena, s: *State, payload: []const u8) -> bool {
+    // Split at the first three bars.
+    var bars: [3]usize = zero
+    var n = 0usize
+    var i = 0usize
+    while i < payload.len && n < 3usize {
+        if payload[i] == 124u8 {
+            bars[n] = i
+            n += 1usize
+        }
+        i += 1usize
+    }
+    if n < 3usize || !text_is(payload[0usize..bars[0usize]], "MSG") { ret false }
+    let room_name_bytes = payload[bars[0usize] + 1usize..bars[1usize]]
+    let who_bytes = payload[bars[1usize] + 1usize..bars[2usize]]
+    let body_bytes = payload[bars[2usize] + 1usize..payload.len]
+    if text_is(who_bytes, "neper") { ret false }
+    let room = find_room(s, room_name_bytes)
+    if room == NONE { ret false }
+    var who = 4usize
+    if text_is(who_bytes, "Maya") { who = 1usize }
+    if text_is(who_bytes, "Alex") { who = 2usize }
+    if text_is(who_bytes, "Priya") { who = 3usize }
+    add_post(s, room, who, ui.text_of(a, body_bytes, body_bytes.len), s.now_minute, 0usize)
+    if !(s.screen == ROOM_SCREEN && s.open == room) { s.rooms[room].unread += 1usize }
+    ui.say("chat received ")
+    ui.say_text(ui.text_of(a, who_bytes, who_bytes.len))
+    ui.say(" ")
+    ui.say_text(ui.text_of(a, body_bytes, body_bytes.len))
+    ui.say("\n")
+    ret true
+}
+
+// What the server has sent since last time: true when a post was added.
+fn live_poll(a: *mem.Arena, s: *State) -> bool {
+    if !s.live { ret false }
+    var changed = false
+    let have = netio.poll(&s.nb)
+    if have == 0usize {
+        if s.nb.closed {
+            s.live = false
+            ui.say("chat live closed\n")
+        }
+        ret false
+    }
+    var guard = 0usize
+    var payload: [256]u8 = zero
+    while s.nb.pos < s.nb.len && guard < 16usize {
+        let (opcode, n, received) = wsc.receive(&s.nb, payload[0usize..256usize])
+        if !received {
+            s.live = false
+            ret changed
+        }
+        if opcode == 1u8 {
+            if live_message(a, s, payload[0usize..n]) { changed = true }
+        }
+        guard += 1usize
+    }
+    ret changed
+}
+
+// Connect to the chat server and join as `neper`. Plain text only: the network server polls plain connections for
+// what has arrived, and a TLS stream it can only read by waiting (a poll over TLS is a later step).
+fn live_open(s: *State) -> bool {
+    let link = netclient.connect("neper.test", 8090u16, false)
+    if link != netproto.R_OK { ret false }
+    s.nb.pos = 0usize
+    s.nb.len = 0usize
+    s.nb.closed = false
+    if !wsc.upgrade(&s.nb, "neper.test", "/chat") {
+        let closed = netclient.close()
+        ret false
+    }
+    s.live = true
+    live_say(s, "JOIN|neper")
+    ui.say("chat live ws\n")
+    ret s.live
+}
+
 fn send(a: *mem.Arena, s: *State) {
     if s.draft.len == 0usize { ret }
-    add_post(s, s.open, 0usize, ui.field_text(a, &s.draft), s.now_minute, 0usize)
+    let body = ui.field_text(a, &s.draft)
+    add_post(s, s.open, 0usize, body, s.now_minute, 0usize)
+    // A room the server knows (not a direct message) is said there too.
+    if s.live && !s.rooms[s.open].direct {
+        live_say(s, ui.join(a, ui.join(a, "SAY|", room_name(a, s, s.open), ""), "|", body))
+    }
     s.draft.len = 0usize
     ui.say("chat sent\n")
 }
@@ -319,6 +452,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let alex = add_room(&s, "Alex", true, 0usize)
     add_post(&s, alex, 0usize, "Thanks for the review!", 9usize * 60usize + 2usize, 0usize)
     add_post(&s, alex, 2usize, "Anytime.", 9usize * 60usize + 3usize, 0usize)
+    let joined = live_open(&s)
     if !show(a, &kit, &s) {
         ui.say("chat present failed\n")
         ret ok
@@ -330,7 +464,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if tap.ended {
             running = false
         } else if tap.tick {
-            appkit.answer(appkit.ANSWER_NONE)
+            // Messages that arrived since the last tick.
+            if live_poll(a, &s) {
+                if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }
+            } else {
+                appkit.answer(appkit.ANSWER_NONE)
+            }
         } else if tap.y >= 896.0 {
             ui.say("chat home\n")
             appkit.leave()

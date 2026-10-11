@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-C134	compiler	0	761	NeperOS Chat: a real team chat service	The Chat app (D2229) holds sample rooms in the process.
 C135	compiler	0	915	NeperOS Meet: real video calls: signalling, media transport, capture	The Meet app (D2230) runs a demo meeting with made-up people.
 C136	compiler	0	797	NeperOS Recorder: real capture and playback, storage and transcription	The Recorder app (D2231) draws a sample wave and keeps recordings in the process.
 C137	compiler	0	916	NeperOS Translate: a real translation model, more languages, camera and voice input	The Translate app (D2232) uses a sample book of eight phrases in six languages.
@@ -141,3 +140,4 @@ C160	compiler	0	909	NeperOS Maps remainder: map data, location, search and turn-
 C161	compiler	0	802	NeperOS sensors remainder: a sensor server and drivers, the gyroscope, GPS and the location service	Split from C131 (D2420): the settings server serves a scripted magnetometer and accelerometer trace, the Compass computes its heading from it with calibration and the model's declination.
 C162	compiler	0	700	NeperOS Level remainder: fast sensor stream, self-test, orientation modes, feedback	Split from C132 (D2421): Level filters the accelerometer and gyroscope of the sensor service with a complementary filter and keeps its calibration.
 C163	compiler	0	588	NeperOS Flashlight remainder: a finer timer, quick toggles, patterns, torch policy	Split from C133 (D2422): the Flashlight drives a simulated torch through the settings server.
+C164	compiler	0	714	NeperOS Chat remainder: TLS, accounts and presence, history, files, encryption	Split from C134 (D2423): the Chat app talks to a loopback WebSocket server for the general room.

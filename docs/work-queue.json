@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C134",
-      "category": "compiler",
-      "group": "NeperOS",
-      "order": 134,
-      "title": "NeperOS Chat: a real team chat service",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Chat app (D2229) holds sample rooms in the process. Acceptance: (1) a chat protocol over C117 TLS (WebSocket or a Matrix-style API) with accounts, rooms, direct messages, presence and typing indicators, delivery and read marks; (2) message history in storage (C125), search, threads, mentions, emoji reactions with a picker, edit and delete; (3) files and images from Files and Camera, link previews; (4) notifications through the status server with per-room settings (C126); (5) voice and video from a room opens Meet (C135); (6) end-to-end encryption with keys in Secure (C116); (7) a fixture on QEMU against a local test server that sends and receives a message across two clients. Not queued here: bots, workflows, a desktop client."
-    },
-    {
       "id": "C135",
       "category": "compiler",
       "group": "NeperOS",
@@ -1564,6 +1553,17 @@
       "model": "opus",
       "thinking": "medium",
       "evidence": "Split from C133 (D2422): the Flashlight drives a simulated torch through the settings server. Acceptance: (1) a finer timer (a 10 ms tick or a timer capability in the kernel) so a Morse unit can be 100 ms and a strobe can reach 10 flashes a second, with a speed control; (2) a quick toggle from the status bar and the lock screen; (3) patterns kept as a list the user can add to; (4) the torch turned off when the camera opens (the camera server of C153) and on a timeout, and the flash-mode permission check; (5) a fixture that sends a message and checks the beat times against the unit."
+    },
+    {
+      "id": "C164",
+      "category": "compiler",
+      "group": "NeperOS",
+      "order": 164,
+      "title": "NeperOS Chat remainder: TLS, accounts and presence, history, files, encryption",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Split from C134 (D2423): the Chat app talks to a loopback WebSocket server for the general room. Acceptance: (1) wss with a way to poll a TLS connection from an app (the network server's poll is plain TCP only), accounts, rooms and direct messages as the server has them, presence and typing indicators, delivery and read marks; (2) message history in storage (C125), search, threads, mentions, reactions kept on the server, edit and delete; (3) files and images from Files and Camera, link previews; (4) notifications through the status server with per-room settings (C126); (5) voice and video from a room opens Meet (C135); (6) end-to-end encryption with keys in Secure (C116); (7) a fixture across two clients."
     }
   ]
 }
