@@ -13,6 +13,7 @@ use e.mem
 use e.os
 use e.io
 use e.gfx.image
+use e.gfx.vision
 use e.fmt.png
 use vaultfs
 use e.gfx.geometry
@@ -161,6 +162,7 @@ type State = struct {
     cap_total: usize,
     // A photo was just taken and its file is still to be written (main does it from the frame on the screen).
     save_photo: bool,
+    save_scan: bool,
     // (C122) Tap to focus: the ring's centre; the exposure step (0 to 4, 2 is neutral); the timer (0 off, 1 is 3 s,
     // 2 is 10 s) and the half-seconds left of a countdown.
     focused: bool,
@@ -557,18 +559,124 @@ fn save_photo(a: *mem.Arena) -> bool {
         }
         y += 1usize
     }
+    ret write_png(a, pixels, width, height, "/DCIM/IMG_")
+}
+
+// (C122) A scan: the page in the viewfinder found, straightened and written as /DCIM/SCAN_nnnn.png. The frame is
+// sampled at one pixel in four; the page is the bright (paper) region of the rows above the zoom chips, its corners
+// the extremes of x + y and x - y; a homography maps the 186 x 300 sheet onto those corners and the sheet is
+// sampled bilinearly. False when no page is in view.
+fn save_scan(a: *mem.Arena) -> bool {
+    let step = 4usize
+    let width = 320usize
+    let height = 393usize
+    let top = 261usize
+    var min_sum = 100000i64
+    var max_sum = -100000i64
+    var min_diff = 100000i64
+    var max_diff = -100000i64
+    var tl = vision.Point { x: 0.0f64, y: 0.0f64 }
+    var br = tl
+    var tr = tl
+    var bl = tl
+    var bright = 0usize
+    var y = 0usize
+    while y < height {
+        var x = 0usize
+        while x < width {
+            let px = usize(os.load32(os.SHARED_FRAME_VA + ((top + y * step) * os.SURFACE_W + x * step) * 4usize))
+            let red = (px >> 16usize) & 255usize
+            let green = (px >> 8usize) & 255usize
+            let blue = px & 255usize
+            if red >= 200usize && green >= 200usize && blue >= 190usize {
+                bright += 1usize
+                let sum = i64(x) + i64(y)
+                let diff = i64(x) - i64(y)
+                if sum < min_sum {
+                    min_sum = sum
+                    tl = vision.Point { x: f64(x), y: f64(y) }
+                }
+                if sum > max_sum {
+                    max_sum = sum
+                    br = vision.Point { x: f64(x), y: f64(y) }
+                }
+                if diff > max_diff {
+                    max_diff = diff
+                    tr = vision.Point { x: f64(x), y: f64(y) }
+                }
+                if diff < min_diff {
+                    min_diff = diff
+                    bl = vision.Point { x: f64(x), y: f64(y) }
+                }
+            }
+            x += 1usize
+        }
+        y += 1usize
+    }
+    // A page is a good part of the frame; anything less is a speck.
+    say_num(bright)
+    say(" bright\n")
+    if bright < 3000usize { ret false }
+    let out_w = 186usize
+    let out_h = 300usize
+    var from_sheet: [4]vision.Point = zero
+    from_sheet[0usize] = vision.Point { x: 0.0f64, y: 0.0f64 }
+    from_sheet[1usize] = vision.Point { x: f64(out_w), y: 0.0f64 }
+    from_sheet[2usize] = vision.Point { x: f64(out_w), y: f64(out_h) }
+    from_sheet[3usize] = vision.Point { x: 0.0f64, y: f64(out_h) }
+    var to_frame: [4]vision.Point = zero
+    to_frame[0usize] = tl
+    to_frame[1usize] = tr
+    to_frame[2usize] = br
+    to_frame[3usize] = bl
+    var h: [9]f64 = zero
+    if vision.homography(from_sheet[0usize..4usize], to_frame[0usize..4usize], h[0usize..9usize]) != ok {
+        say("homography failed\n")
+        ret false
+    }
+    let (sheet, sheet_error) = mem.alloc[u8](a, out_w * out_h * 4usize)
+    if sheet_error != ok { ret false }
+    var oy = 0usize
+    while oy < out_h {
+        var ox = 0usize
+        while ox < out_w {
+            let at = vision.apply_homography(h[0usize..9usize], vision.Point { x: f64(ox) + 0.5f64, y: f64(oy) + 0.5f64 })
+            var sx = i64(at.x)
+            var sy = i64(at.y)
+            if sx < 0i64 { sx = 0i64 }
+            if sy < 0i64 { sy = 0i64 }
+            if sx >= i64(width) { sx = i64(width) - 1i64 }
+            if sy >= i64(height) { sy = i64(height) - 1i64 }
+            let px = usize(os.load32(os.SHARED_FRAME_VA + ((top + usize(sy) * step) * os.SURFACE_W + usize(sx) * step) * 4usize))
+            let to = (oy * out_w + ox) * 4usize
+            sheet[to] = u8((px >> 16usize) & 255usize)
+            sheet[to + 1usize] = u8((px >> 8usize) & 255usize)
+            sheet[to + 2usize] = u8(px & 255usize)
+            sheet[to + 3usize] = 255u8
+            ox += 1usize
+        }
+        oy += 1usize
+    }
+    ret write_png(a, sheet, out_w, out_h, "/DCIM/SCAN_")
+}
+
+// RGBA pixels as a PNG at the first free `<prefix>nnnn.png` (numbered from 1) in /DCIM.
+fn write_png(a: *mem.Arena, pixels: []u8, width: usize, height: usize, prefix: str) -> bool {
     let (source, source_error) = image.make_const(pixels, u32(width), u32(height), width * 4usize, image.Format.Rgba8, image.Alpha.Straight)
     if source_error != ok { ret false }
-    let (buffer, buffer_error) = mem.alloc[u8](a, 196608usize)
+    let (buffer, buffer_error) = mem.alloc[u8](a, 327680usize)
     if buffer_error != ok { ret false }
     var sink = io.SliceWriter { data: buffer, off: 0usize }
     var encoder = io.slice_writer(&sink)
-    if png.encode(&encoder, source, png.EncodeOptions { compression: .Fast, interlace: false }) != ok { ret false }
+    if png.encode(&encoder, source, png.EncodeOptions { compression: .Fast, interlace: false }) != ok {
+        say("camera png encode failed\n")
+        ret false
+    }
     let made_dir = vaultfs.mkdir("/DCIM")
     var index = 1usize
     var free = 0usize
     while index < 10000usize {
-        let candidate = join(a, "/DCIM/IMG_", join(a, number_pad(a, index), ".png", ""), "")
+        let candidate = join(a, prefix, join(a, number_pad(a, index), ".png", ""), "")
         let (size, kind, day, found) = vaultfs.stat(candidate)
         if !found {
             free = index
@@ -578,7 +686,7 @@ fn save_photo(a: *mem.Arena) -> bool {
         }
     }
     if free == 0usize { ret false }
-    let path = join(a, "/DCIM/IMG_", join(a, number_pad(a, free), ".png", ""), "")
+    let path = join(a, prefix, join(a, number_pad(a, free), ".png", ""), "")
     if vaultfs.write_big(path, mem.address_of(&buffer[0usize]), sink.off) {
         say("camera saved ")
         // (os.write reads from the stack, so the arena's text is copied there first.)
@@ -686,6 +794,7 @@ fn act(s: *State, id: usize) -> bool {
                 take_photo(s)
             }
         } else if s.mode == SCAN {
+            s.save_scan = true
             add_cap(s, 2usize, 0usize)
             s.toast = 3usize
             say("camera scan ")
@@ -831,6 +940,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if s.save_photo {
                     s.save_photo = false
                     let kept = save_photo(a)
+                }
+                if s.save_scan {
+                    s.save_scan = false
+                    if !save_scan(a) { say("camera scan found no page\n") }
                 }
                 if !show(a, &kit, &s) {
                     say("camera present failed\n")
