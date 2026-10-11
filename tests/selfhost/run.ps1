@@ -1041,6 +1041,12 @@ $algoBignumWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $algoBignumWritten -ne 'executable written') { throw 'algo_bignum emission failed' }
 & $algoBignumPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_bignum check failed: exit $LASTEXITCODE" }
+# `e.algo.magnetic`: WMM2025 at fourteen places against pygeomag, the tilt-compensated heading against rotation matrices.
+$algoMagneticPath = Join-Path $testBuild 'algo-magnetic-selfhost.exe'
+$algoMagneticWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_magnetic\src\main.e') $repo 'x64' 'windows' $algoMagneticPath
+if ($LASTEXITCODE -ne 0 -or $algoMagneticWritten -ne 'executable written') { throw 'algo_magnetic emission failed' }
+& $algoMagneticPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_magnetic check failed: exit $LASTEXITCODE" }
 # `e.fmt.uri`: RFC 3986 parsing, the section 5.4 resolution examples, normalisation, escapes.
 $fmtUriPath = Join-Path $testBuild 'fmt-uri-selfhost.exe'
 $fmtUriWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_uri\src\main.e') $repo 'x64' 'windows' $fmtUriPath

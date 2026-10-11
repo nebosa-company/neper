@@ -23093,3 +23093,23 @@ fn write(cards: []const Card, buf: []u8) -> (usize, err)
 ```
 
 vCards (C127): `parse` reads the cards of a .vcf text (versions 2.1, 3.0 and 4.0) into `Card` values with the display name, the family and given names, up to four telephone numbers with their first TYPE (lower case), up to two e-mail addresses, the organisation and a note; lines are unfolded, groups and parameters read, values unescaped, everything else skipped; no BEGIN:VCARD is `Malformed`. `write` writes cards as vCard 3.0 with CRLF lines folded at 75 octets. Checked against vobject on its own output and on hand-made 2.1 and folded texts.
+
+
+### `e.algo.magnetic`
+
+```neper
+type Field = struct { declination: f64, inclination: f64, horizontal: f64, total: f64, north: f64, east: f64, down: f64 }
+fn epoch() -> f64
+const DEGREE: usize = 12usize
+fn deg_to_rad(d: f64) -> f64
+fn rad_to_deg(r: f64) -> f64
+fn coefficient_g(i: usize) -> f64
+fn coefficient_h(i: usize) -> f64
+fn coefficient_g_dot(i: usize) -> f64
+fn coefficient_h_dot(i: usize) -> f64
+fn field(latitude: f64, longitude: f64, height: f64, year: f64) -> Field
+fn calibrate_hard_iron(xs: []const f64, ys: []const f64, zs: []const f64, count: usize) -> (f64, f64, f64)
+fn heading(mx: f64, my: f64, mz: f64, ax: f64, ay: f64, az: f64) -> f64
+```
+
+The Earth's magnetic field (C131): `field` evaluates the World Magnetic Model WMM2025 (degree and order 12, the 2025.0 epoch and its secular variation) at a geodetic latitude, longitude, height in km and decimal year: declination, inclination, horizontal and total intensity, north, east and down components (degrees, nT), by spherical-harmonic synthesis as NOAA's reference code does. `heading` is the tilt-compensated heading in degrees from magnetometer and accelerometer vectors (x forward, y right, z down), `calibrate_hard_iron` the centre of the box around magnetometer samples. Checked against pygeomag at fourteen places and dates and against orientations from rotation matrices.

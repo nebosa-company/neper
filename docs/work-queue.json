@@ -9,10 +9,10 @@
       "group": "NeperOS",
       "order": 131,
       "title": "NeperOS Compass: the magnetometer, GPS and the declination",
-      "score": 0,
+      "score": 0.35,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Queued (2026-10-08). The Compass app (D2226) swings a sample heading. Acceptance: (1) a sensor server for the magnetometer, accelerometer and gyroscope (virtio-input-style under QEMU with a scripted source, the Pixel's sensor hub later) delivering readings at a fixed rate through the capability model; (2) the heading from the tilt-compensated magnetometer with hard-iron calibration and the figure-eight routine driven by real data, and the accuracy shown from it; (3) the position from the location service shared with Maps (C130) and the declination from a world magnetic model table in the library; (4) the Level app (C132) and Maps use the same sensor server; (5) a fixture on QEMU feeding a scripted sensor trace and checking the heading to a degree. Not queued here: augmented-reality overlays."
+      "evidence": "Queued (2026-10-08). The Compass app (D2226) swings a sample heading. Acceptance: (1) a sensor server for the magnetometer, accelerometer and gyroscope (virtio-input-style under QEMU with a scripted source, the Pixel's sensor hub later) delivering readings at a fixed rate through the capability model; (2) the heading from the tilt-compensated magnetometer with hard-iron calibration and the figure-eight routine driven by real data, and the accuracy shown from it; (3) the position from the location service shared with Maps (C130) and the declination from a world magnetic model table in the library; (4) the Level app (C132) and Maps use the same sensor server; (5) a fixture on QEMU feeding a scripted sensor trace and checking the heading to a degree. Not queued here: augmented-reality overlays. Done (D2419): (2) and (3) as far as software goes -- e.algo.magnetic (WMM2025 field, declination and intensities checked against pygeomag at fourteen places and dates; the tilt-compensated heading against rotation-matrix orientations; hard-iron calibration) and the Compass app computing its heading from simulated magnetometer and accelerometer vectors with a phone's hard-iron offset, calibrated by the Calibrate routine, with the true-north declination and the shown declination from the model (fixture compass). Not here: the sensor server and its capability, real GPS, the Level app and Maps sharing the server, a scripted trace fixture of the sensor server."
     },
     {
       "id": "C132",

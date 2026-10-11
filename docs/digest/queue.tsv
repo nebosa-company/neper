@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-C131	compiler	0	802	NeperOS Compass: the magnetometer, GPS and the declination	The Compass app (D2226) swings a sample heading.
+C131	compiler	0.35	1466	NeperOS Compass: the magnetometer, GPS and the declination	The Compass app (D2226) swings a sample heading.
 C132	compiler	0	687	NeperOS Level: the accelerometer and gyroscope for the bubble level and protractor	The Level app (D2227) shows a sample tilt.
 C133	compiler	0	827	NeperOS Flashlight: the real LED, its levels and a faster beat	The Flashlight app (D2228) turns the SCREEN bright and beats once every 500 ms tick.
 C134	compiler	0	761	NeperOS Chat: a real team chat service	The Chat app (D2229) holds sample rooms in the process.

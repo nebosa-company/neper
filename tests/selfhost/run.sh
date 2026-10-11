@@ -985,6 +985,11 @@ algo_bignum_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$algo_bignum_written" = 'executable written' ]
 chmod +x "$test_build/algo-bignum-selfhost"
 "$test_build/algo-bignum-selfhost"
+# `e.algo.magnetic`: WMM2025 at fourteen places against pygeomag, the tilt-compensated heading against rotation matrices.
+algo_magnetic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_magnetic/src/main.e" "$repo" x64 linux "$test_build/algo-magnetic-selfhost")
+[ "$algo_magnetic_written" = 'executable written' ]
+chmod +x "$test_build/algo-magnetic-selfhost"
+"$test_build/algo-magnetic-selfhost"
 # `e.fmt.uri`: RFC 3986 parsing, the section 5.4 resolution examples, normalisation, escapes.
 fmt_uri_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_uri/src/main.e" "$repo" x64 linux "$test_build/fmt-uri-selfhost")
 [ "$fmt_uri_written" = 'executable written' ]

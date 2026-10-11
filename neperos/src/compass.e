@@ -10,6 +10,7 @@
 use e.mem
 use e.os
 use e.math
+use e.algo.magnetic as magnetic
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -22,7 +23,21 @@ use ui
 
 const NONE: usize = 99usize
 
+// (C131) The simulated sensor source: where the device is (Seattle, the position the app shows), the field there
+// from the World Magnetic Model, and a hard-iron offset the phone's own magnets add to every reading (nT).
+fn place_latitude() -> f64 { ret 47.6062f64 }
+fn place_longitude() -> f64 { ret 0.0f64 - 122.3321f64 }
+fn model_year() -> f64 { ret 2026.8f64 }
+fn iron_x() -> f64 { ret 3000.0f64 }
+fn iron_y() -> f64 { ret 0.0f64 - 2000.0f64 }
+fn iron_z() -> f64 { ret 1500.0f64 }
+
 type State = struct {
+    // The hard-iron offset found by calibration (zero until then) and whether it has been found.
+    offset_x: f64,
+    offset_y: f64,
+    offset_z: f64,
+    calibrated: bool,
     ticks: usize,
     locked: bool,
     locked_heading: f32,
@@ -42,10 +57,95 @@ fn raw_heading(ticks: usize) -> f32 {
     ret 40.0 + 28.0 * math.sin(t) + 9.0 * math.sin(t * 2.7)
 }
 
+// The magnetometer and accelerometer readings of a device turned `yaw` degrees from magnetic north, pitched and
+// rolled a little (what a hand does): the field in the body frame plus the hard-iron offset, and gravity.
+fn sensors(ticks: usize) -> (f64, f64, f64, f64, f64, f64) {
+    let yaw = f64(raw_heading(ticks)) * 3.141592653589793f64 / 180.0f64
+    let t = f64(ticks) * 0.5f64
+    let pitch = 0.10f64 * math.sin[f64](t)
+    let roll = 0.07f64 * math.cos[f64](t * 0.8f64)
+    let f = magnetic.field(place_latitude(), place_longitude(), 0.056f64, model_year())
+    // The field in the frame whose x axis is magnetic north: horizontal along x, vertical down.
+    let nx = f.horizontal
+    let nz = f.down
+    // Rotate by yaw about z, then pitch about y, then roll about x (the aerospace 3-2-1 order).
+    let cy = math.cos[f64](yaw)
+    let sy = math.sin[f64](yaw)
+    let cp = math.cos[f64](pitch)
+    let sp = math.sin[f64](pitch)
+    let cr = math.cos[f64](roll)
+    let sr = math.sin[f64](roll)
+    let v1x = cy * nx
+    let v1y = 0.0f64 - sy * nx
+    let v1z = nz
+    let v2x = cp * v1x - sp * v1z
+    let v2y = v1y
+    let v2z = sp * v1x + cp * v1z
+    let mx = v2x
+    let my = cr * v2y + sr * v2z
+    let mz = 0.0f64 - sr * v2y + cr * v2z
+    // Gravity: (0, 0, g) rotated the same way (yaw leaves it alone).
+    let ax = 0.0f64 - sp * 9.81f64
+    let ay = sr * cp * 9.81f64
+    let az = cr * cp * 9.81f64
+    ret (mx + iron_x(), my + iron_y(), mz + iron_z(), ax, ay, az)
+}
+
+// The heading from the sensors, with the calibration subtracted.
+fn magnetic_heading(s: *State) -> f32 {
+    let (mx, my, mz, ax, ay, az) = sensors(s.ticks)
+    ret f32(magnetic.heading(mx - s.offset_x, my - s.offset_y, mz - s.offset_z, ax, ay, az))
+}
+
+// The calibration routine: the phone is swung through a figure eight, so the field is read in every direction
+// (here fourteen of them, each axis both ways and the corners) and the offset is the centre of what was read.
+fn calibrate(s: *State) {
+    let f = magnetic.field(place_latitude(), place_longitude(), 0.056f64, model_year())
+    let r = f.total
+    var xs: [14]f64 = zero
+    var ys: [14]f64 = zero
+    var zs: [14]f64 = zero
+    var k = 0usize
+    let corner = 0.57735f64
+    while k < 14usize {
+        var dx = 0.0f64
+        var dy = 0.0f64
+        var dz = 0.0f64
+        if k == 0usize { dx = 1.0f64 }
+        if k == 1usize { dx = 0.0f64 - 1.0f64 }
+        if k == 2usize { dy = 1.0f64 }
+        if k == 3usize { dy = 0.0f64 - 1.0f64 }
+        if k == 4usize { dz = 1.0f64 }
+        if k == 5usize { dz = 0.0f64 - 1.0f64 }
+        if k >= 6usize {
+            dx = corner
+            dy = corner
+            dz = corner
+            if (k - 6usize) % 2usize == 1usize { dx = 0.0f64 - corner }
+            if ((k - 6usize) / 2usize) % 2usize == 1usize { dy = 0.0f64 - corner }
+            if (k - 6usize) / 4usize == 1usize { dz = 0.0f64 - corner }
+        }
+        xs[k] = r * dx + iron_x()
+        ys[k] = r * dy + iron_y()
+        zs[k] = r * dz + iron_z()
+        k += 1usize
+    }
+    let (ox, oy, oz) = magnetic.calibrate_hard_iron(xs[0usize..14usize], ys[0usize..14usize], zs[0usize..14usize], 14usize)
+    s.offset_x = ox
+    s.offset_y = oy
+    s.offset_z = oz
+    s.calibrated = true
+}
+
+fn declination_of() -> f32 {
+    let f = magnetic.field(place_latitude(), place_longitude(), 0.056f64, model_year())
+    ret f32(f.declination)
+}
+
 fn heading_of(s: *State) -> f32 {
-    var h = raw_heading(s.ticks)
+    var h = magnetic_heading(s)
     if s.locked { h = s.locked_heading }
-    if s.true_north { h += 15.0 }
+    if s.true_north { h += declination_of() }
     while h < 0.0 { h += 360.0 }
     while h >= 360.0 { h -= 360.0 }
     ret h
@@ -146,7 +246,15 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
     try ui.put(a, builder, faces.grotesk, 12.0, "Accuracy", 160.0, 700.0, ui.muted())
     try ui.put(a, builder, faces.jost, 16.0, "High", 160.0, 716.0, ui.ink())
     try ui.put(a, builder, faces.grotesk, 12.0, "Declination", 270.0, 700.0, ui.muted())
-    try ui.put(a, builder, faces.jost, 16.0, "15\xC2\xB0 E", 270.0, 716.0, ui.ink())
+    // The declination from the World Magnetic Model at this place and date.
+    var declination_value = declination_of()
+    var declination_side = " E"
+    if declination_value < 0.0 {
+        declination_value = 0.0 - declination_value
+        declination_side = " W"
+    }
+    let declination_text = ui.join(a, ui.number(a, usize(declination_value + 0.5)), "\xC2\xB0", declination_side)
+    try ui.put(a, builder, faces.jost, 16.0, declination_text, 270.0, 716.0, ui.ink())
     try button(a, builder, s, faces, 100usize, 16.0, 120.0, "Lock", s.locked)
     try button(a, builder, s, faces, 101usize, 146.0, 120.0, "Calibrate", s.calibrating)
     try button(a, builder, s, faces, 102usize, 276.0, 120.0, "True north", s.true_north)
@@ -172,7 +280,7 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
 fn act(s: *State, id: usize) -> bool {
     if id == 100usize {
         s.locked = !s.locked
-        if s.locked { s.locked_heading = raw_heading(s.ticks) }
+        if s.locked { s.locked_heading = magnetic_heading(s) }
         if s.locked { ui.say("compass lock on\n") } else { ui.say("compass lock off\n") }
         ret true
     }
@@ -188,6 +296,10 @@ fn act(s: *State, id: usize) -> bool {
     }
     if id == 103usize {
         s.calibrating = false
+        calibrate(s)
+        ui.say("compass calibrated ")
+        ui.say_num(usize(s.offset_x))
+        ui.say("\n")
         ret true
     }
     ret false

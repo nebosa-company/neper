@@ -3,6 +3,17 @@
  "version": 1,
  "modules": [
   {
+   "module": "e.algo.magnetic",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 1,
+   "delivered": 1,
+   "pending": [],
+   "fixtures": [
+    "algo_magnetic"
+   ]
+  },
+  {
    "module": "e.algo.bignum",
    "milestone": null,
    "schedule": "later",
@@ -11,6 +22,7 @@
    "pending": [],
    "fixtures": [
     "algo_bignum",
+    "algo_magnetic",
     "algo_gaps_a"
    ]
   },
