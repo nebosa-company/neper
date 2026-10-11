@@ -1695,6 +1695,12 @@ ml_rl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 [ "$ml_rl_written" = 'executable written' ]
 chmod +x "$test_build/ml-rl-selfhost"
 "$test_build/ml-rl-selfhost"
+# e.ml.multivariate (L058): LDA/QDA posteriors, maximum-likelihood factor analysis with varimax, canonical correlation with Bartlett's test and one-way MANOVA against scikit-learn, statsmodels and a SciPy whitening-SVD (30 cases, D2542).
+ml_multivariate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_multivariate/src/main.e" "$repo" x64 linux "$test_build/ml-multivariate-selfhost" -j 2)
+[ "${ml_multivariate_written}" = 'executable written' ]
+chmod +x "$test_build/ml-multivariate-selfhost"
+ml_multivariate_output=$("$test_build/ml-multivariate-selfhost")
+[ "${ml_multivariate_output}" = 'ml multivariate ok' ]
 # `e.ml.reduce`: PCA against NumPy, Oja's rule converging on the leading component, frequent directions keeping the dominant direction, and t-SNE keeping three groups apart (D848).
 ml_reduce_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ml_reduce/src/main.e" "$repo" x64 linux "$test_build/ml-reduce-selfhost")
 [ "$ml_reduce_written" = 'executable written' ]

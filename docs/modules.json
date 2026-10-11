@@ -295,6 +295,7 @@
     "e.ml.hmm",
     "e.ml.rl",
     "e.ml.reduce",
+    "e.ml.multivariate",
     "e.ml.ann",
     "e.data.treap",
     "e.data.skip_list",
@@ -5734,6 +5735,19 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.algo.rand"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ml.multivariate",
+   "layer": 3,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.math.special",
+    "e.ml.reduce"
    ],
    "blocked_by": []
   },

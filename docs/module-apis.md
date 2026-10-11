@@ -21612,6 +21612,52 @@ fn sarsa(q: []f64, actions: usize, state: usize, action: usize, reward: f64, nex
 Tabular action values (`states × actions`): `q_learning` and `sarsa` apply one
 temporal-difference update, `epsilon_greedy` and `greedy` choose actions.
 
+### `e.ml.multivariate`
+
+```neper
+error TooSmall
+error Invalid
+error Singular
+type Discriminant = struct { classes: usize, features: usize, quadratic: bool, means: []f64, priors: []f64, factors: []f64, log_det: []f64 }
+type FactorFit = struct { iterations: u32, log_likelihood: f64 }
+type ManovaTest = struct { statistic: f64, f: f64, df1: f64, df2: f64, p_value: f64 }
+type Manova = struct { wilks: ManovaTest, pillai: ManovaTest, hotelling: ManovaTest, roy: ManovaTest }
+fn cholesky_in_place(a: []f64, d: usize) -> err
+fn solve_lower(l: []const f64, d: usize, b: []f64)
+fn solve_lower_transpose(l: []const f64, d: usize, b: []f64)
+fn covariance_matrix(x: []const f64, n: usize, d: usize, unbiased: bool, mean: []f64, cov: []f64) -> err
+fn normalize_signs(values: []f64, rows: usize, width: usize)
+fn discriminant_fit(x: []const f64, labels: []const usize, n: usize, d: usize, classes: usize, quadratic: bool, unbiased: bool, reg: f64, class_priors: []const f64, model: *Discriminant, scratch: []f64) -> err
+fn discriminant_scores(model: *const Discriminant, sample: []const f64, out: []f64, work: []f64) -> err
+fn discriminant_posterior(model: *const Discriminant, sample: []const f64, out: []f64, work: []f64) -> err
+fn discriminant_predict(model: *const Discriminant, sample: []const f64, out: []f64, work: []f64) -> (usize, err)
+fn polar_factor(m: []const f64, c: usize, rotation: []f64, scratch: []f64) -> (f64, err)
+fn factor_analysis(x: []const f64, n: usize, d: usize, components: usize, tolerance: f64, max_iterations: u32, loadings: []f64, noise: []f64, scratch: []f64) -> (FactorFit, err)
+fn varimax(loadings: []f64, c: usize, d: usize, tolerance: f64, max_iterations: u32, scratch: []f64) -> err
+fn canonical_correlation(x: []const f64, y: []const f64, n: usize, p: usize, q: usize, correlations: []f64, x_weights: []f64, y_weights: []f64, scratch: []f64) -> err
+fn canonical_test(correlations: []const f64, n: usize, p: usize, q: usize, first: usize) -> (f64, f64, f64)
+fn manova_oneway(x: []const f64, labels: []const usize, n: usize, p: usize, groups: usize, result: *Manova, eigenvalues: []f64, scratch: []f64) -> err
+```
+
+Classical multivariate analysis on the `e.ml.reduce` eigen solver. `discriminant_fit`
+fills a `Discriminant` whose slices the caller owns (`means`, `priors`, `factors`
+holding Cholesky factors of the pooled or per-class covariances, `log_det`) for linear
+or quadratic Gaussian discriminant analysis (`unbiased` picks the `n - classes` /
+`n_k - 1` divisor over scikit-learn's maximum-likelihood `n` / `n_k`; `reg` shrinks
+the quadratic covariances toward the identity); `discriminant_scores`,
+`discriminant_posterior` and `discriminant_predict` evaluate a sample.
+`factor_analysis` is scikit-learn's SVD iteration for maximum-likelihood factor
+analysis (loadings `components x d`, noise variances, log-likelihood) and `varimax`
+its orthogonal rotation. `canonical_correlation` answers `min(p, q)` correlations
+with unit-variance variate weights and `canonical_test` Bartlett's chi-squared test
+from a given pair on. `manova_oneway` answers the eigenvalues of `E^-1 H` and the
+Wilks (Rao F), Pillai, Hotelling-Lawley (McKeon F) and Roy (upper-bound F)
+statistics with p-values. Eigenvectors are defined up to sign, so loadings and
+weights are normalised with the entry of largest magnitude positive
+(`normalize_signs`); `cholesky_in_place`, `solve_lower`, `solve_lower_transpose`,
+`covariance_matrix` and `polar_factor` are the shared building blocks. Scratch sizes
+are on each function in source.
+
 ### `e.ml.reduce`
 
 ```neper

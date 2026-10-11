@@ -1885,6 +1885,12 @@ $mlRlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $mlRlWritten -ne 'executable written') { throw 'ml_rl emission failed' }
 & $mlRlPath
 if ($LASTEXITCODE -ne 0) { throw "a ml_rl check failed: exit $LASTEXITCODE" }
+# e.ml.multivariate (L058): LDA/QDA posteriors, maximum-likelihood factor analysis with varimax, canonical correlation with Bartlett's test and one-way MANOVA against scikit-learn, statsmodels and a SciPy whitening-SVD (30 cases, D2542).
+$mlMultivariatePath = Join-Path $testBuild 'ml-multivariate-selfhost.exe'
+$mlMultivariateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_multivariate\src\main.e') $repo 'x64' 'windows' $mlMultivariatePath -j 2
+if ($LASTEXITCODE -ne 0 -or $mlMultivariateWritten -ne 'executable written') { throw 'ml_multivariate emission failed' }
+$mlMultivariateOutput = & $mlMultivariatePath
+if ($LASTEXITCODE -ne 0 -or $mlMultivariateOutput -ne 'ml multivariate ok') { throw "ml_multivariate answered wrongly: exit $LASTEXITCODE" }
 # `e.ml.reduce`: PCA against NumPy, Oja's rule converging on the leading component, frequent directions keeping the dominant direction, and t-SNE keeping three groups apart (D848).
 $mlReducePath = Join-Path $testBuild 'ml-reduce-selfhost.exe'
 $mlReduceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ml_reduce\src\main.e') $repo 'x64' 'windows' $mlReducePath
