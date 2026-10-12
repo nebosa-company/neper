@@ -22252,6 +22252,171 @@ fn time_zone_id(a: *mem.Arena) -> (str, err)
 
 Who and where this process is: `hostname`, `user_name`, `locale_name` (a BCP 47 tag) and `time_zone_id`, per-target variants only (`ident.windows.e`, `ident.linux.e`). Windows reads kernel32/advapi32 (`GetComputerNameExW` DNS host name, `GetUserNameW`, `GetUserDefaultLocaleName`, `GetDynamicTimeZoneInformation`'s `TimeZoneKeyName`, a Windows id that `e.tz.winzones` maps to IANA); Linux reads `/proc/sys/kernel/hostname` and the environment (`USER`/`LOGNAME`; `LC_ALL`/`LC_MESSAGES`/`LANG` rewritten `de_DE.UTF-8` to `de-DE`, `C`/`POSIX` unset; `TZ` then `/etc/timezone`), so the user, locale and zone may answer `NotFound` there. Results are arena-owned. Not here: MAC addresses, the user database (`getpwuid`), or the full locale-variable cascade.
 
+### `e.fmt.json5`
+
+```neper
+type Out = struct { buf: []u8, n: usize, bad: bool }
+error Invalid
+error NonFinite
+fn put(o: *Out, c: u8)
+fn put_text(o: *Out, s: str)
+fn hex_value(c: u8) -> i32
+fn is_digit(c: u8) -> bool { ret c >= 48u8 && c <= 57u8 }
+fn is_id_start(c: u8) -> bool
+fn is_id_part(c: u8) -> bool { ret is_id_start(c) || is_digit(c) }
+fn wide_space(src: str, at: usize) -> usize
+fn id_part_at(src: str, at: usize) -> bool { ret is_id_part(src[at]) && wide_space(src, at) == 0usize }
+fn skip(src: str, at: usize) -> (usize, bool)
+fn put_u_escape(o: *Out, unit: u32)
+fn put_utf8(o: *Out, cp: u32)
+fn read_u4(src: str, at: usize) -> (u32, usize, bool)
+fn string_token(o: *Out, src: str, at: usize) -> (usize, bool)
+fn identifier_token(o: *Out, src: str, at: usize) -> (usize, bool)
+fn word_at(src: str, at: usize, word: str) -> bool
+fn number_token(o: *Out, src: str, at: usize, nonfinite: *bool) -> (usize, bool)
+fn transcode(source: str, buf: []u8) -> (usize, err)
+fn parse(a: *mem.Arena, source: str, options: json.Options) -> (json.Value, err)
+fn is_identifier(key: str) -> bool
+fn write_indent(w: *io.Writer, spaces: usize) -> err
+fn write_value(w: *io.Writer, value: *const json.Value, indent: u8, depth: usize) -> err
+fn write(w: *io.Writer, value: *const json.Value) -> err { ret write_value(w, value, 0u8, 0usize) }
+fn write_pretty(w: *io.Writer, value: *const json.Value, indent: u8) -> err { ret write_value(w, value, indent, 0usize) }
+```
+
+JSON5 over `e.fmt.json`: `parse` transcodes JSON5 to strict JSON text in the arena and hands it to the JSON parser, so the value tree, lexeme-preserving numbers, duplicate-key and depth options are the JSON module's; `write`/`write_pretty` emit a tree as JSON5 with identifier keys unquoted. Accepted beyond JSON: `//` and `/* */` comments, trailing commas, single-quoted strings with `\xHH`, `\v`, `\0`, line continuations and other escapes standing for themselves, unquoted IdentifierName keys (ASCII, `$`, `_`, raw non-ASCII, `\uXXXX`), numbers with `+`, bare leading or trailing `.` and hexadecimal integers up to 64 digits (read as their decimal value), and the extra whitespace characters (NBSP, BOM, U+2028/2029, the Zs spaces). `Infinity` and `NaN` are `NonFinite` (the JSON value type has no non-finite number); everything else outside the grammar is `Invalid`. Not here: preserving comments or the source spelling of numbers across a round trip.
+
+### `e.sync.flight`
+
+```neper
+type Call = struct { key: str, used: bool, done: bool, forgotten: bool, waiters: u32, value: str, failure: err }
+type Group = struct { lock: sync.Mutex, finished: sync.Condition, calls: []Call }
+error Full
+fn group(calls: []Call) -> Group
+fn same(a: str, b: str) -> bool
+fn find(g: *Group, key: str) -> usize
+fn free_slot(g: *Group) -> usize
+fn do(g: *Group, key: str, ctx: *void, f: fn(*void) -> (str, err)) -> (str, bool, err)
+fn forget(g: *Group, key: str)
+fn waiting(g: *Group, key: str) -> u32
+```
+
+Call de-duplication in the manner of Go's `singleflight`: concurrent `do` calls for the same key share one execution of `f`; the first caller (the leader) runs it, later callers wait and receive its value and error, a caller after completion starts a new execution. The group is a fixed table of `Call` slots supplied by the caller (`Full` when every slot holds a distinct in-flight key); `forget` stops new callers joining the in-flight key; `waiting` counts the queued callers. Keys and the returned value are borrowed (the key must outlive the call; the value must stay valid for the waiters). A `Group` must not be moved once in use. Not here: result caching after completion, per-key timeouts, or cancellation of waiters.
+
+### `e.log.rotate`
+
+```neper
+type Rotator = struct { arena: *mem.Arena, path: str, max_bytes: u64, keep: u32, file: os.File, size: u64, is_open: bool }
+error Closed
+fn backup_name(a: *mem.Arena, path: str, index: u32) -> (str, err)
+fn open_current(r: *Rotator, truncate: bool) -> err
+fn open(a: *mem.Arena, path: str, max_bytes: u64, keep: u32) -> (Rotator, err)
+fn close(r: *Rotator) -> err
+fn remove_if_present(a: *mem.Arena, name: str) -> err
+fn rotate(r: *Rotator) -> err
+fn write(r: *Rotator, record: []const u8) -> err
+fn writer_write(ctx: *void, src: []const u8) -> (usize, err)
+fn writer_flush(ctx: *void) -> err { ret ok }
+fn writer(r: *Rotator) -> io.Writer
+```
+
+A size-rotated file sink with Python `RotatingFileHandler` policy: records are appended to `path`, and when `size + len >= max_bytes` the file is rotated first (`path.N-1` to `path.N` down to 2, `path` to `path.1`, a fresh `path`; the oldest backup is dropped). `max_bytes == 0` never rotates; `keep == 0` truncates (an extension: Python never rotates then); a record at or over the limit is written whole to a freshly rotated file. `writer` adapts a `Rotator` to an `io.Writer` for `log.jsonl_sink`. Existing files are appended to and counted from disk. Not here: time-based rotation, compression of backups, or inter-process locking.
+
+### `e.net.tftp`
+
+```neper
+type Packet = struct { opcode: u16, block: u16, error_code: u16, text: str, mode: str, data: []const u8, options: []const u8 }
+type Transfer = struct { writing: bool, block: u16, blksize: u16, tsize: u64, started: bool, done: bool, error_code: u16, data: []const u8, out: []u8, written: usize, last_len: usize }
+type Step = struct { reply_len: usize, finished: bool }
+error Malformed
+error TooSmall
+error Remote
+error Protocol
+error TooLong
+fn op_rrq() -> u16 { ret 1u16 }
+fn op_wrq() -> u16 { ret 2u16 }
+fn op_data() -> u16 { ret 3u16 }
+fn op_ack() -> u16 { ret 4u16 }
+fn op_error() -> u16 { ret 5u16 }
+fn op_oack() -> u16 { ret 6u16 }
+fn default_blksize() -> u16 { ret 512u16 }
+fn put_u16(dst: []u8, at: usize, v: u16)
+fn get_u16(src: []const u8, at: usize) -> u16 { ret u16(u32(src[at]) * 256u32 + u32(src[at + 1usize])) }
+fn put_cstr(dst: []u8, at: usize, s: str) -> (usize, bool)
+fn put_options(dst: []u8, at: usize, names: []const str, values: []const str) -> (usize, bool)
+fn encode_request(writing: bool, filename: str, mode: str, names: []const str, values: []const str, dst: []u8) -> (usize, err)
+fn encode_data(block: u16, payload: []const u8, dst: []u8) -> (usize, err)
+fn encode_ack(block: u16, dst: []u8) -> (usize, err)
+fn encode_error(code: u16, message: str, dst: []u8) -> (usize, err)
+fn encode_oack(names: []const str, values: []const str, dst: []u8) -> (usize, err)
+fn read_cstr(src: []const u8, at: usize) -> (str, usize, bool)
+fn option_next(run: []const u8, at: usize) -> (str, str, usize, bool)
+fn decode(src: []const u8) -> (Packet, err)
+fn number_text(v: u64, dst: []u8) -> str
+fn parse_number(s: str) -> (u64, bool)
+fn same_fold(a: str, b: str) -> bool
+fn read_start(t: *Transfer, filename: str, mode: str, blksize: u16, out: []u8, request: []u8) -> (usize, err)
+fn read_step(t: *Transfer, incoming: []const u8, reply: []u8) -> (Step, err)
+fn write_start(t: *Transfer, filename: str, mode: str, blksize: u16, data: []const u8, request: []u8) -> (usize, err)
+fn write_step(t: *Transfer, incoming: []const u8, reply: []u8) -> (Step, err)
+```
+
+TFTP (RFC 1350) with option negotiation (RFC 2347 OACK, 2348 `blksize`, 2349 `tsize`) as caller-buffer codecs (`encode_request`, `encode_data`, `encode_ack`, `encode_error`, `encode_oack`, `decode`, `option_next`) and a sans-IO client `Transfer`: `read_start`/`read_step` download into a caller buffer and `write_start`/`write_step` upload a slice, each step taking one incoming datagram and writing the next datagram to send, with duplicate DATA re-acknowledged, out-of-order packets ignored, an exact multiple of the block size closed by an empty block, and `Remote`/`Protocol`/`TooLong` errors. The caller owns the UDP socket, the TID rule (requests to port 69, everything after to the first reply's source port) and the retransmission timer. Not here: a server, `timeout` option handling, netascii translation, or transfers past 65535 blocks.
+
+### `e.crypto.cms`
+
+```neper
+type Signer = struct { version: u8, issuer: []const u8, serial: []const u8, digest_oid: []const u8, has_attributes: bool, attributes: []const u8, signature_oid: []const u8, signature: []const u8 }
+type SignedData = struct { content_type: []const u8, has_content: bool, content: []const u8, certificates: []const x509.Certificate, signers: []const Signer }
+error Invalid
+error Unsupported
+error BadDigest
+error BadSignature
+error NoCertificate
+error TooSmall
+const DEPTH: u16 = 16u16
+fn oid_signed_data() -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 7u8, 2u8 } }
+fn oid_data() -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 7u8, 1u8 } }
+fn oid_content_type() -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 9u8, 3u8 } }
+fn oid_message_digest() -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 9u8, 4u8 } }
+fn oid_signing_time() -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 9u8, 5u8 } }
+fn oid_sha256() -> [9]u8 { ret [9]u8{ 96u8, 134u8, 72u8, 1u8, 101u8, 3u8, 4u8, 2u8, 1u8 } }
+fn oid_sha384() -> [9]u8 { ret [9]u8{ 96u8, 134u8, 72u8, 1u8, 101u8, 3u8, 4u8, 2u8, 2u8 } }
+fn oid_sha512() -> [9]u8 { ret [9]u8{ 96u8, 134u8, 72u8, 1u8, 101u8, 3u8, 4u8, 2u8, 3u8 } }
+fn oid_ed25519() -> [3]u8 { ret [3]u8{ 43u8, 101u8, 112u8 } }
+fn oid_rsa_encryption() -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 1u8, 1u8 } }
+fn oid_ecdsa_sha256() -> [8]u8 { ret [8]u8{ 42u8, 134u8, 72u8, 206u8, 61u8, 4u8, 3u8, 2u8 } }
+fn oid_ecdsa_sha384() -> [8]u8 { ret [8]u8{ 42u8, 134u8, 72u8, 206u8, 61u8, 4u8, 3u8, 3u8 } }
+fn oid_ecdsa_sha512() -> [8]u8 { ret [8]u8{ 42u8, 134u8, 72u8, 206u8, 61u8, 4u8, 3u8, 4u8 } }
+fn same(a: []const u8, b: []const u8) -> bool
+fn rsa_with_hash(oid: []const u8) -> u16
+fn hash_bits(oid: []const u8) -> u16
+fn next(r: *asn1.Reader) -> (asn1.Value, err)
+fn universal(r: *asn1.Reader, number: u32, constructed: bool) -> (asn1.Value, err)
+fn children(v: asn1.Value) -> (asn1.Reader, err)
+fn oid_of(r: *asn1.Reader) -> ([]const u8, err)
+fn algorithm_oid(r: *asn1.Reader) -> ([]const u8, err)
+fn issuer_and_serial(der: []const u8) -> ([]const u8, []const u8, err)
+fn parse_signer(v: asn1.Value) -> (Signer, err)
+fn parse(a: *mem.Arena, der: []const u8) -> (SignedData, err)
+fn find_certificate(sd: *const SignedData, index: usize) -> (x509.Certificate, bool)
+fn signer_certificate(sd: *const SignedData, index: usize) -> (x509.Certificate, bool)
+fn digest(bits: u16, content: []const u8, out: []u8) -> usize
+fn attribute_value(encoded: []const u8, want: []const u8) -> ([]const u8, bool)
+fn verify_signer(a: *mem.Arena, sd: *const SignedData, index: usize, detached: []const u8) -> err
+fn verify(a: *mem.Arena, sd: *const SignedData, detached: []const u8) -> err
+fn begin(dst: []u8, at: usize, tag: u8, total: usize) -> (usize, err)
+fn append(dst: []u8, at: usize, bytes: []const u8) -> usize
+fn tlv1(dst: []u8, at: usize, tag: u8, p0: []const u8) -> (usize, err)
+fn tlv2(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8) -> (usize, err)
+fn tlv3(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8) -> (usize, err)
+fn tlv5(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8, p3: []const u8, p4: []const u8) -> (usize, err)
+fn tlv6(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8, p3: []const u8, p4: []const u8, p5: []const u8) -> (usize, err)
+fn utc_time(seconds: i64, dst: []u8) -> str
+fn sign_ed25519(a: *mem.Arena, content: []const u8, cert_der: []const u8, secret: sign.Ed25519SecretKey, attached: bool, signing_time: i64, out: []u8) -> (usize, err)
+```
+
+CMS / PKCS #7 SignedData (RFC 5652) for S/MIME. `parse` reads a DER ContentInfo (attached or detached content, embedded certificates, SignerInfos by IssuerAndSerialNumber); `verify_signer`/`verify` check the content digest against the signed `messageDigest` attribute (SHA-256/384/512), the `contentType` attribute, and the signature over the signed attributes re-tagged as a SET (or over the content when there are none) with the signer's embedded certificate: ECDSA P-256/P-384, RSA PKCS#1 v1.5 or Ed25519; `signer_certificate` returns the certificate for `e.crypto.x509.verify`, since trust is the caller's. `sign_ed25519` writes a SignedData (RFC 8419: SHA-512, signed attributes with content type, signing time and message digest, the signer certificate embedded, detached or attached) that OpenSSL verifies. RSA and ECDSA signing are not here (`e.crypto.sign` has no PKCS#1 v1.5 signer and its P-256 signer is `Unsupported`); BER indefinite lengths, SubjectKeyIdentifier signers, CRLs, countersignatures and EnvelopedData are not interpreted.
+
 ### `e.time.parse`
 
 ```neper

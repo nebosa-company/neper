@@ -280,6 +280,7 @@
    "delivered": 228,
    "pending": [],
    "fixtures": [
+    "crypto_cms",
     "crypto_pq",
     "crypto_sign",
     "crypto_sign_plan",
@@ -297,6 +298,7 @@
    "delivered": 46,
    "pending": [],
    "fixtures": [
+    "crypto_cms",
     "crypto_sign_wide",
     "crypto_x509",
     "misc_gaps",
@@ -498,6 +500,7 @@
     "fmt_exe",
     "fmt_gaps_a",
     "fmt_json",
+    "fmt_json5",
     "fmt_woff",
     "fmt_xlsx",
     "gfx_cssvalue",
@@ -2614,6 +2617,7 @@
     "net_mdns",
     "net_socks",
     "net_ssh",
+    "net_tftp",
     "net_tls"
    ]
   },
@@ -2739,6 +2743,7 @@
     "os_exit_threads",
     "runtime_gaps",
     "sync_dataguard",
+    "sync_flight",
     "sync_guard",
     "sync_rwguard",
     "sync_semantics",
@@ -3036,6 +3041,7 @@
     "net_tls",
     "net_tls_roots",
     "proc_output",
+    "sync_flight",
     "sync_semantics",
     "sync_threads",
     "task_pool",

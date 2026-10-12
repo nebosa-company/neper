@@ -3935,6 +3935,36 @@ os_ident_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/os-ident-selfhost"
 os_ident_output=$("$test_build/os-ident-selfhost")
 [ "$os_ident_output" = 'os ident ok' ]
+# e.fmt.json5: JSON5 accept/reject and values against the json5 package (346 vectors, D2802).
+fmt_json5_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_json5/src/main.e" "$repo" x64 linux "$test_build/fmt-json5-selfhost" -j 2)
+[ "$fmt_json5_written" = 'executable written' ]
+chmod +x "$test_build/fmt-json5-selfhost"
+fmt_json5_output=$("$test_build/fmt-json5-selfhost")
+[ "$fmt_json5_output" = 'fmt json5 ok' ]
+# e.sync.flight: concurrent callers share one execution, errors fan out, forget and Full (D2802).
+sync_flight_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/sync_flight/src/main.e" "$repo" x64 linux "$test_build/sync-flight-selfhost" -j 2)
+[ "$sync_flight_written" = 'executable written' ]
+chmod +x "$test_build/sync-flight-selfhost"
+sync_flight_output=$("$test_build/sync-flight-selfhost")
+[ "$sync_flight_output" = 'sync flight ok' ]
+# e.log.rotate: rotation byte for byte against RotatingFileHandler (21 scenarios, D2802).
+log_rotate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/log_rotate/src/main.e" "$repo" x64 linux "$test_build/log-rotate-selfhost" -j 2)
+[ "$log_rotate_written" = 'executable written' ]
+chmod +x "$test_build/log-rotate-selfhost"
+log_rotate_output=$("$test_build/log-rotate-selfhost")
+[ "$log_rotate_output" = 'log rotate ok' ]
+# e.net.tftp: codec against tftpy (92 vectors) and loopback UDP transfers against a scripted server (D2802).
+net_tftp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_tftp/src/main.e" "$repo" x64 linux "$test_build/net-tftp-selfhost" -j 2)
+[ "$net_tftp_written" = 'executable written' ]
+chmod +x "$test_build/net-tftp-selfhost"
+net_tftp_output=$("$test_build/net-tftp-selfhost")
+[ "$net_tftp_output" = 'net tftp ok' ]
+# e.crypto.cms: OpenSSL SignedData verify, tamper refusals and the Ed25519 signer reproduced (33 vectors, D2802).
+crypto_cms_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_cms/src/main.e" "$repo" x64 linux "$test_build/crypto-cms-selfhost" -j 2)
+[ "$crypto_cms_written" = 'executable written' ]
+chmod +x "$test_build/crypto-cms-selfhost"
+crypto_cms_output=$("$test_build/crypto-cms-selfhost")
+[ "$crypto_cms_output" = 'crypto cms ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

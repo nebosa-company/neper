@@ -4399,6 +4399,36 @@ $osIdentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $osIdentWritten -ne 'executable written') { throw 'os_ident emission failed' }
 $osIdentOutput = & $osIdentPath
 if ($LASTEXITCODE -ne 0 -or $osIdentOutput -ne 'os ident ok') { throw "os_ident answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.json5: JSON5 accept/reject and values against the json5 package (346 vectors, D2802).
+$fmtJson5Path = Join-Path $testBuild 'fmt-json5-selfhost.exe'
+$fmtJson5Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_json5\src\main.e') $repo 'x64' 'windows' $fmtJson5Path -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtJson5Written -ne 'executable written') { throw 'fmt_json5 emission failed' }
+$fmtJson5Output = & $fmtJson5Path
+if ($LASTEXITCODE -ne 0 -or $fmtJson5Output -ne 'fmt json5 ok') { throw "fmt_json5 answered wrongly: exit $LASTEXITCODE" }
+# e.sync.flight: concurrent callers share one execution, errors fan out, forget and Full (D2802).
+$syncFlightPath = Join-Path $testBuild 'sync-flight-selfhost.exe'
+$syncFlightWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\sync_flight\src\main.e') $repo 'x64' 'windows' $syncFlightPath -j 2
+if ($LASTEXITCODE -ne 0 -or $syncFlightWritten -ne 'executable written') { throw 'sync_flight emission failed' }
+$syncFlightOutput = & $syncFlightPath
+if ($LASTEXITCODE -ne 0 -or $syncFlightOutput -ne 'sync flight ok') { throw "sync_flight answered wrongly: exit $LASTEXITCODE" }
+# e.log.rotate: rotation byte for byte against RotatingFileHandler (21 scenarios, D2802).
+$logRotatePath = Join-Path $testBuild 'log-rotate-selfhost.exe'
+$logRotateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\log_rotate\src\main.e') $repo 'x64' 'windows' $logRotatePath -j 2
+if ($LASTEXITCODE -ne 0 -or $logRotateWritten -ne 'executable written') { throw 'log_rotate emission failed' }
+$logRotateOutput = & $logRotatePath
+if ($LASTEXITCODE -ne 0 -or $logRotateOutput -ne 'log rotate ok') { throw "log_rotate answered wrongly: exit $LASTEXITCODE" }
+# e.net.tftp: codec against tftpy (92 vectors) and loopback UDP transfers against a scripted server (D2802).
+$netTftpPath = Join-Path $testBuild 'net-tftp-selfhost.exe'
+$netTftpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_tftp\src\main.e') $repo 'x64' 'windows' $netTftpPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netTftpWritten -ne 'executable written') { throw 'net_tftp emission failed' }
+$netTftpOutput = & $netTftpPath
+if ($LASTEXITCODE -ne 0 -or $netTftpOutput -ne 'net tftp ok') { throw "net_tftp answered wrongly: exit $LASTEXITCODE" }
+# e.crypto.cms: OpenSSL SignedData verify, tamper refusals and the Ed25519 signer reproduced (33 vectors, D2802).
+$cryptoCmsPath = Join-Path $testBuild 'crypto-cms-selfhost.exe'
+$cryptoCmsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_cms\src\main.e') $repo 'x64' 'windows' $cryptoCmsPath -j 2
+if ($LASTEXITCODE -ne 0 -or $cryptoCmsWritten -ne 'executable written') { throw 'crypto_cms emission failed' }
+$cryptoCmsOutput = & $cryptoCmsPath
+if ($LASTEXITCODE -ne 0 -or $cryptoCmsOutput -ne 'crypto cms ok') { throw "crypto_cms answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

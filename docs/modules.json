@@ -556,6 +556,11 @@
     "e.text.bytesize",
     "e.fmt.magic",
     "e.os.ident",
+    "e.fmt.json5",
+    "e.sync.flight",
+    "e.log.rotate",
+    "e.net.tftp",
+    "e.crypto.cms",
     "e.time.parse",
     "e.path.dirs",
     "e.fmt.dotenv",
@@ -4867,6 +4872,69 @@
    "direct_dependencies": [
     "e.mem",
     "e.os"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.json5",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.io",
+    "e.mem",
+    "e.fmt.json"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.sync.flight",
+   "layer": 5,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.sync"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.log.rotate",
+   "layer": 5,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.io",
+    "e.mem",
+    "e.os"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.tftp",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.crypto.cms",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.crypto.hash",
+    "e.crypto.sign",
+    "e.crypto.x509",
+    "e.fmt.asn1"
    ],
    "blocked_by": []
   },
