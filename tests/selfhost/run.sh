@@ -2189,6 +2189,11 @@ data_tablegroup_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$data_tablegroup_written" = 'executable written' ]
 chmod +x "$test_build/data-tablegroup-selfhost"
 "$test_build/data-tablegroup-selfhost"
+# `e.data.tablesearch`: the incremental search (begins/within, folded and exact, forward and backward, wrap, over a sorted and a filtered order) enumerated against a brute-force scan, and the value list (counts, fold order, merged variants, nulls, filtered rows only) against a per-entry recount (D3909).
+data_tablesearch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_tablesearch/src/main.e" "$repo" x64 linux "$test_build/data-tablesearch-selfhost" --arena 768m)
+[ "$data_tablesearch_written" = 'executable written' ]
+chmod +x "$test_build/data-tablesearch-selfhost"
+"$test_build/data-tablesearch-selfhost"
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 algo_rules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rules/src/main.e" "$repo" x64 linux "$test_build/algo-rules-selfhost")
 [ "$algo_rules_written" = 'executable written' ]

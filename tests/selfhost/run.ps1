@@ -2470,6 +2470,12 @@ $dataTablegroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $dataTablegroupWritten -ne 'executable written') { throw 'data_tablegroup emission failed' }
 & $dataTablegroupPath
 if ($LASTEXITCODE -ne 0) { throw "a data_tablegroup check failed: exit $LASTEXITCODE" }
+# `e.data.tablesearch`: the incremental search (begins/within, folded and exact, forward and backward, wrap, over a sorted and a filtered order) enumerated against a brute-force scan, and the value list (counts, fold order, merged variants, nulls, filtered rows only) against a per-entry recount (D3909).
+$dataTablesearchPath = Join-Path $testBuild 'data-tablesearch-selfhost.exe'
+$dataTablesearchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_tablesearch\src\main.e') $repo 'x64' 'windows' $dataTablesearchPath --arena 768m
+if ($LASTEXITCODE -ne 0 -or $dataTablesearchWritten -ne 'executable written') { throw 'data_tablesearch emission failed' }
+& $dataTablesearchPath
+if ($LASTEXITCODE -ne 0) { throw "a data_tablesearch check failed: exit $LASTEXITCODE" }
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 $algoRulesPath = Join-Path $testBuild 'algo-rules-selfhost.exe'
 $algoRulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rules\src\main.e') $repo 'x64' 'windows' $algoRulesPath
