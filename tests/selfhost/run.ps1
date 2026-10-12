@@ -2752,6 +2752,66 @@ $netCoapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $netCoapWritten -ne 'executable written') { throw 'net_coap emission failed' }
 & $netCoapPath
 if ($LASTEXITCODE -ne 0) { throw "a net_coap check failed: exit $LASTEXITCODE" }
+# `e.net.tls.roots`, `.hoststore` and `.mozilla`: a test PKI built by `cryptography`, chains through tls.verify_certificate_set, the bundled set against certifi (D2641).
+$netTlsRootsPath = Join-Path $testBuild 'net-tls-roots-selfhost.exe'
+$netTlsRootsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_tls_roots\src\main.e') $repo 'x64' 'windows' $netTlsRootsPath
+if ($LASTEXITCODE -ne 0 -or $netTlsRootsWritten -ne 'executable written') { throw 'net_tls_roots emission failed' }
+& $netTlsRootsPath
+if ($LASTEXITCODE -ne 0) { throw "a net_tls_roots check failed: exit $LASTEXITCODE" }
+# `e.net.nats` against nats-py: 533 stream, command and header vectors plus a scripted session (D2642).
+$netNatsPath = Join-Path $testBuild 'net-nats-selfhost.exe'
+$netNatsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_nats\src\main.e') $repo 'x64' 'windows' $netNatsPath
+if ($LASTEXITCODE -ne 0 -or $netNatsWritten -ne 'executable written') { throw 'net_nats emission failed' }
+& $netNatsPath
+if ($LASTEXITCODE -ne 0) { throw "a net_nats check failed: exit $LASTEXITCODE" }
+# `x.redis.resp` against redis-py: RESP2/RESP3 streams, commands, slots, redirects (D2643).
+$xRedisRespPath = Join-Path $testBuild 'x-redis-resp-selfhost.exe'
+$xRedisRespWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_redis_resp\src\main.e') $repo 'x64' 'windows' $xRedisRespPath
+if ($LASTEXITCODE -ne 0 -or $xRedisRespWritten -ne 'executable written') { throw 'x_redis_resp emission failed' }
+& $xRedisRespPath
+if ($LASTEXITCODE -ne 0) { throw "a x_redis_resp check failed: exit $LASTEXITCODE" }
+# `x.mongodb.wire` against pymongo and bson: OP_MSG frames, command and status documents, SCRAM-SHA-256 incl. the RFC 7677 exchange, CRC-32C (D2644).
+$xMongodbWirePath = Join-Path $testBuild 'x-mongodb-wire-selfhost.exe'
+$xMongodbWireWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_mongodb_wire\src\main.e') $repo 'x64' 'windows' $xMongodbWirePath
+if ($LASTEXITCODE -ne 0 -or $xMongodbWireWritten -ne 'executable written') { throw 'x_mongodb_wire emission failed' }
+& $xMongodbWirePath
+if ($LASTEXITCODE -ne 0) { throw "a x_mongodb_wire check failed: exit $LASTEXITCODE" }
+# `x.elastic.rest` against elasticsearch-py: URL quoting, bulk NDJSON lines, response readers (D2645).
+$xElasticRestPath = Join-Path $testBuild 'x-elastic-rest-selfhost.exe'
+$xElasticRestWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_elastic_rest\src\main.e') $repo 'x64' 'windows' $xElasticRestPath
+if ($LASTEXITCODE -ne 0 -or $xElasticRestWritten -ne 'executable written') { throw 'x_elastic_rest emission failed' }
+& $xElasticRestPath
+if ($LASTEXITCODE -ne 0) { throw "a x_elastic_rest check failed: exit $LASTEXITCODE" }
+# `e.net.http2` against hpack and hyperframe: blocks, frames, Huffman, integers, encoder goldens verified by hpack.Decoder (D2646).
+$netHttp2Path = Join-Path $testBuild 'net-http2-selfhost.exe'
+$netHttp2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http2\src\main.e') $repo 'x64' 'windows' $netHttp2Path
+if ($LASTEXITCODE -ne 0 -or $netHttp2Written -ne 'executable written') { throw 'net_http2 emission failed' }
+& $netHttp2Path
+if ($LASTEXITCODE -ne 0) { throw "a net_http2 check failed: exit $LASTEXITCODE" }
+# `e.net.grpc` against grpcio transcripts and h2 reading the client bytes (D2646).
+$netGrpcPath = Join-Path $testBuild 'net-grpc-selfhost.exe'
+$netGrpcWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_grpc\src\main.e') $repo 'x64' 'windows' $netGrpcPath
+if ($LASTEXITCODE -ne 0 -or $netGrpcWritten -ne 'executable written') { throw 'net_grpc emission failed' }
+& $netGrpcPath
+if ($LASTEXITCODE -ne 0) { throw "a net_grpc check failed: exit $LASTEXITCODE" }
+# `x.modbus.wire` against pymodbus: PDUs, TCP/RTU/ASCII frames, typed registers, slave scenarios vs a reference model (D2647).
+$xModbusWirePath = Join-Path $testBuild 'x-modbus-wire-selfhost.exe'
+$xModbusWireWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_modbus_wire\src\main.e') $repo 'x64' 'windows' $xModbusWirePath
+if ($LASTEXITCODE -ne 0 -or $xModbusWireWritten -ne 'executable written') { throw 'x_modbus_wire emission failed' }
+& $xModbusWirePath
+if ($LASTEXITCODE -ne 0) { throw "a x_modbus_wire check failed: exit $LASTEXITCODE" }
+# `e.dbus` against dbus-next: typed bodies and messages in both byte orders, standard calls, AUTH, match rules, addresses (D2648).
+$dbusPath = Join-Path $testBuild 'dbus-selfhost.exe'
+$dbusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dbus\src\main.e') $repo 'x64' 'windows' $dbusPath
+if ($LASTEXITCODE -ne 0 -or $dbusWritten -ne 'executable written') { throw 'dbus emission failed' }
+& $dbusPath
+if ($LASTEXITCODE -ne 0) { throw "a dbus check failed: exit $LASTEXITCODE" }
+# `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
+$netHttpPoolPath = Join-Path $testBuild 'net-http-pool-selfhost.exe'
+$netHttpPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http_pool\src\main.e') $repo 'x64' 'windows' $netHttpPoolPath
+if ($LASTEXITCODE -ne 0 -or $netHttpPoolWritten -ne 'executable written') { throw 'net_http_pool emission failed' }
+& $netHttpPoolPath
+if ($LASTEXITCODE -ne 0) { throw "a net_http_pool check failed: exit $LASTEXITCODE" }
 # `e.net.mqtt`: the specification's CONNECT bytes, remaining-length limits, fourteen topic-filter cases, QoS 1 and 2 flows producing the replica's byte stream, a duplicated QoS 2 publish delivered once (D877).
 $netMqttPath = Join-Path $testBuild 'net-mqtt-selfhost.exe'
 $netMqttWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_mqtt\src\main.e') $repo 'x64' 'windows' $netMqttPath

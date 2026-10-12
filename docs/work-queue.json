@@ -455,61 +455,6 @@
       "evidence": "Planning only (D1824). Signature/draw parity missing: ink stroke capture, pressure-aware polyline storage and timed replay over the existing pointer/pen gesture stream; pen input exists but ink storage does not. Minor. Fixtures for stroke bounds, replay timing and capacity refusal."
     },
     {
-      "id": "L101",
-      "category": "library",
-      "group": "Drivers",
-      "order": 199,
-      "title": "gRPC transport and stubs over e.fmt.protobuf",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1873). grpcio parity missing: HTTP/2-framed unary and streaming RPC over e.net.http3/quic and e.fmt.protobuf, with stub generation from .proto descriptors. Fixtures against grpcio reference transcripts on loopback; deadlines, trailers and status codes included. No service mesh. Follow-on (D1881): classic H2C/H2-TLS transport for grpc-go interop, not just H2 over QUIC."
-    },
-    {
-      "id": "L107",
-      "category": "library",
-      "group": "Drivers",
-      "order": 205,
-      "title": "HTTP keep-alive connection pooling in e.net.http",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1873). urllib3-pool parity missing (verified: no pool surface in http.e): keep-alive connection reuse with per-host limits and idle eviction under caller storage. Loopback fixtures assert socket reuse counts; TLS session reuse follows."
-    },
-    {
-      "id": "L109",
-      "category": "library",
-      "group": "Drivers",
-      "order": 207,
-      "title": "TLS trust-root provisioning for e.net.tls",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1873). certifi parity gap (verified: no store readers or bundle found): OS trust-store readers per host plus an optional bundled Mozilla set feeding the existing caller-roots config. Fixtures assert chain building against test roots, never live trust contents."
-    },
-    {
-      "id": "L114",
-      "category": "library",
-      "group": "Drivers",
-      "order": 212,
-      "title": "NoSQL wire clients: Redis, MongoDB, Elasticsearch",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1877). go-redis/mongo-driver/elastic parity missing (verified: only false positives found): RESP, OP_MSG and ES REST codecs with loopback fixtures. S3-compatible storage stays out per the cloud ruling. Client-side only; cluster failover follows."
-    },
-    {
-      "id": "L115",
-      "category": "library",
-      "group": "Drivers",
-      "order": 213,
-      "title": "NATS client in e.net",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1877). Messaging-client gap, NATS first: text-protocol codec with pub/sub, request-reply and queue groups over e.net, loopback fixtures against scripted servers. Kafka and AMQP stay deferred as heavier protocols; MQTT already exists. Follow-on (D1891): Pulsar, RocketMQ and Artemis share the deferred slot."
-    },
-    {
       "id": "L125",
       "category": "library",
       "group": "Formats",
@@ -519,17 +464,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1881). resvg parity gap (verified: SVG output exists, render does not): SVG path/shape/text document rendering into the scene backend over e.gfx.geometry and text layout. Fixtures against reference rasters with tolerance bounds; filters and scripting stay out."
-    },
-    {
-      "id": "L126",
-      "category": "library",
-      "group": "Drivers",
-      "order": 224,
-      "title": "D-Bus message codec and client for Linux desktop",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1881). zbus parity gap (verified: e.dbus is only a forward reference; AT-SPI calls are hand-rolled): D-Bus wire codec plus session/system bus client behind e.os, unlocking Linux notification, portal and tray backends. Loopback bus fixtures; no service implementations."
     },
     {
       "id": "L135",
@@ -629,17 +563,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1890). NodaTime parity gap (verified: TZif parsing present, non-ISO calendars absent): Japanese/Islamic/Hebrew calendar arithmetic over e.time.calendar, pattern-based text parsing/formatting and a Windows to IANA zone map. Fixtures against reference conversions."
-    },
-    {
-      "id": "L151",
-      "category": "library",
-      "group": "Drivers",
-      "order": 249,
-      "title": "Industrial protocols: Modbus first, OPC UA and S7 follow",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1890). Factory-automation parity missing: Modbus TCP/RTU client with register modeling first; OPC UA and Siemens S7 as follow-on slices. Follow-on (D1891): BACnet and KNX building automation as further slices. Loopback fixtures against scripted slaves; device discovery stays with L086."
     },
     {
       "id": "L152",

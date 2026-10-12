@@ -163,7 +163,9 @@
     "fmt_jwt",
     "gfx_chart_svg_paint",
     "gfx_phash256",
-    "gp09_simd_hex"
+    "gp09_simd_hex",
+    "net_grpc",
+    "net_tls_roots"
    ]
   },
   {
@@ -241,7 +243,8 @@
     "crypto_pq",
     "crypto_sign_plan",
     "crypto_sign_wide",
-    "differential"
+    "differential",
+    "net_tls_roots"
    ]
   },
   {
@@ -297,7 +300,8 @@
     "crypto_sign_wide",
     "crypto_x509",
     "misc_gaps",
-    "net_tls"
+    "net_tls",
+    "net_tls_roots"
    ]
   },
   {
@@ -356,7 +360,8 @@
    "pending": [],
    "fixtures": [
     "fmt_asn1",
-    "fmt_gaps_a"
+    "fmt_gaps_a",
+    "net_tls_roots"
    ]
   },
   {
@@ -367,7 +372,8 @@
    "delivered": 11,
    "pending": [],
    "fixtures": [
-    "fmt_bson"
+    "fmt_bson",
+    "x_mongodb_wire"
    ]
   },
   {
@@ -515,6 +521,7 @@
     "x_cloud_aws",
     "x_cloud_manifest",
     "x_cloud_rest",
+    "x_elastic_rest",
     "x_identity_oidc",
     "x_identity_saml",
     "x_identity_scim",
@@ -794,6 +801,7 @@
     "gpu_vulkan_raw",
     "grep",
     "log_debug",
+    "net_tls_roots",
     "os_shell",
     "store",
     "test_snapshot",
@@ -2602,6 +2610,7 @@
     "net",
     "net_ftp",
     "net_http",
+    "net_http_pool",
     "net_mdns",
     "net_socks",
     "net_ssh",
@@ -2612,13 +2621,14 @@
    "module": "e.net.http",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 104,
-   "delivered": 104,
+   "catalogue": 121,
+   "delivered": 121,
    "pending": [],
    "fixtures": [
     "metrics_export",
     "misc_gaps",
     "net_http",
+    "net_http_pool",
     "net_tls",
     "net_ws",
     "store"
@@ -2649,6 +2659,7 @@
     "net_pop3",
     "net_smtp",
     "net_tls",
+    "net_tls_roots",
     "x_openssl"
    ]
   },
@@ -3023,6 +3034,7 @@
     "net_pop3",
     "net_smtp",
     "net_tls",
+    "net_tls_roots",
     "proc_output",
     "sync_semantics",
     "sync_threads",

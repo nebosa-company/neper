@@ -2428,6 +2428,56 @@ net_coap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$net_coap_written" = 'executable written' ]
 chmod +x "$test_build/net-coap-selfhost"
 "$test_build/net-coap-selfhost"
+# `e.net.tls.roots`, `.hoststore` and `.mozilla`: a test PKI built by `cryptography`, chains through tls.verify_certificate_set, the bundled set against certifi (D2641).
+net_tls_roots_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_tls_roots/src/main.e" "$repo" x64 linux "$test_build/net-tls-roots-selfhost")
+[ "$net_tls_roots_written" = 'executable written' ]
+chmod +x "$test_build/net-tls-roots-selfhost"
+"$test_build/net-tls-roots-selfhost"
+# `e.net.nats` against nats-py: 533 stream, command and header vectors plus a scripted session (D2642).
+net_nats_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_nats/src/main.e" "$repo" x64 linux "$test_build/net-nats-selfhost")
+[ "$net_nats_written" = 'executable written' ]
+chmod +x "$test_build/net-nats-selfhost"
+"$test_build/net-nats-selfhost"
+# `x.redis.resp` against redis-py: RESP2/RESP3 streams, commands, slots, redirects (D2643).
+x_redis_resp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_redis_resp/src/main.e" "$repo" x64 linux "$test_build/x-redis-resp-selfhost")
+[ "$x_redis_resp_written" = 'executable written' ]
+chmod +x "$test_build/x-redis-resp-selfhost"
+"$test_build/x-redis-resp-selfhost"
+# `x.mongodb.wire` against pymongo and bson: OP_MSG frames, command and status documents, SCRAM-SHA-256 incl. the RFC 7677 exchange, CRC-32C (D2644).
+x_mongodb_wire_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_mongodb_wire/src/main.e" "$repo" x64 linux "$test_build/x-mongodb-wire-selfhost")
+[ "$x_mongodb_wire_written" = 'executable written' ]
+chmod +x "$test_build/x-mongodb-wire-selfhost"
+"$test_build/x-mongodb-wire-selfhost"
+# `x.elastic.rest` against elasticsearch-py: URL quoting, bulk NDJSON lines, response readers (D2645).
+x_elastic_rest_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_elastic_rest/src/main.e" "$repo" x64 linux "$test_build/x-elastic-rest-selfhost")
+[ "$x_elastic_rest_written" = 'executable written' ]
+chmod +x "$test_build/x-elastic-rest-selfhost"
+"$test_build/x-elastic-rest-selfhost"
+# `e.net.http2` against hpack and hyperframe: blocks, frames, Huffman, integers, encoder goldens verified by hpack.Decoder (D2646).
+net_http2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http2/src/main.e" "$repo" x64 linux "$test_build/net-http2-selfhost")
+[ "$net_http2_written" = 'executable written' ]
+chmod +x "$test_build/net-http2-selfhost"
+"$test_build/net-http2-selfhost"
+# `e.net.grpc` against grpcio transcripts and h2 reading the client bytes (D2646).
+net_grpc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpc/src/main.e" "$repo" x64 linux "$test_build/net-grpc-selfhost")
+[ "$net_grpc_written" = 'executable written' ]
+chmod +x "$test_build/net-grpc-selfhost"
+"$test_build/net-grpc-selfhost"
+# `x.modbus.wire` against pymodbus: PDUs, TCP/RTU/ASCII frames, typed registers, slave scenarios vs a reference model (D2647).
+x_modbus_wire_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_modbus_wire/src/main.e" "$repo" x64 linux "$test_build/x-modbus-wire-selfhost")
+[ "$x_modbus_wire_written" = 'executable written' ]
+chmod +x "$test_build/x-modbus-wire-selfhost"
+"$test_build/x-modbus-wire-selfhost"
+# `e.dbus` against dbus-next: typed bodies and messages in both byte orders, standard calls, AUTH, match rules, addresses (D2648).
+dbus_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dbus/src/main.e" "$repo" x64 linux "$test_build/dbus-selfhost")
+[ "$dbus_written" = 'executable written' ]
+chmod +x "$test_build/dbus-selfhost"
+"$test_build/dbus-selfhost"
+# `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
+net_http_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http_pool/src/main.e" "$repo" x64 linux "$test_build/net-http-pool-selfhost")
+[ "$net_http_pool_written" = 'executable written' ]
+chmod +x "$test_build/net-http-pool-selfhost"
+"$test_build/net-http-pool-selfhost"
 # `e.net.mqtt`: the specification's CONNECT bytes, remaining-length limits, fourteen topic-filter cases, QoS 1 and 2 flows producing the replica's byte stream, a duplicated QoS 2 publish delivered once (D877).
 net_mqtt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_mqtt/src/main.e" "$repo" x64 linux "$test_build/net-mqtt-selfhost")
 [ "$net_mqtt_written" = 'executable written' ]

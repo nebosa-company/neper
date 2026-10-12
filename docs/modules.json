@@ -133,6 +133,17 @@
     "e.net.tls",
     "e.net.policy",
     "e.net.ssrf",
+    "e.dbus",
+    "x.modbus.wire",
+    "e.net.grpc",
+    "e.net.http2",
+    "x.elastic.rest",
+    "x.mongodb.wire",
+    "x.redis.resp",
+    "e.net.nats",
+    "e.net.tls.roots",
+    "e.net.tls.hoststore",
+    "e.net.tls.mozilla",
     "e.net.packet",
     "e.net.pcap",
     "e.net.http",
@@ -7184,6 +7195,152 @@
   },
   {
    "name": "e.text.termkit",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.tls.roots",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.crypto.x509",
+    "e.fmt.asn1",
+    "e.fmt.pem",
+    "e.fs",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.tls.hoststore",
+   "layer": 6,
+   "surface": "spec",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.net.tls.roots",
+    "e.os",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.tls.mozilla",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.net.tls.roots"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.nats",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.redis.resp",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.mongodb.wire",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.crypto.hash",
+    "e.crypto.kdf",
+    "e.crypto.mac",
+    "e.fmt.bson",
+    "e.io",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.elastic.rest",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.http2",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.grpc",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.mem",
+    "e.net.http2",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.modbus.wire",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dbus",
    "layer": 2,
    "surface": "source",
    "milestone": null,

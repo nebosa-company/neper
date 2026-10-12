@@ -1018,6 +1018,266 @@ fn reason(status: u16) -> str {
     ret ""
 }
 
+// --- keep-alive connection pool (L107) -------------------------------------------------------------------------
+//
+// A pool of plain-TCP HTTP/1.1 connections over caller storage: `slots` are the caller's `PoolSlot` array (zero
+// them with `pool_new`), the reader buffers live in the pool's arena once per slot and are reused by every
+// connection that slot carries. The caller passes the clock (`now_ms`, any monotonic millisecond count), so idle
+// eviction is deterministic. A connection is kept only when the response was framed by length, chunks or status
+// (never by close), neither side said `Connection: close` (HTTP/1.0 needs `keep-alive`), and no bytes are left
+// unread. A reused connection that fails before its response is retried once on a fresh one when the method is
+// idempotent (the stale-socket case). One thread owns a pool; TLS connections are not pooled yet.
+
+error PoolFull
+
+type PoolSlot = struct { used: bool, idle: bool, has_decoder: bool, key: net.Endpoint, network: NetworkIo, decoder: Reader, last_ms: u64, served: u32 }
+type Pool = struct { slots: []PoolSlot, arena: *mem.Arena, limits: Limits, max_per_host: usize, idle_ms: u64, opened: usize, reused: usize, evicted: usize, retried: usize }
+
+fn pool_new(arena: *mem.Arena, slots: []PoolSlot, limits: Limits, max_per_host: usize, idle_ms: u64) -> Pool {
+    var i = 0usize
+    while i < slots.len {
+        slots[i].used = false
+        slots[i].idle = false
+        slots[i].has_decoder = false
+        slots[i].last_ms = 0u64
+        slots[i].served = 0u32
+        i += 1usize
+    }
+    ret Pool { slots: slots, arena: arena, limits: limits, max_per_host: max_per_host, idle_ms: idle_ms, opened: 0usize, reused: 0usize, evicted: 0usize, retried: 0usize }
+}
+
+fn endpoint_same(left: net.Endpoint, right: net.Endpoint) -> bool {
+    if left.port != right.port { ret false }
+    var lb: [16]u8 = zero
+    var rb: [16]u8 = zero
+    let ln = net.address_bytes(left.address, lb[0usize..])
+    let rn = net.address_bytes(right.address, rb[0usize..])
+    if ln != rn { ret false }
+    var i = 0usize
+    while i < ln {
+        if lb[i] != rb[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn pool_drop(p: *Pool, at: usize) {
+    let slot = &p.slots[at]
+    if slot.used {
+        let unused = net.close(slot.network.socket)
+    }
+    slot.used = false
+    slot.idle = false
+}
+
+// Close every idle connection unused for longer than `idle_ms`; answers how many.
+fn pool_evict(p: *Pool, now_ms: u64) -> usize {
+    var count = 0usize
+    var i = 0usize
+    while i < p.slots.len {
+        let slot = &p.slots[i]
+        if slot.used && slot.idle && now_ms >= slot.last_ms && now_ms - slot.last_ms > p.idle_ms {
+            pool_drop(p, i)
+            p.evicted += 1usize
+            count += 1usize
+        }
+        i += 1usize
+    }
+    ret count
+}
+
+fn pool_idle(p: *const Pool) -> usize {
+    var count = 0usize
+    var i = 0usize
+    while i < p.slots.len {
+        if p.slots[i].used && p.slots[i].idle { count += 1usize }
+        i += 1usize
+    }
+    ret count
+}
+
+fn pool_open(p: *const Pool) -> usize {
+    var count = 0usize
+    var i = 0usize
+    while i < p.slots.len {
+        if p.slots[i].used { count += 1usize }
+        i += 1usize
+    }
+    ret count
+}
+
+// Check a connection out: the most recently used idle one for `endpoint`, else a new one when the host holds fewer
+// than `max_per_host` and a slot is free (the oldest idle connection to another host is closed to make room).
+// Answers the slot index and whether the connection is a reuse. `PoolFull` when neither is possible.
+fn pool_hold(p: *Pool, endpoint: net.Endpoint, now_ms: u64, control: cancel.Control) -> (usize, bool, err) {
+    let evicted = pool_evict(p, now_ms)
+    var best = p.slots.len
+    var i = 0usize
+    var held = 0usize
+    while i < p.slots.len {
+        let slot = &p.slots[i]
+        if slot.used && endpoint_same(slot.key, endpoint) {
+            held += 1usize
+            if slot.idle && (best == p.slots.len || slot.last_ms >= p.slots[best].last_ms) { best = i }
+        }
+        i += 1usize
+    }
+    if best != p.slots.len {
+        p.slots[best].idle = false
+        p.slots[best].network.control = control
+        p.reused += 1usize
+        ret (best, true, ok)
+    }
+    if held >= p.max_per_host { ret (0usize, false, PoolFull) }
+    var free = p.slots.len
+    i = 0usize
+    while i < p.slots.len {
+        if !p.slots[i].used {
+            free = i
+            break
+        }
+        i += 1usize
+    }
+    if free == p.slots.len {
+        var oldest = p.slots.len
+        i = 0usize
+        while i < p.slots.len {
+            if p.slots[i].idle && (oldest == p.slots.len || p.slots[i].last_ms < p.slots[oldest].last_ms) { oldest = i }
+            i += 1usize
+        }
+        if oldest == p.slots.len { ret (0usize, false, PoolFull) }
+        pool_drop(p, oldest)
+        p.evicted += 1usize
+        free = oldest
+    }
+    let (opened, connect_error) = net.tcp_connect_with_control(endpoint, control)
+    if connect_error != ok { ret (0usize, false, connect_error) }
+    let slot = &p.slots[free]
+    if !slot.has_decoder {
+        slot.network.control = control
+        let source = io.Reader { ctx: mem.cast[*void](&slot.network), read: network_read }
+        let (created, reader_error) = reader(p.arena, source, p.limits)
+        if reader_error != ok {
+            let unused = net.close(opened)
+            ret (0usize, false, reader_error)
+        }
+        slot.decoder = created
+        slot.has_decoder = true
+    }
+    let state = mem.cast[*ReaderState](slot.decoder.state)
+    state.input_at = 0usize
+    state.input_len = 0usize
+    slot.network.socket = opened
+    slot.network.control = control
+    slot.key = endpoint
+    slot.used = true
+    slot.idle = false
+    slot.served = 0u32
+    p.opened += 1usize
+    ret (free, false, ok)
+}
+
+// Give a held connection back: kept idle (stamped `now_ms`) when `keep`, closed otherwise.
+fn pool_release(p: *Pool, at: usize, now_ms: u64, keep: bool) {
+    if at >= p.slots.len { ret }
+    let slot = &p.slots[at]
+    if !slot.used { ret }
+    if keep {
+        slot.idle = true
+        slot.last_ms = now_ms
+        slot.served += 1u32
+        ret
+    }
+    pool_drop(p, at)
+}
+
+fn pool_close(p: *Pool) {
+    var i = 0usize
+    while i < p.slots.len {
+        pool_drop(p, i)
+        i += 1usize
+    }
+}
+
+fn has_token(value: str, token: str) -> bool {
+    var start = 0usize
+    var i = 0usize
+    while i <= value.len {
+        if i == value.len || value[i] == 44u8 {
+            if same_ascii(trim_spaces(value[start..i]), token) { ret true }
+            start = i + 1usize
+        }
+        i += 1usize
+    }
+    ret false
+}
+
+// Whether a message's version and `Connection` header allow the connection to carry another exchange.
+fn keeps_alive(version: Version, headers: []const Header) -> bool {
+    let (value, found) = header(headers, "Connection")
+    if found && has_token(value, "close") { ret false }
+    if version == .Http10 { ret found && has_token(value, "keep-alive") }
+    ret true
+}
+
+fn idempotent(method: Method) -> bool {
+    ret method == .Get || method == .Head || method == .Put || method == .Delete || method == .Options || method == .Trace
+}
+
+fn pool_exchange(p: *Pool, at: usize, a: *mem.Arena, req: *const Request) -> (Response, bool, err) {
+    var out: Response = zero
+    let slot = &p.slots[at]
+    var sink = io.Writer { ctx: mem.cast[*void](&slot.network), write: network_write, flush: network_flush }
+    var encoder = writer(sink)
+    let write_error = write_request(&encoder, req)
+    if write_error != ok { ret (out, false, write_error) }
+    let mark = mem.mark(a)
+    let (meta, meta_error) = read_response_meta(a, &slot.decoder)
+    if meta_error != ok {
+        mem.reset(a, mark)
+        ret (out, false, meta_error)
+    }
+    var body: []const u8 = zero
+    var framed = true
+    if !no_response_body(meta.head.status) && req.method != .Head {
+        let until_end = !meta.chunked && !meta.has_length
+        let body_state = mem.cast[*ReaderState](slot.decoder.state)
+        let (read, body_error) = read_body(a, body_state, meta.length, meta.chunked, until_end)
+        if body_error != ok {
+            mem.reset(a, mark)
+            ret (out, false, body_error)
+        }
+        body = read
+        if until_end { framed = false }
+    }
+    let state = mem.cast[*ReaderState](slot.decoder.state)
+    let clean = state.input_at == state.input_len
+    let keep = framed && clean && keeps_alive(meta.head.version, meta.head.headers) && keeps_alive(req.version, req.headers)
+    out = Response { version: meta.head.version, status: meta.head.status, reason: meta.head.reason, headers: meta.head.headers, body: body }
+    ret (out, keep, ok)
+}
+
+// One request over a pooled connection: hold, exchange, release (kept or closed per the rules above).
+fn pool_request(p: *Pool, a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, now_ms: u64, control: cancel.Control) -> (Response, err) {
+    var out: Response = zero
+    if req.method == .Connect { ret (out, Unsupported) }
+    var attempt = 0u8
+    while attempt < 2u8 {
+        let (at, reused, hold_error) = pool_hold(p, endpoint, now_ms, control)
+        if hold_error != ok { ret (out, hold_error) }
+        let (response, keep, exchange_error) = pool_exchange(p, at, a, req)
+        if exchange_error == ok {
+            pool_release(p, at, now_ms, keep)
+            ret (response, ok)
+        }
+        pool_release(p, at, now_ms, false)
+        if !reused || !idempotent(req.method) || attempt == 1u8 { ret (out, exchange_error) }
+        p.retried += 1usize
+        attempt += 1u8
+    }
+    ret (out, Invalid)
+}
+
 type SseReaderState = struct { source: io.Reader, input: []u8, input_at: usize, input_len: usize, line: []u8, data: []u8, event: []u8, id: []u8, data_len: usize, event_len: usize, id_len: usize, event_used: usize, retry_ms: u64, has_id: bool, has_retry: bool, ended: bool, line_terminated: bool, first_line: bool }
 
 fn take(s: *SseReaderState) -> (u8, bool, err) {
