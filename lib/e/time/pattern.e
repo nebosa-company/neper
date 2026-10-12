@@ -1,7 +1,10 @@
 // Pattern-based date-time text, the shape NodaTime's `LocalDateTimePattern` has: a runtime
 // pattern string of custom specifiers, formatted from and parsed into an
 // `e.time.calendar` `DateTime`. (`calendar.format` is the compile-time, fixed-width
-// subset; this reads any pattern a caller holds as data.) English names, invariant culture.
+// subset; this reads any pattern a caller holds as data.) English names, invariant culture;
+// `format_locale` and `parse_locale` take a language tag and use that language's CLDR month,
+// weekday and AM/PM names from `e.time.names` (`MMM` and `ddd` are then its abbreviations,
+// not three letters; `t` is the first character of the mark).
 //
 // Specifiers: `yyyy` four-digit year, `yy` two-digit year (parsed 00-29 as 2000-2029,
 // 30-99 as 1930-1999); `MMMM` `MMM` month name, `MM` `M` month number; `dddd` `ddd`
@@ -19,6 +22,7 @@
 
 use e.time
 use e.time.calendar
+use e.time.names
 
 type Buf = struct { dst: []u8, n: usize, bad: bool }
 type Fields = struct { year: i64, month: i64, day: i64, hour: i64, minute: i64, second: i64, nanos: i64, hour12: i64, pm: i64, weekday: i64 }
@@ -56,6 +60,43 @@ fn weekday_name(index: i64) -> str {
     if index == 5i64 { ret "Saturday" }
     if index == 6i64 { ret "Sunday" }
     ret ""
+}
+
+// The month, weekday and AM/PM texts of locale `loc` (0 is the invariant English: the abbreviation is its first three
+// letters, the mark is AM or PM).
+fn month_text(loc: usize, month: u8, abbr: bool) -> str {
+    if loc != 0usize { ret names.month(loc, month, abbr) }
+    let full = month_name(month)
+    if abbr && full.len >= 3usize { ret full[0usize..3usize] }
+    ret full
+}
+
+fn weekday_text(loc: usize, index: i64, abbr: bool) -> str {
+    if loc != 0usize { ret names.weekday(loc, index, abbr) }
+    let full = weekday_name(index)
+    if abbr && full.len >= 3usize { ret full[0usize..3usize] }
+    ret full
+}
+
+fn mark_text(loc: usize, pm: bool) -> str {
+    if loc != 0usize { ret names.day_period(loc, pm) }
+    if pm { ret "PM" }
+    ret "AM"
+}
+
+// The byte length of the UTF-8 scalar at the start of `s`.
+fn first_scalar(s: str) -> usize {
+    if s.len == 0usize { ret 0usize }
+    var n = 1usize
+    if s[0usize] >= 240u8 {
+        n = 4usize
+    } else if s[0usize] >= 224u8 {
+        n = 3usize
+    } else if s[0usize] >= 192u8 {
+        n = 2usize
+    }
+    if n > s.len { n = s.len }
+    ret n
 }
 
 fn push(b: *Buf, c: u8) {
@@ -128,6 +169,19 @@ fn quoted_end(pattern: str, at: usize) -> (usize, bool) {
 }
 
 fn format(pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err) {
+    let (text, text_error) = format_in(0usize, pattern, value, dst)
+    ret (text, text_error)
+}
+
+// `format` with the names of a language tag (`fr`, `de-AT`, ...); an unknown tag is `Invalid`.
+fn format_locale(tag: str, pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err) {
+    let (loc, known) = names.locale_index(tag)
+    if !known { ret ("", Invalid) }
+    let (text, text_error) = format_in(loc, pattern, value, dst)
+    ret (text, text_error)
+}
+
+fn format_in(loc: usize, pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err) {
     if !calendar.valid_date(value.date) || !calendar.valid_time(value.time) { ret ("", Invalid) }
     let (wd, wd_error) = calendar.weekday(value.date)
     if wd_error != ok { ret ("", Invalid) }
@@ -167,9 +221,9 @@ fn format(pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err) {
                 } else { ret ("", Invalid) }
             } else if letter == 77u8 {
                 if run == 4usize {
-                    push_str(&b, month_name(value.date.month))
+                    push_str(&b, month_text(loc, value.date.month, false))
                 } else if run == 3usize {
-                    push_prefix(&b, month_name(value.date.month), 3usize)
+                    push_str(&b, month_text(loc, value.date.month, true))
                 } else if run == 2usize {
                     push_num(&b, i64(value.date.month), 2usize)
                 } else if run == 1usize {
@@ -177,9 +231,9 @@ fn format(pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err) {
                 } else { ret ("", Invalid) }
             } else if letter == 100u8 {
                 if run == 4usize {
-                    push_str(&b, weekday_name(calendar.weekday_index(wd)))
+                    push_str(&b, weekday_text(loc, calendar.weekday_index(wd), false))
                 } else if run == 3usize {
-                    push_prefix(&b, weekday_name(calendar.weekday_index(wd)), 3usize)
+                    push_str(&b, weekday_text(loc, calendar.weekday_index(wd), true))
                 } else if run == 2usize {
                     push_num(&b, i64(value.date.day), 2usize)
                 } else if run == 1usize {
@@ -201,12 +255,11 @@ fn format(pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err) {
                 push_num(&b, i64(value.time.second), run)
             } else if letter == 116u8 {
                 if run > 2usize { ret ("", Invalid) }
-                var mark = "AM"
-                if value.time.hour >= 12u8 { mark = "PM" }
+                let mark = mark_text(loc, value.time.hour >= 12u8)
                 if run == 2usize {
                     push_str(&b, mark)
                 } else {
-                    push_prefix(&b, mark, 1usize)
+                    push_prefix(&b, mark, first_scalar(mark))
                 }
             } else {
                 // f / F fraction of `run` digits, from the nanoseconds.
@@ -264,32 +317,40 @@ fn starts_with_fold(src: str, at: usize, name: str, count: usize) -> bool {
 }
 
 // The month or weekday whose name (`count` letters of it, 0 = whole) is at `at`.
-fn match_month(src: str, at: usize, abbr: bool) -> (i64, usize) {
+fn match_month(loc: usize, src: str, at: usize, abbr: bool) -> (i64, usize) {
+    var best = 0i64
+    var best_len = 0usize
     var m = 1u8
     while m <= 12u8 {
-        let name = month_name(m)
-        var count = name.len
-        if abbr { count = 3usize }
-        if starts_with_fold(src, at, name, count) { ret (i64(m), at + count) }
+        let name = month_text(loc, m, abbr)
+        if name.len > best_len && starts_with_fold(src, at, name, name.len) {
+            best = i64(m)
+            best_len = name.len
+        }
         m += 1u8
     }
-    ret (0i64, at)
+    if best == 0i64 { ret (0i64, at) }
+    ret (best, at + best_len)
 }
 
-fn match_weekday(src: str, at: usize, abbr: bool) -> (i64, usize) {
+fn match_weekday(loc: usize, src: str, at: usize, abbr: bool) -> (i64, usize) {
+    var best = -1i64
+    var best_len = 0usize
     var w = 0i64
     while w < 7i64 {
-        let name = weekday_name(w)
-        var count = name.len
-        if abbr { count = 3usize }
-        if starts_with_fold(src, at, name, count) { ret (w, at + count) }
+        let name = weekday_text(loc, w, abbr)
+        if name.len > best_len && starts_with_fold(src, at, name, name.len) {
+            best = w
+            best_len = name.len
+        }
         w += 1i64
     }
-    ret (-1i64, at)
+    if best < 0i64 { ret (-1i64, at) }
+    ret (best, at + best_len)
 }
 
 // A field slot is set once: -1 marks "unset" until read.
-fn parse_with(pattern: str, source: str, template: calendar.DateTime) -> (calendar.DateTime, err) {
+fn parse_with(loc: usize, pattern: str, source: str, template: calendar.DateTime) -> (calendar.DateTime, err) {
     var f: Fields = zero
     f.year = -1i64
     f.month = -1i64
@@ -348,7 +409,7 @@ fn parse_with(pattern: str, source: str, template: calendar.DateTime) -> (calend
                 if run > 4usize { ret (zero, Invalid) }
                 if f.month >= 0i64 { ret (zero, Invalid) }
                 if run >= 3usize {
-                    let (v, next) = match_month(source, pos, run == 3usize)
+                    let (v, next) = match_month(loc, source, pos, run == 3usize)
                     if v == 0i64 { ret (zero, Invalid) }
                     f.month = v
                     pos = next
@@ -364,7 +425,7 @@ fn parse_with(pattern: str, source: str, template: calendar.DateTime) -> (calend
                 if run > 4usize { ret (zero, Invalid) }
                 if run >= 3usize {
                     if f.weekday >= 0i64 { ret (zero, Invalid) }
-                    let (v, next) = match_weekday(source, pos, run == 3usize)
+                    let (v, next) = match_weekday(loc, source, pos, run == 3usize)
                     if v < 0i64 { ret (zero, Invalid) }
                     f.weekday = v
                     pos = next
@@ -401,16 +462,39 @@ fn parse_with(pattern: str, source: str, template: calendar.DateTime) -> (calend
                 if run > 2usize { ret (zero, Invalid) }
                 if f.pm >= 0i64 { ret (zero, Invalid) }
                 if pos >= source.len { ret (zero, Invalid) }
-                let first = lower(source[pos])
-                if first == 97u8 {
-                    f.pm = 0i64
-                } else if first == 112u8 {
-                    f.pm = 1i64
-                } else { ret (zero, Invalid) }
-                pos += 1usize
-                if run == 2usize {
-                    if pos >= source.len || lower(source[pos]) != 109u8 { ret (zero, Invalid) }
+                if loc != 0usize {
+                    // The language's marks: the whole mark for `tt`, its first character for `t` (refused when
+                    // both marks share it, as in Japanese).
+                    let am = mark_text(loc, false)
+                    let pm_mark = mark_text(loc, true)
+                    var am_len = am.len
+                    var pm_len = pm_mark.len
+                    if run == 1usize {
+                        am_len = first_scalar(am)
+                        pm_len = first_scalar(pm_mark)
+                    }
+                    let is_am = am_len > 0usize && starts_with_fold(source, pos, am, am_len)
+                    let is_pm = pm_len > 0usize && starts_with_fold(source, pos, pm_mark, pm_len)
+                    if is_am == is_pm { ret (zero, Invalid) }
+                    if is_am {
+                        f.pm = 0i64
+                        pos += am_len
+                    } else {
+                        f.pm = 1i64
+                        pos += pm_len
+                    }
+                } else {
+                    let first = lower(source[pos])
+                    if first == 97u8 {
+                        f.pm = 0i64
+                    } else if first == 112u8 {
+                        f.pm = 1i64
+                    } else { ret (zero, Invalid) }
                     pos += 1usize
+                    if run == 2usize {
+                        if pos >= source.len || lower(source[pos]) != 109u8 { ret (zero, Invalid) }
+                        pos += 1usize
+                    }
                 }
             } else {
                 if run > 9usize { ret (zero, Invalid) }
@@ -463,6 +547,18 @@ fn parse(pattern: str, source: str) -> (calendar.DateTime, err) {
     template.date.year = 2000i32
     template.date.month = 1u8
     template.date.day = 1u8
-    let (value, value_error) = parse_with(pattern, source, template)
+    let (value, value_error) = parse_with(0usize, pattern, source, template)
+    ret (value, value_error)
+}
+
+// `parse` with the names of a language tag; an unknown tag is `Invalid`.
+fn parse_locale(tag: str, pattern: str, source: str) -> (calendar.DateTime, err) {
+    var template: calendar.DateTime = zero
+    template.date.year = 2000i32
+    template.date.month = 1u8
+    template.date.day = 1u8
+    let (loc, known) = names.locale_index(tag)
+    if !known { ret (zero, Invalid) }
+    let (value, value_error) = parse_with(loc, pattern, source, template)
     ret (value, value_error)
 }

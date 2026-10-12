@@ -23883,6 +23883,49 @@ fn stem_branch(year: i32) -> (u8, u8)
 
 The Chinese lunisolar calendar over `e.time`'s day count (days from 1970-01-01), reckoned from astronomy: a month starts on the day that holds a new moon (Meeus ch. 49, full terms, in dynamical time reduced by the Espenak and Meeus delta-T polynomials; China Standard Time UTC+8 from 1929, Beijing mean time UTC+7:45:40 before); month 11 is the month that holds the winter solstice (the sun at 270 degrees, Meeus ch. 25 with the planetary and lunar terms, read in UTC+8 for every year, which is what the published 1900..1928 calendars did for their leap months); a year of 13 months has a leap month, the first month after month 11 with no major term (sun at a multiple of 30 degrees), carrying the number of the month before it. A `Date` is the Gregorian year the Chinese new year falls in, the month 1..12, whether it is the leap month of that number, and the day 1..30. `from_days` and `to_days` answer `OutOfRange` outside the years 1900..2100 (and `to_days` for a leap month or a 30th day the year does not have); `new_year`, `leap_month` (0 when none) and `month_length` (29 or 30) answer from the same months; `stem_branch` is the sexagenary stem 0..9 and branch 0..11 (1984 is 0, 0). Exact against lunar_python for 1900..2100 except 1906-04-23 and 2057-09-28, where a new moon falls eight minutes and two and a half seconds from midnight. Not here: the pre-1645 calendars, years beyond 1900..2100, the 24 solar-term dates as a surface, festivals.
 
+### `e.time.names`
+
+```neper
+fn lower(b: u8) -> u8
+fn locale_count() -> usize
+fn row(loc: usize) -> str
+fn field(r: str, n: usize) -> str
+fn item(f: str, n: usize) -> str
+fn locale_index(tag: str) -> (usize, bool)
+fn month(loc: usize, m: u8, abbr: bool) -> str
+fn weekday(loc: usize, index: i64, abbr: bool) -> str
+fn day_period(loc: usize, pm: bool) -> str
+fn row_0() -> str
+fn row_1() -> str
+fn row_2() -> str
+fn row_3() -> str
+fn row_4() -> str
+fn row_5() -> str
+fn row_6() -> str
+fn row_7() -> str
+fn row_8() -> str
+fn row_9() -> str
+fn row_10() -> str
+fn row_11() -> str
+fn row_12() -> str
+fn row_13() -> str
+fn row_14() -> str
+fn row_15() -> str
+fn row_16() -> str
+fn row_17() -> str
+fn row_18() -> str
+fn row_19() -> str
+fn row_20() -> str
+fn row_21() -> str
+fn row_22() -> str
+fn row_23() -> str
+fn row_24() -> str
+fn row_25() -> str
+fn row_26() -> str
+```
+
+Month and weekday names (wide and abbreviated, CLDR's format context) and the AM/PM marks of 27 locales (`en fr de es it pt nl sv da nb fi pl cs hu ro ru uk tr el ja zh ko id vi ar he hi`), for `e.time.pattern`'s `format_locale` and `parse_locale`. A locale is an index (0 is English); `locale_index` finds it from a BCP 47 tag by its language subtag, case-insensitively (`fr`, `fr-CA`, `FR_ca`), so regional differences (`pt-PT`, `en-GB` abbreviations) are not distinguished. `month`, `weekday` (0 Monday) and `day_period` answer the empty string for an index out of range. Generated from Babel's CLDR by `scripts/gen_time_names.py`; `time_pattern_locales` compares 868 formatted and parsed date-times with Babel's formatter.
+
 ### `e.time.pattern`
 
 ```neper
@@ -23893,6 +23936,10 @@ fn lower(b: u8) -> u8
 fn is_digit(b: u8) -> bool
 fn month_name(month: u8) -> str
 fn weekday_name(index: i64) -> str
+fn month_text(loc: usize, month: u8, abbr: bool) -> str
+fn weekday_text(loc: usize, index: i64, abbr: bool) -> str
+fn mark_text(loc: usize, pm: bool) -> str
+fn first_scalar(s: str) -> usize
 fn push(b: *Buf, c: u8)
 fn push_str(b: *Buf, s: str)
 fn push_prefix(b: *Buf, s: str, count: usize)
@@ -23901,15 +23948,18 @@ fn run_of(pattern: str, at: usize) -> usize
 fn is_specifier(c: u8) -> bool
 fn quoted_end(pattern: str, at: usize) -> (usize, bool)
 fn format(pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err)
+fn format_locale(tag: str, pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err)
+fn format_in(loc: usize, pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err)
 fn read_digits(src: str, at: usize, min: usize, max: usize) -> (i64, usize, bool)
 fn starts_with_fold(src: str, at: usize, name: str, count: usize) -> bool
-fn match_month(src: str, at: usize, abbr: bool) -> (i64, usize)
-fn match_weekday(src: str, at: usize, abbr: bool) -> (i64, usize)
-fn parse_with(pattern: str, source: str, template: calendar.DateTime) -> (calendar.DateTime, err)
+fn match_month(loc: usize, src: str, at: usize, abbr: bool) -> (i64, usize)
+fn match_weekday(loc: usize, src: str, at: usize, abbr: bool) -> (i64, usize)
+fn parse_with(loc: usize, pattern: str, source: str, template: calendar.DateTime) -> (calendar.DateTime, err)
 fn parse(pattern: str, source: str) -> (calendar.DateTime, err)
+fn parse_locale(tag: str, pattern: str, source: str) -> (calendar.DateTime, err)
 ```
 
-NodaTime-style runtime patterns over `e.time.calendar`'s `DateTime` (`calendar.format`/`parse` take a compile-time pattern; these take one as data). Specifiers: `yyyy yy MMMM MMM MM M dddd ddd dd d HH H hh h mm m ss s f..fffffffff F..FFFFFFFFF tt t`; `'...'` and `"..."` quote, `\x` escapes, `%x` forces a single-letter specifier, every other byte is literal. `format` writes into the caller's buffer and refuses an overflow rather than truncating. `parse` reads padded forms exactly and unpadded ones as one or two digits, matches names case-insensitively, refuses repeated fields, 12-hour without a marker (and a marker without `h`), a weekday that disagrees with the date, impossible dates and trailing input; `yy` pivots 00-29 to 2000s and 30-99 to 1900s; fields the pattern lacks come from the template (`parse` uses 2000-01-01T00:00:00, `parse_with` takes one). English names only; no culture data, zones or offsets (`e.time.parse` reads those, `e.tz` applies them).
+NodaTime-style runtime patterns over `e.time.calendar`'s `DateTime` (`calendar.format`/`parse` take a compile-time pattern; these take one as data). Specifiers: `yyyy yy MMMM MMM MM M dddd ddd dd d HH H hh h mm m ss s f..fffffffff F..FFFFFFFFF tt t`; `'...'` and `"..."` quote, `\x` escapes, `%x` forces a single-letter specifier, every other byte is literal. `format` writes into the caller's buffer and refuses an overflow rather than truncating. `parse` reads padded forms exactly and unpadded ones as one or two digits, matches names case-insensitively, refuses repeated fields, 12-hour without a marker (and a marker without `h`), a weekday that disagrees with the date, impossible dates and trailing input; `yy` pivots 00-29 to 2000s and 30-99 to 1900s; fields the pattern lacks come from the template (`parse` uses 2000-01-01T00:00:00, `parse_with` takes one). `format` and `parse` use English names; `format_locale` and `parse_locale` take a language tag and use that language's CLDR names from `e.time.names` (`MMM` and `ddd` are its abbreviations, `t` is the first character of the AM/PM mark and is refused on parse when both marks share it; an unknown tag is `Invalid`). No zones or offsets (`e.time.parse` reads those, `e.tz` applies them).
 
 ### `e.tz.winzones`
 
@@ -23919,6 +23969,9 @@ fn fold(b: u8) -> u8
 fn same_fold(a: str, b: str) -> bool
 fn find_row(rows: str, key: str) -> (str, bool)
 fn iana_for_windows(name: str) -> (str, err)
+fn find_territory_row(rows: str, name: str, territory: str) -> (str, bool)
+fn iana_for_windows_in(name: str, territory: str) -> (str, err)
+fn territory_row_count() -> usize
 fn windows_for_iana(name: str) -> (str, err)
 fn windows_zone_count() -> usize
 fn iana_name_count() -> usize
@@ -23931,9 +23984,12 @@ fn iana_rows_3() -> str
 fn iana_rows_4() -> str
 fn iana_rows_5() -> str
 fn iana_rows_6() -> str
+fn territory_rows_0() -> str
+fn territory_rows_1() -> str
+fn territory_rows_2() -> str
 ```
 
-The Windows time zone id to IANA zone map and back (NodaTime's `WindowsMapping`, .NET's `TryConvertWindowsIdToIanaId`): `iana_for_windows("Pacific Standard Time")` is `America/Los_Angeles`, `windows_for_iana` takes any IANA name or link. The tables are the CLDR `windowsZones` primary mapping (territory 001: one IANA zone per Windows id; 139 ids, 586 IANA names), generated by `scripts/gen_tz_winzones.py` as string chunks; matching is ASCII case-insensitive and a miss is `NotFound`. Territory-specific variants of a Windows id are not here, and the module does not load zone rules (`e.tz` does).
+The Windows time zone id to IANA zone map and back (NodaTime's `WindowsMapping`, .NET's `TryConvertWindowsIdToIanaId`): `iana_for_windows("Pacific Standard Time")` is `America/Los_Angeles`, `windows_for_iana` takes any IANA name or link. The tables are the CLDR `windowsZones` primary mapping (territory 001: one IANA zone per Windows id; 139 ids, 586 IANA names), generated by `scripts/gen_tz_winzones.py` as string chunks; matching is ASCII case-insensitive and a miss is `NotFound`. `iana_for_windows_in(name, "CA")` answers the territory's own CLDR row (227 rows that differ from the default, read from .NET's `TryConvertWindowsIdToIanaId` over every `AA..ZZ` by `scripts/tz_winzones_territories.ps1`; `Central Standard Time` in `CA` is `America/Winnipeg`, in `MX` `America/Matamoros`), and the 001 answer for an empty, `001` or unlisted territory, case-insensitively; each row's zone belongs to its territory in CLDR's `territory_zones` (checked against Babel). The first IANA id of a territory's CLDR list is the one kept, the others of a multi-zone territory are not. The module does not load zone rules (`e.tz` does).
 
 ### `e.fmt.bincode`
 

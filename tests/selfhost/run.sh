@@ -1232,6 +1232,11 @@ time_calendars_persian_uq_written=$($test_build/neper-self emit-executable "$rep
 [ "$time_calendars_persian_uq_written" = 'executable written' ]
 chmod +x "$test_build/time-calendars-persian-uq-selfhost"
 "$test_build/time-calendars-persian-uq-selfhost"
+# `e.time.pattern` locale names against Babel's CLDR formatter (L150).
+time_pattern_locales_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_pattern_locales/src/main.e" "$repo" x64 linux "$test_build/time-pattern-locales-selfhost")
+[ "$time_pattern_locales_written" = 'executable written' ]
+chmod +x "$test_build/time-pattern-locales-selfhost"
+"$test_build/time-pattern-locales-selfhost"
 # `e.time.chinese` against lunar_python, 1900..2100 (L150).
 time_chinese_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_chinese/src/main.e" "$repo" x64 linux "$test_build/time-chinese-selfhost")
 [ "$time_chinese_written" = 'executable written' ]

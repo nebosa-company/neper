@@ -1336,6 +1336,12 @@ $time_calendars_persian_uqWritten = & $compiler emit-executable (Join-Path $PSSc
 if ($LASTEXITCODE -ne 0 -or $time_calendars_persian_uqWritten -ne 'executable written') { throw 'time_calendars_persian_uq emission failed' }
 & $time_calendars_persian_uqPath
 if ($LASTEXITCODE -ne 0) { throw "a time_calendars_persian_uq check failed: exit $LASTEXITCODE" }
+# `e.time.pattern` locale names against Babel's CLDR formatter (L150).
+$time_pattern_localesPath = Join-Path $testBuild 'time-pattern-locales-selfhost.exe'
+$time_pattern_localesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_pattern_locales\src\main.e') $repo 'x64' 'windows' $time_pattern_localesPath
+if ($LASTEXITCODE -ne 0 -or $time_pattern_localesWritten -ne 'executable written') { throw 'time_pattern_locales emission failed' }
+& $time_pattern_localesPath
+if ($LASTEXITCODE -ne 0) { throw "a time_pattern_locales check failed: exit $LASTEXITCODE" }
 # `e.time.chinese` against lunar_python, 1900..2100 (L150).
 $time_chinesePath = Join-Path $testBuild 'time-chinese-selfhost.exe'
 $time_chineseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_chinese\src\main.e') $repo 'x64' 'windows' $time_chinesePath

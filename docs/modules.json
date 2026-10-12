@@ -584,6 +584,7 @@
     "e.time.recur",
     "e.time.calendars",
     "e.time.chinese",
+    "e.time.names",
     "e.time.pattern",
     "e.tz.winzones",
     "e.fmt.bincode",
@@ -7583,6 +7584,15 @@
    "blocked_by": []
   },
   {
+   "name": "e.time.names",
+   "layer": 5,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
    "name": "e.time.pattern",
    "layer": 5,
    "surface": "source",
@@ -7590,7 +7600,8 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.time",
-    "e.time.calendar"
+    "e.time.calendar",
+    "e.time.names"
    ],
    "blocked_by": []
   },

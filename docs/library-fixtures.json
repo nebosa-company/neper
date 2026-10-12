@@ -3099,6 +3099,7 @@
     "time_chinese",
     "time_cron",
     "time_pattern",
+    "time_pattern_locales",
     "time_recur",
     "tz",
     "ui_a11y_controls",
@@ -3212,6 +3213,7 @@
     "time_calendar",
     "time_calendar_iso",
     "time_pattern",
+    "time_pattern_locales",
     "time_recur",
     "ui_schedule",
     "ui_schedule_month"
