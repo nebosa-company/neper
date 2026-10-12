@@ -5593,6 +5593,16 @@ $gpuStagingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gpuStagingWritten -ne 'executable written') { throw 'gpu_staging emission failed' }
 $gpuStagingOutput = & $gpuStagingPath
 if ($LASTEXITCODE -ne 0 -or $gpuStagingOutput -notmatch '^gpu staging (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the GPU staging runtime failed: $gpuStagingOutput" }
+# (D4203, C095) Floating point on a kernel: two roundings for `a * x + y`, one for
+# `math.fma`, denormals preserved without `ftz` and flushed with it, a CPU `ftz` run
+# leaving the host alone, on the CPU build and on every Vulkan device at the floor.
+$gpuFloatModesPath = Join-Path $testBuild 'gpu-float-modes-selfhost.exe'
+foreach ($floatMode in @('', '--release')) {
+    if ($floatMode -eq '') { $gpuFloatModesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_float_modes\src\main.e') $repo 'x64' 'windows' $gpuFloatModesPath } else { $gpuFloatModesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_float_modes\src\main.e') $repo 'x64' 'windows' $gpuFloatModesPath $floatMode }
+    if ($LASTEXITCODE -ne 0 -or $gpuFloatModesWritten -ne 'executable written') { throw "gpu_float_modes emission failed ($floatMode)" }
+    $gpuFloatModesOutput = & $gpuFloatModesPath
+    if ($LASTEXITCODE -ne 0 -or $gpuFloatModesOutput -notmatch '^gpu float modes ok on cpu( and [0-9]+ devices)?$') { throw "an e.gpu floating-point mode answered wrongly ($floatMode): exit $LASTEXITCODE $gpuFloatModesOutput" }
+}
 # (D4200, C093) Device selection: a bounded snapshot, deviceUUID keys, exact open_id.
 $gpuDevicesPath = Join-Path $testBuild 'gpu-devices-selfhost.exe'
 $gpuDevicesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_devices\src\main.e') $repo 'x64' 'windows' $gpuDevicesPath

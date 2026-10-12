@@ -10139,7 +10139,19 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
     if layout_error != ok { ret layout_error }
     run_arguments[12usize] = layout_value
     var run_results: CallResults = zero
+    // An `ftz` kernel's CPU run happens inside `launch_run` on this thread, under FTZ and
+    // DAZ (spec section 11, D4203): set before it, cleared after, and the device builds
+    // of the same kernel carry their own `DenormFlushToZero`.
+    let flushes = (check.kernel_fact(c, generic.template_index) & 128usize) != 0usize
+    if flushes {
+        let (flush_on, flush_on_ignored, flush_on_error) = nir.emit(builder, .AtomicFence, zero, false, 100usize, token)
+        if flush_on_error != ok { ret flush_on_error }
+    }
     try emit_library_call(c, g, "e.gpu", "launch_run", run_arguments[..], 13usize, builder, token, &run_results)
+    if flushes {
+        let (flush_off, flush_off_ignored, flush_off_error) = nir.emit(builder, .AtomicFence, zero, false, 101usize, token)
+        if flush_off_error != ok { ret flush_off_error }
+    }
     if run_results.count != 1usize { ret check.ArgumentCount }
     try emit_formatter_return(c, module_index, instance, 0usize, 0usize, run_results.values[0usize], false, builder, token)
     ret nir.end_function(builder)

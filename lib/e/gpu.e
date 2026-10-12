@@ -95,7 +95,7 @@ const MAX_DEVICES: usize = 16usize
 const MAX_QUEUES: usize = 64usize
 const MAX_AXIS: usize = 4294967295usize
 const SUBGROUP_PC: usize = 1073741824usize
-const CPU_CAPABILITIES: usize = 375usize
+const CPU_CAPABILITIES: usize = 503usize
 
 // One buffer slot: the storage's bytes, the element count and size, and the
 // generation a handle has to carry.
@@ -1768,6 +1768,10 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
     if state.device.backend == .Vulkan { available = state.device.physical.caps }
     if (requirements & available) != requirements { ret Unsupported }
     if state.device.backend == .Vulkan { ret launch_device(state, grid, x, y, z, ctx, module, entry, layout) }
+    // A CPU run under `ftz` sets MXCSR's FTZ and DAZ (D4203), which flush `f64` as well:
+    // a kernel that is both `ftz` and `f64` cannot keep section 11's "`f64` is not
+    // flushed" there, so it is refused rather than run flushed.
+    if (requirements & 144usize) == 144usize { ret Unsupported }
     locks.mutex_lock(&cpu_launch_locks[0usize])
     defer locks.mutex_unlock(&cpu_launch_locks[0usize])
     if launch_active { ret Unsupported }

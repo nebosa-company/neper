@@ -128,7 +128,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, other_key_error) = gpu.open_id(a, gpu.DeviceKey { backend: .Cpu, uuid: other_uuid })
     if other_key_error != gpu.NoDevice { os.exit(7i32) }
     let (described, info_error) = gpu.info(a, device)
-    if info_error != ok || described.capabilities.len != 7usize || !gpu.has(device, .Int64) || !gpu.has(device, .Subgroup) || !gpu.has(device, .DenormPreserve) || gpu.has(device, .Float16) || gpu.has(device, .Ftz) { os.exit(8i32) }
+    if info_error != ok || described.capabilities.len != 8usize || !gpu.has(device, .Int64) || !gpu.has(device, .Subgroup) || !gpu.has(device, .DenormPreserve) || gpu.has(device, .Float16) || !gpu.has(device, .Ftz) { os.exit(8i32) }
     let (q, queue_error) = gpu.queue(device)
     if queue_error != ok { os.exit(9i32) }
     let (_, staging_error) = gpu.queue_with(device, gpu.StagingLimits { blocks: 0u32, block_bytes: 4096usize })
@@ -190,7 +190,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if seen[13usize * 16usize + 2usize] != ((1u32 << 24u32) | (5u32 << 8u32) | 2u32) { os.exit(30i32) }
     if seen[0] != 0u32 || seen[255] != ((1u32 << 24u32) | (1u32 << 16u32) | (7u32 << 8u32) | 7u32) { os.exit(31i32) }
     try compare_vulkan(a, x[0..], y[0..], cpu_saxpy[0..], seen[0..])
-    if gpu.launch[needs_ftz](q, gpu.grid1(1usize), tile) != gpu.Unsupported { os.exit(31i32) }
+    // The CPU build flushes for an `ftz` kernel (D4203), so the launch that was refused here runs.
+    if gpu.launch[needs_ftz](q, gpu.grid1(1usize), tile) != ok { os.exit(31i32) }
 
     // Release: the handle is stale afterwards, and its slot is reused.
     if gpu.release(q, tile) != ok { os.exit(32i32) }

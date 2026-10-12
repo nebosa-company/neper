@@ -5125,6 +5125,16 @@ case "$gpu_staging_output" in
     'gpu staging cpu only'|'gpu staging vulkan ok on '[1-9]' devices'|'gpu staging vulkan ok on '1[0-6]' devices') ;;
     *) printf '%s\n' "the GPU staging runtime failed: $gpu_staging_output" >&2; exit 1 ;;
 esac
+for float_mode in '' '--release'; do
+    gpu_float_modes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_float_modes/src/main.e" "$repo" x64 linux "$test_build/gpu-float-modes-selfhost" $float_mode)
+    [ "$gpu_float_modes_written" = 'executable written' ]
+    chmod +x "$test_build/gpu-float-modes-selfhost"
+    gpu_float_modes_output=$("$test_build/gpu-float-modes-selfhost")
+    case "$gpu_float_modes_output" in
+        'gpu float modes ok on cpu'|'gpu float modes ok on cpu and '[0-9]*' devices') ;;
+        *) printf '%s\n' "an e.gpu floating-point mode answered wrongly: $gpu_float_modes_output" >&2; exit 1 ;;
+    esac
+done
 gpu_devices_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_devices/src/main.e" "$repo" x64 linux "$test_build/gpu-devices-selfhost")
 [ "$gpu_devices_written" = 'executable written' ]
 chmod +x "$test_build/gpu-devices-selfhost"

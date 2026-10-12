@@ -416,6 +416,22 @@ fn select_atomic(builder: *nir.Builder, current: nir.Function, instruction: nir.
     let mask = preserve_mask(builder, current, instruction, 3usize, false, context)
     if instruction.opcode == .AtomicFence {
         if instruction.immediate == 4usize { ret emit_x64.memory_fence(output) }
+        // Not a fence but the one place a launcher says FTZ and DAZ (D4203, spec section
+        // 11): 100 sets them in MXCSR for the CPU build of an `ftz` kernel's run, 101
+        // clears them again; the runtime never sets either otherwise.
+        if instruction.immediate == 100usize || instruction.immediate == 101usize {
+            // sub rsp, 8; stmxcsr [rsp]; or (set) or and (clear) dword [rsp], mask;
+            // ldmxcsr [rsp]; add rsp, 8
+            var mode_bytes: [23]usize = [23]usize{ 0x48, 0x83, 0xEC, 0x08, 0x0F, 0xAE, 0x1C, 0x24, 0x81, 0x0C, 0x24, 0x40, 0x80, 0x00, 0x00, 0x0F, 0xAE, 0x14, 0x24, 0x48, 0x83, 0xC4, 0x08 }
+            if instruction.immediate == 101usize {
+                mode_bytes[9usize] = 0x24
+                mode_bytes[11usize] = 0xBF
+                mode_bytes[12usize] = 0x7F
+                mode_bytes[13usize] = 0xFF
+                mode_bytes[14usize] = 0xFF
+            }
+            ret emit_x64.emit_bytes(output, mode_bytes[0usize..23usize])
+        }
         ret ok
     }
     let width = atomic_width(instruction.ty)

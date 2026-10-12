@@ -333,7 +333,9 @@ fn describe(a: *mem.Arena, handle: usize) -> (Physical, err) {
     let subgroup_operations = get32(subgroup, 24usize)
     if described.subgroup_size >= 4u32 && described.subgroup_size <= 64u32 && (subgroup_stages & 32usize) != 0usize && (subgroup_operations & 31usize) == 31usize { caps = caps | 64usize }
     if get32(floats, 52usize) != 0usize { caps = caps | 128usize }
-    if get32(floats, 40usize) != 0usize { caps = caps | 256usize }
+    // `.DenormPreserve` is every float width the device computes in (D4203): a kernel that
+    // uses `f64` is written with `DenormPreserve` for 64 as well as 32.
+    if get32(floats, 40usize) != 0usize && (get32(features, 172usize) == 0usize || get32(floats, 44usize) != 0usize) { caps = caps | 256usize }
     described.caps = caps
     // A queue family that computes.
     var families = 0u32
