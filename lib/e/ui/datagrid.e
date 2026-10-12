@@ -13,8 +13,14 @@
 // row`, a group row `key + 4096 + row capacity + group`, the footer `key + 4096 + row capacity +
 // group capacity`.
 //
-// ponytail: one level of header; bands, filter row, navigator, indicator and preview are the
-// next increments of G006.
+// Custom cells. A column of kind `Custom` asks the application for the cell's node (a mana
+// cost, a legality badge, a foil mark: boxes and text composed there), and `row_role` colours
+// the text of a row (colour by rarity). Filter row: a row of small text fields, one per
+// column that asks for one, above the header; each change is the `filter_changed` event (the
+// application builds and applies the filter, as for a sort).
+//
+// ponytail: one level of header and the filter row sits above it (the table owns the header);
+// bands, navigator, indicator and preview are the next increments of G006.
 
 use e.mem
 use e.str
@@ -26,13 +32,24 @@ use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
 
-type CellKind = enum u8 { Text, Int, Real, Currency, Bool }
+const FILTER_TEXT: usize = 40usize
+const FILTER_KEY: u64 = 2048u64
+
+type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom }
 
 // One grid column: the table column it shows and how, and which applied group summary it
-// shows on group rows and in the footer (`summary` < 0: none).
-type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind }
+// shows on group rows and in the footer (`summary` < 0: none); `filter` asks for a field in the
+// filter row.
+type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool }
 
-type Events = struct { ctx: *void, sort_changed: fn(*void, usize, bool) -> err, row_picked: fn(*void, usize) -> err }
+type Events = struct {
+    ctx: *void,
+    sort_changed: fn(*void, usize, bool) -> err,
+    row_picked: fn(*void, usize) -> err,
+    filter_changed: fn(*void, usize, str) -> err,
+    custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err,
+    row_role: fn(*void, usize) -> style.ColorRole
+}
 
 type Grid = struct {
     t: *table.Table,
@@ -49,6 +66,9 @@ type Grid = struct {
     offset: f32,
     row_height: f32,
     footer_visible: bool,
+    filter_visible: bool,
+    filter_text: []u8,
+    filter_lens: []usize,
     theme: *const control.Theme
 }
 
@@ -58,9 +78,15 @@ fn ignore_sort(ctx: *void, column: usize, descending: bool) -> err { ret ok }
 
 fn ignore_row(ctx: *void, row: usize) -> err { ret ok }
 
+fn ignore_filter(ctx: *void, spec: usize, text: str) -> err { ret ok }
+
+fn no_custom_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spec: usize, out: *widget.Node) -> err { ret ok }
+
+fn plain_role(ctx: *void, row: usize) -> style.ColorRole { ret .Text }
+
 // Events that do nothing, for a grid that only displays.
 fn no_events() -> Events {
-    ret Events { ctx: nil, sort_changed: ignore_sort, row_picked: ignore_row }
+    ret Events { ctx: nil, sort_changed: ignore_sort, row_picked: ignore_row, filter_changed: ignore_filter, custom_cell: no_custom_cell, row_role: plain_role }
 }
 
 fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, events: Events, key: widget.Key) -> (Grid, err) {
@@ -83,6 +109,17 @@ fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const Colum
             at += 1usize
         }
         grid.columns = columns
+        let (text, text_error) = mem.alloc[u8](a, specs.len * FILTER_TEXT)
+        if text_error != ok { ret (grid, text_error) }
+        grid.filter_text = text
+        let (lens, lens_error) = mem.alloc[usize](a, specs.len)
+        if lens_error != ok { ret (grid, lens_error) }
+        var k = 0usize
+        while k < specs.len {
+            lens[k] = 0usize
+            k += 1usize
+        }
+        grid.filter_lens = lens
     }
     ret (grid, ok)
 }
@@ -94,6 +131,12 @@ fn show_sort(grid: *Grid, spec: usize, descending: bool) {
 }
 
 fn clear_selection(grid: *Grid) { grid.has_selection = false }
+
+// Shows or hides the filter row.
+fn show_filter_row(grid: *Grid, on: bool) { grid.filter_visible = on }
+
+// The text typed in a column's filter field.
+fn filter_value(grid: *const Grid, spec: usize) -> str { ret grid.filter_text[spec * FILTER_TEXT..spec * FILTER_TEXT + grid.filter_lens[spec]] }
 
 const KEY_BASE: u64 = 4096u64
 
@@ -155,9 +198,10 @@ fn summary_text(a: *mem.Arena, s: ColumnSpec, summary: grp.Summary) -> (str, err
     ret (str.done(&sb), ok)
 }
 
-fn text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, out: *widget.Node) -> err {
+fn text_node(a: *mem.Arena, grid: *const Grid, text: str, bold: bool, role: style.ColorRole, out: *widget.Node) -> err {
     var options = control.text_options()
     options.wrap = .None
+    options.color = role
     if bold { options.weight = 700u32 }
     let (node, node_error) = control.text(a, 0u64, text, grid.theme, options)
     if node_error != ok { ret node_error }
@@ -207,23 +251,26 @@ fn group_cell(a: *mem.Arena, grid: *Grid, group: usize, spec: usize, out: *widge
             }
         }
         if str.push(&sb, "  (") != ok || str.push_usize(&sb, grp.group_count(grid.g, group)) != ok || str.push(&sb, ")") != ok { ret control.TooLarge }
-        ret text_node(a, grid, str.done(&sb), true, out)
+        ret text_node(a, grid, str.done(&sb), true, .Text, out)
     }
     if s.summary >= 0 && usize(s.summary) < grid.g.specs.len {
         let (text, text_error) = summary_text(a, s, grp.group_summary(grid.g, group, usize(s.summary)))
         if text_error != ok { ret text_error }
-        ret text_node(a, grid, text, true, out)
+        ret text_node(a, grid, text, true, .Text, out)
     }
-    ret text_node(a, grid, "", true, out)
+    ret text_node(a, grid, "", true, .Text, out)
 }
 
 fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *widget.Node) -> err {
     let grid = mem.cast[*Grid](ctx)
     if column >= grid.specs.len { ret control.TooLarge }
     if grp.visible_is_group(grid.g, index) { ret group_cell(a, grid, grp.visible_group(grid.g, index), column, out) }
-    let (text, text_error) = cell_text(a, grid, column, grp.visible_row(grid.g, index))
+    let row = grp.visible_row(grid.g, index)
+    if grid.specs[column].kind == CellKind.Custom { ret grid.events.custom_cell(grid.events.ctx, a, grid.theme, row, column, out) }
+    let role = grid.events.row_role(grid.events.ctx, row)
+    let (text, text_error) = cell_text(a, grid, column, row)
     if text_error != ok { ret text_error }
-    ret text_node(a, grid, text, false, out)
+    ret text_node(a, grid, text, false, role, out)
 }
 
 // ---- events ----------------------------------------------------------------------
@@ -256,6 +303,15 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
     ret grid.events.row_picked(grid.events.ctx, usize(at))
 }
 
+// One filter field changed: the grid keeps the text (its buffer is the field's) and reports it.
+type FilterPick = struct { grid: *Grid, spec: usize }
+
+fn on_filter(ctx: *void, value: str) -> err {
+    let pick = mem.cast[*FilterPick](ctx)
+    pick.grid.filter_lens[pick.spec] = value.len
+    ret pick.grid.events.filter_changed(pick.grid.events.ctx, pick.spec, value)
+}
+
 fn on_scroll(ctx: *void, value: f32) -> err {
     let grid = mem.cast[*Grid](ctx)
     grid.offset = value
@@ -275,6 +331,37 @@ fn one(a: *mem.Arena, node: widget.Node) -> []widget.Node {
     ret nodes[0usize..1usize]
 }
 
+// The filter row: a small text field under each column that asks for one.
+fn filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, grid.specs.len)
+    if cells_error != ok { ret (zero, cells_error) }
+    let (picks, picks_error) = mem.alloc[FilterPick](a, grid.specs.len)
+    if picks_error != ok { ret (zero, picks_error) }
+    var at = 0usize
+    while at < grid.specs.len {
+        let s = grid.specs[at]
+        picks[at] = FilterPick { grid: grid, spec: at }
+        var cell_style = style.defaults()
+        cell_style.width = style.Length { Px: s.width }
+        if s.filter {
+            var options = control.field_options()
+            options.placeholder = "filter"
+            options.width = s.width - 12.0
+            options.height = 36.0
+            let buffer = grid.filter_text[at * FILTER_TEXT..(at + 1usize) * FILTER_TEXT]
+            let (field, field_error) = control.text_field(a, grid.key + FILTER_KEY + u64(at), grid.theme, s.title, buffer, grid.filter_lens[at], widget.Change[str] { ctx: mem.cast[*void](&picks[at]), invoke: on_filter }, zero, options)
+            if field_error != ok { ret (zero, field_error) }
+            cells[at] = widget.padded(0u64, 0.0, 2.0, 0.0, 2.0, cell_style, one(a, field))
+        } else {
+            let (blank, blank_error) = control.text(a, 0u64, "", grid.theme, control.text_options())
+            if blank_error != ok { ret (zero, blank_error) }
+            cells[at] = widget.padded(0u64, 0.0, 2.0, 0.0, 2.0, cell_style, one(a, blank))
+        }
+        at += 1usize
+    }
+    ret (widget.flex(grid.key + FILTER_KEY - 1u64, ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..grid.specs.len]), ok)
+}
+
 // A row of the footer: the column summaries under their columns.
 fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
     let (cells, cells_error) = mem.alloc[widget.Node](a, grid.specs.len)
@@ -291,7 +378,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
             text = shown
         }
         var inner: widget.Node = zero
-        let node_error = text_node(a, grid, text, true, &inner)
+        let node_error = text_node(a, grid, text, true, .Text, &inner)
         if node_error != ok { ret (zero, node_error) }
         var cell_style = style.defaults()
         cell_style.width = style.Length { Px: s.width }
@@ -306,7 +393,7 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     grid.theme = theme
     if grp.visible_len(grid.g) == 0usize {
         var inner: widget.Node = zero
-        let node_error = text_node(a, grid, grid.empty_text, false, &inner)
+        let node_error = text_node(a, grid, grid.empty_text, false, .Text, &inner)
         if node_error != ok { ret (zero, node_error) }
         ret (widget.padded(grid.key, 16.0, 16.0, 16.0, 16.0, style.defaults(), one(a, inner)), ok)
     }
@@ -320,16 +407,32 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     let me = mem.cast[*void](grid)
     let source = collection.TableSource { ctx: me, count: source_count, key: source_key, cell: source_cell }
     var body_height = height
-    if grid.footer_visible && grid.g.specs.len != 0usize { body_height = height - grid.row_height - 8.0 }
+    if grid.footer_visible && grid.g.specs.len != 0usize { body_height = body_height - grid.row_height - 8.0 }
+    if grid.filter_visible { body_height = body_height - 44.0 }
     var sort_shown = grid.sort_column
     let (body, body_error) = collection.table(a, grid.key, theme, "Data grid", grid.columns, source, selected[0usize..selected_count], sort_shown, grid.descending, widget.Change[usize] { ctx: me, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: me, invoke: no_reorder }, widget.Change[collection.ColumnResize] { ctx: me, invoke: no_resize }, widget.Change[widget.Key] { ctx: me, invoke: on_pick }, grid.row_height, grid.offset, widget.Change[f32] { ctx: me, invoke: on_scroll }, body_height)
     if body_error != ok { ret (zero, body_error) }
-    if !grid.footer_visible || grid.g.specs.len == 0usize { ret (body, ok) }
-    let (footer, footer_error) = footer_row(a, grid)
-    if footer_error != ok { ret (zero, footer_error) }
-    let (parts, parts_error) = mem.alloc[widget.Node](a, 2usize)
+    var part_count = 1usize
+    var with_footer = grid.footer_visible && grid.g.specs.len != 0usize
+    if with_footer { part_count += 1usize }
+    if grid.filter_visible { part_count += 1usize }
+    if part_count == 1usize { ret (body, ok) }
+    let (parts, parts_error) = mem.alloc[widget.Node](a, part_count)
     if parts_error != ok { ret (zero, parts_error) }
-    parts[0usize] = body
-    parts[1usize] = footer
-    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), parts[0usize..2usize]), ok)
+    var at = 0usize
+    if grid.filter_visible {
+        let (filter, filter_error) = filter_row(a, grid)
+        if filter_error != ok { ret (zero, filter_error) }
+        parts[at] = filter
+        at += 1usize
+    }
+    parts[at] = body
+    at += 1usize
+    if with_footer {
+        let (footer, footer_error) = footer_row(a, grid)
+        if footer_error != ok { ret (zero, footer_error) }
+        parts[at] = footer
+        at += 1usize
+    }
+    ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), parts[0usize..part_count]), ok)
 }

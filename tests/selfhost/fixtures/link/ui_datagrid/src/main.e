@@ -1,9 +1,10 @@
-// `e.ui.datagrid` (G006, first increment) over a 3,000-row `e.data.table` with its view and
+// `e.ui.datagrid` (G006, first and second increments) over a 3,000-row `e.data.table` with its view and
 // grouping, driven through the UI test harness: the virtual body builds only the visible rows,
 // a header tap reports the sort and the application re-sorts, a group row expands on a tap and
 // shows its rows, the footer carries the summaries, a tap on a data row reports the storage
-// row, and a filter that matches nothing shows the no-data text. Every check has its own exit
-// code.
+// row, and a filter that matches nothing shows the no-data text; a custom cell column asks the
+// application for its node, a row role colours a row's text, and the filter row's field reports
+// what is typed. Every check has its own exit code.
 use e.gpu
 use e.mem
 use e.os
@@ -16,6 +17,7 @@ use e.gfx.geometry
 use e.text.shape
 use e.gfx.scene
 use e.ui.control
+use e.gfx.paint
 use e.ui.datagrid as dg
 use e.ui.style
 use e.ui.testing
@@ -40,7 +42,14 @@ type App = struct {
     sort_spec: usize,
     sort_desc: bool,
     picked: usize,
-    pick_calls: usize
+    pick_calls: usize,
+    filter_calls: usize,
+    filter_spec: usize,
+    filter_text: [32]u8,
+    filter_len: usize,
+    custom_calls: usize,
+    role_calls: usize,
+    role_data: usize
 }
 
 fn mix(x: u64) -> u64 {
@@ -139,6 +148,60 @@ fn on_row_picked(ctx: *void, row: usize) -> err {
     ret ok
 }
 
+// The filter row: the typed text becomes a Contains filter on the field's column.
+fn on_filter_changed(ctx: *void, spec: usize, text: str) -> err {
+    let app = mem.cast[*App](ctx)
+    app.filter_calls += 1usize
+    app.filter_spec = spec
+    var at = 0usize
+    while at < text.len && at < app.filter_text.len {
+        app.filter_text[at] = text[at]
+        at += 1usize
+    }
+    app.filter_len = at
+    if text.len == 0usize {
+        view.clear_filter(&app.rows_view)
+    } else {
+        var nodes: [1]view.Node = zero
+        nodes[0usize] = view.leaf_node(app_column_of(spec), view.Op.Contains, view.text_operand(text))
+        let marker = mem.mark(&app.scratch)
+        let filter_error = view.apply_filter(&app.rows_view, nodes[0..], false, &app.scratch)
+        mem.reset(&app.scratch, marker)
+        if filter_error != ok { ret filter_error }
+    }
+    let marker = mem.mark(&app.scratch)
+    let refresh_error = grp.refresh(&app.grouping, &app.scratch)
+    mem.reset(&app.scratch, marker)
+    if refresh_error != ok { ret refresh_error }
+    ret summarise(app)
+}
+
+fn app_column_of(spec: usize) -> usize { ret spec }
+
+// A Foil cell: a marker box with text, built by the application.
+fn on_custom_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spec: usize, out: *widget.Node) -> err {
+    let app = mem.cast[*App](ctx)
+    app.custom_calls += 1usize
+    var label = "-"
+    if table.get_bool(&app.tbl, C_FOIL, row) { label = "FOIL" }
+    let (node, node_error) = control.text(a, 0u64, label, t, control.text_options())
+    if node_error != ok { ret node_error }
+    *out = node
+    ret ok
+}
+
+// Mythic rows are drawn in the first data colour.
+fn on_row_role(ctx: *void, row: usize) -> style.ColorRole {
+    let app = mem.cast[*App](ctx)
+    app.role_calls += 1usize
+    let name = table.get_str(&app.tbl, C_RARITY, row)
+    if name.len == 6usize && name[0usize] == 77u8 {
+        app.role_data += 1usize
+        ret .Data1
+    }
+    ret .Text
+}
+
 fn bounds(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> (geometry.Rect, bool) {
     let (b, found) = widget.bounds_of(runtime, testing.by_key(h, key).element)
     ret (b, found)
@@ -212,12 +275,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if rebuild(app, 5usize, false) != ok { os.exit(21) }
 
     var specs: [5]dg.ColumnSpec = zero
-    specs[0usize] = dg.ColumnSpec { title: "Name", width: 220.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows }
-    specs[1usize] = dg.ColumnSpec { title: "Rarity", width: 120.0, column: C_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows }
-    specs[2usize] = dg.ColumnSpec { title: "CMC", width: 80.0, column: C_CMC, kind: dg.CellKind.Int, decimals: 0u8, summary: 0, summary_kind: grp.SummaryKind.Avg }
-    specs[3usize] = dg.ColumnSpec { title: "Price", width: 120.0, column: C_PRICE, kind: dg.CellKind.Currency, decimals: 2u8, summary: 1, summary_kind: grp.SummaryKind.Sum }
-    specs[4usize] = dg.ColumnSpec { title: "Foil", width: 70.0, column: C_FOIL, kind: dg.CellKind.Bool, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows }
-    let events = dg.Events { ctx: mem.cast[*void](app), sort_changed: on_sort_changed, row_picked: on_row_picked }
+    specs[0usize] = dg.ColumnSpec { title: "Name", width: 220.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: true }
+    specs[1usize] = dg.ColumnSpec { title: "Rarity", width: 120.0, column: C_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: true }
+    specs[2usize] = dg.ColumnSpec { title: "CMC", width: 80.0, column: C_CMC, kind: dg.CellKind.Int, decimals: 0u8, summary: 0, summary_kind: grp.SummaryKind.Avg, filter: false }
+    specs[3usize] = dg.ColumnSpec { title: "Price", width: 120.0, column: C_PRICE, kind: dg.CellKind.Currency, decimals: 2u8, summary: 1, summary_kind: grp.SummaryKind.Sum, filter: false }
+    specs[4usize] = dg.ColumnSpec { title: "Foil", width: 70.0, column: C_FOIL, kind: dg.CellKind.Custom, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false }
+    let events = dg.Events { ctx: mem.cast[*void](app), sort_changed: on_sort_changed, row_picked: on_row_picked, filter_changed: on_filter_changed, custom_cell: on_custom_cell, row_role: on_row_role }
     let (made_grid, grid_error) = dg.create(a, &app.tbl, &app.grouping, specs[0..], events, GRID_KEY)
     if grid_error != ok { os.exit(22) }
     var grid = made_grid
@@ -313,6 +376,53 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // a tap on the group row collapses it again
     if !tap_key(&harness, &runtime, dg.group_key(&grid, 1usize)) { os.exit(71) }
     if grp.is_expanded(&app.grouping, 1usize) || grp.visible_len(&app.grouping) != 4usize { os.exit(72) }
+
+    // 4b. custom cells and the row role: a Foil cell is built by the application; a Mythic row's name
+    // is drawn in the first data colour, another row's in the text colour
+    app.group_rarity = false
+    if rebuild(app, 5usize, false) != ok { os.exit(90) }
+    mem.reset(&f, 0usize)
+    let (root7, build7_error) = dg.build(&f, &grid, &theme, 400.0)
+    if build7_error != ok { os.exit(91) }
+    if settle(&harness, root7, 7000000000i64) != ok { os.exit(92) }
+    if app.custom_calls == 0usize { os.exit(93) }
+    if testing.by_text(&harness, "FOIL").count == 0usize && testing.by_text(&harness, "-").count == 0usize { os.exit(94) }
+    // the role is asked once per built data row, and Mythic rows get the data colour
+    if app.role_calls == 0usize || app.role_data == 0usize || app.role_data >= app.role_calls { os.exit(95) }
+    var expected_data = 0usize
+    var scan = 0usize
+    while scan < 40usize {
+        let rarity = table.get_str(&app.tbl, C_RARITY, scan)
+        if rarity.len == 6usize && rarity[0usize] == 77u8 { expected_data += 1usize }
+        scan += 1usize
+    }
+    if expected_data == 0usize { os.exit(96) }
+
+    // 4c. the filter row: a field under each filterable column; typing reports the text and the
+    // application filters
+    dg.show_filter_row(&grid, true)
+    mem.reset(&f, 0usize)
+    let (root8, build8_error) = dg.build(&f, &grid, &theme, 400.0)
+    if build8_error != ok { os.exit(100) }
+    if settle(&harness, root8, 8000000000i64) != ok { os.exit(101) }
+    if testing.by_key(&harness, GRID_KEY + 2048u64 + 1u64).count == 0usize { os.exit(102) }
+    if testing.by_key(&harness, GRID_KEY + 2048u64 + 2u64).count != 0usize { os.exit(103) }
+    if !tap_key(&harness, &runtime, GRID_KEY + 2048u64 + 1u64) { os.exit(104) }
+    if testing.type_text(&harness, "rare") != ok { os.exit(105) }
+    if app.filter_calls == 0usize || app.filter_spec != 1usize || app.filter_len != 4usize { os.exit(106) }
+    var want = 0usize
+    row = 0usize
+    while row < ROWS {
+        let level_name = table.get_str(&app.tbl, C_RARITY, row)
+        if level_name.len == 4usize && (level_name[0usize] == 82u8 || level_name[0usize] == 114u8) && level_name[1usize] == 97u8 { want += 1usize }
+        row += 1usize
+    }
+    if want == 0usize || grp.visible_len(&app.grouping) != want { os.exit(107) }
+    if dg.filter_value(&grid, 1usize).len != 4usize { os.exit(108) }
+    // clearing the field (the application's filter off) restores every row
+    view.clear_filter(&app.rows_view)
+    if grp.refresh(&app.grouping, &app.scratch) != ok { os.exit(109) }
+    dg.show_filter_row(&grid, false)
 
     // 5. a filter that matches nothing: the no-data text, no table
     var nodes: [1]view.Node = zero
