@@ -1,21 +1,28 @@
-// Math typesetting over `e.text.shape` (L098): a LaTeX-math subset parsed and laid
-// out in one pass into a flat list of positioned glyphs and rules in caller storage,
-// for scene and SVG adapters. The model is TeX's: atoms of a class (ordinary,
-// operator, binary, relation, open, close, punctuation, inner) with the inter-atom
-// space table of the TeXbook, four styles (display, text, script, scriptscript) at
-// 1, 1, 0.7 and 0.5 of the size, fractions, radicals with an optional index, super-
-// and subscripts with the rule 18 shifts, big operators with limits in display
+// Math typesetting over `e.text.shape` (L098): a LaTeX-math subset, or presentation
+// MathML, parsed and laid out in one pass into a flat list of positioned glyphs and
+// rules in caller storage, for scene and SVG adapters. The model is TeX's: atoms of a
+// class (ordinary, operator, binary, relation, open, close, punctuation, inner) with
+// the inter-atom space table of the TeXbook, four styles (display, text, script,
+// scriptscript) each with a cramped form, fractions, radicals with an optional index,
+// super- and subscripts with the rule 18 shifts, big operators with limits in display
 // style, `\left` `\right` delimiters grown to the content, and `matrix`, `pmatrix`,
-// `bmatrix`, `Bmatrix`, `vmatrix` and `cases` environments.
+// `bmatrix`, `Bmatrix`, `vmatrix`, `cases`, `align`, `aligned` and `gather`
+// environments.
 //
 // Coordinates are in the caller's size units, origin at the equation's left edge on
 // its baseline, y growing downward: a glyph's `y` is its baseline, a rule's `y` its
 // top edge. Glyph extents come from the font's `glyf` bounding boxes when it is a
-// TrueType outline font (otherwise a character is taken as 0.7 em tall); the axis,
-// rule thickness and the shift constants are TeX's cmsy values as fractions of the
-// em, since a plain text font has no MATH table. ponytail: a font's own MATH
-// constants, italic correction, extensible-glyph assembly and cramped styles are
-// the upgrades; a delimiter or radical is the font's glyph scaled to the content.
+// TrueType outline font (otherwise a character is taken as 0.7 em tall).
+//
+// A font with an OpenType MATH table is laid out by that table (L098, D3101): the
+// MathConstants (axis, rule thickness, fraction and script shifts and gaps, radical
+// parameters, script scale-down percentages), the italic corrections of
+// MathGlyphInfo, and MathVariants for delimiters, radical signs and display
+// operators -- the first variant tall enough, else an assembly of parts with the
+// extenders repeated and the connectors overlapped. A font without one gets TeX's
+// cmsy values as fractions of the em and a glyph scaled to the content. When the
+// font carries the Mathematical Alphanumeric block, Latin and lower-case Greek
+// letters in a formula take its italic forms; otherwise they stay as written.
 //
 // Input: source is UTF-8; `\` commands are those below; spaces are ignored. A
 // command or environment this subset does not know is `Invalid`, as is an unbalanced
@@ -28,8 +35,22 @@
 // the Greek letters, `\pm` `\times` `\div` `\cdot` `\leq` `\geq` `\neq` `\approx`
 // `\equiv` `\to` `\leftarrow` `\infty` `\partial` `\nabla` `\in` `\ldots` `\forall`
 // `\exists`, the spaces `\,` `\:` `\;` `\quad` `\qquad` `\!`, and `\{` `\}`.
+//
+// `typeset_mathml` reads presentation MathML (`mrow` `mi` `mn` `mo` `mtext` `msup`
+// `msub` `msubsup` `munder` `mover` `munderover` `mfrac` `msqrt` `mroot` `mfenced`
+// `mtable` `mtr` `mtd` `mstyle` `mspace`) by translating it to the LaTeX subset
+// above and laying that out, so the two inputs share every rule. `munder` and `mover`
+// are laid out as a subscript and a superscript (limits on a big operator in
+// display style), which is not MathML's accent placement.
+//
+// `to_layout` turns the glyph items into an `e.text.layout.Layout` of one run per
+// glyph, which `e.gfx.scene` draws as a `DrawText`; the rule items are rectangles the
+// caller fills.
 
 use e.mem
+use e.str
+use e.gfx.geometry
+use e.text.layout
 use e.text.shape
 use e.text.unicode
 
@@ -53,10 +74,51 @@ const CLASS_CLOSE: u8 = 5u8
 const CLASS_PUNCT: u8 = 6u8
 const CLASS_INNER: u8 = 7u8
 const CLASS_SPACE: u8 = 8u8
+const STYLE_CRAMPED: u32 = 4u32
 
 // A laid-out piece: its items are `first..last` of the shared list, positioned
 // relative to its own origin on the baseline.
 type Atom = struct { class: u8, first: usize, last: usize, width: f32, height: f32, depth: f32, simple: bool, limits: bool }
+
+// Layout constants in ems of the size: TeX's cmsy and cmex values, or the font's MATH
+// table's when it has one.
+type Consts = struct {
+    axis: f32,
+    rule: f32,
+    script: f32,
+    scriptscript: f32,
+    num_display: f32,
+    num_text: f32,
+    den_display: f32,
+    den_text: f32,
+    num_gap: f32,
+    num_gap_display: f32,
+    den_gap: f32,
+    den_gap_display: f32,
+    sup_display: f32,
+    sup_text: f32,
+    sup_cramped: f32,
+    sub_only: f32,
+    sub_both: f32,
+    sub_top_max: f32,
+    sup_bottom_min: f32,
+    sup_max_with_sub: f32,
+    sub_sup_gap: f32,
+    sup_drop: f32,
+    sub_drop: f32,
+    script_space: f32,
+    upper_gap: f32,
+    lower_gap: f32,
+    rad_rule: f32,
+    rad_gap: f32,
+    rad_gap_display: f32,
+    rad_extra: f32,
+    rad_before: f32,
+    rad_after: f32,
+    rad_raise: f32,
+    delim_min: f32,
+    op_min: f32,
+}
 
 type Ctx = struct {
     a: *mem.Arena,
@@ -76,10 +138,22 @@ type Ctx = struct {
     loca_at: usize,
     glyf_at: usize,
     maxp_at: usize,
+    hhea_at: usize,
+    hmtx_at: usize,
+    math_at: usize,
+    consts_at: usize,
+    info_at: usize,
+    variants_at: usize,
+    k: Consts,
 }
 
 fn maxf(x: f32, y: f32) -> f32 {
     if x > y { ret x }
+    ret y
+}
+
+fn minf(x: f32, y: f32) -> f32 {
+    if x < y { ret x }
     ret y
 }
 
@@ -129,20 +203,203 @@ fn glyph_extent(c: *Ctx, id: u32) -> (f32, f32) {
     ret (f32(be16s(d, g + 4usize)) / c.upem, f32(be16s(d, g + 8usize)) / c.upem)
 }
 
-fn style_scale(style: u32) -> f32 {
-    if style >= 3u32 { ret 0.5 }
-    if style == 2u32 { ret 0.7 }
+// The horizontal advance of a glyph in ems, from `hmtx`.
+fn glyph_advance(c: *Ctx, id: u32) -> f32 {
+    if c.hhea_at == NONE || c.hmtx_at == NONE || c.upem <= 0.0 { ret 0.5 }
+    let d = c.font.data
+    let metrics = usize(be16(d, c.hhea_at + 34usize))
+    if metrics == 0usize { ret 0.5 }
+    var index = usize(id)
+    if index >= metrics { index = metrics - 1usize }
+    ret f32(be16(d, c.hmtx_at + 4usize * index)) / c.upem
+}
+
+// --- Styles: 0 display, 1 text, 2 script, 3 scriptscript, plus STYLE_CRAMPED.
+
+fn style_base(style: u32) -> u32 {
+    ret style & 3u32
+}
+
+fn style_cramped(style: u32) -> bool {
+    ret style & STYLE_CRAMPED != 0u32
+}
+
+fn style_scale(c: *Ctx, style: u32) -> f32 {
+    let base = style & 3u32
+    if base >= 3u32 { ret c.k.scriptscript }
+    if base == 2u32 { ret c.k.script }
     ret 1.0
 }
 
+// The style of a script: script or scriptscript, cramped as its parent is.
 fn script_style(style: u32) -> u32 {
-    if style < 2u32 { ret 2u32 }
-    ret 3u32
+    var base = 3u32
+    if style & 3u32 < 2u32 { base = 2u32 }
+    ret base | (style & STYLE_CRAMPED)
 }
 
 fn fraction_style(style: u32) -> u32 {
-    if style >= 3u32 { ret 3u32 }
-    ret style + 1u32
+    var base = 3u32
+    if style & 3u32 < 3u32 { base = (style & 3u32) + 1u32 }
+    ret base | (style & STYLE_CRAMPED)
+}
+
+// --- Constants.
+
+// TeX's values; `xh` is the font's x-height in ems.
+fn default_consts(xh: f32) -> Consts {
+    var k: Consts = zero
+    k.axis = 0.25
+    k.rule = 0.04
+    k.script = 0.7
+    k.scriptscript = 0.5
+    k.num_display = 0.677
+    k.num_text = 0.394
+    k.den_display = 0.686
+    k.den_text = 0.345
+    k.num_gap = 0.04
+    k.num_gap_display = 0.12
+    k.den_gap = 0.04
+    k.den_gap_display = 0.12
+    k.sup_display = 0.413
+    k.sup_text = 0.363
+    k.sup_cramped = 0.289
+    k.sub_only = 0.15
+    k.sub_both = 0.247
+    k.sub_top_max = 0.8 * xh
+    k.sup_bottom_min = 0.25 * xh
+    k.sup_max_with_sub = 0.8 * xh
+    k.sub_sup_gap = 0.16
+    k.sup_drop = 0.386
+    k.sub_drop = 0.05
+    k.script_space = 0.05
+    k.upper_gap = 0.12
+    k.lower_gap = 0.12
+    k.rad_rule = 0.04
+    k.rad_gap = 0.05
+    k.rad_gap_display = 0.04 + 0.25 * xh
+    k.rad_extra = 0.0
+    k.rad_before = 0.0
+    k.rad_after = 0.0 - 5.0 / 18.0
+    k.rad_raise = 0.6
+    k.delim_min = 1.2
+    k.op_min = 0.0
+    ret k
+}
+
+// A MathValueRecord of the MathConstants table, in ems; `index` counts the records
+// from `mathLeading` (0) on.
+fn math_value(c: *Ctx, index: usize) -> f32 {
+    ret f32(be16s(c.font.data, c.consts_at + 8usize + 4usize * index)) / c.upem
+}
+
+// Reads the MATH table's constants over TeX's defaults and finds its info and
+// variants; a table of another major version, or one cut short, is ignored.
+fn load_math(c: *Ctx) {
+    c.k = default_consts(c.x_height)
+    let d = c.font.data
+    c.math_at = find_table(d, 1296127048u32)
+    c.consts_at = NONE
+    c.info_at = NONE
+    c.variants_at = NONE
+    if c.math_at == NONE || be16(d, c.math_at) != 1u32 { ret }
+    let consts = usize(be16(d, c.math_at + 4usize))
+    let info = usize(be16(d, c.math_at + 6usize))
+    let variants = usize(be16(d, c.math_at + 8usize))
+    if consts == 0usize || c.math_at + consts + 8usize + 4usize * 51usize + 2usize > d.len { ret }
+    c.consts_at = c.math_at + consts
+    if info != 0usize { c.info_at = c.math_at + info }
+    if variants != 0usize { c.variants_at = c.math_at + variants }
+    var k = c.k
+    let up = f32(be16s(d, c.consts_at)) / 100.0
+    let up2 = f32(be16s(d, c.consts_at + 2usize)) / 100.0
+    if up > 0.0 { k.script = up }
+    if up2 > 0.0 { k.scriptscript = up2 }
+    k.delim_min = f32(be16(d, c.consts_at + 4usize)) / c.upem
+    k.op_min = f32(be16(d, c.consts_at + 6usize)) / c.upem
+    k.axis = math_value(c, 1usize)
+    k.sub_only = math_value(c, 4usize)
+    k.sub_both = k.sub_only
+    k.sub_top_max = math_value(c, 5usize)
+    k.sub_drop = math_value(c, 6usize)
+    k.sup_display = math_value(c, 7usize)
+    k.sup_text = k.sup_display
+    k.sup_cramped = math_value(c, 8usize)
+    k.sup_bottom_min = math_value(c, 9usize)
+    k.sup_drop = math_value(c, 10usize)
+    k.sub_sup_gap = math_value(c, 11usize)
+    k.sup_max_with_sub = math_value(c, 12usize)
+    k.script_space = math_value(c, 13usize)
+    k.upper_gap = math_value(c, 14usize)
+    k.lower_gap = math_value(c, 16usize)
+    k.num_text = math_value(c, 28usize)
+    k.num_display = math_value(c, 29usize)
+    k.den_text = math_value(c, 30usize)
+    k.den_display = math_value(c, 31usize)
+    k.num_gap = math_value(c, 32usize)
+    k.num_gap_display = math_value(c, 33usize)
+    k.rule = math_value(c, 34usize)
+    k.den_gap = math_value(c, 35usize)
+    k.den_gap_display = math_value(c, 36usize)
+    k.rad_gap = math_value(c, 45usize)
+    k.rad_gap_display = math_value(c, 46usize)
+    k.rad_rule = math_value(c, 47usize)
+    k.rad_extra = math_value(c, 48usize)
+    k.rad_before = math_value(c, 49usize)
+    k.rad_after = math_value(c, 50usize)
+    k.rad_raise = f32(be16s(d, c.consts_at + 8usize + 4usize * 51usize)) / 100.0
+    c.k = k
+}
+
+// The position of `gid` in a Coverage table at `at`, or NONE.
+fn coverage_pos(d: []const u8, at: usize, gid: u32) -> usize {
+    let format = be16(d, at)
+    let count = usize(be16(d, at + 2usize))
+    var i = 0usize
+    if format == 1u32 {
+        while i < count {
+            if be16(d, at + 4usize + 2usize * i) == gid { ret i }
+            i += 1usize
+        }
+        ret NONE
+    }
+    if format == 2u32 {
+        while i < count {
+            let record = at + 4usize + 6usize * i
+            let first = be16(d, record)
+            let last = be16(d, record + 2usize)
+            if gid >= first && gid <= last { ret usize(be16(d, record + 4usize)) + usize(gid - first) }
+            i += 1usize
+        }
+    }
+    ret NONE
+}
+
+// The italic correction of a glyph in ems, from MathGlyphInfo; 0 when it has none.
+fn italic_correction(c: *Ctx, gid: u32) -> f32 {
+    if c.info_at == NONE { ret 0.0 }
+    let d = c.font.data
+    let table = usize(be16(d, c.info_at))
+    if table == 0usize { ret 0.0 }
+    let at = c.info_at + table
+    let cov = usize(be16(d, at))
+    if cov == 0usize { ret 0.0 }
+    let index = coverage_pos(d, at + cov, gid)
+    if index == NONE || index >= usize(be16(d, at + 2usize)) { ret 0.0 }
+    ret f32(be16s(d, at + 4usize + 4usize * index)) / c.upem
+}
+
+// The vertical GlyphConstruction table of a glyph, or NONE.
+fn construction_of(c: *Ctx, gid: u32) -> usize {
+    if c.variants_at == NONE || gid == 0u32 { ret NONE }
+    let d = c.font.data
+    let cov = usize(be16(d, c.variants_at + 2usize))
+    if cov == 0usize { ret NONE }
+    let index = coverage_pos(d, c.variants_at + cov, gid)
+    if index == NONE || index >= usize(be16(d, c.variants_at + 6usize)) { ret NONE }
+    let offset = usize(be16(d, c.variants_at + 10usize + 2usize * index))
+    if offset == 0usize { ret NONE }
+    ret c.variants_at + offset
 }
 
 fn push_item(c: *Ctx, item: Item) {
@@ -207,6 +464,19 @@ fn fail(c: *Ctx, why: err) {
     if c.status == ok { c.status = why }
 }
 
+// The glyph a scalar shapes to alone, 0 when the font lacks it.
+fn scalar_gid(c: *Ctx, scalar: u32) -> u32 {
+    var buffer: [4]u8 = zero
+    let n = unicode.write_utf8(scalar, buffer[0..], 0usize)
+    let m = mem.mark(c.a)
+    var o: shape.Options = zero
+    let (run, shape_error) = shape.shape(c.a, c.font, buffer[..n], o)
+    var id = 0u32
+    if shape_error == ok && run.glyphs.len > 0usize { id = run.glyphs[0].id }
+    mem.reset(c.a, m)
+    ret id
+}
+
 // One character as a positioned glyph of `size`; the atom's origin is its pen.
 fn glyph_atom(c: *Ctx, scalar: u32, size: f32, class: u8) -> Atom {
     var out: Atom = zero
@@ -232,6 +502,23 @@ fn glyph_atom(c: *Ctx, scalar: u32, size: f32, class: u8) -> Atom {
         fail(c, MissingGlyph)
         ret out
     }
+    let (low, high) = glyph_extent(c, id)
+    push_item(c, Item { kind: .Glyph, x: 0.0, y: 0.0, w: advance, h: 0.0, size: size, glyph: id, scalar: scalar })
+    out.last = c.count
+    out.width = advance
+    out.height = maxf(high * size, 0.0)
+    out.depth = maxf(0.0 - low * size, 0.0)
+    ret out
+}
+
+// A glyph named by id (a MATH variant or part) as one positioned item.
+fn id_atom(c: *Ctx, id: u32, scalar: u32, size: f32, class: u8) -> Atom {
+    var out: Atom = zero
+    out.class = class
+    out.first = c.count
+    out.last = c.count
+    if c.status != ok { ret out }
+    let advance = glyph_advance(c, id) * size
     let (low, high) = glyph_extent(c, id)
     push_item(c, Item { kind: .Glyph, x: 0.0, y: 0.0, w: advance, h: 0.0, size: size, glyph: id, scalar: scalar })
     out.last = c.count
@@ -290,6 +577,22 @@ fn char_class(scalar: u32) -> u8 {
     if scalar == 41u32 || scalar == 93u32 || scalar == 33u32 || scalar == 63u32 { ret CLASS_CLOSE }
     if scalar == 44u32 || scalar == 59u32 { ret CLASS_PUNCT }
     ret CLASS_ORD
+}
+
+// The Mathematical Alphanumeric italic form of a Latin or lower-case Greek letter when
+// the font has a glyph for it, else the scalar itself.
+fn math_italic(c: *Ctx, scalar: u32) -> u32 {
+    var want = 0u32
+    if scalar >= 97u32 && scalar <= 122u32 {
+        want = 119886u32 + (scalar - 97u32)
+        if scalar == 104u32 { want = 8462u32 }
+    } else if scalar >= 65u32 && scalar <= 90u32 {
+        want = 119860u32 + (scalar - 65u32)
+    } else if scalar >= 945u32 && scalar <= 969u32 {
+        want = 120572u32 + (scalar - 945u32)
+    }
+    if want == 0u32 || scalar_gid(c, want) == 0u32 { ret scalar }
+    ret want
 }
 
 fn greek_names() -> str {
@@ -470,13 +773,13 @@ fn parse_row(c: *Ctx, style: u32) -> Atom {
         }
         i += 1usize
     }
-    let em18 = c.size * style_scale(style) / 18.0
+    let em18 = c.size * style_scale(c, style) / 18.0
     var x: f32 = 0.0
     var previous = CLASS_SPACE
     i = 0usize
     while i < n {
         if atoms[i].class != CLASS_SPACE {
-            if previous != CLASS_SPACE { x += spacing(previous, atoms[i].class, style >= 2u32) * em18 }
+            if previous != CLASS_SPACE { x += spacing(previous, atoms[i].class, style_base(style) >= 2u32) * em18 }
             previous = atoms[i].class
         } else {
             previous = CLASS_SPACE
@@ -521,7 +824,10 @@ fn parse_atom(c: *Ctx, style: u32) -> Atom {
         c.pos += 1usize
         if up && has_sup { fail(c, Invalid) }
         if !up && has_sub { fail(c, Invalid) }
-        let arg = parse_argument(c, sstyle)
+        // A subscript is set cramped; a superscript keeps the style's own cramping.
+        var arg_style = sstyle
+        if !up { arg_style = sstyle | STYLE_CRAMPED }
+        let arg = parse_argument(c, arg_style)
         if up {
             sup = arg
             has_sup = true
@@ -532,9 +838,9 @@ fn parse_atom(c: *Ctx, style: u32) -> Atom {
         skip_space(c)
     }
     if c.status != ok || (!has_sup && !has_sub) { ret nucleus }
-    let s = c.size * style_scale(style)
-    let ss = c.size * style_scale(sstyle)
-    let display = c.display && style == 0u32
+    let s = c.size * style_scale(c, style)
+    let ss = c.size * style_scale(c, sstyle)
+    let display = c.display && style_base(style) == 0u32
     // Limits over and under a big operator in display style.
     if nucleus.limits && display {
         var width = nucleus.width
@@ -543,14 +849,13 @@ fn parse_atom(c: *Ctx, style: u32) -> Atom {
         shift_range(c, nucleus.first, nucleus.last, (width - nucleus.width) / 2.0, 0.0)
         var height = nucleus.height
         var depth = nucleus.depth
-        let gap = 0.12 * s
         if has_sup {
-            let up_shift = nucleus.height + gap + sup.depth
+            let up_shift = nucleus.height + c.k.upper_gap * s + sup.depth
             shift_range(c, sup.first, sup.last, (width - sup.width) / 2.0, 0.0 - up_shift)
             height = up_shift + sup.height
         }
         if has_sub {
-            let down_shift = nucleus.depth + gap + sub.height
+            let down_shift = nucleus.depth + c.k.lower_gap * s + sub.height
             shift_range(c, sub.first, sub.last, (width - sub.width) / 2.0, down_shift)
             depth = down_shift + sub.depth
         }
@@ -566,40 +871,46 @@ fn parse_atom(c: *Ctx, style: u32) -> Atom {
     var up_shift: f32 = 0.0
     var down_shift: f32 = 0.0
     if !nucleus.simple {
-        up_shift = nucleus.height - 0.386 * ss
-        down_shift = nucleus.depth + 0.05 * ss
+        up_shift = nucleus.height - c.k.sup_drop * ss
+        down_shift = nucleus.depth + c.k.sub_drop * ss
     }
-    var sup_min = 0.363 * s
-    if display { sup_min = 0.413 * s }
-    let x_height = c.x_height * s
+    var sup_min = c.k.sup_text * s
+    if display { sup_min = c.k.sup_display * s }
+    if style_cramped(style) { sup_min = c.k.sup_cramped * s }
     if has_sup {
         up_shift = maxf(up_shift, sup_min)
-        up_shift = maxf(up_shift, sup.depth + 0.25 * x_height)
+        up_shift = maxf(up_shift, sup.depth + c.k.sup_bottom_min * s)
     }
     if has_sub && !has_sup {
-        down_shift = maxf(down_shift, 0.15 * s)
-        down_shift = maxf(down_shift, sub.height - 0.8 * x_height)
+        down_shift = maxf(down_shift, c.k.sub_only * s)
+        down_shift = maxf(down_shift, sub.height - c.k.sub_top_max * s)
     }
     if has_sub && has_sup {
-        down_shift = maxf(down_shift, 0.247 * s)
-        let theta = 0.04 * s
+        down_shift = maxf(down_shift, c.k.sub_both * s)
         let gap = (up_shift - sup.depth) - (sub.height - down_shift)
-        if gap < 4.0 * theta {
-            down_shift += 4.0 * theta - gap
-            let psi = 0.8 * x_height - (up_shift - sup.depth)
+        let want = c.k.sub_sup_gap * s
+        if gap < want {
+            down_shift += want - gap
+            let psi = c.k.sup_max_with_sub * s - (up_shift - sup.depth)
             if psi > 0.0 {
                 up_shift += psi
                 down_shift -= psi
             }
         }
     }
+    // A single glyph with an italic correction pushes its superscript right of the slant.
+    var correction: f32 = 0.0
+    if has_sup && nucleus.simple && nucleus.last > nucleus.first {
+        let last_item = c.items[nucleus.last - 1usize]
+        if last_item.kind == .Glyph { correction = italic_correction(c, last_item.glyph) * last_item.size }
+    }
     var width = nucleus.width
     var height = nucleus.height
     var depth = nucleus.depth
-    let script_space = 0.05 * s
+    let script_space = c.k.script_space * s
     if has_sup {
-        shift_range(c, sup.first, sup.last, nucleus.width, 0.0 - up_shift)
-        width = maxf(width, nucleus.width + sup.width + script_space)
+        shift_range(c, sup.first, sup.last, nucleus.width + correction, 0.0 - up_shift)
+        width = maxf(width, nucleus.width + correction + sup.width + script_space)
         height = maxf(height, up_shift + sup.height)
         depth = maxf(depth, sup.depth - up_shift)
     }
@@ -619,6 +930,124 @@ fn parse_atom(c: *Ctx, style: u32) -> Atom {
     ret out
 }
 
+// The glyph `scalar` with its ink at least `need` tall: the natural glyph when it is,
+// else the font's own variant or assembly (MATH table), else the natural glyph scaled.
+// The ink's baseline is the atom's: for an assembly the bottom part sits on it.
+fn grown(c: *Ctx, scalar: u32, need: f32, size: f32, class: u8) -> Atom {
+    var probe = glyph_atom(c, scalar, size, class)
+    if c.status != ok { ret probe }
+    let ink = probe.height + probe.depth
+    if !(need > ink) || !(ink > 0.0) { ret probe }
+    let d = c.font.data
+    let cons = construction_of(c, c.items[probe.first].glyph)
+    if cons != NONE {
+        c.count = probe.first
+        let variants = usize(be16(d, cons + 2usize))
+        var v = 0usize
+        while v < variants {
+            let record = cons + 4usize + 4usize * v
+            if f32(be16(d, record + 2usize)) / c.upem * size >= need {
+                var picked = id_atom(c, be16(d, record), scalar, size, class)
+                picked.simple = false
+                ret picked
+            }
+            v += 1usize
+        }
+        let assembly = usize(be16(d, cons))
+        if assembly != 0usize {
+            let at = cons + assembly
+            let parts = usize(be16(d, at + 4usize))
+            let first_part = at + 6usize
+            let min_overlap = f32(be16(d, c.variants_at)) / c.upem * size
+            var fixed: f32 = 0.0
+            var repeated: f32 = 0.0
+            var extenders = 0usize
+            var p = 0usize
+            while p < parts {
+                let advance = f32(be16(d, first_part + 10usize * p + 6usize)) / c.upem * size
+                if be16(d, first_part + 10usize * p + 8usize) & 1u32 != 0u32 {
+                    repeated += advance
+                    extenders += 1usize
+                } else {
+                    fixed += advance
+                }
+                p += 1usize
+            }
+            if parts > 0usize && (extenders > 0usize || fixed > 0.0) {
+                var reps = 1usize
+                var total = fixed + repeated - f32(parts - 1usize) * min_overlap
+                while extenders > 0usize && total < need && reps < 64usize {
+                    reps += 1usize
+                    total = fixed + repeated * f32(reps) - f32(parts - extenders + extenders * reps - 1usize) * min_overlap
+                }
+                let joints = parts - extenders + extenders * reps - 1usize
+                var extra: f32 = 0.0
+                if joints > 0usize && total > need { extra = (total - need) / f32(joints) }
+                let out_first = c.count
+                var width: f32 = 0.0
+                var bottom: f32 = 0.0
+                var previous_end: f32 = 0.0
+                var placed = 0usize
+                var q = 0usize
+                while q < parts {
+                    var times = 1usize
+                    let is_extender = be16(d, first_part + 10usize * q + 8usize) & 1u32 != 0u32
+                    if is_extender { times = reps }
+                    var t = 0usize
+                    while t < times {
+                        let part_id = be16(d, first_part + 10usize * q)
+                        let advance = f32(be16(d, first_part + 10usize * q + 6usize)) / c.upem * size
+                        let start_connector = f32(be16(d, first_part + 10usize * q + 2usize)) / c.upem * size
+                        var overlap = min_overlap
+                        if placed > 0usize {
+                            // Overlap more than the minimum only as far as both connectors reach.
+                            overlap = min_overlap + minf(extra, maxf(minf(previous_end, start_connector) - min_overlap, 0.0))
+                            bottom = bottom - overlap
+                        }
+                        let (low, high) = glyph_extent(c, part_id)
+                        let piece = id_atom(c, part_id, scalar, size, class)
+                        if c.status != ok { ret piece }
+                        // The part's box bottom sits at `bottom` above the assembly's base.
+                        let lift = bottom - low * size
+                        c.items[piece.first].y = 0.0 - lift
+                        width = maxf(width, piece.width)
+                        bottom = bottom + advance
+                        previous_end = f32(be16(d, first_part + 10usize * q + 4usize)) / c.upem * size
+                        placed += 1usize
+                        t += 1usize
+                    }
+                    q += 1usize
+                }
+                // Centre the parts horizontally on the widest.
+                var r = out_first
+                while r < c.count {
+                    c.items[r].x = (width - c.items[r].w) / 2.0
+                    r += 1usize
+                }
+                var out: Atom = zero
+                out.class = class
+                out.first = out_first
+                out.last = c.count
+                out.width = width
+                out.height = bottom
+                out.depth = 0.0
+                ret out
+            }
+        }
+        if variants > 0usize {
+            let record = cons + 4usize + 4usize * (variants - 1usize)
+            var biggest = id_atom(c, be16(d, record), scalar, size, class)
+            biggest.simple = false
+            ret biggest
+        }
+        // No variant at all: the scaled natural glyph below.
+        probe = glyph_atom(c, scalar, size, class)
+    }
+    let k = need / ink
+    c.count = probe.first
+    ret glyph_atom(c, scalar, size * k, class)
+}
+
 // The delimiter glyph `scalar` grown so its ink spans `span_h`, centred on the
 // axis; an empty atom for scalar 0.
 fn delimiter(c: *Ctx, scalar: u32, span_h: f32, size: f32, class: u8) -> Atom {
@@ -629,25 +1058,11 @@ fn delimiter(c: *Ctx, scalar: u32, span_h: f32, size: f32, class: u8) -> Atom {
         empty.last = c.count
         ret empty
     }
-    var probe = glyph_atom(c, scalar, size, class)
-    if c.status != ok { ret probe }
-    let ink = probe.height + probe.depth
-    var k: f32 = 1.0
-    if ink > 0.0 && span_h > ink { k = span_h / ink }
-    if k == 1.0 {
-        // Centre on the axis at the natural size.
-        let lift = 0.25 * size - (probe.height - probe.depth) / 2.0
-        shift_range(c, probe.first, probe.last, 0.0, 0.0 - lift)
-        probe.height += lift
-        probe.depth -= lift
-        ret probe
-    }
-    // Replace the natural glyph with the scaled one.
-    c.count = probe.first
-    let scaled = glyph_atom(c, scalar, size * k, class)
-    let lift = 0.25 * size - (scaled.height - scaled.depth) / 2.0
-    shift_range(c, scaled.first, scaled.last, 0.0, 0.0 - lift)
-    var out = scaled
+    var out = grown(c, scalar, span_h, size, class)
+    if c.status != ok { ret out }
+    // Centre the ink on the axis.
+    let lift = c.k.axis * size - (out.height - out.depth) / 2.0
+    shift_range(c, out.first, out.last, 0.0, 0.0 - lift)
     out.height += lift
     out.depth -= lift
     ret out
@@ -684,11 +1099,11 @@ fn delimiter_scalar(c: *Ctx) -> u32 {
 
 // Wraps the content `body` (already at its origin) in delimiters grown to it.
 fn fence(c: *Ctx, body: Atom, left: u32, right: u32, style: u32) -> Atom {
-    let s = c.size * style_scale(style)
-    let axis = 0.25 * s
+    let s = c.size * style_scale(c, style)
+    let axis = c.k.axis * s
     var delta = maxf(body.height - axis, body.depth + axis)
     var span_h = 2.0 * delta * 0.95
-    if span_h < 1.2 * s { span_h = 1.2 * s }
+    if span_h < c.k.delim_min * s { span_h = c.k.delim_min * s }
     let first = body.first
     // Delimiters go after the body in the list; move the body right of the left one.
     let l = delimiter(c, left, span_h, s, CLASS_OPEN)
@@ -708,25 +1123,28 @@ fn fence(c: *Ctx, body: Atom, left: u32, right: u32, style: u32) -> Atom {
 fn lay_fraction(c: *Ctx, style: u32) -> Atom {
     let child = fraction_style(style)
     let numerator = parse_argument(c, child)
-    let denominator = parse_argument(c, child)
+    // The denominator is cramped.
+    let denominator = parse_argument(c, child | STYLE_CRAMPED)
     var out: Atom = zero
     out.class = CLASS_INNER
     out.first = numerator.first
     if c.status != ok { ret out }
-    let s = c.size * style_scale(style)
-    let display = c.display && style == 0u32
-    let theta = 0.04 * s
-    let axis = 0.25 * s
-    var up = 0.394 * s
-    var down = 0.345 * s
-    var clearance = theta
+    let s = c.size * style_scale(c, style)
+    let display = c.display && style_base(style) == 0u32
+    let theta = c.k.rule * s
+    let axis = c.k.axis * s
+    var up = c.k.num_text * s
+    var down = c.k.den_text * s
+    var up_gap = c.k.num_gap * s
+    var down_gap = c.k.den_gap * s
     if display {
-        up = 0.677 * s
-        down = 0.686 * s
-        clearance = 3.0 * theta
+        up = c.k.num_display * s
+        down = c.k.den_display * s
+        up_gap = c.k.num_gap_display * s
+        down_gap = c.k.den_gap_display * s
     }
-    if (up - numerator.depth) - (axis + theta / 2.0) < clearance { up += clearance - ((up - numerator.depth) - (axis + theta / 2.0)) }
-    if (axis - theta / 2.0) - (denominator.height - down) < clearance { down += clearance - ((axis - theta / 2.0) - (denominator.height - down)) }
+    if (up - numerator.depth) - (axis + theta / 2.0) < up_gap { up += up_gap - ((up - numerator.depth) - (axis + theta / 2.0)) }
+    if (axis - theta / 2.0) - (denominator.height - down) < down_gap { down += down_gap - ((axis - theta / 2.0) - (denominator.height - down)) }
     let side = 0.12 * s
     let width = maxf(numerator.width, denominator.width)
     shift_range(c, numerator.first, numerator.last, side + (width - numerator.width) / 2.0, 0.0 - up)
@@ -754,42 +1172,36 @@ fn lay_radical(c: *Ctx, style: u32) -> Atom {
         has_index = true
         out.first = first
     }
-    let body = parse_argument(c, style)
+    // The radicand is cramped.
+    let body = parse_argument(c, style | STYLE_CRAMPED)
     if c.status != ok { ret out }
-    let s = c.size * style_scale(style)
-    let theta = 0.04 * s
-    var clearance = theta + theta / 4.0
-    if c.display && style == 0u32 { clearance = theta + c.x_height * s / 4.0 }
+    let s = c.size * style_scale(c, style)
+    let theta = c.k.rad_rule * s
+    var clearance = c.k.rad_gap * s
+    if c.display && style_base(style) == 0u32 { clearance = c.k.rad_gap_display * s }
     let need = body.height + body.depth + clearance + theta
     // The radical sign, grown to `need`.
-    let probe = glyph_atom(c, 8730u32, s, CLASS_ORD)
-    if c.status != ok { ret out }
-    let ink = probe.height + probe.depth
-    var k: f32 = 1.0
-    if ink > 0.0 && need > ink { k = need / ink }
-    c.count = probe.first
-    let sign = glyph_atom(c, 8730u32, s * k, CLASS_ORD)
+    let sign = grown(c, 8730u32, need, s, CLASS_ORD)
     if c.status != ok { ret out }
     // Sit the sign's bottom at the body's bottom plus the clearance's share.
     let top_of_bar = body.height + clearance + theta
     shift_range(c, sign.first, sign.last, 0.0, 0.0 - (top_of_bar - sign.height))
     var sign_x: f32 = 0.0
-    var index_width: f32 = 0.0
+    var index_x: f32 = 0.0
     if has_index {
-        index_width = index.width
-        let overlap = 5.0 / 18.0 * s
-        sign_x = maxf(index_width - overlap, 0.0)
-        let raise = 0.6 * (top_of_bar + body.depth) - body.depth
-        shift_range(c, index.first, index.last, 0.0, 0.0 - raise)
+        index_x = maxf(c.k.rad_before * s, 0.0)
+        sign_x = maxf(index_x + index.width + c.k.rad_after * s, 0.0)
+        let raise = c.k.rad_raise * (top_of_bar + body.depth) - body.depth
+        shift_range(c, index.first, index.last, index_x, 0.0 - raise)
     }
     shift_range(c, sign.first, sign.last, sign_x, 0.0)
     shift_range(c, body.first, body.last, sign_x + sign.width, 0.0)
     push_rule(c, sign_x + sign.width, 0.0 - top_of_bar, body.width, theta)
     out.last = c.count
     out.width = sign_x + sign.width + body.width
-    out.height = top_of_bar
+    out.height = top_of_bar + c.k.rad_extra * s
     out.depth = maxf(body.depth, sign.depth - (top_of_bar - sign.height))
-    if has_index { out.height = maxf(out.height, 0.6 * (top_of_bar + body.depth) - body.depth + index.height) }
+    if has_index { out.height = maxf(out.height, c.k.rad_raise * (top_of_bar + body.depth) - body.depth + index.height) }
     ret out
 }
 
@@ -836,6 +1248,8 @@ fn lay_environment(c: *Ctx, style: u32) -> Atom {
     var left = 0u32
     var right = 0u32
     var left_align = false
+    // 1: columns alternate right and left aligned, pairs one em apart; 2: rows centred.
+    var aligned_kind = 0u32
     if word_is(name, "pmatrix") {
         left = 40u32
         right = 41u32
@@ -851,6 +1265,10 @@ fn lay_environment(c: *Ctx, style: u32) -> Atom {
     } else if word_is(name, "cases") {
         left = 123u32
         left_align = true
+    } else if word_is(name, "align") || word_is(name, "align*") || word_is(name, "aligned") {
+        aligned_kind = 1u32
+    } else if word_is(name, "gather") || word_is(name, "gather*") || word_is(name, "gathered") {
+        aligned_kind = 2u32
     } else if !word_is(name, "matrix") {
         fail(c, Invalid)
         ret out
@@ -871,7 +1289,8 @@ fn lay_environment(c: *Ctx, style: u32) -> Atom {
     var row = 0usize
     var col = 0usize
     var columns = 0usize
-    let cell_style = 1u32
+    var cell_style = 1u32
+    if aligned_kind != 0u32 && c.display { cell_style = 0u32 }
     while c.status == ok {
         let cell = parse_row(c, cell_style)
         if c.status != ok { break }
@@ -915,15 +1334,16 @@ fn lay_environment(c: *Ctx, style: u32) -> Atom {
         i += 1usize
     }
     let (col_w, col_error) = mem.alloc[f32](c.a, columns + 1usize)
+    let (col_x, col_x_error) = mem.alloc[f32](c.a, columns + 1usize)
     let (row_h, row_h_error) = mem.alloc[f32](c.a, rows + 1usize)
     let (row_d, row_d_error) = mem.alloc[f32](c.a, rows + 1usize)
-    if col_error != ok || row_h_error != ok || row_d_error != ok {
+    if col_error != ok || col_x_error != ok || row_h_error != ok || row_d_error != ok {
         mem.reset(c.a, m)
         c.nest -= 1usize
         fail(c, Invalid)
         ret out
     }
-    let s = c.size * style_scale(style)
+    let s = c.size * style_scale(c, style)
     i = 0usize
     while i < columns {
         col_w[i] = 0.0
@@ -949,25 +1369,30 @@ fn lay_environment(c: *Ctx, style: u32) -> Atom {
         total_h += row_h[i] + row_d[i]
         i += 1usize
     }
+    // Column origins: an em between columns, except inside an `align` pair.
     var total_w: f32 = 0.0
     i = 0usize
     while i < columns {
+        col_x[i] = total_w
         total_w += col_w[i]
+        if i + 1usize < columns {
+            var gap = s
+            if aligned_kind == 1u32 && i % 2usize == 0usize { gap = 0.0 }
+            total_w += gap
+        }
         i += 1usize
     }
-    if columns > 1usize { total_w += s * f32(columns - 1usize) }
-    let top = 0.25 * s + total_h / 2.0
+    let top = c.k.axis * s + total_h / 2.0
     i = 0usize
     while i < n {
-        var x: f32 = 0.0
-        var j = 0usize
-        while j < cells[i].col {
-            x += col_w[j] + s
-            j += 1usize
+        var x = col_x[cells[i].col]
+        if aligned_kind == 1u32 {
+            if cells[i].col % 2usize == 0usize { x += col_w[cells[i].col] - cells[i].atom.width }
+        } else if !left_align {
+            x += (col_w[cells[i].col] - cells[i].atom.width) / 2.0
         }
-        if !left_align { x += (col_w[cells[i].col] - cells[i].atom.width) / 2.0 }
         var above = top
-        j = 0usize
+        var j = 0usize
         while j < cells[i].row {
             above -= row_h[j] + row_d[j]
             j += 1usize
@@ -1000,7 +1425,7 @@ fn lay_text(c: *Ctx, style: u32) -> Atom {
         var empty: Atom = zero
         ret empty
     }
-    var out = text_atom(c, raw, c.size * style_scale(style), CLASS_ORD)
+    var out = text_atom(c, raw, c.size * style_scale(c, style), CLASS_ORD)
     out.simple = false
     ret out
 }
@@ -1010,7 +1435,7 @@ fn space_atom(c: *Ctx, em18: f32, style: u32) -> Atom {
     out.class = CLASS_SPACE
     out.first = c.count
     out.last = c.count
-    out.width = em18 * c.size * style_scale(style) / 18.0
+    out.width = em18 * c.size * style_scale(c, style) / 18.0
     ret out
 }
 
@@ -1023,7 +1448,7 @@ fn parse_nucleus(c: *Ctx, style: u32) -> Atom {
         fail(c, Invalid)
         ret out
     }
-    let s = c.size * style_scale(style)
+    let s = c.size * style_scale(c, style)
     let ch = c.src[c.pos]
     if ch == 123u8 {
         c.pos += 1usize
@@ -1040,7 +1465,7 @@ fn parse_nucleus(c: *Ctx, style: u32) -> Atom {
         c.pos += step
         var mapped = scalar
         if scalar == 45u32 { mapped = 8722u32 }
-        ret glyph_atom(c, mapped, s, char_class(mapped))
+        ret glyph_atom(c, math_italic(c, mapped), s, char_class(mapped))
     }
     c.pos += 1usize
     let word = command_word(c)
@@ -1091,12 +1516,19 @@ fn parse_nucleus(c: *Ctx, style: u32) -> Atom {
         var scalar = 8721u32
         if word_is(word, "prod") { scalar = 8719u32 }
         if word_is(word, "int") { scalar = 8747u32 }
-        var size = s
-        if c.display && style == 0u32 { size = s * 1.4 }
-        var op = glyph_atom(c, scalar, size, CLASS_OP)
+        let big = c.display && style_base(style) == 0u32
+        var op: Atom = zero
+        if big && c.k.op_min > 0.0 {
+            // The font names a minimum height for a display operator: its variant.
+            op = grown(c, scalar, c.k.op_min * s, s, CLASS_OP)
+        } else if big {
+            op = glyph_atom(c, scalar, s * 1.4, CLASS_OP)
+        } else {
+            op = glyph_atom(c, scalar, s, CLASS_OP)
+        }
         if c.status != ok { ret op }
         // Centre the operator on the axis.
-        let lift = 0.25 * s - (op.height - op.depth) / 2.0
+        let lift = c.k.axis * s - (op.height - op.depth) / 2.0
         shift_range(c, op.first, op.last, 0.0, 0.0 - lift)
         op.height += lift
         op.depth -= lift
@@ -1111,7 +1543,7 @@ fn parse_nucleus(c: *Ctx, style: u32) -> Atom {
         ret op
     }
     let (scalar, class) = symbol_of(word)
-    if scalar != 0u32 { ret glyph_atom(c, scalar, s, class) }
+    if scalar != 0u32 { ret glyph_atom(c, math_italic(c, scalar), s, class) }
     fail(c, Invalid)
     ret out
 }
@@ -1123,14 +1555,14 @@ fn font_ready(c: *Ctx) -> bool {
     c.maxp_at = find_table(d, 1835104368u32)
     c.loca_at = find_table(d, 1819239265u32)
     c.glyf_at = find_table(d, 1735162214u32)
+    c.hhea_at = find_table(d, 1751672161u32)
+    c.hmtx_at = find_table(d, 1752003704u32)
     if c.head_at == NONE { ret false }
     c.upem = f32(be16(d, c.head_at + 18usize))
     ret c.upem > 0.0
 }
 
-// Typesets `source` at `options.size` into `items`.
-fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err) {
-    if options.size <= 0.0 || source.len == 0usize { ret (zero, Invalid) }
+fn context(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Ctx, bool) {
     var c: Ctx = zero
     c.a = a
     c.font = options.font
@@ -1140,7 +1572,7 @@ fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equa
     c.display = options.display
     c.notdef = options.notdef
     c.status = ok
-    if !font_ready(&c) { ret (zero, Invalid) }
+    if !font_ready(&c) { ret (c, false) }
     // The x-height from the font's own "x".
     c.x_height = 0.5
     let m = mem.mark(a)
@@ -1151,15 +1583,601 @@ fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equa
         if high > 0.0 { c.x_height = high }
     }
     mem.reset(a, m)
+    load_math(&c)
+    ret (c, true)
+}
+
+// Typesets `source` at `options.size` into `items`.
+fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err) {
+    if options.size <= 0.0 || source.len == 0usize { ret (zero, Invalid) }
+    let (made_value, ready) = context(a, source, options, items)
+    if !ready { ret (zero, Invalid) }
+    var made = made_value
     var style = 1u32
     if options.display { style = 0u32 }
-    let row = parse_row(&c, style)
-    if c.status == ok && c.pos < c.src.len { c.status = Invalid }
-    if c.status != ok { ret (zero, c.status) }
+    let row = parse_row(&made, style)
+    if made.status == ok && made.pos < made.src.len { made.status = Invalid }
+    if made.status != ok { ret (zero, made.status) }
     var eq: Equation = zero
-    eq.items = items[..c.count]
+    eq.items = items[..made.count]
     eq.width = row.width
     eq.ascent = row.height
     eq.descent = row.depth
     ret (eq, ok)
+}
+
+// --- Drawing.
+
+// The glyph items as one `e.text.layout.Layout` line, a run of one glyph per item at
+// its pen, for `e.gfx.scene`'s `DrawText` (the font must be registered with the
+// renderer). Rule items are not glyphs: fill the rectangle `(x, y, w, h)` of each.
+fn to_layout(a: *mem.Arena, eq: Equation, font: shape.Font) -> (layout.Layout, err) {
+    var glyphs = 0usize
+    var i = 0usize
+    while i < eq.items.len {
+        if eq.items[i].kind == .Glyph { glyphs += 1usize }
+        i += 1usize
+    }
+    let (runs, runs_error) = mem.alloc[layout.GlyphRun](a, glyphs + 1usize)
+    if runs_error != ok { ret (zero, runs_error) }
+    let (shapes, shapes_error) = mem.alloc[shape.Glyph](a, glyphs + 1usize)
+    if shapes_error != ok { ret (zero, shapes_error) }
+    let (lines, lines_error) = mem.alloc[layout.Line](a, 1usize)
+    if lines_error != ok { ret (zero, lines_error) }
+    var n = 0usize
+    i = 0usize
+    while i < eq.items.len {
+        let item = eq.items[i]
+        if item.kind == .Glyph && item.size > 0.0 {
+            shapes[n] = shape.Glyph { id: item.glyph, cluster: 0usize, advance_x: item.w / item.size, advance_y: 0.0, offset_x: 0.0, offset_y: 0.0 }
+            let run = shape.Run { font: font.id, direction: shape.Direction.LeftToRight, script: 0u32, language: "", glyphs: shapes[n..n + 1usize] }
+            runs[n] = layout.GlyphRun { run: run, origin: geometry.Point { x: item.x, y: item.y }, size: item.size }
+            n += 1usize
+        }
+        i += 1usize
+    }
+    let bounds = geometry.Rect { x: 0.0, y: 0.0 - eq.ascent, width: eq.width, height: eq.ascent + eq.descent }
+    lines[0usize] = layout.Line { runs: runs[..n], bounds: bounds, baseline: 0.0, start: 0usize, end: 0usize }
+    ret (layout.Layout { source: "", lines: lines[0usize..1usize], bounds: bounds }, ok)
+}
+
+// --- Presentation MathML, translated to the LaTeX subset and typeset by it.
+
+type Ml = struct { src: str, pos: usize, out: str.Builder, status: err, depth: usize }
+
+fn ml_fail(m: *Ml, why: err) {
+    if m.status == ok { m.status = why }
+}
+
+fn ml_space(m: *Ml) {
+    while m.pos < m.src.len && (m.src[m.pos] == 32u8 || m.src[m.pos] == 10u8 || m.src[m.pos] == 9u8 || m.src[m.pos] == 13u8) { m.pos += 1usize }
+}
+
+fn ml_push(m: *Ml, text: str) {
+    if m.status != ok { ret }
+    let e = str.push(&m.out, text)
+    if e != ok { m.status = TooSmall }
+}
+
+// The tag at the cursor: `<`, then a name, then attributes up to `>`. Gives the
+// name, the attribute text, whether it closes (`</`) and whether it is empty (`/>`).
+type Tag = struct { name: str, attrs: str, closing: bool, empty: bool }
+
+fn ml_tag(m: *Ml) -> Tag {
+    var t: Tag = zero
+    if m.pos >= m.src.len || m.src[m.pos] != 60u8 {
+        ml_fail(m, Invalid)
+        ret t
+    }
+    var i = m.pos + 1usize
+    if i < m.src.len && m.src[i] == 47u8 {
+        t.closing = true
+        i += 1usize
+    }
+    let name_start = i
+    while i < m.src.len && m.src[i] != 62u8 && m.src[i] != 32u8 && m.src[i] != 47u8 && m.src[i] != 10u8 && m.src[i] != 9u8 { i += 1usize }
+    var name = m.src[name_start..i]
+    // Drop a namespace prefix.
+    var p = 0usize
+    while p < name.len {
+        if name[p] == 58u8 {
+            name = name[p + 1usize..name.len]
+            break
+        }
+        p += 1usize
+    }
+    t.name = name
+    let attrs_start = i
+    var quote = 0u8
+    while i < m.src.len {
+        let ch = m.src[i]
+        if quote != 0u8 {
+            if ch == quote { quote = 0u8 }
+        } else if ch == 34u8 || ch == 39u8 {
+            quote = ch
+        } else if ch == 62u8 {
+            break
+        }
+        i += 1usize
+    }
+    if i >= m.src.len {
+        ml_fail(m, Invalid)
+        ret t
+    }
+    t.attrs = m.src[attrs_start..i]
+    if t.attrs.len > 0usize && t.attrs[t.attrs.len - 1usize] == 47u8 {
+        t.empty = true
+        t.attrs = t.attrs[0usize..t.attrs.len - 1usize]
+    }
+    m.pos = i + 1usize
+    ret t
+}
+
+// The value of attribute `want` in a tag's attribute text, "" with `found` false.
+fn ml_attr(attrs: str, want: str) -> (str, bool) {
+    var i = 0usize
+    while i + want.len < attrs.len {
+        let boundary = i == 0usize || attrs[i - 1usize] == 32u8 || attrs[i - 1usize] == 10u8 || attrs[i - 1usize] == 9u8
+        if boundary && word_is(attrs[i..i + want.len], want) && attrs[i + want.len] == 61u8 && i + want.len + 1usize < attrs.len {
+            let quote = attrs[i + want.len + 1usize]
+            var j = i + want.len + 2usize
+            let first = j
+            while j < attrs.len && attrs[j] != quote { j += 1usize }
+            ret (attrs[first..j], true)
+        }
+        i += 1usize
+    }
+    ret ("", false)
+}
+
+// The text content up to the closing tag of a token element, entities decoded into
+// `buffer` as UTF-8; returns its length. The cursor ends after the closing tag.
+fn ml_token_text(m: *Ml, buffer: []u8) -> usize {
+    var n = 0usize
+    while m.pos < m.src.len && m.status == ok {
+        let ch = m.src[m.pos]
+        if ch == 60u8 {
+            let t = ml_tag(m)
+            if m.status != ok { ret n }
+            if !t.closing { ml_fail(m, Invalid) }
+            ret n
+        }
+        var scalar = u32(ch)
+        var step = 1usize
+        if ch == 38u8 {
+            var j = m.pos + 1usize
+            while j < m.src.len && m.src[j] != 59u8 && j < m.pos + 12usize { j += 1usize }
+            if j >= m.src.len || m.src[j] != 59u8 {
+                ml_fail(m, Invalid)
+                ret n
+            }
+            let name = m.src[m.pos + 1usize..j]
+            step = j + 1usize - m.pos
+            scalar = 0u32
+            if word_is(name, "lt") { scalar = 60u32 }
+            if word_is(name, "gt") { scalar = 62u32 }
+            if word_is(name, "amp") { scalar = 38u32 }
+            if word_is(name, "quot") { scalar = 34u32 }
+            if word_is(name, "minus") { scalar = 8722u32 }
+            if word_is(name, "InvisibleTimes") || word_is(name, "ApplyFunction") || word_is(name, "InvisibleComma") { scalar = 1u32 }
+            if name.len > 1usize && name[0usize] == 35u8 {
+                var value = 0u32
+                var k = 1usize
+                var base = 10u32
+                if name[1usize] == 120u8 || name[1usize] == 88u8 {
+                    base = 16u32
+                    k = 2usize
+                }
+                while k < name.len {
+                    let digit = name[k]
+                    var v = 99u32
+                    if digit >= 48u8 && digit <= 57u8 { v = u32(digit) - 48u32 }
+                    if digit >= 97u8 && digit <= 102u8 { v = u32(digit) - 87u32 }
+                    if digit >= 65u8 && digit <= 70u8 { v = u32(digit) - 55u32 }
+                    if v >= base {
+                        ml_fail(m, Invalid)
+                        ret n
+                    }
+                    value = value * base + v
+                    k += 1usize
+                }
+                scalar = value
+            }
+            if scalar == 0u32 {
+                ml_fail(m, Invalid)
+                ret n
+            }
+            // The invisible operators (U+2061, U+2062, U+2063) carry no ink.
+            if scalar == 8289u32 || scalar == 8290u32 || scalar == 8291u32 { scalar = 1u32 }
+            if scalar != 1u32 {
+                if n + 4usize > buffer.len {
+                    ml_fail(m, TooSmall)
+                    ret n
+                }
+                n = unicode.write_utf8(scalar, buffer, n)
+            }
+            m.pos += step
+            continue
+        }
+        if ch == 32u8 || ch == 10u8 || ch == 9u8 || ch == 13u8 {
+            // Token content has its whitespace collapsed away at the ends and between.
+            m.pos += 1usize
+            continue
+        }
+        let (read, width) = unicode.read_utf8(m.src, m.pos)
+        if n + 4usize > buffer.len {
+            ml_fail(m, TooSmall)
+            ret n
+        }
+        n = unicode.write_utf8(read, buffer, n)
+        m.pos += width
+    }
+    ml_fail(m, Invalid)
+    ret n
+}
+
+// The LaTeX command or escape for a scalar the subset names, "" otherwise.
+fn ml_command(scalar: u32) -> str {
+    if scalar == 8721u32 { ret "\\sum" }
+    if scalar == 8719u32 { ret "\\prod" }
+    if scalar == 8747u32 { ret "\\int" }
+    if scalar == 177u32 { ret "\\pm" }
+    if scalar == 215u32 { ret "\\times" }
+    if scalar == 247u32 { ret "\\div" }
+    if scalar == 8901u32 { ret "\\cdot" }
+    if scalar == 8804u32 { ret "\\leq" }
+    if scalar == 8805u32 { ret "\\geq" }
+    if scalar == 8800u32 { ret "\\neq" }
+    if scalar == 8776u32 { ret "\\approx" }
+    if scalar == 8801u32 { ret "\\equiv" }
+    if scalar == 8594u32 { ret "\\to" }
+    if scalar == 8592u32 { ret "\\leftarrow" }
+    if scalar == 8712u32 { ret "\\in" }
+    if scalar == 8734u32 { ret "\\infty" }
+    if scalar == 8706u32 { ret "\\partial" }
+    if scalar == 8711u32 { ret "\\nabla" }
+    if scalar == 8704u32 { ret "\\forall" }
+    if scalar == 8707u32 { ret "\\exists" }
+    if scalar == 8230u32 { ret "\\ldots" }
+    if scalar == 8746u32 { ret "\\cup" }
+    if scalar == 8745u32 { ret "\\cap" }
+    if scalar == 123u32 { ret "\\{" }
+    if scalar == 125u32 { ret "\\}" }
+    if scalar == 37u32 { ret "\\%" }
+    if scalar == 35u32 { ret "\\#" }
+    if scalar == 38u32 { ret "\\&" }
+    if scalar == 95u32 { ret "\\_" }
+    if scalar == 36u32 { ret "\\$" }
+    ret ""
+}
+
+// A scalar written as LaTeX: a command for the ones the subset names, else its UTF-8.
+fn ml_scalar(m: *Ml, scalar: u32) {
+    let command = ml_command(scalar)
+    if command.len > 0usize {
+        ml_push(m, command)
+        ml_push(m, " ")
+        ret
+    }
+    if scalar == 92u32 || scalar == 94u32 || scalar == 126u32 {
+        ml_fail(m, Invalid)
+        ret
+    }
+    var buffer: [4]u8 = zero
+    let n = unicode.write_utf8(scalar, buffer[0..], 0usize)
+    ml_push(m, buffer[..n])
+}
+
+fn ml_scalar_count(text: []const u8) -> usize {
+    var n = 0usize
+    var i = 0usize
+    while i < text.len {
+        if text[i] & 192u8 != 128u8 { n += 1usize }
+        i += 1usize
+    }
+    ret n
+}
+
+// Emits the token element `name` (its start tag is consumed); `wrap` asks for the
+// result to be braced when it is more than one atom and the caller needs one.
+fn ml_token(m: *Ml, name: str, wrap: bool) {
+    var buffer: [256]u8 = zero
+    let n = ml_token_text(m, buffer[0..])
+    if m.status != ok { ret }
+    let text: str = buffer[..n]
+    if word_is(name, "mtext") || word_is(name, "ms") {
+        ml_push(m, "\\text{")
+        ml_push(m, text)
+        ml_push(m, "}")
+        ret
+    }
+    let count = ml_scalar_count(buffer[..n])
+    if word_is(name, "mi") && count > 1usize {
+        if is_operator_name(text) {
+            ml_push(m, "\\")
+            ml_push(m, text)
+            ml_push(m, " ")
+        } else {
+            ml_push(m, "\\mathrm{")
+            ml_push(m, text)
+            ml_push(m, "}")
+        }
+        ret
+    }
+    if count > 1usize && wrap { ml_push(m, "{") }
+    var i = 0usize
+    while i < n {
+        let (scalar, width) = unicode.read_utf8(text, i)
+        ml_scalar(m, scalar)
+        i += width
+    }
+    if count > 1usize && wrap { ml_push(m, "}") }
+}
+
+// Advances past one element (or token run) without emitting, tags balanced.
+fn ml_skip(m: *Ml) {
+    ml_space(m)
+    var depth = 0usize
+    var started = false
+    while m.pos < m.src.len && m.status == ok {
+        if m.src[m.pos] != 60u8 {
+            m.pos += 1usize
+            continue
+        }
+        let t = ml_tag(m)
+        if m.status != ok { ret }
+        if t.closing {
+            if depth == 0usize {
+                ml_fail(m, Invalid)
+                ret
+            }
+            depth -= 1usize
+        } else if !t.empty {
+            depth += 1usize
+        }
+        started = true
+        if depth == 0usize && started { ret }
+    }
+    ml_fail(m, Invalid)
+}
+
+// One child as a LaTeX argument: a group, or a single token as itself.
+fn ml_child(m: *Ml) {
+    ml_space(m)
+    ml_element(m, true)
+}
+
+// The children of the element just opened, up to its closing tag, each emitted
+// as a row item (no extra braces).
+fn ml_row(m: *Ml, expected: str) {
+    while m.status == ok {
+        ml_space(m)
+        if m.pos >= m.src.len {
+            ml_fail(m, Invalid)
+            ret
+        }
+        if m.src[m.pos] != 60u8 {
+            ml_fail(m, Invalid)
+            ret
+        }
+        if m.pos + 1usize < m.src.len && m.src[m.pos + 1usize] == 47u8 {
+            let t = ml_tag(m)
+            if m.status == ok && !word_is(t.name, expected) { ml_fail(m, Invalid) }
+            ret
+        }
+        ml_element(m, false)
+    }
+}
+
+fn ml_close(m: *Ml, expected: str) {
+    ml_space(m)
+    let t = ml_tag(m)
+    if m.status == ok && (!t.closing || !word_is(t.name, expected)) { ml_fail(m, Invalid) }
+}
+
+// A delimiter attribute value as a `\left` or `\right` operand.
+fn ml_delimiter(m: *Ml, value: str) {
+    if value.len == 0usize {
+        ml_push(m, ".")
+        ret
+    }
+    let (scalar, width) = unicode.read_utf8(value, 0usize)
+    if scalar == 123u32 {
+        ml_push(m, "\\{")
+    } else if scalar == 125u32 {
+        ml_push(m, "\\}")
+    } else {
+        ml_push(m, value[0usize..width])
+    }
+}
+
+fn ml_element(m: *Ml, wrap: bool) {
+    if m.status != ok { ret }
+    if m.depth >= MAX_NEST {
+        ml_fail(m, TooDeep)
+        ret
+    }
+    m.depth += 1usize
+    let t = ml_tag(m)
+    if m.status != ok || t.closing {
+        ml_fail(m, Invalid)
+        m.depth -= 1usize
+        ret
+    }
+    let name = t.name
+    if t.empty {
+        if word_is(name, "mspace") { ml_push(m, "\\,") } else { ml_fail(m, Invalid) }
+        m.depth -= 1usize
+        ret
+    }
+    if word_is(name, "mi") || word_is(name, "mn") || word_is(name, "mo") || word_is(name, "mtext") || word_is(name, "ms") {
+        ml_token(m, name, wrap)
+    } else if word_is(name, "mspace") {
+        ml_push(m, "\\,")
+        ml_close(m, name)
+    } else if word_is(name, "math") || word_is(name, "mrow") || word_is(name, "mstyle") || word_is(name, "mpadded") || word_is(name, "semantics") {
+        if wrap { ml_push(m, "{") }
+        ml_row(m, name)
+        if wrap { ml_push(m, "}") }
+    } else if word_is(name, "annotation") || word_is(name, "annotation-xml") {
+        // Annotations carry no layout: skip to the matching close.
+        var depth = 1usize
+        while m.pos < m.src.len && depth > 0usize && m.status == ok {
+            if m.src[m.pos] != 60u8 {
+                m.pos += 1usize
+                continue
+            }
+            let inner = ml_tag(m)
+            if inner.closing { depth -= 1usize } else if !inner.empty { depth += 1usize }
+        }
+    } else if word_is(name, "msup") || word_is(name, "mover") {
+        if wrap { ml_push(m, "{") }
+        ml_child(m)
+        ml_push(m, "^")
+        ml_child(m)
+        if wrap { ml_push(m, "}") }
+        ml_close(m, name)
+    } else if word_is(name, "msub") || word_is(name, "munder") {
+        if wrap { ml_push(m, "{") }
+        ml_child(m)
+        ml_push(m, "_")
+        ml_child(m)
+        if wrap { ml_push(m, "}") }
+        ml_close(m, name)
+    } else if word_is(name, "msubsup") || word_is(name, "munderover") {
+        if wrap { ml_push(m, "{") }
+        ml_child(m)
+        ml_push(m, "_")
+        ml_child(m)
+        ml_push(m, "^")
+        ml_child(m)
+        if wrap { ml_push(m, "}") }
+        ml_close(m, name)
+    } else if word_is(name, "mfrac") {
+        ml_push(m, "\\frac ")
+        ml_child(m)
+        ml_push(m, " ")
+        ml_child(m)
+        ml_close(m, name)
+    } else if word_is(name, "msqrt") {
+        ml_push(m, "\\sqrt{")
+        ml_row(m, name)
+        ml_push(m, "}")
+    } else if word_is(name, "mroot") {
+        // The index is the second child: skip the base, emit the index, return to the base.
+        ml_space(m)
+        let base_at = m.pos
+        ml_skip(m)
+        ml_space(m)
+        ml_push(m, "\\sqrt[")
+        ml_row_one(m)
+        ml_push(m, "]")
+        let after = m.pos
+        m.pos = base_at
+        ml_child(m)
+        m.pos = after
+        ml_close(m, name)
+    } else if word_is(name, "mfenced") {
+        let (open, has_open) = ml_attr(t.attrs, "open")
+        let (close, has_close) = ml_attr(t.attrs, "close")
+        let (separators, has_separators) = ml_attr(t.attrs, "separators")
+        ml_push(m, "\\left")
+        if has_open { ml_delimiter(m, open) } else { ml_push(m, "(") }
+        var index = 0usize
+        while m.status == ok {
+            ml_space(m)
+            if m.pos >= m.src.len {
+                ml_fail(m, Invalid)
+                break
+            }
+            if m.pos + 1usize < m.src.len && m.src[m.pos + 1usize] == 47u8 {
+                ml_close(m, name)
+                break
+            }
+            if index > 0usize {
+                var sep = ","
+                if has_separators && separators.len > 0usize {
+                    var at = index - 1usize
+                    if at >= separators.len { at = separators.len - 1usize }
+                    sep = separators[at..at + 1usize]
+                }
+                ml_push(m, sep)
+            }
+            ml_element(m, true)
+            index += 1usize
+        }
+        ml_push(m, "\\right")
+        if has_close { ml_delimiter(m, close) } else { ml_push(m, ")") }
+    } else if word_is(name, "mtable") {
+        ml_push(m, "\\begin{matrix}")
+        var first_row = true
+        while m.status == ok {
+            ml_space(m)
+            if m.pos >= m.src.len {
+                ml_fail(m, Invalid)
+                break
+            }
+            if m.pos + 1usize < m.src.len && m.src[m.pos + 1usize] == 47u8 {
+                ml_close(m, name)
+                break
+            }
+            if !first_row { ml_push(m, "\\\\") }
+            first_row = false
+            let row_tag = ml_tag(m)
+            if m.status != ok || row_tag.closing || !word_is(row_tag.name, "mtr") {
+                ml_fail(m, Invalid)
+                break
+            }
+            var first_cell = true
+            while m.status == ok {
+                ml_space(m)
+                if m.pos >= m.src.len {
+                    ml_fail(m, Invalid)
+                    break
+                }
+                if m.pos + 1usize < m.src.len && m.src[m.pos + 1usize] == 47u8 {
+                    ml_close(m, "mtr")
+                    break
+                }
+                if !first_cell { ml_push(m, "&") }
+                first_cell = false
+                let cell_tag = ml_tag(m)
+                if m.status != ok || cell_tag.closing || !word_is(cell_tag.name, "mtd") {
+                    ml_fail(m, Invalid)
+                    break
+                }
+                ml_push(m, "{")
+                ml_row(m, "mtd")
+                ml_push(m, "}")
+            }
+        }
+        ml_push(m, "\\end{matrix}")
+    } else {
+        ml_fail(m, Invalid)
+    }
+    m.depth -= 1usize
+}
+
+// One child element's content as a row (the index of a root), consuming only it.
+fn ml_row_one(m: *Ml) {
+    ml_space(m)
+    ml_element(m, false)
+}
+
+// Typesets presentation MathML `source` (an element, usually `math`).
+fn typeset_mathml(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err) {
+    var ml: Ml = zero
+    ml.src = source
+    ml.status = ok
+    let (builder, builder_error) = str.builder(a, source.len * 4usize + 64usize)
+    if builder_error != ok { ret (zero, TooSmall) }
+    ml.out = builder
+    ml_space(&ml)
+    ml_element(&ml, false)
+    ml_space(&ml)
+    if ml.status == ok && ml.pos < ml.src.len { ml.status = Invalid }
+    if ml.status != ok { ret (zero, ml.status) }
+    let latex = str.done(&ml.out)
+    let (eq, eq_error) = typeset(a, latex, options, items)
+    ret (eq, eq_error)
 }

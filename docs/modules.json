@@ -7491,7 +7491,10 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.gfx.geometry",
     "e.mem",
+    "e.str",
+    "e.text.layout",
     "e.text.shape",
     "e.text.unicode"
    ],

@@ -7417,17 +7417,29 @@ const CLASS_CLOSE: u8 = 5u8
 const CLASS_PUNCT: u8 = 6u8
 const CLASS_INNER: u8 = 7u8
 const CLASS_SPACE: u8 = 8u8
+const STYLE_CRAMPED: u32 = 4u32
 type Atom = struct { class: u8, first: usize, last: usize, width: f32, height: f32, depth: f32, simple: bool, limits: bool }
-type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize }
+type Consts = struct { axis: f32, rule: f32, script: f32, scriptscript: f32, num_display: f32, num_text: f32, den_display: f32, den_text: f32, num_gap: f32, num_gap_display: f32, den_gap: f32, den_gap_display: f32, sup_display: f32, sup_text: f32, sup_cramped: f32, sub_only: f32, sub_both: f32, sub_top_max: f32, sup_bottom_min: f32, sup_max_with_sub: f32, sub_sup_gap: f32, sup_drop: f32, sub_drop: f32, script_space: f32, upper_gap: f32, lower_gap: f32, rad_rule: f32, rad_gap: f32, rad_gap_display: f32, rad_extra: f32, rad_before: f32, rad_after: f32, rad_raise: f32, delim_min: f32, op_min: f32 }
+type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize, hhea_at: usize, hmtx_at: usize, math_at: usize, consts_at: usize, info_at: usize, variants_at: usize, k: Consts }
 fn maxf(x: f32, y: f32) -> f32
+fn minf(x: f32, y: f32) -> f32
 fn be16(d: []const u8, at: usize) -> u32
 fn be16s(d: []const u8, at: usize) -> i32
 fn be32(d: []const u8, at: usize) -> u32
 fn find_table(d: []const u8, tag: u32) -> usize
 fn glyph_extent(c: *Ctx, id: u32) -> (f32, f32)
-fn style_scale(style: u32) -> f32
+fn glyph_advance(c: *Ctx, id: u32) -> f32
+fn style_base(style: u32) -> u32
+fn style_cramped(style: u32) -> bool
+fn style_scale(c: *Ctx, style: u32) -> f32
 fn script_style(style: u32) -> u32
 fn fraction_style(style: u32) -> u32
+fn default_consts(xh: f32) -> Consts
+fn math_value(c: *Ctx, index: usize) -> f32
+fn load_math(c: *Ctx)
+fn coverage_pos(d: []const u8, at: usize, gid: u32) -> usize
+fn italic_correction(c: *Ctx, gid: u32) -> f32
+fn construction_of(c: *Ctx, gid: u32) -> usize
 fn push_item(c: *Ctx, item: Item)
 fn shift_range(c: *Ctx, first: usize, last: usize, dx: f32, dy: f32)
 fn byte_at(c: *Ctx, at: usize) -> u8
@@ -7436,9 +7448,12 @@ fn word_is(word: str, want: str) -> bool
 fn at_command(c: *Ctx, word: str) -> bool
 fn ends_row(c: *Ctx) -> bool
 fn fail(c: *Ctx, why: err)
+fn scalar_gid(c: *Ctx, scalar: u32) -> u32
 fn glyph_atom(c: *Ctx, scalar: u32, size: f32, class: u8) -> Atom
+fn id_atom(c: *Ctx, id: u32, scalar: u32, size: f32, class: u8) -> Atom
 fn text_atom(c: *Ctx, text: str, size: f32, class: u8) -> Atom
 fn char_class(scalar: u32) -> u8
+fn math_italic(c: *Ctx, scalar: u32) -> u32
 fn greek_names() -> str
 fn greek_scalar(word: str) -> u32
 fn upper_greek(word: str) -> u32
@@ -7452,6 +7467,7 @@ fn as_atom(b: Atom, class: u8) -> Atom
 fn parse_row(c: *Ctx, style: u32) -> Atom
 fn parse_argument(c: *Ctx, style: u32) -> Atom
 fn parse_atom(c: *Ctx, style: u32) -> Atom
+fn grown(c: *Ctx, scalar: u32, need: f32, size: f32, class: u8) -> Atom
 fn delimiter(c: *Ctx, scalar: u32, span_h: f32, size: f32, class: u8) -> Atom
 fn push_rule(c: *Ctx, x: f32, top: f32, w: f32, h: f32)
 fn delimiter_scalar(c: *Ctx) -> u32
@@ -7465,22 +7481,54 @@ fn lay_text(c: *Ctx, style: u32) -> Atom
 fn space_atom(c: *Ctx, em18: f32, style: u32) -> Atom
 fn parse_nucleus(c: *Ctx, style: u32) -> Atom
 fn font_ready(c: *Ctx) -> bool
+fn context(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Ctx, bool)
 fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err)
+fn to_layout(a: *mem.Arena, eq: Equation, font: shape.Font) -> (layout.Layout, err)
+type Ml = struct { src: str, pos: usize, out: str.Builder, status: err, depth: usize }
+fn ml_fail(m: *Ml, why: err)
+fn ml_space(m: *Ml)
+fn ml_push(m: *Ml, text: str)
+type Tag = struct { name: str, attrs: str, closing: bool, empty: bool }
+fn ml_tag(m: *Ml) -> Tag
+fn ml_attr(attrs: str, want: str) -> (str, bool)
+fn ml_token_text(m: *Ml, buffer: []u8) -> usize
+fn ml_command(scalar: u32) -> str
+fn ml_scalar(m: *Ml, scalar: u32)
+fn ml_scalar_count(text: []const u8) -> usize
+fn ml_token(m: *Ml, name: str, wrap: bool)
+fn ml_skip(m: *Ml)
+fn ml_child(m: *Ml)
+fn ml_row(m: *Ml, expected: str)
+fn ml_close(m: *Ml, expected: str)
+fn ml_delimiter(m: *Ml, value: str)
+fn ml_element(m: *Ml, wrap: bool)
+fn ml_row_one(m: *Ml)
+fn typeset_mathml(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err)
 ```
 
-Math typesetting (L098, D2842): `typeset` parses a LaTeX-math subset and lays it out in
-one pass into `items`, a flat paint-ordered list of positioned glyphs and rules in
-caller storage, for scene and SVG adapters. The model is TeX's: atom classes with the
-TeXbook's inter-atom space table, display, text, script and scriptscript styles,
-fractions, radicals with an index, scripts by rule 18, big operators with display
-limits, `\left` `\right` delimiters grown to the content and the `matrix`, `pmatrix`,
-`bmatrix`, `Bmatrix`, `vmatrix` and `cases` environments. Coordinates have the origin
-on the baseline at the left edge, y downward: a glyph's `y` is its baseline, a rule's
-its top. Glyph extents are read from the font's `glyf` boxes; the TeX shift constants
-are fractions of the size, since a text font has no MATH table. Only `typeset`,
-`Options`, `Item`, `Equation`, `Kind` and the four errors are the interface; the rest
-of the fence is the module's internals. Checked against fontTools metrics and the
-TeXbook's formulas (`scripts/gen_math_test.py`).
+Math typesetting (L098, D2842, D3101): `typeset` parses a LaTeX-math subset and lays it
+out in one pass into `items`, a flat paint-ordered list of positioned glyphs and rules in
+caller storage, for scene and SVG adapters; `typeset_mathml` reads presentation MathML
+(`mrow` `mi` `mn` `mo` `mtext` `msup` `msub` `msubsup` `munder` `mover` `munderover`
+`mfrac` `msqrt` `mroot` `mfenced` `mtable` `mtr` `mtd` `mstyle` `mspace`) by translating
+it to that subset, so both inputs share every rule. The model is TeX's: atom classes with
+the TeXbook's inter-atom space table, display, text, script and scriptscript styles with
+cramped forms (denominators, radicands and subscripts), fractions, radicals with an index,
+scripts by rule 18, big operators with display limits, `\left` `ight` delimiters grown
+to the content and the `matrix`, `pmatrix`, `bmatrix`, `Bmatrix`, `vmatrix`, `cases`,
+`align`, `aligned` and `gather` environments. A font with an OpenType MATH table is laid
+out by it: MathConstants, italic corrections, and MathVariants for delimiters, radical
+signs and display operators (the first variant tall enough, else an assembly of parts with
+repeated extenders); a font without one gets TeX's cmsy values and a scaled glyph. A font
+with the Mathematical Alphanumeric block gives Latin and lower-case Greek letters their
+italic forms. Coordinates have the origin on the baseline at the left edge, y downward: a
+glyph's `y` is its baseline, a rule's its top. `to_layout` turns the glyph items into an
+`e.text.layout.Layout` (one run of one glyph each) that `e.gfx.scene` draws as a
+`DrawText`; the rule items are rectangles to fill. `typeset`, `typeset_mathml`,
+`to_layout`, `Options`, `Item`, `Equation`, `Kind` and the four errors are the interface;
+the rest of the fence is the module's internals. Checked against fontTools metrics, a
+separate Python model of the rules over a generated MATH font, and Pillow renderings
+(`scripts/gen_math_font.py`, `scripts/gen_math_render_test.py`, `scripts/gen_math_test.py`).
 
 ### `e.text.sig`
 
