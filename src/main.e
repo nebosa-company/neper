@@ -4285,11 +4285,18 @@ type BarrierOracle = struct {
 // Copy just the device helpers on a path to a barrier until no such call
 // remains. Ordinary debug calls stay real calls; release keeps its usual
 // two-pass oracle separately.
-fn build_barrier_oracle(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bindings: []lower.Binding, reachable: []bool, cpu_level: usize, release: bool) -> (BarrierOracle, err) {
+fn build_barrier_oracle(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bindings: []lower.Binding, reachable: []bool, cpu_level: usize, release: bool, every: bool) -> (BarrierOracle, err) {
     var current: BarrierOracle = zero
     var pass = 0usize
     while true {
-        if pass != 0usize && pass >= current.count { ret (current, lower.BarrierInlineCycle) }
+        if pass != 0usize && pass >= current.count {
+            // Device code that calls itself has no flat body; its kernel gets no copy.
+            if every {
+                current.count = 0usize
+                ret (current, ok)
+            }
+            ret (current, lower.BarrierInlineCycle)
+        }
         let previous = current
         let (builders, builder_error) = mem.alloc[nir.Builder](a, 1usize)
         if builder_error != ok { ret (current, builder_error) }
@@ -4324,8 +4331,8 @@ fn build_barrier_oracle(a: *mem.Arena, checker: *check.Checker, loaded: *graph.G
         current.count = 0usize
         let build_error = lower.build_inline_oracle(checker, loaded, current.builder, current.signatures, bindings, entries, &current.count)
         if build_error != ok { ret (current, build_error) }
-        let (marked, pending) = lower.mark_barrier_entries(entries, current.count)
-        if marked == 0usize { ret (current, lower.HelperInlineMissing) }
+        let (marked, pending) = lower.mark_barrier_entries(entries, current.count, every)
+        if marked == 0usize && !every { ret (current, lower.HelperInlineMissing) }
         if !pending { ret (current, ok) }
         pass += 1usize
     }
@@ -9299,6 +9306,7 @@ fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
                             if lower_error == regalloc.InvalidIR { try write_all(&message, ": the allocator refused the NIR") }
                             if lower_error == regalloc.NoRegisters { try write_all(&message, ": the allocator ran out of registers") }
                             if lower_error == lower.FunctionNotFound { try write_all(&message, ": a function was not found") }
+                            if lower_error == graph.ModuleDropped { try write_all(&message, ": a module's front was dropped") }
                             if lower_error == lower.HelperInlineMissing { try write_all(&message, ": a barrier helper has no inlinable body") }
                             if lower_error == lower.BarrierInlineCycle { try write_all(&message, ": a barrier helper call chain is cyclic or indirect") }
                             if lower_error == codegen_x64.Unsupported { try write_all(&message, ": the selector does not support the instruction") }
@@ -11519,6 +11527,8 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
     w.builder.oracle_signatures = program.oracle_signatures
     w.builder.inline_entries = program.inline_entries
     w.builder.inline_entry_count = program.inline_entry_count
+    w.builder.device_entries = program.device_entries
+    w.builder.device_entry_count = program.device_entry_count
     let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, sized(8192usize, loaded.largest_bytes, 16usize))
     if inlined_error != ok { ret inlined_error }
     w.builder.inlined = inlined
@@ -12437,6 +12447,8 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
                 generous.builder.oracle_signatures = &generous.second_signatures
                 generous.builder.inline_entries = crew.second_all
                 generous.builder.inline_entry_count = crew.second_all_count
+                generous.builder.device_entries = crew.workers[worker_at].builder.device_entries
+                generous.builder.device_entry_count = crew.workers[worker_at].builder.device_entry_count
                 generous.modules = crew.workers[worker_at].modules
                 generous.count = crew.workers[worker_at].count
                 generous.stopped = false
@@ -12591,6 +12603,22 @@ fn begin_drops(a: *mem.Arena, crew: *Crew, loaded: *graph.Graph, checker: *check
     while entry_at < crew.second_all_count {
         try prefill_one(crew, checker, loaded, builder, crew.second_all[entry_at].module_index, crew.second_all[entry_at].name, &scratch)
         entry_at += 1usize
+    }
+    // The device oracle's callees too (D4201): a kernel's module copies them into its
+    // `K$spirv` and records them as body edges, long after their own module is given back.
+    var device_at = 0usize
+    while device_at < builder.device_entry_count {
+        let device_entry = builder.device_entries[device_at]
+        try prefill_one(crew, checker, loaded, builder, device_entry.module_index, device_entry.name, &scratch)
+        if device_at == 0usize {
+            var nested_at = 0usize
+            while nested_at < device_entry.oracle.inlined_count {
+                let nested = device_entry.oracle.inlined[nested_at]
+                try prefill_one(crew, checker, loaded, builder, nested.callee_module, nested.name, &scratch)
+                nested_at += 1usize
+            }
+        }
+        device_at += 1usize
     }
     worker_at = 0usize
     while worker_at <= generous_slot() {
@@ -14312,7 +14340,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         let (needs_barrier_oracle, needs_barrier_error) = lower.barrier_helper_present(&checker, &loaded, device_reachable)
         if needs_barrier_error != ok { ret needs_barrier_error }
         if needs_barrier_oracle {
-            let (barrier, barrier_error) = build_barrier_oracle(a, &checker, &loaded, bindings, device_reachable, early_builder.cpu_level, release_build)
+            let (barrier, barrier_error) = build_barrier_oracle(a, &checker, &loaded, bindings, device_reachable, early_builder.cpu_level, release_build, false)
             if barrier_error != ok {
                 try print_lower_diagnostic(&report, &loaded, &checker, barrier.builder, barrier_error)
                 try finish_report(&report)
@@ -14351,6 +14379,26 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 crew.workers[worker_at].builder.inline_entries = combined
                 crew.workers[worker_at].builder.inline_entry_count = at
                 worker_at += 1usize
+            }
+        }
+        // The device oracle (D24, D4201): every plain function a kernel reaches, flattened,
+        // for the kernel's own module to copy into its `K$spirv` when another module
+        // declares the helper.
+        if lower.device_helper_present(&checker, device_reachable) {
+            let (device, device_error) = build_barrier_oracle(a, &checker, &loaded, bindings, device_reachable, early_builder.cpu_level, release_build, true)
+            if device_error != ok {
+                try print_lower_diagnostic(&report, &loaded, &checker, device.builder, device_error)
+                try finish_report(&report)
+                os.exit(1i32)
+                ret ok
+            }
+            builder.device_entries = device.entries
+            builder.device_entry_count = device.count
+            var device_worker_at = 0usize
+            while device_worker_at <= generous_slot() && device_worker_at < crew.workers.len {
+                crew.workers[device_worker_at].builder.device_entries = device.entries
+                crew.workers[device_worker_at].builder.device_entry_count = device.count
+                device_worker_at += 1usize
             }
         }
         var artifact_mode: em.BuildMode = .Debug

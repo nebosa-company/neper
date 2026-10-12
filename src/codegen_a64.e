@@ -1001,6 +1001,19 @@ fn select_vector_binary(builder: *nir.Builder, current: nir.Function, instructio
 fn select_atomic(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, context: *codegen_x64.FunctionContext) -> err {
     let output = context.output
     let allocations = context.allocations
+    // FPCR.FZ around an `ftz` kernel's run (D4203, spec section 11): 100 sets it, 101
+    // clears it, through x16, the scratch. Written from the architecture manual's
+    // encodings (MRS/MSR FPCR, ORR/AND with the bit-24 bitmask) and not yet run.
+    if instruction.opcode == .AtomicFence && instruction.immediate == 100usize {
+        try emit_a64.instruction_word(output, 0xD53B4410usize)
+        try emit_a64.instruction_word(output, 0xB2680210usize)
+        ret emit_a64.instruction_word(output, 0xD51B4410usize)
+    }
+    if instruction.opcode == .AtomicFence && instruction.immediate == 101usize {
+        try emit_a64.instruction_word(output, 0xD53B4410usize)
+        try emit_a64.instruction_word(output, 0x9267FA10usize)
+        ret emit_a64.instruction_word(output, 0xD51B4410usize)
+    }
     if instruction.opcode == .AtomicFence { ret emit_a64.barrier_full(output) }
     let width = codegen_x64.atomic_width(instruction.ty)
     if width == 0usize { ret codegen_x64.Unsupported }

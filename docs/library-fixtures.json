@@ -2393,11 +2393,14 @@
     "gpu_barrier_large_helper",
     "gpu_barrier_occurrence",
     "gpu_cpu",
+    "gpu_device_edit",
     "gpu_device_lock",
+    "gpu_devices",
     "gpu_divergence",
     "gpu_fault_bounds",
     "gpu_fault_nocheck",
     "gpu_fault_unchecked",
+    "gpu_float_modes",
     "gpu_frame_many",
     "gpu_gaps",
     "gpu_present",
@@ -2591,6 +2594,7 @@
     "gfx_mesh",
     "gfx_scene_plan",
     "gfx_vision",
+    "gpu_float_modes",
     "gpu_vulkan_float",
     "math_exact",
     "math_exp_log",
@@ -4268,6 +4272,7 @@
     "data_tablesearch",
     "data_tableview",
     "ui_datagrid"
+    "data_tableview"
    ]
   },
   {
@@ -4306,6 +4311,11 @@
    "pending": [],
    "fixtures": [
     "data_tablesearch"
+   "catalogue": 13,
+   "delivered": 13,
+   "pending": [],
+   "fixtures": [
+    "data_tableview"
    ]
   }
  ]

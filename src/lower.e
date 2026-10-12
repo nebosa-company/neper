@@ -2348,6 +2348,18 @@ fn barrier_helper_present(c: *check.Checker, g: *graph.Graph, reachable: []bool)
     ret (false, ok)
 }
 
+// Whether a kernel reaches a plain function with a body (D4201), which the device
+// oracle then copies into the kernel's own module.
+fn device_helper_present(c: *check.Checker, reachable: []bool) -> bool {
+    var at = check.function_row(c, 0usize)
+    while at < c.function_count {
+        let function = c.functions[at]
+        if at < reachable.len && reachable[at] && !function.gpu && !function.generic && !function.external && !function.intrinsic { ret true }
+        at = check.function_row(c, at + 1usize)
+    }
+    ret false
+}
+
 fn inline_entry_calls_marked(entries: []nir.InlineEntry, count: usize, entry: nir.InlineEntry) -> bool {
     let oracle = entry.oracle
     let function = oracle.functions[entry.function_index]
@@ -2371,9 +2383,12 @@ fn inline_entry_calls_marked(entries: []nir.InlineEntry, count: usize, entry: ni
 // ponytail: this quadratic walk is only over kernel-reached device helpers;
 // index calls if GPU programs grow enough to make oracle time measurable.
 // Only callers of an actual barrier need mandatory inlining.
-fn mark_barrier_entries(entries: []nir.InlineEntry, count: usize) -> (usize, bool) {
+fn mark_barrier_entries(entries: []nir.InlineEntry, count: usize, every: bool) -> (usize, bool) {
     var at = 0usize
     while at < count {
+        // The device oracle (D4201) flattens every helper a kernel reaches, not just
+        // the ones above a barrier.
+        if every { entries[at].mandatory = true }
         let entry = entries[at]
         let oracle = entry.oracle
         let function = oracle.functions[entry.function_index]
@@ -3874,6 +3889,30 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
     var return_layout: ReturnLayout = zero
     let return_layout_error = call_return_layout(c, call, &return_layout)
     if return_layout_error != ok { ret return_layout_error }
+    // A helper another module declares, reached from a kernel's device build (D24,
+    // D4201): its flattened body from the device oracle, so the module that owns the
+    // kernel carries the device code in its own `K$spirv`.
+    if builder.spirv && builder.device_entry_count != 0usize && !call.indirect && !call.mem_alloc && !call.function.intrinsic && !call.function.external && !call.function.generic && !call.function.gpu {
+        let caller_module = builder.functions[builder.current_function].module_index
+        if call.function.owner_module_index != caller_module {
+            var device_at = 0usize
+            var device_found = false
+            while device_at < builder.device_entry_count && !device_found {
+                let candidate = builder.device_entries[device_at]
+                if candidate.module_index == call.function.owner_module_index && candidate.instance == call.function.instance_id && check.same(candidate.name, call.function.name) { device_found = true } else { device_at += 1usize }
+            }
+            if device_found {
+                let saved_entries = builder.inline_entries
+                let saved_count = builder.inline_entry_count
+                builder.inline_entries = builder.device_entries
+                builder.inline_entry_count = builder.device_entry_count
+                let inlined_error = emit_inlined_call(c, call, device_at, arguments, argument_count, builder, token, results)
+                builder.inline_entries = saved_entries
+                builder.inline_entry_count = saved_count
+                ret inlined_error
+            }
+        }
+    }
     // Section 12's ordinary oracle keeps scalar-only calls; the barrier oracle
     // also copies a single result returned through a hidden slot.
     if builder.has_oracle && !call.indirect && !call.mem_alloc && !call.function.intrinsic && !call.function.external && !call.function.generic && !call.function.gpu {
@@ -8658,8 +8697,26 @@ fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
             spelling = escaped
         }
     }
+    // The body edges the device build took (D36): the copies it made of other modules'
+    // helpers, which the reset below would drop with the lowering. They are put back
+    // against the kernel's own function, so the module is rebuilt when one changes.
+    var device_edges: [64]nir.InlinedRef = zero
+    var device_edge_count = 0usize
+    var edge_at = at.inlined_count
+    while edge_at < builder.inlined_count {
+        if device_edge_count == device_edges.len { ret check.Capacity }
+        device_edges[device_edge_count] = builder.inlined[edge_at]
+        device_edge_count += 1usize
+        edge_at += 1usize
+    }
     nir.reset(builder, at)
     signatures.count = signature_mark
+    var restored = 0usize
+    while restored < device_edge_count {
+        builder.current_function = at.function_count - 1usize
+        try record_inlined(builder, device_edges[restored].callee_module, device_edges[restored].name, device_edges[restored].instance)
+        restored += 1usize
+    }
     if has_pending {
         generic_at = check.function_row(c, 0usize)
         while generic_at < c.function_count {
@@ -10086,7 +10143,19 @@ fn lower_launcher_instance(c: *check.Checker, g: *graph.Graph, module_index: usi
     if layout_error != ok { ret layout_error }
     run_arguments[12usize] = layout_value
     var run_results: CallResults = zero
+    // An `ftz` kernel's CPU run happens inside `launch_run` on this thread, under FTZ and
+    // DAZ (spec section 11, D4203): set before it, cleared after, and the device builds
+    // of the same kernel carry their own `DenormFlushToZero`.
+    let flushes = (check.kernel_fact(c, generic.template_index) & 128usize) != 0usize
+    if flushes {
+        let (flush_on, flush_on_ignored, flush_on_error) = nir.emit(builder, .AtomicFence, zero, false, 100usize, token)
+        if flush_on_error != ok { ret flush_on_error }
+    }
     try emit_library_call(c, g, "e.gpu", "launch_run", run_arguments[..], 13usize, builder, token, &run_results)
+    if flushes {
+        let (flush_off, flush_off_ignored, flush_off_error) = nir.emit(builder, .AtomicFence, zero, false, 101usize, token)
+        if flush_off_error != ok { ret flush_off_error }
+    }
     if run_results.count != 1usize { ret check.ArgumentCount }
     try emit_formatter_return(c, module_index, instance, 0usize, 0usize, run_results.values[0usize], false, builder, token)
     ret nir.end_function(builder)

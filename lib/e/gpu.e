@@ -95,7 +95,7 @@ const MAX_DEVICES: usize = 16usize
 const MAX_QUEUES: usize = 64usize
 const MAX_AXIS: usize = 4294967295usize
 const SUBGROUP_PC: usize = 1073741824usize
-const CPU_CAPABILITIES: usize = 375usize
+const CPU_CAPABILITIES: usize = 503usize
 
 // One buffer slot: the storage's bytes, the element count and size, and the
 // generation a handle has to carry.
@@ -105,7 +105,7 @@ type Buffer = struct { bytes: []u8, count: usize, elem: usize, generation: u32, 
 
 // A device's state: the CPU's, or a Vulkan device's context and its pipelines, one per
 // kernel module and entry it has launched (D1611).
-type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize }
+type DeviceState = struct { arena: *mem.Arena, lock: locks.Mutex, lock_owner: Atomic[usize], lock_depth: usize, owner: u32, closed: bool, buffers: []Buffer, queues: u32, staging: [MAX_QUEUES]vulkan.Buffer, backend: Backend, context: vulkan.Context, physical: vulkan.Physical, ordinal: u32, pipeline_modules: [16]usize, pipeline_entries: [16]str, pipelines: [16]vulkan.Pipeline, pipeline_count: usize }
 
 type QueueState = struct { device: *DeviceState, index: u32, staging_bytes: usize, serial: u64, fault_count: u32, fault: FaultRecord, last: FaultRecord, has_last: bool }
 
@@ -488,10 +488,11 @@ fn cpu_info(a: *mem.Arena) -> (DeviceInfo, err) {
     let (caps, caps_error) = cpu_capabilities(a)
     if caps_error != ok { ret (zero, caps_error) }
     var record: DeviceInfo = zero
+    // The CPU's key selects this process's CPU backend: all-zero bytes, valid (D4200).
     record.key.backend = .Cpu
-    record.key_valid = false
+    record.key_valid = true
     record.index = 0u32
-    record.name = "cpu"
+    record.name = "Neper CPU"
     record.kind = .Cpu
     record.memory_bytes = 0u64
     record.memory_known = false
@@ -506,8 +507,11 @@ fn vulkan_info(a: *mem.Arena, physical: vulkan.Physical, index: u32) -> (DeviceI
     var record: DeviceInfo = zero
     let (caps, caps_error) = capability_list(a, physical.caps)
     if caps_error != ok { ret (record, caps_error) }
+    // deviceUUID when the driver reports one; otherwise no key (D4200), never a name or an
+    // index dressed up as an identity.
     record.key.backend = .Vulkan
-    record.key_valid = false
+    record.key_valid = physical.device_uuid_valid
+    if physical.device_uuid_valid { record.key.uuid = physical.device_uuid }
     record.index = index
     record.name = physical.name
     record.kind = .Other
@@ -524,9 +528,29 @@ fn vulkan_info(a: *mem.Arena, physical: vulkan.Physical, index: u32) -> (DeviceI
 
 fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo, err) {
     if backend == .Vulkan {
-        let (found, found_error) = vulkan.devices(a, limit)
-        if found_error == vulkan.NoLoader || found_error == vulkan.NoDevice { ret (zero, NoDevice) }
-        if found_error != ok { ret (zero, Lost) }
+        // One past the limit shows whether the snapshot fits: past it is `TooLarge`, never a
+        // truncated list presented as complete (D4200). A missing loader is a backend that
+        // is absent (`Unsupported`); a loader with no device is a successful empty list.
+        let checkpoint = mem.mark(a)
+        let (found, found_error) = vulkan.devices(a, limit + 1usize)
+        if found_error == vulkan.NoLoader {
+            mem.reset(a, checkpoint)
+            ret (zero, Unsupported)
+        }
+        if found_error == vulkan.NoDevice {
+            mem.reset(a, checkpoint)
+            var empty: []const DeviceInfo = zero
+            ret (empty, ok)
+        }
+        if found_error != ok {
+            mem.reset(a, checkpoint)
+            if found_error == mem.Exhausted { ret (zero, found_error) }
+            ret (zero, Lost)
+        }
+        if found.len > limit {
+            mem.reset(a, checkpoint)
+            ret (zero, TooLarge)
+        }
         let (records, records_error) = mem.alloc[DeviceInfo](a, found.len)
         if records_error != ok { ret (zero, records_error) }
         var at = 0usize
@@ -614,7 +638,12 @@ fn open_vulkan(a: *mem.Arena, index: u32) -> (*Device, err) {
     if found_error == vulkan.NoLoader || found_error == vulkan.NoDevice { ret (zero, NoDevice) }
     if found_error != ok { ret (zero, Lost) }
     if usize(index) >= found.len { ret (zero, NoDevice) }
-    let physical = found[usize(index)]
+    let (device, device_error) = open_physical(a, found[usize(index)], index)
+    ret (device, device_error)
+}
+
+// One enumerated physical device opened: below the floor is `Unsupported`.
+fn open_physical(a: *mem.Arena, physical: vulkan.Physical, index: u32) -> (*Device, err) {
     if !physical.floor { ret (zero, Unsupported) }
     let (context, context_error) = vulkan.open(a, physical)
     if context_error == vulkan.Unsupported { ret (zero, Unsupported) }
@@ -629,6 +658,7 @@ fn open_vulkan(a: *mem.Arena, index: u32) -> (*Device, err) {
     defer unlock_state(state)
     state.context = context
     state.physical = physical
+    state.ordinal = index
     ret (device, ok)
 }
 
@@ -676,10 +706,74 @@ fn open_state(a: *mem.Arena, backend: Backend) -> (*Device, err) {
     ret (&handles[0usize], ok)
 }
 
+// The one record of `records` whose key is exactly `key` (D4200): backend and all 16 UUID
+// bytes, a record without a valid key never matching. No match is `NoDevice`, several are
+// `AmbiguousDevice`; an index, a name or another backend never stands in.
+fn resolve_key(records: []const DeviceInfo, key: DeviceKey) -> (usize, err) {
+    var found = 0usize
+    var count = 0usize
+    var at = 0usize
+    while at < records.len {
+        let record = records[at]
+        if record.key_valid && record.key.backend == key.backend {
+            var same = true
+            var byte = 0usize
+            while byte < 16usize {
+                if record.key.uuid[byte] != key.uuid[byte] { same = false }
+                byte += 1usize
+            }
+            if same {
+                found = at
+                count += 1usize
+            }
+        }
+        at += 1usize
+    }
+    if count == 0usize { ret (0usize, NoDevice) }
+    if count > 1usize { ret (0usize, AmbiguousDevice) }
+    ret (found, ok)
+}
+
 fn open_id(a: *mem.Arena, key: DeviceKey) -> (*Device, err) {
-    if key.backend != .Cpu { ret (zero, Unsupported) }
-    // The CPU device has no stable key (`key_valid` is false), so no key names it.
-    ret (zero, NoDevice)
+    if key.backend == .Cpu {
+        // The CPU's key is all zero bytes; anything else names no CPU device.
+        var byte = 0usize
+        while byte < 16usize {
+            if key.uuid[byte] != 0u8 { ret (zero, NoDevice) }
+            byte += 1usize
+        }
+        let (device, device_error) = open(a, .Cpu, 0u32)
+        ret (device, device_error)
+    }
+    if key.backend != .Vulkan { ret (zero, Unsupported) }
+    // Enumerate the full set so a duplicate is seen, match, then open that very handle:
+    // removal or a changed identity fails instead of opening a replacement at the ordinal.
+    let checkpoint = mem.mark(a)
+    let (found, found_error) = vulkan.devices(a, MAX_DEVICES)
+    if found_error == vulkan.NoLoader {
+        mem.reset(a, checkpoint)
+        ret (zero, Unsupported)
+    }
+    if found_error == vulkan.NoDevice {
+        mem.reset(a, checkpoint)
+        ret (zero, NoDevice)
+    }
+    if found_error != ok {
+        mem.reset(a, checkpoint)
+        ret (zero, Lost)
+    }
+    var records: [16]DeviceInfo = zero
+    var at = 0usize
+    while at < found.len && at < 16usize {
+        let (record, record_error) = vulkan_info(a, found[at], u32(at))
+        if record_error != ok { ret (zero, record_error) }
+        records[at] = record
+        at += 1usize
+    }
+    let (chosen, chosen_error) = resolve_key(records[..at], key)
+    if chosen_error != ok { ret (zero, chosen_error) }
+    let (device, device_error) = open_physical(a, found[chosen], u32(chosen))
+    ret (device, device_error)
 }
 
 fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err) {
@@ -687,7 +781,7 @@ fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err) {
     if state_error != ok { ret (zero, state_error) }
     defer unlock_state(state)
     if state.backend == .Vulkan {
-        let (record, record_error) = vulkan_info(a, state.physical, 0u32)
+        let (record, record_error) = vulkan_info(a, state.physical, state.ordinal)
         ret (record, record_error)
     }
     let (record, record_error) = cpu_info(a)
@@ -1674,6 +1768,10 @@ fn launch_run(q: *Queue, grid: Grid, x: usize, y: usize, z: usize, frame_bytes: 
     if state.device.backend == .Vulkan { available = state.device.physical.caps }
     if (requirements & available) != requirements { ret Unsupported }
     if state.device.backend == .Vulkan { ret launch_device(state, grid, x, y, z, ctx, module, entry, layout) }
+    // A CPU run under `ftz` sets MXCSR's FTZ and DAZ (D4203), which flush `f64` as well:
+    // a kernel that is both `ftz` and `f64` cannot keep section 11's "`f64` is not
+    // flushed" there, so it is refused rather than run flushed.
+    if (requirements & 144usize) == 144usize { ret Unsupported }
     locks.mutex_lock(&cpu_launch_locks[0usize])
     defer locks.mutex_unlock(&cpu_launch_locks[0usize])
     if launch_active { ret Unsupported }

@@ -74,6 +74,10 @@ type Module = struct {
     // instruction (`Fma` or the seed `Sqrt`).
     glsl: usize,
     denorm_preserve: bool,
+    denorm_flush: bool,
+    // `e.math`, whose `fma` a call writes as `Fma` (D4203).
+    math_module: usize,
+    has_math: bool,
     subgroup: bool,
     subgroup_vote: bool,
     subgroup_ballot: bool,
@@ -152,6 +156,9 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
     *has_checks = false
     let init_error = init_module(a, &m)
     if init_error != ok { ret (no_bytes, init_error) }
+    let (math_module, has_math) = graph.find_module(g, "e.math")
+    m.math_module = math_module
+    m.has_math = has_math
     let (function_ids, ids_error) = mem.alloc[usize](a, builder.function_count + 1usize)
     if ids_error != ok { ret (no_bytes, ids_error) }
     let (function_types, types_error) = mem.alloc[usize](a, builder.function_count + 1usize)
@@ -236,6 +243,10 @@ fn emit(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
                     if instruction.opcode == .Call {
                         if instruction.immediate >= builder.function_ref_count { ret (no_bytes, fail(&m, "a helper call has no function reference")) }
                         let (callee, found) = nir.function_for_reference(builder, builder.function_refs[instruction.immediate])
+                        if is_math_fma(&m, c, builder, instruction) {
+                            instruction_at += 1usize
+                            continue
+                        }
                         if !found || callee >= builder.function_count { ret (no_bytes, fail(&m, "a helper call has no SPIR-V body")) }
                         if !m.function_reachable[callee] {
                             m.function_reachable[callee] = true
@@ -922,6 +933,26 @@ fn uses_f32(builder: *nir.Builder, function: nir.Function) -> bool {
     ret false
 }
 
+// Whether any function the module writes uses a float of the width (D4203): a kernel
+// whose floats are all in a helper still needs the mode its helper's operations run under.
+fn reachable_uses_float(m: *Module, builder: *nir.Builder, name: str) -> bool {
+    var function_at = 0usize
+    while function_at < builder.function_count {
+        if m.function_reachable[function_at] {
+            let function = builder.functions[function_at]
+            let end = function.first_instruction + function.instruction_count
+            var at = function.first_instruction
+            while at < end {
+                let ty = builder.instructions[at].ty
+                if ty.kind == .Float && same(ty.name, name) { ret true }
+                at += 1usize
+            }
+        }
+        function_at += 1usize
+    }
+    ret false
+}
+
 fn type_bytes(m: *Module, ty: usize) -> usize {
     if ty != 0usize && ty == m.t_u8 { ret 1usize }
     if ty != 0usize && ty == m.t_u16 { ret 2usize }
@@ -1038,7 +1069,23 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
     put(&m.modes, size % 1024usize + 1usize)
     put(&m.modes, size / 1024usize % 1024usize + 1usize)
     put(&m.modes, size / 1048576usize % 1024usize + 1usize)
-    if uses_f32(builder, function) {
+    // Denormals are preserved unless the kernel opted out with `ftz` (spec section 11,
+    // D4203): `DenormFlushToZero` for `f32` then, `DenormPreserve` for `f32` otherwise,
+    // and `f64` is preserved either way, since `ftz` does not flush it.
+    let ftz = (check.kernel_fact(c, checked) & 128usize) != 0usize
+    var uses_32 = uses_f32(builder, function)
+    if reachable_uses_float(m, builder, "f32") { uses_32 = true }
+    if uses_32 && ftz {
+        if !m.denorm_flush {
+            capability(m, 4465usize)
+            m.denorm_flush = true
+        }
+        head(&m.modes, OP_EXECUTION_MODE, 4usize)
+        put(&m.modes, entry)
+        put(&m.modes, 4460usize)
+        put(&m.modes, 32usize)
+    }
+    if uses_32 && !ftz {
         if !m.denorm_preserve {
             capability(m, 4464usize)
             m.denorm_preserve = true
@@ -1047,6 +1094,16 @@ fn emit_kernel(a: *mem.Arena, m: *Module, c: *check.Checker, g: *graph.Graph, bu
         put(&m.modes, entry)
         put(&m.modes, 4459usize)
         put(&m.modes, 32usize)
+    }
+    if reachable_uses_float(m, builder, "f64") {
+        if !m.denorm_preserve {
+            capability(m, 4464usize)
+            m.denorm_preserve = true
+        }
+        head(&m.modes, OP_EXECUTION_MODE, 4usize)
+        put(&m.modes, entry)
+        put(&m.modes, 4459usize)
+        put(&m.modes, 64usize)
     }
     // The function, and its first block: every private variable, then the block's address.
     head(&m.code, OP_FUNCTION, 5usize)
@@ -1581,8 +1638,42 @@ fn scalar(values: *Values, value: usize, id: usize, ty: usize, signed: bool) {
     values.signed[value] = signed
 }
 
+// Whether a call is `math.fma` (D4203): the one fused multiply-add, which a device
+// writes as `Fma` rather than as the library's integer sequence. The reference names the
+// instance, so the template it came from says where it was declared.
+fn is_math_fma(m: *Module, c: *check.Checker, builder: *nir.Builder, call: nir.Instruction) -> bool {
+    if !m.has_math || call.opcode != .Call || call.immediate >= builder.function_ref_count { ret false }
+    let reference = builder.function_refs[call.immediate]
+    if !same(reference.name, "fma") { ret false }
+    var at = check.function_row(c, 0usize)
+    while at < c.function_count {
+        let function = c.functions[at]
+        if function.owner_module_index == reference.module_index && function.instance_id == reference.instance && same(function.name, "fma") {
+            var declared = function.module_index
+            let generic = c.function_generics[at]
+            if generic.instance && generic.template_index < c.function_count { declared = c.functions[generic.template_index].module_index }
+            if declared == m.math_module { ret true }
+        }
+        at = check.function_row(c, at + 1usize)
+    }
+    ret false
+}
+
+fn emit_fma(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
+    if instruction.operand_count != 3usize || !instruction.has_result { ret fail(m, "a math.fma call has the wrong argument count") }
+    if instruction.ty.kind != .Float || !same(instruction.ty.name, "f32") { ret fail(m, "math.fma is written for f32 only") }
+    let a = operand(builder, instruction, 0usize)
+    let b = operand(builder, instruction, 1usize)
+    let c_value = operand(builder, instruction, 2usize)
+    if KIND_SCALAR != values.kind[a] || KIND_SCALAR != values.kind[b] || KIND_SCALAR != values.kind[c_value] { ret fail(m, "a math.fma argument is not a scalar") }
+    let id = float_fma(m, values.id[a], values.id[b], values.id[c_value])
+    scalar(values, instruction.result, id, m.t_f32, false)
+    ret ok
+}
+
 fn emit_call(m: *Module, c: *check.Checker, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     if instruction.immediate >= builder.function_ref_count { ret fail(m, "a helper call has no function reference") }
+    if is_math_fma(m, c, builder, instruction) { ret emit_fma(m, builder, instruction, values) }
     let (callee, found) = nir.function_for_reference(builder, builder.function_refs[instruction.immediate])
     if !found || callee >= builder.function_count || m.function_ids[callee] == 0usize { ret fail(m, "a helper call has no SPIR-V body") }
     var result_type = m.t_void

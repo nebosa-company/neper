@@ -18323,7 +18323,9 @@ fn device_nodes(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
             if same(callee_module, "e.thread") || same(callee_module, "e.atomic") { device_found(walk, "a host call to", callee_module) }
             if same(callee_module, "e.mem") && same(callee.name, "cast") { device_found(walk, "a pointer cast,", "mem.cast") }
             // A generic helper is walked in its template: the rules read its syntax (D1589).
-            if !walk.found && !callee.intrinsic && !callee.external && !callee.gpu { try device_walk(c, g, callee_index, walk) }
+            // `math.fma` is the one fused multiply-add and a device writes it as `Fma`
+            // (spec section 11, D4203): its library body is the CPU's, not device code.
+            if !walk.found && !callee.intrinsic && !callee.external && !callee.gpu && !(same(callee_module, "e.math") && same(callee.name, "fma")) { try device_walk(c, g, callee_index, walk) }
         } else {
             // A qualified intrinsic with no function of its own -- `mem.cast[T](p)` --
             // named by its module and member.

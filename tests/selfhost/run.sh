@@ -5150,6 +5150,21 @@ case "$gpu_staging_output" in
     'gpu staging cpu only'|'gpu staging vulkan ok on '[1-9]' devices'|'gpu staging vulkan ok on '1[0-6]' devices') ;;
     *) printf '%s\n' "the GPU staging runtime failed: $gpu_staging_output" >&2; exit 1 ;;
 esac
+for float_mode in '' '--release'; do
+    gpu_float_modes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_float_modes/src/main.e" "$repo" x64 linux "$test_build/gpu-float-modes-selfhost" $float_mode)
+    [ "$gpu_float_modes_written" = 'executable written' ]
+    chmod +x "$test_build/gpu-float-modes-selfhost"
+    gpu_float_modes_output=$("$test_build/gpu-float-modes-selfhost")
+    case "$gpu_float_modes_output" in
+        'gpu float modes ok on cpu'|'gpu float modes ok on cpu and '[0-9]*' devices') ;;
+        *) printf '%s\n' "an e.gpu floating-point mode answered wrongly: $gpu_float_modes_output" >&2; exit 1 ;;
+    esac
+done
+gpu_devices_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_devices/src/main.e" "$repo" x64 linux "$test_build/gpu-devices-selfhost")
+[ "$gpu_devices_written" = 'executable written' ]
+chmod +x "$test_build/gpu-devices-selfhost"
+gpu_devices_output=$("$test_build/gpu-devices-selfhost")
+[ "$gpu_devices_output" = 'gpu devices ok' ]
 gpu_device_lock_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gpu_device_lock/src/main.e" "$repo" x64 linux "$test_build/gpu-device-lock-selfhost")
 [ "$gpu_device_lock_written" = 'executable written' ]
 chmod +x "$test_build/gpu-device-lock-selfhost"
@@ -6942,6 +6957,54 @@ incremental_signature=$($test_build/neper-self emit-em-all "$incremental_main" "
 case "$incremental_signature" in *'rebuilt main'*) ;; *) printf %s "a signature edit did not rebuild the dependent: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_signature" in *'rebuilt dep'*) ;; *) printf %s "a signature edit did not rebuild its module: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_signature" in *'kept e.os'*) ;; *) printf %s "an untouched module was rebuilt: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
+# The device-reached edit case (C096, D4202; spec section 12, D24 and D36): a kernel's
+# helper chain lives in two other modules and its device copy in the kernel module's
+# `K$spirv`, so a body edit two modules away rebuilds the kernel's module and nothing
+# between that only calls it, and the incremental image is the clean build's.
+device_edit_fixture="$repo/tests/selfhost/fixtures/link/gpu_device_edit"
+device_edit_scratch="$test_build/gpu-device-edit-scratch"
+device_edit_artifacts="$test_build/gpu-device-edit-artifacts"
+rm -rf "$device_edit_scratch" "$device_edit_artifacts"
+mkdir -p "$device_edit_scratch/src" "$device_edit_artifacts"
+cp "$device_edit_fixture"/src/*.e "$device_edit_scratch/src/"
+device_edit_main="$device_edit_scratch/src/main.e"
+device_edit_first=$($test_build/neper-self emit-em-all "$device_edit_main" "$repo" x64 linux "$device_edit_artifacts")
+[ "$device_edit_first" = 'compiled modules written' ]
+device_edit_main_artifact="$device_edit_artifacts/main.x64-linux.em"
+device_edit_before=$(sha256sum "$device_edit_main_artifact" | cut -d' ' -f1)
+device_edit_same=$($test_build/neper-self emit-em-all "$device_edit_main" "$repo" x64 linux "$device_edit_artifacts" --incremental)
+case "$device_edit_same" in *'kept main'*) ;; *) printf %s "an unchanged device edit fixture rebuilt main: $device_edit_same" >&2; echo >&2; exit 1 ;; esac
+case "$device_edit_same" in *rebuilt*) printf %s "an unchanged device edit fixture rebuilt a module: $device_edit_same" >&2; echo >&2; exit 1 ;; esac
+cp "$device_edit_fixture/edits/lowhelp_body.e" "$device_edit_scratch/src/lowhelp.e"
+device_edit_body=$($test_build/neper-self emit-em-all "$device_edit_main" "$repo" x64 linux "$device_edit_artifacts" --incremental)
+case "$device_edit_body" in *'rebuilt main'*) ;; *) printf %s "a device-reached edit did not rebuild the kernel's module: $device_edit_body" >&2; echo >&2; exit 1 ;; esac
+case "$device_edit_body" in *'rebuilt lowhelp'*) ;; *) printf %s "a device-reached edit did not rebuild its own module: $device_edit_body" >&2; echo >&2; exit 1 ;; esac
+case "$device_edit_body" in *'kept midhelp'*) ;; *) printf %s "a device-reached edit rebuilt the module in between: $device_edit_body" >&2; echo >&2; exit 1 ;; esac
+[ "$(sha256sum "$device_edit_main_artifact" | cut -d' ' -f1)" != "$device_edit_before" ]
+device_edit_hot_scratch="$test_build/gpu-device-edit-hot"
+rm -rf "$device_edit_hot_scratch"
+mkdir -p "$device_edit_hot_scratch/src"
+cp "$device_edit_fixture"/src/*.e "$device_edit_hot_scratch/src/"
+device_edit_hot_main="$device_edit_hot_scratch/src/main.e"
+device_edit_hot_first=$($test_build/neper-self emit-executable "$device_edit_hot_main" "$repo" x64 linux "$test_build/gpu-device-edit-hot" --incremental 2>/dev/null)
+[ "$device_edit_hot_first" = 'executable written' ]
+cp "$device_edit_fixture/edits/lowhelp_body.e" "$device_edit_hot_scratch/src/lowhelp.e"
+device_edit_hot_second=$($test_build/neper-self emit-executable "$device_edit_hot_main" "$repo" x64 linux "$test_build/gpu-device-edit-hot" --incremental 2>/dev/null)
+[ "$device_edit_hot_second" = 'executable written' ]
+device_edit_clean_written=$($test_build/neper-self emit-executable "$device_edit_hot_main" "$repo" x64 linux "$test_build/gpu-device-edit-clean" 2>/dev/null)
+[ "$device_edit_clean_written" = 'executable written' ]
+cmp "$test_build/gpu-device-edit-hot" "$test_build/gpu-device-edit-clean"
+chmod +x "$test_build/gpu-device-edit-hot"
+device_edit_output=$("$test_build/gpu-device-edit-hot")
+[ "$device_edit_output" = 'gpu device edit ok' ]
+# The schedule does not reach the image (C083, D331): the device oracle and the kernel
+# module's device copy are the same bytes under one worker and under a turned-around crew.
+device_edit_serial_written=$($test_build/neper-self emit-executable "$device_edit_hot_main" "$repo" x64 linux "$test_build/gpu-device-edit-j1" -j 1 2>/dev/null)
+[ "$device_edit_serial_written" = 'executable written' ]
+device_edit_perturb_written=$($test_build/neper-self emit-executable "$device_edit_hot_main" "$repo" x64 linux "$test_build/gpu-device-edit-perturb" -j 3 --perturb 2>/dev/null)
+[ "$device_edit_perturb_written" = 'executable written' ]
+cmp "$test_build/gpu-device-edit-clean" "$test_build/gpu-device-edit-j1"
+cmp "$test_build/gpu-device-edit-clean" "$test_build/gpu-device-edit-perturb"
 # (D1667) The counts a cold build takes as each block goes back are a warm no-edit
 # build's, on a program whose `@gpus` and `@tests` rows are not zero.
 front_scratch="$test_build/front-counts"
