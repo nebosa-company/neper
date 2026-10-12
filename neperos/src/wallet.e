@@ -14,6 +14,7 @@
 use e.mem
 use e.os
 use e.valid
+use e.time
 use e.barcode
 use e.io
 use e.gfx.image
@@ -374,8 +375,37 @@ fn payment_card(a: *mem.Arena, name: str, number: str, expiry: str, color: usize
     put_value(&c, 0usize, tail)
     put_value(&c, 1usize, expiry)
     put_value(&c, 2usize, brand)
-    if valid.luhn(number) { put_value(&c, 3usize, "Valid") } else { put_value(&c, 3usize, "Check digit failed") }
+    if !valid.luhn(number) {
+        put_value(&c, 3usize, "Check digit failed")
+    } else if expired(expiry) {
+        put_value(&c, 3usize, "Expired")
+    } else {
+        put_value(&c, 3usize, "Valid")
+    }
     ret c
+}
+
+// Whether a card's "MM/YY" expiry is behind the wall clock's month (the whole of the last month still counts); false
+// when the text is not an expiry or there is no clock.
+fn expired(expiry: str) -> bool {
+    if expiry.len != 5usize || expiry[2usize] != 47u8 { ret false }
+    var i = 0usize
+    while i < 5usize {
+        if i != 2usize && (expiry[i] < 48u8 || expiry[i] > 57u8) { ret false }
+        i += 1usize
+    }
+    let month = u32(usize(expiry[0usize] - 48u8) * 10usize + usize(expiry[1usize] - 48u8))
+    let year = u32(usize(expiry[3usize] - 48u8) * 10usize + usize(expiry[4usize] - 48u8))
+    let (wall, wall_error) = time.now()
+    if wall_error != ok || wall.nanos <= 0i64 { ret false }
+    let days = wall.nanos / 86400000000000i64
+    let (now_year, now_month, now_day) = time.civil_from_days(days)
+    // A date the checker would call out of range (more than twenty years on) is not "expired" either.
+    if month < 1u32 || month > 12u32 { ret false }
+    var full = year
+    if year < 100u32 { full = 2000u32 + year }
+    if full > u32(now_year) + 20u32 { ret false }
+    ret !valid.card_expiry(month, year, u32(now_month), u32(now_year))
 }
 
 fn card_brand_label(number: str) -> str {
@@ -1246,7 +1276,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let visa = "4111 1111 1111 1111"
     let master = "5500 0000 0000 0004"
     let c1 = add_card(&s, payment_card(a, "Neper Bank", visa, "09/29", 0usize, 11usize))
-    let c2 = add_card(&s, payment_card(a, "Atlas Card", master, "02/28", 1usize, 12usize))
+    let atlas = payment_card(a, "Atlas Card", master, "02/26", 1usize, 12usize)
+    let c2 = add_card(&s, atlas)
     say("wallet brand ")
     say(card_brand_label(visa))
     say("\n")
@@ -1254,6 +1285,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     say(card_brand_label(master))
     say("\n")
     let c3 = add_card(&s, plain_card("Skyline Air", "Fri, Oct 16 - 11:35", PASS, 2usize, 13usize, "SFO to NRT", "SK 108", "B22", "14A"))
+    // (C154) A card whose expiry is behind the clock says so.
+    say("wallet status Atlas Card ")
+    say_text(value_of(a, atlas, 3usize))
+    say("\n")
     let c4 = add_card(&s, plain_card("Harbor Jazz Night", "Sat, Oct 17 - 8:00 PM", EVENT, 3usize, 14usize, "Sat, Oct 17", "8:00 PM", "C", "Row 9, 12"))
     let c5 = add_card(&s, plain_card("Vaccination", "Certificate", HEALTH, 4usize, 15usize, "Sam Rivera", "mRNA", "3 of 3", "Health Authority"))
     let c6 = add_card(&s, plain_card("City Library", "Member card", LOYALTY, 5usize, 16usize, "Sam Rivera", "2019", "120", "2204 8831"))

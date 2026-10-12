@@ -570,10 +570,10 @@
       "group": "NeperOS",
       "order": 154,
       "title": "NeperOS Wallet remainder: encrypted storage, MRZ from an image, editing, camera scanning",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C121 (D2402): Wallet draws real QR and Code 128 symbols, validates its form with e.valid, and shows the newest Camera scan on a document. Acceptance: (1) the cards kept encrypted at rest under the Secure vault's master password (the vault module's derive/seal over the filesystem server), with no card number beyond the last four digits unless the user asks, loaded at start and fixture-tested through an encrypted round trip on a disk; (2) editing an existing card or document with the same validation; (3) Camera Scan mode feeding frames to e.barcode.qr_scan and offering the decoded text (a pass, a URL) to Wallet or the browser; (4) a machine-readable zone read from a scanned page (the OCR-B glyphs) and checked by e.valid.mrz_td3; (5) a scan stored with its own document instead of the newest one; (6) expiry checked against the clock."
+      "evidence": "Split from C121 (D2402): Wallet draws real QR and Code 128 symbols, validates its form with e.valid, and shows the newest Camera scan on a document. Acceptance: (1) the cards kept encrypted at rest under the Secure vault's master password (the vault module's derive/seal over the filesystem server), with no card number beyond the last four digits unless the user asks, loaded at start and fixture-tested through an encrypted round trip on a disk; (2) editing an existing card or document with the same validation; (3) Camera Scan mode feeding frames to e.barcode.qr_scan and offering the decoded text (a pass, a URL) to Wallet or the browser; (4) a machine-readable zone read from a scanned page (the OCR-B glyphs) and checked by e.valid.mrz_td3; (5) a scan stored with its own document instead of the newest one; (6) expiry checked against the clock. PART (D2447): a card's expiry is checked against the clock (Expired status; fixture wallet). Remaining: encrypted storage under the Secure master password, editing, Camera Scan mode, MRZ from an image, a scan per document."
     },
     {
       "id": "C155",
