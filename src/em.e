@@ -2071,7 +2071,7 @@ fn mark_type_aggregates(c: *check.Checker, ty: check.Type, module_index: usize, 
 // module's source, so their artifact declares nothing for a signature edge to hold
 // against: the edge was stale on every build, and a module that took an `Atomic[T]`
 // through a foreign signature (`e.sync` over `os.wait_u32`, and `e.gpu` and every
-// kernel owner after it) was rebuilt each time (D4204). Their layout is the
+// kernel owner after it) was rebuilt each time (D4202). Their layout is the
 // compiler's, which the artifact's compiler hash already covers.
 fn unmark_seeded_aggregates(c: *check.Checker, g: *graph.Graph, marks: []u8) {
     let (atomic_module, has_atomic) = graph.find_module(g, "e.atomic")
