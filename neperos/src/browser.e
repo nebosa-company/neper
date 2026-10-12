@@ -21,6 +21,7 @@ use text
 use ui
 use scenes
 use httpc
+use vaultfs
 use e.time
 use e.net.cookie as cookie
 
@@ -257,6 +258,119 @@ fn find_title(a: *mem.Arena, s: *State, doc: *const html.Document) {
     }
 }
 
+// The jar is kept in /cookies: a version byte, a count, then per cookie the lengths of name, value, domain and path (a
+// byte each), flags (secure 1, http-only 2, host-only 4, same-site << 3), the expiry and creation seconds (four bytes
+// each, little end) and the four strings. Session cookies (no expiry) are not kept.
+fn save_jar(s: *State) {
+    var buf: [2048]u8 = zero
+    buf[0usize] = 1u8
+    var n = 2usize
+    var kept = 0usize
+    var i = 0usize
+    while i < s.jar.count {
+        let c = s.jar.cookies[i]
+        let need = 14usize + c.name.len + c.value.len + c.domain.len + c.path.len
+        if c.has_expires && c.expires > 0i64 && c.name.len < 256usize && c.value.len < 256usize && c.domain.len < 256usize && c.path.len < 256usize && n + need <= 2048usize {
+            buf[n] = u8(c.name.len)
+            buf[n + 1usize] = u8(c.value.len)
+            buf[n + 2usize] = u8(c.domain.len)
+            buf[n + 3usize] = u8(c.path.len)
+            var flags = 0usize
+            if c.secure { flags = flags | 1usize }
+            if c.http_only { flags = flags | 2usize }
+            if c.host_only { flags = flags | 4usize }
+            if c.same_site == .Lax { flags = flags | 8usize }
+            if c.same_site == .Strict { flags = flags | 16usize }
+            if c.same_site == .None { flags = flags | 24usize }
+            buf[n + 4usize] = u8(flags)
+            var b = 0usize
+            let expires = usize(c.expires)
+            let created = usize(c.created)
+            while b < 4usize {
+                buf[n + 5usize + b] = u8((expires >> (8usize * b)) & 255usize)
+                buf[n + 9usize + b] = u8((created >> (8usize * b)) & 255usize)
+                b += 1usize
+            }
+            n += 13usize
+            var p = 0usize
+            while p < c.name.len {
+                buf[n + p] = c.name[p]
+                p += 1usize
+            }
+            n += c.name.len
+            p = 0usize
+            while p < c.value.len {
+                buf[n + p] = c.value[p]
+                p += 1usize
+            }
+            n += c.value.len
+            p = 0usize
+            while p < c.domain.len {
+                buf[n + p] = c.domain[p]
+                p += 1usize
+            }
+            n += c.domain.len
+            p = 0usize
+            while p < c.path.len {
+                buf[n + p] = c.path[p]
+                p += 1usize
+            }
+            n += c.path.len
+            kept += 1usize
+        }
+        i += 1usize
+    }
+    buf[1usize] = u8(kept)
+    let written = vaultfs.write_big("/cookies", mem.address_of(&buf[0usize]), n)
+}
+
+// Read /cookies into the jar (expired cookies are dropped as they are stored).
+fn load_jar(s: *State, now: i64) -> usize {
+    var buf: [2048]u8 = zero
+    let (n, found) = vaultfs.read_big("/cookies", mem.address_of(&buf[0usize]), 2048usize)
+    if !found || n < 2usize || buf[0usize] != 1u8 { ret 0usize }
+    let count = usize(buf[1usize])
+    var at = 2usize
+    var loaded = 0usize
+    var k = 0usize
+    while k < count && at + 13usize <= n {
+        let name_len = usize(buf[at])
+        let value_len = usize(buf[at + 1usize])
+        let domain_len = usize(buf[at + 2usize])
+        let path_len = usize(buf[at + 3usize])
+        let flags = usize(buf[at + 4usize])
+        var expires = 0usize
+        var created = 0usize
+        var b = 0usize
+        while b < 4usize {
+            expires = expires | (usize(buf[at + 5usize + b]) << (8usize * b))
+            created = created | (usize(buf[at + 9usize + b]) << (8usize * b))
+            b += 1usize
+        }
+        let start = at + 13usize
+        if start + name_len + value_len + domain_len + path_len > n { ret loaded }
+        var c: cookie.Cookie = zero
+        c.name = buf[start..start + name_len]
+        c.value = buf[start + name_len..start + name_len + value_len]
+        c.domain = buf[start + name_len + value_len..start + name_len + value_len + domain_len]
+        c.path = buf[start + name_len + value_len + domain_len..start + name_len + value_len + domain_len + path_len]
+        c.secure = (flags & 1usize) != 0usize
+        c.http_only = (flags & 2usize) != 0usize
+        c.host_only = (flags & 4usize) != 0usize
+        let site = (flags >> 3usize) & 3usize
+        if site == 1usize { c.same_site = .Lax }
+        if site == 2usize { c.same_site = .Strict }
+        if site == 3usize { c.same_site = .None }
+        c.has_expires = true
+        c.expires = i64(expires)
+        c.created = i64(created)
+        if cookie.store(&s.jar, c, now) == ok { loaded += 1usize }
+        at = start + name_len + value_len + domain_len + path_len
+        k += 1usize
+    }
+    ret loaded
+}
+
 // The wall clock's second.
 fn wall_seconds() -> i64 {
     let (wall, wall_error) = time.now()
@@ -341,6 +455,7 @@ fn fetch_following(a: *mem.Arena, s: *State, host: str, path: str, now: i64) -> 
         last = reply
         let kept = absorb_cookies(a, s, reply.head, h, p, now)
         if kept > 0usize {
+            save_jar(s)
             ui.say("browser cookies ")
             ui.say_num(s.jar.count)
             ui.say("\n")
@@ -1075,6 +1190,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var s: State = zero
     s.jar = cookie.jar_new(s.cookie_store[0usize..16usize], s.cookie_text[0usize..2048usize])
+    let restored = load_jar(&s, wall_seconds())
+    if restored > 0usize {
+        ui.say("browser cookies loaded ")
+        ui.say_num(restored)
+        ui.say("\n")
+    }
     let first = new_tab(&s)
     if !show(a, &kit, &s) {
         ui.say("browser present failed\n")

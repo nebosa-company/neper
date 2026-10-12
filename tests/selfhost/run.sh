@@ -10876,6 +10876,25 @@ greeting"
             esac
         done
     done < <(grep -v '^#' "$apps_table")
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = livediskfixture ] || continue
+        # (C159) A disk kept under the base name; a row named <base>_again boots on what its base left.
+        live_base="${fixture%_again}"
+        live_disk="$test_build/live-$live_base.disk"
+        if [ "$fixture" = "$live_base" ]; then dd if=/dev/zero of="$live_disk" bs=1M count=8 status=none; fi
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$live_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified nettest" 'shell app code' "$live_disk" 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) kill "$live_hosts" 2> /dev/null || true; printf 'NeperOS %s fixture did not reach "%s" (%s): %s\n' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
     kill "$live_hosts" 2> /dev/null || true
     wait "$live_hosts" 2> /dev/null || true
     unset NEPEROS_NET

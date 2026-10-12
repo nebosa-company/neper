@@ -11041,6 +11041,19 @@ if ($neperosQemu) {
             $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
             if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
         }
+        # The live fixtures with a disk (C159): the same boot with a block disk kept under the fixture's base name; a row
+        # named <base>_again boots on the disk its base left.
+        foreach ($row in $appsTable) {
+            $fields = $row.Split('|', 7)
+            if ($fields[0] -ne 'livediskfixture') { continue }
+            $fixture = $fields[1]
+            $liveDisk = Join-Path $testBuild ("live-" + ($fixture -replace '_again$', '') + ".disk")
+            if ($fixture -notmatch '_again$') { $liveDiskStream = [IO.File]::Create($liveDisk); $liveDiskStream.SetLength(8MB); $liveDiskStream.Close() }
+            if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
+            $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $liveArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified nettest' 'shell app code' $liveDisk 0 $fields[4] 2>&1) -join "`n"
+            $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+            if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+        }
     } finally {
         if (-not $liveHosts.HasExited) { $liveHosts.Kill() }
         Remove-Item Env:NEPEROS_NET -ErrorAction SilentlyContinue
