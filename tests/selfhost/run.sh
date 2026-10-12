@@ -1212,6 +1212,16 @@ fmt_pdf_a85_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$fmt_pdf_a85_written" = 'executable written' ]
 chmod +x "$test_build/fmt-pdf-a85-selfhost"
 "$test_build/fmt-pdf-a85-selfhost"
+# e.control Kalman filter and noise_bias (C162).
+control_kalman_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/control_kalman/src/main.e" "$repo" x64 linux "$test_build/control-kalman-selfhost")
+[ "$control_kalman_written" = 'executable written' ]
+chmod +x "$test_build/control-kalman-selfhost"
+"$test_build/control-kalman-selfhost"
+# e.algo.pedometer distance and energy (C168).
+algo_pedometer_energy_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_pedometer_energy/src/main.e" "$repo" x64 linux "$test_build/algo-pedometer-energy-selfhost")
+[ "$algo_pedometer_energy_written" = 'executable written' ]
+chmod +x "$test_build/algo-pedometer-energy-selfhost"
+"$test_build/algo-pedometer-energy-selfhost"
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-selfhost")
 [ "$fmt_pdf_written" = 'executable written' ]

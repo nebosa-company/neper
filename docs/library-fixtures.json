@@ -2548,6 +2548,7 @@
     "audio_analysis",
     "audio_fx",
     "audio_synth",
+    "control_kalman",
     "control_loop",
     "dsp",
     "fmt_flac",

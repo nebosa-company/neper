@@ -24017,7 +24017,14 @@ fn observer_update(o: *Observer, u: []const f64, y: []const f64, scratch: []f64)
 fn roll_from_accel(ay: f64, az: f64) -> f64
 fn pitch_from_accel(ax: f64, ay: f64, az: f64) -> f64
 fn complementary(angle: f64, rate: f64, measured: f64, dt: f64, alpha: f64) -> f64
+type Kalman = struct { angle: f64, bias: f64, p00: f64, p01: f64, p10: f64, p11: f64, q_angle: f64, q_bias: f64, r_measure: f64 }
+fn kalman_new(q_angle: f64, q_bias: f64, r_measure: f64) -> Kalman
+fn kalman_start(k: *Kalman, angle: f64)
+fn kalman_step(k: *Kalman, measured: f64, rate: f64, dt: f64) -> f64
+fn noise_bias(samples: []const f64) -> (f64, f64)
 ```
+
+Kalman attitude filter and sensor self-test (C162): `kalman_new`, `kalman_start` and `kalman_step` are the two-state (angle, gyroscope bias) filter IMU attitude code uses -- predict with the gyroscope rate across `dt`, correct with the accelerometer angle -- and `noise_bias` is a flat-surface self-test: the mean (bias) and sample standard deviation (noise) of readings. Checked against an independent Python implementation of the 2x2 covariance recursion (`control_kalman`).
 
 Attitude (C132): `roll_from_accel` and `pitch_from_accel` give a device's roll and pitch in degrees from the
 accelerometer's gravity vector (x forward, y right, z down), and `complementary` one step of a complementary
@@ -28110,6 +28117,8 @@ fn history_mean_deviation(p: *Pedometer) -> (f64, f64)
 fn feed(p: *Pedometer, magnitude: f64) -> bool
 fn steps(p: *Pedometer) -> usize
 fn is_running(p: *Pedometer) -> bool
+fn distance_m(count: usize, height_cm: f64, running: bool) -> f64
+fn calories_kcal(metres: f64, weight_kg: f64, running: bool) -> f64
 ```
 
 A step detector (C138): `new(rate)` makes a pedometer for a sample rate of 20 to 100 Hz, `feed` takes one acceleration magnitude (m/s^2, gravity included) and answers true when it completed a step, `steps` the count and `is_running` whether the cadence over the last steps is above 2.6 a second. Steps are local maxima of a three-sample moving average that rise above the mean plus half a standard deviation of the last 64 smoothed samples and come at least 250 ms apart. No allocation. Checked on synthetic walks (slow, normal, brisk, a run) within two per cent and a phone on a table.

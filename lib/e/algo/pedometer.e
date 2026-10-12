@@ -115,3 +115,19 @@ fn feed(p: *Pedometer, magnitude: f64) -> bool {
 fn steps(p: *Pedometer) -> usize { ret p.steps }
 
 fn is_running(p: *Pedometer) -> bool { ret p.running }
+
+// The distance in metres of `count` steps for a person `height_cm` tall: a stride of 41.5% of the height walking and 65%
+// of it running (the usual fitness-tracker estimate).
+fn distance_m(count: usize, height_cm: f64, running: bool) -> f64 {
+    var factor = 0.415f64
+    if running { factor = 0.65f64 }
+    ret f64(count) * height_cm * factor / 100.0f64
+}
+
+// The energy in kilocalories of covering `metres` at `weight_kg`: about 0.75 kcal per kilogram per kilometre walking
+// and 1.0 running (net of resting). An estimate, not a measurement.
+fn calories_kcal(metres: f64, weight_kg: f64, running: bool) -> f64 {
+    var per_kg_km = 0.75f64
+    if running { per_kg_km = 1.0f64 }
+    ret per_kg_km * weight_kg * metres / 1000.0f64
+}

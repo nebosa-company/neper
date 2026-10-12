@@ -658,10 +658,10 @@
       "group": "NeperOS",
       "order": 162,
       "title": "NeperOS Level remainder: fast sensor stream, self-test, orientation modes, feedback",
-      "score": 0,
+      "score": 0.25,
       "model": "opus",
       "thinking": "medium",
-      "evidence": "Split from C132 (D2421): Level filters the accelerometer and gyroscope of the sensor service with a complementary filter and keeps its calibration. Acceptance: (1) the sensors read at 50 Hz or better from the sensor server of C161 (the half-second tick of the scripted source is too slow for a real filter); (2) a Kalman filter in the library next to the complementary one, and a self-test on a flat surface that reports the sensor's noise and bias; (3) Level, Angle and an edge mode switched from the real orientation; (4) the readings in degrees, per cent slope and a ratio, and a beep or vibration when level; (5) a fixture feeding a recorded trace and checking the reading to a tenth of a degree."
+      "evidence": "Split from C132 (D2421): Level filters the accelerometer and gyroscope of the sensor service with a complementary filter and keeps its calibration. Acceptance: (1) the sensors read at 50 Hz or better from the sensor server of C161 (the half-second tick of the scripted source is too slow for a real filter); (2) a Kalman filter in the library next to the complementary one, and a self-test on a flat surface that reports the sensor's noise and bias; (3) Level, Angle and an edge mode switched from the real orientation; (4) the readings in degrees, per cent slope and a ratio, and a beep or vibration when level; (5) a fixture feeding a recorded trace and checking the reading to a tenth of a degree. PART (D2444): e.control Kalman filter (kalman_new/start/step) and noise_bias self-test, checked against an independent 2x2-matrix implementation (control_kalman). Remaining: the 50 Hz stream from the sensor server, Level's modes, readings and feedback, a recorded-trace fixture."
     },
     {
       "id": "C163",
@@ -724,10 +724,10 @@
       "group": "NeperOS",
       "order": 168,
       "title": "NeperOS Steps remainder: background counting, history, profile, notifications",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "medium",
-      "evidence": "Split from C138 (D2427): Steps counts a walk with the library's pedometer from a scripted accelerometer stream and keeps today's total. Acceptance: (1) counting in the background at a low-power sensor rate from the sensor server (C161), with the run and walk classification shown; (2) the history of days, weeks and months in storage (C125), the goal, streaks and a weekly report; (3) calories from the user's height and weight (a profile in Settings, C126) rather than a fixed figure per step; (4) a notification when the goal is reached through the status server and a widget on the home screen; (5) a fixture that replays a recorded accelerometer walk and checks the count within two per cent."
+      "evidence": "Split from C138 (D2427): Steps counts a walk with the library's pedometer from a scripted accelerometer stream and keeps today's total. Acceptance: (1) counting in the background at a low-power sensor rate from the sensor server (C161), with the run and walk classification shown; (2) the history of days, weeks and months in storage (C125), the goal, streaks and a weekly report; (3) calories from the user's height and weight (a profile in Settings, C126) rather than a fixed figure per step; (4) a notification when the goal is reached through the status server and a widget on the home screen; (5) a fixture that replays a recorded accelerometer walk and checks the count within two per cent. PART (D2444): e.algo.pedometer distance_m and calories_kcal from height and weight (algo_pedometer_energy). Remaining: the Settings profile, background counting, history, notification and widget, the recorded-walk fixture."
     },
     {
       "id": "C169",

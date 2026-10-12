@@ -359,3 +359,63 @@ fn pitch_from_accel(ax: f64, ay: f64, az: f64) -> f64 {
 fn complementary(angle: f64, rate: f64, measured: f64, dt: f64, alpha: f64) -> f64 {
     ret alpha * (angle + rate * dt) + (1.0f64 - alpha) * measured
 }
+
+// A two-state Kalman filter of an angle and its gyroscope bias (the form IMU attitude filters use): the state is the
+// angle (degrees) and the gyroscope's bias (degrees per second), the covariance a 2x2 matrix, `q_angle` and `q_bias`
+// the process noise of each and `r_measure` the accelerometer angle's measurement noise.
+type Kalman = struct { angle: f64, bias: f64, p00: f64, p01: f64, p10: f64, p11: f64, q_angle: f64, q_bias: f64, r_measure: f64 }
+
+fn kalman_new(q_angle: f64, q_bias: f64, r_measure: f64) -> Kalman {
+    ret Kalman { angle: 0.0f64, bias: 0.0f64, p00: 0.0f64, p01: 0.0f64, p10: 0.0f64, p11: 0.0f64, q_angle: q_angle, q_bias: q_bias, r_measure: r_measure }
+}
+
+// Start the filter at a measured angle (the first accelerometer reading).
+fn kalman_start(k: *Kalman, angle: f64) {
+    k.angle = angle
+    k.bias = 0.0f64
+}
+
+// One step: predict across `dt` seconds with the gyroscope's `rate` (degrees per second), then correct with the
+// accelerometer's `measured` angle. The filtered angle.
+fn kalman_step(k: *Kalman, measured: f64, rate: f64, dt: f64) -> f64 {
+    let unbiased = rate - k.bias
+    k.angle = k.angle + dt * unbiased
+    k.p00 = k.p00 + dt * (dt * k.p11 - k.p01 - k.p10 + k.q_angle)
+    k.p01 = k.p01 - dt * k.p11
+    k.p10 = k.p10 - dt * k.p11
+    k.p11 = k.p11 + k.q_bias * dt
+    let s = k.p00 + k.r_measure
+    let gain0 = k.p00 / s
+    let gain1 = k.p10 / s
+    let innovation = measured - k.angle
+    k.angle = k.angle + gain0 * innovation
+    k.bias = k.bias + gain1 * innovation
+    let old00 = k.p00
+    let old01 = k.p01
+    k.p00 = k.p00 - gain0 * old00
+    k.p01 = k.p01 - gain0 * old01
+    k.p10 = k.p10 - gain1 * old00
+    k.p11 = k.p11 - gain1 * old01
+    ret k.angle
+}
+
+// The mean and the sample standard deviation (n - 1) of `samples`: a sensor's bias and noise from a self-test on a
+// flat, still surface. (0, 0) for fewer than two samples.
+fn noise_bias(samples: []const f64) -> (f64, f64) {
+    if samples.len < 2usize { ret (0.0f64, 0.0f64) }
+    var sum = 0.0f64
+    var i = 0usize
+    while i < samples.len {
+        sum = sum + samples[i]
+        i += 1usize
+    }
+    let mean = sum / f64(samples.len)
+    var spread = 0.0f64
+    i = 0usize
+    while i < samples.len {
+        let d = samples[i] - mean
+        spread = spread + d * d
+        i += 1usize
+    }
+    ret (mean, math.sqrt[f64](spread / f64(samples.len - 1usize)))
+}

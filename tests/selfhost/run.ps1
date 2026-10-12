@@ -1312,6 +1312,18 @@ $fmtPdfA85Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $fmtPdfA85Written -ne 'executable written') { throw 'fmt_pdf_a85 emission failed' }
 & $fmtPdfA85Path
 if ($LASTEXITCODE -ne 0) { throw "a fmt_pdf_a85 check failed: exit $LASTEXITCODE" }
+# e.control Kalman filter and noise_bias (C162).
+$controlkalmanPath = Join-Path $testBuild 'control-kalman-selfhost.exe'
+$controlkalmanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\control_kalman\src\main.e') $repo 'x64' 'windows' $controlkalmanPath
+if ($LASTEXITCODE -ne 0 -or $controlkalmanWritten -ne 'executable written') { throw 'control_kalman emission failed' }
+& $controlkalmanPath
+if ($LASTEXITCODE -ne 0) { throw "a control_kalman check failed: exit $LASTEXITCODE" }
+# e.algo.pedometer distance and energy (C168).
+$algopedometerenergyPath = Join-Path $testBuild 'algo-pedometer-energy-selfhost.exe'
+$algopedometerenergyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_pedometer_energy\src\main.e') $repo 'x64' 'windows' $algopedometerenergyPath
+if ($LASTEXITCODE -ne 0 -or $algopedometerenergyWritten -ne 'executable written') { throw 'algo_pedometer_energy emission failed' }
+& $algopedometerenergyPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_pedometer_energy check failed: exit $LASTEXITCODE" }
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 $fmtPdfPath = Join-Path $testBuild 'fmt-pdf-selfhost.exe'
 $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf\src\main.e') $repo 'x64' 'windows' $fmtPdfPath
