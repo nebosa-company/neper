@@ -600,7 +600,27 @@ fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -
     ihdr[9] = color
     if options.interlace { ihdr[12] = 1u8 }
     try write_chunk(writer, "IHDR", ihdr[0..])
-    var arena_bytes: [327680]u8 = undef
+    // The encoder's storage is on the stack, as large as the level needs: Fast fits 160 KB (the wallpaper loader, with a
+    // small stack, uses it), the lazy-matching levels need twice that. One frame per size: a single function holding both
+    // arrays would reserve both.
+    if options.compression == .Fast { try encode_fast(writer, value, options, channels) } else { try encode_full(writer, value, options, channels) }
+    var end: [1]u8 = zero
+    try write_chunk(writer, "IEND", end[0..0usize])
+    ret ok
+}
+
+fn encode_fast(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, channels: usize) -> err {
+    var store: [163840]u8 = undef
+    ret encode_core(writer, value, options, channels, store[0..])
+}
+
+fn encode_full(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, channels: usize) -> err {
+    var store: [327680]u8 = undef
+    ret encode_core(writer, value, options, channels, store[0..])
+}
+
+// The image data and the rest of the file: IDAT chunks of the zlib stream, the deflate encoder living in `arena_bytes`.
+fn encode_core(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, channels: usize, arena_bytes: []u8) -> err {
     var arena = mem.arena_from(arena_bytes[0..])
     let storage_size = deflate.encoder_storage(options.compression)
     let (words, words_error) = mem.alloc[u64](&arena, storage_size / 8usize + 1usize)
@@ -637,6 +657,5 @@ fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -
     put32(sink.chunk[0..], sink.filled, sink.adler)
     sink.filled += 4usize
     try flush_idat(&sink)
-    try write_chunk(writer, "IEND", line[0..0usize])
     ret ok
 }
