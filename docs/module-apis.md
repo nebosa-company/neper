@@ -23847,6 +23847,42 @@ fn uq_table() -> str
 
 Non-ISO calendars over `e.time`'s day count (days from 1970-01-01): a date in any calendar is a `time.Date` read in that calendar, and every conversion goes through the one count. `Persian` is the Solar Hijri calendar by its 33-year arithmetic rule (leap when the year mod 33 is 1 5 9 13 17 22 26 30; months 1-6 have 31 days, 7-11 have 30, the 12th 29 or 30), anchored so it matches the astronomical calendar for 1278..1502 AP; `UmmAlQura` is the published table, 1343..1500 AH (1924-08-01 to 2077-11-16), and a count outside the table answers `Invalid`, its months being 28 to 31 days as published. `Julian` is proleptic with astronomical year numbering; `IslamicCivil` is the tabular civil calendar (Friday epoch, 30-year cycle); `Hebrew` is the fixed-rule calendar with civil month numbers (Tishri 1; in a leap year Adar I is 6 and Adar II is 7), `scriptural_month`/`civil_month` converting to Nisan-is-1. Hebrew and Islamic years start at 1 and earlier counts answer `Invalid`. Month arithmetic walks real months (13 in a Hebrew leap year) and clamps the day; `add_years` keeps the month number, clamped to the year's last month. Japanese eras ride the Gregorian year/month/day with the .NET table (Meiji from 1868-09-08, Taisho, Showa, Heisei, Reiwa as indexes 0..4); earlier dates are refused. Not here: the observational Islamic calendar, the Chinese calendar, and week-of-year rules per calendar.
 
+### `e.time.chinese`
+
+```neper
+error OutOfRange
+
+type Date = struct { year: i32, month: u8, leap: bool, day: u8 }
+
+const FIRST_YEAR: i32 = 1900i32
+const LAST_YEAR: i32 = 2100i32
+
+fn sin_deg(deg: f64) -> f64
+fn cos_deg(deg: f64) -> f64
+fn delta_t(y: f64) -> f64
+fn year_of(days: f64) -> f64
+fn offset_days(days: f64) -> f64
+fn new_moon_jde(k: i64) -> f64
+fn sun_longitude(jde: f64) -> f64
+fn new_moon_day(k: i64) -> i64
+fn longitude_at_start(day: i64) -> f64
+fn lunation_near(day: i64) -> i64
+fn solstice_lunation(y: i64) -> i64
+fn has_term(first: i64, next_first: i64) -> bool
+fn leap_index(k0: i64, months: i64) -> i64
+fn number_at(i: i64, leap_i: i64) -> i64
+fn year_at(y: i64, i: i64, leap_i: i64) -> i64
+fn in_range(year: i64) -> bool
+fn from_days(count: i64) -> (Date, err)
+fn to_days(date: Date) -> (i64, err)
+fn new_year(year: i32) -> (i64, err)
+fn leap_month(year: i32) -> u8
+fn month_length(year: i32, month: u8, leap: bool) -> (u8, err)
+fn stem_branch(year: i32) -> (u8, u8)
+```
+
+The Chinese lunisolar calendar over `e.time`'s day count (days from 1970-01-01), reckoned from astronomy: a month starts on the day that holds a new moon (Meeus ch. 49, full terms, in dynamical time reduced by the Espenak and Meeus delta-T polynomials; China Standard Time UTC+8 from 1929, Beijing mean time UTC+7:45:40 before); month 11 is the month that holds the winter solstice (the sun at 270 degrees, Meeus ch. 25 with the planetary and lunar terms, read in UTC+8 for every year, which is what the published 1900..1928 calendars did for their leap months); a year of 13 months has a leap month, the first month after month 11 with no major term (sun at a multiple of 30 degrees), carrying the number of the month before it. A `Date` is the Gregorian year the Chinese new year falls in, the month 1..12, whether it is the leap month of that number, and the day 1..30. `from_days` and `to_days` answer `OutOfRange` outside the years 1900..2100 (and `to_days` for a leap month or a 30th day the year does not have); `new_year`, `leap_month` (0 when none) and `month_length` (29 or 30) answer from the same months; `stem_branch` is the sexagenary stem 0..9 and branch 0..11 (1984 is 0, 0). Exact against lunar_python for 1900..2100 except 1906-04-23 and 2057-09-28, where a new moon falls eight minutes and two and a half seconds from midnight. Not here: the pre-1645 calendars, years beyond 1900..2100, the 24 solar-term dates as a surface, festivals.
+
 ### `e.time.pattern`
 
 ```neper
