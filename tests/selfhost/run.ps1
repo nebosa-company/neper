@@ -990,6 +990,18 @@ $dataTableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $dataTableWritten -ne 'executable written') { throw 'data_table emission failed' }
 & $dataTablePath
 if ($LASTEXITCODE -ne 0) { throw "a data_table check failed: exit $LASTEXITCODE" }
+# `e.data.tableview`: the stable multi-key LSD sort over a 150,000-row `e.data.table`: dictionary ranks folded and exact, nulls first and last, 64-bit integers, floats, booleans, heap strings, three keys, key function, comparer, deleted rows and rank caches after an edit, each result checked against a reference ordering (D2363).
+$dataTableviewPath = Join-Path $testBuild 'data-tableview-selfhost.exe'
+$dataTableviewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_tableview\src\main.e') $repo 'x64' 'windows' $dataTableviewPath --arena 256m
+if ($LASTEXITCODE -ne 0 -or $dataTableviewWritten -ne 'executable written') { throw 'data_tableview emission failed' }
+& $dataTableviewPath
+if ($LASTEXITCODE -ne 0) { throw "a data_tableview check failed: exit $LASTEXITCODE" }
+# `e.data.tableview` filter: every operator over a 150,000-row table against an independent brute-force evaluator: text folded and exact, `*`/`?` wildcards, numbers with nulls and real operands, booleans, In/NotIn, Between, Null, groups six deep, the sort order kept through a filter and a re-sort, refining, refusals and an edit (D2364).
+$dataTablefilterPath = Join-Path $testBuild 'data-tablefilter-selfhost.exe'
+$dataTablefilterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_tablefilter\src\main.e') $repo 'x64' 'windows' $dataTablefilterPath --arena 512m
+if ($LASTEXITCODE -ne 0 -or $dataTablefilterWritten -ne 'executable written') { throw 'data_tablefilter emission failed' }
+& $dataTablefilterPath
+if ($LASTEXITCODE -ne 0) { throw "a data_tablefilter check failed: exit $LASTEXITCODE" }
 # `e.algo.stat` against closed-form moments and a least-squares line, and `e.data.slot_map`'s
 # generational keys: stale after removal, reused with the next generation, retired at the last.
 $statSlotsPath = Join-Path $testBuild 'stat-slots-selfhost.exe'

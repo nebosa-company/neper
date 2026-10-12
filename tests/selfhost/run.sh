@@ -942,6 +942,15 @@ data_table_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$data_table_written" = 'executable written' ]
 chmod +x "$test_build/data-table-selfhost"
 "$test_build/data-table-selfhost"
+# `e.data.tableview`: the stable multi-key LSD sort over a 150,000-row `e.data.table`: dictionary ranks folded and exact, nulls first and last, 64-bit integers, floats, booleans, heap strings, three keys, key function, comparer, deleted rows and rank caches after an edit, each result checked against a reference ordering (D2363).
+data_tableview_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_tableview/src/main.e" "$repo" x64 linux "$test_build/data-tableview-selfhost" --arena 256m)
+[ "$data_tableview_written" = 'executable written' ]
+chmod +x "$test_build/data-tableview-selfhost"
+"$test_build/data-tableview-selfhost"
+# `e.data.tableview` filter: every operator over a 150,000-row table against an independent brute-force evaluator: text folded and exact, `*`/`?` wildcards, numbers with nulls and real operands, booleans, In/NotIn, Between, Null, groups six deep, the sort order kept through a filter and a re-sort, refining, refusals and an edit (D2364).
+data_tablefilter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_tablefilter/src/main.e" "$repo" x64 linux "$test_build/data-tablefilter-selfhost" --arena 512m)
+[ "$data_tablefilter_written" = 'executable written' ]
+chmod +x "$test_build/data-tablefilter-selfhost"
 # `e.algo.stat` against closed-form moments and a least-squares line, and `e.data.slot_map`'s
 # generational keys: stale after removal, reused with the next generation, retired at the last.
 stat_slots_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/stat_slots/src/main.e" "$repo" x64 linux "$test_build/stat-slots-selfhost")
