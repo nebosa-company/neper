@@ -39982,3 +39982,11 @@ Not done: the vault's password prompted for inside Wallet when no vault exists (
 A document card keeps the number of its scan (`SCAN_nnnn.png` in /DCIM), two bytes in its sealed record. Opening a document with none attaches the newest scan that no other document has (`wallet scan attached N`) and from then on shows that one; a scan no longer on the disk falls back to the newest unclaimed one. Before this every document showed the newest scan of the Camera.
 
 Not done: choosing which scan to attach (the newest unclaimed is taken), detaching, Camera Scan mode inside Wallet (frames to `e.barcode.qr_scan` for passes), and a machine-readable zone read from the image: there is no OCR-B recogniser in the library, so `e.valid.mrz_td3` still checks typed lines only.
+
+## D3809 — C152, C172: Word tables are grids between the paragraphs (`e.fmt.ooxml.tables`, `cell_flags`)
+
+`paragraphs` kept every cell paragraph in document order, so a table read as a run of one-word lines. `tables(data)` gives each top-level `w:tbl` as a `Grid` (the cells' paragraphs joined by a space, runs by nothing, a short row padded, a table nested in a cell contributing its text to that cell, at most 2000 by 64) with `after`, the number of paragraphs outside any table before it; `cell_flags(data)` says for each paragraph `paragraphs` returns whether it sits in a cell. Document leaves the flagged paragraphs out of the text and sets each table's rows (tabs between cells) after the `after` paragraphs before it; `draw_txt` draws a line with tabs as cells in equal columns with a hairline under it, so a Word table has the same look as a sheet's rows. `Grid` gained `after` (0 for a sheet), `document tables N` is logged.
+
+Checked: `fmt_ooxml` gains 12 checks on a package made with Python's zipfile (`reference_table.py`): a 3 by 3 table with a two-paragraph cell and a short row, a paragraph either side, a second table whose cell holds a nested table (`outer inner`), `after` 1 and 2, the flags of all twelve paragraphs, and `NoMainPart` for a package with no document. The sample `report.docx` of the seeded-disk fixtures now carries a two-column table (`document_docx_table`).
+
+Not done: merged cells (`gridSpan`, `vMerge`), column widths and borders, cell shading, images and drawings, tables in headers and footers, `.odt` tables (`table:table`), a table's caption and style.

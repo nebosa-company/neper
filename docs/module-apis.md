@@ -28726,7 +28726,7 @@ type Source = struct { data: []const u8, off: usize }
 type Paragraph = struct { text: str, style: str, list: bool }
 type Slide = struct { paragraphs: []const str }
 type Collected = struct { texts: []str, styles: []str, lists: []bool }
-type Grid = struct { rows: usize, columns: usize, cells: []str }
+type Grid = struct { rows: usize, columns: usize, cells: []str, after: usize }
 
 const LIMIT_ENTRIES: usize = 512usize
 const LIMIT_NAME: usize = 256usize
@@ -28748,7 +28748,12 @@ fn slides(a: *mem.Arena, data: []const u8) -> ([]Slide, err)
 fn cell_at(reference: str) -> (usize, usize, bool)
 fn sheet_names(a: *mem.Arena, data: []const u8) -> ([]str, err)
 fn sheet_grid(a: *mem.Arena, data: []const u8, number: usize) -> (Grid, err)
+fn tables(a: *mem.Arena, data: []const u8) -> ([]Grid, err)
+fn inside_cell(nodes: []const xml.Node, i: usize) -> bool
+fn cell_flags(a: *mem.Arena, data: []const u8) -> ([]bool, err)
 ```
+
+Word tables (C152, D3809): `tables` reads a `.docx`'s tables in document order as `Grid`s (rows, columns, `cells[row * columns + column]`): the paragraphs of a cell joined by a space, a short row padded with empty cells, a table nested in a cell contributing its text to that cell rather than a grid of its own, at most 2000 by 64. `Grid.after` is the number of paragraphs outside any table before the table (0 for a sheet), and `cell_flags` says for each paragraph `paragraphs` gives whether it sits in a cell, so a viewer can leave those out of the text and set the grids in between. `paragraphs` is unchanged (a cell's paragraphs are still paragraphs in order). Checked on a package made with Python's zipfile (`reference_table.py`).
 
 Spreadsheets (C172, D3800): `sheet_names` lists an `.xlsx`'s sheet names in workbook order and `sheet_grid` reads sheet N (`xl/worksheets/sheet<N>.xml`, assumed to follow workbook order) as a `Grid` of cell text (`cells[row * columns + column]`, `""` for an absent cell, at most 2000 rows by 64 columns): shared, inline and `str` strings as their characters, numbers as stored, booleans `TRUE`/`FALSE`, dates as serials (no number-format reading), a cell without an `r` reference skipped. Checked on a package made with Python's zipfile (`reference_xlsx.py`): a sparse sheet, column `AA`, an entity, a rich-text shared string, a second sheet and the refusals.
 

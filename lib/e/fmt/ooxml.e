@@ -260,7 +260,7 @@ fn slides(a: *mem.Arena, data: []const u8) -> ([]Slide, err) {
 // A worksheet as a grid (C172): `cells[row * columns + column]` is the cell's text, "" where the sheet has none.
 // A number is its stored text, a boolean `TRUE` or `FALSE`, a shared or inline string its characters; a date is its
 // serial number (no number-format reading).
-type Grid = struct { rows: usize, columns: usize, cells: []str }
+type Grid = struct { rows: usize, columns: usize, cells: []str, after: usize }
 
 const LIMIT_GRID_ROWS: usize = 2000usize
 const LIMIT_GRID_COLUMNS: usize = 64usize
@@ -400,5 +400,170 @@ fn sheet_grid(a: *mem.Arena, data: []const u8, number: usize) -> (Grid, err) {
         }
         i += 1usize
     }
-    ret (Grid { rows: rows, columns: columns, cells: cells }, ok)
+    ret (Grid { rows: rows, columns: columns, cells: cells, after: 0usize }, ok)
+}
+
+// The tables of a `.docx` in document order (C152, C172), each as a Grid of its cells' text (the paragraphs of a cell
+// joined by a space, runs by nothing). A table nested in a cell is not a table of its own: its text joins the cell's.
+// At most LIMIT_GRID_ROWS by LIMIT_GRID_COLUMNS each; a short row is padded with empty cells.
+fn tables(a: *mem.Arena, data: []const u8) -> ([]Grid, err) {
+    let (archive, open_error) = open_package(a, data)
+    if open_error != ok { ret (zero, open_error) }
+    var ar = archive
+    let (index, found) = find(&ar, "word/document.xml")
+    if !found { ret (zero, NoMainPart) }
+    let (part, extract_error) = zip.extract(a, &ar, index)
+    if extract_error != ok { ret (zero, extract_error) }
+    let (doc, parse_error) = xml.parse(a, part)
+    if parse_error != ok { ret (zero, parse_error) }
+    let nodes = doc.nodes
+    // Pass 1: the shape of each top-level table: rows, and the most cells in a row.
+    var table_count = 0usize
+    var i = 0usize
+    while i < nodes.len {
+        if nodes[i].kind == .Element && str.eq(local(nodes[i].name), "tbl") && !inside_cell(nodes, i) { table_count += 1usize }
+        i += 1usize
+    }
+    let (out, out_error) = mem.alloc[Grid](a, table_count + 1usize)
+    if out_error != ok { ret (zero, out_error) }
+    let (row_counts, rc_error) = mem.alloc[usize](a, table_count + 1usize)
+    if rc_error != ok { ret (zero, rc_error) }
+    let (column_counts, cc_error) = mem.alloc[usize](a, table_count + 1usize)
+    if cc_error != ok { ret (zero, cc_error) }
+    let (afters, afters_error) = mem.alloc[usize](a, table_count + 1usize)
+    if afters_error != ok { ret (zero, afters_error) }
+    var t = 0usize
+    while t < table_count + 1usize {
+        row_counts[t] = 0usize
+        column_counts[t] = 0usize
+        t += 1usize
+    }
+    var current = 0usize
+    var seen = 0usize
+    var row_cells = 0usize
+    var body_paragraphs = 0usize
+    i = 0usize
+    while i < nodes.len {
+        if nodes[i].kind == .Element {
+            let name = local(nodes[i].name)
+            if str.eq(name, "p") && !inside_cell(nodes, i) { body_paragraphs += 1usize }
+            if str.eq(name, "tbl") && !inside_cell(nodes, i) {
+                current = seen
+                afters[seen] = body_paragraphs
+                seen += 1usize
+                row_cells = 0usize
+            } else if str.eq(name, "tr") && !inside_cell(nodes, i) && seen > 0usize {
+                row_counts[current] += 1usize
+                row_cells = 0usize
+            } else if str.eq(name, "tc") && !inside_cell(nodes, i) && seen > 0usize {
+                row_cells += 1usize
+                if row_cells > column_counts[current] { column_counts[current] = row_cells }
+            }
+        }
+        i += 1usize
+    }
+    t = 0usize
+    while t < table_count {
+        var rows = row_counts[t]
+        var columns = column_counts[t]
+        if rows > LIMIT_GRID_ROWS { rows = LIMIT_GRID_ROWS }
+        if columns > LIMIT_GRID_COLUMNS { columns = LIMIT_GRID_COLUMNS }
+        let (cells, cells_error) = mem.alloc[str](a, rows * columns + 1usize)
+        if cells_error != ok { ret (zero, cells_error) }
+        var c = 0usize
+        while c < rows * columns {
+            cells[c] = ""
+            c += 1usize
+        }
+        out[t] = Grid { rows: rows, columns: columns, cells: cells, after: afters[t] }
+        t += 1usize
+    }
+    // Pass 2: the text of each cell into its place.
+    current = 0usize
+    seen = 0usize
+    var row = 0usize
+    var column = 0usize
+    var live = false
+    var in_row = false
+    i = 0usize
+    while i < nodes.len {
+        if nodes[i].kind == .Element {
+            let name = local(nodes[i].name)
+            if str.eq(name, "tbl") && !inside_cell(nodes, i) {
+                current = seen
+                seen += 1usize
+                row = 0usize
+                column = 0usize
+                in_row = false
+                live = false
+            } else if str.eq(name, "tr") && !inside_cell(nodes, i) && seen > 0usize {
+                if in_row { row += 1usize }
+                in_row = true
+                column = 0usize
+                live = false
+            } else if str.eq(name, "tc") && !inside_cell(nodes, i) && seen > 0usize {
+                live = row < out[current].rows && column < out[current].columns
+                column += 1usize
+            } else if str.eq(name, "p") && live && seen > 0usize && inside_cell(nodes, i) {
+                let at_cell = row * out[current].columns + (column - 1usize)
+                if out[current].cells[at_cell].len > 0usize {
+                    let (joined, joined_error) = str.concat(a, out[current].cells[at_cell], " ")
+                    if joined_error != ok { ret (zero, joined_error) }
+                    out[current].cells[at_cell] = joined
+                }
+            }
+        } else if nodes[i].kind == .Text && live && seen > 0usize && inside_cell(nodes, i) && usize(nodes[i].parent) < nodes.len && str.eq(local(nodes[usize(nodes[i].parent)].name), "t") && column > 0usize {
+            let at_cell = row * out[current].columns + (column - 1usize)
+            let (joined, joined_error) = str.concat(a, out[current].cells[at_cell], nodes[i].value)
+            if joined_error != ok { ret (zero, joined_error) }
+            out[current].cells[at_cell] = joined
+        }
+        i += 1usize
+    }
+    ret (out[0usize..table_count], ok)
+}
+
+// Whether node `i` has a `tc` element among its ancestors (a table nested in a cell).
+fn inside_cell(nodes: []const xml.Node, i: usize) -> bool {
+    var up = usize(nodes[i].parent)
+    var steps = 0usize
+    while up < nodes.len && steps < 64usize {
+        if nodes[up].kind == .Element && str.eq(local(nodes[up].name), "tc") { ret true }
+        up = usize(nodes[up].parent)
+        steps += 1usize
+    }
+    ret false
+}
+
+// For each paragraph `paragraphs` gives (the same order), whether it sits in a table cell: a viewer that lays the
+// `tables` out itself leaves those out of the text.
+fn cell_flags(a: *mem.Arena, data: []const u8) -> ([]bool, err) {
+    let (archive, open_error) = open_package(a, data)
+    if open_error != ok { ret (zero, open_error) }
+    var ar = archive
+    let (index, found) = find(&ar, "word/document.xml")
+    if !found { ret (zero, NoMainPart) }
+    let (part, extract_error) = zip.extract(a, &ar, index)
+    if extract_error != ok { ret (zero, extract_error) }
+    let (doc, parse_error) = xml.parse(a, part)
+    if parse_error != ok { ret (zero, parse_error) }
+    let nodes = doc.nodes
+    var count = 0usize
+    var i = 0usize
+    while i < nodes.len {
+        if nodes[i].kind == .Element && str.eq(local(nodes[i].name), "p") { count += 1usize }
+        i += 1usize
+    }
+    let (flags, flags_error) = mem.alloc[bool](a, count + 1usize)
+    if flags_error != ok { ret (zero, flags_error) }
+    var k = 0usize
+    i = 0usize
+    while i < nodes.len {
+        if nodes[i].kind == .Element && str.eq(local(nodes[i].name), "p") {
+            flags[k] = inside_cell(nodes, i)
+            k += 1usize
+        }
+        i += 1usize
+    }
+    ret (flags[0usize..count], ok)
 }

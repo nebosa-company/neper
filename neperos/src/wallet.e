@@ -1612,7 +1612,7 @@ fn load_scan(a: *mem.Arena, kit: *appkit.Kit, s: *State) {
             if file_name.len > 5usize && file_name[0usize] == 83u8 && file_name[1usize] == 67u8 && file_name[2usize] == 65u8 && file_name[3usize] == 78u8 && file_name[4usize] == 95u8 {
                 var scan_number = 0usize
                 var d = 5usize
-                while d < file_name.len && file_name[d] >= 48u8 && file_name[d] <= 57u8 {
+                while d < file_name.len && d < 11usize && file_name[d] >= 48u8 && file_name[d] <= 57u8 {
                     scan_number = scan_number * 10usize + usize(file_name[d] - 48u8)
                     d += 1usize
                 }

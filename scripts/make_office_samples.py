@@ -36,8 +36,15 @@ def slide(*paragraphs):
 def main():
     out = Path(sys.argv[1])
     out.mkdir(parents=True, exist_ok=True)
+    # A table (C152): the sales by region, two columns, between the list and the closing paragraph.
+    def cell(text):
+        return f"<w:tc>{para(text)}</w:tc>"
+    def row(*texts):
+        return "<w:tr>" + "".join(cell(t) for t in texts) + "</w:tr>"
+    table = "<w:tbl>" + row("Region", "Sales") + row("North America", "120") + row("Europe", "95") + "</w:tbl>"
     body = (para("Quarterly report", "Heading1") + para("Revenue grew in every region.") +
-            para("North America", None, True) + para("Europe", None, True) + para("Asia Pacific", None, True))
+            para("North America", None, True) + para("Europe", None, True) + para("Asia Pacific", None, True) +
+            table + para("End of report"))
     document = f'<?xml version="1.0" encoding="UTF-8"?><w:document {W}><w:body>{body}</w:body></w:document>'
     (out / "report.docx").write_bytes(zipped([("[Content_Types].xml", "<Types/>"), ("word/document.xml", document)]))
     (out / "deck.pptx").write_bytes(zipped([("[Content_Types].xml", "<Types/>"),

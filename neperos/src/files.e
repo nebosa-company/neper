@@ -701,10 +701,10 @@ fn load_thumbs(a: *mem.Arena, kit: *appkit.Kit, s: *State) {
         let index = s.children[pos]
         // A node slot reused for another file (after a delete, a rename or a move) is read again: its key is the
         // file's name and size.
-        var key = s.nodes[index].kb * 131usize + s.nodes[index].name_len
+        var key = (s.nodes[index].kb % 100000usize) * 131usize + s.nodes[index].name_len
         var k = 0usize
         while k < s.nodes[index].name_len {
-            key = key * 31usize + usize(s.nodes[index].name[k])
+            key = (key * 31usize + usize(s.nodes[index].name[k])) % 1000003usize
             k += 1usize
         }
         if s.thumb_state[index] != 0u8 && s.thumb_key[index] != key { s.thumb_state[index] = 0u8 }

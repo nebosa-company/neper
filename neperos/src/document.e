@@ -145,14 +145,45 @@ fn office_text(a: *mem.Arena, s: *State, is_deck: bool, is_odf: bool, raw: []con
     } else {
         let (paragraphs, paragraphs_error) = text_of_file(a, is_odf, raw)
         if paragraphs_error != ok { ret 0usize }
+        // (C152) A Word document's tables are grids set between the paragraphs outside them: the cells' paragraphs
+        // are left out of the text and each table's rows follow the paragraph it came after, tabs between cells.
+        var flags: []bool = zero
+        var grids: []ooxml.Grid = zero
+        if !is_odf {
+            let (found_flags, flags_error) = ooxml.cell_flags(a, raw)
+            let (found_grids, grids_error) = ooxml.tables(a, raw)
+            if flags_error == ok && grids_error == ok && found_flags.len == paragraphs.len {
+                flags = found_flags
+                grids = found_grids
+            }
+        }
+        var next_table = 0usize
+        var body_count = 0usize
         var i = 0usize
         while i < paragraphs.len {
-            if paragraphs[i].list {
-                n = add_line(s, n, ui.join(a, "- ", paragraphs[i].text, ""))
-            } else {
-                n = add_line(s, n, paragraphs[i].text)
+            let in_cell = i < flags.len && flags[i]
+            if !in_cell {
+                while next_table < grids.len && grids[next_table].after <= body_count {
+                    n = add_grid(s, n, grids[next_table])
+                    next_table += 1usize
+                }
+                if paragraphs[i].list {
+                    n = add_line(s, n, ui.join(a, "- ", paragraphs[i].text, ""))
+                } else {
+                    n = add_line(s, n, paragraphs[i].text)
+                }
+                body_count += 1usize
             }
             i += 1usize
+        }
+        while next_table < grids.len {
+            n = add_grid(s, n, grids[next_table])
+            next_table += 1usize
+        }
+        if grids.len > 0usize {
+            ui.say("document tables ")
+            ui.say_num(grids.len)
+            ui.say("\n")
         }
     }
     ret n
@@ -163,7 +194,13 @@ fn office_text(a: *mem.Arena, s: *State, is_deck: bool, is_odf: bool, raw: []con
 fn xlsx_text(a: *mem.Arena, s: *State, raw: []const u8) -> usize {
     let (grid, grid_error) = ooxml.sheet_grid(a, raw, 1usize)
     if grid_error != ok || grid.rows == 0usize || grid.columns == 0usize { ret 0usize }
-    var n = 0usize
+    ret add_grid(s, 0usize, grid)
+}
+
+// A grid's rows as lines of the handed text from `at`, cells separated by tabs (a tab or newline inside a cell is a
+// space); the new length. A table of a Word document goes in the same way (C152).
+fn add_grid(s: *State, at: usize, grid: ooxml.Grid) -> usize {
+    var n = at
     var row = 0usize
     while row < grid.rows {
         var column = 0usize
@@ -827,7 +864,15 @@ fn draw_txt(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
     // Only the lines of the page are drawn.
     let zf = zoom_factor(s)
     while n < total && n < first + lines_per_page(s) + 1usize {
-        try ui.put(a, builder, faces.grotesk, 15.0 * zf, splitter(a, content, n), 28.0, 100.0 + f32(n - first) * 26.0 * zf, ui.ink())
+        let row = splitter(a, content, n)
+        let row_y: f32 = 100.0 + f32(n - first) * 26.0 * zf
+        if field_count(row, 9u8) > 1usize {
+            // A table row of a Word document (C152): its cells in equal columns with a hairline under it.
+            try draw_cells(a, builder, faces, row, 9u8, field_count(row, 9u8), 28.0, row_y, 356.0, false, ui.ink())
+            try ui.card(a, builder, 28.0, row_y + 22.0, 356.0, 1.0, 0.5, ui.muted())
+        } else {
+            try ui.put(a, builder, faces.grotesk, 15.0 * zf, row, 28.0, row_y, ui.ink())
+        }
         n += 1usize
     }
     ret ok
