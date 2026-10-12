@@ -1,4 +1,4 @@
-// `e.ui.datagrid` (G006, first to fifth increments) over a 3,000-row `e.data.table` with its view and
+// `e.ui.datagrid` (G006, first to sixth increments) over a 3,000-row `e.data.table` with its view and
 // grouping, driven through the UI test harness: the virtual body builds only the visible rows,
 // a header tap reports the sort and the application re-sorts, a group row expands on a tap and
 // shows its rows, the footer carries the summaries, a tap on a data row reports the storage
@@ -8,6 +8,7 @@
 // has its own exit code. Fourth: in-place editing (typed commit, invalid text, nulls, dictionary
 // growth, read-only) and the saved layout (round trip, unknown lines and columns tolerated).
 // Fifth: the preview row and pixel probes (band fill, selected row, a stable frame).
+// Sixth: Tab, Shift+Tab and Escape in the editor, column hide / move and the layout's order.
 use e.algo.hash as hash
 use e.gpu
 use e.mem
@@ -22,6 +23,7 @@ use e.gfx.image
 use e.text.shape
 use e.gfx.scene
 use e.ui.control
+use e.ui.input
 use e.gfx.paint
 use e.ui.datagrid as dg
 use e.ui.style
@@ -745,6 +747,120 @@ fn main(a: *mem.Arena, args: []str) -> err {
         pix += 1usize
     }
     if differing != 0usize { os.exit(250) }
+    // 11. Tab and Shift+Tab move the editor; Escape cancels it
+    dg.hide_preview(&grid2)
+    dg.set_bands(&grid2, bands[0usize..0usize])
+    dg.show_filter_row(&grid2, false)
+    dg.resize_column(&grid2, 0usize, 30.0)
+    dg.resize_column(&grid2, 1usize, 200.0)
+    dg.resize_column(&grid2, 3usize, 120.0)
+    dg.clear_selection(&grid2)
+    var tab_clock = 30000000000i64
+    let tab_row = grp.visible_row(&app.grouping, 6usize)
+    let next_row = grp.visible_row(&app.grouping, 7usize)
+    show_row(&grid2, &app.grouping, tab_row)
+    if dg.begin_edit(&grid2, tab_row, 2usize) != ok { os.exit(260) }
+    mem.reset(&f, 0usize)
+    let (root18, build18_error) = dg.build(&f, &grid2, &theme, 400.0)
+    if build18_error != ok { os.exit(261) }
+    if settle(&harness, root18, tab_clock) != ok { os.exit(262) }
+    tab_clock += 2000000000i64
+    if !tap_key(&harness, &runtime, 9000u64 + dg.EDIT_KEY) { os.exit(263) }
+    let tab_edits = app.edit_calls
+    if testing.press_key(&harness, 9u32, zero) != ok { os.exit(264) }
+    // the Rarity edit committed (an event) and the Price cell of the same row is being edited
+    if app.edit_calls != tab_edits + 1usize || !grid2.editing || grid2.edit_row != tab_row || grid2.edit_spec != 3usize { os.exit(265) }
+    mem.reset(&f, 0usize)
+    let (root19, build19_error) = dg.build(&f, &grid2, &theme, 400.0)
+    if build19_error != ok { os.exit(266) }
+    if settle(&harness, root19, tab_clock) != ok { os.exit(267) }
+    tab_clock += 2000000000i64
+    if !tap_key(&harness, &runtime, 9000u64 + dg.EDIT_KEY) { os.exit(268) }
+    // past the last editable cell: the first editable cell of the next row (the order may have
+    // changed under the application's re-sort, so the row is looked up by what the grid says)
+    if testing.press_key(&harness, 9u32, zero) != ok { os.exit(269) }
+    if !grid2.editing || grid2.edit_spec != 2usize || grid2.edit_row == tab_row { os.exit(270) }
+    let moved_to = grid2.edit_row
+    // Shift+Tab goes back: the previous row's last editable cell
+    mem.reset(&f, 0usize)
+    show_row(&grid2, &app.grouping, moved_to)
+    let (root20, build20_error) = dg.build(&f, &grid2, &theme, 400.0)
+    if build20_error != ok { os.exit(271) }
+    if settle(&harness, root20, tab_clock) != ok { os.exit(272) }
+    tab_clock += 2000000000i64
+    if !tap_key(&harness, &runtime, 9000u64 + dg.EDIT_KEY) { os.exit(273) }
+    var shift_tab: input.Modifiers = zero
+    shift_tab.shift = true
+    if testing.press_key(&harness, 9u32, shift_tab) != ok { os.exit(274) }
+    if !grid2.editing || grid2.edit_spec != 3usize || grid2.edit_row == moved_to { os.exit(275) }
+    // Escape cancels
+    mem.reset(&f, 0usize)
+    show_row(&grid2, &app.grouping, grid2.edit_row)
+    let (root21, build21_error) = dg.build(&f, &grid2, &theme, 400.0)
+    if build21_error != ok { os.exit(276) }
+    if settle(&harness, root21, tab_clock) != ok { os.exit(277) }
+    tab_clock += 2000000000i64
+    if !tap_key(&harness, &runtime, 9000u64 + dg.EDIT_KEY) { os.exit(278) }
+    if testing.press_key(&harness, 27u32, zero) != ok { os.exit(279) }
+    if grid2.editing { os.exit(280) }
+    if next_row == tab_row { os.exit(281) }
+
+    // 12. columns: hide one, move one; events and layout speak of the list given to create
+    // Rarity and Price ask for filter fields (the specs array is the grid's list)
+    specs2[2usize].filter = true
+    specs2[3usize].filter = true
+    dg.show_filter_row(&grid2, false)
+    dg.set_hidden(&grid2, 2usize, true)
+    if grid2.specs.len != 3usize || !dg.is_hidden(&grid2, 2usize) { os.exit(282) }
+    let (price_at, price_shown) = dg.display_of(&grid2, 3usize)
+    if !price_shown || price_at != 2usize { os.exit(283) }
+    let (rarity_at, rarity_shown) = dg.display_of(&grid2, 2usize)
+    if rarity_shown || rarity_at != 0usize { os.exit(284) }
+    grid2.offset = 0.0
+    mem.reset(&f, 0usize)
+    let (root22, build22_error) = dg.build(&f, &grid2, &theme, 400.0)
+    if build22_error != ok { os.exit(285) }
+    if settle(&harness, root22, tab_clock) != ok { os.exit(286) }
+    tab_clock += 2000000000i64
+    if testing.by_text(&harness, "Rarity").count != 0usize || testing.by_text(&harness, "Price").count == 0usize { os.exit(287) }
+    // a header tap on Price reports spec 3, not its display position 2
+    let sorts_before = app.sort_calls
+    if !tap_text(&harness, &runtime, "Price") { os.exit(288) }
+    if app.sort_calls != sorts_before + 1usize || app.sort_spec != 3usize { os.exit(289) }
+    // the filter field of a column keeps its key from the list, hidden or not
+    dg.show_filter_row(&grid2, true)
+    mem.reset(&f, 0usize)
+    let (root23, build23_error) = dg.build(&f, &grid2, &theme, 400.0)
+    if build23_error != ok { os.exit(302) }
+    if settle(&harness, root23, tab_clock) != ok { os.exit(303) }
+    tab_clock += 2000000000i64
+    if testing.by_key(&harness, 9000u64 + dg.FILTER_KEY + 3u64).count == 0usize { os.exit(290) }
+    if testing.by_key(&harness, 9000u64 + dg.FILTER_KEY + 2u64).count != 0usize { os.exit(291) }
+    // move Price to the front
+    dg.move_column(&grid2, 3usize, 0usize)
+    let (price_first, price_first_shown) = dg.display_of(&grid2, 3usize)
+    if !price_first_shown || price_first != 0usize { os.exit(292) }
+    let (name_at, name_shown) = dg.display_of(&grid2, 1usize)
+    if !name_shown || name_at != 2usize { os.exit(293) }
+    // the layout carries the order and the hidden columns; a fresh grid takes them
+    let (saved2, save2_error) = dg.save_layout(&f, &grid2)
+    if save2_error != ok { os.exit(294) }
+    let (made6, grid6_error) = dg.create(a, &app.tbl, &app.grouping, specs2[0..], events, 9400u64)
+    if grid6_error != ok { os.exit(295) }
+    var grid6 = made6
+    if dg.load_layout(&grid6, saved2) != ok { os.exit(296) }
+    let (price_6, price_6_shown) = dg.display_of(&grid6, 3usize)
+    if !dg.is_hidden(&grid6, 2usize) || !price_6_shown || price_6 != 0usize || grid6.specs.len != 3usize { os.exit(297) }
+    // an order naming columns the grid does not have, and a hidden list with an unknown one
+    let (made7, grid7_error) = dg.create(a, &app.tbl, &app.grouping, specs2[0..], events, 9500u64)
+    if grid7_error != ok { os.exit(298) }
+    var grid7 = made7
+    if dg.load_layout(&grid7, "datagrid 1\norder 3 9 3 1\nhidden 7 0\n") != ok { os.exit(299) }
+    let (p7, p7_shown) = dg.display_of(&grid7, 3usize)
+    if !p7_shown || p7 != 0usize || !dg.is_hidden(&grid7, 0usize) || grid7.specs.len != 3usize { os.exit(300) }
+    // a column shown again returns at its place in the order
+    dg.set_hidden(&grid2, 2usize, false)
+    if grid2.specs.len != 4usize { os.exit(301) }
     os.exit(0)
     ret ok
 }
