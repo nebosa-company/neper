@@ -506,6 +506,7 @@
     "x_cloud_aws",
     "x_cloud_manifest",
     "x_cloud_rest",
+    "x_elastic_rest",
     "x_identity_oidc",
     "x_identity_saml",
     "x_identity_scim",

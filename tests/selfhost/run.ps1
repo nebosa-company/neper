@@ -2533,6 +2533,12 @@ $xMongodbWireWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $xMongodbWireWritten -ne 'executable written') { throw 'x_mongodb_wire emission failed' }
 & $xMongodbWirePath
 if ($LASTEXITCODE -ne 0) { throw "a x_mongodb_wire check failed: exit $LASTEXITCODE" }
+# `x.elastic.rest` against elasticsearch-py: URL quoting, bulk NDJSON lines, response readers (D2645).
+$xElasticRestPath = Join-Path $testBuild 'x-elastic-rest-selfhost.exe'
+$xElasticRestWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_elastic_rest\src\main.e') $repo 'x64' 'windows' $xElasticRestPath
+if ($LASTEXITCODE -ne 0 -or $xElasticRestWritten -ne 'executable written') { throw 'x_elastic_rest emission failed' }
+& $xElasticRestPath
+if ($LASTEXITCODE -ne 0) { throw "a x_elastic_rest check failed: exit $LASTEXITCODE" }
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 $netHttpPoolPath = Join-Path $testBuild 'net-http-pool-selfhost.exe'
 $netHttpPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http_pool\src\main.e') $repo 'x64' 'windows' $netHttpPoolPath

@@ -108,6 +108,7 @@
     "e.net.tls",
     "e.net.policy",
     "e.net.ssrf",
+    "x.elastic.rest",
     "x.mongodb.wire",
     "x.redis.resp",
     "e.net.nats",
@@ -3545,6 +3546,19 @@
     "e.crypto.mac",
     "e.fmt.bson",
     "e.io",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.elastic.rest",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.json",
     "e.mem",
     "e.str"
    ],

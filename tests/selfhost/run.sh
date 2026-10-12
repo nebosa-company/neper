@@ -2237,6 +2237,11 @@ x_mongodb_wire_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$x_mongodb_wire_written" = 'executable written' ]
 chmod +x "$test_build/x-mongodb-wire-selfhost"
 "$test_build/x-mongodb-wire-selfhost"
+# `x.elastic.rest` against elasticsearch-py: URL quoting, bulk NDJSON lines, response readers (D2645).
+x_elastic_rest_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_elastic_rest/src/main.e" "$repo" x64 linux "$test_build/x-elastic-rest-selfhost")
+[ "$x_elastic_rest_written" = 'executable written' ]
+chmod +x "$test_build/x-elastic-rest-selfhost"
+"$test_build/x-elastic-rest-selfhost"
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 net_http_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http_pool/src/main.e" "$repo" x64 linux "$test_build/net-http-pool-selfhost")
 [ "$net_http_pool_written" = 'executable written' ]

@@ -12800,6 +12800,46 @@ fn scram_verify(server_final: str, expected: str) -> bool
 
 The MongoDB wire protocol (L114), OP_MSG only (every server since 3.6), over caller buffers; no sockets or topology monitoring. `encode_op_msg` frames a message (request id, flag bits, the kind 0 body document, any number of kind 1 document sequences, an optional CRC-32C when `CHECKSUM_PRESENT` is set); `parse` reads one message from a stream (`Truncated` until it is all there, `BadChecksum`, `Unsupported` for OP_COMPRESSED and the legacy opcodes or an unknown required flag bit, `Invalid` for a malformed section, every length checked before use) and `next_document` walks a sequence. `command` builds a command document through `e.fmt.bson` with `$db` appended and `status` reads `ok`, `code`, `codeName` and `errmsg` from a reply. SCRAM-SHA-256 is `scram_first`, `scram_final` (PBKDF2-HMAC-SHA-256, the client proof and the server signature to expect) and `scram_verify`; passwords and user names are ASCII (SASLprep of other text is not implemented and answers `Unsupported`). Checked against pymongo's OP_MSG builder, `bson`, pymongo's own SCRAM client run against a scripted server (the RFC 7677 exchange asserted) and the `crc32c` package over 187 vectors on both hosts (D2644). Not done: sockets, server discovery and monitoring, compression, SCRAM-SHA-1 and x.509/AWS/OIDC/Kerberos mechanisms, sessions and transactions, change streams, cursors beyond the getMore command a caller builds with `command`.
 
+### `x.elastic.rest`
+
+```neper
+error TooSmall
+error Invalid
+type Meta = struct { id: str, index: str, if_seq_no: i64, if_primary_term: i64, retry_on_conflict: i64, routing: str, version: i64, version_type: str, pipeline: str }
+type Param = struct { name: str, value: str }
+type BulkItem = struct { op: str, index: str, id: str, status: i64, result: str, error_type: str, error_reason: str, version: i64 }
+type BulkResult = struct { took: i64, errors: bool, items: []const BulkItem }
+type Hit = struct { index: str, id: str, score: f64, has_score: bool, source: json.Value }
+type SearchResult = struct { took: i64, timed_out: bool, total: i64, relation: str, hits: []const Hit, scroll_id: str, shards_failed: i64 }
+type ErrorInfo = struct { status: i64, kind: str, reason: str, root_kind: str, root_reason: str }
+
+fn meta() -> Meta
+fn put_text(dst: []u8, at: *usize, text: str) -> err
+fn put_byte(dst: []u8, at: *usize, b: u8) -> err
+fn hex_upper(v: u8) -> u8
+fn plain(c: u8, safe: str) -> bool
+fn quote(dst: []u8, at: *usize, value: str, safe: str) -> err
+fn path(dst: []u8, segments: []const str) -> (usize, err)
+fn query(dst: []u8, params: []const Param) -> (usize, err)
+fn put_decimal(dst: []u8, at: *usize, value: i64) -> err
+fn put_string(dst: []u8, at: *usize, value: str) -> err
+fn put_key_string(dst: []u8, at: *usize, first: *bool, key: str, value: str) -> err
+fn put_key_number(dst: []u8, at: *usize, first: *bool, key: str, value: i64) -> err
+fn bulk_meta(dst: []u8, op: str, m: *const Meta) -> (usize, err)
+fn bulk_line(dst: []u8, op: str, m: *const Meta, source: str) -> (usize, err)
+fn member(v: json.Value, key: str) -> (json.Value, bool)
+fn text_of(v: json.Value, key: str) -> str
+fn int_of(v: json.Value, key: str, fallback: i64) -> i64
+fn bool_of(v: json.Value, key: str) -> bool
+fn array_of(v: json.Value, key: str) -> ([]const json.Value, bool)
+fn options() -> json.Options
+fn parse_bulk(a: *mem.Arena, body: str) -> (BulkResult, err)
+fn parse_search(a: *mem.Arena, body: str) -> (SearchResult, err)
+fn parse_error(a: *mem.Arena, body: str) -> (ErrorInfo, err)
+```
+
+The Elasticsearch REST codecs (L114): the parts of a client that are not sockets. `quote`, `path` and `query` percent-encode URL parts and query strings as elasticsearch-py does (`urllib.parse.quote` with `,` and `*` safe, empty path segments skipped); `bulk_meta` and `bulk_line` write the `_bulk` NDJSON action line with the metadata keys in the driver's order (`_id`, `_index`, `if_seq_no`, `if_primary_term`, `retry_on_conflict`, `routing`, `version`, `version_type`, `pipeline`; -1 and empty strings are absent) and the source line (none for delete, no raw newline allowed). `parse_bulk`, `parse_search` and `parse_error` read the documented response shapes (per-item status, error type and reason; total as an object or a plain integer; the new and the legacy error forms) over `e.fmt.json`, hit sources left as JSON values. HTTP, headers (`application/x-ndjson`), retry and cluster sniffing are the caller's (`e.net.http`, `http.pool_request`). Checked against elasticsearch-py's `_quote`, `_quote_query`, `expand_action` and elastic-transport's NDJSON serializer, with response shapes from a model, over 171 vectors on both hosts (D2645). Not done: a typed query DSL, scroll and point-in-time management, the async search and ingest APIs, ES|QL, cluster sniffing and node health, TLS and API-key header helpers.
+
 ### `e.net.packet`
 
 ```neper
