@@ -2356,6 +2356,12 @@ $taskJobsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $taskJobsWritten -ne 'executable written') { throw 'task_jobs emission failed' }
 & $taskJobsPath
 if ($LASTEXITCODE -ne 0) { throw "a task_jobs check failed: exit $LASTEXITCODE" }
+# `e.db.docstore`: byte-exact log image against an independent struct+zlib writer, concurrency refusals, recovery over every torn prefix and a flipped byte, projection catch-up and rebuild, subscription resume across a reopen, compaction, store round trip, capacity rollback (D2763).
+$dbDocstorePath = Join-Path $testBuild 'db-docstore-selfhost.exe'
+$dbDocstoreWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_docstore\src\main.e') $repo 'x64' 'windows' $dbDocstorePath
+if ($LASTEXITCODE -ne 0 -or $dbDocstoreWritten -ne 'executable written') { throw 'db_docstore emission failed' }
+& $dbDocstorePath
+if ($LASTEXITCODE -ne 0) { throw "a db_docstore check failed: exit $LASTEXITCODE" }
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 $dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
 $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath

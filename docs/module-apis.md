@@ -15664,6 +15664,72 @@ fn load(a: *mem.Arena, s: *store.Store, key: str, max_jobs: usize, max_recurring
 
 Persistent background jobs with retries and cron triggers (L140), in the shape of Hangfire and Quartz. A `Queue` is fixed-capacity plain data over an arena; `save` and `load` write it to one blob of an `e.store` behind a magic and an FNV-1a 64 checksum (`Corrupt` on a flipped byte, a short blob or capacities too small). Delivery is at-least-once: `fetch` leases the best due job (priority, due time, id), `attempts` counts deliveries, and a lease that runs out is a failed attempt. A failed job is `Retry` after the policy backoff (exponential with a cap and a deterministic jitter, or Hangfire's curve) and `Dead` past `max_attempts`, held with its last error until `requeue`. A `key` makes `enqueue` idempotent. Recurring schedules are six-field cron expressions (`e.time.cron`) at a fixed offset; `tick(now)` enqueues the fires up to `now` under the Quartz-style misfire policy (`MISFIRE_SKIP`, `MISFIRE_ONE`, `MISFIRE_ALL`, with a grace window and a catch-up bound), each keyed so a repeated tick enqueues nothing twice. The queue is single-threaded: callers serialize access. No dashboard.
 
+### `e.db.docstore`
+
+```neper
+const ANY_VERSION: i64 = -1i64
+const NS_PROJECTION: u8 = 0u8
+const NS_SUBSCRIPTION: u8 = 1u8
+const KIND_PUT: u8 = 1u8
+const KIND_DELETE: u8 = 2u8
+const KIND_EVENT: u8 = 3u8
+const KIND_MARK: u8 = 4u8
+type DocRec = struct { coll: str, id: str, data: str, alive: bool }
+type Event = struct { seq: u64, stream: str, version: u32, kind: str, data: str, at: i64 }
+type Mark = struct { ns: u8, name: str, seq: u64 }
+type Stream = struct { name: str, version: u32 }
+type Db = struct { log: []u8, used: usize, docs: []DocRec, ndocs: usize, events: []Event, nevents: usize, marks: []Mark, nmarks: usize, streams: []Stream, nstreams: usize, a: *mem.Arena }
+type Limits = struct { log: usize, docs: usize, events: usize, marks: usize, streams: usize }
+type Projection = struct { name: str, ctx: *void, apply: fn(*void, *Db, Event) -> err }
+type Reader = struct { pos: usize, bad: bool }
+error Full
+error Concurrency
+error Invalid
+error Corrupt
+fn magic() -> str
+fn create(a: *mem.Arena, lim: Limits) -> (Db, err)
+fn rd_u32(data: str, r: *Reader) -> u32
+fn rd_u64(data: str, r: *Reader) -> u64
+fn rd_byte(data: str, r: *Reader) -> u8
+fn rd_span(data: str, r: *Reader) -> (usize, usize)
+fn find_doc(db: *Db, coll: str, id: str) -> (usize, bool)
+fn find_stream(db: *Db, name: str) -> (usize, bool)
+fn find_mark(db: *Db, ns: u8, name: str) -> (usize, bool)
+fn apply(db: *Db, payload: str) -> err
+fn restore(a: *mem.Arena, image: str, lim: Limits) -> (Db, usize, err)
+fn bytes(db: *Db) -> str
+fn w_byte(db: *Db, v: u8) -> bool
+fn w_u32(db: *Db, v: u32) -> bool
+fn w_u64(db: *Db, v: u64) -> bool
+fn w_str(db: *Db, s: str) -> bool
+fn begin(db: *Db) -> (usize, bool)
+fn seal(db: *Db, start: usize) -> err
+fn abandon(db: *Db, start: usize) -> err
+fn put(db: *Db, coll: str, id: str, data: str) -> err
+fn get(db: *Db, coll: str, id: str) -> (str, bool)
+fn delete(db: *Db, coll: str, id: str) -> (bool, err)
+fn count(db: *Db, coll: str) -> usize
+fn doc_at(db: *Db, coll: str, n: usize) -> (str, str, bool)
+fn stream_version(db: *Db, stream: str) -> u32
+fn write_event(db: *Db, stream: str, version: u32, kind: str, data: str, at: i64) -> err
+fn append(db: *Db, stream: str, kind: str, data: str, at: i64, expected: i64) -> (u64, err)
+fn event_count(db: *Db) -> usize
+fn read_stream(db: *Db, stream: str, from_version: u32, out: []Event) -> usize
+fn read_all(db: *Db, after_seq: u64, out: []Event) -> usize
+fn mark_of(db: *Db, ns: u8, name: str) -> u64
+fn set_mark(db: *Db, ns: u8, name: str, seq: u64) -> err
+fn project(db: *Db, p: Projection, limit: usize) -> (usize, err)
+fn rebuild(db: *Db, p: Projection, coll: str) -> (usize, err)
+fn position(db: *Db, name: str) -> u64
+fn poll(db: *Db, name: str, out: []Event) -> usize
+fn ack(db: *Db, name: str, seq: u64) -> err
+fn compact(db: *Db, a: *mem.Arena, lim: Limits) -> (Db, err)
+fn save(db: *Db, s: *store.Store, key: str) -> err
+fn open(a: *mem.Arena, s: *store.Store, key: str, lim: Limits) -> (Db, usize, err)
+```
+
+An embedded document and event store in one append-only file (L147), in the shape of LiteDB and Marten. The file is `NDS1` and CRC32-framed records (a document put, a document delete, an event, a mark); every operation appends its frame and applies that same frame to the in-memory tables, exactly as `restore` does, so a reopened database equals the one that wrote it. Documents are named collections of id to text. The journal is global-sequenced and per-stream-versioned; `append` takes the version the caller expects (`ANY_VERSION` for none) and a mismatch is `Concurrency` with nothing written. `project` folds events after the projection's persisted mark through its idempotent `apply`, `rebuild` clears the collection and folds again, `poll`/`ack` give a subscription a persisted position. `restore` replays sound frames and reports the bytes of a torn or damaged tail it dropped; `compact` rebuilds from live documents, every event and the marks; `save`/`open` use an `e.store` key. Lookups are linear; the store is single-threaded; clustering stays with `e.dist`.
+
 ### `e.db.migrate`
 
 ```neper

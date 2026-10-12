@@ -2094,6 +2094,11 @@ task_jobs_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$task_jobs_written" = 'executable written' ]
 chmod +x "$test_build/task-jobs-selfhost"
 "$test_build/task-jobs-selfhost"
+# `e.db.docstore`: byte-exact log image against an independent struct+zlib writer, concurrency refusals, recovery over every torn prefix and a flipped byte, projection catch-up and rebuild, subscription resume across a reopen, compaction, store round trip, capacity rollback (D2763).
+db_docstore_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_docstore/src/main.e" "$repo" x64 linux "$test_build/db-docstore-selfhost")
+[ "$db_docstore_written" = 'executable written' ]
+chmod +x "$test_build/db-docstore-selfhost"
+"$test_build/db-docstore-selfhost"
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 db_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_migrate/src/main.e" "$repo" x64 linux "$test_build/db-migrate-selfhost")
 [ "$db_migrate_written" = 'executable written' ]

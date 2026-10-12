@@ -501,6 +501,7 @@
     "e.algo.rules",
     "e.data.mapper",
     "e.task.jobs",
+    "e.db.docstore",
     "e.db.migrate",
     "e.db.orm",
     "e.test.match",
@@ -6972,6 +6973,20 @@
     "e.str",
     "e.time",
     "e.time.cron"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.db.docstore",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.mem",
+    "e.store",
+    "e.str"
    ],
    "blocked_by": []
   },
