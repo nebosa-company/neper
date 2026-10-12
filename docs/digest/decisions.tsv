@@ -2367,4 +2367,10 @@ D3905	2523	G001: `e.data.table`, the columnar store of the data grid: fixed call
 D3906	2661	G002: `e.data.tableview` sorts by stable LSD passes over derived integer keys, one pass per key, never a comparer per pair
 D3907	3356	G003: the filter stage of `e.data.tableview` keeps the sort order; dictionary columns are evaluated once per entry
 D3908	3450	G004: `e.data.tablegroup`: groups from neighbour comparison over the sorted order, expansion by key path, f64 summaries per group and footer
-D3909	2750	G005: `e.data.tablesearch`: search over a display order with a per-entry verdict, and the value list from dictionary counts
+D3909	2751	G005: `e.data.tablesearch`: search over a display order with a per-entry verdict, and the value list from dictionary counts
+D4300	3661	AES-GCM in hardware: AES-NI and PCLMULQDQ intrinsics, CPUID asked once (C098)
+D4301	2735	The compiler hashes from the library: one SHA-256, with the extensions in it (T021)
+D4302	2218	The generated-code report: thresholds scored on the real toolchain, not on a model (T023)
+D4303	2083	T026 measured: script share fell to 6-8%, context is level with Dart's now
+D4304	2338	`compare-manifests --cross-host`: what two hosts' builds of one program must agree on (T022)
+D4305	1537	The package manifest's schema branch has a fixture and a negative self-check (T012)

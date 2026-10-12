@@ -239,8 +239,11 @@
    "milestone": null,
    "schedule": "later",
    "catalogue": 92,
-   "delivered": 92,
-   "pending": [],
+   "delivered": 90,
+   "pending": [
+    "sha256_compress",
+    "sha256_k"
+   ],
    "fixtures": [
     "crypto_hash",
     "crypto_kdf_plan",
@@ -1198,6 +1201,7 @@
     "ui_content3_v2",
     "ui_content_v2",
     "ui_core",
+    "ui_datagrid",
     "ui_desktop",
     "ui_edit",
     "ui_entry",
@@ -2281,6 +2285,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_edit",
     "ui_entry",
@@ -2437,6 +2442,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_drag_drop",
     "ui_edit",
@@ -2982,6 +2988,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_edit",
     "ui_entry",
@@ -3141,6 +3148,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_drag_drop",
     "ui_entry",
@@ -3407,6 +3415,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_entry",
     "ui_feedback",
@@ -3911,6 +3920,7 @@
     "ui_content3_v2",
     "ui_content_v2",
     "ui_core",
+    "ui_datagrid",
     "ui_desktop",
     "ui_drag_drop",
     "ui_edit",
@@ -4014,6 +4024,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_entry",
     "ui_feedback",
@@ -4121,6 +4132,7 @@
     "ui_content2_v2",
     "ui_content3_v2",
     "ui_content_v2",
+    "ui_datagrid",
     "ui_desktop",
     "ui_drag_drop",
     "ui_edit",
@@ -4253,7 +4265,9 @@
     "data_table",
     "data_tablefilter",
     "data_tablegroup",
-    "data_tableview"
+    "data_tablesearch",
+    "data_tableview",
+    "ui_datagrid"
    ]
   },
   {
@@ -4266,7 +4280,9 @@
    "fixtures": [
     "data_tablefilter",
     "data_tablegroup",
-    "data_tableview"
+    "data_tablesearch",
+    "data_tableview",
+    "ui_datagrid"
    ]
   },
   {
@@ -4277,7 +4293,19 @@
    "delivered": 36,
    "pending": [],
    "fixtures": [
-    "data_tablegroup"
+    "data_tablegroup",
+    "ui_datagrid"
+   ]
+  },
+  {
+   "module": "e.data.tablesearch",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 6,
+   "delivered": 6,
+   "pending": [],
+   "fixtures": [
+    "data_tablesearch"
    ]
   }
  ]
