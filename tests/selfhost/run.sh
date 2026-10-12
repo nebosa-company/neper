@@ -3674,6 +3674,20 @@ algo_syncjob_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/algo-syncjob-selfhost"
 algo_syncjob_output=$("$test_build/algo-syncjob-selfhost")
 [ "$algo_syncjob_output" = 'algo syncjob ok' ]
+# `e.algo.syncsource`: change-stream tokens, URLs, deliveries and planned row changes, and entity browse
+# # against appdor's src/sync change-stream.js and entity-browse.js (700 inputs, D2921).
+algo_syncsource_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_syncsource/src/main.e" "$repo" x64 linux "$test_build/algo-syncsource-selfhost" -j 2)
+[ "$algo_syncsource_written" = 'executable written' ]
+chmod +x "$test_build/algo-syncsource-selfhost"
+algo_syncsource_output=$("$test_build/algo-syncsource-selfhost")
+[ "$algo_syncsource_output" = 'algo syncsource ok' ]
+# `e.algo.offline`: write queue, read cache, connectivity, replay, conflict review and access purge
+# # against appdor's src/offline (220 scripts, D2921).
+algo_offline_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_offline/src/main.e" "$repo" x64 linux "$test_build/algo-offline-selfhost" -j 2)
+[ "$algo_offline_written" = 'executable written' ]
+chmod +x "$test_build/algo-offline-selfhost"
+algo_offline_output=$("$test_build/algo-offline-selfhost")
+[ "$algo_offline_output" = 'algo offline ok' ]
 # `e.fmt.css.syntax`: the CSS Syntax 3 tokenizer and rule grammar against Vaper's own Dart code
 # # over 420 random inputs of well-formed and malformed CSS (D2340).
 text_css_syntax_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_css_syntax/src/main.e" "$repo" x64 linux "$test_build/text-css-syntax-selfhost" -j 2)
@@ -3716,6 +3730,13 @@ text_css_match_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/text-css-match-selfhost"
 text_css_match_output=$("$test_build/text-css-match-selfhost")
 [ "$text_css_match_output" = 'css match ok' ]
+# `e.fmt.css.cascade`: declaration ranking, the rule index, @container and @scope gating, presentational hints
+# # against Vaper's own resolver cascade (130 documents with rule sets, D2920).
+text_css_cascade_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_css_cascade/src/main.e" "$repo" x64 linux "$test_build/text-css-cascade-selfhost" -j 2)
+[ "$text_css_cascade_written" = 'executable written' ]
+chmod +x "$test_build/text-css-cascade-selfhost"
+text_css_cascade_output=$("$test_build/text-css-cascade-selfhost")
+[ "$text_css_cascade_output" = 'css cascade ok' ]
 # `e.fmt.html.accessible`: roles, accessible names, states and the accessibility tree of an HTML document
 # # against Vaper's own builder (220 documents, D2343).
 html_accessible_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/html_accessible/src/main.e" "$repo" x64 linux "$test_build/html-accessible-selfhost" -j 2)
@@ -3801,6 +3822,24 @@ x_cloud_aws_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/x-cloud-aws-selfhost"
 x_cloud_aws_output=$("$test_build/x-cloud-aws-selfhost")
 [ "$x_cloud_aws_output" = 'x cloud aws ok' ]
+# x.cloud.k8s, x.cloud.awssdk and x.ssh.transport against Petcow's k8s provider, S3/IAM/EC2/Lightsail providers and per-host transport (600 cases, D2922).
+x_cloud_drivers_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_cloud_drivers/src/main.e" "$repo" x64 linux "$test_build/x-cloud-drivers-selfhost" -j 2)
+[ "$x_cloud_drivers_written" = 'executable written' ]
+chmod +x "$test_build/x-cloud-drivers-selfhost"
+x_cloud_drivers_output=$("$test_build/x-cloud-drivers-selfhost")
+[ "$x_cloud_drivers_output" = 'x cloud drivers ok' ]
+# e.net.grpcserver against grpcio: a live Neper server called by grpcio, its transcripts replayed at several chunk sizes (14 calls, D2923).
+net_grpcserver_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpcserver/src/main.e" "$repo" x64 linux "$test_build/net-grpcserver-selfhost" -j 2)
+[ "$net_grpcserver_written" = 'executable written' ]
+chmod +x "$test_build/net-grpcserver-selfhost"
+net_grpcserver_output=$("$test_build/net-grpcserver-selfhost")
+[ "$net_grpcserver_output" = 'net grpcserver ok' ]
+# e.net.grpccodec against Python's gzip and zlib: compressed message bodies of every level, corrupted and mismatched inputs (129 vectors, D2923).
+net_grpccodec_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpccodec/src/main.e" "$repo" x64 linux "$test_build/net-grpccodec-selfhost" -j 2)
+[ "$net_grpccodec_written" = 'executable written' ]
+chmod +x "$test_build/net-grpccodec-selfhost"
+net_grpccodec_output=$("$test_build/net-grpccodec-selfhost")
+[ "$net_grpccodec_output" = 'net grpccodec ok' ]
 # x.net.webhook, x.net.authscheme, x.mcp.protocol and x.api.openapi against Appdor's sign.js, auth-schemes, mcp/protocol.js and openapi-builder.js (649 cases, D2355).
 x_api_protocols_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_api_protocols/src/main.e" "$repo" x64 linux "$test_build/x-api-protocols-selfhost" -j 2)
 [ "$x_api_protocols_written" = 'executable written' ]

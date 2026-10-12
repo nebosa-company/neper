@@ -4146,6 +4146,20 @@ $algoSyncjobWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $algoSyncjobWritten -ne 'executable written') { throw 'algo_syncjob emission failed' }
 $algoSyncjobOutput = & $algoSyncjobPath
 if ($LASTEXITCODE -ne 0 -or $algoSyncjobOutput -ne 'algo syncjob ok') { throw "algo_syncjob answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.syncsource`: change-stream tokens, URLs, deliveries and planned row changes, and entity browse
+# # against appdor's src/sync change-stream.js and entity-browse.js (700 inputs, D2921).
+$algoSyncsourcePath = Join-Path $testBuild 'algo-syncsource-selfhost.exe'
+$algoSyncsourceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_syncsource\src\main.e') $repo 'x64' 'windows' $algoSyncsourcePath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoSyncsourceWritten -ne 'executable written') { throw 'algo_syncsource emission failed' }
+$algoSyncsourceOutput = & $algoSyncsourcePath
+if ($LASTEXITCODE -ne 0 -or $algoSyncsourceOutput -ne 'algo syncsource ok') { throw "algo_syncsource answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.offline`: write queue, read cache, connectivity, replay, conflict review and access purge
+# # against appdor's src/offline (220 scripts, D2921).
+$algoOfflinePath = Join-Path $testBuild 'algo-offline-selfhost.exe'
+$algoOfflineWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_offline\src\main.e') $repo 'x64' 'windows' $algoOfflinePath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoOfflineWritten -ne 'executable written') { throw 'algo_offline emission failed' }
+$algoOfflineOutput = & $algoOfflinePath
+if ($LASTEXITCODE -ne 0 -or $algoOfflineOutput -ne 'algo offline ok') { throw "algo_offline answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.css.syntax`: the CSS Syntax 3 tokenizer and rule grammar against Vaper's own Dart code
 # # over 420 random inputs of well-formed and malformed CSS (D2340).
 $textCssSyntaxPath = Join-Path $testBuild 'text-css-syntax-selfhost.exe'
@@ -4188,6 +4202,13 @@ $textCssMatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $textCssMatchWritten -ne 'executable written') { throw 'text_css_match emission failed' }
 $textCssMatchOutput = & $textCssMatchPath
 if ($LASTEXITCODE -ne 0 -or $textCssMatchOutput -ne 'css match ok') { throw "text_css_match answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.css.cascade`: declaration ranking, the rule index, @container and @scope gating, presentational hints
+# # against Vaper's own resolver cascade (130 documents with rule sets, D2920).
+$textCssCascadePath = Join-Path $testBuild 'text-css-cascade-selfhost.exe'
+$textCssCascadeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_css_cascade\src\main.e') $repo 'x64' 'windows' $textCssCascadePath -j 2
+if ($LASTEXITCODE -ne 0 -or $textCssCascadeWritten -ne 'executable written') { throw 'text_css_cascade emission failed' }
+$textCssCascadeOutput = & $textCssCascadePath
+if ($LASTEXITCODE -ne 0 -or $textCssCascadeOutput -ne 'css cascade ok') { throw "text_css_cascade answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.html.accessible`: roles, accessible names, states and the accessibility tree of an HTML document
 # # against Vaper's own builder (220 documents, D2343).
 $htmlAccessiblePath = Join-Path $testBuild 'html-accessible-selfhost.exe'
@@ -4273,6 +4294,24 @@ $xCloudAwsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $xCloudAwsWritten -ne 'executable written') { throw 'x_cloud_aws emission failed' }
 $xCloudAwsOutput = & $xCloudAwsPath
 if ($LASTEXITCODE -ne 0 -or $xCloudAwsOutput -ne 'x cloud aws ok') { throw "x_cloud_aws answered wrongly: exit $LASTEXITCODE" }
+# x.cloud.k8s, x.cloud.awssdk and x.ssh.transport against Petcow's k8s provider, S3/IAM/EC2/Lightsail providers and per-host transport (600 cases, D2922).
+$xCloudDriversPath = Join-Path $testBuild 'x-cloud-drivers-selfhost.exe'
+$xCloudDriversWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_cloud_drivers\src\main.e') $repo 'x64' 'windows' $xCloudDriversPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xCloudDriversWritten -ne 'executable written') { throw 'x_cloud_drivers emission failed' }
+$xCloudDriversOutput = & $xCloudDriversPath
+if ($LASTEXITCODE -ne 0 -or $xCloudDriversOutput -ne 'x cloud drivers ok') { throw "x_cloud_drivers answered wrongly: exit $LASTEXITCODE" }
+# e.net.grpcserver against grpcio: a live Neper server called by grpcio, its transcripts replayed at several chunk sizes (14 calls, D2923).
+$netGrpcserverPath = Join-Path $testBuild 'net-grpcserver-selfhost.exe'
+$netGrpcserverWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_grpcserver\src\main.e') $repo 'x64' 'windows' $netGrpcserverPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netGrpcserverWritten -ne 'executable written') { throw 'net_grpcserver emission failed' }
+$netGrpcserverOutput = & $netGrpcserverPath
+if ($LASTEXITCODE -ne 0 -or $netGrpcserverOutput -ne 'net grpcserver ok') { throw "net_grpcserver answered wrongly: exit $LASTEXITCODE" }
+# e.net.grpccodec against Python's gzip and zlib: compressed message bodies of every level, corrupted and mismatched inputs (129 vectors, D2923).
+$netGrpccodecPath = Join-Path $testBuild 'net-grpccodec-selfhost.exe'
+$netGrpccodecWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_grpccodec\src\main.e') $repo 'x64' 'windows' $netGrpccodecPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netGrpccodecWritten -ne 'executable written') { throw 'net_grpccodec emission failed' }
+$netGrpccodecOutput = & $netGrpccodecPath
+if ($LASTEXITCODE -ne 0 -or $netGrpccodecOutput -ne 'net grpccodec ok') { throw "net_grpccodec answered wrongly: exit $LASTEXITCODE" }
 # x.net.webhook, x.net.authscheme, x.mcp.protocol and x.api.openapi against Appdor's sign.js, auth-schemes, mcp/protocol.js and openapi-builder.js (649 cases, D2355).
 $xApiProtocolsPath = Join-Path $testBuild 'x-api-protocols-selfhost.exe'
 $xApiProtocolsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_api_protocols\src\main.e') $repo 'x64' 'windows' $xApiProtocolsPath -j 2

@@ -6396,6 +6396,7 @@ fn apply_changes(a: *mem.Arena, local: []const json.Value, changes: json.Value, 
 fn add_key(keys: *list.List[json.Value], key: str)
 fn add_keys_of(keys: *list.List[json.Value], v: json.Value)
 fn field_of(v: json.Value, key: str) -> json.Value
+fn same_field(a: *mem.Arena, x: json.Value, has_x: bool, y: json.Value, has_y: bool) -> bool
 fn detect_field_conflicts(a: *mem.Arena, base: json.Value, has_base: bool, mine: json.Value, theirs: json.Value) -> json.Value
 fn known_strategy(s: str) -> bool
 fn resolve_conflict(a: *mem.Arena, conflict: json.Value, strategy: str) -> json.Value
@@ -6578,6 +6579,90 @@ fn accept_drift(a: *mem.Arena, stored: []const json.Value, report: json.Value, a
 ```
 
 Scheduled external sync (L037), after appdor's `src/sync/sync-schedule.js`, `sync-refusal.js` and the pure half of `synced-table.js`: the lease a worker holds on a binding (`lease_available`), which bindings are due (`due_bindings`), the doubling retry delay and the next run (`backoff_minutes`, `schedule_after_run`, `next_run_at`), binding health, what a deletion policy and flag plans do to rows the source lost, the sync-key check, quarantine of rows with no usable key, the insert, update and delete plan of one pull (`sync_plan`, `plan_pull`), the run ledger row, and schema drift against a stored column mapping with its acceptance (`drift_report`, `accept_drift`). Words come back as appdor's catalogue fallbacks; refusals are translated by an injected hook. Checked against appdor's own modules over 700 random inputs on both hosts (D2339).
+
+### `e.algo.offline`
+
+```neper
+const FRESH_MS: i64 = 300000i64
+type Snapshot = struct { table_id: json.Value, records: []const json.Value, fetched_at: json.Value }
+type ReadCache = struct { a: *mem.Arena, fresh_ms: i64, tables: list.List[Snapshot] }
+type Connectivity = struct { a: *mem.Arena, state: str, log: list.List[json.Value] }
+
+fn js_string(v: json.Value, present: bool) -> str
+fn truthy_member(v: json.Value, key: str) -> bool
+fn object_or_empty(v: json.Value, key: str) -> json.Value
+fn same_member(a: *mem.Arena, x: json.Value, has_x: bool, y: json.Value, has_y: bool) -> bool
+fn lower_ascii(a: *mem.Arena, s: str) -> str
+fn with_member(a: *mem.Arena, o: json.Value, key: str, v: json.Value, present: bool) -> json.Value
+fn text_list(a: *mem.Arena, names: []const str) -> json.Value
+fn is_network_failure(a: *mem.Arena, failure: json.Value, has_failure: bool) -> bool
+fn queue_if_offline(a: *mem.Arena, o: *sync.Outbox, failure: json.Value, has_failure: bool, mutation: json.Value, has_mutation: bool) -> json.Value
+fn flush_queue(a: *mem.Arena, o: *sync.Outbox, remote: *const sync.Remote, at: i64, resolve: str) -> json.Value
+fn queue_status(a: *mem.Arena, o: *const sync.Outbox, has_outbox: bool) -> json.Value
+fn plural(count: json.Value) -> str
+fn describe_queue(a: *mem.Arena, status: json.Value, has_status: bool) -> json.Value
+fn new_read_cache(a: *mem.Arena, fresh_ms: i64) -> ReadCache
+fn snapshot_index(c: *const ReadCache, table_id: json.Value) -> i64
+fn cache_store(c: *ReadCache, table_id: json.Value, records: json.Value, fetched_at: json.Value)
+fn cache_read(c: *const ReadCache, table_id: json.Value, now_ms: i64, online: bool) -> json.Value
+fn id_slot(ids: []const json.Value, present: []const bool, live: []const bool, id: json.Value, has_id: bool, a: *mem.Arena) -> i64
+fn cache_overlay(c: *const ReadCache, table_id: json.Value, queued: []const json.Value) -> (json.Value, bool)
+fn cache_evict(c: *ReadCache, table_id: json.Value) -> bool
+fn cache_scopes(c: *const ReadCache) -> json.Value
+fn cache_drop_records(c: *ReadCache, table_id: json.Value, ids: []const str) -> i64
+fn new_connectivity(a: *mem.Arena) -> Connectivity
+fn transition_allowed(from: str, next: str) -> bool
+fn connect_to(c: *Connectivity, next: str, at: json.Value, has_at: bool) -> json.Value
+fn connectivity_history(c: *const Connectivity) -> []const json.Value
+fn plan_replay(a: *mem.Arena, queue: []const json.Value, versions: json.Value) -> json.Value
+fn resolve_replay_conflict(a: *mem.Arena, conflict: json.Value, choice: str, server_record: json.Value, has_server: bool, base_record: json.Value, has_base: bool) -> json.Value
+fn server_data(a: *mem.Arena, server: json.Value) -> json.Value
+fn member_names(a: *mem.Arena, mine: json.Value, theirs: json.Value) -> []const str
+fn names_include(names: json.Value, name: str) -> bool
+fn build_conflict_review(a: *mem.Arena, conflicts: []const json.Value) -> json.Value
+fn plan_offline_resolution(a: *mem.Arena, item: json.Value, has_item: bool, choice: str, server: json.Value, has_server: bool, mutation: json.Value, has_mutation: bool) -> json.Value
+fn conflict_count(review: json.Value) -> i64
+fn string_in(values: []const json.Value, s: str) -> bool
+fn plan_cache_purge(a: *mem.Arena, cached: []const json.Value, readable: json.Value, has_readable: bool, probe_ok: bool) -> json.Value
+fn apply_cache_purge(a: *mem.Arena, c: *ReadCache, plan: json.Value, has_plan: bool) -> json.Value
+fn purge_outcome(a: *mem.Arena, plan: json.Value, has_plan: bool) -> json.Value
+```
+
+The offline layer around the outbox (L037), after appdor's `src/offline/write-queue.js`, `read-cache.js`, `conflict-review.js` and `access-purge.js`: `is_network_failure`, `queue_if_offline`, `flush_queue`, `queue_status` and `describe_queue` for the write queue over an `e.algo.sync` outbox; a `ReadCache` (`cache_store`, `cache_read` with its fresh / stale / offline-only verdict, `cache_overlay` of queued writes, `cache_evict`, `cache_scopes`, `cache_drop_records`, which keeps the snapshot's age); the `Connectivity` machine (`connect_to`, `connectivity_history`); `plan_replay` and `resolve_replay_conflict` (local-wins, server-wins, field merge); `build_conflict_review`, `plan_offline_resolution` and `conflict_count` (merge is offered only when the base values were kept and refuses, naming them, when both sides changed a field); and `plan_cache_purge`, `apply_cache_purge` and `purge_outcome` (a probe that did not succeed purges nothing). A JavaScript `undefined` is an absent member. Rendering the review is the host's, since it needs an escaper and a translator. Checked against appdor's own modules over 220 operation scripts, a memory outbox with a counting clock and a scripted push, on Windows (D2921). Writing it showed `e.algo.sync`'s field-conflict detection read an absent field as a null one; it now tells them apart as `JSON.stringify` does.
+
+
+### `e.algo.syncsource`
+
+```neper
+const MAX_ENTITIES: usize = 500usize
+
+fn stream_prefix() -> str { ret "cs_" }
+fn is_word_byte(c: u8) -> bool
+fn looks_like_stream_token(token: str) -> bool
+fn stream_url(a: *mem.Arena, base_url: str, token: str) -> str
+fn lower_ascii(a: *mem.Arena, s: str) -> str
+fn js_text(a: *mem.Arena, v: json.Value) -> str
+fn change_from_delivery(a: *mem.Arena, payload: json.Value) -> json.Value
+fn refusal(a: *mem.Arena, reason: str) -> json.Value
+fn plan_stream_change(a: *mem.Arena, binding: json.Value, op: str, record: json.Value, existing: json.Value, has_existing: bool) -> json.Value
+fn stream_plan_counts(a: *mem.Arena, plan: json.Value) -> json.Value
+fn pick_list(one: list.List[json.Value], chosen: bool) -> []const json.Value
+fn char_class(c: u8) -> i32
+fn fold(c: u8) -> u8
+fn collate(x: str, y: str) -> i32
+fn name_of(v: json.Value) -> str
+fn sort_by_name(a: *mem.Arena, entities: []const json.Value) -> []const json.Value
+fn has_path(entities: []const json.Value, path: str) -> bool
+fn static_entities(a: *mem.Arena, channel: json.Value) -> []const json.Value
+fn can_browse(channel: json.Value) -> bool
+fn at_path(a: *mem.Arena, body: json.Value, path: str) -> (json.Value, bool)
+fn replace_name(a: *mem.Arena, template: str, raw: str) -> str
+fn entities_from_body(a: *mem.Arena, channel: json.Value, body: json.Value) -> []const json.Value
+fn merge_entities(a: *mem.Arena, from_source: []const json.Value, from_catalog: []const json.Value) -> []const json.Value
+```
+
+What a synced table reads from its source before a scheduled pull (L037), after appdor's `src/sync/change-stream.js` and `src/sync/entity-browse.js`: the change-stream token shape check (`looks_like_stream_token`), the public URL (`stream_url`), one change out of a delivery body (`change_from_delivery`: one record, `upsert` by default), the single row change it implies through the accepted column mapping (`plan_stream_change`: insert, update, delete or noop, refusing without a mapping, a sync key or a mapped column) and its ledger counts (`stream_plan_counts`); and the entities a channel names (`static_entities`, `can_browse`), an index response read into entities (`entities_from_body`, array or keyed object, dotted `resultPath` and `namePath`, `/rpc/` and the root dropped, capped at 500) and the merged picker list (`merge_entities`, the source winning a collision). Names are sorted as `localeCompare` does for ASCII names (punctuation, digits, letters ignoring case, lower case first on a tie). The SSRF-checked request builder (`browseRequest`) belongs to the connectors and is not here. Checked against appdor's own modules over 700 single operations on Windows (D2921).
+
 
 ### `e.algo.fulltext`
 
@@ -14510,6 +14595,52 @@ fn parse_error(a: *mem.Arena, body: str) -> (ErrorInfo, err)
 
 The Elasticsearch REST codecs (L114): the parts of a client that are not sockets. `quote`, `path` and `query` percent-encode URL parts and query strings as elasticsearch-py does (`urllib.parse.quote` with `,` and `*` safe, empty path segments skipped); `bulk_meta` and `bulk_line` write the `_bulk` NDJSON action line with the metadata keys in the driver's order (`_id`, `_index`, `if_seq_no`, `if_primary_term`, `retry_on_conflict`, `routing`, `version`, `version_type`, `pipeline`; -1 and empty strings are absent) and the source line (none for delete, no raw newline allowed). `parse_bulk`, `parse_search` and `parse_error` read the documented response shapes (per-item status, error type and reason; total as an object or a plain integer; the new and the legacy error forms) over `e.fmt.json`, hit sources left as JSON values. HTTP, headers (`application/x-ndjson`), retry and cluster sniffing are the caller's (`e.net.http`, `http.pool_request`). Checked against elasticsearch-py's `_quote`, `_quote_query`, `expand_action` and elastic-transport's NDJSON serializer, with response shapes from a model, over 171 vectors on both hosts (D2645). Not done: a typed query DSL, scroll and point-in-time management, the async search and ingest APIs, ES|QL, cluster sniffing and node health, TLS and API-key header helpers.
 
+### `e.net.grpcserver`
+
+```neper
+const EVENT_REQUEST: u8 = 1u8
+const EVENT_MESSAGE: u8 = 2u8
+const EVENT_HALF_CLOSE: u8 = 3u8
+const EVENT_RESET: u8 = 4u8
+const EVENT_GOAWAY: u8 = 5u8
+type Event = struct { kind: u8, stream: u32, code: u32, compressed: bool, nanos: u64, text: str, payload: []const u8, headers: []const h2.Header }
+type Call = struct { id: u32, used: bool, remote_closed: bool, half_close_sent: bool, local_headers: bool, local_closed: bool, send_window: i64, recv_window: i64, buf: []u8, buf_len: usize, consumed: usize }
+type Server = struct { calls: []Call, last_stream: u32, enc: h2.Table, dec: h2.Table, send_window: i64, recv_window: i64, peer_initial_window: i64, peer_max_frame: usize, initial_recv: i64, max_frame: usize, got_preface: bool, started: bool, got_settings: bool, goaway: bool, block: []u8, block_len: usize, block_stream: u32, block_end_stream: bool, block_active: bool }
+
+fn server_new(calls: []Call, enc: h2.Table, dec: h2.Table, block: []u8, initial_recv: u32, max_frame: u32) -> Server
+fn put_frame(dst: []u8, at: *usize, kind: u8, flags: u8, stream: u32, payload: []const u8) -> err
+fn u32_bytes(v: u32) -> [4]u8
+fn server_start(s: *Server, dst: []u8) -> (usize, err)
+fn find_call(s: *Server, id: u32) -> usize
+fn request_is_grpc(headers: []const h2.Header) -> bool
+fn drain(s: *Server, events: []Event, count: *usize, hdr: []h2.Header)
+fn release_if_done(s: *Server, at_call: usize)
+fn server_receive(s: *Server, input: []const u8, dst: []u8, events: []Event, hdr: []h2.Header, scratch: []u8) -> (usize, usize, usize, err)
+fn response_block(s: *Server, dst: []u8, id: u32, headers: []const h2.Header, end_stream: bool) -> (usize, err)
+fn response_headers(s: *Server, dst: []u8, id: u32, metadata: []const h2.Header) -> (usize, err)
+fn response_message(s: *Server, dst: []u8, id: u32, payload: []const u8, compressed: bool) -> (usize, err)
+fn response_write(s: *Server, dst: []u8, id: u32, data: []const u8) -> (usize, usize, err)
+fn response_finish(s: *Server, dst: []u8, id: u32, status: u32, message: str, metadata: []const h2.Header) -> (usize, err)
+fn response_deadline_exceeded(s: *Server, dst: []u8, id: u32) -> (usize, err)
+fn response_reset(s: *Server, dst: []u8, id: u32, code: u32) -> (usize, err)
+```
+
+gRPC over HTTP/2, server side (L164), over caller buffers and `e.net.http2`, the mirror of the client in `e.net.grpc` and sharing its message framing, `grpc-timeout`, status text and metadata functions. `Server` is the connection state machine: `server_start` sends SETTINGS, `server_receive` checks the client preface, answers SETTINGS and PING, keeps both HPACK tables and both windows, and turns bytes into events (a call's request with its path and deadline in nanoseconds, whole messages across DATA frames, the half-close, a reset, GOAWAY); `response_headers`, `response_message`, `response_write` (the flow-controlled primitive, resumable after a WINDOW_UPDATE), `response_finish` (trailers with the status and its percent-encoded message, or trailers-only when no headers went out), `response_deadline_exceeded` and `response_reset` write the answer, so unary, server-streaming, client-streaming and bidirectional calls are one machine. Compression is reported, not undone. Checked against grpcio: a Neper server compiled from the same echo service the fixture replays was called by a grpcio client through a recording proxy, every outcome (status, details, messages, initial and trailing metadata, deadlines) asserted on the client's side, and the transcripts replayed at several chunk sizes on Windows (D2923).
+
+
+### `e.net.grpccodec`
+
+```neper
+error Unsupported
+
+fn supported(encoding: str) -> bool
+fn aligned(a: *mem.Arena, bytes: usize) -> ([]u8, err)
+fn inflate(a: *mem.Arena, encoding: str, payload: []const u8, limit: usize) -> ([]const u8, err)
+```
+
+gRPC message compression (L164), the part `e.net.grpc` and `e.net.grpcserver` only report: `inflate` undoes a message flagged compressed in the call's `grpc-encoding` (`gzip` is RFC 1952, `deflate` the zlib stream every gRPC implementation means by that name, `identity` or none passes the payload on), at most `limit` bytes; `supported` names the encodings it reads. An unknown encoding is `Unsupported` and a body that does not check out is the codec's own error. Checked against Python's gzip and zlib over every level, a named gzip member, stored blocks, an empty body and 70000 bytes, and against corrupted CRC, size, magic, header and truncated inputs, on Windows (D2923).
+
+
 ### `e.net.http2`
 
 ```neper
@@ -18490,6 +18621,58 @@ fn matches_pseudo_class(m: *const Matcher, pseudo: str, el: html.NodeId) -> bool
 
 Selector matching over an HTML document (L040), after Vaper's `css/selector_matcher.dart`: a parsed selector from `e.fmt.css.selector` tested against an element of an `e.fmt.html` document by walking its combinators right to left from the key compound, with the simple selectors, the structural pseudo-classes, `:not()`, `:is()`, `:where()`, `:has()` and its relative lookahead, `:nth-*()` with An+B and `of S`, the attribute operators with the `i` flag, and the state and form pseudo-classes (`:hover`, `:focus`, `:checked`, `:disabled`, `:required`, `:in-range`, `:valid`, `:invalid`, ...) over a `State` the host installs. Checked against Vaper's own matcher over 560 random documents and selector lists on both hosts (D2343).
 
+### `e.fmt.css.cascade`
+
+```neper
+const UNSCOPED: i64 = 2147483647i64
+const INLINE_SPECIFICITY: i64 = 268435456i64
+type Declaration = struct { property: str, value: str, important: bool }
+type ContainerKind = enum u8 { None, InlineSize, Size }
+type ContainerBox = struct { kind: ContainerKind, names: []const str, has_width: bool, width: f64, has_height: bool, height: f64 }
+type ContainerQuery = struct { has_name: bool, name: str, condition: container.Condition }
+type Scope = struct { starts: []const selector.Selector, limits: []const selector.Selector }
+type Rule = struct { selector: selector.Selector, declarations: []const Declaration, source: i64, has_layer: bool, layer: i64, containers: []const ContainerQuery, scopes: []const Scope }
+type Declared = struct { declaration: Declaration, author: bool, hint: bool, specificity: i64, source: i64, has_layer: bool, layer: i64, proximity: i64 }
+type Winner = struct { property: str, value: str }
+type Bucket = enum u8 { Universal, Id, Klass, Tag }
+type Index = struct { rules: []const Rule, buckets: []Bucket, keys: []str }
+
+fn beats(x: Declared, y: Declared) -> bool
+fn find_property(best: *const list.List[Declared], property: str) -> i64
+fn rank(a: *mem.Arena, declared: []const Declared) -> []const Winner
+fn drop_outranked_longhands(best: *list.List[Declared], shorthand: str, first: str, second: str)
+fn build_index(a: *mem.Arena, rules: []const Rule) -> Index
+fn push_bucket(out: *list.List[usize], idx: *const Index, bucket: Bucket, key: str)
+fn is_blank_byte(c: u8) -> bool { ret c == 32u8 || (c >= 9u8 && c <= 13u8) }
+fn class_seen(classes: str, end: usize, name: str) -> bool
+fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> []const usize
+fn names_contain(names: []const str, name: str) -> bool
+fn containers_match(stack: []const ContainerBox, queries: []const ContainerQuery) -> bool
+fn scoped(m: *const match.Matcher, root: html.NodeId) -> match.Matcher
+fn unscoped(m: *const match.Matcher) -> match.Matcher
+fn any_matches(m: *const match.Matcher, sels: []const selector.Selector, el: html.NodeId) -> bool
+fn inside_limits(m: *const match.Matcher, sc: Scope, root: html.NodeId, el: html.NodeId) -> bool
+fn find_scope_root(m: *const match.Matcher, sc: Scope, el: html.NodeId) -> (html.NodeId, i64, bool)
+fn scope_proximity(m: *const match.Matcher, scopes: []const Scope, sel: selector.Selector, el: html.NodeId) -> (i64, bool)
+fn hint(property: str, value: str) -> Declaration
+fn trimmed_attr(m: *const match.Matcher, el: html.NodeId, name: str) -> (str, bool)
+fn try_int(s: str) -> (i64, bool)
+fn int_text(a: *mem.Arena, v: i64) -> str
+fn join3(a: *mem.Arena, x: str, y: str, z: str) -> str
+fn length_hint(a: *mem.Arena, v: str) -> str
+fn legacy_font_size(s: str) -> (str, bool)
+fn one_of(name: str, a: str, b: str, c: str, d: str, e: str, f: str, g: str, h: str) -> bool
+fn ancestor_named(m: *const match.Matcher, el: html.NodeId, name: str) -> html.NodeId
+fn push_hint(out: *list.List[Declaration], property: str, value: str)
+fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> []const Declaration
+fn inline_declarations(a: *mem.Arena, source: str) -> []const Declaration
+fn collect(m: *const match.Matcher, out: *list.List[Declared], rules: []const Rule, author: bool, el: html.NodeId, stack: []const ContainerBox)
+fn resolve(m: *const match.Matcher, ua: []const Rule, author: []const Rule, el: html.NodeId, stack: []const ContainerBox, inline: []const Declaration) -> []const Winner
+```
+
+The cascade kernels of a style resolver (L040), after Vaper's `css/style_resolver.dart`, over the matcher, the container model and an `e.fmt.html` document: `beats` ranks one declaration over another (importance, author over user agent, a presentational hint between them, unlayered over layered and a later layer over an earlier, specificity, `@scope` proximity with an unscoped rule infinitely far, then source order with a tie going to the declaration visited later), `build_index` and `candidates` bucket rules by the id, else the first class, else the tag of the key compound and visit an element's id bucket, then its classes, then its tag, then the universal bucket, `containers_match` takes each `@container` query's nearest eligible container on the stack (named, and `size`-typed for a block-axis feature), `scope_proximity` finds the nearest scoping root with donut limits and the hops to it, `presentational_hints` maps the legacy attributes (`bgcolor`, `width`, `align`, `border`, `cellpadding`, `<font size>`, `dir`, `type`, ...) to declarations, `inline_declarations` reads a `style` attribute, and `resolve` runs the whole cascade for one element, a winning shorthand dropping the longhands it outranks. Media queries and value readers are the caller's. Checked against Vaper's own `_cascade`, `_presentationalHints` and `_RuleIndex` (with those private names made reachable and nothing else changed) over 130 documents with rule sets, container stacks and scopes, 1282 elements, tags and parents compared as well (D2920).
+
+
 ### `e.fmt.html.accessible`
 
 ```neper
@@ -20915,6 +21098,101 @@ fn parse_properties(a: *mem.Arena, props: str, has_props: bool) -> (json.Value, 
 ```
 
 AWS Cloud Control identity and request shaping (L048), after Petcow's `provider/aws/cloudcontrol.rs`: the catalogue `Def` read from an operator manifest and merged over the built-ins by type (`parse_defs`, `merge_defs`); the composite identifier joined with `|` in schema order and read back (`compose_identifier`, `name_from_identifier`); the `DesiredState` documents for name-addressable and tag-indexed types; tags with the `petcow:managed`/`petcow:name` identity stamped in under both tag shapes (`merged_tags`, `managed_name_from_attrs`, `strip_petcow_tags`); the RFC 6902 patch documents for update; `properties_have_key`, `parse_properties` and `is_throttle`. The SDK calls are host code. Checked against Petcow's own Rust (extracted behind thin shims) over 311 cases with `x.ssh.args` on both hosts (D2354).
+
+### `x.cloud.k8s`
+
+```neper
+type Def = struct { petcow_type: str, api_version: str, kind: str, namespaced: bool }
+type Defs = struct { valid: bool, message: str, defs: []const Def }
+
+fn join(a: *mem.Arena, x: str, y: str) -> str { ret f.join(a, x, y) }
+fn managed_label() -> str { ret "petcow.io/managed" }
+fn name_label() -> str { ret "petcow.io/name" }
+fn last_applied_key() -> str { ret "kubectl.kubernetes.io/last-applied-configuration" }
+fn def(petcow_type: str, api_version: str, kind: str, namespaced: bool) -> Def
+fn default_defs(a: *mem.Arena) -> []const Def
+fn failed_defs(a: *mem.Arena, what: str) -> Defs
+fn string_value(a: *mem.Arena, v: yaml.Value) -> (str, bool)
+fn def_of(a: *mem.Arena, v: yaml.Value) -> (Def, str, bool)
+fn parse_defs(a: *mem.Arena, source: str) -> Defs
+fn merge_defs(a: *mem.Arena, defaults: []const Def, extra: []const Def) -> []const Def
+fn selector(a: *mem.Arena, d: Def) -> str
+fn ns_args(a: *mem.Arena, d: Def, namespace: str, has_namespace: bool) -> []const str
+fn lower_ascii(a: *mem.Arena, s: str) -> str
+fn is_not_found(a: *mem.Arena, stderr: str) -> bool
+fn text(s: str) -> json.Value { ret json.Value{ String: s } }
+fn obj(a: *mem.Arena) -> ir.Obj
+fn is_managed_item(item: json.Value) -> bool
+fn apply_manifest(a: *mem.Arena, d: Def, name: str, attrs: json.Value) -> str
+fn observed(a: *mem.Arena, type_: str, live: json.Value) -> json.Value
+```
+
+The Kubernetes provider's identity and drift rules (L048), after Petcow's `provider/k8s/mod.rs`: the fourteen built-in kinds and an operator manifest of more merged over them by type (`default_defs`, `parse_defs`, `merge_defs`), the kubectl selector and `-n` arguments (`selector`, `ns_args`), the apply manifest with `metadata.name` forced and the `petcow.io/managed` and `petcow.io/name` labels injected over a user's own (`apply_manifest`), the observed state taken from the `last-applied-configuration` annotation when it parses and from the live object otherwise (`observed`), and whether an object is managed or a kubectl error means not found (`is_managed_item`, `is_not_found`). A string field accepts a plain scalar as its text, as the reference's YAML reader does; a number written with a trailing zero or an exponent is read as its shortest text. The kubectl process is host code. Checked against Petcow's own functions, extracted unchanged, with the S3, IAM, EC2, Lightsail and transport helpers, over 600 inputs on Windows (D2922).
+
+
+### `x.cloud.awssdk`
+
+```neper
+fn join(a: *mem.Arena, x: str, y: str) -> str { ret f.join(a, x, y) }
+fn text(s: str) -> json.Value { ret json.Value{ String: s } }
+fn obj(a: *mem.Arena) -> ir.Obj
+fn managed_key() -> str { ret "petcow:managed" }
+fn name_key() -> str { ret "petcow:name" }
+fn resource_error(a: *mem.Arena, logical_id: str, message: str) -> str
+fn validate_bucket_name(a: *mem.Arena, name: str) -> (bool, str)
+fn attr_bool(attrs: json.Value, key: str) -> bool
+fn attr_str(attrs: json.Value, key: str) -> (str, bool)
+fn user_tags(a: *mem.Arena, attrs: json.Value) -> json.Value
+fn hex_value(c: u8) -> i32
+fn continuation(b: u8, low: u8, high: u8) -> bool { ret b >= low && b <= high }
+fn utf8_step(s: str, at: usize) -> i64
+fn lossy(a: *mem.Arena, bytes: str) -> str
+fn percent_decode(a: *mem.Arena, s: str) -> str
+fn assume_role_json(a: *mem.Arena, attrs: json.Value, name: str) -> (str, bool, str)
+fn pair(a: *mem.Arena, k: str, v: str) -> json.Value
+fn managed_iam_tags(a: *mem.Arena, name: str, user: json.Value) -> json.Value
+fn desired_arns(a: *mem.Arena, attrs: json.Value) -> []const str
+fn string_list(a: *mem.Arena, attrs: json.Value, key: str) -> []const str
+fn attr_i64(attrs: json.Value, key: str) -> (i64, bool)
+fn managed_tags(a: *mem.Arena, name: str, user: json.Value) -> json.Value
+fn tag_key(tags: []const json.Value, at: usize) -> (str, bool)
+fn tag_value(tags: []const json.Value, at: usize) -> (str, bool)
+fn observed_user_tags(a: *mem.Arena, tags: json.Value) -> json.Value
+fn items(v: json.Value) -> []const json.Value
+fn petcow_name(tags: json.Value) -> (str, bool)
+fn name_or_id(tags: json.Value, real_id: str) -> str
+fn unmanaged(a: *mem.Arena, type_: str, tags: json.Value, real_id: str) -> json.Value
+fn wrap_i32(v: i64) -> i64
+fn ingress_permissions(a: *mem.Arena, name: str, attrs: json.Value) -> (json.Value, bool, str)
+fn int_text(a: *mem.Arena, v: i64) -> str
+fn lightsail_type_name(kind: str) -> str
+fn req_attr(a: *mem.Arena, attrs: json.Value, key: str, kind: str) -> (str, bool, str)
+fn lightsail_managed_tags(a: *mem.Arena, name: str) -> json.Value
+```
+
+The pure mapping of Petcow's native AWS providers (L048), after `provider/aws/{s3,iam,ec2,lightsail}.rs`: the S3 bucket-name rules and `bool`, `str` and `tags` attributes, the IAM inline-policy percent-decoding (a malformed byte replaced as `from_utf8_lossy` does), `assume_role_json` (a string passes through, anything else is compact JSON in member order, a missing one is an error), the managed tag lists and sorted `managed_policy_arns`, the EC2 managed tags, user tags read back, PetCow name, display name of an unmanaged resource and integer and string-list attributes, the security-group ingress rules (ports cast to 32 bits as the original does), and the Lightsail type names, required attributes and identity tags. Tags are `[key, value]` pairs. The SDK calls are host code. Checked against Petcow's own functions, extracted unchanged behind thin shims for the SDK builders, over 600 inputs on Windows (D2922).
+
+
+### `x.ssh.transport`
+
+```neper
+type Factory = struct { ctx: *void, build: fn(*void, str) -> (bool, str) }
+type Table = struct { a: *mem.Arena, default_kind: str, built: list.List[str], factory: Factory }
+type Resolution = struct { kind: str, good: bool, failure: str }
+
+fn new_table(a: *mem.Arena, default_kind: str, factory: Factory) -> Table
+fn name(t: *const Table) -> str { ret t.default_kind }
+fn is_white(c: u32) -> bool
+fn trim(s: str) -> str
+fn kind_for(default_kind: str, vars: json.Value) -> str
+fn members_of(v: json.Value) -> ([]const json.Member, bool)
+fn is_built(t: *const Table, kind: str) -> bool
+fn cat(a: *mem.Arena, x: str, y: str) -> str
+fn resolve(t: *Table, host: str, vars: json.Value) -> Resolution
+```
+
+Per-host transport selection (L048), after Petcow's `transport/mod.rs` `PerHostTransport`: `kind_for` reads a host's `transport` variable (a string with something in it, trimmed as Rust's `str::trim` does) and falls back to the run's default; `resolve` builds that kind through an injected `Factory` the first time a host asks for it and keeps it, so a run over three WinRM hosts never builds the SSM transport and five hosts on one kind build it once, and a factory failure is reported with the host's name and the kind. A failed kind is not kept. Running a command is host code. Checked against Petcow's own selection logic over 40 mixed-estate runs on Windows (D2922).
+
 
 ### `x.ssh.args`
 

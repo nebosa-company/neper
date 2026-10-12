@@ -46,7 +46,8 @@
    "pending": [],
    "fixtures": [
     "algo_deflate",
-    "fmt_png"
+    "fmt_png",
+    "net_grpccodec"
    ]
   },
   {
@@ -409,7 +410,8 @@
    "delivered": 10,
    "pending": [],
    "fixtures": [
-    "fmt_gzip"
+    "fmt_gzip",
+    "net_grpccodec"
    ]
   },
   {
@@ -423,6 +425,7 @@
     "fmt_gaps_a",
     "fmt_html",
     "html_accessible",
+    "text_css_cascade",
     "text_css_match"
    ]
   },
@@ -484,6 +487,7 @@
     "algo_fulltext",
     "algo_ir",
     "algo_journal",
+    "algo_offline",
     "algo_page_batch",
     "algo_predicate",
     "algo_project",
@@ -491,6 +495,7 @@
     "algo_realtime",
     "algo_sync",
     "algo_syncjob",
+    "algo_syncsource",
     "algo_transpile",
     "algo_trigger",
     "algo_view",
@@ -508,6 +513,7 @@
     "net_packet",
     "net_policy",
     "net_ssrf",
+    "text_css_cascade",
     "text_css_container",
     "text_css_match",
     "text_css_selector",
@@ -522,6 +528,7 @@
     "x_agent_task",
     "x_api_protocols",
     "x_cloud_aws",
+    "x_cloud_drivers",
     "x_cloud_manifest",
     "x_cloud_rest",
     "x_elastic_rest",
@@ -745,7 +752,8 @@
    "delivered": 10,
    "pending": [],
    "fixtures": [
-    "fmt_zlib"
+    "fmt_zlib",
+    "net_grpccodec"
    ]
   },
   {

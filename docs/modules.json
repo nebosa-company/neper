@@ -50,6 +50,7 @@
     "e.gfx.cssvalue",
     "e.fmt.css.container",
     "e.fmt.css.match",
+    "e.fmt.css.cascade",
     "e.fmt.html.accessible",
     "e.fmt.html.sanitize",
     "e.fmt.hcl",
@@ -136,6 +137,8 @@
     "e.dbus",
     "x.modbus.wire",
     "e.net.grpc",
+    "e.net.grpcserver",
+    "e.net.grpccodec",
     "e.net.http2",
     "x.elastic.rest",
     "x.mongodb.wire",
@@ -192,6 +195,9 @@
     "x.cloud.manifest",
     "x.cloud.aws",
     "x.ssh.args",
+    "x.cloud.k8s",
+    "x.cloud.awssdk",
+    "x.ssh.transport",
     "x.net.webhook",
     "x.net.authscheme",
     "x.mcp.protocol",
@@ -254,6 +260,8 @@
     "e.algo.sync",
     "e.algo.realtime",
     "e.algo.syncjob",
+    "e.algo.offline",
+    "e.algo.syncsource",
     "e.algo.fulltext",
     "e.algo.search",
     "e.text.sig",
@@ -7800,6 +7808,134 @@
     "e.time.calendar",
     "e.time.recur",
     "e.ui.accessibility"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.offline",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.ir",
+    "e.algo.sync",
+    "e.data.list",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.syncsource",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.ir",
+    "e.algo.sync",
+    "e.algo.syncjob",
+    "e.data.list",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.css.cascade",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.fmt.css.container",
+    "e.fmt.css.match",
+    "e.fmt.css.selector",
+    "e.fmt.css.syntax",
+    "e.fmt.html",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.cloud.k8s",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.chain",
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.fmt.json",
+    "e.fmt.yaml",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.cloud.awssdk",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.chain",
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.ssh.transport",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.fmt.json",
+    "e.mem",
+    "e.str",
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.grpcserver",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.net.grpc",
+    "e.net.http2",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.grpccodec",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.gzip",
+    "e.fmt.zlib",
+    "e.io",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   }

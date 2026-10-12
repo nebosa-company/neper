@@ -2273,4 +2273,8 @@ D2805	2971	L156: brokerless messaging, ZMTP (ZeroMQ) and SP (NNG) patterns over 
 D2442	1006	C170: HOTP entries and several URIs per import in Secure
 D2880	3329	L066: a safe structured Markdown viewer model (`e.ui.markdown_view`)
 D2881	3455	L067: a refresh-stable explorer tree adapter (`e.ui.tree_adapter`)
-D2882	3216	L148: scheduler control model, day, week and agenda views (`e.ui.schedule`)
+D2882	3217	L148: scheduler control model, day, week and agenda views (`e.ui.schedule`)
+D2920	2293	L040: the cascade kernels of a style resolver (`e.fmt.css.cascade`)
+D2921	3033	L037: the offline layer and the change-stream and entity-browse judgements (`e.algo.offline`, `e.algo.syncsource`)
+D2922	2591	L048: the k8s provider's identity rules, the native AWS providers' mapping and per-host transport selection (`x.cloud.k8s`, `x.cloud.awssdk`, `x.ssh.transport`)
+D2923	3255	L164: gRPC server side over `e.net.http2`, and message decompression (`e.net.grpcserver`, `e.net.grpccodec`)
