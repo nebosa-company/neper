@@ -1942,6 +1942,7 @@ fn fill_i32(t: *Table, col: usize, values: []const i32)
 fn fill_i64(t: *Table, col: usize, values: []const i64)
 fn fill_f64(t: *Table, col: usize, values: []const f64)
 fn dict_len(t: *const Table, col: usize) -> usize
+fn dict_capacity(t: *const Table, col: usize) -> usize
 fn dict_str(t: *const Table, col: usize, id: u32) -> str
 fn dict_id(t: *const Table, col: usize, row: usize) -> u32
 fn dict_find(t: *const Table, col: usize, s: str) -> (u32, bool)
@@ -1961,6 +1962,35 @@ its null bit. `ranks` gives every dictionary entry its dense position in ASCII u
 byte order (the order of `CompareStr(UpperCase(a), UpperCase(b))`); entries have the same rank
 exactly when they are equal ignoring ASCII case. Replacing a `Str` cell leaves its old bytes in
 the heap (`heap_wasted`). Single writer; row compaction and a boxed value accessor are not here.
+
+### `e.data.tableview`
+
+```neper
+type KeyMode = enum u8 { Column, KeyFn, Compare }
+type Key = struct { mode: KeyMode, column: usize, descending: bool, fold: bool, key_fn: fn(*void, usize) -> u64, compare: fn(*void, u32, u32) -> i32, ctx: *void }
+type Cache = struct { ranks: []u32, version: u64, structure: u64, fold: bool, size: usize, valid: bool }
+type View = struct { t: *table.Table, order_rows: []u32, spare: []u32, keys: []u64, caches: []Cache, total: usize }
+
+fn column_key(col: usize, descending: bool, fold: bool) -> Key
+fn fn_key(f: fn(*void, usize) -> u64, ctx: *void, descending: bool) -> Key
+fn compare_key(f: fn(*void, u32, u32) -> i32, ctx: *void, descending: bool) -> Key
+fn create(a: *mem.Arena, t: *table.Table) -> (View, err)
+fn reset_order(v: *View)
+fn rows(v: *const View) -> []const u32
+fn len(v: *const View) -> usize
+fn row_at(v: *const View, position: usize) -> usize
+fn apply_sort(v: *View, keys: []const Key, scratch: *mem.Arena) -> err
+```
+
+The display order of an `e.data.table`'s live rows (`docs/grid.md` §5.4); this increment is the
+sort stage. `apply_sort` is a stable LSD multi-key sort: keys are applied last to first, each a
+stable pass, so ties on every key are in row order. A numeric, bool or dictionary column becomes
+an unsigned 64-bit key per row and takes one counting pass per significant key byte; a heap
+string column is ranked once (cached until the column or row set changes) by a comparison sort;
+`fn_key` is a derived key per row for an order the table cannot express; `compare_key` is the
+slow path, a stable merge stage. Nulls sort first ascending and last descending (descending
+reverses the whole order). Text order is ASCII upper-case folded (`fold: true`) or byte order.
+`scratch` supplies rank-building and merge storage; the caller may reset it afterwards.
 
 ### `e.data.slot_map`
 

@@ -2452,6 +2452,12 @@ $dataTableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $dataTableWritten -ne 'executable written') { throw 'data_table emission failed' }
 & $dataTablePath
 if ($LASTEXITCODE -ne 0) { throw "a data_table check failed: exit $LASTEXITCODE" }
+# `e.data.tableview`: the stable multi-key LSD sort over a 150,000-row `e.data.table`: dictionary ranks folded and exact, nulls first and last, 64-bit integers, floats, booleans, heap strings, three keys, key function, comparer, deleted rows and rank caches after an edit, each result checked against a reference ordering (D3906).
+$dataTableviewPath = Join-Path $testBuild 'data-tableview-selfhost.exe'
+$dataTableviewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_tableview\src\main.e') $repo 'x64' 'windows' $dataTableviewPath --arena 256m
+if ($LASTEXITCODE -ne 0 -or $dataTableviewWritten -ne 'executable written') { throw 'data_tableview emission failed' }
+& $dataTableviewPath
+if ($LASTEXITCODE -ne 0) { throw "a data_tableview check failed: exit $LASTEXITCODE" }
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 $algoRulesPath = Join-Path $testBuild 'algo-rules-selfhost.exe'
 $algoRulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rules\src\main.e') $repo 'x64' 'windows' $algoRulesPath

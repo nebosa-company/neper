@@ -479,6 +479,7 @@ fn intern(c: *Column, s: str) -> (u32, err) {
 }
 
 fn dict_len(t: *const Table, col: usize) -> usize { ret t.columns[col].entry_count }
+fn dict_capacity(t: *const Table, col: usize) -> usize { ret t.columns[col].entry_starts.len }
 fn dict_str(t: *const Table, col: usize, id: u32) -> str { ret entry_text(&t.columns[col], id) }
 // The dictionary id of a row's cell (meaningless for a null cell).
 fn dict_id(t: *const Table, col: usize, row: usize) -> u32 { ret t.columns[col].ids[row] }

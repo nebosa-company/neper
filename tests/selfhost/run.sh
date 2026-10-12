@@ -2174,6 +2174,11 @@ data_table_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$data_table_written" = 'executable written' ]
 chmod +x "$test_build/data-table-selfhost"
 "$test_build/data-table-selfhost"
+# `e.data.tableview`: the stable multi-key LSD sort over a 150,000-row `e.data.table`: dictionary ranks folded and exact, nulls first and last, 64-bit integers, floats, booleans, heap strings, three keys, key function, comparer, deleted rows and rank caches after an edit, each result checked against a reference ordering (D3906).
+data_tableview_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_tableview/src/main.e" "$repo" x64 linux "$test_build/data-tableview-selfhost" --arena 256m)
+[ "$data_tableview_written" = 'executable written' ]
+chmod +x "$test_build/data-tableview-selfhost"
+"$test_build/data-tableview-selfhost"
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 algo_rules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rules/src/main.e" "$repo" x64 linux "$test_build/algo-rules-selfhost")
 [ "$algo_rules_written" = 'executable written' ]
