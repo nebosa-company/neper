@@ -22,7 +22,9 @@ const BLOCKED: u8 = 4u8
 // capability space, a thread cannot name an endpoint, the console or a frame. `object` is
 // the kernel index the capability grants, and `parent` the slot it was derived from (or
 // NONE), so a revoke walks the derivations. Rights are ANDed down on each derivation.
-const CAPS: usize = 12usize
+// (D4000) 16 slots: the sensor server's two endpoints (apps hold them in 11 and 12) and the audio server's follow the
+// settings server's in the apps' space.
+const CAPS: usize = 16usize
 const CAP_NULL: u8 = 0u8
 const CAP_ENDPOINT: u8 = 1u8
 const CAP_CONSOLE: u8 = 2u8
@@ -46,14 +48,18 @@ type Cap = struct { kind: u8, rights: u8, object: usize, parent: usize }
 // sentinel, and `waiting_child` the child it is blocked reaping (NONE otherwise).
 // (D2157) `detached` marks a thread (from os.thread_detach) whose slot is freed the moment it
 // exits rather than kept for a join -- a thread nobody will reap.
-type Thread = struct { state: u8, name: str, ttbr: usize, caps: [12]Cap, frame: a64.Frame, parent: usize, exit_code: usize, waiting_child: usize, detached: usize, window: usize }
+type Thread = struct { state: u8, name: str, ttbr: usize, caps: [16]Cap, frame: a64.Frame, parent: usize, exit_code: usize, waiting_child: usize, detached: usize, window: usize, deadline: usize, app: usize }
 
 // The exit code of a process the kernel killed for a fault, which its parent's reap returns.
 const FAULT_CODE: usize = 18446744073709551615usize
+// (D4000) What a receive with a deadline returns when the deadline passes first, and the destination slot value from
+// which the number is a wait in milliseconds.
+const TIMED_OUT: u64 = 18446744073709551614u64
+const TIMEOUT_BASE: usize = 1000usize
 
 // A synchronous IPC endpoint: a queue of threads blocked on it, all senders or all
 // receivers, since a sender and a receiver rendezvous rather than both waiting.
-const ENDPOINTS: usize = 16usize
+const ENDPOINTS: usize = 24usize
 const EP_EMPTY: u8 = 0u8
 const EP_SENDERS: u8 = 1u8
 const EP_RECEIVERS: u8 = 2u8
@@ -69,7 +75,7 @@ const NOTIFICATIONS: usize = 2usize
 type Notification = struct { pending: usize, waiters: [24]usize, count: usize }
 
 var threads: [24]Thread = zero
-var endpoints: [16]Endpoint = zero
+var endpoints: [24]Endpoint = zero
 var notifications: [2]Notification = zero
 var current: usize = 24usize
 // The next boot-reserved endpoint retype will hand out.
@@ -104,10 +110,10 @@ fn add(space: vm.Space, name: str, arg_table: usize, arg_count: usize) -> usize 
     frame.sp_el0 = u64(space.stack_top)
     frame.elr = u64(space.entry)
     frame.spsr = 0u64
-    var empty: [12]Cap = zero
+    var empty: [16]Cap = zero
     // The parent is whatever thread is current: none at boot (where `current` is NONE), the
     // launcher under the `launch` system call, so a later `reap` on this child finds its parent.
-    threads[slot] = Thread { state: READY, name: name, ttbr: space.ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: space.size }
+    threads[slot] = Thread { state: READY, name: name, ttbr: space.ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: space.size, deadline: 0usize, app: 0usize }
     live += 1usize
     ret slot
 }
@@ -147,11 +153,11 @@ fn add_in_space(ttbr: usize, name: str, elr: usize, arg0: usize, arg1: usize, st
     frame.sp_el0 = u64(stack_top)
     frame.elr = u64(elr)
     frame.spsr = 0u64
-    var empty: [12]Cap = zero
+    var empty: [16]Cap = zero
     // A spawned thread shares the creating thread's address space, so it shares its window size too.
     var inherited = 0usize
     if current != NONE { inherited = threads[current].window }
-    threads[slot] = Thread { state: READY, name: name, ttbr: ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: inherited }
+    threads[slot] = Thread { state: READY, name: name, ttbr: ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: inherited, deadline: 0usize, app: 0usize }
     live += 1usize
     ret slot
 }
@@ -226,6 +232,7 @@ fn run_next(base: usize, frame: *a64.Frame) -> bool {
 // idle (no current) it starts the first thread. Always finds one -- the preempted thread
 // is ready again -- so it need not report.
 fn on_timer(frame: *a64.Frame) {
+    expire_deadlines()
     if current == NONE {
         idle_frame = *frame
         let started = run_next(MAX_THREADS - 1usize, frame)
@@ -351,6 +358,24 @@ fn transfer_cap(sender: usize, sender_ep_slot: usize, sender_grant_slot: usize, 
     threads[receiver].caps[receiver_dest_slot] = Cap { kind: granted.kind, rights: granted.rights, object: granted.object, parent: NONE }
 }
 
+// (D4001) A stamped endpoint tells its receiver who sent: the kernel puts the sender's app number (the archive entry of
+// a launched app, 99 for an installed one) in the top byte of every word it delivers, so a server's per-app permission
+// cannot be forged by the app. Words on such an endpoint are therefore 56 bits.
+var stamp_mask: usize = 0usize
+
+fn stamp_endpoint(ep_id: usize) {
+    if ep_id < ENDPOINTS { stamp_mask = stamp_mask | (1usize << ep_id) }
+}
+
+fn set_app(thread_index: usize, app: usize) {
+    threads[thread_index].app = app
+}
+
+fn stamped_word(ep_id: usize, sender: usize, word: u64) -> u64 {
+    if ((stamp_mask >> ep_id) & 1usize) == 0usize { ret word }
+    ret (word & 72057594037927935u64) | (u64(threads[sender].app & 255usize) << 56u64)
+}
+
 // Synchronous send of one word (x1) over the endpoint capability in slot x0, optionally
 // granting the capability in slot x2 when the endpoint capability has the grant right. A
 // waiting receiver takes the word and the granted capability and both run on; otherwise the
@@ -365,7 +390,8 @@ fn ipc_send(frame: *a64.Frame) {
     }
     if endpoints[ep_id].kind == EP_RECEIVERS && endpoints[ep_id].count != 0usize {
         let receiver = ep_dequeue(ep_id)
-        threads[receiver].frame.x[0usize] = frame.x[1usize]
+        threads[receiver].deadline = 0usize
+        threads[receiver].frame.x[0usize] = stamped_word(ep_id, current, frame.x[1usize])
         transfer_cap(current, ep_slot, usize(frame.x[2usize]), receiver, usize(threads[receiver].frame.x[1usize]))
         threads[receiver].state = READY
         frame.x[0usize] = 0u64
@@ -388,14 +414,72 @@ fn ipc_recv(frame: *a64.Frame) {
     let dest = usize(frame.x[1usize])
     if endpoints[ep_id].kind == EP_SENDERS && endpoints[ep_id].count != 0usize {
         let sender = ep_dequeue(ep_id)
-        frame.x[0usize] = threads[sender].frame.x[1usize]
+        frame.x[0usize] = stamped_word(ep_id, sender, threads[sender].frame.x[1usize])
         transfer_cap(sender, usize(threads[sender].frame.x[0usize]), usize(threads[sender].frame.x[2usize]), current, dest)
         threads[sender].frame.x[0usize] = 0u64
         threads[sender].state = READY
         ret
     }
+    // (D4000) A destination slot of TIMEOUT_BASE + n (past every capability slot, so no capability is placed) waits at
+    // most n milliseconds: the timer tick that finds the deadline gone takes the thread off the endpoint and hands it
+    // TIMED_OUT in x0. It is the apps' finer timer -- a thread that must also do something between events waits on its
+    // routed endpoint with a timeout rather than without one.
+    if dest >= TIMEOUT_BASE {
+        let freq = usize(os.mrs(a64.CNTFRQ_EL0))
+        var span = (dest - TIMEOUT_BASE) * (freq / 1000usize)
+        if span == 0usize { span = 1usize }
+        threads[current].deadline = usize(os.mrs(a64.CNTVCT_EL0)) + span
+    }
     ep_enqueue(ep_id, current, false)
     block_current(frame)
+}
+
+// Take `who` off the receivers waiting on whichever endpoint holds it.
+fn ep_remove(who: usize) {
+    var ep_id = 0usize
+    while ep_id < ENDPOINTS {
+        if endpoints[ep_id].kind == EP_RECEIVERS {
+            var at = 0usize
+            while at < endpoints[ep_id].count {
+                if endpoints[ep_id].waiters[at] == who {
+                    var i = at + 1usize
+                    while i < endpoints[ep_id].count {
+                        endpoints[ep_id].waiters[i - 1usize] = endpoints[ep_id].waiters[i]
+                        i += 1usize
+                    }
+                    endpoints[ep_id].count -= 1usize
+                    if endpoints[ep_id].count == 0usize { endpoints[ep_id].kind = EP_EMPTY }
+                    ret
+                }
+                at += 1usize
+            }
+        }
+        ep_id += 1usize
+    }
+}
+
+// Ready every thread whose receive deadline has passed, with TIMED_OUT as its received word.
+fn expire_deadlines() {
+    var any = false
+    var i = 0usize
+    while i < MAX_THREADS {
+        if threads[i].deadline != 0usize { any = true }
+        i += 1usize
+    }
+    if !any { ret }
+    let now = usize(os.mrs(a64.CNTVCT_EL0))
+    i = 0usize
+    while i < MAX_THREADS {
+        if threads[i].deadline != 0usize && now >= threads[i].deadline {
+            threads[i].deadline = 0usize
+            if threads[i].state == BLOCKED {
+                ep_remove(i)
+                threads[i].frame.x[0usize] = TIMED_OUT
+                threads[i].state = READY
+            }
+        }
+        i += 1usize
+    }
 }
 
 // Retype memory from an untyped capability (slot x0) into an object of kind x1, capability
