@@ -1207,6 +1207,11 @@ generic_field_owner_written=$($test_build/neper-self emit-executable "$repo/test
 [ "$generic_field_owner_written" = 'executable written' ]
 chmod +x "$test_build/generic-field-owner-selfhost"
 "$test_build/generic-field-owner-selfhost"
+# `e.fmt.pdf` ASCII85 (D2441): page contents with ASCII85Decode alone and then FlateDecode, a zero group and white space.
+fmt_pdf_a85_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf_a85/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-a85-selfhost")
+[ "$fmt_pdf_a85_written" = 'executable written' ]
+chmod +x "$test_build/fmt-pdf-a85-selfhost"
+"$test_build/fmt-pdf-a85-selfhost"
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-selfhost")
 [ "$fmt_pdf_written" = 'executable written' ]

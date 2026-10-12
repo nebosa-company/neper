@@ -26288,6 +26288,7 @@ fn has_pair(data: []const u8, from: usize, until: usize, key: str, value: str) -
 fn ref_after(data: []const u8, from: usize, until: usize, key: str) -> (usize, bool)
 fn refs_in_array(data: []const u8, from: usize, until: usize, key: str, out: []usize) -> usize
 fn walk(a: *mem.Arena, data: []const u8, table: []const Object, count: usize, root: usize, found_pages: []usize) -> (usize, err)
+fn ascii85(a: *mem.Arena, raw: []const u8) -> ([]const u8, err)
 fn stream_of(a: *mem.Arena, data: []const u8, s: usize, e: usize) -> ([]const u8, err)
 type Mem = struct { data: []const u8, off: usize }
 fn mem_read(ctx: *void, dst: []u8) -> (usize, err)

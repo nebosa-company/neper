@@ -1306,6 +1306,12 @@ $genericFieldOwnerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $genericFieldOwnerWritten -ne 'executable written') { throw 'generic_field_owner emission failed' }
 & $genericFieldOwnerPath
 if ($LASTEXITCODE -ne 0) { throw "a generic_field_owner check failed: exit $LASTEXITCODE" }
+# `e.fmt.pdf` ASCII85 (D2441): page contents with ASCII85Decode alone and then FlateDecode, a zero group and white space.
+$fmtPdfA85Path = Join-Path $testBuild 'fmt-pdf-a85-selfhost.exe'
+$fmtPdfA85Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf_a85\src\main.e') $repo 'x64' 'windows' $fmtPdfA85Path
+if ($LASTEXITCODE -ne 0 -or $fmtPdfA85Written -ne 'executable written') { throw 'fmt_pdf_a85 emission failed' }
+& $fmtPdfA85Path
+if ($LASTEXITCODE -ne 0) { throw "a fmt_pdf_a85 check failed: exit $LASTEXITCODE" }
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 $fmtPdfPath = Join-Path $testBuild 'fmt-pdf-selfhost.exe'
 $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf\src\main.e') $repo 'x64' 'windows' $fmtPdfPath

@@ -230,7 +230,62 @@ fn walk(a: *mem.Arena, data: []const u8, table: []const Object, count: usize, ro
     ret (n, ok)
 }
 
-// Decode the stream of object span [s, e): its bytes, `/FlateDecode` undone. (The raw span when it has no
+// ASCII85 (Adobe): optional `<~`, groups of five characters `!`..`u` into four bytes, `z` for four zero bytes,
+// white space ignored, `~>` ends; a final partial group of n characters gives n - 1 bytes.
+fn ascii85(a: *mem.Arena, raw: []const u8) -> ([]const u8, err) {
+    let (out, out_error) = mem.alloc[u8](a, raw.len + 8usize)
+    if out_error != ok { ret (raw[0usize..0usize], out_error) }
+    var at = 0usize
+    var n = 0usize
+    var i = 0usize
+    if raw.len >= 2usize && raw[0usize] == 60u8 && raw[1usize] == 126u8 { i = 2usize }
+    var group: [5]u32 = zero
+    var count = 0usize
+    var done = false
+    while i < raw.len && !done {
+        let c = raw[i]
+        i += 1usize
+        if c == 126u8 {
+            done = true
+        } else if c == 122u8 && count == 0usize {
+            out[n] = 0u8
+            out[n + 1usize] = 0u8
+            out[n + 2usize] = 0u8
+            out[n + 3usize] = 0u8
+            n += 4usize
+        } else if c >= 33u8 && c <= 117u8 {
+            group[count] = u32(c) - 33u32
+            count += 1usize
+            if count == 5usize {
+                let v = group[0usize] * 52200625u32 + group[1usize] * 614125u32 + group[2usize] * 7225u32 + group[3usize] * 85u32 + group[4usize]
+                out[n] = u8(v >> 24u32)
+                out[n + 1usize] = u8((v >> 16u32) & 255u32)
+                out[n + 2usize] = u8((v >> 8u32) & 255u32)
+                out[n + 3usize] = u8(v & 255u32)
+                n += 4usize
+                count = 0usize
+            }
+        }
+    }
+    if count > 1usize {
+        var k = count
+        while k < 5usize {
+            group[k] = 84u32
+            k += 1usize
+        }
+        let v = group[0usize] * 52200625u32 + group[1usize] * 614125u32 + group[2usize] * 7225u32 + group[3usize] * 85u32 + group[4usize]
+        let bytes: [4]u8 = [4]u8{ u8(v >> 24u32), u8((v >> 16u32) & 255u32), u8((v >> 8u32) & 255u32), u8(v & 255u32) }
+        var j = 0usize
+        while j + 1usize < count {
+            out[n + j] = bytes[j]
+            j += 1usize
+        }
+        n += count - 1usize
+    }
+    ret (out[0usize..n], ok)
+}
+
+// Decode the stream of object span [s, e): its bytes, `/ASCII85Decode` and `/FlateDecode` undone. (The raw span when it has no
 // filter, an empty result when the stream is missing or does not inflate.)
 fn stream_of(a: *mem.Arena, data: []const u8, s: usize, e: usize) -> ([]const u8, err) {
     let keyword = find(data, "stream", s, e)
@@ -242,7 +297,14 @@ fn stream_of(a: *mem.Arena, data: []const u8, s: usize, e: usize) -> ([]const u8
     // Trim the end-of-line before `endstream`.
     if until > from && data[until - 1usize] == 10u8 { until -= 1usize }
     if until > from && data[until - 1usize] == 13u8 { until -= 1usize }
-    let raw = data[from..until]
+    var raw = data[from..until]
+    // `/ASCII85Decode` first when the filter list has it (reportlab writes ASCII85 then Flate).
+    let a85 = find(data, "ASCII85Decode", s, keyword)
+    if a85 < keyword {
+        let (decoded, decode_error) = ascii85(a, raw)
+        if decode_error != ok { ret (raw[0usize..0usize], ok) }
+        raw = decoded
+    }
     let flate = find(data, "FlateDecode", s, keyword)
     if flate >= keyword { ret (raw, ok) }
     let (storage, storage_error) = mem.alloc[u8](a, zlib.storage_required(.Fast))

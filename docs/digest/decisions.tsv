@@ -2256,4 +2256,5 @@ D2762	2753	L140: e.task.jobs, persistent background jobs with at-least-once retr
 D2763	3037	L147: e.db.docstore, an embedded document store and append-only event journal in one CRC-framed file, checked against an independent writer and replay model
 D2764	2574	L141: e.dist.actor, virtual actors with lifecycle, timers, durable reminders and persisted state over rendezvous placement and e.db.docstore
 D2765	2871	L149: e.debug.report, a Sentry-envelope crash and error report client with an offline queue, checked byte for byte against sentry-sdk
-D2440	906	C177: a comptime Field argument is keyed by its owner
+D2440	907	C177: a comptime Field argument is keyed by its owner
+D2441	753	e.fmt.pdf reads ASCII85-filtered streams
