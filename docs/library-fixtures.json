@@ -3139,6 +3139,7 @@
     "ui_property",
     "ui_ribbon",
     "ui_ripple_v2",
+    "ui_schedule",
     "ui_scroll_view",
     "ui_selection",
     "ui_selection2_v2",
@@ -3182,7 +3183,8 @@
     "time_calendar",
     "time_calendar_iso",
     "time_pattern",
-    "time_recur"
+    "time_recur",
+    "ui_schedule"
    ]
   },
   {
@@ -3290,6 +3292,7 @@
     "ui_progress",
     "ui_property",
     "ui_ribbon",
+    "ui_schedule",
     "ui_selection",
     "ui_semantics",
     "ui_sheet",

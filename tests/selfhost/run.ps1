@@ -4321,6 +4321,12 @@ $uiTreeAdapterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $uiTreeAdapterWritten -ne 'executable written') { throw 'ui_tree_adapter emission failed' }
 $uiTreeAdapterOutput = & $uiTreeAdapterPath
 if ($LASTEXITCODE -ne 0 -or $uiTreeAdapterOutput -ne 'ui tree adapter ok') { throw "ui_tree_adapter answered wrongly: exit $LASTEXITCODE" }
+# e.ui.schedule: day, week and agenda layouts with recurrence, overlap lanes, all-day band, hits, drag-create and accessible roles against a python-dateutil model (D2882).
+$uiSchedulePath = Join-Path $testBuild 'ui-schedule-selfhost.exe'
+$uiScheduleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_schedule\src\main.e') $repo 'x64' 'windows' $uiSchedulePath -j 2
+if ($LASTEXITCODE -ne 0 -or $uiScheduleWritten -ne 'executable written') { throw 'ui_schedule emission failed' }
+$uiScheduleOutput = & $uiSchedulePath
+if ($LASTEXITCODE -ne 0 -or $uiScheduleOutput -ne 'ui schedule ok') { throw "ui_schedule answered wrongly: exit $LASTEXITCODE" }
 # e.gfx.svg against cairosvg: gradients, defs and use, units, clip path and plain shapes rendered through the CPU backend and held to a 16x16 cell tolerance (D2843).
 $gfxSvgRenderPath = Join-Path $testBuild 'gfx-svg-render-selfhost.exe'
 $gfxSvgRenderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg_render\src\main.e') $repo 'x64' 'windows' $gfxSvgRenderPath -j 2

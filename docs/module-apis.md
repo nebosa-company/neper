@@ -9225,6 +9225,70 @@ the row at the viewport top under refresh. `Duplicate`, `MissingParent`, `NotDir
 `Invalid` and `TooLarge` refuse a snapshot that is not a tree. Enumeration, path
 resolution and mutation authorization stay with the host's filesystem services.
 
+### `e.ui.schedule`
+
+```neper
+type Mode = enum u8 { Day, Week, Agenda }
+type Kind = enum u8 { Timed, AllDay }
+type RowKind = enum u8 { DayHeader, Event }
+type HitKind = enum u8 { None, Event, AllDay, Slot, DayHeader, Gutter }
+type Item = struct { id: u32, start: calendar.DateTime, minutes: u32, all_day: bool, title: str, rule: str }
+type Config = struct { mode: Mode, anchor: time.Date, week_start: calendar.Weekday, day_start: u32, day_end: u32, slot: u32, agenda_days: u32, width: f32, gutter: f32, header: f32, all_day_h: f32, hour_h: f32, row_h: f32, min_h: f32 }
+type Placed = struct { item: u32, kind: Kind, day: u32, start: i64, end: i64, x: f32, y: f32, w: f32, h: f32, lane: u32, lanes: u32, before: bool, after: bool, recurring: bool }
+type Column = struct { date: time.Date, count: i64, x: f32, w: f32 }
+type Row = struct { kind: RowKind, day: u32, placed: u32, y: f32, h: f32 }
+type Access = struct { role: accessibility.Role, x: f32, y: f32, w: f32, h: f32, label_start: usize, label_len: usize, row: u32, column: u32, row_count: u32, column_count: u32, level: u8 }
+type Hit = struct { kind: HitKind, index: usize, day: u32, minute: u32 }
+type Slot = struct { day: u32, minute: u32, start: calendar.DateTime }
+type Span = struct { day: u32, start: calendar.DateTime, minutes: u32 }
+type Occ = struct { item: u32, start: i64, minutes: i64, recurring: bool, all_day: bool }
+type Storage = struct { occ: []Occ, stamps: []calendar.DateTime, placed: []Placed, columns: []Column, rows: []Row, nodes: []Access, labels: []u8, order: []u32, lane_end: []i64 }
+type Layout = struct { cfg: Config, placed: []Placed, columns: []Column, rows: []Row, nodes: []Access, labels: []u8, placed_count: usize, column_count: usize, row_count: usize, node_count: usize, labels_len: usize, band_h: f32, grid_top: f32, height: f32, first_day: i64, days: i64, truncated: bool }
+error TooLarge
+error Invalid
+fn abs_minutes(d: calendar.DateTime) -> i64
+fn datetime_of(abs: i64) -> calendar.DateTime
+fn max_i64(a: i64, b: i64) -> i64
+fn min_i64(a: i64, b: i64) -> i64
+fn range_of(cfg: Config) -> (i64, i64)
+type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32 }
+fn push_occ(c: *Ctx, item: u32, start: i64, minutes: i64, recurring: bool, all_day: bool) -> err
+fn collect(c: *Ctx, items: []const Item) -> err
+fn occ_before(c: *const Ctx, x: u32, y: u32) -> bool
+fn put_placed(c: *Ctx, p: Placed) -> err
+fn day_order(c: *Ctx, day0: i64) -> usize
+fn place_day(c: *Ctx, d: usize, top: f32) -> err
+fn weekday_name(index: i64) -> str
+fn month_name(month: u8) -> str
+fn put_label(c: *Ctx, s: str) -> err
+fn put_number(c: *Ctx, v: i64, width: usize) -> err
+fn put_date(c: *Ctx, count: i64) -> err
+fn put_clock(c: *Ctx, abs: i64) -> err
+fn put_event_label(c: *Ctx, items: []const Item, p: Placed) -> err
+fn put_node(c: *Ctx, role: accessibility.Role, x: f32, y: f32, w: f32, h: f32, label_start: usize, row: u32, column: u32, row_count: u32, column_count: u32, level: u8) -> err
+fn build_grid(c: *Ctx, items: []const Item) -> err
+fn build_agenda(c: *Ctx, items: []const Item) -> err
+fn build(items: []const Item, cfg: Config, st: Storage) -> (Layout, err)
+fn label_of(l: *const Layout, node: usize) -> str
+fn slot_at(l: *const Layout, x: f32, y: f32) -> (Slot, bool)
+fn drag_range(l: *const Layout, x0: f32, y0: f32, x1: f32, y1: f32) -> (Span, bool)
+fn hit(l: *const Layout, x: f32, y: f32) -> Hit
+```
+
+Scheduler control model (L148, D2882): `build(items, cfg, storage)` lays appointments out
+as a `Day` or `Week` time grid or an `Agenda` list. An `Item` is a start, a length in
+minutes (all-day items are whole days) and an optional RFC 5545 rule expanded with
+`e.time.recur` for the days in view; an occurrence is placed on every day it overlaps,
+clipped to the `day_start`..`day_end` hours, with transitively overlapping occurrences in
+a cluster sharing the column by first-free-lane (`lane` of `lanes`). The `Layout` holds
+the placed rectangles, the agenda rows, the all-day band height and an accessible node
+list (`Grid`/`ColumnHeader`/`Cell` for a grid, `List`/`Heading`/`ListItem` for an agenda,
+each with its label and row and column position, over `e.ui.accessibility.Role`).
+`hit` answers what is under a point, `slot_at` the snapped day and minute and
+`drag_range` the snapped, window-clamped range of a drag-to-create gesture.
+`truncated` says an endless rule was cut at the occurrence scratch. Layout is data; the
+painting, pointer capture and keyboard model of a window are the host's.
+
 ### `e.ui.undo`
 
 ```neper

@@ -3849,6 +3849,12 @@ ui_tree_adapter_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/ui-tree-adapter-selfhost"
 ui_tree_adapter_output=$("$test_build/ui-tree-adapter-selfhost")
 [ "$ui_tree_adapter_output" = 'ui tree adapter ok' ]
+# e.ui.schedule: day, week and agenda layouts with recurrence, overlap lanes, all-day band, hits, drag-create and accessible roles against a python-dateutil model (D2882).
+ui_schedule_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_schedule/src/main.e" "$repo" x64 linux "$test_build/ui-schedule-selfhost" -j 2)
+[ "$ui_schedule_written" = 'executable written' ]
+chmod +x "$test_build/ui-schedule-selfhost"
+ui_schedule_output=$("$test_build/ui-schedule-selfhost")
+[ "$ui_schedule_output" = 'ui schedule ok' ]
 # e.gfx.svg against cairosvg: gradients, defs and use, units, clip path and plain shapes rendered through the CPU backend and held to a 16x16 cell tolerance (D2843).
 gfx_svg_render_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_svg_render/src/main.e" "$repo" x64 linux "$test_build/gfx-svg-render-selfhost" -j 2)
 [ "$gfx_svg_render_written" = 'executable written' ]

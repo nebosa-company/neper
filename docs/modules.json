@@ -470,6 +470,7 @@
     "e.ui.ink",
     "e.ui.markdown_view",
     "e.ui.tree_adapter",
+    "e.ui.schedule",
     "e.fmt.lzma",
     "e.fmt.parquet",
     "e.net.cidr",
@@ -7522,6 +7523,20 @@
     "e.ui.collection",
     "e.ui.control",
     "e.ui.widget"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.schedule",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.time",
+    "e.time.calendar",
+    "e.time.recur",
+    "e.ui.accessibility"
    ],
    "blocked_by": []
   },
