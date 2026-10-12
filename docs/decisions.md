@@ -39695,3 +39695,6 @@ The `settings_theme` fixture reached `level mode Angle` and then never `level ho
 
 ## D2463 — The Dynamic fixture's taps are twelve seconds apart
 With the compositor frames of the current tree the Dynamic fixture dropped its open tap at the eight-second cadence (the app was still presenting the Ready stage), so the next taps typed into the prompt and `dynamic open` never printed. The same fifteen taps at twelve seconds reach every marker through `dynamic home`; the row's delay field is now 12. The table's header already names the cause: the virtio-input queue drops events a busy app has not consumed.
+
+## D2464 — The Clock fixture's taps are twelve seconds apart
+The Clock fixture's Timer tab starts a countdown and relies on the app's own ticks to print `clock timer done` before the Alarm taps. At the eight-second cadence the countdown had not expired by the time the next tap switched tabs (reproduced twice outside the suite: `timer started` then two `tab Timer` lines and no `timer done`); at twelve seconds every marker prints through `clock home`. The fixture row's delay field is now 12, as for the Dynamic fixture (D2463): emulated frames of the full tree take longer than when the cadence was chosen.
