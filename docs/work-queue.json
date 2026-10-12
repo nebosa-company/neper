@@ -757,10 +757,10 @@
       "group": "NeperOS",
       "order": 170,
       "title": "NeperOS Secure remainder: HOTP, QR and export, clipboard and autofill, biometrics, breach check",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C140 (D2429): Secure has the encrypted vault, SHA-1/256/512 codes of 6 to 8 digits with their own period, and otpauth import from /otpauth.txt. Acceptance: (1) HOTP entries with a counter that advances on use; (2) the otpauth URI from a QR scan (L137, C122) and an export (an encrypted file and the common authenticator formats); (3) a clipboard service with a timed clear and autofill of a login into the Browser (C129) and other apps through a capability; (4) fingerprint and face unlock (C126 settings) with the master password as the fallback, and auto-lock on timeout; (5) a password generator with options and a breach check by hash prefix over C117; (6) Wallet's cards and Dynamic's API keys kept here; not queued: sharing a vault, passkeys."
+      "evidence": "Split from C140 (D2429): Secure has the encrypted vault, SHA-1/256/512 codes of 6 to 8 digits with their own period, and otpauth import from /otpauth.txt. Acceptance: (1) HOTP entries with a counter that advances on use; (2) the otpauth URI from a QR scan (L137, C122) and an export (an encrypted file and the common authenticator formats); (3) a clipboard service with a timed clear and autofill of a login into the Browser (C129) and other apps through a capability; (4) fingerprint and face unlock (C126 settings) with the master password as the fallback, and auto-lock on timeout; (5) a password generator with options and a breach check by hash prefix over C117; (6) Wallet's cards and Dynamic's API keys kept here; not queued: sharing a vault, passkeys. PART (D2442): HOTP entries (counter kept and sealed, Next moves it), several otpauth URIs imported from /otpauth.txt, fixture secure_import (TOTP SHA-256/8 digits/45 s and HOTP counter 3). Remaining: QR scan and export, breach check, fingerprint/auto-lock, Paste beyond AI (C175)."
     },
     {
       "id": "C171",

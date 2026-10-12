@@ -63,7 +63,7 @@ def main():
     (out / "zznotes.md").write_text("# Handbook\n\nWelcome to **Neper**.\n\n## Apps\n- Calc\n- Files\n", encoding="utf-8")
     # A long text file (120 lines, a few pages in Document).
     (out / "zzzlong.txt").write_text("".join(f"line {i + 1} of a long file\n" for i in range(120)), encoding="utf-8")
-    (out / "otpauth.txt").write_text("otpauth://totp/Neper%20Bank:sam.rivera?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Neper%20Bank&algorithm=SHA256&digits=8&period=45\n", encoding="utf-8")
+    (out / "otpauth.txt").write_text("otpauth://totp/Neper%20Bank:sam.rivera?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Neper%20Bank&algorithm=SHA256&digits=8&period=45\notpauth://hotp/Mail:sam@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Mail&counter=3\n", encoding="utf-8")
     # An OpenDocument text file: a heading and two paragraphs (named to sort after the other samples).
     odt = io.BytesIO()
     with zipfile.ZipFile(odt, "w") as z:

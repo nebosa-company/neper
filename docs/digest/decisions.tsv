@@ -2269,4 +2269,5 @@ D2801	2747	L135: bincode, shell words, tilde expansion, byte sizes, a magic-numb
 D2802	2875	L152: CMS signing, json5, TFTP, singleflight and a rotating file sink
 D2803	2975	L160: robots.txt, sitemaps, test polling, fixed-width records, JKS and PKCS #12 keystores
 D2804	2940	L157: a sandboxed expression language with JEXL, SpEL and MVEL shapes (`e.algo.expr`)
-D2805	2970	L156: brokerless messaging, ZMTP (ZeroMQ) and SP (NNG) patterns over e.net
+D2805	2971	L156: brokerless messaging, ZMTP (ZeroMQ) and SP (NNG) patterns over e.net
+D2442	1005	C170: HOTP entries and several URIs per import in Secure
