@@ -4156,7 +4156,7 @@ if ($LASTEXITCODE -ne 0 -or $algoWorkflowOutput -ne 'algo workflow ok') { throw 
 # `e.algo.flow`: the inline flow interpreter -- conditions, branches, loops, find, CRUD, retried effects with redaction, the
 # step budget and the cascade guard -- against appdor's src/workflow/flow-engine.js (400 flows, D2334).
 $algoFlowPath = Join-Path $testBuild 'algo-flow-selfhost.exe'
-$algoFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\linklgo_flow\src\main.e') $repo 'x64' 'windows' $algoFlowPath -j 2
+$algoFlowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_flow\src\main.e') $repo 'x64' 'windows' $algoFlowPath -j 2
 if ($LASTEXITCODE -ne 0 -or $algoFlowWritten -ne 'executable written') { throw 'algo_flow emission failed' }
 $algoFlowOutput = & $algoFlowPath
 if ($LASTEXITCODE -ne 0 -or $algoFlowOutput -ne 'algo flow ok') { throw "algo_flow answered wrongly: exit $LASTEXITCODE" }
