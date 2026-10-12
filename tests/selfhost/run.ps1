@@ -4195,6 +4195,13 @@ $algoSyncsourceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $algoSyncsourceWritten -ne 'executable written') { throw 'algo_syncsource emission failed' }
 $algoSyncsourceOutput = & $algoSyncsourcePath
 if ($LASTEXITCODE -ne 0 -or $algoSyncsourceOutput -ne 'algo syncsource ok') { throw "algo_syncsource answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.conflictview`: the offline conflict review as markup
+# # against appdor's src/offline/conflict-review.js renderConflictReview (300 reviews, D3003).
+$algoConflictviewPath = Join-Path $testBuild 'algo-conflictview-selfhost.exe'
+$algoConflictviewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_conflictview\src\main.e') $repo 'x64' 'windows' $algoConflictviewPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoConflictviewWritten -ne 'executable written') { throw 'algo_conflictview emission failed' }
+$algoConflictviewOutput = & $algoConflictviewPath
+if ($LASTEXITCODE -ne 0 -or $algoConflictviewOutput -ne 'algo conflictview ok') { throw "algo_conflictview answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.syncpull`: the connector type map, column configuration, base-URL placeholders, pagination, record envelopes and the page loop
 # # against appdor's src/connectors/connector-type-map.js and src/sync/synced-table.js (700 inputs, D3002).
 $algoSyncpullPath = Join-Path $testBuild 'algo-syncpull-selfhost.exe'

@@ -266,6 +266,7 @@
     "e.algo.syncjob",
     "e.algo.offline",
     "e.algo.syncsource",
+    "e.algo.conflictview",
     "e.algo.syncpull",
     "e.algo.sqlsource",
     "e.algo.writeback",
@@ -7845,6 +7846,23 @@
     "e.algo.sync",
     "e.algo.syncjob",
     "e.data.list",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.conflictview",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.ir",
+    "e.algo.sync",
+    "e.algo.syncjob",
+    "e.algo.writeback",
     "e.fmt.json",
     "e.mem",
     "e.str"

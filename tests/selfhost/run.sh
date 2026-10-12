@@ -3716,6 +3716,13 @@ algo_syncsource_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/algo-syncsource-selfhost"
 algo_syncsource_output=$("$test_build/algo-syncsource-selfhost")
 [ "$algo_syncsource_output" = 'algo syncsource ok' ]
+# `e.algo.conflictview`: the offline conflict review as markup
+# # against appdor's src/offline/conflict-review.js renderConflictReview (300 reviews, D3003).
+algo_conflictview_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_conflictview/src/main.e" "$repo" x64 linux "$test_build/algo-conflictview-selfhost" -j 2)
+[ "$algo_conflictview_written" = 'executable written' ]
+chmod +x "$test_build/algo-conflictview-selfhost"
+algo_conflictview_output=$("$test_build/algo-conflictview-selfhost")
+[ "$algo_conflictview_output" = 'algo conflictview ok' ]
 # `e.algo.syncpull`: the connector type map, column configuration, base-URL placeholders, pagination, record envelopes and the page loop
 # # against appdor's src/connectors/connector-type-map.js and src/sync/synced-table.js (700 inputs, D3002).
 algo_syncpull_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_syncpull/src/main.e" "$repo" x64 linux "$test_build/algo-syncpull-selfhost" -j 2)

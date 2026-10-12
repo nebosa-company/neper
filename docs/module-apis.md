@@ -6864,6 +6864,24 @@ fn pull_pages(a: *mem.Arena, connection: json.Value, entity: str, pagination: js
 How a synced table reads its source page by page (L037), after the second half of appdor's `src/sync/synced-table.js` and `src/connectors/connector-type-map.js`: the type map (`map_external_type`, `map_lc8_to_native`, `list_native_types`, `propose_schema`, `propose_mapping`), a column's configuration and badge (`synced_column_config`, `synced_column_badge`), `resolve_base_url` and `build_pull_request`, pagination (`pull_pagination`, `pull_cursor`, `advance_pull`), record envelopes (`unwrap_record`, `unwrap_records`, `pull_record_shape`) and the page loop `pull_pages` over a host-supplied fetch. The sample-inferred half of `propose_mapping` is not here.
 
 
+### `e.algo.conflictview`
+
+```neper
+fn escape_html(a: *mem.Arena, s: str) -> str
+fn cut_units(s: str, limit: usize) -> (str, bool)
+fn units_over(s: str, limit: usize) -> bool
+fn show(a: *mem.Arena, v: json.Value, present: bool) -> str
+fn element_text(a: *mem.Arena, v: json.Value) -> str
+fn attribute(a: *mem.Arena, s: str) -> str
+fn say(a: *mem.Arena, translate: *const syncjob.Translate, key: str, variable: str) -> str
+fn rows_markup(a: *mem.Arena, item: json.Value) -> str
+fn choice_button(a: *mem.Arena, translate: *const syncjob.Translate, item_id: str, choice: str) -> str
+fn render_conflict_review(a: *mem.Arena, review: json.Value, translate: *const syncjob.Translate) -> str
+```
+
+The offline conflict review as markup (L037), after `renderConflictReview` of appdor's `src/offline/conflict-review.js`: `render_conflict_review` turns a review (`e.algo.offline.build_conflict_review`) into one section per conflict with its field table, its choice buttons, the contested fields and the reason a merge is not offered; `escape_html` is the DOM's text serialisation. Sentences come through the host's translator.
+
+
 ### `e.algo.fulltext`
 
 ```neper

@@ -473,6 +473,7 @@
     "algo_chain",
     "algo_checksum",
     "algo_collect",
+    "algo_conflictview",
     "algo_findings",
     "algo_flow",
     "algo_formula",
