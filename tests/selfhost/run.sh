@@ -1232,6 +1232,11 @@ time_calendars_persian_uq_written=$($test_build/neper-self emit-executable "$rep
 [ "$time_calendars_persian_uq_written" = 'executable written' ]
 chmod +x "$test_build/time-calendars-persian-uq-selfhost"
 "$test_build/time-calendars-persian-uq-selfhost"
+# `e.ui.schedule` zones, month bars and series moves against zoneinfo and dateutil (L148).
+ui_schedule_zones_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_schedule_zones/src/main.e" "$repo" x64 linux "$test_build/ui-schedule-zones-selfhost")
+[ "$ui_schedule_zones_written" = 'executable written' ]
+chmod +x "$test_build/ui-schedule-zones-selfhost"
+"$test_build/ui-schedule-zones-selfhost"
 # `e.time.pattern` locale names against Babel's CLDR formatter (L150).
 time_pattern_locales_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_pattern_locales/src/main.e" "$repo" x64 linux "$test_build/time-pattern-locales-selfhost")
 [ "$time_pattern_locales_written" = 'executable written' ]

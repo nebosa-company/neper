@@ -9795,11 +9795,12 @@ type Storage = struct { occ: []Occ, stamps: []calendar.DateTime, placed: []Place
 type Layout = struct { cfg: Config, placed: []Placed, columns: []Column, rows: []Row, nodes: []Access, labels: []u8, placed_count: usize, column_count: usize, row_count: usize, node_count: usize, labels_len: usize, band_h: f32, grid_top: f32, height: f32, first_day: i64, days: i64, truncated: bool }
 type Names = struct { weekdays: [7]str, months: [12]str, all_day: str, to: str, repeats: str, day_schedule: str, week_schedule: str, agenda: str, month_schedule: str, no_events: str, one_event: str, events: str, more: str }
 type MonthConfig = struct { anchor: time.Date, week_start: calendar.Weekday, width: f32, header: f32, cell_h: f32, line_h: f32, lines: u32 }
-type MonthCell = struct { date: time.Date, count: i64, in_month: bool, x: f32, y: f32, w: f32, h: f32, first: u32, total: u32, shown: u32, more: u32 }
+type MonthCell = struct { date: time.Date, count: i64, in_month: bool, x: f32, y: f32, w: f32, h: f32, first: u32, total: u32, shown: u32, more: u32, reserved: u32 }
 type MonthStorage = struct { occ: []Occ, stamps: []calendar.DateTime, placed: []Placed, cells: []MonthCell, order: []u32, nodes: []Access, labels: []u8 }
 type MonthLayout = struct { cfg: MonthConfig, placed: []Placed, cells: []MonthCell, nodes: []Access, labels: []u8, placed_count: usize, cell_count: usize, node_count: usize, labels_len: usize, weeks: u32, first_day: i64, height: f32, truncated: bool }
 type MonthHit = struct { kind: MonthHitKind, cell: u32, index: usize }
-type Bar = struct { item: u32, first: u32, last: u32, lane: u32, x: f32, y: f32, w: f32, h: f32, before: bool, after: bool, recurring: bool }
+type Bar = struct { item: u32, first: u32, last: u32, lane: u32, x: f32, y: f32, w: f32, h: f32, before: bool, after: bool, recurring: bool, start: i64, end: i64 }
+type SeriesOut = struct { dst: []u8, n: usize, bad: bool }
 error TooLarge
 error Invalid
 fn english() -> Names
@@ -9808,12 +9809,15 @@ fn datetime_of(abs: i64) -> calendar.DateTime
 fn max_i64(a: i64, b: i64) -> i64
 fn min_i64(a: i64, b: i64) -> i64
 fn range_of(cfg: Config) -> (i64, i64)
-type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32, names: Names }
-fn push_occ(c: *Ctx, item: u32, start: i64, minutes: i64, recurring: bool, all_day: bool) -> err
+type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32, names: Names, zoned: bool, zone_src: tz.Zone, zone_dst: tz.Zone }
+fn zone_shift(src: tz.Zone, dst: tz.Zone, abs: i64) -> i64
+fn push_occ(c: *Ctx, item: u32, start_in: i64, minutes: i64, recurring: bool, all_day: bool) -> err
 fn collect(c: *Ctx, items: []const Item) -> err
 fn occ_before(c: *const Ctx, x: u32, y: u32) -> bool
 fn put_placed(c: *Ctx, p: Placed) -> err
 fn day_order(c: *Ctx, day0: i64) -> usize
+fn spans_days(o: Occ) -> bool
+fn day_order_if(c: *Ctx, day0: i64, singles: bool) -> usize
 fn place_day(c: *Ctx, d: usize, top: f32) -> err
 fn weekday_name(index: i64) -> str
 fn month_name(month: u8) -> str
@@ -9827,6 +9831,8 @@ fn build_grid(c: *Ctx, items: []const Item) -> err
 fn build_agenda(c: *Ctx, items: []const Item) -> err
 fn build(items: []const Item, cfg: Config, st: Storage) -> (Layout, err)
 fn build_named(items: []const Item, cfg: Config, st: Storage, names: Names) -> (Layout, err)
+fn build_zoned(items: []const Item, cfg: Config, st: Storage, source: tz.Zone, display: tz.Zone) -> (Layout, err)
+fn build_core(items: []const Item, cfg: Config, st: Storage, names: Names, zoned: bool, src_zone: tz.Zone, dst_zone: tz.Zone) -> (Layout, err)
 fn label_of(l: *const Layout, node: usize) -> str
 fn slot_at(l: *const Layout, x: f32, y: f32) -> (Slot, bool)
 fn drag_range(l: *const Layout, x0: f32, y0: f32, x1: f32, y1: f32) -> (Span, bool)
@@ -9835,16 +9841,34 @@ fn month_first(cfg: MonthConfig) -> (i64, u32)
 fn put_cell_label(c: *Ctx, count: i64, total: usize) -> err
 fn build_month(items: []const Item, cfg: MonthConfig, ms: MonthStorage) -> (MonthLayout, err)
 fn build_month_named(items: []const Item, cfg: MonthConfig, ms: MonthStorage, names: Names) -> (MonthLayout, err)
+fn build_month_zoned(items: []const Item, cfg: MonthConfig, ms: MonthStorage, source: tz.Zone, display: tz.Zone) -> (MonthLayout, err)
+fn build_month_bars(items: []const Item, cfg: MonthConfig, ms: MonthStorage, bars: []Bar) -> (MonthLayout, usize, err)
+fn build_month_zoned_bars(items: []const Item, cfg: MonthConfig, ms: MonthStorage, source: tz.Zone, display: tz.Zone, bars: []Bar) -> (MonthLayout, usize, err)
+fn month_core(items: []const Item, cfg: MonthConfig, ms: MonthStorage, names: Names, zoned: bool, src_zone: tz.Zone, dst_zone: tz.Zone, bars: []Bar, with_bars: bool) -> (MonthLayout, usize, err)
 fn month_label_of(l: *const MonthLayout, node: usize) -> str
 fn more_top(l: *const MonthLayout, cell: usize) -> f32
 fn hit_month(l: *const MonthLayout, x: f32, y: f32) -> MonthHit
 fn month_move(l: *const MonthLayout, cell: u32, key: Key) -> u32
 fn bar_before(a: Bar, b: Bar) -> bool
 fn all_day_bars(l: *const Layout, out: []Bar) -> (usize, u32, err)
+fn assign_lanes(out: []Bar, n: usize) -> u32
+fn hit_month_bar(bars: []const Bar, count: usize, x: f32, y: f32) -> (usize, bool)
+fn display_to_source(source: tz.Zone, display: tz.Zone, value: calendar.DateTime) -> calendar.DateTime
 fn column_at(l: *const Layout, x: f32) -> (usize, bool)
 fn move_target(l: *const Layout, items: []const Item, index: usize, grab_x: f32, grab_y: f32, x: f32, y: f32) -> (Span, bool)
 fn resize_target(l: *const Layout, index: usize, y: f32) -> (u32, bool)
 fn focus_next(l: *const Layout, current: usize, key: Key) -> usize
+fn weekday_code(a: u8, b: u8) -> i64
+fn weekday_letters(index: i64) -> str
+fn series_text(o: *SeriesOut, s: str)
+fn series_digits(o: *SeriesOut, v: i64, width: usize)
+fn str_of(bytes: []const u8) -> str
+fn digits_value(s: str, from: usize, count: usize) -> i64
+fn series_byday(o: *SeriesOut, value: str, days: i64) -> bool
+fn series_until(o: *SeriesOut, value: str, delta: i64) -> bool
+fn key_is(part: str, key: str) -> bool
+fn interval_is_one(rule: str) -> bool
+fn move_series(item: Item, from: calendar.DateTime, to: calendar.DateTime, dst: []u8) -> (Item, err)
 ```
 
 Scheduler control model (L148, D2882): `build(items, cfg, storage)` lays appointments out
@@ -9866,7 +9890,19 @@ and a "+N more" line past `lines`, `hit_month`, `month_move`), `all_day_bars` (o
 all-day occurrence over its columns, in lanes), `move_target` and `resize_target` (a drag of a
 placed occurrence to its new start and length), `focus_next` (arrow-key focus among
 occurrences) and `Names` (`english()`; `build_named`/`build_month_named` take another set of
-words for the labels). Not here: zones and DST (items are floating times).
+words for the labels).
+
+D3602 adds zones: `build_zoned` and `build_month_zoned` take the zone the items' wall clocks are in and the
+zone to show; each timed occurrence (a recurrence is expanded in the source zone, so an every-Monday-09:00
+series keeps its local time and moves in the display zone across a DST change) is converted by its instant,
+a time in a gap of the source zone is read with the offset before the gap, an ambiguous one is its first
+occurrence, all-day items stay floating. `display_to_source` turns a displayed wall clock (what `move_target`
+answers) back into the item's zone. `build_month_bars` (and `build_month_zoned_bars`) draw the occurrences
+that touch more than one day as bars: one per week row (`first`/`last` are cell indices), lowest free lane
+under the day number, single-day occurrences below the week's bars (`MonthCell.reserved`), bars past `lines`
+counted in `more`; `hit_month_bar` is the bar under a point. `move_series` moves a whole recurring series by
+the amount an occurrence was dragged (item start, `BYDAY` weekdays, `UNTIL`), refusing with `Invalid` a rule
+that would change which occurrences it makes.
 
 ### `e.ui.undo`
 
