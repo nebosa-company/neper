@@ -70,6 +70,13 @@ def main():
         z.writestr(zipfile.ZipInfo("mimetype"), "application/vnd.oasis.opendocument.text", compress_type=zipfile.ZIP_STORED)
         z.writestr("content.xml", '<?xml version="1.0" encoding="UTF-8"?><office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><office:body><office:text><text:h text:outline-level="1">Open letter</text:h><text:p>Written in OpenDocument.</text:p></office:text></office:body></office:document-content>')
     (out / "zzzzodf.odt").write_bytes(odt.getvalue())
+    # A zip archive (C150): a file, a directory and a file inside it; named to sort last.
+    zbuf = io.BytesIO()
+    with zipfile.ZipFile(zbuf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("hello.txt", "hello")
+        z.writestr("docs/", "")
+        z.writestr("docs/notes.md", "# Notes here")
+    (out / "zzzzzzzip.zip").write_bytes(zbuf.getvalue())
     (out / "zzcode.py").write_text("# count words\nimport sys\n\nclass Counter:\n    def add(self, word):\n        return 1\n", encoding="utf-8")
     print("wrote", out)
 

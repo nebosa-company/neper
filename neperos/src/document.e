@@ -27,6 +27,7 @@ use vaultfs
 use e.fmt.ooxml as ooxml
 use e.fmt.odf as odf
 use e.fmt.pdf as pdf
+use e.fmt.zip as zip
 use e.text.highlight as hl
 
 const NONE: usize = 99usize
@@ -131,6 +132,26 @@ fn office_text(a: *mem.Arena, s: *State, is_deck: bool, is_odf: bool, raw: []con
             }
             i += 1usize
         }
+    }
+    ret n
+}
+
+// The contents of a zip archive (C150): its name, then each entry as "name  size" ("name/" for a directory), one per
+// line; the length, 0 when it did not open.
+fn zip_text(a: *mem.Arena, s: *State, raw: []const u8) -> usize {
+    let (archive, open_error) = ooxml.open_package(a, raw)
+    if open_error != ok { ret 0usize }
+    var ar = archive
+    let listed = zip.entries(&ar)
+    var n = add_line(s, 0usize, ui.join(a, ui.number(a, listed.len), " entries", ""))
+    var i = 0usize
+    while i < listed.len {
+        if listed[i].directory {
+            n = add_line(s, n, listed[i].name)
+        } else {
+            n = add_line(s, n, ui.join(a, ui.join(a, listed[i].name, "  ", ""), ui.number(a, usize(listed[i].size)), " bytes"))
+        }
+        i += 1usize
     }
     ret n
 }
@@ -778,7 +799,7 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
 
 // Whether `name` is a file the app can show: a document format, Markdown or text, or a language the highlighter knows.
 fn showable(name: str) -> bool {
-    if ends_with(name, ".md") || ends_with(name, ".txt") || ends_with(name, ".docx") || ends_with(name, ".pptx") || ends_with(name, ".pdf") || ends_with(name, ".odt") || ends_with(name, ".odp") { ret true }
+    if ends_with(name, ".md") || ends_with(name, ".txt") || ends_with(name, ".docx") || ends_with(name, ".pptx") || ends_with(name, ".pdf") || ends_with(name, ".odt") || ends_with(name, ".odp") || ends_with(name, ".zip") { ret true }
     let (index, found) = hl.language_for(name)
     ret found
 }
@@ -944,7 +965,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
 fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
     var text_len = 0usize
     var has_text = false
-    if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") || ends_with(hand_path, ".pdf") || ends_with(hand_path, ".odt") || ends_with(hand_path, ".odp") {
+    if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") || ends_with(hand_path, ".pdf") || ends_with(hand_path, ".odt") || ends_with(hand_path, ".odp") || ends_with(hand_path, ".zip") {
         // An Office file: read it whole (up to 256 KB, in pieces) and take its text.
         let (size, kind, day, found) = vaultfs.stat(hand_path)
         if found && size > 0usize && size <= 262144usize {
@@ -952,7 +973,9 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
             if raw_error == ok {
                 let (got, read_ok) = vaultfs.read_big(hand_path, mem.address_of(&raw[0usize]), size)
                 if read_ok && got == size {
-                    if ends_with(hand_path, ".pdf") {
+                    if ends_with(hand_path, ".zip") {
+                        text_len = zip_text(a, s, raw[0usize..got])
+                    } else if ends_with(hand_path, ".pdf") {
                         text_len = pdf_text(a, s, raw[0usize..got])
                     } else {
                         text_len = office_text(a, s, ends_with(hand_path, ".pptx") || ends_with(hand_path, ".odp"), ends_with(hand_path, ".odt") || ends_with(hand_path, ".odp"), raw[0usize..got])
@@ -994,7 +1017,7 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
         if hand_path.len > 4usize && ends_with(hand_path, ".pdf") { s.hand_kind = TXT }
         // The table-driven highlighter takes any extension it knows that is not a document format.
         let (hl_index, hl_found) = hl.language_for(ui.text_of(a, s.hand_name[0usize..], n))
-        if hl_found && s.hand_kind != MD && !ends_with(hand_path, ".pdf") && !ends_with(hand_path, ".docx") && !ends_with(hand_path, ".pptx") && !ends_with(hand_path, ".odt") && !ends_with(hand_path, ".odp") {
+        if hl_found && s.hand_kind != MD && !ends_with(hand_path, ".pdf") && !ends_with(hand_path, ".docx") && !ends_with(hand_path, ".pptx") && !ends_with(hand_path, ".odt") && !ends_with(hand_path, ".odp") && !ends_with(hand_path, ".zip") {
             s.hand_kind = CODE
             s.hand_hl = hl_index
             s.hand_has_hl = true

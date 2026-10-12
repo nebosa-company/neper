@@ -262,10 +262,10 @@
       "group": "NeperOS",
       "order": 150,
       "title": "NeperOS storage remainder: per-app directories, Share, thumbnails, zip, external storage, large files",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C125 (D2382): the Files app is on the real filesystem with list, create, rename, move, copy, trash, search, recent and select, and hands a file to Document. Acceptance: (1) the capability model: the filesystem server tells its clients apart (badged endpoints from the kernel or a per-app request endpoint) so an app sees only its own directory and what Files shares to it; (2) Share to another app and the Camera, Wallet and Mail apps saving into Files once they exist (C121, C122, C128); (3) a grid view with image thumbnails (PNG/JPEG decode into e.gfx scenes); (4) browse and extract a zip with e.fmt.zip (the disk image seeded by scripts/make_fs_image.py so a fixture has one); (5) external storage: a second block device as a second root through a second filesystem server instance; (6) entries beyond sixteen a directory (files larger than 4 KB: done, D2387). Delivered by C125 and not to redo: everything in D2375-D2382."
+      "evidence": "Split from C125 (D2382): the Files app is on the real filesystem with list, create, rename, move, copy, trash, search, recent and select, and hands a file to Document. Acceptance: (1) the capability model: the filesystem server tells its clients apart (badged endpoints from the kernel or a per-app request endpoint) so an app sees only its own directory and what Files shares to it; (2) Share to another app and the Camera, Wallet and Mail apps saving into Files once they exist (C121, C122, C128); (3) a grid view with image thumbnails (PNG/JPEG decode into e.gfx scenes); (4) browse and extract a zip with e.fmt.zip (the disk image seeded by scripts/make_fs_image.py so a fixture has one); (5) external storage: a second block device as a second root through a second filesystem server instance; (6) entries beyond sixteen a directory (files larger than 4 KB: done, D2387). Delivered by C125 and not to redo: everything in D2375-D2382. PART (D2446): zip archives are browsed (entries and sizes) in Document via Files' handover, e.fmt.zip, fixture document_zip. Remaining: extract an entry, per-app directories, Share, thumbnails, external storage."
     },
     {
       "id": "C151",
