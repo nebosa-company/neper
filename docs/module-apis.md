@@ -9714,7 +9714,7 @@ type NodeKind = enum u8 { File, Folder, Loading, Failed }
 type DirState = enum u8 { Ready, Loading, Failed, Unloaded }
 type Entry = struct { path: str, dir: bool, state: DirState }
 type Rename = struct { from: str, to: str }
-type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64, unicode_names: bool }
+type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64, unicode_names: bool, tailoring: u8 }
 type Node = struct { key: widget.Key, parent: u32, kind: NodeKind, path_start: usize, path_len: usize, name_start: usize, depth: u32, first_child: usize, child_count: usize, lazy: bool }
 type Storage = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, order: []u32, scratch: []u8 }
 type Tree = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, count: usize, root_first: usize, root_count: usize, case_sensitive_paths: bool }
@@ -9726,6 +9726,8 @@ error Invalid
 fn default_hash(s: str) -> u64
 fn policy(case_sensitive_paths: bool) -> Policy
 fn policy_unicode(case_sensitive_paths: bool) -> Policy
+fn tailoring_of(tag: str) -> u8
+fn policy_language(tag: str, case_sensitive_paths: bool) -> Policy
 fn fold_byte(ch: u8, sensitive: bool) -> u8
 fn id_cmp(x: str, y: str, sensitive: bool) -> i32
 type Ctx = struct { nodes: []Node, paths: []u8, policy: Policy }
@@ -9733,7 +9735,10 @@ fn node_path(c: *const Ctx, i: usize) -> str
 fn node_name(c: *const Ctx, i: usize) -> str
 fn rank_of(c: *const Ctx, n: Node) -> u32
 const KEY_CAP: usize = 512usize
-fn fold_keys(name: str, fold: bool, all: []u32, base: []u32) -> (usize, usize)
+fn fold_keys(name: str, fold: bool, tailoring: u8, all: []u32, base: []u32) -> (usize, usize)
+fn primary_key(tailoring: u8, s: u32) -> u32
+fn lone_key(tailoring: u8, s: u32) -> u32
+fn mark_key(tailoring: u8, b: u32, m: u32) -> u32
 fn is_digit_scalar(s: u32) -> bool
 fn natural_scalars(x: []const u32, nx: usize, y: []const u32, ny: usize, numeric: bool) -> i32
 fn name_order(c: *const Ctx, a: str, b: str) -> i32
@@ -9782,6 +9787,14 @@ resolution and mutation authorization stay with the host's filesystem services.
 D3305 adds `policy_unicode` (names by NFD, Unicode simple lowering, base letters first then
 accents) and lazy folders: `DirState.Unloaded` shows an expander with no children, `pending`
 lists the expanded `Unloaded` folders for the host to enumerate and `is_lazy` tests one.
+
+D3604 adds `policy_language(tag, case_sensitive_paths)`: `policy_unicode` with the letters a language
+sorts as letters of its own placed where its alphabet has them (Swedish and Finnish `å ä ö` after
+`z`, Danish and Norwegian `æ ø å`, Spanish `ñ` after `n`, Polish `ą ć ę ł ń ó ś ź ż`, Czech
+`č ř š ž` and the digraph `ch` after `h`, Turkish `ç ğ ö ş ü` with `ı` before `i`, German `ß`
+as `ss`), keyed by the language subtag (`tailoring_of`). Compared with CLDR collation as .NET's
+ICU gives it for nine languages; region variants, traditional orders and further languages are
+not distinguished.
 
 ### `e.ui.schedule`
 

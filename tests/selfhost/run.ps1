@@ -1336,6 +1336,12 @@ $time_calendars_persian_uqWritten = & $compiler emit-executable (Join-Path $PSSc
 if ($LASTEXITCODE -ne 0 -or $time_calendars_persian_uqWritten -ne 'executable written') { throw 'time_calendars_persian_uq emission failed' }
 & $time_calendars_persian_uqPath
 if ($LASTEXITCODE -ne 0) { throw "a time_calendars_persian_uq check failed: exit $LASTEXITCODE" }
+# `e.ui.tree_adapter` language tailorings against .NET's ICU collation (L067).
+$ui_tree_adapter_tailoredPath = Join-Path $testBuild 'ui-tree-adapter-tailored-selfhost.exe'
+$ui_tree_adapter_tailoredWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_tree_adapter_tailored\src\main.e') $repo 'x64' 'windows' $ui_tree_adapter_tailoredPath
+if ($LASTEXITCODE -ne 0 -or $ui_tree_adapter_tailoredWritten -ne 'executable written') { throw 'ui_tree_adapter_tailored emission failed' }
+& $ui_tree_adapter_tailoredPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_tree_adapter_tailored check failed: exit $LASTEXITCODE" }
 # `e.ui.markdown_view` measured text and content-sized columns against the oracle model (L066).
 $ui_markdown_view_fitPath = Join-Path $testBuild 'ui-markdown-view-fit-selfhost.exe'
 $ui_markdown_view_fitWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_markdown_view_fit\src\main.e') $repo 'x64' 'windows' $ui_markdown_view_fitPath

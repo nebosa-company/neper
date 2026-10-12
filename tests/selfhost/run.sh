@@ -1232,6 +1232,11 @@ time_calendars_persian_uq_written=$($test_build/neper-self emit-executable "$rep
 [ "$time_calendars_persian_uq_written" = 'executable written' ]
 chmod +x "$test_build/time-calendars-persian-uq-selfhost"
 "$test_build/time-calendars-persian-uq-selfhost"
+# `e.ui.tree_adapter` language tailorings against .NET's ICU collation (L067).
+ui_tree_adapter_tailored_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_tree_adapter_tailored/src/main.e" "$repo" x64 linux "$test_build/ui-tree-adapter-tailored-selfhost")
+[ "$ui_tree_adapter_tailored_written" = 'executable written' ]
+chmod +x "$test_build/ui-tree-adapter-tailored-selfhost"
+"$test_build/ui-tree-adapter-tailored-selfhost"
 # `e.ui.markdown_view` measured text and content-sized columns against the oracle model (L066).
 ui_markdown_view_fit_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_markdown_view_fit/src/main.e" "$repo" x64 linux "$test_build/ui-markdown-view-fit-selfhost")
 [ "$ui_markdown_view_fit_written" = 'executable written' ]

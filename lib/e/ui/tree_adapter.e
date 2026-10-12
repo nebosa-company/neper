@@ -34,8 +34,12 @@
 // names the expanded ones for the host to enumerate, which lists them again as `Loading`
 // (a placeholder row) and then `Ready` with their entries, the keys kept through `prev`.
 //
-// ponytail: names have no locale tailoring beyond that (no language-specific orders such
-// as Swedish `å` after `z`, no UCA contractions or Han readings), a name is compared on its
+// `policy_language` adds one language's tailoring to that order (Swedish `å ä ö` after `z`,
+// Polish `ł` after `l`, Czech `ch` after `h`, ... -- see `tailoring_of`), keyed by the tag's
+// language subtag.
+//
+// ponytail: only the tailorings of nine languages, none per region or traditional (no UCA
+// contractions beyond Czech `ch`, no Han readings, no `aa` as `å` in Danish), a name is compared on its
 // first 512 NFD scalars; a node's parent is found by a binary search over identity paths, so build is
 // O(n log n) in the entry count; `prev` and the new `Storage` must be different buffers.
 
@@ -59,7 +63,10 @@ type Entry = struct { path: str, dir: bool, state: DirState }
 type Rename = struct { from: str, to: str }
 // `unicode_names`: order names by Unicode simple case folding with accents as a second
 // level (see `name_order`) rather than by ASCII folding.
-type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64, unicode_names: bool }
+// `tailoring`: with `unicode_names`, a language's letters that sort as letters of their own
+// (1 Swedish and Finnish, 2 Danish and Norwegian, 3 German, 4 Spanish, 5 Polish, 6 Czech,
+// 7 Turkish; 0 none), see `policy_language`.
+type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64, unicode_names: bool, tailoring: u8 }
 type Node = struct { key: widget.Key, parent: u32, kind: NodeKind, path_start: usize, path_len: usize, name_start: usize, depth: u32, first_child: usize, child_count: usize, lazy: bool }
 type Storage = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, order: []u32, scratch: []u8 }
 type Tree = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, count: usize, root_first: usize, root_count: usize, case_sensitive_paths: bool }
@@ -77,7 +84,7 @@ fn default_hash(s: str) -> u64 {
 // A host's policy: case-sensitive or not path identity, folders first, natural order
 // folding ASCII case, the FNV-1a hash.
 fn policy(case_sensitive_paths: bool) -> Policy {
-    ret Policy { case_sensitive_paths: case_sensitive_paths, order: collate.Options { case_sensitive: false, numeric: true }, folders_first: true, hash: default_hash, unicode_names: false }
+    ret Policy { case_sensitive_paths: case_sensitive_paths, order: collate.Options { case_sensitive: false, numeric: true }, folders_first: true, hash: default_hash, unicode_names: false, tailoring: 0u8 }
 }
 
 // `policy` with names ordered beyond ASCII: each name is decomposed (NFD), lowered with
@@ -87,6 +94,43 @@ fn policy(case_sensitive_paths: bool) -> Policy {
 fn policy_unicode(case_sensitive_paths: bool) -> Policy {
     var p = policy(case_sensitive_paths)
     p.unicode_names = true
+    ret p
+}
+
+// The tailoring of a language tag's language subtag (`sv`, `da-DK`, `nb`, `de_AT`, ...), 0 for
+// a language with none.
+fn tailoring_of(tag: str) -> u8 {
+    var end = 0usize
+    while end < tag.len && tag[end] != 45u8 && tag[end] != 95u8 { end += 1usize }
+    if end != 2usize && end != 3usize { ret 0u8 }
+    let a = fold_byte(tag[0usize], false)
+    let b = fold_byte(tag[1usize], false)
+    if end == 3usize {
+        // nob, nno: Norwegian.
+        if a == 110u8 && b == 111u8 { ret 2u8 }
+        ret 0u8
+    }
+    if a == 115u8 && b == 118u8 { ret 1u8 }
+    if a == 102u8 && b == 105u8 { ret 1u8 }
+    if a == 100u8 && b == 97u8 { ret 2u8 }
+    if a == 110u8 && (b == 98u8 || b == 111u8 || b == 110u8) { ret 2u8 }
+    if a == 100u8 && b == 101u8 { ret 3u8 }
+    if a == 101u8 && b == 115u8 { ret 4u8 }
+    if a == 112u8 && b == 108u8 { ret 5u8 }
+    if a == 99u8 && b == 115u8 { ret 6u8 }
+    if a == 116u8 && b == 114u8 { ret 7u8 }
+    ret 0u8
+}
+
+// `policy_unicode` with a language's tailoring (D3604): the letters that sort as letters of their own are placed
+// where its alphabet has them -- Swedish and Finnish `å ä ö` after `z`, Danish and Norwegian `æ ø å`, Spanish `ñ` after
+// `n`, Polish `ą ć ę ł ń ó ś ź ż`, Czech `č ř š ž` and the digraph `ch` after `h`, Turkish `ç ğ ö ş ü` and `ı` before
+// `i` (with `I` and `İ` its dotless and dotted pair), German `ß` as `ss`. Where a language has no row of its own the
+// order is `policy_unicode`'s. Regional variants and traditional orders (Spanish `ch` and `ll`, German phone-book
+// `ä` as `ae`, Swedish `v` and `w`) are not distinguished.
+fn policy_language(tag: str, case_sensitive_paths: bool) -> Policy {
+    var p = policy_unicode(case_sensitive_paths)
+    p.tailoring = tailoring_of(tag)
     ret p
 }
 
@@ -132,19 +176,34 @@ const KEY_CAP: usize = 512usize
 // The NFD scalars of `name`, lowered with Unicode's simple mapping when `fold`: every one
 // into `all`, those that are not combining marks into `base`; both lengths. A name longer
 // than KEY_CAP scalars is cut there (the byte tie-break still orders it).
-fn fold_keys(name: str, fold: bool, all: []u32, base: []u32) -> (usize, usize) {
+fn fold_keys(name: str, fold: bool, tailoring: u8, all: []u32, base: []u32) -> (usize, usize) {
     var n_all = 0usize
     var n_base = 0usize
     var at = 0usize
     var parts: [18]u32 = zero
+    var last_raw = 0u32
     while at < name.len {
         let (scalar, width) = unicode.read_utf8(name, at)
         at += width
-        let (used_parts, decompose_error) = normalize.decompose(scalar, false, parts[..], 0usize)
-        var used = used_parts
-        if decompose_error != ok {
-            parts[0usize] = scalar
+        var used = 0usize
+        if tailoring == 3u8 && scalar == 223u32 {
+            // German sharp s reads as `ss`.
+            parts[0usize] = 115u32
+            parts[1usize] = 115u32
+            used = 2usize
+        } else if tailoring == 7u8 && scalar == 73u32 {
+            parts[0usize] = 305u32
             used = 1usize
+        } else if tailoring == 7u8 && scalar == 304u32 {
+            parts[0usize] = 105u32
+            used = 1usize
+        } else {
+            let (used_parts, decompose_error) = normalize.decompose(scalar, false, parts[..], 0usize)
+            used = used_parts
+            if decompose_error != ok {
+                parts[0usize] = scalar
+                used = 1usize
+            }
         }
         var k = 0usize
         while k < used {
@@ -154,14 +213,81 @@ fn fold_keys(name: str, fold: bool, all: []u32, base: []u32) -> (usize, usize) {
                 all[n_all] = s
                 n_all += 1usize
             }
-            if unicode.combining_class(parts[k]) == 0u8 && n_base < base.len {
-                base[n_base] = s
-                n_base += 1usize
+            if unicode.combining_class(parts[k]) == 0u8 {
+                let lowered = unicode.to_lower_simple(parts[k])
+                if n_base < base.len {
+                    var key = primary_key(tailoring, s)
+                    if tailoring != 0u8 {
+                        let own = lone_key(tailoring, lowered)
+                        if own != 0u32 { key = own }
+                    }
+                    base[n_base] = key
+                    n_base += 1usize
+                    // Czech `ch` is one letter after `h`.
+                    if tailoring == 6u8 && lowered == 104u32 && last_raw == 99u32 && n_base >= 2usize && base[n_base - 2usize] == primary_key(6u8, 99u32) {
+                        base[n_base - 2usize] = primary_key(6u8, 104u32) + 1u32
+                        n_base -= 1usize
+                    }
+                    last_raw = lowered
+                }
+            } else if tailoring != 0u8 && n_base > 0usize {
+                let own = mark_key(tailoring, last_raw, unicode.to_lower_simple(parts[k]))
+                if own != 0u32 { base[n_base - 1usize] = own }
             }
             k += 1usize
         }
     }
     ret (n_all, n_base)
+}
+
+// The primary key of a base scalar: itself without a tailoring; with one the keys above the digits are spread by 16 so a
+// tailored letter can stand between a letter and the next.
+fn primary_key(tailoring: u8, s: u32) -> u32 {
+    if tailoring == 0u8 || s < 58u32 { ret s }
+    ret s * 16u32
+}
+
+// The key of a scalar that is a letter of its own in the tailoring, 0 when it is not.
+fn lone_key(tailoring: u8, s: u32) -> u32 {
+    if tailoring == 1u8 {
+        if s == 230u32 { ret primary_key(1u8, 122u32) + 2u32 }
+        if s == 248u32 { ret primary_key(1u8, 122u32) + 3u32 }
+    }
+    if tailoring == 2u8 {
+        if s == 230u32 { ret primary_key(2u8, 122u32) + 1u32 }
+        if s == 248u32 { ret primary_key(2u8, 122u32) + 2u32 }
+    }
+    if tailoring == 5u8 && s == 322u32 { ret primary_key(5u8, 108u32) + 1u32 }
+    if tailoring == 7u8 && s == 305u32 { ret primary_key(7u8, 105u32) - 1u32 }
+    ret 0u32
+}
+
+// The key of the base letter `b` carrying the combining mark `m` in the tailoring, 0 when the pair is not a letter of
+// its own. `b` and `m` are lowered scalars.
+fn mark_key(tailoring: u8, b: u32, m: u32) -> u32 {
+    if tailoring == 1u8 {
+        if b == 97u32 && m == 778u32 { ret primary_key(1u8, 122u32) + 1u32 }
+        if b == 97u32 && m == 776u32 { ret primary_key(1u8, 122u32) + 2u32 }
+        if b == 111u32 && m == 776u32 { ret primary_key(1u8, 122u32) + 3u32 }
+    }
+    if tailoring == 2u8 {
+        if b == 97u32 && m == 776u32 { ret primary_key(2u8, 122u32) + 1u32 }
+        if b == 111u32 && m == 776u32 { ret primary_key(2u8, 122u32) + 2u32 }
+        if b == 97u32 && m == 778u32 { ret primary_key(2u8, 122u32) + 3u32 }
+    }
+    if tailoring == 4u8 && b == 110u32 && m == 771u32 { ret primary_key(4u8, 110u32) + 1u32 }
+    if tailoring == 5u8 {
+        if m == 808u32 && (b == 97u32 || b == 101u32) { ret primary_key(5u8, b) + 1u32 }
+        if m == 769u32 && (b == 99u32 || b == 110u32 || b == 111u32 || b == 115u32 || b == 122u32) { ret primary_key(5u8, b) + 1u32 }
+        if m == 775u32 && b == 122u32 { ret primary_key(5u8, 122u32) + 2u32 }
+    }
+    if tailoring == 6u8 && m == 780u32 && (b == 99u32 || b == 114u32 || b == 115u32 || b == 122u32) { ret primary_key(6u8, b) + 1u32 }
+    if tailoring == 7u8 {
+        if m == 807u32 && (b == 99u32 || b == 115u32) { ret primary_key(7u8, b) + 1u32 }
+        if m == 774u32 && b == 103u32 { ret primary_key(7u8, 103u32) + 1u32 }
+        if m == 776u32 && (b == 111u32 || b == 117u32) { ret primary_key(7u8, b) + 1u32 }
+    }
+    ret 0u32
 }
 
 fn is_digit_scalar(s: u32) -> bool { ret s >= 48u32 && s <= 57u32 }
@@ -215,8 +341,8 @@ fn name_order(c: *const Ctx, a: str, b: str) -> i32 {
     var all_b: [512]u32 = zero
     var base_b: [512]u32 = zero
     let fold = !c.policy.order.case_sensitive
-    let (na, pa) = fold_keys(a, fold, all_a[..], base_a[..])
-    let (nb, pb) = fold_keys(b, fold, all_b[..], base_b[..])
+    let (na, pa) = fold_keys(a, fold, c.policy.tailoring, all_a[..], base_a[..])
+    let (nb, pb) = fold_keys(b, fold, c.policy.tailoring, all_b[..], base_b[..])
     let primary = natural_scalars(base_a[..], pa, base_b[..], pb, c.policy.order.numeric)
     if primary != 0i32 { ret primary }
     ret natural_scalars(all_a[..], na, all_b[..], nb, false)
