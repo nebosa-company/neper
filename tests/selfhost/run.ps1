@@ -4465,6 +4465,12 @@ $cryptoPkcs12Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $cryptoPkcs12Written -ne 'executable written') { throw 'crypto_pkcs12 emission failed' }
 $cryptoPkcs12Output = & $cryptoPkcs12Path
 if ($LASTEXITCODE -ne 0 -or $cryptoPkcs12Output -ne 'crypto pkcs12 ok') { throw "crypto_pkcs12 answered wrongly: exit $LASTEXITCODE" }
+# e.algo.expr against an independent Python implementation of the documented language: hand cases, limits and 700 random trees (1121 vectors, D2804).
+$algoExprPath = Join-Path $testBuild 'algo-expr-selfhost.exe'
+$algoExprWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_expr\src\main.e') $repo 'x64' 'windows' $algoExprPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoExprWritten -ne 'executable written') { throw 'algo_expr emission failed' }
+$algoExprOutput = & $algoExprPath
+if ($LASTEXITCODE -ne 0 -or $algoExprOutput -ne 'algo expr ok') { throw "algo_expr answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

@@ -567,6 +567,7 @@
     "e.fmt.fixedwidth",
     "e.crypto.jks",
     "e.crypto.pkcs12",
+    "e.algo.expr",
     "e.time.parse",
     "e.path.dirs",
     "e.fmt.dotenv",
@@ -5018,6 +5019,18 @@
     "e.crypto.kdf",
     "e.crypto.mac",
     "e.fmt.asn1"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.expr",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },

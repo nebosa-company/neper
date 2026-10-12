@@ -22601,6 +22601,134 @@ fn encode(a: *mem.Arena, pkcs8: []const u8, chain: []const []const u8, friendly:
 
 PKCS #12 (.p12/.pfx, RFC 7292): `parse` verifies the MAC and returns key bags (PKCS #8, decrypted when shrouded) and certificate bags with friendly names and local key ids; `encode` writes one private key and its chain (PBES2 AES-256-CBC / PBKDF2-HMAC-SHA256, HMAC-SHA-256 MAC, salts and IVs supplied by the caller). Read profile: PBES2 with HMAC-SHA-256/512 PRFs and AES-128/192/256-CBC, MACs HMAC-SHA-256/512; a store that uses PBE-SHA1-3DES, PBE-SHA1-RC2-40 or a SHA-1 MAC (pre-3.0 OpenSSL, old Java) is `Unsupported`. A wrong password shows as `BadPassword`. Not here: legacy ciphers, secret bags, CRL bags, or several keys per file on write.
 
+### `e.algo.expr`
+
+```neper
+type Pair = struct { key: str, value: Value }
+type Value = union enum u8 { Null, Bool: bool, Int: i64, Float: f64, Str: str, List: []const Value, Map: []const Pair, Object: u32 }
+type Binding = struct { name: str, value: Value }
+type Host = struct {
+type Limits = struct { max_steps: u32, max_depth: u32, max_string: usize, max_collection: usize, strict: bool }
+type Token = struct { kind: u8, start: usize, end: usize, int_value: i64, float_value: f64, text: str }
+type Node = struct { kind: u8, op: u8, a: u32, b: u32, c: u32, text: str, value: Value }
+type Program = struct { nodes: []Node, kids: []u32, root: u32 }
+type Interp = struct { arena: *mem.Arena, host: Host, scope: []const Binding, program: *const Program, limits: Limits, steps: u32, depth: u32 }
+error Syntax
+error Type
+error DivideByZero
+error Index
+error Undefined
+error Limit
+error Denied
+error Overflow
+const T_END: u8 = 0u8
+const T_INT: u8 = 1u8
+const T_FLOAT: u8 = 2u8
+const T_STR: u8 = 3u8
+const T_NAME: u8 = 4u8
+const T_PUNCT: u8 = 5u8
+const N_LIT: u8 = 0u8
+const N_VAR: u8 = 1u8
+const N_LIST: u8 = 2u8
+const N_MAP: u8 = 3u8
+const N_UNARY: u8 = 4u8
+const N_BINARY: u8 = 5u8
+const N_AND: u8 = 6u8
+const N_OR: u8 = 7u8
+const N_TERNARY: u8 = 8u8
+const N_ELVIS: u8 = 9u8
+const N_COALESCE: u8 = 10u8
+const N_PROP: u8 = 11u8
+const N_INDEX: u8 = 12u8
+const N_CALL: u8 = 13u8
+const N_METHOD: u8 = 14u8
+const N_RANGE: u8 = 15u8
+fn no_value() -> Value
+fn default_limits() -> Limits
+fn is_digit(c: u8) -> bool { ret c >= 48u8 && c <= 57u8 }
+fn is_name_start(c: u8) -> bool { ret (c >= 97u8 && c <= 122u8) || (c >= 65u8 && c <= 90u8) || c == 95u8 || c == 36u8 }
+fn is_name(c: u8) -> bool { ret is_name_start(c) || is_digit(c) }
+fn hex_of(c: u8) -> i32
+fn same(a: str, b: str) -> bool
+fn put_utf8(buf: []u8, n: usize, cp: u32) -> usize
+fn lex_string(a: *mem.Arena, src: str, at: usize, max: usize) -> (str, usize, err)
+fn lex(a: *mem.Arena, src: str, limits: Limits, out: []Token) -> (usize, err)
+type Parser = struct { tokens: []const Token, at: usize, nodes: []Node, node_count: usize, kids: []u32, kid_count: usize, depth: u32, max_depth: u32 }
+fn add_node(p: *Parser, n: Node) -> (u32, err)
+fn peek_is(p: *const Parser, text: str) -> bool
+fn punct_is(p: *const Parser, text: str) -> bool
+fn word_is(p: *const Parser, text: str) -> bool
+fn expect_punct(p: *Parser, text: str) -> err
+fn push_kid(p: *Parser, id: u32) -> err
+fn binary(p: *Parser, op: u8, left: u32, right: u32) -> (u32, err)
+const OP_ADD: u8 = 1u8
+const OP_SUB: u8 = 2u8
+const OP_MUL: u8 = 3u8
+const OP_DIV: u8 = 4u8
+const OP_MOD: u8 = 5u8
+const OP_EQ: u8 = 6u8
+const OP_NE: u8 = 7u8
+const OP_LT: u8 = 8u8
+const OP_LE: u8 = 9u8
+const OP_GT: u8 = 10u8
+const OP_GE: u8 = 11u8
+const OP_IN: u8 = 12u8
+const OP_NIN: u8 = 13u8
+const OP_STARTS: u8 = 14u8
+const OP_ENDS: u8 = 15u8
+const OP_NOT: u8 = 20u8
+const OP_NEG: u8 = 21u8
+const OP_POS: u8 = 22u8
+const OP_EMPTY: u8 = 23u8
+const OP_SIZE: u8 = 24u8
+fn parse_expr(p: *Parser) -> (u32, err)
+fn parse_ternary(p: *Parser) -> (u32, err)
+fn parse_or(p: *Parser) -> (u32, err)
+fn parse_and(p: *Parser) -> (u32, err)
+fn equality_op(p: *const Parser) -> u8
+fn parse_equality(p: *Parser) -> (u32, err)
+fn relational_op(p: *const Parser) -> u8
+fn parse_relational(p: *Parser) -> (u32, err)
+fn parse_range(p: *Parser) -> (u32, err)
+fn parse_additive(p: *Parser) -> (u32, err)
+fn multiplicative_op(p: *const Parser) -> u8
+fn parse_multiplicative(p: *Parser) -> (u32, err)
+fn parse_unary(p: *Parser) -> (u32, err)
+fn parse_args(p: *Parser, first_kid: *usize, count: *u32) -> err
+fn parse_postfix(p: *Parser) -> (u32, err)
+fn parse_primary(p: *Parser) -> (u32, err)
+fn compile(a: *mem.Arena, source: str, limits: Limits) -> (Program, err)
+fn truthy(v: Value) -> bool
+fn is_number(v: Value) -> bool
+fn as_float(v: Value) -> f64
+fn map_get(m: []const Pair, key: str) -> (Value, bool)
+fn equals(x: Value, y: Value) -> bool
+fn push_value(b: *str.Builder, v: Value, depth: u32) -> err
+fn text_of(a: *mem.Arena, v: Value, max: usize) -> (str, err)
+fn tick(it: *Interp) -> err
+fn lookup(it: *const Interp, name: str) -> (Value, bool)
+fn make_list(it: *Interp, items: []const Value) -> (Value, err)
+fn arith(it: *Interp, op: u8, x: Value, y: Value) -> (Value, err)
+fn compare(x: Value, y: Value) -> (i32, err)
+fn contains(container: Value, item: Value) -> (bool, err)
+fn size_of(v: Value) -> (i64, err)
+fn eval(it: *Interp, id: u32) -> (Value, err)
+fn eval_args(it: *Interp, first: u32, count: u32, out: []Value) -> err
+fn eval_node(it: *Interp, id: u32) -> (Value, err)
+fn int_arg(args: []const Value, i: usize) -> (i64, bool)
+fn str_arg(args: []const Value, i: usize) -> (str, bool)
+fn lower_of(c: u8) -> u8
+fn upper_of(c: u8) -> u8
+fn new_string(it: *Interp, len: usize) -> ([]u8, err)
+fn find_text(s: str, needle: str, from: usize) -> i64
+fn builtin_method(it: *Interp, base: Value, name: str, args: []const Value) -> (Value, err)
+fn call_function(it: *Interp, name: str, args: []const Value) -> (Value, err)
+fn evaluate(a: *mem.Arena, source: str, scope: []const Binding, host: Host, limits: Limits) -> (Value, err)
+fn run(a: *mem.Arena, prog: *const Program, scope: []const Binding, host: Host, limits: Limits) -> (Value, err)
+```
+
+A small expression language in the family of JEXL, SpEL and MVEL: property navigation (`a.b`, `a?.b`, `a['b']`, `a[0]`), method calls, function calls and operators over values and caller-owned objects, evaluated by a tree walk. Values are `Null`, `Bool`, `Int` (i64), `Float`, `Str`, `List`, `Map` and `Object`, an opaque `u32` handle that only the caller's `Host` callbacks (`get`, `call`, `function`) can open: that is the sandbox, together with `Limits` (steps, nesting depth, string and collection sizes, `strict` for undefined names and properties) and the fixed whitelist of built-in methods (strings: length size isEmpty toUpperCase toLowerCase trim contains startsWith endsWith indexOf substring charAt concat; lists: size isEmpty contains get indexOf join; maps: size isEmpty containsKey get keys values) and functions (size empty str int float abs min max floor ceil round); a method not on the list is `Denied`. Operators: `?:`, elvis, `??`, `|| or`, `&& and`, `== != eq ne =~ !~ =^ =$`, `< <= > >= lt le gt ge`, `..`, `+ - * / % div mod`, unary `! not - + empty size`. Semantics are spelled out in the source header (Int `/` exact-or-Float, truncated `%`, overflow is an error, JEXL-style truthiness, string `+`). `compile` once and `run` against many scopes, or `evaluate`. Not here: assignment and scripts, lambdas, `new`/type references (SpEL `T()`), projection and selection, regex `matches`, bean-style `getX()` property inference, and compilation to bytecode.
+
 ### `e.time.parse`
 
 ```neper

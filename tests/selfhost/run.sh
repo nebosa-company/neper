@@ -4001,6 +4001,12 @@ crypto_pkcs12_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/crypto-pkcs12-selfhost"
 crypto_pkcs12_output=$("$test_build/crypto-pkcs12-selfhost")
 [ "$crypto_pkcs12_output" = 'crypto pkcs12 ok' ]
+# e.algo.expr against an independent Python implementation of the documented language: hand cases, limits and 700 random trees (1121 vectors, D2804).
+algo_expr_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_expr/src/main.e" "$repo" x64 linux "$test_build/algo-expr-selfhost" -j 2)
+[ "$algo_expr_written" = 'executable written' ]
+chmod +x "$test_build/algo-expr-selfhost"
+algo_expr_output=$("$test_build/algo-expr-selfhost")
+[ "$algo_expr_output" = 'algo expr ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
