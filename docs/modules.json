@@ -98,6 +98,7 @@
     "e.concurrent.queue",
     "e.concurrent.map",
     "e.task",
+    "e.mediator",
     "e.time.calendar",
     "e.tz",
     "e.gpu",
@@ -3934,6 +3935,19 @@
     "e.sync",
     "e.thread",
     "e.time"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.mediator",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str",
+    "e.task"
    ],
    "blocked_by": []
   },

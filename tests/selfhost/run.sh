@@ -3541,6 +3541,12 @@ math_sym_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/math-sym-selfhost"
 math_sym_output=$("$test_build/math-sym-selfhost")
 [ "$math_sym_output" = 'math sym ok' ]
+# e.mediator: handlers, listeners and pipeline behaviors against an independent model of MediatR semantics (60 scenarios, D2727).
+mediator_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/mediator/src/main.e" "$repo" x64 linux "$test_build/mediator-selfhost" -j 2)
+[ "$mediator_written" = 'executable written' ]
+chmod +x "$test_build/mediator-selfhost"
+mediator_output=$("$test_build/mediator-selfhost")
+[ "$mediator_output" = 'mediator ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

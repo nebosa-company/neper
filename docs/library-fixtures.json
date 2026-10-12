@@ -175,7 +175,8 @@
    "delivered": 15,
    "pending": [],
    "fixtures": [
-    "cli"
+    "cli",
+    "cli_complete"
    ]
   },
   {
@@ -756,6 +757,7 @@
     "grep",
     "log_debug",
     "os_shell",
+    "store",
     "ui_activation",
     "ui_drag_drop",
     "ui_file_access",
@@ -2543,7 +2545,8 @@
    "delivered": 15,
    "pending": [],
    "fixtures": [
-    "metrics"
+    "metrics",
+    "metrics_export"
    ]
   },
   {
@@ -2570,10 +2573,12 @@
    "delivered": 104,
    "pending": [],
    "fixtures": [
+    "metrics_export",
     "misc_gaps",
     "net_http",
     "net_tls",
-    "net_ws"
+    "net_ws",
+    "store"
    ]
   },
   {
@@ -2684,6 +2689,7 @@
    "delivered": 20,
    "pending": [],
    "fixtures": [
+    "mediator",
     "task_pool"
    ]
   },
@@ -2953,6 +2959,7 @@
     "gfx_chart_locale",
     "gfx_chart_widget",
     "log_debug",
+    "mediator",
     "misc_gaps",
     "net",
     "net_ftp",

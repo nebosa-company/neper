@@ -3958,6 +3958,12 @@ $mathSymWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $mathSymWritten -ne 'executable written') { throw 'math_sym emission failed' }
 $mathSymOutput = & $mathSymPath
 if ($LASTEXITCODE -ne 0 -or $mathSymOutput -ne 'math sym ok') { throw "math_sym answered wrongly: exit $LASTEXITCODE" }
+# e.mediator: handlers, listeners and pipeline behaviors against an independent model of MediatR semantics (60 scenarios, D2727).
+$mediatorPath = Join-Path $testBuild 'mediator-selfhost.exe'
+$mediatorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\mediator\src\main.e') $repo 'x64' 'windows' $mediatorPath -j 2
+if ($LASTEXITCODE -ne 0 -or $mediatorWritten -ne 'executable written') { throw 'mediator emission failed' }
+$mediatorOutput = & $mediatorPath
+if ($LASTEXITCODE -ne 0 -or $mediatorOutput -ne 'mediator ok') { throw "mediator answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

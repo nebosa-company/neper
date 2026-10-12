@@ -10850,6 +10850,39 @@ input order, not completion order. `parallel_for` partitions `[begin..end)` into
 deterministic ranges no smaller than `grain` except the last; scheduling order is not
 observable and callers synchronize shared state explicitly.
 
+### `e.mediator`
+
+```neper
+error NoHandler
+error Duplicate
+error Full
+type Message = struct { kind: u32, data: []const u8 }
+type Handler = struct { kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message) -> (Message, err) }
+type Listener = struct { kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message) -> err }
+type Behavior = struct { kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message, *const Next) -> (Message, err) }
+type Mediator = struct { handlers: []Handler, listeners: []Listener, behaviors: []Behavior, handler_count: usize, listener_count: usize, behavior_count: usize }
+type Next = struct { mediator: *const Mediator, position: usize, handler: *const Handler }
+type SendJob = struct { mediator: *Mediator, arena: *mem.Arena, request: Message }
+type Retry = struct { attempts: u32 }
+type Validation = struct { ctx: *void, check: fn(*void, *const Message) -> err }
+type Logging = struct { ctx: *void, sink: fn(*void, str) }
+
+fn mediator(a: *mem.Arena, handlers: usize, listeners: usize, behaviors: usize) -> (Mediator, err)
+fn register(m: *Mediator, kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message) -> (Message, err)) -> err
+fn subscribe(m: *Mediator, kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message) -> err) -> err
+fn behave(m: *Mediator, kind: u32, ctx: *void, run: fn(*void, *mem.Arena, *const Message, *const Next) -> (Message, err)) -> err
+fn proceed(n: *const Next, a: *mem.Arena, req: *const Message) -> (Message, err)
+fn send(m: *const Mediator, a: *mem.Arena, req: Message) -> (Message, err)
+fn publish(m: *const Mediator, a: *mem.Arena, note: Message) -> err
+fn publish_all(m: *const Mediator, a: *mem.Arena, note: Message) -> (usize, err)
+fn send_job(job: *SendJob, token: *const task.Cancel) -> (Message, err)
+fn retry_run(ctx: *void, a: *mem.Arena, req: *const Message, n: *const Next) -> (Message, err)
+fn validation_run(ctx: *void, a: *mem.Arena, req: *const Message, n: *const Next) -> (Message, err)
+fn logging_run(ctx: *void, a: *mem.Arena, req: *const Message, n: *const Next) -> (Message, err)
+```
+
+An in-process mediator in the shape of MediatR. A request is a `Message` (a `u32` kind and payload bytes); `register` binds the one handler of a kind (`Duplicate` for a second, `Full` past capacity), `subscribe` adds a notification listener, `behave` adds a pipeline behavior for one kind or, with kind 0, for every request. `send` runs the pipeline -- behaviors in registration order, the first registered outermost, then the handler -- and answers `NoHandler` for an unregistered kind without running any behavior. A behavior calls `proceed` zero times (short circuit, refusal), once or several (retry). `publish` calls every listener of the kind in registration order and stops at the first failure; `publish_all` runs them all and answers the failure count and the first error. Stock behaviors: `retry_run` (`Retry.attempts`), `validation_run` (a check function refuses before the handler) and `logging_run` (start and ok/failed lines to a sink). `send_job` is the body of a task-pool job so one `send` becomes a `task.future`; give each job its own arena. No broker: distributed messaging belongs to the queue and bus modules. There is no type-based dispatch (no reflection), so typed layers are a cast in each handler.
+
 ### `e.time`
 
 ```neper
