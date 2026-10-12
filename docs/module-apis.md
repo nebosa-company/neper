@@ -9076,6 +9076,219 @@ first stroke's first sample), `duration` its length, and `path_of` a stroke's pr
 a polyline for `StrokePath`. Capacity is `TooSmall`; state errors and non-finite
 values are `Invalid`. Pressure is the caller's (the `e.ui.input` pointer has none).
 
+### `e.ui.markdown_view`
+
+```neper
+const BOLD: u8 = 1u8
+const ITALIC: u8 = 2u8
+const CODE: u8 = 4u8
+const LINK: u8 = 8u8
+const IMAGE: u8 = 16u8
+const GLUED: u8 = 32u8
+const HEADING: u8 = 64u8
+const E_QUOTE: u8 = 1u8
+const E_LIST: u8 = 2u8
+const E_ITEM: u8 = 3u8
+type ItemKind = enum u8 { Word, Marker, Rule, QuoteBar, CodeBack, CodeLine }
+type NodeRole = enum u8 { Heading, Paragraph, List, ListItem, Quote, Code, Separator }
+type LinkPolicy = enum u8 { DisplayOnly, HostActivated }
+type Item = struct { kind: ItemKind, style: u8, x: f32, y: f32, w: f32, h: f32, start: usize, len: usize, link: u32, node: u32 }
+type Node = struct { role: NodeRole, level: u32, depth: u32, first: usize, count: usize, label_start: usize, label_len: usize }
+type Link = struct { dest_start: usize, dest_len: usize, safe: bool, mail: bool }
+type Word = struct { start: usize, len: usize, cols: usize, style: u8, link: u32, glued: bool, hard: bool }
+type Metrics = struct { width: f32, char_w: f32, line_h: f32, gap: f32, indent: f32, pad: f32, bar: f32 }
+type Storage = struct { items: []Item, nodes: []Node, links: []Link, store: []u8, scratch: []u8, blocks: []markdown.Block, inlines: []markdown.Inline, words: []Word }
+type View = struct { items: []Item, nodes: []Node, links: []Link, store: []u8, item_count: usize, node_count: usize, link_count: usize, store_len: usize, height: f32, fallback: bool, policy: LinkPolicy }
+error TooLarge
+error TooDeep
+error Invalid
+type Entry = struct { kind: u8, level_at: usize, tight: bool, ordered: bool, number: u32, marker: bool, node: usize }
+type Ctx = struct { st: Storage, m: Metrics, policy: LinkPolicy, items: usize, nodes: usize, links: usize, store_len: usize, y: f32, any: bool, fresh: bool, stack: [32]Entry, depth: usize, levels: usize }
+fn utf8_cols(s: str) -> usize
+fn lower(c: u8) -> u8
+fn same_scheme(d: str, n: usize, want: str) -> bool
+fn dest_safe(d: str) -> bool
+fn put_item(c: *Ctx, item: Item) -> err
+fn put_node(c: *Ctx, role: NodeRole, level: u32) -> (usize, err)
+fn put_bytes(c: *Ctx, s: str) -> (usize, err)
+fn put_link(c: *Ctx, at: usize, len: usize, mail: bool) -> (u32, err)
+fn commit_links(c: *Ctx, joined: str, from: usize) -> err
+fn commit_words(c: *Ctx, joined: str, count: usize) -> (usize, usize, err)
+fn heading_scale(level: u32) -> f32
+fn avail_width(c: *Ctx, x0: f32) -> f32
+fn leaf_gap(c: *Ctx) -> f32
+fn decimal(n: u32, out: []u8) -> usize
+fn begin_leaf(c: *Ctx, scale: f32) -> (f32, err)
+fn end_leaf(c: *Ctx, top: f32, height: f32) -> err
+fn join_lines(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize) -> (usize, usize, err)
+type Words = struct { count: usize, after_space: bool, hard: bool }
+fn add_word(c: *Ctx, w: *Words, at: usize, bytes: str, style: u8, link: u32) -> err
+fn add_text(c: *Ctx, w: *Words, base: usize, seg: str, style: u8, link: u32) -> err
+fn collect_words(c: *Ctx, joined: str, nodes: []const markdown.Inline) -> (Words, err)
+fn place_words(c: *Ctx, count: usize, scale: f32, x0: f32, avail: f32, top: f32, node: usize, extra: u8) -> (usize, err)
+fn text_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize, heading: u32) -> (usize, err)
+fn code_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize) -> (usize, err)
+fn push_entry(c: *Ctx, e: Entry) -> err
+fn pop_entry(c: *Ctx) -> Entry
+fn close_node(c: *Ctx, node: usize)
+fn lay_out(c: *Ctx, src: str, blocks: []const markdown.Block) -> err
+fn reset(c: *Ctx)
+fn plain(c: *Ctx, src: str) -> err
+fn build(src: str, st: Storage, m: Metrics, policy: LinkPolicy) -> (View, err)
+fn inside(it: Item, x: f32, y: f32) -> bool
+fn item_at(v: *const View, x: f32, y: f32) -> (usize, bool)
+fn link_at(v: *const View, x: f32, y: f32) -> (usize, bool)
+fn activation(v: *const View, link: usize) -> (str, bool)
+fn selected_text(v: *const View, first: usize, last: usize, out: []u8) -> (usize, err)
+fn rich_spans(v: *const View, node: usize, out: []control.RichSpan, action: widget.Submit) -> (usize, err)
+```
+
+Safe structured Markdown viewer (L066, D2880): `build` parses a source with
+`e.fmt.markdown` into caller `Storage` and lays it out on a fixed-advance grid
+(`Metrics`) as a flat scene `Item` list (words, list markers, rules, quote bars, code
+backgrounds and lines), an accessible `Node` list (heading with level, paragraph, list,
+list item, quote, code, separator, each with the item range it covers and a plain-text
+label) and `Link` records. Raw HTML, reference links and unknown syntax are the literal
+text the parser leaves; an image is its alt text and is never loaded; a source the
+parser, the depth limit or the storage cannot bound is drawn whole as preformatted lines
+with `fallback` set. A link is display-only under `DisplayOnly`; under `HostActivated`
+`activation` answers the destination only if it is relative or http, https or mailto
+(`safe`), and never opens anything. `item_at` and `link_at` are the hit regions,
+`selected_text` the selectable text of an item range, and `rich_spans` a heading's or
+paragraph's words as `control.RichSpan`s for `control.paragraph`. Layout and queries are
+data, checked against a markdown-it-py oracle; a window-level check would still need a
+shaped-text measure in place of the grid advance and the pointer and clipboard plumbing
+of a host.
+
+### `e.ui.tree_adapter`
+
+```neper
+const NONE: u32 = 4294967295u32
+type NodeKind = enum u8 { File, Folder, Loading, Failed }
+type DirState = enum u8 { Ready, Loading, Failed }
+type Entry = struct { path: str, dir: bool, state: DirState }
+type Rename = struct { from: str, to: str }
+type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64 }
+type Node = struct { key: widget.Key, parent: u32, kind: NodeKind, path_start: usize, path_len: usize, name_start: usize, depth: u32, first_child: usize, child_count: usize }
+type Storage = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, order: []u32, scratch: []u8 }
+type Tree = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, count: usize, root_first: usize, root_count: usize, case_sensitive_paths: bool }
+error TooLarge
+error Duplicate
+error MissingParent
+error NotDirectory
+error Invalid
+fn default_hash(s: str) -> u64
+fn policy(case_sensitive_paths: bool) -> Policy
+fn fold_byte(ch: u8, sensitive: bool) -> u8
+fn id_cmp(x: str, y: str, sensitive: bool) -> i32
+type Ctx = struct { nodes: []Node, paths: []u8, policy: Policy }
+fn node_path(c: *const Ctx, i: usize) -> str
+fn node_name(c: *const Ctx, i: usize) -> str
+fn rank_of(c: *const Ctx, n: Node) -> u32
+fn before(c: *const Ctx, x: u32, y: u32, mode: u32) -> bool
+fn sort(c: *const Ctx, idx: []u32, tmp: []u32, n: usize, mode: u32)
+fn find_path(t: *const Tree, p: str) -> (u32, bool)
+fn slot_find(slots: []u32, nodes: []Node, key: widget.Key) -> u32
+fn slot_put(slots: []u32, key: widget.Key, node: u32)
+fn prev_key(prev: *const Tree, renames: []const Rename, p: str, scratch: []u8) -> (widget.Key, bool)
+fn put_path(paths: []u8, used: *usize, p: str) -> (usize, err)
+fn last_slash(p: str) -> (usize, bool)
+fn build(entries: []const Entry, renames: []const Rename, prev: *const Tree, pol: Policy, st: Storage) -> (Tree, err)
+fn find(t: *const Tree, key: widget.Key) -> (usize, bool)
+fn path_of(t: *const Tree, node: usize) -> str
+fn name_of(t: *const Tree, node: usize) -> str
+fn retain(t: *const Tree, keys: []widget.Key, n: usize, folders_only: bool) -> usize
+fn settle(prev: *const Tree, next: *const Tree, key: widget.Key) -> widget.Key
+fn position_of(t: *const Tree, node: usize) -> usize
+fn anchor_offset(before_rows: []const collection.TreeRow, after_rows: []const collection.TreeRow, offset: f32, row_height: f32, viewport: f32) -> f32
+type Bridge = struct { tree: *const Tree, theme: *const control.Theme }
+fn bridge_count(ctx: *void, key: widget.Key) -> usize
+fn bridge_key(ctx: *void, parent: widget.Key, index: usize) -> widget.Key
+fn bridge_has_children(ctx: *void, key: widget.Key) -> bool
+fn bridge_build(ctx: *void, a: *mem.Arena, key: widget.Key, out: *widget.Node) -> err
+fn source(b: *Bridge) -> collection.TreeSource
+fn visible(b: *Bridge, expanded: []const widget.Key, out: []collection.TreeRow) -> usize
+```
+
+Refresh-stable explorer tree (L067, D2881): `build` turns a host snapshot of `Entry`
+(relative path, folder or file, a folder's `DirState`) into a `Tree` in caller `Storage`:
+folders first and natural order inside each folder through `e.text.collate`, a loading or
+failed folder carrying a placeholder row, and a 64-bit key per node. Keys are the
+policy's hash of the path identity (exact on a case-sensitive host, ASCII-folded on a
+case-insensitive one), kept from the `prev` tree by path or by a `Rename` (descendants of
+a renamed folder included), probed apart in identity order when a hash is taken, so they
+do not depend on listing order. `source` and `visible` hand the tree to `e.ui.collection`
+as a `TreeSource` and its `flatten`; `retain` drops keys no longer present, `settle`
+chooses where a removed selection falls (the sibling at the same position under its
+surviving parent, else the ancestor, else the root's sibling) and `anchor_offset` keeps
+the row at the viewport top under refresh. `Duplicate`, `MissingParent`, `NotDirectory`,
+`Invalid` and `TooLarge` refuse a snapshot that is not a tree. Enumeration, path
+resolution and mutation authorization stay with the host's filesystem services.
+
+### `e.ui.schedule`
+
+```neper
+type Mode = enum u8 { Day, Week, Agenda }
+type Kind = enum u8 { Timed, AllDay }
+type RowKind = enum u8 { DayHeader, Event }
+type HitKind = enum u8 { None, Event, AllDay, Slot, DayHeader, Gutter }
+type Item = struct { id: u32, start: calendar.DateTime, minutes: u32, all_day: bool, title: str, rule: str }
+type Config = struct { mode: Mode, anchor: time.Date, week_start: calendar.Weekday, day_start: u32, day_end: u32, slot: u32, agenda_days: u32, width: f32, gutter: f32, header: f32, all_day_h: f32, hour_h: f32, row_h: f32, min_h: f32 }
+type Placed = struct { item: u32, kind: Kind, day: u32, start: i64, end: i64, x: f32, y: f32, w: f32, h: f32, lane: u32, lanes: u32, before: bool, after: bool, recurring: bool }
+type Column = struct { date: time.Date, count: i64, x: f32, w: f32 }
+type Row = struct { kind: RowKind, day: u32, placed: u32, y: f32, h: f32 }
+type Access = struct { role: accessibility.Role, x: f32, y: f32, w: f32, h: f32, label_start: usize, label_len: usize, row: u32, column: u32, row_count: u32, column_count: u32, level: u8 }
+type Hit = struct { kind: HitKind, index: usize, day: u32, minute: u32 }
+type Slot = struct { day: u32, minute: u32, start: calendar.DateTime }
+type Span = struct { day: u32, start: calendar.DateTime, minutes: u32 }
+type Occ = struct { item: u32, start: i64, minutes: i64, recurring: bool, all_day: bool }
+type Storage = struct { occ: []Occ, stamps: []calendar.DateTime, placed: []Placed, columns: []Column, rows: []Row, nodes: []Access, labels: []u8, order: []u32, lane_end: []i64 }
+type Layout = struct { cfg: Config, placed: []Placed, columns: []Column, rows: []Row, nodes: []Access, labels: []u8, placed_count: usize, column_count: usize, row_count: usize, node_count: usize, labels_len: usize, band_h: f32, grid_top: f32, height: f32, first_day: i64, days: i64, truncated: bool }
+error TooLarge
+error Invalid
+fn abs_minutes(d: calendar.DateTime) -> i64
+fn datetime_of(abs: i64) -> calendar.DateTime
+fn max_i64(a: i64, b: i64) -> i64
+fn min_i64(a: i64, b: i64) -> i64
+fn range_of(cfg: Config) -> (i64, i64)
+type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32 }
+fn push_occ(c: *Ctx, item: u32, start: i64, minutes: i64, recurring: bool, all_day: bool) -> err
+fn collect(c: *Ctx, items: []const Item) -> err
+fn occ_before(c: *const Ctx, x: u32, y: u32) -> bool
+fn put_placed(c: *Ctx, p: Placed) -> err
+fn day_order(c: *Ctx, day0: i64) -> usize
+fn place_day(c: *Ctx, d: usize, top: f32) -> err
+fn weekday_name(index: i64) -> str
+fn month_name(month: u8) -> str
+fn put_label(c: *Ctx, s: str) -> err
+fn put_number(c: *Ctx, v: i64, width: usize) -> err
+fn put_date(c: *Ctx, count: i64) -> err
+fn put_clock(c: *Ctx, abs: i64) -> err
+fn put_event_label(c: *Ctx, items: []const Item, p: Placed) -> err
+fn put_node(c: *Ctx, role: accessibility.Role, x: f32, y: f32, w: f32, h: f32, label_start: usize, row: u32, column: u32, row_count: u32, column_count: u32, level: u8) -> err
+fn build_grid(c: *Ctx, items: []const Item) -> err
+fn build_agenda(c: *Ctx, items: []const Item) -> err
+fn build(items: []const Item, cfg: Config, st: Storage) -> (Layout, err)
+fn label_of(l: *const Layout, node: usize) -> str
+fn slot_at(l: *const Layout, x: f32, y: f32) -> (Slot, bool)
+fn drag_range(l: *const Layout, x0: f32, y0: f32, x1: f32, y1: f32) -> (Span, bool)
+fn hit(l: *const Layout, x: f32, y: f32) -> Hit
+```
+
+Scheduler control model (L148, D2882): `build(items, cfg, storage)` lays appointments out
+as a `Day` or `Week` time grid or an `Agenda` list. An `Item` is a start, a length in
+minutes (all-day items are whole days) and an optional RFC 5545 rule expanded with
+`e.time.recur` for the days in view; an occurrence is placed on every day it overlaps,
+clipped to the `day_start`..`day_end` hours, with transitively overlapping occurrences in
+a cluster sharing the column by first-free-lane (`lane` of `lanes`). The `Layout` holds
+the placed rectangles, the agenda rows, the all-day band height and an accessible node
+list (`Grid`/`ColumnHeader`/`Cell` for a grid, `List`/`Heading`/`ListItem` for an agenda,
+each with its label and row and column position, over `e.ui.accessibility.Role`).
+`hit` answers what is under a point, `slot_at` the snapped day and minute and
+`drag_range` the snapped, window-clamped range of a drag-to-create gesture.
+`truncated` says an endless rule was cut at the occurrence scratch. Layout is data; the
+painting, pointer capture and keyboard model of a window are the host's.
+
 ### `e.ui.undo`
 
 ```neper

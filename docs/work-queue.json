@@ -372,10 +372,10 @@
       "group": "UI",
       "order": 164,
       "title": "Safe structured Markdown viewer over e.fmt.markdown and e.ui.control",
-      "score": 0,
+      "score": 0.6,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1812). Reference: JustCode src/replytext.js and its unit cases. e.fmt.markdown already provides caller-storage block/inline parsing; e.ui.control has text/rich-text primitives. Reuse these for a generic native viewer with headings, paragraphs, lists, quotes, rules, fenced/inline code, emphasis and selectable text. Not yet: the integrated viewer, explicit display-only versus host-activated link policy, accessible structure, bounded parsing/layout, literal raw-HTML and unknown-syntax fallback, and deterministic layout/input checks for malicious markup, links and code containing Markdown. Render source as data; no script execution, implicit network loads or hidden harness dependencies. P7 hover/docs and T034 may consume this viewer without duplicating parsers."
+      "evidence": "Planning only (D1812). Reference: JustCode src/replytext.js and its unit cases. e.fmt.markdown already provides caller-storage block/inline parsing; e.ui.control has text/rich-text primitives. Reuse these for a generic native viewer with headings, paragraphs, lists, quotes, rules, fenced/inline code, emphasis and selectable text. Not yet: the integrated viewer, explicit display-only versus host-activated link policy, accessible structure, bounded parsing/layout, literal raw-HTML and unknown-syntax fallback, and deterministic layout/input checks for malicious markup, links and code containing Markdown. Render source as data; no script execution, implicit network loads or hidden harness dependencies. P7 hover/docs and T034 may consume this viewer without duplicating parsers. PART (D2880): e.ui.markdown_view builds scene items, accessible nodes, links, selection text and control.RichSpans from a Markdown source (raw HTML and reference links literal, images alt text, link policy and scheme allowlist), 40 checks vs markdown-it-py. NOT DONE: a window-level check, shaped-text measurement (fixed one-advance grid), tables."
     },
     {
       "id": "L067",
@@ -383,10 +383,10 @@
       "group": "UI",
       "order": 165,
       "title": "Refresh-stable explorer tree adapter over e.ui.collection",
-      "score": 0,
+      "score": 0.6,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1812). Reference: JustCode src/filetree.js, src/explorer.js and their unit cases. e.ui.collection already has TreeSource stable keys, expanded/selected key lists and virtual tree views; e.text.collate already offers numeric ordering. Reuse them for a generic file-tree adapter with folders-first natural ordering and expansion/selection/scroll retention across refresh, rename and removal. Not yet: integrated filesystem snapshots, collision-safe stable identities, loading/error rows, explicit locale comparator and path-identity policy, and deterministic refresh/rename/delete/large-tree fixtures. Preserve case-sensitive host distinctions; never copy JustCode's unconditional path lowercasing to Linux. Enumeration, path resolution, mutation authorization and recursive-copy containment belong to host filesystem services. No second tree widget or bespoke natural-sort implementation. P7-17's explorer hook consumes this adapter."
+      "evidence": "Planning only (D1812). Reference: JustCode src/filetree.js, src/explorer.js and their unit cases. e.ui.collection already has TreeSource stable keys, expanded/selected key lists and virtual tree views; e.text.collate already offers numeric ordering. Reuse them for a generic file-tree adapter with folders-first natural ordering and expansion/selection/scroll retention across refresh, rename and removal. Not yet: integrated filesystem snapshots, collision-safe stable identities, loading/error rows, explicit locale comparator and path-identity policy, and deterministic refresh/rename/delete/large-tree fixtures. Preserve case-sensitive host distinctions; never copy JustCode's unconditional path lowercasing to Linux. Enumeration, path resolution, mutation authorization and recursive-copy containment belong to host filesystem services. No second tree widget or bespoke natural-sort implementation. P7-17's explorer hook consumes this adapter. PART (D2881): e.ui.tree_adapter, a refresh-stable explorer tree over collection.TreeSource (folders-first collation, loading/failed rows, stable keys under rename/refresh/collisions, retain/settle/anchor_offset; 51 checks, a 3,070-node refresh). NOT DONE: lazy loading, enumeration and mutation authorization with host services, locale collation beyond ASCII, a run against a real theme."
     },
     {
       "id": "T033",
@@ -471,10 +471,10 @@
       "group": "UI",
       "order": 246,
       "title": "Scheduler control: day, week and agenda views",
-      "score": 0,
+      "score": 0.4,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1890). DevExpress-style scheduler parity missing (pickers exist, no appointment surface): day/week/agenda views with drag-create and recurrence display over e.time.calendar plus L103 rules. Fixtures for layout, overlap columns and accessibility roles."
+      "evidence": "Planning only (D1890). DevExpress-style scheduler parity missing (pickers exist, no appointment surface): day/week/agenda views with drag-create and recurrence display over e.time.calendar plus L103 rules. Fixtures for layout, overlap columns and accessibility roles. PART (D2882): e.ui.schedule day, week and agenda layouts with recurrence over e.time.recur, all-day band, overlap lanes, hit, slot_at, drag_range and an accessible tree (18 checks vs datetime/dateutil). NOT DONE: month view, multi-day all-day bars, zones and DST, moving appointments, locale names, painting and pointer/keyboard model."
     },
     {
       "id": "L150",

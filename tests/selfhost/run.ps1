@@ -4309,6 +4309,24 @@ $uiInkWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $uiInkWritten -ne 'executable written') { throw 'ui_ink emission failed' }
 $uiInkOutput = & $uiInkPath
 if ($LASTEXITCODE -ne 0 -or $uiInkOutput -ne 'ui ink ok') { throw "ui_ink answered wrongly: exit $LASTEXITCODE" }
+# e.ui.markdown_view: eight documents laid out (items, nodes, links, selection, hits, rich spans) against a markdown-it-py oracle, link policy and unbounded-input fallbacks (D2880).
+$uiMarkdownViewPath = Join-Path $testBuild 'ui-markdown-view-selfhost.exe'
+$uiMarkdownViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_markdown_view\src\main.e') $repo 'x64' 'windows' $uiMarkdownViewPath -j 2
+if ($LASTEXITCODE -ne 0 -or $uiMarkdownViewWritten -ne 'executable written') { throw 'ui_markdown_view emission failed' }
+$uiMarkdownViewOutput = & $uiMarkdownViewPath
+if ($LASTEXITCODE -ne 0 -or $uiMarkdownViewOutput -ne 'ui markdown view ok') { throw "ui_markdown_view answered wrongly: exit $LASTEXITCODE" }
+# e.ui.tree_adapter: file trees from host snapshots against an independent model: folders-first natural order, placeholders, keys across refresh and rename, forced hash collisions, settling, scroll anchor and a 3,000-entry refresh (D2881).
+$uiTreeAdapterPath = Join-Path $testBuild 'ui-tree-adapter-selfhost.exe'
+$uiTreeAdapterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_tree_adapter\src\main.e') $repo 'x64' 'windows' $uiTreeAdapterPath -j 2
+if ($LASTEXITCODE -ne 0 -or $uiTreeAdapterWritten -ne 'executable written') { throw 'ui_tree_adapter emission failed' }
+$uiTreeAdapterOutput = & $uiTreeAdapterPath
+if ($LASTEXITCODE -ne 0 -or $uiTreeAdapterOutput -ne 'ui tree adapter ok') { throw "ui_tree_adapter answered wrongly: exit $LASTEXITCODE" }
+# e.ui.schedule: day, week and agenda layouts with recurrence, overlap lanes, all-day band, hits, drag-create and accessible roles against a python-dateutil model (D2882).
+$uiSchedulePath = Join-Path $testBuild 'ui-schedule-selfhost.exe'
+$uiScheduleWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_schedule\src\main.e') $repo 'x64' 'windows' $uiSchedulePath -j 2
+if ($LASTEXITCODE -ne 0 -or $uiScheduleWritten -ne 'executable written') { throw 'ui_schedule emission failed' }
+$uiScheduleOutput = & $uiSchedulePath
+if ($LASTEXITCODE -ne 0 -or $uiScheduleOutput -ne 'ui schedule ok') { throw "ui_schedule answered wrongly: exit $LASTEXITCODE" }
 # e.gfx.svg against cairosvg: gradients, defs and use, units, clip path and plain shapes rendered through the CPU backend and held to a 16x16 cell tolerance (D2843).
 $gfxSvgRenderPath = Join-Path $testBuild 'gfx-svg-render-selfhost.exe'
 $gfxSvgRenderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg_render\src\main.e') $repo 'x64' 'windows' $gfxSvgRenderPath -j 2

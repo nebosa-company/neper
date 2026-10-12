@@ -2270,4 +2270,7 @@ D2802	2875	L152: CMS signing, json5, TFTP, singleflight and a rotating file sink
 D2803	2975	L160: robots.txt, sitemaps, test polling, fixed-width records, JKS and PKCS #12 keystores
 D2804	2940	L157: a sandboxed expression language with JEXL, SpEL and MVEL shapes (`e.algo.expr`)
 D2805	2971	L156: brokerless messaging, ZMTP (ZeroMQ) and SP (NNG) patterns over e.net
-D2442	1005	C170: HOTP entries and several URIs per import in Secure
+D2442	1006	C170: HOTP entries and several URIs per import in Secure
+D2880	3329	L066: a safe structured Markdown viewer model (`e.ui.markdown_view`)
+D2881	3455	L067: a refresh-stable explorer tree adapter (`e.ui.tree_adapter`)
+D2882	3216	L148: scheduler control model, day, week and agenda views (`e.ui.schedule`)
