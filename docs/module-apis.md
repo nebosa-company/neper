@@ -9407,6 +9407,135 @@ An undo/redo stack of caller-interpreted commands: `push` (dropping the redo tai
 oldest entry when full), `undo`/`redo`, groups (`begin_group`, `end_group`, `undo_group`,
 `redo_group`), `merge_last` through a caller merge callback, `mark_saved`/`is_dirty`.
 
+### `e.ui.code_editor`
+
+```neper
+type Range = struct { anchor: usize, head: usize, goal: usize }
+type Edit = struct { at: usize, remove: usize, text_off: usize, text_len: usize }
+type Batch = struct { edit_first: usize, edit_n: usize, text_first: usize, text_len: usize }
+type Entry = struct { batch_first: usize, batch_n: usize, sel_first: usize, sel_n: usize, id_before: u64, kind: u32 }
+type Stack = struct { entries: []Entry, nent: usize, batches: []Batch, nbat: usize, edits: []Edit, ned: usize, text: []u8, ntext: usize, sels: []Range, nsel: usize }
+type Token = struct { start: usize, end: usize, kind: u32 }
+type Language = struct { keywords: str, types: str, line_comment: str, block_open: str, block_close: str, quotes: str, multiline_quotes: str }
+type SearchOpts = struct { case_sensitive: bool, whole_word: bool }
+type Editor = struct { buf: []u8, gap_start: usize, gap_end: usize, lines: []usize, nlines: usize, line_state: []u8, first_dirty: usize, sels: []Range, nsel: usize, primary: usize, undo: Stack, redo: Stack, content_id: u64, next_id: u64, saved_id: u64, revision: u64, can_merge: bool, merge_kind: u32, lang: Language, use_tabs: bool, tab_width: usize, indent_unit: usize, scratch_edits: []Edit, scratch_text: []u8, scratch_sels: []Range }
+error Invalid
+error TooLarge
+error TooManyLines
+error TooManySelections
+error NotBoundary
+error BadEdits
+const NO_GOAL: usize = 18446744073709551615usize
+const NO_DIRTY: usize = 18446744073709551615usize
+const KIND_OTHER: u32 = 0u32
+const KIND_TYPING: u32 = 1u32
+const KIND_DELETE_BACK: u32 = 2u32
+const KIND_DELETE_FORWARD: u32 = 3u32
+const TOK_KEYWORD: u32 = 1u32
+const TOK_TYPE: u32 = 2u32
+const TOK_IDENT: u32 = 3u32
+const TOK_NUMBER: u32 = 4u32
+const TOK_STRING: u32 = 5u32
+const TOK_COMMENT: u32 = 6u32
+const TOK_OPERATOR: u32 = 7u32
+const TOK_PUNCT: u32 = 8u32
+const MOVE_LEFT: u32 = 1u32
+const MOVE_RIGHT: u32 = 2u32
+const MOVE_UP: u32 = 3u32
+const MOVE_DOWN: u32 = 4u32
+const MOVE_LINE_START: u32 = 5u32
+const MOVE_LINE_END: u32 = 6u32
+const MOVE_DOC_START: u32 = 7u32
+const MOVE_DOC_END: u32 = 8u32
+const MOVE_WORD_LEFT: u32 = 9u32
+const MOVE_WORD_RIGHT: u32 = 10u32
+fn min_of(x: usize, y: usize) -> usize
+fn max_of(x: usize, y: usize) -> usize
+fn lang_plain() -> Language
+fn lang_neper() -> Language
+fn lang_javascript() -> Language
+fn lang_python() -> Language
+fn same_bytes(x: []const u8, y: str) -> bool
+fn lang_for_suffix(suffix: str) -> Language
+fn len(e: *const Editor) -> usize
+fn byte_at(e: *const Editor, i: usize) -> u8
+fn move_gap(e: *Editor, pos: usize)
+fn is_boundary(e: *const Editor, pos: usize) -> bool
+fn copy_text(e: *const Editor, from: usize, to: usize, dst: []u8) -> usize
+fn valid_utf8(text: []const u8, off: usize, n: usize) -> bool
+fn decode_at(e: *const Editor, pos: usize) -> (u32, usize)
+fn is_extender(cp: u32) -> bool
+fn next_boundary(e: *const Editor, pos: usize) -> usize
+fn prev_cp_start(e: *const Editor, pos: usize) -> usize
+fn prev_boundary(e: *const Editor, pos: usize) -> usize
+fn line_count(e: *const Editor) -> usize
+fn line_start(e: *const Editor, i: usize) -> usize
+fn line_end(e: *const Editor, i: usize) -> usize
+fn line_of(e: *const Editor, pos: usize) -> usize
+fn column_of(e: *const Editor, pos: usize) -> usize
+fn pos_at_column(e: *const Editor, ln: usize, col: usize) -> usize
+fn lines_splice(e: *Editor, at: usize, rem: usize, src: []const u8, off: usize, n: usize)
+fn is_word_byte(c: u8) -> bool
+fn has_word(set: str, e: *const Editor, from: usize, to: usize) -> bool
+fn at_prefix(e: *const Editor, p: usize, end: usize, s: str) -> bool
+fn quote_index(set: str, c: u8) -> usize
+fn scan_line(e: *const Editor, ln: usize, state_in: u8, out: []Token) -> (usize, u8)
+fn ensure_states(e: *Editor, upto: usize)
+fn tokens(e: *Editor, ln: usize, out: []Token) -> usize
+fn set_language(e: *Editor, lg: Language)
+fn stack_room(s: *const Stack, nent: usize, nbat: usize, ned: usize, ntext: usize, nsel: usize) -> bool
+fn stack_clear(s: *Stack)
+fn stack_drop_oldest(s: *Stack)
+fn stack_make_room(s: *Stack, nent: usize, nbat: usize, ned: usize, ntext: usize, nsel: usize, keep: usize) -> bool
+fn range_from(r: Range) -> usize
+fn range_to(r: Range) -> usize
+fn caret(pos: usize) -> Range
+fn normalize(rs: []Range, n: usize, primary: usize) -> (usize, usize)
+fn set_selection(e: *Editor, ranges: []const Range, primary: usize) -> err
+fn selection_count(e: *const Editor) -> usize
+fn selection_at(e: *const Editor, i: usize) -> Range
+fn map_pos(edits: []const Edit, pos: usize, assoc: i32) -> usize
+fn validate(e: *const Editor, edits: []const Edit, text: []const u8) -> err
+fn apply_raw(e: *Editor, edits: []const Edit, text: []const u8, to: *Stack)
+fn push_entry(to: *Stack, id_before: u64, kind: u32, sels: []const Range, n: usize)
+fn commit(e: *Editor, edits: []const Edit, text: []const u8, new_sels: []const Range, kind: u32) -> err
+fn apply_edits(e: *Editor, edits: []const Edit, text: []const u8) -> err
+fn apply_edits_as(e: *Editor, edits: []const Edit, text: []const u8, kind: u32, caret_assoc: i32) -> err
+fn can_undo(e: *const Editor) -> bool
+fn can_redo(e: *const Editor) -> bool
+fn is_dirty(e: *const Editor) -> bool
+fn mark_saved(e: *Editor)
+fn break_group(e: *Editor)
+fn history_step(e: *Editor, from: *Stack, to: *Stack) -> err
+fn undo(e: *Editor) -> err
+fn redo(e: *Editor) -> err
+fn make_stack(a: *mem.Arena, entries: usize, edits: usize, text: usize, sels: usize) -> (Stack, err)
+fn open(a: *mem.Arena, capacity: usize, max_lines: usize, max_sels: usize, history_entries: usize, history_edits: usize, history_bytes: usize) -> (Editor, err)
+fn load(e: *Editor, text: []const u8) -> err
+fn type_text(e: *Editor, s: str) -> err
+fn delete_char(e: *Editor, forward: bool) -> err
+fn is_blank_byte(c: u8) -> bool
+fn indent_of(e: *const Editor, ln: usize) -> (usize, usize)
+fn write_indent(e: *const Editor, width: usize, dst: []u8, at: usize) -> usize
+fn is_open_bracket(c: u8) -> bool
+fn closes(open_c: u8, c: u8) -> bool
+fn newline_indent(e: *Editor) -> err
+fn selected_lines(e: *const Editor, out: []usize) -> usize
+fn indent_lines(e: *Editor, dedent: bool) -> err
+fn toggle_comment(e: *Editor) -> err
+fn is_word_char_at(e: *const Editor, p: usize) -> bool
+fn word_end(e: *const Editor, pos: usize) -> usize
+fn word_start(e: *const Editor, pos: usize) -> usize
+fn move_selection(e: *Editor, dir: u32, extend: bool) -> err
+fn fold_byte(c: u8, sensitive: bool) -> u8
+fn match_at(e: *const Editor, q: str, p: usize, o: SearchOpts) -> bool
+fn find(e: *const Editor, q: str, from: usize, forward: bool, o: SearchOpts) -> (usize, bool)
+fn count_matches(e: *const Editor, q: str, o: SearchOpts, limit: usize) -> (usize, bool)
+fn replace_all(e: *Editor, q: str, repl: str, o: SearchOpts) -> (usize, err)
+```
+
+The model and engine layer of the native code editor (L065, D3201); the widget, IME, wrapping, folding, decorations, regex search, completion, diagnostics and LSP are not here. `open` allocates one arena block; `Editor` owns a UTF-8 gap-buffer document with an incremental line index (`line_of`, `column_of`, `pos_at_column`), a normalised multi-range selection (`set_selection`, `move_selection`, sticky goal columns, grapheme/word steps), and undo/redo stacks of inverse batches. Every change goes through `commit`/`apply_edits`: sorted non-overlapping edits against one revision are validated (bounds, UTF-8 boundaries, well-formed text, capacity, line limit) and their history reserved before anything mutates, so a refusal changes nothing. `type_text`/`delete_char` coalesce into one undo entry until `break_group` or a selection change; `newline_indent`, `indent_lines`, `toggle_comment` and `replace_all` are single transactions across all selections. `tokens` yields highlight tokens per line from a `Language` (`lang_neper`, `lang_javascript`, `lang_python`, `lang_plain`, `lang_for_suffix`) with line states cached and re-propagated only as far as they change. `find`/`count_matches`/`replace_all` are literal, ASCII case folding, optional whole word. `is_dirty` follows the saved content identity across undo and redo.
+
 ### `e.ui.terminal`
 
 ```neper

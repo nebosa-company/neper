@@ -480,6 +480,7 @@
     "e.ui.state",
     "e.ui.undo",
     "e.ui.terminal",
+    "e.ui.code_editor",
     "e.ui.ink",
     "e.ui.markdown_view",
     "e.ui.tree_adapter",
@@ -5202,6 +5203,17 @@
    "direct_dependencies": [
     "e.mem",
     "e.text.encoding"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.code_editor",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
    ],
    "blocked_by": []
   },

@@ -2493,6 +2493,11 @@ ui_terminal_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$ui_terminal_written" = 'executable written' ]
 chmod +x "$test_build/ui-terminal-selfhost"
 "$test_build/ui-terminal-selfhost"
+# `e.ui.code_editor`: typing/undo, grapheme deletion, atomic refusals, dirty tracking, history eviction, search, tokens, sticky columns, multi-caret, indentation, then a 520-step generated script equal to an independent flat-text model with a digest after every step (D3201).
+ui_code_editor_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_code_editor/src/main.e" "$repo" x64 linux "$test_build/ui-code-editor-selfhost")
+[ "$ui_code_editor_written" = 'executable written' ]
+chmod +x "$test_build/ui-code-editor-selfhost"
+"$test_build/ui-code-editor-selfhost"
 # `e.fmt.lzma`: liblzma's alone, raw and .xz streams of a text and a 4 KB generated buffer decoded exactly, a flipped check byte refused (D877).
 fmt_lzma_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_lzma/src/main.e" "$repo" x64 linux "$test_build/fmt-lzma-selfhost")
 [ "$fmt_lzma_written" = 'executable written' ]
