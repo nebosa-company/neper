@@ -29,6 +29,22 @@ CRLF = b"\r\n"
 
 
 def render(sender, subject, date, body):
+    if subject == b"Your hold is ready":
+        # (C158) HTML only, quoted-printable: the client must undo both to show the text.
+        html = b"<html><body><p>The book you reserved is ready for pickup at the <b>front desk</b>.</p></body></html>"
+        return (b"From: " + sender + b"\r\nTo: neper@neper.test\r\nSubject: " + subject + b"\r\nDate: " + date +
+                b"\r\nMessage-ID: <html@neper.test>\r\nMIME-Version: 1.0\r\n"
+                b"Content-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n" +
+                html.replace(b"=", b"=3D") + b"\r\n")
+    if subject == b"Build is green":
+        # A multipart/alternative: the plain part first, an HTML part after.
+        boundary = b"=_neper_alt"
+        return (b"From: " + sender + b"\r\nTo: neper@neper.test\r\nSubject: " + subject + b"\r\nDate: " + date +
+                b"\r\nMessage-ID: <alt@neper.test>\r\nMIME-Version: 1.0\r\n"
+                b"Content-Type: multipart/alternative; boundary=\"" + boundary + b"\"\r\n\r\n"
+                b"--" + boundary + b"\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body + b"\r\n"
+                b"--" + boundary + b"\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>" + body + b"</p>\r\n"
+                b"--" + boundary + b"--\r\n")
     return (b"From: " + sender + b"\r\nTo: neper@neper.test\r\nSubject: " + subject + b"\r\nDate: " + date +
             b"\r\nMessage-ID: <" + str(abs(hash(subject)) % 100000).encode() + b"@neper.test>\r\n"
             b"MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body + b"\r\n")

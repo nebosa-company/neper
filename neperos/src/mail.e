@@ -19,6 +19,7 @@ use e.io
 use e.time
 use e.fmt.mail as mailfmt
 use e.fmt.mime as mime
+use e.fmt.extract as extract
 use e.net.imap as imap
 use e.net.smtp as smtp
 use appkit
@@ -185,13 +186,32 @@ fn sync_inbox(a: *mem.Arena, s: *State) -> usize {
                                     let (stamp, date_error) = mailfmt.parse_date(date)
                                     if date_error == ok && now_seconds > stamp.instant { ago = usize((now_seconds - stamp.instant) / 60i64) }
                                 }
+                                // (C158) The text of the message through the extraction facade: a multipart/alternative
+                                // gives its plain part, an HTML-only message its text, quoted-printable and base64
+                                // undone; when it will not read, the raw bytes as before.
                                 var body_buf: [160]u8 = zero
-                                var body = message.body
-                                let (got, body_error) = io.read(&body, body_buf[0usize..160usize])
                                 var body_len = 0usize
-                                if body_error == ok { body_len = got }
+                                let (doc, doc_error) = extract.extract_as(a, raw, extract.Format.Mail)
+                                if doc_error == ok && doc.text.len > 0usize {
+                                    var j = 0usize
+                                    while j < doc.text.len && j < 160usize {
+                                        body_buf[j] = doc.text[j]
+                                        j += 1usize
+                                    }
+                                    body_len = j
+                                } else {
+                                    var body = message.body
+                                    let (got, body_error) = io.read(&body, body_buf[0usize..160usize])
+                                    if body_error == ok { body_len = got }
+                                }
                                 let unread = !imap.has_flag(items[i], "\\Seen")
-                                let made = add_mail(s, from_name, subject, ui.text_of(a, body_buf[0usize..], body_len), INBOX, unread, ago)
+                                let body_text = ui.text_of(a, body_buf[0usize..], body_len)
+                                ui.say("mail body ")
+                                ui.say_text(subject)
+                                ui.say(": ")
+                                ui.say_text(body_text)
+                                ui.say("\n")
+                                let made = add_mail(s, from_name, subject, body_text, INBOX, unread, ago)
                                 if made != NONE {
                                     s.mails[made].uid = usize(items[i].uid)
                                     s.mails[made].remote = true

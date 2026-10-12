@@ -614,10 +614,10 @@
       "group": "NeperOS",
       "order": 158,
       "title": "NeperOS Mail remainder: accounts, folders and threads, HTML and attachments, notifications",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C128 (D2413): Mail syncs the INBOX of a fixed test account over IMAP and sends over SMTP, on TLS, and marks read and deleted on the server. Acceptance: (1) accounts added in the app (server, user, password kept in Secure, C116), OAuth for the large providers, several accounts, folder list and sync, IDLE or polling for push; (2) threads, labels, search, archive, mark unread and swipe actions done on the server; (3) rich messages: MIME multipart, HTML rendering through the Document engine (C123), inline images, attachments saved into Files (C125) and opened in their apps; (4) compose with attachments from Files, Photos and Camera, drafts, signatures and the contact picker (the vCard store, C127/C157); (5) notifications through the status server and a badge on the icon; (6) a fixture against the test IMAP and SMTP server that fetches, threads, searches, replies with an attachment and checks the sent message."
+      "evidence": "Split from C128 (D2413): Mail syncs the INBOX of a fixed test account over IMAP and sends over SMTP, on TLS, and marks read and deleted on the server. Acceptance: (1) accounts added in the app (server, user, password kept in Secure, C116), OAuth for the large providers, several accounts, folder list and sync, IDLE or polling for push; (2) threads, labels, search, archive, mark unread and swipe actions done on the server; (3) rich messages: MIME multipart, HTML rendering through the Document engine (C123), inline images, attachments saved into Files (C125) and opened in their apps; (4) compose with attachments from Files, Photos and Camera, drafts, signatures and the contact picker (the vCard store, C127/C157); (5) notifications through the status server and a badge on the icon; (6) a fixture against the test IMAP and SMTP server that fetches, threads, searches, replies with an attachment and checks the sent message. PART (D2448): MIME bodies (multipart/alternative, HTML-only, quoted-printable) shown as text through e.fmt.extract; fixture mail_live. Remaining: HTML rendering through Document, inline images, attachments, compose with attachments, accounts/folders/threads, push."
     },
     {
       "id": "C159",
