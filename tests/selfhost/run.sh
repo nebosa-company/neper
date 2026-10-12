@@ -1340,6 +1340,11 @@ fmt_html_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$fmt_html_written" = 'executable written' ]
 chmod +x "$test_build/fmt-html-selfhost"
 "$test_build/fmt-html-selfhost"
+# `e.fmt.graph`: NetworkX-written GraphML, GEXF and GML read, nested reference files read, a typed model written byte for byte and read back, to_csr, the refusals.
+fmt_graph_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_graph/src/main.e" "$repo" x64 linux "$test_build/fmt-graph-selfhost")
+[ "$fmt_graph_written" = 'executable written' ]
+chmod +x "$test_build/fmt-graph-selfhost"
+"$test_build/fmt-graph-selfhost"
 # `e.async`: the loop over two loopback datagram sockets, the os_poller shape.
 async_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/async/src/main.e" "$repo" x64 linux "$test_build/async-selfhost")
 [ "$async_written" = 'executable written' ]

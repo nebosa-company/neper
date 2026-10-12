@@ -179,6 +179,7 @@
     "e.fmt.xslt",
     "e.fmt.soap",
     "e.fmt.html",
+    "e.fmt.graph",
     "e.fmt.html.template",
     "e.fmt.png",
     "e.fmt.jpeg",
@@ -2198,6 +2199,22 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.io",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.graph",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.data.graph",
+    "e.data.list",
+    "e.fmt.xml",
     "e.mem",
     "e.str"
    ],

@@ -1462,6 +1462,12 @@ $fmtHtmlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtHtmlWritten -ne 'executable written') { throw 'fmt_html emission failed' }
 & $fmtHtmlPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_html check failed: exit $LASTEXITCODE" }
+# `e.fmt.graph`: NetworkX-written GraphML, GEXF and GML read, nested reference files read, a typed model written byte for byte and read back, to_csr, the refusals.
+$fmtGraphPath = Join-Path $testBuild 'fmt-graph-selfhost.exe'
+$fmtGraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_graph\src\main.e') $repo 'x64' 'windows' $fmtGraphPath
+if ($LASTEXITCODE -ne 0 -or $fmtGraphWritten -ne 'executable written') { throw 'fmt_graph emission failed' }
+& $fmtGraphPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_graph check failed: exit $LASTEXITCODE" }
 # `e.async`: the loop over two loopback datagram sockets, the os_poller shape.
 $asyncPath = Join-Path $testBuild 'async-selfhost.exe'
 $asyncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\async\src\main.e') $repo 'x64' 'windows' $asyncPath
