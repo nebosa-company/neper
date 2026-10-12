@@ -9912,6 +9912,7 @@ type Stack = struct { entries: []Entry, nent: usize, batches: []Batch, nbat: usi
 type Token = struct { start: usize, end: usize, kind: u32 }
 type Language = struct { keywords: str, types: str, line_comment: str, block_open: str, block_close: str, quotes: str, multiline_quotes: str }
 type SearchOpts = struct { case_sensitive: bool, whole_word: bool }
+type Fold = struct { from: usize, to: usize }
 type Editor = struct { buf: []u8, gap_start: usize, gap_end: usize, lines: []usize, nlines: usize, line_state: []u8, first_dirty: usize, sels: []Range, nsel: usize, primary: usize, undo: Stack, redo: Stack, content_id: u64, next_id: u64, saved_id: u64, revision: u64, can_merge: bool, merge_kind: u32, lang: Language, use_tabs: bool, tab_width: usize, indent_unit: usize, scratch_edits: []Edit, scratch_text: []u8, scratch_sels: []Range }
 error Invalid
 error TooLarge
@@ -9949,6 +9950,19 @@ fn lang_plain() -> Language
 fn lang_neper() -> Language
 fn lang_javascript() -> Language
 fn lang_python() -> Language
+fn lang_c() -> Language
+fn lang_rust() -> Language
+fn lang_go() -> Language
+fn lang_java() -> Language
+fn lang_typescript() -> Language
+fn lang_json() -> Language
+fn lang_shell() -> Language
+fn lang_sql() -> Language
+fn lang_css() -> Language
+fn lang_html() -> Language
+fn lang_yaml() -> Language
+fn lang_toml() -> Language
+fn lang_lua() -> Language
 fn same_bytes(x: []const u8, y: str) -> bool
 fn lang_for_suffix(suffix: str) -> Language
 fn len(e: *const Editor) -> usize
@@ -9973,6 +9987,7 @@ fn is_word_byte(c: u8) -> bool
 fn has_word(set: str, e: *const Editor, from: usize, to: usize) -> bool
 fn at_prefix(e: *const Editor, p: usize, end: usize, s: str) -> bool
 fn quote_index(set: str, c: u8) -> usize
+fn scan_probe(e: *const Editor, ln: usize, state_in: u8, out: []Token, probe: usize) -> (usize, u8, bool)
 fn scan_line(e: *const Editor, ln: usize, state_in: u8, out: []Token) -> (usize, u8)
 fn ensure_states(e: *Editor, upto: usize)
 fn tokens(e: *Editor, ln: usize, out: []Token) -> usize
@@ -10026,9 +10041,37 @@ fn match_at(e: *const Editor, q: str, p: usize, o: SearchOpts) -> bool
 fn find(e: *const Editor, q: str, from: usize, forward: bool, o: SearchOpts) -> (usize, bool)
 fn count_matches(e: *const Editor, q: str, o: SearchOpts, limit: usize) -> (usize, bool)
 fn replace_all(e: *Editor, q: str, repl: str, o: SearchOpts) -> (usize, err)
+fn contiguous(e: *Editor) -> str
+fn scalar_len(lead: u8) -> usize
+fn regex_next(prog: *const rx.Regex, text: str, from: usize) -> (usize, usize, bool)
+fn find_regex(e: *Editor, prog: *const rx.Regex, from: usize, forward: bool) -> (usize, usize, bool)
+fn count_regex(e: *Editor, prog: *const rx.Regex, limit: usize) -> (usize, bool)
+fn expand_replacement(text: str, whole: rx.Match, groups: []const rx.Match, repl: str, dst: []u8, off_in: usize) -> usize
+fn replace_regex_all(a: *mem.Arena, e: *Editor, prog: *const rx.Regex, repl: str) -> (usize, err)
+fn bracket_partner(c: u8) -> u8
+fn in_skipped(e: *Editor, pos: usize) -> bool
+fn match_at_bracket(e: *Editor, at: usize) -> (usize, bool)
+fn match_bracket(e: *Editor, pos: usize) -> (usize, usize, bool)
+fn blank_line(e: *const Editor, ln: usize) -> bool
+fn fold_indent(e: *Editor, ln: usize) -> (usize, usize, bool)
+fn fold_at(e: *Editor, ln: usize) -> (usize, usize, bool)
+fn fold_all(e: *Editor, out: []Fold) -> usize
+fn wrap_next_row(e: *const Editor, from: usize, end: usize, width: usize) -> usize
+fn wrap_rows(e: *const Editor, ln: usize, width: usize) -> usize
+fn wrap_row_start(e: *const Editor, ln: usize, width: usize, row: usize) -> usize
+fn wrap_locate(e: *const Editor, pos: usize, width: usize) -> (usize, usize)
+fn wrap_total_rows(e: *const Editor, width: usize) -> usize
+fn add_cursor_vertical(e: *Editor, up: bool) -> err
+fn select_rect(e: *Editor, a: usize, b: usize) -> err
+fn word_bounds(e: *const Editor, pos: usize) -> (usize, usize)
+fn select_next_occurrence(e: *Editor, o: SearchOpts) -> err
+fn select_all_occurrences(e: *Editor, o: SearchOpts) -> err
+fn split_selection_by_line(e: *Editor) -> err
 ```
 
-The model and engine layer of the native code editor (L065, D3201); the widget, IME, wrapping, folding, decorations, regex search, completion, diagnostics and LSP are not here. `open` allocates one arena block; `Editor` owns a UTF-8 gap-buffer document with an incremental line index (`line_of`, `column_of`, `pos_at_column`), a normalised multi-range selection (`set_selection`, `move_selection`, sticky goal columns, grapheme/word steps), and undo/redo stacks of inverse batches. Every change goes through `commit`/`apply_edits`: sorted non-overlapping edits against one revision are validated (bounds, UTF-8 boundaries, well-formed text, capacity, line limit) and their history reserved before anything mutates, so a refusal changes nothing. `type_text`/`delete_char` coalesce into one undo entry until `break_group` or a selection change; `newline_indent`, `indent_lines`, `toggle_comment` and `replace_all` are single transactions across all selections. `tokens` yields highlight tokens per line from a `Language` (`lang_neper`, `lang_javascript`, `lang_python`, `lang_plain`, `lang_for_suffix`) with line states cached and re-propagated only as far as they change. `find`/`count_matches`/`replace_all` are literal, ASCII case folding, optional whole word. `is_dirty` follows the saved content identity across undo and redo.
+D3500 adds regular-expression `find_regex`/`count_regex`/`replace_regex_all` over a compiled `e.text.regex` program (the non-empty matches left to right; `$0`..`$9` and `$$` in replacements; one transaction), `match_bracket` (string and comment tokens neither match nor count), `fold_at`/`fold_all` (bracket folds, plus indentation folds in `#`-comment languages), soft-wrap rows (`wrap_rows`, `wrap_row_start`, `wrap_locate`, `wrap_total_rows`: a row breaks after the last blank it holds, else at the overflowing caret stop), `add_cursor_vertical`, `select_rect`, `select_next_occurrence`, `select_all_occurrences`, `split_selection_by_line`, and the language packs `lang_c`, `lang_rust`, `lang_go`, `lang_java`, `lang_typescript`, `lang_json`, `lang_shell`, `lang_sql`, `lang_css`, `lang_html`, `lang_yaml`, `lang_toml`, `lang_lua` behind `lang_for_suffix`.
+
+The model and engine layer of the native code editor (L065, D3201); the widget, IME, decorations, completion, diagnostics and LSP are not here. `open` allocates one arena block; `Editor` owns a UTF-8 gap-buffer document with an incremental line index (`line_of`, `column_of`, `pos_at_column`), a normalised multi-range selection (`set_selection`, `move_selection`, sticky goal columns, grapheme/word steps), and undo/redo stacks of inverse batches. Every change goes through `commit`/`apply_edits`: sorted non-overlapping edits against one revision are validated (bounds, UTF-8 boundaries, well-formed text, capacity, line limit) and their history reserved before anything mutates, so a refusal changes nothing. `type_text`/`delete_char` coalesce into one undo entry until `break_group` or a selection change; `newline_indent`, `indent_lines`, `toggle_comment` and `replace_all` are single transactions across all selections. `tokens` yields highlight tokens per line from a `Language` (`lang_neper`, `lang_javascript`, `lang_python`, `lang_plain`, `lang_for_suffix`) with line states cached and re-propagated only as far as they change. `find`/`count_matches`/`replace_all` are literal, ASCII case folding, optional whole word. `is_dirty` follows the saved content identity across undo and redo.
 
 ### `e.ui.terminal`
 
