@@ -2824,6 +2824,12 @@ $uiUndoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $uiUndoWritten -ne 'executable written') { throw 'ui_undo emission failed' }
 & $uiUndoPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_undo check failed: exit $LASTEXITCODE" }
+# `e.ui.terminal`: wrap, SGR, erase, scroll regions, scrollback, alternate screen, split UTF-8, wide cells, resize, DSR/DA replies, titles, palette and line drawing, then a generated 4 KB stream equal to an independent Python model whole and in 7-byte pieces (D3200).
+$uiTerminalPath = Join-Path $testBuild 'ui-terminal-selfhost.exe'
+$uiTerminalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_terminal\src\main.e') $repo 'x64' 'windows' $uiTerminalPath
+if ($LASTEXITCODE -ne 0 -or $uiTerminalWritten -ne 'executable written') { throw 'ui_terminal emission failed' }
+& $uiTerminalPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_terminal check failed: exit $LASTEXITCODE" }
 # `e.fmt.lzma`: liblzma's alone, raw and .xz streams of a text and a 4 KB generated buffer decoded exactly, a flipped check byte refused (D877).
 $fmtLzmaPath = Join-Path $testBuild 'fmt-lzma-selfhost.exe'
 $fmtLzmaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_lzma\src\main.e') $repo 'x64' 'windows' $fmtLzmaPath

@@ -9407,6 +9407,101 @@ An undo/redo stack of caller-interpreted commands: `push` (dropping the redo tai
 oldest entry when full), `undo`/`redo`, groups (`begin_group`, `end_group`, `undo_group`,
 `redo_group`), `merge_last` through a caller merge callback, `mark_saved`/`is_dirty`.
 
+### `e.ui.terminal`
+
+```neper
+type Cell = struct { ch: u32, fg: u32, bg: u32, attr: u32 }
+type Term = struct { cols: usize, rows: usize, max_cols: usize, max_rows: usize, sb_cap: usize, sb_head: usize, sb_len: usize, cells: []Cell, flags: []u32, tabs: []bool, alt: bool, cx: usize, cy: usize, wrap_pending: bool, top: usize, bottom: usize, pen_fg: u32, pen_bg: u32, pen_attr: u32, graphics: bool, saved_x: usize, saved_y: usize, saved_fg: u32, saved_bg: u32, saved_attr: u32, saved_pending: bool, saved_origin: bool, saved_graphics: bool, autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool, state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32, utf_cp: u32, utf_need: u32, last_ch: u32, osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize, out: [256]u8, out_len: usize, bells: u32 }
+error Invalid
+const BOLD: u32 = 1u32
+const DIM: u32 = 2u32
+const ITALIC: u32 = 4u32
+const UNDERLINE: u32 = 8u32
+const BLINK: u32 = 16u32
+const REVERSE: u32 = 32u32
+const HIDDEN: u32 = 64u32
+const STRIKE: u32 = 128u32
+const WIDE: u32 = 256u32
+const CONT: u32 = 512u32
+const COLOR_INDEXED: u32 = 16777216u32
+const COLOR_RGB: u32 = 33554432u32
+const LINE_WRAPPED: u32 = 1u32
+const S_GROUND: u32 = 0u32
+const S_ESC: u32 = 1u32
+const S_ESC_INT: u32 = 2u32
+const S_CSI: u32 = 3u32
+const S_CSI_INT: u32 = 4u32
+const S_CSI_IGN: u32 = 5u32
+const S_OSC: u32 = 6u32
+const S_STR: u32 = 7u32
+fn min_usize(x: usize, y: usize) -> usize
+fn max_usize(x: usize, y: usize) -> usize
+fn indexed(i: u32) -> u32
+fn rgb(v: u32) -> u32
+fn palette_rgb(i: u32) -> u32
+fn resolve_color(c: u32, fallback: u32) -> u32
+fn char_width(cp: u32) -> u32
+fn dec_graphics(cp: u32) -> u32
+fn blank_cell(bg: u32) -> Cell
+fn live_base(t: *const Term, r: usize) -> usize
+fn sb_slot(t: *const Term, i: usize) -> usize
+fn line_row(t: *const Term, i: usize) -> usize
+fn clear_row(t: *Term, r: usize, bg: u32)
+fn copy_row(t: *Term, src_row: usize, dst_row: usize)
+fn push_scrollback(t: *Term, r: usize)
+fn scroll_up(t: *Term, top_row: usize, bot_row: usize, n: usize, keep: bool)
+fn scroll_down(t: *Term, top_row: usize, bot_row: usize, n: usize)
+fn index_down(t: *Term)
+fn reverse_index(t: *Term)
+fn set_row_flag(t: *Term, r: usize, f: u32)
+fn unwide(t: *Term, r: usize, x: usize)
+fn fix_row(t: *Term, r: usize)
+fn erase_span(t: *Term, r: usize, x0: usize, x1: usize)
+fn put_cell(t: *Term, ch: u32, w: u32)
+fn insert_blank(t: *Term, n: usize)
+fn delete_chars(t: *Term, n: usize)
+fn put_char(t: *Term, cp_in: u32)
+fn queue_byte(t: *Term, b: u8)
+fn queue_str(t: *Term, s: str)
+fn queue_num(t: *Term, v: usize)
+fn param(t: *const Term, i: usize, fallback: u32) -> u32
+fn param_count(t: *const Term) -> usize
+fn clear_params(t: *Term)
+fn row_min(t: *const Term) -> usize
+fn row_max(t: *const Term) -> usize
+fn move_to(t: *Term, r: usize, c: usize)
+fn save_cursor(t: *Term)
+fn restore_cursor(t: *Term)
+fn reset_tabs(t: *Term)
+fn clear_screen_rows(t: *Term, bg: u32)
+fn reset(t: *Term)
+fn new(a: *mem.Arena, cols: usize, rows: usize, max_cols: usize, max_rows: usize, scrollback: usize) -> (Term, err)
+fn set_alt(t: *Term, on: bool, save: bool)
+fn set_mode(t: *Term, private: bool, mode: u32, on: bool)
+fn apply_sgr(t: *Term)
+fn erase_display(t: *Term, mode: u32)
+fn erase_line(t: *Term, mode: u32)
+fn next_tab(t: *const Term, x: usize) -> usize
+fn prev_tab(t: *const Term, x: usize) -> usize
+fn dispatch_csi(t: *Term, f: u32)
+fn dispatch_esc(t: *Term, f: u32)
+fn dispatch_osc(t: *Term)
+fn execute_c0(t: *Term, b: u32)
+fn feed_ground(t: *Term, b: u32)
+fn feed_byte(t: *Term, b: u32)
+fn feed(t: *Term, data: []const u8)
+fn take_output(t: *Term, dst: []u8) -> usize
+fn blank_range(t: *Term, r: usize, x0: usize, x1: usize)
+fn resize(t: *Term, cols: usize, rows: usize) -> err
+fn line_count(t: *const Term) -> usize
+fn line_cell(t: *const Term, i: usize, c: usize) -> Cell
+fn line_wrapped(t: *const Term, i: usize) -> bool
+fn line_text(t: *const Term, i: usize, dst: []u8) -> usize
+fn snapshot(t: *const Term, offset: usize, out: []Cell) -> usize
+```
+
+A headless terminal emulator engine (L136, D3200): `new` allocates cells, line flags and a scrollback ring from an arena for a maximum size; `feed` runs the DEC ANSI state machine over output bytes (UTF-8 across calls, C0, CSI cursor/erase/insert/delete/scroll, DECSTBM, SGR with 16/256/true colour, modes 4/6/7/25/47/1047/1049/2004, DEC line drawing, OSC titles) and `take_output` drains DSR/DA replies. `line_count`/`line_cell`/`line_wrapped`/`line_text` read scrollback then live rows, `snapshot` copies the viewport scrolled back by an offset, `resolve_color`/`palette_rgb` map a cell colour to 0xRRGGBB, `resize` keeps rows and clips columns. Wide characters take WIDE+CONT cells; combining marks are dropped. No PTY, no rendering.
+
 ### `e.ui.style`
 
 ```neper

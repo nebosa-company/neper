@@ -2488,6 +2488,11 @@ ui_undo_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$ui_undo_written" = 'executable written' ]
 chmod +x "$test_build/ui-undo-selfhost"
 "$test_build/ui-undo-selfhost"
+# `e.ui.terminal`: wrap, SGR, erase, scroll regions, scrollback, alternate screen, split UTF-8, wide cells, resize, DSR/DA replies, titles, palette and line drawing, then a generated 4 KB stream equal to an independent Python model whole and in 7-byte pieces (D3200).
+ui_terminal_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_terminal/src/main.e" "$repo" x64 linux "$test_build/ui-terminal-selfhost")
+[ "$ui_terminal_written" = 'executable written' ]
+chmod +x "$test_build/ui-terminal-selfhost"
+"$test_build/ui-terminal-selfhost"
 # `e.fmt.lzma`: liblzma's alone, raw and .xz streams of a text and a 4 KB generated buffer decoded exactly, a flipped check byte refused (D877).
 fmt_lzma_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_lzma/src/main.e" "$repo" x64 linux "$test_build/fmt-lzma-selfhost")
 [ "$fmt_lzma_written" = 'executable written' ]
