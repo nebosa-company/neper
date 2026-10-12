@@ -119,3 +119,87 @@ fn time_zone_id(a: *mem.Arena) -> (str, err) {
     if name.len == 0usize { ret ("", os.NotFound) }
     ret (name, ok)
 }
+
+// `/sys/class/net/<name>/address` as the arena path.
+fn address_path(a: *mem.Arena, name: str) -> (str, err) {
+    let head = "/sys/class/net/"
+    let tail = "/address"
+    let (out, alloc_error) = mem.alloc[u8](a, head.len + name.len + tail.len)
+    if alloc_error != ok { ret ("", alloc_error) }
+    var n = 0usize
+    var i = 0usize
+    while i < head.len {
+        out[n] = head[i]
+        n += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < name.len {
+        out[n] = name[i]
+        n += 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < tail.len {
+        out[n] = tail[i]
+        n += 1usize
+        i += 1usize
+    }
+    ret (out[0usize..n], ok)
+}
+
+fn lower_hex(c: u8) -> bool { ret (c >= 48u8 && c <= 57u8) || (c >= 97u8 && c <= 102u8) }
+
+// `aa:bb:cc:dd:ee:ff`, not all zero.
+fn mac_shape(s: str) -> bool {
+    if s.len != 17usize { ret false }
+    var nonzero = false
+    var i = 0usize
+    while i < 17usize {
+        if i % 3usize == 2usize {
+            if s[i] != 58u8 { ret false }
+        } else {
+            if !lower_hex(s[i]) { ret false }
+            if s[i] != 48u8 { nonzero = true }
+        }
+        i += 1usize
+    }
+    ret nonzero
+}
+
+// The hardware (MAC) address of the first interface other than the loopback that has one, as
+// `aa:bb:cc:dd:ee:ff`: the interface names come from `/proc/net/dev`, the address from
+// `/sys/class/net/<name>/address`. `NotFound` when none has.
+fn mac_address(a: *mem.Arena) -> (str, err) {
+    let (listing, list_error) = read_small(a, "/proc/net/dev", 16384usize)
+    if list_error != ok { ret ("", list_error) }
+    var line = 0usize
+    var start = 0usize
+    var i = 0usize
+    while i <= listing.len {
+        if i == listing.len || listing[i] == 10u8 {
+            // The first two lines are the table's headings.
+            if line >= 2usize {
+                let row = listing[start..i]
+                var colon = 0usize
+                while colon < row.len && row[colon] != 58u8 { colon += 1usize }
+                if colon < row.len {
+                    let name = trim(row[0usize..colon])
+                    if name.len > 0usize && name.len < 16usize && !(name.len == 2usize && name[0usize] == 108u8 && name[1usize] == 111u8) {
+                        let (path, path_error) = address_path(a, name)
+                        if path_error != ok { ret ("", path_error) }
+                        let (text, read_error) = read_small(a, path, 64usize)
+                        if read_error == ok {
+                            let mac = trim(text)
+                            if mac_shape(mac) { ret (mac, ok) }
+                        }
+                    }
+                }
+            }
+            line += 1usize
+            start = i + 1usize
+        }
+        i += 1usize
+    }
+    ret ("", os.NotFound)
+}

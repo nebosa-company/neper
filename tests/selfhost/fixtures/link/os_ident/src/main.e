@@ -1,6 +1,6 @@
 // e.os.ident: the host, user, locale and zone lookups answer well-formed values on the running host
 // (D2801). The values themselves are machine-specific; the fixture checks their shape: a host name
-// is non-empty with no whitespace or control byte, a locale tag is `ll` or `ll-XX...` ASCII, a zone
+// is non-empty with no whitespace or control byte, a MAC address is six lower-case hex pairs, a locale tag is `ll` or `ll-XX...` ASCII, a zone
 // id is non-empty printable. On Linux the user, locale and zone come from the environment and may
 // legitimately be absent (`NotFound`); anything else is a failure. The pure POSIX-locale rewrite is
 // covered by the variant itself on Linux only.
@@ -63,6 +63,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !printable(zone) { os.exit(7i32) }
     } else if zone_error != os.NotFound {
         os.exit(8i32)
+    }
+    // The MAC address is `aa:bb:cc:dd:ee:ff` in lower-case hex and not all zero, or absent (a host with
+    // no adapter) -- D3302.
+    let (mac, mac_error) = ident.mac_address(a)
+    if mac_error == ok {
+        if mac.len != 17usize { os.exit(9i32) }
+        var nonzero = false
+        var m = 0usize
+        while m < 17usize {
+            let c = mac[m]
+            if m % 3usize == 2usize {
+                if c != 58u8 { os.exit(10i32) }
+            } else {
+                if !((c >= 48u8 && c <= 57u8) || (c >= 97u8 && c <= 102u8)) { os.exit(10i32) }
+                if c != 48u8 { nonzero = true }
+            }
+            m += 1usize
+        }
+        if !nonzero { os.exit(11i32) }
+    } else if mac_error != os.NotFound {
+        os.exit(12i32)
     }
     try io.print("os ident ok")
     ret ok

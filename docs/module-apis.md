@@ -23305,9 +23305,10 @@ fn hostname(a: *mem.Arena) -> (str, err)
 fn user_name(a: *mem.Arena) -> (str, err)
 fn locale_name(a: *mem.Arena) -> (str, err)
 fn time_zone_id(a: *mem.Arena) -> (str, err)
+fn mac_address(a: *mem.Arena) -> (str, err)
 ```
 
-Who and where this process is: `hostname`, `user_name`, `locale_name` (a BCP 47 tag) and `time_zone_id`, per-target variants only (`ident.windows.e`, `ident.linux.e`). Windows reads kernel32/advapi32 (`GetComputerNameExW` DNS host name, `GetUserNameW`, `GetUserDefaultLocaleName`, `GetDynamicTimeZoneInformation`'s `TimeZoneKeyName`, a Windows id that `e.tz.winzones` maps to IANA); Linux reads `/proc/sys/kernel/hostname` and the environment (`USER`/`LOGNAME`; `LC_ALL`/`LC_MESSAGES`/`LANG` rewritten `de_DE.UTF-8` to `de-DE`, `C`/`POSIX` unset; `TZ` then `/etc/timezone`), so the user, locale and zone may answer `NotFound` there. Results are arena-owned. Not here: MAC addresses, the user database (`getpwuid`), or the full locale-variable cascade.
+Who and where this process is: `hostname`, `user_name`, `locale_name` (a BCP 47 tag) and `time_zone_id`, per-target variants only (`ident.windows.e`, `ident.linux.e`). Windows reads kernel32/advapi32 (`GetComputerNameExW` DNS host name, `GetUserNameW`, `GetUserDefaultLocaleName`, `GetDynamicTimeZoneInformation`'s `TimeZoneKeyName`, a Windows id that `e.tz.winzones` maps to IANA); Linux reads `/proc/sys/kernel/hostname` and the environment (`USER`/`LOGNAME`; `LC_ALL`/`LC_MESSAGES`/`LANG` rewritten `de_DE.UTF-8` to `de-DE`, `C`/`POSIX` unset; `TZ` then `/etc/timezone`), so the user, locale and zone may answer `NotFound` there. `mac_address` is the hardware address of the uplink as `aa:bb:cc:dd:ee:ff` (Windows: `GetAdaptersInfo`, the first IPv4 adapter with a gateway, else with an address, else any, loopback and tunnels skipped; Linux: the first non-loopback interface of `/proc/net/dev` with a non-zero `/sys/class/net/<name>/address`), `NotFound` when none. Results are arena-owned. Not here: the user database (`getpwuid`), or the full locale-variable cascade.
 
 ### `e.fmt.json5`
 
