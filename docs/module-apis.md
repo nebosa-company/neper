@@ -28726,11 +28726,14 @@ type Source = struct { data: []const u8, off: usize }
 type Paragraph = struct { text: str, style: str, list: bool }
 type Slide = struct { paragraphs: []const str }
 type Collected = struct { texts: []str, styles: []str, lists: []bool }
+type Grid = struct { rows: usize, columns: usize, cells: []str }
 
 const LIMIT_ENTRIES: usize = 512usize
 const LIMIT_NAME: usize = 256usize
 const LIMIT_ENTRY: u64 = 8388608u64
 const LIMIT_TOTAL: u64 = 33554432u64
+const LIMIT_GRID_ROWS: usize = 2000usize
+const LIMIT_GRID_COLUMNS: usize = 64usize
 
 fn source_read(ctx: *void, dst: []u8) -> (usize, err)
 fn source_seek(ctx: *void, off: i64, whence: os.SeekWhence) -> (u64, err)
@@ -28738,10 +28741,16 @@ fn local(name: str) -> str
 fn open_package(a: *mem.Arena, data: []const u8) -> (zip.Archive, err)
 fn find(archive: *zip.Archive, name: str) -> (usize, bool)
 fn collect(a: *mem.Arena, part: []const u8) -> (Collected, err)
+fn collect_of(a: *mem.Arena, part: []const u8, para: str) -> (Collected, err)
 fn paragraphs(a: *mem.Arena, data: []const u8) -> ([]Paragraph, err)
 fn slide_number(name: str) -> usize
 fn slides(a: *mem.Arena, data: []const u8) -> ([]Slide, err)
+fn cell_at(reference: str) -> (usize, usize, bool)
+fn sheet_names(a: *mem.Arena, data: []const u8) -> ([]str, err)
+fn sheet_grid(a: *mem.Arena, data: []const u8, number: usize) -> (Grid, err)
 ```
+
+Spreadsheets (C172, D3800): `sheet_names` lists an `.xlsx`'s sheet names in workbook order and `sheet_grid` reads sheet N (`xl/worksheets/sheet<N>.xml`, assumed to follow workbook order) as a `Grid` of cell text (`cells[row * columns + column]`, `""` for an absent cell, at most 2000 rows by 64 columns): shared, inline and `str` strings as their characters, numbers as stored, booleans `TRUE`/`FALSE`, dates as serials (no number-format reading), a cell without an `r` reference skipped. Checked on a package made with Python's zipfile (`reference_xlsx.py`): a sparse sheet, column `AA`, an entity, a rich-text shared string, a second sheet and the refusals.
 
 The text of an Office Open XML package, read over `e.fmt.zip` and `e.fmt.xml` from a byte slice (C123): `paragraphs` gives a `.docx`'s paragraphs in order (the text of each, its style name such as `Heading1`, whether it is a list item, tabs and breaks as characters, entities decoded), `slides` a `.pptx`'s slides in slide-number order with each slide's text paragraphs. Namespace prefixes are ignored; runs, tables, images and shapes are not laid out, and the text of a table cell or a shape is a paragraph like any other. A zip with no main part is `NoMainPart`, bytes that are not a zip `NotAPackage`. Checked against packages made with Python's zipfile.
 

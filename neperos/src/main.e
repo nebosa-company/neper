@@ -835,7 +835,8 @@ fn launch(frame: *a64.Frame) {
                 thread.grant(child, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                 thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
             }
-            if rng_present && index == 38usize {
+            // (C154) The Wallet (entry 20) draws nonces for the cards it seals under the Secure vault's key.
+            if rng_present && (index == 38usize || index == 20usize) {
                 thread.grant(child, 7usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 10usize)
                 thread.grant(child, 8usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 11usize)
             }

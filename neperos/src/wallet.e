@@ -20,6 +20,7 @@ use e.io
 use e.gfx.image
 use e.fmt.png
 use vaultfs
+use vault
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -36,6 +37,8 @@ const VALUE_WIDTH: usize = 36usize
 const STACK_SCREEN: usize = 0usize
 const DETAIL_SCREEN: usize = 1usize
 const ADD_SCREEN: usize = 2usize
+// (C154) The Secure vault's master password asked for at start when the disk holds a vault.
+const UNLOCK_SCREEN: usize = 3usize
 const PAYMENT: usize = 0usize
 const PASS: usize = 1usize
 const EVENT: usize = 2usize
@@ -198,6 +201,11 @@ type State = struct {
     scan_tex: scene.TextureId,
     scan_w: f32,
     scan_h: f32,
+    // (C154) The Secure vault's key once the master password opened it: the cards are then kept sealed under it in
+    // /w. `editing` is the card an open add form is changing (NONE for a new one).
+    keyed: bool,
+    key: [32]u8,
+    editing: usize,
     hits: [96]Hit,
     hit_total: usize,
 }
@@ -252,6 +260,161 @@ fn count_cards(s: *State) -> usize {
         i += 1usize
     }
     ret n
+}
+
+// ---- (C154) Cards kept sealed under the Secure vault's key: /w/c<i> for slot i, the record named c<i>.
+
+const PACKED_CARD: usize = 248usize
+
+// A card as bytes: kind, colour, document type, seed (two bytes), the title and subtitle with their lengths and the
+// five values with theirs; the length.
+fn pack_card(c: Card, out: []u8) -> usize {
+    var n = 0usize
+    out[n] = u8(c.kind)
+    out[n + 1usize] = u8(c.color)
+    out[n + 2usize] = u8(c.doc_type)
+    out[n + 3usize] = u8(c.seed & 255usize)
+    out[n + 4usize] = u8((c.seed >> 8usize) & 255usize)
+    out[n + 5usize] = u8(c.title_len)
+    n += 6usize
+    var i = 0usize
+    while i < 24usize {
+        out[n + i] = c.title[i]
+        i += 1usize
+    }
+    n += 24usize
+    out[n] = u8(c.sub_len)
+    n += 1usize
+    i = 0usize
+    while i < 32usize {
+        out[n + i] = c.sub[i]
+        i += 1usize
+    }
+    n += 32usize
+    i = 0usize
+    while i < 5usize {
+        out[n + i] = u8(c.value_len[i])
+        i += 1usize
+    }
+    n += 5usize
+    i = 0usize
+    while i < 180usize {
+        out[n + i] = c.values[i]
+        i += 1usize
+    }
+    n += 180usize
+    ret n
+}
+
+// The card `pack_card` wrote; false when the bytes are not one (a length out of range).
+fn unpack_card(plain: []const u8) -> (Card, bool) {
+    var c: Card = zero
+    if plain.len != PACKED_CARD { ret (c, false) }
+    c.kind = usize(plain[0usize])
+    c.color = usize(plain[1usize])
+    c.doc_type = usize(plain[2usize])
+    c.seed = usize(plain[3usize]) | (usize(plain[4usize]) << 8usize)
+    c.title_len = usize(plain[5usize])
+    var n = 6usize
+    var i = 0usize
+    while i < 24usize {
+        c.title[i] = plain[n + i]
+        i += 1usize
+    }
+    n += 24usize
+    c.sub_len = usize(plain[n])
+    n += 1usize
+    i = 0usize
+    while i < 32usize {
+        c.sub[i] = plain[n + i]
+        i += 1usize
+    }
+    n += 32usize
+    i = 0usize
+    while i < 5usize {
+        c.value_len[i] = usize(plain[n + i])
+        i += 1usize
+    }
+    n += 5usize
+    i = 0usize
+    while i < 180usize {
+        c.values[i] = plain[n + i]
+        i += 1usize
+    }
+    if c.title_len > 24usize || c.sub_len > 32usize || c.kind > DOC { ret (c, false) }
+    i = 0usize
+    while i < 5usize {
+        if c.value_len[i] > VALUE_WIDTH { ret (c, false) }
+        i += 1usize
+    }
+    c.used = true
+    ret (c, true)
+}
+
+// Write every used card as a sealed record and remove the records of the unused slots; the cards written. A fresh
+// random nonce for each (two words from the random server).
+fn save_all(a: *mem.Arena, s: *State) -> usize {
+    if !s.keyed { ret 0usize }
+    let made = vaultfs.mkdir("/w")
+    var written = 0usize
+    var i = 0usize
+    while i < MAX_CARDS {
+        let name = join(a, "c", number_label(i % 10usize), "")
+        var record_name = name
+        if i >= 10usize { record_name = join(a, "c1", number_label(i - 10usize), "") }
+        let path = join(a, "/w/", record_name, "")
+        if s.cards[i].used {
+            var plain: [248]u8 = zero
+            let n = pack_card(s.cards[i], plain[0usize..])
+            var nonce: [16]u8 = zero
+            if vaultfs.random(mem.address_of(&nonce[0usize]), 2usize) {
+                var record: [288]u8 = zero
+                let (length, seal_error) = vault.seal(s.key, nonce[0usize..], record_name, plain[0usize..n], record[0usize..])
+                if seal_error == ok && vaultfs.write(path, mem.address_of(&record[0usize]), length) { written += 1usize }
+            }
+        } else {
+            let dropped = vaultfs.remove(path)
+        }
+        i += 1usize
+    }
+    say("wallet vault saved ")
+    say_num(written)
+    say("\n")
+    ret written
+}
+
+// Open the sealed records into the card slots; how many came back. The cards in the slots now are replaced only when
+// at least one record opened.
+fn load_all(a: *mem.Arena, s: *State) -> usize {
+    var found: [12]Card = zero
+    var loaded = 0usize
+    var i = 0usize
+    while i < MAX_CARDS {
+        var record_name = join(a, "c", number_label(i % 10usize), "")
+        if i >= 10usize { record_name = join(a, "c1", number_label(i - 10usize), "") }
+        var record: [288]u8 = zero
+        let (count, has_record) = vaultfs.read(join(a, "/w/", record_name, ""), mem.address_of(&record[0usize]), 288usize)
+        if has_record {
+            var plain: [256]u8 = zero
+            let (n, open_error) = vault.open(s.key, record_name, record[0usize..count], plain[0usize..])
+            if open_error == ok {
+                let (opened, good) = unpack_card(plain[0usize..n])
+                if good {
+                    found[i] = opened
+                    loaded += 1usize
+                }
+            }
+        }
+        i += 1usize
+    }
+    if loaded > 0usize {
+        i = 0usize
+        while i < MAX_CARDS {
+            s.cards[i] = found[i]
+            i += 1usize
+        }
+    }
+    ret loaded
 }
 
 // Does card kind `kind` belong under filter `filter` (0 All, 1 Payment, 2 Tickets, 3 Bank, 4 Docs, 5 Other)?
@@ -767,6 +930,7 @@ fn draw_detail(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
         try centred(a, builder, faces.grotesk, 12.0, caption, 206.0, below + 222.0, muted())
     }
     try pill(a, builder, s, faces, 600usize, 16.0, 824.0, 150.0, 44.0, "Remove card", soft(), 16.0)
+    if editable(c.kind) { try pill(a, builder, s, faces, 601usize, 246.0, 824.0, 150.0, 44.0, "Edit card", amber(), 16.0) }
     ret ok
 }
 
@@ -898,7 +1062,9 @@ fn field_text(a: *mem.Arena, s: *State, slot: usize) -> str {
 }
 
 fn field(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, slot: usize, y: f32) -> err {
-    try put(a, builder, faces.grotesk, 12.0, slot_label(s.pick, slot), 20.0, y - 15.0, light_muted())
+    var label = slot_label(s.pick, slot)
+    if s.editing != NONE && s.pick == 0usize && slot == 1usize { label = "Card number (empty keeps it)" }
+    try put(a, builder, faces.grotesk, 12.0, label, 20.0, y - 15.0, light_muted())
     // The document type is chosen, not typed.
     if s.pick == 5usize && slot == 0usize {
         try card(a, builder, 16.0, y, 380.0, 40.0, 14.0, amber())
@@ -922,7 +1088,9 @@ fn field(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces, s
 }
 
 fn draw_add(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
-    try put(a, builder, faces.jost_bold, 28.0, "Add to Wallet", 24.0, 12.0, light())
+    var heading = "Add to Wallet"
+    if s.editing != NONE { heading = "Edit card" }
+    try put(a, builder, faces.jost_bold, 28.0, heading, 24.0, 12.0, light())
     var chip = 0usize
     while chip < 6usize {
         var fill = soft()
@@ -944,6 +1112,28 @@ fn draw_add(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
     ret ok
 }
 
+// (C154) The master password asked for before the cards are opened: the password as dots, Unlock, and Skip to use the
+// sample cards without keeping anything.
+fn draw_unlock(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try put(a, builder, faces.jost_bold, 28.0, "Unlock Wallet", 24.0, 12.0, light())
+    try put(a, builder, faces.grotesk, 13.0, "Your cards are sealed under the Secure vault's password", 24.0, 58.0, light_muted())
+    try put(a, builder, faces.grotesk, 12.0, "Master password", 20.0, 104.0, light_muted())
+    try card(a, builder, 14.0, 118.0, 384.0, 44.0, 16.0, amber())
+    try card(a, builder, 16.0, 120.0, 380.0, 40.0, 14.0, cream())
+    var dots = 0usize
+    while dots < s.field_len[0usize] && dots < 24usize {
+        try card(a, builder, 32.0 + f32(dots) * 14.0, 134.0, 8.0, 8.0, 4.0, ink())
+        dots += 1usize
+    }
+    if s.problem != 0usize {
+        try put(a, builder, faces.grotesk, 13.0, "That password does not open the vault", 16.0, 170.0, paint.Color { red: 0.96, green: 0.45, blue: 0.42, alpha: 1.0 })
+    }
+    try pill(a, builder, s, faces, 1310usize, 16.0, 436.0, 186.0, 46.0, "Unlock", amber(), 17.0)
+    try pill(a, builder, s, faces, 1311usize, 210.0, 436.0, 186.0, 46.0, "Skip", soft(), 17.0)
+    try draw_keyboard(a, builder, s, faces)
+    ret ok
+}
+
 fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> err {
     s.hit_total = 0usize
     let faces = kit.faces
@@ -954,6 +1144,8 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
         try draw_stack(a, builder, s, faces)
     } else if s.screen == DETAIL_SCREEN {
         try draw_detail(a, builder, s, faces)
+    } else if s.screen == UNLOCK_SCREEN {
+        try draw_unlock(a, builder, s, faces)
     } else {
         try draw_add(a, builder, s, faces)
     }
@@ -977,6 +1169,12 @@ fn type_byte(s: *State, byte: u8) {
     if s.pick == 5usize && slot == 0usize { ret }
     if s.field_len[slot] >= VALUE_WIDTH { ret }
     var b = byte
+    // A password keeps its case.
+    if s.screen == UNLOCK_SCREEN {
+        s.fields[slot * VALUE_WIDTH + s.field_len[slot]] = b
+        s.field_len[slot] += 1usize
+        ret
+    }
     if b >= 97u8 && b <= 122u8 {
         // An IBAN is upper case; any other field starts with a capital.
         if s.pick == 4usize && slot == 2usize { b = b - 32u8 } else if s.field_len[slot] == 0usize { b = b - 32u8 }
@@ -990,6 +1188,7 @@ fn backspace(s: *State) {
 }
 
 fn open_add(s: *State) {
+    s.editing = NONE
     s.screen = ADD_SCREEN
     s.pick = 0usize
     s.doc_type = 0usize
@@ -1017,8 +1216,11 @@ fn form_problem(a: *mem.Arena, s: *State) -> usize {
         let number = field_text(a, s, 1usize)
         var d: [24]u8 = zero
         let count = valid.digits(number, d[..])
-        if count < 12usize || count > 19usize { ret 4usize }
-        if !valid.luhn(number) { ret 1usize }
+        // (C154) Editing a card, an empty number keeps the card's own.
+        if !(s.editing != NONE && number.len == 0usize) {
+            if count < 12usize || count > 19usize { ret 4usize }
+            if !valid.luhn(number) { ret 1usize }
+        }
         let expiry = field_text(a, s, 2usize)
         if expiry.len > 0usize {
             // MM/YY: two digits, a slash, two digits.
@@ -1046,7 +1248,7 @@ fn form_problem(a: *mem.Arena, s: *State) -> usize {
 fn can_save(s: *State) -> bool {
     if s.pick == 5usize { ret s.field_len[1usize] > 0usize }
     if s.pick == 4usize { ret s.field_len[0usize] > 0usize && s.field_len[1usize] > 0usize && s.field_len[2usize] > 0usize }
-    if s.pick == 0usize { ret s.field_len[0usize] > 0usize && s.field_len[1usize] > 0usize }
+    if s.pick == 0usize { ret s.field_len[0usize] > 0usize && (s.field_len[1usize] > 0usize || s.editing != NONE) }
     ret s.field_len[0usize] > 0usize
 }
 
@@ -1065,6 +1267,125 @@ fn built_card(a: *mem.Arena, s: *State) -> Card {
     if s.pick == 3usize { ret plain_card(f0, join(a, "No. ", last_four(a, f1), ""), LOYALTY, 5usize, seed, f0, "-", "0", f1) }
     if s.pick == 4usize { ret bank_card(f0, f1, f2, f3, f4, 7usize, seed) }
     ret doc_card(s.doc_type, f1, f2, f3, f4, 8usize, seed)
+}
+
+// ---- (C154) Unlock and edit.
+
+// Open the Secure vault with the typed password and load the sealed cards (or seal the ones shown, the first time).
+fn try_unlock(a: *mem.Arena, s: *State) {
+    var meta: [80]u8 = zero
+    let (count, found) = vaultfs.read("/vmeta", mem.address_of(&meta[0usize]), 80usize)
+    var password: [36]u8 = zero
+    var i = 0usize
+    while i < s.field_len[0usize] {
+        password[i] = s.fields[i]
+        i += 1usize
+    }
+    var good = false
+    var key: [32]u8 = zero
+    if found {
+        let (opened_key, unlock_error) = vault.meta_unlock(meta[0usize..count], password[0usize..s.field_len[0usize]])
+        if unlock_error == ok {
+            key = opened_key
+            good = true
+        }
+    }
+    // The password does not stay in memory beyond the key.
+    i = 0usize
+    while i < 36usize {
+        s.fields[i] = 0u8
+        password[i] = 0u8
+        i += 1usize
+    }
+    s.field_len[0usize] = 0usize
+    if !good {
+        s.problem = 1usize
+        say("wallet vault wrong password\n")
+        ret
+    }
+    s.problem = 0usize
+    s.key = key
+    s.keyed = true
+    let loaded = load_all(a, s)
+    say("wallet vault unlocked ")
+    say_num(loaded)
+    say("\n")
+    if loaded == 0usize { let first = save_all(a, s) }
+    s.screen = STACK_SCREEN
+}
+
+// The kinds that can be edited: those that carry a check (the card's expiry, the bank's IBAN) and documents.
+fn editable(kind: usize) -> bool {
+    ret kind == PAYMENT || kind == BANK || kind == DOC
+}
+
+fn set_field(s: *State, slot: usize, value: str) {
+    var i = 0usize
+    while i < value.len && i < VALUE_WIDTH {
+        s.fields[slot * VALUE_WIDTH + i] = value[i]
+        i += 1usize
+    }
+    s.field_len[slot] = i
+}
+
+// The add form, filled with the open card. A payment card keeps no number beyond its last four digits, so its number
+// field starts empty (empty keeps the card as it is) and a new one is checked like any other.
+fn open_edit(a: *mem.Arena, s: *State) {
+    let c = s.cards[s.open]
+    open_add(s)
+    s.editing = s.open
+    if c.kind == PAYMENT {
+        s.pick = 0usize
+        set_field(s, 0usize, title_of(a, c))
+        set_field(s, 2usize, value_of(a, c, 1usize))
+    } else if c.kind == BANK {
+        s.pick = 4usize
+        set_field(s, 0usize, value_of(a, c, 0usize))
+        set_field(s, 1usize, value_of(a, c, 1usize))
+        set_field(s, 2usize, value_of(a, c, 2usize))
+        set_field(s, 3usize, value_of(a, c, 3usize))
+        set_field(s, 4usize, value_of(a, c, 4usize))
+    } else {
+        s.pick = 5usize
+        s.doc_type = c.doc_type
+        set_field(s, 1usize, value_of(a, c, 0usize))
+        set_field(s, 2usize, value_of(a, c, 1usize))
+        set_field(s, 3usize, value_of(a, c, 2usize))
+        set_field(s, 4usize, value_of(a, c, 3usize))
+    }
+    s.screen = ADD_SCREEN
+    say("wallet editing ")
+    say_text(title_of(a, c))
+    say("\n")
+}
+
+// The card an edit makes: the form's card with the old one's colour and seed; a payment card with no new number is
+// the old card with the new name and expiry (its status worked out again from the expiry).
+fn edited_card(a: *mem.Arena, s: *State) -> Card {
+    let old = s.cards[s.editing]
+    if s.pick == 0usize && s.field_len[1usize] == 0usize {
+        var c = old
+        let name = field_text(a, s, 0usize)
+        c.title_len = 0usize
+        var i = 0usize
+        while i < name.len && i < 24usize {
+            c.title[i] = name[i]
+            i += 1usize
+        }
+        c.title_len = i
+        let expiry = field_text(a, s, 2usize)
+        put_value(&c, 1usize, expiry)
+        if value_of(a, old, 3usize).len == 18usize {
+            // "Check digit failed" stays.
+            ret c
+        }
+        if expired(expiry) { put_value(&c, 3usize, "Expired") } else { put_value(&c, 3usize, "Valid") }
+        ret c
+    }
+    var fresh = built_card(a, s)
+    fresh.color = old.color
+    fresh.seed = old.seed
+    ret fresh
 }
 
 // What a tap on button `id` did: true when the screen changed.
@@ -1125,6 +1446,54 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             s.cards[s.open].used = false
             s.screen = STACK_SCREEN
             say("wallet removed\n")
+            let kept = save_all(a, s)
+            ret true
+        }
+        // (C154) Edit: the add form again, filled with the card, with the same checks on Save.
+        if id == 601usize && editable(s.cards[s.open].kind) {
+            open_edit(a, s)
+            ret true
+        }
+        ret false
+    }
+    // (C154) The master password: typed, then Unlock opens the vault and the sealed cards; Skip keeps the samples.
+    if s.screen == UNLOCK_SCREEN {
+        if id >= 1000usize && id < 1026usize {
+            type_byte(s, u8(97usize + id - 1000usize))
+            ret true
+        }
+        if id >= 1100usize && id < 1110usize {
+            type_byte(s, u8(48usize + (id - 1100usize + 1usize) % 10usize))
+            ret true
+        }
+        if id == 1200usize {
+            type_byte(s, 32u8)
+            ret true
+        }
+        if id == 1201usize {
+            backspace(s)
+            ret true
+        }
+        if id == 1202usize {
+            type_byte(s, 46u8)
+            ret true
+        }
+        if id == 1203usize {
+            type_byte(s, 45u8)
+            ret true
+        }
+        if id == 1204usize {
+            type_byte(s, 47u8)
+            ret true
+        }
+        if id == 1311usize {
+            s.field_len[0usize] = 0usize
+            s.screen = STACK_SCREEN
+            say("wallet vault skipped\n")
+            ret true
+        }
+        if id == 1310usize || id == 1205usize {
+            try_unlock(a, s)
             ret true
         }
         ret false
@@ -1168,6 +1537,8 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         ret true
     }
     if id >= 1320usize && id < 1326usize {
+        // The kind of a card being edited does not change.
+        if s.editing != NONE { ret false }
         s.pick = id - 1320usize
         s.focus = 0usize
         if s.pick == 5usize { s.focus = 1usize }
@@ -1188,14 +1559,22 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
                 say("\n")
                 ret true
             }
-            let index = add_card(s, built_card(a, s))
-            if index != NONE { say("wallet added\n") }
+            if s.editing != NONE {
+                s.cards[s.editing] = edited_card(a, s)
+                s.editing = NONE
+                say("wallet edited\n")
+            } else {
+                let index = add_card(s, built_card(a, s))
+                if index != NONE { say("wallet added\n") }
+            }
+            let kept = save_all(a, s)
             s.screen = STACK_SCREEN
             s.filter = 0usize
         }
         ret true
     }
     if id == 1302usize {
+        s.editing = NONE
         s.screen = STACK_SCREEN
         ret true
     }
@@ -1271,6 +1650,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     var s: State = zero
     s.open = NONE
+    s.editing = NONE
     // The sample cards. The two payment cards use published test numbers; the network is worked out from
     // the number, and only the last four digits stay on the card.
     let visa = "4111 1111 1111 1111"
@@ -1298,6 +1678,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let c10 = add_card(&s, doc_card(1usize, "Sam Rivera", "V-884201", "Consulate General", "Dec 2027", 9usize, 20usize))
     let c11 = add_card(&s, doc_card(2usize, "Sam Rivera", "D 5530 1207", "Motor Vehicles", "Jun 2029", 2usize, 21usize))
     let c12 = add_card(&s, doc_card(11usize, "Sam Rivera", "KX 21 NTR", "Motor Vehicles", "Aug 2027", 6usize, 22usize))
+    // (C154) A Secure vault on the disk: its master password opens the cards before they are shown.
+    let (vault_meta, has_vault) = vaultfs.probe("/vmeta")
+    if has_vault {
+        s.screen = UNLOCK_SCREEN
+        say("wallet vault locked\n")
+    }
     if !show(a, &kit, &s) {
         say("wallet present failed\n")
         ret ok

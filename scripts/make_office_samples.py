@@ -60,7 +60,18 @@ def main():
     pdf += b"trailer\n<< /Root 1 0 R >>\n%%EOF\n"
     (out / "zz.pdf").write_bytes(bytes(pdf))
     # A Markdown file and a Python file: shown as rendered Markdown and highlighted code.
-    (out / "zznotes.md").write_text("# Handbook\n\nWelcome to **Neper**.\n\n## Apps\n- Calc\n- Files\n", encoding="utf-8")
+    (out / "zznotes.md").write_text("# Handbook\n\nWelcome to **Neper**.\n\n## Apps\n- Calc\n- Files\n\n| App | Kind | Size |\n|---|:-:|--:|\n| Calc | tool | 12 |\n| Files | system | 48 |\n", encoding="utf-8")
+    # A spreadsheet (C172): a header row, a sparse row and booleans; the first sheet is drawn as a grid.
+    sheet_ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+    (out / "budget.xlsx").write_bytes(zipped([
+        ("[Content_Types].xml", "<Types/>"),
+        ("xl/workbook.xml", f'<workbook {sheet_ns}><sheets><sheet name="Budget" sheetId="1"/></sheets></workbook>'),
+        ("xl/sharedStrings.xml", f'<sst {sheet_ns}><si><t>Item</t></si><si><t>Rent</t></si><si><t>Food</t></si><si><t>Paid</t></si></sst>'),
+        ("xl/worksheets/sheet1.xml", f'<worksheet {sheet_ns}><sheetData>'
+            '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="inlineStr"><is><t>Cost</t></is></c><c r="C1" t="s"><v>3</v></c></row>'
+            '<row r="2"><c r="A2" t="s"><v>1</v></c><c r="B2"><v>1200.5</v></c><c r="C2" t="b"><v>1</v></c></row>'
+            '<row r="4"><c r="A4" t="s"><v>2</v></c><c r="B4"><v>310</v></c><c r="C4" t="b"><v>0</v></c></row>'
+            '</sheetData></worksheet>')]))
     # A long text file (120 lines, a few pages in Document).
     (out / "zzzlong.txt").write_text("".join(f"line {i + 1} of a long file\n" for i in range(120)), encoding="utf-8")
     (out / "otpauth.txt").write_text("otpauth://totp/Neper%20Bank:sam.rivera?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Neper%20Bank&algorithm=SHA256&digits=8&period=45\notpauth://hotp/Mail:sam@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Mail&counter=3\n", encoding="utf-8")
