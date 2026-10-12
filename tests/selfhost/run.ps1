@@ -4255,8 +4255,14 @@ $textSigWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $textSigWritten -ne 'executable written') { throw 'text_sig emission failed' }
 $textSigOutput = & $textSigPath
 if ($LASTEXITCODE -ne 0 -or $textSigOutput -ne 'text sig ok') { throw "text_sig answered wrongly: exit $LASTEXITCODE" }
+# e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
+$textMathPath = Join-Path $testBuild 'text-math-selfhost.exe'
+$textMathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_math\src\main.e') $repo 'x64' 'windows' $textMathPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textMathWritten -ne 'executable written') { throw 'text_math emission failed' }
+$textMathOutput = & $textMathPath
+if ($LASTEXITCODE -ne 0 -or $textMathOutput -ne 'text math ok') { throw "text_math answered wrongly: exit $LASTEXITCODE" }
 # e.algo.rand.fake: seeded fake-data generators against an independent PCG and generator, 5 seeds across 4 locales plus shape rules (D2560).
-$algoRandFakePath = Join-Path $testBuild 'algo-rand-fake-selfhost.exe'
+$algoRandFakePath =Join-Path $testBuild 'algo-rand-fake-selfhost.exe'
 $algoRandFakeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rand_fake\src\main.e') $repo 'x64' 'windows' $algoRandFakePath -j 2
 if ($LASTEXITCODE -ne 0 -or $algoRandFakeWritten -ne 'executable written') { throw 'algo_rand_fake emission failed' }
 $algoRandFakeOutput = & $algoRandFakePath

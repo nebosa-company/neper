@@ -519,6 +519,7 @@
     "e.asset",
     "e.text.shape",
     "e.text.layout",
+    "e.text.math",
     "e.ui.style",
     "e.ui.layout",
     "e.gfx.scene",
@@ -4502,6 +4503,19 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.math",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.text.shape",
+    "e.text.unicode"
+   ],
    "blocked_by": []
   },
   {

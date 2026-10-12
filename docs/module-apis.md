@@ -7310,6 +7310,93 @@ fn put_unit(unit: u32, big_endian: bool, out: []u8, at: usize)
 fn encode_utf16(s: str, big_endian: bool, out: []u8) -> (usize, err)
 ```
 
+### `e.text.math`
+
+```neper
+type Kind = enum u8 { Glyph, Rule }
+type Item = struct { kind: Kind, x: f32, y: f32, w: f32, h: f32, size: f32, glyph: u32, scalar: u32 }
+type Equation = struct { items: []const Item, width: f32, ascent: f32, descent: f32 }
+type Options = struct { font: shape.Font, size: f32, display: bool, notdef: bool }
+error Invalid
+error MissingGlyph
+error TooSmall
+error TooDeep
+const NONE: usize = 18446744073709551615usize
+const MAX_NEST: usize = 24usize
+const CLASS_ORD: u8 = 0u8
+const CLASS_OP: u8 = 1u8
+const CLASS_BIN: u8 = 2u8
+const CLASS_REL: u8 = 3u8
+const CLASS_OPEN: u8 = 4u8
+const CLASS_CLOSE: u8 = 5u8
+const CLASS_PUNCT: u8 = 6u8
+const CLASS_INNER: u8 = 7u8
+const CLASS_SPACE: u8 = 8u8
+type Atom = struct { class: u8, first: usize, last: usize, width: f32, height: f32, depth: f32, simple: bool, limits: bool }
+type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize }
+fn maxf(x: f32, y: f32) -> f32
+fn be16(d: []const u8, at: usize) -> u32
+fn be16s(d: []const u8, at: usize) -> i32
+fn be32(d: []const u8, at: usize) -> u32
+fn find_table(d: []const u8, tag: u32) -> usize
+fn glyph_extent(c: *Ctx, id: u32) -> (f32, f32)
+fn style_scale(style: u32) -> f32
+fn script_style(style: u32) -> u32
+fn fraction_style(style: u32) -> u32
+fn push_item(c: *Ctx, item: Item)
+fn shift_range(c: *Ctx, first: usize, last: usize, dx: f32, dy: f32)
+fn byte_at(c: *Ctx, at: usize) -> u8
+fn skip_space(c: *Ctx)
+fn word_is(word: str, want: str) -> bool
+fn at_command(c: *Ctx, word: str) -> bool
+fn ends_row(c: *Ctx) -> bool
+fn fail(c: *Ctx, why: err)
+fn glyph_atom(c: *Ctx, scalar: u32, size: f32, class: u8) -> Atom
+fn text_atom(c: *Ctx, text: str, size: f32, class: u8) -> Atom
+fn char_class(scalar: u32) -> u8
+fn greek_names() -> str
+fn greek_scalar(word: str) -> u32
+fn upper_greek(word: str) -> u32
+fn symbol_of(word: str) -> (u32, u8)
+fn is_operator_name(word: str) -> bool
+fn spacing_table() -> str
+fn spacing(left: u8, right: u8, script: bool) -> f32
+fn command_word(c: *Ctx) -> str
+fn expect_byte(c: *Ctx, want: u8)
+fn as_atom(b: Atom, class: u8) -> Atom
+fn parse_row(c: *Ctx, style: u32) -> Atom
+fn parse_argument(c: *Ctx, style: u32) -> Atom
+fn parse_atom(c: *Ctx, style: u32) -> Atom
+fn delimiter(c: *Ctx, scalar: u32, span_h: f32, size: f32, class: u8) -> Atom
+fn push_rule(c: *Ctx, x: f32, top: f32, w: f32, h: f32)
+fn delimiter_scalar(c: *Ctx) -> u32
+fn fence(c: *Ctx, body: Atom, left: u32, right: u32, style: u32) -> Atom
+fn lay_fraction(c: *Ctx, style: u32) -> Atom
+fn lay_radical(c: *Ctx, style: u32) -> Atom
+fn parse_row_until_bracket(c: *Ctx, style: u32) -> Atom
+type Cell = struct { atom: Atom, row: usize, col: usize }
+fn lay_environment(c: *Ctx, style: u32) -> Atom
+fn lay_text(c: *Ctx, style: u32) -> Atom
+fn space_atom(c: *Ctx, em18: f32, style: u32) -> Atom
+fn parse_nucleus(c: *Ctx, style: u32) -> Atom
+fn font_ready(c: *Ctx) -> bool
+fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err)
+```
+
+Math typesetting (L098, D2842): `typeset` parses a LaTeX-math subset and lays it out in
+one pass into `items`, a flat paint-ordered list of positioned glyphs and rules in
+caller storage, for scene and SVG adapters. The model is TeX's: atom classes with the
+TeXbook's inter-atom space table, display, text, script and scriptscript styles,
+fractions, radicals with an index, scripts by rule 18, big operators with display
+limits, `\left` `\right` delimiters grown to the content and the `matrix`, `pmatrix`,
+`bmatrix`, `Bmatrix`, `vmatrix` and `cases` environments. Coordinates have the origin
+on the baseline at the left edge, y downward: a glyph's `y` is its baseline, a rule's
+its top. Glyph extents are read from the font's `glyf` boxes; the TeX shift constants
+are fractions of the size, since a text font has no MATH table. Only `typeset`,
+`Options`, `Item`, `Equation`, `Kind` and the four errors are the interface; the rest
+of the fence is the module's internals. Checked against fontTools metrics and the
+TeXbook's formulas (`scripts/gen_math_test.py`).
+
 ### `e.text.sig`
 
 ```neper
