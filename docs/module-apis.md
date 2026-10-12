@@ -11725,6 +11725,33 @@ fn help(a: *mem.Arena, command: *const Command, width: u16) -> (str, err)
 `parse_into` uses `e.meta` field shape and field-owned parsing protocols; it does not
 introduce runtime reflection.
 
+### `e.cli.complete`
+
+```neper
+error Invalid
+type Node = struct { path: str, command: *const cli.Command, parent: usize }
+
+fn valid_name(s: str) -> bool
+fn count_commands(c: *const cli.Command) -> usize
+fn joined(a: *mem.Arena, prefix: str, name: str) -> (str, err)
+fn flatten(a: *mem.Arena, root: *const cli.Command) -> ([]Node, err)
+fn takes_value(o: *const cli.Option) -> bool
+fn push_ident(b: *str.Builder, s: str) -> err
+fn push_short(b: *str.Builder, o: *const cli.Option) -> err
+fn bash(a: *mem.Arena, root: *const cli.Command) -> (str, err)
+fn push_fish_text(b: *str.Builder, s: str) -> err
+fn push_fish_condition(b: *str.Builder, nodes: []const Node, i: usize) -> err
+fn fish(a: *mem.Arena, root: *const cli.Command) -> (str, err)
+fn push_zsh_text(b: *str.Builder, s: str) -> err
+fn push_zsh_function(b: *str.Builder, nodes: []const Node, i: usize) -> err
+fn zsh(a: *mem.Arena, root: *const cli.Command) -> (str, err)
+fn push_roff(b: *str.Builder, s: str) -> err
+fn push_upper(b: *str.Builder, s: str) -> err
+fn man_page(a: *mem.Arena, command: *const cli.Command, title: str, section: u8, date: str, version: str) -> (str, err)
+```
+
+Shell completion scripts and man pages from an `e.cli` command spec (clap_complete and clap_mangen at the portable layer). `bash`, `zsh` and `fish` each write a script that completes the deepest subcommand's options (`--long`, `-s`) and subcommands, and file names after an option that takes a value; `man_page` writes the roff page for one command, titled `title` (`tool`, or `tool sub` for a subcommand's own page), with NAME, SYNOPSIS, DESCRIPTION, OPTIONS, COMMANDS and ENVIRONMENT (the `env` fallbacks). Command and long-option names are limited to letters, digits and `_ . + -` because they are written into shell syntax unquoted (`Invalid` otherwise); help text is escaped per target. Installing a script or a page is host policy. Not here: value hints beyond files, dynamic completion that calls back into the program, PowerShell and elvish scripts, aliases, a subcommand name reused at two levels in fish.
+
 ### `e.async`
 
 ```neper

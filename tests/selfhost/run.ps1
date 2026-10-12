@@ -3946,6 +3946,12 @@ $storeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $storeWritten -ne 'executable written') { throw 'store emission failed' }
 $storeOutput = & $storePath
 if ($LASTEXITCODE -ne 0 -or $storeOutput -ne 'store ok') { throw "store answered wrongly: exit $LASTEXITCODE" }
+# e.cli.complete: bash, zsh and fish completion scripts and man pages, goldens held to real shells and groff (D2725).
+$cliCompletePath = Join-Path $testBuild 'cli-complete-selfhost.exe'
+$cliCompleteWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\cli_complete\src\main.e') $repo 'x64' 'windows' $cliCompletePath -j 2
+if ($LASTEXITCODE -ne 0 -or $cliCompleteWritten -ne 'executable written') { throw 'cli_complete emission failed' }
+$cliCompleteOutput = & $cliCompletePath
+if ($LASTEXITCODE -ne 0 -or $cliCompleteOutput -ne 'cli complete ok') { throw "cli_complete answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

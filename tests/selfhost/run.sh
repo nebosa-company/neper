@@ -3529,6 +3529,12 @@ store_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 chmod +x "$test_build/store-selfhost"
 store_output=$("$test_build/store-selfhost")
 [ "$store_output" = 'store ok' ]
+# e.cli.complete: bash, zsh and fish completion scripts and man pages, goldens held to real shells and groff (D2725).
+cli_complete_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/cli_complete/src/main.e" "$repo" x64 linux "$test_build/cli-complete-selfhost" -j 2)
+[ "$cli_complete_written" = 'executable written' ]
+chmod +x "$test_build/cli-complete-selfhost"
+cli_complete_output=$("$test_build/cli-complete-selfhost")
+[ "$cli_complete_output" = 'cli complete ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

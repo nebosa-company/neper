@@ -108,6 +108,7 @@
     "e.metrics.export",
     "e.log",
     "e.cli",
+    "e.cli.complete",
     "e.async",
     "e.async.io",
     "e.net",
@@ -1161,6 +1162,19 @@
     "e.mem",
     "e.meta",
     "e.os",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.cli.complete",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.cli",
+    "e.mem",
     "e.str"
    ],
    "blocked_by": []
