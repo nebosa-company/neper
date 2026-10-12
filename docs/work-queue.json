@@ -827,6 +827,127 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Split from L101 (D2646): e.net.http2 and the e.net.grpc client protocol exist and are checked against hpack/h2 and recorded grpcio transcripts. Acceptance: (1) a server side over e.net.http2 (unary, then streaming); (2) deadlines, retries and message compression; (3) the gRPC-over-HTTP/3 binding on e.net.http3 frames; (4) a TLS dial helper; (5) stub generation from .proto descriptors (e.fmt.protobuf needs a descriptor reader first) with typed request and response messages. PART (D2923): e.net.grpcserver (preface, SETTINGS, HPACK, flow control, request events, flow-controlled responses, trailers-only, deadlines, resets) and e.net.grpccodec (gzip/deflate/identity decompression) checked with grpcio against a live loopback server (14 calls). NOT DONE: retries and backoff, gRPC over HTTP/3, a TLS dial helper, send-side compression wiring, stub generation (e.fmt.protobuf has no descriptor reader). PART (D3004-D3008): send-side compression (net_grpccompress, decoded by Python gzip/zlib), e.fmt.protodesc descriptor reader (32 cases vs protobuf MessageToDict), typed stubs e.fmt.protomsg/e.net.grpcstub (242 Python-serialised instances round trip), e.net.grpcretry (gRFC A6 vs a Python model), e.net.grpctls dial helper. Missing: gRPC over HTTP/3, retry wired into a transport loop, hedging, perAttemptRecvTimeout. PART (D3401): e.net.grpccall retry and hedging loop over e.net.grpc with deadline and per-attempt timeout; net_grpccall 331 runs, 60 against live grpcio, 271 against an independent A6 model. Missing: HTTP/3, transparent retries, a socket run; per_attempt_ns has no live oracle."
+    },
+    {
+      "id": "G001",
+      "category": "library",
+      "group": "Library",
+      "order": 262,
+      "title": "e.data.table: typed columns, null bitmaps, string dictionary + heap, bulk load, journal",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: 150k × 24 load fixture; typed get/set round-trip; dictionary rank/fold correct; memory ≤ budget."
+    },
+    {
+      "id": "G002",
+      "category": "library",
+      "group": "Library",
+      "order": 263,
+      "title": "e.data.tableview sort: key derivation, stable radix, multi-key, comparer slow path",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: stable tie-break by row; null first; case-insensitive parity; ≤ budget at 150k (cachegrind)."
+    },
+    {
+      "id": "G003",
+      "category": "library",
+      "group": "Library",
+      "order": 264,
+      "title": "filter tree compile + evaluate (dictionary fast path, narrowing, parallel)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: every operator in §4.2; */? wildcards; **text operators case-insensitive by default, match_case opt-in** (*creature* → 56,095 on the MTG pool); nested depth 6; ≤ budget."
+    },
+    {
+      "id": "G004",
+      "category": "library",
+      "group": "Library",
+      "order": 265,
+      "title": "group + summary engine, expansion keyed by path, group summaries/footers",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: group boundaries equal golden; summaries equal; sort-by-summary."
+    },
+    {
+      "id": "G005",
+      "category": "library",
+      "group": "Library",
+      "order": 266,
+      "title": "search / locate / value list",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: begins-with and within; next/prev with wrap; value list = dictionary."
+    },
+    {
+      "id": "G006",
+      "category": "library",
+      "group": "UI",
+      "order": 267,
+      "title": "e.ui.datagrid v1: bands, footer, group rows, filter row, navigator, indicator, preview, no-data",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: pixel-level offline screenshot fixtures (per neper offline UI screenshot recipe); keyboard/pointer fixtures."
+    },
+    {
+      "id": "G007",
+      "category": "library",
+      "group": "UI",
+      "order": 268,
+      "title": "editing: cell kinds + editors + write-through + lock",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: edit-then-commit fixtures incl. sort-key edit."
+    },
+    {
+      "id": "G008",
+      "category": "library",
+      "group": "UI",
+      "order": 269,
+      "title": "custom painters + row style + conditional formatting rules",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: mana-cost/legality/foil painter fixtures from MTG assets."
+    },
+    {
+      "id": "G009",
+      "category": "library",
+      "group": "UI",
+      "order": 270,
+      "title": "layout + filter persistence, customization panel, quick customization",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: round-trip; unknown/new column tolerance."
+    },
+    {
+      "id": "G010",
+      "category": "library",
+      "group": "UI",
+      "order": 271,
+      "title": "export + clipboard (+ print hand-off)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: CSV/XML/HTML/XLSX of filtered+grouped view equals golden."
+    },
+    {
+      "id": "G011",
+      "category": "library",
+      "group": "UI",
+      "order": 272,
+      "title": "MTG Studio reference app: card-pool/deck/collection views over a 150k fixture",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: all §7 rows exercised; benchmark table filled with measured numbers."
     }
   ]
 }
