@@ -12,9 +12,11 @@
 // (opaque alpha drops the channel), and refuses `Rgba16Float`. Every row goes out
 // with filter `None` straight from the caller's pixels -- deterministic, no row
 // scratch, so `encode` needs no arena; the deflate encoder's state lives in a stack
-// arena. ponytail: `Sub` or `Paeth` filtering would shrink the output and needs a row
-// buffer; add it beside a `Level` that asks for it. `interlace` writes the seven Adam7
-// passes, which a decoder reads back into the same pixels.
+// arena. `encode_adaptive` (L163) is the smaller form: an image of at most 256 colours
+// goes out indexed, any other with libpng's per-row filter heuristic, both from the
+// same stack arena (the rows are gathered through 4 KB chunk buffers, never whole).
+// `interlace` writes the seven Adam7 passes, which a decoder reads back into the same
+// pixels.
 
 use e.algo.deflate
 use e.bytes
@@ -548,79 +550,367 @@ fn source_channels(value: image.ConstImage) -> (usize, u8, err) {
 fn encode_row(s: *Sink, e: *deflate.Encoder, value: image.ConstImage, p: Pass, y: usize, pw: usize, channels: usize, line: []u8) -> err {
     var filter: [1]u8 = zero
     try deflate_into(s, e, filter[0..], false)
-    let bpp = image.bytes_per_pixel(value.format)
-    let row = (p.y0 + y * p.dy) * value.stride
     var x = 0usize
     while x < pw {
         var take = pw - x
         if take * channels > line.len { take = line.len / channels }
-        var i = 0usize
-        if p.dx == 1usize && channels == bpp && value.format != .Bgra8 {
-            // Same layout in and out: the run of pixels is one copy.
-            let from = row + (p.x0 + x) * bpp
-            mem.copy[u8](line[0..take * bpp], value.pixels[from..from + take * bpp])
-            i = take
-        }
-        while i < take {
-            let at = row + (p.x0 + (x + i) * p.dx) * bpp
-            let to = i * channels
-            if channels == 1usize {
-                line[to] = value.pixels[at]
-            } else if value.format == .Bgra8 {
-                line[to] = value.pixels[at + 2usize]
-                line[to + 1usize] = value.pixels[at + 1usize]
-                line[to + 2usize] = value.pixels[at]
-                if channels == 4usize { line[to + 3usize] = value.pixels[at + 3usize] }
-            } else {
-                line[to] = value.pixels[at]
-                line[to + 1usize] = value.pixels[at + 1usize]
-                line[to + 2usize] = value.pixels[at + 2usize]
-                if channels == 4usize { line[to + 3usize] = value.pixels[at + 3usize] }
-            }
-            i += 1usize
-        }
+        gather_row(value, p, y, x, take, channels, line)
         try deflate_into(s, e, line[..take * channels], false)
         x += take
     }
     ret ok
 }
 
+// Gathers `take` pixels of pass row `y`, from pixel `x` on, into `line` as PNG bytes (`channels` each).
+fn gather_row(value: image.ConstImage, p: Pass, y: usize, x: usize, take: usize, channels: usize, line: []u8) {
+    let bpp = image.bytes_per_pixel(value.format)
+    let row = (p.y0 + y * p.dy) * value.stride
+    var i = 0usize
+    if p.dx == 1usize && channels == bpp && value.format != .Bgra8 {
+        // Same layout in and out: the run of pixels is one copy.
+        let from = row + (p.x0 + x) * bpp
+        mem.copy[u8](line[0..take * bpp], value.pixels[from..from + take * bpp])
+        i = take
+    }
+    while i < take {
+        let at = row + (p.x0 + (x + i) * p.dx) * bpp
+        let to = i * channels
+        if channels == 1usize {
+            line[to] = value.pixels[at]
+        } else if value.format == .Bgra8 {
+            line[to] = value.pixels[at + 2usize]
+            line[to + 1usize] = value.pixels[at + 1usize]
+            line[to + 2usize] = value.pixels[at]
+            if channels == 4usize { line[to + 3usize] = value.pixels[at + 3usize] }
+        } else {
+            line[to] = value.pixels[at]
+            line[to + 1usize] = value.pixels[at + 1usize]
+            line[to + 2usize] = value.pixels[at + 2usize]
+            if channels == 4usize { line[to + 3usize] = value.pixels[at + 3usize] }
+        }
+        i += 1usize
+    }
+}
+
+// ---- adaptive filters and palettes (encode_adaptive)
+
+const CHUNK_PIXELS: usize = 1024usize
+
+// The filtered byte for `kind` (0 None, 1 Sub, 2 Up, 3 Average, 4 Paeth) of sample `v` with left `a`, up `b`, up-left `c`.
+fn filtered(kind: usize, v: u32, a: u32, b: u32, c: u32) -> u32 {
+    if kind == 0usize { ret v }
+    if kind == 1usize { ret (v + 256u32 - a) & 255u32 }
+    if kind == 2usize { ret (v + 256u32 - b) & 255u32 }
+    if kind == 3usize { ret (v + 256u32 - ((a + b) >> 1u32)) & 255u32 }
+    ret (v + 256u32 - paeth(a, b, c)) & 255u32
+}
+
+// libpng's heuristic: the byte read as signed, absolute value.
+fn signed_abs(v: u32) -> usize {
+    if v < 128u32 { ret usize(v) }
+    ret usize(256u32 - v)
+}
+
+fn zero_bytes(d: []u8) {
+    var i = 0usize
+    while i < d.len {
+        d[i] = 0u8
+        i += 1usize
+    }
+}
+
+// Carries the last four bytes of the chunk (or of the four before it, for a short one) into its four context bytes.
+fn carry_context(buf: []u8, at: usize, n: usize) {
+    let t0 = buf[at + n]
+    let t1 = buf[at + n + 1usize]
+    let t2 = buf[at + n + 2usize]
+    let t3 = buf[at + n + 3usize]
+    buf[at] = t0
+    buf[at + 1usize] = t1
+    buf[at + 2usize] = t2
+    buf[at + 3usize] = t3
+}
+
+// Picks the filter with the least sum of signed-absolute filtered bytes (ties go to the lower kind, as libpng does),
+// then deflates the row. `buf` holds, each behind four bytes of left context, the current chunk (at 4), the previous
+// row's (at 4108) and the filtered output (at 8208).
+fn encode_row_adaptive(s: *Sink, e: *deflate.Encoder, value: image.ConstImage, p: Pass, y: usize, pw: usize, channels: usize, buf: []u8) -> err {
+    var s0 = 0usize
+    var s1 = 0usize
+    var s2 = 0usize
+    var s3 = 0usize
+    var s4 = 0usize
+    zero_bytes(buf[0..4usize])
+    zero_bytes(buf[4104usize..4108usize])
+    var x = 0usize
+    while x < pw {
+        var take = pw - x
+        if take > CHUNK_PIXELS { take = CHUNK_PIXELS }
+        let n = take * channels
+        gather_row(value, p, y, x, take, channels, buf[4usize..4100usize])
+        if y > 0usize { gather_row(value, p, y - 1usize, x, take, channels, buf[4108usize..8204usize]) } else { zero_bytes(buf[4108usize..4108usize + n]) }
+        var i = 0usize
+        while i < n {
+            let v = i32(buf[4usize + i])
+            let a = i32(buf[4usize + i - channels])
+            let b = i32(buf[4108usize + i])
+            let c = i32(buf[4108usize + i - channels])
+            var t = v
+            if t > 128 { t = 256 - t }
+            s0 += usize(t)
+            t = (v - a) & 255
+            if t > 128 { t = 256 - t }
+            s1 += usize(t)
+            t = (v - b) & 255
+            if t > 128 { t = 256 - t }
+            s2 += usize(t)
+            t = (v - ((a + b) >> 1)) & 255
+            if t > 128 { t = 256 - t }
+            s3 += usize(t)
+            var pa = b - c
+            var pb = a - c
+            let pc = a + b - c - c
+            var pr = c
+            if pa < 0 { pa = 0 - pa }
+            if pb < 0 { pb = 0 - pb }
+            var qc = pc
+            if qc < 0 { qc = 0 - qc }
+            if pa <= pb && pa <= qc { pr = a } else if pb <= qc { pr = b }
+            t = (v - pr) & 255
+            if t > 128 { t = 256 - t }
+            s4 += usize(t)
+            i += 1usize
+        }
+        carry_context(buf, 0usize, n)
+        carry_context(buf, 4104usize, n)
+        x += take
+    }
+    var best = 0usize
+    var low = s0
+    if s1 < low {
+        best = 1usize
+        low = s1
+    }
+    if s2 < low {
+        best = 2usize
+        low = s2
+    }
+    if s3 < low {
+        best = 3usize
+        low = s3
+    }
+    if s4 < low { best = 4usize }
+    var head: [1]u8 = zero
+    head[0] = u8(best)
+    try deflate_into(s, e, head[0..], false)
+    zero_bytes(buf[0..4usize])
+    zero_bytes(buf[4104usize..4108usize])
+    x = 0usize
+    while x < pw {
+        var take = pw - x
+        if take > CHUNK_PIXELS { take = CHUNK_PIXELS }
+        let n = take * channels
+        gather_row(value, p, y, x, take, channels, buf[4usize..4100usize])
+        if y > 0usize { gather_row(value, p, y - 1usize, x, take, channels, buf[4108usize..8204usize]) } else { zero_bytes(buf[4108usize..4108usize + n]) }
+        var i = 0usize
+        while i < n {
+            buf[8208usize + i] = u8(filtered(best, u32(buf[4usize + i]), u32(buf[4usize + i - channels]), u32(buf[4108usize + i]), u32(buf[4108usize + i - channels])))
+            i += 1usize
+        }
+        carry_context(buf, 0usize, n)
+        carry_context(buf, 4104usize, n)
+        try deflate_into(s, e, buf[8208usize..8208usize + n], false)
+        x += take
+    }
+    ret ok
+}
+
+// The palette: `pal[0..256]` holds the colours (r | g << 8 | b << 16 | a << 24) in order of first appearance, and
+// `pal[256..768]` an open-addressed table of index + 1 keyed by the colour's hash.
+fn pal_hash(c: u32) -> usize {
+    ret usize((u64(c) * 2654435761u64) >> 20u64) & 511usize
+}
+
+// The index of `c`, or 256 when it is not in the palette.
+fn pal_find(pal: []const u32, c: u32) -> usize {
+    var h = pal_hash(c)
+    while true {
+        let slot = usize(pal[256usize + h])
+        if slot == 0usize { ret 256usize }
+        if pal[slot - 1usize] == c { ret slot - 1usize }
+        h = (h + 1usize) & 511usize
+    }
+    ret 256usize
+}
+
+fn pixel_color(value: image.ConstImage, at: usize) -> u32 {
+    var r = u32(value.pixels[at])
+    let g = u32(value.pixels[at + 1usize])
+    var b = u32(value.pixels[at + 2usize])
+    var a = 255u32
+    if value.format == .Bgra8 {
+        let t = r
+        r = b
+        b = t
+    }
+    if value.alpha != .Opaque { a = u32(value.pixels[at + 3usize]) }
+    ret r | (g << 8u32) | (b << 16u32) | (a << 24u32)
+}
+
+// Counts the distinct colours of an Rgba8 or Bgra8 image into `pal`; 257 when there are more than 256.
+fn collect_palette(value: image.ConstImage, pal: []u32) -> usize {
+    var n = 0usize
+    var y = 0usize
+    while y < usize(value.height) {
+        var x = 0usize
+        while x < usize(value.width) {
+            let c = pixel_color(value, y * value.stride + x * 4usize)
+            if pal_find(pal, c) == 256usize {
+                if n == 256usize { ret 257usize }
+                pal[n] = c
+                var h = pal_hash(c)
+                while pal[256usize + h] != 0u32 { h = (h + 1usize) & 511usize }
+                pal[256usize + h] = u32(n + 1usize)
+                n += 1usize
+            }
+            x += 1usize
+        }
+        y += 1usize
+    }
+    ret n
+}
+
+// Palette indices of `take` pixels of pass row `y` from pixel `x`, packed `depth` bits each (MSB first) into `dst`;
+// the byte count. `take` is a multiple of 8 or the rest of the row.
+fn pack_indices(value: image.ConstImage, pal: []const u32, p: Pass, y: usize, x: usize, take: usize, depth: usize, dst: []u8) -> usize {
+    let row = (p.y0 + y * p.dy) * value.stride
+    let per = 8usize / depth
+    let n = (take + per - 1usize) / per
+    zero_bytes(dst[0..n])
+    var i = 0usize
+    while i < take {
+        let c = pixel_color(value, row + (p.x0 + (x + i) * p.dx) * 4usize)
+        let index = pal_find(pal, c)
+        let shift = 8usize - depth * (i % per + 1usize)
+        dst[i / per] = dst[i / per] | u8(index << shift)
+        i += 1usize
+    }
+    ret n
+}
+
+fn encode_row_palette(s: *Sink, e: *deflate.Encoder, value: image.ConstImage, pal: []const u32, p: Pass, y: usize, pw: usize, depth: usize, buf: []u8) -> err {
+    var head: [1]u8 = zero
+    try deflate_into(s, e, head[0..], false)
+    var x = 0usize
+    while x < pw {
+        var take = pw - x
+        if take > CHUNK_PIXELS { take = CHUNK_PIXELS }
+        let n = pack_indices(value, pal, p, y, x, take, depth, buf)
+        try deflate_into(s, e, buf[0..n], false)
+        x += take
+    }
+    ret ok
+}
+
+// The palette's depth: the fewest bits that index `n` colours.
+fn palette_depth(n: usize) -> usize {
+    if n <= 2usize { ret 1usize }
+    if n <= 4usize { ret 2usize }
+    if n <= 16usize { ret 4usize }
+    ret 8usize
+}
+
 fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err {
-    let (channels, color, channels_error) = source_channels(value)
+    var none: [1]u32 = zero
+    ret encode_with(writer, value, options, false, none[0..0usize], 0usize)
+}
+
+// Like `encode`, but picks the encoding per image: an `Rgba8`/`Bgra8` image of at most 256 colours goes out indexed
+// (PLTE, and tRNS when any alpha is below 255) at the fewest of 1, 2, 4 or 8 bits, every row filter `None`; any other
+// image is written with libpng's per-row filter heuristic (the filter whose output bytes, read as signed, have the least
+// sum of absolute values; ties to the lower filter number). The same pixels decode either way. ponytail: a palette is
+// chosen whenever it fits, with no trial encode against the filtered form.
+fn encode_adaptive(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err {
+    var pal: [768]u32 = zero
+    var n = 257usize
+    if (value.format == .Rgba8 || value.format == .Bgra8) && value.width > 0u32 && value.height > 0u32 {
+        let (_, size_error) = image.required_bytes(value.width, value.height, value.format, value.stride)
+        if size_error == ok { n = collect_palette(value, pal[0..]) }
+    }
+    if n > 256usize { n = 0usize }
+    ret encode_with(writer, value, options, true, pal[0..], n)
+}
+
+// `adaptive` selects filters per row; `colors` above zero selects indexed output over the palette in `pal`.
+fn encode_with(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, adaptive: bool, pal: []u32, colors: usize) -> err {
+    let (channels, color0, channels_error) = source_channels(value)
     if channels_error != ok { ret channels_error }
     let (_, size_error) = image.required_bytes(value.width, value.height, value.format, value.stride)
     if size_error != ok { ret Invalid }
     if value.pixels.len < value.stride * usize(value.height) - value.stride + usize(value.width) * image.bytes_per_pixel(value.format) { ret Invalid }
+    var color = color0
+    var depth = 8u8
+    if colors > 0usize {
+        color = 3u8
+        depth = u8(palette_depth(colors))
+    }
     var signature: [8]u8 = [8]u8{ 137, 80, 78, 71, 13, 10, 26, 10 }
     try io.write_all(writer, signature[0..])
     var ihdr: [13]u8 = zero
     put32(ihdr[0..], 0usize, value.width)
     put32(ihdr[0..], 4usize, value.height)
-    ihdr[8] = 8u8
+    ihdr[8] = depth
     ihdr[9] = color
     if options.interlace { ihdr[12] = 1u8 }
     try write_chunk(writer, "IHDR", ihdr[0..])
     // The encoder's storage is on the stack, as large as the level needs: Fast fits 160 KB (the wallpaper loader, with a
     // small stack, uses it), the lazy-matching levels need twice that. One frame per size: a single function holding both
     // arrays would reserve both.
-    if options.compression == .Fast { try encode_fast(writer, value, options, channels) } else { try encode_full(writer, value, options, channels) }
+    var mode = 0usize
+    if adaptive { mode = 1usize }
+    if colors > 0usize { mode = 2usize }
+    if options.compression == .Fast { try encode_fast(writer, value, options, channels, mode, pal, colors) } else { try encode_full(writer, value, options, channels, mode, pal, colors) }
     var end: [1]u8 = zero
     try write_chunk(writer, "IEND", end[0..0usize])
     ret ok
 }
 
-fn encode_fast(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, channels: usize) -> err {
+fn encode_fast(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, channels: usize, mode: usize, pal: []const u32, colors: usize) -> err {
     var store: [163840]u8 = undef
-    ret encode_core(writer, value, options, channels, store[0..])
+    ret encode_core(writer, value, options, channels, mode, pal, colors, store[0..])
 }
 
-fn encode_full(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, channels: usize) -> err {
+fn encode_full(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, channels: usize, mode: usize, pal: []const u32, colors: usize) -> err {
     var store: [327680]u8 = undef
-    ret encode_core(writer, value, options, channels, store[0..])
+    ret encode_core(writer, value, options, channels, mode, pal, colors, store[0..])
+}
+
+// PLTE (and tRNS when some colour is not opaque) for the first `colors` entries of `pal`; `buf` holds 768 bytes.
+fn write_palette(writer: *io.Writer, pal: []const u32, colors: usize, buf: []u8) -> err {
+    var i = 0usize
+    var last = 0usize
+    while i < colors {
+        let c = pal[i]
+        buf[i * 3usize] = u8(c & 255u32)
+        buf[i * 3usize + 1usize] = u8((c >> 8u32) & 255u32)
+        buf[i * 3usize + 2usize] = u8((c >> 16u32) & 255u32)
+        if (c >> 24u32) != 255u32 { last = i + 1usize }
+        i += 1usize
+    }
+    try write_chunk(writer, "PLTE", buf[0..colors * 3usize])
+    if last > 0usize {
+        i = 0usize
+        while i < last {
+            buf[i] = u8(pal[i] >> 24u32)
+            i += 1usize
+        }
+        try write_chunk(writer, "tRNS", buf[0..last])
+    }
+    ret ok
 }
 
 // The image data and the rest of the file: IDAT chunks of the zlib stream, the deflate encoder living in `arena_bytes`.
-fn encode_core(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, channels: usize, arena_bytes: []u8) -> err {
+fn encode_core(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions, channels: usize, mode: usize, pal: []const u32, colors: usize, arena_bytes: []u8) -> err {
     var arena = mem.arena_from(arena_bytes[0..])
     let storage_size = deflate.encoder_storage(options.compression)
     let (words, words_error) = mem.alloc[u64](&arena, storage_size / 8usize + 1usize)
@@ -638,6 +928,8 @@ fn encode_core(writer: *io.Writer, value: image.ConstImage, options: EncodeOptio
     sink.chunk[1] = zlib_head[1]
     sink.filled = 2usize
     var line: [16384]u8 = zero
+    if mode == 2usize { try write_palette(writer, pal, colors, line[0..]) }
+    let depth = palette_depth(colors)
     var passes = 1usize
     if options.interlace { passes = 7usize }
     var i = 0usize
@@ -647,7 +939,13 @@ fn encode_core(writer: *io.Writer, value: image.ConstImage, options: EncodeOptio
         let (pw, ph) = pass_size(p, usize(value.width), usize(value.height))
         var y = 0usize
         while pw > 0usize && y < ph {
-            try encode_row(&sink, &e, value, p, y, pw, channels, line[0..])
+            if mode == 0usize {
+                try encode_row(&sink, &e, value, p, y, pw, channels, line[0..])
+            } else if mode == 1usize {
+                try encode_row_adaptive(&sink, &e, value, p, y, pw, channels, line[0..])
+            } else {
+                try encode_row_palette(&sink, &e, value, pal, p, y, pw, depth, line[0..])
+            }
             y += 1usize
         }
         i += 1usize

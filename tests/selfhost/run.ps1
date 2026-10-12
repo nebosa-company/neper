@@ -5325,6 +5325,13 @@ $fmtPngWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtPngWritten -ne 'executable written') { throw 'fmt_png emission failed' }
 $fmtPngOutput = & $fmtPngPath
 if ($LASTEXITCODE -ne 0 -or $fmtPngOutput -ne 'fmt png ok') { throw "an e.fmt.png decode, encode or refusal answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.png` encode_adaptive (L163): a Python model of libpng's filter heuristic (checked against
+# Pillow byte for byte) gives the colour type, depth, PLTE/tRNS, filtered-stream Adler-32 and zlib 6 size.
+$fmtPngAdaptivePath = Join-Path $testBuild 'fmt-png-adaptive-selfhost.exe'
+$fmtPngAdaptiveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_png_adaptive\src\main.e') $repo 'x64' 'windows' $fmtPngAdaptivePath
+if ($LASTEXITCODE -ne 0 -or $fmtPngAdaptiveWritten -ne 'executable written') { throw 'fmt_png_adaptive emission failed' }
+$fmtPngAdaptiveOutput = & $fmtPngAdaptivePath
+if ($LASTEXITCODE -ne 0 -or $fmtPngAdaptiveOutput -ne 'fmt png adaptive ok') { throw "an e.fmt.png adaptive encode answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.jpeg` (D774): baseline 4:4:4 and 4:2:0, progressive, greyscale and restart intervals within
 # a few steps of libjpeg; a baseline encode decoded back within libjpeg's own error.
 $fmtJpegPath = Join-Path $testBuild 'fmt-jpeg-selfhost.exe'

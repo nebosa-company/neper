@@ -4839,6 +4839,13 @@ fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 chmod +x "$test_build/fmt-png-selfhost"
 fmt_png_output=$("$test_build/fmt-png-selfhost")
 [ "$fmt_png_output" = 'fmt png ok' ]
+# `e.fmt.png` encode_adaptive (L163): a Python model of libpng's filter heuristic (checked against
+# Pillow byte for byte) gives the colour type, depth, PLTE/tRNS, filtered-stream Adler-32 and zlib 6 size.
+fmt_png_adaptive_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png_adaptive/src/main.e" "$repo" x64 linux "$test_build/fmt-png-adaptive-selfhost")
+[ "$fmt_png_adaptive_written" = 'executable written' ]
+chmod +x "$test_build/fmt-png-adaptive-selfhost"
+fmt_png_adaptive_output=$("$test_build/fmt-png-adaptive-selfhost")
+[ "$fmt_png_adaptive_output" = 'fmt png adaptive ok' ]
 # `e.fmt.jpeg` (D774): baseline 4:4:4 and 4:2:0, progressive, greyscale and restart intervals within
 # a few steps of libjpeg; a baseline encode decoded back within libjpeg's own error.
 fmt_jpeg_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_jpeg/src/main.e" "$repo" x64 linux "$test_build/fmt-jpeg-selfhost")

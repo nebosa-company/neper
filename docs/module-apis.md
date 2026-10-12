@@ -23378,11 +23378,16 @@ error TooLarge
 fn inspect(source: io.Reader) -> (image.Info, err)
 fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
 fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err
+fn encode_adaptive(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err
 ```
 
 PNG decoding supports the standard grayscale, RGB, indexed and alpha color types and
 rejects dimensions before pixel allocation. Encoding is deterministic for identical
-pixels and options.
+pixels and options. `encode` writes filter `None` for every row; `encode_adaptive`
+(L163) writes an `Rgba8`/`Bgra8` image of at most 256 colors as an indexed PNG (PLTE,
+tRNS when an alpha is below 255, 1, 2, 4 or 8 bits by color count, filter `None`) and
+any other image with libpng's per-row filter heuristic (least sum of signed-absolute
+filtered bytes, ties to the lower filter). The pixels decode identically either way.
 For PNG, JPEG and WebP, each zero dimension limit selects 16,384 and a zero pixel
 limit selects 16,777,216. Explicit nonzero limits can raise or lower these bounds;
 raising one field does not disable defaults in the others. Encoded input buffering

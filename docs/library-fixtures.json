@@ -47,6 +47,7 @@
    "fixtures": [
     "algo_deflate",
     "fmt_png",
+    "fmt_png_adaptive",
     "net_grpccodec"
    ]
   },
@@ -632,11 +633,12 @@
    "module": "e.fmt.png",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 9,
-   "delivered": 9,
+   "catalogue": 10,
+   "delivered": 10,
    "pending": [],
    "fixtures": [
     "fmt_png",
+    "fmt_png_adaptive",
     "gfx_chart_png"
    ]
   },
@@ -1793,6 +1795,7 @@
     "fmt_images",
     "fmt_jpeg",
     "fmt_png",
+    "fmt_png_adaptive",
     "fmt_webp",
     "gfx_core",
     "gfx_paint_plan",
