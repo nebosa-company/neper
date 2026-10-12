@@ -3078,6 +3078,7 @@
     "text_regex_backtrack",
     "time_calendar",
     "time_calendars",
+    "time_calendars_african",
     "time_cron",
     "time_pattern",
     "time_recur",

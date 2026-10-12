@@ -1324,6 +1324,12 @@ $algopedometerenergyWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $algopedometerenergyWritten -ne 'executable written') { throw 'algo_pedometer_energy emission failed' }
 & $algopedometerenergyPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_pedometer_energy check failed: exit $LASTEXITCODE" }
+# `e.time.calendars` Coptic and Ethiopic against convertdate (L150).
+$timeCalendarsAfricanPath = Join-Path $testBuild 'time-calendars-african-selfhost.exe'
+$timeCalendarsAfricanWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_calendars_african\src\main.e') $repo 'x64' 'windows' $timeCalendarsAfricanPath -j 2
+if ($LASTEXITCODE -ne 0 -or $timeCalendarsAfricanWritten -ne 'executable written') { throw 'time_calendars_african emission failed' }
+& $timeCalendarsAfricanPath
+if ($LASTEXITCODE -ne 0) { throw "a time_calendars_african check failed: exit $LASTEXITCODE" }
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 $fmtPdfPath = Join-Path $testBuild 'fmt-pdf-selfhost.exe'
 $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf\src\main.e') $repo 'x64' 'windows' $fmtPdfPath

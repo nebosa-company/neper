@@ -471,10 +471,10 @@
       "group": "Algorithms",
       "order": 248,
       "title": "NodaTime-style dates: non-ISO calendars, patterns, maps",
-      "score": 0.85,
+      "score": 0.9,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1890). NodaTime parity gap (verified: TZif parsing present, non-ISO calendars absent): Japanese/Islamic/Hebrew calendar arithmetic over e.time.calendar, pattern-based text parsing/formatting and a Windows to IANA zone map. Fixtures against reference conversions. PART (D2800): e.time.calendars (Julian, Islamic civil, Hebrew vs convertdate; Japanese eras), e.time.pattern (runtime date patterns, 573 checks) and e.tz.winzones (Windows to IANA zone ids). NOT DONE: Persian, Coptic, Thai/Buddhist, Chinese and Umm al-Qura calendars; windows zone mapping beyond territory 001; non-English pattern names."
+      "evidence": "Planning only (D1890). NodaTime parity gap (verified: TZif parsing present, non-ISO calendars absent): Japanese/Islamic/Hebrew calendar arithmetic over e.time.calendar, pattern-based text parsing/formatting and a Windows to IANA zone map. Fixtures against reference conversions. PART (D2800): e.time.calendars (Julian, Islamic civil, Hebrew vs convertdate; Japanese eras), e.time.pattern (runtime date patterns, 573 checks) and e.tz.winzones (Windows to IANA zone ids). NOT DONE: Persian, Coptic, Thai/Buddhist, Chinese and Umm al-Qura calendars; windows zone mapping beyond territory 001; non-English pattern names. PART (D2450): Coptic and Ethiopic calendars (time_calendars_african, 643 checks vs convertdate). Remaining: Persian, Thai Buddhist, Chinese, Umm al-Qura; zone mapping beyond territory 001; non-English pattern names."
     },
     {
       "id": "T036",

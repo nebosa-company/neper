@@ -1222,6 +1222,11 @@ algo_pedometer_energy_written=$($test_build/neper-self emit-executable "$repo/te
 [ "$algo_pedometer_energy_written" = 'executable written' ]
 chmod +x "$test_build/algo-pedometer-energy-selfhost"
 "$test_build/algo-pedometer-energy-selfhost"
+# `e.time.calendars` Coptic and Ethiopic against convertdate (L150).
+time_calendars_african_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_calendars_african/src/main.e" "$repo" x64 linux "$test_build/time-calendars-african-selfhost" -j 2)
+[ "$time_calendars_african_written" = 'executable written' ]
+chmod +x "$test_build/time-calendars-african-selfhost"
+"$test_build/time-calendars-african-selfhost"
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-selfhost")
 [ "$fmt_pdf_written" = 'executable written' ]

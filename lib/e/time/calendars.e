@@ -24,13 +24,17 @@
 
 use e.time
 
-type Calendar = enum u8 { Julian, IslamicCivil, Hebrew }
+type Calendar = enum u8 { Julian, IslamicCivil, Hebrew, Coptic, Ethiopic }
 type JapaneseDate = struct { era: u8, year: i32, month: u8, day: u8 }
 error Invalid
 
 const RD_UNIX: i64 = 719163i64
 const HEBREW_EPOCH: i64 = -1373427i64
 const ISLAMIC_EPOCH: i64 = 227015i64
+// The Coptic and Ethiopic calendars (twelve months of thirty days and a short month of five or six, a leap year when
+// the year mod 4 is 3): their year 1 starts on these R.D. day numbers.
+const COPTIC_EPOCH: i64 = 103605i64
+const ETHIOPIC_EPOCH: i64 = 2796i64
 const JULIAN_DAY_UNIX: i64 = 2440588i64
 const ERA_COUNT: u8 = 5u8
 
@@ -166,13 +170,33 @@ fn hebrew_from_days(count: i64) -> (i64, i64, i64) {
 
 // ---- the shared surface ----
 
+fn african_epoch(cal: Calendar) -> i64 {
+    if cal == .Ethiopic { ret ETHIOPIC_EPOCH }
+    ret COPTIC_EPOCH
+}
+
+fn african_to_days(cal: Calendar, year: i64, month: i64, day: i64) -> i64 {
+    let rd = african_epoch(cal) - 1i64 + 365i64 * (year - 1i64) + time.floor_div(year, 4i64) + 30i64 * (month - 1i64) + day
+    ret rd - RD_UNIX
+}
+
+fn african_from_days(cal: Calendar, count: i64) -> (i64, i64, i64) {
+    let rd = count + RD_UNIX
+    let year = time.floor_div(4i64 * (rd - african_epoch(cal)) + 1463i64, 1461i64)
+    let month = time.floor_div(rd - (african_to_days(cal, year, 1i64, 1i64) + RD_UNIX), 30i64) + 1i64
+    let day = rd + 1i64 - (african_to_days(cal, year, month, 1i64) + RD_UNIX)
+    ret (year, month, day)
+}
+
 fn is_leap_year(cal: Calendar, year: i32) -> bool {
+    if cal == .Coptic || cal == .Ethiopic { ret time.floor_mod(i64(year), 4i64) == 3i64 }
     if cal == .Julian { ret time.floor_mod(i64(year), 4i64) == 0i64 }
     if cal == .IslamicCivil { ret islamic_leap(i64(year)) }
     ret hebrew_leap(i64(year))
 }
 
 fn months_in_year(cal: Calendar, year: i32) -> u8 {
+    if cal == .Coptic || cal == .Ethiopic { ret 13u8 }
     if cal == .Hebrew { ret u8(hebrew_month_count(i64(year))) }
     ret 12u8
 }
@@ -195,6 +219,13 @@ fn days_in_month(cal: Calendar, year: i32, month: u8) -> (u8, err) {
         if m == 4i64 || m == 6i64 || m == 9i64 || m == 11i64 { ret (30u8, ok) }
         ret (31u8, ok)
     }
+    if cal == .Coptic || cal == .Ethiopic {
+        if m == 13i64 {
+            if time.floor_mod(y, 4i64) == 3i64 { ret (6u8, ok) }
+            ret (5u8, ok)
+        }
+        ret (30u8, ok)
+    }
     if cal == .IslamicCivil {
         if m == 12i64 && islamic_leap(y) { ret (30u8, ok) }
         if time.floor_mod(m, 2i64) == 1i64 { ret (30u8, ok) }
@@ -216,6 +247,7 @@ fn to_days(cal: Calendar, date: time.Date) -> (i64, err) {
     let d = i64(date.day)
     if cal == .Julian { ret (julian_to_days(y, m, d), ok) }
     if cal == .IslamicCivil { ret (islamic_to_days(y, m, d), ok) }
+    if cal == .Coptic || cal == .Ethiopic { ret (african_to_days(cal, y, m, d), ok) }
     ret (hebrew_to_days(y, m, d), ok)
 }
 
@@ -236,6 +268,11 @@ fn from_days(cal: Calendar, count: i64) -> (time.Date, err) {
     if cal == .IslamicCivil {
         if count < islamic_to_days(1i64, 1i64, 1i64) { ret (zero, Invalid) }
         let (y, m, d) = islamic_from_days(count)
+        ret (make_date(y, m, d), ok)
+    }
+    if cal == .Coptic || cal == .Ethiopic {
+        if count < african_to_days(cal, 1i64, 1i64, 1i64) { ret (zero, Invalid) }
+        let (y, m, d) = african_from_days(cal, count)
         ret (make_date(y, m, d), ok)
     }
     if count < hebrew_to_days(1i64, 1i64, 1i64) { ret (zero, Invalid) }
@@ -267,10 +304,12 @@ fn to_iso(cal: Calendar, date: time.Date) -> (time.Date, err) {
 // month arithmetic.
 fn month_index(cal: Calendar, year: i64, month: i64) -> i64 {
     if cal == .Hebrew { ret time.floor_div(235i64 * year - 234i64, 19i64) + month - 1i64 }
+    if cal == .Coptic || cal == .Ethiopic { ret year * 13i64 + month - 1i64 }
     ret year * 12i64 + month - 1i64
 }
 
 fn year_of_index(cal: Calendar, index: i64) -> i64 {
+    if cal == .Coptic || cal == .Ethiopic { ret time.floor_div(index, 13i64) }
     if cal != .Hebrew { ret time.floor_div(index, 12i64) }
     var year = time.floor_div(19i64 * index + 234i64, 235i64)
     while month_index(cal, year + 1i64, 1i64) <= index { year += 1i64 }

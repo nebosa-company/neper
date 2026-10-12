@@ -2284,4 +2284,5 @@ D2445	1021	C169: a score board in Blocks
 D2446	807	C150: a zip is browsed in Document
 D2447	908	C154: a card's expiry is checked against the clock
 D2448	1032	C158: Mail shows the text of a MIME message
-D2449	943	C168: Steps keeps its week
+D2449	944	C168: Steps keeps its week
+D2450	953	L150: the Coptic and Ethiopic calendars

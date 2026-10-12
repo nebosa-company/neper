@@ -23022,31 +23022,39 @@ after the year 9999 or 4,000,000 sub-daily steps. Zones belong to `e.tz`.
 ### `e.time.calendars`
 
 ```neper
-type Calendar = enum u8 { Julian, IslamicCivil, Hebrew }
-type JapaneseDate = struct { era: u8, year: i32, month: u8, day: u8 }
 error Invalid
+
+type Calendar = enum u8 { Julian, IslamicCivil, Hebrew, Coptic, Ethiopic }
+type JapaneseDate = struct { era: u8, year: i32, month: u8, day: u8 }
+
 const RD_UNIX: i64 = 719163i64
 const HEBREW_EPOCH: i64 = -1373427i64
 const ISLAMIC_EPOCH: i64 = 227015i64
+const COPTIC_EPOCH: i64 = 103605i64
+const ETHIOPIC_EPOCH: i64 = 2796i64
 const JULIAN_DAY_UNIX: i64 = 2440588i64
 const ERA_COUNT: u8 = 5u8
+
 fn julian_to_days(year: i64, month: i64, day: i64) -> i64
 fn julian_from_days(count: i64) -> (i64, i64, i64)
-fn islamic_leap(year: i64) -> bool { ret time.floor_mod(14i64 + 11i64 * year, 30i64) < 11i64 }
+fn islamic_leap(year: i64) -> bool
 fn islamic_fixed(year: i64, month: i64, day: i64) -> i64
-fn islamic_to_days(year: i64, month: i64, day: i64) -> i64 { ret islamic_fixed(year, month, day) - RD_UNIX }
+fn islamic_to_days(year: i64, month: i64, day: i64) -> i64
 fn islamic_from_days(count: i64) -> (i64, i64, i64)
-fn hebrew_leap(year: i64) -> bool { ret time.floor_mod(7i64 * year + 1i64, 19i64) < 7i64 }
+fn hebrew_leap(year: i64) -> bool
 fn hebrew_month_count(year: i64) -> i64
 fn hebrew_elapsed(year: i64) -> i64
 fn hebrew_new_year(year: i64) -> i64
-fn hebrew_year_length(year: i64) -> i64 { ret hebrew_new_year(year + 1i64) - hebrew_new_year(year) }
+fn hebrew_year_length(year: i64) -> i64
 fn hebrew_scriptural_length(year: i64, s: i64) -> i64
 fn scriptural_month(year: i32, civil: u8) -> u8
 fn civil_month(year: i32, scriptural: u8) -> u8
 fn hebrew_civil_length(year: i64, civil: i64) -> i64
 fn hebrew_to_days(year: i64, month: i64, day: i64) -> i64
 fn hebrew_from_days(count: i64) -> (i64, i64, i64)
+fn african_epoch(cal: Calendar) -> i64
+fn african_to_days(cal: Calendar, year: i64, month: i64, day: i64) -> i64
+fn african_from_days(cal: Calendar, count: i64) -> (i64, i64, i64)
 fn is_leap_year(cal: Calendar, year: i32) -> bool
 fn months_in_year(cal: Calendar, year: i32) -> u8
 fn year_ok(cal: Calendar, year: i32) -> bool
@@ -23067,7 +23075,7 @@ fn day_of_year(cal: Calendar, date: time.Date) -> (u16, err)
 fn month_name_hebrew(year: i32, civil: u8) -> str
 fn era_name(era: u8) -> str
 fn era_start(era: u8) -> time.Date
-fn iso_count(date: time.Date) -> i64 { ret time.days_from_civil(i64(date.year), i64(date.month), i64(date.day)) }
+fn iso_count(date: time.Date) -> i64
 fn japanese_from_iso(date: time.Date) -> (JapaneseDate, err)
 fn japanese_to_iso(j: JapaneseDate) -> (time.Date, err)
 ```
