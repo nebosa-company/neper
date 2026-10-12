@@ -4363,6 +4363,42 @@ $tzWinzonesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $tzWinzonesWritten -ne 'executable written') { throw 'tz_winzones emission failed' }
 $tzWinzonesOutput = & $tzWinzonesPath
 if ($LASTEXITCODE -ne 0 -or $tzWinzonesOutput -ne 'tz windows ok') { throw "tz_winzones answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.bincode: bincode 1 and 2 wire formats against an independent Python model (365 vectors, D2801).
+$fmtBincodePath = Join-Path $testBuild 'fmt-bincode-selfhost.exe'
+$fmtBincodeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_bincode\src\main.e') $repo 'x64' 'windows' $fmtBincodePath -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtBincodeWritten -ne 'executable written') { throw 'fmt_bincode emission failed' }
+$fmtBincodeOutput = & $fmtBincodePath
+if ($LASTEXITCODE -ne 0 -or $fmtBincodeOutput -ne 'fmt bincode ok') { throw "fmt_bincode answered wrongly: exit $LASTEXITCODE" }
+# e.text.shlex: split, quote and join against Python shlex (402 vectors, D2801).
+$textShlexPath = Join-Path $testBuild 'text-shlex-selfhost.exe'
+$textShlexWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_shlex\src\main.e') $repo 'x64' 'windows' $textShlexPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textShlexWritten -ne 'executable written') { throw 'text_shlex emission failed' }
+$textShlexOutput = & $textShlexPath
+if ($LASTEXITCODE -ne 0 -or $textShlexOutput -ne 'text shlex ok') { throw "text_shlex answered wrongly: exit $LASTEXITCODE" }
+# e.path.tilde: expansion and collapse against posixpath.expanduser and a model (188 vectors, D2801).
+$pathTildePath = Join-Path $testBuild 'path-tilde-selfhost.exe'
+$pathTildeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\path_tilde\src\main.e') $repo 'x64' 'windows' $pathTildePath -j 2
+if ($LASTEXITCODE -ne 0 -or $pathTildeWritten -ne 'executable written') { throw 'path_tilde emission failed' }
+$pathTildeOutput = & $pathTildePath
+if ($LASTEXITCODE -ne 0 -or $pathTildeOutput -ne 'path tilde ok') { throw "path_tilde answered wrongly: exit $LASTEXITCODE" }
+# e.text.bytesize: parse and format against go-humanize rules in exact arithmetic (608 vectors, D2801).
+$textBytesizePath = Join-Path $testBuild 'text-bytesize-selfhost.exe'
+$textBytesizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_bytesize\src\main.e') $repo 'x64' 'windows' $textBytesizePath -j 2
+if ($LASTEXITCODE -ne 0 -or $textBytesizeWritten -ne 'executable written') { throw 'text_bytesize emission failed' }
+$textBytesizeOutput = & $textBytesizePath
+if ($LASTEXITCODE -ne 0 -or $textBytesizeOutput -ne 'text bytesize ok') { throw "text_bytesize answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.magic: 74 signature rows sampled against an independent first-match scan, cross-checked with filetype (282 vectors, D2801).
+$fmtMagicPath = Join-Path $testBuild 'fmt-magic-selfhost.exe'
+$fmtMagicWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_magic\src\main.e') $repo 'x64' 'windows' $fmtMagicPath -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtMagicWritten -ne 'executable written') { throw 'fmt_magic emission failed' }
+$fmtMagicOutput = & $fmtMagicPath
+if ($LASTEXITCODE -ne 0 -or $fmtMagicOutput -ne 'fmt magic ok') { throw "fmt_magic answered wrongly: exit $LASTEXITCODE" }
+# e.os.ident: host, user, locale and zone lookups answer well-formed values (D2801).
+$osIdentPath = Join-Path $testBuild 'os-ident-selfhost.exe'
+$osIdentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_ident\src\main.e') $repo 'x64' 'windows' $osIdentPath -j 2
+if ($LASTEXITCODE -ne 0 -or $osIdentWritten -ne 'executable written') { throw 'os_ident emission failed' }
+$osIdentOutput = & $osIdentPath
+if ($LASTEXITCODE -ne 0 -or $osIdentOutput -ne 'os ident ok') { throw "os_ident answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

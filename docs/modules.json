@@ -550,6 +550,12 @@
     "e.time.calendars",
     "e.time.pattern",
     "e.tz.winzones",
+    "e.fmt.bincode",
+    "e.text.shlex",
+    "e.path.tilde",
+    "e.text.bytesize",
+    "e.fmt.magic",
+    "e.os.ident",
     "e.time.parse",
     "e.path.dirs",
     "e.fmt.dotenv",
@@ -4794,6 +4800,73 @@
    "schedule": "later",
    "direct_dependencies": [
 
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.bincode",
+   "layer": 3,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.shlex",
+   "layer": 3,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.path.tilde",
+   "layer": 3,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.bytesize",
+   "layer": 3,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.magic",
+   "layer": 3,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.os.ident",
+   "layer": 4,
+   "surface": "spec",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.os"
    ],
    "blocked_by": []
   },

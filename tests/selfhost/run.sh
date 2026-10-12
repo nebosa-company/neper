@@ -3899,6 +3899,42 @@ tz_winzones_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/tz-winzones-selfhost"
 tz_winzones_output=$("$test_build/tz-winzones-selfhost")
 [ "$tz_winzones_output" = 'tz windows ok' ]
+# e.fmt.bincode: bincode 1 and 2 wire formats against an independent Python model (365 vectors, D2801).
+fmt_bincode_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_bincode/src/main.e" "$repo" x64 linux "$test_build/fmt-bincode-selfhost" -j 2)
+[ "$fmt_bincode_written" = 'executable written' ]
+chmod +x "$test_build/fmt-bincode-selfhost"
+fmt_bincode_output=$("$test_build/fmt-bincode-selfhost")
+[ "$fmt_bincode_output" = 'fmt bincode ok' ]
+# e.text.shlex: split, quote and join against Python shlex (402 vectors, D2801).
+text_shlex_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_shlex/src/main.e" "$repo" x64 linux "$test_build/text-shlex-selfhost" -j 2)
+[ "$text_shlex_written" = 'executable written' ]
+chmod +x "$test_build/text-shlex-selfhost"
+text_shlex_output=$("$test_build/text-shlex-selfhost")
+[ "$text_shlex_output" = 'text shlex ok' ]
+# e.path.tilde: expansion and collapse against posixpath.expanduser and a model (188 vectors, D2801).
+path_tilde_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/path_tilde/src/main.e" "$repo" x64 linux "$test_build/path-tilde-selfhost" -j 2)
+[ "$path_tilde_written" = 'executable written' ]
+chmod +x "$test_build/path-tilde-selfhost"
+path_tilde_output=$("$test_build/path-tilde-selfhost")
+[ "$path_tilde_output" = 'path tilde ok' ]
+# e.text.bytesize: parse and format against go-humanize rules in exact arithmetic (608 vectors, D2801).
+text_bytesize_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_bytesize/src/main.e" "$repo" x64 linux "$test_build/text-bytesize-selfhost" -j 2)
+[ "$text_bytesize_written" = 'executable written' ]
+chmod +x "$test_build/text-bytesize-selfhost"
+text_bytesize_output=$("$test_build/text-bytesize-selfhost")
+[ "$text_bytesize_output" = 'text bytesize ok' ]
+# e.fmt.magic: 74 signature rows sampled against an independent first-match scan, cross-checked with filetype (282 vectors, D2801).
+fmt_magic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_magic/src/main.e" "$repo" x64 linux "$test_build/fmt-magic-selfhost" -j 2)
+[ "$fmt_magic_written" = 'executable written' ]
+chmod +x "$test_build/fmt-magic-selfhost"
+fmt_magic_output=$("$test_build/fmt-magic-selfhost")
+[ "$fmt_magic_output" = 'fmt magic ok' ]
+# e.os.ident: host, user, locale and zone lookups answer well-formed values (D2801).
+os_ident_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_ident/src/main.e" "$repo" x64 linux "$test_build/os-ident-selfhost" -j 2)
+[ "$os_ident_written" = 'executable written' ]
+chmod +x "$test_build/os-ident-selfhost"
+os_ident_output=$("$test_build/os-ident-selfhost")
+[ "$os_ident_output" = 'os ident ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
