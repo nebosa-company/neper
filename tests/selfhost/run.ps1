@@ -4429,6 +4429,42 @@ $cryptoCmsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $cryptoCmsWritten -ne 'executable written') { throw 'crypto_cms emission failed' }
 $cryptoCmsOutput = & $cryptoCmsPath
 if ($LASTEXITCODE -ne 0 -or $cryptoCmsOutput -ne 'crypto cms ok') { throw "crypto_cms answered wrongly: exit $LASTEXITCODE" }
+# e.net.robots: RFC 9309 matching against protego over random documents and the RFC example (1357 vectors, D2803).
+$netRobotsPath = Join-Path $testBuild 'net-robots-selfhost.exe'
+$netRobotsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_robots\src\main.e') $repo 'x64' 'windows' $netRobotsPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netRobotsWritten -ne 'executable written') { throw 'net_robots emission failed' }
+$netRobotsOutput = & $netRobotsPath
+if ($LASTEXITCODE -ne 0 -or $netRobotsOutput -ne 'net robots ok') { throw "net_robots answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.sitemap: urlset, index and text sitemaps against ElementTree, plus writer round trips (120 vectors, D2803).
+$fmtSitemapPath = Join-Path $testBuild 'fmt-sitemap-selfhost.exe'
+$fmtSitemapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_sitemap\src\main.e') $repo 'x64' 'windows' $fmtSitemapPath -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtSitemapWritten -ne 'executable written') { throw 'fmt_sitemap emission failed' }
+$fmtSitemapOutput = & $fmtSitemapPath
+if ($LASTEXITCODE -ne 0 -or $fmtSitemapOutput -ne 'fmt sitemap ok') { throw "fmt_sitemap answered wrongly: exit $LASTEXITCODE" }
+# e.test.poll: until and during on a fake clock against an independent model, plus real-clock runs (280 vectors, D2803).
+$testPollPath = Join-Path $testBuild 'test-poll-selfhost.exe'
+$testPollWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_poll\src\main.e') $repo 'x64' 'windows' $testPollPath -j 2
+if ($LASTEXITCODE -ne 0 -or $testPollWritten -ne 'executable written') { throw 'test_poll emission failed' }
+$testPollOutput = & $testPollPath
+if ($LASTEXITCODE -ne 0 -or $testPollOutput -ne 'test poll ok') { throw "test_poll answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.fixedwidth: FileHelpers-style layouts and length modes against a Python slicing model (500 vectors, D2803).
+$fmtFixedwidthPath = Join-Path $testBuild 'fmt-fixedwidth-selfhost.exe'
+$fmtFixedwidthWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_fixedwidth\src\main.e') $repo 'x64' 'windows' $fmtFixedwidthPath -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtFixedwidthWritten -ne 'executable written') { throw 'fmt_fixedwidth emission failed' }
+$fmtFixedwidthOutput = & $fmtFixedwidthPath
+if ($LASTEXITCODE -ne 0 -or $fmtFixedwidthOutput -ne 'fmt fixedwidth ok') { throw "fmt_fixedwidth answered wrongly: exit $LASTEXITCODE" }
+# e.crypto.jks: pyjks keystores parsed, decrypted and re-encoded byte for byte (4 stores, D2803).
+$cryptoJksPath = Join-Path $testBuild 'crypto-jks-selfhost.exe'
+$cryptoJksWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_jks\src\main.e') $repo 'x64' 'windows' $cryptoJksPath -j 2
+if ($LASTEXITCODE -ne 0 -or $cryptoJksWritten -ne 'executable written') { throw 'crypto_jks emission failed' }
+$cryptoJksOutput = & $cryptoJksPath
+if ($LASTEXITCODE -ne 0 -or $cryptoJksOutput -ne 'crypto jks ok') { throw "crypto_jks answered wrongly: exit $LASTEXITCODE" }
+# e.crypto.pkcs12: cryptography/OpenSSL 3 stores read and the writer reproduced byte for byte (D2803).
+$cryptoPkcs12Path = Join-Path $testBuild 'crypto-pkcs12-selfhost.exe'
+$cryptoPkcs12Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_pkcs12\src\main.e') $repo 'x64' 'windows' $cryptoPkcs12Path -j 2
+if ($LASTEXITCODE -ne 0 -or $cryptoPkcs12Written -ne 'executable written') { throw 'crypto_pkcs12 emission failed' }
+$cryptoPkcs12Output = & $cryptoPkcs12Path
+if ($LASTEXITCODE -ne 0 -or $cryptoPkcs12Output -ne 'crypto pkcs12 ok') { throw "crypto_pkcs12 answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

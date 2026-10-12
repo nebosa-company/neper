@@ -561,6 +561,12 @@
     "e.log.rotate",
     "e.net.tftp",
     "e.crypto.cms",
+    "e.net.robots",
+    "e.fmt.sitemap",
+    "e.test.poll",
+    "e.fmt.fixedwidth",
+    "e.crypto.jks",
+    "e.crypto.pkcs12",
     "e.time.parse",
     "e.path.dirs",
     "e.fmt.dotenv",
@@ -4934,6 +4940,83 @@
     "e.crypto.hash",
     "e.crypto.sign",
     "e.crypto.x509",
+    "e.fmt.asn1"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.robots",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.sitemap",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.io",
+    "e.mem",
+    "e.fmt.xml"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.test.poll",
+   "layer": 5,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.sync",
+    "e.time"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.fixedwidth",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.crypto.jks",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.crypto.hash",
+    "e.fmt.asn1"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.crypto.pkcs12",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.crypto.cipher",
+    "e.crypto.hash",
+    "e.crypto.kdf",
+    "e.crypto.mac",
     "e.fmt.asn1"
    ],
    "blocked_by": []

@@ -2749,6 +2749,7 @@
     "sync_semantics",
     "sync_threads",
     "task_pool",
+    "test_poll",
     "thread_perturb"
    ]
   },
@@ -3046,6 +3047,7 @@
     "sync_threads",
     "task_pool",
     "test_fuzz",
+    "test_poll",
     "test_support",
     "text_locale",
     "text_regex_backtrack",

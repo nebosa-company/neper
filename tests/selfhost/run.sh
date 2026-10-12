@@ -3965,6 +3965,42 @@ crypto_cms_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$test_build/crypto-cms-selfhost"
 crypto_cms_output=$("$test_build/crypto-cms-selfhost")
 [ "$crypto_cms_output" = 'crypto cms ok' ]
+# e.net.robots: RFC 9309 matching against protego over random documents and the RFC example (1357 vectors, D2803).
+net_robots_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_robots/src/main.e" "$repo" x64 linux "$test_build/net-robots-selfhost" -j 2)
+[ "$net_robots_written" = 'executable written' ]
+chmod +x "$test_build/net-robots-selfhost"
+net_robots_output=$("$test_build/net-robots-selfhost")
+[ "$net_robots_output" = 'net robots ok' ]
+# e.fmt.sitemap: urlset, index and text sitemaps against ElementTree, plus writer round trips (120 vectors, D2803).
+fmt_sitemap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_sitemap/src/main.e" "$repo" x64 linux "$test_build/fmt-sitemap-selfhost" -j 2)
+[ "$fmt_sitemap_written" = 'executable written' ]
+chmod +x "$test_build/fmt-sitemap-selfhost"
+fmt_sitemap_output=$("$test_build/fmt-sitemap-selfhost")
+[ "$fmt_sitemap_output" = 'fmt sitemap ok' ]
+# e.test.poll: until and during on a fake clock against an independent model, plus real-clock runs (280 vectors, D2803).
+test_poll_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_poll/src/main.e" "$repo" x64 linux "$test_build/test-poll-selfhost" -j 2)
+[ "$test_poll_written" = 'executable written' ]
+chmod +x "$test_build/test-poll-selfhost"
+test_poll_output=$("$test_build/test-poll-selfhost")
+[ "$test_poll_output" = 'test poll ok' ]
+# e.fmt.fixedwidth: FileHelpers-style layouts and length modes against a Python slicing model (500 vectors, D2803).
+fmt_fixedwidth_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_fixedwidth/src/main.e" "$repo" x64 linux "$test_build/fmt-fixedwidth-selfhost" -j 2)
+[ "$fmt_fixedwidth_written" = 'executable written' ]
+chmod +x "$test_build/fmt-fixedwidth-selfhost"
+fmt_fixedwidth_output=$("$test_build/fmt-fixedwidth-selfhost")
+[ "$fmt_fixedwidth_output" = 'fmt fixedwidth ok' ]
+# e.crypto.jks: pyjks keystores parsed, decrypted and re-encoded byte for byte (4 stores, D2803).
+crypto_jks_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_jks/src/main.e" "$repo" x64 linux "$test_build/crypto-jks-selfhost" -j 2)
+[ "$crypto_jks_written" = 'executable written' ]
+chmod +x "$test_build/crypto-jks-selfhost"
+crypto_jks_output=$("$test_build/crypto-jks-selfhost")
+[ "$crypto_jks_output" = 'crypto jks ok' ]
+# e.crypto.pkcs12: cryptography/OpenSSL 3 stores read and the writer reproduced byte for byte (D2803).
+crypto_pkcs12_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_pkcs12/src/main.e" "$repo" x64 linux "$test_build/crypto-pkcs12-selfhost" -j 2)
+[ "$crypto_pkcs12_written" = 'executable written' ]
+chmod +x "$test_build/crypto-pkcs12-selfhost"
+crypto_pkcs12_output=$("$test_build/crypto-pkcs12-selfhost")
+[ "$crypto_pkcs12_output" = 'crypto pkcs12 ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

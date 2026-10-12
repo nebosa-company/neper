@@ -22417,6 +22417,190 @@ fn sign_ed25519(a: *mem.Arena, content: []const u8, cert_der: []const u8, secret
 
 CMS / PKCS #7 SignedData (RFC 5652) for S/MIME. `parse` reads a DER ContentInfo (attached or detached content, embedded certificates, SignerInfos by IssuerAndSerialNumber); `verify_signer`/`verify` check the content digest against the signed `messageDigest` attribute (SHA-256/384/512), the `contentType` attribute, and the signature over the signed attributes re-tagged as a SET (or over the content when there are none) with the signer's embedded certificate: ECDSA P-256/P-384, RSA PKCS#1 v1.5 or Ed25519; `signer_certificate` returns the certificate for `e.crypto.x509.verify`, since trust is the caller's. `sign_ed25519` writes a SignedData (RFC 8419: SHA-512, signed attributes with content type, signing time and message digest, the signer certificate embedded, detached or attached) that OpenSSL verifies. RSA and ECDSA signing are not here (`e.crypto.sign` has no PKCS#1 v1.5 signer and its P-256 signer is `Unsupported`); BER indefinite lengths, SubjectKeyIdentifier signers, CRLs, countersignatures and EnvelopedData are not interpreted.
 
+### `e.net.robots`
+
+```neper
+type Group = struct { first_agent: usize, agent_count: usize, first_rule: usize, rule_count: usize, has_delay: bool, delay_millis: u32 }
+type Rule = struct { allow: bool, pattern: str }
+type Robots = struct { groups: []Group, agents: []str, rules: []Rule, sitemaps: []str, group_count: usize, agent_count: usize, rule_count: usize, sitemap_count: usize }
+error Invalid
+fn lower(c: u8) -> u8
+fn same_fold(a: str, b: str) -> bool
+fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 13u8 }
+fn trim(s: str) -> str
+fn field_kind(name: str) -> u8
+fn parse_millis(s: str) -> (u32, bool)
+fn split_line(line: str) -> (u8, str, bool)
+fn parse(a: *mem.Arena, text: str) -> (Robots, err)
+fn hex_upper(c: u8) -> u8
+fn is_hex(c: u8) -> bool { ret (c >= 48u8 && c <= 57u8) || (c >= 65u8 && c <= 70u8) || (c >= 97u8 && c <= 102u8) }
+fn norm_at(s: str, i: usize) -> u8
+fn part_at(pattern: str, from: usize, to: usize, path: str, at: usize) -> bool
+fn find_part(pattern: str, from: usize, to: usize, path: str, start: usize) -> (usize, bool)
+fn matches(pattern: str, path: str) -> bool
+fn group_names(r: *const Robots, g: usize, agent: str) -> bool
+fn knows(r: *const Robots, agent: str) -> bool
+fn applicable(r: *const Robots, agent: str) -> (str, bool)
+fn allowed(r: *const Robots, agent: str, path: str) -> bool
+fn crawl_delay(r: *const Robots, agent: str) -> (u32, bool)
+```
+
+robots.txt (RFC 9309): `parse` once, then `allowed(robots, agent, path)` and `crawl_delay` per crawler product token. Fields are case-insensitive, `#` comments, a colon or a space separates; consecutive `User-agent` lines share a group, groups naming the same agent merge, rules before any agent are ignored, `Sitemap` is site-wide (`robots.sitemaps`). The group is the crawler's own name (exact, case-insensitive) else `*`; the longest matching pattern wins and `Allow` wins ties; `*` matches any run and a trailing `$` anchors the end; `/robots.txt` is always allowed; `Crawl-delay` seconds are answered in milliseconds. Matching is against the path-and-query as given with `%XX` hex digits upper-cased; no URL parsing or further percent-decoding, and `index.html` is not treated as `/`. Everything is a slice of the text, which must outlive the `Robots`.
+
+### `e.fmt.sitemap`
+
+```neper
+type Entry = struct { loc: str, lastmod: str, changefreq: str, priority: str }
+type Sitemap = struct { entries: []Entry, index: bool }
+error Invalid
+error TooMany
+const MAX_ENTRIES: usize = 50000usize
+const MAX_LOC: usize = 2048usize
+fn local(name: str) -> str
+fn same(a: str, b: str) -> bool
+fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 }
+fn trim(s: str) -> str
+fn valid_changefreq(s: str) -> bool
+fn valid_priority(s: str) -> bool
+fn check_entry(e: Entry) -> err
+fn element_text(a: *mem.Arena, doc: *const xml.Document, id: u32) -> (str, err)
+fn parse(a: *mem.Arena, source: []const u8) -> (Sitemap, err)
+fn parse_text(a: *mem.Arena, source: []const u8) -> (Sitemap, err)
+fn leaf(w: *xml.Writer, name: str, value: str) -> err
+fn write_document(sink: io.Writer, entries: []const Entry, index: bool) -> err
+fn write_urlset(sink: io.Writer, entries: []const Entry) -> err { ret write_document(sink, entries, false) }
+fn write_index(sink: io.Writer, entries: []const Entry) -> err { ret write_document(sink, entries, true) }
+```
+
+Sitemaps (sitemaps.org 0.9): `parse` reads a `urlset` or `sitemapindex` XML document (matching by local name, so any namespace prefix works; extension elements and unknown children are skipped; CDATA and entities decoded) into `Entry` values (`loc`, `lastmod`, `changefreq`, `priority` as written), refusing a missing or oversized `loc`, an unknown `changefreq` or a `priority` outside 0.0..1.0 as `Invalid` and more than 50000 entries as `TooMany`; `parse_text` reads the one-URL-per-line form; `write_urlset`/`write_index` emit the XML declaration and namespace with the same checks. Not here: gzip handling, the 50 MB size limit, or interpreting the image/video/news extensions.
+
+### `e.test.poll`
+
+```neper
+type Clock = struct { ctx: *void, now: fn(*void) -> i64, sleep: fn(*void, i64) }
+type RealClock = struct { nap: sync.Semaphore }
+type Options = struct { timeout_ns: i64, interval_ns: i64, initial_delay_ns: i64, backoff_percent: u32, max_interval_ns: i64, ignore_errors: bool }
+type Outcome = struct { attempts: u32, elapsed_ns: i64, last_error: err }
+error Timeout
+error Failed
+error Invalid
+fn real_now(ctx: *void) -> i64
+fn real_sleep(ctx: *void, nanos: i64)
+fn real_clock(c: *RealClock) -> Clock
+fn next_interval(current: i64, o: Options) -> i64
+fn until(clock: Clock, ctx: *void, cond: fn(*void) -> (bool, err), o: Options) -> (Outcome, err)
+fn during(clock: Clock, ctx: *void, cond: fn(*void) -> (bool, err), o: Options) -> (Outcome, err)
+```
+
+Awaitility-style condition polling: `until` waits for a `fn(*void) -> (bool, err)` condition to hold and `during` checks that it keeps holding, polling at `interval_ns` with an optional `initial_delay_ns`, `backoff_percent` growth capped by `max_interval_ns`, and `ignore_errors` (the last condition error is kept in the `Outcome`). Time comes from a `Clock {ctx, now, sleep}` so waiting code can be tested on a fake clock; `real_clock` is the monotonic clock with sleeping. `until` makes one last evaluation at the deadline and answers `Timeout`; `during` answers `Failed` on the first false. Not here: hamcrest-style matchers, thread-pool-based async conditions, or poll-delay presets by name.
+
+### `e.fmt.fixedwidth`
+
+```neper
+type Align = enum u8 { Left, Right }
+type Trim = enum u8 { None, Both, Left, Right }
+type Mode = enum u8 { Exact, AllowMore, AllowLess, AllowVariable }
+type Field = struct { name: str, width: u32, align: Align, pad: u8, trim: Trim, optional: bool }
+error Short
+error Long
+error Overflow
+error TooSmall
+error Mismatch
+fn record_width(fields: []const Field) -> usize
+fn trimmed(f: Field, cut: str) -> str
+fn read(fields: []const Field, mode: Mode, line: str, out: []str) -> err
+fn write(fields: []const Field, values: []const str, dst: []u8) -> (str, err)
+```
+
+FileHelpers-style fixed-width records: a layout is a slice of `Field {name, width, align, pad, trim, optional}`; `read` cuts a line into trimmed values (slices of the line) under `Mode` `Exact`, `AllowMore`, `AllowLess` or `AllowVariable` (`Short`/`Long` otherwise), `write` pads and aligns values into a line and refuses an over-long value as `Overflow`. Widths are bytes. Not here: typed conversion of field text (dates, numbers, decimals), field converters, record hierarchies, or multi-line records.
+
+### `e.crypto.jks`
+
+```neper
+type Entry = struct { alias: str, is_key: bool, timestamp_ms: u64, protected: []const u8, chain: []const []const u8 }
+type Keystore = struct { entries: []Entry }
+error Invalid
+error BadPassword
+error Unsupported
+error TooSmall
+const DEPTH: u16 = 8u16
+fn password_bytes(password: str, dst: []u8) -> (usize, err)
+fn be16(d: []const u8, at: usize) -> usize { ret usize(d[at]) * 256usize + usize(d[at + 1usize]) }
+fn be32(d: []const u8, at: usize) -> usize
+fn be64(d: []const u8, at: usize) -> u64
+fn same(a: []const u8, b: []const u8) -> bool
+fn integrity_digest(a: *mem.Arena, password: str, body: []const u8) -> ([20]u8, err)
+fn parse(a: *mem.Arena, data: []const u8, password: str) -> (Keystore, err)
+fn keystream_block(pw: []const u8, previous: []const u8) -> [20]u8
+fn sun_oid() -> [10]u8 { ret [10]u8{ 43u8, 6u8, 1u8, 4u8, 1u8, 42u8, 2u8, 17u8, 1u8, 1u8 } }
+fn decrypt_key(a: *mem.Arena, protected: []const u8, password: str, out: []u8) -> (usize, err)
+fn next(r: *asn1.Reader) -> (asn1.Value, err)
+fn put_be16(dst: []u8, at: usize, v: usize)
+fn put_be32(dst: []u8, at: usize, v: usize)
+fn put_be64(dst: []u8, at: usize, v: u64)
+fn header(dst: []u8, at: usize, tag: u8, len: usize) -> usize { ret asn1.put_header(dst, at, tag, len) }
+fn protect_key(pkcs8: []const u8, password: str, salt: []const u8, out: []u8) -> (usize, err)
+fn put_utf(dst: []u8, at: usize, s: str) -> usize
+fn encode(a: *mem.Arena, entries: []const Entry, password: str, out: []u8) -> (usize, err)
+```
+
+Java KeyStore (JKS v2) files: `parse` verifies the keystore's SHA-1 integrity digest (`BadPassword` when the password is wrong) and lists the entries (private-key entries with their encrypted key and certificate chain, trusted certificates, aliases, creation times); `decrypt_key` unwraps Sun's key-protection scheme (algorithm 1.3.6.1.4.1.42.2.17.1.1, a SHA-1 keystream with a check) to PKCS #8; `protect_key` and `encode` write one. The scheme is weak and legacy; use it to interoperate, not to protect new keys. Passwords are UTF-8 text re-encoded as UTF-16BE like the JDK's `char[]`. Not here: JCEKS (Triple-DES sealed keys) or BKS stores, and PKCS #12 (`e.crypto.pkcs12`).
+
+### `e.crypto.pkcs12`
+
+```neper
+type KeyBag = struct { friendly_name: str, local_key_id: []const u8, pkcs8: []const u8 }
+type CertBag = struct { friendly_name: str, local_key_id: []const u8, der: []const u8 }
+type Store = struct { keys: []KeyBag, certs: []CertBag, had_mac: bool }
+type Params = struct { key_salt: [16]u8, key_iv: [16]u8, cert_salt: [16]u8, cert_iv: [16]u8, mac_salt: [16]u8, iterations: u32 }
+error Invalid
+error BadPassword
+error Unsupported
+error TooSmall
+const DEPTH: u16 = 16u16
+fn same(a: []const u8, b: []const u8) -> bool
+fn oid_bag(n: u8) -> [11]u8 { ret [11]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 12u8, 10u8, 1u8, n } }
+fn oid_pkcs7(n: u8) -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 7u8, n } }
+fn oid_attr(n: u8) -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 9u8, n } }
+fn oid_pbe(n: u8) -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 5u8, n } }
+fn oid_prf(n: u8) -> [8]u8 { ret [8]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 2u8, n } }
+fn oid_aes(n: u8) -> [9]u8 { ret [9]u8{ 96u8, 134u8, 72u8, 1u8, 101u8, 3u8, 4u8, 1u8, n } }
+fn oid_sha(n: u8) -> [9]u8 { ret [9]u8{ 96u8, 134u8, 72u8, 1u8, 101u8, 3u8, 4u8, 2u8, n } }
+fn oid_x509_cert() -> [10]u8 { ret [10]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 9u8, 22u8, 1u8 } }
+fn next(r: *asn1.Reader) -> (asn1.Value, err)
+fn children(v: asn1.Value) -> (asn1.Reader, err)
+fn seq_of(r: *asn1.Reader) -> (asn1.Reader, err)
+fn int_of(v: asn1.Value) -> (u32, err)
+fn bmp_to_utf8(a: *mem.Arena, bmp: []const u8) -> (str, err)
+fn bmp_password(a: *mem.Arena, password: str) -> ([]u8, err)
+fn digest_of(bits: u16, data: []const u8, out: []u8)
+fn pkcs12_kdf(a: *mem.Arena, bits: u16, id: u8, password_bmp: []const u8, salt: []const u8, iterations: u32, out: []u8) -> err
+fn pbes2_decrypt(a: *mem.Arena, params: asn1.Value, data: []const u8, password: str) -> ([]u8, err)
+type Collector = struct { keys: []KeyBag, certs: []CertBag, key_count: usize, cert_count: usize }
+fn read_attributes(a: *mem.Arena, set: asn1.Value) -> (str, []const u8, err)
+fn read_safe_contents(a: *mem.Arena, contents: []const u8, password: str, c: *Collector) -> err
+fn parse(a: *mem.Arena, der: []const u8, password: str) -> (Store, err)
+fn begin(dst: []u8, at: usize, tag: u8, total: usize) -> (usize, err)
+fn append(dst: []u8, at: usize, bytes: []const u8) -> usize
+fn tlv1(dst: []u8, at: usize, tag: u8, p0: []const u8) -> (usize, err)
+fn tlv2(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8) -> (usize, err)
+fn tlv3(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8) -> (usize, err)
+fn tlv4(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8, p3: []const u8) -> (usize, err)
+type Build = struct { buf: []u8, at: usize, failed: bool }
+fn piece1(b: *Build, tag: u8, p0: []const u8) -> []const u8
+fn piece2(b: *Build, tag: u8, p0: []const u8, p1: []const u8) -> []const u8
+fn piece3(b: *Build, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8) -> []const u8
+fn piece4(b: *Build, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8, p3: []const u8) -> []const u8
+fn integer_piece(b: *Build, value: u32) -> []const u8
+fn oid_piece(b: *Build, oid: []const u8) -> []const u8 { ret piece1(b, 6u8, oid) }
+fn utf16_bmp(a: *mem.Arena, s: str) -> ([]u8, err)
+fn pbes2_encrypt(a: *mem.Arena, b: *Build, plain: []const u8, password: str, salt: []const u8, iv: []const u8, iterations: u32) -> ([]const u8, []const u8, err)
+fn attributes_piece(b: *Build, a: *mem.Arena, friendly: str, key_id: []const u8) -> ([]const u8, err)
+fn encode(a: *mem.Arena, pkcs8: []const u8, chain: []const []const u8, friendly: str, password: str, p: Params, out: []u8) -> (usize, err)
+```
+
+PKCS #12 (.p12/.pfx, RFC 7292): `parse` verifies the MAC and returns key bags (PKCS #8, decrypted when shrouded) and certificate bags with friendly names and local key ids; `encode` writes one private key and its chain (PBES2 AES-256-CBC / PBKDF2-HMAC-SHA256, HMAC-SHA-256 MAC, salts and IVs supplied by the caller). Read profile: PBES2 with HMAC-SHA-256/512 PRFs and AES-128/192/256-CBC, MACs HMAC-SHA-256/512; a store that uses PBE-SHA1-3DES, PBE-SHA1-RC2-40 or a SHA-1 MAC (pre-3.0 OpenSSL, old Java) is `Unsupported`. A wrong password shows as `BadPassword`. Not here: legacy ciphers, secret bags, CRL bags, or several keys per file on write.
+
 ### `e.time.parse`
 
 ```neper
