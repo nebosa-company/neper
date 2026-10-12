@@ -20426,6 +20426,36 @@ Snappy raw format (`encode` as the reference encoder over 64 KiB blocks, strict 
 `decoded_length`, `bound`) and the framing format (`encode_framed`, `decode_framed` with
 masked CRC32C chunks) with `crc32c`.
 
+### `e.fmt.s2`
+
+```neper
+error Invalid
+error TooSmall
+error Checksum
+
+fn block_size() -> usize
+fn max_chunk() -> usize
+fn table_required() -> usize
+fn bound(n: usize) -> usize
+fn bound_framed(n: usize) -> usize
+fn emit_repeat(dst: []u8, d: usize, length: usize) -> (usize, err)
+fn emit_copy2(dst: []u8, d: usize, offset: usize, length: usize) -> (usize, err)
+fn emit_copy(dst: []u8, d: usize, offset: usize, length: usize, last: usize) -> (usize, err)
+fn encode_block(src: []const u8, dst: []u8, d0: usize, table: []u16) -> (usize, err)
+fn encode(src: []const u8, dst: []u8, table: []u16) -> (usize, err)
+fn decoded_length(src: []const u8) -> (usize, err)
+fn decode(src: []const u8, dst: []u8) -> (usize, err)
+fn encode_framed(src: []const u8, dst: []u8, table: []u16) -> (usize, err)
+fn decode_framed(src: []const u8, dst: []u8) -> (usize, err)
+```
+
+S2 (klauspost/compress) blocks and framing over caller storage, reusing `e.fmt.snappy`'s
+helpers. The decoder reads every S2 element (literals, copies with 1-, 2- and 4-byte
+offsets, repeats with the 1-, 2- and 3-byte length extensions) strictly, and the framed
+reader also takes a Snappy stream. The encoder is Snappy's matcher over 64 KiB blocks
+writing a match at the previous offset as a repeat; it is the plain level, not S2's
+better or best.
+
 ### `e.fmt.tar`
 
 ```neper

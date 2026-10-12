@@ -1232,6 +1232,11 @@ time_calendars_persian_uq_written=$($test_build/neper-self emit-executable "$rep
 [ "$time_calendars_persian_uq_written" = 'executable written' ]
 chmod +x "$test_build/time-calendars-persian-uq-selfhost"
 "$test_build/time-calendars-persian-uq-selfhost"
+# `e.fmt.s2` against klauspost/compress/s2 blocks and streams (L135).
+fmt_s2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_s2/src/main.e" "$repo" x64 linux "$test_build/fmt-s2-selfhost")
+[ "$fmt_s2_written" = 'executable written' ]
+chmod +x "$test_build/fmt-s2-selfhost"
+"$test_build/fmt-s2-selfhost"
 # `e.fmt.cap`: Common Alerting Protocol alerts against an ElementTree walk (C156).
 fmt_cap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_cap/src/main.e" "$repo" x64 linux "$test_build/fmt-cap-selfhost")
 [ "$fmt_cap_written" = 'executable written' ]
