@@ -1232,6 +1232,11 @@ time_calendars_persian_uq_written=$($test_build/neper-self emit-executable "$rep
 [ "$time_calendars_persian_uq_written" = 'executable written' ]
 chmod +x "$test_build/time-calendars-persian-uq-selfhost"
 "$test_build/time-calendars-persian-uq-selfhost"
+# `e.ui.markdown_view` measured text and content-sized columns against the oracle model (L066).
+ui_markdown_view_fit_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_markdown_view_fit/src/main.e" "$repo" x64 linux "$test_build/ui-markdown-view-fit-selfhost")
+[ "$ui_markdown_view_fit_written" = 'executable written' ]
+chmod +x "$test_build/ui-markdown-view-fit-selfhost"
+"$test_build/ui-markdown-view-fit-selfhost"
 # `e.ui.schedule` zones, month bars and series moves against zoneinfo and dateutil (L148).
 ui_schedule_zones_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_schedule_zones/src/main.e" "$repo" x64 linux "$test_build/ui-schedule-zones-selfhost")
 [ "$ui_schedule_zones_written" = 'executable written' ]

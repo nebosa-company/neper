@@ -1336,6 +1336,12 @@ $time_calendars_persian_uqWritten = & $compiler emit-executable (Join-Path $PSSc
 if ($LASTEXITCODE -ne 0 -or $time_calendars_persian_uqWritten -ne 'executable written') { throw 'time_calendars_persian_uq emission failed' }
 & $time_calendars_persian_uqPath
 if ($LASTEXITCODE -ne 0) { throw "a time_calendars_persian_uq check failed: exit $LASTEXITCODE" }
+# `e.ui.markdown_view` measured text and content-sized columns against the oracle model (L066).
+$ui_markdown_view_fitPath = Join-Path $testBuild 'ui-markdown-view-fit-selfhost.exe'
+$ui_markdown_view_fitWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_markdown_view_fit\src\main.e') $repo 'x64' 'windows' $ui_markdown_view_fitPath
+if ($LASTEXITCODE -ne 0 -or $ui_markdown_view_fitWritten -ne 'executable written') { throw 'ui_markdown_view_fit emission failed' }
+& $ui_markdown_view_fitPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_markdown_view_fit check failed: exit $LASTEXITCODE" }
 # `e.ui.schedule` zones, month bars and series moves against zoneinfo and dateutil (L148).
 $ui_schedule_zonesPath = Join-Path $testBuild 'ui-schedule-zones-selfhost.exe'
 $ui_schedule_zonesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_schedule_zones\src\main.e') $repo 'x64' 'windows' $ui_schedule_zonesPath

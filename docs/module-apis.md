@@ -9621,12 +9621,16 @@ type Word = struct { start: usize, len: usize, cols: usize, style: u8, link: u32
 type Metrics = struct { width: f32, char_w: f32, line_h: f32, gap: f32, indent: f32, pad: f32, bar: f32 }
 type Storage = struct { items: []Item, nodes: []Node, links: []Link, store: []u8, scratch: []u8, blocks: []markdown.Block, inlines: []markdown.Inline, words: []Word }
 type View = struct { items: []Item, nodes: []Node, links: []Link, store: []u8, item_count: usize, node_count: usize, link_count: usize, store_len: usize, height: f32, fallback: bool, policy: LinkPolicy }
+type Measure = struct { state: *void, width: fn(*void, str, u8) -> f32 }
+type Options = struct { measure: Measure, measured: bool, fit_columns: bool }
 error TooLarge
 error TooDeep
 error Invalid
 type Entry = struct { kind: u8, level_at: usize, tight: bool, ordered: bool, number: u32, marker: bool, node: usize }
-type Ctx = struct { st: Storage, m: Metrics, policy: LinkPolicy, items: usize, nodes: usize, links: usize, store_len: usize, y: f32, any: bool, fresh: bool, stack: [32]Entry, depth: usize, levels: usize }
+type Ctx = struct { st: Storage, m: Metrics, policy: LinkPolicy, items: usize, nodes: usize, links: usize, store_len: usize, y: f32, any: bool, fresh: bool, stack: [32]Entry, depth: usize, levels: usize, opts: Options }
 fn utf8_cols(s: str) -> usize
+fn text_px(c: *Ctx, bytes: str, style: u8) -> f32
+fn space_px(c: *Ctx, style: u8) -> f32
 fn lower(c: u8) -> u8
 fn same_scheme(d: str, n: usize, want: str) -> bool
 fn dest_safe(d: str) -> bool
@@ -9658,6 +9662,7 @@ fn delimiter_row(line: str, aligns: []u32) -> usize
 fn has_pipe(line: str) -> bool
 fn line_text(src: str, b: markdown.Block) -> str
 fn cell_words(c: *Ctx, text: str, x: f32, y: f32, back_w: f32, inner: f32, header: bool, align: u32, row: u32, column: u32) -> (usize, err)
+fn column_widths(c: *Ctx, src: str, blocks: []const markdown.Block, header: usize, stop: usize, columns: usize, total: f32, out: []f32) -> err
 fn table_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, header: usize, stop: usize, columns: usize, aligns: []const u32) -> err
 fn find_table(src: str, blocks: []const markdown.Block, from: usize, stop: usize, aligns: []u32) -> (usize, usize)
 fn code_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize) -> (usize, err)
@@ -9668,6 +9673,7 @@ fn lay_out(c: *Ctx, src: str, blocks: []const markdown.Block) -> err
 fn reset(c: *Ctx)
 fn plain(c: *Ctx, src: str) -> err
 fn build(src: str, st: Storage, m: Metrics, policy: LinkPolicy) -> (View, err)
+fn build_with(src: str, st: Storage, m: Metrics, policy: LinkPolicy, opts: Options) -> (View, err)
 fn inside(it: Item, x: f32, y: f32) -> bool
 fn item_at(v: *const View, x: f32, y: f32) -> (usize, bool)
 fn link_at(v: *const View, x: f32, y: f32) -> (usize, bool)
@@ -9691,9 +9697,14 @@ with `fallback` set. A link is display-only under `DisplayOnly`; under `HostActi
 paragraph's (or a table cell's) words as `control.RichSpan`s for `control.paragraph`. GFM
 pipe tables (D3304) are read from paragraph lines into `Table`, `Row`, `Cell` and
 `HeaderCell` nodes with `CellBack` boxes, equal columns and per-column alignment.
-Layout and queries are data, checked against a markdown-it-py oracle; a window-level check would still need a
-shaped-text measure in place of the grid advance and the pointer and clipboard plumbing
-of a host.
+Layout and queries are data, checked against a markdown-it-py oracle. `build_with` (D3603)
+takes `Options`: a `Measure` (the host's width of a word, a space or a code line at scale 1 in
+the style it is drawn in, so any shaper can stand behind it; headings scale the answer) in
+place of the grid advance, and `fit_columns` for table columns as wide as their content
+(the widest cell on one line plus the padding when those fit, else shared between the
+longest word and the widest cell in proportion to the room, and the longest words when even
+those overflow). `build` is `build_with` of the zero options. A window-level check would
+still need the pointer and clipboard plumbing of a host.
 
 ### `e.ui.tree_adapter`
 
