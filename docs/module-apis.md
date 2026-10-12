@@ -15788,6 +15788,65 @@ fn timer_kind(a: *mem.Arena, prefix: str, name: str) -> str
 
 A virtual-actor framework (L141) in the shape of Orleans grains, over `e.algo.consistent_hash` placement and `e.db.docstore` storage. A grain is an id that always exists: the first `call` places it on a live silo by rendezvous hashing of its id, loads its persisted state, runs `activate` and delivers messages one turn at a time through the behavior's `handle`; `collect` deactivates idle grains and the next call activates them again. A turn's state change and reply take effect only when the handler returns `ok`, and the state is written through to the store first. A turn is not reentrant: a call to a grain that is in a turn (its own, or a cycle) is `Reentrancy`, refused rather than deadlocked. Timers are in memory and die with the activation; reminders are durable documents that fire whether or not the grain is active and survive a restart of the same file; a periodic schedule's next firing is its due time plus the smallest period multiple after `now`, so a gap is one firing. `fail_silo` drops a silo's activations with no hook and no write; the next call re-places and reloads. There is no transport: a silo is a placement target and failure domain in one process.
 
+### `e.debug.report`
+
+```neper
+const MAX_HEADERS: usize = 4usize
+const SECOND_NS: i64 = 1000000000i64
+const MAX_BACKOFF_S: i64 = 60i64
+type Dsn = struct { scheme: str, public_key: str, secret_key: str, host: str, port: u16, path: str, project_id: str }
+type Tag = struct { key: str, value: str }
+type Event = struct { id: str, timestamp: i64, level: str, message: str, err_type: str, err_value: str, frames: []const debug.Frame, release: str, environment: str, tags: []const Tag }
+type Item = struct { kind: str, content_type: str, filename: str, payload: str }
+type Limit = struct { category: str, until: i64 }
+type Transport = struct { ctx: *void, send: fn(*void, *mem.Arena, *const http.Request) -> (http.Response, err) }
+type NetTransport = struct { endpoint: net.Endpoint, limits: http.Limits }
+type TlsTransport = struct { endpoint: net.Endpoint, config: tls.ClientConfig, limits: http.Limits }
+type Client = struct { dsn: Dsn, a: *mem.Arena, transport: Transport, name: str, queue: []str, count: usize, bytes: usize, max_items: usize, max_bytes: usize, dropped: usize, rejected: usize, sent: usize, failures: u32, retry_at: i64, limited_until: i64 }
+error Invalid
+error TooLarge
+error Corrupt
+fn find_byte(s: str, from: usize, c: u8) -> usize
+fn parse_port(s: str) -> (u16, bool)
+fn parse_dsn(text: str) -> (Dsn, err)
+fn envelope_target(a: *mem.Arena, d: *const Dsn) -> (str, err)
+fn auth_header(a: *mem.Arena, d: *const Dsn, sdk: str) -> (str, err)
+fn push_hex2(b: *str.Builder, v: u8) -> err
+fn push_json_string(b: *str.Builder, s: str) -> err
+fn push_key(b: *str.Builder, first: bool, name: str) -> err
+fn push_timestamp(b: *str.Builder, nanos: i64) -> err
+fn push_frame(b: *str.Builder, f: debug.Frame) -> err
+fn event_json(a: *mem.Arena, ev: *const Event) -> (str, err)
+fn write_event(b: *str.Builder, ev: *const Event) -> err
+fn event_item(a: *mem.Arena, ev: *const Event) -> (Item, err)
+fn push_item(b: *str.Builder, it: Item) -> err
+fn envelope(a: *mem.Arena, event_id: str, sent_at: i64, items: []const Item) -> (str, err)
+fn trim_space(s: str) -> str
+fn parse_seconds(s: str, fallback: i64) -> i64
+fn parse_rate_limits(header: str, now: i64, out: []Limit) -> usize
+fn net_send(ctx: *void, a: *mem.Arena, req: *const http.Request) -> (http.Response, err)
+fn net_transport(t: *NetTransport) -> Transport
+fn tls_send(ctx: *void, a: *mem.Arena, req: *const http.Request) -> (http.Response, err)
+fn tls_transport(t: *TlsTransport) -> Transport
+fn client(a: *mem.Arena, dsn_text: str, transport: Transport, sdk_name: str, max_items: usize, max_bytes: usize) -> (Client, err)
+fn keep(a: *mem.Arena, s: str) -> (str, err)
+fn pop_front(c: *Client)
+fn enqueue(c: *Client, bytes_in: str) -> err
+fn capture(c: *Client, ev: *const Event, attachments: []const Item, now: i64) -> err
+fn is_error_category(l: Limit) -> bool
+fn header_value(h: []const http.Header, name: str) -> (str, bool)
+fn lower_eq(x: str, y: str) -> bool
+fn flush(c: *Client, now: i64, max_send: usize) -> (usize, err)
+fn pending(c: *Client) -> usize
+fn put_u32(b: *str.Builder, v: u32) -> err
+fn save_queue(c: *Client, s: *store.Store, key: str) -> err
+fn get_u32(data: str, at: usize) -> u32
+fn load_queue(c: *Client, s: *store.Store, key: str) -> err
+fn capture_here(c: *Client, level: str, err_type: str, err_value: str, id: str, release: str, now: i64, frames: []debug.Frame) -> err
+```
+
+A crash and error report upload client (L149) speaking the Sentry envelope protocol over `e.net.http`. `parse_dsn` reads `scheme://key[:secret]@host[:port]/[path/]project` (default ports 80/443), `envelope_target` and `auth_header` give the `/api/<project>/envelope/` path and the `X-Sentry-Auth` value, `event_json` and `envelope` write the event and the length-framed envelope (an event item, optional attachments) byte for byte as sentry-sdk does for ASCII text, and `parse_rate_limits` reads `X-Sentry-Rate-Limits`. A `Client` queues serialized envelopes in a bounded offline queue (oldest dropped to fit, counted) and `flush` sends them through a caller `Transport` (`net_transport` over `http.request`, `tls_transport` over `http.request_tls`): 2xx removes, a rate limit on `error` pauses until its deadline, another 4xx drops the envelope, 5xx or a transport failure keeps it and backs off 1 s doubling to 60 s. `save_queue`/`load_queue` persist the queue through an `e.store` key; `capture_here` builds an event from the live `e.debug.backtrace`. Time is the caller's clock. No hub, sessions, transactions or symbolication.
+
 ### `e.db.migrate`
 
 ```neper

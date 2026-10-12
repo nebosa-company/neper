@@ -505,6 +505,11 @@ fn main(a: *mem.Arena) -> err {
     if code == 0i32 { code = persistence(a) }
     if code == 0i32 { code = replay(a) }
     if code == 0i32 { code = limits(a) }
-    if code != 0i32 { os.exit(code) }
+    if code != 0i32 {
+        // a status of 256, 512, ... would read as success on Linux, where it is taken mod 256
+        var shown = code
+        if shown % 256i32 == 0i32 { shown += 1i32 }
+        os.exit(shown)
+    }
     ret ok
 }

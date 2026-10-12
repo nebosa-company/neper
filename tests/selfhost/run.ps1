@@ -2368,6 +2368,12 @@ $distActorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $distActorWritten -ne 'executable written') { throw 'dist_actor emission failed' }
 & $distActorPath
 if ($LASTEXITCODE -ne 0) { throw "a dist_actor check failed: exit $LASTEXITCODE" }
+# `e.debug.report`: DSN fields, endpoint, X-Sentry-Auth, byte-exact envelopes and X-Sentry-Rate-Limits against sentry-sdk, then queue, batched flush, 5xx backoff, 429 limits, rejection, overflow, persistence and backtrace capture through a fake transport (D2765).
+$debugReportPath = Join-Path $testBuild 'debug-report-selfhost.exe'
+$debugReportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\debug_report\src\main.e') $repo 'x64' 'windows' $debugReportPath
+if ($LASTEXITCODE -ne 0 -or $debugReportWritten -ne 'executable written') { throw 'debug_report emission failed' }
+& $debugReportPath
+if ($LASTEXITCODE -ne 0) { throw "a debug_report check failed: exit $LASTEXITCODE" }
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 $dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
 $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath

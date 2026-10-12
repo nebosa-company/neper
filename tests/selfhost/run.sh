@@ -2104,6 +2104,11 @@ dist_actor_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$dist_actor_written" = 'executable written' ]
 chmod +x "$test_build/dist-actor-selfhost"
 "$test_build/dist-actor-selfhost"
+# `e.debug.report`: DSN fields, endpoint, X-Sentry-Auth, byte-exact envelopes and X-Sentry-Rate-Limits against sentry-sdk, then queue, batched flush, 5xx backoff, 429 limits, rejection, overflow, persistence and backtrace capture through a fake transport (D2765).
+debug_report_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/debug_report/src/main.e" "$repo" x64 linux "$test_build/debug-report-selfhost")
+[ "$debug_report_written" = 'executable written' ]
+chmod +x "$test_build/debug-report-selfhost"
+"$test_build/debug-report-selfhost"
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 db_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_migrate/src/main.e" "$repo" x64 linux "$test_build/db-migrate-selfhost")
 [ "$db_migrate_written" = 'executable written' ]
