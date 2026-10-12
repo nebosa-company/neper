@@ -735,10 +735,10 @@
       "group": "NeperOS",
       "order": 169,
       "title": "NeperOS Blocks remainder: fast fall, held keys and drags, score board, sound",
-      "score": 0,
+      "score": 0.35,
       "model": "opus",
       "thinking": "medium",
-      "evidence": "Split from C139 (D2428): Blocks has hold, ghost, kicks and a saved best score. Acceptance: (1) a finer timer (C163) so the fall reaches 20 rows a second at high levels, and auto-repeat on held buttons plus drags and swipes (the touch layer needs press, move and release events); (2) a score board of the best games and the last game kept in storage; (3) sound effects and music through e.audio (C166); (4) a fixture that plays a scripted sequence with the fixed seed and checks the score and the lines; the name stays Blocks (never Tetris)."
+      "evidence": "Split from C139 (D2428): Blocks has hold, ghost, kicks and a saved best score. Acceptance: (1) a finer timer (C163) so the fall reaches 20 rows a second at high levels, and auto-repeat on held buttons plus drags and swipes (the touch layer needs press, move and release events); (2) a score board of the best games and the last game kept in storage; (3) sound effects and music through e.audio (C166); (4) a fixture that plays a scripted sequence with the fixed seed and checks the score and the lines; the name stays Blocks (never Tetris). PART (D2445): the score board (five best games and the last game in /blocks, game-over card, fixtures blocks_board and blocks_board_again). Remaining: the finer timer, held keys and drags, sound, the scripted-sequence fixture."
     },
     {
       "id": "C170",

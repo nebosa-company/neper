@@ -49,6 +49,10 @@ type State = struct {
     hold: usize,
     hold_used: bool,
     best: usize,
+    // (C169) The score board: the five best games and the last game, kept with the best in /blocks.
+    top: [5]usize,
+    top_count: usize,
+    last: usize,
     hits: ui.Hits,
 }
 
@@ -156,6 +160,7 @@ fn spawn(s: *State) {
     if !fits(s, s.piece, s.rot, s.px, s.py) {
         s.over = true
         ui.say("blocks game over\n")
+        finish_game(s)
     }
 }
 
@@ -247,30 +252,83 @@ fn step_down(s: *State) -> bool {
 // ----------------------------------------------------------------------------------------------
 // Drawing.
 
-// The best score is kept in /blocks (four bytes, little end).
-fn save_best(s: *State) {
-    if s.score <= s.best { ret }
-    s.best = s.score
-    var buf: [4]u8 = zero
+fn put_word(buf: []u8, at: usize, value: usize) {
     var i = 0usize
     while i < 4usize {
-        buf[i] = u8((s.best >> (8usize * i)) & 255usize)
+        buf[at + i] = u8((value >> (8usize * i)) & 255usize)
         i += 1usize
     }
-    let kept = vaultfs.write("/blocks", mem.address_of(&buf[0usize]), 4usize)
 }
 
-fn load_best(s: *State) {
-    var buf: [4]u8 = zero
-    let (n, found) = vaultfs.read("/blocks", mem.address_of(&buf[0usize]), 4usize)
-    if !found || n < 4usize { ret }
+fn get_word(buf: []const u8, at: usize) -> usize {
     var v = 0usize
     var i = 0usize
     while i < 4usize {
-        v = v | (usize(buf[i]) << (8usize * i))
+        v = v | (usize(buf[at + i]) << (8usize * i))
         i += 1usize
     }
-    s.best = v
+    ret v
+}
+
+// /blocks is 28 bytes: the best score, the five best games (highest first, zero for none) and the last game, four
+// bytes each, little end. A four-byte file from before is just the best.
+fn save_board(s: *State) {
+    var buf: [28]u8 = zero
+    put_word(buf[0usize..28usize], 0usize, s.best)
+    var i = 0usize
+    while i < 5usize {
+        put_word(buf[0usize..28usize], 4usize + 4usize * i, s.top[i])
+        i += 1usize
+    }
+    put_word(buf[0usize..28usize], 24usize, s.last)
+    let kept = vaultfs.write("/blocks", mem.address_of(&buf[0usize]), 28usize)
+}
+
+// A hard drop that beats the best keeps it at once (a game left half-way still counts).
+fn save_best(s: *State) {
+    if s.score <= s.best { ret }
+    s.best = s.score
+    save_board(s)
+}
+
+// The game just ended: it is the last game, and goes into the five best when it is high enough.
+fn finish_game(s: *State) {
+    s.last = s.score
+    if s.score > s.best { s.best = s.score }
+    if s.score > 0usize {
+        var at = 0usize
+        while at < 5usize && s.top[at] >= s.score { at += 1usize }
+        if at < 5usize {
+            var k = 4usize
+            while k > at {
+                s.top[k] = s.top[k - 1usize]
+                k -= 1usize
+            }
+            s.top[at] = s.score
+        }
+    }
+    var count = 0usize
+    while count < 5usize && s.top[count] > 0usize { count += 1usize }
+    s.top_count = count
+    save_board(s)
+}
+
+fn load_best(s: *State) {
+    var buf: [28]u8 = zero
+    let (n, found) = vaultfs.read("/blocks", mem.address_of(&buf[0usize]), 28usize)
+    if !found || n < 4usize { ret }
+    s.best = get_word(buf[0usize..28usize], 0usize)
+    if n >= 28usize {
+        var i = 0usize
+        while i < 5usize {
+            s.top[i] = get_word(buf[0usize..28usize], 4usize + 4usize * i)
+            i += 1usize
+        }
+        s.last = get_word(buf[0usize..28usize], 24usize)
+    }
+    var count = 0usize
+    while count < 5usize && s.top[count] > 0usize { count += 1usize }
+    s.top_count = count
 }
 
 // The row the piece in play would stop at if dropped now.
@@ -356,7 +414,13 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
         try ui.card(a, builder, 28.0, 250.0, 216.0, 130.0, 18.0, ui.cream())
         try ui.centred(a, builder, faces.jost_bold, 24.0, "Game over", 136.0, 272.0, ui.ink())
         try ui.centred(a, builder, faces.jost, 16.0, ui.join(a, "Score ", ui.number(a, s.score), ""), 136.0, 310.0, ui.muted())
-        try ui.pill(a, builder, &s.hits, faces, 130usize, 56.0, 336.0, 160.0, 36.0, "Play again", ui.amber(), 15.0)
+        // The three best games.
+        var rank = 0usize
+        while rank < 3usize && rank < s.top_count {
+            try ui.put(a, builder, faces.grotesk, 12.0, ui.join(a, ui.join(a, ui.number(a, rank + 1usize), ". ", ""), ui.number(a, s.top[rank]), ""), 40.0 + f32(rank) * 64.0, 336.0 - 0.0, ui.muted())
+            rank += 1usize
+        }
+        try ui.pill(a, builder, &s.hits, faces, 130usize, 56.0, 352.0, 160.0, 28.0, "Play again", ui.amber(), 15.0)
     }
     // The buttons.
     try ui.pill(a, builder, &s.hits, faces, 100usize, 16.0, 596.0, 120.0, 52.0, "Left", ui.soft(), 18.0)
@@ -462,7 +526,11 @@ fn act(s: *State, id: usize) -> bool {
             s.rot = 0usize
             s.px = 3i32
             s.py = -1i32
-            if !fits(s, s.piece, s.rot, s.px, s.py) { s.over = true }
+            if !fits(s, s.piece, s.rot, s.px, s.py) {
+                s.over = true
+                ui.say("blocks game over\n")
+                finish_game(s)
+            }
         }
         s.hold_used = true
         ui.say("blocks hold\n")
@@ -488,6 +556,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if s.best > 0usize {
         ui.say("blocks best ")
         ui.say_num(s.best)
+        ui.say("\n")
+    }
+    if s.top_count > 0usize {
+        ui.say("blocks board ")
+        ui.say_num(s.top_count)
+        ui.say(" last ")
+        ui.say_num(s.last)
         ui.say("\n")
     }
     restart(&s)
