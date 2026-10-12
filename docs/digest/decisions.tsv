@@ -2121,4 +2121,5 @@ D2362	2523	G001: `e.data.table`, the columnar store of the data grid: fixed call
 D2363	2661	G002: `e.data.tableview` sorts by stable LSD passes over derived integer keys, one pass per key, never a comparer per pair
 D2364	3356	G003: the filter stage of `e.data.tableview` keeps the sort order; dictionary columns are evaluated once per entry
 D2365	3450	G004: `e.data.tablegroup`: groups from neighbour comparison over the sorted order, expansion by key path, f64 summaries per group and footer
-D2366	2750	G005: `e.data.tablesearch`: search over a display order with a per-entry verdict, and the value list from dictionary counts
+D2366	2751	G005: `e.data.tablesearch`: search over a display order with a per-entry verdict, and the value list from dictionary counts
+D2367	3112	G006: `e.ui.datagrid`, first increment: the grid view over the table, view and grouping, with no data logic of its own

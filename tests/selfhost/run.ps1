@@ -1014,6 +1014,12 @@ $dataTablesearchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $dataTablesearchWritten -ne 'executable written') { throw 'data_tablesearch emission failed' }
 & $dataTablesearchPath
 if ($LASTEXITCODE -ne 0) { throw "a data_tablesearch check failed: exit $LASTEXITCODE" }
+# `e.ui.datagrid`: the grid view over the table, view and grouping through the UI test harness: virtual body, header tap reporting the sort, row tap reporting the storage row, group rows expanding and collapsing, footer summaries, no-data text (D2367).
+$uiDatagridPath = Join-Path $testBuild 'ui-datagrid-selfhost.exe'
+$uiDatagridWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_datagrid\src\main.e') $repo 'x64' 'windows' $uiDatagridPath --arena 512m
+if ($LASTEXITCODE -ne 0 -or $uiDatagridWritten -ne 'executable written') { throw 'ui_datagrid emission failed' }
+& $uiDatagridPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_datagrid check failed: exit $LASTEXITCODE" }
 # `e.algo.stat` against closed-form moments and a least-squares line, and `e.data.slot_map`'s
 # generational keys: stale after removal, reused with the next generation, retired at the last.
 $statSlotsPath = Join-Path $testBuild 'stat-slots-selfhost.exe'
