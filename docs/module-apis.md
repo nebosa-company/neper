@@ -15563,6 +15563,46 @@ fn load(e: *Engine, src: str) -> err
 
 A forward-chaining production-rule engine (L161) in the shape of Drools and CLIPS. Facts are an interned kind and up to six `i64` fields; asserting an existing fact is a no-op. A Rete network (shared alpha memories on constant tests, a beta chain of join and negative nodes holding partial matches) is updated incrementally by `assert_fact` and `retract`. `fire` runs the best activation until the agenda is empty, a `halt` runs or the limit is reached; conflict resolution is salience, recency, specificity, rule order, with refraction. Right-hand sides are data: `assert`, `retract n`, `halt`, with `?v`, `?v+?w` and `?v+k` terms. `load` parses the rule DSL; `add_table` compiles a decision table (row rules, `first_hit` through a marker fact and a `not`, or collect). Storage is fixed at `init` (`Limits`); `Full` when a pool is spent. Not here: beta prefix sharing, `exists`/`forall`/`or`, truth maintenance, a workbench or server.
 
+### `e.data.mapper`
+
+```neper
+type Rename = struct { dest: str, src: str }
+type Default = struct { dest: str, as_int: i64, as_real: f64, as_str: str }
+type Profile = struct { renames: []const Rename, defaults: []const Default, ignore: []const str, strict: bool, empty_is_null: bool }
+type Stats = struct { mapped: usize, defaulted: usize, skipped: usize, missing: usize }
+type Resolution = struct { score: u32, depth: usize, a: str, b: str, c: str, renamed: bool }
+error Overflow
+error Incompatible
+error Unmapped
+error TooSmall
+fn lower_byte(c: u8) -> u8
+fn eat(dname: str, at: usize, seg: str) -> (usize, bool)
+fn loose_eq(dname: str, a: str, b: str, c: str) -> bool
+fn take(src: str, at: usize, seg: str) -> (usize, bool)
+fn dotted_eq(src: str, depth: usize, a: str, b: str, c: str) -> bool
+fn path_score(dname: str, want: str, renamed: bool, depth: usize, a: str, b: str, c: str) -> u32
+fn rename_of(p: *const Profile, dest: str) -> (str, bool)
+fn default_of(p: *const Profile, dest: str) -> (usize, bool)
+fn ignored(p: *const Profile, dest: str) -> bool
+fn compatible[F: type, G: type]() -> bool
+fn is_null[F: type](x: F, empty_is_null: bool) -> bool
+fn from_default[G: type](d: Default) -> G
+fn convert[G: type, F: type](a: *mem.Arena, x: F) -> (G, err)
+fn resolve[DF: meta.Field, D: type, S: type](p: *const Profile) -> Resolution
+fn put_value[DF: meta.Field, D: type, F: type](a: *mem.Arena, dst: *D, v: F, p: *const Profile, st: *Stats) -> err
+fn map_into[S: type, D: type](a: *mem.Arena, src: *const S, dst: *D, p: *const Profile) -> (Stats, err)
+fn map_all[S: type, D: type](a: *mem.Arena, src: []const S, dst: []D, p: *const Profile) -> (Stats, err)
+fn unmapped[S: type, D: type](p: *const Profile) -> usize
+fn push_column(b: *str.Builder, res: Resolution) -> err
+fn column_is(res: Resolution, name: str) -> bool
+fn push_literal_int(b: *str.Builder, v: i64) -> err
+fn push_literal_text(b: *str.Builder, s: str) -> err
+fn push_item[G: type](b: *str.Builder, name: str, has_source: bool, res: Resolution, has_default: bool, d: Default) -> err
+fn project_sql[S: type, D: type](a: *mem.Arena, table: str, p: *const Profile) -> (str, err)
+```
+
+An object-object mapper (L139) in the shape of AutoMapper and Mapster, over `e.meta` field reflection. `map_into[S, D]` fills a destination struct by convention: an explicit `Rename` (a dotted source path), the same name, the same name ignoring case and underscores, or a flattened path (`address_city` reads `address.city`, up to three levels), the best score winning and an incompatible member never a candidate. `ignore` skips a field, a `Default` is the null substitution (an absent source, an empty `str` when `empty_is_null`, a NaN), and `strict` makes a field with no source `Unmapped`. Integers are range-checked (`Overflow`), a `str` is copied into the arena, a nested struct maps by convention. `map_all` maps a slice and `unmapped` counts the fields nothing covers. `project_sql[S, D]` answers the SELECT list that reads only the columns the destination needs (flattened paths as `a_b`, defaults as `COALESCE`). A slice field is a `str`; enums, pointers and other slices are not mapped.
+
 ### `e.db.migrate`
 
 ```neper

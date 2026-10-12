@@ -2344,6 +2344,12 @@ $algoRulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $algoRulesWritten -ne 'executable written') { throw 'algo_rules emission failed' }
 & $algoRulesPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_rules check failed: exit $LASTEXITCODE" }
+# `e.data.mapper`: convention-based struct mapping with flattening, renames, ignore, null substitution, range-checked integers, map_all and project_sql against a Python name/range model and hand-derived structs (D2761).
+$dataMapperPath = Join-Path $testBuild 'data-mapper-selfhost.exe'
+$dataMapperWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_mapper\src\main.e') $repo 'x64' 'windows' $dataMapperPath
+if ($LASTEXITCODE -ne 0 -or $dataMapperWritten -ne 'executable written') { throw 'data_mapper emission failed' }
+& $dataMapperPath
+if ($LASTEXITCODE -ne 0) { throw "a data_mapper check failed: exit $LASTEXITCODE" }
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 $dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
 $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath

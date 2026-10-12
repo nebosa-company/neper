@@ -2084,6 +2084,11 @@ algo_rules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$algo_rules_written" = 'executable written' ]
 chmod +x "$test_build/algo-rules-selfhost"
 "$test_build/algo-rules-selfhost"
+# `e.data.mapper`: convention-based struct mapping with flattening, renames, ignore, null substitution, range-checked integers, map_all and project_sql against a Python name/range model and hand-derived structs (D2761).
+data_mapper_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_mapper/src/main.e" "$repo" x64 linux "$test_build/data-mapper-selfhost")
+[ "$data_mapper_written" = 'executable written' ]
+chmod +x "$test_build/data-mapper-selfhost"
+"$test_build/data-mapper-selfhost"
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 db_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_migrate/src/main.e" "$repo" x64 linux "$test_build/db-migrate-selfhost")
 [ "$db_migrate_written" = 'executable written' ]
