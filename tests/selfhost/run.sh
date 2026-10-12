@@ -963,7 +963,7 @@ data_tablesearch_written=$($test_build/neper-self emit-executable "$repo/tests/s
 chmod +x "$test_build/data-tablesearch-selfhost"
 "$test_build/data-tablesearch-selfhost"
 # `e.ui.datagrid`: the grid view over the table, view and grouping through the UI test harness: virtual body, header tap reporting the sort, row tap reporting the storage row, group rows expanding and collapsing, footer summaries, no-data text (D2367).
-ui_datagrid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_datagrid/src/main.e" "$repo" x64 linux "$test_build/ui-datagrid-selfhost" --arena 512m)
+ui_datagrid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_datagrid/src/main.e" "$repo" x64 linux "$test_build/ui-datagrid-selfhost" --arena 768m)
 [ "$ui_datagrid_written" = 'executable written' ]
 chmod +x "$test_build/ui-datagrid-selfhost"
 "$test_build/ui-datagrid-selfhost"

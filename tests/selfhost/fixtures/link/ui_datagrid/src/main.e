@@ -1,4 +1,4 @@
-// `e.ui.datagrid` (G006, first to fourth increments) over a 3,000-row `e.data.table` with its view and
+// `e.ui.datagrid` (G006, first to fifth increments) over a 3,000-row `e.data.table` with its view and
 // grouping, driven through the UI test harness: the virtual body builds only the visible rows,
 // a header tap reports the sort and the application re-sorts, a group row expands on a tap and
 // shows its rows, the footer carries the summaries, a tap on a data row reports the storage
@@ -7,6 +7,8 @@
 // what is typed; and a second grid with bands, the row indicator and the navigator. Every check
 // has its own exit code. Fourth: in-place editing (typed commit, invalid text, nulls, dictionary
 // growth, read-only) and the saved layout (round trip, unknown lines and columns tolerated).
+// Fifth: the preview row and pixel probes (band fill, selected row, a stable frame).
+use e.algo.hash as hash
 use e.gpu
 use e.mem
 use e.os
@@ -16,6 +18,7 @@ use e.data.table as table
 use e.data.tableview as view
 use e.data.tablegroup as grp
 use e.gfx.geometry
+use e.gfx.image
 use e.text.shape
 use e.gfx.scene
 use e.ui.control
@@ -217,6 +220,22 @@ fn show_row(grid: *dg.Grid, g: *grp.Grouping, row: usize) {
         }
         at += 1usize
     }
+}
+
+const W: usize = 1000usize
+
+fn px(x: f32, y: f32) -> usize {
+    ret (usize(y) * W + usize(x)) * 4usize
+}
+
+fn close_to(value: u8, expected: f32) -> bool {
+    let e = expected * 255.0
+    let v = f32(value)
+    ret v - e < 4.0 && e - v < 4.0
+}
+
+fn is_color(shot: image.Image, i: usize, c: paint.Color) -> bool {
+    ret close_to(shot.pixels[i], c.red) && close_to(shot.pixels[i + 1usize], c.green) && close_to(shot.pixels[i + 2usize], c.blue)
 }
 
 fn tap_text(h: *testing.Harness, runtime: *widget.Runtime, text: str) -> bool {
@@ -661,6 +680,71 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var grid5 = made5
     if dg.load_layout(&grid5, "datagrid 1\nwidths 90\n") != ok || dg.column_width(&grid5, 0usize) != 90.0 || dg.column_width(&grid5, 1usize) != 200.0 { os.exit(191) }
     if dg.load_layout(&grid5, "widths 10 20\n") != dg.BadLayout { os.exit(192) }
+    // (the layout test left the Price column at its 24 px minimum: give it room again)
+    dg.resize_column(&grid2, 3usize, 120.0)
+    // 9. the preview row: a disclosure on each data row opens, under it, the row's text
+    app.group_rarity = false
+    if rebuild(app, 5usize, false) != ok { os.exit(230) }
+    dg.show_filter_row(&grid2, false)
+    dg.show_navigator(&grid2, false)
+    grid2.offset = 0.0
+    dg.clear_selection(&grid2)
+    dg.show_preview(&grid2, 1usize)
+    var preview_clock = 20000000000i64
+    let first_row = grp.visible_row(&app.grouping, 0usize)
+    mem.reset(&f, 0usize)
+    let (root15, build15_error) = dg.build(&f, &grid2, &theme, 400.0)
+    if build15_error != ok { os.exit(231) }
+    if settle(&harness, root15, preview_clock) != ok { os.exit(232) }
+    preview_clock += 2000000000i64
+    let first_name = table.get_str(&app.tbl, C_NAME, first_row)
+    let before_open = testing.by_text(&harness, first_name).count
+    if before_open == 0usize { os.exit(233) }
+    if !tap_key(&harness, &runtime, dg.row_key(&grid2, first_row) ^ hash.fnv1a64("row-disclose")) { os.exit(234) }
+    if grid2.preview_count != 1usize || !dg.preview_is_open(&grid2, dg.row_key(&grid2, first_row)) { os.exit(235) }
+    mem.reset(&f, 0usize)
+    let (root16, build16_error) = dg.build(&f, &grid2, &theme, 400.0)
+    if build16_error != ok { os.exit(236) }
+    if settle(&harness, root16, preview_clock) != ok { os.exit(237) }
+    preview_clock += 2000000000i64
+    if testing.by_text(&harness, first_name).count <= before_open { os.exit(238) }
+    // closing it takes the text away again
+    if !tap_key(&harness, &runtime, dg.row_key(&grid2, first_row) ^ hash.fnv1a64("row-disclose")) { os.exit(239) }
+    if grid2.preview_count != 0usize { os.exit(240) }
+    dg.hide_preview(&grid2)
+
+    // 10. pixels: the band's fill and the selected row's fill are the theme's colours, and the
+    // same frame renders to the same pixels
+    dg.set_bands(&grid2, bands[0usize..2usize])
+    grid2.has_selection = true
+    grid2.selected_row = grp.visible_row(&app.grouping, 2usize)
+    mem.reset(&f, 0usize)
+    let (root17, build17_error) = dg.build(&f, &grid2, &theme, 400.0)
+    if build17_error != ok { os.exit(241) }
+    if settle(&harness, root17, preview_clock) != ok { os.exit(242) }
+    let (shot_a, shot_a_error) = testing.snapshot(&harness, a)
+    if shot_a_error != ok { os.exit(243) }
+    let (band_bounds, has_band) = bounds(&harness, &runtime, dg.band_key(&grid2))
+    let (row_bounds, has_row) = bounds(&harness, &runtime, dg.row_key(&grid2, grid2.selected_row))
+    if !has_band || !has_row { os.exit(244) }
+    // the "Card" band covers Name and Rarity: 30 in (the indicator's column) and 100 across
+    if !is_color(shot_a, px(band_bounds.x + 130.0, band_bounds.y + 6.0), style.color(&tokens, .SurfaceVariant)) { os.exit(245) }
+    // the selected row: secondary-container, where no text stands (right of the price column)
+    if !is_color(shot_a, px(row_bounds.x + 520.0, row_bounds.y + row_bounds.height * 0.5), style.color(&tokens, .SecondaryContainer)) { os.exit(246) }
+    // a row that is not selected is not
+    let (other_bounds, has_other) = bounds(&harness, &runtime, dg.row_key(&grid2, grp.visible_row(&app.grouping, 4usize)))
+    if !has_other || is_color(shot_a, px(other_bounds.x + 520.0, other_bounds.y + other_bounds.height * 0.5), style.color(&tokens, .SecondaryContainer)) { os.exit(247) }
+    // the same tree again: the same pixels
+    if testing.pump(&harness, root17, time.Instant { nanos: preview_clock + 9000000000i64 }) != ok { os.exit(248) }
+    let (shot_b, shot_b_error) = testing.snapshot(&harness, a)
+    if shot_b_error != ok { os.exit(249) }
+    var differing = 0usize
+    var pix = 0usize
+    while pix < W * 600usize * 4usize {
+        if shot_a.pixels[pix] != shot_b.pixels[pix] { differing += 1usize }
+        pix += 1usize
+    }
+    if differing != 0usize { os.exit(250) }
     os.exit(0)
     ret ok
 }
