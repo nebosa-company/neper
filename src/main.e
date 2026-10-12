@@ -6418,7 +6418,8 @@ fn compare_manifests_command(a: *mem.Arena, args: []str) -> err {
     var out = stderr_sink()
     out.file = os.stdout()
     var report = stderr_sink()
-    let json = args.len >= 5usize && same(args[4usize], "--json")
+    let json = compare_flag(args, "--json")
+    let cross_host = compare_flag(args, "--cross-host")
     var sink = &report
     if json {
         out.json = true
@@ -6431,24 +6432,58 @@ fn compare_manifests_command(a: *mem.Arena, args: []str) -> err {
     if right_error != ok { ret compare_refused(sink, "the second manifest cannot be read") }
     if !same(json_str_after(left, "\"schema\":\""), "neper-build-manifest") || !same(json_str_after(right, "\"schema\":\""), "neper-build-manifest") { ret compare_refused(sink, "an operand is not a build manifest") }
     var differences = 0usize
-    try compare_scalar(&out, &differences, "target", json_str_after(left, "\"target\":\""), json_str_after(right, "\"target\":\""))
+    // Across hosts (D4304) only the architecture of the target is held to agree: the OS is
+    // what the two builds differ by on purpose.
+    if cross_host {
+        try compare_scalar(&out, &differences, "target.arch", target_arch(json_str_after(left, "\"target\":\"")), target_arch(json_str_after(right, "\"target\":\"")))
+    } else {
+        try compare_scalar(&out, &differences, "target", json_str_after(left, "\"target\":\""), json_str_after(right, "\"target\":\""))
+    }
     try compare_scalar(&out, &differences, "mode", json_str_after(left, "\"mode\":\""), json_str_after(right, "\"mode\":\""))
     try compare_scalar(&out, &differences, "root_module", json_str_after(left, "\"root_module\":\""), json_str_after(right, "\"root_module\":\""))
     try compare_scalar(&out, &differences, "tool_version", json_str_after(left, "\"tool_version\":\""), json_str_after(right, "\"tool_version\":\""))
     try compare_scalar(&out, &differences, "options.checks", json_str_after(left, "\"checks\":\""), json_str_after(right, "\"checks\":\""))
     try compare_scalar(&out, &differences, "options.cpu", json_str_after(left, "\"cpu\":\""), json_str_after(right, "\"cpu\":\""))
-    try compare_entries(a, &out, &differences, "input", json_array_after(left, "\"inputs\":["), json_array_after(right, "\"inputs\":["), "\"path\":\"", "\"sha256\":\"", "")
-    try compare_entries(a, &out, &differences, "dependency", json_array_after(left, "\"dependencies\":["), json_array_after(right, "\"dependencies\":["), "\"module\":\"", "\"interface_sha256\":\"", "\"body_sha256\":\"")
-    // Libraries by their requested name and the file's hash, not where it was found
-    // (D1685, T022); assets by logical name and hash.
-    try compare_entries(a, &out, &differences, "library", json_array_after(left, "\"libraries\":["), json_array_after(right, "\"libraries\":["), "\"requested\":\"", "\"sha256\":\"", "")
+    var left_inputs = json_array_after(left, "\"inputs\":[")
+    var right_inputs = json_array_after(right, "\"inputs\":[")
+    var left_dependencies = json_array_after(left, "\"dependencies\":[")
+    var right_dependencies = json_array_after(right, "\"dependencies\":[")
+    if cross_host {
+        // A file that is a per-target variant (`e/os.windows.e`) is the host's own, and so is the
+        // module it stands for (`e.os`): neither is held to agree, because each host builds its own.
+        let (variants, variants_error) = host_variant_modules(a, left_inputs, right_inputs)
+        if variants_error != ok { ret variants_error }
+        let (kept_left_inputs, left_inputs_error) = without_host_entries(a, left_inputs, "\"path\":\"", variants, true)
+        if left_inputs_error != ok { ret left_inputs_error }
+        let (kept_right_inputs, right_inputs_error) = without_host_entries(a, right_inputs, "\"path\":\"", variants, true)
+        if right_inputs_error != ok { ret right_inputs_error }
+        let (kept_left_dependencies, left_dependencies_error) = without_host_entries(a, left_dependencies, "\"module\":\"", variants, false)
+        if left_dependencies_error != ok { ret left_dependencies_error }
+        let (kept_right_dependencies, right_dependencies_error) = without_host_entries(a, right_dependencies, "\"module\":\"", variants, false)
+        if right_dependencies_error != ok { ret right_dependencies_error }
+        left_inputs = kept_left_inputs
+        right_inputs = kept_right_inputs
+        left_dependencies = kept_left_dependencies
+        right_dependencies = kept_right_dependencies
+    }
+    try compare_entries(a, &out, &differences, "input", left_inputs, right_inputs, "\"path\":\"", "\"sha256\":\"", "")
+    try compare_entries(a, &out, &differences, "dependency", left_dependencies, right_dependencies, "\"module\":\"", "\"interface_sha256\":\"", "\"body_sha256\":\"")
+    // Assets by logical name and hash. Libraries by their requested name and the file's hash, not
+    // where it was found (D1685, T022) -- and not across hosts, whose libraries are the host's own
+    // (kernel32, libc.so.6), nor artifacts, which differ by design.
+    if !cross_host {
+        try compare_entries(a, &out, &differences, "library", json_array_after(left, "\"libraries\":["), json_array_after(right, "\"libraries\":["), "\"requested\":\"", "\"sha256\":\"", "")
+    }
     try compare_entries(a, &out, &differences, "asset", json_array_after(left, "\"assets\":["), json_array_after(right, "\"assets\":["), "\"name\":\"", "\"sha256\":\"", "")
-    try compare_artifacts(a, &out, &differences, json_array_after(left, "\"artifacts\":["), json_array_after(right, "\"artifacts\":["))
+    if !cross_host {
+        try compare_artifacts(a, &out, &differences, json_array_after(left, "\"artifacts\":["), json_array_after(right, "\"artifacts\":["))
+    }
     if json {
         try write_all(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"same\":")
         if differences == 0usize { try write_all(&out, "true") } else { try write_all(&out, "false") }
         try write_all(&out, ",\"differences\":")
         try write_usize(&out, differences)
+        if cross_host { try write_all(&out, ",\"cross_host\":true") }
         ret write_all(&out, "}}\n")
     }
     if differences == 0usize { ret write_all(&out, "manifests agree\n") }
@@ -6457,6 +6492,122 @@ fn compare_manifests_command(a: *mem.Arena, args: []str) -> err {
     try write_all(&out, ")\n")
     os.exit(1i32)
     ret ok
+}
+
+// The flags after the two manifests are `--json` and `--cross-host`, each at most once.
+fn compare_flags_ok(args: []str) -> bool {
+    var at = 4usize
+    while at < args.len {
+        if !same(args[at], "--json") && !same(args[at], "--cross-host") { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn compare_flag(args: []str, flag: str) -> bool {
+    var at = 4usize
+    while at < args.len {
+        if same(args[at], flag) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// `x64` of `x64-windows`.
+fn target_arch(triple: str) -> str {
+    var at = 0usize
+    while at < triple.len && triple[at] != 45u8 { at += 1usize }
+    ret triple[0usize..at]
+}
+
+fn ends_with_text(text: str, suffix: str) -> bool {
+    if text.len < suffix.len { ret false }
+    ret same(text[text.len - suffix.len..text.len], suffix)
+}
+
+// A per-target variant of a module's file, `os.windows.e` beside `os.linux.e`.
+fn host_variant_path(path: str) -> bool {
+    if ends_with_text(path, ".windows.e") { ret true }
+    if ends_with_text(path, ".linux.e") { ret true }
+    if ends_with_text(path, ".macos.e") { ret true }
+    if ends_with_text(path, ".freebsd.e") { ret true }
+    if ends_with_text(path, ".android.e") { ret true }
+    ret ends_with_text(path, ".ios.e")
+}
+
+// The module a variant file stands for, one name and a newline each, from the inputs of both
+// manifests: `e/os.windows.e` is `e.os`.
+fn host_variant_modules(a: *mem.Arena, left: str, right: str) -> (str, err) {
+    let (buffer, buffer_error) = mem.alloc[u8](a, left.len + right.len + 2usize)
+    if buffer_error != ok { ret ("", buffer_error) }
+    var n = 0usize
+    var pass = 0usize
+    while pass < 2usize {
+        var array = left
+        if pass == 1usize { array = right }
+        var at = 0usize
+        while true {
+            let (start, end, found) = json_next_object(array, at)
+            if !found { break }
+            let path = json_str_after(array[start..end], "\"path\":\"")
+            if host_variant_path(path) {
+                // Without the `.e`, then without the `.<os>` before it.
+                var stop = path.len - 2usize
+                while stop > 0usize && path[stop - 1usize] != 46u8 { stop = stop - 1usize }
+                if stop > 0usize { stop = stop - 1usize }
+                var i = 0usize
+                while i < stop {
+                    var byte = path[i]
+                    if byte == 47u8 { byte = 46u8 }
+                    buffer[n] = byte
+                    n += 1usize
+                    i += 1usize
+                }
+                buffer[n] = 10u8
+                n += 1usize
+            }
+            at = end
+        }
+        pass += 1usize
+    }
+    ret (buffer[0usize..n], ok)
+}
+
+fn line_listed(lines: str, name: str) -> bool {
+    var at = 0usize
+    while at < lines.len {
+        var stop = at
+        while stop < lines.len && lines[stop] != 10u8 { stop += 1usize }
+        if same(lines[at..stop], name) { ret true }
+        at = stop + 1usize
+    }
+    ret false
+}
+
+// The objects of `array` that are the host's own: an input whose path is a per-target variant
+// (`by_path`), or a dependency whose module has one, are left out.
+fn without_host_entries(a: *mem.Arena, array: str, name_key: str, variants: str, by_path: bool) -> (str, err) {
+    let (buffer, buffer_error) = mem.alloc[u8](a, array.len + 1usize)
+    if buffer_error != ok { ret ("", buffer_error) }
+    var n = 0usize
+    var at = 0usize
+    while true {
+        let (start, end, found) = json_next_object(array, at)
+        if !found { break }
+        let name = json_str_after(array[start..end], name_key)
+        var host_own = false
+        if by_path { host_own = host_variant_path(name) } else { host_own = line_listed(variants, name) }
+        if !host_own {
+            var i = start
+            while i < end {
+                buffer[n] = array[i]
+                n += 1usize
+                i += 1usize
+            }
+        }
+        at = end
+    }
+    ret (buffer[0usize..n], ok)
 }
 
 fn compare_refused(report: *Sink, message: str) -> err {
@@ -13664,8 +13815,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if args.len == 9usize && same(args[1usize], "index-file") && same(args[6usize], "--json") && (same(args[7usize], "--path") || same(args[7usize], "--toolchain-path") || same(args[7usize], "--project-path")) { ret index_command(a, args) }
     // `apply-plan PLAN --root DIR [--project-src DIR] [--json]` (D481, H29): the plans applied by the compiler.
     if args.len >= 5usize && same(args[1usize], "apply-plan") && same(args[3usize], "--root") { ret apply_plan_command(a, args) }
-    // `compare-manifests A B [--json]` (D482): two build manifests held against each other.
-    if (args.len == 4usize || (args.len == 5usize && same(args[4usize], "--json"))) && same(args[1usize], "compare-manifests") { ret compare_manifests_command(a, args) }
+    // `compare-manifests A B [--cross-host] [--json]` (D482, D4304): two build manifests held against each other.
+    if args.len >= 4usize && args.len <= 6usize && same(args[1usize], "compare-manifests") && compare_flags_ok(args) { ret compare_manifests_command(a, args) }
     // `index-project DIR ROOT ARCH OS WORKDIR --json` (D298): every module under DIR/src
     // and DIR/lib, one stream.
     if (args.len == 8usize || (args.len == 9usize && same(args[8usize], "--all"))) && same(args[1usize], "index-project") && same(args[7usize], "--json") { ret index_project_command(a, args) }

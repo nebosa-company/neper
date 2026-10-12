@@ -8142,6 +8142,27 @@ if ((Select-String -LiteralPath $comparedModes -Pattern '"record":"difference","
 if ((Select-String -LiteralPath $comparedModes -Pattern '"same":false' -Quiet) -ne $true) { throw 'compare-manifests calls two modes the same' }
 & python (Join-Path $repo 'scripts/validate_stream.py') $comparedModes
 if ($LASTEXITCODE -ne 0) { throw 'the difference records do not validate against the schema' }
+# `compare-manifests --cross-host` (D4304, T022): a Windows and a Linux build of one program
+# differ in their target, their per-target variant of e.os, the dependency that stands for it
+# and the executables -- and agree on everything else; a changed input is still named.
+$crossTool = Join-Path $conformanceRoot 'tools\run_args.e'
+$crossWindows = Join-Path $testBuild 'manifest-cross-windows.json'
+$crossLinux = Join-Path $testBuild 'manifest-cross-linux.json'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$crossTool`" `"$repo`" x64 windows conformance-tools-cross-windows.out > nul"
+if ($LASTEXITCODE -ne 0) { throw "the windows build of run_args.e exited $LASTEXITCODE" }
+Copy-Item -LiteralPath (Join-Path $repo '.neper\debug\build-manifest.json') -Destination $crossWindows -Force
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$crossTool`" `"$repo`" x64 linux conformance-tools-cross-linux.out > nul"
+if ($LASTEXITCODE -ne 0) { throw "the linux build of run_args.e exited $LASTEXITCODE" }
+Copy-Item -LiteralPath (Join-Path $repo '.neper\debug\build-manifest.json') -Destination $crossLinux -Force
+$crossPlain = & $compiler compare-manifests $crossWindows $crossLinux
+if ($LASTEXITCODE -ne 1) { throw 'compare-manifests called a windows and a linux build the same' }
+$crossAgreed = & $compiler compare-manifests $crossWindows $crossLinux --cross-host
+if ($LASTEXITCODE -ne 0 -or $crossAgreed -ne 'manifests agree') { throw "the two hosts' builds of one program differ across hosts: $crossAgreed" }
+$crossAltered = Join-Path $testBuild 'manifest-cross-linux-altered.json'
+$crossText = [IO.File]::ReadAllText($crossLinux)
+[IO.File]::WriteAllText($crossAltered, [regex]::Replace($crossText, '("path":"run_args\.e"\},"sha256":")[0-9a-f]{64}', '${1}0000000000000000000000000000000000000000000000000000000000000000'))
+$crossChanged = & $compiler compare-manifests $crossWindows $crossAltered --cross-host
+if ($LASTEXITCODE -ne 1 -or $crossChanged -notmatch 'input run_args\.e: ') { throw "a changed input is not named across hosts: $crossChanged" }
 # Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
 # has the toolchain's lib/ beside it is the same stream as the positional form.
 $shortRoot = Join-Path $repo 'build\windows\short'

@@ -7902,6 +7902,24 @@ grep -q '"record":"difference","kind":"mode","name":"","left":"debug","right":"r
 grep -q '"record":"difference","kind":"artifact"' "$test_build/conformance-tools-compare-manifests.jsonl"
 grep -q '"same":false' "$test_build/conformance-tools-compare-manifests.jsonl"
 python3 "$repo/scripts/validate_stream.py" "$test_build/conformance-tools-compare-manifests.jsonl"
+# `compare-manifests --cross-host` (D4304, T022): a Windows and a Linux build of one program
+# differ in their target, their per-target variant of e.os, the dependency that stands for it
+# and the executables -- and agree on everything else; a changed input is still named.
+cross_tool="$repo/tests/conformance/tools/run_args.e"
+(cd "$test_build" && "$test_build/neper-self" emit-executable "$cross_tool" "$repo" x64 windows conformance-tools-cross-windows.out > /dev/null)
+cp "$repo/.neper/debug/build-manifest.json" "$test_build/manifest-cross-windows.json"
+(cd "$test_build" && "$test_build/neper-self" emit-executable "$cross_tool" "$repo" x64 linux conformance-tools-cross-linux.out > /dev/null)
+cp "$repo/.neper/debug/build-manifest.json" "$test_build/manifest-cross-linux.json"
+if "$test_build/neper-self" compare-manifests "$test_build/manifest-cross-windows.json" "$test_build/manifest-cross-linux.json" > /dev/null; then
+    printf '%s\n' 'compare-manifests called a windows and a linux build the same' >&2; exit 1
+fi
+cross_agreed=$("$test_build/neper-self" compare-manifests "$test_build/manifest-cross-windows.json" "$test_build/manifest-cross-linux.json" --cross-host) || { printf '%s\n' "the two hosts' builds of one program differ across hosts: $cross_agreed" >&2; exit 1; }
+[ "$cross_agreed" = "manifests agree" ] || { printf '%s\n' "the two hosts' builds of one program differ across hosts: $cross_agreed" >&2; exit 1; }
+sed 's|\("path":"run_args\.e"},"sha256":"\)[0-9a-f]\{64\}|\10000000000000000000000000000000000000000000000000000000000000000|' "$test_build/manifest-cross-linux.json" > "$test_build/manifest-cross-linux-altered.json"
+if cross_changed=$("$test_build/neper-self" compare-manifests "$test_build/manifest-cross-windows.json" "$test_build/manifest-cross-linux-altered.json" --cross-host); then
+    printf '%s\n' 'a changed input is not a difference across hosts' >&2; exit 1
+fi
+case "$cross_changed" in *'input run_args.e: '*) ;; *) printf '%s\n' "a changed input is not named across hosts: $cross_changed" >&2; exit 1 ;; esac
 # Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
 # has the toolchain's lib/ beside it is the same stream as the positional form.
 rm -rf "$repo/build/linux/short"
