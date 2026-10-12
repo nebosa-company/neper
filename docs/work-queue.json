@@ -53,10 +53,10 @@
       "group": "Back end",
       "order": 93,
       "title": "M3-05: device selection: devices, DeviceInfo/DeviceKind/DeviceKey, open_id, info",
-      "score": 0.4,
+      "score": 0.85,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "`devices` answers the bounded snapshot with the CPU device (`supported`, no stable key, capabilities copied into the caller's arena), `open` takes `.Cpu` index 0 and refuses other indices with `NoDevice` and other backends with `Unsupported`, `open_id` refuses a CPU key with `NoDevice` since the CPU has none, `info` copies the opening-time descriptor (D778). Not yet: Vulkan and CUDA enumeration, stable keys and `AmbiguousDevice`, memory capacity."
+      "evidence": "`devices` answers the bounded snapshot with the CPU device (`supported`, no stable key, capabilities copied into the caller's arena), `open` takes `.Cpu` index 0 and refuses other indices with `NoDevice` and other backends with `Unsupported`, `open_id` refuses a CPU key with `NoDevice` since the CPU has none, `info` copies the opening-time descriptor (D778). Not yet: Vulkan and CUDA enumeration, stable keys and `AmbiguousDevice`, memory capacity. PART (D4200): Vulkan device keys from deviceUUID with key_valid, open_id matching backend and all 16 bytes (NoDevice, AmbiguousDevice, Unsupported), devices a complete snapshot, real index in info; gpu_devices passes on this host's two Vulkan devices; AmbiguousDevice only through the pure resolve_key. Missing: CUDA enumeration, a --gpu-inventory file, three-attempt re-enumeration."
     },
     {
       "id": "C094",
@@ -64,10 +64,10 @@
       "group": "Back end",
       "order": 94,
       "title": "M3-06: device-callable inference into the kernel-owning module's .em",
-      "score": 0.0,
+      "score": 0.85,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": ""
+      "evidence": " PART (D4201): a second oracle pass flattens every kernel-reached plain function into Builder.device_entries so the kernel module's .em carries the device code; a 3-module chain with a 2-result helper runs on both Vulkan devices in debug and release (gpu_device_edit). Missing: generic and function-pointer helpers, constants read from a third module."
     },
     {
       "id": "C095",
@@ -75,10 +75,10 @@
       "group": "Back end",
       "order": 95,
       "title": "M3-07: GPU floating point: no contraction, math.fma only, denormals, ftz",
-      "score": 0.0,
+      "score": 0.8,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": ""
+      "evidence": " PART (D4203): DenormPreserve/DenormFlushToZero over every reachable function, ftz kernels run under FTZ/DAZ on the CPU (stmxcsr/ldmxcsr; aarch64 FPCR hand-derived, not run), math.fma as Fma/NoContraction; gpu_float_modes passes on the CPU and the Intel Xe device. Missing: f64 in the SPIR-V writer, NVIDIA DenormPreserve, ftz+f64 on the CPU."
     },
     {
       "id": "C096",
@@ -86,10 +86,10 @@
       "group": "Back end",
       "order": 96,
       "title": "M3-08: determinism harness, the device-reached edit case",
-      "score": 0.0,
+      "score": 0.9,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": ""
+      "evidence": " PART (D4201-D4202): gpu_device_edit edits a helper two modules from the kernel and requires main and lowhelp rebuilt, midhelp kept, hot image equal to clean, device equal to host, -j 1 and -j 3 --perturb images equal; also fixed emit-em-all --incremental rebuilding main/e.gpu/e.sync every time (D4202). Run by hand on x64 Windows and the Linux target; the run.sh block not executed."
     },
     {
       "id": "C083",
@@ -97,10 +97,10 @@
       "group": "Back end",
       "order": 83,
       "title": "Determinism harness",
-      "score": 0.9,
+      "score": 0.95,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "compiler fixed point on both platforms, artifact-linked equals source-linked for every artifact fixture, and incremental equals clean for link/incremental (D205); the compiler's own 31 artifacts, listed in graph order, link byte-equal to the source build, and so does the set with one module rebuilt incrementally (D213, D214) -- `link-em` lays functions out in the order the artifacts are given, so the order is an input. `-j N` caps every phase's workers and `--perturb` turns the crew's schedule around (D331): both suites require the compiler built under `-j 1` and under `-j 3 --perturb` to be the stable stage byte for byte, and the inlined release fixture under `-j 1 --perturb` the default build; the hot build under either is the cold image. A relocated build is the same image (D337): the sources spelled from the project root in the line table, so the operand's spelling and the project's place change nothing, pinned by both suites. The fixed point caught the crew's one shared scratch table (D505): the workers' checkers forked every table they append to but the constant expressions, so D500's fold on eight workers wrote over each other's copies and once folded `if 4991usize < limit` away in a loaded stage 3; each worker now has its own. Not yet: the device-reached edit case that waits on M3 Placed after C096 (D1580): the one case left is C096's device-reached edit case, which the GPU line before it has to deliver first."
+      "evidence": "compiler fixed point on both platforms, artifact-linked equals source-linked for every artifact fixture, and incremental equals clean for link/incremental (D205); the compiler's own 31 artifacts, listed in graph order, link byte-equal to the source build, and so does the set with one module rebuilt incrementally (D213, D214) -- `link-em` lays functions out in the order the artifacts are given, so the order is an input. `-j N` caps every phase's workers and `--perturb` turns the crew's schedule around (D331): both suites require the compiler built under `-j 1` and under `-j 3 --perturb` to be the stable stage byte for byte, and the inlined release fixture under `-j 1 --perturb` the default build; the hot build under either is the cold image. A relocated build is the same image (D337): the sources spelled from the project root in the line table, so the operand's spelling and the project's place change nothing, pinned by both suites. The fixed point caught the crew's one shared scratch table (D505): the workers' checkers forked every table they append to but the constant expressions, so D500's fold on eight workers wrote over each other's copies and once folded `if 4991usize < limit` away in a loaded stage 3; each worker now has its own. Not yet: the device-reached edit case that waits on M3 Placed after C096 (D1580): the one case left is C096's device-reached edit case, which the GPU line before it has to deliver first. The device-reached edit case is delivered (C096) with schedule-independence assertions (3f393d47); the suites were not run on it."
     },
     {
       "id": "C088",

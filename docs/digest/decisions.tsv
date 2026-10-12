@@ -2374,4 +2374,9 @@ D4302	2218	The generated-code report: thresholds scored on the real toolchain, n
 D4303	2083	T026 measured: script share fell to 6-8%, context is level with Dart's now
 D4304	2338	`compare-manifests --cross-host`: what two hosts' builds of one program must agree on (T022)
 D4305	1538	The package manifest's schema branch has a fixture and a negative self-check (T012)
-D3910	3112	G006: `e.ui.datagrid`, first increment: the grid view over the table, view and grouping, with no data logic of its own
+D3910	3113	G006: `e.ui.datagrid`, first increment: the grid view over the table, view and grouping, with no data logic of its own
+D4200	2283	Device selection: deviceUUID keys, exact `open_id`, a bounded complete snapshot
+D4201	2229	A kernel's device build copies its cross-module helpers from a device oracle
+D4202	2160	The device-reached edit case, and what the harness found under it
+D4203	2572	Floating point on a kernel: the modes a kernel is written with, `ftz` on the CPU, `math.fma` on a device
+D2471	851	The C bootstrap's argument and local limits rise to what `src/` already uses

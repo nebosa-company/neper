@@ -46,8 +46,8 @@
 #define MAX_DECLS 4096
 #define MAX_PARAMS 32
 /* ponytail: 265 fits dispatch today; split it if it grows rather than enlarging every Function. */
-#define MAX_LOCALS 265
-#define MAX_ARGS 16
+#define MAX_LOCALS 400
+#define MAX_ARGS 32
 #define MAX_USES 256
 /* Program-wide string literals, held by pointer. Raised from 4096 (D361): the
    compiler's own JSON writers passed it, and the failure was an undefined label at

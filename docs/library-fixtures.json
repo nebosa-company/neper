@@ -3559,6 +3559,17 @@
    ]
   },
   {
+   "module": "e.ui.datagrid",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 14,
+   "delivered": 14,
+   "pending": [],
+   "fixtures": [
+    "ui_datagrid"
+   ]
+  },
+  {
    "module": "e.os.shell",
    "milestone": null,
    "schedule": "later",
@@ -4272,7 +4283,6 @@
     "data_tablesearch",
     "data_tableview",
     "ui_datagrid"
-    "data_tableview"
    ]
   },
   {
@@ -4311,11 +4321,6 @@
    "pending": [],
    "fixtures": [
     "data_tablesearch"
-   "catalogue": 13,
-   "delivered": 13,
-   "pending": [],
-   "fixtures": [
-    "data_tableview"
    ]
   }
  ]

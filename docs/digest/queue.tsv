@@ -3,11 +3,11 @@ C147	compiler	0.5	1643	Full suites complete on this machine: Windows run.ps1 and
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C107	compiler	0.9	6770	NeperOS shell 3: the e.os surface on NeperOS (os.neperos.e)	Queued by D2148.
 C092	compiler	0.95	2360	M3-04: e.gpu runtime surface: Device, Queue, Buf[T], launch, sync, barrier	full-suite verification. The prior Windows suite reached its final function/type-renamed compiler image, which crashed with an access violation when compiling the original sources. Linux's bootstrap c
-C093	compiler	0.4	450	M3-05: device selection: devices, DeviceInfo/DeviceKind/DeviceKey, open_id, info	Vulkan and CUDA enumeration, stable keys and `AmbiguousDevice`, memory capacity.
-C094	compiler	0.0	0	M3-06: device-callable inference into the kernel-owning module's .em	
-C095	compiler	0.0	0	M3-07: GPU floating point: no contraction, math.fma only, denormals, ftz	
-C096	compiler	0.0	0	M3-08: determinism harness, the device-reached edit case	
-C083	compiler	0.9	1441	Determinism harness	the device-reached edit case that waits on M3 Placed after C096 (D1580): the one case left is C096's device-reached edit case, which the GPU line before it has to deliver first.
+C093	compiler	0.85	834	M3-05: device selection: devices, DeviceInfo/DeviceKind/DeviceKey, open_id, info	Vulkan and CUDA enumeration, stable keys and `AmbiguousDevice`, memory capacity. PART (D4200): Vulkan device keys from deviceUUID with key_valid, open_id matching backend and all 16 bytes (NoDevice, A
+C094	compiler	0.85	351	M3-06: device-callable inference into the kernel-owning module's .em	PART (D4201): a second oracle pass flattens every kernel-reached plain function into Builder.device_entries so the kernel module's .em carries the device code;
+C095	compiler	0.8	342	M3-07: GPU floating point: no contraction, math.fma only, denormals, ftz	PART (D4203): DenormPreserve/DenormFlushToZero over every reachable function, ftz kernels run under FTZ/DAZ on the CPU (stmxcsr/ldmxcsr;
+C096	compiler	0.9	384	M3-08: determinism harness, the device-reached edit case	PART (D4201-D4202): gpu_device_edit edits a helper two modules from the kernel and requires main and lowhelp rebuilt, midhelp kept, hot image equal to clean, device equal to host, -j 1 and -j 3 --pert
+C083	compiler	0.95	1571	Determinism harness	the device-reached edit case that waits on M3 Placed after C096 (D1580): the one case left is C096's device-reached edit case, which the GPU line before it has to deliver first. The device-reached edi
 C088	compiler	0	233	Bootstrap frozen and deleted	bootstrap/neper.c still builds stage 0.
 T004	tooling	0.93	1775	run	streaming
 T011	tooling	0.95	1062	info	the spec table's other levels -- `x64-v4`, `aarch64-*`, `x86-*`, `sm_*` -- which the emitter does not produce
