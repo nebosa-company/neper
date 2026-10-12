@@ -26,6 +26,12 @@ import threading
 
 here = pathlib.Path(__file__).resolve().parent
 BODY = b'hello from the neper test server\n'
+# (C151) The Dynamic build server (dynamic_services.py needs `cryptography`, as scripts/make_package.py does).
+sys.path.insert(0, str(here))
+try:
+    import dynamic_services as DYNAMIC
+except ImportError:
+    DYNAMIC = None
 
 # The test boot's translation "model": a word-for-word dictionary through English, six languages.
 WORDS = [
@@ -112,6 +118,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         url = urllib.parse.urlparse(self.path)
         host = (self.headers.get('Host') or '').split(':')[0]
         query = urllib.parse.parse_qs(url.query)
+        # (C151) The Dynamic build server's package and revocation list.
+        if DYNAMIC is not None and DYNAMIC.get(self, host, url.path):
+            return
         if host == 'api.exchange.coinbase.com' and url.path == '/products':
             # Public, no key: the curated pair list the Add sheet's crypto Find searches.
             self.reply(200, (here / 'products.json').read_bytes(), 'application/json')
@@ -235,7 +244,56 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     '<p>Cookie: %s</p></body></html>' % cookie).encode('utf-8')
             self.reply(200, page, 'text/html')
             return
+        if host == 'neper.test' and url.path == '/v1/models':
+            # (C171) The AI app's cheap key check: the model list, a 401 for the key `bad`.
+            if self.headers.get('Authorization') == 'Bearer bad':
+                self.reply(401, b'{"error":{"message":"bad key"}}', 'application/json')
+            else:
+                self.reply(200, b'{"object":"list","data":[{"id":"llama-7b"}]}', 'application/json')
+            return
+        if host == 'neper.test' and url.path.startswith('/range/'):
+            # (C170) The Secure app's breach check by hash prefix (the k-anonymity range API): every suffix under the
+            # prefix with a count, and for the prefix of a known password its real suffix.
+            import hashlib
+            prefix = url.path[len('/range/'):].upper()
+            lines = []
+            for n in range(6):
+                suffix = hashlib.sha1(('decoy%s%d' % (prefix, n)).encode()).hexdigest().upper()[5:]
+                lines.append('%s:%d' % (suffix, 1 + n))
+            for known, count in (('hunter22', 24230577), ('correct-horse-battery', 7)):
+                digest = hashlib.sha1(known.encode()).hexdigest().upper()
+                if digest.startswith(prefix):
+                    lines.append('%s:%d' % (digest[5:], count))
+            self.reply(200, ('\r\n'.join(lines) + '\r\n').encode(), 'text/plain')
+            return
         self.reply(200, BODY)
+
+    def stream_chat(self, text):
+        """(C171) The reply as a chunked text/event-stream of OpenAI-style deltas a moment apart, ended by [DONE]."""
+        import json
+        import time
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/event-stream')
+        self.send_header('Transfer-Encoding', 'chunked')
+        self.send_header('Connection', 'close')
+        self.end_headers()
+
+        def chunk(data):
+            self.wfile.write(('%x\r\n' % len(data)).encode() + data + b'\r\n')
+            self.wfile.flush()
+        words = text.split(' ')
+        pieces = []
+        step = max(1, len(words) // 4)
+        for i in range(0, len(words), step):
+            pieces.append(' '.join(words[i:i + step]) + ('' if i + step >= len(words) else ' '))
+        chunk(b'data: ' + json.dumps({'choices': [{'index': 0, 'delta': {'role': 'assistant', 'content': ''}}]}).encode() + b'\n\n')
+        for piece in pieces:
+            time.sleep(0.7)
+            chunk(b'data: ' + json.dumps({'choices': [{'index': 0, 'delta': {'content': piece}}]}).encode() + b'\n\n')
+        chunk(b': keep-alive\n\n')
+        chunk(b'data: [DONE]\n\n')
+        self.wfile.write(b'0\r\n\r\n')
+        self.wfile.flush()
 
     def do_POST(self):
         # (C141) The AI app's local model: an OpenAI-compatible chat endpoint. It answers with the last user
@@ -244,16 +302,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
         length = int(self.headers.get('Content-Length') or 0)
         raw = self.rfile.read(length)
         host = (self.headers.get('Host') or '').split(':')[0]
+        # (C151) The Dynamic build server's routes (dynamic_services.py).
+        if DYNAMIC is not None and DYNAMIC.post(self, host, self.path, raw):
+            return
         if host == 'neper.test' and self.path == '/v1/chat/completions':
             if self.headers.get('Authorization') == 'Bearer bad':
                 self.reply(401, b'{"error":{"message":"bad key"}}', 'application/json')
                 return
-            messages = json.loads(raw.decode('utf-8')).get('messages', [])
+            if self.headers.get('Authorization') == 'Bearer limit':
+                self.reply(429, b'{"error":{"message":"rate limited"}}', 'application/json')
+                return
+            request = json.loads(raw.decode('utf-8'))
+            messages = request.get('messages', [])
             last = ''
             for m in messages:
                 if m.get('role') == 'user':
                     last = m.get('content', '')
             text = 'Echo from the neper test model (%d messages): %s' % (len(messages), last)
+            if request.get('stream'):
+                self.stream_chat(text)
+                return
             answer = {'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': text}, 'finish_reason': 'stop'}]}
             self.reply(200, json.dumps(answer).encode('utf-8'), 'application/json')
             return
@@ -325,7 +393,10 @@ def ssh_server():
                 process.stdout.write(line.upper() + '\r\n$ ')
 
     async def main():
-        key = asyncssh.generate_private_key('ssh-ed25519')
+        # (C155) A fixed host key (ssh_host_ed25519, made once), so a client that trusted it on one boot finds it
+        # again on the next; a fixture for a changed key seeds a different one on the client's side.
+        fixed = here / 'ssh_host_ed25519'
+        key = asyncssh.read_private_key(str(fixed)) if fixed.exists() else asyncssh.generate_private_key('ssh-ed25519')
         await asyncssh.create_server(Server, '127.0.0.1', 8022, server_host_keys=[key], process_factory=handle,
                                      encoding='utf-8', line_editor=False, kex_algs=['curve25519-sha256'],
                                      encryption_algs=['chacha20-poly1305@openssh.com'], mac_algs=['hmac-sha2-256'])

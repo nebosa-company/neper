@@ -90,6 +90,21 @@ async def main(exe):
             failed += 1
     server.close()
     await server.wait_closed()
+    # (C155) The other ciphers, and a key exchange begun by the server in the middle of the session (its byte limit
+    # set low): each against a server that has only that cipher.
+    for mode, cipher_name, extra in (("gcm256", "aes256-gcm@openssh.com", {}), ("gcm128", "aes128-gcm@openssh.com", {}),
+                                     ("rekey", "aes256-gcm@openssh.com", {"rekey_bytes": 1500})):
+        other_server = await asyncssh.create_server(
+            Server, "127.0.0.1", 0, server_host_keys=[host_key], process_factory=handle,
+            encoding="utf-8", line_editor=False, kex_algs=["curve25519-sha256"],
+            encryption_algs=[cipher_name], mac_algs=["hmac-sha2-256"], **extra)
+        other_port = other_server.sockets[0].getsockname()[1]
+        code = await run_client(exe, mode, other_port, key_bytes.hex())
+        print("net_ssh %s: exit %s" % (mode, code))
+        if code != 0:
+            failed += 1
+        other_server.close()
+        await other_server.wait_closed()
     return failed
 
 

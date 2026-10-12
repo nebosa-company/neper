@@ -192,3 +192,24 @@ fn check_revocable(data: []const u8, public: sign.Ed25519PublicKey, list: []cons
     if revoked(p, list) { ret (p, Revoked) }
     ret (p, ok)
 }
+
+// A revocation list as the server sends it (C173), so the device can fetch it instead of only reading one from its
+// disk: "NREV" | version (1) | text length (2, little end) | the list's text (the lines above) | signature (64), the
+// signature being Ed25519 over everything before it. The text, when the signature is the server's; BadPackage when
+// the bytes are not a list or the signature is not the server's.
+fn check_list(data: []const u8, public: sign.Ed25519PublicKey) -> ([]const u8, err) {
+    var none: []const u8 = data[0usize..0usize]
+    if data.len < 7usize + SIGNATURE_BYTES { ret (none, BadPackage) }
+    if data[0usize] != 78u8 || data[1usize] != 82u8 || data[2usize] != 69u8 || data[3usize] != 86u8 { ret (none, BadPackage) }
+    if data[4usize] != FORMAT { ret (none, BadPackage) }
+    let text_len = le16(data, 5usize)
+    if 7usize + text_len + SIGNATURE_BYTES != data.len { ret (none, BadPackage) }
+    var signature: sign.Ed25519Signature = zero
+    var i = 0usize
+    while i < SIGNATURE_BYTES {
+        signature.bytes[i] = data[7usize + text_len + i]
+        i += 1usize
+    }
+    if !sign.ed25519_verify(public, data[0usize..7usize + text_len], signature) { ret (none, BadPackage) }
+    ret (data[7usize..7usize + text_len], ok)
+}

@@ -819,6 +819,10 @@ fn launch(frame: *a64.Frame) {
             thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
         }
         // (D2252) The Secure app (archive entry 38, the table's `secure`) alone reaches storage and the random server.
+        // (C171) The AI app (entry 39) reaches them too: its conversations, its settings and the API key sealed in the vault.
+        // (C155) The SSH app (entry 19) keeps its saved hosts and the host keys it trusted in /ssh.
+        // (C164) The Chat app (entry 32) keeps each room's messages in /chat.
+        // (C151) The Dynamic app (entry 41) keeps the packages it fetches in /apps and the revocation list in /revoked.
         // (C126) Settings (entry 24) keeps its values in the filesystem too.
         // (C125) The Files app (entry 23) holds the whole tree through the same endpoints.
         // (C125) The Document app (entry 40) reads the file Files hands it over the same endpoints.
@@ -831,13 +835,13 @@ fn launch(frame: *a64.Frame) {
         // (C138) The Steps app (entry 36) keeps today's count and the goal in /steps.
         // (C139) The Blocks app (entry 37) keeps the best score in /blocks.
         // (C158) The Mail app (entry 26) saves an attachment into /Downloads.
-        if index == 38usize || index == 26usize || index == 27usize || index == 14usize || index == 15usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize || index == 37usize {
+        if index == 38usize || index == 26usize || index == 39usize || index == 19usize || index == 41usize || index == 32usize || index == 27usize || index == 14usize || index == 15usize || index == 24usize || index == 23usize || index == 40usize || index == 21usize || index == 22usize || index == 20usize || index == 18usize || index == 25usize || index == 30usize || index == 34usize || index == 36usize || index == 37usize {
             if fs_present {
                 thread.grant(child, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 6usize)
                 thread.grant(child, 6usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 7usize)
             }
             // (C154) The Wallet (entry 20) draws nonces for the cards it seals under the Secure vault's key.
-            if rng_present && (index == 38usize || index == 20usize) {
+            if rng_present && (index == 38usize || index == 39usize || index == 20usize) {
                 thread.grant(child, 7usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 10usize)
                 thread.grant(child, 8usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 11usize)
             }

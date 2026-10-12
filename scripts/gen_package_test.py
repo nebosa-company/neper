@@ -30,6 +30,19 @@ image = bytes((i * 7 + 3) % 256 for i in range(300))
 good = package(manifest, image, key)
 newer = package(manifest.replace(b"api=1", b"api=2"), image, key)
 
+
+def revocation_list(text: bytes, signing_key: Ed25519PrivateKey) -> bytes:
+    # (C173) "NREV" | version | text length | text | signature over all before.
+    body = b"NREV" + bytes([1]) + struct.pack("<H", len(text)) + text
+    return body + signing_key.sign(body)
+
+
+list_text = b"Tip calculator=2\nOther\n"
+signed_list = revocation_list(list_text, key)
+signed_list_other = revocation_list(list_text, Ed25519PrivateKey.from_private_bytes(bytes(range(101, 133))))
+signed_list_damaged = bytearray(signed_list)
+signed_list_damaged[9] ^= 1
+
 out = []
 out.append("// The NeperOS app package (neperos/src/package.e, C124) against Python's cryptography package (written by\n")
 out.append("// scripts/gen_package_test.py): a signed package parses, verifies and answers its manifest; a flipped byte,\n")
@@ -47,8 +60,12 @@ LISTS = (
     ("rev_prefix", b"Tip calcul\nTip calculator2\n=1\n"),
     ("rev_other", b"Other=9\nAnother app\n"),
 )
-for list_name, list_text in LISTS:
-    out.append(array(list_name, list_text))
+for list_name, list_body in LISTS:
+    out.append(array(list_name, list_body))
+out.append(array("signed_list", signed_list))
+out.append(array("signed_list_other", signed_list_other))
+out.append(array("signed_list_damaged", bytes(signed_list_damaged)))
+out.append(array("list_text", list_text))
 out.append("""    let key = sign.Ed25519PublicKey { bytes: public_bytes }
     let wrong = sign.Ed25519PublicKey { bytes: other_bytes }
     let (p, parse_error) = package.parse(good[0..])
@@ -94,6 +111,26 @@ out.append("""    let key = sign.Ed25519PublicKey { bytes: public_bytes }
     if ok_error != ok { os.exit(24) }
     let (bad_p, bad_error) = package.check_revocable(damaged[0..], key, rev_other[0..])
     if bad_error != package.BadPackage { os.exit(25) }
+    // (C173) A revocation list the server signs: its text when the signature is the server's, nothing when another
+    // key signed it, a byte changed or it is cut short; and the text works as the revocation list.
+    let (listed, list_error) = package.check_list(signed_list[0..], key)
+    if list_error != ok || listed.len != list_text.len { os.exit(26) }
+    var same = true
+    var li = 0usize
+    while li < list_text.len {
+        if listed[li] != list_text[li] { same = false }
+        li += 1usize
+    }
+    if !same { os.exit(27) }
+    let (other_list, other_error) = package.check_list(signed_list_other[0..], key)
+    if other_error != package.BadPackage { os.exit(28) }
+    let (damaged_list, damaged_error) = package.check_list(signed_list_damaged[0..], key)
+    if damaged_error != package.BadPackage { os.exit(29) }
+    let (cut_list, cut_error) = package.check_list(signed_list[0..40], key)
+    if cut_error != package.BadPackage { os.exit(30) }
+    let (not_list, not_error) = package.check_list(good[0..], key)
+    if not_error != package.BadPackage { os.exit(31) }
+    if !package.revoked(p, listed) { os.exit(32) }
     ret ok
 }
 """ % (len(good), 7 + len(manifest) + 4 + 10, 7 + len(manifest) + 4 + 10, len(good) - 5))
