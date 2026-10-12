@@ -1227,6 +1227,11 @@ time_calendars_african_written=$($test_build/neper-self emit-executable "$repo/t
 [ "$time_calendars_african_written" = 'executable written' ]
 chmod +x "$test_build/time-calendars-african-selfhost"
 "$test_build/time-calendars-african-selfhost"
+# `e.time.calendars` Persian and Umm al-Qura against convertdate and hijridate (L150).
+time_calendars_persian_uq_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_calendars_persian_uq/src/main.e" "$repo" x64 linux "$test_build/time-calendars-persian-uq-selfhost")
+[ "$time_calendars_persian_uq_written" = 'executable written' ]
+chmod +x "$test_build/time-calendars-persian-uq-selfhost"
+"$test_build/time-calendars-persian-uq-selfhost"
 # `e.fmt.cap`: Common Alerting Protocol alerts against an ElementTree walk (C156).
 fmt_cap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_cap/src/main.e" "$repo" x64 linux "$test_build/fmt-cap-selfhost")
 [ "$fmt_cap_written" = 'executable written' ]

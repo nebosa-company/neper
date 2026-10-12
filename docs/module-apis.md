@@ -23014,7 +23014,7 @@ after the year 9999 or 4,000,000 sub-daily steps. Zones belong to `e.tz`.
 ```neper
 error Invalid
 
-type Calendar = enum u8 { Julian, IslamicCivil, Hebrew, Coptic, Ethiopic, ThaiBuddhist }
+type Calendar = enum u8 { Julian, IslamicCivil, Hebrew, Coptic, Ethiopic, ThaiBuddhist, Persian, UmmAlQura }
 type JapaneseDate = struct { era: u8, year: i32, month: u8, day: u8 }
 
 const RD_UNIX: i64 = 719163i64
@@ -23023,6 +23023,10 @@ const ISLAMIC_EPOCH: i64 = 227015i64
 const COPTIC_EPOCH: i64 = 103605i64
 const ETHIOPIC_EPOCH: i64 = 2796i64
 const BUDDHIST_OFFSET: i64 = 543i64
+const PERSIAN_EPOCH: i64 = 226895i64
+const UQ_START: i64 = -16589i64
+const UQ_FIRST: i64 = 1343i64
+const UQ_LAST: i64 = 1500i64
 const JULIAN_DAY_UNIX: i64 = 2440588i64
 const ERA_COUNT: u8 = 5u8
 
@@ -23043,6 +23047,18 @@ fn civil_month(year: i32, scriptural: u8) -> u8
 fn hebrew_civil_length(year: i64, civil: i64) -> i64
 fn hebrew_to_days(year: i64, month: i64, day: i64) -> i64
 fn hebrew_from_days(count: i64) -> (i64, i64, i64)
+fn persian_leap(year: i64) -> bool
+fn persian_leaps_before(n: i64) -> i64
+fn persian_to_days(year: i64, month: i64, day: i64) -> i64
+fn persian_from_days(count: i64) -> (i64, i64, i64)
+fn hex_value(b: u8) -> i64
+fn uq_year_bits(year: i64) -> i64
+fn uq_month_length(year: i64, month: i64) -> i64
+fn uq_year_length(year: i64) -> i64
+fn uq_year_start(year: i64) -> i64
+fn uq_to_days(year: i64, month: i64, day: i64) -> i64
+fn uq_in_range(count: i64) -> bool
+fn uq_from_days(count: i64) -> (i64, i64, i64)
 fn african_epoch(cal: Calendar) -> i64
 fn african_to_days(cal: Calendar, year: i64, month: i64, day: i64) -> i64
 fn african_from_days(cal: Calendar, count: i64) -> (i64, i64, i64)
@@ -23069,9 +23085,10 @@ fn era_start(era: u8) -> time.Date
 fn iso_count(date: time.Date) -> i64
 fn japanese_from_iso(date: time.Date) -> (JapaneseDate, err)
 fn japanese_to_iso(j: JapaneseDate) -> (time.Date, err)
+fn uq_table() -> str
 ```
 
-Non-ISO calendars over `e.time`'s day count (days from 1970-01-01): a date in any calendar is a `time.Date` read in that calendar, and every conversion goes through the one count. `Julian` is proleptic with astronomical year numbering; `IslamicCivil` is the tabular civil calendar (Friday epoch, 30-year cycle); `Hebrew` is the fixed-rule calendar with civil month numbers (Tishri 1; in a leap year Adar I is 6 and Adar II is 7), `scriptural_month`/`civil_month` converting to Nisan-is-1. Hebrew and Islamic years start at 1 and earlier counts answer `Invalid`. Month arithmetic walks real months (13 in a Hebrew leap year) and clamps the day; `add_years` keeps the month number, clamped to the year's last month. Japanese eras ride the Gregorian year/month/day with the .NET table (Meiji from 1868-09-08, Taisho, Showa, Heisei, Reiwa as indexes 0..4); earlier dates are refused. Not here: observational and Umm al-Qura Islamic calendars, Persian, Coptic, Thai/Buddhist and Chinese calendars, and week-of-year rules per calendar.
+Non-ISO calendars over `e.time`'s day count (days from 1970-01-01): a date in any calendar is a `time.Date` read in that calendar, and every conversion goes through the one count. `Persian` is the Solar Hijri calendar by its 33-year arithmetic rule (leap when the year mod 33 is 1 5 9 13 17 22 26 30; months 1-6 have 31 days, 7-11 have 30, the 12th 29 or 30), anchored so it matches the astronomical calendar for 1278..1502 AP; `UmmAlQura` is the published table, 1343..1500 AH (1924-08-01 to 2077-11-16), and a count outside the table answers `Invalid`, its months being 28 to 31 days as published. `Julian` is proleptic with astronomical year numbering; `IslamicCivil` is the tabular civil calendar (Friday epoch, 30-year cycle); `Hebrew` is the fixed-rule calendar with civil month numbers (Tishri 1; in a leap year Adar I is 6 and Adar II is 7), `scriptural_month`/`civil_month` converting to Nisan-is-1. Hebrew and Islamic years start at 1 and earlier counts answer `Invalid`. Month arithmetic walks real months (13 in a Hebrew leap year) and clamps the day; `add_years` keeps the month number, clamped to the year's last month. Japanese eras ride the Gregorian year/month/day with the .NET table (Meiji from 1868-09-08, Taisho, Showa, Heisei, Reiwa as indexes 0..4); earlier dates are refused. Not here: the observational Islamic calendar, the Chinese calendar, and week-of-year rules per calendar.
 
 ### `e.time.pattern`
 
