@@ -1097,7 +1097,7 @@ placement, case folding, Like wildcards, custom orders).
 ## 9. Work items (enqueued as G001–G011 in `docs/work-queue.json`, 2026-10-12)
 
 Per `AGENTS.md`, the first item in `docs/work-queue.json` is the only one to work; they are appended at the end of the
-queue (order 262–272), score 0, each with its acceptance list.
+queue (appended at the end of the queue when enqueued), score 0, each with its acceptance list.
 
 | Id | Item | Acceptance |
 |---|---|---|
