@@ -2335,4 +2335,16 @@ D3604	2642	L067: language tailorings of the explorer's sibling order (`policy_la
 D3700	3525	L163: `e.fmt.png.encode_adaptive`: libpng's row-filter heuristic and indexed output, checked against a Python model that matches Pillow
 D3701	5262	L125: e.gfx.svg gains group and element opacity layers, selector combinators, pattern viewBox and href, a radial focal point, masks and text, by lowering to existing scene commands
 D3702	4625	L098: e.text.math gains the other math alphabets, accents, bars and braces, horizontal variants and MathKernInfo
-D3703	4556	L037: the types a synced table infers from sample rows (`e.algo.syncinfer`), V8's date parser included
+D3703	4557	L037: the types a synced table infers from sample rows (`e.algo.syncinfer`), V8's date parser included
+D3704	833	the data grid's text operators are case-insensitive by default
+D2469	1358	An opacity layer is a full-target canvas; single-paint shapes do not take one
+D3800	2001	C172: a spreadsheet is a grid in Document, read by `e.fmt.ooxml.sheet_grid`
+D3801	2086	C152, C172: a PDF page painted from its content stream (`e.fmt.pdf.page_painting`)
+D3802	1220	C172: Markdown tables in Document
+D3803	1076	C150: Document extracts a zip into a folder named after it
+D3804	1186	C152: a text file over 16 KB is paged from the disk a window at a time
+D3805	914	C152: a file with no extension that starts `#!` is the language of its interpreter
+D3806	1320	C150: Files has a grid view with image thumbnails
+D3807	2121	C154: the Wallet's cards are sealed under the Secure vault's key; editing a card
+D3808	738	C154: a scan belongs to its document
+D3809	1598	C152, C172: Word tables are grids between the paragraphs (`e.fmt.ooxml.tables`, `cell_flags`)
