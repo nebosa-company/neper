@@ -4195,6 +4195,27 @@ $algoSyncsourceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $algoSyncsourceWritten -ne 'executable written') { throw 'algo_syncsource emission failed' }
 $algoSyncsourceOutput = & $algoSyncsourcePath
 if ($LASTEXITCODE -ne 0 -or $algoSyncsourceOutput -ne 'algo syncsource ok') { throw "algo_syncsource answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.syncpull`: the connector type map, column configuration, base-URL placeholders, pagination, record envelopes and the page loop
+# # against appdor's src/connectors/connector-type-map.js and src/sync/synced-table.js (700 inputs, D3002).
+$algoSyncpullPath = Join-Path $testBuild 'algo-syncpull-selfhost.exe'
+$algoSyncpullWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_syncpull\src\main.e') $repo 'x64' 'windows' $algoSyncpullPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoSyncpullWritten -ne 'executable written') { throw 'algo_syncpull emission failed' }
+$algoSyncpullOutput = & $algoSyncpullPath
+if ($LASTEXITCODE -ne 0 -or $algoSyncpullOutput -ne 'algo syncpull ok') { throw "algo_syncpull answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.sqlsource`: a SQL database as a sync source: dialect, host allowlist, address verdicts, connection, identifiers and statements, redaction, diagnostics and rows
+# # against appdor's src/sync/sql-source.js (900 inputs, D3001).
+$algoSqlsourcePath = Join-Path $testBuild 'algo-sqlsource-selfhost.exe'
+$algoSqlsourceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_sqlsource\src\main.e') $repo 'x64' 'windows' $algoSqlsourcePath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoSqlsourceWritten -ne 'executable written') { throw 'algo_sqlsource emission failed' }
+$algoSqlsourceOutput = & $algoSqlsourcePath
+if ($LASTEXITCODE -ne 0 -or $algoSqlsourceOutput -ne 'algo sqlsource ok') { throw "algo_sqlsource answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.writeback`: the push half of two-way sync: outbox lifecycle, reversion, echo suppression, field mapping, three-way merge and the SSRF-checked request builder
+# # against appdor's src/sync/writeback.js and src/connectors (900 inputs, D3000).
+$algoWritebackPath = Join-Path $testBuild 'algo-writeback-selfhost.exe'
+$algoWritebackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_writeback\src\main.e') $repo 'x64' 'windows' $algoWritebackPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoWritebackWritten -ne 'executable written') { throw 'algo_writeback emission failed' }
+$algoWritebackOutput = & $algoWritebackPath
+if ($LASTEXITCODE -ne 0 -or $algoWritebackOutput -ne 'algo writeback ok') { throw "algo_writeback answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.offline`: write queue, read cache, connectivity, replay, conflict review and access purge
 # # against appdor's src/offline (220 scripts, D2921).
 $algoOfflinePath = Join-Path $testBuild 'algo-offline-selfhost.exe'

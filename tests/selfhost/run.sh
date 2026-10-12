@@ -3716,6 +3716,27 @@ algo_syncsource_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/algo-syncsource-selfhost"
 algo_syncsource_output=$("$test_build/algo-syncsource-selfhost")
 [ "$algo_syncsource_output" = 'algo syncsource ok' ]
+# `e.algo.syncpull`: the connector type map, column configuration, base-URL placeholders, pagination, record envelopes and the page loop
+# # against appdor's src/connectors/connector-type-map.js and src/sync/synced-table.js (700 inputs, D3002).
+algo_syncpull_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_syncpull/src/main.e" "$repo" x64 linux "$test_build/algo-syncpull-selfhost" -j 2)
+[ "$algo_syncpull_written" = 'executable written' ]
+chmod +x "$test_build/algo-syncpull-selfhost"
+algo_syncpull_output=$("$test_build/algo-syncpull-selfhost")
+[ "$algo_syncpull_output" = 'algo syncpull ok' ]
+# `e.algo.sqlsource`: a SQL database as a sync source: dialect, host allowlist, address verdicts, connection, identifiers and statements, redaction, diagnostics and rows
+# # against appdor's src/sync/sql-source.js (900 inputs, D3001).
+algo_sqlsource_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_sqlsource/src/main.e" "$repo" x64 linux "$test_build/algo-sqlsource-selfhost" -j 2)
+[ "$algo_sqlsource_written" = 'executable written' ]
+chmod +x "$test_build/algo-sqlsource-selfhost"
+algo_sqlsource_output=$("$test_build/algo-sqlsource-selfhost")
+[ "$algo_sqlsource_output" = 'algo sqlsource ok' ]
+# `e.algo.writeback`: the push half of two-way sync: outbox lifecycle, reversion, echo suppression, field mapping, three-way merge and the SSRF-checked request builder
+# # against appdor's src/sync/writeback.js and src/connectors (900 inputs, D3000).
+algo_writeback_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_writeback/src/main.e" "$repo" x64 linux "$test_build/algo-writeback-selfhost" -j 2)
+[ "$algo_writeback_written" = 'executable written' ]
+chmod +x "$test_build/algo-writeback-selfhost"
+algo_writeback_output=$("$test_build/algo-writeback-selfhost")
+[ "$algo_writeback_output" = 'algo writeback ok' ]
 # `e.algo.offline`: write queue, read cache, connectivity, replay, conflict review and access purge
 # # against appdor's src/offline (220 scripts, D2921).
 algo_offline_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_offline/src/main.e" "$repo" x64 linux "$test_build/algo-offline-selfhost" -j 2)

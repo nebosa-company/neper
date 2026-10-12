@@ -6664,6 +6664,206 @@ fn merge_entities(a: *mem.Arena, from_source: []const json.Value, from_catalog: 
 What a synced table reads from its source before a scheduled pull (L037), after appdor's `src/sync/change-stream.js` and `src/sync/entity-browse.js`: the change-stream token shape check (`looks_like_stream_token`), the public URL (`stream_url`), one change out of a delivery body (`change_from_delivery`: one record, `upsert` by default), the single row change it implies through the accepted column mapping (`plan_stream_change`: insert, update, delete or noop, refusing without a mapping, a sync key or a mapped column) and its ledger counts (`stream_plan_counts`); and the entities a channel names (`static_entities`, `can_browse`), an index response read into entities (`entities_from_body`, array or keyed object, dotted `resultPath` and `namePath`, `/rpc/` and the root dropped, capped at 500) and the merged picker list (`merge_entities`, the source winning a collision). Names are sorted as `localeCompare` does for ASCII names (punctuation, digits, letters ignoring case, lower case first on a tie). The SSRF-checked request builder (`browseRequest`) belongs to the connectors and is not here. Checked against appdor's own modules over 700 single operations on Windows (D2921).
 
 
+### `e.algo.writeback`
+
+```neper
+fn rejected_key() -> str
+fn default_max_attempts() -> i64
+fn js_string(a: *mem.Arena, v: json.Value, present: bool) -> str
+fn hash_of(a: *mem.Arena, v: json.Value) -> str
+fn strings_of(a: *mem.Arena, v: json.Value) -> []const str
+fn array_of(a: *mem.Arena, l: list.List[json.Value]) -> json.Value
+fn empty_obj() -> json.Value
+fn str_member(v: json.Value, key: str) -> str
+fn member_is(v: json.Value, key: str, want: str) -> bool
+fn pushes(v: json.Value) -> bool
+fn strict_true(v: json.Value, key: str) -> bool
+fn copy_of(a: *mem.Arena, v: json.Value) -> ir.Obj
+fn create_entry(a: *mem.Arena, opts: json.Value, id: str, now_iso: str) -> json.Value
+fn record_delivery(a: *mem.Arena, entry: json.Value, result: json.Value, now_iso: str) -> json.Value
+fn plan_reversion(a: *mem.Arena, entry: json.Value) -> json.Value
+fn mark_reverted(a: *mem.Arena, entry: json.Value, reverted_fields: json.Value, now_iso: str) -> json.Value
+fn status_counter(status: str) -> str
+fn summarize_outbox(a: *mem.Arena, entries: []const json.Value) -> json.Value
+fn str_less(x: str, y: str) -> bool
+fn two_way_fields(a: *mem.Arena, mapping: json.Value) -> json.Value
+fn writeback_mapping(a: *mem.Arena, mapping: json.Value) -> json.Value
+fn entry_from_row(a: *mem.Arena, row: json.Value, id: str, now_iso: str) -> json.Value
+fn put_present(o: *ir.Obj, from: json.Value, key: str, as_key: str)
+fn entry_patch(a: *mem.Arena, entry: json.Value) -> json.Value
+fn settle_delivery(a: *mem.Arena, entry: json.Value, result: json.Value, now_iso: str) -> json.Value
+fn last_error(entry: json.Value) -> json.Value
+fn revert_patch(a: *mem.Arena, entry: json.Value, reversion: json.Value, now_iso: str) -> json.Value
+fn finish_reversion(a: *mem.Arena, entry: json.Value, patch: json.Value, now_iso: str) -> json.Value
+fn echo_hash(a: *mem.Arena, key_text: str, record: json.Value, fields: []const str) -> str
+fn has_text(l: list.List[json.Value], s: str) -> bool
+fn echo_set(a: *mem.Arena, delivered: []const json.Value, fields: []const str) -> json.Value
+fn suppress_echoes(a: *mem.Arena, plan: json.Value, echo: []const json.Value, sync_key: str, fields: []const str) -> json.Value
+fn has_text_in(values: []const json.Value, s: str) -> bool
+fn outbox_line(a: *mem.Arena, entries: []const json.Value, translate: *const syncjob.Translate) -> json.Value
+fn map_remote_to_local(a: *mem.Arena, remote: json.Value, mapping: []const json.Value) -> json.Value
+fn map_local_to_remote(a: *mem.Arena, local: json.Value, mapping: []const json.Value) -> json.Value
+type Keyed = struct { id: str, key: json.Value, has_key: bool, row: json.Value }
+fn index_rows(a: *mem.Arena, rows: []const json.Value, key: str) -> list.List[Keyed]
+fn js_identity(a: *mem.Arena, v: json.Value, present: bool) -> str
+fn find_row(l: list.List[Keyed], id: str) -> (json.Value, bool)
+fn has_id(l: list.List[Keyed], id: str) -> bool
+fn fields_changed(a: *mem.Arena, x: json.Value, base: json.Value, fields: []const str) -> bool
+type Plan = struct { pulls: list.List[json.Value], pushes: list.List[json.Value], conflicts: list.List[json.Value], echoes: list.List[json.Value], create_local: list.List[json.Value], create_remote: list.List[json.Value], delete_local: list.List[json.Value], delete_remote: list.List[json.Value], noops: i64 }
+fn move_entry(a: *mem.Arena, k: Keyed, record: json.Value, via_conflict: bool) -> json.Value
+fn add_conflict(a: *mem.Arena, p: *Plan, k: Keyed, local: json.Value, remote: json.Value, base: json.Value, policy: str)
+fn plan_two_way_sync(a: *mem.Arena, local_rows: []const json.Value, remote_rows: []const json.Value, base_rows: []const json.Value, key: str, fields: []const str, policy: str, echo: []const json.Value) -> json.Value
+fn lower_ascii(a: *mem.Arena, s: str) -> str
+fn upper_ascii(a: *mem.Arena, s: str) -> str
+fn hex_digit(n: u8) -> u8
+fn is_alnum(c: u8) -> bool
+fn encode_uri_component(a: *mem.Arena, s: str) -> str
+fn form_encode(a: *mem.Arena, s: str) -> str
+fn is_digits(s: str) -> bool
+fn small_number(s: str) -> i64
+fn private_v4(host: str) -> bool
+fn is_safe_url(a: *mem.Arena, url: str) -> (bool, str)
+fn auth_headers(a: *mem.Arena, o: *ir.Obj, auth: json.Value)
+type Param = struct { name: str, value: str }
+fn build_request(a: *mem.Arena, connection: json.Value, request: json.Value) -> json.Value
+fn build_push_request(a: *mem.Arena, connection: json.Value, entity: str, entry: json.Value, mapping: json.Value) -> json.Value
+```
+
+The push half of two-way sync (L037), after appdor's `src/sync/writeback.js` with `src/connectors/writeback-outbox.js`, `sync-engine.js` and `index.js`: the outbox entry and its lifecycle (`create_entry`, `record_delivery`, `plan_reversion`, `mark_reverted`, `summarize_outbox`), the host's judgements (`two_way_fields`, `writeback_mapping`, `entry_from_row`, `entry_patch`, `settle_delivery`, `revert_patch`, `finish_reversion`, `echo_set`, `suppress_echoes`, `outbox_line`), the engine (`map_remote_to_local`, `map_local_to_remote`, `plan_two_way_sync`) and the SSRF-checked `build_request` and `build_push_request`. The clock and the entry id are arguments; words come back through the host's translator.
+
+
+### `e.algo.sqlsource`
+
+```neper
+fn max_sql_rows() -> i64
+fn max_entities() -> i64
+fn statement_timeout_ms() -> i64
+fn connect_timeout_ms() -> i64
+fn row_cap_sentinel() -> str
+fn is_space(c: u8) -> bool
+fn is_digit(c: u8) -> bool
+fn is_letter(c: u8) -> bool
+fn is_word(c: u8) -> bool
+fn lower(a: *mem.Arena, s: str) -> str
+fn fail(a: *mem.Arena, reason: str) -> json.Value
+fn text_member(v: json.Value, key: str) -> str
+fn string_or_empty(a: *mem.Arena, v: json.Value) -> str
+fn all_digits(s: str) -> bool
+fn digits_value(s: str) -> i64
+fn valid_port(has_port: bool, port: i64) -> bool
+fn sql_dialect(a: *mem.Arena, base_url: str) -> (str, bool)
+fn is_sql_channel(a: *mem.Arena, channel: json.Value) -> bool
+fn normalize_host(a: *mem.Arena, host: str) -> str
+fn valid_host(host: str) -> bool
+fn count_colons(s: str) -> usize
+fn split_host_port(a: *mem.Arena, value: str) -> (str, i64, bool, bool)
+fn refused_entry(a: *mem.Arena, value: str, message: str) -> json.Value
+fn is_wildcard(lowered: str) -> bool
+fn parse_sql_source_hosts(a: *mem.Arena, raw: str) -> json.Value
+fn check_sql_host(a: *mem.Arena, host: str, port: json.Value, entries: []const json.Value) -> json.Value
+fn is_hex_digit(c: u8) -> bool
+fn hex_value(c: u8) -> i64
+fn unmap_ipv4(a: *mem.Arena, address: str) -> (str, bool)
+fn js_int(a: *mem.Arena, n: i64) -> str
+fn check_sql_address(a: *mem.Arena, address: str, entries: []const json.Value) -> json.Value
+fn query_param(a: *mem.Arena, query: str, name: str) -> (str, bool)
+fn form_decode(a: *mem.Arena, s: str) -> str
+fn uri_decode(a: *mem.Arena, s: str) -> (str, bool)
+fn forbidden_opaque(c: u8) -> bool
+fn ssl_mode_value(a: *mem.Arena, mode: str) -> (json.Value, bool)
+fn sql_source_from(a: *mem.Arena, base_url: json.Value, has_base: bool, auth: json.Value) -> json.Value
+fn is_valid_sql_identifier(name: str) -> bool
+fn quote_sql_identifier(a: *mem.Arena, name: str) -> (str, bool)
+fn trim_slashes(s: str) -> str
+fn parse_sql_entity(a: *mem.Arena, entity: str) -> json.Value
+fn sql_entity_name(a: *mem.Arena, schema: str, table: str) -> str
+fn clamp_limit(a: *mem.Arena, v: json.Value, fallback: i64, high: i64) -> json.Value
+fn statement(a: *mem.Arena, text: str, values: []const json.Value) -> json.Value
+fn values_of(a: *mem.Arena, first: json.Value, second: json.Value, third: json.Value, count: usize) -> []const json.Value
+fn browse_tables_statement(a: *mem.Arena, limit: json.Value) -> json.Value
+fn columns_statement(a: *mem.Arena, schema: json.Value, table: json.Value) -> json.Value
+fn select_rows_statement(a: *mem.Arena, schema: str, table: str, limit: json.Value) -> (json.Value, bool)
+fn read_only_session_statements(a: *mem.Arena, timeout_ms: json.Value) -> json.Value
+fn clamp_ms(v: json.Value) -> i64
+fn redact_urls(a: *mem.Arena, s: str) -> str
+fn lower_eq_at(a: *mem.Arena, s: str, at: usize, word: str) -> bool
+fn redact_keywords(a: *mem.Arena, s: str) -> str
+fn replace_all(a: *mem.Arena, s: str, needle: str, with: str) -> str
+fn redact_sql_text(a: *mem.Arena, text: str, secrets: []const json.Value) -> str
+fn reason_for_code(code: str) -> (str, bool)
+fn contains_fold(a: *mem.Arena, s: str, needle: str) -> bool
+fn reason_from_message(a: *mem.Arena, detail: str) -> str
+fn sql_diagnostic(a: *mem.Arena, error_value: json.Value, secrets: []const json.Value) -> json.Value
+fn normalize_sql_value(a: *mem.Arena, value: json.Value) -> json.Value
+fn hex_char(n: u8) -> u8
+fn sql_bytes_value(a: *mem.Arena, data: []const u8) -> str
+fn normalize_sql_row(a: *mem.Arena, row: json.Value) -> json.Value
+fn either(row: json.Value, first: str, second: str) -> json.Value
+fn sql_entities(a: *mem.Arena, rows: []const json.Value) -> json.Value
+fn sql_columns(a: *mem.Arena, rows: []const json.Value) -> json.Value
+```
+
+A SQL database as a sync source (L037), after appdor's `src/sync/sql-source.js`: `sql_dialect` and `is_sql_channel`, the operator's host list (`parse_sql_source_hosts`, `check_sql_host`, `check_sql_address`), the connection a URL and a credential make (`sql_source_from`), identifiers and entities (`is_valid_sql_identifier`, `quote_sql_identifier`, `parse_sql_entity`), the statements a pull sends (`browse_tables_statement`, `columns_statement`, `select_rows_statement`, `read_only_session_statements`), redaction and driver diagnostics (`redact_sql_text`, `sql_diagnostic`) and the rows an information schema answers (`normalize_sql_row`, `sql_entities`, `sql_columns`).
+
+
+### `e.algo.syncpull`
+
+```neper
+fn max_pull_pages() -> i64
+fn max_pull_records() -> i64
+fn min_interval_minutes() -> i64
+fn preview_row_limit() -> i64
+type FetchPage = struct { ctx: *void, run: fn(*void, json.Value) -> json.Value }
+fn type_map_text() -> str
+fn type_maps(a: *mem.Arena) -> json.Value
+fn has_member(v: json.Value, key: str) -> bool
+fn includes_text(values: json.Value, s: str) -> bool
+fn map_external_type(a: *mem.Arena, connector: str, native: json.Value, has_native: bool, translate: *const syncjob.Translate) -> json.Value
+fn map_lc8_to_native(a: *mem.Arena, connector: str, lc8: str) -> json.Value
+fn list_native_types(a: *mem.Arena, connector: str) -> json.Value
+fn propose_schema(a: *mem.Arena, connector: str, columns: []const json.Value, translate: *const syncjob.Translate) -> json.Value
+fn propose_mapping(a: *mem.Arena, connector: str, columns: json.Value, translate: *const syncjob.Translate) -> (json.Value, bool)
+fn synced_column_config(a: *mem.Arena, column: json.Value, source_label: json.Value, has_label: bool) -> json.Value
+fn synced_column_badge(a: *mem.Arena, config: json.Value, translate: *const syncjob.Translate) -> json.Value
+fn is_word_char(c: u8) -> bool
+fn resolve_base_url(a: *mem.Arena, channel_base_url: json.Value, config: json.Value) -> json.Value
+fn build_pull_request(a: *mem.Arena, connection: json.Value, entity: str, query: json.Value) -> json.Value
+fn pluck_path(a: *mem.Arena, body: json.Value, path: str) -> json.Value
+fn all_digits(s: str) -> bool
+fn digits_at(s: str) -> i64
+fn is_space(c: u8) -> bool
+fn next_link(link: str) -> (str, bool)
+fn cursor_value(a: *mem.Arena, style: str, value: json.Value) -> json.Value
+fn pull_cursor(a: *mem.Arena, body: json.Value, pagination: json.Value, headers: json.Value) -> json.Value
+type Url = struct { valid: bool, origin: str, path: str, query: str }
+fn bad_url() -> Url
+fn hex_upper(n: u8) -> u8
+fn path_encode_byte(c: u8) -> bool
+fn dot_segment(seg: str) -> i32
+fn parse_url(a: *mem.Arena, text: str) -> Url
+fn hex_val(c: u8) -> i64
+fn form_decode(a: *mem.Arena, s: str) -> str
+fn query_object(a: *mem.Arena, query: str) -> json.Value
+fn relative_to(a: *mem.Arena, base_url: str, absolute: str) -> json.Value
+fn js_number(v: json.Value) -> f64
+fn step_value(a: *mem.Arena, query: json.Value, param: str, fallback: f64, plus: f64) -> json.Value
+fn advance_pull(a: *mem.Arena, cursor: json.Value, pagination: json.Value, path: str, query: json.Value, base_url: str) -> json.Value
+fn is_http_url(a: *mem.Arena, s: str) -> bool
+fn segments_of(a: *mem.Arena, path: str) -> []const str
+fn path_matches(declared: []const str, entity: []const str) -> bool
+fn pull_pagination(a: *mem.Arena, channel: json.Value, entity: str) -> json.Value
+fn record_shape(a: *mem.Arena, name: str) -> json.Value
+fn unwrap_record(a: *mem.Arena, shape: json.Value, record: json.Value) -> json.Value
+fn unwrap_records(a: *mem.Arena, shape: json.Value, records: json.Value) -> []const json.Value
+fn pull_record_shape(a: *mem.Arena, channel: json.Value, connector: json.Value, stored_mapping: json.Value) -> json.Value
+fn failed_pull(a: *mem.Arena, reason: str, status: json.Value, has_status: bool) -> json.Value
+fn asked_before(asked: list.List[json.Value], url: str) -> bool
+fn pull_pages(a: *mem.Arena, connection: json.Value, entity: str, pagination: json.Value, shape: json.Value, limit: i64, has_limit: bool, fetch: *const FetchPage) -> json.Value
+```
+
+How a synced table reads its source page by page (L037), after the second half of appdor's `src/sync/synced-table.js` and `src/connectors/connector-type-map.js`: the type map (`map_external_type`, `map_lc8_to_native`, `list_native_types`, `propose_schema`, `propose_mapping`), a column's configuration and badge (`synced_column_config`, `synced_column_badge`), `resolve_base_url` and `build_pull_request`, pagination (`pull_pagination`, `pull_cursor`, `advance_pull`), record envelopes (`unwrap_record`, `unwrap_records`, `pull_record_shape`) and the page loop `pull_pages` over a host-supplied fetch. The sample-inferred half of `propose_mapping` is not here.
+
+
 ### `e.algo.fulltext`
 
 ```neper
