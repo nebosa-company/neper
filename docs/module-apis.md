@@ -23024,7 +23024,7 @@ after the year 9999 or 4,000,000 sub-daily steps. Zones belong to `e.tz`.
 ```neper
 error Invalid
 
-type Calendar = enum u8 { Julian, IslamicCivil, Hebrew, Coptic, Ethiopic }
+type Calendar = enum u8 { Julian, IslamicCivil, Hebrew, Coptic, Ethiopic, ThaiBuddhist }
 type JapaneseDate = struct { era: u8, year: i32, month: u8, day: u8 }
 
 const RD_UNIX: i64 = 719163i64
@@ -23032,6 +23032,7 @@ const HEBREW_EPOCH: i64 = -1373427i64
 const ISLAMIC_EPOCH: i64 = 227015i64
 const COPTIC_EPOCH: i64 = 103605i64
 const ETHIOPIC_EPOCH: i64 = 2796i64
+const BUDDHIST_OFFSET: i64 = 543i64
 const JULIAN_DAY_UNIX: i64 = 2440588i64
 const ERA_COUNT: u8 = 5u8
 

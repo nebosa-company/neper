@@ -563,189 +563,312 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !expect(.Ethiopic, 0i64 - 80107i64, 1742i32, 13u8, 1u8) { os.exit(548) }
     if !expect(.Ethiopic, 0i64 - 80103i64, 1742i32, 13u8, 5u8) { os.exit(549) }
     if !expect(.Ethiopic, 0i64 - 80102i64, 1743i32, 1u8, 1u8) { os.exit(550) }
-    let (l550, le550) = calendars.days_in_month(.Coptic, 1i32, 1u8)
-    if le550 != ok || l550 != 30u8 { os.exit(551) }
-    let (l551, le551) = calendars.days_in_month(.Coptic, 1i32, 6u8)
-    if le551 != ok || l551 != 30u8 { os.exit(552) }
-    let (l552, le552) = calendars.days_in_month(.Coptic, 1i32, 12u8)
-    if le552 != ok || l552 != 30u8 { os.exit(553) }
-    let (l553, le553) = calendars.days_in_month(.Coptic, 1i32, 13u8)
-    if le553 != ok || l553 != 5u8 { os.exit(554) }
-    let (l554, le554) = calendars.days_in_month(.Coptic, 2i32, 1u8)
-    if le554 != ok || l554 != 30u8 { os.exit(555) }
-    let (l555, le555) = calendars.days_in_month(.Coptic, 2i32, 6u8)
-    if le555 != ok || l555 != 30u8 { os.exit(556) }
-    let (l556, le556) = calendars.days_in_month(.Coptic, 2i32, 12u8)
-    if le556 != ok || l556 != 30u8 { os.exit(557) }
-    let (l557, le557) = calendars.days_in_month(.Coptic, 2i32, 13u8)
-    if le557 != ok || l557 != 5u8 { os.exit(558) }
-    let (l558, le558) = calendars.days_in_month(.Coptic, 3i32, 1u8)
-    if le558 != ok || l558 != 30u8 { os.exit(559) }
-    let (l559, le559) = calendars.days_in_month(.Coptic, 3i32, 6u8)
-    if le559 != ok || l559 != 30u8 { os.exit(560) }
-    let (l560, le560) = calendars.days_in_month(.Coptic, 3i32, 12u8)
-    if le560 != ok || l560 != 30u8 { os.exit(561) }
-    let (l561, le561) = calendars.days_in_month(.Coptic, 3i32, 13u8)
-    if le561 != ok || l561 != 6u8 { os.exit(562) }
-    let (l562, le562) = calendars.days_in_month(.Coptic, 4i32, 1u8)
-    if le562 != ok || l562 != 30u8 { os.exit(563) }
-    let (l563, le563) = calendars.days_in_month(.Coptic, 4i32, 6u8)
-    if le563 != ok || l563 != 30u8 { os.exit(564) }
-    let (l564, le564) = calendars.days_in_month(.Coptic, 4i32, 12u8)
-    if le564 != ok || l564 != 30u8 { os.exit(565) }
-    let (l565, le565) = calendars.days_in_month(.Coptic, 4i32, 13u8)
-    if le565 != ok || l565 != 5u8 { os.exit(566) }
-    let (l566, le566) = calendars.days_in_month(.Coptic, 5i32, 1u8)
-    if le566 != ok || l566 != 30u8 { os.exit(567) }
-    let (l567, le567) = calendars.days_in_month(.Coptic, 5i32, 6u8)
-    if le567 != ok || l567 != 30u8 { os.exit(568) }
-    let (l568, le568) = calendars.days_in_month(.Coptic, 5i32, 12u8)
-    if le568 != ok || l568 != 30u8 { os.exit(569) }
-    let (l569, le569) = calendars.days_in_month(.Coptic, 5i32, 13u8)
-    if le569 != ok || l569 != 5u8 { os.exit(570) }
-    let (l570, le570) = calendars.days_in_month(.Coptic, 6i32, 1u8)
-    if le570 != ok || l570 != 30u8 { os.exit(571) }
-    let (l571, le571) = calendars.days_in_month(.Coptic, 6i32, 6u8)
-    if le571 != ok || l571 != 30u8 { os.exit(572) }
-    let (l572, le572) = calendars.days_in_month(.Coptic, 6i32, 12u8)
-    if le572 != ok || l572 != 30u8 { os.exit(573) }
-    let (l573, le573) = calendars.days_in_month(.Coptic, 6i32, 13u8)
-    if le573 != ok || l573 != 5u8 { os.exit(574) }
-    let (l574, le574) = calendars.days_in_month(.Coptic, 7i32, 1u8)
-    if le574 != ok || l574 != 30u8 { os.exit(575) }
-    let (l575, le575) = calendars.days_in_month(.Coptic, 7i32, 6u8)
-    if le575 != ok || l575 != 30u8 { os.exit(576) }
-    let (l576, le576) = calendars.days_in_month(.Coptic, 7i32, 12u8)
-    if le576 != ok || l576 != 30u8 { os.exit(577) }
-    let (l577, le577) = calendars.days_in_month(.Coptic, 7i32, 13u8)
-    if le577 != ok || l577 != 6u8 { os.exit(578) }
-    let (l578, le578) = calendars.days_in_month(.Coptic, 8i32, 1u8)
-    if le578 != ok || l578 != 30u8 { os.exit(579) }
-    let (l579, le579) = calendars.days_in_month(.Coptic, 8i32, 6u8)
-    if le579 != ok || l579 != 30u8 { os.exit(580) }
-    let (l580, le580) = calendars.days_in_month(.Coptic, 8i32, 12u8)
-    if le580 != ok || l580 != 30u8 { os.exit(581) }
-    let (l581, le581) = calendars.days_in_month(.Coptic, 8i32, 13u8)
-    if le581 != ok || l581 != 5u8 { os.exit(582) }
-    let (l582, le582) = calendars.days_in_month(.Coptic, 9i32, 1u8)
-    if le582 != ok || l582 != 30u8 { os.exit(583) }
-    let (l583, le583) = calendars.days_in_month(.Coptic, 9i32, 6u8)
-    if le583 != ok || l583 != 30u8 { os.exit(584) }
-    let (l584, le584) = calendars.days_in_month(.Coptic, 9i32, 12u8)
-    if le584 != ok || l584 != 30u8 { os.exit(585) }
-    let (l585, le585) = calendars.days_in_month(.Coptic, 9i32, 13u8)
-    if le585 != ok || l585 != 5u8 { os.exit(586) }
-    let (l586, le586) = calendars.days_in_month(.Coptic, 10i32, 1u8)
-    if le586 != ok || l586 != 30u8 { os.exit(587) }
-    let (l587, le587) = calendars.days_in_month(.Coptic, 10i32, 6u8)
-    if le587 != ok || l587 != 30u8 { os.exit(588) }
-    let (l588, le588) = calendars.days_in_month(.Coptic, 10i32, 12u8)
-    if le588 != ok || l588 != 30u8 { os.exit(589) }
-    let (l589, le589) = calendars.days_in_month(.Coptic, 10i32, 13u8)
-    if le589 != ok || l589 != 5u8 { os.exit(590) }
-    let (l590, le590) = calendars.days_in_month(.Coptic, 11i32, 1u8)
-    if le590 != ok || l590 != 30u8 { os.exit(591) }
-    let (l591, le591) = calendars.days_in_month(.Coptic, 11i32, 6u8)
-    if le591 != ok || l591 != 30u8 { os.exit(592) }
-    let (l592, le592) = calendars.days_in_month(.Coptic, 11i32, 12u8)
-    if le592 != ok || l592 != 30u8 { os.exit(593) }
-    let (l593, le593) = calendars.days_in_month(.Coptic, 11i32, 13u8)
-    if le593 != ok || l593 != 6u8 { os.exit(594) }
-    let (l594, le594) = calendars.days_in_month(.Ethiopic, 1i32, 1u8)
-    if le594 != ok || l594 != 30u8 { os.exit(595) }
-    let (l595, le595) = calendars.days_in_month(.Ethiopic, 1i32, 6u8)
-    if le595 != ok || l595 != 30u8 { os.exit(596) }
-    let (l596, le596) = calendars.days_in_month(.Ethiopic, 1i32, 12u8)
-    if le596 != ok || l596 != 30u8 { os.exit(597) }
-    let (l597, le597) = calendars.days_in_month(.Ethiopic, 1i32, 13u8)
-    if le597 != ok || l597 != 5u8 { os.exit(598) }
-    let (l598, le598) = calendars.days_in_month(.Ethiopic, 2i32, 1u8)
-    if le598 != ok || l598 != 30u8 { os.exit(599) }
-    let (l599, le599) = calendars.days_in_month(.Ethiopic, 2i32, 6u8)
-    if le599 != ok || l599 != 30u8 { os.exit(600) }
-    let (l600, le600) = calendars.days_in_month(.Ethiopic, 2i32, 12u8)
-    if le600 != ok || l600 != 30u8 { os.exit(601) }
-    let (l601, le601) = calendars.days_in_month(.Ethiopic, 2i32, 13u8)
-    if le601 != ok || l601 != 5u8 { os.exit(602) }
-    let (l602, le602) = calendars.days_in_month(.Ethiopic, 3i32, 1u8)
-    if le602 != ok || l602 != 30u8 { os.exit(603) }
-    let (l603, le603) = calendars.days_in_month(.Ethiopic, 3i32, 6u8)
-    if le603 != ok || l603 != 30u8 { os.exit(604) }
-    let (l604, le604) = calendars.days_in_month(.Ethiopic, 3i32, 12u8)
-    if le604 != ok || l604 != 30u8 { os.exit(605) }
-    let (l605, le605) = calendars.days_in_month(.Ethiopic, 3i32, 13u8)
-    if le605 != ok || l605 != 6u8 { os.exit(606) }
-    let (l606, le606) = calendars.days_in_month(.Ethiopic, 4i32, 1u8)
-    if le606 != ok || l606 != 30u8 { os.exit(607) }
-    let (l607, le607) = calendars.days_in_month(.Ethiopic, 4i32, 6u8)
-    if le607 != ok || l607 != 30u8 { os.exit(608) }
-    let (l608, le608) = calendars.days_in_month(.Ethiopic, 4i32, 12u8)
-    if le608 != ok || l608 != 30u8 { os.exit(609) }
-    let (l609, le609) = calendars.days_in_month(.Ethiopic, 4i32, 13u8)
-    if le609 != ok || l609 != 5u8 { os.exit(610) }
-    let (l610, le610) = calendars.days_in_month(.Ethiopic, 5i32, 1u8)
-    if le610 != ok || l610 != 30u8 { os.exit(611) }
-    let (l611, le611) = calendars.days_in_month(.Ethiopic, 5i32, 6u8)
-    if le611 != ok || l611 != 30u8 { os.exit(612) }
-    let (l612, le612) = calendars.days_in_month(.Ethiopic, 5i32, 12u8)
-    if le612 != ok || l612 != 30u8 { os.exit(613) }
-    let (l613, le613) = calendars.days_in_month(.Ethiopic, 5i32, 13u8)
-    if le613 != ok || l613 != 5u8 { os.exit(614) }
-    let (l614, le614) = calendars.days_in_month(.Ethiopic, 6i32, 1u8)
-    if le614 != ok || l614 != 30u8 { os.exit(615) }
-    let (l615, le615) = calendars.days_in_month(.Ethiopic, 6i32, 6u8)
-    if le615 != ok || l615 != 30u8 { os.exit(616) }
-    let (l616, le616) = calendars.days_in_month(.Ethiopic, 6i32, 12u8)
-    if le616 != ok || l616 != 30u8 { os.exit(617) }
-    let (l617, le617) = calendars.days_in_month(.Ethiopic, 6i32, 13u8)
-    if le617 != ok || l617 != 5u8 { os.exit(618) }
-    let (l618, le618) = calendars.days_in_month(.Ethiopic, 7i32, 1u8)
-    if le618 != ok || l618 != 30u8 { os.exit(619) }
-    let (l619, le619) = calendars.days_in_month(.Ethiopic, 7i32, 6u8)
-    if le619 != ok || l619 != 30u8 { os.exit(620) }
-    let (l620, le620) = calendars.days_in_month(.Ethiopic, 7i32, 12u8)
-    if le620 != ok || l620 != 30u8 { os.exit(621) }
-    let (l621, le621) = calendars.days_in_month(.Ethiopic, 7i32, 13u8)
-    if le621 != ok || l621 != 6u8 { os.exit(622) }
-    let (l622, le622) = calendars.days_in_month(.Ethiopic, 8i32, 1u8)
-    if le622 != ok || l622 != 30u8 { os.exit(623) }
-    let (l623, le623) = calendars.days_in_month(.Ethiopic, 8i32, 6u8)
-    if le623 != ok || l623 != 30u8 { os.exit(624) }
-    let (l624, le624) = calendars.days_in_month(.Ethiopic, 8i32, 12u8)
-    if le624 != ok || l624 != 30u8 { os.exit(625) }
-    let (l625, le625) = calendars.days_in_month(.Ethiopic, 8i32, 13u8)
-    if le625 != ok || l625 != 5u8 { os.exit(626) }
-    let (l626, le626) = calendars.days_in_month(.Ethiopic, 9i32, 1u8)
-    if le626 != ok || l626 != 30u8 { os.exit(627) }
-    let (l627, le627) = calendars.days_in_month(.Ethiopic, 9i32, 6u8)
-    if le627 != ok || l627 != 30u8 { os.exit(628) }
-    let (l628, le628) = calendars.days_in_month(.Ethiopic, 9i32, 12u8)
-    if le628 != ok || l628 != 30u8 { os.exit(629) }
-    let (l629, le629) = calendars.days_in_month(.Ethiopic, 9i32, 13u8)
-    if le629 != ok || l629 != 5u8 { os.exit(630) }
-    let (l630, le630) = calendars.days_in_month(.Ethiopic, 10i32, 1u8)
-    if le630 != ok || l630 != 30u8 { os.exit(631) }
-    let (l631, le631) = calendars.days_in_month(.Ethiopic, 10i32, 6u8)
-    if le631 != ok || l631 != 30u8 { os.exit(632) }
-    let (l632, le632) = calendars.days_in_month(.Ethiopic, 10i32, 12u8)
-    if le632 != ok || l632 != 30u8 { os.exit(633) }
-    let (l633, le633) = calendars.days_in_month(.Ethiopic, 10i32, 13u8)
-    if le633 != ok || l633 != 5u8 { os.exit(634) }
-    let (l634, le634) = calendars.days_in_month(.Ethiopic, 11i32, 1u8)
-    if le634 != ok || l634 != 30u8 { os.exit(635) }
-    let (l635, le635) = calendars.days_in_month(.Ethiopic, 11i32, 6u8)
-    if le635 != ok || l635 != 30u8 { os.exit(636) }
-    let (l636, le636) = calendars.days_in_month(.Ethiopic, 11i32, 12u8)
-    if le636 != ok || l636 != 30u8 { os.exit(637) }
-    let (l637, le637) = calendars.days_in_month(.Ethiopic, 11i32, 13u8)
-    if le637 != ok || l637 != 6u8 { os.exit(638) }
-    if !calendars.is_leap_year(.Coptic, 3i32) || !calendars.is_leap_year(.Coptic, 1739i32) || calendars.is_leap_year(.Coptic, 1740i32) { os.exit(639) }
-    if !calendars.is_leap_year(.Ethiopic, 3i32) || !calendars.is_leap_year(.Ethiopic, 1739i32) || calendars.is_leap_year(.Ethiopic, 1740i32) { os.exit(640) }
+    if !expect(.ThaiBuddhist, 22310i64, 2574i32, 1u8, 31u8) { os.exit(551) }
+    if !expect(.ThaiBuddhist, 17625i64, 2561i32, 4u8, 4u8) { os.exit(552) }
+    if !expect(.ThaiBuddhist, 3585i64, 2522i32, 10u8, 26u8) { os.exit(553) }
+    if !expect(.ThaiBuddhist, 14467i64, 2552i32, 8u8, 11u8) { os.exit(554) }
+    if !expect(.ThaiBuddhist, 29770i64, 2594i32, 7u8, 5u8) { os.exit(555) }
+    if !expect(.ThaiBuddhist, 4162i64, 2524i32, 5u8, 25u8) { os.exit(556) }
+    if !expect(.ThaiBuddhist, 0i64 - 7748i64, 2491i32, 10u8, 15u8) { os.exit(557) }
+    if !expect(.ThaiBuddhist, 27717i64, 2588i32, 11u8, 20u8) { os.exit(558) }
+    if !expect(.ThaiBuddhist, 0i64 - 1850i64, 2507i32, 12u8, 8u8) { os.exit(559) }
+    if !expect(.ThaiBuddhist, 29598i64, 2594i32, 1u8, 14u8) { os.exit(560) }
+    if !expect(.ThaiBuddhist, 0i64 - 2703i64, 2505i32, 8u8, 8u8) { os.exit(561) }
+    if !expect(.ThaiBuddhist, 39689i64, 2621i32, 8u8, 31u8) { os.exit(562) }
+    if !expect(.ThaiBuddhist, 0i64 - 3224i64, 2504i32, 3u8, 5u8) { os.exit(563) }
+    if !expect(.ThaiBuddhist, 25374i64, 2582i32, 6u8, 22u8) { os.exit(564) }
+    if !expect(.ThaiBuddhist, 770i64, 2515i32, 2u8, 10u8) { os.exit(565) }
+    if !expect(.ThaiBuddhist, 8023i64, 2534i32, 12u8, 20u8) { os.exit(566) }
+    if !expect(.ThaiBuddhist, 0i64 - 4880i64, 2499i32, 8u8, 22u8) { os.exit(567) }
+    if !expect(.ThaiBuddhist, 0i64 - 7634i64, 2492i32, 2u8, 6u8) { os.exit(568) }
+    if !expect(.ThaiBuddhist, 29737i64, 2594i32, 6u8, 2u8) { os.exit(569) }
+    if !expect(.ThaiBuddhist, 0i64 - 7245i64, 2493i32, 3u8, 2u8) { os.exit(570) }
+    if !expect(.ThaiBuddhist, 27492i64, 2588i32, 4u8, 9u8) { os.exit(571) }
+    if !expect(.ThaiBuddhist, 18534i64, 2563i32, 9u8, 29u8) { os.exit(572) }
+    if !expect(.ThaiBuddhist, 0i64 - 6765i64, 2494i32, 6u8, 25u8) { os.exit(573) }
+    if !expect(.ThaiBuddhist, 24615i64, 2580i32, 5u8, 24u8) { os.exit(574) }
+    if !expect(.ThaiBuddhist, 25219i64, 2582i32, 1u8, 18u8) { os.exit(575) }
+    if !expect(.ThaiBuddhist, 32423i64, 2601i32, 10u8, 9u8) { os.exit(576) }
+    if !expect(.ThaiBuddhist, 9789i64, 2539i32, 10u8, 20u8) { os.exit(577) }
+    if !expect(.ThaiBuddhist, 38000i64, 2617i32, 1u8, 15u8) { os.exit(578) }
+    if !expect(.ThaiBuddhist, 14336i64, 2552i32, 4u8, 2u8) { os.exit(579) }
+    if !expect(.ThaiBuddhist, 22144i64, 2573i32, 8u8, 18u8) { os.exit(580) }
+    if !expect(.ThaiBuddhist, 10797i64, 2542i32, 7u8, 25u8) { os.exit(581) }
+    if !expect(.ThaiBuddhist, 33616i64, 2605i32, 1u8, 14u8) { os.exit(582) }
+    if !expect(.ThaiBuddhist, 6732i64, 2531i32, 6u8, 7u8) { os.exit(583) }
+    if !expect(.ThaiBuddhist, 14087i64, 2551i32, 7u8, 27u8) { os.exit(584) }
+    if !expect(.ThaiBuddhist, 5740i64, 2528i32, 9u8, 19u8) { os.exit(585) }
+    if !expect(.ThaiBuddhist, 29544i64, 2593i32, 11u8, 21u8) { os.exit(586) }
+    if !expect(.ThaiBuddhist, 21376i64, 2571i32, 7u8, 11u8) { os.exit(587) }
+    if !expect(.ThaiBuddhist, 0i64 - 3961i64, 2502i32, 2u8, 27u8) { os.exit(588) }
+    if !expect(.ThaiBuddhist, 0i64 - 3853i64, 2502i32, 6u8, 15u8) { os.exit(589) }
+    if !expect(.ThaiBuddhist, 28874i64, 2592i32, 1u8, 20u8) { os.exit(590) }
+    if !expect(.ThaiBuddhist, 11923i64, 2545i32, 8u8, 24u8) { os.exit(591) }
+    if !expect(.ThaiBuddhist, 23362i64, 2576i32, 12u8, 18u8) { os.exit(592) }
+    if !expect(.ThaiBuddhist, 23980i64, 2578i32, 8u8, 28u8) { os.exit(593) }
+    if !expect(.ThaiBuddhist, 32457i64, 2601i32, 11u8, 12u8) { os.exit(594) }
+    if !expect(.ThaiBuddhist, 14701i64, 2553i32, 4u8, 2u8) { os.exit(595) }
+    if !expect(.ThaiBuddhist, 141i64, 2513i32, 5u8, 22u8) { os.exit(596) }
+    if !expect(.ThaiBuddhist, 22147i64, 2573i32, 8u8, 21u8) { os.exit(597) }
+    if !expect(.ThaiBuddhist, 4493i64, 2525i32, 4u8, 21u8) { os.exit(598) }
+    if !expect(.ThaiBuddhist, 37429i64, 2615i32, 6u8, 23u8) { os.exit(599) }
+    if !expect(.ThaiBuddhist, 13413i64, 2549i32, 9u8, 22u8) { os.exit(600) }
+    if !expect(.ThaiBuddhist, 25687i64, 2583i32, 4u8, 30u8) { os.exit(601) }
+    if !expect(.ThaiBuddhist, 7813i64, 2534i32, 5u8, 24u8) { os.exit(602) }
+    if !expect(.ThaiBuddhist, 15058i64, 2554i32, 3u8, 25u8) { os.exit(603) }
+    if !expect(.ThaiBuddhist, 27632i64, 2588i32, 8u8, 27u8) { os.exit(604) }
+    if !expect(.ThaiBuddhist, 14385i64, 2552i32, 5u8, 21u8) { os.exit(605) }
+    if !expect(.ThaiBuddhist, 0i64 - 4225i64, 2501i32, 6u8, 8u8) { os.exit(606) }
+    if !expect(.ThaiBuddhist, 23209i64, 2576i32, 7u8, 18u8) { os.exit(607) }
+    if !expect(.ThaiBuddhist, 25030i64, 2581i32, 7u8, 13u8) { os.exit(608) }
+    if !expect(.ThaiBuddhist, 0i64 - 8347i64, 2490i32, 2u8, 24u8) { os.exit(609) }
+    if !expect(.ThaiBuddhist, 36108i64, 2611i32, 11u8, 10u8) { os.exit(610) }
+    if !expect(.ThaiBuddhist, 0i64 - 5935i64, 2496i32, 10u8, 2u8) { os.exit(611) }
+    if !expect(.ThaiBuddhist, 31154i64, 2598i32, 4u8, 19u8) { os.exit(612) }
+    if !expect(.ThaiBuddhist, 11946i64, 2545i32, 9u8, 16u8) { os.exit(613) }
+    if !expect(.ThaiBuddhist, 0i64 - 3518i64, 2503i32, 5u8, 15u8) { os.exit(614) }
+    if !expect(.ThaiBuddhist, 34141i64, 2606i32, 6u8, 23u8) { os.exit(615) }
+    if !expect(.ThaiBuddhist, 17786i64, 2561i32, 9u8, 12u8) { os.exit(616) }
+    if !expect(.ThaiBuddhist, 0i64 - 5366i64, 2498i32, 4u8, 24u8) { os.exit(617) }
+    if !expect(.ThaiBuddhist, 0i64 - 1793i64, 2508i32, 2u8, 3u8) { os.exit(618) }
+    if !expect(.ThaiBuddhist, 8332i64, 2535i32, 10u8, 24u8) { os.exit(619) }
+    if !expect(.ThaiBuddhist, 0i64 - 3453i64, 2503i32, 7u8, 19u8) { os.exit(620) }
+    if !expect(.ThaiBuddhist, 11100i64, 2543i32, 5u8, 23u8) { os.exit(621) }
+    if !expect(.ThaiBuddhist, 11935i64, 2545i32, 9u8, 5u8) { os.exit(622) }
+    if !expect(.ThaiBuddhist, 0i64 - 2694i64, 2505i32, 8u8, 17u8) { os.exit(623) }
+    if !expect(.ThaiBuddhist, 33275i64, 2604i32, 2u8, 7u8) { os.exit(624) }
+    if !expect(.ThaiBuddhist, 36790i64, 2613i32, 9u8, 23u8) { os.exit(625) }
+    if !expect(.ThaiBuddhist, 1568i64, 2517i32, 4u8, 18u8) { os.exit(626) }
+    if !expect(.ThaiBuddhist, 33226i64, 2603i32, 12u8, 20u8) { os.exit(627) }
+    if !expect(.ThaiBuddhist, 11784i64, 2545i32, 4u8, 7u8) { os.exit(628) }
+    if !expect(.ThaiBuddhist, 16483i64, 2558i32, 2u8, 17u8) { os.exit(629) }
+    if !expect(.ThaiBuddhist, 38750i64, 2619i32, 2u8, 4u8) { os.exit(630) }
+    if !expect(.ThaiBuddhist, 2867i64, 2520i32, 11u8, 7u8) { os.exit(631) }
+    if !expect(.ThaiBuddhist, 3782i64, 2523i32, 5u8, 10u8) { os.exit(632) }
+    if !expect(.ThaiBuddhist, 32396i64, 2601i32, 9u8, 12u8) { os.exit(633) }
+    if !expect(.ThaiBuddhist, 12304i64, 2546i32, 9u8, 9u8) { os.exit(634) }
+    if !expect(.ThaiBuddhist, 3593i64, 2522i32, 11u8, 3u8) { os.exit(635) }
+    if !expect(.ThaiBuddhist, 25656i64, 2583i32, 3u8, 30u8) { os.exit(636) }
+    if !expect(.ThaiBuddhist, 33904i64, 2605i32, 10u8, 29u8) { os.exit(637) }
+    if !expect(.ThaiBuddhist, 0i64 - 9424i64, 2487i32, 3u8, 14u8) { os.exit(638) }
+    if !expect(.ThaiBuddhist, 8848i64, 2537i32, 3u8, 24u8) { os.exit(639) }
+    if !expect(.ThaiBuddhist, 0i64 - 5207i64, 2498i32, 9u8, 30u8) { os.exit(640) }
+    if !expect(.ThaiBuddhist, 3969i64, 2523i32, 11u8, 13u8) { os.exit(641) }
+    if !expect(.ThaiBuddhist, 33598i64, 2604i32, 12u8, 27u8) { os.exit(642) }
+    if !expect(.ThaiBuddhist, 0i64 - 5642i64, 2497i32, 7u8, 22u8) { os.exit(643) }
+    if !expect(.ThaiBuddhist, 23311i64, 2576i32, 10u8, 28u8) { os.exit(644) }
+    if !expect(.ThaiBuddhist, 33029i64, 2603i32, 6u8, 6u8) { os.exit(645) }
+    if !expect(.ThaiBuddhist, 0i64 - 4306i64, 2501i32, 3u8, 19u8) { os.exit(646) }
+    if !expect(.ThaiBuddhist, 29078i64, 2592i32, 8u8, 12u8) { os.exit(647) }
+    if !expect(.ThaiBuddhist, 0i64 - 9145i64, 2487i32, 12u8, 18u8) { os.exit(648) }
+    if !expect(.ThaiBuddhist, 9785i64, 2539i32, 10u8, 16u8) { os.exit(649) }
+    if !expect(.ThaiBuddhist, 25497i64, 2582i32, 10u8, 23u8) { os.exit(650) }
+    if !expect(.ThaiBuddhist, 27180i64, 2587i32, 6u8, 1u8) { os.exit(651) }
+    if !expect(.ThaiBuddhist, 6463i64, 2530i32, 9u8, 12u8) { os.exit(652) }
+    if !expect(.ThaiBuddhist, 20476i64, 2569i32, 1u8, 23u8) { os.exit(653) }
+    if !expect(.ThaiBuddhist, 35763i64, 2610i32, 12u8, 1u8) { os.exit(654) }
+    if !expect(.ThaiBuddhist, 27294i64, 2587i32, 9u8, 23u8) { os.exit(655) }
+    if !expect(.ThaiBuddhist, 34547i64, 2607i32, 8u8, 2u8) { os.exit(656) }
+    if !expect(.ThaiBuddhist, 2192i64, 2519i32, 1u8, 2u8) { os.exit(657) }
+    if !expect(.ThaiBuddhist, 16293i64, 2557i32, 8u8, 11u8) { os.exit(658) }
+    if !expect(.ThaiBuddhist, 32564i64, 2602i32, 2u8, 27u8) { os.exit(659) }
+    if !expect(.ThaiBuddhist, 22474i64, 2574i32, 7u8, 14u8) { os.exit(660) }
+    if !expect(.ThaiBuddhist, 31627i64, 2599i32, 8u8, 4u8) { os.exit(661) }
+    if !expect(.ThaiBuddhist, 34576i64, 2607i32, 8u8, 31u8) { os.exit(662) }
+    if !expect(.ThaiBuddhist, 7081i64, 2532i32, 5u8, 22u8) { os.exit(663) }
+    if !expect(.ThaiBuddhist, 5532i64, 2528i32, 2u8, 23u8) { os.exit(664) }
+    if !expect(.ThaiBuddhist, 28033i64, 2589i32, 10u8, 2u8) { os.exit(665) }
+    if !expect(.ThaiBuddhist, 35506i64, 2610i32, 3u8, 19u8) { os.exit(666) }
+    if !expect(.ThaiBuddhist, 0i64 - 774i64, 2510i32, 11u8, 19u8) { os.exit(667) }
+    if !expect(.ThaiBuddhist, 23514i64, 2577i32, 5u8, 19u8) { os.exit(668) }
+    if !expect(.ThaiBuddhist, 35501i64, 2610i32, 3u8, 14u8) { os.exit(669) }
+    if !expect(.ThaiBuddhist, 15969i64, 2556i32, 9u8, 21u8) { os.exit(670) }
+    if !calendars.is_leap_year(.ThaiBuddhist, 2567i32) || calendars.is_leap_year(.ThaiBuddhist, 2566i32) || calendars.is_leap_year(.ThaiBuddhist, 2643i32) { os.exit(671) }
+    let (feb, feb_e) = calendars.days_in_month(.ThaiBuddhist, 2567i32, 2u8)
+    if feb_e != ok || feb != 29u8 { os.exit(672) }
+    let (l672, le672) = calendars.days_in_month(.Coptic, 1i32, 1u8)
+    if le672 != ok || l672 != 30u8 { os.exit(673) }
+    let (l673, le673) = calendars.days_in_month(.Coptic, 1i32, 6u8)
+    if le673 != ok || l673 != 30u8 { os.exit(674) }
+    let (l674, le674) = calendars.days_in_month(.Coptic, 1i32, 12u8)
+    if le674 != ok || l674 != 30u8 { os.exit(675) }
+    let (l675, le675) = calendars.days_in_month(.Coptic, 1i32, 13u8)
+    if le675 != ok || l675 != 5u8 { os.exit(676) }
+    let (l676, le676) = calendars.days_in_month(.Coptic, 2i32, 1u8)
+    if le676 != ok || l676 != 30u8 { os.exit(677) }
+    let (l677, le677) = calendars.days_in_month(.Coptic, 2i32, 6u8)
+    if le677 != ok || l677 != 30u8 { os.exit(678) }
+    let (l678, le678) = calendars.days_in_month(.Coptic, 2i32, 12u8)
+    if le678 != ok || l678 != 30u8 { os.exit(679) }
+    let (l679, le679) = calendars.days_in_month(.Coptic, 2i32, 13u8)
+    if le679 != ok || l679 != 5u8 { os.exit(680) }
+    let (l680, le680) = calendars.days_in_month(.Coptic, 3i32, 1u8)
+    if le680 != ok || l680 != 30u8 { os.exit(681) }
+    let (l681, le681) = calendars.days_in_month(.Coptic, 3i32, 6u8)
+    if le681 != ok || l681 != 30u8 { os.exit(682) }
+    let (l682, le682) = calendars.days_in_month(.Coptic, 3i32, 12u8)
+    if le682 != ok || l682 != 30u8 { os.exit(683) }
+    let (l683, le683) = calendars.days_in_month(.Coptic, 3i32, 13u8)
+    if le683 != ok || l683 != 6u8 { os.exit(684) }
+    let (l684, le684) = calendars.days_in_month(.Coptic, 4i32, 1u8)
+    if le684 != ok || l684 != 30u8 { os.exit(685) }
+    let (l685, le685) = calendars.days_in_month(.Coptic, 4i32, 6u8)
+    if le685 != ok || l685 != 30u8 { os.exit(686) }
+    let (l686, le686) = calendars.days_in_month(.Coptic, 4i32, 12u8)
+    if le686 != ok || l686 != 30u8 { os.exit(687) }
+    let (l687, le687) = calendars.days_in_month(.Coptic, 4i32, 13u8)
+    if le687 != ok || l687 != 5u8 { os.exit(688) }
+    let (l688, le688) = calendars.days_in_month(.Coptic, 5i32, 1u8)
+    if le688 != ok || l688 != 30u8 { os.exit(689) }
+    let (l689, le689) = calendars.days_in_month(.Coptic, 5i32, 6u8)
+    if le689 != ok || l689 != 30u8 { os.exit(690) }
+    let (l690, le690) = calendars.days_in_month(.Coptic, 5i32, 12u8)
+    if le690 != ok || l690 != 30u8 { os.exit(691) }
+    let (l691, le691) = calendars.days_in_month(.Coptic, 5i32, 13u8)
+    if le691 != ok || l691 != 5u8 { os.exit(692) }
+    let (l692, le692) = calendars.days_in_month(.Coptic, 6i32, 1u8)
+    if le692 != ok || l692 != 30u8 { os.exit(693) }
+    let (l693, le693) = calendars.days_in_month(.Coptic, 6i32, 6u8)
+    if le693 != ok || l693 != 30u8 { os.exit(694) }
+    let (l694, le694) = calendars.days_in_month(.Coptic, 6i32, 12u8)
+    if le694 != ok || l694 != 30u8 { os.exit(695) }
+    let (l695, le695) = calendars.days_in_month(.Coptic, 6i32, 13u8)
+    if le695 != ok || l695 != 5u8 { os.exit(696) }
+    let (l696, le696) = calendars.days_in_month(.Coptic, 7i32, 1u8)
+    if le696 != ok || l696 != 30u8 { os.exit(697) }
+    let (l697, le697) = calendars.days_in_month(.Coptic, 7i32, 6u8)
+    if le697 != ok || l697 != 30u8 { os.exit(698) }
+    let (l698, le698) = calendars.days_in_month(.Coptic, 7i32, 12u8)
+    if le698 != ok || l698 != 30u8 { os.exit(699) }
+    let (l699, le699) = calendars.days_in_month(.Coptic, 7i32, 13u8)
+    if le699 != ok || l699 != 6u8 { os.exit(700) }
+    let (l700, le700) = calendars.days_in_month(.Coptic, 8i32, 1u8)
+    if le700 != ok || l700 != 30u8 { os.exit(701) }
+    let (l701, le701) = calendars.days_in_month(.Coptic, 8i32, 6u8)
+    if le701 != ok || l701 != 30u8 { os.exit(702) }
+    let (l702, le702) = calendars.days_in_month(.Coptic, 8i32, 12u8)
+    if le702 != ok || l702 != 30u8 { os.exit(703) }
+    let (l703, le703) = calendars.days_in_month(.Coptic, 8i32, 13u8)
+    if le703 != ok || l703 != 5u8 { os.exit(704) }
+    let (l704, le704) = calendars.days_in_month(.Coptic, 9i32, 1u8)
+    if le704 != ok || l704 != 30u8 { os.exit(705) }
+    let (l705, le705) = calendars.days_in_month(.Coptic, 9i32, 6u8)
+    if le705 != ok || l705 != 30u8 { os.exit(706) }
+    let (l706, le706) = calendars.days_in_month(.Coptic, 9i32, 12u8)
+    if le706 != ok || l706 != 30u8 { os.exit(707) }
+    let (l707, le707) = calendars.days_in_month(.Coptic, 9i32, 13u8)
+    if le707 != ok || l707 != 5u8 { os.exit(708) }
+    let (l708, le708) = calendars.days_in_month(.Coptic, 10i32, 1u8)
+    if le708 != ok || l708 != 30u8 { os.exit(709) }
+    let (l709, le709) = calendars.days_in_month(.Coptic, 10i32, 6u8)
+    if le709 != ok || l709 != 30u8 { os.exit(710) }
+    let (l710, le710) = calendars.days_in_month(.Coptic, 10i32, 12u8)
+    if le710 != ok || l710 != 30u8 { os.exit(711) }
+    let (l711, le711) = calendars.days_in_month(.Coptic, 10i32, 13u8)
+    if le711 != ok || l711 != 5u8 { os.exit(712) }
+    let (l712, le712) = calendars.days_in_month(.Coptic, 11i32, 1u8)
+    if le712 != ok || l712 != 30u8 { os.exit(713) }
+    let (l713, le713) = calendars.days_in_month(.Coptic, 11i32, 6u8)
+    if le713 != ok || l713 != 30u8 { os.exit(714) }
+    let (l714, le714) = calendars.days_in_month(.Coptic, 11i32, 12u8)
+    if le714 != ok || l714 != 30u8 { os.exit(715) }
+    let (l715, le715) = calendars.days_in_month(.Coptic, 11i32, 13u8)
+    if le715 != ok || l715 != 6u8 { os.exit(716) }
+    let (l716, le716) = calendars.days_in_month(.Ethiopic, 1i32, 1u8)
+    if le716 != ok || l716 != 30u8 { os.exit(717) }
+    let (l717, le717) = calendars.days_in_month(.Ethiopic, 1i32, 6u8)
+    if le717 != ok || l717 != 30u8 { os.exit(718) }
+    let (l718, le718) = calendars.days_in_month(.Ethiopic, 1i32, 12u8)
+    if le718 != ok || l718 != 30u8 { os.exit(719) }
+    let (l719, le719) = calendars.days_in_month(.Ethiopic, 1i32, 13u8)
+    if le719 != ok || l719 != 5u8 { os.exit(720) }
+    let (l720, le720) = calendars.days_in_month(.Ethiopic, 2i32, 1u8)
+    if le720 != ok || l720 != 30u8 { os.exit(721) }
+    let (l721, le721) = calendars.days_in_month(.Ethiopic, 2i32, 6u8)
+    if le721 != ok || l721 != 30u8 { os.exit(722) }
+    let (l722, le722) = calendars.days_in_month(.Ethiopic, 2i32, 12u8)
+    if le722 != ok || l722 != 30u8 { os.exit(723) }
+    let (l723, le723) = calendars.days_in_month(.Ethiopic, 2i32, 13u8)
+    if le723 != ok || l723 != 5u8 { os.exit(724) }
+    let (l724, le724) = calendars.days_in_month(.Ethiopic, 3i32, 1u8)
+    if le724 != ok || l724 != 30u8 { os.exit(725) }
+    let (l725, le725) = calendars.days_in_month(.Ethiopic, 3i32, 6u8)
+    if le725 != ok || l725 != 30u8 { os.exit(726) }
+    let (l726, le726) = calendars.days_in_month(.Ethiopic, 3i32, 12u8)
+    if le726 != ok || l726 != 30u8 { os.exit(727) }
+    let (l727, le727) = calendars.days_in_month(.Ethiopic, 3i32, 13u8)
+    if le727 != ok || l727 != 6u8 { os.exit(728) }
+    let (l728, le728) = calendars.days_in_month(.Ethiopic, 4i32, 1u8)
+    if le728 != ok || l728 != 30u8 { os.exit(729) }
+    let (l729, le729) = calendars.days_in_month(.Ethiopic, 4i32, 6u8)
+    if le729 != ok || l729 != 30u8 { os.exit(730) }
+    let (l730, le730) = calendars.days_in_month(.Ethiopic, 4i32, 12u8)
+    if le730 != ok || l730 != 30u8 { os.exit(731) }
+    let (l731, le731) = calendars.days_in_month(.Ethiopic, 4i32, 13u8)
+    if le731 != ok || l731 != 5u8 { os.exit(732) }
+    let (l732, le732) = calendars.days_in_month(.Ethiopic, 5i32, 1u8)
+    if le732 != ok || l732 != 30u8 { os.exit(733) }
+    let (l733, le733) = calendars.days_in_month(.Ethiopic, 5i32, 6u8)
+    if le733 != ok || l733 != 30u8 { os.exit(734) }
+    let (l734, le734) = calendars.days_in_month(.Ethiopic, 5i32, 12u8)
+    if le734 != ok || l734 != 30u8 { os.exit(735) }
+    let (l735, le735) = calendars.days_in_month(.Ethiopic, 5i32, 13u8)
+    if le735 != ok || l735 != 5u8 { os.exit(736) }
+    let (l736, le736) = calendars.days_in_month(.Ethiopic, 6i32, 1u8)
+    if le736 != ok || l736 != 30u8 { os.exit(737) }
+    let (l737, le737) = calendars.days_in_month(.Ethiopic, 6i32, 6u8)
+    if le737 != ok || l737 != 30u8 { os.exit(738) }
+    let (l738, le738) = calendars.days_in_month(.Ethiopic, 6i32, 12u8)
+    if le738 != ok || l738 != 30u8 { os.exit(739) }
+    let (l739, le739) = calendars.days_in_month(.Ethiopic, 6i32, 13u8)
+    if le739 != ok || l739 != 5u8 { os.exit(740) }
+    let (l740, le740) = calendars.days_in_month(.Ethiopic, 7i32, 1u8)
+    if le740 != ok || l740 != 30u8 { os.exit(741) }
+    let (l741, le741) = calendars.days_in_month(.Ethiopic, 7i32, 6u8)
+    if le741 != ok || l741 != 30u8 { os.exit(742) }
+    let (l742, le742) = calendars.days_in_month(.Ethiopic, 7i32, 12u8)
+    if le742 != ok || l742 != 30u8 { os.exit(743) }
+    let (l743, le743) = calendars.days_in_month(.Ethiopic, 7i32, 13u8)
+    if le743 != ok || l743 != 6u8 { os.exit(744) }
+    let (l744, le744) = calendars.days_in_month(.Ethiopic, 8i32, 1u8)
+    if le744 != ok || l744 != 30u8 { os.exit(745) }
+    let (l745, le745) = calendars.days_in_month(.Ethiopic, 8i32, 6u8)
+    if le745 != ok || l745 != 30u8 { os.exit(746) }
+    let (l746, le746) = calendars.days_in_month(.Ethiopic, 8i32, 12u8)
+    if le746 != ok || l746 != 30u8 { os.exit(747) }
+    let (l747, le747) = calendars.days_in_month(.Ethiopic, 8i32, 13u8)
+    if le747 != ok || l747 != 5u8 { os.exit(748) }
+    let (l748, le748) = calendars.days_in_month(.Ethiopic, 9i32, 1u8)
+    if le748 != ok || l748 != 30u8 { os.exit(749) }
+    let (l749, le749) = calendars.days_in_month(.Ethiopic, 9i32, 6u8)
+    if le749 != ok || l749 != 30u8 { os.exit(750) }
+    let (l750, le750) = calendars.days_in_month(.Ethiopic, 9i32, 12u8)
+    if le750 != ok || l750 != 30u8 { os.exit(751) }
+    let (l751, le751) = calendars.days_in_month(.Ethiopic, 9i32, 13u8)
+    if le751 != ok || l751 != 5u8 { os.exit(752) }
+    let (l752, le752) = calendars.days_in_month(.Ethiopic, 10i32, 1u8)
+    if le752 != ok || l752 != 30u8 { os.exit(753) }
+    let (l753, le753) = calendars.days_in_month(.Ethiopic, 10i32, 6u8)
+    if le753 != ok || l753 != 30u8 { os.exit(754) }
+    let (l754, le754) = calendars.days_in_month(.Ethiopic, 10i32, 12u8)
+    if le754 != ok || l754 != 30u8 { os.exit(755) }
+    let (l755, le755) = calendars.days_in_month(.Ethiopic, 10i32, 13u8)
+    if le755 != ok || l755 != 5u8 { os.exit(756) }
+    let (l756, le756) = calendars.days_in_month(.Ethiopic, 11i32, 1u8)
+    if le756 != ok || l756 != 30u8 { os.exit(757) }
+    let (l757, le757) = calendars.days_in_month(.Ethiopic, 11i32, 6u8)
+    if le757 != ok || l757 != 30u8 { os.exit(758) }
+    let (l758, le758) = calendars.days_in_month(.Ethiopic, 11i32, 12u8)
+    if le758 != ok || l758 != 30u8 { os.exit(759) }
+    let (l759, le759) = calendars.days_in_month(.Ethiopic, 11i32, 13u8)
+    if le759 != ok || l759 != 6u8 { os.exit(760) }
+    if !calendars.is_leap_year(.Coptic, 3i32) || !calendars.is_leap_year(.Coptic, 1739i32) || calendars.is_leap_year(.Coptic, 1740i32) { os.exit(761) }
+    if !calendars.is_leap_year(.Ethiopic, 3i32) || !calendars.is_leap_year(.Ethiopic, 1739i32) || calendars.is_leap_year(.Ethiopic, 1740i32) { os.exit(762) }
     let (c1, ce1) = calendars.convert(.Coptic, .Julian, time.Date{ year: 1i32, month: 1u8, day: 1u8 })
-    if ce1 != ok || c1.year != 284i32 || c1.month != 8u8 || c1.day != 29u8 { os.exit(641) }
+    if ce1 != ok || c1.year != 284i32 || c1.month != 8u8 || c1.day != 29u8 { os.exit(763) }
     let (e1, ee1) = calendars.convert(.Ethiopic, .Julian, time.Date{ year: 1i32, month: 1u8, day: 1u8 })
-    if ee1 != ok || e1.year != 8i32 || e1.month != 8u8 || e1.day != 29u8 { os.exit(642) }
+    if ee1 != ok || e1.year != 8i32 || e1.month != 8u8 || e1.day != 29u8 { os.exit(764) }
     let (bad, bade) = calendars.days_in_month(.Coptic, 0i32, 1u8)
-    if bade == ok { os.exit(643) }
+    if bade == ok { os.exit(765) }
     ret ok
 }

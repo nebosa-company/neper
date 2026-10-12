@@ -24,7 +24,7 @@
 
 use e.time
 
-type Calendar = enum u8 { Julian, IslamicCivil, Hebrew, Coptic, Ethiopic }
+type Calendar = enum u8 { Julian, IslamicCivil, Hebrew, Coptic, Ethiopic, ThaiBuddhist }
 type JapaneseDate = struct { era: u8, year: i32, month: u8, day: u8 }
 error Invalid
 
@@ -35,6 +35,8 @@ const ISLAMIC_EPOCH: i64 = 227015i64
 // the year mod 4 is 3): their year 1 starts on these R.D. day numbers.
 const COPTIC_EPOCH: i64 = 103605i64
 const ETHIOPIC_EPOCH: i64 = 2796i64
+// The Thai solar (Buddhist Era) calendar since 1941: the Gregorian year plus 543, the months and days the Gregorian ones.
+const BUDDHIST_OFFSET: i64 = 543i64
 const JULIAN_DAY_UNIX: i64 = 2440588i64
 const ERA_COUNT: u8 = 5u8
 
@@ -189,6 +191,7 @@ fn african_from_days(cal: Calendar, count: i64) -> (i64, i64, i64) {
 }
 
 fn is_leap_year(cal: Calendar, year: i32) -> bool {
+    if cal == .ThaiBuddhist { ret time.is_leap(i64(year) - BUDDHIST_OFFSET) }
     if cal == .Coptic || cal == .Ethiopic { ret time.floor_mod(i64(year), 4i64) == 3i64 }
     if cal == .Julian { ret time.floor_mod(i64(year), 4i64) == 0i64 }
     if cal == .IslamicCivil { ret islamic_leap(i64(year)) }
@@ -219,6 +222,7 @@ fn days_in_month(cal: Calendar, year: i32, month: u8) -> (u8, err) {
         if m == 4i64 || m == 6i64 || m == 9i64 || m == 11i64 { ret (30u8, ok) }
         ret (31u8, ok)
     }
+    if cal == .ThaiBuddhist { ret (u8(time.days_in_month(y - BUDDHIST_OFFSET, m)), ok) }
     if cal == .Coptic || cal == .Ethiopic {
         if m == 13i64 {
             if time.floor_mod(y, 4i64) == 3i64 { ret (6u8, ok) }
@@ -248,6 +252,7 @@ fn to_days(cal: Calendar, date: time.Date) -> (i64, err) {
     if cal == .Julian { ret (julian_to_days(y, m, d), ok) }
     if cal == .IslamicCivil { ret (islamic_to_days(y, m, d), ok) }
     if cal == .Coptic || cal == .Ethiopic { ret (african_to_days(cal, y, m, d), ok) }
+    if cal == .ThaiBuddhist { ret (time.days_from_civil(y - BUDDHIST_OFFSET, m, d), ok) }
     ret (hebrew_to_days(y, m, d), ok)
 }
 
@@ -269,6 +274,11 @@ fn from_days(cal: Calendar, count: i64) -> (time.Date, err) {
         if count < islamic_to_days(1i64, 1i64, 1i64) { ret (zero, Invalid) }
         let (y, m, d) = islamic_from_days(count)
         ret (make_date(y, m, d), ok)
+    }
+    if cal == .ThaiBuddhist {
+        let (y, m, d) = time.civil_from_days(count)
+        if y + BUDDHIST_OFFSET < 1i64 { ret (zero, Invalid) }
+        ret (make_date(y + BUDDHIST_OFFSET, m, d), ok)
     }
     if cal == .Coptic || cal == .Ethiopic {
         if count < african_to_days(cal, 1i64, 1i64, 1i64) { ret (zero, Invalid) }

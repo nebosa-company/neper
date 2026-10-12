@@ -58,6 +58,12 @@ def main():
                 cases.append((name, day, (year, 13, d)))
             nxt = unix_days(module.to_jd(year, 13, last)) + 1
             cases.append((name, nxt, module.from_jd(nxt + 2440587.5)))
+    # The Thai Buddhist calendar: the Gregorian date with the year plus 543 (datetime is the reference).
+    thai = []
+    for _ in range(120):
+        day = random.randint(-10000, 40000)
+        d = datetime.date.fromordinal(day + 719163)
+        thai.append((day, d.year + 543, d.month, d.day))
     lengths = []
     for module, name in ((coptic, "Coptic"), (ethiopian, "Ethiopic")):
         for year in range(1, 12):
@@ -84,6 +90,14 @@ def main():
         sign = "0i64 - " if day < 0 else ""
         out.append("    if !expect(%s, %s%di64, %di32, %du8, %du8) { os.exit(%d) }\n" % (cal, sign, abs(day), y, m, d, n + 1))
         n += 1
+    for day, y, m, d in thai:
+        sign = "0i64 - " if day < 0 else ""
+        out.append("    if !expect(.ThaiBuddhist, %s%di64, %di32, %du8, %du8) { os.exit(%d) }\n" % (sign, abs(day), y, m, d, n + 1))
+        n += 1
+    out.append("    if !calendars.is_leap_year(.ThaiBuddhist, 2567i32) || calendars.is_leap_year(.ThaiBuddhist, 2566i32) || calendars.is_leap_year(.ThaiBuddhist, 2643i32) { os.exit(%d) }\n" % (n + 1))
+    n += 1
+    out.append("    let (feb, feb_e) = calendars.days_in_month(.ThaiBuddhist, 2567i32, 2u8)\n    if feb_e != ok || feb != 29u8 { os.exit(%d) }\n" % (n + 1))
+    n += 1
     for name, year, month, length in lengths:
         cal = ".%s" % name
         out.append("    let (l%d, le%d) = calendars.days_in_month(%s, %di32, %du8)\n" % (n, n, cal, year, month))
