@@ -330,6 +330,100 @@ fn saturating_sub[T: type](a: T, b: T) -> T
 fn saturating_mul[T: type](a: T, b: T) -> T
 ```
 
+### `e.math.sym`
+
+```neper
+error TooLarge
+error Syntax
+error Unsupported
+type Q = struct { n: i64, d: i64 }
+type Node = struct { kind: u8, f: u8, a: u32, b: u32, n: i64, d: i64 }
+type Pool = struct { nodes: []Node, count: u32, names: []str, name_count: u32, failed: bool }
+type Poly = struct { c: [20]Q, deg: i32 }
+type Parser = struct { src: str, at: usize, pool: *Pool, bad: bool }
+const K_NUM: u8 = 0u8
+const K_SYM: u8 = 1u8
+const K_ADD: u8 = 2u8
+const K_MUL: u8 = 3u8
+const K_POW: u8 = 4u8
+const K_FUN: u8 = 5u8
+const F_SIN: u8 = 0u8
+const F_COS: u8 = 1u8
+const F_TAN: u8 = 2u8
+const F_EXP: u8 = 3u8
+const F_LN: u8 = 4u8
+const F_ATAN: u8 = 5u8
+const LIMIT: i64 = 2147483648i64
+
+fn pool(a: *mem.Arena, capacity: usize) -> (Pool, err)
+fn mk(p: *Pool, kind: u8, f: u8, a: u32, b: u32, n: i64, d: i64) -> u32
+fn abs64(v: i64) -> i64
+fn gcd64(x: i64, y: i64) -> i64
+fn q(n: i64, d: i64) -> Q
+fn big(p: *Pool, v: i64) -> bool
+fn q_add(p: *Pool, x: Q, y: Q) -> Q
+fn q_mul(p: *Pool, x: Q, y: Q) -> Q
+fn q_neg(x: Q) -> Q
+fn q_inv(p: *Pool, x: Q) -> Q
+fn q_zero() -> Q
+fn q_one() -> Q
+fn q_pow(p: *Pool, x: Q, e: i64) -> Q
+fn num(p: *Pool, n: i64, d: i64) -> u32
+fn int(p: *Pool, n: i64) -> u32
+fn qnode(p: *Pool, v: Q) -> u32
+fn is_num(p: *Pool, e: u32) -> bool
+fn q_of(p: *Pool, e: u32) -> Q
+fn is_int(p: *Pool, e: u32) -> bool
+fn is_value(p: *Pool, e: u32, n: i64) -> bool
+fn sym(p: *Pool, name: str) -> u32
+fn same(p: *Pool, x: u32, y: u32) -> bool
+fn add(p: *Pool, x: u32, y: u32) -> u32
+fn mul(p: *Pool, x: u32, y: u32) -> u32
+fn neg(p: *Pool, x: u32) -> u32
+fn sub(p: *Pool, x: u32, y: u32) -> u32
+fn pow(p: *Pool, x: u32, y: u32) -> u32
+fn div(p: *Pool, x: u32, y: u32) -> u32
+fn isqrt(v: i64) -> i64
+fn func(p: *Pool, f: u8, x: u32) -> u32
+fn has(p: *Pool, e: u32, s: u32) -> bool
+fn symbol_index(p: *Pool, e: u32) -> u32
+fn index_of(p: *Pool, name: str) -> u32
+fn skip_blanks(s: *Parser)
+fn peek(s: *Parser) -> u8
+fn is_alpha(c: u8) -> bool
+fn is_digit(c: u8) -> bool
+fn parse_number(s: *Parser) -> u32
+fn function_id(name: str) -> i32
+fn parse_atom(s: *Parser, depth: u32) -> u32
+fn parse_unary(s: *Parser, depth: u32) -> u32
+fn parse_power(s: *Parser, depth: u32) -> u32
+fn parse_product(s: *Parser, depth: u32) -> u32
+fn parse_sum(s: *Parser, depth: u32) -> u32
+fn parse(p: *Pool, src: str) -> (u32, err)
+fn prec(p: *Pool, e: u32) -> u8
+fn function_name(f: u8) -> str
+fn push_expr(b: *str.Builder, p: *Pool, e: u32, parent: u8) -> err
+fn to_string(a: *mem.Arena, p: *Pool, e: u32) -> (str, err)
+fn eval(p: *Pool, e: u32, names: []const str, values: []const f64) -> f64
+fn diff(p: *Pool, e: u32, s: u32) -> u32
+fn poly_zero() -> Poly
+fn poly_const(v: Q) -> Poly
+fn poly_trim(r: *Poly)
+fn poly_add(p: *Pool, x: Poly, y: Poly) -> Poly
+fn poly_mul(p: *Pool, x: Poly, y: Poly) -> (Poly, bool)
+fn poly_of(p: *Pool, e: u32, s: u32) -> (Poly, bool)
+fn poly_expr(p: *Pool, f: Poly, x: u32) -> u32
+fn poly_derivative(p: *Pool, f: Poly) -> Poly
+fn integrate(p: *Pool, e: u32, s: u32) -> (u32, bool)
+fn by_parts(p: *Pool, poly: Poly, f: u8, u: u32, slope: Q, x: u32) -> (u32, bool)
+fn divides(d: i64, v: i64) -> bool
+fn horner(p: *Pool, f: Poly, r: Q) -> Q
+fn deflate(p: *Pool, f: Poly, r: Q) -> Poly
+fn solve(p: *Pool, e: u32, s: u32, out: []u32) -> (usize, err)
+```
+
+Symbolic mathematics over exact rationals (`i64` pairs, `failed` on the pool instead of wrapping past 2^62): expression trees in an arena `Pool` built by smart constructors (`add`, `mul`, `pow`, `div`, `func` fold constants, drop identities and merge a numeric factor; simplification stays that minimal, so equal expressions need not print alike and are compared by evaluating). `parse` reads `+ - * / ^ **`, decimals (exact), names, `sin cos tan exp ln log atan sqrt`; `to_string` prints; `eval` evaluates over `e.math`; `diff` differentiates anything buildable (product, quotient, general power, chain rule); `integrate` returns an antiderivative for polynomials, sums, constant factors, powers and elementary functions of a linear argument, `1/(a x + b)`, and polynomial times `exp`, `sin` or `cos` of a linear argument (by parts), `false` otherwise; `solve` finds the distinct real roots of a polynomial with rational coefficients (rational-root theorem with deflation, quadratic formula with exact roots or `sqrt` expressions) and answers `Unsupported` for anything else, including a factor of degree three or more with no rational root. Not here: factoring, trigonometric identities, symbolic definite limits, systems, inequalities, limits and series, complex roots.
+
 ### `e.simd`
 
 `V` is a legal `Vec[T,N]`; `M` is its `Mask[T,N]`; `I` is an integer vector with

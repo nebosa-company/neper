@@ -12,6 +12,7 @@
     "e.mem",
     "e.meta",
     "e.math",
+    "e.math.sym",
     "e.simd",
     "e.atomic",
     "e.bytes",
@@ -5603,6 +5604,19 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.math.sym",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math",
+    "e.mem",
+    "e.str"
+   ],
    "blocked_by": []
   },
   {

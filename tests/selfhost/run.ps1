@@ -3952,6 +3952,12 @@ $cliCompleteWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $cliCompleteWritten -ne 'executable written') { throw 'cli_complete emission failed' }
 $cliCompleteOutput = & $cliCompletePath
 if ($LASTEXITCODE -ne 0 -or $cliCompleteOutput -ne 'cli complete ok') { throw "cli_complete answered wrongly: exit $LASTEXITCODE" }
+# e.math.sym: parse, eval, diff, integrate and solve against SymPy and mpmath by value (176 records, D2726).
+$mathSymPath = Join-Path $testBuild 'math-sym-selfhost.exe'
+$mathSymWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_sym\src\main.e') $repo 'x64' 'windows' $mathSymPath -j 2
+if ($LASTEXITCODE -ne 0 -or $mathSymWritten -ne 'executable written') { throw 'math_sym emission failed' }
+$mathSymOutput = & $mathSymPath
+if ($LASTEXITCODE -ne 0 -or $mathSymOutput -ne 'math sym ok') { throw "math_sym answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

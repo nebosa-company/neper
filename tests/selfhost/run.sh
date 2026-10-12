@@ -3535,6 +3535,12 @@ cli_complete_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/cli-complete-selfhost"
 cli_complete_output=$("$test_build/cli-complete-selfhost")
 [ "$cli_complete_output" = 'cli complete ok' ]
+# e.math.sym: parse, eval, diff, integrate and solve against SymPy and mpmath by value (176 records, D2726).
+math_sym_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_sym/src/main.e" "$repo" x64 linux "$test_build/math-sym-selfhost" -j 2)
+[ "$math_sym_written" = 'executable written' ]
+chmod +x "$test_build/math-sym-selfhost"
+math_sym_output=$("$test_build/math-sym-selfhost")
+[ "$math_sym_output" = 'math sym ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
