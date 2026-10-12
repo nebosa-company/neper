@@ -14382,6 +14382,52 @@ fn parse_error(a: *mem.Arena, body: str) -> (ErrorInfo, err)
 
 The Elasticsearch REST codecs (L114): the parts of a client that are not sockets. `quote`, `path` and `query` percent-encode URL parts and query strings as elasticsearch-py does (`urllib.parse.quote` with `,` and `*` safe, empty path segments skipped); `bulk_meta` and `bulk_line` write the `_bulk` NDJSON action line with the metadata keys in the driver's order (`_id`, `_index`, `if_seq_no`, `if_primary_term`, `retry_on_conflict`, `routing`, `version`, `version_type`, `pipeline`; -1 and empty strings are absent) and the source line (none for delete, no raw newline allowed). `parse_bulk`, `parse_search` and `parse_error` read the documented response shapes (per-item status, error type and reason; total as an object or a plain integer; the new and the legacy error forms) over `e.fmt.json`, hit sources left as JSON values. HTTP, headers (`application/x-ndjson`), retry and cluster sniffing are the caller's (`e.net.http`, `http.pool_request`). Checked against elasticsearch-py's `_quote`, `_quote_query`, `expand_action` and elastic-transport's NDJSON serializer, with response shapes from a model, over 171 vectors on both hosts (D2645). Not done: a typed query DSL, scroll and point-in-time management, the async search and ingest APIs, ES|QL, cluster sniffing and node health, TLS and API-key header helpers.
 
+### `e.net.grpcserver`
+
+```neper
+const EVENT_REQUEST: u8 = 1u8
+const EVENT_MESSAGE: u8 = 2u8
+const EVENT_HALF_CLOSE: u8 = 3u8
+const EVENT_RESET: u8 = 4u8
+const EVENT_GOAWAY: u8 = 5u8
+type Event = struct { kind: u8, stream: u32, code: u32, compressed: bool, nanos: u64, text: str, payload: []const u8, headers: []const h2.Header }
+type Call = struct { id: u32, used: bool, remote_closed: bool, half_close_sent: bool, local_headers: bool, local_closed: bool, send_window: i64, recv_window: i64, buf: []u8, buf_len: usize, consumed: usize }
+type Server = struct { calls: []Call, last_stream: u32, enc: h2.Table, dec: h2.Table, send_window: i64, recv_window: i64, peer_initial_window: i64, peer_max_frame: usize, initial_recv: i64, max_frame: usize, got_preface: bool, started: bool, got_settings: bool, goaway: bool, block: []u8, block_len: usize, block_stream: u32, block_end_stream: bool, block_active: bool }
+
+fn server_new(calls: []Call, enc: h2.Table, dec: h2.Table, block: []u8, initial_recv: u32, max_frame: u32) -> Server
+fn put_frame(dst: []u8, at: *usize, kind: u8, flags: u8, stream: u32, payload: []const u8) -> err
+fn u32_bytes(v: u32) -> [4]u8
+fn server_start(s: *Server, dst: []u8) -> (usize, err)
+fn find_call(s: *Server, id: u32) -> usize
+fn request_is_grpc(headers: []const h2.Header) -> bool
+fn drain(s: *Server, events: []Event, count: *usize, hdr: []h2.Header)
+fn release_if_done(s: *Server, at_call: usize)
+fn server_receive(s: *Server, input: []const u8, dst: []u8, events: []Event, hdr: []h2.Header, scratch: []u8) -> (usize, usize, usize, err)
+fn response_block(s: *Server, dst: []u8, id: u32, headers: []const h2.Header, end_stream: bool) -> (usize, err)
+fn response_headers(s: *Server, dst: []u8, id: u32, metadata: []const h2.Header) -> (usize, err)
+fn response_message(s: *Server, dst: []u8, id: u32, payload: []const u8, compressed: bool) -> (usize, err)
+fn response_write(s: *Server, dst: []u8, id: u32, data: []const u8) -> (usize, usize, err)
+fn response_finish(s: *Server, dst: []u8, id: u32, status: u32, message: str, metadata: []const h2.Header) -> (usize, err)
+fn response_deadline_exceeded(s: *Server, dst: []u8, id: u32) -> (usize, err)
+fn response_reset(s: *Server, dst: []u8, id: u32, code: u32) -> (usize, err)
+```
+
+gRPC over HTTP/2, server side (L164), over caller buffers and `e.net.http2`, the mirror of the client in `e.net.grpc` and sharing its message framing, `grpc-timeout`, status text and metadata functions. `Server` is the connection state machine: `server_start` sends SETTINGS, `server_receive` checks the client preface, answers SETTINGS and PING, keeps both HPACK tables and both windows, and turns bytes into events (a call's request with its path and deadline in nanoseconds, whole messages across DATA frames, the half-close, a reset, GOAWAY); `response_headers`, `response_message`, `response_write` (the flow-controlled primitive, resumable after a WINDOW_UPDATE), `response_finish` (trailers with the status and its percent-encoded message, or trailers-only when no headers went out), `response_deadline_exceeded` and `response_reset` write the answer, so unary, server-streaming, client-streaming and bidirectional calls are one machine. Compression is reported, not undone. Checked against grpcio: a Neper server compiled from the same echo service the fixture replays was called by a grpcio client through a recording proxy, every outcome (status, details, messages, initial and trailing metadata, deadlines) asserted on the client's side, and the transcripts replayed at several chunk sizes on Windows (D2923).
+
+
+### `e.net.grpccodec`
+
+```neper
+error Unsupported
+
+fn supported(encoding: str) -> bool
+fn aligned(a: *mem.Arena, bytes: usize) -> ([]u8, err)
+fn inflate(a: *mem.Arena, encoding: str, payload: []const u8, limit: usize) -> ([]const u8, err)
+```
+
+gRPC message compression (L164), the part `e.net.grpc` and `e.net.grpcserver` only report: `inflate` undoes a message flagged compressed in the call's `grpc-encoding` (`gzip` is RFC 1952, `deflate` the zlib stream every gRPC implementation means by that name, `identity` or none passes the payload on), at most `limit` bytes; `supported` names the encodings it reads. An unknown encoding is `Unsupported` and a body that does not check out is the codec's own error. Checked against Python's gzip and zlib over every level, a named gzip member, stored blocks, an empty body and 70000 bytes, and against corrupted CRC, size, magic, header and truncated inputs, on Windows (D2923).
+
+
 ### `e.net.http2`
 
 ```neper

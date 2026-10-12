@@ -4300,6 +4300,18 @@ $xCloudDriversWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $xCloudDriversWritten -ne 'executable written') { throw 'x_cloud_drivers emission failed' }
 $xCloudDriversOutput = & $xCloudDriversPath
 if ($LASTEXITCODE -ne 0 -or $xCloudDriversOutput -ne 'x cloud drivers ok') { throw "x_cloud_drivers answered wrongly: exit $LASTEXITCODE" }
+# e.net.grpcserver against grpcio: a live Neper server called by grpcio, its transcripts replayed at several chunk sizes (14 calls, D2923).
+$netGrpcserverPath = Join-Path $testBuild 'net-grpcserver-selfhost.exe'
+$netGrpcserverWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_grpcserver\src\main.e') $repo 'x64' 'windows' $netGrpcserverPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netGrpcserverWritten -ne 'executable written') { throw 'net_grpcserver emission failed' }
+$netGrpcserverOutput = & $netGrpcserverPath
+if ($LASTEXITCODE -ne 0 -or $netGrpcserverOutput -ne 'net grpcserver ok') { throw "net_grpcserver answered wrongly: exit $LASTEXITCODE" }
+# e.net.grpccodec against Python's gzip and zlib: compressed message bodies of every level, corrupted and mismatched inputs (129 vectors, D2923).
+$netGrpccodecPath = Join-Path $testBuild 'net-grpccodec-selfhost.exe'
+$netGrpccodecWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_grpccodec\src\main.e') $repo 'x64' 'windows' $netGrpccodecPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netGrpccodecWritten -ne 'executable written') { throw 'net_grpccodec emission failed' }
+$netGrpccodecOutput = & $netGrpccodecPath
+if ($LASTEXITCODE -ne 0 -or $netGrpccodecOutput -ne 'net grpccodec ok') { throw "net_grpccodec answered wrongly: exit $LASTEXITCODE" }
 # x.net.webhook, x.net.authscheme, x.mcp.protocol and x.api.openapi against Appdor's sign.js, auth-schemes, mcp/protocol.js and openapi-builder.js (649 cases, D2355).
 $xApiProtocolsPath = Join-Path $testBuild 'x-api-protocols-selfhost.exe'
 $xApiProtocolsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_api_protocols\src\main.e') $repo 'x64' 'windows' $xApiProtocolsPath -j 2

@@ -3828,6 +3828,18 @@ x_cloud_drivers_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$test_build/x-cloud-drivers-selfhost"
 x_cloud_drivers_output=$("$test_build/x-cloud-drivers-selfhost")
 [ "$x_cloud_drivers_output" = 'x cloud drivers ok' ]
+# e.net.grpcserver against grpcio: a live Neper server called by grpcio, its transcripts replayed at several chunk sizes (14 calls, D2923).
+net_grpcserver_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpcserver/src/main.e" "$repo" x64 linux "$test_build/net-grpcserver-selfhost" -j 2)
+[ "$net_grpcserver_written" = 'executable written' ]
+chmod +x "$test_build/net-grpcserver-selfhost"
+net_grpcserver_output=$("$test_build/net-grpcserver-selfhost")
+[ "$net_grpcserver_output" = 'net grpcserver ok' ]
+# e.net.grpccodec against Python's gzip and zlib: compressed message bodies of every level, corrupted and mismatched inputs (129 vectors, D2923).
+net_grpccodec_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpccodec/src/main.e" "$repo" x64 linux "$test_build/net-grpccodec-selfhost" -j 2)
+[ "$net_grpccodec_written" = 'executable written' ]
+chmod +x "$test_build/net-grpccodec-selfhost"
+net_grpccodec_output=$("$test_build/net-grpccodec-selfhost")
+[ "$net_grpccodec_output" = 'net grpccodec ok' ]
 # x.net.webhook, x.net.authscheme, x.mcp.protocol and x.api.openapi against Appdor's sign.js, auth-schemes, mcp/protocol.js and openapi-builder.js (649 cases, D2355).
 x_api_protocols_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_api_protocols/src/main.e" "$repo" x64 linux "$test_build/x-api-protocols-selfhost" -j 2)
 [ "$x_api_protocols_written" = 'executable written' ]

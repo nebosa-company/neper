@@ -137,6 +137,8 @@
     "e.dbus",
     "x.modbus.wire",
     "e.net.grpc",
+    "e.net.grpcserver",
+    "e.net.grpccodec",
     "e.net.http2",
     "x.elastic.rest",
     "x.mongodb.wire",
@@ -7460,6 +7462,35 @@
     "e.bytes",
     "e.mem",
     "e.net.http2",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.grpcserver",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.net.grpc",
+    "e.net.http2",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.grpccodec",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.gzip",
+    "e.fmt.zlib",
+    "e.io",
+    "e.mem",
     "e.str"
    ],
    "blocked_by": []

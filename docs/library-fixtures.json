@@ -46,7 +46,8 @@
    "pending": [],
    "fixtures": [
     "algo_deflate",
-    "fmt_png"
+    "fmt_png",
+    "net_grpccodec"
    ]
   },
   {
@@ -409,7 +410,8 @@
    "delivered": 10,
    "pending": [],
    "fixtures": [
-    "fmt_gzip"
+    "fmt_gzip",
+    "net_grpccodec"
    ]
   },
   {
@@ -750,7 +752,8 @@
    "delivered": 10,
    "pending": [],
    "fixtures": [
-    "fmt_zlib"
+    "fmt_zlib",
+    "net_grpccodec"
    ]
   },
   {
