@@ -4294,6 +4294,12 @@ $xCloudAwsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $xCloudAwsWritten -ne 'executable written') { throw 'x_cloud_aws emission failed' }
 $xCloudAwsOutput = & $xCloudAwsPath
 if ($LASTEXITCODE -ne 0 -or $xCloudAwsOutput -ne 'x cloud aws ok') { throw "x_cloud_aws answered wrongly: exit $LASTEXITCODE" }
+# x.cloud.k8s, x.cloud.awssdk and x.ssh.transport against Petcow's k8s provider, S3/IAM/EC2/Lightsail providers and per-host transport (600 cases, D2922).
+$xCloudDriversPath = Join-Path $testBuild 'x-cloud-drivers-selfhost.exe'
+$xCloudDriversWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_cloud_drivers\src\main.e') $repo 'x64' 'windows' $xCloudDriversPath -j 2
+if ($LASTEXITCODE -ne 0 -or $xCloudDriversWritten -ne 'executable written') { throw 'x_cloud_drivers emission failed' }
+$xCloudDriversOutput = & $xCloudDriversPath
+if ($LASTEXITCODE -ne 0 -or $xCloudDriversOutput -ne 'x cloud drivers ok') { throw "x_cloud_drivers answered wrongly: exit $LASTEXITCODE" }
 # x.net.webhook, x.net.authscheme, x.mcp.protocol and x.api.openapi against Appdor's sign.js, auth-schemes, mcp/protocol.js and openapi-builder.js (649 cases, D2355).
 $xApiProtocolsPath = Join-Path $testBuild 'x-api-protocols-selfhost.exe'
 $xApiProtocolsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_api_protocols\src\main.e') $repo 'x64' 'windows' $xApiProtocolsPath -j 2

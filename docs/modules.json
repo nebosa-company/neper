@@ -193,6 +193,9 @@
     "x.cloud.manifest",
     "x.cloud.aws",
     "x.ssh.args",
+    "x.cloud.k8s",
+    "x.cloud.awssdk",
+    "x.ssh.transport",
     "x.net.webhook",
     "x.net.authscheme",
     "x.mcp.protocol",
@@ -2779,6 +2782,54 @@
     "e.fmt.json",
     "e.mem",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.cloud.k8s",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.chain",
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.fmt.json",
+    "e.fmt.yaml",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.cloud.awssdk",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.chain",
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.ssh.transport",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.fmt.json",
+    "e.mem",
+    "e.str",
+    "e.text.utf8"
    ],
    "blocked_by": []
   },

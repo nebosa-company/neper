@@ -3822,6 +3822,12 @@ x_cloud_aws_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 chmod +x "$test_build/x-cloud-aws-selfhost"
 x_cloud_aws_output=$("$test_build/x-cloud-aws-selfhost")
 [ "$x_cloud_aws_output" = 'x cloud aws ok' ]
+# x.cloud.k8s, x.cloud.awssdk and x.ssh.transport against Petcow's k8s provider, S3/IAM/EC2/Lightsail providers and per-host transport (600 cases, D2922).
+x_cloud_drivers_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_cloud_drivers/src/main.e" "$repo" x64 linux "$test_build/x-cloud-drivers-selfhost" -j 2)
+[ "$x_cloud_drivers_written" = 'executable written' ]
+chmod +x "$test_build/x-cloud-drivers-selfhost"
+x_cloud_drivers_output=$("$test_build/x-cloud-drivers-selfhost")
+[ "$x_cloud_drivers_output" = 'x cloud drivers ok' ]
 # x.net.webhook, x.net.authscheme, x.mcp.protocol and x.api.openapi against Appdor's sign.js, auth-schemes, mcp/protocol.js and openapi-builder.js (649 cases, D2355).
 x_api_protocols_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_api_protocols/src/main.e" "$repo" x64 linux "$test_build/x-api-protocols-selfhost" -j 2)
 [ "$x_api_protocols_written" = 'executable written' ]

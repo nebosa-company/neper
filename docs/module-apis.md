@@ -20840,6 +20840,101 @@ fn parse_properties(a: *mem.Arena, props: str, has_props: bool) -> (json.Value, 
 
 AWS Cloud Control identity and request shaping (L048), after Petcow's `provider/aws/cloudcontrol.rs`: the catalogue `Def` read from an operator manifest and merged over the built-ins by type (`parse_defs`, `merge_defs`); the composite identifier joined with `|` in schema order and read back (`compose_identifier`, `name_from_identifier`); the `DesiredState` documents for name-addressable and tag-indexed types; tags with the `petcow:managed`/`petcow:name` identity stamped in under both tag shapes (`merged_tags`, `managed_name_from_attrs`, `strip_petcow_tags`); the RFC 6902 patch documents for update; `properties_have_key`, `parse_properties` and `is_throttle`. The SDK calls are host code. Checked against Petcow's own Rust (extracted behind thin shims) over 311 cases with `x.ssh.args` on both hosts (D2354).
 
+### `x.cloud.k8s`
+
+```neper
+type Def = struct { petcow_type: str, api_version: str, kind: str, namespaced: bool }
+type Defs = struct { valid: bool, message: str, defs: []const Def }
+
+fn join(a: *mem.Arena, x: str, y: str) -> str { ret f.join(a, x, y) }
+fn managed_label() -> str { ret "petcow.io/managed" }
+fn name_label() -> str { ret "petcow.io/name" }
+fn last_applied_key() -> str { ret "kubectl.kubernetes.io/last-applied-configuration" }
+fn def(petcow_type: str, api_version: str, kind: str, namespaced: bool) -> Def
+fn default_defs(a: *mem.Arena) -> []const Def
+fn failed_defs(a: *mem.Arena, what: str) -> Defs
+fn string_value(a: *mem.Arena, v: yaml.Value) -> (str, bool)
+fn def_of(a: *mem.Arena, v: yaml.Value) -> (Def, str, bool)
+fn parse_defs(a: *mem.Arena, source: str) -> Defs
+fn merge_defs(a: *mem.Arena, defaults: []const Def, extra: []const Def) -> []const Def
+fn selector(a: *mem.Arena, d: Def) -> str
+fn ns_args(a: *mem.Arena, d: Def, namespace: str, has_namespace: bool) -> []const str
+fn lower_ascii(a: *mem.Arena, s: str) -> str
+fn is_not_found(a: *mem.Arena, stderr: str) -> bool
+fn text(s: str) -> json.Value { ret json.Value{ String: s } }
+fn obj(a: *mem.Arena) -> ir.Obj
+fn is_managed_item(item: json.Value) -> bool
+fn apply_manifest(a: *mem.Arena, d: Def, name: str, attrs: json.Value) -> str
+fn observed(a: *mem.Arena, type_: str, live: json.Value) -> json.Value
+```
+
+The Kubernetes provider's identity and drift rules (L048), after Petcow's `provider/k8s/mod.rs`: the fourteen built-in kinds and an operator manifest of more merged over them by type (`default_defs`, `parse_defs`, `merge_defs`), the kubectl selector and `-n` arguments (`selector`, `ns_args`), the apply manifest with `metadata.name` forced and the `petcow.io/managed` and `petcow.io/name` labels injected over a user's own (`apply_manifest`), the observed state taken from the `last-applied-configuration` annotation when it parses and from the live object otherwise (`observed`), and whether an object is managed or a kubectl error means not found (`is_managed_item`, `is_not_found`). A string field accepts a plain scalar as its text, as the reference's YAML reader does; a number written with a trailing zero or an exponent is read as its shortest text. The kubectl process is host code. Checked against Petcow's own functions, extracted unchanged, with the S3, IAM, EC2, Lightsail and transport helpers, over 600 inputs on Windows (D2922).
+
+
+### `x.cloud.awssdk`
+
+```neper
+fn join(a: *mem.Arena, x: str, y: str) -> str { ret f.join(a, x, y) }
+fn text(s: str) -> json.Value { ret json.Value{ String: s } }
+fn obj(a: *mem.Arena) -> ir.Obj
+fn managed_key() -> str { ret "petcow:managed" }
+fn name_key() -> str { ret "petcow:name" }
+fn resource_error(a: *mem.Arena, logical_id: str, message: str) -> str
+fn validate_bucket_name(a: *mem.Arena, name: str) -> (bool, str)
+fn attr_bool(attrs: json.Value, key: str) -> bool
+fn attr_str(attrs: json.Value, key: str) -> (str, bool)
+fn user_tags(a: *mem.Arena, attrs: json.Value) -> json.Value
+fn hex_value(c: u8) -> i32
+fn continuation(b: u8, low: u8, high: u8) -> bool { ret b >= low && b <= high }
+fn utf8_step(s: str, at: usize) -> i64
+fn lossy(a: *mem.Arena, bytes: str) -> str
+fn percent_decode(a: *mem.Arena, s: str) -> str
+fn assume_role_json(a: *mem.Arena, attrs: json.Value, name: str) -> (str, bool, str)
+fn pair(a: *mem.Arena, k: str, v: str) -> json.Value
+fn managed_iam_tags(a: *mem.Arena, name: str, user: json.Value) -> json.Value
+fn desired_arns(a: *mem.Arena, attrs: json.Value) -> []const str
+fn string_list(a: *mem.Arena, attrs: json.Value, key: str) -> []const str
+fn attr_i64(attrs: json.Value, key: str) -> (i64, bool)
+fn managed_tags(a: *mem.Arena, name: str, user: json.Value) -> json.Value
+fn tag_key(tags: []const json.Value, at: usize) -> (str, bool)
+fn tag_value(tags: []const json.Value, at: usize) -> (str, bool)
+fn observed_user_tags(a: *mem.Arena, tags: json.Value) -> json.Value
+fn items(v: json.Value) -> []const json.Value
+fn petcow_name(tags: json.Value) -> (str, bool)
+fn name_or_id(tags: json.Value, real_id: str) -> str
+fn unmanaged(a: *mem.Arena, type_: str, tags: json.Value, real_id: str) -> json.Value
+fn wrap_i32(v: i64) -> i64
+fn ingress_permissions(a: *mem.Arena, name: str, attrs: json.Value) -> (json.Value, bool, str)
+fn int_text(a: *mem.Arena, v: i64) -> str
+fn lightsail_type_name(kind: str) -> str
+fn req_attr(a: *mem.Arena, attrs: json.Value, key: str, kind: str) -> (str, bool, str)
+fn lightsail_managed_tags(a: *mem.Arena, name: str) -> json.Value
+```
+
+The pure mapping of Petcow's native AWS providers (L048), after `provider/aws/{s3,iam,ec2,lightsail}.rs`: the S3 bucket-name rules and `bool`, `str` and `tags` attributes, the IAM inline-policy percent-decoding (a malformed byte replaced as `from_utf8_lossy` does), `assume_role_json` (a string passes through, anything else is compact JSON in member order, a missing one is an error), the managed tag lists and sorted `managed_policy_arns`, the EC2 managed tags, user tags read back, PetCow name, display name of an unmanaged resource and integer and string-list attributes, the security-group ingress rules (ports cast to 32 bits as the original does), and the Lightsail type names, required attributes and identity tags. Tags are `[key, value]` pairs. The SDK calls are host code. Checked against Petcow's own functions, extracted unchanged behind thin shims for the SDK builders, over 600 inputs on Windows (D2922).
+
+
+### `x.ssh.transport`
+
+```neper
+type Factory = struct { ctx: *void, build: fn(*void, str) -> (bool, str) }
+type Table = struct { a: *mem.Arena, default_kind: str, built: list.List[str], factory: Factory }
+type Resolution = struct { kind: str, good: bool, failure: str }
+
+fn new_table(a: *mem.Arena, default_kind: str, factory: Factory) -> Table
+fn name(t: *const Table) -> str { ret t.default_kind }
+fn is_white(c: u32) -> bool
+fn trim(s: str) -> str
+fn kind_for(default_kind: str, vars: json.Value) -> str
+fn members_of(v: json.Value) -> ([]const json.Member, bool)
+fn is_built(t: *const Table, kind: str) -> bool
+fn cat(a: *mem.Arena, x: str, y: str) -> str
+fn resolve(t: *Table, host: str, vars: json.Value) -> Resolution
+```
+
+Per-host transport selection (L048), after Petcow's `transport/mod.rs` `PerHostTransport`: `kind_for` reads a host's `transport` variable (a string with something in it, trimmed as Rust's `str::trim` does) and falls back to the run's default; `resolve` builds that kind through an injected `Factory` the first time a host asks for it and keeps it, so a run over three WinRM hosts never builds the SSM transport and five hosts on one kind build it once, and a factory failure is reported with the host's name and the kind. A failed kind is not kept. Running a command is host code. Checked against Petcow's own selection logic over 40 mixed-estate runs on Windows (D2922).
+
+
 ### `x.ssh.args`
 
 ```neper
