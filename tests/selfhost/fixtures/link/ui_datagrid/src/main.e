@@ -525,6 +525,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     dg.set_bands(&grid2, bands[0usize..0usize])
     grid2.offset = 0.0
     var edit_clock = 11000000000i64
+    // a first tap selects the row, a second tap on the same current row starts editing its first
+    // editable column
+    dg.clear_selection(&grid2)
+    show_row(&grid2, &app.grouping, 11usize)
+    mem.reset(&f, 0usize)
+    let (root_t, build_t_error) = dg.build(&f, &grid2, &theme, 400.0)
+    if build_t_error != ok { os.exit(220) }
+    if settle(&harness, root_t, edit_clock) != ok { os.exit(221) }
+    edit_clock += 2000000000i64
+    if !tap_key(&harness, &runtime, dg.row_key(&grid2, 11usize)) { os.exit(222) }
+    if grid2.editing || !grid2.has_selection || grid2.selected_row != 11usize { os.exit(223) }
+    if !tap_key(&harness, &runtime, dg.row_key(&grid2, 11usize)) { os.exit(224) }
+    if !grid2.editing || grid2.edit_row != 11usize || grid2.edit_spec != 2usize { os.exit(225) }
+    dg.cancel_edit(&grid2)
     // a read-only grid and a column that is not editable refuse
     if dg.begin_edit(&grid2, 5usize, 1usize) != dg.NotEditable { os.exit(141) }
     grid2.read_only = true
