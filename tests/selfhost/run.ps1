@@ -7061,6 +7061,17 @@ if ($LASTEXITCODE -ne 0 -or $deviceEditCleanWritten -ne 'executable written') { 
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditHotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditCleanExe).Hash) { throw 'the hot build after a device-reached edit is not the clean build' }
 $deviceEditOutput = & $deviceEditHotExe
 if ($LASTEXITCODE -ne 0 -or $deviceEditOutput -ne 'gpu device edit ok') { throw "the edited device edit fixture answered wrongly: exit $LASTEXITCODE $deviceEditOutput" }
+# The schedule does not reach the image (C083, D331): the device oracle and the kernel
+# module's device copy are the same bytes under one worker and under a turned-around crew.
+$deviceEditSerialExe = Join-Path $testBuild 'gpu-device-edit-j1.exe'
+$deviceEditSerialWritten = & $compiler emit-executable $deviceEditHotMain $repo 'x64' 'windows' $deviceEditSerialExe -j 1 2>$null
+if ($LASTEXITCODE -ne 0 -or $deviceEditSerialWritten -ne 'executable written') { throw 'the device edit fixture did not build under -j 1' }
+$deviceEditPerturbExe = Join-Path $testBuild 'gpu-device-edit-perturb.exe'
+$deviceEditPerturbWritten = & $compiler emit-executable $deviceEditHotMain $repo 'x64' 'windows' $deviceEditPerturbExe -j 3 --perturb 2>$null
+if ($LASTEXITCODE -ne 0 -or $deviceEditPerturbWritten -ne 'executable written') { throw 'the device edit fixture did not build under -j 3 --perturb' }
+foreach ($deviceEditVariant in @($deviceEditSerialExe, $deviceEditPerturbExe)) {
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditVariant).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditCleanExe).Hash) { throw "the device edit fixture's image depends on the crew's schedule: $deviceEditVariant" }
+}
 # (D1667) The counts a cold build takes as each block goes back are a warm no-edit
 # build's, on a program whose `@gpus` and `@tests` rows are not zero.
 $frontScratch = Join-Path $testBuild 'front-counts'

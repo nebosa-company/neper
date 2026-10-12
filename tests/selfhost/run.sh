@@ -6972,6 +6972,14 @@ cmp "$test_build/gpu-device-edit-hot" "$test_build/gpu-device-edit-clean"
 chmod +x "$test_build/gpu-device-edit-hot"
 device_edit_output=$("$test_build/gpu-device-edit-hot")
 [ "$device_edit_output" = 'gpu device edit ok' ]
+# The schedule does not reach the image (C083, D331): the device oracle and the kernel
+# module's device copy are the same bytes under one worker and under a turned-around crew.
+device_edit_serial_written=$($test_build/neper-self emit-executable "$device_edit_hot_main" "$repo" x64 linux "$test_build/gpu-device-edit-j1" -j 1 2>/dev/null)
+[ "$device_edit_serial_written" = 'executable written' ]
+device_edit_perturb_written=$($test_build/neper-self emit-executable "$device_edit_hot_main" "$repo" x64 linux "$test_build/gpu-device-edit-perturb" -j 3 --perturb 2>/dev/null)
+[ "$device_edit_perturb_written" = 'executable written' ]
+cmp "$test_build/gpu-device-edit-clean" "$test_build/gpu-device-edit-j1"
+cmp "$test_build/gpu-device-edit-clean" "$test_build/gpu-device-edit-perturb"
 # (D1667) The counts a cold build takes as each block goes back are a warm no-edit
 # build's, on a program whose `@gpus` and `@tests` rows are not zero.
 front_scratch="$test_build/front-counts"
