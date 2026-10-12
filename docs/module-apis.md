@@ -9036,6 +9036,46 @@ computation), `set`, `memo` (skipping dependents when unchanged), `effect`, batc
 `schedule_effects` running dirty nodes once each in height order with dynamic
 dependencies; `dispose`, `run_count`.
 
+### `e.ui.ink`
+
+```neper
+type Sample = struct { x: f32, y: f32, pressure: f32, time_ms: u32 }
+type Stroke = struct { first: usize, count: usize, width: f32, color: u32 }
+type Canvas = struct { strokes: []Stroke, samples: []Sample, stroke_count: usize, sample_count: usize, open: bool, min_distance: f32 }
+error TooSmall
+error Invalid
+fn canvas(strokes: []Stroke, samples: []Sample, min_distance: f32) -> Canvas
+fn clamp_pressure(p: f32) -> f32
+fn is_number(v: f32) -> bool
+fn begin(c: *Canvas, x: f32, y: f32, pressure: f32, time_ms: u32, width: f32, color: u32) -> err
+fn extend(c: *Canvas, x: f32, y: f32, pressure: f32, time_ms: u32) -> err
+fn end(c: *Canvas, x: f32, y: f32, pressure: f32, time_ms: u32) -> err
+fn cancel(c: *Canvas)
+fn clear(c: *Canvas)
+fn erase(c: *Canvas, index: usize) -> err
+fn samples_of(c: *const Canvas, index: usize) -> []const Sample
+fn width_at(c: *const Canvas, index: usize, k: usize) -> f32
+fn bounds(c: *const Canvas, index: usize) -> geometry.Rect
+fn extent(c: *const Canvas) -> geometry.Rect
+fn length(c: *const Canvas, index: usize) -> f32
+fn math_sqrt(v: f32) -> f32
+fn duration(c: *const Canvas) -> u32
+fn replay_counts(c: *const Canvas, elapsed_ms: u32, counts: []usize) -> err
+fn path_of(a: *mem.Arena, c: *const Canvas, index: usize, count: usize) -> (geometry.Path, err)
+fn segment_distance_squared(px: f32, py: f32, ax: f32, ay: f32, bx: f32, by: f32) -> f32
+fn hit(c: *const Canvas, p: geometry.Point, radius: f32) -> (usize, bool)
+```
+
+Ink strokes (L099, D2844): a `Canvas` over two caller slices holds strokes and their
+pressure-and-time samples; `begin`, `extend` and `end` capture from a pointer or pen
+stream (a sample nearer than `min_distance` is dropped, the end point is always
+stored), `cancel` and `erase` remove a stroke, `bounds`, `extent`, `length`, `hit` and
+`width_at` (a quarter width with no pressure) query it, `replay_counts` answers how
+many samples each stroke has drawn by an elapsed time on its own clock (zero at the
+first stroke's first sample), `duration` its length, and `path_of` a stroke's prefix as
+a polyline for `StrokePath`. Capacity is `TooSmall`; state errors and non-finite
+values are `Invalid`. Pressure is the caller's (the `e.ui.input` pointer has none).
+
 ### `e.ui.undo`
 
 ```neper

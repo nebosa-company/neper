@@ -4255,6 +4255,12 @@ $textSigWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $textSigWritten -ne 'executable written') { throw 'text_sig emission failed' }
 $textSigOutput = & $textSigPath
 if ($LASTEXITCODE -ne 0 -or $textSigOutput -ne 'text sig ok') { throw "text_sig answered wrongly: exit $LASTEXITCODE" }
+# e.ui.ink: ink strokes captured from a pen pointer stream, bounds, length, replay on the stroke clock, hits, erase and capacity refusals against generator formulas (D2844).
+$uiInkPath = Join-Path $testBuild 'ui-ink-selfhost.exe'
+$uiInkWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_ink\src\main.e') $repo 'x64' 'windows' $uiInkPath -j 2
+if ($LASTEXITCODE -ne 0 -or $uiInkWritten -ne 'executable written') { throw 'ui_ink emission failed' }
+$uiInkOutput = & $uiInkPath
+if ($LASTEXITCODE -ne 0 -or $uiInkOutput -ne 'ui ink ok') { throw "ui_ink answered wrongly: exit $LASTEXITCODE" }
 # e.gfx.svg against cairosvg: gradients, defs and use, units, clip path and plain shapes rendered through the CPU backend and held to a 16x16 cell tolerance (D2843).
 $gfxSvgRenderPath = Join-Path $testBuild 'gfx-svg-render-selfhost.exe'
 $gfxSvgRenderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg_render\src\main.e') $repo 'x64' 'windows' $gfxSvgRenderPath -j 2

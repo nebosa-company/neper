@@ -3791,6 +3791,12 @@ text_sig_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/text-sig-selfhost"
 text_sig_output=$("$test_build/text-sig-selfhost")
 [ "$text_sig_output" = 'text sig ok' ]
+# e.ui.ink: ink strokes captured from a pen pointer stream, bounds, length, replay on the stroke clock, hits, erase and capacity refusals against generator formulas (D2844).
+ui_ink_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_ink/src/main.e" "$repo" x64 linux "$test_build/ui-ink-selfhost" -j 2)
+[ "$ui_ink_written" = 'executable written' ]
+chmod +x "$test_build/ui-ink-selfhost"
+ui_ink_output=$("$test_build/ui-ink-selfhost")
+[ "$ui_ink_output" = 'ui ink ok' ]
 # e.gfx.svg against cairosvg: gradients, defs and use, units, clip path and plain shapes rendered through the CPU backend and held to a 16x16 cell tolerance (D2843).
 gfx_svg_render_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_svg_render/src/main.e" "$repo" x64 linux "$test_build/gfx-svg-render-selfhost" -j 2)
 [ "$gfx_svg_render_written" = 'executable written' ]

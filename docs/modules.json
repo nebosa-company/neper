@@ -467,6 +467,7 @@
     "e.ui.report",
     "e.ui.state",
     "e.ui.undo",
+    "e.ui.ink",
     "e.fmt.lzma",
     "e.fmt.parquet",
     "e.net.cidr",
@@ -5158,6 +5159,18 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.ink",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.gfx.geometry"
+   ],
    "blocked_by": []
   },
   {
