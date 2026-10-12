@@ -15,6 +15,7 @@
 Writes the ready-file once all three listen, then serves until killed.
 """
 import http.server
+import json
 import pathlib
 import socket
 import ssl
@@ -74,7 +75,18 @@ PAGE_INDEX = (b'<!doctype html><html><head><title>Neper test page</title><style>
 PAGE_ABOUT = (b'<!doctype html><html><head><title>About</title></head><body>'
               b'<h1>About</h1><p>Neper is a language and an operating system.</p>'
               b'<p><a href="/pages/index.html">Back to the index</a></p>'
-              b'<p><a href="/pages/login.html">Sign in</a></p></body></html>')
+              b'<p><a href="/pages/login.html">Sign in</a></p>'
+              b'<p><a href="/pages/form.html">Search form</a></p></body></html>')
+# (C159) A page with an image and a form (GET), the page the form's query reaches, and a file to download.
+PAGE_FORM = (b'<!doctype html><html><head><title>Search form</title></head><body>'
+             b'<h1>Search form</h1><img src="/pages/logo.svg" alt="logo">'
+             b'<form action="/pages/echo.html" method="get">'
+             b'<input type="text" name="q" value="neper os"><input type="hidden" name="lang" value="en">'
+             b'<input type="submit" value="Go"></form></body></html>')
+LOGO_SVG = (b"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'>"
+            b"<rect x='4' y='4' width='88' height='88' rx='12' fill='currentColor'/>"
+            b"<circle cx='48' cy='48' r='24' fill='none' stroke='white' stroke-width='6'/></svg>")
+REPORT_BIN = bytes(range(32)) + b'neper report 2026-10-12'
 # (C159) A page that sets a session cookie and one that says what cookie it was sent.
 PAGE_LOGIN = (b'<!doctype html><html><head><title>Signed in</title></head><body>'
               b'<h1>Signed in</h1><p><a href="/pages/me.html">Account</a></p></body></html>')
@@ -119,6 +131,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.reply(200, (here / ('forecast-%s.json' % known)).read_bytes(), 'application/json')
             else:
                 self.reply(400, b'{"error":true,"reason":"no recording for these coordinates"}', 'application/json')
+            return
+        if host == 'tiles.openfreemap.org' and url.path.startswith('/planet/') and url.path.endswith('.pbf'):
+            # (C160) The vector tile over the map's middle (zoom 14, x 8681, y 4769), built by maptile.py.
+            import maptile
+            if url.path.endswith('/14/8681/4769.pbf'):
+                self.reply(200, maptile.tile(), 'application/x-protobuf')
+            else:
+                self.reply(404, b'', 'text/plain')
+            return
+        if host == 'api.met.no' and url.path == '/weatherapi/metalerts/2.0/current.json':
+            # (C156) MetAlerts for a point: a feature per alert in force whose resources name its CAP message. Written
+            # from the documented shape, not captured; Oslo has a gale warning, any other point none.
+            if query.get('lat', [''])[0] == '59.91':
+                body = json.dumps({'type': 'FeatureCollection', 'features': [{'type': 'Feature', 'properties': {
+                    'event': 'gale', 'severity': 'Moderate', 'area': 'Oslo',
+                    'resources': [{'description': 'CAP file', 'mimeType': 'application/xml',
+                                   'uri': 'https://api.met.no/weatherapi/metalerts/2.0/alert-oslo.cap'}]}}]})
+            else:
+                body = json.dumps({'type': 'FeatureCollection', 'features': []})
+            self.reply(200, body.encode('utf-8'), 'application/json')
+            return
+        if host == 'api.met.no' and url.path == '/weatherapi/metalerts/2.0/alert-oslo.cap':
+            self.reply(200, (here / 'alert-oslo.cap').read_bytes(), 'application/xml')
             return
         if host == 'geocoding-api.open-meteo.com' and url.path == '/v1/search':
             if query.get('name', [''])[0].lower() == 'bergen':
@@ -171,6 +206,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if host == 'neper.test' and url.path == '/pages/old.html':
             # (C159) A moved page: a redirect the browser must follow.
             self.reply(302, b'', 'text/html', (('Location', '/pages/about.html'),))
+            return
+        if host == 'neper.test' and url.path == '/pages/form.html':
+            self.reply(200, PAGE_FORM, 'text/html')
+            return
+        if host == 'neper.test' and url.path == '/pages/logo.svg':
+            self.reply(200, LOGO_SVG, 'image/svg+xml')
+            return
+        if host == 'neper.test' and url.path == '/pages/report.bin':
+            self.reply(200, REPORT_BIN, 'application/octet-stream')
+            return
+        if host == 'neper.test' and url.path == '/pages/echo.html':
+            # (C159) What the form sent: the decoded fields, and a link to a download.
+            fields = ', '.join('%s=%s' % (k, v[0]) for k, v in sorted(query.items()))
+            page = ('<!doctype html><html><head><title>Echo</title></head><body><h1>Echo</h1>'
+                    '<p>Query: %s</p><p><a href="/pages/report.bin">Download the report</a></p>'
+                    '</body></html>' % fields).encode('utf-8')
+            self.reply(200, page, 'text/html')
             return
         if host == 'neper.test' and url.path == '/pages/login.html':
             self.reply(200, PAGE_LOGIN, 'text/html',

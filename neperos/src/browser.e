@@ -48,6 +48,7 @@ const KIND_H2: usize = 2usize
 const KIND_LINK: usize = 3usize
 const KIND_BULLET: usize = 4usize
 const KIND_PRE: usize = 5usize
+const KIND_IMAGE: usize = 6usize
 
 type Tab = struct {
     pages: [10]usize,
@@ -87,6 +88,16 @@ type State = struct {
     cookie_store: [16]cookie.Cookie,
     cookie_text: [2048]u8,
     jar: cookie.Jar,
+    // (C159) The form being read (its action and the query its fields make) and the first image of the page: the SVG
+    // fetched for it and the page line it stands at.
+    form_open: bool,
+    form_action: [40]u8,
+    form_action_len: usize,
+    form_query: [40]u8,
+    form_query_len: usize,
+    svg_text: [1536]u8,
+    svg_len: usize,
+    svg_line: usize,
     hits: ui.Hits,
 }
 
@@ -195,6 +206,59 @@ fn is_block(name: str) -> bool {
     ret ui.same(name, "p") || ui.same(name, "div") || ui.same(name, "ul") || ui.same(name, "ol") || ui.same(name, "li") || ui.same(name, "br") || ui.same(name, "section") || ui.same(name, "article") || ui.same(name, "header") || ui.same(name, "footer") || ui.same(name, "nav") || ui.same(name, "main") || ui.same(name, "table") || ui.same(name, "tr") || ui.same(name, "hr") || ui.same(name, "blockquote") || ui.same(name, "pre") || ui.same(name, "h1") || ui.same(name, "h2") || ui.same(name, "h3") || ui.same(name, "h4") || ui.same(name, "h5") || ui.same(name, "h6")
 }
 
+fn unreserved(c: u8) -> bool {
+    ret (c >= 48u8 && c <= 57u8) || (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 45u8 || c == 46u8 || c == 95u8 || c == 126u8
+}
+
+fn hex_char(n: usize) -> u8 {
+    if n < 10usize { ret u8(48usize + n) }
+    ret u8(55usize + n)
+}
+
+// (C159) How many bytes `piece` takes in a query string: a space is `+`, anything else not plain is `%XX`.
+fn query_size(piece: str) -> usize {
+    var n = 0usize
+    var i = 0usize
+    while i < piece.len {
+        if unreserved(piece[i]) || piece[i] == 32u8 { n += 1usize } else { n += 3usize }
+        i += 1usize
+    }
+    ret n
+}
+
+fn query_put(s: *State, c: u8) {
+    s.form_query[s.form_query_len] = c
+    s.form_query_len += 1usize
+}
+
+fn query_piece(s: *State, piece: str) {
+    var i = 0usize
+    while i < piece.len {
+        let c = piece[i]
+        if unreserved(c) {
+            query_put(s, c)
+        } else if c == 32u8 {
+            query_put(s, 43u8)
+        } else {
+            query_put(s, 37u8)
+            query_put(s, hex_char(usize(c >> 4u8)))
+            query_put(s, hex_char(usize(c & 15u8)))
+        }
+        i += 1usize
+    }
+}
+
+// (C159) One `name=value` pair of the form being read, percent-encoded; a pair that does not fit is dropped whole.
+fn query_add(s: *State, field: str, value: str) {
+    var need = query_size(field) + 1usize + query_size(value)
+    if s.form_query_len > 0usize { need += 1usize }
+    if s.form_query_len + need > 40usize { ret }
+    if s.form_query_len > 0usize { query_put(s, 38u8) }
+    query_piece(s, field)
+    query_put(s, 61u8)
+    query_piece(s, value)
+}
+
 // Walk the document below `id`, gathering lines. `kind` and `href` come from the elements around.
 fn walk(s: *State, doc: *const html.Document, id: html.NodeId, kind: usize, href: str) {
     let n = html.node(doc, id)
@@ -217,6 +281,56 @@ fn walk(s: *State, doc: *const html.Document, id: html.NodeId, kind: usize, href
             child_kind = KIND_BULLET
             add_text(s, "-", KIND_BULLET, "")
         }
+        // (C159) A form: its fields are shown as `name: value` and make a query; its end is a Submit link that fetches
+        // the action with that query (GET).
+        if ui.same(name, "form") {
+            flush_line(s, kind, href)
+            s.form_open = true
+            s.form_query_len = 0usize
+            s.form_action_len = 0usize
+            let (action, has_action) = html.attribute(n, "action")
+            if has_action {
+                var k = 0usize
+                while k < action.len && k < 40usize {
+                    s.form_action[k] = action[k]
+                    k += 1usize
+                }
+                s.form_action_len = k
+            }
+        }
+        if ui.same(name, "input") && s.form_open {
+            let (field, has_field) = html.attribute(n, "name")
+            let (given, has_given) = html.attribute(n, "value")
+            let (input_type, has_type) = html.attribute(n, "type")
+            var pressed = false
+            var hidden = false
+            if has_type && (ui.same(input_type, "submit") || ui.same(input_type, "button")) { pressed = true }
+            if has_type && ui.same(input_type, "hidden") { hidden = true }
+            if has_field && !pressed {
+                var current_value = ""
+                if has_given { current_value = given }
+                query_add(s, field, current_value)
+                if !hidden {
+                    flush_line(s, kind, href)
+                    add_text(s, field, KIND_BODY, "")
+                    add_text(s, ":", KIND_BODY, "")
+                    add_text(s, current_value, KIND_BODY, "")
+                    flush_line(s, KIND_BODY, "")
+                }
+            }
+        }
+        // (C159) An image is a line the page shows as the picture when it could be fetched, its alt text otherwise.
+        if ui.same(name, "img") {
+            let (source, has_source) = html.attribute(n, "src")
+            let (alt, has_alt) = html.attribute(n, "alt")
+            if has_source {
+                flush_line(s, kind, href)
+                var caption = "image"
+                if has_alt && alt.len > 0usize { caption = alt }
+                add_text(s, caption, KIND_IMAGE, source)
+                flush_line(s, KIND_IMAGE, source)
+            }
+        }
         if ui.same(name, "a") {
             let (destination, has_destination) = html.attribute(n, "href")
             if has_destination {
@@ -234,6 +348,28 @@ fn walk(s: *State, doc: *const html.Document, id: html.NodeId, kind: usize, href
     }
     if n.kind == .Element {
         if is_block(n.name) || ui.same(n.name, "a") { flush_line(s, child_kind, child_href) }
+        if ui.same(n.name, "form") && s.form_open {
+            flush_line(s, kind, href)
+            s.form_open = false
+            var dest: [48]u8 = zero
+            var t = 0usize
+            while t < s.form_action_len {
+                dest[t] = s.form_action[t]
+                t += 1usize
+            }
+            if s.form_query_len > 0usize {
+                dest[t] = 63u8
+                t += 1usize
+                var q = 0usize
+                while q < s.form_query_len && t < 48usize {
+                    dest[t] = s.form_query[q]
+                    t += 1usize
+                    q += 1usize
+                }
+            }
+            add_text(s, "Submit", KIND_LINK, dest[0usize..t])
+            flush_line(s, KIND_LINK, dest[0usize..t])
+        }
     }
 }
 
@@ -483,6 +619,53 @@ fn fetch_following(a: *mem.Arena, s: *State, host: str, path: str, now: i64) -> 
     ret (last, h, p, httpc.Malformed)
 }
 
+// (C159) Save a download into /Downloads and make the page a note of it: its name, its size and where it went.
+fn download(a: *mem.Arena, s: *State, slot: usize, path: str, body: str) -> bool {
+    var start = 0usize
+    var end = path.len
+    var i = 0usize
+    while i < path.len {
+        if path[i] == 63u8 && end == path.len { end = i }
+        if path[i] == 47u8 && end == path.len { start = i + 1usize }
+        i += 1usize
+    }
+    var name = path[start..end]
+    if name.len == 0usize { name = "download" }
+    let made = vaultfs.mkdir("/Downloads")
+    let dest = ui.join(a, "/Downloads/", name, "")
+    var saved = false
+    if body.len > 0usize { saved = vaultfs.write_big(dest, mem.address_of(&body[0usize]), body.len) }
+    let (size, kind_of, extra, found) = vaultfs.stat(dest)
+    s.page_total = 0usize
+    s.cur_len = 0usize
+    s.pending_space = false
+    s.scroll = 0usize
+    s.svg_len = 0usize
+    s.svg_line = NONE
+    s.title_len = 0usize
+    flush_line_text(s, "Downloaded", KIND_H1)
+    flush_line_text(s, name, KIND_BODY)
+    flush_line_text(s, ui.join(a, ui.number(a, size), " bytes in Downloads", ""), KIND_BODY)
+    s.loaded = slot
+    s.load_error = 0usize
+    if !saved || !found || size != body.len {
+        s.load_error = 4usize
+        ret false
+    }
+    ui.say("browser downloaded ")
+    ui.say_text(name)
+    ui.say(" ")
+    ui.say_num(size)
+    ui.say("\n")
+    ret true
+}
+
+// One whole line of text (a note the Browser itself shows).
+fn flush_line_text(s: *State, line_text: str, kind: usize) {
+    add_text(s, line_text, kind, "")
+    flush_line(s, kind, "")
+}
+
 // Fetch and lay out the page of address slot `slot`: false (with `load_error` set) when it could not be had.
 fn load_live(a: *mem.Arena, s: *State, slot: usize) -> bool {
     let u = s.urls[slot]
@@ -499,20 +682,65 @@ fn load_live(a: *mem.Arena, s: *State, slot: usize) -> bool {
     let (reply, final_host, final_path, get_error) = fetch_following(a, s, host, path, now)
     if get_error != ok {
         s.load_error = 1usize
+        ui.say("browser fetch failed ")
+        if get_error == httpc.NoNetwork { ui.say("no-network ") }
+        if get_error == httpc.Unreachable { ui.say("unreachable ") }
+        if get_error == httpc.TlsFailed { ui.say("tls ") }
+        if get_error == httpc.Io { ui.say("io ") }
+        if get_error == httpc.Malformed { ui.say("malformed ") }
+        if get_error == httpc.TooLarge { ui.say("too-large ") }
+        ui.say_text(host)
+        ui.say_text(path)
+        ui.say("\n")
         ret false
     }
     if reply.status != 200usize {
         s.load_error = 2usize
+        ui.say("browser fetch status ")
+        ui.say_num(reply.status)
+        ui.say("\n")
         ret false
+    }
+    // (C159) A reply that is not a page (its Content-Type is neither text nor XHTML) is a download: saved in /Downloads
+    // under the last segment of the path and shown as a note.
+    let (content_type, has_type) = header_value(reply.head, "content-type:")
+    if has_type && !header_is(content_type, "text/") && !header_is(content_type, "application/xhtml") {
+        ret download(a, s, slot, final_path, reply.body)
     }
     let (doc, parse_error) = html.parse(a, reply.body, html.Options { max_bytes: 98304usize, max_nodes: 2048usize, max_attributes: 16usize, max_depth: 40u16, preserve_comments: false })
     if parse_error != ok {
         s.load_error = 3usize
         ret false
     }
+    s.form_open = false
     find_title(a, s, &doc)
     walk(s, &doc, doc.root, KIND_BODY, "")
     flush_line(s, KIND_BODY, "")
+    // (C159) The first image of the page, fetched from the page's host: an SVG of at most 1.5 KB is kept and drawn.
+    s.svg_len = 0usize
+    s.svg_line = NONE
+    var at_line = 0usize
+    while at_line < s.page_total && s.svg_line == NONE {
+        if s.page[at_line].kind == KIND_IMAGE {
+            let image_line = s.page[at_line]
+            let (image_host, image_path) = split_address(a, s, ui.text_of(a, image_line.href[0usize..], image_line.href_len), final_host)
+            let (image, image_got_host, image_got_path, image_error) = fetch_following(a, s, image_host, image_path, now)
+            if image_error == ok && image.status == 200usize && image.body.len > 0usize && image.body.len <= 1536usize {
+                var b = 0usize
+                while b < image.body.len {
+                    s.svg_text[b] = image.body[b]
+                    b += 1usize
+                }
+                s.svg_len = b
+                s.svg_line = at_line
+                ui.say("browser image ")
+                ui.say_num(b)
+                ui.say(" bytes\n")
+            }
+            at_line = s.page_total
+        }
+        at_line += 1usize
+    }
     s.loaded = slot
     s.load_error = 0usize
     ui.say("browser live ")
@@ -845,6 +1073,13 @@ fn draw_live(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         } else if line.kind == KIND_PRE {
             try ui.put(a, builder, faces.grotesk, 13.0, text_line, 20.0, y, ui.light())
             y += 20.0
+        } else if line.kind == KIND_IMAGE && s.svg_line == i && s.svg_len > 0usize {
+            try picture(a, builder, ui.text_of(a, s.svg_text[0usize..], s.svg_len), geometry.rect(20.0, y, 96.0, 96.0), ui.amber())
+            ui.say("browser image drawn\n")
+            y += 108.0
+        } else if line.kind == KIND_IMAGE {
+            try ui.put(a, builder, faces.jost, 17.0, ui.join(a, "[", text_line, "]"), 20.0, y, ui.light_muted())
+            y += 26.0
         } else {
             try ui.put(a, builder, faces.jost, 17.0, text_line, 20.0, y, ui.light())
             y += 26.0
@@ -1006,6 +1241,9 @@ fn ensure_live(a: *mem.Arena, s: *State) {
 }
 
 fn submit(a: *mem.Arena, s: *State, address: str) {
+    ui.say("browser address ")
+    ui.say_text(address)
+    ui.say("\n")
     var page = resolve(address)
     if page == ERROR {
         // Not one of the sample sites: a real address, fetched over the network.
