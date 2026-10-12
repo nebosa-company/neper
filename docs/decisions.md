@@ -39692,3 +39692,6 @@ L163 (D2840) doubled `e.fmt.png.encode`'s on-stack arena to 320 KB for the lazy-
 
 ## D2462 — The theme fixture sends its home tap twice
 The `settings_theme` fixture reached `level mode Angle` and then never `level home`: the tap that follows the Angle tab lands while Level is redrawing the mode and is dropped (the virtio-input queue drops events a busy app has not consumed, the table's own header says so). Reproduced outside the suite with the same eight taps; adding one more identical home tap produced `level home`, `shell app code 0`, `shell home`. The table row now carries the second tap; the Level app itself is unchanged.
+
+## D2463 — The Dynamic fixture's taps are twelve seconds apart
+With the compositor frames of the current tree the Dynamic fixture dropped its open tap at the eight-second cadence (the app was still presenting the Ready stage), so the next taps typed into the prompt and `dynamic open` never printed. The same fifteen taps at twelve seconds reach every marker through `dynamic home`; the row's delay field is now 12. The table's header already names the cause: the virtio-input queue drops events a busy app has not consumed.
