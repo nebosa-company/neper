@@ -889,10 +889,10 @@
       "group": "UI",
       "order": 268,
       "title": "editing: cell kinds + editors + write-through + lock",
-      "score": 0,
+      "score": 0.8,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: edit-then-commit fixtures incl. sort-key edit."
+      "evidence": "D3916: tableview.reposition/refilter_row/row_matches (data_tablerow: 150k rows vs full apply_sort/apply_filter, every key kind, mutations caught); datagrid bool toggle, select editor (choice), can_edit lock, value_changed old/new, begin_batch/end_batch (ui_datagrid section 13, exits 310-337). Open: undo, paste helper, Linux run. Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: edit-then-commit fixtures incl. sort-key edit."
     },
     {
       "id": "G008",

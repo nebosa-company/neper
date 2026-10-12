@@ -460,6 +460,8 @@ type NodeKind = enum u8 { Leaf, And, Or, NotAnd, NotOr }
 type Node = struct { kind: NodeKind, leaf: Leaf, first: usize, count: usize }
 
 error BadFilter
+error TooManyKeys
+error NotInView
 
 // Per node: for a leaf over a dictionary column, the verdict of each dictionary entry.
 type Accept = struct { entries: []bool }
@@ -874,3 +876,158 @@ fn clear_filter(v: *View) {
 }
 
 fn is_filtered(v: *const View) -> bool { ret v.filtered }
+
+// ---- one row changed -------------------------------------------------------------
+//
+// A cell edit touches one row. Sorting 150,000 rows again to move one is not needed:
+// `reposition` takes the row out of the sorted order and puts it back where the same keys
+// would have placed it, found by a binary search (ties by row, as in `apply_sort`), and
+// `refilter_row` re-evaluates the filter for that row alone.
+
+const MAX_REPOSITION_KEYS: usize = 8usize
+
+// A key's text order of one column for comparisons: the dictionary ranks when it is folded.
+type KeyPrep = struct { ranks: []const u32, has_ranks: bool }
+
+fn compare_u32(x: u32, y: u32) -> i32 {
+    if x < y { ret -1i32 }
+    if x > y { ret 1i32 }
+    ret 0i32
+}
+
+// The order of rows x and y under one column key (without the row tie-break).
+fn compare_by_column(v: *const View, key: Key, prep: KeyPrep, x: usize, y: usize) -> i32 {
+    let t = v.t
+    let xn = table.is_null(t, key.column, x)
+    let yn = table.is_null(t, key.column, y)
+    var c = 0i32
+    if xn || yn {
+        if xn && yn { c = 0i32 } else if xn { c = -1i32 } else { c = 1i32 }
+    } else {
+        let kind = table.column_kind(t, key.column)
+        if kind == table.Kind.I32 {
+            c = three_way_int(i64(table.get_i32(t, key.column, x)), i64(table.get_i32(t, key.column, y)))
+        } else if kind == table.Kind.I64 {
+            c = three_way_int(table.get_i64(t, key.column, x), table.get_i64(t, key.column, y))
+        } else if kind == table.Kind.F64 {
+            c = three_way_real(table.get_f64(t, key.column, x), table.get_f64(t, key.column, y))
+        } else if kind == table.Kind.Bool {
+            var bx = 0i64
+            var by = 0i64
+            if table.get_bool(t, key.column, x) { bx = 1i64 }
+            if table.get_bool(t, key.column, y) { by = 1i64 }
+            c = three_way_int(bx, by)
+        } else if kind == table.Kind.Dict && key.fold && prep.has_ranks {
+            c = compare_u32(prep.ranks[usize(table.dict_id(t, key.column, x))], prep.ranks[usize(table.dict_id(t, key.column, y))])
+        } else {
+            let sx = table.get_str(t, key.column, x)
+            let sy = table.get_str(t, key.column, y)
+            if key.fold { c = table.compare_fold(sx, sy) } else { c = compare_bytes(sx, sy) }
+        }
+    }
+    if key.descending { ret 0i32 - c }
+    ret c
+}
+
+fn compare_by_keys(v: *const View, keys: []const Key, preps: []const KeyPrep, x: usize, y: usize) -> i32 {
+    var at = 0usize
+    while at < keys.len {
+        let key = keys[at]
+        var c = 0i32
+        if key.mode == KeyMode.Compare {
+            c = key.compare(key.ctx, u32(x), u32(y))
+            if key.descending { c = 0i32 - c }
+        } else if key.mode == KeyMode.KeyFn {
+            c = compare_u64(key.key_fn(key.ctx, x), key.key_fn(key.ctx, y))
+            if key.descending { c = 0i32 - c }
+        } else {
+            c = compare_by_column(v, key, preps[at], x, y)
+        }
+        if c != 0i32 { ret c }
+        at += 1usize
+    }
+    if x < y { ret -1i32 }
+    if x > y { ret 1i32 }
+    ret 0i32
+}
+
+fn compare_u64(x: u64, y: u64) -> i32 {
+    if x < y { ret -1i32 }
+    if x > y { ret 1i32 }
+    ret 0i32
+}
+
+// Puts `row` where `keys` place it in an order that is sorted by `keys` except for that row.
+// The keys are the ones of the last `apply_sort`. `TooManyKeys` past eight keys.
+fn reposition(v: *View, keys: []const Key, row: usize, scratch: *mem.Arena) -> err {
+    if keys.len > MAX_REPOSITION_KEYS { ret TooManyKeys }
+    var preps: [8]KeyPrep = zero
+    var k = 0usize
+    while k < keys.len {
+        preps[k] = KeyPrep { ranks: v.order_rows[0usize..0usize], has_ranks: false }
+        if keys[k].mode == KeyMode.Column && keys[k].fold && table.column_kind(v.t, keys[k].column) == table.Kind.Dict {
+            let (rank_slice, rank_error) = table.ranks(v.t, keys[k].column, scratch)
+            if rank_error != ok { ret rank_error }
+            preps[k] = KeyPrep { ranks: rank_slice, has_ranks: true }
+        }
+        k += 1usize
+    }
+    // out of the order
+    var at = 0usize
+    while at < v.total && usize(v.order_rows[at]) != row { at += 1usize }
+    if at >= v.total { ret NotInView }
+    while at + 1usize < v.total {
+        v.order_rows[at] = v.order_rows[at + 1usize]
+        at += 1usize
+    }
+    let rest = v.total - 1usize
+    // the first position whose row sorts after `row`
+    var low = 0usize
+    var high = rest
+    while low < high {
+        let middle = (low + high) / 2usize
+        if compare_by_keys(v, keys, preps[0usize..keys.len], usize(v.order_rows[middle]), row) < 0i32 {
+            low = middle + 1usize
+        } else {
+            high = middle
+        }
+    }
+    // and back in
+    var j = rest
+    while j > low {
+        v.order_rows[j] = v.order_rows[j - 1usize]
+        j -= 1usize
+    }
+    v.order_rows[low] = u32(row)
+    if v.filtered { rebuild_shown(v) }
+    ret ok
+}
+
+// Re-evaluates the filter tree `nodes` for one row: its match bit and its place in the shown
+// rows follow. A view with no filter is left alone.
+fn refilter_row(v: *View, nodes: []const Node, row: usize, scratch: *mem.Arena) -> err {
+    if !v.filtered || nodes.len == 0usize { ret ok }
+    let marker = mem.mark(scratch)
+    let (compiled, compile_error) = compile(v, nodes, scratch)
+    if compile_error != ok {
+        mem.reset(scratch, marker)
+        ret compile_error
+    }
+    let pass = eval_node(v, &compiled, 0usize, row)
+    mem.reset(scratch, marker)
+    let word = row >> 6usize
+    let bit = 1u64 << u64(row & 63usize)
+    if pass {
+        v.matched[word] = v.matched[word] | bit
+    } else {
+        v.matched[word] = v.matched[word] & (ALL64 ^ bit)
+    }
+    rebuild_shown(v)
+    ret ok
+}
+
+// Whether the filter keeps `row`, as of the last `apply_filter` or `refilter_row`.
+fn row_matches(v: *const View, row: usize) -> bool {
+    if !v.filtered { ret true }
+    ret bit_is_set(v.matched, row)
+}

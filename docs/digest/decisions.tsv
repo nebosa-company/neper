@@ -2384,4 +2384,5 @@ D3911	2789	G006: datagrid cell painters (custom cell nodes, row roles) and the f
 D3912	2530	G006: datagrid bands, row indicator and navigator
 D3913	3955	G006: datagrid in-place editors and layout persistence
 D3914	2426	G006: datagrid preview row and pixel probes
-D3915	3377	G006: datagrid Tab navigation, column visibility and order
+D3915	3378	G006: datagrid Tab navigation, column visibility and order
+D3916	1981	G007: single-row reposition, editors by kind, lock, old/new text and batches

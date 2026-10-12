@@ -1988,6 +1988,8 @@ type Leaf = struct { column: usize, op: Op, a: Operand, b: Operand, items: []con
 type NodeKind = enum u8 { Leaf, And, Or, NotAnd, NotOr }
 type Node = struct { kind: NodeKind, leaf: Leaf, first: usize, count: usize }
 error BadFilter
+error TooManyKeys
+error NotInView
 
 fn int_operand(value: i64) -> Operand
 fn real_operand(value: f64) -> Operand
@@ -2000,6 +2002,9 @@ fn group_node(kind: NodeKind, first: usize, count: usize) -> Node
 fn apply_filter(v: *View, nodes: []const Node, refine: bool, scratch: *mem.Arena) -> err
 fn clear_filter(v: *View)
 fn is_filtered(v: *const View) -> bool
+fn reposition(v: *View, keys: []const Key, row: usize, scratch: *mem.Arena) -> err
+fn refilter_row(v: *View, nodes: []const Node, row: usize, scratch: *mem.Arena) -> err
+fn row_matches(v: *const View, row: usize) -> bool
 ```
 
 `apply_filter` evaluates the tree rooted at `nodes[0]` (a group names its children as the run
@@ -2114,11 +2119,12 @@ const EDIT_TEXT: usize = 64usize
 type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom, Indicator }
 type Band = struct { title: str, first: usize, count: usize }
 type Nav = enum u8 { First, Prev, Next, Last }
-type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool, editable: bool }
-type Events = struct { ctx: *void, sort_changed: fn(*void, usize, bool) -> err, row_picked: fn(*void, usize) -> err, filter_changed: fn(*void, usize, str) -> err, cell_edited: fn(*void, usize, usize) -> err, custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err, row_role: fn(*void, usize) -> style.ColorRole }
-type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, all: []const ColumnSpec, display: []ColumnSpec, column_store: []collection.Column, origin: []usize, order: []usize, hidden: []bool, widths: []f32, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, read_only: bool, preview_on: bool, preview_spec: usize, preview_open: [32]u64, preview_count: usize, editing: bool, edit_row: usize, edit_spec: usize, edit_text: [64]u8, edit_scratch: [160]u8, edit_len: usize, edit_invalid: bool, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
+type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool, editable: bool, choice: bool }
+type Events = struct { ctx: *void, sort_changed: fn(*void, usize, bool) -> err, row_picked: fn(*void, usize) -> err, filter_changed: fn(*void, usize, str) -> err, cell_edited: fn(*void, usize, usize) -> err, value_changed: fn(*void, usize, usize, str, str) -> err, can_edit: fn(*void, usize, usize) -> bool, batch_done: fn(*void, usize) -> err, custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err, row_role: fn(*void, usize) -> style.ColorRole }
+type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, all: []const ColumnSpec, display: []ColumnSpec, column_store: []collection.Column, origin: []usize, order: []usize, hidden: []bool, widths: []f32, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, read_only: bool, preview_on: bool, preview_spec: usize, preview_open: [32]u64, preview_count: usize, editing: bool, edit_row: usize, edit_spec: usize, edit_text: [64]u8, edit_scratch: [160]u8, edit_len: usize, edit_invalid: bool, edit_old: [64]u8, edit_old_len: usize, select_open: bool, batch_depth: usize, batch_count: usize, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
 error TooManyColumns
 error NotEditable
+error Locked
 error BadLayout
 
 fn no_events() -> Events
@@ -2144,6 +2150,8 @@ fn navigate(grid: *Grid, kind: Nav) -> err
 fn begin_edit(grid: *Grid, row: usize, spec: usize) -> err
 fn cancel_edit(grid: *Grid)
 fn commit_edit(grid: *Grid) -> err
+fn begin_batch(grid: *Grid)
+fn end_batch(grid: *Grid) -> err
 fn column_width(grid: *const Grid, spec: usize) -> f32
 fn resize_column(grid: *Grid, spec: usize, width: f32)
 fn save_layout(a: *mem.Arena, grid: *const Grid) -> (str, err)
