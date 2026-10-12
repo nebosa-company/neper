@@ -62,6 +62,7 @@
     "e.fmt.extract",
     "e.fmt.odf",
     "e.fmt.cap",
+    "e.fmt.mvt",
     "e.fmt.sse",
     "e.fmt.pdf",
     "e.fmt.pdf.write",
@@ -7963,6 +7964,19 @@
    "direct_dependencies": [
     "e.mem",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.mvt",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.fmt.protobuf",
+    "e.mem"
    ],
    "blocked_by": []
   }

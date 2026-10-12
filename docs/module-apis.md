@@ -27786,6 +27786,44 @@ fn next(a: *mem.Arena, data: []const u8, at: usize) -> (Event, usize, bool, err)
 Server-Sent Events (`text/event-stream`, HTML Living Standard 9.2) read incrementally (C171): `next` takes the bytes received so far and a position and returns the next dispatched event (type, data with its lines joined by LF, last event id, retry in milliseconds) with the position after it, or `whole` false when the stream has not yet delivered a whole event, consuming nothing. LF, CR and CRLF line ends (a CR at the very end waits for what follows), comments, one optional space after the colon, `id` with NUL ignored, `retry` digits only, events without data skipped. `skip_bom` skips a byte order mark. The way a streamed AI reply arrives. Checked against an independent Python parser of the standard's algorithm, whole streams and every prefix (`scripts/gen_sse_test.py`).
 
 
+### `e.fmt.mvt`
+
+```neper
+error Invalid
+error TooMany
+
+type Value = struct { kind: u8, text: str, number: f64, integer: i64 }
+type Point = struct { x: i32, y: i32 }
+type Feature = struct { id: u64, has_id: bool, kind: u8, tags: []u32, points: []Point, parts: []usize }
+type Layer = struct { name: str, version: u32, extent: u32, keys: []str, values: []Value, features: []Feature }
+
+const KIND_POINT: u8 = 1u8
+const KIND_LINE: u8 = 2u8
+const KIND_POLYGON: u8 = 3u8
+const VALUE_NONE: u8 = 0u8
+const VALUE_STRING: u8 = 1u8
+const VALUE_FLOAT: u8 = 2u8
+const VALUE_DOUBLE: u8 = 3u8
+const VALUE_INT: u8 = 4u8
+const VALUE_UINT: u8 = 5u8
+const VALUE_SINT: u8 = 6u8
+const VALUE_BOOL: u8 = 7u8
+const MAX_POINTS: usize = 65536usize
+
+fn packed(a: *mem.Arena, payload: []const u8) -> ([]u32, err)
+fn unzig(v: u32) -> i32
+fn decode_geometry(a: *mem.Arena, kind: u8, commands: []const u32) -> ([]Point, []usize, err)
+fn parse_feature(a: *mem.Arena, payload: []const u8) -> (Feature, err)
+fn parse_value(payload: []const u8) -> (Value, err)
+fn f32_from_bits(w: u32) -> f32
+fn f64_from_bits(w: u64) -> f64
+fn parse_layer(a: *mem.Arena, payload: []const u8) -> (Layer, err)
+fn parse(a: *mem.Arena, data: []const u8) -> ([]Layer, err)
+```
+
+Mapbox Vector Tiles (specification 2.1, C160), decoded over `e.fmt.protobuf`: `parse` reads a tile's layers (name, extent, version, key and value tables, values keeping their protobuf type) and each layer's features (id, geometry type, tag pairs, and the MoveTo, LineTo and ClosePath commands resolved to absolute integer points in the layer's extent, with `parts` giving where each linestring or ring ends). Truncated geometry or tag lists are `Invalid`. The tile format OpenStreetMap vector sources (OpenFreeMap, Protomaps) serve; rendering and the transform to the screen belong to the caller. Checked against a tile built by an independent encoder (`scripts/gen_mvt_test.py`).
+
+
 ### `e.fmt.pdf`
 
 ```neper

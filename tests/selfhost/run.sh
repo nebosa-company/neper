@@ -1237,6 +1237,11 @@ fmt_sse_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_sse_written" = 'executable written' ]
 chmod +x "$test_build/fmt-sse-selfhost"
 "$test_build/fmt-sse-selfhost"
+# `e.fmt.mvt`: a vector tile against an independent encoder (C160).
+fmt_mvt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_mvt/src/main.e" "$repo" x64 linux "$test_build/fmt-mvt-selfhost")
+[ "$fmt_mvt_written" = 'executable written' ]
+chmod +x "$test_build/fmt-mvt-selfhost"
+"$test_build/fmt-mvt-selfhost"
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-selfhost")
 [ "$fmt_pdf_written" = 'executable written' ]

@@ -1342,6 +1342,12 @@ $fmtSseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtSseWritten -ne 'executable written') { throw 'fmt_sse emission failed' }
 & $fmtSsePath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_sse check failed: exit $LASTEXITCODE" }
+# `e.fmt.mvt`: a vector tile against an independent encoder (C160).
+$fmtmvtPath = Join-Path $testBuild 'fmt-mvt-selfhost.exe'
+$fmtmvtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_mvt\src\main.e') $repo 'x64' 'windows' $fmtmvtPath
+if ($LASTEXITCODE -ne 0 -or $fmtmvtWritten -ne 'executable written') { throw 'fmt_mvt emission failed' }
+& $fmtmvtPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_mvt check failed: exit $LASTEXITCODE" }
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 $fmtPdfPath = Join-Path $testBuild 'fmt-pdf-selfhost.exe'
 $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf\src\main.e') $repo 'x64' 'windows' $fmtPdfPath

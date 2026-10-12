@@ -2288,4 +2288,5 @@ D2449	944	C168: Steps keeps its week
 D2450	954	L150: the Coptic and Ethiopic calendars
 D2451	769	L150: the Thai Buddhist calendar
 D2452	876	C156: a CAP alert reader
-D2453	1088	C171: a Server-Sent Events reader
+D2453	1089	C171: a Server-Sent Events reader
+D2454	991	C160: Mapbox Vector Tile reader
