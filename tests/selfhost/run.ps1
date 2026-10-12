@@ -1348,6 +1348,12 @@ $ui_schedule_monthWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $ui_schedule_monthWritten -ne 'executable written') { throw 'ui_schedule_month emission failed' }
 & $ui_schedule_monthPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_schedule_month check failed: exit $LASTEXITCODE" }
+# `e.ui.tree_adapter` Unicode name order and lazily loaded folders (L067).
+$ui_tree_adapter_unicodePath = Join-Path $testBuild 'ui-tree-adapter-unicode-selfhost.exe'
+$ui_tree_adapter_unicodeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_tree_adapter_unicode\src\main.e') $repo 'x64' 'windows' $ui_tree_adapter_unicodePath
+if ($LASTEXITCODE -ne 0 -or $ui_tree_adapter_unicodeWritten -ne 'executable written') { throw 'ui_tree_adapter_unicode emission failed' }
+& $ui_tree_adapter_unicodePath
+if ($LASTEXITCODE -ne 0) { throw "a ui_tree_adapter_unicode check failed: exit $LASTEXITCODE" }
 # `e.fmt.cap`: Common Alerting Protocol alerts against an ElementTree walk (C156).
 $fmtCapPath = Join-Path $testBuild 'fmt-cap-selfhost.exe'
 $fmtCapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_cap\src\main.e') $repo 'x64' 'windows' $fmtCapPath

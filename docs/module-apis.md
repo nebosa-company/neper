@@ -9263,11 +9263,11 @@ of a host.
 ```neper
 const NONE: u32 = 4294967295u32
 type NodeKind = enum u8 { File, Folder, Loading, Failed }
-type DirState = enum u8 { Ready, Loading, Failed }
+type DirState = enum u8 { Ready, Loading, Failed, Unloaded }
 type Entry = struct { path: str, dir: bool, state: DirState }
 type Rename = struct { from: str, to: str }
-type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64 }
-type Node = struct { key: widget.Key, parent: u32, kind: NodeKind, path_start: usize, path_len: usize, name_start: usize, depth: u32, first_child: usize, child_count: usize }
+type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64, unicode_names: bool }
+type Node = struct { key: widget.Key, parent: u32, kind: NodeKind, path_start: usize, path_len: usize, name_start: usize, depth: u32, first_child: usize, child_count: usize, lazy: bool }
 type Storage = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, order: []u32, scratch: []u8 }
 type Tree = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, count: usize, root_first: usize, root_count: usize, case_sensitive_paths: bool }
 error TooLarge
@@ -9277,12 +9277,18 @@ error NotDirectory
 error Invalid
 fn default_hash(s: str) -> u64
 fn policy(case_sensitive_paths: bool) -> Policy
+fn policy_unicode(case_sensitive_paths: bool) -> Policy
 fn fold_byte(ch: u8, sensitive: bool) -> u8
 fn id_cmp(x: str, y: str, sensitive: bool) -> i32
 type Ctx = struct { nodes: []Node, paths: []u8, policy: Policy }
 fn node_path(c: *const Ctx, i: usize) -> str
 fn node_name(c: *const Ctx, i: usize) -> str
 fn rank_of(c: *const Ctx, n: Node) -> u32
+const KEY_CAP: usize = 512usize
+fn fold_keys(name: str, fold: bool, all: []u32, base: []u32) -> (usize, usize)
+fn is_digit_scalar(s: u32) -> bool
+fn natural_scalars(x: []const u32, nx: usize, y: []const u32, ny: usize, numeric: bool) -> i32
+fn name_order(c: *const Ctx, a: str, b: str) -> i32
 fn before(c: *const Ctx, x: u32, y: u32, mode: u32) -> bool
 fn sort(c: *const Ctx, idx: []u32, tmp: []u32, n: usize, mode: u32)
 fn find_path(t: *const Tree, p: str) -> (u32, bool)
@@ -9303,6 +9309,8 @@ type Bridge = struct { tree: *const Tree, theme: *const control.Theme }
 fn bridge_count(ctx: *void, key: widget.Key) -> usize
 fn bridge_key(ctx: *void, parent: widget.Key, index: usize) -> widget.Key
 fn bridge_has_children(ctx: *void, key: widget.Key) -> bool
+fn is_lazy(t: *const Tree, key: widget.Key) -> bool
+fn pending(t: *const Tree, expanded: []const widget.Key, n: usize, out: []widget.Key) -> usize
 fn bridge_build(ctx: *void, a: *mem.Arena, key: widget.Key, out: *widget.Node) -> err
 fn source(b: *Bridge) -> collection.TreeSource
 fn visible(b: *Bridge, expanded: []const widget.Key, out: []collection.TreeRow) -> usize
@@ -9322,6 +9330,10 @@ surviving parent, else the ancestor, else the root's sibling) and `anchor_offset
 the row at the viewport top under refresh. `Duplicate`, `MissingParent`, `NotDirectory`,
 `Invalid` and `TooLarge` refuse a snapshot that is not a tree. Enumeration, path
 resolution and mutation authorization stay with the host's filesystem services.
+
+D3305 adds `policy_unicode` (names by NFD, Unicode simple lowering, base letters first then
+accents) and lazy folders: `DirState.Unloaded` shows an expander with no children, `pending`
+lists the expanded `Unloaded` folders for the host to enumerate and `is_lazy` tests one.
 
 ### `e.ui.schedule`
 

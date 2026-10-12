@@ -3423,6 +3423,7 @@
     "ui_title_bar",
     "ui_transient",
     "ui_tree_adapter",
+    "ui_tree_adapter_unicode",
     "ui_workspace"
    ]
   },
@@ -3503,7 +3504,8 @@
     "ui_property",
     "ui_ripple_v2",
     "ui_tabular",
-    "ui_tree_adapter"
+    "ui_tree_adapter",
+    "ui_tree_adapter_unicode"
    ]
   },
   {
@@ -4149,6 +4151,7 @@
     "ui_title_bar",
     "ui_transient",
     "ui_tree_adapter",
+    "ui_tree_adapter_unicode",
     "ui_widget",
     "ui_workspace"
    ]

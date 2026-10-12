@@ -24,13 +24,26 @@
 // callback of `source` makes a text row in the theme; rows with icons, rename editors and
 // drag are `e.ui.collection`'s `TreeOptions`.
 //
-// ponytail: names order by `collate` (ASCII case folding and numeric runs), not a locale
-// tailoring; a node's parent is found by a binary search over identity paths, so build is
+// Names: the default order is `collate`'s (ASCII case folding and numeric runs); under
+// `policy_unicode` a name is decomposed (NFD), lowered by Unicode's simple mapping and
+// compared first without its combining marks (digit runs by magnitude), then with them,
+// so `e`, `é` and a decomposed `é` sort together before `f` and a composed and a decomposed
+// spelling are equal until the byte tie-break.
+//
+// Lazy loading: a folder listed as `Unloaded` has an expander and no children; `pending`
+// names the expanded ones for the host to enumerate, which lists them again as `Loading`
+// (a placeholder row) and then `Ready` with their entries, the keys kept through `prev`.
+//
+// ponytail: names have no locale tailoring beyond that (no language-specific orders such
+// as Swedish `å` after `z`, no UCA contractions or Han readings), a name is compared on its
+// first 512 NFD scalars; a node's parent is found by a binary search over identity paths, so build is
 // O(n log n) in the entry count; `prev` and the new `Storage` must be different buffers.
 
 use e.algo.hash as hash
 use e.mem
 use e.text.collate as collate
+use e.text.normalize as normalize
+use e.text.unicode as unicode
 use e.ui.collection
 use e.ui.control
 use e.ui.widget
@@ -38,12 +51,16 @@ use e.ui.widget
 const NONE: u32 = 4294967295u32
 
 type NodeKind = enum u8 { File, Folder, Loading, Failed }
-type DirState = enum u8 { Ready, Loading, Failed }
+// `Unloaded`: a folder whose contents the host has not listed yet (it shows an expander and
+// no placeholder row; `pending` names the expanded ones the host should enumerate).
+type DirState = enum u8 { Ready, Loading, Failed, Unloaded }
 
 type Entry = struct { path: str, dir: bool, state: DirState }
 type Rename = struct { from: str, to: str }
-type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64 }
-type Node = struct { key: widget.Key, parent: u32, kind: NodeKind, path_start: usize, path_len: usize, name_start: usize, depth: u32, first_child: usize, child_count: usize }
+// `unicode_names`: order names by Unicode simple case folding with accents as a second
+// level (see `name_order`) rather than by ASCII folding.
+type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64, unicode_names: bool }
+type Node = struct { key: widget.Key, parent: u32, kind: NodeKind, path_start: usize, path_len: usize, name_start: usize, depth: u32, first_child: usize, child_count: usize, lazy: bool }
 type Storage = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, order: []u32, scratch: []u8 }
 type Tree = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, count: usize, root_first: usize, root_count: usize, case_sensitive_paths: bool }
 
@@ -60,7 +77,17 @@ fn default_hash(s: str) -> u64 {
 // A host's policy: case-sensitive or not path identity, folders first, natural order
 // folding ASCII case, the FNV-1a hash.
 fn policy(case_sensitive_paths: bool) -> Policy {
-    ret Policy { case_sensitive_paths: case_sensitive_paths, order: collate.Options { case_sensitive: false, numeric: true }, folders_first: true, hash: default_hash }
+    ret Policy { case_sensitive_paths: case_sensitive_paths, order: collate.Options { case_sensitive: false, numeric: true }, folders_first: true, hash: default_hash, unicode_names: false }
+}
+
+// `policy` with names ordered beyond ASCII: each name is decomposed (NFD), lowered with
+// Unicode's simple mapping and compared first without its combining marks (so `e`, `é` and
+// `É` sort together, between `d` and `f`, digit runs by magnitude), then with them (the
+// plain letter first), then by the byte tie-break every order here ends with.
+fn policy_unicode(case_sensitive_paths: bool) -> Policy {
+    var p = policy(case_sensitive_paths)
+    p.unicode_names = true
+    ret p
 }
 
 fn fold_byte(ch: u8, sensitive: bool) -> u8 {
@@ -100,6 +127,101 @@ fn rank_of(c: *const Ctx, n: Node) -> u32 {
     ret 1u32
 }
 
+const KEY_CAP: usize = 512usize
+
+// The NFD scalars of `name`, lowered with Unicode's simple mapping when `fold`: every one
+// into `all`, those that are not combining marks into `base`; both lengths. A name longer
+// than KEY_CAP scalars is cut there (the byte tie-break still orders it).
+fn fold_keys(name: str, fold: bool, all: []u32, base: []u32) -> (usize, usize) {
+    var n_all = 0usize
+    var n_base = 0usize
+    var at = 0usize
+    var parts: [18]u32 = zero
+    while at < name.len {
+        let (scalar, width) = unicode.read_utf8(name, at)
+        at += width
+        let (used_parts, decompose_error) = normalize.decompose(scalar, false, parts[..], 0usize)
+        var used = used_parts
+        if decompose_error != ok {
+            parts[0usize] = scalar
+            used = 1usize
+        }
+        var k = 0usize
+        while k < used {
+            var s = parts[k]
+            if fold { s = unicode.to_lower_simple(s) }
+            if n_all < all.len {
+                all[n_all] = s
+                n_all += 1usize
+            }
+            if unicode.combining_class(parts[k]) == 0u8 && n_base < base.len {
+                base[n_base] = s
+                n_base += 1usize
+            }
+            k += 1usize
+        }
+    }
+    ret (n_all, n_base)
+}
+
+fn is_digit_scalar(s: u32) -> bool { ret s >= 48u32 && s <= 57u32 }
+
+// -1, 0, 1 over two scalar runs: ASCII digit runs by magnitude (then by length, the shorter
+// zero padding first) when `numeric`, everything else by value.
+fn natural_scalars(x: []const u32, nx: usize, y: []const u32, ny: usize, numeric: bool) -> i32 {
+    var i = 0usize
+    var j = 0usize
+    while i < nx && j < ny {
+        if numeric && is_digit_scalar(x[i]) && is_digit_scalar(y[j]) {
+            let si = i
+            let sj = j
+            while i < nx && is_digit_scalar(x[i]) { i += 1usize }
+            while j < ny && is_digit_scalar(y[j]) { j += 1usize }
+            var a = si
+            var b = sj
+            while a < i && x[a] == 48u32 { a += 1usize }
+            while b < j && y[b] == 48u32 { b += 1usize }
+            let la = i - a
+            let lb = j - b
+            if la < lb { ret -1i32 }
+            if la > lb { ret 1i32 }
+            var d = 0usize
+            while d < la {
+                if x[a + d] < y[b + d] { ret -1i32 }
+                if x[a + d] > y[b + d] { ret 1i32 }
+                d += 1usize
+            }
+            if i - si < j - sj { ret -1i32 }
+            if i - si > j - sj { ret 1i32 }
+            continue
+        }
+        if x[i] < y[j] { ret -1i32 }
+        if x[i] > y[j] { ret 1i32 }
+        i += 1usize
+        j += 1usize
+    }
+    if i < nx { ret 1i32 }
+    if j < ny { ret -1i32 }
+    ret 0i32
+}
+
+// The order of two names under the policy: ASCII-folded natural order, or with
+// `unicode_names` the base letters (marks dropped, lowered) naturally, then the full NFD
+// letters; 0 when both agree (the caller's byte tie-break follows).
+fn name_order(c: *const Ctx, a: str, b: str) -> i32 {
+    if !c.policy.unicode_names { ret collate.compare(a, b, c.policy.order) }
+    var all_a: [512]u32 = zero
+    var base_a: [512]u32 = zero
+    var all_b: [512]u32 = zero
+    var base_b: [512]u32 = zero
+    let fold = !c.policy.order.case_sensitive
+    let (na, pa) = fold_keys(a, fold, all_a[..], base_a[..])
+    let (nb, pb) = fold_keys(b, fold, all_b[..], base_b[..])
+    let primary = natural_scalars(base_a[..], pa, base_b[..], pb, c.policy.order.numeric)
+    if primary != 0i32 { ret primary }
+    ret natural_scalars(all_a[..], na, all_b[..], nb, false)
+}
+
 // Whether node `x` sorts before `y`: mode 0 by identity path, mode 1 by parent, then
 // folders-first rank, natural name order and identity path.
 fn before(c: *const Ctx, x: u32, y: u32, mode: u32) -> bool {
@@ -114,7 +236,7 @@ fn before(c: *const Ctx, x: u32, y: u32, mode: u32) -> bool {
     let rb = rank_of(c, b)
     if ra != rb { ret ra < rb }
     if ra < 2u32 {
-        let by_name = collate.compare(node_name(c, usize(x)), node_name(c, usize(y)), c.policy.order)
+        let by_name = name_order(c, node_name(c, usize(x)), node_name(c, usize(y)))
         if by_name != 0i32 { ret by_name < 0i32 }
     }
     ret id_cmp(node_path(c, usize(x)), node_path(c, usize(y)), sensitive) < 0i32
@@ -278,7 +400,7 @@ fn build(entries: []const Entry, renames: []const Rename, prev: *const Tree, pol
     var placeholders = 0usize
     var e = 0usize
     while e < n {
-        if entries[e].dir && entries[e].state != .Ready { placeholders += 1usize }
+        if entries[e].dir && (entries[e].state == .Loading || entries[e].state == .Failed) { placeholders += 1usize }
         e += 1usize
     }
     let total = n + placeholders
@@ -295,7 +417,7 @@ fn build(entries: []const Entry, renames: []const Rename, prev: *const Tree, pol
         if has_slash { name_start = begin + slash + 1usize }
         var kind: NodeKind = .File
         if entries[i].dir { kind = .Folder }
-        st.nodes[i] = Node { key: 0u64, parent: NONE, kind: kind, path_start: begin, path_len: p.len, name_start: name_start, depth: 0u32, first_child: 0usize, child_count: 0usize }
+        st.nodes[i] = Node { key: 0u64, parent: NONE, kind: kind, path_start: begin, path_len: p.len, name_start: name_start, depth: 0u32, first_child: 0usize, child_count: 0usize, lazy: entries[i].dir && entries[i].state == .Unloaded }
         st.by_path[i] = u32(i)
         i += 1usize
     }
@@ -325,7 +447,7 @@ fn build(entries: []const Entry, renames: []const Rename, prev: *const Tree, pol
         let at = usize(st.by_path[i])
         let nd = st.nodes[at]
         let entry = entries[at]
-        if entry.dir && entry.state != .Ready {
+        if entry.dir && (entry.state == .Loading || entry.state == .Failed) {
             var synthetic: [2]u8 = zero
             synthetic[0usize] = 0u8
             synthetic[1usize] = 1u8
@@ -341,7 +463,7 @@ fn build(entries: []const Entry, renames: []const Rename, prev: *const Tree, pol
             let (_, mark_error) = put_path(st.paths, &used, synthetic[0usize..2usize])
             if mark_error != ok { ret (zero, mark_error) }
             let len = entry.path.len + 3usize
-            st.nodes[next] = Node { key: 0u64, parent: u32(at), kind: kind, path_start: begin, path_len: len, name_start: begin + len, depth: nd.depth + 1u32, first_child: 0usize, child_count: 0usize }
+            st.nodes[next] = Node { key: 0u64, parent: u32(at), kind: kind, path_start: begin, path_len: len, name_start: begin + len, depth: nd.depth + 1u32, first_child: 0usize, child_count: 0usize, lazy: false }
             st.by_path[next] = u32(next)
             next += 1usize
         }
@@ -566,7 +688,32 @@ fn bridge_key(ctx: *void, parent: widget.Key, index: usize) -> widget.Key {
 }
 
 fn bridge_has_children(ctx: *void, key: widget.Key) -> bool {
-    ret bridge_count(ctx, key) > 0usize
+    if bridge_count(ctx, key) > 0usize { ret true }
+    let b = mem.cast[*Bridge](ctx)
+    let (at, found) = find(b.tree, key)
+    ret found && b.tree.nodes[at].lazy
+}
+
+// Whether the folder `key` is an `Unloaded` one: its children are not listed yet.
+fn is_lazy(t: *const Tree, key: widget.Key) -> bool {
+    let (at, found) = find(t, key)
+    ret found && t.nodes[at].lazy
+}
+
+// The keys of `expanded[0..n]` that are `Unloaded` folders, in order, into `out`: the folders
+// the host should enumerate (and list again as `Loading`, then `Ready`, keeping their keys
+// through `prev`); the count written, at most `out.len`.
+fn pending(t: *const Tree, expanded: []const widget.Key, n: usize, out: []widget.Key) -> usize {
+    var written = 0usize
+    var i = 0usize
+    while i < n && written < out.len {
+        if is_lazy(t, expanded[i]) {
+            out[written] = expanded[i]
+            written += 1usize
+        }
+        i += 1usize
+    }
+    ret written
 }
 
 fn bridge_build(ctx: *void, a: *mem.Arena, key: widget.Key, out: *widget.Node) -> err {
