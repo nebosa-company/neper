@@ -2464,6 +2464,12 @@ $dataTablefilterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $dataTablefilterWritten -ne 'executable written') { throw 'data_tablefilter emission failed' }
 & $dataTablefilterPath
 if ($LASTEXITCODE -ne 0) { throw "a data_tablefilter check failed: exit $LASTEXITCODE" }
+# `e.data.tablegroup`: grouping and summaries over a 150,000-row view against an independent reference: boundaries by neighbour equality, one to three levels, folded and exact text, null keys, the visible list, expansion by path through a re-sort and a re-filter, summaries with nulls, groups ordered by a summary at two levels, refusals (D3908).
+$dataTablegroupPath = Join-Path $testBuild 'data-tablegroup-selfhost.exe'
+$dataTablegroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_tablegroup\src\main.e') $repo 'x64' 'windows' $dataTablegroupPath --arena 768m
+if ($LASTEXITCODE -ne 0 -or $dataTablegroupWritten -ne 'executable written') { throw 'data_tablegroup emission failed' }
+& $dataTablegroupPath
+if ($LASTEXITCODE -ne 0) { throw "a data_tablegroup check failed: exit $LASTEXITCODE" }
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 $algoRulesPath = Join-Path $testBuild 'algo-rules-selfhost.exe'
 $algoRulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rules\src\main.e') $repo 'x64' 'windows' $algoRulesPath

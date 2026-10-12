@@ -2356,4 +2356,5 @@ D3904	1126	C160: Maps draws a vector tile from the network
 D2470	919	A large program gets the stack that is left, not a refusal
 D3905	2523	G001: `e.data.table`, the columnar store of the data grid: fixed caller-funded capacity, typed columns, dictionary strings with fold-order ranks, a per-column version for a journal
 D3906	2661	G002: `e.data.tableview` sorts by stable LSD passes over derived integer keys, one pass per key, never a comparer per pair
-D3907	3355	G003: the filter stage of `e.data.tableview` keeps the sort order; dictionary columns are evaluated once per entry
+D3907	3356	G003: the filter stage of `e.data.tableview` keeps the sort order; dictionary columns are evaluated once per entry
+D3908	3449	G004: `e.data.tablegroup`: groups from neighbour comparison over the sorted order, expansion by key path, f64 summaries per group and footer

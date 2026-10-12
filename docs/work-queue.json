@@ -867,10 +867,10 @@
       "group": "Library",
       "order": 265,
       "title": "group + summary engine, expansion keyed by path, group summaries/footers",
-      "score": 0,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: group boundaries equal golden; summaries equal; sort-by-summary."
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: group boundaries equal golden; summaries equal; sort-by-summary. PART (D3908): lib/e/data/tablegroup.e: up to four group levels over a tableview (sort by levels then keys, neighbour comparison), flat pre-order group array, expansion by key path surviving re-sort and re-filter, visible list, f64 summaries (rows/values/sum/min/max) per group and footer, groups ordered by a summary within each parent; tests/selfhost/fixtures/link/data_tablegroup against an independent reference, four mutations caught; measured 27 ms (one level incl. sort), 31 ms (two), summaries 4 ms, order groups 26 ms at 150,000 rows. NOT DONE: group footers, date-part grouping, parallel passes, incremental upkeep under edits, a Linux run."
     },
     {
       "id": "G005",

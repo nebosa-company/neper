@@ -2184,6 +2184,11 @@ data_tablefilter_written=$($test_build/neper-self emit-executable "$repo/tests/s
 [ "$data_tablefilter_written" = 'executable written' ]
 chmod +x "$test_build/data-tablefilter-selfhost"
 "$test_build/data-tablefilter-selfhost"
+# `e.data.tablegroup`: grouping and summaries over a 150,000-row view against an independent reference: boundaries by neighbour equality, one to three levels, folded and exact text, null keys, the visible list, expansion by path through a re-sort and a re-filter, summaries with nulls, groups ordered by a summary at two levels, refusals (D3908).
+data_tablegroup_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_tablegroup/src/main.e" "$repo" x64 linux "$test_build/data-tablegroup-selfhost" --arena 768m)
+[ "$data_tablegroup_written" = 'executable written' ]
+chmod +x "$test_build/data-tablegroup-selfhost"
+"$test_build/data-tablegroup-selfhost"
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 algo_rules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rules/src/main.e" "$repo" x64 linux "$test_build/algo-rules-selfhost")
 [ "$algo_rules_written" = 'executable written' ]

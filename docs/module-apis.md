@@ -2024,6 +2024,62 @@ slow path, a stable merge stage. Nulls sort first ascending and last descending 
 reverses the whole order). Text order is ASCII upper-case folded (`fold: true`) or byte order.
 `scratch` supplies rank-building and merge storage; the caller may reset it afterwards.
 
+### `e.data.tablegroup`
+
+```neper
+const MAX_LEVELS: usize = 4usize
+const NO_GROUP: u32 = 4294967295u32
+const HEADER_BIT: u32 = 2147483648u32
+const MAX_TOGGLED: usize = 4096usize
+
+type GroupLevel = struct { column: usize, descending: bool, fold: bool }
+type Group = struct { level: u32, first: u32, count: u32, parent: u32, key_row: u32, path: u64, expanded: bool }
+type SummaryKind = enum u8 { Rows, Values, Sum, Min, Max, Avg }
+type SummarySpec = struct { column: usize }
+type Summary = struct { rows: usize, values: usize, sum: f64, min: f64, max: f64 }
+type Grouping = struct { v: *view.View, t: *table.Table, levels: [4]GroupLevel, level_count: usize, order: []u32, spare: []u32, total_rows: usize, groups: []Group, group_total: usize, visible: []u32, visible_total: usize, toggled: []u64, toggled_count: usize, default_expanded: bool, specs: []SummarySpec, sums: []Summary }
+error TooManyGroups
+error TooManyToggles
+error BadLevel
+
+fn create(a: *mem.Arena, v: *view.View, group_capacity: usize) -> (Grouping, err)
+fn group_by(g: *Grouping, levels: []const GroupLevel, keys: []const view.Key, scratch: *mem.Arena) -> err
+fn refresh(g: *Grouping, scratch: *mem.Arena) -> err
+fn set_expanded(g: *Grouping, group: usize, on: bool) -> err
+fn is_expanded(g: *const Grouping, group: usize) -> bool
+fn set_all_expanded(g: *Grouping, on: bool)
+fn visible_len(g: *const Grouping) -> usize
+fn visible_is_group(g: *const Grouping, position: usize) -> bool
+fn visible_group(g: *const Grouping, position: usize) -> usize
+fn visible_row(g: *const Grouping, position: usize) -> usize
+fn group_len(g: *const Grouping) -> usize
+fn row_count(g: *const Grouping) -> usize
+fn row_at(g: *const Grouping, position: usize) -> usize
+fn group_level(g: *const Grouping, group: usize) -> usize
+fn group_first(g: *const Grouping, group: usize) -> usize
+fn group_count(g: *const Grouping, group: usize) -> usize
+fn group_parent(g: *const Grouping, group: usize) -> (usize, bool)
+fn group_key_row(g: *const Grouping, group: usize) -> usize
+fn apply_summaries(g: *Grouping, specs: []const SummarySpec, store: *mem.Arena) -> err
+fn group_summary(g: *const Grouping, group: usize, spec: usize) -> Summary
+fn footer_summary(g: *const Grouping, spec: usize) -> Summary
+fn summary_value(s: Summary, kind: SummaryKind) -> f64
+fn sort_groups_by_summary(g: *Grouping, level: usize, spec: usize, kind: SummaryKind, descending: bool, scratch: *mem.Arena) -> err
+```
+
+Groups and summaries over an `e.data.tableview` (`docs/grid.md` §5.4, steps 3-4). `group_by` sorts
+the view by the levels (up to four) and then by `keys`, takes its displayed rows and finds the
+groups with one pass comparing each row with the one before it; a group is a run of rows with equal
+cells at its level and above (text folded per level `fold`). Groups are one flat array in display
+(pre-)order with level, first position, row count and parent, so a subtree is a contiguous run. An
+expansion is remembered by the group's path (a hash of its key and its ancestors' keys), so it
+survives a re-sort, a re-filter and `refresh`; `set_all_expanded` also sets the default for groups
+that appear later. The visible list is what a grid scrolls over: a header per visible group, then
+the rows of an expanded bottom-level group. `apply_summaries` accumulates rows, non-null values,
+sum, min and max (f64) per group and for the footer into storage from `store`;
+`sort_groups_by_summary` orders the groups of a level within each parent by one of them, moving
+their rows with them. `TooManyGroups` answers more groups than the capacity given to `create`.
+
 ### `e.data.slot_map`
 
 ```neper
