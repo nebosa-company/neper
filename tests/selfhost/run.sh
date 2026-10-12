@@ -2252,6 +2252,11 @@ net_grpc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$net_grpc_written" = 'executable written' ]
 chmod +x "$test_build/net-grpc-selfhost"
 "$test_build/net-grpc-selfhost"
+# `x.modbus.wire` against pymodbus: PDUs, TCP/RTU/ASCII frames, typed registers, slave scenarios vs a reference model (D2647).
+x_modbus_wire_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_modbus_wire/src/main.e" "$repo" x64 linux "$test_build/x-modbus-wire-selfhost")
+[ "$x_modbus_wire_written" = 'executable written' ]
+chmod +x "$test_build/x-modbus-wire-selfhost"
+"$test_build/x-modbus-wire-selfhost"
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 net_http_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http_pool/src/main.e" "$repo" x64 linux "$test_build/net-http-pool-selfhost")
 [ "$net_http_pool_written" = 'executable written' ]

@@ -12979,6 +12979,69 @@ fn conn_receive(c: *Conn, input: []const u8, dst: []u8, events: []Event, hdr: []
 
 gRPC over HTTP/2 (L101), client side, over caller buffers and `e.net.http2`: no sockets. The protocol pieces are plain functions: the 5-byte message prefix (`message_encode`, `message_decode`), `grpc-timeout` (`timeout_encode` as grpc-go's `encodeTimeout`, `timeout_parse`), the status names and codes with the HTTP-to-gRPC mapping, `grpc-message` percent-encoding, and `-bin` metadata (base64 sent unpadded; padded, unpadded and the raw zero-prefixed form gRPC C-core writes are accepted). `Conn` is the client state machine: `conn_start` (preface, SETTINGS, window raise), `call_start` (request headers, stream ids), `call_send` (DATA frames split at the peer's frame size, `Blocked` when the windows are short), `call_close_send`, `call_cancel`, and `conn_receive`, which turns the byte stream into events (initial metadata, whole messages across DATA boundaries, trailers with the status and decoded message, trailers-only responses, resets, GOAWAY) while answering SETTINGS and PING and returning flow-control credit. Unary and streaming calls are the same machine. Compression is reported (the flag), never undone. Checked against grpcio transcripts replayed at four chunk sizes (unary, errors with non-ASCII details, metadata incl. binary, a 70 KB message, gzip, server/client/bidi streaming, UNIMPLEMENTED trailers-only) and against `h2` reading Neper's client bytes as a server (D2646). Not done: the server side, gRPC over HTTP/3 and the H2-over-TLS dial (the transport is the caller's), deadlines as a timer (the timeout is carried, not enforced), service stubs from `.proto` descriptors, the retry and keepalive policies, compression.
 
+### `x.modbus.wire`
+
+```neper
+error Truncated
+error Invalid
+error BadChecksum
+error TooSmall
+const READ_COILS: u8 = 1u8
+const READ_DISCRETE_INPUTS: u8 = 2u8
+const READ_HOLDING_REGISTERS: u8 = 3u8
+const READ_INPUT_REGISTERS: u8 = 4u8
+const WRITE_SINGLE_COIL: u8 = 5u8
+const WRITE_SINGLE_REGISTER: u8 = 6u8
+const WRITE_MULTIPLE_COILS: u8 = 15u8
+const WRITE_MULTIPLE_REGISTERS: u8 = 16u8
+const MASK_WRITE_REGISTER: u8 = 22u8
+const READ_WRITE_REGISTERS: u8 = 23u8
+const ILLEGAL_FUNCTION: u8 = 1u8
+const ILLEGAL_ADDRESS: u8 = 2u8
+const ILLEGAL_VALUE: u8 = 3u8
+const DEVICE_FAILURE: u8 = 4u8
+type Frame = struct { transaction: u16, unit: u8, pdu: []const u8 }
+type Request = struct { function: u8, address: u16, count: u16, value: u16, and_mask: u16, or_mask: u16, read_address: u16, read_count: u16, data: []const u8 }
+type Response = struct { function: u8, exception: u8, address: u16, count: u16, value: u16, and_mask: u16, or_mask: u16, data: []const u8 }
+type Slave = struct { coils: []u8, discrete: []u8, holding: []u16, input: []u16 }
+
+fn be16(b: []const u8, at: usize) -> u16
+fn put16(b: []u8, at: usize, v: u16)
+fn crc16(data: []const u8) -> u16
+fn lrc(data: []const u8) -> u8
+fn encode_read(dst: []u8, function: u8, address: u16, count: u16) -> (usize, err)
+fn encode_write_single(dst: []u8, function: u8, address: u16, value: u16) -> (usize, err)
+fn encode_write_coils(dst: []u8, address: u16, count: u16, packed: []const u8) -> (usize, err)
+fn encode_write_registers(dst: []u8, address: u16, values: []const u16) -> (usize, err)
+fn encode_mask_write(dst: []u8, address: u16, and_mask: u16, or_mask: u16) -> (usize, err)
+fn encode_read_write(dst: []u8, read_address: u16, read_count: u16, write_address: u16, values: []const u16) -> (usize, err)
+fn encode_exception(dst: []u8, function: u8, code: u8) -> (usize, err)
+fn parse_request(pdu: []const u8) -> (Request, err)
+fn parse_response(pdu: []const u8) -> (Response, err)
+fn bit_at(data: []const u8, i: usize) -> bool
+fn register_at(data: []const u8, i: usize) -> u16
+fn tcp_frame(dst: []u8, transaction: u16, unit: u8, pdu: []const u8) -> (usize, err)
+fn tcp_parse(buf: []const u8) -> (Frame, usize, err)
+fn rtu_frame(dst: []u8, unit: u8, pdu: []const u8) -> (usize, err)
+fn rtu_parse(buf: []const u8) -> (Frame, err)
+fn hex_upper(v: u8) -> u8
+fn hex_value(c: u8) -> (u8, bool)
+fn ascii_frame(dst: []u8, unit: u8, pdu: []const u8) -> (usize, err)
+fn ascii_parse(buf: []const u8, out: []u8) -> (Frame, err)
+fn get_u32(regs: []const u16, at: usize, little: bool) -> u32
+fn get_u64(regs: []const u16, at: usize, little: bool) -> u64
+fn get_f32(regs: []const u16, at: usize, little: bool) -> f32
+fn get_f64(regs: []const u16, at: usize, little: bool) -> f64
+fn put_u32(regs: []u16, at: usize, v: u32, little: bool)
+fn put_u64(regs: []u16, at: usize, v: u64, little: bool)
+fn put_f32(regs: []u16, at: usize, v: f32, little: bool)
+fn put_f64(regs: []u16, at: usize, v: f64, little: bool)
+fn fail_pdu(dst: []u8, function: u8, code: u8) -> usize
+fn slave_handle(s: *Slave, pdu: []const u8, dst: []u8) -> (usize, err)
+```
+
+Modbus (L151) over caller buffers, no transport. PDU encoders and request/response parsers for function codes 1, 2, 3, 4, 5, 6, 15, 16, 22 and 23 and the exception responses; the three framings (`tcp_frame`/`tcp_parse` with the MBAP header, `rtu_frame`/`rtu_parse` with CRC-16, `ascii_frame`/`ascii_parse` with LRC; `Truncated` until a TCP frame is whole, `BadChecksum`, `Invalid` for a non-zero protocol id or a length outside 2 to 254); typed register access (`get_*`/`put_*` for 32 and 64-bit integers and floats in either word order, `bit_at` and `register_at` over read data); and `slave_handle`, which executes a request against register banks in caller storage with the specification's exception order (unknown function 1, a quantity or value out of limits 3, an address range outside the bank 2) and write-before-read for function 23. A client keeps its own transaction numbers and a transport reads bytes; device discovery stays with L086. Checked against pymodbus (its request and response classes, its socket, RTU and ASCII framers, its CRC and LRC helpers and register conversions) and, for the slave, against an independent reference slave written from the specification over 222 vectors on both hosts (D2647). Not done: the file-record, FIFO, diagnostic and device-identification function codes, the serial port and TCP socket loops, RTU frame delimiting by inter-character silence, broadcast and multi-unit gateways, OPC UA and Siemens S7 (separate slices).
+
 ### `e.net.packet`
 
 ```neper

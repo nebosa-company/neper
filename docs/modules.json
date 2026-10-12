@@ -108,6 +108,7 @@
     "e.net.tls",
     "e.net.policy",
     "e.net.ssrf",
+    "x.modbus.wire",
     "e.net.grpc",
     "e.net.http2",
     "x.elastic.rest",
@@ -3589,6 +3590,17 @@
     "e.mem",
     "e.net.http2",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.modbus.wire",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
    ],
    "blocked_by": []
   },

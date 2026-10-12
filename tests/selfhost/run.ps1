@@ -2551,6 +2551,12 @@ $netGrpcWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $netGrpcWritten -ne 'executable written') { throw 'net_grpc emission failed' }
 & $netGrpcPath
 if ($LASTEXITCODE -ne 0) { throw "a net_grpc check failed: exit $LASTEXITCODE" }
+# `x.modbus.wire` against pymodbus: PDUs, TCP/RTU/ASCII frames, typed registers, slave scenarios vs a reference model (D2647).
+$xModbusWirePath = Join-Path $testBuild 'x-modbus-wire-selfhost.exe'
+$xModbusWireWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_modbus_wire\src\main.e') $repo 'x64' 'windows' $xModbusWirePath
+if ($LASTEXITCODE -ne 0 -or $xModbusWireWritten -ne 'executable written') { throw 'x_modbus_wire emission failed' }
+& $xModbusWirePath
+if ($LASTEXITCODE -ne 0) { throw "a x_modbus_wire check failed: exit $LASTEXITCODE" }
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 $netHttpPoolPath = Join-Path $testBuild 'net-http-pool-selfhost.exe'
 $netHttpPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http_pool\src\main.e') $repo 'x64' 'windows' $netHttpPoolPath
