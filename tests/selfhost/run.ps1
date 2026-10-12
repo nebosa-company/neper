@@ -1336,6 +1336,12 @@ $fmtCapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtCapWritten -ne 'executable written') { throw 'fmt_cap emission failed' }
 & $fmtCapPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_cap check failed: exit $LASTEXITCODE" }
+# `e.fmt.sse`: event streams against the standard's algorithm, whole and prefix by prefix (C171).
+$fmtSsePath = Join-Path $testBuild 'fmt-sse-selfhost.exe'
+$fmtSseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_sse\src\main.e') $repo 'x64' 'windows' $fmtSsePath
+if ($LASTEXITCODE -ne 0 -or $fmtSseWritten -ne 'executable written') { throw 'fmt_sse emission failed' }
+& $fmtSsePath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_sse check failed: exit $LASTEXITCODE" }
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 $fmtPdfPath = Join-Path $testBuild 'fmt-pdf-selfhost.exe'
 $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf\src\main.e') $repo 'x64' 'windows' $fmtPdfPath

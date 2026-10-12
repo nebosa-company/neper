@@ -1232,6 +1232,11 @@ fmt_cap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_cap_written" = 'executable written' ]
 chmod +x "$test_build/fmt-cap-selfhost"
 "$test_build/fmt-cap-selfhost"
+# `e.fmt.sse`: event streams against the standard's algorithm, whole and prefix by prefix (C171).
+fmt_sse_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_sse/src/main.e" "$repo" x64 linux "$test_build/fmt-sse-selfhost")
+[ "$fmt_sse_written" = 'executable written' ]
+chmod +x "$test_build/fmt-sse-selfhost"
+"$test_build/fmt-sse-selfhost"
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-selfhost")
 [ "$fmt_pdf_written" = 'executable written' ]

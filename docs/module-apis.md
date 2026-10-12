@@ -27767,6 +27767,25 @@ fn parse(a: *mem.Arena, source: []const u8) -> (Alert, err)
 Common Alerting Protocol 1.2 (C156): `parse` reads an `<alert>` over `e.fmt.xml` into the message (identifier, sender, sent, status, message type, scope) and each `<info>` block (language, first category, event, urgency, severity, certainty, effective, onset, expires, sender name, headline, description, instruction, web, the first area's description and the number of areas), element names matched without a namespace prefix and text trimmed. No polygons, geocodes, resources or signatures; a document whose root is not `alert` is `NotCap`, malformed XML the parser's error. Checked against an ElementTree walk of two-language, cancel and prefixed documents (`scripts/gen_cap_test.py`).
 
 
+### `e.fmt.sse`
+
+```neper
+error TooLarge
+
+type Event = struct { kind: str, data: str, id: str, has_id: bool, retry: i64, has_retry: bool }
+
+const MAX_EVENT: usize = 1048576usize
+const MAX_LINES: usize = 128usize
+
+fn skip_bom(data: []const u8) -> usize
+fn line_end(data: []const u8, at: usize) -> (usize, usize, bool)
+fn has_nul(s: str) -> bool
+fn next(a: *mem.Arena, data: []const u8, at: usize) -> (Event, usize, bool, err)
+```
+
+Server-Sent Events (`text/event-stream`, HTML Living Standard 9.2) read incrementally (C171): `next` takes the bytes received so far and a position and returns the next dispatched event (type, data with its lines joined by LF, last event id, retry in milliseconds) with the position after it, or `whole` false when the stream has not yet delivered a whole event, consuming nothing. LF, CR and CRLF line ends (a CR at the very end waits for what follows), comments, one optional space after the colon, `id` with NUL ignored, `retry` digits only, events without data skipped. `skip_bom` skips a byte order mark. The way a streamed AI reply arrives. Checked against an independent Python parser of the standard's algorithm, whole streams and every prefix (`scripts/gen_sse_test.py`).
+
+
 ### `e.fmt.pdf`
 
 ```neper

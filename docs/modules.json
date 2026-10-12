@@ -62,6 +62,7 @@
     "e.fmt.extract",
     "e.fmt.odf",
     "e.fmt.cap",
+    "e.fmt.sse",
     "e.fmt.pdf",
     "e.fmt.pdf.write",
     "e.fmt.vcard",
@@ -7948,6 +7949,18 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.fmt.xml",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.sse",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
     "e.mem",
     "e.str"
    ],

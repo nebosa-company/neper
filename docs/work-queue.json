@@ -757,10 +757,10 @@
       "group": "NeperOS",
       "order": 171,
       "title": "NeperOS AI remainder: streaming, keys in Secure, conversations, files and tools",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C141 (D2430): AI sends a conversation to a provider and shows the answer. Acceptance: (1) the reply streamed (server-sent events) into the bubble, which needs the network layer to read a response incrementally and the compositor's ticks to keep arriving during a request; (2) the API key kept in Secure (C170's store), never in memory longer than a request, and a cheap key check on Save; (3) conversations kept in storage (C125) with titles, search, rename and delete, system prompts, and temperature and token limits as settings; a configurable host for the local server; (4) images from Camera and Photos, files from Files and documents from Document as inputs, and the reply's code blocks highlighted; (5) a tool-use loop so a conversation can call other apps through capabilities, each with a confirmation; (6) a fixture against a mock server that streams a reply and checks the error paths for each provider's status codes. Not queued here: voice mode, image generation."
+      "evidence": "Split from C141 (D2430): AI sends a conversation to a provider and shows the answer. Acceptance: (1) the reply streamed (server-sent events) into the bubble, which needs the network layer to read a response incrementally and the compositor's ticks to keep arriving during a request; (2) the API key kept in Secure (C170's store), never in memory longer than a request, and a cheap key check on Save; (3) conversations kept in storage (C125) with titles, search, rename and delete, system prompts, and temperature and token limits as settings; a configurable host for the local server; (4) images from Camera and Photos, files from Files and documents from Document as inputs, and the reply's code blocks highlighted; (5) a tool-use loop so a conversation can call other apps through capabilities, each with a confirmation; (6) a fixture against a mock server that streams a reply and checks the error paths for each provider's status codes. Not queued here: voice mode, image generation. PART (D2453): e.fmt.sse, an incremental Server-Sent Events reader (fmt_sse, 46 checks vs the standard's algorithm on whole streams and every prefix). Remaining: incremental reads from the network server over TLS, streaming into the bubble, keys in Secure, conversations, files, tools."
     },
     {
       "id": "C172",
