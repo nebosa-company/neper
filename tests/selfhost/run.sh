@@ -8795,6 +8795,10 @@ done
 # emitters; the script skips itself where the `jsonschema` package is absent.
 python3 "$repo/scripts/validate_stream.py" || { printf '%s
 ' "the conformance corpus does not validate against the v1 schema" >&2; exit 1; }
+# T023: the generated-code report over the reference corpus -- parse, check, canonical layout and
+# output on every task, so the corpus and the toolchain stay inside the roadmap's thresholds.
+python3 "$repo/benchmarks/llm_gen/report.py" --compiler "$test_build/neper-self" --host linux --strict || { printf '%s
+' "the generated-code report is below a threshold" >&2; exit 1; }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"

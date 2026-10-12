@@ -1,5 +1,5 @@
-use e.mem
 use e.io
+use e.mem
 
 fn is_prime(n: i32) -> bool {
     if n < 2 { ret false }

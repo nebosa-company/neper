@@ -1,5 +1,5 @@
-use e.mem
 use e.io
+use e.mem
 
 fn main(a: *mem.Arena, args: []str) -> err {
     var total = 0i32

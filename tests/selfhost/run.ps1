@@ -9180,6 +9180,10 @@ foreach ($case in @(
 # emitters; the script skips itself where the `jsonschema` package is absent.
 & python (Join-Path $repo 'scripts/validate_stream.py')
 if ($LASTEXITCODE -ne 0) { throw "the conformance corpus does not validate against the v1 schema" }
+# T023: the generated-code report over the reference corpus -- parse, check, canonical layout and
+# output on every task, so the corpus and the toolchain stay inside the roadmap's thresholds.
+& python (Join-Path $repo 'benchmarks/llm_gen/report.py') --compiler $compiler --host windows --strict
+if ($LASTEXITCODE -ne 0) { throw "the generated-code report is below a threshold" }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'
