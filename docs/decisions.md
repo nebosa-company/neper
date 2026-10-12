@@ -39698,3 +39698,6 @@ With the compositor frames of the current tree the Dynamic fixture dropped its o
 
 ## D2464 — The Clock fixture's taps are twelve seconds apart
 The Clock fixture's Timer tab starts a countdown and relies on the app's own ticks to print `clock timer done` before the Alarm taps. At the eight-second cadence the countdown had not expired by the time the next tap switched tabs (reproduced twice outside the suite: `timer started` then two `tab Timer` lines and no `timer done`); at twelve seconds every marker prints through `clock home`. The fixture row's delay field is now 12, as for the Dynamic fixture (D2463): emulated frames of the full tree take longer than when the cadence was chosen.
+
+## D2465 — The theme fixture's taps are twelve seconds apart
+After D2462 added the second home tap, the `settings_theme` fixture still stopped in the suite at `shell theme 5361`: the shell had not returned Home when the Level tap arrived, so that tap and the next were lost (the same dropped-event cause as D2463 and D2464, under the suite's heavier load than a lone boot). Its row's delay field is now 12.
