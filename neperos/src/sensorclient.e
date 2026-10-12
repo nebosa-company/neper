@@ -28,12 +28,28 @@ const OP_CLOSE: usize = 3usize
 const OP_FIX: usize = 4usize
 const OP_PERMIT_GET: usize = 5usize
 const OP_PERMIT_SET: usize = 6usize
+const OP_STEPS: usize = 7usize
+// (C176) The recorded fingerprint sensor: only the shell (the lock screen) may ask; the answer is BIOMETRIC_MATCH, the
+// Fingerprint switch of Settings being off (BIOMETRIC_OFF), or BIOMETRIC_NO (a finger that is not the enrolled one).
+const OP_BIOMETRIC: usize = 8usize
+const BIOMETRIC_MATCH: usize = 0usize
+const BIOMETRIC_OFF: usize = 1usize
+const BIOMETRIC_NO: usize = 2usize
+const BIOMETRIC_DENIED: usize = 3usize
+const APP_SHELL: usize = 1usize
 
 const KIND_MAGNETOMETER: usize = 0usize
 const KIND_ACCELEROMETER: usize = 1usize
 const KIND_GYROSCOPE: usize = 2usize
 const KIND_LOCATION: usize = 3usize
-const KINDS: usize = 4usize
+// The hub's step counter (C168): cumulative steps and the present cadence, counted in the hub whether or not an app
+// is running (STEPS -> count, then cadence in hundredths of a step a second); never opened as a stream.
+const KIND_STEPS: usize = 4usize
+// The permissions that are not streams, the same one-bit-a-kind: the fine (satellite) location, the camera and storage.
+const KIND_FINE: usize = 5usize
+const KIND_CAMERA: usize = 6usize
+const KIND_STORAGE: usize = 7usize
+const KINDS: usize = 8usize
 
 // A stream's source (OPEN's second argument): the live (scripted, under QEMU) sensor; the same phone lying flat and
 // still on a table, with a bias and a noise of its own (Level's self-test); a recorded session of lifting and
@@ -41,6 +57,13 @@ const KINDS: usize = 4usize
 const SOURCE_LIVE: usize = 0usize
 const SOURCE_FLAT: usize = 1usize
 const SOURCE_REPLAY: usize = 2usize
+// A recorded walk: the accelerometer of a phone in the pocket of someone walking at 1.9 steps a second (the magnitude in
+// z), played at the speed it is read; the ground truth of the step detector's fixture.
+const SOURCE_WALK: usize = 3usize
+// The compass's recordings: the phone turned to north, east, south and west two seconds each (the heading is the yaw), and
+// the figure eight of the calibration (the field along every axis and corner, eight samples each).
+const SOURCE_COMPASS: usize = 4usize
+const SOURCE_FIGURE_EIGHT: usize = 5usize
 
 const BIAS: i64 = 2147483648i64
 const FIELD_BIAS: i64 = 131072i64
@@ -136,11 +159,36 @@ fn fix(precise: bool) -> (usize, i64, i64, usize, usize) {
     ret (meta & 255usize, i64(lat) - BIAS, i64(lon) - BIAS, (meta >> 8usize) & 16777215usize, meta >> 32usize)
 }
 
+// A touch on the fingerprint reader: BIOMETRIC_MATCH when the enrolled finger lay on it and the switch is on.
+fn biometric() -> usize {
+    let sent = os.send(REQ, request(OP_BIOMETRIC, 0usize, 0usize, 0usize), NO_SLOT)
+    if sent == REFUSED { ret BIOMETRIC_DENIED }
+    ret os.recv(REP, NO_SLOT)
+}
+
+// The hub's step counter: the count since the hub started, the cadence in hundredths of a step a second, and the
+// status (STATUS_DENIED without the permission, STATUS_NO_SERVER without a server).
+fn steps() -> (usize, usize, usize) {
+    let sent = os.send(REQ, request(OP_STEPS, KIND_STEPS, 0usize, 0usize), NO_SLOT)
+    if sent == REFUSED { ret (0usize, 0usize, STATUS_NO_SERVER) }
+    let count = os.recv(REP, NO_SLOT)
+    let cadence = os.recv(REP, NO_SLOT)
+    let status = os.recv(REP, NO_SLOT)
+    ret (count, cadence, status)
+}
+
 // Whether `app` may read `kind` (the default of the app's manifest or what Settings set).
 fn permitted(app: usize, kind: usize) -> bool {
     let sent = os.send(REQ, request(OP_PERMIT_GET, kind, app, 0usize), NO_SLOT)
     if sent == REFUSED { ret false }
     ret os.recv(REP, NO_SLOT) != 0usize
+}
+
+// The same with whether the server answered at all (a machine without it asks nothing of the app).
+fn permission(app: usize, kind: usize) -> (bool, bool) {
+    let sent = os.send(REQ, request(OP_PERMIT_GET, kind, app, 0usize), NO_SLOT)
+    if sent == REFUSED { ret (false, false) }
+    ret (os.recv(REP, NO_SLOT) != 0usize, true)
 }
 
 // Allow or deny `kind` for `app`; true when the server took it (only the Settings app is believed).

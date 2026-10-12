@@ -37,6 +37,7 @@ use server_key
 use fsproto
 use theme
 use sysettings
+use sensorclient
 
 const ROUTED: usize = 2usize
 const NO_SLOT: usize = 99usize
@@ -201,6 +202,9 @@ fn wallpaper_layer(builder: *scene.Builder, texture: scene.TextureId, width: f32
 }
 
 // The lock screen: clock, date, the Moon-phase card, a notification card and the dock.
+// (C163) Whether the torch is on, as the lock screen's quick toggle last left it (the settings server holds the truth).
+var lock_torch: bool = false
+
 fn draw_lock(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, hour: usize, minute: usize, seconds: usize) -> err {
     let white = paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 }
     let soft = paint.Color { red: 0.86, green: 0.87, blue: 0.9, alpha: 1.0 }
@@ -238,6 +242,14 @@ fn draw_lock(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, hour: us
     if e3 != ok { ret e3 }
     let (t4, e4) = text.draw(a, builder, faces.exo, 15.0, "Orion Crew Module successfully tests communication from the Moon\xE2\x80\x99s far side", 36.0, 366.0, 340.0, 3u32, layout.Align.Start, soft)
     if e4 != ok { ret e4 }
+    // (C163) The torch's quick toggle, above the dock at the left: amber while it is on.
+    var torch_fill = glass
+    if lock_torch { torch_fill = paint.Color { red: 0.99, green: 0.78, blue: 0.30, alpha: 1.0 } }
+    try card(a, builder, 24.0, 680.0, 56.0, 56.0, 28.0, torch_fill)
+    try centred(a, builder, faces.jost, 15.0, "Torch", 52.0, 697.0, white)
+    // (C176) The fingerprint pad, above the dock at the right: a touch of the enrolled finger unlocks.
+    try card(a, builder, 332.0, 680.0, 56.0, 56.0, 28.0, glass)
+    try centred(a, builder, faces.jost, 13.0, "Print", 360.0, 698.0, white)
     // The dock: camera, settings, files, photos (the icon indexes in icons.e).
     try card(a, builder, 10.0, 756.0, 392.0, 118.0, 28.0, glass)
     var d = 0usize
@@ -849,7 +861,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     }
                 }
             }
-            if tapped && !home_shown {
+            if tapped && !home_shown && !by_key && f32(pointer_x) * 412.0 / 32768.0 < 92.0 && f32(pointer_y) * logical_h / 32768.0 > 670.0 && f32(pointer_y) * logical_h / 32768.0 < 750.0 {
+                // (C163) The torch's quick toggle on the lock screen: the settings server flips it and the lock
+                // screen is drawn again; the screen stays locked.
+                let (level, served) = sysettings.torch_toggle()
+                if served {
+                    lock_torch = level != 0usize
+                    say("shell torch toggle ")
+                    say_num(level)
+                    say("\n")
+                }
+                if show_lock(a, &renderer, &w, drawable, faces, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale, hour, minute, seconds) { framed = true }
+            } else if tapped && !home_shown && !by_key && f32(pointer_x) * 412.0 / 32768.0 > 320.0 && f32(pointer_y) * logical_h / 32768.0 > 670.0 && f32(pointer_y) * logical_h / 32768.0 < 750.0 && sensorclient.biometric() != sensorclient.BIOMETRIC_MATCH {
+                // (C176) The fingerprint pad did not accept: off in Settings, or not the enrolled finger. It stays locked.
+                say("shell fingerprint refused\n")
+            } else if tapped && !home_shown {
                 if !show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { ret ok }
                 home_shown = true
                 framed = true

@@ -548,6 +548,7 @@ fn finish_test(s: *State) {
     s.noise_z = i64(noise_z * 10.0f64)
     s.testing = false
     s.test_done = true
+    s.dirty = true
     ui.say("level selftest sum ")
     say_signed(s.sum_x)
     ui.say(" ")
@@ -760,14 +761,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if s.streamed { wait = 20usize }
         let touch = appkit.next_touch(&kit, wait)
         if touch.kind == appkit.TOUCH_TIMEOUT {
+            // Samples only: a frame goes to the compositor as the answer to an event it forwarded (the half-second
+            // tick draws what changed), never on its own.
             poll(&s)
-            s.since_draw += 1usize
-            // The screen follows the reading about twice a second while it is live.
-            if s.dirty && s.since_draw >= 25usize && !s.held && s.mode != TEST_MODE {
-                if !show(a, &kit, &s) { ui.say("level present failed\n") }
-            } else if s.dirty && s.mode == TEST_MODE && !s.testing && s.since_draw >= 25usize {
-                if !show(a, &kit, &s) { ui.say("level present failed\n") }
-            }
         } else if touch.kind == appkit.TOUCH_END {
             running = false
         } else if touch.kind == appkit.TOUCH_TICK {

@@ -25,6 +25,8 @@ use e.text.shape
 use appkit
 use text
 use scenes
+use sysettings
+use sensorclient
 
 const NONE: usize = 99usize
 const MAX_CAPS: usize = 24usize
@@ -842,6 +844,18 @@ fn act(s: *State, id: usize) -> bool {
     }
     if id == 500usize {
         s.flash = (s.flash + 1usize) % 3usize
+        // (C163) The flash drives the torch, so its modes need the permission: Camera access in Security & privacy and
+        // this app's own camera permission (Settings, App info). Without them only Off is on offer.
+        if s.flash != 0usize {
+            let (switch_value, switch_served) = sysettings.get(16usize)
+            let (granted, granted_served) = sensorclient.permission(21usize, sensorclient.KIND_CAMERA)
+            let allowed = (!switch_served || switch_value != 0usize) && (granted || !granted_served)
+            if !allowed {
+                s.flash = 0usize
+                say("camera flash refused\n")
+                ret true
+            }
+        }
         say("camera flash ")
         say(flash_name(s.flash))
         say("\n")
@@ -885,6 +899,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !kit.has_fonts {
         say("camera fonts absent\n")
         ret ok
+    }
+    // (C163) The camera owns the LED: a torch the Flashlight left on goes off when the camera opens.
+    let (torch_now, torch_served) = sysettings.torch(99usize)
+    if torch_served && torch_now != 0usize {
+        let (released, released_served) = sysettings.torch(0usize)
+        say("camera torch released\n")
     }
     var s: State = zero
     s.mode = PHOTO

@@ -50,6 +50,18 @@ const OP_CLIP_SET: usize = 12usize
 const OP_CLIP_GET: usize = 13usize
 const CLIP_SECONDS: usize = 90usize
 const CLIP_BYTES: usize = 32usize
+// (C163, D4006) The torch with a timer: TORCH_FOR level seconds -> the level now set; the server turns it off by itself
+// after the seconds (and after TORCH_MAX_SECONDS whatever was asked: the policy that no app leaves the LED on).
+// TORCH_TOGGLE -> the level now set: on at the last level used (full when none) or off, for the quick toggles of the
+// status bar and the lock screen. TORCH with a level past 5 only reports the level.
+const OP_TORCH_FOR: usize = 14usize
+const OP_TORCH_TOGGLE: usize = 15usize
+// (C175) CLIP_CLEAR owner -> 1 when it emptied the clipboard: the text is gone only if `owner` put it there (Secure
+// clears its own copy when it locks or is left). The clipboard's lifetime is setting 35 of Settings: 30 s, a minute,
+// five minutes or fifteen.
+const OP_CLIP_CLEAR: usize = 16usize
+const CLIP_LIFETIME_SETTING: usize = 35usize
+const TORCH_MAX_SECONDS: usize = 300usize
 
 // A sensor's reading at `tick` in milli-units (x, y, z) and whether the server answered.
 fn sensor(kind: usize, tick: usize) -> (i64, i64, i64, bool) {
@@ -68,6 +80,30 @@ fn torch(level: usize) -> (usize, bool) {
     let sent = os.send(REQ, OP_TORCH, NO_SLOT)
     if sent == REFUSED { ret (0usize, false) }
     let sent_level = os.send(REQ, level, NO_SLOT)
+    ret (os.recv(REP, NO_SLOT), true)
+}
+
+// Empty the clipboard when `owner` put its text there; whether it was emptied.
+fn clip_clear(owner: usize) -> bool {
+    let sent = os.send(REQ, OP_CLIP_CLEAR, NO_SLOT)
+    if sent == REFUSED { ret false }
+    let sent_owner = os.send(REQ, owner, NO_SLOT)
+    ret os.recv(REP, NO_SLOT) != 0usize
+}
+
+// The torch at `level` for at most `seconds` (0 for the policy's limit); the level now set, and whether it answered.
+fn torch_for(level: usize, seconds: usize) -> (usize, bool) {
+    let sent = os.send(REQ, OP_TORCH_FOR, NO_SLOT)
+    if sent == REFUSED { ret (0usize, false) }
+    let sent_level = os.send(REQ, level, NO_SLOT)
+    let sent_seconds = os.send(REQ, seconds, NO_SLOT)
+    ret (os.recv(REP, NO_SLOT), true)
+}
+
+// Flip the torch: the level now set, and whether the server answered.
+fn torch_toggle() -> (usize, bool) {
+    let sent = os.send(REQ, OP_TORCH_TOGGLE, NO_SLOT)
+    if sent == REFUSED { ret (0usize, false) }
     ret (os.recv(REP, NO_SLOT), true)
 }
 

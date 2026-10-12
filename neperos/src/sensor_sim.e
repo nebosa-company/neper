@@ -191,3 +191,95 @@ fn session_gyro(t: f64) -> (f64, f64, f64) {
     let d = 3.141592653589793f64 / 180.0f64
     ret (session_roll_rate(t) * d, session_pitch_rate(t) * d, 0.0f64)
 }
+
+// (C168) The step counter of the hub: what a person who carries the phone has walked since the hub started, as a
+// function of the time in milliseconds: each 120 s cycle holds a walk of a minute at 1.9 steps a second (from 10 s) and a
+// run of ten seconds at 2.8 (from 90 s). The count is a whole number of steps and the cadence the present one in
+// hundredths of a step a second (0 while still).
+fn steps_cycle_count() -> usize { ret 142usize }
+
+fn step_count_at(ms: usize) -> usize {
+    let cycles = ms / 120000usize
+    let into = ms % 120000usize
+    var count = cycles * steps_cycle_count()
+    // The walk: 10 s to 70 s at 1.9 a second (1900 a thousand seconds), the run: 90 s to 100 s at 2.8.
+    if into > 10000usize {
+        var walked = into - 10000usize
+        if walked > 60000usize { walked = 60000usize }
+        count = count + walked * 19usize / 10000usize
+    }
+    if into > 90000usize {
+        var ran = into - 90000usize
+        if ran > 10000usize { ran = 10000usize }
+        count = count + ran * 28usize / 10000usize
+    }
+    ret count
+}
+
+fn step_cadence_at(ms: usize) -> usize {
+    let into = ms % 120000usize
+    if into >= 10000usize && into < 70000usize { ret 190usize }
+    if into >= 90000usize && into < 100000usize { ret 280usize }
+    ret 0usize
+}
+
+// (C161) The compass's recordings, in the device frame at yaw/pitch/roll (radians) with the field's north and down
+// components `nx` and `nz` (nT) and the phone's hard-iron offset on every magnetometer reading.
+fn body_frame(yaw: f64, pitch: f64, roll: f64, nx: f64, nz: f64) -> (f64, f64, f64, f64, f64, f64) {
+    let cy = math.cos[f64](yaw)
+    let sy = math.sin[f64](yaw)
+    let cp = math.cos[f64](pitch)
+    let sp = math.sin[f64](pitch)
+    let cr = math.cos[f64](roll)
+    let sr = math.sin[f64](roll)
+    let v1x = cy * nx
+    let v1y = 0.0f64 - sy * nx
+    let v1z = nz
+    let v2x = cp * v1x - sp * v1z
+    let v2y = v1y
+    let v2z = sp * v1x + cp * v1z
+    let mx = v2x
+    let my = cr * v2y + sr * v2z
+    let mz = 0.0f64 - sr * v2y + cr * v2z
+    ret (mx + iron_x(), my + iron_y(), mz + iron_z(), 0.0f64 - sp * 9.81f64, sr * cp * 9.81f64, cr * cp * 9.81f64)
+}
+
+// A recorded session of the phone held a little tilted (5 degrees of pitch, 3 of roll) and turned to the four
+// cardinal points, two seconds each: north, east, south, west. The heading is the yaw, exactly.
+fn compass_session_yaw(t: f64) -> f64 {
+    if t < 2.0f64 { ret 0.0f64 }
+    if t < 4.0f64 { ret 90.0f64 }
+    if t < 6.0f64 { ret 180.0f64 }
+    ret 270.0f64
+}
+
+fn compass_session(t: f64, nx: f64, nz: f64) -> (f64, f64, f64, f64, f64, f64) {
+    let d = 3.141592653589793f64 / 180.0f64
+    let (mx, my, mz, ax, ay, az) = body_frame(compass_session_yaw(t) * d, 5.0f64 * d, 0.0f64 - 3.0f64 * d, nx, nz)
+    ret (mx, my, mz, ax, ay, az)
+}
+
+// The figure eight of the calibration: the phone is swung so the field is seen along every axis and every corner of
+// the cube, each held for eight samples; `total` is the field's strength. Sample n of a stream.
+fn calibration_pose(n: usize, total: f64) -> (f64, f64, f64) {
+    let k = (n / 8usize) % 14usize
+    var dx = 0.0f64
+    var dy = 0.0f64
+    var dz = 0.0f64
+    if k == 0usize { dx = 1.0f64 }
+    if k == 1usize { dx = 0.0f64 - 1.0f64 }
+    if k == 2usize { dy = 1.0f64 }
+    if k == 3usize { dy = 0.0f64 - 1.0f64 }
+    if k == 4usize { dz = 1.0f64 }
+    if k == 5usize { dz = 0.0f64 - 1.0f64 }
+    if k >= 6usize {
+        let corner = 0.57735f64
+        dx = corner
+        dy = corner
+        dz = corner
+        if (k - 6usize) % 2usize == 1usize { dx = 0.0f64 - corner }
+        if ((k - 6usize) / 2usize) % 2usize == 1usize { dy = 0.0f64 - corner }
+        if (k - 6usize) / 4usize == 1usize { dz = 0.0f64 - corner }
+    }
+    ret (total * dx + iron_x(), total * dy + iron_y(), total * dz + iron_z())
+}

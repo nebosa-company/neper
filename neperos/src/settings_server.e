@@ -7,6 +7,7 @@
 // Without a disk the settings live for the boot only.
 use e.mem
 use e.os
+use e.time
 use fsproto
 use sysettings
 use theme
@@ -27,6 +28,15 @@ const STATUS_REQ: usize = 6usize
 const STATUS_REP: usize = 7usize
 
 type Store = struct { v: [48]u8 }
+
+// (D4000) What a receive with a deadline returns when the deadline passes first.
+const TIMED_OUT: usize = 18446744073709551614usize
+
+fn now_ms() -> usize {
+    let (now, now_error) = time.monotonic()
+    if now_error != ok { ret 0usize }
+    ret usize(now.nanos / 1000000i64)
+}
 
 fn say(text: str) {
     let (written, write_error) = os.write(os.stdout(), text)
@@ -161,8 +171,49 @@ fn push_notify_mask(store: *Store) {
     let mask_sent = os.send(STATUS_REQ, mask, sysettings.NO_SLOT)
 }
 
+// (D4007) The background services process's request end (slot 11): the volumes and Vibrate as one word, whenever one
+// changes and at start (the words are the process's bgclient.OP_VOLUMES: op 7, then media, ring and alarm volumes and
+// Vibrate from bit 8); and the Clock's /clock in eleven words of six bytes (op 5, the chunk in bits 4-7), read once at
+// start so the alarms ring after a restart without the Clock being opened.
+const SERVICES_REQ: usize = 11usize
+
+fn push_volumes(store: *Store) {
+    let payload = usize(store.v[9usize]) | (usize(store.v[10usize]) << 8usize) | (usize(store.v[11usize]) << 16usize) | (usize(store.v[13usize]) << 24usize)
+    let sent = os.send(SERVICES_REQ, 7usize | (payload << 8usize), sysettings.NO_SLOT)
+}
+
+fn push_clock() {
+    let sent = os.send(FS_REQ, fsproto.OP_READ, fsproto.NO_SLOT)
+    if sent == REFUSED { ret }
+    fsproto.send_str(FS_REQ, "/clock")
+    let result = os.recv(FS_REP, fsproto.NO_SLOT)
+    var raw: [64]u8 = zero
+    let count = fsproto.recv_bytes(FS_REP, mem.address_of(&raw[0usize]), 64usize)
+    if result != fsproto.RESULT_OK || count < 59usize { ret }
+    var chunk = 0usize
+    while chunk < 11usize {
+        var payload = 0usize
+        var k = 0usize
+        while k < 6usize {
+            let at = chunk * 6usize + k
+            if at < 64usize { payload = payload | (usize(raw[at]) << (8usize * k)) }
+            k += 1usize
+        }
+        let sent_chunk = os.send(SERVICES_REQ, 5usize | (chunk << 4usize) | (payload << 8usize), sysettings.NO_SLOT)
+        chunk += 1usize
+    }
+}
+
 fn system_word(store: *Store) -> usize {
     ret theme.stored_word(store.v[0usize..COUNT])
+}
+
+// How long a copy stays on the clipboard, in seconds, by Settings' choice (setting 35): 30 s, a minute, five minutes, fifteen.
+fn clip_lifetime(choice: usize) -> usize {
+    if choice == 1usize { ret 60usize }
+    if choice == 2usize { ret 300usize }
+    if choice == 3usize { ret 900usize }
+    ret 30usize
 }
 
 fn say_num(value: usize) {
@@ -187,6 +238,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var registry: Registry = zero
     load_registry(&registry)
     var torch_level = 0usize
+    // (C163) The torch policy: the level last used (the toggle's on), and the monotonic millisecond at which the server
+    // turns it off by itself (0 while it is off).
+    var torch_last = 5usize
+    var torch_until = 0usize
     // (C148) The clipboard: the text as four words, its length, owner and the second it was put.
     var clip: [4]usize = zero
     var clip_len = 0usize
@@ -195,11 +250,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var radios = radios_allowed(&store)
     if !radios { push_radio(false) }
     push_notify_mask(&store)
+    push_volumes(&store)
+    push_clock()
     say("settings server up\n")
     var running = true
     while running {
-        let op = os.recv(REQ, sysettings.NO_SLOT)
-        if op == sysettings.OP_QUIT {
+        // (C163) While the torch is on under a limit the server wakes every half second to see whether it has passed.
+        var wait_slot = sysettings.NO_SLOT
+        if torch_until != 0usize { wait_slot = 1500usize }
+        let op = os.recv(REQ, wait_slot)
+        // The limit is checked at every request too, not only when the wait ran out: an app that polls the torch
+        // would otherwise keep the server from ever timing out.
+        if torch_until != 0usize && now_ms() >= torch_until {
+            torch_level = 0usize
+            torch_until = 0usize
+            say("torch level 0 timeout\n")
+        }
+        if op == TIMED_OUT {
+            running = true
+        } else if op == sysettings.OP_QUIT {
             running = false
         } else if op == sysettings.OP_GET_WORD {
             let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
@@ -219,6 +288,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     push_radio(radios)
                 }
                 if index >= 26usize && index < 34usize { push_notify_mask(&store) }
+                if index == 9usize || index == 10usize || index == 11usize || index == 13usize { push_volumes(&store) }
             }
             let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
         } else if op == sysettings.OP_GET_BATTERY {
@@ -287,10 +357,48 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let level = os.recv(REQ, sysettings.NO_SLOT)
             if level <= 5usize && level != torch_level {
                 torch_level = level
+                if level != 0usize {
+                    torch_last = level
+                    torch_until = now_ms() + sysettings.TORCH_MAX_SECONDS * 1000usize
+                } else {
+                    torch_until = 0usize
+                }
                 say("torch level ")
                 say_num(level)
                 say("\n")
             }
+            let sent = os.send(REP, torch_level, sysettings.NO_SLOT)
+        } else if op == sysettings.OP_TORCH_FOR {
+            let level = os.recv(REQ, sysettings.NO_SLOT)
+            var seconds = os.recv(REQ, sysettings.NO_SLOT)
+            if seconds == 0usize || seconds > sysettings.TORCH_MAX_SECONDS { seconds = sysettings.TORCH_MAX_SECONDS }
+            if level <= 5usize {
+                if level != 0usize {
+                    torch_last = level
+                    torch_until = now_ms() + seconds * 1000usize
+                } else {
+                    torch_until = 0usize
+                }
+                if level != torch_level {
+                    torch_level = level
+                    say("torch level ")
+                    say_num(level)
+                    say("\n")
+                }
+            }
+            let sent = os.send(REP, torch_level, sysettings.NO_SLOT)
+        } else if op == sysettings.OP_TORCH_TOGGLE {
+            if torch_level == 0usize {
+                torch_level = torch_last
+                torch_until = now_ms() + sysettings.TORCH_MAX_SECONDS * 1000usize
+            } else {
+                torch_last = torch_level
+                torch_level = 0usize
+                torch_until = 0usize
+            }
+            say("torch level ")
+            say_num(torch_level)
+            say(" toggle\n")
             let sent = os.send(REP, torch_level, sysettings.NO_SLOT)
         } else if op == sysettings.OP_CLIP_SET {
             clip_owner = os.recv(REQ, sysettings.NO_SLOT)
@@ -311,7 +419,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let sent = os.send(REP, 1usize, sysettings.NO_SLOT)
         } else if op == sysettings.OP_CLIP_GET {
             let asked_at = os.recv(REQ, sysettings.NO_SLOT)
-            if clip_len > 0usize && asked_at >= clip_stamp && asked_at - clip_stamp > sysettings.CLIP_SECONDS {
+            if clip_len > 0usize && asked_at >= clip_stamp && asked_at - clip_stamp > clip_lifetime(usize(store.v[sysettings.CLIP_LIFETIME_SETTING])) {
                 clip_len = 0usize
                 clip[0usize] = 0usize
                 clip[1usize] = 0usize
@@ -326,6 +434,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let sent_word = os.send(REP, clip[gw], sysettings.NO_SLOT)
                 gw += 1usize
             }
+        } else if op == sysettings.OP_CLIP_CLEAR {
+            let owner = os.recv(REQ, sysettings.NO_SLOT)
+            var cleared = 0usize
+            if clip_len > 0usize && clip_owner == owner {
+                clip_len = 0usize
+                clip[0usize] = 0usize
+                clip[1usize] = 0usize
+                clip[2usize] = 0usize
+                clip[3usize] = 0usize
+                cleared = 1usize
+                say("clipboard cleared by owner ")
+                say_num(owner)
+                say("\n")
+            }
+            let sent = os.send(REP, cleared, sysettings.NO_SLOT)
         } else if op == sysettings.OP_GET_HIDDEN {
             let sent = os.send(REP, hidden, sysettings.NO_SLOT)
         } else if op == sysettings.OP_SET_HIDDEN {
@@ -344,6 +467,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 push_radio(radios)
             }
             push_notify_mask(&store)
+            push_volumes(&store)
             let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
         }
     }

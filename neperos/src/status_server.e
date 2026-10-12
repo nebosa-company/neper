@@ -24,6 +24,12 @@ const OP_SUBSCRIBE: usize = 3usize
 // is never blocked.
 const OP_POST_APP: usize = 4usize
 const OP_SET_ALLOWED: usize = 5usize
+// (D4007) A notification from a background process: counted, and no snapshot is pushed (the shell reads it at its next
+// query), so the sender -- the background services process -- never waits for a reader that is behind an app.
+const OP_POST_QUIET: usize = 6usize
+// The same as POST_APP (a word follows: the app's place in Settings' notification list) without the snapshot push: how a
+// background process posts as an app (C176).
+const OP_POST_APP_QUIET: usize = 7usize
 // A field's present bit; absent providers send 0, so a client reads them as unavailable.
 const PRESENT: usize = 2147483648usize
 
@@ -81,6 +87,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 notes += 1usize
             }
             push_snapshot(notes, battery)
+        }
+        if op == OP_POST_QUIET { notes += 1usize }
+        if op == OP_POST_APP_QUIET {
+            let quiet_app = os.recv(REQ, NO_SLOT)
+            if quiet_app < 8usize && ((allowed >> quiet_app) & 1usize) == 0usize {
+                say("status notification blocked ")
+                say(digit_text(quiet_app))
+                say("\n")
+            } else {
+                notes += 1usize
+            }
         }
         if op == OP_SUBSCRIBE { push_snapshot(notes, battery) }
         if op == OP_QUERY { push_snapshot(notes, battery) }

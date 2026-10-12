@@ -13,6 +13,7 @@
 use e.mem
 use e.os
 use e.time
+use e.math
 use fsproto
 use sysettings
 use sensorclient
@@ -33,7 +34,8 @@ const APPS: usize = 64usize
 const BIT_FINE: usize = 32usize
 const OVERRIDE: u8 = 128u8
 
-type Permits = struct { b: [64]u8 }
+// The overrides: two bytes an app, the mask's low byte then OVERRIDE | its high bits (a mask of 15 bits).
+type Permits = struct { b: [128]u8 }
 
 type Streams = struct {
     app: [16]usize,
@@ -67,28 +69,34 @@ fn say_num(value: usize) {
 fn default_mask(app: usize) -> usize {
     if app == sensorclient.APP_COMPASS { ret 1usize | 2usize | 4usize | 8usize | BIT_FINE }
     if app == sensorclient.APP_LEVEL { ret 2usize | 4usize | 16usize }
-    if app == sensorclient.APP_STEPS { ret 2usize }
+    if app == sensorclient.APP_STEPS { ret 2usize | 16usize }
+    // The background services process (kernel-started, app number 2): the step counter's keeper.
+    if app == 2usize { ret 16usize }
     if app == sensorclient.APP_MAPS { ret 8usize | BIT_FINE }
     if app == sensorclient.APP_WEATHER { ret 8usize }
+    // The camera belongs to the Camera app (entry 21); storage to the apps that were granted the filesystem's ends.
+    if app == 21usize { ret 64usize | 128usize }
+    if app == 14usize || app == 15usize || app == 18usize || app == 20usize || app == 22usize || app == 23usize || app == 24usize || app == 25usize || app == 27usize || app == 31usize || app == 34usize || app == 37usize || app == 38usize || app == 40usize { ret 128usize }
     ret 0usize
 }
 
+// One bit a kind: the three sensors, the location (coarse), the step counter, the fine location, the camera and storage.
 fn kind_bit(kind: usize) -> usize {
-    if kind >= sensorclient.KINDS { ret 0usize }
+    if kind >= 8usize { ret 0usize }
     ret 1usize << kind
 }
 
-// The overrides, one byte per app: OVERRIDE | mask. Zero is no override.
+// The overrides, two bytes an app: the low byte, then the high bits with OVERRIDE set. Zero is no override.
 fn load_overrides(over: *Permits) {
     let sent = os.send(FS_REQ, fsproto.OP_READ, fsproto.NO_SLOT)
     if sent == REFUSED { ret }
     fsproto.send_str(FS_REQ, "/permits")
     let result = os.recv(FS_REP, fsproto.NO_SLOT)
-    var raw: [64]u8 = zero
-    let count = fsproto.recv_bytes(FS_REP, mem.address_of(&raw[0usize]), 64usize)
-    if result != fsproto.RESULT_OK || count != 64usize { ret }
+    var raw: [128]u8 = zero
+    let count = fsproto.recv_bytes(FS_REP, mem.address_of(&raw[0usize]), 128usize)
+    if result != fsproto.RESULT_OK || count != 128usize { ret }
     var i = 0usize
-    while i < APPS {
+    while i < 128usize {
         over.b[i] = raw[i]
         i += 1usize
     }
@@ -99,13 +107,13 @@ fn save_overrides(over: *Permits) {
     let sent = os.send(FS_REQ, fsproto.OP_WRITE, fsproto.NO_SLOT)
     if sent == REFUSED { ret }
     fsproto.send_str(FS_REQ, "/permits")
-    fsproto.send_bytes(FS_REQ, mem.address_of(&over.b[0usize]), 64usize)
+    fsproto.send_bytes(FS_REQ, mem.address_of(&over.b[0usize]), 128usize)
     let result = os.recv(FS_REP, fsproto.NO_SLOT)
 }
 
 fn mask_of(over: *Permits, app: usize) -> usize {
     if app >= APPS { ret 0usize }
-    if (over.b[app] & OVERRIDE) != 0u8 { ret usize(over.b[app] & 127u8) }
+    if (over.b[app * 2usize + 1usize] & OVERRIDE) != 0u8 { ret usize(over.b[app * 2usize]) | (usize(over.b[app * 2usize + 1usize] & 127u8) << 8usize) }
     ret default_mask(app)
 }
 
@@ -133,6 +141,25 @@ fn sample(kind: usize, source: usize, n: usize, rate: usize, nx: f64, nz: f64) -
         if kind == sensorclient.KIND_ACCELEROMETER {
             ret sensorclient.pack(i64(fx * 1000.0f64), i64(fy * 1000.0f64), i64(fz * 1000.0f64))
         }
+        ret sensorclient.pack(0i64, 0i64, 0i64)
+    }
+    if source == sensorclient.SOURCE_COMPASS {
+        let (cx, cy, cz, cax, cay, caz) = sensor_sim.compass_session(f64(n) / f64(rate), nx, nz)
+        if kind == sensorclient.KIND_MAGNETOMETER { ret sensorclient.pack(i64(cx), i64(cy), i64(cz)) }
+        if kind == sensorclient.KIND_ACCELEROMETER { ret sensorclient.pack(i64(cax * 1000.0f64), i64(cay * 1000.0f64), i64(caz * 1000.0f64)) }
+        ret sensorclient.pack(0i64, 0i64, 0i64)
+    }
+    if source == sensorclient.SOURCE_FIGURE_EIGHT {
+        let total = math.sqrt[f64](nx * nx + nz * nz)
+        let (fx, fy, fz) = sensor_sim.calibration_pose(n, total)
+        if kind == sensorclient.KIND_MAGNETOMETER { ret sensorclient.pack(i64(fx), i64(fy), i64(fz)) }
+        if kind == sensorclient.KIND_ACCELEROMETER { ret sensorclient.pack(0i64, 0i64, 9810i64) }
+        ret sensorclient.pack(0i64, 0i64, 0i64)
+    }
+    if source == sensorclient.SOURCE_WALK {
+        // The magnitude of a walk at the stream's rate: gravity, the stride and its harmonic, the sway and a little noise.
+        let magnitude = sensor_sim.walk_at(n, f64(n) / f64(rate))
+        if kind == sensorclient.KIND_ACCELEROMETER { ret sensorclient.pack(0i64, 0i64, i64(magnitude * 1000.0f64)) }
         ret sensorclient.pack(0i64, 0i64, 0i64)
     }
     if source == sensorclient.SOURCE_REPLAY {
@@ -168,6 +195,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // same filesystem endpoints in the same moments of the boot, and two processes' multi-word requests must not
     // interleave on them.
     var loaded = false
+    var touches = 0usize
     let (nx, nz) = sensor_sim.field_north()
     let born = now_ms()
     say("sensor server up\n")
@@ -187,7 +215,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if op == sensorclient.OP_OPEN {
                 var status = sensorclient.STATUS_OK
                 var granted = 0usize
-                if kind >= sensorclient.KINDS || kind == sensorclient.KIND_LOCATION || (mask_of(&over, app) & kind_bit(kind)) == 0usize {
+                if kind > sensorclient.KIND_GYROSCOPE || (mask_of(&over, app) & kind_bit(kind)) == 0usize {
                     status = sensorclient.STATUS_DENIED
                     say("sensor denied app ")
                     say_num(app)
@@ -217,7 +245,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         streams.start_ms[at] = now_ms()
                         streams.next[at] = 0usize
                         streams.source[at] = arg2
-                        if arg2 > sensorclient.SOURCE_REPLAY { streams.source[at] = sensorclient.SOURCE_LIVE }
+                        if arg2 > sensorclient.SOURCE_FIGURE_EIGHT { streams.source[at] = sensorclient.SOURCE_LIVE }
                         say("sensor open app ")
                         say_num(app)
                         say(" kind ")
@@ -303,16 +331,50 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let sent_lat = os.send(REP, usize(lat + sensorclient.BIAS), NO_SLOT)
                 let sent_lon = os.send(REP, usize(lon + sensorclient.BIAS), NO_SLOT)
                 let sent_meta = os.send(REP, status | (accuracy << 8usize) | (source << 32usize), NO_SLOT)
+            } else if op == sensorclient.OP_STEPS {
+                // The hub's counter: the count and cadence at the time since the hub started.
+                var status = sensorclient.STATUS_OK
+                var count = 0usize
+                var cadence = 0usize
+                if (mask_of(&over, app) & 16usize) == 0usize {
+                    status = sensorclient.STATUS_DENIED
+                } else {
+                    let since = now_ms() - born
+                    count = sensor_sim.step_count_at(since)
+                    cadence = sensor_sim.step_cadence_at(since)
+                }
+                let sent_count = os.send(REP, count, NO_SLOT)
+                let sent_cadence = os.send(REP, cadence, NO_SLOT)
+                let sent_status = os.send(REP, status, NO_SLOT)
+            } else if op == sensorclient.OP_BIOMETRIC {
+                // The recorded fingerprint sensor: the enrolled finger lies on the reader unless it is every fourth try.
+                var answer = sensorclient.BIOMETRIC_DENIED
+                if app == sensorclient.APP_SHELL {
+                    let (switch_value, switch_served) = sysettings.get(18usize)
+                    if switch_served && switch_value == 0usize {
+                        answer = sensorclient.BIOMETRIC_OFF
+                    } else if touches % 4usize == 3usize {
+                        answer = sensorclient.BIOMETRIC_NO
+                    } else {
+                        answer = sensorclient.BIOMETRIC_MATCH
+                    }
+                    touches += 1usize
+                    say("sensor biometric ")
+                    say_num(answer)
+                    say("\n")
+                }
+                let sent = os.send(REP, answer, NO_SLOT)
             } else if op == sensorclient.OP_PERMIT_GET {
                 var value = 0usize
                 if (mask_of(&over, arg1) & kind_bit(kind)) != 0usize { value = 1usize }
                 let sent = os.send(REP, value, NO_SLOT)
             } else if op == sensorclient.OP_PERMIT_SET {
                 var taken = 0usize
-                if app == sensorclient.APP_SETTINGS && arg1 < APPS && kind < sensorclient.KINDS {
+                if app == sensorclient.APP_SETTINGS && arg1 < APPS && kind < 8usize {
                     var mask = mask_of(&over, arg1)
                     if arg2 != 0usize { mask = mask | kind_bit(kind) } else { mask = mask & ~kind_bit(kind) }
-                    over.b[arg1] = OVERRIDE | u8(mask & 127usize)
+                    over.b[arg1 * 2usize] = u8(mask & 255usize)
+                    over.b[arg1 * 2usize + 1usize] = OVERRIDE | u8((mask >> 8usize) & 127usize)
                     save_overrides(&over)
                     taken = 1usize
                     say("sensor permit app ")
