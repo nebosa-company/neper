@@ -7,7 +7,8 @@ mean and the largest cell difference to a tolerance. The documents use what the
 renderer now draws beyond shapes: linear and radial gradients (bounding-box and
 user-space units, stop opacity, href-inherited stops, gradientTransform), `defs` and
 `use`, units and percentages, and a clip path; plus two plain-shape documents so the
-older renderer is measured against the same reference.
+older renderer is measured against the same reference. D3100 adds style sheets,
+preserveAspectRatio, spread, dashes, even-odd, patterns and markers.
 
     python scripts/gen_svg_render_test.py
 """
@@ -41,6 +42,30 @@ CASES = [
      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><clipPath id="c"><rect x="25" y="25" width="50" height="50"/></clipPath></defs><circle cx="50" cy="50" r="45" fill="#ff0000" clip-path="url(#c)"/></svg>'),
     ("plain shapes and strokes",
      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="8" y="8" width="40" height="30" rx="6" fill="#336699"/><circle cx="70" cy="30" r="18" fill="none" stroke="#cc3300" stroke-width="5"/><polygon points="20,90 50,50 80,90" fill="#009966"/><path d="M10 60 Q 30 40 50 60 T 90 60" fill="none" stroke="#000000" stroke-width="3" stroke-linecap="round"/></svg>'),
+    ("style sheet: type, class and id rules over attributes",
+     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><style>rect{stroke:#000000;stroke-width:4}.a{fill:#ff0000}#b{fill:#00a000}</style><rect class="a" x="10" y="10" width="35" height="35" fill="#0000ff"/><rect id="b" class="a" x="55" y="10" width="35" height="35"/><rect x="10" y="55" width="35" height="35" fill="#ffff00" style="fill:#800080"/></svg>'),
+    ("preserveAspectRatio slice, xMinYMax",
+     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" preserveAspectRatio="xMinYMax slice"><rect width="100" height="50" fill="#fff0c0"/><circle cx="25" cy="25" r="20" fill="#d03030"/><rect x="60" y="5" width="30" height="40" fill="#3050d0"/></svg>'),
+    ("preserveAspectRatio none",
+     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" preserveAspectRatio="none"><circle cx="50" cy="25" r="22" fill="#209040"/></svg>'),
+    ("linear gradient, spread reflect",
+     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0.4" y1="0" x2="0.6" y2="0" spreadMethod="reflect"><stop offset="0" stop-color="#ff0000"/><stop offset="1" stop-color="#0000ff"/></linearGradient></defs><rect x="5" y="5" width="90" height="90" fill="url(#g)"/></svg>'),
+    ("linear gradient, spread repeat, diagonal",
+     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="20" y1="20" x2="45" y2="45" spreadMethod="repeat"><stop offset="0" stop-color="#ffcc00"/><stop offset="1" stop-color="#006600"/></linearGradient></defs><rect x="5" y="5" width="90" height="90" fill="url(#g)"/></svg>'),
+    ("radial gradient, spread reflect",
+     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><radialGradient id="r" cx="0.5" cy="0.5" r="0.2" spreadMethod="reflect"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#800000"/></radialGradient></defs><rect x="5" y="5" width="90" height="90" fill="url(#r)"/></svg>'),
+    ("stroke-dasharray with offset",
+     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M10 20 H90 M10 50 H90 M10 80 H90" fill="none" stroke="#000000" stroke-width="8" stroke-dasharray="14 6" stroke-dashoffset="5"/></svg>'),
+    ("dashes round caps on a circle",
+     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="38" fill="none" stroke="#c02020" stroke-width="7" stroke-linecap="round" stroke-dasharray="1 16"/></svg>'),
+    ("fill-rule evenodd, nested loops",
+     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill-rule="evenodd" fill="#2060a0" d="M5 5H95V95H5Z M20 20H80V80H20Z M35 35H65V65H35Z"/></svg>'),
+    ("fill-rule evenodd, circles and a nonzero twin",
+     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path fill-rule="evenodd" fill="#b04080" d="M50 5A45 45 0 1 1 49.9 5Z M50 20A30 30 0 1 1 49.9 20Z"/></svg>'),
+    ("pattern tiles",
+     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="p" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse"><rect width="10" height="10" fill="#d02020"/><rect x="10" y="10" width="10" height="10" fill="#2020d0"/></pattern></defs><circle cx="50" cy="50" r="42" fill="url(#p)"/></svg>'),
+    ("markers on a polyline",
+     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><marker id="m" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto"><circle cx="3" cy="3" r="3" fill="#d02020"/></marker></defs><polyline points="15,80 40,25 65,70 90,20" fill="none" stroke="#000000" stroke-width="3" marker-start="url(#m)" marker-mid="url(#m)" marker-end="url(#m)"/></svg>'),
     ("icon-like path with arcs",
      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2 a10 10 0 1 0 0.01 0 z M12 6 v6 l4 2" fill="none" stroke="#222222" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'),
 ]
@@ -77,7 +102,7 @@ def main():
     for index, (label, svg) in enumerate(CASES):
         ref = reference(svg)
         lines.append("    // %d: %s." % (index + 1, label))
-        lines.append('    if !matches(a, "%s", "%s", %di32) { os.exit(%di32) }' % (neper_text(svg), neper_string(ref), index + 1, index + 1))
+        lines.append('    if !matches(a, device, "%s", "%s", %di32) { os.exit(%di32) }' % (neper_text(svg), neper_string(ref), index + 1, index + 1))
     body = "\n".join(lines)
     source = TEMPLATE.replace("@@CASES@@", body)
     path = os.path.join(ROOT, "tests", "selfhost", "fixtures", "link", "gfx_svg_render", "src", "main.e")
@@ -111,9 +136,7 @@ const CELL: i32 = 56i32
 
 fn mean_limit() -> f32 { ret 3.0 }
 
-fn render(a: *mem.Arena, text: str) -> ([]u32, err) {
-    let (device, open_error) = gpu.open(a, gpu.Backend.Cpu, 0u32)
-    if open_error != ok { ret (zero, open_error) }
+fn render(a: *mem.Arena, device: *gpu.Device, text: str) -> ([]u32, err) {
     let (q, queue_error) = gpu.queue(device)
     if queue_error != ok { ret (zero, queue_error) }
     let (frames, frames_error) = gpu.open_target(q, gpu.Surface { kind: gpu.SurfaceKind.Offscreen, handle: zero, context: zero }, u32(SIDE), u32(SIDE), gpu.Format.Bgra8)
@@ -156,9 +179,9 @@ fn cell_mean(pixels: []const u32, cx: usize, cy: usize, shift: u32) -> i32 {
 }
 
 // Does `text` draw to within tolerance of the reference cells? `code` is for the exit.
-fn matches(a: *mem.Arena, text: str, want: str, code: i32) -> bool {
+fn matches(a: *mem.Arena, device: *gpu.Device, text: str, want: str, code: i32) -> bool {
     let mark = mem.mark(a)
-    let (pixels, pixels_error) = render(a, text)
+    let (pixels, pixels_error) = render(a, device, text)
     if pixels_error != ok { ret false }
     var total = 0i64
     var worst = 0i32
@@ -188,15 +211,18 @@ fn matches(a: *mem.Arena, text: str, want: str, code: i32) -> bool {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // One device for every document: a process opens at most sixteen.
+    let (device, open_error) = gpu.open(a, gpu.Backend.Cpu, 0u32)
+    if open_error != ok { os.exit(80i32) }
 @@CASES@@
     // A gradient naming nothing draws nothing, and an unknown use is skipped: the
     // document is still valid.
-    let (blank, blank_error) = render(a, "<svg viewBox=\"0 0 10 10\"><rect width=\"10\" height=\"10\" fill=\"url(#missing)\"/><use href=\"#nothing\"/></svg>")
-    if blank_error != ok { os.exit(20i32) }
-    if blank[32usize * SIDE + 32usize] != 4294967295u32 { os.exit(21i32) }
+    let (blank, blank_error) = render(a, device, "<svg viewBox=\"0 0 10 10\"><rect width=\"10\" height=\"10\" fill=\"url(#missing)\"/><use href=\"#nothing\"/></svg>")
+    if blank_error != ok { os.exit(90i32) }
+    if blank[32usize * SIDE + 32usize] != 4294967295u32 { os.exit(91i32) }
     // A use cycle is refused rather than recursed into.
-    let (_, cycle_error) = render(a, "<svg viewBox=\"0 0 10 10\"><defs><g id=\"g\"><use href=\"#g\"/></g></defs><use href=\"#g\"/></svg>")
-    if cycle_error != svg.TooComplex { os.exit(22i32) }
+    let (_, cycle_error) = render(a, device, "<svg viewBox=\"0 0 10 10\"><defs><g id=\"g\"><use href=\"#g\"/></g></defs><use href=\"#g\"/></svg>")
+    if cycle_error != svg.TooComplex { os.exit(92i32) }
     ret ok
 }
 '''

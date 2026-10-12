@@ -16471,8 +16471,11 @@ Since L125 (D2843) `fill` and `stroke` take `url(#id)` to a `linearGradient` or
 `use` draws a referenced element or `symbol` translated by `x` and `y` (`defs`
 contents draw only that way; a cycle is `TooComplex`), `clip-path="url(#id)"` clips by
 the first shape of a `clipPath`, and lengths take `px pt pc mm cm in em` and `%` of the
-viewBox. Masks, patterns, markers, text, spread other than pad, dashes, even-odd fill
-and CSS sheets are not drawn.
+viewBox. Since D3100 it also takes `<style>` sheets of simple selectors, `preserveAspectRatio`
+(none, alignments, meet, slice), `spreadMethod` reflect and repeat, `stroke-dasharray` and
+`stroke-dashoffset`, `fill-rule="evenodd"` (exact for nested and disjoint simple loops),
+`pattern` fills and `marker-start`/`-mid`/`-end`. Masks, filters, text, a radial focal point
+and selector combinators are not drawn.
 
 ### `e.gfx.curve`
 

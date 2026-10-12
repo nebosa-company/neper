@@ -23,10 +23,23 @@
 // the clipped element's user space), and lengths with `px pt pc mm cm in em` or `%` of the
 // viewBox's width (x-ish) or height (y-ish).
 //
-// Not drawn: patterns, masks, filters, text, markers, `<style>` sheets, dashes, spread methods
-// other than pad and even-odd fills. Their elements are skipped whole (an unresolvable `url(...)`
-// paint draws nothing). Group `opacity` multiplies each shape's own alpha rather than compositing
-// the group as a layer, and every fill is non-zero.
+// Also (L125, D3100): `<style>` sheets of simple selectors (`*`, `rect`, `.a`, `rect.a.b`, `#id`,
+// comma lists; no combinators, pseudo-classes or at-rules) cascaded above attributes and below an
+// element's own `style`; `preserveAspectRatio` (`none`, the nine `x?Y?` alignments, `meet` and
+// `slice`, which clips to the destination); `spreadMethod` reflect and repeat on linear and radial
+// gradients (the stops are tiled over the periods the shape reaches, at most 32); `stroke-dasharray`
+// and `stroke-dashoffset` (the path is flattened and cut into dash subpaths, restarting per
+// subpath; round and square caps draw zero-length dashes as dots); `fill-rule="evenodd"` (each
+// subpath is wound by its nesting depth so the non-zero scene fill is the even-odd fill: exact for
+// disjoint and nested simple loops, a path that crosses itself still fills non-zero); `pattern`
+// fills (tiles of the pattern's children, `patternUnits`, `patternContentUnits`,
+// `patternTransform`, clipped to the shape; no `viewBox`, no `href`); and `marker-start`, `-mid`,
+// `-end` and `marker` on `path`, `line`, `polyline` and `polygon` (`markerWidth`/`Height`, `refX`/
+// `refY`, `viewBox`, `orient` as `auto` or an angle, `markerUnits`, clipped to the marker viewport).
+//
+// Not drawn: masks, filters, text, a radial focal point, selector combinators. Their elements are
+// skipped whole (an unresolvable `url(...)` paint draws nothing). Group `opacity` multiplies each
+// shape's own alpha rather than compositing the group as a layer.
 //
 // ponytail: an overlapping group at partial opacity darkens where its shapes overlap; wrap in an
 // OpacityLayer when that matters. A path draws into arena storage sized from its data and never
@@ -34,6 +47,7 @@
 
 use e.math
 use e.mem
+use e.str
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -43,7 +57,7 @@ error TooComplex
 
 const MAX_DEPTH: usize = 16usize
 
-type Style = struct { fill: paint.Color, fill_on: bool, stroke: paint.Color, stroke_on: bool, stroke_width: f32, cap: paint.StrokeCap, join: paint.StrokeJoin, miter: f32, opacity: f32, fill_opacity: f32, stroke_opacity: f32, current: paint.Color, fill_ref: str, stroke_ref: str, clip_ref: str, clip_ctm: geometry.Transform }
+type Style = struct { fill: paint.Color, fill_on: bool, stroke: paint.Color, stroke_on: bool, stroke_width: f32, cap: paint.StrokeCap, join: paint.StrokeJoin, miter: f32, opacity: f32, fill_opacity: f32, stroke_opacity: f32, current: paint.Color, fill_ref: str, stroke_ref: str, clip_ref: str, clip_ctm: geometry.Transform, dash: str, dash_offset: f32, even_odd: bool, marker_start: str, marker_mid: str, marker_end: str }
 type Frame = struct { style: Style, ctm: geometry.Transform }
 
 fn is_space(c: u8) -> bool {
@@ -344,6 +358,24 @@ fn apply_style(tag: str, base: Style) -> Style {
     if has_fill_opacity { s.fill_opacity = unit_value(number_of(fill_opacity, 1.0)) }
     let (stroke_opacity, has_stroke_opacity) = prop(tag, "stroke-opacity")
     if has_stroke_opacity { s.stroke_opacity = unit_value(number_of(stroke_opacity, 1.0)) }
+    let (dash, has_dash) = prop(tag, "stroke-dasharray")
+    if has_dash { s.dash = trim(dash) }
+    let (dash_offset, has_dash_offset) = prop(tag, "stroke-dashoffset")
+    if has_dash_offset { s.dash_offset = number_of(dash_offset, 0.0) }
+    let (rule, has_rule) = prop(tag, "fill-rule")
+    if has_rule { s.even_odd = same(trim(rule), "evenodd") }
+    let (marker_all, has_marker_all) = prop(tag, "marker")
+    if has_marker_all {
+        s.marker_start = url_id(marker_all)
+        s.marker_mid = s.marker_start
+        s.marker_end = s.marker_start
+    }
+    let (marker_start, has_marker_start) = prop(tag, "marker-start")
+    if has_marker_start { s.marker_start = url_id(marker_start) }
+    let (marker_mid, has_marker_mid) = prop(tag, "marker-mid")
+    if has_marker_mid { s.marker_mid = url_id(marker_mid) }
+    let (marker_end, has_marker_end) = prop(tag, "marker-end")
+    if has_marker_end { s.marker_end = url_id(marker_end) }
     ret s
 }
 
@@ -953,10 +985,58 @@ fn gradient_stops(a: *mem.Arena, text: str, body_start: usize, body_end: usize, 
     ret (stops[..n], ok)
 }
 
+// 0 pad, 1 reflect, 2 repeat: the gradient's `spreadMethod`, else its href's.
+fn spread_of(doc: Doc, tag: str) -> usize {
+    var holder = tag
+    var hops = 0usize
+    while hops < 4usize {
+        let (method, has_method) = attr(holder, "spreadMethod")
+        if has_method {
+            if same(method, "reflect") { ret 1usize }
+            if same(method, "repeat") { ret 2usize }
+            ret 0usize
+        }
+        let (plain, has_plain) = attr(holder, "href")
+        let (linked, has_linked) = attr(holder, "xlink:href")
+        var reference = plain
+        if !has_plain { reference = linked }
+        if !has_plain && !has_linked { ret 0usize }
+        let next = find_by_id(doc.text, url_id(reference))
+        if !next.found { ret 0usize }
+        holder = next.tag
+        hops += 1usize
+    }
+    ret 0usize
+}
+
+// `periods` copies of the stops end to end; reflect runs every odd period backwards
+// (`first_odd` is the parity of the first one).
+fn spread_stops(a: *mem.Arena, stops: []const paint.Stop, periods: usize, reflect: bool, first_odd: usize) -> ([]paint.Stop, err) {
+    let n = stops.len
+    let (out, out_error) = mem.alloc[paint.Stop](a, n * periods)
+    if out_error != ok { ret (zero, out_error) }
+    var k = 0usize
+    while k < periods {
+        var i = 0usize
+        while i < n {
+            var source = stops[i]
+            var offset = source.offset
+            if reflect && (k + first_odd) % 2usize == 1usize {
+                source = stops[n - 1usize - i]
+                offset = 1.0 - source.offset
+            }
+            out[k * n + i] = paint.Stop { offset: (f32(k) + offset) / f32(periods), color: source.color }
+            i += 1usize
+        }
+        k += 1usize
+    }
+    ret (out, ok)
+}
+
 // The brush for `url(#id)` over a shape with bounds `bounds`; false when the id names
 // no gradient or it has no stops. A single stop is a solid colour. Spread methods other
 // than pad, a radial focal point and a radial gradient's elliptical box are not drawn.
-fn gradient_brush(a: *mem.Arena, doc: Doc, id: str, bounds: geometry.Rect, alpha: f32, current: paint.Color) -> (paint.Brush, bool, err) {
+fn gradient_brush(a: *mem.Arena, doc: Doc, id: str, bounds: geometry.Rect, cover: geometry.Rect, alpha: f32, current: paint.Color) -> (paint.Brush, bool, err) {
     let found = find_by_id(doc.text, id)
     var none: paint.Brush = zero
     if !found.found { ret (none, false, ok) }
@@ -1001,8 +1081,38 @@ fn gradient_brush(a: *mem.Arena, doc: Doc, id: str, bounds: geometry.Rect, alpha
             y1 = bounds.y + y1 * bounds.height
             y2 = bounds.y + y2 * bounds.height
         }
-        let start = geometry.transform_point(transform, pt(x1, y1))
-        let stop_point = geometry.transform_point(transform, pt(x2, y2))
+        var start = geometry.transform_point(transform, pt(x1, y1))
+        var stop_point = geometry.transform_point(transform, pt(x2, y2))
+        let spread = spread_of(doc, found.tag)
+        let dx = stop_point.x - start.x
+        let dy = stop_point.y - start.y
+        let dd = dx * dx + dy * dy
+        if spread != 0usize && dd > 0.0 {
+            // Repeat and reflect: tile the stops over every period the shape reaches.
+            let t0 = ((cover.x - start.x) * dx + (cover.y - start.y) * dy) / dd
+            let t1 = ((cover.x + cover.width - start.x) * dx + (cover.y - start.y) * dy) / dd
+            let t2 = ((cover.x - start.x) * dx + (cover.y + cover.height - start.y) * dy) / dd
+            let t3 = ((cover.x + cover.width - start.x) * dx + (cover.y + cover.height - start.y) * dy) / dd
+            var lo = t0
+            var hi = t0
+            if t1 < lo { lo = t1 }
+            if t2 < lo { lo = t2 }
+            if t3 < lo { lo = t3 }
+            if t1 > hi { hi = t1 }
+            if t2 > hi { hi = t2 }
+            if t3 > hi { hi = t3 }
+            let k0 = i64(math.floor[f32](lo))
+            var k1 = i64(math.ceil[f32](hi))
+            if k1 <= k0 { k1 = k0 + 1i64 }
+            if k1 - k0 > 32i64 { k1 = k0 + 32i64 }
+            var parity = k0 % 2i64
+            if parity < 0i64 { parity += 2i64 }
+            let (tiled, tiled_error) = spread_stops(a, stops, usize(k1 - k0), spread == 1usize, usize(parity))
+            if tiled_error != ok { ret (none, false, tiled_error) }
+            stops = tiled
+            stop_point = pt(start.x + dx * f32(k1), start.y + dy * f32(k1))
+            start = pt(start.x + dx * f32(k0), start.y + dy * f32(k0))
+        }
         ret (paint.Brush { Linear: paint.LinearGradient { start: start, end: stop_point, stops: stops } }, true, ok)
     }
     var cx = gradient_coord(found.tag, "cx", 0.5, boxed, doc.vw)
@@ -1018,7 +1128,29 @@ fn gradient_brush(a: *mem.Arena, doc: Doc, id: str, bounds: geometry.Rect, alpha
     let det = transform.m00 * transform.m11 - transform.m01 * transform.m10
     var scale = det
     if scale < 0.0 { scale = 0.0 - scale }
-    ret (paint.Brush { Radial: paint.RadialGradient { center: center, radius: r * math.sqrt[f32](scale), stops: stops } }, true, ok)
+    var radius = r * math.sqrt[f32](scale)
+    let spread = spread_of(doc, found.tag)
+    if spread != 0usize && radius > 0.0 {
+        var far = 0.0f32
+        var corner = 0usize
+        while corner < 4usize {
+            var px = cover.x
+            var py = cover.y
+            if corner % 2usize == 1usize { px += cover.width }
+            if corner >= 2usize { py += cover.height }
+            let d = geometry.distance(center, pt(px, py))
+            if d > far { far = d }
+            corner += 1usize
+        }
+        var periods = i64(math.ceil[f32](far / radius))
+        if periods < 1i64 { periods = 1i64 }
+        if periods > 32i64 { periods = 32i64 }
+        let (tiled, tiled_error) = spread_stops(a, stops, usize(periods), spread == 1usize, 0usize)
+        if tiled_error != ok { ret (none, false, tiled_error) }
+        stops = tiled
+        radius = radius * f32(periods)
+    }
+    ret (paint.Brush { Radial: paint.RadialGradient { center: center, radius: radius, stops: stops } }, true, ok)
 }
 
 // The first shape inside the `clipPath` named `id`, as a path in the space of `ctm`.
@@ -1050,13 +1182,702 @@ fn clip_path(a: *mem.Arena, doc: Doc, id: str, ctm: geometry.Transform) -> (geom
     ret (zero, false, ok)
 }
 
+// ---- <style> sheets (L125, D3100) ----------------------------------------------------------
+
+// One matched declaration block: its specificity level and its byte span in the document.
+type Hit = struct { level: usize, from: usize, to: usize }
+
+fn class_has(list: str, word: str) -> bool {
+    var i = 0usize
+    while i < list.len {
+        while i < list.len && is_space(list[i]) { i += 1usize }
+        var j = i
+        while j < list.len && !is_space(list[j]) { j += 1usize }
+        if j > i && same(list[i..j], word) { ret true }
+        i = j
+    }
+    ret false
+}
+
+// How specifically one simple selector (`*`, `rect`, `.a`, `rect.a.b`, `#id`) matches an
+// element: 0 for no match, else 1 universal, 2 type, 3 class, 4 id. Combinators,
+// pseudo-classes and attribute selectors never match.
+fn selector_rank(sel: str, element: str, classes: str, id: str) -> usize {
+    if sel.len == 0usize { ret 0usize }
+    var i = 0usize
+    while i < sel.len {
+        let c = sel[i]
+        if is_space(c) || c == 62u8 || c == 43u8 || c == 126u8 || c == 58u8 || c == 91u8 || c == 40u8 { ret 0usize }
+        i += 1usize
+    }
+    var rank = 1usize
+    var j = 0usize
+    while j < sel.len && sel[j] != 46u8 && sel[j] != 35u8 { j += 1usize }
+    if j > 0usize && !same(sel[0usize..j], "*") {
+        if !same(sel[0usize..j], element) { ret 0usize }
+        rank = 2usize
+    }
+    i = j
+    while i < sel.len {
+        let kind = sel[i]
+        var k = i + 1usize
+        while k < sel.len && sel[k] != 46u8 && sel[k] != 35u8 { k += 1usize }
+        let part = sel[i + 1usize..k]
+        if kind == 46u8 {
+            if !class_has(classes, part) { ret 0usize }
+            if rank < 3usize { rank = 3usize }
+        } else {
+            if !same(part, id) { ret 0usize }
+            rank = 4usize
+        }
+        i = k
+    }
+    ret rank
+}
+
+// The rules of every `<style>` element that match the element, in source order.
+fn collect_hits(text: str, element: str, classes: str, id: str, hits: []Hit) -> usize {
+    var n = 0usize
+    var at = find(text, 0usize, "<style")
+    while at < text.len {
+        let open_end = tag_end(text, at)
+        let close = find(text, open_end, "</style")
+        var base = open_end + 1usize
+        if base > close { base = close }
+        let css = text[base..close]
+        var i = 0usize
+        while i < css.len {
+            if is_space(css[i]) {
+                i += 1usize
+                continue
+            }
+            if begins(css, i, "/*") {
+                i = find(css, i + 2usize, "*/") + 2usize
+                continue
+            }
+            if begins(css, i, "<![CDATA[") {
+                i += 9usize
+                continue
+            }
+            if begins(css, i, "]]>") {
+                i += 3usize
+                continue
+            }
+            var j = i
+            while j < css.len && css[j] != 123u8 { j += 1usize }
+            if j >= css.len { break }
+            var k = j + 1usize
+            while k < css.len && css[k] != 125u8 { k += 1usize }
+            let selectors = css[i..j]
+            if selectors[0usize] != 64u8 {
+                var best = 0usize
+                var s = 0usize
+                while s <= selectors.len {
+                    var e = s
+                    while e < selectors.len && selectors[e] != 44u8 { e += 1usize }
+                    let rank = selector_rank(trim(selectors[s..e]), element, classes, id)
+                    if rank > best { best = rank }
+                    s = e + 1usize
+                }
+                if best > 0usize && n < hits.len {
+                    hits[n] = Hit { level: best, from: base + j + 1usize, to: base + k }
+                    n += 1usize
+                }
+            }
+            i = k + 1usize
+        }
+        at = find(text, close, "<style")
+    }
+    ret n
+}
+
+// The tag with the declarations of the matching sheet rules folded into a leading
+// `style` attribute: the element's own `style` first (it wins), then the rules by
+// specificity and then by source order, later first. Attributes sit below `style` in
+// `prop`, which is the cascade's order for presentation attributes.
+fn styled(a: *mem.Arena, doc: Doc, tag: str) -> (str, err) {
+    if find(doc.text, 0usize, "<style") >= doc.text.len { ret (tag, ok) }
+    let element = name_of(tag)
+    let (classes, has_classes) = attr(tag, "class")
+    let (id, has_id) = attr(tag, "id")
+    var hits: [32]Hit = zero
+    let n = collect_hits(doc.text, element, classes, id, hits[0usize..32usize])
+    if n == 0usize { ret (tag, ok) }
+    let (inline, has_inline) = attr(tag, "style")
+    let (made, builder_error) = str.builder(a, 0usize)
+    if builder_error != ok { ret (tag, builder_error) }
+    var sb = made
+    try str.push(&sb, element)
+    try str.push(&sb, " style=\"")
+    if has_inline {
+        try str.push(&sb, inline)
+        try str.push(&sb, ";")
+    }
+    var level = 4usize
+    while level > 0usize {
+        var h = n
+        while h > 0usize {
+            h -= 1usize
+            if hits[h].level == level {
+                try str.push(&sb, doc.text[hits[h].from..hits[h].to])
+                try str.push(&sb, ";")
+            }
+        }
+        level -= 1usize
+    }
+    try str.push(&sb, "\"")
+    try str.push(&sb, tag[element.len..tag.len])
+    ret (str.done(&sb), ok)
+}
+
+// ---- dashes and even-odd fills -------------------------------------------------------------
+
+const MAX_DASHES: usize = 16usize
+
+// `stroke-dasharray` as lengths in `out`; zero entries for `none`, a negative entry or an
+// all-zero list. An odd list is repeated to make it even, as the specification has it.
+fn dash_values(value: str, out: []f32) -> usize {
+    if same(value, "none") { ret 0usize }
+    var n = 0usize
+    var at = 0usize
+    var total = 0.0f32
+    while n < out.len {
+        var v = 0.0f32
+        if !read_number(value, &at, &v) { break }
+        var j = at
+        while j < value.len && is_alpha(value[j]) { j += 1usize }
+        let (factor, percent) = unit_factor(value[at..j], 0usize)
+        at = j
+        if v < 0.0 { ret 0usize }
+        out[n] = v * factor
+        total += out[n]
+        n += 1usize
+    }
+    if n == 0usize || !(total > 0.0) { ret 0usize }
+    if n % 2usize == 1usize && n * 2usize <= out.len {
+        var k = 0usize
+        while k < n {
+            out[n + k] = out[k]
+            k += 1usize
+        }
+        n *= 2usize
+    }
+    ret n
+}
+
+type DashState = struct { on: bool, idx: usize, remaining: f32, started: bool }
+
+// Flattening tolerance for a path of these bounds: 1/2000 of the larger side.
+fn flat_tolerance(bounds: geometry.Rect) -> f32 {
+    var tol = bounds.width
+    if bounds.height > tol { tol = bounds.height }
+    tol = tol / 2000.0
+    if tol < 0.01 { tol = 0.01 }
+    ret tol
+}
+
+fn flat_of(a: *mem.Arena, path: geometry.Path) -> (geometry.Path, err) {
+    let (fv, fv_error) = mem.alloc[geometry.PathVerb](a, path.verbs.len * 48usize + 16usize)
+    if fv_error != ok { ret (zero, fv_error) }
+    let (fp, fp_error) = mem.alloc[geometry.Point](a, path.points.len * 48usize + 16usize)
+    if fp_error != ok { ret (zero, fp_error) }
+    let (flat, flat_error) = geometry.flatten(path, flat_tolerance(path_bounds(path)), fv, fp)
+    if flat_error != ok { ret (zero, TooComplex) }
+    ret (flat, ok)
+}
+
+fn dash_advance(st: *DashState, dashes: []const f32) {
+    st.idx = (st.idx + 1usize) % dashes.len
+    st.on = !st.on
+    st.started = false
+    st.remaining = dashes[st.idx]
+}
+
+// Dashes of the segment p..q, appended to `pb`; the state carries across segments.
+fn dash_segment(pb: *geometry.PathBuilder, st: *DashState, dashes: []const f32, p: geometry.Point, q: geometry.Point) -> err {
+    let seg = geometry.distance(p, q)
+    if !(seg > 0.0) { ret ok }
+    var pos = 0.0f32
+    while pos < seg {
+        var step = st.remaining
+        if step > seg - pos { step = seg - pos }
+        let here = geometry.lerp(p, q, (pos + step) / seg)
+        if st.on {
+            if !st.started {
+                try geometry.move_to(pb, geometry.lerp(p, q, pos / seg))
+                st.started = true
+            }
+            try geometry.line_to(pb, here)
+        }
+        pos += step
+        st.remaining -= step
+        if st.remaining <= 0.0 {
+            dash_advance(st, dashes)
+            var spins = 0usize
+            while st.remaining <= 0.0 && spins < dashes.len {
+                // A zero-length dash is a dot (round and square caps draw it).
+                if st.on {
+                    try geometry.move_to(pb, here)
+                    try geometry.line_to(pb, here)
+                }
+                dash_advance(st, dashes)
+                spins += 1usize
+            }
+        }
+    }
+    ret ok
+}
+
+// The path cut into dashes: every subpath restarts the pattern at `offset`.
+fn dash_path(a: *mem.Arena, path: geometry.Path, dashes: []const f32, offset: f32) -> (geometry.Path, err) {
+    let (flat, flat_error) = flat_of(a, path)
+    if flat_error != ok { ret (zero, flat_error) }
+    var cycle = 0.0f32
+    var d = 0usize
+    while d < dashes.len {
+        cycle += dashes[d]
+        d += 1usize
+    }
+    var length = 0.0f32
+    var pi = 0usize
+    var cur: geometry.Point = zero
+    var first: geometry.Point = zero
+    var vi = 0usize
+    while vi < flat.verbs.len {
+        let verb = flat.verbs[vi]
+        if verb == .Move {
+            cur = flat.points[pi]
+            first = cur
+            pi += 1usize
+        } else if verb == .Line {
+            length += geometry.distance(cur, flat.points[pi])
+            cur = flat.points[pi]
+            pi += 1usize
+        } else {
+            length += geometry.distance(cur, first)
+            cur = first
+        }
+        vi += 1usize
+    }
+    let events = usize(length / cycle) + 2usize
+    if events > 20000usize { ret (zero, TooComplex) }
+    let cap = flat.points.len + 2usize * events * dashes.len + 16usize
+    let (pb, pb_error) = new_path(a, cap, cap)
+    if pb_error != ok { ret (zero, pb_error) }
+    var builder = pb
+    var st = DashState { on: true, idx: 0usize, remaining: 0.0, started: false }
+    var skip = offset - cycle * math.floor[f32](offset / cycle)
+    pi = 0usize
+    vi = 0usize
+    while vi < flat.verbs.len {
+        let verb = flat.verbs[vi]
+        if verb == .Move {
+            cur = flat.points[pi]
+            first = cur
+            pi += 1usize
+            st = DashState { on: true, idx: 0usize, remaining: dashes[0usize], started: false }
+            var left = skip
+            while left > 0.0 {
+                if left >= st.remaining {
+                    left -= st.remaining
+                    dash_advance(&st, dashes)
+                } else {
+                    st.remaining -= left
+                    left = 0.0
+                }
+            }
+        } else if verb == .Line {
+            let next = flat.points[pi]
+            pi += 1usize
+            try dash_segment(&builder, &st, dashes, cur, next)
+            cur = next
+        } else {
+            try dash_segment(&builder, &st, dashes, cur, first)
+            cur = first
+        }
+        vi += 1usize
+    }
+    ret (geometry.finish(&builder), ok)
+}
+
+// Is `p` inside the polygon pts[from..to] by the even-odd rule?
+fn polygon_has(pts: []const geometry.Point, from: usize, to: usize, p: geometry.Point) -> bool {
+    var inside = false
+    var j = to - 1usize
+    var i = from
+    while i < to {
+        let u = pts[i]
+        let w = pts[j]
+        if (u.y > p.y) != (w.y > p.y) {
+            let x = (w.x - u.x) * (p.y - u.y) / (w.y - u.y) + u.x
+            if p.x < x { inside = !inside }
+        }
+        j = i
+        i += 1usize
+    }
+    ret inside
+}
+
+// A path whose non-zero fill is its even-odd fill: each subpath wound the way its nesting
+// depth asks (even depth one way, odd the other), so a loop inside a loop cuts a hole.
+// Exact for disjoint and nested simple loops; a loop that crosses itself still fills non-zero.
+fn even_odd_path(a: *mem.Arena, path: geometry.Path) -> (geometry.Path, err) {
+    let (flat, flat_error) = flat_of(a, path)
+    if flat_error != ok { ret (zero, flat_error) }
+    var count = 0usize
+    var vi = 0usize
+    while vi < flat.verbs.len {
+        if flat.verbs[vi] == .Move { count += 1usize }
+        vi += 1usize
+    }
+    if count == 0usize { ret (path, ok) }
+    let (starts, starts_error) = mem.alloc[usize](a, count + 1usize)
+    if starts_error != ok { ret (zero, starts_error) }
+    var s = 0usize
+    var pi = 0usize
+    vi = 0usize
+    while vi < flat.verbs.len {
+        let verb = flat.verbs[vi]
+        if verb == .Move {
+            starts[s] = pi
+            s += 1usize
+            pi += 1usize
+        } else if verb == .Line {
+            pi += 1usize
+        }
+        vi += 1usize
+    }
+    starts[count] = pi
+    let (pb, pb_error) = new_path(a, flat.points.len + count * 2usize + 8usize, flat.points.len + 8usize)
+    if pb_error != ok { ret (zero, pb_error) }
+    var builder = pb
+    s = 0usize
+    while s < count {
+        let from = starts[s]
+        let to = starts[s + 1usize]
+        if to - from >= 3usize {
+            var depth = 0usize
+            var o = 0usize
+            while o < count {
+                if o != s && starts[o + 1usize] - starts[o] >= 3usize && polygon_has(flat.points, starts[o], starts[o + 1usize], flat.points[from]) { depth += 1usize }
+                o += 1usize
+            }
+            var area = 0.0f32
+            var j = to - 1usize
+            var i = from
+            while i < to {
+                area += flat.points[j].x * flat.points[i].y - flat.points[i].x * flat.points[j].y
+                j = i
+                i += 1usize
+            }
+            let want_positive = depth % 2usize == 0usize
+            let reverse = (area > 0.0) != want_positive
+            var n = 0usize
+            while n < to - from {
+                var at = from + n
+                if reverse { at = to - 1usize - n }
+                if n == 0usize { try geometry.move_to(&builder, flat.points[at]) } else { try geometry.line_to(&builder, flat.points[at]) }
+                n += 1usize
+            }
+            try geometry.close_path(&builder)
+        } else {
+            var n = from
+            while n < to {
+                if n == from { try geometry.move_to(&builder, flat.points[n]) } else { try geometry.line_to(&builder, flat.points[n]) }
+                n += 1usize
+            }
+        }
+        s += 1usize
+    }
+    ret (geometry.finish(&builder), ok)
+}
+
+// ---- patterns -------------------------------------------------------------------------------
+
+fn invert(t: geometry.Transform) -> (geometry.Transform, bool) {
+    let det = t.m00 * t.m11 - t.m01 * t.m10
+    if det < 0.000001 && det > 0.0 - 0.000001 { ret (t, false) }
+    ret (geometry.Transform { m00: t.m11 / det, m01: 0.0 - t.m01 / det, m02: (t.m01 * t.m12 - t.m11 * t.m02) / det, m10: 0.0 - t.m10 / det, m11: t.m00 / det, m12: (t.m10 * t.m02 - t.m00 * t.m12) / det }, true)
+}
+
+// Fill `path` by tiling the `pattern` element's children over its bounds, clipped to the
+// path. `viewBox` on the pattern and a pattern's own `href` are not read.
+fn fill_pattern(a: *mem.Arena, b: *scene.Builder, doc: Doc, style: Style, path: geometry.Path, bounds: geometry.Rect, pat: Found, level: usize) -> err {
+    if level + 1usize >= 8usize { ret TooComplex }
+    var boxed = true
+    let (units, has_units) = attr(pat.tag, "patternUnits")
+    if has_units && same(units, "userSpaceOnUse") { boxed = false }
+    var content_boxed = false
+    let (content_units, has_content_units) = attr(pat.tag, "patternContentUnits")
+    if has_content_units && same(content_units, "objectBoundingBox") { content_boxed = true }
+    var tx = 0.0f32
+    var ty = 0.0f32
+    var tw = 0.0f32
+    var th = 0.0f32
+    if boxed {
+        tx = bounds.x + gradient_coord(pat.tag, "x", 0.0, true, 0.0) * bounds.width
+        ty = bounds.y + gradient_coord(pat.tag, "y", 0.0, true, 0.0) * bounds.height
+        tw = gradient_coord(pat.tag, "width", 0.0, true, 0.0) * bounds.width
+        th = gradient_coord(pat.tag, "height", 0.0, true, 0.0) * bounds.height
+    } else {
+        tx = len_x(doc, pat.tag, "x")
+        ty = len_y(doc, pat.tag, "y")
+        tw = len_x(doc, pat.tag, "width")
+        th = len_y(doc, pat.tag, "height")
+    }
+    if !(tw > 0.0) || !(th > 0.0) { ret ok }
+    var pm = geometry.transform_identity()
+    let (pm_text, has_pm) = attr(pat.tag, "patternTransform")
+    if has_pm { pm = parse_transform(pm_text) }
+    let (inv, invertible) = invert(pm)
+    if !invertible { ret ok }
+    let c0 = geometry.transform_point(inv, pt(bounds.x, bounds.y))
+    let c1 = geometry.transform_point(inv, pt(bounds.x + bounds.width, bounds.y))
+    let c2 = geometry.transform_point(inv, pt(bounds.x, bounds.y + bounds.height))
+    let c3 = geometry.transform_point(inv, pt(bounds.x + bounds.width, bounds.y + bounds.height))
+    var min_x = c0.x
+    var max_x = c0.x
+    var min_y = c0.y
+    var max_y = c0.y
+    if c1.x < min_x { min_x = c1.x }
+    if c2.x < min_x { min_x = c2.x }
+    if c3.x < min_x { min_x = c3.x }
+    if c1.x > max_x { max_x = c1.x }
+    if c2.x > max_x { max_x = c2.x }
+    if c3.x > max_x { max_x = c3.x }
+    if c1.y < min_y { min_y = c1.y }
+    if c2.y < min_y { min_y = c2.y }
+    if c3.y < min_y { min_y = c3.y }
+    if c1.y > max_y { max_y = c1.y }
+    if c2.y > max_y { max_y = c2.y }
+    if c3.y > max_y { max_y = c3.y }
+    let ix0 = i64(math.floor[f32]((min_x - tx) / tw))
+    let ix1 = i64(math.ceil[f32]((max_x - tx) / tw))
+    let iy0 = i64(math.floor[f32]((min_y - ty) / th))
+    let iy1 = i64(math.ceil[f32]((max_y - ty) / th))
+    if (ix1 - ix0) * (iy1 - iy0) > 1024i64 { ret TooComplex }
+    let inner = doc.text[pat.body_start..pat.body_end]
+    let frame = Frame { style: apply_style(pat.tag, default_style(style.current)), ctm: geometry.transform_identity() }
+    let save: scene.Command = .Save
+    let restore: scene.Command = .Restore
+    try scene.push(b, save)
+    try scene.push(b, scene.Command { Clip: scene.Clip { Path: path } })
+    try scene.push(b, scene.Command { Transform: pm })
+    var iy = iy0
+    while iy < iy1 {
+        var ix = ix0
+        while ix < ix1 {
+            try scene.push(b, save)
+            try scene.push(b, scene.Command { Transform: geometry.transform_translate(tx + f32(ix) * tw, ty + f32(iy) * th) })
+            try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.rect(0.0, 0.0, tw, th) } })
+            if content_boxed { try scene.push(b, scene.Command { Transform: geometry.transform_scale(bounds.width, bounds.height) }) }
+            try walk(a, b, doc, inner, frame, false, bounds, level + 1usize)
+            try scene.push(b, restore)
+            ix += 1i64
+        }
+        iy += 1i64
+    }
+    try scene.push(b, restore)
+    ret ok
+}
+
+// ---- markers --------------------------------------------------------------------------------
+
+// A path vertex with the unit directions of the segments arriving and leaving it.
+type Vertex = struct { at: geometry.Point, in_x: f32, in_y: f32, has_in: bool, out_x: f32, out_y: f32, has_out: bool }
+
+fn unit_dir(from: geometry.Point, to: geometry.Point) -> (f32, f32, bool) {
+    let dx = to.x - from.x
+    let dy = to.y - from.y
+    let len = math.sqrt[f32](dx * dx + dy * dy)
+    if !(len > 0.000001) { ret (0.0, 0.0, false) }
+    ret (dx / len, dy / len, true)
+}
+
+// The vertices of a path with their tangents (curves use their control polygon).
+fn vertices_of(a: *mem.Arena, path: geometry.Path) -> ([]Vertex, err) {
+    let (out, out_error) = mem.alloc[Vertex](a, path.verbs.len + 1usize)
+    if out_error != ok { ret (zero, out_error) }
+    var n = 0usize
+    var pi = 0usize
+    var cur: geometry.Point = zero
+    var first: geometry.Point = zero
+    var vi = 0usize
+    while vi < path.verbs.len {
+        let verb = path.verbs[vi]
+        if verb == .Move {
+            cur = path.points[pi]
+            first = cur
+            pi += 1usize
+            out[n] = Vertex { at: cur, in_x: 0.0, in_y: 0.0, has_in: false, out_x: 0.0, out_y: 0.0, has_out: false }
+            n += 1usize
+        } else if n > 0usize {
+            var start_to = cur
+            var end_from = cur
+            var end = cur
+            if verb == .Line {
+                end = path.points[pi]
+                start_to = end
+                end_from = cur
+                pi += 1usize
+            } else if verb == .Quad {
+                start_to = path.points[pi]
+                end_from = path.points[pi]
+                end = path.points[pi + 1usize]
+                pi += 2usize
+            } else if verb == .Cubic {
+                start_to = path.points[pi]
+                end_from = path.points[pi + 1usize]
+                end = path.points[pi + 2usize]
+                pi += 3usize
+            } else {
+                end = first
+                start_to = first
+            }
+            let (s1x, s1y, s1ok) = unit_dir(cur, start_to)
+            let (s2x, s2y, s2ok) = unit_dir(cur, end)
+            let (e1x, e1y, e1ok) = unit_dir(end_from, end)
+            var sx = s1x
+            var sy = s1y
+            var has_s = s1ok
+            if !s1ok {
+                sx = s2x
+                sy = s2y
+                has_s = s2ok
+            }
+            var ex = e1x
+            var ey = e1y
+            var has_e = e1ok
+            if !e1ok {
+                ex = s2x
+                ey = s2y
+                has_e = s2ok
+            }
+            out[n - 1usize].out_x = sx
+            out[n - 1usize].out_y = sy
+            out[n - 1usize].has_out = has_s
+            out[n] = Vertex { at: end, in_x: ex, in_y: ey, has_in: has_e, out_x: 0.0, out_y: 0.0, has_out: false }
+            n += 1usize
+            cur = end
+        }
+        vi += 1usize
+    }
+    ret (out[..n], ok)
+}
+
+// Draw the marker element `id` at `at` heading `(dx, dy)`, at `scale` times its own size.
+fn draw_marker(a: *mem.Arena, b: *scene.Builder, doc: Doc, style: Style, id: str, at: geometry.Point, dx: f32, dy: f32, level: usize) -> err {
+    if id.len == 0usize { ret ok }
+    if level + 1usize >= 8usize { ret TooComplex }
+    let m = find_by_id(doc.text, id)
+    if !m.found || !same(name_of(m.tag), "marker") { ret ok }
+    var mw = 3.0f32
+    var mh = 3.0f32
+    let (mw_text, has_mw) = attr(m.tag, "markerWidth")
+    if has_mw { mw = length_value(mw_text, 3.0, doc.vw) }
+    let (mh_text, has_mh) = attr(m.tag, "markerHeight")
+    if has_mh { mh = length_value(mh_text, 3.0, doc.vh) }
+    if !(mw > 0.0) || !(mh > 0.0) { ret ok }
+    var scale = style.stroke_width
+    let (units, has_units) = attr(m.tag, "markerUnits")
+    if has_units && same(units, "userSpaceOnUse") { scale = 1.0 }
+    var rx = 0.0f32
+    var ry = 0.0f32
+    let (rx_text, has_rx) = attr(m.tag, "refX")
+    if has_rx { rx = length_value(rx_text, 0.0, doc.vw) }
+    let (ry_text, has_ry) = attr(m.tag, "refY")
+    if has_ry { ry = length_value(ry_text, 0.0, doc.vh) }
+    // The viewBox maps into the (mw, mh) viewport, meet and centred.
+    var content = geometry.transform_identity()
+    let (view, has_view) = attr(m.tag, "viewBox")
+    if has_view {
+        var p = 0usize
+        var vx = 0.0f32
+        var vy = 0.0f32
+        var vw = 0.0f32
+        var vh = 0.0f32
+        if read_number(view, &p, &vx) && read_number(view, &p, &vy) && read_number(view, &p, &vw) && read_number(view, &p, &vh) && vw > 0.0 && vh > 0.0 {
+            var k = mw / vw
+            if mh / vh < k { k = mh / vh }
+            content = geometry.transform_multiply(geometry.transform_translate((mw - vw * k) / 2.0, (mh - vh * k) / 2.0), geometry.transform_multiply(geometry.transform_scale(k, k), geometry.transform_translate(0.0 - vx, 0.0 - vy)))
+        }
+    }
+    let ref_point = geometry.transform_point(content, pt(rx, ry))
+    var heading_x = 1.0f32
+    var heading_y = 0.0f32
+    let (orient, has_orient) = attr(m.tag, "orient")
+    if has_orient {
+        if same(orient, "auto") {
+            heading_x = dx
+            heading_y = dy
+        } else if same(orient, "auto-start-reverse") {
+            heading_x = dx
+            heading_y = dy
+        } else {
+            let radians = number_of(orient, 0.0) * 0.017453292
+            heading_x = math.cos[f32](radians)
+            heading_y = math.sin[f32](radians)
+        }
+    }
+    let place = geometry.Transform { m00: heading_x * scale, m01: 0.0 - heading_y * scale, m02: at.x, m10: heading_y * scale, m11: heading_x * scale, m12: at.y }
+    let save: scene.Command = .Save
+    let restore: scene.Command = .Restore
+    try scene.push(b, save)
+    try scene.push(b, scene.Command { Transform: place })
+    try scene.push(b, scene.Command { Transform: geometry.transform_translate(0.0 - ref_point.x, 0.0 - ref_point.y) })
+    try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.rect(0.0, 0.0, mw, mh) } })
+    try scene.push(b, scene.Command { Transform: content })
+    let frame = Frame { style: apply_style(m.tag, default_style(style.current)), ctm: geometry.transform_identity() }
+    try walk(a, b, doc, doc.text[m.body_start..m.body_end], frame, false, geometry.rect(0.0, 0.0, mw, mh), level + 1usize)
+    try scene.push(b, restore)
+    ret ok
+}
+
+fn draw_markers(a: *mem.Arena, b: *scene.Builder, doc: Doc, style: Style, path: geometry.Path, level: usize) -> err {
+    if style.marker_start.len == 0usize && style.marker_mid.len == 0usize && style.marker_end.len == 0usize { ret ok }
+    let (vs, vs_error) = vertices_of(a, path)
+    if vs_error != ok { ret vs_error }
+    var i = 0usize
+    while i < vs.len {
+        let v = vs[i]
+        var dx = 1.0f32
+        var dy = 0.0f32
+        if v.has_in && v.has_out {
+            dx = v.in_x + v.out_x
+            dy = v.in_y + v.out_y
+            let len = math.sqrt[f32](dx * dx + dy * dy)
+            if len > 0.000001 {
+                dx = dx / len
+                dy = dy / len
+            } else {
+                dx = v.out_x
+                dy = v.out_y
+            }
+        } else if v.has_out {
+            dx = v.out_x
+            dy = v.out_y
+        } else if v.has_in {
+            dx = v.in_x
+            dy = v.in_y
+        }
+        var id = style.marker_mid
+        if i == 0usize { id = style.marker_start }
+        if i + 1usize == vs.len { id = style.marker_end }
+        if i == 0usize && vs.len == 1usize { id = style.marker_start }
+        try draw_marker(a, b, doc, style, id, v.at, dx, dy, level)
+        i += 1usize
+    }
+    ret ok
+}
+
 // Fill and stroke of `path` under the frame, clipped by its clip-path when it has one.
 // `fillable` is false for a line, whose fill is never drawn.
-fn emit(a: *mem.Arena, b: *scene.Builder, doc: Doc, frame: Frame, path: geometry.Path, fillable: bool) -> err {
+fn emit(a: *mem.Arena, b: *scene.Builder, doc: Doc, frame: Frame, path: geometry.Path, fillable: bool, level: usize) -> err {
     let s = frame.style
     let fill_alpha = s.opacity * s.fill_opacity
     let stroke_alpha = s.opacity * s.stroke_opacity
     let bounds = path_bounds(path)
+    let reach = geometry.rect(bounds.x - s.stroke_width, bounds.y - s.stroke_width, bounds.width + 2.0 * s.stroke_width, bounds.height + 2.0 * s.stroke_width)
     let save: scene.Command = .Save
     try scene.push(b, save)
     if s.clip_ref.len > 0usize {
@@ -1066,27 +1887,49 @@ fn emit(a: *mem.Arena, b: *scene.Builder, doc: Doc, frame: Frame, path: geometry
     }
     try scene.push(b, scene.Command { Transform: frame.ctm })
     if fillable && s.fill_on && fill_alpha > 0.0 {
+        var shape = path
+        if s.even_odd {
+            let (wound, wound_error) = even_odd_path(a, path)
+            if wound_error != ok { ret wound_error }
+            shape = wound
+        }
         if s.fill_ref.len > 0usize {
-            let (brush, has_brush, brush_error) = gradient_brush(a, doc, s.fill_ref, bounds, fill_alpha, s.current)
-            if brush_error != ok { ret brush_error }
-            if has_brush { try scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: brush } }) }
+            let pat = find_by_id(doc.text, s.fill_ref)
+            if pat.found && same(name_of(pat.tag), "pattern") {
+                try fill_pattern(a, b, doc, s, shape, bounds, pat, level)
+            } else {
+                let (brush, has_brush, brush_error) = gradient_brush(a, doc, s.fill_ref, bounds, bounds, fill_alpha, s.current)
+                if brush_error != ok { ret brush_error }
+                if has_brush { try scene.push(b, scene.Command { FillPath: scene.FillPath { path: shape, brush: brush } }) }
+            }
         } else {
-            try scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: color_with(s.fill, fill_alpha) } } })
+            try scene.push(b, scene.Command { FillPath: scene.FillPath { path: shape, brush: paint.Brush { Solid: color_with(s.fill, fill_alpha) } } })
         }
     }
     if s.stroke_on && s.stroke_width > 0.0 && stroke_alpha > 0.0 {
         var brush = paint.Brush { Solid: color_with(s.stroke, stroke_alpha) }
         var draw_stroke = true
         if s.stroke_ref.len > 0usize {
-            let (made, has_made, made_error) = gradient_brush(a, doc, s.stroke_ref, bounds, stroke_alpha, s.current)
+            let (made, has_made, made_error) = gradient_brush(a, doc, s.stroke_ref, bounds, reach, stroke_alpha, s.current)
             if made_error != ok { ret made_error }
             draw_stroke = has_made
             if has_made { brush = made }
         }
+        var cut = path
+        if draw_stroke && s.dash.len > 0usize {
+            var dashes: [16]f32 = zero
+            let n = dash_values(s.dash, dashes[0usize..16usize])
+            if n > 0usize {
+                let (dashed, dashed_error) = dash_path(a, path, dashes[0usize..n], s.dash_offset)
+                if dashed_error != ok { ret dashed_error }
+                cut = dashed
+            }
+        }
         if draw_stroke {
-            try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: path, brush: brush, stroke: paint.Stroke { width: s.stroke_width, cap: s.cap, join: s.join, miter_limit: s.miter } } })
+            try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: cut, brush: brush, stroke: paint.Stroke { width: s.stroke_width, cap: s.cap, join: s.join, miter_limit: s.miter } } })
         }
     }
+    try draw_markers(a, b, doc, s, path, level)
     let restore: scene.Command = .Restore
     try scene.push(b, restore)
     ret ok
@@ -1131,7 +1974,7 @@ fn size(text: str) -> (f32, f32, bool) {
 }
 
 fn default_style(current: paint.Color) -> Style {
-    ret Style { fill: paint.rgba(0.0, 0.0, 0.0, 1.0), fill_on: true, stroke: paint.rgba(0.0, 0.0, 0.0, 1.0), stroke_on: false, stroke_width: 1.0, cap: paint.StrokeCap.Butt, join: paint.StrokeJoin.Miter, miter: 4.0, opacity: 1.0, fill_opacity: 1.0, stroke_opacity: 1.0, current: current, fill_ref: "", stroke_ref: "", clip_ref: "", clip_ctm: geometry.transform_identity() }
+    ret Style { fill: paint.rgba(0.0, 0.0, 0.0, 1.0), fill_on: true, stroke: paint.rgba(0.0, 0.0, 0.0, 1.0), stroke_on: false, stroke_width: 1.0, cap: paint.StrokeCap.Butt, join: paint.StrokeJoin.Miter, miter: 4.0, opacity: 1.0, fill_opacity: 1.0, stroke_opacity: 1.0, current: current, fill_ref: "", stroke_ref: "", clip_ref: "", clip_ctm: geometry.transform_identity(), dash: "", dash_offset: 0.0, even_odd: false, marker_start: "", marker_mid: "", marker_end: "" }
 }
 
 // Draw `text` into `b`, fitted to `dest`. `current` is what `currentColor` and an unset
@@ -1171,9 +2014,9 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
             i = end + 1usize
             continue
         }
-        let tag = text[i + 1usize..end]
-        let name = name_of(tag)
-        let self_closing = tag.len > 0usize && tag[tag.len - 1usize] == 47u8
+        let raw = text[i + 1usize..end]
+        let name = name_of(raw)
+        let self_closing = raw.len > 0usize && raw[raw.len - 1usize] == 47u8
         i = end + 1usize
         if skipped(name) {
             if !self_closing {
@@ -1186,6 +2029,8 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
             }
             continue
         }
+        let (tag, tag_error) = styled(a, doc, raw)
+        if tag_error != ok { ret tag_error }
         if same(name, "svg") {
             if !opened {
                 opened = true
@@ -1201,11 +2046,31 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
                     var skip_h = 0.0f32
                     let got = read_number(view, &at, &vx) && read_number(view, &at, &vy) && read_number(view, &at, &skip_w) && read_number(view, &at, &skip_h)
                 }
-                var scale = dest.width / vw
-                if dest.height / vh < scale { scale = dest.height / vh }
-                let fit = geometry.transform_multiply(geometry.transform_translate(dest.x + (dest.width - vw * scale) / 2.0, dest.y + (dest.height - vh * scale) / 2.0), geometry.transform_multiply(geometry.transform_scale(scale, scale), geometry.transform_translate(0.0 - vx, 0.0 - vy)))
+                var fx = 0.5f32
+                var fy = 0.5f32
+                var stretch = false
+                var slice = false
+                let (aspect, has_aspect) = attr(tag, "preserveAspectRatio")
+                if has_aspect {
+                    if find(aspect, 0usize, "none") < aspect.len { stretch = true }
+                    if find(aspect, 0usize, "xMin") < aspect.len { fx = 0.0 }
+                    if find(aspect, 0usize, "xMax") < aspect.len { fx = 1.0 }
+                    if find(aspect, 0usize, "YMin") < aspect.len { fy = 0.0 }
+                    if find(aspect, 0usize, "YMax") < aspect.len { fy = 1.0 }
+                    if find(aspect, 0usize, "slice") < aspect.len { slice = true }
+                }
+                var scale_x = dest.width / vw
+                var scale_y = dest.height / vh
+                if !stretch {
+                    var scale = scale_x
+                    if slice { if scale_y > scale { scale = scale_y } } else { if scale_y < scale { scale = scale_y } }
+                    scale_x = scale
+                    scale_y = scale
+                }
+                let fit = geometry.transform_multiply(geometry.transform_translate(dest.x + (dest.width - vw * scale_x) * fx, dest.y + (dest.height - vh * scale_y) * fy), geometry.transform_multiply(geometry.transform_scale(scale_x, scale_y), geometry.transform_translate(0.0 - vx, 0.0 - vy)))
                 let save: scene.Command = .Save
                 try scene.push(b, save)
+                if slice { try scene.push(b, scene.Command { Clip: scene.Clip { Rect: dest } }) }
                 try scene.push(b, scene.Command { Transform: fit })
             } else {
                 if depth + 1usize >= MAX_DEPTH { ret TooComplex }
@@ -1245,7 +2110,15 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
         }
         let (path, has_path, path_error) = shape_path(a, doc, tag, name)
         if path_error != ok { ret path_error }
-        if has_path { try emit(a, b, doc, frame, path, !same(name, "line")) }
+        if has_path {
+            // Markers belong to the line-like shapes only.
+            if !(same(name, "path") || same(name, "line") || same(name, "polyline") || same(name, "polygon")) {
+                frame.style.marker_start = ""
+                frame.style.marker_mid = ""
+                frame.style.marker_end = ""
+            }
+            try emit(a, b, doc, frame, path, !same(name, "line"), level)
+        }
     }
     if !opened { ret BadSvg }
     if root {
