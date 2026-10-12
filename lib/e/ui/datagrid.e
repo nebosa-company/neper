@@ -19,8 +19,22 @@
 // column that asks for one, above the header; each change is the `filter_changed` event (the
 // application builds and applies the filter, as for a sort).
 //
+// Bands. `set_bands` puts a row of titled spans above the filter row and the header, each over a
+// run of columns (non-interactive). Row indicator: a column of kind `Indicator` shows `>` at the
+// grid's current row. Navigator: `show_navigator` adds First / Prev / Next / Last buttons and
+// "Row n of m" under the footer; they move the current data row (groups are skipped) and scroll
+// it into view; `navigate` is the same from code.
+//
+// Editing. A column with `editable` set can be edited in place: a tap on the already current row
+// (or `begin_edit`) replaces that cell by a text field holding the cell's text; Enter commits
+// (parsed by the column's kind, written to the table through its typed setters, an empty text
+// is a null, a text that does not parse keeps the editor open and marked invalid), and the
+// application hears `cell_edited` (storage row, spec) to re-sort, re-filter or re-group.
+// Layout. Column widths follow a header resize; `save_layout` / `load_layout` keep the widths,
+// the sort indicator, the filter row, the navigator and the filter texts as small text.
+//
 // ponytail: one level of header and the filter row sits above it (the table owns the header);
-// bands, navigator, indicator and preview are the next increments of G006.
+// the preview row, Tab to the next editable cell and column visibility are what remains.
 
 use e.mem
 use e.str
@@ -28,25 +42,34 @@ use e.data.table as table
 use e.data.tablegroup as grp
 use e.ui.collection
 use e.ui.control
+use e.gfx.paint
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
 
 const FILTER_TEXT: usize = 40usize
 const FILTER_KEY: u64 = 2048u64
+const EDIT_KEY: u64 = 3000u64
+const EDIT_TEXT: usize = 64usize
 
-type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom }
+type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom, Indicator }
+
+// A titled span over `count` columns from spec `first`.
+type Band = struct { title: str, first: usize, count: usize }
+
+type Nav = enum u8 { First, Prev, Next, Last }
 
 // One grid column: the table column it shows and how, and which applied group summary it
 // shows on group rows and in the footer (`summary` < 0: none); `filter` asks for a field in the
 // filter row.
-type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool }
+type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool, editable: bool }
 
 type Events = struct {
     ctx: *void,
     sort_changed: fn(*void, usize, bool) -> err,
     row_picked: fn(*void, usize) -> err,
     filter_changed: fn(*void, usize, str) -> err,
+    cell_edited: fn(*void, usize, usize) -> err,
     custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err,
     row_role: fn(*void, usize) -> style.ColorRole
 }
@@ -67,12 +90,26 @@ type Grid = struct {
     row_height: f32,
     footer_visible: bool,
     filter_visible: bool,
+    bands: []const Band,
+    navigator_visible: bool,
+    has_position: bool,
+    position: usize,
+    read_only: bool,
+    editing: bool,
+    edit_row: usize,
+    edit_spec: usize,
+    edit_text: [64]u8,
+    edit_scratch: [160]u8,
+    edit_len: usize,
+    edit_invalid: bool,
     filter_text: []u8,
     filter_lens: []usize,
     theme: *const control.Theme
 }
 
 error TooManyColumns
+error NotEditable
+error BadLayout
 
 fn ignore_sort(ctx: *void, column: usize, descending: bool) -> err { ret ok }
 
@@ -80,13 +117,15 @@ fn ignore_row(ctx: *void, row: usize) -> err { ret ok }
 
 fn ignore_filter(ctx: *void, spec: usize, text: str) -> err { ret ok }
 
+fn ignore_edit(ctx: *void, row: usize, spec: usize) -> err { ret ok }
+
 fn no_custom_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spec: usize, out: *widget.Node) -> err { ret ok }
 
 fn plain_role(ctx: *void, row: usize) -> style.ColorRole { ret .Text }
 
 // Events that do nothing, for a grid that only displays.
 fn no_events() -> Events {
-    ret Events { ctx: nil, sort_changed: ignore_sort, row_picked: ignore_row, filter_changed: ignore_filter, custom_cell: no_custom_cell, row_role: plain_role }
+    ret Events { ctx: nil, sort_changed: ignore_sort, row_picked: ignore_row, filter_changed: ignore_filter, cell_edited: ignore_edit, custom_cell: no_custom_cell, row_role: plain_role }
 }
 
 fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, events: Events, key: widget.Key) -> (Grid, err) {
@@ -132,6 +171,330 @@ fn show_sort(grid: *Grid, spec: usize, descending: bool) {
 
 fn clear_selection(grid: *Grid) { grid.has_selection = false }
 
+// Puts a row of band titles above the header (an empty slice removes it).
+fn set_bands(grid: *Grid, bands: []const Band) { grid.bands = bands }
+
+fn show_navigator(grid: *Grid, on: bool) { grid.navigator_visible = on }
+
+// The visible position of the current data row, if there is one.
+fn current_position(grid: *const Grid) -> (usize, bool) {
+    if !grid.has_position || grid.position >= grp.visible_len(grid.g) { ret (0usize, false) }
+    ret (grid.position, true)
+}
+
+// Data rows (not group rows) before position `at`, and the total.
+fn data_counts(grid: *const Grid, at: usize) -> (usize, usize) {
+    var before = 0usize
+    var total = 0usize
+    var i = 0usize
+    let n = grp.visible_len(grid.g)
+    while i < n {
+        if !grp.visible_is_group(grid.g, i) {
+            if i < at { before += 1usize }
+            total += 1usize
+        }
+        i += 1usize
+    }
+    ret (before, total)
+}
+
+// Makes the data row at visible position `at` current: selected, scrolled into view, reported.
+fn go_to(grid: *Grid, at: usize) -> err {
+    grid.has_position = true
+    grid.position = at
+    let row = grp.visible_row(grid.g, at)
+    grid.has_selection = true
+    grid.selected_row = row
+    var top = f32(at) * grid.row_height - 2.0 * grid.row_height
+    if top < 0.0 { top = 0.0 }
+    grid.offset = top
+    ret grid.events.row_picked(grid.events.ctx, row)
+}
+
+// Moves the current data row; a move with nowhere to go does nothing (and reports nothing).
+fn navigate(grid: *Grid, kind: Nav) -> err {
+    let n = grp.visible_len(grid.g)
+    if n == 0usize { ret ok }
+    var i = 0usize
+    if kind == Nav.First {
+        while i < n {
+            if !grp.visible_is_group(grid.g, i) { ret go_to(grid, i) }
+            i += 1usize
+        }
+        ret ok
+    }
+    if kind == Nav.Last {
+        i = n
+        while i > 0usize {
+            i -= 1usize
+            if !grp.visible_is_group(grid.g, i) { ret go_to(grid, i) }
+        }
+        ret ok
+    }
+    let (at, has) = current_position(grid)
+    if kind == Nav.Next {
+        i = 0usize
+        if has { i = at + 1usize }
+        while i < n {
+            if !grp.visible_is_group(grid.g, i) { ret go_to(grid, i) }
+            i += 1usize
+        }
+        ret ok
+    }
+    // Prev
+    if !has { ret ok }
+    i = at
+    while i > 0usize {
+        i -= 1usize
+        if !grp.visible_is_group(grid.g, i) { ret go_to(grid, i) }
+    }
+    ret ok
+}
+
+// ---- editing ---------------------------------------------------------------------
+
+// The text a cell is edited as: the value without decoration (no currency sign).
+fn edit_text_of(grid: *const Grid, spec: usize, row: usize) -> str {
+    let s = grid.specs[spec]
+    if table.is_null(grid.t, s.column, row) { ret "" }
+    let kind = table.column_kind(grid.t, s.column)
+    if kind == table.Kind.Str || kind == table.Kind.Dict { ret table.get_str(grid.t, s.column, row) }
+    ret ""
+}
+
+fn copy_edit(grid: *Grid, text: str) {
+    var at = 0usize
+    while at < text.len && at < EDIT_TEXT {
+        grid.edit_text[at] = text[at]
+        at += 1usize
+    }
+    grid.edit_len = at
+}
+
+// Starts editing a cell: the editor holds the cell's text. `NotEditable` for a column that is
+// not, or a read-only grid.
+fn begin_edit(grid: *Grid, row: usize, spec: usize) -> err {
+    if grid.read_only || spec >= grid.specs.len || !grid.specs[spec].editable { ret NotEditable }
+    let s = grid.specs[spec]
+    var scratch = mem.arena_from(grid.edit_scratch[0usize..160usize])
+    let a = &scratch
+    var text = edit_text_of(grid, spec, row)
+    let kind = table.column_kind(grid.t, s.column)
+    if !table.is_null(grid.t, s.column, row) && kind != table.Kind.Str && kind != table.Kind.Dict {
+        let (b, b_error) = str.builder(a, 40usize)
+        if b_error != ok { ret b_error }
+        var sb = b
+        var value = 0.0f64
+        if kind == table.Kind.I32 { value = f64(table.get_i32(grid.t, s.column, row)) }
+        if kind == table.Kind.I64 { value = f64(table.get_i64(grid.t, s.column, row)) }
+        if kind == table.Kind.F64 { value = table.get_f64(grid.t, s.column, row) }
+        if kind == table.Kind.Bool {
+            if table.get_bool(grid.t, s.column, row) { value = 1.0f64 }
+            if str.push(&sb, "no") != ok { ret control.TooLarge }
+            text = "no"
+            if value != 0.0f64 { text = "yes" }
+        } else if s.kind == CellKind.Int {
+            if str.push_f64_fixed(&sb, value, 0u8) != ok { ret control.TooLarge }
+            text = str.done(&sb)
+        } else {
+            if str.push_f64_fixed(&sb, value, s.decimals) != ok { ret control.TooLarge }
+            text = str.done(&sb)
+        }
+    }
+    grid.editing = true
+    grid.edit_row = row
+    grid.edit_spec = spec
+    grid.edit_invalid = false
+    copy_edit(grid, text)
+    ret ok
+}
+
+fn cancel_edit(grid: *Grid) {
+    grid.editing = false
+    grid.edit_invalid = false
+}
+
+fn truthy(text: str) -> (bool, bool) {
+    if text.len == 0usize { ret (false, false) }
+    let c = text[0usize]
+    if c == 121u8 || c == 89u8 || c == 116u8 || c == 84u8 || c == 49u8 { ret (true, true) }
+    if c == 110u8 || c == 78u8 || c == 102u8 || c == 70u8 || c == 48u8 { ret (false, true) }
+    ret (false, false)
+}
+
+// Parses the editor's text by the column's kind and writes the cell. An empty text is null.
+// A text that does not parse (or a dictionary that is full) keeps the editor open, invalid.
+fn commit_edit(grid: *Grid) -> err {
+    if !grid.editing { ret ok }
+    let spec = grid.edit_spec
+    let s = grid.specs[spec]
+    let row = grid.edit_row
+    let text = grid.edit_text[0usize..grid.edit_len]
+    let kind = table.column_kind(grid.t, s.column)
+    var done = false
+    if text.len == 0usize {
+        table.set_null(grid.t, s.column, row)
+        done = true
+    } else if kind == table.Kind.Str || kind == table.Kind.Dict {
+        if table.set_str(grid.t, s.column, row, text) == ok { done = true }
+    } else if kind == table.Kind.Bool {
+        let (value, good) = truthy(text)
+        if good {
+            table.set_bool(grid.t, s.column, row, value)
+            done = true
+        }
+    } else if kind == table.Kind.F64 {
+        var digits = text
+        if digits[0usize] == 36u8 && digits.len > 1usize { digits = digits[1usize..] }
+        let (value, parse_error) = str.parse_f64(digits)
+        if parse_error == ok {
+            table.set_f64(grid.t, s.column, row, value)
+            done = true
+        }
+    } else {
+        let (value, parse_error) = str.parse_i64(text)
+        if parse_error == ok {
+            if kind == table.Kind.I32 {
+                if value >= -2147483648i64 && value <= 2147483647i64 {
+                    table.set_i32(grid.t, s.column, row, i32(value))
+                    done = true
+                }
+            } else {
+                table.set_i64(grid.t, s.column, row, value)
+                done = true
+            }
+        }
+    }
+    if !done {
+        grid.edit_invalid = true
+        ret ok
+    }
+    grid.editing = false
+    grid.edit_invalid = false
+    ret grid.events.cell_edited(grid.events.ctx, row, spec)
+}
+
+fn on_edit_change(ctx: *void, value: str) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    grid.edit_len = value.len
+    grid.edit_invalid = false
+    ret ok
+}
+
+fn on_edit_commit(ctx: *void) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    ret commit_edit(grid)
+}
+
+// ---- layout ----------------------------------------------------------------------
+
+fn column_width(grid: *const Grid, spec: usize) -> f32 { ret grid.columns[spec].width }
+
+fn resize_column(grid: *Grid, spec: usize, width: f32) {
+    var w = width
+    if w < 24.0 { w = 24.0 }
+    grid.columns[spec].width = w
+}
+
+// The layout as text: the version, the widths, the sort indicator, the two optional rows and
+// the filter texts. Written into `a`.
+fn save_layout(a: *mem.Arena, grid: *const Grid) -> (str, err) {
+    let (b, b_error) = str.builder(a, 512usize + grid.specs.len * (FILTER_TEXT + 24usize))
+    if b_error != ok { ret ("", b_error) }
+    var sb = b
+    if str.push(&sb, "datagrid 1\nwidths") != ok { ret ("", control.TooLarge) }
+    var at = 0usize
+    while at < grid.specs.len {
+        if str.push(&sb, " ") != ok || str.push_f64_fixed(&sb, f64(grid.columns[at].width), 1u8) != ok { ret ("", control.TooLarge) }
+        at += 1usize
+    }
+    if str.push(&sb, "\nsort ") != ok || str.push_usize(&sb, grid.sort_column) != ok { ret ("", control.TooLarge) }
+    if grid.descending { if str.push(&sb, " desc") != ok { ret ("", control.TooLarge) } } else { if str.push(&sb, " asc") != ok { ret ("", control.TooLarge) } }
+    if grid.filter_visible { if str.push(&sb, "\nfilterrow 1") != ok { ret ("", control.TooLarge) } } else { if str.push(&sb, "\nfilterrow 0") != ok { ret ("", control.TooLarge) } }
+    if grid.navigator_visible { if str.push(&sb, "\nnavigator 1") != ok { ret ("", control.TooLarge) } } else { if str.push(&sb, "\nnavigator 0") != ok { ret ("", control.TooLarge) } }
+    at = 0usize
+    while at < grid.specs.len {
+        if grid.filter_lens[at] != 0usize {
+            if str.push(&sb, "\nfilter ") != ok || str.push_usize(&sb, at) != ok || str.push(&sb, " ") != ok { ret ("", control.TooLarge) }
+            if str.push(&sb, grid.filter_text[at * FILTER_TEXT..at * FILTER_TEXT + grid.filter_lens[at]]) != ok { ret ("", control.TooLarge) }
+        }
+        at += 1usize
+    }
+    if str.push(&sb, "\n") != ok { ret ("", control.TooLarge) }
+    ret (str.done(&sb), ok)
+}
+
+// The next token of a line: text up to a space (or the end), and what follows it.
+fn next_token(line: str) -> (str, str) {
+    var at = 0usize
+    while at < line.len && line[at] != 32u8 { at += 1usize }
+    if at >= line.len { ret (line, line[line.len..]) }
+    ret (line[0usize..at], line[at + 1usize..])
+}
+
+fn same_text(x: str, y: str) -> bool {
+    if x.len != y.len { ret false }
+    var at = 0usize
+    while at < x.len {
+        if x[at] != y[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// Applies saved layout text. Lines it does not know are skipped; a width for a column the grid
+// does not have is ignored and a column the text does not mention keeps its width, so a layout
+// from an older or newer column set loads. `BadLayout` is a text without the version line.
+fn load_layout(grid: *Grid, text: str) -> err {
+    var rest = text
+    var first = true
+    while rest.len > 0usize {
+        var end = 0usize
+        while end < rest.len && rest[end] != 10u8 { end += 1usize }
+        let line = rest[0usize..end]
+        if end < rest.len { rest = rest[end + 1usize..] } else { rest = rest[rest.len..] }
+        let (head, tail) = next_token(line)
+        if first {
+            if !same_text(head, "datagrid") { ret BadLayout }
+            first = false
+        } else if same_text(head, "widths") {
+            var items = tail
+            var spec = 0usize
+            while items.len > 0usize && spec < grid.specs.len {
+                let (word, after) = next_token(items)
+                let (value, parse_error) = str.parse_f64(word)
+                if parse_error == ok { resize_column(grid, spec, f32(value)) }
+                items = after
+                spec += 1usize
+            }
+        } else if same_text(head, "sort") {
+            let (number, after) = next_token(tail)
+            let (value, parse_error) = str.parse_u64(number)
+            if parse_error == ok && usize(value) <= grid.specs.len {
+                grid.sort_column = usize(value)
+                grid.descending = same_text(after, "desc")
+            }
+        } else if same_text(head, "filterrow") {
+            grid.filter_visible = same_text(tail, "1")
+        } else if same_text(head, "navigator") {
+            grid.navigator_visible = same_text(tail, "1")
+        } else if same_text(head, "filter") {
+            let (number, value_text) = next_token(tail)
+            let (spec, parse_error) = str.parse_u64(number)
+            if parse_error == ok && usize(spec) < grid.specs.len {
+                var n = 0usize
+                while n < value_text.len && n < FILTER_TEXT {
+                    grid.filter_text[usize(spec) * FILTER_TEXT + n] = value_text[n]
+                    n += 1usize
+                }
+                grid.filter_lens[usize(spec)] = n
+            }
+        }
+    }
+    if first { ret BadLayout }
+    ret ok
+}
+
 // Shows or hides the filter row.
 fn show_filter_row(grid: *Grid, on: bool) { grid.filter_visible = on }
 
@@ -145,6 +508,10 @@ fn row_key(grid: *const Grid, row: usize) -> widget.Key { ret grid.key + KEY_BAS
 fn group_key(grid: *const Grid, group: usize) -> widget.Key { ret grid.key + KEY_BASE + u64(table.capacity(grid.t)) + u64(group) }
 
 fn footer_key(grid: *const Grid) -> widget.Key { ret grid.key + KEY_BASE + u64(table.capacity(grid.t)) + u64(grid.g.groups.len) }
+
+fn band_key(grid: *const Grid) -> widget.Key { ret footer_key(grid) + 1u64 }
+
+fn navigator_key(grid: *const Grid) -> widget.Key { ret footer_key(grid) + 2u64 }
 
 // ---- formatting ------------------------------------------------------------------
 
@@ -266,6 +633,23 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     if column >= grid.specs.len { ret control.TooLarge }
     if grp.visible_is_group(grid.g, index) { ret group_cell(a, grid, grp.visible_group(grid.g, index), column, out) }
     let row = grp.visible_row(grid.g, index)
+    if grid.editing && grid.edit_row == row && grid.edit_spec == column {
+        var options = control.field_options()
+        options.width = grid.columns[column].width - 12.0
+        options.height = 36.0
+        options.invalid = grid.edit_invalid
+        let buffer = grid.edit_text[0usize..EDIT_TEXT]
+        let me = mem.cast[*void](grid)
+        let (field, field_error) = control.text_field(a, grid.key + EDIT_KEY, grid.theme, grid.specs[column].title, buffer, grid.edit_len, widget.Change[str] { ctx: me, invoke: on_edit_change }, widget.Submit { ctx: me, invoke: on_edit_commit }, options)
+        if field_error != ok { ret field_error }
+        *out = field
+        ret ok
+    }
+    if grid.specs[column].kind == CellKind.Indicator {
+        var mark = ""
+        if grid.has_selection && grid.selected_row == row { mark = ">" }
+        ret text_node(a, grid, mark, true, .Text, out)
+    }
     if grid.specs[column].kind == CellKind.Custom { ret grid.events.custom_cell(grid.events.ctx, a, grid.theme, row, column, out) }
     let role = grid.events.row_role(grid.events.ctx, row)
     let (text, text_error) = cell_text(a, grid, column, row)
@@ -298,8 +682,27 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
         }
         ret ok
     }
+    let again = grid.has_selection && grid.selected_row == usize(at)
     grid.has_selection = true
     grid.selected_row = usize(at)
+    var found = 0usize
+    let visible = grp.visible_len(grid.g)
+    while found < visible && (grp.visible_is_group(grid.g, found) || grp.visible_row(grid.g, found) != usize(at)) { found += 1usize }
+    if found < visible {
+        grid.has_position = true
+        grid.position = found
+    }
+    if again && !grid.read_only && !grid.editing {
+        // the first editable column of the row
+        var column = 0usize
+        while column < grid.specs.len && !grid.specs[column].editable { column += 1usize }
+        if column < grid.specs.len {
+            let began = begin_edit(grid, usize(at), column)
+            if began != ok { ret began }
+        }
+    } else if grid.editing && grid.edit_row != usize(at) {
+        cancel_edit(grid)
+    }
     ret grid.events.row_picked(grid.events.ctx, usize(at))
 }
 
@@ -320,7 +723,11 @@ fn on_scroll(ctx: *void, value: f32) -> err {
 
 fn no_reorder(ctx: *void, value: collection.Reorder) -> err { ret ok }
 
-fn no_resize(ctx: *void, value: collection.ColumnResize) -> err { ret ok }
+fn on_resize(ctx: *void, value: collection.ColumnResize) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    if value.column < grid.specs.len { resize_column(grid, value.column, value.width) }
+    ret ok
+}
 
 // ---- the node --------------------------------------------------------------------
 
@@ -329,6 +736,96 @@ fn one(a: *mem.Arena, node: widget.Node) -> []widget.Node {
     if nodes_error != ok { ret zero }
     nodes[0usize] = node
     ret nodes[0usize..1usize]
+}
+
+// The band row: each band's title over the columns it spans.
+fn band_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, grid.specs.len + 1usize)
+    if cells_error != ok { ret (zero, cells_error) }
+    var count = 0usize
+    var at = 0usize
+    while at < grid.specs.len {
+        // the band that starts here, or a plain gap up to the next band
+        var span = 1usize
+        var title = ""
+        var found = false
+        var b = 0usize
+        while b < grid.bands.len {
+            if grid.bands[b].first == at && grid.bands[b].count > 0usize {
+                span = grid.bands[b].count
+                title = grid.bands[b].title
+                found = true
+            }
+            b += 1usize
+        }
+        var width: f32 = 0.0
+        var k = 0usize
+        while k < span && at + k < grid.specs.len {
+            width += grid.columns[at + k].width
+            k += 1usize
+        }
+        var cell_style = style.defaults()
+        cell_style.width = style.Length { Px: width }
+        if found {
+            cell_style.background = paint.Brush { Solid: style.color(grid.theme.tokens, .SurfaceVariant) }
+        }
+        var inner: widget.Node = zero
+        let node_error = text_node(a, grid, title, true, .Text, &inner)
+        if node_error != ok { ret (zero, node_error) }
+        cells[count] = widget.padded(0u64, 12.0, 4.0, 0.0, 4.0, cell_style, one(a, inner))
+        count += 1usize
+        at += k
+    }
+    ret (widget.flex(band_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..count]), ok)
+}
+
+type NavPick = struct { grid: *Grid, kind: Nav }
+
+fn on_navigate(ctx: *void) -> err {
+    let pick = mem.cast[*NavPick](ctx)
+    ret navigate(pick.grid, pick.kind)
+}
+
+// First / Prev / Next / Last buttons and "Row n of m".
+fn navigator_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let labels: [4]str = [4]str{ "First", "Prev", "Next", "Last" }
+    let (picks, picks_error) = mem.alloc[NavPick](a, 4usize)
+    if picks_error != ok { ret (zero, picks_error) }
+    let (submits, submits_error) = mem.alloc[widget.Submit](a, 4usize)
+    if submits_error != ok { ret (zero, submits_error) }
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 5usize)
+    if cells_error != ok { ret (zero, cells_error) }
+    var at = 0usize
+    while at < 4usize {
+        var kind = Nav.First
+        if at == 1usize { kind = Nav.Prev }
+        if at == 2usize { kind = Nav.Next }
+        if at == 3usize { kind = Nav.Last }
+        picks[at] = NavPick { grid: grid, kind: kind }
+        submits[at] = widget.Submit { ctx: mem.cast[*void](&picks[at]), invoke: on_navigate }
+        var options = control.button_options()
+        options.variant = .Outlined
+        let (button, button_error) = control.button(a, navigator_key(grid) + 1u64 + u64(at), grid.theme, labels[at], &submits[at], options)
+        if button_error != ok { ret (zero, button_error) }
+        cells[at] = button
+        at += 1usize
+    }
+    let (b, b_error) = str.builder(a, 48usize)
+    if b_error != ok { ret (zero, b_error) }
+    var sb = b
+    let (position, has) = current_position(grid)
+    let (before, total) = data_counts(grid, position)
+    if str.push(&sb, "Row ") != ok { ret (zero, control.TooLarge) }
+    if has {
+        if str.push_usize(&sb, before + 1usize) != ok { ret (zero, control.TooLarge) }
+    } else {
+        if str.push(&sb, "-") != ok { ret (zero, control.TooLarge) }
+    }
+    if str.push(&sb, " of ") != ok || str.push_usize(&sb, total) != ok { ret (zero, control.TooLarge) }
+    let (info, info_error) = control.text(a, 0u64, str.done(&sb), grid.theme, control.text_options())
+    if info_error != ok { ret (zero, info_error) }
+    cells[4usize] = info
+    ret (widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), cells[0usize..5usize]), ok)
 }
 
 // The filter row: a small text field under each column that asks for one.
@@ -342,11 +839,11 @@ fn filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         let s = grid.specs[at]
         picks[at] = FilterPick { grid: grid, spec: at }
         var cell_style = style.defaults()
-        cell_style.width = style.Length { Px: s.width }
+        cell_style.width = style.Length { Px: grid.columns[at].width }
         if s.filter {
             var options = control.field_options()
             options.placeholder = "filter"
-            options.width = s.width - 12.0
+            options.width = grid.columns[at].width - 12.0
             options.height = 36.0
             let buffer = grid.filter_text[at * FILTER_TEXT..(at + 1usize) * FILTER_TEXT]
             let (field, field_error) = control.text_field(a, grid.key + FILTER_KEY + u64(at), grid.theme, s.title, buffer, grid.filter_lens[at], widget.Change[str] { ctx: mem.cast[*void](&picks[at]), invoke: on_filter }, zero, options)
@@ -381,7 +878,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         let node_error = text_node(a, grid, text, true, .Text, &inner)
         if node_error != ok { ret (zero, node_error) }
         var cell_style = style.defaults()
-        cell_style.width = style.Length { Px: s.width }
+        cell_style.width = style.Length { Px: grid.columns[at].width }
         cells[at] = widget.padded(0u64, 12.0, 4.0, 0.0, 4.0, cell_style, one(a, inner))
         at += 1usize
     }
@@ -409,17 +906,28 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     var body_height = height
     if grid.footer_visible && grid.g.specs.len != 0usize { body_height = body_height - grid.row_height - 8.0 }
     if grid.filter_visible { body_height = body_height - 44.0 }
+    if grid.bands.len != 0usize { body_height = body_height - 36.0 }
+    if grid.navigator_visible { body_height = body_height - 52.0 }
     var sort_shown = grid.sort_column
-    let (body, body_error) = collection.table(a, grid.key, theme, "Data grid", grid.columns, source, selected[0usize..selected_count], sort_shown, grid.descending, widget.Change[usize] { ctx: me, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: me, invoke: no_reorder }, widget.Change[collection.ColumnResize] { ctx: me, invoke: no_resize }, widget.Change[widget.Key] { ctx: me, invoke: on_pick }, grid.row_height, grid.offset, widget.Change[f32] { ctx: me, invoke: on_scroll }, body_height)
+    let (body, body_error) = collection.table(a, grid.key, theme, "Data grid", grid.columns, source, selected[0usize..selected_count], sort_shown, grid.descending, widget.Change[usize] { ctx: me, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: me, invoke: no_reorder }, widget.Change[collection.ColumnResize] { ctx: me, invoke: on_resize }, widget.Change[widget.Key] { ctx: me, invoke: on_pick }, grid.row_height, grid.offset, widget.Change[f32] { ctx: me, invoke: on_scroll }, body_height)
     if body_error != ok { ret (zero, body_error) }
     var part_count = 1usize
-    var with_footer = grid.footer_visible && grid.g.specs.len != 0usize
+    let with_footer = grid.footer_visible && grid.g.specs.len != 0usize
+    let with_bands = grid.bands.len != 0usize
     if with_footer { part_count += 1usize }
     if grid.filter_visible { part_count += 1usize }
+    if with_bands { part_count += 1usize }
+    if grid.navigator_visible { part_count += 1usize }
     if part_count == 1usize { ret (body, ok) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, part_count)
     if parts_error != ok { ret (zero, parts_error) }
     var at = 0usize
+    if with_bands {
+        let (bands_node, bands_error) = band_row(a, grid)
+        if bands_error != ok { ret (zero, bands_error) }
+        parts[at] = bands_node
+        at += 1usize
+    }
     if grid.filter_visible {
         let (filter, filter_error) = filter_row(a, grid)
         if filter_error != ok { ret (zero, filter_error) }
@@ -432,6 +940,12 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
         let (footer, footer_error) = footer_row(a, grid)
         if footer_error != ok { ret (zero, footer_error) }
         parts[at] = footer
+        at += 1usize
+    }
+    if grid.navigator_visible {
+        let (navigator, navigator_error) = navigator_row(a, grid)
+        if navigator_error != ok { ret (zero, navigator_error) }
+        parts[at] = navigator
         at += 1usize
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), parts[0usize..part_count]), ok)

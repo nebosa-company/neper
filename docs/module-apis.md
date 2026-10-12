@@ -1948,22 +1948,43 @@ too short (the values that fit are written).
 const KEY_BASE: u64 = 4096u64
 const FILTER_TEXT: usize = 40usize
 const FILTER_KEY: u64 = 2048u64
+const EDIT_KEY: u64 = 3000u64
+const EDIT_TEXT: usize = 64usize
 
-type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom }
-type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool }
-type Events = struct { ctx: *void, sort_changed: fn(*void, usize, bool) -> err, row_picked: fn(*void, usize) -> err, filter_changed: fn(*void, usize, str) -> err, custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err, row_role: fn(*void, usize) -> style.ColorRole }
-type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
+type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom, Indicator }
+type Band = struct { title: str, first: usize, count: usize }
+type Nav = enum u8 { First, Prev, Next, Last }
+type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool, editable: bool }
+type Events = struct { ctx: *void, sort_changed: fn(*void, usize, bool) -> err, row_picked: fn(*void, usize) -> err, filter_changed: fn(*void, usize, str) -> err, cell_edited: fn(*void, usize, usize) -> err, custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err, row_role: fn(*void, usize) -> style.ColorRole }
+type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, read_only: bool, editing: bool, edit_row: usize, edit_spec: usize, edit_text: [64]u8, edit_scratch: [160]u8, edit_len: usize, edit_invalid: bool, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
 error TooManyColumns
+error NotEditable
+error BadLayout
 
 fn no_events() -> Events
 fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, events: Events, key: widget.Key) -> (Grid, err)
 fn show_sort(grid: *Grid, spec: usize, descending: bool)
 fn clear_selection(grid: *Grid)
 fn show_filter_row(grid: *Grid, on: bool)
+fn set_bands(grid: *Grid, bands: []const Band)
+fn show_navigator(grid: *Grid, on: bool)
+fn current_position(grid: *const Grid) -> (usize, bool)
+fn data_counts(grid: *const Grid, at: usize) -> (usize, usize)
+fn go_to(grid: *Grid, at: usize) -> err
+fn navigate(grid: *Grid, kind: Nav) -> err
+fn begin_edit(grid: *Grid, row: usize, spec: usize) -> err
+fn cancel_edit(grid: *Grid)
+fn commit_edit(grid: *Grid) -> err
+fn column_width(grid: *const Grid, spec: usize) -> f32
+fn resize_column(grid: *Grid, spec: usize, width: f32)
+fn save_layout(a: *mem.Arena, grid: *const Grid) -> (str, err)
+fn load_layout(grid: *Grid, text: str) -> err
 fn filter_value(grid: *const Grid, spec: usize) -> str
 fn row_key(grid: *const Grid, row: usize) -> widget.Key
 fn group_key(grid: *const Grid, group: usize) -> widget.Key
 fn footer_key(grid: *const Grid) -> widget.Key
+fn band_key(grid: *const Grid) -> widget.Key
+fn navigator_key(grid: *const Grid) -> widget.Key
 fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err)
 ```
 
@@ -1979,10 +2000,24 @@ application sorts or groups through `e.data.tableview` / `e.data.tablegroup` and
 node (a mana-cost badge row, a legality mark: composed by the application), `row_role` colours the
 text of a data row (colour by rarity), and the filter row, shown by `show_filter_row`, is a text
 field above the header under each column with `filter` set; a change is `filter_changed` (spec,
-text) and `filter_value` reads what is typed. A grid owns the widget keys from `key` to
+text) and `filter_value` reads what is typed. `set_bands` puts a row of titled spans over runs of columns above the filter row (non-interactive); a
+column of kind `Indicator` shows `>` at the current row; `show_navigator` adds First / Prev / Next /
+Last buttons and "Row n of m" under the footer, moving the current data row (groups are skipped,
+the row is scrolled into view and `row_picked` is reported; a move with nowhere to go reports
+nothing). A column with `editable` set can be edited in place: a tap on the already current data row (or
+`begin_edit`) replaces the cell by a text field holding its text; Enter commits it, parsed by the
+column's kind (integer, real or currency, boolean, text; an empty text is a null) and written to the
+table through its typed setters, and `cell_edited` (storage row, spec) tells the application to
+re-sort, re-filter or re-group; a text that does not parse (or a dictionary that is full) keeps the
+editor open and `edit_invalid`; `cancel_edit` closes it, `read_only` forbids editing
+(`NotEditable`). A header resize updates the column width (`column_width`, `resize_column`, not
+below 24 px). `save_layout` writes the widths, the sort indicator, the filter row and navigator
+flags and the filter texts as small text; `load_layout` applies it, skipping lines it does not know,
+widths for columns the grid does not have and sorts out of range (`BadLayout` for text without the
+version line). A grid owns the widget keys from `key` to
 `key + KEY_BASE + row capacity + group capacity` (the table's own header cells use the keys just
-above `key`; the filter fields use `key + FILTER_KEY + spec`). Not yet: bands, navigator, row
-indicator, preview row, editors, persistence; the filter row stands above the header, not below.
+above `key`; the filter fields use `key + FILTER_KEY + spec`). Not yet: preview row, Tab to the
+next editable cell, column visibility and order; the filter row stands above the header, not below.
 
 ### `e.data.slot_map`
 

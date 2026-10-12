@@ -2123,4 +2123,6 @@ D2364	3356	G003: the filter stage of `e.data.tableview` keeps the sort order; di
 D2365	3450	G004: `e.data.tablegroup`: groups from neighbour comparison over the sorted order, expansion by key path, f64 summaries per group and footer
 D2366	2751	G005: `e.data.tablesearch`: search over a display order with a per-entry verdict, and the value list from dictionary counts
 D2367	3113	G006: `e.ui.datagrid`, first increment: the grid view over the table, view and grouping, with no data logic of its own
-D2368	2788	G006: datagrid cell painters (custom cell nodes, row roles) and the filter row
+D2368	2789	G006: datagrid cell painters (custom cell nodes, row roles) and the filter row
+D2369	2530	G006: datagrid bands, row indicator and navigator
+D2370	3954	G006: datagrid in-place editors and layout persistence
