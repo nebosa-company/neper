@@ -2387,7 +2387,9 @@
     "gpu_barrier_large_helper",
     "gpu_barrier_occurrence",
     "gpu_cpu",
+    "gpu_device_edit",
     "gpu_device_lock",
+    "gpu_devices",
     "gpu_divergence",
     "gpu_fault_bounds",
     "gpu_fault_nocheck",
@@ -4239,6 +4241,29 @@
    "fixtures": [
     "ui_flow",
     "ui_flow_logic"
+   ]
+  },
+  {
+   "module": "e.data.table",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 50,
+   "delivered": 50,
+   "pending": [],
+   "fixtures": [
+    "data_table",
+    "data_tableview"
+   ]
+  },
+  {
+   "module": "e.data.tableview",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 13,
+   "delivered": 13,
+   "pending": [],
+   "fixtures": [
+    "data_tableview"
    ]
   }
  ]

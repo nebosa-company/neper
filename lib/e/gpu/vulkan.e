@@ -92,6 +92,11 @@ type Physical = struct {
     floor: bool,
     compute_family: u32,
     uuid: [16]u8,
+    // VkPhysicalDeviceIDProperties.deviceUUID (D4200): the identity `DeviceKey` carries.
+    // `uuid` above is the pipeline cache UUID, which names a driver's cache format.
+    device_uuid: [16]u8,
+    // False when the driver reports no usable identity: below Vulkan 1.1 or all zero.
+    device_uuid_valid: bool,
 }
 
 // An opened device: its handles, the memory type buffers come from, and the queue.
@@ -267,6 +272,11 @@ fn describe(a: *mem.Arena, handle: usize) -> (Physical, err) {
     put32(subgroup, 0usize, 1000094000usize)
     put_pointer(subgroup, 8usize, floats)
     put32(floats, 0usize, 1000197000usize)
+    // VkPhysicalDeviceIDProperties: deviceUUID at 16 (D4200).
+    let (ids, ids_error) = record(a, 64usize)
+    if ids_error != ok { ret (described, ids_error) }
+    put_pointer(floats, 8usize, ids)
+    put32(ids, 0usize, 1000071004usize)
     api.get_physical_device_properties2(handle, &properties[0usize])
     described.api_version = u32(get32(properties, 16usize))
     described.driver_version = u32(get32(properties, 20usize))
@@ -282,6 +292,15 @@ fn describe(a: *mem.Arena, handle: usize) -> (Physical, err) {
         described.uuid[k] = properties[292usize + k]
         k += 1usize
     }
+    var identity_bits = 0usize
+    k = 0usize
+    while k < 16usize {
+        described.device_uuid[k] = ids[16usize + k]
+        identity_bits = identity_bits | usize(ids[16usize + k])
+        k += 1usize
+    }
+    // Properties2 is core from 1.1; a zero UUID is a driver that fills nothing in.
+    described.device_uuid_valid = identity_bits != 0usize && described.api_version >= 4198400u32
     // Memory: the device-local heaps' total.
     let (memory, memory_error) = record(a, 520usize)
     if memory_error != ok { ret (described, memory_error) }

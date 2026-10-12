@@ -13384,8 +13384,11 @@ answers the record behind the last `Fault` the queue reported (D785). These addi
 claim implementation or an optimized production CPU fallback.
 
 A `.Vulkan` device (D1611) is `e.gpu.vulkan` underneath: `devices` lists every physical
-device with `supported` meaning section 10's floor, `open` answers `NoDevice` without a
-loader or a device at that index and `Unsupported` below the floor, and a buffer is
+device with `supported` meaning section 10's floor (`Unsupported` without a loader, an
+empty list with a loader and no device, `TooLarge` past the limit, D4200), each record's
+key the driver's deviceUUID with `key_valid` false when the driver reports none, `open`
+answers `NoDevice` without a loader or a device at that index and `Unsupported` below the
+floor, `open_id` matches that key exactly, and a buffer is
 mapped host memory, so `upload`, `write` and `download` are copies. `gpu.launch` hands
 `launch_run` the kernel's SPIR-V, as hex digits from its module's `K$spirv` companion,
 its entry point and a character per parameter; a launch on a Vulkan device lays out

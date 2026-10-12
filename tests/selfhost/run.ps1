@@ -5593,6 +5593,12 @@ $gpuStagingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $gpuStagingWritten -ne 'executable written') { throw 'gpu_staging emission failed' }
 $gpuStagingOutput = & $gpuStagingPath
 if ($LASTEXITCODE -ne 0 -or $gpuStagingOutput -notmatch '^gpu staging (cpu only|vulkan ok on [1-9][0-9]* devices)$') { throw "the GPU staging runtime failed: $gpuStagingOutput" }
+# (D4200, C093) Device selection: a bounded snapshot, deviceUUID keys, exact open_id.
+$gpuDevicesPath = Join-Path $testBuild 'gpu-devices-selfhost.exe'
+$gpuDevicesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_devices\src\main.e') $repo 'x64' 'windows' $gpuDevicesPath
+if ($LASTEXITCODE -ne 0 -or $gpuDevicesWritten -ne 'executable written') { throw 'gpu_devices emission failed' }
+$gpuDevicesOutput = & $gpuDevicesPath
+if ($LASTEXITCODE -ne 0 -or $gpuDevicesOutput -ne 'gpu devices ok') { throw "e.gpu device selection answered wrongly: exit $LASTEXITCODE $gpuDevicesOutput" }
 $gpuDeviceLockPath = Join-Path $testBuild 'gpu-device-lock-selfhost.exe'
 $gpuDeviceLockWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gpu_device_lock\src\main.e') $repo 'x64' 'windows' $gpuDeviceLockPath
 if ($LASTEXITCODE -ne 0 -or $gpuDeviceLockWritten -ne 'executable written') { throw 'gpu_device_lock emission failed' }
@@ -7004,6 +7010,47 @@ Copy-Item (Join-Path $incrementalFixture 'edits\dep_signature.e') (Join-Path $in
 Copy-Item (Join-Path $incrementalFixture 'edits\main_signature.e') $incrementalMain
 $incrementalSignature = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --release --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $incrementalSignature -notmatch 'rebuilt main' -or $incrementalSignature -notmatch 'rebuilt dep' -or $incrementalSignature -notmatch 'kept e.os') { throw "a signature edit did not rebuild the dependent: $incrementalSignature" }
+# The device-reached edit case (C096, D4202; spec section 12, D24 and D36): a kernel's
+# helper chain lives in two other modules and its device copy in the kernel module's
+# `K$spirv`, so a body edit two modules away rebuilds the kernel's module and nothing
+# between that only calls it, and the incremental image is the clean build's.
+$deviceEditFixture = Join-Path $PSScriptRoot 'fixtures\link\gpu_device_edit'
+$deviceEditScratch = Join-Path $testBuild 'gpu-device-edit-scratch'
+$deviceEditSource = Join-Path $deviceEditScratch 'src'
+$deviceEditArtifacts = Join-Path $testBuild 'gpu-device-edit-artifacts'
+if (Test-Path -LiteralPath $deviceEditScratch) { Remove-Item -LiteralPath $deviceEditScratch -Recurse -Force }
+if (Test-Path -LiteralPath $deviceEditArtifacts) { Remove-Item -LiteralPath $deviceEditArtifacts -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $deviceEditSource, $deviceEditArtifacts | Out-Null
+Copy-Item (Join-Path $deviceEditFixture 'src\*.e') $deviceEditSource
+$deviceEditMain = Join-Path $deviceEditSource 'main.e'
+$deviceEditFirst = & $compiler emit-em-all $deviceEditMain $repo 'x64' 'windows' $deviceEditArtifacts
+if ($LASTEXITCODE -ne 0 -or $deviceEditFirst -ne 'compiled modules written') { throw 'the device edit fixture did not compile to artifacts' }
+$deviceEditMainArtifact = Join-Path $deviceEditArtifacts 'main.x64-windows.em'
+$deviceEditBefore = (Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditMainArtifact).Hash
+$deviceEditSame = (& $compiler emit-em-all $deviceEditMain $repo 'x64' 'windows' $deviceEditArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $deviceEditSame -notmatch 'kept main' -or $deviceEditSame -notmatch 'kept lowhelp' -or $deviceEditSame -match 'rebuilt') { throw "an unchanged device edit fixture rebuilt a module: $deviceEditSame" }
+Copy-Item (Join-Path $deviceEditFixture 'edits\lowhelp_body.e') (Join-Path $deviceEditSource 'lowhelp.e')
+$deviceEditBody = (& $compiler emit-em-all $deviceEditMain $repo 'x64' 'windows' $deviceEditArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $deviceEditBody -notmatch 'rebuilt main' -or $deviceEditBody -notmatch 'rebuilt lowhelp' -or $deviceEditBody -notmatch 'kept midhelp') { throw "a body edit two modules from the kernel did not rebuild exactly the kernel's module and the edited one: $deviceEditBody" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditMainArtifact).Hash -eq $deviceEditBefore) { throw 'the kernel module was rebuilt but its device copy did not change' }
+# A hot build over the same edit is the clean build's image, and the device agrees with the host.
+$deviceEditHotScratch = Join-Path $testBuild 'gpu-device-edit-hot'
+if (Test-Path -LiteralPath $deviceEditHotScratch) { Remove-Item -LiteralPath $deviceEditHotScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $deviceEditHotScratch 'src') | Out-Null
+Copy-Item (Join-Path $deviceEditFixture 'src\*.e') (Join-Path $deviceEditHotScratch 'src')
+$deviceEditHotMain = Join-Path $deviceEditHotScratch 'src\main.e'
+$deviceEditHotExe = Join-Path $testBuild 'gpu-device-edit-hot.exe'
+$deviceEditCleanExe = Join-Path $testBuild 'gpu-device-edit-clean.exe'
+$deviceEditHotFirst = & $compiler emit-executable $deviceEditHotMain $repo 'x64' 'windows' $deviceEditHotExe --incremental 2>$null
+if ($LASTEXITCODE -ne 0 -or $deviceEditHotFirst -ne 'executable written') { throw 'the device edit fixture did not build hot' }
+Copy-Item (Join-Path $deviceEditFixture 'edits\lowhelp_body.e') (Join-Path $deviceEditHotScratch 'src\lowhelp.e')
+$deviceEditHotSecond = & $compiler emit-executable $deviceEditHotMain $repo 'x64' 'windows' $deviceEditHotExe --incremental 2>$null
+if ($LASTEXITCODE -ne 0 -or $deviceEditHotSecond -ne 'executable written') { throw 'the device edit fixture did not rebuild hot after the edit' }
+$deviceEditCleanWritten = & $compiler emit-executable $deviceEditHotMain $repo 'x64' 'windows' $deviceEditCleanExe 2>$null
+if ($LASTEXITCODE -ne 0 -or $deviceEditCleanWritten -ne 'executable written') { throw 'the clean build of the edited device edit fixture failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditHotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $deviceEditCleanExe).Hash) { throw 'the hot build after a device-reached edit is not the clean build' }
+$deviceEditOutput = & $deviceEditHotExe
+if ($LASTEXITCODE -ne 0 -or $deviceEditOutput -ne 'gpu device edit ok') { throw "the edited device edit fixture answered wrongly: exit $LASTEXITCODE $deviceEditOutput" }
 # (D1667) The counts a cold build takes as each block goes back are a warm no-edit
 # build's, on a program whose `@gpus` and `@tests` rows are not zero.
 $frontScratch = Join-Path $testBuild 'front-counts'

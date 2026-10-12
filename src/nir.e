@@ -510,6 +510,11 @@ type Builder = struct {
     inline_only_mandatory: bool,
     inline_entries: []InlineEntry,
     inline_entry_count: usize,
+    // Every plain function a kernel reaches, flattened into its callers' bodies (D24,
+    // D4201): what a kernel's device build copies in for a helper another module
+    // declares, since the module that owns the kernel carries the device code.
+    device_entries: []InlineEntry,
+    device_entry_count: usize,
     inlined: []InlinedRef,
     inlined_count: usize,
     // Inline-origin nodes share the unused tail of `inlined`, growing backwards so

@@ -1386,6 +1386,7 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
         constant_at += 1usize
     }
     mark_aggregate_uses(c, g, builder, module_index, aggregate_marks)
+    unmark_seeded_aggregates(c, g, aggregate_marks)
     try intern_aggregate_strings(c, g, table, aggregate_marks)
     mark_body_constant_uses(c, g, module_index, string_marks)
     constant_at = 0usize
@@ -2064,6 +2065,24 @@ fn mark_type_aggregates(c: *check.Checker, ty: check.Type, module_index: usize, 
     if c.aggregates[aggregate_index].module_index == module_index || marks[aggregate_index] != 0u8 { ret }
     marks[aggregate_index] = 1u8
     *changed = true
+}
+
+// The builtin aggregates the checker seeds into `e.atomic` and `e.simd` are in no
+// module's source, so their artifact declares nothing for a signature edge to hold
+// against: the edge was stale on every build, and a module that took an `Atomic[T]`
+// through a foreign signature (`e.sync` over `os.wait_u32`, and `e.gpu` and every
+// kernel owner after it) was rebuilt each time (D4204). Their layout is the
+// compiler's, which the artifact's compiler hash already covers.
+fn unmark_seeded_aggregates(c: *check.Checker, g: *graph.Graph, marks: []u8) {
+    let (atomic_module, has_atomic) = graph.find_module(g, "e.atomic")
+    let (simd_module, has_simd) = graph.find_module(g, "e.simd")
+    var at = 0usize
+    while at < c.aggregate_count && at < marks.len {
+        let aggregate = c.aggregates[at]
+        if has_atomic && aggregate.module_index == atomic_module && same(aggregate.name, "Atomic") { marks[at] = 0u8 }
+        if has_simd && aggregate.module_index == simd_module && (same(aggregate.name, "Vec") || same(aggregate.name, "Mask")) { marks[at] = 0u8 }
+        at += 1usize
+    }
 }
 
 fn mark_aggregate_uses(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, marks: []u8) {
