@@ -31,6 +31,8 @@
     "e.os",
     "e.io",
     "e.fs",
+    "e.store",
+    "e.store.http",
     "e.proc",
     "e.proc.sys.format",
     "e.proc.sys.host",
@@ -2695,6 +2697,34 @@
     "e.mem",
     "e.os",
     "e.path"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.store",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fs",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.store.http",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.net",
+    "e.net.http",
+    "e.store",
+    "e.str"
    ],
    "blocked_by": []
   },

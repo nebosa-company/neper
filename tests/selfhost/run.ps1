@@ -3940,6 +3940,12 @@ $metricsExportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $metricsExportWritten -ne 'executable written') { throw 'metrics_export emission failed' }
 $metricsExportOutput = & $metricsExportPath
 if ($LASTEXITCODE -ne 0 -or $metricsExportOutput -ne 'metrics export ok') { throw "metrics_export answered wrongly: exit $LASTEXITCODE" }
+# e.store: one conformance script over the memory, filesystem and HTTP backends plus key rules against Python (D2724).
+$storePath = Join-Path $testBuild 'store-selfhost.exe'
+$storeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\store\src\main.e') $repo 'x64' 'windows' $storePath -j 2
+if ($LASTEXITCODE -ne 0 -or $storeWritten -ne 'executable written') { throw 'store emission failed' }
+$storeOutput = & $storePath
+if ($LASTEXITCODE -ne 0 -or $storeOutput -ne 'store ok') { throw "store answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

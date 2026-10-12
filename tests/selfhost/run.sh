@@ -3523,6 +3523,12 @@ metrics_export_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/metrics-export-selfhost"
 metrics_export_output=$("$test_build/metrics-export-selfhost")
 [ "$metrics_export_output" = 'metrics export ok' ]
+# e.store: one conformance script over the memory, filesystem and HTTP backends plus key rules against Python (D2724).
+store_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/store/src/main.e" "$repo" x64 linux "$test_build/store-selfhost" -j 2)
+[ "$store_written" = 'executable written' ]
+chmod +x "$test_build/store-selfhost"
+store_output=$("$test_build/store-selfhost")
+[ "$store_output" = 'store ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

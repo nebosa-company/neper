@@ -11609,6 +11609,77 @@ fn post(a: *mem.Arena, endpoint: net.Endpoint, req: *const http.Request) -> (htt
 
 Exposition and export over `e.metrics` and `e.trace` values. A `Sample` is a reading (counter, gauge, or histogram with cumulative buckets); `counter_sample`, `gauge_sample` and `histogram_sample` take one from the metric types, so registries, label sets and sampling stay with the caller. `render_text` writes the Prometheus text exposition (0.0.4) or, with `openmetrics`, the OpenMetrics text with `# EOF`: samples of one name are listed together under one `HELP`/`TYPE`, labels are written in name order with `le` slotted in, and numbers follow `prometheus_client` (`3.0`, `1e-05`, `1.2345675e+06` from a million up, `+Inf`, `NaN`). `scrape` picks the format from an `Accept` header and returns the content type with the body. `render_otlp_metrics` and `render_otlp_spans` write OTLP/JSON requests (counters as monotonic cumulative sums, gauges, cumulative histograms with per-bucket counts; hex ids, quoted 64-bit integers, string attributes only). `otlp_request` builds the `POST` to `/v1/metrics` or `/v1/traces` and `post` sends it over `e.net.http` (plain TCP; TLS is `e.net.http.request_tls`). Not here: protobuf encoding, gzip, retries and batching, exemplars, summaries, native histograms, non-string attribute values, span events and links.
 
+### `e.store`
+
+```neper
+error NotFound
+error Invalid
+error TooLarge
+error Failed
+type Entry = struct { key: str, size: u64 }
+type Store = struct { ctx: *void, put: fn(*void, *mem.Arena, str, []const u8) -> err, get: fn(*void, *mem.Arena, str, usize) -> ([]u8, err), stat: fn(*void, *mem.Arena, str) -> (u64, err), delete: fn(*void, *mem.Arena, str) -> err, list: fn(*void, *mem.Arena, str, []Entry) -> (usize, err) }
+type MemoryStore = struct { keys: []str, values: []str, count: usize }
+type FsStore = struct { root: str }
+
+fn valid_key(key: str) -> bool
+fn has_prefix(key: str, prefix: str) -> bool
+fn key_less(x: str, y: str) -> bool
+fn put(s: *Store, a: *mem.Arena, key: str, data: []const u8) -> err
+fn get(s: *Store, a: *mem.Arena, key: str, limit: usize) -> ([]u8, err)
+fn stat(s: *Store, a: *mem.Arena, key: str) -> (u64, err)
+fn exists(s: *Store, a: *mem.Arena, key: str) -> (bool, err)
+fn delete(s: *Store, a: *mem.Arena, key: str) -> err
+fn list(s: *Store, a: *mem.Arena, prefix: str, out: []Entry) -> (usize, err)
+fn memory(a: *mem.Arena, capacity: usize) -> (MemoryStore, err)
+fn memory_store(m: *MemoryStore) -> Store
+fn memory_find(m: *MemoryStore, key: str) -> (usize, bool)
+fn copy_str(a: *mem.Arena, s: str) -> (str, err)
+fn memory_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err
+fn memory_get(ctx: *void, a: *mem.Arena, key: str, limit: usize) -> ([]u8, err)
+fn memory_stat(ctx: *void, a: *mem.Arena, key: str) -> (u64, err)
+fn memory_delete(ctx: *void, a: *mem.Arena, key: str) -> err
+fn memory_list(ctx: *void, a: *mem.Arena, prefix: str, out: []Entry) -> (usize, err)
+fn fs_store(f: *FsStore) -> Store
+fn fs_error(e: err) -> err
+fn fs_path(a: *mem.Arena, f: *FsStore, key: str) -> (str, err)
+fn fs_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err
+fn fs_get(ctx: *void, a: *mem.Arena, key: str, limit: usize) -> ([]u8, err)
+fn fs_stat(ctx: *void, a: *mem.Arena, key: str) -> (u64, err)
+fn fs_delete(ctx: *void, a: *mem.Arena, key: str) -> err
+fn fs_list(ctx: *void, a: *mem.Arena, prefix: str, out: []Entry) -> (usize, err)
+fn bytes_equal(x: []const u8, y: []const u8) -> bool
+fn conformance(s: *Store, a: *mem.Arena) -> u32
+```
+
+One put/get/stat/delete/list surface over places that hold named blobs (opendal and fsspec at the portable layer). A `Store` is a context pointer plus five function pointers, so a backend is whatever fills them in; `memory_store` (a sorted table copied into the arena, at most `capacity` keys, `TooLarge` past it) and `fs_store` (a root directory; `/`-separated keys become nested files and parent directories are made) ship here, `e.store.http` is the third. A key has no empty, `.` or `..` segment, no leading or trailing `/`, no backslash and no NUL (`Invalid`), so it cannot leave its store; `list` is a byte prefix over keys in byte order (`TooLarge` when `out` is full); reading an absent key is `NotFound` and deleting one is `ok`. `conformance` is the one script every backend runs: overwrite, binary and empty values, nested and non-ASCII keys, read bounds, ordering, prefix listing, absent keys, idempotent delete, escaping keys, a 70000-byte value; it answers 0 or the first failing step. A filesystem backend cannot hold a key and a key beneath it at once (`a` and `a/b`); object stores can. Not here: streaming reads and writes, ranges, metadata beyond size, conditional writes, multipart, and the virtual-filesystem overlay and union mounts of L119.
+
+### `e.store.http`
+
+```neper
+type Transport = struct { ctx: *void, send: fn(*void, *mem.Arena, *const http.Request) -> (http.Response, err) }
+type HttpStore = struct { transport: Transport, host: str, base: str }
+type NetTransport = struct { endpoint: net.Endpoint, limits: http.Limits }
+
+fn net_transport(t: *NetTransport) -> Transport
+fn net_send(ctx: *void, a: *mem.Arena, req: *const http.Request) -> (http.Response, err)
+fn http_store(h: *HttpStore) -> store.Store
+fn is_unreserved(c: u8) -> bool
+fn push_hex_byte(b: *str.Builder, v: u8) -> err
+fn push_encoded(b: *str.Builder, s: str) -> err
+fn encoded(a: *mem.Arena, s: str) -> (str, err)
+fn target_of(a: *mem.Arena, h: *HttpStore, key: str, listing: bool) -> (str, err)
+fn send(h: *HttpStore, a: *mem.Arena, method: http.Method, path_text: str, body: []const u8) -> (http.Response, err)
+fn success(status: u16) -> bool
+fn http_put(ctx: *void, a: *mem.Arena, key: str, data: []const u8) -> err
+fn http_get(ctx: *void, a: *mem.Arena, key: str, limit: usize) -> ([]u8, err)
+fn parse_decimal(s: str) -> (u64, bool)
+fn http_stat(ctx: *void, a: *mem.Arena, key: str) -> (u64, err)
+fn http_delete(ctx: *void, a: *mem.Arena, key: str) -> err
+fn http_list(ctx: *void, a: *mem.Arena, prefix: str, out: []store.Entry) -> (usize, err)
+```
+
+`e.store` over HTTP. An `HttpStore` speaks a small REST object protocol under a base path: `PUT base/key` stores, `GET` reads (404 is `NotFound`), `HEAD` answers the size in Content-Length, `DELETE` removes (404 is fine), and `GET base/?prefix=P` lists `key<TAB>size` lines in byte order. Keys are percent-encoded per byte (uppercase hex; `A-Za-z0-9-._~` and `/` kept), checked against `urllib.parse.quote`. The `Transport` is a function pointer so a TLS client, a proxy or a test server can sit behind it; `net_transport` is plain TCP over `e.net.http.request`. One request per call, no connection reuse, no signing: an S3 or GCS client is a cloud client and stays out by the cloud ruling.
+
 ### `e.log`
 
 ```neper
