@@ -108,6 +108,7 @@
     "e.net.tls",
     "e.net.policy",
     "e.net.ssrf",
+    "e.dbus",
     "x.modbus.wire",
     "e.net.grpc",
     "e.net.http2",
@@ -3601,6 +3602,18 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.dbus",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },

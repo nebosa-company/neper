@@ -13042,6 +13042,75 @@ fn slave_handle(s: *Slave, pdu: []const u8, dst: []u8) -> (usize, err)
 
 Modbus (L151) over caller buffers, no transport. PDU encoders and request/response parsers for function codes 1, 2, 3, 4, 5, 6, 15, 16, 22 and 23 and the exception responses; the three framings (`tcp_frame`/`tcp_parse` with the MBAP header, `rtu_frame`/`rtu_parse` with CRC-16, `ascii_frame`/`ascii_parse` with LRC; `Truncated` until a TCP frame is whole, `BadChecksum`, `Invalid` for a non-zero protocol id or a length outside 2 to 254); typed register access (`get_*`/`put_*` for 32 and 64-bit integers and floats in either word order, `bit_at` and `register_at` over read data); and `slave_handle`, which executes a request against register banks in caller storage with the specification's exception order (unknown function 1, a quantity or value out of limits 3, an address range outside the bank 2) and write-before-read for function 23. A client keeps its own transaction numbers and a transport reads bytes; device discovery stays with L086. Checked against pymodbus (its request and response classes, its socket, RTU and ASCII framers, its CRC and LRC helpers and register conversions) and, for the slave, against an independent reference slave written from the specification over 222 vectors on both hosts (D2647). Not done: the file-record, FIFO, diagnostic and device-identification function codes, the serial port and TCP socket loops, RTU frame delimiting by inter-character silence, broadcast and multi-unit gateways, OPC UA and Siemens S7 (separate slices).
 
+### `e.dbus`
+
+```neper
+error Truncated
+error Invalid
+error TooLarge
+error TooSmall
+error Unsupported
+error Rejected
+const METHOD_CALL: u8 = 1u8
+const METHOD_RETURN: u8 = 2u8
+const ERROR: u8 = 3u8
+const SIGNAL: u8 = 4u8
+const FLAG_NO_REPLY_EXPECTED: u8 = 1u8
+const FLAG_NO_AUTO_START: u8 = 2u8
+const MAX_ARRAY: usize = 67108864usize
+const MAX_MESSAGE: usize = 134217728usize
+type ArrayValue = struct { element: str, items: []const Value }
+type VariantValue = struct { signature: str, value: []const Value }
+type Value = union enum u8 { Byte: u8, Bool: bool, I16: i16, U16: u16, I32: i32, U32: u32, I64: i64, U64: u64, Double: f64, Str: str, Path: str, Sig: str, Fd: u32, Array: ArrayValue, Struct: []const Value, Entry: []const Value, Variant: VariantValue }
+type Message = struct { little: bool, kind: u8, flags: u8, serial: u32, path: str, interface: str, member: str, error_name: str, reply_serial: u32, destination: str, sender: str, signature: str, unix_fds: u32, body: []const Value }
+type Pending = struct { used: bool, serial: u32 }
+type Bus = struct { serial: u32, calls: []Pending, unique_name: str }
+type Address = struct { transport: str, path: str, abstract_name: str, host: str, port: u16, guid: str, runtime: bool }
+
+fn is_basic(c: u8) -> bool
+fn complete_len(sig: str, at: usize, arrays: u32, structs: u32) -> usize
+fn valid_signature(sig: str) -> bool
+fn align_of(c: u8) -> usize
+fn pad_to(dst: []u8, at: *usize, n: usize) -> err
+fn put_u32(dst: []u8, at: *usize, little: bool, v: u32) -> err
+fn put_u16(dst: []u8, at: *usize, little: bool, v: u16) -> err
+fn put_u64(dst: []u8, at: *usize, little: bool, v: u64) -> err
+fn put_byte(dst: []u8, at: *usize, b: u8) -> err
+fn put_string(dst: []u8, at: *usize, little: bool, s: str) -> err
+fn put_signature(dst: []u8, at: *usize, s: str) -> err
+fn put_value(dst: []u8, at: *usize, little: bool, sig: str, v: Value) -> err
+fn put_u32_at(dst: []u8, at: *usize, little: bool, v: u32) -> err
+fn skip_pad(buf: []const u8, at: *usize, n: usize) -> err
+fn get_u32(buf: []const u8, at: *usize, little: bool) -> (u32, err)
+fn get_u16(buf: []const u8, at: *usize, little: bool) -> (u16, err)
+fn get_u64(buf: []const u8, at: *usize, little: bool) -> (u64, err)
+fn get_string(buf: []const u8, at: *usize, little: bool) -> (str, err)
+fn get_signature(buf: []const u8, at: *usize) -> (str, err)
+fn get_value(a: *mem.Arena, buf: []const u8, at: *usize, little: bool, sig: str, depth: u32) -> (Value, err)
+fn skip_value(buf: []const u8, at: *usize, little: bool, sig: str, limit: usize) -> (bool, err)
+fn message(kind: u8, serial: u32) -> Message
+fn put_field(dst: []u8, at: *usize, little: bool, code: u8, sig: str, text: str, number: u32, is_number: bool) -> err
+fn message_encode(dst: []u8, m: *const Message) -> (usize, err)
+fn message_decode(a: *mem.Arena, buf: []const u8) -> (Message, usize, err)
+fn hex_digit(v: u8) -> u8
+fn auth_external(dst: []u8, uid: str) -> (usize, err)
+fn auth_anonymous(dst: []u8) -> (usize, err)
+fn auth_reply(line: str, dst: []u8) -> (usize, bool, err)
+fn bus_new(calls: []Pending) -> Bus
+fn next_serial(b: *Bus) -> u32
+fn call(b: *Bus, destination: str, path: str, interface: str, member: str, signature: str, body: []const Value, flags: u8) -> (Message, err)
+fn hello(b: *Bus) -> (Message, err)
+fn retire(b: *Bus, m: *const Message) -> bool
+fn rule_value(rule: str, key: str) -> (str, bool)
+fn path_under(namespace: str, path: str) -> bool
+fn kind_name(kind: u8) -> str
+fn rule_matches(rule: str, m: *const Message) -> bool
+fn parse_address(text: str, out: []u8) -> (Address, err)
+fn hex_value(c: u8) -> u8
+```
+
+D-Bus (L126): the wire format, the authentication exchange and the client bookkeeping over caller buffers, with no socket. `put_value`/`get_value` marshal and unmarshal typed values by signature in either byte order with the specification's alignment, array length limit (64 MiB), nesting limits and strict checks (booleans 0 or 1, no interior NUL, NUL-terminated strings and signatures, zero padding); `Value` carries array element signatures and variant signatures so empty arrays and nested variants survive a round trip. `message_encode`/`message_decode` handle whole messages (method call, return, error, signal) in either byte order with the header fields in libdbus's order, required fields by kind, unknown fields skipped by their signature, `Truncated` until the message is whole. `auth_external` and `auth_anonymous` write the SASL first line, `auth_reply` answers `OK` with `BEGIN` and refuses `REJECTED`. `Bus` allocates serials and keeps the table of calls awaiting a reply (`call`, `hello`, `retire`); `rule_matches` tests a match rule (type, sender, interface, member, path, path_namespace, destination, argN) and `parse_address` reads a bus address (`unix:path=`, `abstract=`, `runtime=yes`, `tcp:host=,port=`, `%XX` escapes, first entry). Checked against dbus-next (its Marshaller, `Message._marshall` and Unmarshaller over 150 random typed bodies and 40 messages; big-endian twins from a reference marshaller asserted byte-equal to the library's on every little-endian vector), with the AUTH line from dbus-next's authenticator and match rules and addresses from the specification, 444 vectors on both hosts (D2648). Not done: the AF_UNIX socket and SCM_RIGHTS fd passing (`e.os` platform code; Linux was not run), the `org.freedesktop.DBus` convenience calls beyond Hello/RequestName/AddMatch, introspection XML, property and ObjectManager helpers, service export, and the notification, portal and tray backends this was queued to unlock.
+
 ### `e.net.packet`
 
 ```neper

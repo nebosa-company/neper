@@ -2557,6 +2557,12 @@ $xModbusWireWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $xModbusWireWritten -ne 'executable written') { throw 'x_modbus_wire emission failed' }
 & $xModbusWirePath
 if ($LASTEXITCODE -ne 0) { throw "a x_modbus_wire check failed: exit $LASTEXITCODE" }
+# `e.dbus` against dbus-next: typed bodies and messages in both byte orders, standard calls, AUTH, match rules, addresses (D2648).
+$dbusPath = Join-Path $testBuild 'dbus-selfhost.exe'
+$dbusWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dbus\src\main.e') $repo 'x64' 'windows' $dbusPath
+if ($LASTEXITCODE -ne 0 -or $dbusWritten -ne 'executable written') { throw 'dbus emission failed' }
+& $dbusPath
+if ($LASTEXITCODE -ne 0) { throw "a dbus check failed: exit $LASTEXITCODE" }
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 $netHttpPoolPath = Join-Path $testBuild 'net-http-pool-selfhost.exe'
 $netHttpPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http_pool\src\main.e') $repo 'x64' 'windows' $netHttpPoolPath

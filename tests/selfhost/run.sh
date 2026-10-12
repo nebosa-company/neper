@@ -2257,6 +2257,11 @@ x_modbus_wire_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$x_modbus_wire_written" = 'executable written' ]
 chmod +x "$test_build/x-modbus-wire-selfhost"
 "$test_build/x-modbus-wire-selfhost"
+# `e.dbus` against dbus-next: typed bodies and messages in both byte orders, standard calls, AUTH, match rules, addresses (D2648).
+dbus_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dbus/src/main.e" "$repo" x64 linux "$test_build/dbus-selfhost")
+[ "$dbus_written" = 'executable written' ]
+chmod +x "$test_build/dbus-selfhost"
+"$test_build/dbus-selfhost"
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 net_http_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http_pool/src/main.e" "$repo" x64 linux "$test_build/net-http-pool-selfhost")
 [ "$net_http_pool_written" = 'executable written' ]
