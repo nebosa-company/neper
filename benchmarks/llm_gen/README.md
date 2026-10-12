@@ -62,3 +62,23 @@ that where an expression wraps under §11 is legible from its own line -- that i
 choice, not a gap. On real edits rather than ten-line programs, `scripts/lang-stats.py` finds
 Neper and Rust within 3% of each other in visible output tokens per source byte (0.479 vs
 0.490), which is what the fixed-cost reading predicts.
+
+## Generated-code report (T023)
+
+`report.py` scores a set of candidate programs against the thresholds of the roadmap's
+cross-milestone verification, on the real toolchain: parse first pass >= 95%, type-check first
+pass >= 90%, zero formatting diff (`fmt FILE --check`) 100%, one-turn repair >= 95% of the
+candidates that failed parse or check, and whether the built program prints `expected.txt`.
+
+```text
+python benchmarks/llm_gen/report.py --compiler build/windows/tests/selfhost/neper-self.exe --strict
+python benchmarks/llm_gen/report.py --compiler ... --candidates DIR --repairs DIR --json
+```
+
+Without `--candidates` it scores the committed reference solutions and says `source:
+reference`; both suites run that with `--strict`, so the corpus and the toolchain stay inside
+the thresholds. A model's pass rate needs a provider and a budget: lay its output out as
+`DIR/<task>/neper.e` (and a second turn as `--repairs DIR/<task>/neper.e`) and run the same
+command. The reference sources were put through `fmt` for this (sorted `use` lines, one
+over-long `fizzbuzz` line wrapped), so the token counts above are from before that and are
+about two tokens off on `fizzbuzz`; re-run `run.py` before quoting them.

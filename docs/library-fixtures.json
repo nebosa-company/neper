@@ -227,6 +227,7 @@
    "pending": [],
    "fixtures": [
     "crypto_aead",
+    "crypto_aead_hw",
     "crypto_cipher",
     "misc_gaps",
     "net_tls",

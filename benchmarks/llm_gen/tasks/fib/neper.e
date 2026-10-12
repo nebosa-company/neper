@@ -1,5 +1,5 @@
-use e.mem
 use e.io
+use e.mem
 
 fn fib(n: i32) -> i32 {
     if n < 2 { ret n }

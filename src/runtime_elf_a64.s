@@ -1928,3 +1928,22 @@ neper_os_wait:
     movk w1, #0x6f77, lsl #16
     ldp x29, x30, [sp], #32
     ret
+
+// os.aes_ctr and os.ghash_blocks (C098): the answer is none -- there is no AES-NI here, so the
+// caller keeps its portable path. (ARMv8 AES and PMULL would be the same two functions.)
+.global neper_os_aes_ctr
+neper_os_aes_ctr:
+    mov x0, #0
+    ret
+.global neper_os_ghash_blocks
+neper_os_ghash_blocks:
+    mov x0, #0
+    ret
+.global neper_os_cpu_features
+neper_os_cpu_features:
+    mov x0, #0
+    ret
+.global neper_os_aes_expand_key
+neper_os_aes_expand_key:
+    mov x0, #0
+    ret

@@ -1,5 +1,5 @@
-use e.mem
 use e.io
+use e.mem
 
 fn gcd(x: i32, y: i32) -> i32 {
     var p = x

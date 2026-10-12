@@ -1083,6 +1083,11 @@ crypto_aead_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$crypto_aead_written" = 'executable written' ]
 chmod +x "$test_build/crypto-aead-selfhost"
 "$test_build/crypto-aead-selfhost"
+# C098: the same AEAD through AES-NI and PCLMULQDQ against the portable path and the intrinsics against references.
+crypto_aead_hw_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_aead_hw/src/main.e" "$repo" x64 linux "$test_build/crypto-aead-hw-selfhost")
+[ "$crypto_aead_hw_written" = 'executable written' ]
+chmod +x "$test_build/crypto-aead-hw-selfhost"
+"$test_build/crypto-aead-hw-selfhost"
 # `e.crypto.kx`: X25519 against RFC 7748's exchange and 5.2 vector, the zero peer refused.
 crypto_kx_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_kx/src/main.e" "$repo" x64 linux "$test_build/crypto-kx-selfhost")
 [ "$crypto_kx_written" = 'executable written' ]
@@ -7912,6 +7917,24 @@ grep -q '"record":"difference","kind":"mode","name":"","left":"debug","right":"r
 grep -q '"record":"difference","kind":"artifact"' "$test_build/conformance-tools-compare-manifests.jsonl"
 grep -q '"same":false' "$test_build/conformance-tools-compare-manifests.jsonl"
 python3 "$repo/scripts/validate_stream.py" "$test_build/conformance-tools-compare-manifests.jsonl"
+# `compare-manifests --cross-host` (D4304, T022): a Windows and a Linux build of one program
+# differ in their target, their per-target variant of e.os, the dependency that stands for it
+# and the executables -- and agree on everything else; a changed input is still named.
+cross_tool="$repo/tests/conformance/tools/run_args.e"
+(cd "$test_build" && "$test_build/neper-self" emit-executable "$cross_tool" "$repo" x64 windows conformance-tools-cross-windows.out > /dev/null)
+cp "$repo/.neper/debug/build-manifest.json" "$test_build/manifest-cross-windows.json"
+(cd "$test_build" && "$test_build/neper-self" emit-executable "$cross_tool" "$repo" x64 linux conformance-tools-cross-linux.out > /dev/null)
+cp "$repo/.neper/debug/build-manifest.json" "$test_build/manifest-cross-linux.json"
+if "$test_build/neper-self" compare-manifests "$test_build/manifest-cross-windows.json" "$test_build/manifest-cross-linux.json" > /dev/null; then
+    printf '%s\n' 'compare-manifests called a windows and a linux build the same' >&2; exit 1
+fi
+cross_agreed=$("$test_build/neper-self" compare-manifests "$test_build/manifest-cross-windows.json" "$test_build/manifest-cross-linux.json" --cross-host) || { printf '%s\n' "the two hosts' builds of one program differ across hosts: $cross_agreed" >&2; exit 1; }
+[ "$cross_agreed" = "manifests agree" ] || { printf '%s\n' "the two hosts' builds of one program differ across hosts: $cross_agreed" >&2; exit 1; }
+sed 's|\("path":"run_args\.e"},"sha256":"\)[0-9a-f]\{64\}|\10000000000000000000000000000000000000000000000000000000000000000|' "$test_build/manifest-cross-linux.json" > "$test_build/manifest-cross-linux-altered.json"
+if cross_changed=$("$test_build/neper-self" compare-manifests "$test_build/manifest-cross-windows.json" "$test_build/manifest-cross-linux-altered.json" --cross-host); then
+    printf '%s\n' 'a changed input is not a difference across hosts' >&2; exit 1
+fi
+case "$cross_changed" in *'input run_args.e: '*) ;; *) printf '%s\n' "a changed input is not named across hosts: $cross_changed" >&2; exit 1 ;; esac
 # Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
 # has the toolchain's lib/ beside it is the same stream as the positional form.
 rm -rf "$repo/build/linux/short"
@@ -8805,6 +8828,10 @@ done
 # emitters; the script skips itself where the `jsonschema` package is absent.
 python3 "$repo/scripts/validate_stream.py" || { printf '%s
 ' "the conformance corpus does not validate against the v1 schema" >&2; exit 1; }
+# T023: the generated-code report over the reference corpus -- parse, check, canonical layout and
+# output on every task, so the corpus and the toolchain stay inside the roadmap's thresholds.
+python3 "$repo/benchmarks/llm_gen/report.py" --compiler "$test_build/neper-self" --host linux --strict || { printf '%s
+' "the generated-code report is below a threshold" >&2; exit 1; }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"

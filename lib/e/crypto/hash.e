@@ -5,6 +5,8 @@
 // and a one-call form over it. `equal_constant_time` compares digests without an early
 // exit. Every constant is the published one; the fixture checks the published vectors.
 
+use e.os
+
 type Sha256 = struct { h: [8]u32, block: [64]u8, block_len: u8, total: u64 }
 type Sha512 = struct { h: [8]u64, block: [128]u8, block_len: u8, total_hi: u64, total_lo: u64 }
 type Sha3_256 = struct { lanes: [25]u64, block: [136]u8, block_len: u8 }
@@ -55,17 +57,16 @@ fn store_be64(out: []u8, at: usize, value: u64) {
     store_be32(out, at + 4usize, u32(value & 4294967295u64))
 }
 
-fn sha256_k(index: usize) -> u32 {
-    let table: [64]u32 = [64]u32{
-        1116352408u32, 1899447441u32, 3049323471u32, 3921009573u32, 961987163u32, 1508970993u32, 2453635748u32, 2870763221u32,
-        3624381080u32, 310598401u32, 607225278u32, 1426881987u32, 1925078388u32, 2162078206u32, 2614888103u32, 3248222580u32,
-        3835390401u32, 4022224774u32, 264347078u32, 604807628u32, 770255983u32, 1249150122u32, 1555081692u32, 1996064986u32,
-        2554220882u32, 2821834349u32, 2952996808u32, 3210313671u32, 3336571891u32, 3584528711u32, 113926993u32, 338241895u32,
-        666307205u32, 773529912u32, 1294757372u32, 1396182291u32, 1695183700u32, 1986661051u32, 2177026350u32, 2456956037u32,
-        2730485921u32, 2820302411u32, 3259730800u32, 3345764771u32, 3516065817u32, 3600352804u32, 4094571909u32, 275423344u32,
-        430227734u32, 506948616u32, 659060556u32, 883997877u32, 958139571u32, 1322822218u32, 1537002063u32, 1747873779u32,
-        1955562222u32, 2024104815u32, 2227730452u32, 2361852424u32, 2428436474u32, 2756734187u32, 3204031479u32, 3329325298u32 }
-    ret table[index]
+fn sha256_table() -> [64]usize {
+    ret [64]usize{
+        1116352408usize, 1899447441usize, 3049323471usize, 3921009573usize, 961987163usize, 1508970993usize, 2453635748usize, 2870763221usize,
+        3624381080usize, 310598401usize, 607225278usize, 1426881987usize, 1925078388usize, 2162078206usize, 2614888103usize, 3248222580usize,
+        3835390401usize, 4022224774usize, 264347078usize, 604807628usize, 770255983usize, 1249150122usize, 1555081692usize, 1996064986usize,
+        2554220882usize, 2821834349usize, 2952996808usize, 3210313671usize, 3336571891usize, 3584528711usize, 113926993usize, 338241895usize,
+        666307205usize, 773529912usize, 1294757372usize, 1396182291usize, 1695183700usize, 1986661051usize, 2177026350usize, 2456956037usize,
+        2730485921usize, 2820302411usize, 3259730800usize, 3345764771usize, 3516065817usize, 3600352804usize, 4094571909usize, 275423344usize,
+        430227734usize, 506948616usize, 659060556usize, 883997877usize, 958139571usize, 1322822218usize, 1537002063usize, 1747873779usize,
+        1955562222usize, 2024104815usize, 2227730452usize, 2361852424usize, 2428436474usize, 2756734187usize, 3204031479usize, 3329325298usize }
 }
 
 fn sha256_init() -> Sha256 {
@@ -81,67 +82,119 @@ fn sha256_init() -> Sha256 {
     ret s
 }
 
-fn sha256_compress(s: *Sha256, block: []const u8) {
-    var w: [64]u32 = zero
+// One 64-byte block, read from `bytes` at `at`, into the eight-word `state` (a word to a slot,
+// masked to 32 bits). The round table comes in from the caller, built once per call to update
+// (D323): a copy of it per block was most of a manifest's time. The message schedule is a
+// rolling window of sixteen words (D330) and the rotations are spelled out, a call per rotation
+// being what a debug build paid nine times a round. This is the compiler's own function, which
+// had been measured faster than the byte-buffered one this module carried (T021, D333's rule).
+fn sha256_rounds(state: []usize, bytes: []const u8, at: usize, k: []const usize) {
+    var w: [16]usize = zero
     var t = 0usize
     while t < 16usize {
-        w[t] = load_be32(block, t * 4usize)
+        let p = at + t * 4usize
+        w[t] = (usize(bytes[p]) << 24usize) | (usize(bytes[p + 1usize]) << 16usize) | (usize(bytes[p + 2usize]) << 8usize) | usize(bytes[p + 3usize])
         t += 1usize
     }
-    while t < 64usize {
-        let s0 = rotr32(w[t - 15usize], 7u32) ^ rotr32(w[t - 15usize], 18u32) ^ (w[t - 15usize] >> 3u32)
-        let s1 = rotr32(w[t - 2usize], 17u32) ^ rotr32(w[t - 2usize], 19u32) ^ (w[t - 2usize] >> 10u32)
-        w[t] = w[t - 16usize] +% s0 +% w[t - 7usize] +% s1
-        t += 1usize
-    }
-    var a = s.h[0]
-    var b = s.h[1]
-    var c = s.h[2]
-    var d = s.h[3]
-    var e = s.h[4]
-    var f = s.h[5]
-    var g = s.h[6]
-    var h = s.h[7]
+    var a = state[0usize]
+    var b = state[1usize]
+    var c = state[2usize]
+    var d = state[3usize]
+    var e = state[4usize]
+    var f = state[5usize]
+    var g = state[6usize]
+    var h = state[7usize]
     t = 0usize
     while t < 64usize {
-        let big1 = rotr32(e, 6u32) ^ rotr32(e, 11u32) ^ rotr32(e, 25u32)
-        let choose = (e & f) ^ ((~e) & g)
-        let t1 = h +% big1 +% choose +% sha256_k(t) +% w[t]
-        let big0 = rotr32(a, 2u32) ^ rotr32(a, 13u32) ^ rotr32(a, 22u32)
+        var word = w[t & 15usize]
+        if t >= 16usize {
+            let w15 = w[(t + 1usize) & 15usize]
+            let w2 = w[(t + 14usize) & 15usize]
+            let s0 = (((w15 >> 7usize) | (w15 << 25usize)) ^ ((w15 >> 18usize) | (w15 << 14usize)) ^ (w15 >> 3usize)) & 4294967295usize
+            let s1 = (((w2 >> 17usize) | (w2 << 15usize)) ^ ((w2 >> 19usize) | (w2 << 13usize)) ^ (w2 >> 10usize)) & 4294967295usize
+            word = (word + s0 + w[(t + 9usize) & 15usize] + s1) & 4294967295usize
+            w[t & 15usize] = word
+        }
+        let big1 = (((e >> 6usize) | (e << 26usize)) ^ ((e >> 11usize) | (e << 21usize)) ^ ((e >> 25usize) | (e << 7usize))) & 4294967295usize
+        let choose = (e & f) ^ ((e ^ 4294967295usize) & g)
+        let t1 = (h + big1 + choose + k[t] + word) & 4294967295usize
+        let big0 = (((a >> 2usize) | (a << 30usize)) ^ ((a >> 13usize) | (a << 19usize)) ^ ((a >> 22usize) | (a << 10usize))) & 4294967295usize
         let majority = (a & b) ^ (a & c) ^ (b & c)
-        let t2 = big0 +% majority
+        let t2 = (big0 + majority) & 4294967295usize
         h = g
         g = f
         f = e
-        e = d +% t1
+        e = (d + t1) & 4294967295usize
         d = c
         c = b
         b = a
-        a = t1 +% t2
+        a = (t1 + t2) & 4294967295usize
         t += 1usize
     }
-    s.h[0] = s.h[0] +% a
-    s.h[1] = s.h[1] +% b
-    s.h[2] = s.h[2] +% c
-    s.h[3] = s.h[3] +% d
-    s.h[4] = s.h[4] +% e
-    s.h[5] = s.h[5] +% f
-    s.h[6] = s.h[6] +% g
-    s.h[7] = s.h[7] +% h
+    state[0usize] = (state[0usize] + a) & 4294967295usize
+    state[1usize] = (state[1usize] + b) & 4294967295usize
+    state[2usize] = (state[2usize] + c) & 4294967295usize
+    state[3usize] = (state[3usize] + d) & 4294967295usize
+    state[4usize] = (state[4usize] + e) & 4294967295usize
+    state[5usize] = (state[5usize] + f) & 4294967295usize
+    state[6usize] = (state[6usize] + g) & 4294967295usize
+    state[7usize] = (state[7usize] + h) & 4294967295usize
 }
 
+// A partial block is topped up, the whole blocks after it go straight from `data` -- through
+// the SHA extensions when the CPU has them (os.sha256_blocks, D332, which answers how many it
+// did and none otherwise), a round function at a time here for the rest -- and the remainder is
+// held for the next call. The compiler's own manifest and cache hashes are this function (T021).
 fn sha256_update(h: *Sha256, data: []const u8) {
-    var at = 0usize
-    while at < data.len {
-        h.block[usize(h.block_len)] = data[at]
-        h.block_len += 1u8
-        h.total += 1u64
-        if h.block_len == 64u8 {
-            sha256_compress(h, h.block[0..])
-            h.block_len = 0u8
+    var held = usize(h.block_len)
+    if held + data.len < 64usize {
+        var j = 0usize
+        while j < data.len {
+            h.block[held + j] = data[j]
+            j += 1usize
         }
-        at += 1usize
+        h.block_len = u8(held + data.len)
+        h.total += u64(data.len)
+        ret
     }
+    var slots: [8]usize = zero
+    var i = 0usize
+    while i < 8usize {
+        slots[i] = usize(h.h[i])
+        i += 1usize
+    }
+    let k = sha256_table()
+    var at = 0usize
+    if held != 0usize {
+        while held < 64usize {
+            h.block[held] = data[at]
+            held += 1usize
+            at += 1usize
+        }
+        sha256_rounds(slots[0..], h.block[0..], 0usize, k[0..])
+    }
+    let whole = ((data.len - at) / 64usize) * 64usize
+    if whole > 0usize {
+        var done = os.sha256_blocks(slots[0..], data[at..at + whole]) * 64usize
+        while done < whole {
+            sha256_rounds(slots[0..], data, at + done, k[0..])
+            done += 64usize
+        }
+        at += whole
+    }
+    i = 0usize
+    while i < 8usize {
+        h.h[i] = u32(slots[i])
+        i += 1usize
+    }
+    let rest = data.len - at
+    var m = 0usize
+    while m < rest {
+        h.block[m] = data[at + m]
+        m += 1usize
+    }
+    h.block_len = u8(rest)
+    h.total += u64(data.len)
 }
 
 fn sha256_done(h: *Sha256) -> [32]u8 {

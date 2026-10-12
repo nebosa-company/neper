@@ -1157,6 +1157,12 @@ $cryptoAeadWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $cryptoAeadWritten -ne 'executable written') { throw 'crypto_aead emission failed' }
 & $cryptoAeadPath
 if ($LASTEXITCODE -ne 0) { throw "a crypto_aead check failed: exit $LASTEXITCODE" }
+# C098: the same AEAD through AES-NI and PCLMULQDQ against the portable path and the intrinsics against references.
+$cryptoAeadHwPath = Join-Path $testBuild 'crypto-aead-hw-selfhost.exe'
+$cryptoAeadHwWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_aead_hw\src\main.e') $repo 'x64' 'windows' $cryptoAeadHwPath
+if ($LASTEXITCODE -ne 0 -or $cryptoAeadHwWritten -ne 'executable written') { throw 'crypto_aead_hw emission failed' }
+& $cryptoAeadHwPath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_aead_hw check failed: exit $LASTEXITCODE" }
 # `e.crypto.kx`: X25519 against RFC 7748's exchange and 5.2 vector, the zero peer refused.
 $cryptoKxPath = Join-Path $testBuild 'crypto-kx-selfhost.exe'
 $cryptoKxWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_kx\src\main.e') $repo 'x64' 'windows' $cryptoKxPath
@@ -8154,6 +8160,27 @@ if ((Select-String -LiteralPath $comparedModes -Pattern '"record":"difference","
 if ((Select-String -LiteralPath $comparedModes -Pattern '"same":false' -Quiet) -ne $true) { throw 'compare-manifests calls two modes the same' }
 & python (Join-Path $repo 'scripts/validate_stream.py') $comparedModes
 if ($LASTEXITCODE -ne 0) { throw 'the difference records do not validate against the schema' }
+# `compare-manifests --cross-host` (D4304, T022): a Windows and a Linux build of one program
+# differ in their target, their per-target variant of e.os, the dependency that stands for it
+# and the executables -- and agree on everything else; a changed input is still named.
+$crossTool = Join-Path $conformanceRoot 'tools\run_args.e'
+$crossWindows = Join-Path $testBuild 'manifest-cross-windows.json'
+$crossLinux = Join-Path $testBuild 'manifest-cross-linux.json'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$crossTool`" `"$repo`" x64 windows conformance-tools-cross-windows.out > nul"
+if ($LASTEXITCODE -ne 0) { throw "the windows build of run_args.e exited $LASTEXITCODE" }
+Copy-Item -LiteralPath (Join-Path $repo '.neper\debug\build-manifest.json') -Destination $crossWindows -Force
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$crossTool`" `"$repo`" x64 linux conformance-tools-cross-linux.out > nul"
+if ($LASTEXITCODE -ne 0) { throw "the linux build of run_args.e exited $LASTEXITCODE" }
+Copy-Item -LiteralPath (Join-Path $repo '.neper\debug\build-manifest.json') -Destination $crossLinux -Force
+$crossPlain = & $compiler compare-manifests $crossWindows $crossLinux
+if ($LASTEXITCODE -ne 1) { throw 'compare-manifests called a windows and a linux build the same' }
+$crossAgreed = & $compiler compare-manifests $crossWindows $crossLinux --cross-host
+if ($LASTEXITCODE -ne 0 -or $crossAgreed -ne 'manifests agree') { throw "the two hosts' builds of one program differ across hosts: $crossAgreed" }
+$crossAltered = Join-Path $testBuild 'manifest-cross-linux-altered.json'
+$crossText = [IO.File]::ReadAllText($crossLinux)
+[IO.File]::WriteAllText($crossAltered, [regex]::Replace($crossText, '("path":"run_args\.e"\},"sha256":")[0-9a-f]{64}', '${1}0000000000000000000000000000000000000000000000000000000000000000'))
+$crossChanged = & $compiler compare-manifests $crossWindows $crossAltered --cross-host
+if ($LASTEXITCODE -ne 1 -or $crossChanged -notmatch 'input run_args\.e: ') { throw "a changed input is not named across hosts: $crossChanged" }
 # Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
 # has the toolchain's lib/ beside it is the same stream as the positional form.
 $shortRoot = Join-Path $repo 'build\windows\short'
@@ -9192,6 +9219,10 @@ foreach ($case in @(
 # emitters; the script skips itself where the `jsonschema` package is absent.
 & python (Join-Path $repo 'scripts/validate_stream.py')
 if ($LASTEXITCODE -ne 0) { throw "the conformance corpus does not validate against the v1 schema" }
+# T023: the generated-code report over the reference corpus -- parse, check, canonical layout and
+# output on every task, so the corpus and the toolchain stay inside the roadmap's thresholds.
+& python (Join-Path $repo 'benchmarks/llm_gen/report.py') --compiler $compiler --host windows --strict
+if ($LASTEXITCODE -ne 0) { throw "the generated-code report is below a threshold" }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'

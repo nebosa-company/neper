@@ -815,6 +815,10 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     if same(name, "neper_os_touch") { ret ("touch", true) }
     if same(name, "neper_os_sha256_blocks") { ret ("sha256_blocks", true) }
     if same(name, "neper_os_crc32c_bytes") { ret ("crc32c_bytes", true) }
+    if same(name, "neper_os_cpu_features") { ret ("cpu_features", true) }
+    if same(name, "neper_os_aes_expand_key") { ret ("aes_expand_key", true) }
+    if same(name, "neper_os_aes_ctr") { ret ("aes_ctr", true) }
+    if same(name, "neper_os_ghash_blocks") { ret ("ghash_blocks", true) }
     if same(name, "neper_os_read") { ret ("read", true) }
     if same(name, "neper_os_write") { ret ("write", true) }
     if same(name, "neper_os_close") { ret ("close", true) }

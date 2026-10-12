@@ -1,0 +1,17 @@
+{
+ "schema": "neper-package",
+ "version": 1,
+ "name": "example.checksum",
+ "package_version": "0.1.0",
+ "license": "MIT",
+ "source": "src/main.e",
+ "source_sha256": "8864ebb0b31db30a6df32a1da1b25947686b5a174d339f20ec6f5bbf78ff9145",
+ "dependencies": [
+  {
+   "name": "example.bytes",
+   "package_version": "1.2.0",
+   "source": "src/bytes.e",
+   "source_sha256": "bd36c76e602e474f3f33839614d2dd7f4e30bdfa6746012f3948666a02c66d90"
+  }
+ ]
+}
