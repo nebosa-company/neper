@@ -2381,4 +2381,5 @@ D4202	2160	The device-reached edit case, and what the harness found under it
 D4203	2572	Floating point on a kernel: the modes a kernel is written with, `ftz` on the CPU, `math.fma` on a device
 D2471	852	The C bootstrap's argument and local limits rise to what `src/` already uses
 D3911	2789	G006: datagrid cell painters (custom cell nodes, row roles) and the filter row
-D3912	2529	G006: datagrid bands, row indicator and navigator
+D3912	2530	G006: datagrid bands, row indicator and navigator
+D3913	3954	G006: datagrid in-place editors and layout persistence

@@ -25,8 +25,16 @@
 // "Row n of m" under the footer; they move the current data row (groups are skipped) and scroll
 // it into view; `navigate` is the same from code.
 //
+// Editing. A column with `editable` set can be edited in place: a tap on the already current row
+// (or `begin_edit`) replaces that cell by a text field holding the cell's text; Enter commits
+// (parsed by the column's kind, written to the table through its typed setters, an empty text
+// is a null, a text that does not parse keeps the editor open and marked invalid), and the
+// application hears `cell_edited` (storage row, spec) to re-sort, re-filter or re-group.
+// Layout. Column widths follow a header resize; `save_layout` / `load_layout` keep the widths,
+// the sort indicator, the filter row, the navigator and the filter texts as small text.
+//
 // ponytail: one level of header and the filter row sits above it (the table owns the header);
-// the preview row is the next increment of G006.
+// the preview row, Tab to the next editable cell and column visibility are what remains.
 
 use e.mem
 use e.str
@@ -41,6 +49,8 @@ use e.ui.widget
 
 const FILTER_TEXT: usize = 40usize
 const FILTER_KEY: u64 = 2048u64
+const EDIT_KEY: u64 = 3000u64
+const EDIT_TEXT: usize = 64usize
 
 type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom, Indicator }
 
@@ -52,13 +62,14 @@ type Nav = enum u8 { First, Prev, Next, Last }
 // One grid column: the table column it shows and how, and which applied group summary it
 // shows on group rows and in the footer (`summary` < 0: none); `filter` asks for a field in the
 // filter row.
-type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool }
+type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool, editable: bool }
 
 type Events = struct {
     ctx: *void,
     sort_changed: fn(*void, usize, bool) -> err,
     row_picked: fn(*void, usize) -> err,
     filter_changed: fn(*void, usize, str) -> err,
+    cell_edited: fn(*void, usize, usize) -> err,
     custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err,
     row_role: fn(*void, usize) -> style.ColorRole
 }
@@ -83,12 +94,22 @@ type Grid = struct {
     navigator_visible: bool,
     has_position: bool,
     position: usize,
+    read_only: bool,
+    editing: bool,
+    edit_row: usize,
+    edit_spec: usize,
+    edit_text: [64]u8,
+    edit_scratch: [160]u8,
+    edit_len: usize,
+    edit_invalid: bool,
     filter_text: []u8,
     filter_lens: []usize,
     theme: *const control.Theme
 }
 
 error TooManyColumns
+error NotEditable
+error BadLayout
 
 fn ignore_sort(ctx: *void, column: usize, descending: bool) -> err { ret ok }
 
@@ -96,13 +117,15 @@ fn ignore_row(ctx: *void, row: usize) -> err { ret ok }
 
 fn ignore_filter(ctx: *void, spec: usize, text: str) -> err { ret ok }
 
+fn ignore_edit(ctx: *void, row: usize, spec: usize) -> err { ret ok }
+
 fn no_custom_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spec: usize, out: *widget.Node) -> err { ret ok }
 
 fn plain_role(ctx: *void, row: usize) -> style.ColorRole { ret .Text }
 
 // Events that do nothing, for a grid that only displays.
 fn no_events() -> Events {
-    ret Events { ctx: nil, sort_changed: ignore_sort, row_picked: ignore_row, filter_changed: ignore_filter, custom_cell: no_custom_cell, row_role: plain_role }
+    ret Events { ctx: nil, sort_changed: ignore_sort, row_picked: ignore_row, filter_changed: ignore_filter, cell_edited: ignore_edit, custom_cell: no_custom_cell, row_role: plain_role }
 }
 
 fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, events: Events, key: widget.Key) -> (Grid, err) {
@@ -225,6 +248,250 @@ fn navigate(grid: *Grid, kind: Nav) -> err {
         i -= 1usize
         if !grp.visible_is_group(grid.g, i) { ret go_to(grid, i) }
     }
+    ret ok
+}
+
+// ---- editing ---------------------------------------------------------------------
+
+// The text a cell is edited as: the value without decoration (no currency sign).
+fn edit_text_of(grid: *const Grid, spec: usize, row: usize) -> str {
+    let s = grid.specs[spec]
+    if table.is_null(grid.t, s.column, row) { ret "" }
+    let kind = table.column_kind(grid.t, s.column)
+    if kind == table.Kind.Str || kind == table.Kind.Dict { ret table.get_str(grid.t, s.column, row) }
+    ret ""
+}
+
+fn copy_edit(grid: *Grid, text: str) {
+    var at = 0usize
+    while at < text.len && at < EDIT_TEXT {
+        grid.edit_text[at] = text[at]
+        at += 1usize
+    }
+    grid.edit_len = at
+}
+
+// Starts editing a cell: the editor holds the cell's text. `NotEditable` for a column that is
+// not, or a read-only grid.
+fn begin_edit(grid: *Grid, row: usize, spec: usize) -> err {
+    if grid.read_only || spec >= grid.specs.len || !grid.specs[spec].editable { ret NotEditable }
+    let s = grid.specs[spec]
+    var scratch = mem.arena_from(grid.edit_scratch[0usize..160usize])
+    let a = &scratch
+    var text = edit_text_of(grid, spec, row)
+    let kind = table.column_kind(grid.t, s.column)
+    if !table.is_null(grid.t, s.column, row) && kind != table.Kind.Str && kind != table.Kind.Dict {
+        let (b, b_error) = str.builder(a, 40usize)
+        if b_error != ok { ret b_error }
+        var sb = b
+        var value = 0.0f64
+        if kind == table.Kind.I32 { value = f64(table.get_i32(grid.t, s.column, row)) }
+        if kind == table.Kind.I64 { value = f64(table.get_i64(grid.t, s.column, row)) }
+        if kind == table.Kind.F64 { value = table.get_f64(grid.t, s.column, row) }
+        if kind == table.Kind.Bool {
+            if table.get_bool(grid.t, s.column, row) { value = 1.0f64 }
+            if str.push(&sb, "no") != ok { ret control.TooLarge }
+            text = "no"
+            if value != 0.0f64 { text = "yes" }
+        } else if s.kind == CellKind.Int {
+            if str.push_f64_fixed(&sb, value, 0u8) != ok { ret control.TooLarge }
+            text = str.done(&sb)
+        } else {
+            if str.push_f64_fixed(&sb, value, s.decimals) != ok { ret control.TooLarge }
+            text = str.done(&sb)
+        }
+    }
+    grid.editing = true
+    grid.edit_row = row
+    grid.edit_spec = spec
+    grid.edit_invalid = false
+    copy_edit(grid, text)
+    ret ok
+}
+
+fn cancel_edit(grid: *Grid) {
+    grid.editing = false
+    grid.edit_invalid = false
+}
+
+fn truthy(text: str) -> (bool, bool) {
+    if text.len == 0usize { ret (false, false) }
+    let c = text[0usize]
+    if c == 121u8 || c == 89u8 || c == 116u8 || c == 84u8 || c == 49u8 { ret (true, true) }
+    if c == 110u8 || c == 78u8 || c == 102u8 || c == 70u8 || c == 48u8 { ret (false, true) }
+    ret (false, false)
+}
+
+// Parses the editor's text by the column's kind and writes the cell. An empty text is null.
+// A text that does not parse (or a dictionary that is full) keeps the editor open, invalid.
+fn commit_edit(grid: *Grid) -> err {
+    if !grid.editing { ret ok }
+    let spec = grid.edit_spec
+    let s = grid.specs[spec]
+    let row = grid.edit_row
+    let text = grid.edit_text[0usize..grid.edit_len]
+    let kind = table.column_kind(grid.t, s.column)
+    var done = false
+    if text.len == 0usize {
+        table.set_null(grid.t, s.column, row)
+        done = true
+    } else if kind == table.Kind.Str || kind == table.Kind.Dict {
+        if table.set_str(grid.t, s.column, row, text) == ok { done = true }
+    } else if kind == table.Kind.Bool {
+        let (value, good) = truthy(text)
+        if good {
+            table.set_bool(grid.t, s.column, row, value)
+            done = true
+        }
+    } else if kind == table.Kind.F64 {
+        var digits = text
+        if digits[0usize] == 36u8 && digits.len > 1usize { digits = digits[1usize..] }
+        let (value, parse_error) = str.parse_f64(digits)
+        if parse_error == ok {
+            table.set_f64(grid.t, s.column, row, value)
+            done = true
+        }
+    } else {
+        let (value, parse_error) = str.parse_i64(text)
+        if parse_error == ok {
+            if kind == table.Kind.I32 {
+                if value >= -2147483648i64 && value <= 2147483647i64 {
+                    table.set_i32(grid.t, s.column, row, i32(value))
+                    done = true
+                }
+            } else {
+                table.set_i64(grid.t, s.column, row, value)
+                done = true
+            }
+        }
+    }
+    if !done {
+        grid.edit_invalid = true
+        ret ok
+    }
+    grid.editing = false
+    grid.edit_invalid = false
+    ret grid.events.cell_edited(grid.events.ctx, row, spec)
+}
+
+fn on_edit_change(ctx: *void, value: str) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    grid.edit_len = value.len
+    grid.edit_invalid = false
+    ret ok
+}
+
+fn on_edit_commit(ctx: *void) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    ret commit_edit(grid)
+}
+
+// ---- layout ----------------------------------------------------------------------
+
+fn column_width(grid: *const Grid, spec: usize) -> f32 { ret grid.columns[spec].width }
+
+fn resize_column(grid: *Grid, spec: usize, width: f32) {
+    var w = width
+    if w < 24.0 { w = 24.0 }
+    grid.columns[spec].width = w
+}
+
+// The layout as text: the version, the widths, the sort indicator, the two optional rows and
+// the filter texts. Written into `a`.
+fn save_layout(a: *mem.Arena, grid: *const Grid) -> (str, err) {
+    let (b, b_error) = str.builder(a, 512usize + grid.specs.len * (FILTER_TEXT + 24usize))
+    if b_error != ok { ret ("", b_error) }
+    var sb = b
+    if str.push(&sb, "datagrid 1\nwidths") != ok { ret ("", control.TooLarge) }
+    var at = 0usize
+    while at < grid.specs.len {
+        if str.push(&sb, " ") != ok || str.push_f64_fixed(&sb, f64(grid.columns[at].width), 1u8) != ok { ret ("", control.TooLarge) }
+        at += 1usize
+    }
+    if str.push(&sb, "\nsort ") != ok || str.push_usize(&sb, grid.sort_column) != ok { ret ("", control.TooLarge) }
+    if grid.descending { if str.push(&sb, " desc") != ok { ret ("", control.TooLarge) } } else { if str.push(&sb, " asc") != ok { ret ("", control.TooLarge) } }
+    if grid.filter_visible { if str.push(&sb, "\nfilterrow 1") != ok { ret ("", control.TooLarge) } } else { if str.push(&sb, "\nfilterrow 0") != ok { ret ("", control.TooLarge) } }
+    if grid.navigator_visible { if str.push(&sb, "\nnavigator 1") != ok { ret ("", control.TooLarge) } } else { if str.push(&sb, "\nnavigator 0") != ok { ret ("", control.TooLarge) } }
+    at = 0usize
+    while at < grid.specs.len {
+        if grid.filter_lens[at] != 0usize {
+            if str.push(&sb, "\nfilter ") != ok || str.push_usize(&sb, at) != ok || str.push(&sb, " ") != ok { ret ("", control.TooLarge) }
+            if str.push(&sb, grid.filter_text[at * FILTER_TEXT..at * FILTER_TEXT + grid.filter_lens[at]]) != ok { ret ("", control.TooLarge) }
+        }
+        at += 1usize
+    }
+    if str.push(&sb, "\n") != ok { ret ("", control.TooLarge) }
+    ret (str.done(&sb), ok)
+}
+
+// The next token of a line: text up to a space (or the end), and what follows it.
+fn next_token(line: str) -> (str, str) {
+    var at = 0usize
+    while at < line.len && line[at] != 32u8 { at += 1usize }
+    if at >= line.len { ret (line, line[line.len..]) }
+    ret (line[0usize..at], line[at + 1usize..])
+}
+
+fn same_text(x: str, y: str) -> bool {
+    if x.len != y.len { ret false }
+    var at = 0usize
+    while at < x.len {
+        if x[at] != y[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// Applies saved layout text. Lines it does not know are skipped; a width for a column the grid
+// does not have is ignored and a column the text does not mention keeps its width, so a layout
+// from an older or newer column set loads. `BadLayout` is a text without the version line.
+fn load_layout(grid: *Grid, text: str) -> err {
+    var rest = text
+    var first = true
+    while rest.len > 0usize {
+        var end = 0usize
+        while end < rest.len && rest[end] != 10u8 { end += 1usize }
+        let line = rest[0usize..end]
+        if end < rest.len { rest = rest[end + 1usize..] } else { rest = rest[rest.len..] }
+        let (head, tail) = next_token(line)
+        if first {
+            if !same_text(head, "datagrid") { ret BadLayout }
+            first = false
+        } else if same_text(head, "widths") {
+            var items = tail
+            var spec = 0usize
+            while items.len > 0usize && spec < grid.specs.len {
+                let (word, after) = next_token(items)
+                let (value, parse_error) = str.parse_f64(word)
+                if parse_error == ok { resize_column(grid, spec, f32(value)) }
+                items = after
+                spec += 1usize
+            }
+        } else if same_text(head, "sort") {
+            let (number, after) = next_token(tail)
+            let (value, parse_error) = str.parse_u64(number)
+            if parse_error == ok && usize(value) <= grid.specs.len {
+                grid.sort_column = usize(value)
+                grid.descending = same_text(after, "desc")
+            }
+        } else if same_text(head, "filterrow") {
+            grid.filter_visible = same_text(tail, "1")
+        } else if same_text(head, "navigator") {
+            grid.navigator_visible = same_text(tail, "1")
+        } else if same_text(head, "filter") {
+            let (number, value_text) = next_token(tail)
+            let (spec, parse_error) = str.parse_u64(number)
+            if parse_error == ok && usize(spec) < grid.specs.len {
+                var n = 0usize
+                while n < value_text.len && n < FILTER_TEXT {
+                    grid.filter_text[usize(spec) * FILTER_TEXT + n] = value_text[n]
+                    n += 1usize
+                }
+                grid.filter_lens[usize(spec)] = n
+            }
+        }
+    }
+    if first { ret BadLayout }
     ret ok
 }
 
@@ -366,6 +633,18 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     if column >= grid.specs.len { ret control.TooLarge }
     if grp.visible_is_group(grid.g, index) { ret group_cell(a, grid, grp.visible_group(grid.g, index), column, out) }
     let row = grp.visible_row(grid.g, index)
+    if grid.editing && grid.edit_row == row && grid.edit_spec == column {
+        var options = control.field_options()
+        options.width = grid.columns[column].width - 12.0
+        options.height = 36.0
+        options.invalid = grid.edit_invalid
+        let buffer = grid.edit_text[0usize..EDIT_TEXT]
+        let me = mem.cast[*void](grid)
+        let (field, field_error) = control.text_field(a, grid.key + EDIT_KEY, grid.theme, grid.specs[column].title, buffer, grid.edit_len, widget.Change[str] { ctx: me, invoke: on_edit_change }, widget.Submit { ctx: me, invoke: on_edit_commit }, options)
+        if field_error != ok { ret field_error }
+        *out = field
+        ret ok
+    }
     if grid.specs[column].kind == CellKind.Indicator {
         var mark = ""
         if grid.has_selection && grid.selected_row == row { mark = ">" }
@@ -403,6 +682,7 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
         }
         ret ok
     }
+    let again = grid.has_selection && grid.selected_row == usize(at)
     grid.has_selection = true
     grid.selected_row = usize(at)
     var found = 0usize
@@ -411,6 +691,17 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
     if found < visible {
         grid.has_position = true
         grid.position = found
+    }
+    if again && !grid.read_only && !grid.editing {
+        // the first editable column of the row
+        var column = 0usize
+        while column < grid.specs.len && !grid.specs[column].editable { column += 1usize }
+        if column < grid.specs.len {
+            let began = begin_edit(grid, usize(at), column)
+            if began != ok { ret began }
+        }
+    } else if grid.editing && grid.edit_row != usize(at) {
+        cancel_edit(grid)
     }
     ret grid.events.row_picked(grid.events.ctx, usize(at))
 }
@@ -432,7 +723,11 @@ fn on_scroll(ctx: *void, value: f32) -> err {
 
 fn no_reorder(ctx: *void, value: collection.Reorder) -> err { ret ok }
 
-fn no_resize(ctx: *void, value: collection.ColumnResize) -> err { ret ok }
+fn on_resize(ctx: *void, value: collection.ColumnResize) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    if value.column < grid.specs.len { resize_column(grid, value.column, value.width) }
+    ret ok
+}
 
 // ---- the node --------------------------------------------------------------------
 
@@ -466,7 +761,7 @@ fn band_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         var width: f32 = 0.0
         var k = 0usize
         while k < span && at + k < grid.specs.len {
-            width += grid.specs[at + k].width
+            width += grid.columns[at + k].width
             k += 1usize
         }
         var cell_style = style.defaults()
@@ -544,11 +839,11 @@ fn filter_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         let s = grid.specs[at]
         picks[at] = FilterPick { grid: grid, spec: at }
         var cell_style = style.defaults()
-        cell_style.width = style.Length { Px: s.width }
+        cell_style.width = style.Length { Px: grid.columns[at].width }
         if s.filter {
             var options = control.field_options()
             options.placeholder = "filter"
-            options.width = s.width - 12.0
+            options.width = grid.columns[at].width - 12.0
             options.height = 36.0
             let buffer = grid.filter_text[at * FILTER_TEXT..(at + 1usize) * FILTER_TEXT]
             let (field, field_error) = control.text_field(a, grid.key + FILTER_KEY + u64(at), grid.theme, s.title, buffer, grid.filter_lens[at], widget.Change[str] { ctx: mem.cast[*void](&picks[at]), invoke: on_filter }, zero, options)
@@ -583,7 +878,7 @@ fn footer_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
         let node_error = text_node(a, grid, text, true, .Text, &inner)
         if node_error != ok { ret (zero, node_error) }
         var cell_style = style.defaults()
-        cell_style.width = style.Length { Px: s.width }
+        cell_style.width = style.Length { Px: grid.columns[at].width }
         cells[at] = widget.padded(0u64, 12.0, 4.0, 0.0, 4.0, cell_style, one(a, inner))
         at += 1usize
     }
@@ -614,7 +909,7 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     if grid.bands.len != 0usize { body_height = body_height - 36.0 }
     if grid.navigator_visible { body_height = body_height - 52.0 }
     var sort_shown = grid.sort_column
-    let (body, body_error) = collection.table(a, grid.key, theme, "Data grid", grid.columns, source, selected[0usize..selected_count], sort_shown, grid.descending, widget.Change[usize] { ctx: me, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: me, invoke: no_reorder }, widget.Change[collection.ColumnResize] { ctx: me, invoke: no_resize }, widget.Change[widget.Key] { ctx: me, invoke: on_pick }, grid.row_height, grid.offset, widget.Change[f32] { ctx: me, invoke: on_scroll }, body_height)
+    let (body, body_error) = collection.table(a, grid.key, theme, "Data grid", grid.columns, source, selected[0usize..selected_count], sort_shown, grid.descending, widget.Change[usize] { ctx: me, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: me, invoke: no_reorder }, widget.Change[collection.ColumnResize] { ctx: me, invoke: on_resize }, widget.Change[widget.Key] { ctx: me, invoke: on_pick }, grid.row_height, grid.offset, widget.Change[f32] { ctx: me, invoke: on_scroll }, body_height)
     if body_error != ok { ret (zero, body_error) }
     var part_count = 1usize
     let with_footer = grid.footer_visible && grid.g.specs.len != 0usize
