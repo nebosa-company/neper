@@ -158,6 +158,7 @@
     "e.net.imap",
     "e.net.ftp",
     "e.net.socks",
+    "e.net.cookie",
     "e.net.dhcp",
     "e.net.snmp",
     "e.net.retro",
@@ -7977,6 +7978,19 @@
     "e.bytes",
     "e.fmt.protobuf",
     "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.cookie",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.fmt.mail",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   }

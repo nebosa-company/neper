@@ -27824,6 +27824,35 @@ fn parse(a: *mem.Arena, data: []const u8) -> ([]Layer, err)
 Mapbox Vector Tiles (specification 2.1, C160), decoded over `e.fmt.protobuf`: `parse` reads a tile's layers (name, extent, version, key and value tables, values keeping their protobuf type) and each layer's features (id, geometry type, tag pairs, and the MoveTo, LineTo and ClosePath commands resolved to absolute integer points in the layer's extent, with `parts` giving where each linestring or ring ends). Truncated geometry or tag lists are `Invalid`. The tile format OpenStreetMap vector sources (OpenFreeMap, Protomaps) serve; rendering and the transform to the screen belong to the caller. Checked against a tile built by an independent encoder (`scripts/gen_mvt_test.py`).
 
 
+### `e.net.cookie`
+
+```neper
+error Invalid
+error Refused
+error JarFull
+
+type SameSite = enum u8 { Unset, Lax, Strict, None }
+type Cookie = struct { name: str, value: str, domain: str, host_only: bool, path: str, expires: i64, has_expires: bool, secure: bool, http_only: bool, same_site: SameSite, created: i64 }
+type Jar = struct { cookies: []Cookie, count: usize, clock: i64 }
+
+fn fold(c: u8) -> u8
+fn eq_fold(a: str, b: str) -> bool
+fn lower(a: *mem.Arena, s: str) -> (str, err)
+fn starts_fold(s: str, prefix: str) -> bool
+fn default_path(request_path: str) -> str
+fn domain_match(host: str, domain: str) -> bool
+fn path_match(request_path: str, cookie_path: str) -> bool
+fn trim(s: str) -> str
+fn parse(a: *mem.Arena, line: str, host: str, request_path: str, secure_request: bool, now: i64) -> (Cookie, err)
+fn expired(c: Cookie, now: i64) -> bool
+fn jar_new(storage: []Cookie) -> Jar
+fn store(jar: *Jar, c: Cookie, now: i64) -> err
+fn header(a: *mem.Arena, jar: *Jar, host: str, path: str, secure: bool, now: i64) -> (str, err)
+```
+
+HTTP cookies (RFC 6265, C159): `parse` reads a `Set-Cookie` line received from a host for a path into a `Cookie` (name, value, Domain with its host-only flag, Path with the default-path rule, Expires or Max-Age as a Unix time with Max-Age winning, Secure, HttpOnly, SameSite); `store` puts it in a caller-owned `Jar` (replacing the same name, domain and path, removing on a past time, dropping expired ones to make room); `header` builds the `Cookie` request header for a host, path and scheme (domain-match and path-match, not expired, Secure only on https, longer path first then earlier-stored). A Domain that does not cover the host, a `__Secure-` or `__Host-` cookie breaking its prefix rules and a Secure cookie from a plain response are refused. The public-suffix list is the caller's. Checked against an independent Python model of the RFC's algorithms over a scripted sequence (`scripts/gen_cookie_test.py`).
+
+
 ### `e.fmt.pdf`
 
 ```neper

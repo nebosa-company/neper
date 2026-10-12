@@ -1242,6 +1242,11 @@ fmt_mvt_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_mvt_written" = 'executable written' ]
 chmod +x "$test_build/fmt-mvt-selfhost"
 "$test_build/fmt-mvt-selfhost"
+# `e.net.cookie`: RFC 6265 storage and retrieval against an independent model (C159).
+net_cookie_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_cookie/src/main.e" "$repo" x64 linux "$test_build/net-cookie-selfhost")
+[ "$net_cookie_written" = 'executable written' ]
+chmod +x "$test_build/net-cookie-selfhost"
+"$test_build/net-cookie-selfhost"
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-selfhost")
 [ "$fmt_pdf_written" = 'executable written' ]

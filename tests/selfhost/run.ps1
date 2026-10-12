@@ -1348,6 +1348,12 @@ $fmtmvtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtmvtWritten -ne 'executable written') { throw 'fmt_mvt emission failed' }
 & $fmtmvtPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_mvt check failed: exit $LASTEXITCODE" }
+# `e.net.cookie`: RFC 6265 storage and retrieval against an independent model (C159).
+$netcookiePath = Join-Path $testBuild 'net-cookie-selfhost.exe'
+$netcookieWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_cookie\src\main.e') $repo 'x64' 'windows' $netcookiePath
+if ($LASTEXITCODE -ne 0 -or $netcookieWritten -ne 'executable written') { throw 'net_cookie emission failed' }
+& $netcookiePath
+if ($LASTEXITCODE -ne 0) { throw "a net_cookie check failed: exit $LASTEXITCODE" }
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 $fmtPdfPath = Join-Path $testBuild 'fmt-pdf-selfhost.exe'
 $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf\src\main.e') $repo 'x64' 'windows' $fmtPdfPath
