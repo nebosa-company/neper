@@ -23753,6 +23753,7 @@ count; the control variate's coefficient is estimated from the same sample, kept
 
 ```neper
 type Chain = struct { accepted: usize, proposed: usize }
+type Fit = struct { bound: f64, steps: usize }
 error TooSmall
 error Invalid
 
@@ -23766,6 +23767,10 @@ fn tree_row(record: []f64, row: usize, n: usize) -> []f64
 fn no_u_turn(record: []f64, n: usize) -> bool
 fn build_tree[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, x: []const f64, p: []const f64, log_slice: f64, direction: f64, depth: usize, step: f64, out: []f64, regions: []f64, gradient: []f64, momentum: []f64, n: usize) -> (usize, bool)
 fn nuts[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, x: []f64, step: f64, max_depth: usize, samples: []f64, count: usize, scratch: []f64) -> (Chain, err)
+fn gaussian_entropy_constant(n: usize) -> f64
+fn elbo[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, r: *rand.Pcg64, mean: []const f64, log_sd: []const f64, draws: usize, scratch: []f64) -> (f64, err)
+fn advi[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, mean: []f64, log_sd: []f64, steps: usize, draws: usize, rate: f64, scratch: []f64) -> (Fit, err)
+fn variational_samples(r: *rand.Pcg64, mean: []const f64, log_sd: []const f64, samples: []f64, count: usize) -> err
 ```
 
 Every sampler starts at the caller's `x`, writes `count` rows into `samples` and leaves
@@ -23773,6 +23778,18 @@ Every sampler starts at the caller's `x`, writes `count` rows into `samples` and
 through the caller's conditional draw, `hmc` with a fixed leapfrog trajectory, and
 `nuts` (algorithm 3, slice form, trees of at most `max_depth` doublings over
 `(5 * max_depth + 14) * n` scratch). A `Chain` counts accepted and proposed moves.
+
+Variational inference (L060, D2841) fits the mean-field Gaussian `q = N(mean,
+diag(exp(log_sd)^2))` to the same unnormalised log density and gradient callbacks:
+`advi` runs `steps` Adam ascents of rate `rate` on reparameterised ELBO gradients
+(`draws` a step, entropy gradient 1 per log-scale), averages the second half of the
+iterates into `mean` and `log_sd` and reports the ELBO from `100 * draws` fresh
+samples in `Fit.bound`; `elbo` is that Monte Carlo estimate on its own and
+`variational_samples` draws rows from the fit. `advi` needs `11 * n` scratch, `elbo`
+`n`. The bound is for the density as given, so `log Z - bound` is the KL divergence.
+A gradient from an `e.ml.nn` tape fits inside the callback; this module does not
+import it. Checked against Gauss-Hermite quadrature optima (`scripts/gen_vi_test.py`):
+correlated normal, banana and log-gamma targets.
 
 ### `e.math.opt.convex`
 

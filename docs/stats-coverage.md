@@ -78,8 +78,10 @@ analysis (`lib/e/ml/bayes.e` covers Gaussian/multinomial naive Bayes only).
 Dirichlet, multivariate Normal (Cholesky), importance/rejection sampling,
 stratified / Latin-hypercube / Halton / Sobol sequences, Gaussian copula.
 
-Gap (→ L060): no variational inference (ELBO / SVI / ADVI-lite) over the
-existing `e.ml.nn` autodiff.
+`mcmc.advi`, `mcmc.elbo` and `mcmc.variational_samples` (L060, D2841): mean-field
+Gaussian ADVI over the same density and gradient callbacks the samplers take; a
+tape from `e.ml.nn` fits inside the callback. Full-rank q and constrained-space
+transforms are left to the caller.
 
 ### Non-parametric — supported
 
