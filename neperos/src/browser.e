@@ -301,6 +301,73 @@ fn absorb_cookies(a: *mem.Arena, s: *State, head: str, host: str, path: str, now
     ret stored
 }
 
+// The value of the header `name` (lower case, with its colon) in a response's header block, trimmed.
+fn header_value(head: str, name: str) -> (str, bool) {
+    var at = 0usize
+    while at < head.len {
+        var end = at
+        while end < head.len && head[end] != 10u8 { end += 1usize }
+        var line_end = end
+        if line_end > at && head[line_end - 1usize] == 13u8 { line_end -= 1usize }
+        let line = head[at..line_end]
+        if header_is(line, name) {
+            var from = name.len
+            while from < line.len && (line[from] == 32u8 || line[from] == 9u8) { from += 1usize }
+            ret (line[from..line.len], true)
+        }
+        at = end + 1usize
+    }
+    ret ("", false)
+}
+
+// GET with the jar's cookies, absorbing what each response sets and following up to five redirects (a `Location` that
+// is a path on the same host or an absolute https address): the final reply and the host and path it came from.
+fn fetch_following(a: *mem.Arena, s: *State, host: str, path: str, now: i64) -> (httpc.Reply, str, str, err) {
+    var h = host
+    var p = path
+    var last: httpc.Reply = zero
+    var hops = 0usize
+    while hops < 5usize {
+        var extra = ""
+        let (sent, sent_error) = cookie.header(a, &s.jar, h, p, true, now)
+        if sent_error == ok && sent.len > 0usize {
+            extra = ui.join(a, "Cookie: ", sent, "\r\n")
+            ui.say("browser cookie sent ")
+            ui.say_num(sent.len)
+            ui.say(" bytes\n")
+        }
+        let (reply, get_error) = httpc.get(a, h, p, extra)
+        if get_error != ok { ret (reply, h, p, get_error) }
+        last = reply
+        let kept = absorb_cookies(a, s, reply.head, h, p, now)
+        if kept > 0usize {
+            ui.say("browser cookies ")
+            ui.say_num(s.jar.count)
+            ui.say("\n")
+        }
+        let moved = reply.status == 301usize || reply.status == 302usize || reply.status == 303usize || reply.status == 307usize || reply.status == 308usize
+        if !moved { ret (reply, h, p, ok) }
+        let (location, has_location) = header_value(reply.head, "location:")
+        if !has_location || location.len == 0usize { ret (reply, h, p, ok) }
+        if location[0usize] == 47u8 {
+            p = location
+        } else if location.len > 8usize && header_is(location, "https://") {
+            var slash = 8usize
+            while slash < location.len && location[slash] != 47u8 { slash += 1usize }
+            h = location[8usize..slash]
+            if slash < location.len { p = location[slash..location.len] } else { p = "/" }
+        } else {
+            ret (reply, h, p, ok)
+        }
+        ui.say("browser redirect ")
+        ui.say_text(h)
+        ui.say_text(p)
+        ui.say("\n")
+        hops += 1usize
+    }
+    ret (last, h, p, httpc.Malformed)
+}
+
 // Fetch and lay out the page of address slot `slot`: false (with `load_error` set) when it could not be had.
 fn load_live(a: *mem.Arena, s: *State, slot: usize) -> bool {
     let u = s.urls[slot]
@@ -312,25 +379,9 @@ fn load_live(a: *mem.Arena, s: *State, slot: usize) -> bool {
     s.scroll = 0usize
     s.title_len = 0usize
     s.loaded = NONE
-    // (C159) The cookies the jar holds for this address go with the request, and what the response sets is kept.
+    // (C159) The cookies the jar holds go with each request, what a response sets is kept, redirects are followed.
     let now = wall_seconds()
-    var extra = ""
-    let (sent, sent_error) = cookie.header(a, &s.jar, host, path, true, now)
-    if sent_error == ok && sent.len > 0usize {
-        extra = ui.join(a, "Cookie: ", sent, "\r\n")
-        ui.say("browser cookie sent ")
-        ui.say_num(sent.len)
-        ui.say(" bytes\n")
-    }
-    let (reply, get_error) = httpc.get(a, host, path, extra)
-    if get_error == ok {
-        let kept = absorb_cookies(a, s, reply.head, host, path, now)
-        if kept > 0usize {
-            ui.say("browser cookies ")
-            ui.say_num(s.jar.count)
-            ui.say("\n")
-        }
-    }
+    let (reply, final_host, final_path, get_error) = fetch_following(a, s, host, path, now)
     if get_error != ok {
         s.load_error = 1usize
         ret false
@@ -350,8 +401,8 @@ fn load_live(a: *mem.Arena, s: *State, slot: usize) -> bool {
     s.loaded = slot
     s.load_error = 0usize
     ui.say("browser live ")
-    ui.say_text(host)
-    ui.say_text(path)
+    ui.say_text(final_host)
+    ui.say_text(final_path)
     ui.say(" ")
     ui.say_text(ui.number(a, s.page_total))
     ui.say("\n")

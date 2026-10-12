@@ -2291,4 +2291,5 @@ D2452	876	C156: a CAP alert reader
 D2453	1089	C171: a Server-Sent Events reader
 D2454	992	C160: Mapbox Vector Tile reader
 D2455	1202	C159: HTTP cookies
-D2456	1336	C159: the Browser keeps cookies
+D2456	1337	C159: the Browser keeps cookies
+D2457	1061	C159: the Browser follows redirects
