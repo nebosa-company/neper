@@ -15471,6 +15471,98 @@ extendible hashing, an LSM (`memtable_flush`, `sstable_find`, `lsm_compact`), a 
 CLOCK and LRU-K eviction, and transactions: 2PL with deadlock detection, MVCC with
 `vacuum`, OCC validation.
 
+### `e.algo.rules`
+
+```neper
+const NONE: u32 = 4294967295u32
+const MAX_ARGS: usize = 6usize
+const MAX_CONDS: usize = 6usize
+const MAX_ACTS: usize = 6usize
+const MAX_VARS: usize = 12usize
+const OP_ANY: u8 = 0u8
+const OP_EQ: u8 = 1u8
+const OP_NE: u8 = 2u8
+const OP_LT: u8 = 3u8
+const OP_LE: u8 = 4u8
+const OP_GT: u8 = 5u8
+const OP_GE: u8 = 6u8
+const ACT_ASSERT: u8 = 1u8
+const ACT_RETRACT: u8 = 2u8
+const ACT_HALT: u8 = 3u8
+const AT_CONST: u8 = 0u8
+const AT_VAR: u8 = 1u8
+const AT_ADD_VAR: u8 = 2u8
+const AT_ADD_CONST: u8 = 3u8
+type Term = struct { bind: i32, first: bool, op: u8, rv: i32, v: i64 }
+type Cond = struct { kind: u32, neg: bool, n: u32, alpha: u32, terms: [6]Term }
+type ATerm = struct { op: u8, a: i64, b: i64 }
+type Act = struct { op: u8, kind: u32, n: u32, cond: u32, terms: [6]ATerm }
+type Rule = struct { name: str, salience: i32, nconds: u32, nacts: u32, node0: u32, specificity: u32, nvars: u32, conds: [6]Cond, acts: [6]Act }
+type Fact = struct { kind: u32, alive: bool, f: [6]i64 }
+type Token = struct { rule: u32, level: u32, next: u32, blocked: u32, alive: bool, fired: bool, path: [7]u32, facts: [6]u32, vars: [12]i64 }
+type Alpha = struct { kind: u32, n: u32, head: u32, tests: [6]Term }
+type Entry = struct { fact: u32, next: u32 }
+type Node = struct { head: u32 }
+type Limits = struct { facts: usize, tokens: usize, rules: usize, alphas: usize, entries: usize, names: usize, log: usize }
+type Engine = struct { a: *mem.Arena, facts: []Fact, nfacts: usize, tokens: []Token, ntokens: usize, entries: []Entry, nentries: usize, alphas: []Alpha, nalphas: usize, nodes: []Node, nnodes: usize, rules: []Rule, nrules: usize, syms: []str, nsyms: usize, kinds: []str, nkinds: usize, log: []u32, nlog: usize, halted: bool }
+type Column = struct { field: u32, op: u8 }
+type Table = struct { name: str, in_kind: str, out_kind: str, in_arity: usize, out_arity: usize, cols: []const Column, rows: usize, cells: []const i64, outs: []const i64, first_hit: bool, salience: i32 }
+type Parser = struct { src: str, pos: usize, vars: [12]str, nvars: usize }
+error Full
+error TooMany
+error BadRule
+error Syntax
+error NotFound
+fn any_cell() -> i64
+fn init(a: *mem.Arena, lim: Limits) -> (Engine, err)
+fn dup(a: *mem.Arena, s: str) -> (str, err)
+fn same(x: str, y: str) -> bool
+fn intern_symbol(e: *Engine, name: str) -> (i64, err)
+fn intern_kind(e: *Engine, name: str) -> (u32, err)
+fn compare(op: u8, x: i64, y: i64) -> bool
+fn match_cond(c: Cond, f: Fact, vars: []i64) -> bool
+fn alpha_pass(al: Alpha, f: Fact) -> bool
+fn new_token(e: *Engine, rule_index: u32, parent: u32) -> (u32, err)
+fn kill_below(e: *Engine, tid: u32)
+fn propagate(e: *Engine, tid: u32) -> err
+fn same_alpha(al: Alpha, kind_id: u32, n: u32, tests: [6]Term) -> bool
+fn add_rule(e: *Engine, rule_in: Rule) -> err
+fn find_fact(e: *Engine, f: Fact) -> u32
+fn right_activate(e: *Engine, ri: usize, ci: usize, fid: u32) -> err
+fn assert_fact(e: *Engine, kind_id: u32, args: []const i64) -> (u32, bool, err)
+fn retract(e: *Engine, fid: u32) -> err
+fn count(e: *Engine, kind_id: u32) -> usize
+fn has(e: *Engine, kind_id: u32, args: []const i64) -> bool
+fn sorted_ids(t: Token, n: u32, out: []u32) -> usize
+fn better(e: *Engine, x: u32, y: u32) -> bool
+fn eval_term(at: ATerm, vars: [12]i64) -> i64
+fn run_actions(e: *Engine, tid: u32) -> err
+fn fire(e: *Engine, limit: usize) -> (usize, err)
+fn fired_rule(e: *Engine, n: usize) -> u32
+fn bind_term(var_index: usize) -> Term
+fn const_aterm(v: i64) -> ATerm
+fn var_aterm(index: usize) -> ATerm
+fn add_table(e: *Engine, t: Table) -> err
+fn is_word_char(c: u8) -> bool
+fn is_digit(c: u8) -> bool
+fn skip(p: *Parser)
+fn accept(p: *Parser, s: str) -> bool
+fn accept_kw(p: *Parser, s: str) -> bool
+fn expect(p: *Parser, s: str) -> err
+fn word(p: *Parser) -> (str, err)
+fn integer(p: *Parser) -> (i64, err)
+fn var_slot(p: *Parser, name: str) -> (i32, err)
+fn parse_op(p: *Parser) -> u8
+fn parse_const(e: *Engine, p: *Parser) -> (i64, err)
+fn parse_term(e: *Engine, p: *Parser) -> (Term, err)
+fn parse_cond(e: *Engine, p: *Parser, neg: bool) -> (Cond, err)
+fn parse_aterm(e: *Engine, p: *Parser) -> (ATerm, err)
+fn parse_rule(e: *Engine, p: *Parser) -> err
+fn load(e: *Engine, src: str) -> err
+```
+
+A forward-chaining production-rule engine (L161) in the shape of Drools and CLIPS. Facts are an interned kind and up to six `i64` fields; asserting an existing fact is a no-op. A Rete network (shared alpha memories on constant tests, a beta chain of join and negative nodes holding partial matches) is updated incrementally by `assert_fact` and `retract`. `fire` runs the best activation until the agenda is empty, a `halt` runs or the limit is reached; conflict resolution is salience, recency, specificity, rule order, with refraction. Right-hand sides are data: `assert`, `retract n`, `halt`, with `?v`, `?v+?w` and `?v+k` terms. `load` parses the rule DSL; `add_table` compiles a decision table (row rules, `first_hit` through a marker fact and a `not`, or collect). Storage is fixed at `init` (`Limits`); `Full` when a pool is spent. Not here: beta prefix sharing, `exists`/`forall`/`or`, truth maintenance, a workbench or server.
+
 ### `e.db.migrate`
 
 ```neper

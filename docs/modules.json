@@ -498,6 +498,7 @@
     "e.debug.dump.host",
     "e.math.pkpd",
     "e.math.units",
+    "e.algo.rules",
     "e.db.migrate",
     "e.db.orm",
     "e.test.match",
@@ -6929,6 +6930,17 @@
     "e.mem",
     "e.str",
     "e.test"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.rules",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
    ],
    "blocked_by": []
   },

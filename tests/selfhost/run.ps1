@@ -2338,6 +2338,12 @@ $dataObjpoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $dataObjpoolWritten -ne 'executable written') { throw 'data_objpool emission failed' }
 & $dataObjpoolPath
 if ($LASTEXITCODE -ne 0) { throw "a data_objpool check failed: exit $LASTEXITCODE" }
+# `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
+$algoRulesPath = Join-Path $testBuild 'algo-rules-selfhost.exe'
+$algoRulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rules\src\main.e') $repo 'x64' 'windows' $algoRulesPath
+if ($LASTEXITCODE -ne 0 -or $algoRulesWritten -ne 'executable written') { throw 'algo_rules emission failed' }
+& $algoRulesPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_rules check failed: exit $LASTEXITCODE" }
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 $dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
 $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath
