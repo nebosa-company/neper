@@ -2373,4 +2373,5 @@ D4301	2735	The compiler hashes from the library: one SHA-256, with the extension
 D4302	2218	The generated-code report: thresholds scored on the real toolchain, not on a model (T023)
 D4303	2083	T026 measured: script share fell to 6-8%, context is level with Dart's now
 D4304	2338	`compare-manifests --cross-host`: what two hosts' builds of one program must agree on (T022)
-D4305	1537	The package manifest's schema branch has a fixture and a negative self-check (T012)
+D4305	1538	The package manifest's schema branch has a fixture and a negative self-check (T012)
+D3910	3112	G006: `e.ui.datagrid`, first increment: the grid view over the table, view and grouping, with no data logic of its own

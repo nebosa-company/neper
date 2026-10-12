@@ -2102,6 +2102,40 @@ their row counts in fold order and the number of null cells; `merge_fold` joins 
 in ASCII case. `BadColumn` answers a numeric column or one out of range; `TooSmall` an `out` that is
 too short (the values that fit are written).
 
+### `e.ui.datagrid`
+
+```neper
+const KEY_BASE: u64 = 4096u64
+
+type CellKind = enum u8 { Text, Int, Real, Currency, Bool }
+type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind }
+type Events = struct { ctx: *void, sort_changed: fn(*void, usize, bool) -> err, row_picked: fn(*void, usize) -> err }
+type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, theme: *const control.Theme }
+error TooManyColumns
+
+fn no_events() -> Events
+fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, events: Events, key: widget.Key) -> (Grid, err)
+fn show_sort(grid: *Grid, spec: usize, descending: bool)
+fn clear_selection(grid: *Grid)
+fn row_key(grid: *const Grid, row: usize) -> widget.Key
+fn group_key(grid: *const Grid, group: usize) -> widget.Key
+fn footer_key(grid: *const Grid) -> widget.Key
+fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err)
+```
+
+A data grid over an `e.data.table` and its `e.data.tablegroup` (`docs/grid.md` §5.5), first
+increment: a header with the sort indicator, a virtual body that builds only the visible rows of
+the grouping's visible list, group rows (a tap expands or collapses; the first column shows
+`[+]`/`[-]`, the key and the count, the others the group's summary under their column), a footer of
+the applied summaries, and a no-data text when there is nothing to show. Cells are typed text nodes
+by kind (text, integer, real, currency, boolean). The grid has no sorting, filtering or grouping
+logic of its own: a header tap is the `sort_changed` event (spec index, descending) and the
+application sorts or groups through `e.data.tableview` / `e.data.tablegroup` and builds again;
+`row_picked` carries the storage row. A grid owns the widget keys from `key` to
+`key + KEY_BASE + row capacity + group capacity` (the table's own header cells use the keys just
+above `key`). Not yet: bands, filter row, navigator, row indicator, preview row, cell painters,
+editors, persistence.
+
 ### `e.data.slot_map`
 
 ```neper

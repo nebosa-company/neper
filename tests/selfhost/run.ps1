@@ -2482,6 +2482,12 @@ $dataTablesearchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $dataTablesearchWritten -ne 'executable written') { throw 'data_tablesearch emission failed' }
 & $dataTablesearchPath
 if ($LASTEXITCODE -ne 0) { throw "a data_tablesearch check failed: exit $LASTEXITCODE" }
+# `e.ui.datagrid`: the grid view over the table, view and grouping through the UI test harness: virtual body, header tap reporting the sort, row tap reporting the storage row, group rows expanding and collapsing, footer summaries, no-data text (D3910).
+$uiDatagridPath = Join-Path $testBuild 'ui-datagrid-selfhost.exe'
+$uiDatagridWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_datagrid\src\main.e') $repo 'x64' 'windows' $uiDatagridPath --arena 512m
+if ($LASTEXITCODE -ne 0 -or $uiDatagridWritten -ne 'executable written') { throw 'ui_datagrid emission failed' }
+& $uiDatagridPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_datagrid check failed: exit $LASTEXITCODE" }
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 $algoRulesPath = Join-Path $testBuild 'algo-rules-selfhost.exe'
 $algoRulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rules\src\main.e') $repo 'x64' 'windows' $algoRulesPath

@@ -2199,6 +2199,11 @@ data_tablesearch_written=$($test_build/neper-self emit-executable "$repo/tests/s
 [ "$data_tablesearch_written" = 'executable written' ]
 chmod +x "$test_build/data-tablesearch-selfhost"
 "$test_build/data-tablesearch-selfhost"
+# `e.ui.datagrid`: the grid view over the table, view and grouping through the UI test harness: virtual body, header tap reporting the sort, row tap reporting the storage row, group rows expanding and collapsing, footer summaries, no-data text (D3910).
+ui_datagrid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_datagrid/src/main.e" "$repo" x64 linux "$test_build/ui-datagrid-selfhost" --arena 512m)
+[ "$ui_datagrid_written" = 'executable written' ]
+chmod +x "$test_build/ui-datagrid-selfhost"
+"$test_build/ui-datagrid-selfhost"
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 algo_rules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rules/src/main.e" "$repo" x64 linux "$test_build/algo-rules-selfhost")
 [ "$algo_rules_written" = 'executable written' ]
