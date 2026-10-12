@@ -2338,6 +2338,15 @@ D3702	4625	L098: e.text.math gains the other math alphabets, accents, bars and b
 D3703	4557	L037: the types a synced table infers from sample rows (`e.algo.syncinfer`), V8's date parser included
 D3704	833	the data grid's text operators are case-insensitive by default
 D2469	1358	An opacity layer is a full-target canvas; single-paint shapes do not take one
+D4100	1619	C170: Secure exports, shows a QR symbol, checks breaches and locks itself
+D4101	669	The network server polls a TLS stream
+D4102	918	C171: the reply streams into the bubble
+D4103	789	C171: conversations, options and the key in the vault
+D4104	1383	C155: saved hosts and trusted host keys on the disk; AES-GCM and the server's rekey in e.net.ssh
+D4105	667	C164: Chat over wss, presence, typing, delivered marks and history on the disk
+D4106	809	C173: the strict scan, its report and the app kit's level
+D4107	353	C173: a signed revocation list the device fetches
+D4108	1124	C151: a build server, a package streamed, the icon on the home screen
 D3800	2001	C172: a spreadsheet is a grid in Document, read by `e.fmt.ooxml.sheet_grid`
 D3801	2086	C152, C172: a PDF page painted from its content stream (`e.fmt.pdf.page_painting`)
 D3802	1220	C172: Markdown tables in Document

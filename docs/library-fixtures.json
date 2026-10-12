@@ -4240,6 +4240,44 @@
     "ui_flow",
     "ui_flow_logic"
    ]
+  },
+  {
+   "module": "e.data.table",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 50,
+   "delivered": 50,
+   "pending": [],
+   "fixtures": [
+    "data_table",
+    "data_tablefilter",
+    "data_tablegroup",
+    "data_tableview"
+   ]
+  },
+  {
+   "module": "e.data.tableview",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 31,
+   "delivered": 31,
+   "pending": [],
+   "fixtures": [
+    "data_tablefilter",
+    "data_tablegroup",
+    "data_tableview"
+   ]
+  },
+  {
+   "module": "e.data.tablegroup",
+   "milestone": null,
+   "schedule": "later",
+   "catalogue": 36,
+   "delivered": 36,
+   "pending": [],
+   "fixtures": [
+    "data_tablegroup"
+   ]
   }
  ]
 }
