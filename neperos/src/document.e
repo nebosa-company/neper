@@ -42,6 +42,10 @@ const CODE: usize = 2usize
 const PDF: usize = 3usize
 const DOCX: usize = 4usize
 const PPTX: usize = 5usize
+// A spreadsheet (C172): its first sheet's cells, a row a line with tabs between the cells, drawn as a grid.
+const SHEET: usize = 6usize
+// A PDF drawn page by page from its content streams (C152), with its text lines one tap away.
+const PDFPAGE: usize = 7usize
 
 type State = struct {
     // A file handed over by Files (C125): its name and text, shown as entry FILES of the list.
@@ -62,6 +66,24 @@ type State = struct {
     disk_len: [8]usize,
     disk_total: usize,
     find: ui.Field,
+    // The path of an open zip archive (C150), so its entries can be extracted: empty when the file is not one.
+    zip_path: [64]u8,
+    zip_path_len: usize,
+    // (C152) A text file over what the viewer holds is read a window at a time from the disk: its path and size, the
+    // window shown, where each window starts (at a line) and the pages before it, and whether another follows.
+    // (C152) An open PDF: its path (to be painted from), its page count, and whether the text lines are shown instead.
+    pdf_path: [64]u8,
+    pdf_path_len: usize,
+    pdf_pages: usize,
+    pdf_text: bool,
+    pdf_said: usize,
+    big_path: [64]u8,
+    big_path_len: usize,
+    big_size: usize,
+    big_chunk: usize,
+    big_starts: [64]usize,
+    big_base: [64]usize,
+    big_more: bool,
     zoom: usize,
     screen: usize,
     open: usize,
@@ -123,15 +145,86 @@ fn office_text(a: *mem.Arena, s: *State, is_deck: bool, is_odf: bool, raw: []con
     } else {
         let (paragraphs, paragraphs_error) = text_of_file(a, is_odf, raw)
         if paragraphs_error != ok { ret 0usize }
+        // (C152) A Word document's tables are grids set between the paragraphs outside them: the cells' paragraphs
+        // are left out of the text and each table's rows follow the paragraph it came after, tabs between cells.
+        var flags: []bool = zero
+        var grids: []ooxml.Grid = zero
+        if !is_odf {
+            let (found_flags, flags_error) = ooxml.cell_flags(a, raw)
+            let (found_grids, grids_error) = ooxml.tables(a, raw)
+            if flags_error == ok && grids_error == ok && found_flags.len == paragraphs.len {
+                flags = found_flags
+                grids = found_grids
+            }
+        }
+        var next_table = 0usize
+        var body_count = 0usize
         var i = 0usize
         while i < paragraphs.len {
-            if paragraphs[i].list {
-                n = add_line(s, n, ui.join(a, "- ", paragraphs[i].text, ""))
-            } else {
-                n = add_line(s, n, paragraphs[i].text)
+            let in_cell = i < flags.len && flags[i]
+            if !in_cell {
+                while next_table < grids.len && grids[next_table].after <= body_count {
+                    n = add_grid(s, n, grids[next_table])
+                    next_table += 1usize
+                }
+                if paragraphs[i].list {
+                    n = add_line(s, n, ui.join(a, "- ", paragraphs[i].text, ""))
+                } else {
+                    n = add_line(s, n, paragraphs[i].text)
+                }
+                body_count += 1usize
             }
             i += 1usize
         }
+        while next_table < grids.len {
+            n = add_grid(s, n, grids[next_table])
+            next_table += 1usize
+        }
+        if grids.len > 0usize {
+            ui.say("document tables ")
+            ui.say_num(grids.len)
+            ui.say("\n")
+        }
+    }
+    ret n
+}
+
+// The first sheet of a spreadsheet (C172) as text: a row a line, the cells separated by tabs (a tab or newline inside
+// a cell is a space), through e.fmt.ooxml.sheet_grid; the length, 0 when it did not read or has no cell.
+fn xlsx_text(a: *mem.Arena, s: *State, raw: []const u8) -> usize {
+    let (grid, grid_error) = ooxml.sheet_grid(a, raw, 1usize)
+    if grid_error != ok || grid.rows == 0usize || grid.columns == 0usize { ret 0usize }
+    ret add_grid(s, 0usize, grid)
+}
+
+// A grid's rows as lines of the handed text from `at`, cells separated by tabs (a tab or newline inside a cell is a
+// space); the new length. A table of a Word document goes in the same way (C152).
+fn add_grid(s: *State, at: usize, grid: ooxml.Grid) -> usize {
+    var n = at
+    var row = 0usize
+    while row < grid.rows {
+        var column = 0usize
+        while column < grid.columns {
+            if column > 0usize && n < 16383usize {
+                s.hand_text[n] = 9u8
+                n += 1usize
+            }
+            let cell = grid.cells[row * grid.columns + column]
+            var i = 0usize
+            while i < cell.len && n < 16383usize {
+                var c = cell[i]
+                if c == 9u8 || c == 10u8 || c == 13u8 { c = 32u8 }
+                s.hand_text[n] = c
+                n += 1usize
+                i += 1usize
+            }
+            column += 1usize
+        }
+        if n < 16383usize {
+            s.hand_text[n] = 10u8
+            n += 1usize
+        }
+        row += 1usize
     }
     ret n
 }
@@ -161,6 +254,7 @@ fn zip_text(a: *mem.Arena, s: *State, raw: []const u8) -> usize {
 fn pdf_text(a: *mem.Arena, s: *State, raw: []const u8) -> usize {
     let (found, pages_error) = pdf.pages(a, raw)
     if pages_error != ok { ret 0usize }
+    s.pdf_pages = found.len
     var n = 0usize
     var i = 0usize
     while i < found.len {
@@ -188,6 +282,77 @@ fn ends_with(whole: str, suffix: str) -> bool {
         i += 1usize
     }
     ret true
+}
+
+// (C152) The window `k` of a big text file into the handed text: from where window k starts, up to 12000 bytes ending
+// after the last line that fits; where window k + 1 starts is noted. False when there is no such window.
+const BIG_WINDOW: usize = 12000usize
+
+fn load_chunk(a: *mem.Arena, s: *State, k: usize) -> bool {
+    if k >= 63usize { ret false }
+    let path = ui.text_of(a, s.big_path[0usize..], s.big_path_len)
+    let offset = s.big_starts[k]
+    if offset >= s.big_size { ret false }
+    var want = s.big_size - offset
+    if want > BIG_WINDOW { want = BIG_WINDOW }
+    let (got, read_ok) = vaultfs.read_from(path, offset, mem.address_of(&s.hand_text[0usize]), want)
+    if !read_ok || got == 0usize { ret false }
+    var cut = got
+    if offset + got < s.big_size {
+        var i = got
+        while i > 0usize && s.hand_text[i - 1usize] != 10u8 { i -= 1usize }
+        if i > 0usize { cut = i }
+    }
+    s.hand_len = cut
+    s.big_starts[k + 1usize] = offset + cut
+    s.big_more = offset + cut < s.big_size
+    s.big_chunk = k
+    if s.hand_has_hl {
+        let classified = hl.classify(s.hand_hl, ui.text_of(a, s.hand_text[0usize..], s.hand_len), s.hand_classes[0usize..])
+    }
+    ret true
+}
+
+// (C152) The file name a `#!` first line stands for, by its interpreter, so the highlighter's extension table picks
+// the language: `#!/usr/bin/env python3` and `#!/bin/python` are Python, `node`, the shells, `perl`, `ruby`, `php` and
+// `lua` likewise. Empty when the text has no such line or the interpreter is not one of those.
+fn shebang_name(content_text: str) -> str {
+    if content_text.len < 3usize || content_text[0usize] != 35u8 || content_text[1usize] != 33u8 { ret "" }
+    var end = 2usize
+    while end < content_text.len && content_text[end] != 10u8 && content_text[end] != 13u8 { end += 1usize }
+    let line = content_text[2usize..end]
+    // The words of the line.
+    var word_start = 0usize
+    var first = ""
+    var second = ""
+    var words = 0usize
+    var i = 0usize
+    while i <= line.len {
+        if i == line.len || line[i] == 32u8 || line[i] == 9u8 {
+            if i > word_start {
+                let word = line[word_start..i]
+                if words == 0usize { first = word }
+                if words == 1usize || (words == 2usize && second.len > 0usize && second[0usize] == 45u8) { second = word }
+                words += 1usize
+            }
+            word_start = i + 1usize
+        }
+        i += 1usize
+    }
+    // The interpreter: the base name of the first word, or the word after `env` (and its options).
+    var base = first
+    var j = first.len
+    while j > 0usize && first[j - 1usize] != 47u8 { j -= 1usize }
+    base = first[j..first.len]
+    if ui.same(base, "env") && second.len > 0usize { base = second }
+    if base.len >= 6usize && ui.same(base[0usize..6usize], "python") { ret "x.py" }
+    if ui.same(base, "node") || ui.same(base, "nodejs") { ret "x.js" }
+    if ui.same(base, "sh") || ui.same(base, "bash") || ui.same(base, "zsh") || ui.same(base, "dash") || ui.same(base, "ksh") { ret "x.sh" }
+    if ui.same(base, "perl") { ret "x.pl" }
+    if ui.same(base, "ruby") { ret "x.rb" }
+    if ui.same(base, "php") { ret "x.php" }
+    if ui.same(base, "lua") { ret "x.lua" }
+    ret ""
 }
 
 // A page of a handed file is this many lines.
@@ -219,6 +384,7 @@ fn hand_lines(s: *State) -> usize {
 
 // The pages of what is open: a handed file's lines in pages, or a sample's own count.
 fn pages_of(s: *State) -> usize {
+    if s.open == FILES && s.hand_kind == PDFPAGE && !s.pdf_text { ret s.pdf_pages }
     if s.open == FILES { ret (hand_lines(s) + lines_per_page(s) - 1usize) / lines_per_page(s) }
     ret page_count(s.open)
 }
@@ -519,6 +685,126 @@ fn draw_list(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     ret ok
 }
 
+// A Markdown table row (C172) starts with a bar; `trim_bar` is the row without its outer bars and spaces.
+fn is_bar_row(line: str) -> bool {
+    var i = 0usize
+    while i < line.len && line[i] == 32u8 { i += 1usize }
+    ret i < line.len && line[i] == 124u8
+}
+
+fn trim_bar(line: str) -> str {
+    var start = 0usize
+    var end = line.len
+    while start < end && line[start] == 32u8 { start += 1usize }
+    if start < end && line[start] == 124u8 { start += 1usize }
+    while end > start && (line[end - 1usize] == 32u8 || line[end - 1usize] == 13u8) { end -= 1usize }
+    if end > start && line[end - 1usize] == 124u8 { end -= 1usize }
+    ret line[start..end]
+}
+
+// The delimiter row under a table's header: only dashes, colons, bars and spaces, with a dash.
+fn is_rule_row(line: str) -> bool {
+    if !is_bar_row(line) { ret false }
+    var dash = false
+    var i = 0usize
+    while i < line.len {
+        let c = line[i]
+        if c == 45u8 { dash = true }
+        if c != 45u8 && c != 58u8 && c != 124u8 && c != 32u8 && c != 13u8 { ret false }
+        i += 1usize
+    }
+    ret dash
+}
+
+// The number of `sep`-separated fields of a line, and the `k`th, without surrounding spaces.
+fn field_count(line: str, sep: u8) -> usize {
+    var n = 1usize
+    var i = 0usize
+    while i < line.len {
+        if line[i] == sep { n += 1usize }
+        i += 1usize
+    }
+    ret n
+}
+
+fn field_at(line: str, k: usize, sep: u8) -> str {
+    var start = 0usize
+    var index = 0usize
+    var i = 0usize
+    while i <= line.len {
+        if i == line.len || line[i] == sep {
+            if index == k {
+                var from = start
+                var to = i
+                while from < to && line[from] == 32u8 { from += 1usize }
+                while to > from && line[to - 1usize] == 32u8 { to -= 1usize }
+                ret line[from..to]
+            }
+            index += 1usize
+            start = i + 1usize
+        }
+        i += 1usize
+    }
+    ret ""
+}
+
+// One row of cells in a grid of `columns` equal columns across `width`, at `x` and `y`: each cell clipped to the
+// characters that fit its column (7 dp a character at the 13 pt grotesk).
+fn draw_cells(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, row: str, sep: u8, columns: usize, x: f32, y: f32, width: f32, bold: bool, color: paint.Color) -> err {
+    if columns == 0usize { ret ok }
+    let each = width / f32(columns)
+    var fit = 2usize
+    while f32(fit + 1usize) * 7.0 <= each { fit += 1usize }
+    var k = 0usize
+    while k < columns {
+        var cell = field_at(row, k, sep)
+        if cell.len > fit { cell = cell[0usize..fit] }
+        if cell.len > 0usize {
+            if bold {
+                try ui.put(a, builder, faces.jost_bold, 14.0, cell, x + f32(k) * each + 5.0, y, color)
+            } else {
+                try ui.put(a, builder, faces.grotesk, 13.0, cell, x + f32(k) * each + 5.0, y, color)
+            }
+        }
+        k += 1usize
+    }
+    ret ok
+}
+
+// A spreadsheet's rows of the page as a grid (C172): the first row a header band, hairlines between rows and columns.
+// The columns are equal and at most eight; a sheet wider than that shows its first eight.
+fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try ui.card(a, builder, 12.0, 84.0, 388.0, 730.0, 18.0, ui.cream())
+    let content = content_of(a, s)
+    var total = line_total(content)
+    // The text ends with a newline: the empty line after it is not a row.
+    if total > 1usize && content.len > 0usize && content[content.len - 1usize] == 10u8 { total -= 1usize }
+    var columns = field_count(splitter(a, content, 0usize), 9u8)
+    if columns > 8usize { columns = 8usize }
+    let zf = zoom_factor(s)
+    let pitch: f32 = 26.0 * zf
+    let first = first_line(s)
+    let last = first + lines_per_page(s)
+    var n = first
+    while n < total && n < last {
+        let y: f32 = 96.0 + f32(n - first) * pitch
+        if n == 0usize { try ui.card(a, builder, 20.0, y - 4.0, 372.0, pitch, 4.0, paint.Color { red: 0.93, green: 0.86, blue: 0.70, alpha: 1.0 }) }
+        try draw_cells(a, builder, faces, splitter(a, content, n), 9u8, columns, 20.0, y, 372.0, n == 0usize, ui.ink())
+        try ui.card(a, builder, 20.0, y - 4.0 + pitch, 372.0, 1.0, 0.5, ui.muted())
+        n += 1usize
+    }
+    // Column hairlines over the rows drawn.
+    var shown = total - first
+    if shown > lines_per_page(s) { shown = lines_per_page(s) }
+    var k = 0usize
+    while k <= columns {
+        let x: f32 = 20.0 + f32(k) * 372.0 / f32(columns)
+        try ui.card(a, builder, x, 92.0, 1.0, f32(shown) * pitch, 0.5, ui.muted())
+        k += 1usize
+    }
+    ret ok
+}
+
 fn draw_md(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try ui.card(a, builder, 12.0, 84.0, 388.0, 730.0, 18.0, ui.cream())
     let content = content_of(a, s)
@@ -548,6 +834,16 @@ fn draw_md(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces)
             y += 26.0
         } else if row.len == 0usize {
             y += 12.0
+        } else if is_bar_row(row) {
+            // A table row (C172): its delimiter row draws nothing, the row above it is the header.
+            if !is_rule_row(row) {
+                let cells = trim_bar(row)
+                let header = n + 1usize < total && is_rule_row(splitter(a, content, n + 1usize))
+                if header { try ui.card(a, builder, 24.0, y - 3.0, 364.0, 26.0, 4.0, paint.Color { red: 0.93, green: 0.86, blue: 0.70, alpha: 1.0 }) }
+                try draw_cells(a, builder, faces, cells, 124u8, field_count(cells, 124u8), 24.0, y, 364.0, header, ui.ink())
+                try ui.card(a, builder, 24.0, y + 23.0, 364.0, 1.0, 0.5, ui.muted())
+                y += 28.0
+            }
         } else {
             let (box, box_error) = ui.wrapped(a, builder, faces.jost, 17.0, row, 28.0, y, 356.0, 0u32, ui.ink())
             if box_error != ok { ret box_error }
@@ -568,7 +864,15 @@ fn draw_txt(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces
     // Only the lines of the page are drawn.
     let zf = zoom_factor(s)
     while n < total && n < first + lines_per_page(s) + 1usize {
-        try ui.put(a, builder, faces.grotesk, 15.0 * zf, splitter(a, content, n), 28.0, 100.0 + f32(n - first) * 26.0 * zf, ui.ink())
+        let row = splitter(a, content, n)
+        let row_y: f32 = 100.0 + f32(n - first) * 26.0 * zf
+        if field_count(row, 9u8) > 1usize {
+            // A table row of a Word document (C152): its cells in equal columns with a hairline under it.
+            try draw_cells(a, builder, faces, row, 9u8, field_count(row, 9u8), 28.0, row_y, 356.0, false, ui.ink())
+            try ui.card(a, builder, 28.0, row_y + 22.0, 356.0, 1.0, 0.5, ui.muted())
+        } else {
+            try ui.put(a, builder, faces.grotesk, 15.0 * zf, row, 28.0, row_y, ui.ink())
+        }
         n += 1usize
     }
     ret ok
@@ -637,6 +941,105 @@ fn draw_code(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         try ui.disc(a, builder, 32.0 + f32(legend) * 76.0, 786.0, 5.0, token_color(kind))
         try ui.put(a, builder, faces.grotesk, 11.0, name, 42.0 + f32(legend) * 76.0, 780.0, ui.light_muted())
         legend += 1usize
+    }
+    ret ok
+}
+
+fn pdf_color(red: f64, green: f64, blue: f64) -> paint.Color {
+    ret paint.Color { red: f32(red), green: f32(green), blue: f32(blue), alpha: 1.0 }
+}
+
+// (C152) A PDF page painted: e.fmt.pdf's shapes (filled rectangles, stroked segments, text at its position and size)
+// laid out on a white sheet scaled to the card. The file is read and the page parsed for each draw (a frame's arena
+// is given back at the next).
+fn draw_pdf_page(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try ui.card(a, builder, 24.0, 84.0, 364.0, 680.0, 8.0, paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 })
+    let path = ui.text_of(a, s.pdf_path[0usize..], s.pdf_path_len)
+    let (size, kind, day, found) = vaultfs.stat(path)
+    if !found || size == 0usize || size > 262144usize {
+        try ui.centred(a, builder, faces.jost, 17.0, "This page cannot be painted", 206.0, 400.0, ui.muted())
+        ret ok
+    }
+    let (raw, raw_error) = mem.alloc[u8](a, size)
+    if raw_error != ok { ret raw_error }
+    let (got, read_ok) = vaultfs.read_big(path, mem.address_of(&raw[0usize]), size)
+    if !read_ok || got != size {
+        try ui.centred(a, builder, faces.jost, 17.0, "This page cannot be painted", 206.0, 400.0, ui.muted())
+        ret ok
+    }
+    let (painting, paint_error) = pdf.page_painting(a, raw[0usize..got], s.page)
+    if paint_error != ok {
+        try ui.centred(a, builder, faces.jost, 17.0, "This page cannot be painted", 206.0, 400.0, ui.muted())
+        ret ok
+    }
+    if s.pdf_said != s.page + 1usize {
+        s.pdf_said = s.page + 1usize
+        ui.say("document pdf painted ")
+        ui.say_num(painting.shapes.len)
+        ui.say(" shapes\n")
+    }
+    var scale = 364.0 / f32(painting.width)
+    let tall = 680.0 / f32(painting.height)
+    if tall < scale { scale = tall }
+    let left: f32 = 24.0 + (364.0 - f32(painting.width) * scale) / 2.0
+    let top: f32 = 84.0
+    let page_height = f32(painting.height)
+    var i = 0usize
+    while i < painting.shapes.len {
+        let piece = painting.shapes[i]
+        let color = pdf_color(piece.red, piece.green, piece.blue)
+        let x0: f32 = left + f32(piece.x0) * scale
+        let y0: f32 = top + (page_height - f32(piece.y0)) * scale
+        if piece.kind == pdf.SHAPE_FILL {
+            let x1: f32 = left + f32(piece.x1) * scale
+            let y1: f32 = top + (page_height - f32(piece.y1)) * scale
+            var rx = x0
+            var ry = y0
+            var rw = x1 - x0
+            var rh = y1 - y0
+            if rw < 0.0 {
+                rx = x1
+                rw = 0.0 - rw
+            }
+            if rh < 0.0 {
+                ry = y1
+                rh = 0.0 - rh
+            }
+            try ui.card(a, builder, rx, ry, rw, rh, 0.0, color)
+        } else if piece.kind == pdf.SHAPE_LINE {
+            let x1: f32 = left + f32(piece.x1) * scale
+            let y1: f32 = top + (page_height - f32(piece.y1)) * scale
+            var thick = f32(piece.width) * scale
+            if thick < 1.0 { thick = 1.0 }
+            var dx = x1 - x0
+            var dy = y1 - y0
+            if dx < 0.0 { dx = 0.0 - dx }
+            if dy < 0.0 { dy = 0.0 - dy }
+            if dy < 0.5 {
+                var from = x0
+                if x1 < x0 { from = x1 }
+                try ui.card(a, builder, from, y0 - thick / 2.0, dx, thick, 0.0, color)
+            } else if dx < 0.5 {
+                var from = y0
+                if y1 < y0 { from = y1 }
+                try ui.card(a, builder, x0 - thick / 2.0, from, thick, dy, 0.0, color)
+            } else {
+                // A slanted segment as a run of dots.
+                var length = dx
+                if dy > length { length = dy }
+                var t: f32 = 0.0
+                let step: f32 = 1.5 / length
+                while t <= 1.0 {
+                    try ui.disc(a, builder, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, thick / 2.0 + 0.3, color)
+                    t += step
+                }
+            }
+        } else {
+            var size_dp = f32(piece.size) * scale
+            if size_dp < 5.0 { size_dp = 5.0 }
+            try ui.put(a, builder, faces.jost, size_dp, piece.text, x0, y0 - size_dp * 0.85, color)
+        }
+        i += 1usize
     }
     ret ok
 }
@@ -710,6 +1113,11 @@ fn draw_slide(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
 fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     var kind = file_kind(s.open)
     if s.open == FILES { kind = s.hand_kind }
+    var painted_pdf = false
+    if kind == PDFPAGE {
+        // The painted page, or the text lines when the toggle says so.
+        if s.pdf_text { kind = TXT } else { painted_pdf = true }
+    }
     try svg.draw(a, builder, ui.back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), ui.light())
     ui.hit(&s.hits, 500usize, 0.0, 10.0, 66.0, 56.0)
     var shown = file_name(s.open)
@@ -720,16 +1128,27 @@ fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         try ui.pill(a, builder, &s.hits, faces, 701usize, 16.0, 50.0, 70.0, 28.0, "Find", ui.soft(), 13.0)
         try ui.pill(a, builder, &s.hits, faces, 702usize, 94.0, 50.0, 40.0, 28.0, "A-", ui.soft(), 13.0)
         try ui.pill(a, builder, &s.hits, faces, 703usize, 142.0, 50.0, 40.0, 28.0, "A+", ui.soft(), 13.0)
+        if s.pdf_path_len > 0usize {
+            var toggle = "Text"
+            if s.pdf_text { toggle = "Page" }
+            try ui.pill(a, builder, &s.hits, faces, 705usize, 196.0, 50.0, 80.0, 28.0, toggle, ui.amber(), 13.0)
+        }
+        if s.zip_path_len > 0usize { try ui.pill(a, builder, &s.hits, faces, 704usize, 196.0, 50.0, 96.0, 28.0, "Extract", ui.amber(), 13.0) }
     }
     if kind == MD { try draw_md(a, builder, s, faces) }
     if kind == TXT { try draw_txt(a, builder, s, faces) }
     if kind == CODE { try draw_code(a, builder, s, faces) }
+    if kind == SHEET { try draw_sheet(a, builder, s, faces) }
+    if painted_pdf { try draw_pdf_page(a, builder, s, faces) }
     if kind == PDF || kind == DOCX { try draw_page(a, builder, s, faces) }
     if kind == PPTX { try draw_slide(a, builder, s, faces) }
-    if pages_of(s) > 1usize {
+    if pages_of(s) > 1usize || s.big_more || s.big_chunk > 0usize {
         try ui.card(a, builder, 0.0, 828.0, 412.0, 68.0, 0.0, paint.Color { red: 0.11, green: 0.12, blue: 0.14, alpha: 1.0 })
         try ui.pill(a, builder, &s.hits, faces, 600usize, 40.0, 838.0, 110.0, 46.0, "Previous", ui.soft(), 15.0)
-        try ui.centred(a, builder, faces.jost, 17.0, ui.join(a, ui.number(a, s.page + 1usize), " / ", ui.number(a, pages_of(s))), 206.0, 850.0, ui.light())
+        // A big file's pages count from its first window; the total grows as the windows are read (a plus sign).
+        var more_mark = ""
+        if s.big_more { more_mark = "+" }
+        try ui.centred(a, builder, faces.jost, 17.0, ui.join(a, ui.number(a, s.big_base[s.big_chunk] + s.page + 1usize), " / ", ui.join(a, ui.number(a, s.big_base[s.big_chunk] + pages_of(s)), more_mark, "")), 206.0, 850.0, ui.light())
         try ui.pill(a, builder, &s.hits, faces, 601usize, 262.0, 838.0, 110.0, 46.0, "Next", ui.amber(), 15.0)
     }
     ret ok
@@ -799,7 +1218,7 @@ fn show(a: *mem.Arena, kit: *appkit.Kit, s: *State) -> bool {
 
 // Whether `name` is a file the app can show: a document format, Markdown or text, or a language the highlighter knows.
 fn showable(name: str) -> bool {
-    if ends_with(name, ".md") || ends_with(name, ".txt") || ends_with(name, ".docx") || ends_with(name, ".pptx") || ends_with(name, ".pdf") || ends_with(name, ".odt") || ends_with(name, ".odp") || ends_with(name, ".zip") { ret true }
+    if ends_with(name, ".md") || ends_with(name, ".txt") || ends_with(name, ".docx") || ends_with(name, ".pptx") || ends_with(name, ".pdf") || ends_with(name, ".odt") || ends_with(name, ".odp") || ends_with(name, ".zip") || ends_with(name, ".xlsx") { ret true }
     let (index, found) = hl.language_for(name)
     ret found
 }
@@ -859,6 +1278,93 @@ fn do_find(s: *State) -> usize {
     ret matches
 }
 
+// A zip entry name that would leave the extraction folder: absolute, with a backslash or a `..` segment.
+fn unsafe_entry(name: str) -> bool {
+    if name.len == 0usize || name[0usize] == 47u8 { ret true }
+    var segment = 0usize
+    var i = 0usize
+    while i <= name.len {
+        if i == name.len || name[i] == 47u8 {
+            if i - segment == 2usize && name[segment] == 46u8 && name[segment + 1usize] == 46u8 { ret true }
+            segment = i + 1usize
+        }
+        if i < name.len && name[i] == 92u8 { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+// (C150) Extract the open zip archive into a folder named after it, at the root: directories made, files written
+// in pieces; an entry that is unsafe, or larger than 200 KB, is skipped. Says how many files and bytes were written
+// (read back from the disk), and returns the files written.
+fn extract_zip(a: *mem.Arena, s: *State) -> usize {
+    if s.zip_path_len == 0usize { ret 0usize }
+    let path = ui.text_of(a, s.zip_path[0usize..], s.zip_path_len)
+    let (size, kind, day, found) = vaultfs.stat(path)
+    if !found || size == 0usize || size > 262144usize { ret 0usize }
+    let (raw, raw_error) = mem.alloc[u8](a, size)
+    if raw_error != ok { ret 0usize }
+    let (got, read_ok) = vaultfs.read_big(path, mem.address_of(&raw[0usize]), size)
+    if !read_ok || got != size { ret 0usize }
+    let (archive, open_error) = ooxml.open_package(a, raw[0usize..got])
+    if open_error != ok { ret 0usize }
+    var ar = archive
+    // The folder: the file's leaf name without ".zip".
+    var leaf = 0usize
+    var i = 0usize
+    while i < path.len {
+        if path[i] == 47u8 { leaf = i + 1usize }
+        i += 1usize
+    }
+    var stem = path[leaf..path.len]
+    if ends_with(stem, ".zip") { stem = stem[0usize..stem.len - 4usize] }
+    let base = ui.join(a, "/", stem, "")
+    let made_base = vaultfs.mkdir(base)
+    let listed = zip.entries(&ar)
+    var files = 0usize
+    var bytes = 0usize
+    var k = 0usize
+    while k < listed.len {
+        let name = listed[k].name
+        if !unsafe_entry(name) && listed[k].size <= 204800u64 {
+            let dest_path = ui.join(a, base, "/", name)
+            // Every directory above the entry (an archive need not list them).
+            var j = base.len + 1usize
+            while j < dest_path.len {
+                if dest_path[j] == 47u8 { let made = vaultfs.mkdir(dest_path[0usize..j]) }
+                j += 1usize
+            }
+            if !listed[k].directory {
+                let (data, data_error) = zip.extract(a, &ar, k)
+                if data_error == ok {
+                    var stored = false
+                    if data.len == 0usize {
+                        stored = vaultfs.write(dest_path, 0usize, 0usize)
+                    } else {
+                        stored = vaultfs.write_big(dest_path, mem.address_of(&data[0usize]), data.len)
+                    }
+                    if stored {
+                        let (written, written_kind, written_day, written_found) = vaultfs.stat(dest_path)
+                        if written_found {
+                            files += 1usize
+                            bytes += written
+                        }
+                    }
+                }
+            }
+        }
+        k += 1usize
+    }
+    ui.say("document extracted ")
+    ui.say_num(files)
+    ui.say(" files ")
+    ui.say_num(bytes)
+    ui.say(" bytes into ")
+    ui.say_text(base)
+    ui.say("\n")
+    ret files
+}
+
 fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if s.screen == DISK_SCREEN {
         if id == 500usize {
@@ -909,8 +1415,21 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if s.screen == VIEW_SCREEN && s.open == FILES {
         if id == 701usize {
             s.find.len = 0usize
+            // Find looks through the lines of text, so a painted PDF shows them.
+            if s.pdf_path_len > 0usize { s.pdf_text = true }
             s.screen = FIND_SCREEN
             ret true
+        }
+        if id == 705usize && s.pdf_path_len > 0usize {
+            s.pdf_text = !s.pdf_text
+            s.page = 0usize
+            ui.say("document pdf ")
+            if s.pdf_text { ui.say("text\n") } else { ui.say("page\n") }
+            ret true
+        }
+        if id == 704usize && s.zip_path_len > 0usize {
+            let extracted = extract_zip(a, s)
+            ret extracted > 0usize
         }
         if id == 702usize || id == 703usize {
             if id == 702usize && s.zoom > 0usize { s.zoom -= 1usize }
@@ -928,16 +1447,31 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             ret true
         }
         if id == 600usize {
-            if s.page > 0usize { s.page -= 1usize }
+            if s.page > 0usize {
+                s.page -= 1usize
+            } else if s.big_path_len > 0usize && s.big_chunk > 0usize {
+                // (C152) Back across a window of a big file.
+                if load_chunk(a, s, s.big_chunk - 1usize) { s.page = pages_of(s) - 1usize }
+            }
             ui.say("document page ")
-            ui.say_num(s.page + 1usize)
+            ui.say_num(s.big_base[s.big_chunk] + s.page + 1usize)
             ui.say("\n")
             ret true
         }
         if id == 601usize {
-            if s.page + 1usize < pages_of(s) { s.page += 1usize }
+            if s.page + 1usize < pages_of(s) {
+                s.page += 1usize
+            } else if s.big_path_len > 0usize && s.big_more {
+                // (C152) On into the next window of a big file: the pages before it are those of the window left.
+                let following_base = s.big_base[s.big_chunk] + pages_of(s)
+                let following = s.big_chunk + 1usize
+                if load_chunk(a, s, following) {
+                    s.big_base[following] = following_base
+                    s.page = 0usize
+                }
+            }
             ui.say("document page ")
-            ui.say_num(s.page + 1usize)
+            ui.say_num(s.big_base[s.big_chunk] + s.page + 1usize)
             ui.say("\n")
             ret true
         }
@@ -963,9 +1497,13 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
 // (C123) Read the file at `hand_path` and make it the open document: Office and PDF text through the readers, a
 // text or source file up to 16 KB, the kind and highlighter picked by its extension. True when it read.
 fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
+    s.big_path_len = 0usize
+    s.big_chunk = 0usize
+    s.big_more = false
+    s.hand_has_hl = false
     var text_len = 0usize
     var has_text = false
-    if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") || ends_with(hand_path, ".pdf") || ends_with(hand_path, ".odt") || ends_with(hand_path, ".odp") || ends_with(hand_path, ".zip") {
+    if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") || ends_with(hand_path, ".pdf") || ends_with(hand_path, ".odt") || ends_with(hand_path, ".odp") || ends_with(hand_path, ".zip") || ends_with(hand_path, ".xlsx") {
         // An Office file: read it whole (up to 256 KB, in pieces) and take its text.
         let (size, kind, day, found) = vaultfs.stat(hand_path)
         if found && size > 0usize && size <= 262144usize {
@@ -975,6 +1513,8 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
                 if read_ok && got == size {
                     if ends_with(hand_path, ".zip") {
                         text_len = zip_text(a, s, raw[0usize..got])
+                    } else if ends_with(hand_path, ".xlsx") {
+                        text_len = xlsx_text(a, s, raw[0usize..got])
                     } else if ends_with(hand_path, ".pdf") {
                         text_len = pdf_text(a, s, raw[0usize..got])
                     } else {
@@ -987,7 +1527,24 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
     } else {
         // A text or source file: up to 16 KB of it, in pieces; the rest is not shown.
         let (plain_size, plain_kind, plain_day, plain_found) = vaultfs.stat(hand_path)
-        if plain_found {
+        if plain_found && plain_size > 16000usize && hand_path.len <= 64usize {
+            // (C152) Over 16 KB: read a window at a time from the disk, not the whole.
+            var b = 0usize
+            while b < hand_path.len {
+                s.big_path[b] = hand_path[b]
+                b += 1usize
+            }
+            s.big_path_len = hand_path.len
+            s.big_size = plain_size
+            s.big_starts[0usize] = 0usize
+            s.big_base[0usize] = 0usize
+            if load_chunk(a, s, 0usize) {
+                text_len = s.hand_len
+                has_text = true
+            } else {
+                s.big_path_len = 0usize
+            }
+        } else if plain_found {
             var want = plain_size
             if want > 16000usize { want = 16000usize }
             let (plain_len, plain_ok) = vaultfs.read_big(hand_path, mem.address_of(&s.hand_text[0usize]), want)
@@ -997,6 +1554,16 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
     }
     if has_text {
         s.hand_len = text_len
+        // A zip can be extracted from its path (C150); any other file clears it.
+        s.zip_path_len = 0usize
+        if ends_with(hand_path, ".zip") && hand_path.len <= 64usize {
+            var z = 0usize
+            while z < hand_path.len {
+                s.zip_path[z] = hand_path[z]
+                z += 1usize
+            }
+            s.zip_path_len = hand_path.len
+        }
         var leaf = 0usize
         var i = 0usize
         while i < hand_path.len {
@@ -1014,16 +1581,69 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
         let (shown_kind, shown_lang) = kind_by_name(ui.text_of(a, s.hand_name[0usize..], n))
         s.hand_kind = shown_kind
         s.hand_lang = shown_lang
-        if hand_path.len > 4usize && ends_with(hand_path, ".pdf") { s.hand_kind = TXT }
+        // (C152) A PDF is painted, one page at a time; its text lines stay behind a tap.
+        s.pdf_path_len = 0usize
+        s.pdf_text = false
+        if hand_path.len > 4usize && ends_with(hand_path, ".pdf") {
+            s.hand_kind = TXT
+            if hand_path.len <= 64usize {
+                var q = 0usize
+                while q < hand_path.len {
+                    s.pdf_path[q] = hand_path[q]
+                    q += 1usize
+                }
+                s.pdf_path_len = hand_path.len
+                s.hand_kind = PDFPAGE
+            }
+        }
+        if ends_with(hand_path, ".xlsx") { s.hand_kind = SHEET }
         // The table-driven highlighter takes any extension it knows that is not a document format.
-        let (hl_index, hl_found) = hl.language_for(ui.text_of(a, s.hand_name[0usize..], n))
-        if hl_found && s.hand_kind != MD && !ends_with(hand_path, ".pdf") && !ends_with(hand_path, ".docx") && !ends_with(hand_path, ".pptx") && !ends_with(hand_path, ".odt") && !ends_with(hand_path, ".odp") && !ends_with(hand_path, ".zip") {
+        let (named_index, named_found) = hl.language_for(ui.text_of(a, s.hand_name[0usize..], n))
+        var hl_index = named_index
+        var hl_found = named_found
+        // (C152) A file with no known extension that starts `#!` is the language of its interpreter.
+        if !hl_found && s.hand_kind == TXT && s.hand_len > 2usize {
+            let guess = shebang_name(ui.text_of(a, s.hand_text[0usize..], s.hand_len))
+            if guess.len > 0usize {
+                let (guessed_index, guessed_found) = hl.language_for(guess)
+                hl_index = guessed_index
+                hl_found = guessed_found
+                if guessed_found {
+                    ui.say("document shebang ")
+                    ui.say(hl.name(guessed_index))
+                    ui.say("\n")
+                }
+            }
+        }
+        if hl_found && s.hand_kind != MD && !ends_with(hand_path, ".pdf") && !ends_with(hand_path, ".docx") && !ends_with(hand_path, ".pptx") && !ends_with(hand_path, ".odt") && !ends_with(hand_path, ".odp") && !ends_with(hand_path, ".zip") && !ends_with(hand_path, ".xlsx") {
             s.hand_kind = CODE
             s.hand_hl = hl_index
             s.hand_has_hl = true
             let classified = hl.classify(hl_index, ui.text_of(a, s.hand_text[0usize..], s.hand_len), s.hand_classes[0usize..])
         }
-        if s.hand_kind == MD { ui.say("document kind markdown\n") }
+        if s.hand_kind == MD {
+            ui.say("document kind markdown\n")
+            // The table rows (a delimiter row excluded), so a fixture can tell a table was seen (C172).
+            var table_rows = 0usize
+            var line_number = 0usize
+            let whole = ui.text_of(a, s.hand_text[0usize..], s.hand_len)
+            let line_count = line_total(whole)
+            while line_number < line_count {
+                let line_text = splitter(a, whole, line_number)
+                if is_bar_row(line_text) && !is_rule_row(line_text) { table_rows += 1usize }
+                line_number += 1usize
+            }
+            if table_rows > 0usize {
+                ui.say("document md table rows ")
+                ui.say_num(table_rows)
+                ui.say("\n")
+            }
+        }
+        if s.hand_kind == SHEET {
+            ui.say("document sheet ")
+            ui.say_num(hand_lines(s) - 1usize)
+            ui.say(" rows\n")
+        }
         if s.hand_kind == CODE {
             ui.say("document kind code ")
             ui.say(shown_language(s))
@@ -1035,6 +1655,13 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
         // The first line of what was read, so a fixture can check the text.
         var first = 0usize
         while first < s.hand_len && s.hand_text[first] != 10u8 { first += 1usize }
+        if s.big_path_len > 0usize {
+            ui.say("document big file ")
+            ui.say_num(s.big_size)
+            ui.say(" bytes, window 1 ")
+            ui.say_num(s.hand_len)
+            ui.say("\n")
+        }
         ui.say("document first line ")
         ui.say_text(ui.text_of(a, s.hand_text[0usize..], first))
         ui.say("\n")

@@ -20,6 +20,9 @@ use e.time
 use e.fmt.mail as mailfmt
 use e.fmt.mime as mime
 use e.fmt.extract as extract
+use e.fmt.multipart as multipart
+use e.bytes as bytes
+use vaultfs
 use e.net.imap as imap
 use e.net.smtp as smtp
 use appkit
@@ -53,6 +56,12 @@ type Mail = struct {
     // (C128) The message's UID on the server, when it came from there.
     uid: usize,
     remote: bool,
+    // (C158) The first attachment of a multipart/mixed message: its file name and what of its bytes were kept (128).
+    att_name: [24]u8,
+    att_name_len: usize,
+    att_size: usize,
+    att_len: usize,
+    att_data: [128]u8,
 }
 
 type State = struct {
@@ -142,6 +151,107 @@ fn mail_connect(tls_port: u16, plain_port: u16) -> (usize, bool) {
 
 // Fetch the INBOX over IMAP and make it the app's inbox: the number of messages, or 0 when there is no server or
 // the login fails (the sample inbox stays).
+// (C158) The `filename` of a Content-Disposition value: `attachment; filename="menu.txt"`, quoted or bare.
+fn disposition_name(disposition: str) -> str {
+    var at = 0usize
+    while at + 9usize <= disposition.len {
+        if extract.starts_fold(disposition, at, "filename=") {
+            var from = at + 9usize
+            var quoted = false
+            if from < disposition.len && disposition[from] == 34u8 {
+                quoted = true
+                from += 1usize
+            }
+            var to = from
+            while to < disposition.len && disposition[to] != 34u8 && disposition[to] != 59u8 && disposition[to] != 32u8 { to += 1usize }
+            ret disposition[from..to]
+        }
+        at += 1usize
+    }
+    ret ""
+}
+
+// (C158) The first attachment of a multipart/mixed message: a part whose Content-Disposition is `attachment`, its
+// transfer encoding (base64 or none) undone, kept in message `made` for saving to Files.
+fn read_attachment(a: *mem.Arena, s: *State, made: usize, headers: []const mime.Header, body: io.Reader) {
+    let (content_type, has_type) = mime.header(headers, "Content-Type")
+    if !has_type { ret }
+    let (media, media_error) = mime.parse_media_type(a, content_type, 256usize)
+    if media_error != ok || !extract.starts_fold(media.major, 0usize, "multipart") { ret }
+    var boundary = ""
+    var k = 0usize
+    while k < media.parameters.len {
+        if media.parameters[k].name.len == 8usize && extract.starts_fold(media.parameters[k].name, 0usize, "boundary") { boundary = media.parameters[k].value }
+        k += 1usize
+    }
+    if boundary.len == 0usize { ret }
+    let (storage, storage_error) = mem.alloc[u8](a, multipart.storage_required())
+    if storage_error != ok { ret }
+    let (opened, open_error) = multipart.reader(storage, body, boundary, 8u32, 65536u64)
+    if open_error != ok { ret }
+    var parts = opened
+    var seen = 0usize
+    while seen < 8usize {
+        seen += 1usize
+        let (part, has_part, part_error) = multipart.reader_next_err(&parts)
+        if part_error != ok || !has_part { ret }
+        let (disposition, has_disposition) = mime.header(part.headers, "Content-Disposition")
+        if has_disposition && extract.starts_fold(disposition, 0usize, "attachment") {
+            let file_name = disposition_name(disposition)
+            let (raw_room, raw_error) = mem.alloc[u8](a, 1024usize)
+            if raw_error != ok { ret }
+            var part_body = part.body
+            var got = 0usize
+            var more = true
+            while more && got < 1024usize {
+                let (count, read_error) = io.read(&part_body, raw_room[got..1024usize])
+                if read_error != ok || count == 0usize { more = false } else { got += count }
+            }
+            var data = raw_room[0usize..got]
+            let (encoding, has_encoding) = mime.header(part.headers, "Content-Transfer-Encoding")
+            if has_encoding && extract.starts_fold(encoding, 0usize, "base64") {
+                // Whitespace out, then decoded.
+                var clean = raw_room[0usize..0usize]
+                var w = 0usize
+                var r = 0usize
+                while r < got {
+                    let c = raw_room[r]
+                    if c != 10u8 && c != 13u8 && c != 32u8 {
+                        raw_room[w] = c
+                        w += 1usize
+                    }
+                    r += 1usize
+                }
+                clean = raw_room[0usize..w]
+                let (room, room_error) = mem.alloc[u8](a, w / 4usize * 3usize + 3usize)
+                if room_error != ok { ret }
+                let (decoded, decode_error) = bytes.base64_decode(room, clean, .Standard)
+                if decode_error != ok { ret }
+                data = decoded
+            }
+            var n = 0usize
+            while n < file_name.len && n < 24usize {
+                s.mails[made].att_name[n] = file_name[n]
+                n += 1usize
+            }
+            s.mails[made].att_name_len = n
+            s.mails[made].att_size = data.len
+            var d = 0usize
+            while d < data.len && d < 128usize {
+                s.mails[made].att_data[d] = data[d]
+                d += 1usize
+            }
+            s.mails[made].att_len = d
+            ui.say("mail attachment ")
+            ui.say_text(file_name)
+            ui.say(" ")
+            ui.say_num(data.len)
+            ui.say("\n")
+            ret
+        }
+    }
+}
+
 fn sync_inbox(a: *mem.Arena, s: *State) -> usize {
     let (link, secure) = mail_connect(8993u16, 8143u16)
     if link != netproto.R_OK { ret 0usize }
@@ -215,6 +325,7 @@ fn sync_inbox(a: *mem.Arena, s: *State) -> usize {
                                 if made != NONE {
                                     s.mails[made].uid = usize(items[i].uid)
                                     s.mails[made].remote = true
+                                    read_attachment(a, s, made, message.headers, message.body)
                                     loaded += 1usize
                                 }
                             }
@@ -455,6 +566,12 @@ fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     try ui.card(a, builder, 16.0, y, 380.0, 280.0, 18.0, ui.cream())
     let (body_box, body_error) = ui.wrapped(a, builder, faces.jost, 17.0, body_of(a, s, s.open), 32.0, y + 18.0, 348.0, 9u32, ui.ink())
     if body_error != ok { ret body_error }
+    // (C158) An attachment is a chip below the message; a tap saves it into /Downloads.
+    if m.att_name_len > 0usize {
+        try ui.card(a, builder, 16.0, 700.0, 380.0, 48.0, 14.0, ui.cream())
+        try ui.put(a, builder, faces.jost, 17.0, ui.join(a, ui.text_of(a, m.att_name[0usize..], m.att_name_len), ui.join(a, " (", ui.number(a, m.att_size), " bytes)"), ""), 32.0, 713.0, ui.ink())
+        ui.hit(&s.hits, 540usize, 16.0, 700.0, 380.0, 48.0)
+    }
     try ui.pill(a, builder, &s.hits, faces, 530usize, 16.0, 830.0, 140.0, 48.0, "Reply", ui.amber(), 17.0)
     ret ok
 }
@@ -578,6 +695,25 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if s.screen == VIEW_SCREEN {
         if id == 500usize {
             s.screen = LIST_SCREEN
+            ret true
+        }
+        if id == 540usize && s.mails[s.open].att_name_len > 0usize {
+            // (C158) Save the attachment into Files: /Downloads/<name>, checked by reading its size back.
+            let m = s.mails[s.open]
+            let made_dir = vaultfs.mkdir("/Downloads")
+            let dest = ui.join(a, "/Downloads/", ui.text_of(a, m.att_name[0usize..], m.att_name_len), "")
+            var saved = false
+            if m.att_len > 0usize { saved = vaultfs.write_big(dest, mem.address_of(&s.mails[s.open].att_data[0usize]), m.att_len) }
+            let (size, kind_of, extra, found) = vaultfs.stat(dest)
+            if saved && found && size == m.att_len {
+                ui.say("mail attachment saved ")
+                ui.say_text(ui.text_of(a, m.att_name[0usize..], m.att_name_len))
+                ui.say(" ")
+                ui.say_num(size)
+                ui.say("\n")
+            } else {
+                ui.say("mail attachment not saved\n")
+            }
             ret true
         }
         if id == 510usize {

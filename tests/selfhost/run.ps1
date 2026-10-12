@@ -2446,6 +2446,18 @@ $dataObjpoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $dataObjpoolWritten -ne 'executable written') { throw 'data_objpool emission failed' }
 & $dataObjpoolPath
 if ($LASTEXITCODE -ne 0) { throw "a data_objpool check failed: exit $LASTEXITCODE" }
+# `e.data.table`: a 150,000-row by 24-column columnar store (typed columns, null bitmaps, dictionary and heap strings) bulk loaded, read back cell by cell, ranked in ASCII-fold order, edited, versioned, tombstoned and bounded (D3905).
+$dataTablePath = Join-Path $testBuild 'data-table-selfhost.exe'
+$dataTableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_table\src\main.e') $repo 'x64' 'windows' $dataTablePath --arena 128m
+if ($LASTEXITCODE -ne 0 -or $dataTableWritten -ne 'executable written') { throw 'data_table emission failed' }
+& $dataTablePath
+if ($LASTEXITCODE -ne 0) { throw "a data_table check failed: exit $LASTEXITCODE" }
+# `e.data.tableview`: the stable multi-key LSD sort over a 150,000-row `e.data.table`: dictionary ranks folded and exact, nulls first and last, 64-bit integers, floats, booleans, heap strings, three keys, key function, comparer, deleted rows and rank caches after an edit, each result checked against a reference ordering (D3906).
+$dataTableviewPath = Join-Path $testBuild 'data-tableview-selfhost.exe'
+$dataTableviewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_tableview\src\main.e') $repo 'x64' 'windows' $dataTableviewPath --arena 256m
+if ($LASTEXITCODE -ne 0 -or $dataTableviewWritten -ne 'executable written') { throw 'data_tableview emission failed' }
+& $dataTableviewPath
+if ($LASTEXITCODE -ne 0) { throw "a data_tableview check failed: exit $LASTEXITCODE" }
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 $algoRulesPath = Join-Path $testBuild 'algo-rules-selfhost.exe'
 $algoRulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rules\src\main.e') $repo 'x64' 'windows' $algoRulesPath
@@ -11155,6 +11167,19 @@ if ($neperosQemu) {
         $fixture = $fields[1]
         $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
         & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 ('/report.docx=' + (Join-Path $officeDir 'report.docx')) ('/deck.pptx=' + (Join-Path $officeDir 'deck.pptx')) ('/zz.pdf=' + (Join-Path $officeDir 'zz.pdf')) ('/zzcode.py=' + (Join-Path $officeDir 'zzcode.py')) ('/zznotes.md=' + (Join-Path $officeDir 'zznotes.md')) ('/zzzlong.txt=' + (Join-Path $officeDir 'zzzlong.txt')) ('/otpauth.txt=' + (Join-Path $officeDir 'otpauth.txt')) ('/zzzzodf.odt=' + (Join-Path $officeDir 'zzzzodf.odt')) ('/zzzzzzzip.zip=' + (Join-Path $officeDir 'zzzzzzzip.zip')) | Out-Null
+        if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
+        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $seedDisk 0 $fields[4] 2>&1) -join "`n"
+        $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+        if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+    }
+    # The sheet fixtures (C172, C150): a disk of its own with a spreadsheet, a picture and a zip (from
+    # scripts/make_office_samples.py), so the Files list and Document's device list have the few entries the taps expect.
+    foreach ($row in $appsTable) {
+        $fields = $row.Split('|', 7)
+        if ($fields[0] -ne 'sheetfixture') { continue }
+        $fixture = $fields[1]
+        $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
+        & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 ('/budget.xlsx=' + (Join-Path $officeDir 'budget.xlsx')) ('/pic.png=' + (Join-Path $officeDir 'pic.png')) ('/zbig.txt=' + (Join-Path $officeDir 'zbig.txt')) ('/zpaint.pdf=' + (Join-Path $officeDir 'zpaint.pdf')) ('/zrun=' + (Join-Path $officeDir 'zrun')) ('/zzzzzzzip.zip=' + (Join-Path $officeDir 'zzzzzzzip.zip')) | Out-Null
         if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
         $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $seedDisk 0 $fields[4] 2>&1) -join "`n"
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
