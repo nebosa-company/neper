@@ -17184,6 +17184,7 @@ error TooComplex
 
 fn size(text: str) -> (f32, f32, bool)
 fn draw(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color) -> err
+fn draw_with_font(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font) -> err
 ```
 
 `draw` fits the document's viewBox (meet, centred) into `dest` and pushes balanced
@@ -17198,8 +17199,23 @@ the first shape of a `clipPath`, and lengths take `px pt pc mm cm in em` and `%`
 viewBox. Since D3100 it also takes `<style>` sheets of simple selectors, `preserveAspectRatio`
 (none, alignments, meet, slice), `spreadMethod` reflect and repeat, `stroke-dasharray` and
 `stroke-dashoffset`, `fill-rule="evenodd"` (exact for nested and disjoint simple loops),
-`pattern` fills and `marker-start`/`-mid`/`-end`. Masks, filters, text, a radial focal point
-and selector combinators are not drawn.
+`pattern` fills and `marker-start`/`-mid`/`-end`. Since D3701: `opacity` on a group, `use`
+or shape composites the element once as an opacity layer (to four deep, then it multiplies
+into the children's alpha); selectors take the descendant, child (`>`), adjacent (`+`) and
+general (`~`) sibling combinators, `[attr]`, `[attr=value]` and `:first-child`, ordered by
+specificity; a pattern takes a `viewBox` (with `preserveAspectRatio`) and inherits its
+attributes and content through `href`; a radial gradient's `fx`/`fy` is drawn as a stack of
+96 circles (opaque stops, pad spread); `mask="url(#id)"` on a shape, group or `use` weights
+the element by the luminance times the alpha of the mask's filled shapes (a solid fill is one
+piece, a linear gradient 32 strips, a radial gradient or pattern its mean; strokes and text
+in the mask add nothing, overlapping mask shapes add their pieces; masks inside a mask or a
+pattern are ignored). `draw_with_font` also sets `<text>` through `e.text.layout` in the
+given font (the caller registers it with the renderer): `x`, `y`, `dx`, `dy` (first value),
+`font-size`, `text-anchor`, `fill`, folded whitespace, entities, and `tspan` with its own
+`x`/`y` as a new chunk; `font-family`, `font-weight`, `text-decoration`, text on a path and
+per-glyph position lists are not read, and `draw` leaves `<text>` undrawn. Filters, an
+object-bounding-box mask or mask region, and a focal radial gradient with translucent stops
+are not drawn as specified.
 
 ### `e.gfx.curve`
 

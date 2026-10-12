@@ -4512,6 +4512,12 @@ $gfxSvgRenderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $gfxSvgRenderWritten -ne 'executable written') { throw 'gfx_svg_render emission failed' }
 & $gfxSvgRenderPath
 if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_render check failed: exit $LASTEXITCODE" }
+# e.gfx.svg text (D3701): `<text>` through e.text.layout over Jost, cells against Pillow's FreeType rendering at 8x (anchor, fill, folded whitespace, tspans, transform, combinator rule).
+$gfxSvgTextPath = Join-Path $testBuild 'gfx-svg-text-selfhost.exe'
+$gfxSvgTextWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg_text\src\main.e') $repo 'x64' 'windows' $gfxSvgTextPath -j 2
+if ($LASTEXITCODE -ne 0 -or $gfxSvgTextWritten -ne 'executable written') { throw 'gfx_svg_text emission failed' }
+& $gfxSvgTextPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_text check failed: exit $LASTEXITCODE" }
 # e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
 $textMathPath = Join-Path $testBuild 'text-math-selfhost.exe'
 $textMathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_math\src\main.e') $repo 'x64' 'windows' $textMathPath -j 2

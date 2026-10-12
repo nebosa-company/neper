@@ -3517,7 +3517,9 @@
     "e.gfx.paint",
     "e.gfx.scene",
     "e.math",
-    "e.mem"
+    "e.mem",
+    "e.text.layout",
+    "e.text.shape"
    ],
    "blocked_by": []
   },

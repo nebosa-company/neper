@@ -4026,6 +4026,11 @@ gfx_svg_render_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$gfx_svg_render_written" = 'executable written' ]
 chmod +x "$test_build/gfx-svg-render-selfhost"
 "$test_build/gfx-svg-render-selfhost"
+# e.gfx.svg text (D3701): `<text>` through e.text.layout over Jost, cells against Pillow's FreeType rendering at 8x (anchor, fill, folded whitespace, tspans, transform, combinator rule).
+gfx_svg_text_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_svg_text/src/main.e" "$repo" x64 linux "$test_build/gfx-svg-text-selfhost" -j 2)
+[ "$gfx_svg_text_written" = 'executable written' ]
+chmod +x "$test_build/gfx-svg-text-selfhost"
+"$test_build/gfx-svg-text-selfhost"
 # e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
 text_math_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_math/src/main.e" "$repo" x64 linux "$test_build/text-math-selfhost" -j 2)
 [ "$text_math_written" = 'executable written' ]
