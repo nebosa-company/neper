@@ -3830,6 +3830,13 @@ algo_syncpull_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/algo-syncpull-selfhost"
 algo_syncpull_output=$("$test_build/algo-syncpull-selfhost")
 [ "$algo_syncpull_output" = 'algo syncpull ok' ]
+# `e.algo.syncinfer`: the date order, decimal separator and column type read from sample rows, and the mapping inferred from a sample
+# # against appdor's src/io/infer.js, src/connectors/index.js and src/sync/synced-table.js (1700 inputs, D3703).
+algo_syncinfer_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_syncinfer/src/main.e" "$repo" x64 linux "$test_build/algo-syncinfer-selfhost" -j 2)
+[ "$algo_syncinfer_written" = 'executable written' ]
+chmod +x "$test_build/algo-syncinfer-selfhost"
+algo_syncinfer_output=$("$test_build/algo-syncinfer-selfhost")
+[ "$algo_syncinfer_output" = 'algo syncinfer ok' ]
 # `e.algo.sqlsource`: a SQL database as a sync source: dialect, host allowlist, address verdicts, connection, identifiers and statements, redaction, diagnostics and rows
 # # against appdor's src/sync/sql-source.js (900 inputs, D3001).
 algo_sqlsource_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_sqlsource/src/main.e" "$repo" x64 linux "$test_build/algo-sqlsource-selfhost" -j 2)
@@ -4068,6 +4075,11 @@ gfx_svg_render_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$gfx_svg_render_written" = 'executable written' ]
 chmod +x "$test_build/gfx-svg-render-selfhost"
 "$test_build/gfx-svg-render-selfhost"
+# e.gfx.svg text (D3701): `<text>` through e.text.layout over Jost, cells against Pillow's FreeType rendering at 8x (anchor, fill, folded whitespace, tspans, transform, combinator rule).
+gfx_svg_text_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_svg_text/src/main.e" "$repo" x64 linux "$test_build/gfx-svg-text-selfhost" -j 2)
+[ "$gfx_svg_text_written" = 'executable written' ]
+chmod +x "$test_build/gfx-svg-text-selfhost"
+"$test_build/gfx-svg-text-selfhost"
 # e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
 text_math_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_math/src/main.e" "$repo" x64 linux "$test_build/text-math-selfhost" -j 2)
 [ "$text_math_written" = 'executable written' ]
@@ -4881,6 +4893,13 @@ fmt_png_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 chmod +x "$test_build/fmt-png-selfhost"
 fmt_png_output=$("$test_build/fmt-png-selfhost")
 [ "$fmt_png_output" = 'fmt png ok' ]
+# `e.fmt.png` encode_adaptive (L163): a Python model of libpng's filter heuristic (checked against
+# Pillow byte for byte) gives the colour type, depth, PLTE/tRNS, filtered-stream Adler-32 and zlib 6 size.
+fmt_png_adaptive_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_png_adaptive/src/main.e" "$repo" x64 linux "$test_build/fmt-png-adaptive-selfhost")
+[ "$fmt_png_adaptive_written" = 'executable written' ]
+chmod +x "$test_build/fmt-png-adaptive-selfhost"
+fmt_png_adaptive_output=$("$test_build/fmt-png-adaptive-selfhost")
+[ "$fmt_png_adaptive_output" = 'fmt png adaptive ok' ]
 # `e.fmt.jpeg` (D774): baseline 4:4:4 and 4:2:0, progressive, greyscale and restart intervals within
 # a few steps of libjpeg; a baseline encode decoded back within libjpeg's own error.
 fmt_jpeg_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_jpeg/src/main.e" "$repo" x64 linux "$test_build/fmt-jpeg-selfhost")

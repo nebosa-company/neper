@@ -4322,6 +4322,13 @@ $algoSyncpullWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $algoSyncpullWritten -ne 'executable written') { throw 'algo_syncpull emission failed' }
 $algoSyncpullOutput = & $algoSyncpullPath
 if ($LASTEXITCODE -ne 0 -or $algoSyncpullOutput -ne 'algo syncpull ok') { throw "algo_syncpull answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.syncinfer`: the date order, decimal separator and column type read from sample rows, and the mapping inferred from a sample
+# # against appdor's src/io/infer.js, src/connectors/index.js and src/sync/synced-table.js (1700 inputs, D3703).
+$algoSyncinferPath = Join-Path $testBuild 'algo-syncinfer-selfhost.exe'
+$algoSyncinferWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_syncinfer\src\main.e') $repo 'x64' 'windows' $algoSyncinferPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoSyncinferWritten -ne 'executable written') { throw 'algo_syncinfer emission failed' }
+$algoSyncinferOutput = & $algoSyncinferPath
+if ($LASTEXITCODE -ne 0 -or $algoSyncinferOutput -ne 'algo syncinfer ok') { throw "algo_syncinfer answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.sqlsource`: a SQL database as a sync source: dialect, host allowlist, address verdicts, connection, identifiers and statements, redaction, diagnostics and rows
 # # against appdor's src/sync/sql-source.js (900 inputs, D3001).
 $algoSqlsourcePath = Join-Path $testBuild 'algo-sqlsource-selfhost.exe'
@@ -4561,6 +4568,12 @@ $gfxSvgRenderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $gfxSvgRenderWritten -ne 'executable written') { throw 'gfx_svg_render emission failed' }
 & $gfxSvgRenderPath
 if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_render check failed: exit $LASTEXITCODE" }
+# e.gfx.svg text (D3701): `<text>` through e.text.layout over Jost, cells against Pillow's FreeType rendering at 8x (anchor, fill, folded whitespace, tspans, transform, combinator rule).
+$gfxSvgTextPath = Join-Path $testBuild 'gfx-svg-text-selfhost.exe'
+$gfxSvgTextWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\gfx_svg_text\src\main.e') $repo 'x64' 'windows' $gfxSvgTextPath -j 2
+if ($LASTEXITCODE -ne 0 -or $gfxSvgTextWritten -ne 'executable written') { throw 'gfx_svg_text emission failed' }
+& $gfxSvgTextPath
+if ($LASTEXITCODE -ne 0) { throw "a gfx_svg_text check failed: exit $LASTEXITCODE" }
 # e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
 $textMathPath = Join-Path $testBuild 'text-math-selfhost.exe'
 $textMathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_math\src\main.e') $repo 'x64' 'windows' $textMathPath -j 2
@@ -5374,6 +5387,13 @@ $fmtPngWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtPngWritten -ne 'executable written') { throw 'fmt_png emission failed' }
 $fmtPngOutput = & $fmtPngPath
 if ($LASTEXITCODE -ne 0 -or $fmtPngOutput -ne 'fmt png ok') { throw "an e.fmt.png decode, encode or refusal answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.png` encode_adaptive (L163): a Python model of libpng's filter heuristic (checked against
+# Pillow byte for byte) gives the colour type, depth, PLTE/tRNS, filtered-stream Adler-32 and zlib 6 size.
+$fmtPngAdaptivePath = Join-Path $testBuild 'fmt-png-adaptive-selfhost.exe'
+$fmtPngAdaptiveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_png_adaptive\src\main.e') $repo 'x64' 'windows' $fmtPngAdaptivePath
+if ($LASTEXITCODE -ne 0 -or $fmtPngAdaptiveWritten -ne 'executable written') { throw 'fmt_png_adaptive emission failed' }
+$fmtPngAdaptiveOutput = & $fmtPngAdaptivePath
+if ($LASTEXITCODE -ne 0 -or $fmtPngAdaptiveOutput -ne 'fmt png adaptive ok') { throw "an e.fmt.png adaptive encode answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.jpeg` (D774): baseline 4:4:4 and 4:2:0, progressive, greyscale and restart intervals within
 # a few steps of libjpeg; a baseline encode decoded back within libjpeg's own error.
 $fmtJpegPath = Join-Path $testBuild 'fmt-jpeg-selfhost.exe'

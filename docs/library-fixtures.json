@@ -47,6 +47,7 @@
    "fixtures": [
     "algo_deflate",
     "fmt_png",
+    "fmt_png_adaptive",
     "net_grpccodec"
    ]
   },
@@ -497,6 +498,7 @@
     "algo_realtime",
     "algo_sqlsource",
     "algo_sync",
+    "algo_syncinfer",
     "algo_syncjob",
     "algo_syncpull",
     "algo_syncsource",
@@ -633,11 +635,12 @@
    "module": "e.fmt.png",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 9,
-   "delivered": 9,
+   "catalogue": 10,
+   "delivered": 10,
    "pending": [],
    "fixtures": [
     "fmt_png",
+    "fmt_png_adaptive",
     "gfx_chart_png"
    ]
   },
@@ -819,6 +822,7 @@
     "gfx_chart_labels",
     "gfx_chart_shared_guides",
     "gfx_chart_word_cloud",
+    "gfx_svg_text",
     "gpu_vulkan_raw",
     "grep",
     "log_debug",
@@ -1164,6 +1168,7 @@
     "gfx_scene_damage",
     "gfx_svg",
     "gfx_svg_render",
+    "gfx_svg_text",
     "text_layout",
     "text_math",
     "ui_a11y_controls",
@@ -1794,6 +1799,7 @@
     "fmt_images",
     "fmt_jpeg",
     "fmt_png",
+    "fmt_png_adaptive",
     "fmt_webp",
     "gfx_core",
     "gfx_paint_plan",
@@ -2015,6 +2021,7 @@
     "gfx_scene_damage",
     "gfx_svg",
     "gfx_svg_render",
+    "gfx_svg_text",
     "text_math",
     "ui_accessibility",
     "ui_actions_v2",
@@ -2244,6 +2251,7 @@
     "gfx_scene_plan",
     "gfx_svg",
     "gfx_svg_render",
+    "gfx_svg_text",
     "text_math",
     "ui_a11y_controls",
     "ui_accessibility",
@@ -2344,13 +2352,14 @@
    "module": "e.gfx.svg",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 4,
-   "delivered": 4,
+   "catalogue": 5,
+   "delivered": 5,
    "pending": [],
    "fixtures": [
     "gfx_scene_damage",
     "gfx_svg",
-    "gfx_svg_render"
+    "gfx_svg_render",
+    "gfx_svg_text"
    ]
   },
   {
@@ -2370,6 +2379,7 @@
     "gfx_scene_damage",
     "gfx_svg",
     "gfx_svg_render",
+    "gfx_svg_text",
     "gpu_barrier",
     "gpu_barrier_chain",
     "gpu_barrier_helper",
@@ -2939,6 +2949,7 @@
     "gfx_chart_shared_guides",
     "gfx_chart_word_cloud",
     "gfx_scene",
+    "gfx_svg_text",
     "text_gaps",
     "text_layout",
     "text_math",

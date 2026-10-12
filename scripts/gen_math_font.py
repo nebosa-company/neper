@@ -11,6 +11,7 @@ the parenthesis. Everything else is the original font, so the numbers the genera
 """
 import os
 import sys
+import unicodedata
 
 from fontTools import subset
 from fontTools.ttLib import TTFont, newTable
@@ -33,15 +34,15 @@ CONSTANTS = {
     "LowerLimitGapMin": 140, "LowerLimitBaselineDropMin": 0,
     "StackTopShiftUp": 0, "StackTopDisplayStyleShiftUp": 0, "StackBottomShiftDown": 0,
     "StackBottomDisplayStyleShiftDown": 0, "StackGapMin": 0, "StackDisplayStyleGapMin": 0,
-    "StretchStackTopShiftUp": 0, "StretchStackBottomShiftDown": 0, "StretchStackGapAboveMin": 0,
-    "StretchStackGapBelowMin": 0,
+    "StretchStackTopShiftUp": 0, "StretchStackBottomShiftDown": 0, "StretchStackGapAboveMin": 60,
+    "StretchStackGapBelowMin": 110,
     "FractionNumeratorShiftUp": 450, "FractionNumeratorDisplayStyleShiftUp": 700,
     "FractionDenominatorShiftDown": 400, "FractionDenominatorDisplayStyleShiftDown": 720,
     "FractionNumeratorGapMin": 50, "FractionNumDisplayStyleGapMin": 130, "FractionRuleThickness": 60,
     "FractionDenominatorGapMin": 50, "FractionDenomDisplayStyleGapMin": 130,
     "SkewedFractionHorizontalGap": 0, "SkewedFractionVerticalGap": 0,
-    "OverbarVerticalGap": 0, "OverbarRuleThickness": 0, "OverbarExtraAscender": 0,
-    "UnderbarVerticalGap": 0, "UnderbarRuleThickness": 0, "UnderbarExtraDescender": 0,
+    "OverbarVerticalGap": 90, "OverbarRuleThickness": 50, "OverbarExtraAscender": 40,
+    "UnderbarVerticalGap": 80, "UnderbarRuleThickness": 45, "UnderbarExtraDescender": 30,
     "RadicalVerticalGap": 70, "RadicalDisplayStyleVerticalGap": 110, "RadicalRuleThickness": 55,
     "RadicalExtraAscender": 80, "RadicalKernBeforeDegree": 100, "RadicalKernAfterDegree": -400,
     "RadicalDegreeBottomRaisePercent": 55,
@@ -50,6 +51,38 @@ ITALIC_CORRECTION = {"X": 40, "Y": 55}
 MIN_CONNECTOR_OVERLAP = 20
 # Italic scalar -> the capital whose glyph it takes.
 ITALIC = {0x1D44E: "A", 0x1D44F: "B", 0x1D465: "X", 0x1D466: "Y"}
+# D3702: the other alphabets, accents and braces, each given a glyph of its own so a test can tell
+# which scalar the library asked for (the glyph shapes are Montserrat's, the scalars are what count).
+# Unicode name -> the character whose glyph it takes; the scalars are found by name, so no code
+# point arithmetic is repeated here.
+ALPHABETS = {
+    "MATHEMATICAL BOLD SMALL A": "c", "MATHEMATICAL BOLD SMALL B": "d", "MATHEMATICAL BOLD SMALL X": "e",
+    "MATHEMATICAL BOLD SMALL Y": "f", "MATHEMATICAL BOLD CAPITAL A": "g", "MATHEMATICAL BOLD CAPITAL X": "h",
+    "MATHEMATICAL BOLD DIGIT ONE": "i", "MATHEMATICAL SCRIPT CAPITAL A": "j", "SCRIPT CAPITAL B": "k",
+    "MATHEMATICAL SCRIPT SMALL A": "l", "SCRIPT SMALL E": "m", "MATHEMATICAL DOUBLE-STRUCK CAPITAL A": "n",
+    "DOUBLE-STRUCK CAPITAL R": "o", "DOUBLE-STRUCK CAPITAL C": "p", "MATHEMATICAL FRAKTUR CAPITAL A": "q",
+    "BLACK-LETTER CAPITAL C": "r", "MATHEMATICAL SANS-SERIF SMALL A": "s", "MATHEMATICAL MONOSPACE SMALL A": "t",
+    "MATHEMATICAL BOLD ITALIC SMALL A": "u", "MATHEMATICAL BOLD SMALL ALPHA": "v",
+    "MATHEMATICAL MONOSPACE DIGIT TWO": "w", "MATHEMATICAL SCRIPT SMALL B": "z",
+}
+# Combining accents and brace characters -> the character whose glyph stands in for them.
+ACCENTS = {0x302: "^", 0x303: "~", 0x304: "_", 0x307: ".", 0x20D7: "-", 0x23DE: "{", 0x23DF: "}"}
+# MathTopAccentAttachment in design units, by the character whose glyph carries it.
+TOP_ACCENT = {"X": 430, "A": 360, "^": 250, "~": 320, "e": 410}
+# MathKernInfo by character: corner (tr tl br bl) -> (correction heights, kern values).
+KERNS = {
+    "X": {"tr": ([150, 450], [-30, -60, 20]), "br": ([-150, 0], [10, -25, -50])},
+    "A": {"tr": ([300], [-45, 25])},
+    "Y": {"tl": ([100, 350], [30, -10, 0]), "bl": ([0, 300], [-20, -45, 10])},
+}
+# Horizontal constructions by character: ([(variant character, declared advance)], [(part
+# character, is extender)]), a part's FullAdvance being its hmtx advance.
+HORIZONTAL = {
+    "^": ([("~", 620), ("=", 930)], []),
+    "~": ([("+", 700)], []),
+    "{": ([], [("(", False), ("=", True), (")", False)]),
+    "}": ([("|", 800)], [("[", False), ("-", True), ("]", False)]),
+}
 
 
 def value(v):
@@ -73,7 +106,7 @@ def build():
     options.glyph_names = True
     options.hinting = False
     font = subset.load_font(SOURCE, options)
-    text = "abcdefghijklmnopqrstuvwxyzABXY0123456789+-=()[]{}|.,√∑∫− "
+    text = "abcdefghijklmnopqrstuvwxyzABXY0123456789+-=()[]{}|.,√∑∫− ^~_"
     subsetter = subset.Subsetter(options)
     subsetter.populate(text=text)
     subsetter.subset(font)
@@ -85,6 +118,10 @@ def build():
     merged = dict(cmap)
     for scalar, cap in ITALIC.items():
         merged[scalar] = cmap[ord(cap)]
+    for unicode_name, ch in ALPHABETS.items():
+        merged[ord(unicodedata.lookup(unicode_name))] = cmap[ord(ch)]
+    for scalar, ch in ACCENTS.items():
+        merged[scalar] = cmap[ord(ch)]
     # One format 12 subtable in place of the old ones.
     table = newTable("cmap")
     table.tableVersion = 0
@@ -101,7 +138,7 @@ def build():
     font["cmap"] = table
 
     order = font.getGlyphOrder()
-    name_of = {ch: cmap[ord(ch)] for ch in "abxyABXY()[]{}|,.=√∑∫"}
+    name_of = {ch: cmap[ord(ch)] for ch in "abcdefghijklmnopqrstuvwxyzABXY()[]{}|,.=√∑∫^~_-+"}
     math = newTable("MATH")
     m = ot.MATH()
     m.Version = 0x00010000
@@ -121,9 +158,36 @@ def build():
     inverse = {name_of[ch]: v for ch, v in ITALIC_CORRECTION.items()}
     ic.ItalicsCorrection = [value(inverse[n]) for n in names]
     info.MathItalicsCorrectionInfo = ic
-    info.MathTopAccentAttachment = None
+    ta = ot.MathTopAccentAttachment()
+    accent_names = sorted((name_of[ch] for ch in TOP_ACCENT), key=order.index)
+    ta.TopAccentCoverage = coverage(accent_names)
+    ta.TopAccentAttachmentCount = len(accent_names)
+    by_name = {name_of[ch]: v for ch, v in TOP_ACCENT.items()}
+    ta.TopAccentAttachment = [value(by_name[n]) for n in accent_names]
+    info.MathTopAccentAttachment = ta
     info.ExtendedShapeCoverage = None
-    info.MathKernInfo = None
+    ki = ot.MathKernInfo()
+    kern_names = sorted((name_of[ch] for ch in KERNS), key=order.index)
+    ki.MathKernCoverage = coverage(kern_names)
+    ki.MathKernCount = len(kern_names)
+    records = []
+    for n in kern_names:
+        ch = [k for k in KERNS if name_of[k] == n][0]
+        rec = ot.MathKernInfoRecord()
+        for field, corner in (("TopRightMathKern", "tr"), ("TopLeftMathKern", "tl"),
+                              ("BottomRightMathKern", "br"), ("BottomLeftMathKern", "bl")):
+            spec = KERNS[ch].get(corner)
+            if spec is None:
+                setattr(rec, field, None)
+                continue
+            mk = ot.MathKern()
+            mk.HeightCount = len(spec[0])
+            mk.CorrectionHeight = [value(h) for h in spec[0]]
+            mk.KernValue = [value(kv) for kv in spec[1]]
+            setattr(rec, field, mk)
+        records.append(rec)
+    ki.MathKernInfoRecords = records
+    info.MathKernInfo = ki
     m.MathGlyphInfo = info
 
     glyf = font["glyf"]
@@ -168,11 +232,42 @@ def build():
     paren.MathGlyphVariantRecord = []
     pairs = sorted([(name_of["√"], radical), (name_of["("], paren)], key=lambda kv: order.index(kv[0]))
     variants.VertGlyphCoverage = coverage([n for n, _ in pairs])
-    variants.HorizGlyphCoverage = None
     variants.VertGlyphCount = len(pairs)
-    variants.HorizGlyphCount = 0
     variants.VertGlyphConstruction = [con for _, con in pairs]
-    variants.HorizGlyphConstruction = []
+    # Horizontal: wide accents and braces. A part's FullAdvance is its glyph's advance width.
+    horizontal = []
+    for ch, (declared_variants, part_spec) in HORIZONTAL.items():
+        con = ot.MathGlyphConstruction()
+        recs = []
+        for vch, declared in declared_variants:
+            r = ot.MathGlyphVariantRecord()
+            r.VariantGlyph = name_of[vch]
+            r.AdvanceMeasurement = declared
+            recs.append(r)
+        con.VariantCount = len(recs)
+        con.MathGlyphVariantRecord = recs
+        if part_spec:
+            parts_h = []
+            for pch, extender in part_spec:
+                p = ot.GlyphPartRecord()
+                p.glyph = name_of[pch]
+                p.StartConnectorLength = 100
+                p.EndConnectorLength = 100
+                p.FullAdvance = hmtx[name_of[pch]][0]
+                p.PartFlags = 1 if extender else 0
+                parts_h.append(p)
+            asm = ot.GlyphAssembly()
+            asm.ItalicsCorrection = value(0)
+            asm.PartCount = len(parts_h)
+            asm.PartRecords = parts_h
+            con.GlyphAssembly = asm
+        else:
+            con.GlyphAssembly = None
+        horizontal.append((name_of[ch], con))
+    horizontal.sort(key=lambda kv: order.index(kv[0]))
+    variants.HorizGlyphCoverage = coverage([n for n, _ in horizontal])
+    variants.HorizGlyphCount = len(horizontal)
+    variants.HorizGlyphConstruction = [con for _, con in horizontal]
     m.MathVariants = variants
     math.table = m
     font["MATH"] = math

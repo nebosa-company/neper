@@ -6806,6 +6806,113 @@ fn sql_columns(a: *mem.Arena, rows: []const json.Value) -> json.Value
 A SQL database as a sync source (L037), after appdor's `src/sync/sql-source.js`: `sql_dialect` and `is_sql_channel`, the operator's host list (`parse_sql_source_hosts`, `check_sql_host`, `check_sql_address`), the connection a URL and a credential make (`sql_source_from`), identifiers and entities (`is_valid_sql_identifier`, `quote_sql_identifier`, `parse_sql_entity`), the statements a pull sends (`browse_tables_statement`, `columns_statement`, `select_rows_statement`, `read_only_session_statements`), redaction and driver diagnostics (`redact_sql_text`, `sql_diagnostic`) and the rows an information schema answers (`normalize_sql_row`, `sql_entities`, `sql_columns`).
 
 
+### `e.algo.syncinfer`
+
+```neper
+fn cps_of(a: *mem.Arena, s: str) -> []u32
+fn is_digit(u: u32) -> bool
+fn is_word(u: u32) -> bool
+fn utf16_len(s: str) -> usize
+fn slash_parts(c: []const u32) -> (u32, u32, u32, usize, bool)
+type Order = struct { order: str, witness: str, sampled: usize }
+fn detect_date_order(a: *mem.Arena, values: []const str) -> Order
+fn rtrim_space(s: str) -> str
+type Stripped = struct { body: str, marked: bool }
+fn strip_percent(s: str) -> Stripped
+fn currency_symbol_len(s: str) -> usize
+fn lower_ascii(u: u32) -> u32
+fn currency_suffix_len(a: *mem.Arena, s: str) -> usize
+fn strip_currency(a: *mem.Arena, s: str) -> Stripped
+fn strip_units(a: *mem.Arena, s: str) -> str
+type Shape = struct { valid: bool, decimal: u8, ambiguous: bool, has_fraction: bool, lead_zero: bool, safe: bool }
+fn no_shape() -> Shape
+fn read_shape(a: *mem.Arena, raw: str) -> Shape
+fn is_number_cell(a: *mem.Arena, s: str) -> bool
+type Decimal = struct { decimal: str, witness: str, sampled: usize, conflicting: bool }
+fn convention_of(d: u8) -> str
+fn detect_decimal(a: *mem.Arena, values: []const str) -> Decimal
+const K_NONE: i32 = -1i32
+const T_END: u8 = 1u8
+const T_NUMBER: u8 = 2u8
+const T_SYMBOL: u8 = 3u8
+const T_KEYWORD: u8 = 4u8
+const T_SPACE: u8 = 5u8
+const T_UNKNOWN: u8 = 6u8
+const T_INVALID: u8 = 7u8
+const KW_INVALID: u8 = 0u8
+const KW_MONTH: u8 = 1u8
+const KW_ZONE: u8 = 2u8
+const KW_TSEP: u8 = 3u8
+const KW_AMPM: u8 = 4u8
+type Token = struct { tag: u8, value: i32, length: i32, kw: u8 }
+type Day = struct { comp: [3]i32, index: i32, named_month: i32, iso: bool }
+type Clock = struct { comp: [4]i32, index: i32, hour_offset: i32 }
+type Zone = struct { sign: i32, hour: i32, minute: i32 }
+type Scan = struct { c: []const u32, at: usize, tok: Token, first: Token, has_first: bool }
+fn is_hour(n: i32) -> bool
+fn is_minute(n: i32) -> bool
+fn is_second(n: i32) -> bool
+fn is_millisecond(n: i32) -> bool
+fn is_month(n: i32) -> bool
+fn is_day(n: i32) -> bool
+fn at_end(s: *Scan) -> bool
+fn keyword_of(w0: u32, w1: u32, w2: u32, length: usize) -> Token
+fn scan_next(s: *Scan) -> Token
+fn next_token(s: *Scan) -> Token
+fn skip_symbol(s: *Scan, sym: u32) -> bool
+fn is_sign(t: Token) -> bool
+fn is_zone_z(t: Token) -> bool
+fn fixed_number(t: Token, len: i32) -> bool
+fn read_milliseconds(t: Token) -> i32
+fn day_add(d: *Day, n: i32) -> bool
+fn clock_add(t: *Clock, n: i32) -> bool
+fn clock_final(t: *Clock, n: i32) -> bool
+fn clock_expecting(t: *Clock, n: i32) -> bool
+fn zone_set(z: *Zone, hours: i32)
+fn zone_expecting(z: *Zone, n: i32) -> bool
+fn zone_is_utc(z: *Zone) -> bool
+fn parse_es5(s: *Scan, day: *Day, time: *Clock, zone: *Zone, invalid: *bool, finished: *bool)
+fn date_ok(a: *mem.Arena, text: str) -> bool
+fn days_in_month(year: i64, month: i64) -> i64
+fn iso_date(c: []const u32) -> bool
+fn calendar_date_ok(a: *mem.Arena, s: str, order: str) -> bool
+fn date_shape(c: []const u32) -> bool
+fn datetime_shape(c: []const u32) -> bool
+fn email_shape(c: []const u32) -> bool
+fn url_shape(c: []const u32) -> bool
+fn phone_shape(a: *mem.Arena, c: []const u32) -> bool
+fn is_bytes4(l: str, b0: u8, b1: u8, b2: u8, b3: u8) -> bool
+fn bool_word(a: *mem.Arena, v: str) -> bool
+fn candidate_name(i: usize) -> str
+fn candidate_test(a: *mem.Arena, i: usize, v: str, date_order: str) -> bool
+type Inferred = struct { kind: str, options: []const str, has_options: bool, date_order: str, decimal: str }
+fn is_numeric_type(kind: str) -> bool
+fn infer_column(a: *mem.Arena, raw: []const str, pinned: str, max_select: usize) -> Inferred
+fn cell_text(a: *mem.Arena, v: json.Value, present: bool) -> str
+fn array_index(key: str) -> (u64, bool)
+fn column_names(a: *mem.Arena, rows: []const json.Value) -> []const str
+fn add_name(names: *list.List[str], key: str)
+fn is_structured(v: json.Value) -> bool
+fn propose_inferred(a: *mem.Arena, sample: json.Value, translate: *const syncjob.Translate) -> (json.Value, bool)
+fn cells_of(a: *mem.Arena, values: json.Value) -> []const str
+fn texts_json(a: *mem.Arena, xs: []const str) -> json.Value
+fn inferred_into(a: *mem.Arena, o: *ir.Obj, i: Inferred)
+fn max_select_of(opts: json.Value) -> usize
+fn pinned_of(opts: json.Value) -> str
+fn infer_column_type(a: *mem.Arena, values: json.Value, opts: json.Value) -> json.Value
+fn date_order_of(a: *mem.Arena, values: json.Value) -> json.Value
+fn decimal_separator_of(a: *mem.Arena, values: json.Value) -> json.Value
+fn infer_external_schema(a: *mem.Arena, records: json.Value) -> (json.Value, bool)
+```
+
+The column types a synced table infers from sample rows (L037, D3703), after appdor's `src/io/infer.js`,
+`inferExternalSchema` and the inferred half of `proposeMapping`: `detect_date_order` (a day over 12 first or second
+proves day-first or month-first), `detect_decimal` (a cell whose separators prove the convention; both conventions
+conflict), `infer_column` (the ladder checkbox, percent, currency, number, datetime, date, email, url, phone, then
+select, longtext and text), `infer_column_type`, `date_order_of`, `decimal_separator_of`, `infer_external_schema`
+and `propose_inferred` over JSON. The platform `new Date(text)` the ladder consults is a port of V8's date parser
+(`date_ok`). Checked against appdor's own functions under node (`scripts/syncinfer_reference.mjs`).
+
 ### `e.algo.syncpull`
 
 ```neper
@@ -6822,6 +6929,7 @@ fn map_external_type(a: *mem.Arena, connector: str, native: json.Value, has_nati
 fn map_lc8_to_native(a: *mem.Arena, connector: str, lc8: str) -> json.Value
 fn list_native_types(a: *mem.Arena, connector: str) -> json.Value
 fn propose_schema(a: *mem.Arena, connector: str, columns: []const json.Value, translate: *const syncjob.Translate) -> json.Value
+fn propose_mapping_for(a: *mem.Arena, connector: str, columns: json.Value, sample: json.Value, translate: *const syncjob.Translate) -> (json.Value, bool)
 fn propose_mapping(a: *mem.Arena, connector: str, columns: json.Value, translate: *const syncjob.Translate) -> (json.Value, bool)
 fn synced_column_config(a: *mem.Arena, column: json.Value, source_label: json.Value, has_label: bool) -> json.Value
 fn synced_column_badge(a: *mem.Arena, config: json.Value, translate: *const syncjob.Translate) -> json.Value
@@ -7848,9 +7956,9 @@ const CLASS_PUNCT: u8 = 6u8
 const CLASS_INNER: u8 = 7u8
 const CLASS_SPACE: u8 = 8u8
 const STYLE_CRAMPED: u32 = 4u32
-type Atom = struct { class: u8, first: usize, last: usize, width: f32, height: f32, depth: f32, simple: bool, limits: bool }
-type Consts = struct { axis: f32, rule: f32, script: f32, scriptscript: f32, num_display: f32, num_text: f32, den_display: f32, den_text: f32, num_gap: f32, num_gap_display: f32, den_gap: f32, den_gap_display: f32, sup_display: f32, sup_text: f32, sup_cramped: f32, sub_only: f32, sub_both: f32, sub_top_max: f32, sup_bottom_min: f32, sup_max_with_sub: f32, sub_sup_gap: f32, sup_drop: f32, sub_drop: f32, script_space: f32, upper_gap: f32, lower_gap: f32, rad_rule: f32, rad_gap: f32, rad_gap_display: f32, rad_extra: f32, rad_before: f32, rad_after: f32, rad_raise: f32, delim_min: f32, op_min: f32 }
-type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize, hhea_at: usize, hmtx_at: usize, math_at: usize, consts_at: usize, info_at: usize, variants_at: usize, k: Consts }
+type Atom = struct { class: u8, first: usize, last: usize, width: f32, height: f32, depth: f32, simple: bool, limits: bool, stretch: bool }
+type Consts = struct { axis: f32, rule: f32, script: f32, scriptscript: f32, num_display: f32, num_text: f32, den_display: f32, den_text: f32, num_gap: f32, num_gap_display: f32, den_gap: f32, den_gap_display: f32, sup_display: f32, sup_text: f32, sup_cramped: f32, sub_only: f32, sub_both: f32, sub_top_max: f32, sup_bottom_min: f32, sup_max_with_sub: f32, sub_sup_gap: f32, sup_drop: f32, sub_drop: f32, script_space: f32, upper_gap: f32, lower_gap: f32, rad_rule: f32, rad_gap: f32, rad_gap_display: f32, rad_extra: f32, rad_before: f32, rad_after: f32, rad_raise: f32, delim_min: f32, op_min: f32, accent_base: f32, over_gap: f32, over_rule: f32, over_extra: f32, under_gap: f32, under_rule: f32, under_extra: f32, stretch_above: f32, stretch_below: f32 }
+type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize, hhea_at: usize, hmtx_at: usize, math_at: usize, consts_at: usize, info_at: usize, variants_at: usize, alphabet: u8, k: Consts }
 fn maxf(x: f32, y: f32) -> f32
 fn minf(x: f32, y: f32) -> f32
 fn be16(d: []const u8, at: usize) -> u32
@@ -7870,6 +7978,9 @@ fn load_math(c: *Ctx)
 fn coverage_pos(d: []const u8, at: usize, gid: u32) -> usize
 fn italic_correction(c: *Ctx, gid: u32) -> f32
 fn construction_of(c: *Ctx, gid: u32) -> usize
+fn construction_h(c: *Ctx, gid: u32) -> usize
+fn top_attach(c: *Ctx, gid: u32, size: f32) -> (f32, bool)
+fn kern_at(c: *Ctx, gid: u32, corner: usize, height: f32, size: f32) -> f32
 fn push_item(c: *Ctx, item: Item)
 fn shift_range(c: *Ctx, first: usize, last: usize, dx: f32, dy: f32)
 fn byte_at(c: *Ctx, at: usize) -> u8
@@ -7884,6 +7995,17 @@ fn id_atom(c: *Ctx, id: u32, scalar: u32, size: f32, class: u8) -> Atom
 fn text_atom(c: *Ctx, text: str, size: f32, class: u8) -> Atom
 fn char_class(scalar: u32) -> u8
 fn math_italic(c: *Ctx, scalar: u32) -> u32
+const ALPHA_ITALIC: u8 = 0u8
+const ALPHA_BOLD: u8 = 1u8
+const ALPHA_BOLD_ITALIC: u8 = 2u8
+const ALPHA_SCRIPT: u8 = 3u8
+const ALPHA_FRAKTUR: u8 = 4u8
+const ALPHA_DOUBLE: u8 = 5u8
+const ALPHA_SANS: u8 = 6u8
+const ALPHA_MONO: u8 = 7u8
+const ALPHA_UPRIGHT: u8 = 8u8
+fn letter_in(alphabet: u8, index: u32) -> u32
+fn alphabet_scalar(c: *Ctx, scalar: u32) -> u32
 fn greek_names() -> str
 fn greek_scalar(word: str) -> u32
 fn upper_greek(word: str) -> u32
@@ -7898,6 +8020,7 @@ fn parse_row(c: *Ctx, style: u32) -> Atom
 fn parse_argument(c: *Ctx, style: u32) -> Atom
 fn parse_atom(c: *Ctx, style: u32) -> Atom
 fn grown(c: *Ctx, scalar: u32, need: f32, size: f32, class: u8) -> Atom
+fn grown_h(c: *Ctx, scalar: u32, need: f32, size: f32, class: u8) -> Atom
 fn delimiter(c: *Ctx, scalar: u32, span_h: f32, size: f32, class: u8) -> Atom
 fn push_rule(c: *Ctx, x: f32, top: f32, w: f32, h: f32)
 fn delimiter_scalar(c: *Ctx) -> u32
@@ -7910,6 +8033,12 @@ fn lay_environment(c: *Ctx, style: u32) -> Atom
 fn lay_text(c: *Ctx, style: u32) -> Atom
 fn space_atom(c: *Ctx, em18: f32, style: u32) -> Atom
 fn parse_nucleus(c: *Ctx, style: u32) -> Atom
+fn alphabet_of(word: str) -> u8
+fn accent_scalar(word: str) -> u32
+fn accent_form(scalar: u32) -> u32
+fn accent_over(c: *Ctx, base: Atom, scalar: u32, wide: bool, below: bool, size: f32) -> Atom
+fn lay_bar(c: *Ctx, style: u32, over: bool) -> Atom
+fn lay_brace(c: *Ctx, style: u32, over: bool) -> Atom
 fn font_ready(c: *Ctx) -> bool
 fn context(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Ctx, bool)
 fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err)
@@ -7931,6 +8060,7 @@ fn ml_child(m: *Ml)
 fn ml_row(m: *Ml, expected: str)
 fn ml_close(m: *Ml, expected: str)
 fn ml_delimiter(m: *Ml, value: str)
+fn ml_accent_script(m: *Ml, attrs: str, name: str, wrap: bool) -> bool
 fn ml_element(m: *Ml, wrap: bool)
 fn ml_row_one(m: *Ml)
 fn typeset_mathml(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err)
@@ -7944,14 +8074,23 @@ caller storage, for scene and SVG adapters; `typeset_mathml` reads presentation 
 it to that subset, so both inputs share every rule. The model is TeX's: atom classes with
 the TeXbook's inter-atom space table, display, text, script and scriptscript styles with
 cramped forms (denominators, radicands and subscripts), fractions, radicals with an index,
-scripts by rule 18, big operators with display limits, `\left` `ight` delimiters grown
+scripts by rule 18, big operators with display limits, `\left` `
+ight` delimiters grown
 to the content and the `matrix`, `pmatrix`, `bmatrix`, `Bmatrix`, `vmatrix`, `cases`,
 `align`, `aligned` and `gather` environments. A font with an OpenType MATH table is laid
 out by it: MathConstants, italic corrections, and MathVariants for delimiters, radical
 signs and display operators (the first variant tall enough, else an assembly of parts with
 repeated extenders); a font without one gets TeX's cmsy values and a scaled glyph. A font
 with the Mathematical Alphanumeric block gives Latin and lower-case Greek letters their
-italic forms. Coordinates have the origin on the baseline at the left edge, y downward: a
+italic forms; since D3702 `\mathbf` `\mathbfit` `\boldsymbol` `\mathcal` `\mathscr` `\mathfrak`
+`\mathbb` `\mathsf` `\mathtt` `\mathit` select the other alphabets of that block (a letter the
+font lacks stays as written), `\hat` `\check` `\tilde` `\acute` `\grave` `\dot` `\ddot` `\breve`
+`\bar` `\vec` `\mathring` and the wide `\widehat` `\widetilde` set accents by attachment
+points over AccentBaseHeight (a horizontal variant or assembly for the wide ones),
+`\overline` `\underline` use the Overbar and Underbar constants, `\overbrace` `\underbrace`
+stretch U+23DE and U+23DF to the body and take limits, a one-glyph script is kerned by
+MathKernInfo, and an `mover`/`munder` over an accent or brace character is that accent or
+brace. Coordinates have the origin on the baseline at the left edge, y downward: a
 glyph's `y` is its baseline, a rule's its top. `to_layout` turns the glyph items into an
 `e.text.layout.Layout` (one run of one glyph each) that `e.gfx.scene` draws as a
 `DrawText`; the rule items are rectangles to fill. `typeset`, `typeset_mathml`,
@@ -17390,6 +17529,7 @@ error TooComplex
 
 fn size(text: str) -> (f32, f32, bool)
 fn draw(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color) -> err
+fn draw_with_font(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font) -> err
 ```
 
 `draw` fits the document's viewBox (meet, centred) into `dest` and pushes balanced
@@ -17404,8 +17544,23 @@ the first shape of a `clipPath`, and lengths take `px pt pc mm cm in em` and `%`
 viewBox. Since D3100 it also takes `<style>` sheets of simple selectors, `preserveAspectRatio`
 (none, alignments, meet, slice), `spreadMethod` reflect and repeat, `stroke-dasharray` and
 `stroke-dashoffset`, `fill-rule="evenodd"` (exact for nested and disjoint simple loops),
-`pattern` fills and `marker-start`/`-mid`/`-end`. Masks, filters, text, a radial focal point
-and selector combinators are not drawn.
+`pattern` fills and `marker-start`/`-mid`/`-end`. Since D3701: `opacity` on a group, `use`
+or shape composites the element once as an opacity layer (to four deep, then it multiplies
+into the children's alpha); selectors take the descendant, child (`>`), adjacent (`+`) and
+general (`~`) sibling combinators, `[attr]`, `[attr=value]` and `:first-child`, ordered by
+specificity; a pattern takes a `viewBox` (with `preserveAspectRatio`) and inherits its
+attributes and content through `href`; a radial gradient's `fx`/`fy` is drawn as a stack of
+96 circles (opaque stops, pad spread); `mask="url(#id)"` on a shape, group or `use` weights
+the element by the luminance times the alpha of the mask's filled shapes (a solid fill is one
+piece, a linear gradient 32 strips, a radial gradient or pattern its mean; strokes and text
+in the mask add nothing, overlapping mask shapes add their pieces; masks inside a mask or a
+pattern are ignored). `draw_with_font` also sets `<text>` through `e.text.layout` in the
+given font (the caller registers it with the renderer): `x`, `y`, `dx`, `dy` (first value),
+`font-size`, `text-anchor`, `fill`, folded whitespace, entities, and `tspan` with its own
+`x`/`y` as a new chunk; `font-family`, `font-weight`, `text-decoration`, text on a path and
+per-glyph position lists are not read, and `draw` leaves `<text>` undrawn. Filters, an
+object-bounding-box mask or mask region, and a focal radial gradient with translucent stops
+are not drawn as specified.
 
 ### `e.gfx.curve`
 
@@ -23637,11 +23792,16 @@ error TooLarge
 fn inspect(source: io.Reader) -> (image.Info, err)
 fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
 fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err
+fn encode_adaptive(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err
 ```
 
 PNG decoding supports the standard grayscale, RGB, indexed and alpha color types and
 rejects dimensions before pixel allocation. Encoding is deterministic for identical
-pixels and options.
+pixels and options. `encode` writes filter `None` for every row; `encode_adaptive`
+(L163) writes an `Rgba8`/`Bgra8` image of at most 256 colors as an indexed PNG (PLTE,
+tRNS when an alpha is below 255, 1, 2, 4 or 8 bits by color count, filter `None`) and
+any other image with libpng's per-row filter heuristic (least sum of signed-absolute
+filtered bytes, ties to the lower filter). The pixels decode identically either way.
 For PNG, JPEG and WebP, each zero dimension limit selects 16,384 and a zero pixel
 limit selects 16,777,216. Explicit nonzero limits can raise or lower these bounds;
 raising one field does not disable defaults in the others. Encoded input buffering

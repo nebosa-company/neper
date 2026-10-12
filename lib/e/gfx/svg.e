@@ -37,13 +37,24 @@
 // `-end` and `marker` on `path`, `line`, `polyline` and `polygon` (`markerWidth`/`Height`, `refX`/
 // `refY`, `viewBox`, `orient` as `auto` or an angle, `markerUnits`, clipped to the marker viewport).
 //
-// Not drawn: masks, filters, text, a radial focal point, selector combinators. Their elements are
-// skipped whole (an unresolvable `url(...)` paint draws nothing). Group `opacity` multiplies each
-// shape's own alpha rather than compositing the group as a layer.
+// Also (L125, D3701): `opacity` on a group, `use` or shape composites the element once as an
+// OpacityLayer (four deep; deeper, and inside patterns and markers, it multiplies into the
+// children's alpha); selectors with the descendant, `>`, `+` and `~` combinators, `[attr]`,
+// `[attr=value]` and `:first-child`, by real specificity; a pattern's `viewBox` and `href`
+// (attributes and content); a radial gradient's focal point (a stack of FOCAL_STEPS circles, opaque
+// stops and pad spread only); `mask` on a shape, group or `use` (the element is replayed under each
+// filled shape of the mask at that shape's luminance times alpha, a linear gradient as MASK_STRIPS
+// strips; strokes and text in the mask add nothing; no mask region); and `<text>` through
+// `draw_with_font` over `e.text.layout` (`x`, `y`, `font-size`, `text-anchor`, `fill`, `tspan`
+// with its own position as a new chunk).
 //
-// ponytail: an overlapping group at partial opacity darkens where its shapes overlap; wrap in an
-// OpacityLayer when that matters. A path draws into arena storage sized from its data and never
-// frees it -- icons are small and the arena is the caller's.
+// Not drawn: filters, text through `draw` (no font), `font-family` and weight, text on a path. Their
+// elements are skipped whole (an unresolvable `url(...)` paint draws nothing).
+//
+// ponytail: mask pieces composite over each other where the mask's shapes overlap, and every piece
+// replays the masked element (cost: pieces x the element's commands, bounded by the scene's size).
+// A path draws into arena storage sized from its data and never frees it -- icons are small and
+// the arena is the caller's.
 
 use e.math
 use e.mem
@@ -51,14 +62,18 @@ use e.str
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
+use e.text.layout
+use e.text.shape as fonts
 
 error BadSvg
 error TooComplex
 
 const MAX_DEPTH: usize = 16usize
 
-type Style = struct { fill: paint.Color, fill_on: bool, stroke: paint.Color, stroke_on: bool, stroke_width: f32, cap: paint.StrokeCap, join: paint.StrokeJoin, miter: f32, opacity: f32, fill_opacity: f32, stroke_opacity: f32, current: paint.Color, fill_ref: str, stroke_ref: str, clip_ref: str, clip_ctm: geometry.Transform, dash: str, dash_offset: f32, even_odd: bool, marker_start: str, marker_mid: str, marker_end: str }
-type Frame = struct { style: Style, ctm: geometry.Transform }
+type Style = struct { fill: paint.Color, fill_on: bool, stroke: paint.Color, stroke_on: bool, stroke_width: f32, cap: paint.StrokeCap, join: paint.StrokeJoin, miter: f32, opacity: f32, fill_opacity: f32, stroke_opacity: f32, current: paint.Color, fill_ref: str, stroke_ref: str, clip_ref: str, clip_ctm: geometry.Transform, dash: str, dash_offset: f32, even_odd: bool, marker_start: str, marker_mid: str, marker_end: str, mask_skip: bool, font_size: f32, anchor: usize }
+// `layers` counts the opacity layers open around the frame's content (a frame that may open no
+// more has 4); `opens` says this frame's own element opened one, closed with its end tag.
+type Frame = struct { style: Style, ctm: geometry.Transform, layers: usize, opens: bool }
 
 fn is_space(c: u8) -> bool {
     ret c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8
@@ -376,6 +391,12 @@ fn apply_style(tag: str, base: Style) -> Style {
     if has_marker_mid { s.marker_mid = url_id(marker_mid) }
     let (marker_end, has_marker_end) = prop(tag, "marker-end")
     if has_marker_end { s.marker_end = url_id(marker_end) }
+    let (font_size, has_font_size) = prop(tag, "font-size")
+    if has_font_size { s.font_size = length_value(font_size, s.font_size, s.font_size) }
+    let (anchor, has_anchor) = prop(tag, "text-anchor")
+    if has_anchor {
+        if same(trim(anchor), "middle") { s.anchor = 1usize } else if same(trim(anchor), "end") { s.anchor = 2usize } else { s.anchor = 0usize }
+    }
     ret s
 }
 
@@ -726,8 +747,13 @@ fn color_with(c: paint.Color, alpha: f32) -> paint.Color {
     ret paint.Color { red: c.red, green: c.green, blue: c.blue, alpha: c.alpha * alpha }
 }
 
-// The document: its text and the viewport a percentage is taken of.
-type Doc = struct { text: str, vw: f32, vh: f32 }
+// A masked element being replayed under each piece of its mask (D3701): the element's source, the
+// frame its parent drew it in, and where the replay walks from.
+type Job = struct { text: str, frame: Frame, dest: geometry.Rect, level: usize, anc: []const str }
+// The document: its text and the viewport a percentage is taken of; `view` is the viewBox in the
+// root user space (what an opacity layer's bounds are), `job` is set while a mask's content is
+// walked, and `font` is what `<text>` is set in when the caller gave one.
+type Doc = struct { text: str, vw: f32, vh: f32, view: geometry.Rect, job: *Job, has_job: bool, font: fonts.Font, has_font: bool, base_anc: []const str }
 // An element found by its `id`: its opening tag, its whole text and its body.
 type Found = struct { tag: str, start: usize, end: usize, body_start: usize, body_end: usize, found: bool }
 
@@ -920,6 +946,11 @@ fn path_bounds(path: geometry.Path) -> geometry.Rect {
 // (objectBoundingBox) or in user units (a percentage then of `axis`).
 fn gradient_coord(tag: str, name: str, fallback: f32, boxed: bool, axis: f32) -> f32 {
     let (value, found) = attr(tag, name)
+    ret coord_value(value, found, fallback, boxed, axis)
+}
+
+// The same for a value already looked up.
+fn coord_value(value: str, found: bool, fallback: f32, boxed: bool, axis: f32) -> f32 {
     if !found { ret fallback }
     var at = 0usize
     var out = 0.0f32
@@ -1199,44 +1230,185 @@ fn class_has(list: str, word: str) -> bool {
     ret false
 }
 
-// How specifically one simple selector (`*`, `rect`, `.a`, `rect.a.b`, `#id`) matches an
-// element: 0 for no match, else 1 universal, 2 type, 3 class, 4 id. Combinators,
-// pseudo-classes and attribute selectors never match.
-fn selector_rank(sel: str, element: str, classes: str, id: str) -> usize {
-    if sel.len == 0usize { ret 0usize }
+// ---- selectors with combinators (L125, D3701) ----------------------------------------------
+
+const MAX_PARTS: usize = 8usize
+
+// A selector split at its combinators: compound `i` and the combinator (space, `>`, `+`, `~`)
+// between compound `i` and `i + 1`.
+type Selector = struct { parts: [8]str, combs: [8]u8, n: usize }
+// The element a selector is matched against: its raw tag, its ancestors from the root, and the
+// siblings before it (oldest first).
+type Scope = struct { subject: str, anc: []const str, sibs: []const str }
+type Node = struct { tag: str, first: bool }
+
+fn split_selector(sel: str) -> (Selector, bool) {
+    var out: Selector = zero
+    var comb = 0u8
     var i = 0usize
     while i < sel.len {
         let c = sel[i]
-        if is_space(c) || c == 62u8 || c == 43u8 || c == 126u8 || c == 58u8 || c == 91u8 || c == 40u8 { ret 0usize }
-        i += 1usize
-    }
-    var rank = 1usize
-    var j = 0usize
-    while j < sel.len && sel[j] != 46u8 && sel[j] != 35u8 { j += 1usize }
-    if j > 0usize && !same(sel[0usize..j], "*") {
-        if !same(sel[0usize..j], element) { ret 0usize }
-        rank = 2usize
-    }
-    i = j
-    while i < sel.len {
-        let kind = sel[i]
-        var k = i + 1usize
-        while k < sel.len && sel[k] != 46u8 && sel[k] != 35u8 { k += 1usize }
-        let part = sel[i + 1usize..k]
-        if kind == 46u8 {
-            if !class_has(classes, part) { ret 0usize }
-            if rank < 3usize { rank = 3usize }
-        } else {
-            if !same(part, id) { ret 0usize }
-            rank = 4usize
+        if is_space(c) {
+            i += 1usize
+            continue
         }
-        i = k
+        if c == 62u8 || c == 43u8 || c == 126u8 {
+            if out.n == 0usize || comb != 0u8 { ret (out, false) }
+            comb = c
+            i += 1usize
+            continue
+        }
+        let start = i
+        var inside = false
+        while i < sel.len && (inside || !(is_space(sel[i]) || sel[i] == 62u8 || sel[i] == 43u8 || sel[i] == 126u8)) {
+            if sel[i] == 91u8 { inside = true }
+            if sel[i] == 93u8 { inside = false }
+            i += 1usize
+        }
+        if out.n >= MAX_PARTS { ret (out, false) }
+        if out.n > 0usize {
+            if comb == 0u8 { out.combs[out.n - 1usize] = 32u8 } else { out.combs[out.n - 1usize] = comb }
+        }
+        out.parts[out.n] = sel[start..i]
+        out.n += 1usize
+        comb = 0u8
     }
-    ret rank
+    ret (out, out.n > 0usize && comb == 0u8)
+}
+
+fn unquote(value: str) -> str {
+    let v = trim(value)
+    if v.len >= 2usize && (v[0usize] == 34u8 || v[0usize] == 39u8) && v[v.len - 1usize] == v[0usize] { ret v[1usize..v.len - 1usize] }
+    ret v
+}
+
+// Does one compound selector (`rect.a#id[k=v]:first-child`, `*`) match the node? Adds its
+// specificity (ids 10000, classes, attributes and pseudo-classes 100, a type 1) to `*spec`.
+fn compound_match(comp: str, node: Node, spec: *usize) -> bool {
+    let element = name_of(node.tag)
+    let (classes, has_classes) = attr(node.tag, "class")
+    let (id, has_id) = attr(node.tag, "id")
+    var j = 0usize
+    while j < comp.len && comp[j] != 46u8 && comp[j] != 35u8 && comp[j] != 91u8 && comp[j] != 58u8 { j += 1usize }
+    if j > 0usize && !same(comp[0usize..j], "*") {
+        if !same(comp[0usize..j], element) { ret false }
+        *spec += 1usize
+    }
+    var i = j
+    while i < comp.len {
+        let kind = comp[i]
+        if kind == 91u8 {
+            var close = i
+            while close < comp.len && comp[close] != 93u8 { close += 1usize }
+            let body = comp[i + 1usize..close]
+            var eq = 0usize
+            while eq < body.len && body[eq] != 61u8 { eq += 1usize }
+            let (value, has_value) = attr(node.tag, trim(body[0usize..eq]))
+            if !has_value { ret false }
+            if eq < body.len && !same(value, unquote(body[eq + 1usize..body.len])) { ret false }
+            *spec += 100usize
+            i = close + 1usize
+        } else if kind == 58u8 {
+            var k = i + 1usize
+            while k < comp.len && comp[k] != 46u8 && comp[k] != 35u8 && comp[k] != 91u8 && comp[k] != 58u8 { k += 1usize }
+            if !same(comp[i + 1usize..k], "first-child") || !node.first { ret false }
+            *spec += 100usize
+            i = k
+        } else {
+            var k = i + 1usize
+            while k < comp.len && comp[k] != 46u8 && comp[k] != 35u8 && comp[k] != 91u8 && comp[k] != 58u8 { k += 1usize }
+            let part = comp[i + 1usize..k]
+            if kind == 46u8 {
+                if !class_has(classes, part) { ret false }
+                *spec += 100usize
+            } else {
+                if !same(part, id) { ret false }
+                *spec += 10000usize
+            }
+            i = k
+        }
+    }
+    ret true
+}
+
+// The node of a scope: kind 0 the subject, 1 the sibling `idx`, 2 the ancestor `idx`. Whether an
+// ancestor is a first child is not known, so `:first-child` never matches one.
+fn node_at(sc: Scope, kind: usize, idx: usize) -> Node {
+    if kind == 0usize { ret Node { tag: sc.subject, first: sc.sibs.len == 0usize } }
+    if kind == 1usize { ret Node { tag: sc.sibs[idx], first: idx == 0usize } }
+    ret Node { tag: sc.anc[idx], first: false }
+}
+
+// Does compound `i` of the selector match the node (kind, idx), and the compounds before it
+// the nodes its combinators reach? Specificity of the whole chain is added to `*spec`.
+fn match_parts(sel: Selector, sc: Scope, i: usize, kind: usize, idx: usize, spec: *usize) -> bool {
+    var local = 0usize
+    if !compound_match(sel.parts[i], node_at(sc, kind, idx), &local) { ret false }
+    if i == 0usize {
+        *spec += local
+        ret true
+    }
+    let comb = sel.combs[i - 1usize]
+    var sub = 0usize
+    if comb == 62u8 {
+        var parent = sc.anc.len
+        if kind == 2usize { parent = idx }
+        if parent == 0usize { ret false }
+        if match_parts(sel, sc, i - 1usize, 2usize, parent - 1usize, &sub) {
+            *spec += local + sub
+            ret true
+        }
+        ret false
+    }
+    if comb == 32u8 {
+        var from = sc.anc.len
+        if kind == 2usize { from = idx }
+        var a = from
+        while a > 0usize {
+            a -= 1usize
+            sub = 0usize
+            if match_parts(sel, sc, i - 1usize, 2usize, a, &sub) {
+                *spec += local + sub
+                ret true
+            }
+        }
+        ret false
+    }
+    if kind == 2usize { ret false }
+    var upto = sc.sibs.len
+    if kind == 1usize { upto = idx }
+    if comb == 43u8 {
+        if upto == 0usize { ret false }
+        if match_parts(sel, sc, i - 1usize, 1usize, upto - 1usize, &sub) {
+            *spec += local + sub
+            ret true
+        }
+        ret false
+    }
+    var s = upto
+    while s > 0usize {
+        s -= 1usize
+        sub = 0usize
+        if match_parts(sel, sc, i - 1usize, 1usize, s, &sub) {
+            *spec += local + sub
+            ret true
+        }
+    }
+    ret false
+}
+
+// The specificity of the selector against the scope's element, or 0 for no match (a matching
+// selector always has at least 1: the universal selector alone counts 1).
+fn selector_spec(text: str, sc: Scope) -> usize {
+    let (sel, valid) = split_selector(text)
+    if !valid { ret 0usize }
+    var spec = 0usize
+    if !match_parts(sel, sc, sel.n - 1usize, 0usize, 0usize, &spec) { ret 0usize }
+    ret spec + 1usize
 }
 
 // The rules of every `<style>` element that match the element, in source order.
-fn collect_hits(text: str, element: str, classes: str, id: str, hits: []Hit) -> usize {
+fn collect_hits(text: str, sc: Scope, hits: []Hit) -> usize {
     var n = 0usize
     var at = find(text, 0usize, "<style")
     while at < text.len {
@@ -1275,7 +1447,7 @@ fn collect_hits(text: str, element: str, classes: str, id: str, hits: []Hit) -> 
                 while s <= selectors.len {
                     var e = s
                     while e < selectors.len && selectors[e] != 44u8 { e += 1usize }
-                    let rank = selector_rank(trim(selectors[s..e]), element, classes, id)
+                    let rank = selector_spec(trim(selectors[s..e]), sc)
                     if rank > best { best = rank }
                     s = e + 1usize
                 }
@@ -1295,13 +1467,11 @@ fn collect_hits(text: str, element: str, classes: str, id: str, hits: []Hit) -> 
 // `style` attribute: the element's own `style` first (it wins), then the rules by
 // specificity and then by source order, later first. Attributes sit below `style` in
 // `prop`, which is the cascade's order for presentation attributes.
-fn styled(a: *mem.Arena, doc: Doc, tag: str) -> (str, err) {
+fn styled(a: *mem.Arena, doc: Doc, tag: str, anc: []const str, sibs: []const str) -> (str, err) {
     if find(doc.text, 0usize, "<style") >= doc.text.len { ret (tag, ok) }
     let element = name_of(tag)
-    let (classes, has_classes) = attr(tag, "class")
-    let (id, has_id) = attr(tag, "id")
     var hits: [32]Hit = zero
-    let n = collect_hits(doc.text, element, classes, id, hits[0usize..32usize])
+    let n = collect_hits(doc.text, Scope { subject: tag, anc: anc, sibs: sibs }, hits[0usize..32usize])
     if n == 0usize { ret (tag, ok) }
     let (inline, has_inline) = attr(tag, "style")
     let (made, builder_error) = str.builder(a, 0usize)
@@ -1313,17 +1483,21 @@ fn styled(a: *mem.Arena, doc: Doc, tag: str) -> (str, err) {
         try str.push(&sb, inline)
         try str.push(&sb, ";")
     }
-    var level = 4usize
-    while level > 0usize {
-        var h = n
-        while h > 0usize {
-            h -= 1usize
-            if hits[h].level == level {
-                try str.push(&sb, doc.text[hits[h].from..hits[h].to])
-                try str.push(&sb, ";")
-            }
+    // Highest specificity first, later rules first among equals (the first declaration of a
+    // property wins in `prop`).
+    var used: [32]bool = zero
+    var done = 0usize
+    while done < n {
+        var best = 32usize
+        var h = 0usize
+        while h < n {
+            if !used[h] && (best == 32usize || hits[h].level >= hits[best].level) { best = h }
+            h += 1usize
         }
-        level -= 1usize
+        used[best] = true
+        try str.push(&sb, doc.text[hits[best].from..hits[best].to])
+        try str.push(&sb, ";")
+        done += 1usize
     }
     try str.push(&sb, "\"")
     try str.push(&sb, tag[element.len..tag.len])
@@ -1594,6 +1768,78 @@ fn even_odd_path(a: *mem.Arena, path: geometry.Path) -> (geometry.Path, err) {
 
 // ---- patterns -------------------------------------------------------------------------------
 
+const MAX_LAYERS_SVG: usize = 4usize
+
+// The value of a pattern attribute: the pattern's own, else the first pattern its href chain reaches
+// that has it.
+fn pattern_attr(doc: Doc, pat: Found, name: str) -> (str, bool) {
+    var holder = pat
+    var hops = 0usize
+    while hops < 4usize {
+        let (value, found) = attr(holder.tag, name)
+        if found { ret (value, true) }
+        let (plain, has_plain) = attr(holder.tag, "href")
+        let (linked, has_linked) = attr(holder.tag, "xlink:href")
+        var reference = plain
+        if !has_plain { reference = linked }
+        if !has_plain && !has_linked { ret ("", false) }
+        let next = find_by_id(doc.text, url_id(reference))
+        if !next.found || !same(name_of(next.tag), "pattern") { ret ("", false) }
+        holder = next
+        hops += 1usize
+    }
+    ret ("", false)
+}
+
+// The pattern whose children are drawn: this one, or the first on its href chain that has any.
+fn pattern_content(doc: Doc, pat: Found) -> Found {
+    var holder = pat
+    var hops = 0usize
+    while hops < 4usize {
+        if trim(doc.text[holder.body_start..holder.body_end]).len > 0usize { ret holder }
+        let (plain, has_plain) = attr(holder.tag, "href")
+        let (linked, has_linked) = attr(holder.tag, "xlink:href")
+        var reference = plain
+        if !has_plain { reference = linked }
+        if !has_plain && !has_linked { ret holder }
+        let next = find_by_id(doc.text, url_id(reference))
+        if !next.found || !same(name_of(next.tag), "pattern") { ret holder }
+        holder = next
+        hops += 1usize
+    }
+    ret holder
+}
+
+// The transform that maps a `viewBox` onto a `w` x `h` viewport under a `preserveAspectRatio`
+// value ("" for the default xMidYMid meet); false when the viewBox is unusable.
+fn view_transform(view: str, w: f32, h: f32, aspect: str) -> (geometry.Transform, bool) {
+    var p = 0usize
+    var vx = 0.0f32
+    var vy = 0.0f32
+    var vw = 0.0f32
+    var vh = 0.0f32
+    if !(read_number(view, &p, &vx) && read_number(view, &p, &vy) && read_number(view, &p, &vw) && read_number(view, &p, &vh) && vw > 0.0 && vh > 0.0) { ret (geometry.transform_identity(), false) }
+    var fx = 0.5f32
+    var fy = 0.5f32
+    var stretch = false
+    var slice = false
+    if find(aspect, 0usize, "none") < aspect.len { stretch = true }
+    if find(aspect, 0usize, "xMin") < aspect.len { fx = 0.0 }
+    if find(aspect, 0usize, "xMax") < aspect.len { fx = 1.0 }
+    if find(aspect, 0usize, "YMin") < aspect.len { fy = 0.0 }
+    if find(aspect, 0usize, "YMax") < aspect.len { fy = 1.0 }
+    if find(aspect, 0usize, "slice") < aspect.len { slice = true }
+    var sx = w / vw
+    var sy = h / vh
+    if !stretch {
+        var k = sx
+        if slice { if sy > k { k = sy } } else { if sy < k { k = sy } }
+        sx = k
+        sy = k
+    }
+    ret (geometry.transform_multiply(geometry.transform_translate((w - vw * sx) * fx, (h - vh * sy) * fy), geometry.transform_multiply(geometry.transform_scale(sx, sy), geometry.transform_translate(0.0 - vx, 0.0 - vy))), true)
+}
+
 fn invert(t: geometry.Transform) -> (geometry.Transform, bool) {
     let det = t.m00 * t.m11 - t.m01 * t.m10
     if det < 0.000001 && det > 0.0 - 0.000001 { ret (t, false) }
@@ -1605,30 +1851,49 @@ fn invert(t: geometry.Transform) -> (geometry.Transform, bool) {
 fn fill_pattern(a: *mem.Arena, b: *scene.Builder, doc: Doc, style: Style, path: geometry.Path, bounds: geometry.Rect, pat: Found, level: usize) -> err {
     if level + 1usize >= 8usize { ret TooComplex }
     var boxed = true
-    let (units, has_units) = attr(pat.tag, "patternUnits")
+    let (units, has_units) = pattern_attr(doc, pat, "patternUnits")
     if has_units && same(units, "userSpaceOnUse") { boxed = false }
     var content_boxed = false
-    let (content_units, has_content_units) = attr(pat.tag, "patternContentUnits")
+    let (content_units, has_content_units) = pattern_attr(doc, pat, "patternContentUnits")
     if has_content_units && same(content_units, "objectBoundingBox") { content_boxed = true }
     var tx = 0.0f32
     var ty = 0.0f32
     var tw = 0.0f32
     var th = 0.0f32
+    let (x_text, has_x) = pattern_attr(doc, pat, "x")
+    let (y_text, has_y) = pattern_attr(doc, pat, "y")
+    let (w_text, has_w) = pattern_attr(doc, pat, "width")
+    let (h_text, has_h) = pattern_attr(doc, pat, "height")
     if boxed {
-        tx = bounds.x + gradient_coord(pat.tag, "x", 0.0, true, 0.0) * bounds.width
-        ty = bounds.y + gradient_coord(pat.tag, "y", 0.0, true, 0.0) * bounds.height
-        tw = gradient_coord(pat.tag, "width", 0.0, true, 0.0) * bounds.width
-        th = gradient_coord(pat.tag, "height", 0.0, true, 0.0) * bounds.height
+        tx = bounds.x + coord_value(x_text, has_x, 0.0, true, 0.0) * bounds.width
+        ty = bounds.y + coord_value(y_text, has_y, 0.0, true, 0.0) * bounds.height
+        tw = coord_value(w_text, has_w, 0.0, true, 0.0) * bounds.width
+        th = coord_value(h_text, has_h, 0.0, true, 0.0) * bounds.height
     } else {
-        tx = len_x(doc, pat.tag, "x")
-        ty = len_y(doc, pat.tag, "y")
-        tw = len_x(doc, pat.tag, "width")
-        th = len_y(doc, pat.tag, "height")
+        if has_x { tx = length_value(x_text, 0.0, doc.vw) }
+        if has_y { ty = length_value(y_text, 0.0, doc.vh) }
+        if has_w { tw = length_value(w_text, 0.0, doc.vw) }
+        if has_h { th = length_value(h_text, 0.0, doc.vh) }
     }
     if !(tw > 0.0) || !(th > 0.0) { ret ok }
     var pm = geometry.transform_identity()
-    let (pm_text, has_pm) = attr(pat.tag, "patternTransform")
+    let (pm_text, has_pm) = pattern_attr(doc, pat, "patternTransform")
     if has_pm { pm = parse_transform(pm_text) }
+    // A viewBox maps onto the tile (and then patternContentUnits does not apply).
+    var content = geometry.transform_identity()
+    var has_content = false
+    let (view_text, has_view) = pattern_attr(doc, pat, "viewBox")
+    if has_view {
+        let (aspect_text, has_aspect) = pattern_attr(doc, pat, "preserveAspectRatio")
+        var aspect = ""
+        if has_aspect { aspect = aspect_text }
+        let (mapped, has_mapped) = view_transform(view_text, tw, th, aspect)
+        if has_mapped {
+            content = mapped
+            has_content = true
+            content_boxed = false
+        }
+    }
     let (inv, invertible) = invert(pm)
     if !invertible { ret ok }
     let c0 = geometry.transform_point(inv, pt(bounds.x, bounds.y))
@@ -1656,8 +1921,9 @@ fn fill_pattern(a: *mem.Arena, b: *scene.Builder, doc: Doc, style: Style, path: 
     let iy0 = i64(math.floor[f32]((min_y - ty) / th))
     let iy1 = i64(math.ceil[f32]((max_y - ty) / th))
     if (ix1 - ix0) * (iy1 - iy0) > 1024i64 { ret TooComplex }
-    let inner = doc.text[pat.body_start..pat.body_end]
-    let frame = Frame { style: apply_style(pat.tag, default_style(style.current)), ctm: geometry.transform_identity() }
+    let holder = pattern_content(doc, pat)
+    let inner = doc.text[holder.body_start..holder.body_end]
+    let frame = Frame { style: apply_style(pat.tag, default_style(style.current)), ctm: geometry.transform_identity(), layers: MAX_LAYERS_SVG, opens: false }
     let save: scene.Command = .Save
     let restore: scene.Command = .Restore
     try scene.push(b, save)
@@ -1671,6 +1937,7 @@ fn fill_pattern(a: *mem.Arena, b: *scene.Builder, doc: Doc, style: Style, path: 
             try scene.push(b, scene.Command { Transform: geometry.transform_translate(tx + f32(ix) * tw, ty + f32(iy) * th) })
             try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.rect(0.0, 0.0, tw, th) } })
             if content_boxed { try scene.push(b, scene.Command { Transform: geometry.transform_scale(bounds.width, bounds.height) }) }
+            if has_content { try scene.push(b, scene.Command { Transform: content }) }
             try walk(a, b, doc, inner, frame, false, bounds, level + 1usize)
             try scene.push(b, restore)
             ix += 1i64
@@ -1827,7 +2094,7 @@ fn draw_marker(a: *mem.Arena, b: *scene.Builder, doc: Doc, style: Style, id: str
     try scene.push(b, scene.Command { Transform: geometry.transform_translate(0.0 - ref_point.x, 0.0 - ref_point.y) })
     try scene.push(b, scene.Command { Clip: scene.Clip { Rect: geometry.rect(0.0, 0.0, mw, mh) } })
     try scene.push(b, scene.Command { Transform: content })
-    let frame = Frame { style: apply_style(m.tag, default_style(style.current)), ctm: geometry.transform_identity() }
+    let frame = Frame { style: apply_style(m.tag, default_style(style.current)), ctm: geometry.transform_identity(), layers: MAX_LAYERS_SVG, opens: false }
     try walk(a, b, doc, doc.text[m.body_start..m.body_end], frame, false, geometry.rect(0.0, 0.0, mw, mh), level + 1usize)
     try scene.push(b, restore)
     ret ok
@@ -1870,9 +2137,251 @@ fn draw_markers(a: *mem.Arena, b: *scene.Builder, doc: Doc, style: Style, path: 
     ret ok
 }
 
+// ---- radial focal point (L125, D3701) -------------------------------------------------------
+
+// The gradient colour at `t` (pad): stops are in ascending offset.
+fn color_at(stops: []const paint.Stop, t: f32) -> paint.Color {
+    if stops.len == 0usize { ret paint.rgba(0.0, 0.0, 0.0, 0.0) }
+    if t <= stops[0usize].offset { ret stops[0usize].color }
+    var i = 1usize
+    while i < stops.len {
+        if t <= stops[i].offset {
+            let lo = stops[i - 1usize]
+            let hi = stops[i]
+            var u = 1.0f32
+            if hi.offset > lo.offset { u = (t - lo.offset) / (hi.offset - lo.offset) }
+            ret paint.Color { red: lo.color.red + (hi.color.red - lo.color.red) * u, green: lo.color.green + (hi.color.green - lo.color.green) * u, blue: lo.color.blue + (hi.color.blue - lo.color.blue) * u, alpha: lo.color.alpha + (hi.color.alpha - lo.color.alpha) * u }
+        }
+        i += 1usize
+    }
+    ret stops[stops.len - 1usize].color
+}
+
+// The focal point `fx`/`fy` of the radial gradient `id`, in the space of its centre; false when
+// it has none of its own, or its spread is not pad (the stops are then tiled around the centre).
+fn focus_of(doc: Doc, id: str, bounds: geometry.Rect) -> (geometry.Point, bool) {
+    let found = find_by_id(doc.text, id)
+    let none = pt(0.0, 0.0)
+    if !found.found || !same(name_of(found.tag), "radialGradient") { ret (none, false) }
+    let (fx_text, has_fx) = attr(found.tag, "fx")
+    let (fy_text, has_fy) = attr(found.tag, "fy")
+    if !has_fx && !has_fy { ret (none, false) }
+    if spread_of(doc, found.tag) != 0usize { ret (none, false) }
+    var boxed = true
+    let (units, has_units) = attr(found.tag, "gradientUnits")
+    if has_units && same(units, "userSpaceOnUse") { boxed = false }
+    let cx = gradient_coord(found.tag, "cx", 0.5, boxed, doc.vw)
+    let cy = gradient_coord(found.tag, "cy", 0.5, boxed, doc.vh)
+    var fx = coord_value(fx_text, has_fx, cx, boxed, doc.vw)
+    var fy = coord_value(fy_text, has_fy, cy, boxed, doc.vh)
+    if boxed {
+        fx = bounds.x + fx * bounds.width
+        fy = bounds.y + fy * bounds.height
+    }
+    var transform = geometry.transform_identity()
+    let (transform_text, has_transform) = attr(found.tag, "gradientTransform")
+    if has_transform { transform = parse_transform(transform_text) }
+    ret (geometry.transform_point(transform, pt(fx, fy)), true)
+}
+
+const FOCAL_STEPS: usize = 96usize
+
+// A radial gradient with its focus off the centre, as a stack of circles: the level set of
+// parameter t is the circle of radius t*r centred t of the way from the focus to the centre, so
+// painting t = 1 down to 0 in FOCAL_STEPS bands, each its colour at the band's middle, draws the
+// two-point gradient up to the banding. Opaque stops only: translucent ones would pile up.
+fn focal_fill(a: *mem.Arena, b: *scene.Builder, shape: geometry.Path, rad: paint.RadialGradient, focus: geometry.Point) -> (bool, err) {
+    if rad.stops.len == 0usize || !(rad.radius > 0.0) { ret (false, ok) }
+    var i = 0usize
+    while i < rad.stops.len {
+        if rad.stops[i].color.alpha < 0.999 { ret (false, ok) }
+        i += 1usize
+    }
+    var fx = focus.x
+    var fy = focus.y
+    let dx = fx - rad.center.x
+    let dy = fy - rad.center.y
+    let d = math.sqrt[f32](dx * dx + dy * dy)
+    let limit = rad.radius * 0.98
+    if d > limit {
+        fx = rad.center.x + dx * limit / d
+        fy = rad.center.y + dy * limit / d
+    }
+    let save: scene.Command = .Save
+    let restore: scene.Command = .Restore
+    try scene.push(b, scene.Command { FillPath: scene.FillPath { path: shape, brush: paint.Brush { Solid: rad.stops[rad.stops.len - 1usize].color } } })
+    try scene.push(b, save)
+    try scene.push(b, scene.Command { Clip: scene.Clip { Path: shape } })
+    var k = FOCAL_STEPS
+    while k > 0usize {
+        let t = f32(k) / f32(FOCAL_STEPS)
+        let middle = (f32(k) - 0.5) / f32(FOCAL_STEPS)
+        let (circle, circle_error) = ellipse_path(a, fx + (rad.center.x - fx) * t, fy + (rad.center.y - fy) * t, rad.radius * t, rad.radius * t)
+        if circle_error != ok { ret (false, circle_error) }
+        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: circle, brush: paint.Brush { Solid: color_at(rad.stops, middle) } } })
+        k -= 1usize
+    }
+    try scene.push(b, restore)
+    ret (true, ok)
+}
+
+// ---- masks (L125, D3701) --------------------------------------------------------------------
+
+// The relative luminance of a colour (SVG 1.1's coefficients, over the stored display values).
+fn luminance(c: paint.Color) -> f32 {
+    ret 0.2125 * c.red + 0.7154 * c.green + 0.0721 * c.blue
+}
+
+// The path with every point carried through `t`.
+fn place_path(a: *mem.Arena, path: geometry.Path, t: geometry.Transform) -> (geometry.Path, err) {
+    let (points, points_error) = mem.alloc[geometry.Point](a, path.points.len)
+    if points_error != ok { ret (zero, points_error) }
+    var k = 0usize
+    while k < points.len {
+        points[k] = geometry.transform_point(t, path.points[k])
+        k += 1usize
+    }
+    ret (geometry.Path { verbs: path.verbs, points: points }, ok)
+}
+
+fn quad_path(a: *mem.Arena, p0: geometry.Point, p1: geometry.Point, p2: geometry.Point, p3: geometry.Point) -> (geometry.Path, err) {
+    let (pb, pb_error) = new_path(a, 5usize, 4usize)
+    if pb_error != ok { ret (zero, pb_error) }
+    var b = pb
+    try geometry.move_to(&b, p0)
+    try geometry.line_to(&b, p1)
+    try geometry.line_to(&b, p2)
+    try geometry.line_to(&b, p3)
+    try geometry.close_path(&b)
+    ret (geometry.finish(&b), ok)
+}
+
+// One piece of a mask: the masked element, clipped to `shape` (and to `strip`), at the mask's
+// value `k` there. The element is replayed from its source, under a layer of opacity `k`.
+fn mask_piece(a: *mem.Arena, b: *scene.Builder, plain: Doc, job: *Job, shape: geometry.Path, strip: geometry.Path, has_strip: bool, k: f32) -> err {
+    if !(k > 0.001) { ret ok }
+    let save: scene.Command = .Save
+    let restore: scene.Command = .Restore
+    try scene.push(b, save)
+    try scene.push(b, scene.Command { Clip: scene.Clip { Path: shape } })
+    if has_strip { try scene.push(b, scene.Command { Clip: scene.Clip { Path: strip } }) }
+    var frame = job.frame
+    var value = k
+    if value > 1.0 { value = 1.0 }
+    var layered = false
+    if frame.layers < MAX_LAYERS_SVG {
+        try scene.push(b, scene.Command { OpacityLayer: scene.OpacityLayer { bounds: plain.view, opacity: value } })
+        frame.layers += 1usize
+        layered = true
+    } else {
+        frame.style.opacity = frame.style.opacity * value
+    }
+    try walk(a, b, plain, job.text, frame, false, job.dest, job.level + 1usize)
+    if layered { try scene.push(b, restore) }
+    try scene.push(b, restore)
+    ret ok
+}
+
+const MASK_STRIPS: usize = 32usize
+
+// A shape of a mask's content: its fill's luminance times its alpha is the mask's value over it.
+// A solid fill is one piece; a linear gradient is MASK_STRIPS strips across its axis (and a pad
+// piece either side); a radial gradient or pattern is its mean stop. Strokes and text add nothing.
+fn emit_mask_piece(a: *mem.Arena, b: *scene.Builder, doc: Doc, frame: Frame, path: geometry.Path, fillable: bool) -> err {
+    let s = frame.style
+    if !fillable || !s.fill_on { ret ok }
+    let job = doc.job
+    var plain = doc
+    plain.has_job = false
+    let alpha = s.opacity * s.fill_opacity
+    let (shape, shape_error) = place_path(a, path, frame.ctm)
+    if shape_error != ok { ret shape_error }
+    var strip: geometry.Path = zero
+    if s.fill_ref.len == 0usize {
+        try mask_piece(a, b, plain, job, shape, strip, false, luminance(s.fill) * s.fill.alpha * alpha)
+        ret ok
+    }
+    let bounds = path_bounds(path)
+    let (brush, has_brush, brush_error) = gradient_brush(a, doc, s.fill_ref, bounds, bounds, 1.0, s.current)
+    if brush_error != ok { ret brush_error }
+    if !has_brush { ret ok }
+    switch brush {
+    case .Solid as c:
+        try mask_piece(a, b, plain, job, shape, strip, false, luminance(c) * c.alpha * alpha)
+    case .Radial as rad:
+        var sum = 0.0f32
+        var n = 0usize
+        while n < rad.stops.len {
+            sum += luminance(rad.stops[n].color) * rad.stops[n].color.alpha
+            n += 1usize
+        }
+        if rad.stops.len > 0usize { try mask_piece(a, b, plain, job, shape, strip, false, sum / f32(rad.stops.len) * alpha) }
+    case .Linear as lin:
+        let start = geometry.transform_point(frame.ctm, lin.start)
+        let stop_point = geometry.transform_point(frame.ctm, lin.end)
+        let dx = stop_point.x - start.x
+        let dy = stop_point.y - start.y
+        let length = math.sqrt[f32](dx * dx + dy * dy)
+        let reach = path_bounds(shape)
+        let far = reach.width + reach.height + length + 1.0
+        if !(length > 0.0001) {
+            try mask_piece(a, b, plain, job, shape, strip, false, luminance(color_at(lin.stops, 0.0)) * alpha)
+            ret ok
+        }
+        let nx = 0.0 - dy / length
+        let ny = dx / length
+        let big = far / length + 1.0
+        var j = 0usize
+        while j < MASK_STRIPS + 2usize {
+            // Strip 0 is the pad before the start, the last one the pad after the end.
+            var t0 = 0.0f32 - big
+            var t1 = 0.0f32
+            var middle = 0.0f32
+            if j == MASK_STRIPS + 1usize {
+                t0 = 1.0
+                t1 = 1.0 + big
+                middle = 1.0
+            } else if j > 0usize {
+                t0 = f32(j - 1usize) / f32(MASK_STRIPS)
+                t1 = f32(j) / f32(MASK_STRIPS)
+                middle = (t0 + t1) / 2.0
+            }
+            let c = color_at(lin.stops, middle)
+            let p0 = pt(start.x + dx * t0, start.y + dy * t0)
+            let p1 = pt(start.x + dx * t1, start.y + dy * t1)
+            let (poly, poly_error) = quad_path(a, pt(p0.x + nx * far, p0.y + ny * far), pt(p1.x + nx * far, p1.y + ny * far), pt(p1.x - nx * far, p1.y - ny * far), pt(p0.x - nx * far, p0.y - ny * far))
+            if poly_error != ok { ret poly_error }
+            try mask_piece(a, b, plain, job, shape, poly, true, luminance(c) * c.alpha * alpha)
+            j += 1usize
+        }
+    }
+    ret ok
+}
+
+// Draw the element at `source` under the mask element `mask_id`: the mask's content is walked
+// in the element's user space, each of its shapes replaying the element under its value. False
+// when the mask cannot be applied here (an unknown id, no room for a layer, inside a mask or a
+// pattern), and the caller then draws the element unmasked.
+fn draw_masked(a: *mem.Arena, b: *scene.Builder, doc: Doc, parent: Frame, frame: Frame, mask_id: str, source: str, anc: []const str, dest: geometry.Rect, level: usize) -> (bool, err) {
+    if doc.has_job || level + 1usize >= 8usize { ret (false, ok) }
+    if frame.layers >= MAX_LAYERS_SVG || !(doc.view.width > 0.0) { ret (false, ok) }
+    let m = find_by_id(doc.text, mask_id)
+    if !m.found || !same(name_of(m.tag), "mask") { ret (false, ok) }
+    var job_frame = parent
+    job_frame.style.mask_skip = true
+    var job = Job { text: source, frame: job_frame, dest: dest, level: level, anc: anc }
+    var inner = doc
+    inner.job = &job
+    inner.has_job = true
+    let content = Frame { style: apply_style(m.tag, default_style(parent.style.current)), ctm: frame.ctm, layers: MAX_LAYERS_SVG, opens: false }
+    try walk(a, b, inner, doc.text[m.body_start..m.body_end], content, false, dest, level + 1usize)
+    ret (true, ok)
+}
+
 // Fill and stroke of `path` under the frame, clipped by its clip-path when it has one.
-// `fillable` is false for a line, whose fill is never drawn.
+// `fillable` is false for a line, whose fill is never drawn. In a mask's content it adds a piece.
 fn emit(a: *mem.Arena, b: *scene.Builder, doc: Doc, frame: Frame, path: geometry.Path, fillable: bool, level: usize) -> err {
+    if doc.has_job { ret emit_mask_piece(a, b, doc, frame, path, fillable) }
     let s = frame.style
     let fill_alpha = s.opacity * s.fill_opacity
     let stroke_alpha = s.opacity * s.stroke_opacity
@@ -1900,7 +2409,21 @@ fn emit(a: *mem.Arena, b: *scene.Builder, doc: Doc, frame: Frame, path: geometry
             } else {
                 let (brush, has_brush, brush_error) = gradient_brush(a, doc, s.fill_ref, bounds, bounds, fill_alpha, s.current)
                 if brush_error != ok { ret brush_error }
-                if has_brush { try scene.push(b, scene.Command { FillPath: scene.FillPath { path: shape, brush: brush } }) }
+                if has_brush {
+                    var drawn = false
+                    switch brush {
+                    case .Radial as rad:
+                        let (focus, has_focus) = focus_of(doc, s.fill_ref, bounds)
+                        if has_focus {
+                            let (done, focal_error) = focal_fill(a, b, shape, rad, focus)
+                            if focal_error != ok { ret focal_error }
+                            drawn = done
+                        }
+                    default:
+                        drawn = false
+                    }
+                    if !drawn { try scene.push(b, scene.Command { FillPath: scene.FillPath { path: shape, brush: brush } }) }
+                }
             }
         } else {
             try scene.push(b, scene.Command { FillPath: scene.FillPath { path: shape, brush: paint.Brush { Solid: color_with(s.fill, fill_alpha) } } })
@@ -1940,23 +2463,39 @@ fn child_of(tag: str, parent: Frame) -> Frame {
     var ctm = parent.ctm
     if found { ctm = geometry.transform_multiply(parent.ctm, parse_transform(value)) }
     var style = apply_style(tag, parent.style)
+    style.mask_skip = false
     let (clip, has_clip) = prop(tag, "clip-path")
     if has_clip {
         // The clip is in the user space of the element that names it.
         style.clip_ref = url_id(clip)
         style.clip_ctm = ctm
     }
-    ret Frame { style: style, ctm: ctm }
+    ret Frame { style: style, ctm: ctm, layers: parent.layers, opens: false }
+}
+
+// Opens an opacity layer for the element's own `opacity` when it is below one and there is room,
+// moving that opacity out of the frame (it keeps what its ancestors left). The caller closes the
+// layer with a Restore when `frame.opens`.
+fn open_layer(b: *scene.Builder, doc: Doc, tag: str, parent: Frame, frame: *Frame) -> err {
+    let (value, has_value) = prop(tag, "opacity")
+    if !has_value { ret ok }
+    let own = unit_value(number_of(value, 1.0))
+    if own >= 1.0 || frame.layers >= MAX_LAYERS_SVG || !(doc.view.width > 0.0) || doc.has_job { ret ok }
+    frame.style.opacity = parent.style.opacity
+    frame.layers += 1usize
+    frame.opens = true
+    try scene.push(b, scene.Command { OpacityLayer: scene.OpacityLayer { bounds: doc.view, opacity: own } })
+    ret ok
 }
 
 fn skipped(name: str) -> bool {
     ret same(name, "defs") || same(name, "title") || same(name, "desc") || same(name, "metadata") || same(name, "style") || same(name, "clipPath") || same(name, "mask") || same(name, "linearGradient") || same(name, "radialGradient") || same(name, "pattern") || same(name, "symbol") || same(name, "filter") || same(name, "marker") || same(name, "text") || same(name, "script")
 }
 
-// The document's own size: the viewBox's width and height, else the `width` and `height`.
-fn size(text: str) -> (f32, f32, bool) {
+// The viewBox as a rectangle in the root user space, else the width and height from the origin.
+fn view_of(text: str) -> geometry.Rect {
     let open = find(text, 0usize, "<svg")
-    if open >= text.len { ret (0.0, 0.0, false) }
+    if open >= text.len { ret geometry.rect(0.0, 0.0, 0.0, 0.0) }
     let tag = text[open + 1usize..tag_end(text, open)]
     let (view, has_view) = attr(tag, "viewBox")
     if has_view {
@@ -1965,25 +2504,226 @@ fn size(text: str) -> (f32, f32, bool) {
         var vy = 0.0f32
         var vw = 0.0f32
         var vh = 0.0f32
-        if read_number(view, &at, &vx) && read_number(view, &at, &vy) && read_number(view, &at, &vw) && read_number(view, &at, &vh) && vw > 0.0 && vh > 0.0 { ret (vw, vh, true) }
+        if read_number(view, &at, &vx) && read_number(view, &at, &vy) && read_number(view, &at, &vw) && read_number(view, &at, &vh) && vw > 0.0 && vh > 0.0 { ret geometry.rect(vx, vy, vw, vh) }
     }
     let w = length_of(tag, "width")
     let h = length_of(tag, "height")
-    if w > 0.0 && h > 0.0 { ret (w, h, true) }
+    if w > 0.0 && h > 0.0 { ret geometry.rect(0.0, 0.0, w, h) }
+    ret geometry.rect(0.0, 0.0, 0.0, 0.0)
+}
+
+// The document's own size: the viewBox's width and height, else the `width` and `height`.
+fn size(text: str) -> (f32, f32, bool) {
+    let r = view_of(text)
+    if r.width > 0.0 && r.height > 0.0 { ret (r.width, r.height, true) }
     ret (0.0, 0.0, false)
 }
 
 fn default_style(current: paint.Color) -> Style {
-    ret Style { fill: paint.rgba(0.0, 0.0, 0.0, 1.0), fill_on: true, stroke: paint.rgba(0.0, 0.0, 0.0, 1.0), stroke_on: false, stroke_width: 1.0, cap: paint.StrokeCap.Butt, join: paint.StrokeJoin.Miter, miter: 4.0, opacity: 1.0, fill_opacity: 1.0, stroke_opacity: 1.0, current: current, fill_ref: "", stroke_ref: "", clip_ref: "", clip_ctm: geometry.transform_identity(), dash: "", dash_offset: 0.0, even_odd: false, marker_start: "", marker_mid: "", marker_end: "" }
+    ret Style { fill: paint.rgba(0.0, 0.0, 0.0, 1.0), fill_on: true, stroke: paint.rgba(0.0, 0.0, 0.0, 1.0), stroke_on: false, stroke_width: 1.0, cap: paint.StrokeCap.Butt, join: paint.StrokeJoin.Miter, miter: 4.0, opacity: 1.0, fill_opacity: 1.0, stroke_opacity: 1.0, current: current, fill_ref: "", stroke_ref: "", clip_ref: "", clip_ctm: geometry.transform_identity(), dash: "", dash_offset: 0.0, even_odd: false, marker_start: "", marker_mid: "", marker_end: "", mask_skip: false, font_size: 16.0, anchor: 0usize }
 }
 
 // Draw `text` into `b`, fitted to `dest`. `current` is what `currentColor` and an unset
 // `color` mean. The commands are balanced -- one outer Save/Restore, one pair per shape.
+// `<text>` is not drawn (see `draw_with_font`).
 fn draw(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color) -> err {
+    var font: fonts.Font = zero
+    ret draw_with(a, b, text, dest, current, font, false)
+}
+
+// As `draw`, with `<text>` set in `font` through `e.text.layout` (the caller registers the font
+// with the renderer). `font-size`, `text-anchor`, `x`, `y` and `fill` are read; a `tspan` with an
+// `x` or `y` of its own starts a new chunk, any other joins the text of its parent.
+fn draw_with_font(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font) -> err {
+    ret draw_with(a, b, text, dest, current, font, true)
+}
+
+fn draw_with(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color, font: fonts.Font, has_font: bool) -> err {
     let (vw, vh, has_size) = size(text)
-    let doc = Doc { text: text, vw: vw, vh: vh }
-    let first = Frame { style: default_style(current), ctm: geometry.transform_identity() }
+    var nothing: [1]str = zero
+    var blank: Job = zero
+    let doc = Doc { text: text, vw: vw, vh: vh, view: view_of(text), job: &blank, has_job: false, font: font, has_font: has_font, base_anc: nothing[0usize..0usize] }
+    let first = Frame { style: default_style(current), ctm: geometry.transform_identity(), layers: 0usize, opens: false }
     ret walk(a, b, doc, text, first, true, dest, 0usize)
+}
+
+// ---- text (L125, D3701) ---------------------------------------------------------------------
+
+type Chunk = struct { x: f32, y: f32, text: str }
+
+// The first number of a coordinate list attribute, else `fallback`.
+fn first_number(tag: str, name: str, fallback: f32) -> f32 {
+    let (value, found) = attr(tag, name)
+    if !found { ret fallback }
+    ret length_value(value, fallback, 0.0)
+}
+
+// Appends `piece` with entities decoded and whitespace runs folded to one space (a space is not
+// written at the start of a chunk or twice running).
+fn push_text(sb: *str.Builder, piece: str, last_space: *bool) -> err {
+    var i = 0usize
+    while i < piece.len {
+        let c = piece[i]
+        if is_space(c) {
+            if !*last_space {
+                try str.push(sb, " ")
+                *last_space = true
+            }
+            i += 1usize
+            continue
+        }
+        *last_space = false
+        if c == 38u8 {
+            var j = i + 1usize
+            while j < piece.len && piece[j] != 59u8 && j - i < 8usize { j += 1usize }
+            if j < piece.len && piece[j] == 59u8 {
+                let name = piece[i + 1usize..j]
+                if same(name, "amp") {
+                    try str.push(sb, "&")
+                } else if same(name, "lt") {
+                    try str.push(sb, "<")
+                } else if same(name, "gt") {
+                    try str.push(sb, ">")
+                } else if same(name, "quot") {
+                    try str.push(sb, "\"")
+                } else if same(name, "apos") {
+                    try str.push(sb, "'")
+                } else {
+                    try str.push(sb, piece[i..j + 1usize])
+                }
+                i = j + 1usize
+                continue
+            }
+        }
+        try str.push(sb, piece[i..i + 1usize])
+        i += 1usize
+    }
+    ret ok
+}
+
+// Draw one `<text>` element: its chunks, each a one-line layout set at its anchor.
+fn draw_text(a: *mem.Arena, b: *scene.Builder, doc: Doc, frame: Frame, tag: str, body: str) -> err {
+    if !doc.has_font { ret ok }
+    let s = frame.style
+    let fill_alpha = s.opacity * s.fill_opacity
+    if !s.fill_on || !(fill_alpha > 0.0) || !(s.font_size > 0.0) { ret ok }
+    let x = first_number(tag, "x", 0.0) + first_number(tag, "dx", 0.0)
+    let y = first_number(tag, "y", 0.0) + first_number(tag, "dy", 0.0)
+    var chunks: [16]Chunk = zero
+    var count = 0usize
+    let (made, builder_error) = str.builder(a, 0usize)
+    if builder_error != ok { ret builder_error }
+    var sb = made
+    var last_space = true
+    var from = 0usize
+    var i = 0usize
+    var pending_x = x
+    var pending_y = y
+    while true {
+        var at_end = i >= body.len
+        if !at_end && body[i] != 60u8 {
+            i += 1usize
+            continue
+        }
+        try push_text(&sb, body[from..i], &last_space)
+        if at_end { break }
+        let end = tag_end(body, i)
+        let inner = body[i + 1usize..end]
+        if begins(inner, 0usize, "tspan") {
+            let (x_text, has_x) = attr(inner, "x")
+            let (y_text, has_y) = attr(inner, "y")
+            if has_x || has_y {
+                // A positioned span ends the chunk so far and starts another.
+                let so_far = str.done(&sb)
+                if so_far.len > 0usize && count < 16usize {
+                    chunks[count] = Chunk { x: pending_x, y: pending_y, text: so_far }
+                    count += 1usize
+                }
+                if has_x { pending_x = length_value(x_text, 0.0, doc.vw) }
+                if has_y { pending_y = length_value(y_text, 0.0, doc.vh) }
+                let (again, again_error) = str.builder(a, 0usize)
+                if again_error != ok { ret again_error }
+                sb = again
+                last_space = true
+            }
+        }
+        from = end + 1usize
+        i = end + 1usize
+    }
+    let tail = str.done(&sb)
+    if tail.len > 0usize && count < 16usize {
+        chunks[count] = Chunk { x: pending_x, y: pending_y, text: tail }
+        count += 1usize
+    }
+    var choices: [1]layout.FontChoice = zero
+    choices[0usize] = layout.FontChoice { font: doc.font, size: s.font_size }
+    let style = layout.Style { fonts: choices[0usize..1usize], language: "", line_height: 0.0 }
+    let options = layout.Options { width: 0.0, max_lines: 0u32, align: layout.Align.Start, wrap: layout.Wrap.None, ellipsis: "", notdef: true }
+    let save: scene.Command = .Save
+    let restore: scene.Command = .Restore
+    var c = 0usize
+    while c < count {
+        var content = chunks[c].text
+        // The whitespace fold can leave one space at the end of a chunk; it takes no part.
+        if content.len > 0usize && content[content.len - 1usize] == 32u8 { content = content[0usize..content.len - 1usize] }
+        if content.len > 0usize {
+            let (laid, laid_error) = layout.layout(a, content, style, options)
+            if laid_error != ok { ret laid_error }
+            if laid.lines.len == 1usize {
+                let (held, held_error) = mem.alloc[layout.Layout](a, 1usize)
+                if held_error != ok { ret held_error }
+                held[0usize] = laid
+                var origin_x = chunks[c].x
+                if s.anchor == 1usize { origin_x = origin_x - laid.bounds.width / 2.0 }
+                if s.anchor == 2usize { origin_x = origin_x - laid.bounds.width }
+                try scene.push(b, save)
+                try scene.push(b, scene.Command { Transform: frame.ctm })
+                try scene.push(b, scene.Command { Text: scene.DrawText { layout: &held[0usize], origin: pt(origin_x, chunks[c].y - laid.lines[0usize].baseline), brush: paint.Brush { Solid: color_with(s.fill, fill_alpha) } } })
+                try scene.push(b, restore)
+            }
+        }
+        c += 1usize
+    }
+    ret ok
+}
+
+// The index just past the element whose open tag ends at `end`: its matching close tag counting
+// nested elements of the same name, or `end + 1` for a self-closing one.
+fn element_end(text: str, end: usize, name: str, self_closing: bool) -> usize {
+    if self_closing { ret end + 1usize }
+    var depth = 1usize
+    var j = end + 1usize
+    while j < text.len {
+        if text[j] != 60u8 {
+            j += 1usize
+            continue
+        }
+        let close = tag_end(text, j)
+        if j + 1usize < text.len && text[j + 1usize] == 47u8 {
+            if same(name_of(text[j + 2usize..close]), name) {
+                depth -= 1usize
+                if depth == 0usize { ret close + 1usize }
+            }
+        } else if j + 1usize < text.len && text[j + 1usize] != 33u8 && text[j + 1usize] != 63u8 {
+            let inner = text[j + 1usize..close]
+            if same(name_of(inner), name) && !(inner.len > 0usize && inner[inner.len - 1usize] == 47u8) { depth += 1usize }
+        }
+        j = close + 1usize
+    }
+    ret text.len
+}
+
+fn sib_push(list: []str, n: *usize, tag: str) {
+    if *n >= list.len {
+        var k = 1usize
+        while k < list.len {
+            list[k - 1usize] = list[k]
+            k += 1usize
+        }
+        *n = list.len - 1usize
+    }
+    list[*n] = tag
+    *n += 1usize
 }
 
 // One pass over the elements of `text` (the document, or the part a `use` names) from
@@ -1991,9 +2731,20 @@ fn draw(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, curren
 fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, root: bool, dest: geometry.Rect, level: usize) -> err {
     var frames: [16]Frame = zero
     frames[0usize] = first
+    // The open elements' raw tags (for selectors): what a replay was started under, then each
+    // group opened here; and at each depth the siblings seen so far.
+    var anc: [28]str = zero
+    var anc_n = 0usize
+    while anc_n < doc.base_anc.len && anc_n < 8usize {
+        anc[anc_n] = doc.base_anc[anc_n]
+        anc_n += 1usize
+    }
+    var sib: [16][8]str = zero
+    var sib_n: [16]usize = zero
     var depth = 0usize
     var opened = !root
     var i = 0usize
+    let restore: scene.Command = .Restore
     while i < text.len {
         if text[i] != 60u8 {
             i += 1usize
@@ -2007,10 +2758,15 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
             i = tag_end(text, i) + 1usize
             continue
         }
+        let tag_start = i
         let end = tag_end(text, i)
         if i + 1usize < text.len && text[i + 1usize] == 47u8 {
             let closing = name_of(text[i + 2usize..end])
-            if (same(closing, "g") || same(closing, "a") || same(closing, "svg")) && depth > 0usize { depth -= 1usize }
+            if (same(closing, "g") || same(closing, "a") || same(closing, "svg")) && depth > 0usize {
+                if frames[depth].opens { try scene.push(b, restore) }
+                depth -= 1usize
+                if anc_n > 0usize { anc_n -= 1usize }
+            }
             i = end + 1usize
             continue
         }
@@ -2018,7 +2774,23 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
         let name = name_of(raw)
         let self_closing = raw.len > 0usize && raw[raw.len - 1usize] == 47u8
         i = end + 1usize
+        if same(name, "text") && opened && !self_closing {
+            let text_end = element_end(text, end, name, false)
+            var body_end = text_end
+            while body_end > end + 1usize && text[body_end - 1usize] != 60u8 { body_end -= 1usize }
+            if body_end > end + 1usize { body_end -= 1usize }
+            let (tag, tag_error) = styled(a, doc, raw, anc[0usize..anc_n], sib[depth][0usize..sib_n[depth]])
+            if tag_error != ok { ret tag_error }
+            sib_push(sib[depth][0usize..8usize], &sib_n[depth], raw)
+            if !doc.has_job {
+                let frame = child_of(tag, frames[depth])
+                try draw_text(a, b, doc, frame, tag, text[end + 1usize..body_end])
+            }
+            i = text_end
+            continue
+        }
         if skipped(name) {
+            sib_push(sib[depth][0usize..8usize], &sib_n[depth], raw)
             if !self_closing {
                 var j = i
                 var found = false
@@ -2029,11 +2801,13 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
             }
             continue
         }
-        let (tag, tag_error) = styled(a, doc, raw)
+        let (tag, tag_error) = styled(a, doc, raw, anc[0usize..anc_n], sib[depth][0usize..sib_n[depth]])
         if tag_error != ok { ret tag_error }
         if same(name, "svg") {
             if !opened {
                 opened = true
+                anc[anc_n] = raw
+                anc_n += 1usize
                 frames[0usize].style = apply_style(tag, frames[0usize].style)
                 let (vw, vh, has_size) = size(text)
                 if !has_size { ret BadSvg }
@@ -2074,23 +2848,44 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
                 try scene.push(b, scene.Command { Transform: fit })
             } else {
                 if depth + 1usize >= MAX_DEPTH { ret TooComplex }
+                sib_push(sib[depth][0usize..8usize], &sib_n[depth], raw)
                 if !self_closing {
                     frames[depth + 1usize] = child_of(tag, frames[depth])
                     depth += 1usize
+                    anc[anc_n] = raw
+                    anc_n += 1usize
+                    sib_n[depth] = 0usize
                 }
             }
             continue
         }
         if !opened { continue }
+        sib_push(sib[depth][0usize..8usize], &sib_n[depth], raw)
+        var frame = child_of(tag, frames[depth])
+        // A mask replays the element (its whole source) under each piece of the mask's content.
+        let (mask_text, has_mask) = prop(tag, "mask")
+        if has_mask && !frames[depth].style.mask_skip && url_id(mask_text).len > 0usize {
+            let span_end = element_end(text, end, name, self_closing)
+            let (applied, mask_error) = draw_masked(a, b, doc, frames[depth], frame, url_id(mask_text), text[tag_start..span_end], anc[0usize..anc_n], dest, level)
+            if mask_error != ok { ret mask_error }
+            if applied {
+                i = span_end
+                continue
+            }
+        }
         if same(name, "g") || same(name, "a") {
             if !self_closing {
                 if depth + 1usize >= MAX_DEPTH { ret TooComplex }
-                frames[depth + 1usize] = child_of(tag, frames[depth])
+                try open_layer(b, doc, tag, frames[depth], &frame)
+                frames[depth + 1usize] = frame
                 depth += 1usize
+                anc[anc_n] = raw
+                anc_n += 1usize
+                sib_n[depth] = 0usize
             }
             continue
         }
-        var frame = child_of(tag, frames[depth])
+        try open_layer(b, doc, tag, frames[depth], &frame)
         if same(name, "use") {
             // `use` draws the element its href names, translated by x and y, under the
             // use element's own style; a symbol contributes its children.
@@ -2106,6 +2901,7 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
                 if same(name_of(used_element.tag), "symbol") { inner = doc.text[used_element.body_start..used_element.body_end] }
                 try walk(a, b, doc, inner, frame, false, dest, level + 1usize)
             }
+            if frame.opens { try scene.push(b, restore) }
             continue
         }
         let (path, has_path, path_error) = shape_path(a, doc, tag, name)
@@ -2119,10 +2915,14 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
             }
             try emit(a, b, doc, frame, path, !same(name, "line"), level)
         }
+        if frame.opens { try scene.push(b, restore) }
     }
     if !opened { ret BadSvg }
+    while depth > 0usize {
+        if frames[depth].opens { try scene.push(b, restore) }
+        depth -= 1usize
+    }
     if root {
-        let restore: scene.Command = .Restore
         try scene.push(b, restore)
     }
     ret ok

@@ -274,6 +274,7 @@
     "e.net.grpcstub",
     "e.fmt.protodesc",
     "e.algo.conflictview",
+    "e.algo.syncinfer",
     "e.algo.syncpull",
     "e.algo.sqlsource",
     "e.algo.writeback",
@@ -3521,7 +3522,9 @@
     "e.gfx.paint",
     "e.gfx.scene",
     "e.math",
-    "e.mem"
+    "e.mem",
+    "e.text.layout",
+    "e.text.shape"
    ],
    "blocked_by": []
   },
@@ -8029,6 +8032,27 @@
    "blocked_by": []
   },
   {
+   "name": "e.algo.syncinfer",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.algo.ir",
+    "e.algo.sync",
+    "e.algo.syncjob",
+    "e.algo.view",
+    "e.algo.writeback",
+    "e.data.list",
+    "e.fmt.json",
+    "e.mem",
+    "e.str",
+    "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.algo.syncpull",
    "layer": 6,
    "surface": "source",
@@ -8037,6 +8061,7 @@
    "direct_dependencies": [
     "e.algo.ir",
     "e.algo.sync",
+    "e.algo.syncinfer",
     "e.algo.syncjob",
     "e.algo.writeback",
     "e.data.list",

@@ -70,6 +70,98 @@ CASES = [
      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2 a10 10 0 1 0 0.01 0 z M12 6 v6 l4 2" fill="none" stroke="#222222" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'),
 ]
 
+# D3701: group opacity as a layer, selector combinators, pattern viewBox and href, a radial focal point.
+H = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 100 100">'
+CASES += [
+    ("group opacity composites the group once",
+     H + '<g opacity="0.5"><rect x="10" y="10" width="50" height="50" fill="#ff0000"/><rect x="40" y="40" width="50" height="50" fill="#0000ff"/></g></svg>'),
+    ("nested group opacities",
+     H + '<g opacity="0.5"><g opacity="0.5"><rect x="10" y="10" width="45" height="45" fill="#00a000"/><rect x="35" y="35" width="45" height="45" fill="#800080"/></g><rect x="60" y="5" width="35" height="30" fill="#000000"/></g></svg>'),
+    ("selector: child combinator over a type rule",
+     H + '<style>g > rect{fill:#ff0000}rect{fill:#0000ff}</style><g><rect x="10" y="10" width="30" height="30"/></g><rect x="60" y="60" width="30" height="30"/></svg>'),
+    ("selector: descendant combinator through two groups",
+     H + '<style>g rect{fill:#00a000}rect{fill:#0000ff}</style><g><g><rect x="10" y="10" width="30" height="30"/></g></g><rect x="60" y="60" width="30" height="30"/></svg>'),
+    ("selector: adjacent sibling and first-child",
+     H + '<style>rect + circle{fill:#ff00ff}circle{fill:#000000}g > rect:first-child{stroke:#ff8000;stroke-width:6}</style><g><rect x="8" y="8" width="30" height="30" fill="#cccccc"/><circle cx="62" cy="24" r="14"/><circle cx="62" cy="74" r="14"/></g></svg>'),
+    ("selector: attribute match and a class that outranks a combinator",
+     H + '<style>rect[data-k=a]{fill:#ff8000}.k{fill:#008080}g rect{fill:#c00000}</style><g><rect data-k="a" x="5" y="5" width="30" height="30"/><rect class="k" x="50" y="5" width="30" height="30"/><rect x="5" y="50" width="30" height="30" fill="#0000ff"/></g></svg>'),
+    ("pattern with a viewBox",
+     H + '<defs><pattern id="p" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse" viewBox="0 0 10 10"><rect width="5" height="5" fill="#d02020"/><rect x="5" y="5" width="5" height="5" fill="#2020d0"/></pattern></defs><rect width="100" height="100" fill="url(#p)"/></svg>'),
+    ("pattern inheriting content and size by href",
+     H + '<defs><pattern id="base" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="6" fill="#208020"/></pattern><pattern id="p" xlink:href="#base" x="5" y="5"/></defs><rect width="100" height="100" fill="url(#p)"/></svg>'),
+    ("radial gradient with a focal point",
+     H + '<defs><radialGradient id="g" cx="0.5" cy="0.5" r="0.5" fx="0.3" fy="0.3"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#0000ff"/></radialGradient></defs><rect width="100" height="100" fill="url(#g)"/></svg>'),
+    ("radial focal point in user space, three stops",
+     H + '<defs><radialGradient id="g" gradientUnits="userSpaceOnUse" cx="50" cy="50" r="40" fx="70" fy="35"><stop offset="0" stop-color="#ffff00"/><stop offset="0.5" stop-color="#ff0000"/><stop offset="1" stop-color="#000080"/></radialGradient></defs><circle cx="50" cy="50" r="46" fill="url(#g)"/></svg>'),
+]
+
+# D3701: masks. cairosvg draws a mask by alpha alone, so the oracle is the SVG compositing formula over
+# cairosvg's own rasters: the element alone, and the mask's content alone, per pixel at 64 x 64.
+MASK_CASES = [
+    ("use opacity composites the referenced group once (cairosvg ignores it, so: the formula)",
+     H + '<defs><g id="two"><circle cx="35" cy="40" r="25" fill="#ff8000"/><circle cx="60" cy="55" r="25" fill="#0080ff"/></g></defs><use xlink:href="#two" opacity="0.6"/></svg>',
+     H + '<defs><g id="two"><circle cx="35" cy="40" r="25" fill="#ff8000"/><circle cx="60" cy="55" r="25" fill="#0080ff"/></g></defs><use xlink:href="#two"/></svg>',
+     H + '<rect width="100" height="100" fill="#ffffff" fill-opacity="0.6"/></svg>'),
+    ("element opacity composites fill and stroke once (cairosvg multiplies them apart, so: the formula)",
+     H + '<rect x="20" y="20" width="60" height="60" fill="#ff0000" stroke="#0000ff" stroke-width="20" opacity="0.5"/></svg>',
+     H + '<rect x="20" y="20" width="60" height="60" fill="#ff0000" stroke="#0000ff" stroke-width="20"/></svg>',
+     H + '<rect width="100" height="100" fill="#ffffff" fill-opacity="0.5"/></svg>'),
+    ("mask: a mid-grey rectangle halves the element",
+     H + '<defs><mask id="m"><rect x="0" y="0" width="100" height="100" fill="#808080"/></mask></defs><rect x="10" y="10" width="80" height="80" fill="#0000ff" mask="url(#m)"/></svg>',
+     H + '<rect x="10" y="10" width="80" height="80" fill="#0000ff"/></svg>',
+     H + '<rect x="0" y="0" width="100" height="100" fill="#808080"/></svg>'),
+    ("mask: a black to white gradient fades the element",
+     H + '<defs><linearGradient id="g"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#ffffff"/></linearGradient><mask id="m"><rect x="0" y="0" width="100" height="100" fill="url(#g)"/></mask></defs><rect x="5" y="5" width="90" height="90" fill="#cc0000" mask="url(#m)"/></svg>',
+     H + '<rect x="5" y="5" width="90" height="90" fill="#cc0000"/></svg>',
+     H + '<defs><linearGradient id="g"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#ffffff"/></linearGradient></defs><rect x="0" y="0" width="100" height="100" fill="url(#g)"/></svg>'),
+    ("mask: two disjoint shapes, white and half-opaque white, over a group",
+     H + '<defs><mask id="m"><circle cx="30" cy="50" r="22" fill="#ffffff"/><rect x="55" y="25" width="40" height="50" fill="#ffffff" fill-opacity="0.4"/></mask></defs><g mask="url(#m)"><rect x="0" y="0" width="100" height="60" fill="#008000"/><rect x="0" y="40" width="100" height="60" fill="#800080"/></g></svg>',
+     H + '<g><rect x="0" y="0" width="100" height="60" fill="#008000"/><rect x="0" y="40" width="100" height="60" fill="#800080"/></g></svg>',
+     H + '<circle cx="30" cy="50" r="22" fill="#ffffff"/><rect x="55" y="25" width="40" height="50" fill="#ffffff" fill-opacity="0.4"/></svg>'),
+    ("mask: a transformed element keeps the mask in its own space",
+     H + '<defs><mask id="m"><rect x="0" y="0" width="30" height="60" fill="#ffffff"/></mask></defs><rect x="0" y="0" width="60" height="60" fill="#ff8000" transform="translate(30 20)" mask="url(#m)"/></svg>',
+     H + '<rect x="0" y="0" width="60" height="60" fill="#ff8000" transform="translate(30 20)"/></svg>',
+     H + '<rect x="0" y="0" width="30" height="60" fill="#ffffff" transform="translate(30 20)"/></svg>'),
+]
+
+
+def lum(p):
+    return (0.2125 * p[0] + 0.7154 * p[1] + 0.0721 * p[2]) / 255.0
+
+
+def reference_mask(content, mask):
+    """White background, the element composited with the mask's luminance times alpha."""
+    def rgba(svg):
+        png = cairosvg.svg2png(bytestring=svg.encode("utf-8"), output_width=SIDE, output_height=SIDE)
+        return Image.open(io.BytesIO(png)).convert("RGBA").load()
+    c = rgba(content)
+    m = rgba(mask)
+    out = Image.new("RGB", (SIDE, SIDE))
+    po = out.load()
+    for y in range(SIDE):
+        for x in range(SIDE):
+            r, g, b, a = c[x, y]
+            mr, mg, mb, ma = m[x, y]
+            k = lum((mr, mg, mb)) * (ma / 255.0) * (a / 255.0)
+            po[x, y] = tuple(int(round(255 * (1 - k) + ch * k)) for ch in (r, g, b))
+    return out
+
+
+def reduce_image(im):
+    cell = SIDE // CELLS
+    out = bytearray()
+    px = im.load()
+    for cy in range(CELLS):
+        for cx in range(CELLS):
+            sums = [0, 0, 0]
+            for y in range(cell):
+                for x in range(cell):
+                    p = px[cx * cell + x, cy * cell + y]
+                    for k in range(3):
+                        sums[k] += p[k]
+            out.extend(s // (cell * cell) for s in sums)
+    return bytes(out)
+
 
 def reference(svg):
     png = cairosvg.svg2png(bytestring=svg.encode("utf-8"), output_width=SIDE, output_height=SIDE, background_color="white")
@@ -101,6 +193,11 @@ def main():
     lines = []
     for index, (label, svg) in enumerate(CASES):
         ref = reference(svg)
+        lines.append("    // %d: %s." % (index + 1, label))
+        lines.append('    if !matches(a, device, "%s", "%s", %di32) { os.exit(%di32) }' % (neper_text(svg), neper_string(ref), index + 1, index + 1))
+    for k, (label, svg, content, mask) in enumerate(MASK_CASES):
+        index = len(CASES) + k
+        ref = reduce_image(reference_mask(content, mask))
         lines.append("    // %d: %s." % (index + 1, label))
         lines.append('    if !matches(a, device, "%s", "%s", %di32) { os.exit(%di32) }' % (neper_text(svg), neper_string(ref), index + 1, index + 1))
     body = "\n".join(lines)
@@ -146,7 +243,7 @@ fn render(a: *mem.Arena, device: *gpu.Device, text: str) -> ([]u32, err) {
     let (renderer_value, renderer_error) = scene.renderer(a, device, q, 1u32, 1u32)
     if renderer_error != ok { ret (zero, renderer_error) }
     var renderer = renderer_value
-    let (builder_value, builder_error) = scene.builder(a, 512usize)
+    let (builder_value, builder_error) = scene.builder(a, 2048usize)
     if builder_error != ok { ret (zero, builder_error) }
     var builder = builder_value
     try scene.push(&builder, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 64.0, 64.0), brush: paint.Brush { Solid: paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 } } } })
