@@ -78,7 +78,7 @@ G002	library	0.6	903	e.data.tableview sort: key derivation, stable radix, multi-
 G003	library	0.7	1097	filter tree compile + evaluate (dictionary fast path, narrowing, parallel)	parallel evaluation, relative-date operators, custom functions, the MTG 56,095 count (needs the real pool), a Linux run.
 G004	library	0.7	943	group + summary engine, expansion keyed by path, group summaries/footers	group footers, date-part grouping, parallel passes, incremental upkeep under edits, a Linux run.
 G005	library	0.7	889	search / locate / value list	search on numeric display text, binary search of a sorted dictionary, match highlighting, find-panel syntax, a Linux run.
-G006	library	0.95	4218	e.ui.datagrid v1: bands, footer, group rows, filter row, navigator, indicator, preview, no-data	whole-frame golden images (the harness has no fonts; glyph goldens need a font decision), a column chooser window, a Linux run of ui_datagrid.
+G006	library	0.95	1380	e.ui.datagrid v1: bands, footer, group rows, filter row, navigator, indicator, preview, no-data	whole-frame golden images (the harness has no fonts; glyph goldens need a font decision), a column chooser window, the filter row below the header, a Linux run.
 G007	library	0	275	editing: cell kinds + editors + write-through + lock	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
 G008	library	0	286	custom painters + row style + conditional formatting rules	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
 G009	library	0	270	layout + filter persistence, customization panel, quick customization	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
