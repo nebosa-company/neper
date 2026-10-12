@@ -108,6 +108,7 @@
     "e.net.tls",
     "e.net.policy",
     "e.net.ssrf",
+    "x.mongodb.wire",
     "x.redis.resp",
     "e.net.nats",
     "e.net.tls.roots",
@@ -3526,6 +3527,24 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.mongodb.wire",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.crypto.hash",
+    "e.crypto.kdf",
+    "e.crypto.mac",
+    "e.fmt.bson",
+    "e.io",
     "e.mem",
     "e.str"
    ],

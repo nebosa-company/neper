@@ -2232,6 +2232,11 @@ x_redis_resp_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$x_redis_resp_written" = 'executable written' ]
 chmod +x "$test_build/x-redis-resp-selfhost"
 "$test_build/x-redis-resp-selfhost"
+# `x.mongodb.wire` against pymongo and bson: OP_MSG frames, command and status documents, SCRAM-SHA-256 incl. the RFC 7677 exchange, CRC-32C (D2644).
+x_mongodb_wire_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_mongodb_wire/src/main.e" "$repo" x64 linux "$test_build/x-mongodb-wire-selfhost")
+[ "$x_mongodb_wire_written" = 'executable written' ]
+chmod +x "$test_build/x-mongodb-wire-selfhost"
+"$test_build/x-mongodb-wire-selfhost"
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 net_http_pool_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_http_pool/src/main.e" "$repo" x64 linux "$test_build/net-http-pool-selfhost")
 [ "$net_http_pool_written" = 'executable written' ]

@@ -2527,6 +2527,12 @@ $xRedisRespWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $xRedisRespWritten -ne 'executable written') { throw 'x_redis_resp emission failed' }
 & $xRedisRespPath
 if ($LASTEXITCODE -ne 0) { throw "a x_redis_resp check failed: exit $LASTEXITCODE" }
+# `x.mongodb.wire` against pymongo and bson: OP_MSG frames, command and status documents, SCRAM-SHA-256 incl. the RFC 7677 exchange, CRC-32C (D2644).
+$xMongodbWirePath = Join-Path $testBuild 'x-mongodb-wire-selfhost.exe'
+$xMongodbWireWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_mongodb_wire\src\main.e') $repo 'x64' 'windows' $xMongodbWirePath
+if ($LASTEXITCODE -ne 0 -or $xMongodbWireWritten -ne 'executable written') { throw 'x_mongodb_wire emission failed' }
+& $xMongodbWirePath
+if ($LASTEXITCODE -ne 0) { throw "a x_mongodb_wire check failed: exit $LASTEXITCODE" }
 # `e.net.http` keep-alive pool over three scripted loopback servers that count accepts (D2640).
 $netHttpPoolPath = Join-Path $testBuild 'net-http-pool-selfhost.exe'
 $netHttpPoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_http_pool\src\main.e') $repo 'x64' 'windows' $netHttpPoolPath

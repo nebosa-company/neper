@@ -358,7 +358,8 @@
    "delivered": 11,
    "pending": [],
    "fixtures": [
-    "fmt_bson"
+    "fmt_bson",
+    "x_mongodb_wire"
    ]
   },
   {
