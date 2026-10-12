@@ -997,8 +997,8 @@ snapshot of typed leaves and evaluated through `DataController.OnFilterRecord`, 
 | Cost | 520 ms | 412 ms | 1.3× |
 
 * Order is identical to the original comparers on all 13 key columns (verification section). **Kept.**
-* **The native filter was a null result and is switched off** (`NativeFilterEnabled = false`; the code stays as a
-  measured experiment). Filter evaluation itself is cheap (≈ 40–65 ms for 119k records with no sort active), but
+* **The native filter was a null result and was deleted** (code and call sites; it is in the session history and
+  the 2026-10-12 description above). Filter evaluation itself is cheap (≈ 40–65 ms for 119k records with no sort active), but
   with a sort active DevExpress re-sorts the *full* list on every filter change (Name filter, 27 rows kept:
   371 ms ≈ one Name sort; sorted by CMC: 179 ms ≈ one CMC sort). DevExpress's own criteria, evaluated in parallel,
   already hide their cost: native 352–507 ms against criteria 363–523 ms. Forcing `Filtering` single-threaded,
