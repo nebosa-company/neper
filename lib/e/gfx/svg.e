@@ -2481,6 +2481,12 @@ fn open_layer(b: *scene.Builder, doc: Doc, tag: str, parent: Frame, frame: *Fram
     if !has_value { ret ok }
     let own = unit_value(number_of(value, 1.0))
     if own >= 1.0 || frame.layers >= MAX_LAYERS_SVG || !(doc.view.width > 0.0) || doc.has_job { ret ok }
+    // A shape with one paint needs no layer: its opacity multiplies into that paint's alpha exactly
+    // as the layer would (the NeperOS shell's icons carry such opacities, and a full-view layer per
+    // element costs a render target the guest's arena does not have).
+    let element = name_of(tag)
+    let container = same(element, "g") || same(element, "svg") || same(element, "use") || same(element, "a") || same(element, "switch")
+    if !container && !(frame.style.fill_on && frame.style.stroke_on) { ret ok }
     frame.style.opacity = parent.style.opacity
     frame.layers += 1usize
     frame.opens = true
