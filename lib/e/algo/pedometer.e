@@ -131,3 +131,24 @@ fn calories_kcal(metres: f64, weight_kg: f64, running: bool) -> f64 {
     if running { per_kg_km = 1.0f64 }
     ret per_kg_km * weight_kg * metres / 1000.0f64
 }
+
+// Roll a week of daily totals forward: `days` is seven counts, the oldest first and the last one the day `stored_day`
+// (days since the epoch). At `now_day` the counts slide left by the days that have passed, the days with no data are
+// zero and the last is the new day's, 0. Going back in time (a clock set earlier) changes nothing; seven days or more
+// clears the week.
+fn roll_week(days: []usize, stored_day: usize, now_day: usize) {
+    if days.len < 7usize || now_day <= stored_day { ret }
+    let passed = now_day - stored_day
+    var i = 0usize
+    if passed >= 7usize {
+        while i < 7usize {
+            days[i] = 0usize
+            i += 1usize
+        }
+        ret
+    }
+    while i < 7usize {
+        if i + passed < 7usize { days[i] = days[i + passed] } else { days[i] = 0usize }
+        i += 1usize
+    }
+}

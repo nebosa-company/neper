@@ -11,6 +11,7 @@
 // server are queued as C138.
 use e.mem
 use e.os
+use e.time
 use e.math
 use e.gfx.geometry
 use e.gfx.paint
@@ -175,32 +176,71 @@ fn walk_sample(index: usize) -> f64 {
     ret sensor_sim.walk_magnitude(index)
 }
 
-// Today's count and the goal are kept in /steps: two words, little end.
-fn save_today(s: *State) {
-    var buf: [8]u8 = zero
+// The wall clock's day (days since the epoch), 0 with no clock.
+fn wall_day() -> usize {
+    let (wall, wall_error) = time.now()
+    if wall_error != ok || wall.nanos <= 0i64 { ret 0usize }
+    ret usize(wall.nanos / 86400000000000i64)
+}
+
+fn put_word(buf: []u8, at: usize, value: usize) {
     var i = 0usize
     while i < 4usize {
-        buf[i] = u8((s.today >> (8usize * i)) & 255usize)
-        buf[4usize + i] = u8((s.goal >> (8usize * i)) & 255usize)
+        buf[at + i] = u8((value >> (8usize * i)) & 255usize)
         i += 1usize
     }
-    let kept = vaultfs.write("/steps", mem.address_of(&buf[0usize]), 8usize)
+}
+
+fn get_word(buf: []const u8, at: usize) -> usize {
+    var v = 0usize
+    var i = 0usize
+    while i < 4usize {
+        v = v | (usize(buf[at + i]) << (8usize * i))
+        i += 1usize
+    }
+    ret v
+}
+
+// /steps is 36 bytes: today's count, the goal, the day (since the epoch) the count is for, and the six days before
+// it, oldest first, four bytes each, little end. A file of eight bytes (before the history) is the first two only.
+fn save_today(s: *State) {
+    var buf: [36]u8 = zero
+    put_word(buf[0usize..36usize], 0usize, s.today)
+    put_word(buf[0usize..36usize], 4usize, s.goal)
+    put_word(buf[0usize..36usize], 8usize, wall_day())
+    var d = 0usize
+    while d < 6usize {
+        put_word(buf[0usize..36usize], 12usize + 4usize * d, s.days[d])
+        d += 1usize
+    }
+    let kept = vaultfs.write("/steps", mem.address_of(&buf[0usize]), 36usize)
 }
 
 fn load_today(s: *State) -> bool {
-    var buf: [8]u8 = zero
-    let (n, found) = vaultfs.read("/steps", mem.address_of(&buf[0usize]), 8usize)
+    var buf: [36]u8 = zero
+    let (n, found) = vaultfs.read("/steps", mem.address_of(&buf[0usize]), 36usize)
     if !found || n < 8usize { ret false }
-    var today = 0usize
-    var goal = 0usize
-    var i = 0usize
-    while i < 4usize {
-        today = today | (usize(buf[i]) << (8usize * i))
-        goal = goal | (usize(buf[4usize + i]) << (8usize * i))
-        i += 1usize
-    }
-    s.today = today
+    s.today = get_word(buf[0usize..36usize], 0usize)
+    let goal = get_word(buf[0usize..36usize], 4usize)
     if goal >= 1000usize && goal <= 100000usize { s.goal = goal }
+    if n >= 36usize {
+        // The week as it was kept, slid forward over the days that have passed since.
+        var week: [7]usize = zero
+        var d = 0usize
+        while d < 6usize {
+            week[d] = get_word(buf[0usize..36usize], 12usize + 4usize * d)
+            d += 1usize
+        }
+        week[6] = s.today
+        let stored_day = get_word(buf[0usize..36usize], 8usize)
+        ped.roll_week(week[0..], stored_day, wall_day())
+        d = 0usize
+        while d < 6usize {
+            s.days[d] = week[d]
+            d += 1usize
+        }
+        s.today = week[6]
+    }
     ret true
 }
 

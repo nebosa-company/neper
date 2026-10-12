@@ -2283,4 +2283,5 @@ D2444	1275	C162 and C168: a Kalman attitude filter, a sensor self-test, distance
 D2445	1021	C169: a score board in Blocks
 D2446	807	C150: a zip is browsed in Document
 D2447	908	C154: a card's expiry is checked against the clock
-D2448	1031	C158: Mail shows the text of a MIME message
+D2448	1032	C158: Mail shows the text of a MIME message
+D2449	943	C168: Steps keeps its week

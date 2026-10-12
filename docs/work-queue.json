@@ -724,10 +724,10 @@
       "group": "NeperOS",
       "order": 168,
       "title": "NeperOS Steps remainder: background counting, history, profile, notifications",
-      "score": 0.15,
+      "score": 0.3,
       "model": "opus",
       "thinking": "medium",
-      "evidence": "Split from C138 (D2427): Steps counts a walk with the library's pedometer from a scripted accelerometer stream and keeps today's total. Acceptance: (1) counting in the background at a low-power sensor rate from the sensor server (C161), with the run and walk classification shown; (2) the history of days, weeks and months in storage (C125), the goal, streaks and a weekly report; (3) calories from the user's height and weight (a profile in Settings, C126) rather than a fixed figure per step; (4) a notification when the goal is reached through the status server and a widget on the home screen; (5) a fixture that replays a recorded accelerometer walk and checks the count within two per cent. PART (D2444): e.algo.pedometer distance_m and calories_kcal from height and weight (algo_pedometer_energy). Remaining: the Settings profile, background counting, history, notification and widget, the recorded-walk fixture."
+      "evidence": "Split from C138 (D2427): Steps counts a walk with the library's pedometer from a scripted accelerometer stream and keeps today's total. Acceptance: (1) counting in the background at a low-power sensor rate from the sensor server (C161), with the run and walk classification shown; (2) the history of days, weeks and months in storage (C125), the goal, streaks and a weekly report; (3) calories from the user's height and weight (a profile in Settings, C126) rather than a fixed figure per step; (4) a notification when the goal is reached through the status server and a widget on the home screen; (5) a fixture that replays a recorded accelerometer walk and checks the count within two per cent. PART (D2444): e.algo.pedometer distance_m and calories_kcal from height and weight (algo_pedometer_energy). Remaining: the Settings profile, background counting, history, notification and widget, the recorded-walk fixture. PART (D2449): the week's history kept in /steps and rolled forward by the days passed (e.algo.pedometer.roll_week; fixtures algo_pedometer_energy, steps_kept, steps_kept_again). Remaining: Settings profile, background counting, month view, notification/widget, recorded-walk fixture."
     },
     {
       "id": "C169",

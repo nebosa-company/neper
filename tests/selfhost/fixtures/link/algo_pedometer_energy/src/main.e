@@ -22,5 +22,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !close(ped.calories_kcal(1000.0f64, 120.0f64, false), 2.0f64 * ped.calories_kcal(1000.0f64, 60.0f64, false)) { os.exit(6) }
     // 1 km of walking by a 60 kg person: 45 kcal.
     if !close(ped.calories_kcal(1000.0f64, 60.0f64, false), 45.0f64) { os.exit(7) }
+    // The week rolls forward: one day, three days, a clock gone back, a week or more.
+    var w: [7]usize = [7]usize{ 1usize, 2usize, 3usize, 4usize, 5usize, 6usize, 7usize }
+    ped.roll_week(w[0..], 100usize, 100usize)
+    if w[0] != 1usize || w[6] != 7usize { os.exit(8) }
+    ped.roll_week(w[0..], 100usize, 101usize)
+    if w[0] != 2usize || w[5] != 7usize || w[6] != 0usize { os.exit(9) }
+    w[6] = 9usize
+    ped.roll_week(w[0..], 101usize, 104usize)
+    if w[0] != 5usize || w[2] != 7usize || w[3] != 9usize || w[4] != 0usize || w[6] != 0usize { os.exit(10) }
+    var v: [7]usize = [7]usize{ 1usize, 2usize, 3usize, 4usize, 5usize, 6usize, 7usize }
+    ped.roll_week(v[0..], 100usize, 99usize)
+    if v[0] != 1usize || v[6] != 7usize { os.exit(11) }
+    ped.roll_week(v[0..], 100usize, 107usize)
+    if v[0] != 0usize || v[6] != 0usize || v[3] != 0usize { os.exit(12) }
     ret ok
 }

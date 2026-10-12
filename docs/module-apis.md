@@ -28119,6 +28119,7 @@ fn steps(p: *Pedometer) -> usize
 fn is_running(p: *Pedometer) -> bool
 fn distance_m(count: usize, height_cm: f64, running: bool) -> f64
 fn calories_kcal(metres: f64, weight_kg: f64, running: bool) -> f64
+fn roll_week(days: []usize, stored_day: usize, now_day: usize)
 ```
 
 A step detector (C138): `new(rate)` makes a pedometer for a sample rate of 20 to 100 Hz, `feed` takes one acceleration magnitude (m/s^2, gravity included) and answers true when it completed a step, `steps` the count and `is_running` whether the cadence over the last steps is above 2.6 a second. Steps are local maxima of a three-sample moving average that rise above the mean plus half a standard deviation of the last 64 smoothed samples and come at least 250 ms apart. No allocation. Checked on synthetic walks (slow, normal, brisk, a run) within two per cent and a phone on a table.
