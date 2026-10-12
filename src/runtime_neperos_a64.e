@@ -44,10 +44,10 @@ fn append(output: *emit_x64.Buffer, limit: usize) -> err {
     try append_blob(output, "\x8d\xff\xff\x97\x18\x03\x00\x8b\x8b\xff\xff\x97\xec\x03\x00\xaa\x00\xfc\x41\xd3\x0d\xfc\x41\xd3\x00\x00\x40\x92\xe0\x03\x00\xcb\x00\x00\x0d\xca\x6b\x01\x00\x8b\x6c\x00\x00\x36\x82\xff\xff\x97\xf3\x03\x00\xaa\x1f\x03\x15\xeb\xc8\x00\x00\x54\xf3\x0b\x00\xf9", 1600usize, limit)
     try append_blob(output, "\xeb\x13\x00\xf9\x29\x00\x80\xd2\xe9\x0f\x00\xf9\xeb\xff\xff\x17\xe9\x0f\x40\xf9\x09\x02\x00\xb4\x00\x04\x80\x52\x6f\xfe\xff\x97\x00\x05\x80\x52\x6d\xfe\xff\x97\xe9\x0b\x40\xf9\xe1\x02\x09\x8b\x22\x00\x40\xb9\x21\x10\x00\x91\x63\xfe\xff\x97\x40\x07\x80\x52", 1664usize, limit)
     try append_blob(output, "\x66\xfe\xff\x97\xe0\x13\x40\xf9\x6c\xfe\xff\x97\x20\x05\x80\x52\x62\xfe\xff\x97\x40\x01\x80\x52\x60\xfe\xff\x97\xf9\x00\x00\xb4\x3a\x07\x40\xf9\x5a\x07\x00\xd1\xe9\x17\x40\xf9\x5a\x03\x09\xcb\x39\x03\x40\xf9\xaa\xff\xff\x17\xc0\x10\x80\xd2\x4f\xfe\xff\x17", 1728usize, limit)
-    ret append_blob(output, "\x20\x20\x61\x74\x20\x00\x00\x00", 1792usize, limit)
+    ret append_blob(output, "\x20\x20\x61\x74\x20\x00\x00\x00\x00\x00\x80\xd2\xc0\x03\x5f\xd6\x00\x00\x80\xd2\xc0\x03\x5f\xd6\x00\x00\x80\xd2\xc0\x03\x5f\xd6\x00\x00\x80\xd2\xc0\x03\x5f\xd6", 1792usize, limit)
 }
 
-fn size() -> usize { ret 1800usize }
+fn size() -> usize { ret 1832usize }
 
 fn symbol_offset(name: str) -> (usize, bool) {
     if check.same(name, "neper_start") { ret (0usize, true) }
@@ -96,6 +96,10 @@ fn symbol_offset(name: str) -> (usize, bool) {
     if check.same(name, "neper_os_store64") { ret (1120usize, true) }
     if check.same(name, "neper_os_barrier") { ret (1128usize, true) }
     if check.same(name, "neper_trap") { ret (1188usize, true) }
+    if check.same(name, "neper_os_aes_ctr") { ret (1800usize, true) }
+    if check.same(name, "neper_os_ghash_blocks") { ret (1808usize, true) }
+    if check.same(name, "neper_os_cpu_features") { ret (1816usize, true) }
+    if check.same(name, "neper_os_aes_expand_key") { ret (1824usize, true) }
     ret (0usize, false)
 }
 
@@ -147,5 +151,9 @@ fn symbol_end(name: str) -> (usize, bool) {
     if check.same(name, "neper_os_store64") { ret (1128usize, true) }
     if check.same(name, "neper_os_barrier") { ret (1188usize, true) }
     if check.same(name, "neper_trap") { ret (1800usize, true) }
+    if check.same(name, "neper_os_aes_ctr") { ret (1808usize, true) }
+    if check.same(name, "neper_os_ghash_blocks") { ret (1816usize, true) }
+    if check.same(name, "neper_os_cpu_features") { ret (1824usize, true) }
+    if check.same(name, "neper_os_aes_expand_key") { ret (1832usize, true) }
     ret (0usize, false)
 }

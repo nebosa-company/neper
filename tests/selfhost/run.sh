@@ -1083,6 +1083,11 @@ crypto_aead_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$crypto_aead_written" = 'executable written' ]
 chmod +x "$test_build/crypto-aead-selfhost"
 "$test_build/crypto-aead-selfhost"
+# C098: the same AEAD through AES-NI and PCLMULQDQ against the portable path and the intrinsics against references.
+crypto_aead_hw_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_aead_hw/src/main.e" "$repo" x64 linux "$test_build/crypto-aead-hw-selfhost")
+[ "$crypto_aead_hw_written" = 'executable written' ]
+chmod +x "$test_build/crypto-aead-hw-selfhost"
+"$test_build/crypto-aead-hw-selfhost"
 # `e.crypto.kx`: X25519 against RFC 7748's exchange and 5.2 vector, the zero peer refused.
 crypto_kx_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_kx/src/main.e" "$repo" x64 linux "$test_build/crypto-kx-selfhost")
 [ "$crypto_kx_written" = 'executable written' ]

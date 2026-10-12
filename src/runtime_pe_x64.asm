@@ -2599,4 +2599,454 @@ wake_all_done:
     ret
 neper_os_wake_all_u32 ENDP
 
+
+; os.cpu_features() -> usize (C098): CPUID leaf 1 ECX in the low half, leaf 7 EBX (when the
+; CPU has the leaf) in the high, for the caller to keep: CPUID is a trap under a hypervisor.
+neper_os_cpu_features PROC
+    push rbx
+    xor r8d, r8d
+    xor eax, eax
+    cpuid
+    cmp eax, 7
+    jb np_features_leaf1
+    mov eax, 7
+    xor ecx, ecx
+    cpuid
+    mov r8d, ebx
+    shl r8, 32
+np_features_leaf1:
+    mov eax, 1
+    xor ecx, ecx
+    cpuid
+    mov eax, ecx
+    or rax, r8
+    pop rbx
+    ret
+neper_os_cpu_features ENDP
+
+; os.aes_expand_key(features: usize, key: []const u8, out: []u8) -> usize (C098): the AES-128 or
+; AES-256 schedule with AESKEYGENASSIST; rcx = features, rdx = &key, r8 = &out.
+neper_os_aes_expand_key PROC
+    xor eax, eax
+    and ecx, 2000000h
+    jz np_expand_ret
+    mov r11, r8
+    mov r8, qword ptr [rdx]
+    mov rcx, qword ptr [rdx+8]
+    mov r9, qword ptr [r11]
+    mov r10, qword ptr [r11+8]
+    lea r11, np_aes_rcon
+    cmp rcx, 16
+    je np_expand_128
+    cmp rcx, 32
+    jne np_expand_ret
+    cmp r10, 240
+    jb np_expand_ret
+    movdqu xmm1, xmmword ptr [r8]
+    movdqu xmm3, xmmword ptr [r8+16]
+    movdqu xmmword ptr [r9], xmm1
+    movdqu xmmword ptr [r9+16], xmm3
+    add r9, 32
+    mov ecx, 7
+np_expand_256_round:
+    aeskeygenassist xmm2, xmm3, 0
+    pshufd xmm2, xmm2, 0ffh
+    movzx eax, byte ptr [r11]
+    movd xmm4, eax
+    pshufd xmm4, xmm4, 0
+    pxor xmm2, xmm4
+    movdqa xmm5, xmm1
+    pslldq xmm5, 4
+    pxor xmm1, xmm5
+    pslldq xmm5, 4
+    pxor xmm1, xmm5
+    pslldq xmm5, 4
+    pxor xmm1, xmm5
+    pxor xmm1, xmm2
+    movdqu xmmword ptr [r9], xmm1
+    add r9, 16
+    inc r11
+    dec ecx
+    jz np_expand_256_done
+    aeskeygenassist xmm2, xmm1, 0
+    pshufd xmm2, xmm2, 0aah
+    movdqa xmm5, xmm3
+    pslldq xmm5, 4
+    pxor xmm3, xmm5
+    pslldq xmm5, 4
+    pxor xmm3, xmm5
+    pslldq xmm5, 4
+    pxor xmm3, xmm5
+    pxor xmm3, xmm2
+    movdqu xmmword ptr [r9], xmm3
+    add r9, 16
+    jmp np_expand_256_round
+np_expand_256_done:
+    mov eax, 240
+    ret
+np_expand_128:
+    cmp r10, 176
+    jb np_expand_ret
+    movdqu xmm1, xmmword ptr [r8]
+    movdqu xmmword ptr [r9], xmm1
+    add r9, 16
+    mov ecx, 10
+np_expand_128_round:
+    aeskeygenassist xmm2, xmm1, 0
+    pshufd xmm2, xmm2, 0ffh
+    movzx eax, byte ptr [r11]
+    movd xmm4, eax
+    pshufd xmm4, xmm4, 0
+    pxor xmm2, xmm4
+    movdqa xmm5, xmm1
+    pslldq xmm5, 4
+    pxor xmm1, xmm5
+    pslldq xmm5, 4
+    pxor xmm1, xmm5
+    pslldq xmm5, 4
+    pxor xmm1, xmm5
+    pxor xmm1, xmm2
+    movdqu xmmword ptr [r9], xmm1
+    add r9, 16
+    inc r11
+    dec ecx
+    jnz np_expand_128_round
+    mov eax, 176
+np_expand_ret:
+    ret
+np_aes_rcon db 1, 2, 4, 8, 16, 32, 64, 128, 27, 54
+neper_os_aes_expand_key ENDP
+
+; os.aes_ctr(features: usize, keys: []const u8, counter: []u8, data: []u8) -> usize (C098): AES-NI
+; counter mode in place over the whole blocks of `data`; rcx = features, rdx = &keys, r8 = &counter,
+; r9 = &data.
+neper_os_aes_ctr PROC
+    push rbx
+    push r12
+    push r13
+    mov r10, r9
+    mov r11, r9
+    mov r9, r8
+    mov r8, rdx
+    xor r12d, r12d
+    and ecx, 2080202h
+    cmp ecx, 2080202h
+    jne np_aes_ret
+    mov rax, qword ptr [r8+8]
+    mov r13d, 9
+    cmp rax, 176
+    je np_aes_keys_ok
+    mov r13d, 11
+    cmp rax, 208
+    je np_aes_keys_ok
+    mov r13d, 13
+    cmp rax, 240
+    jne np_aes_ret
+np_aes_keys_ok:
+    cmp qword ptr [r9+8], 16
+    jb np_aes_ret
+    mov rbx, qword ptr [r10+8]
+    cmp qword ptr [r11+8], rbx
+    jb np_aes_ret
+    shr rbx, 4
+    mov r12, rbx
+    jz np_aes_ret
+    mov r8, qword ptr [r8]
+    mov r9, qword ptr [r9]
+    mov r10, qword ptr [r10]
+    mov r11, qword ptr [r11]
+    mov edx, dword ptr [r9+12]
+    bswap edx
+    movdqu xmm5, xmmword ptr [r9]
+np_aes_four:
+    cmp rbx, 4
+    jb np_aes_one
+    movdqa xmm0, xmm5
+    lea eax, [rdx]
+    bswap eax
+    pinsrd xmm0, eax, 3
+    movdqa xmm1, xmm5
+    lea eax, [rdx+1]
+    bswap eax
+    pinsrd xmm1, eax, 3
+    movdqa xmm2, xmm5
+    lea eax, [rdx+2]
+    bswap eax
+    pinsrd xmm2, eax, 3
+    movdqa xmm3, xmm5
+    lea eax, [rdx+3]
+    bswap eax
+    pinsrd xmm3, eax, 3
+    movdqu xmm4, xmmword ptr [r8]
+    pxor xmm0, xmm4
+    pxor xmm1, xmm4
+    pxor xmm2, xmm4
+    pxor xmm3, xmm4
+    lea rax, [r8+16]
+    mov ecx, r13d
+np_aes_four_round:
+    movdqu xmm4, xmmword ptr [rax]
+    aesenc xmm0, xmm4
+    aesenc xmm1, xmm4
+    aesenc xmm2, xmm4
+    aesenc xmm3, xmm4
+    add rax, 16
+    dec ecx
+    jnz np_aes_four_round
+    movdqu xmm4, xmmword ptr [rax]
+    aesenclast xmm0, xmm4
+    aesenclast xmm1, xmm4
+    aesenclast xmm2, xmm4
+    aesenclast xmm3, xmm4
+    movdqu xmm4, xmmword ptr [r10]
+    pxor xmm0, xmm4
+    movdqu xmm4, xmmword ptr [r10+16]
+    pxor xmm1, xmm4
+    movdqu xmm4, xmmword ptr [r10+32]
+    pxor xmm2, xmm4
+    movdqu xmm4, xmmword ptr [r10+48]
+    pxor xmm3, xmm4
+    movdqu xmmword ptr [r11], xmm0
+    movdqu xmmword ptr [r11+16], xmm1
+    movdqu xmmword ptr [r11+32], xmm2
+    movdqu xmmword ptr [r11+48], xmm3
+    add edx, 4
+    add r10, 64
+    add r11, 64
+    sub rbx, 4
+    jmp np_aes_four
+np_aes_one:
+    test rbx, rbx
+    jz np_aes_store
+    movdqa xmm0, xmm5
+    mov eax, edx
+    bswap eax
+    pinsrd xmm0, eax, 3
+    movdqu xmm4, xmmword ptr [r8]
+    pxor xmm0, xmm4
+    lea rax, [r8+16]
+    mov ecx, r13d
+np_aes_one_round:
+    movdqu xmm4, xmmword ptr [rax]
+    aesenc xmm0, xmm4
+    add rax, 16
+    dec ecx
+    jnz np_aes_one_round
+    movdqu xmm4, xmmword ptr [rax]
+    aesenclast xmm0, xmm4
+    movdqu xmm4, xmmword ptr [r10]
+    pxor xmm0, xmm4
+    movdqu xmmword ptr [r11], xmm0
+    inc edx
+    add r10, 16
+    add r11, 16
+    dec rbx
+    jmp np_aes_one
+np_aes_store:
+    bswap edx
+    mov dword ptr [r9+12], edx
+np_aes_ret:
+    mov rax, r12
+    pop r13
+    pop r12
+    pop rbx
+    ret
+neper_os_aes_ctr ENDP
+
+; os.ghash_blocks(features: usize, state: []u8, h: []const u8, data: []const u8) -> usize (C098),
+; the PCLMULQDQ GHASH, four blocks a step; rcx = features, rdx = &state, r8 = &h, r9 = &data.
+neper_os_ghash_blocks PROC
+    mov r10, r9
+    mov r9, r8
+    mov r8, rdx
+    xor eax, eax
+    and ecx, 202h
+    cmp ecx, 202h
+    jne np_ghash_ret
+    cmp qword ptr [r8+8], 16
+    jb np_ghash_ret
+    cmp qword ptr [r9+8], 16
+    jb np_ghash_ret
+    mov rcx, qword ptr [r10+8]
+    shr rcx, 4
+    mov rax, rcx
+    jz np_ghash_ret
+    mov r11, qword ptr [r10]
+    mov rdx, qword ptr [r8]
+    mov r9, qword ptr [r9]
+    sub rsp, 168
+    movdqu xmmword ptr [rsp+0], xmm6
+    movdqu xmmword ptr [rsp+16], xmm7
+    movdqu xmmword ptr [rsp+32], xmm8
+    movdqu xmmword ptr [rsp+48], xmm9
+    movdqu xmmword ptr [rsp+64], xmm10
+    movdqu xmmword ptr [rsp+80], xmm11
+    movdqu xmmword ptr [rsp+96], xmm12
+    movdqu xmmword ptr [rsp+112], xmm13
+    movdqu xmmword ptr [rsp+128], xmm14
+    movdqu xmmword ptr [rsp+144], xmm15
+    movdqu xmm10, xmmword ptr np_ghash_flip
+    movdqu xmm0, xmmword ptr [rdx]
+    pshufb xmm0, xmm10
+    movdqu xmm1, xmmword ptr [r9]
+    pshufb xmm1, xmm10
+    cmp rcx, 4
+    jb np_ghash_loop
+    movdqa xmm15, xmm0
+    movdqa xmm0, xmm1
+    call np_ghash_mul
+    movdqa xmm11, xmm0
+    call np_ghash_mul
+    movdqa xmm12, xmm0
+    call np_ghash_mul
+    movdqa xmm13, xmm0
+    movdqa xmm0, xmm15
+np_ghash_four:
+    movdqu xmm2, xmmword ptr [r11]
+    pshufb xmm2, xmm10
+    pxor xmm2, xmm0
+    movdqu xmm5, xmmword ptr [r11+16]
+    pshufb xmm5, xmm10
+    movdqu xmm7, xmmword ptr [r11+32]
+    pshufb xmm7, xmm10
+    movdqu xmm14, xmmword ptr [r11+48]
+    pshufb xmm14, xmm10
+    movdqa xmm3, xmm2
+    pclmulqdq xmm3, xmm13, 00h
+    movdqa xmm6, xmm2
+    pclmulqdq xmm6, xmm13, 11h
+    movdqa xmm4, xmm2
+    pclmulqdq xmm4, xmm13, 10h
+    movdqa xmm9, xmm2
+    pclmulqdq xmm9, xmm13, 01h
+    pxor xmm4, xmm9
+    movdqa xmm8, xmm5
+    pclmulqdq xmm8, xmm12, 00h
+    pxor xmm3, xmm8
+    movdqa xmm8, xmm5
+    pclmulqdq xmm8, xmm12, 11h
+    pxor xmm6, xmm8
+    movdqa xmm8, xmm5
+    pclmulqdq xmm8, xmm12, 10h
+    pxor xmm4, xmm8
+    movdqa xmm8, xmm5
+    pclmulqdq xmm8, xmm12, 01h
+    pxor xmm4, xmm8
+    movdqa xmm8, xmm7
+    pclmulqdq xmm8, xmm11, 00h
+    pxor xmm3, xmm8
+    movdqa xmm8, xmm7
+    pclmulqdq xmm8, xmm11, 11h
+    pxor xmm6, xmm8
+    movdqa xmm8, xmm7
+    pclmulqdq xmm8, xmm11, 10h
+    pxor xmm4, xmm8
+    movdqa xmm8, xmm7
+    pclmulqdq xmm8, xmm11, 01h
+    pxor xmm4, xmm8
+    movdqa xmm8, xmm14
+    pclmulqdq xmm8, xmm1, 00h
+    pxor xmm3, xmm8
+    movdqa xmm8, xmm14
+    pclmulqdq xmm8, xmm1, 11h
+    pxor xmm6, xmm8
+    movdqa xmm8, xmm14
+    pclmulqdq xmm8, xmm1, 10h
+    pxor xmm4, xmm8
+    movdqa xmm8, xmm14
+    pclmulqdq xmm8, xmm1, 01h
+    pxor xmm4, xmm8
+    movdqa xmm5, xmm4
+    pslldq xmm5, 8
+    psrldq xmm4, 8
+    pxor xmm3, xmm5
+    pxor xmm6, xmm4
+    call np_ghash_reduce
+    add r11, 64
+    sub rcx, 4
+    cmp rcx, 4
+    jae np_ghash_four
+    test rcx, rcx
+    jz np_ghash_store
+np_ghash_loop:
+    movdqu xmm2, xmmword ptr [r11]
+    pshufb xmm2, xmm10
+    pxor xmm0, xmm2
+    call np_ghash_mul
+    add r11, 16
+    dec rcx
+    jnz np_ghash_loop
+np_ghash_store:
+    pshufb xmm0, xmm10
+    movdqu xmmword ptr [rdx], xmm0
+    movdqu xmm6, xmmword ptr [rsp+0]
+    movdqu xmm7, xmmword ptr [rsp+16]
+    movdqu xmm8, xmmword ptr [rsp+32]
+    movdqu xmm9, xmmword ptr [rsp+48]
+    movdqu xmm10, xmmword ptr [rsp+64]
+    movdqu xmm11, xmmword ptr [rsp+80]
+    movdqu xmm12, xmmword ptr [rsp+96]
+    movdqu xmm13, xmmword ptr [rsp+112]
+    movdqu xmm14, xmmword ptr [rsp+128]
+    movdqu xmm15, xmmword ptr [rsp+144]
+    add rsp, 168
+np_ghash_ret:
+    ret
+np_ghash_mul:
+    movdqa xmm3, xmm0
+    pclmulqdq xmm3, xmm1, 00h
+    movdqa xmm4, xmm0
+    pclmulqdq xmm4, xmm1, 10h
+    movdqa xmm5, xmm0
+    pclmulqdq xmm5, xmm1, 01h
+    movdqa xmm6, xmm0
+    pclmulqdq xmm6, xmm1, 11h
+    pxor xmm4, xmm5
+    movdqa xmm5, xmm4
+    pslldq xmm5, 8
+    psrldq xmm4, 8
+    pxor xmm3, xmm5
+    pxor xmm6, xmm4
+np_ghash_reduce:
+    movdqa xmm7, xmm3
+    psrld xmm7, 31
+    movdqa xmm8, xmm6
+    psrld xmm8, 31
+    pslld xmm3, 1
+    pslld xmm6, 1
+    movdqa xmm9, xmm7
+    psrldq xmm9, 12
+    pslldq xmm8, 4
+    pslldq xmm7, 4
+    por xmm3, xmm7
+    por xmm6, xmm8
+    por xmm6, xmm9
+    movdqa xmm7, xmm3
+    pslld xmm7, 31
+    movdqa xmm8, xmm3
+    pslld xmm8, 30
+    movdqa xmm9, xmm3
+    pslld xmm9, 25
+    pxor xmm7, xmm8
+    pxor xmm7, xmm9
+    movdqa xmm8, xmm7
+    psrldq xmm8, 4
+    pslldq xmm7, 12
+    pxor xmm3, xmm7
+    movdqa xmm2, xmm3
+    psrld xmm2, 1
+    movdqa xmm4, xmm3
+    psrld xmm4, 2
+    movdqa xmm5, xmm3
+    psrld xmm5, 7
+    pxor xmm2, xmm4
+    pxor xmm2, xmm5
+    pxor xmm2, xmm8
+    pxor xmm3, xmm2
+    pxor xmm6, xmm3
+    movdqa xmm0, xmm6
+    ret
+np_ghash_flip db 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
+neper_os_ghash_blocks ENDP
+
 END

@@ -1148,6 +1148,11 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.sha256_blocks", "neper_os_sha256_blocks"); intrinsic_param(fn, token, "state", intrinsic_slice(usize, 0)); intrinsic_param(fn, token, "bytes", const_bytes); intrinsic_returns(fn, 1, usize, error);
     /* `os.crc32c_bytes(crc, bytes)` (D332): the bytes folded with the CRC32 instruction, or none. */
     OS_FN("os.crc32c_bytes", "neper_os_crc32c_bytes"); intrinsic_param(fn, token, "crc", intrinsic_slice(usize, 0)); intrinsic_param(fn, token, "bytes", const_bytes); intrinsic_returns(fn, 1, usize, error);
+    /* C098: `os.cpu_features()`, `os.aes_expand_key(features, key, out)`, `os.aes_ctr(features, keys, counter, data)` and `os.ghash_blocks(features, state, h, data)`: AES-NI and PCLMULQDQ, or none. */
+    OS_FN("os.cpu_features", "neper_os_cpu_features"); intrinsic_returns(fn, 1, usize, error);
+    OS_FN("os.aes_expand_key", "neper_os_aes_expand_key"); intrinsic_param(fn, token, "features", usize); intrinsic_param(fn, token, "key", const_bytes); intrinsic_param(fn, token, "out", bytes); intrinsic_returns(fn, 1, usize, error);
+    OS_FN("os.aes_ctr", "neper_os_aes_ctr"); intrinsic_param(fn, token, "features", usize); intrinsic_param(fn, token, "keys", const_bytes); intrinsic_param(fn, token, "counter", bytes); intrinsic_param(fn, token, "data", bytes); intrinsic_returns(fn, 1, usize, error);
+    OS_FN("os.ghash_blocks", "neper_os_ghash_blocks"); intrinsic_param(fn, token, "features", usize); intrinsic_param(fn, token, "state", bytes); intrinsic_param(fn, token, "h", const_bytes); intrinsic_param(fn, token, "data", const_bytes); intrinsic_returns(fn, 1, usize, error);
     /* `os.seek(f, off, whence) -> (u64, err)` (D324): so a file's size is one call. */
     OS_FN("os.seek", "neper_os_seek"); intrinsic_param(fn, token, "f", file); intrinsic_param(fn, token, "off", i64); intrinsic_param(fn, token, "whence", type_make(TY_NAMED, "os.SeekWhence")); intrinsic_returns(fn, 2, type_make(TY_INT, "u64"), error);
     /* `os.thread_create[Ctx](entry: fn(*Ctx), ctx: *Ctx, stack: usize) -> (Thread, err)` (D321).
@@ -7451,6 +7456,7 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN neper_os_write:PROC\nEXTERN neper_os_close:PROC\nEXTERN neper_os_stdin:PROC\nEXTERN neper_os_stdout:PROC\n"
         "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_remove_file:PROC\nEXTERN neper_os_replace:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\nEXTERN neper_os_spawn_with_options:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_wait_usage:PROC\nEXTERN neper_os_peak_memory:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\nEXTERN neper_os_current_dir:PROC\nEXTERN neper_os_env:PROC\n"
+        "EXTERN neper_os_cpu_features:PROC\nEXTERN neper_os_aes_expand_key:PROC\nEXTERN neper_os_aes_ctr:PROC\nEXTERN neper_os_ghash_blocks:PROC\n"
         "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_release:PROC\nEXTERN neper_os_clock:PROC\nEXTERN neper_os_random:PROC\nEXTERN neper_os_create_new:PROC\nEXTERN neper_os_create_new_with_mode:PROC\n"
         "EXTERN neper_os_thread_create:PROC\nEXTERN neper_os_thread_join:PROC\nEXTERN neper_os_seek:PROC\nEXTERN neper_os_copy_bytes:PROC\nEXTERN neper_os_sha256_blocks:PROC\nEXTERN neper_os_crc32c_bytes:PROC\n"
         "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\nEXTERN neper_mem_root:PROC\n"

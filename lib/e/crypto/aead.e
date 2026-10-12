@@ -11,6 +11,7 @@
 // lookup table or a secret-dependent branch.
 
 use e.crypto.hash as hash
+use e.os
 use e.crypto.random as random
 
 error InvalidKey
@@ -449,14 +450,13 @@ fn ct_spread(c: u64, bit: u64, shift: u32) -> u64 {
     ret (x << 4u32) -% x
 }
 
-// The key schedule of FIPS 197 5.2 on little-endian words, each round key then bitsliced.
-fn ct_key(key: []const u8) -> CtKey {
-    var k: CtKey = zero
+// The key schedule of FIPS 197 5.2 on little-endian words, `words` holding 4 * (rounds + 1) of
+// them; answers the round count. The S-box is the bitsliced circuit, so nothing is looked up.
+fn ct_schedule(key: []const u8, words: []u32) -> usize {
     let nk = key.len / 4usize
-    k.rounds = nk + 6usize
-    let total = (k.rounds + 1usize) * 4usize
+    let rounds = nk + 6usize
+    let total = (rounds + 1usize) * 4usize
     let rcon: [10]u32 = [10]u32{ 1, 2, 4, 8, 16, 32, 64, 128, 27, 54 }
-    var words: [60]u32 = zero
     var i = 0usize
     while i < nk {
         words[i] = u32(key[4usize * i]) | (u32(key[4usize * i + 1usize]) << 8u32) | (u32(key[4usize * i + 2usize]) << 16u32) | (u32(key[4usize * i + 3usize]) << 24u32)
@@ -481,6 +481,14 @@ fn ct_key(key: []const u8) -> CtKey {
         }
         i += 1usize
     }
+    ret rounds
+}
+
+// The key schedule, each round key then bitsliced.
+fn ct_key(key: []const u8) -> CtKey {
+    var k: CtKey = zero
+    var words: [60]u32 = zero
+    k.rounds = ct_schedule(key, words[0..])
     var q: [8]u64 = zero
     var round = 0usize
     while round <= k.rounds {
@@ -731,7 +739,183 @@ fn gcm_crypt(k: *const CtKey, nonce: [12]u8, data: []u8) {
     }
 }
 
+// --- Hardware GCM (C098): AES-NI key expansion and counter mode and PCLMULQDQ GHASH through
+// os.aes_expand_key, os.aes_ctr and os.ghash_blocks, which answer none for a CPU without them
+// -- and then the portable path runs. CPUID is asked once, not per call: under a hypervisor it
+// is a trap of about a microsecond, as much as the whole record costs.
+
+var hw_features: usize = 0usize
+var hw_probed: bool = false
+
+fn hw_cpu() -> usize {
+    if !hw_probed {
+        hw_features = os.cpu_features()
+        hw_probed = true
+    }
+    ret hw_features
+}
+
+// The key schedule as bytes, FIPS 197's words little-endian, the layout os.aes_ctr reads; AES-192
+// and a CPU without AES-NI take the bitsliced schedule instead.
+fn hw_schedule(cpu: usize, key: []const u8, rk: []u8) -> usize {
+    let done = os.aes_expand_key(cpu, key, rk)
+    if done != 0usize { ret done }
+    var words: [60]u32 = zero
+    let rounds = ct_schedule(key, words[0..])
+    let count = (rounds + 1usize) * 4usize
+    var i = 0usize
+    while i < count {
+        let w = words[i]
+        rk[4usize * i] = u8(w & 255u32)
+        rk[4usize * i + 1usize] = u8((w >> 8u32) & 255u32)
+        rk[4usize * i + 2usize] = u8((w >> 16u32) & 255u32)
+        rk[4usize * i + 3usize] = u8(w >> 24u32)
+        i += 1usize
+    }
+    ret count * 4usize
+}
+
+// Counter mode in place over `data`; the whole blocks in one call, the short one through a
+// zero-padded block. False when the CPU has no instructions for it.
+fn hw_ctr(cpu: usize, rk: []const u8, counter: []u8, data: []u8) -> bool {
+    let full = (data.len / 16usize) * 16usize
+    if full > 0usize {
+        if os.aes_ctr(cpu, rk, counter, data[..full]) == 0usize { ret false }
+    }
+    if full < data.len {
+        let rest = data.len - full
+        var block: [16]u8 = zero
+        var i = 0usize
+        while i < rest {
+            block[i] = data[full + i]
+            i += 1usize
+        }
+        if os.aes_ctr(cpu, rk, counter, block[0..]) == 0usize { ret false }
+        i = 0usize
+        while i < rest {
+            data[full + i] = block[i]
+            i += 1usize
+        }
+    }
+    ret true
+}
+
+// `data` folded into `state` as GHASH blocks, the last one zero-padded.
+fn hw_ghash(cpu: usize, state: []u8, h: []const u8, data: []const u8) -> bool {
+    let full = (data.len / 16usize) * 16usize
+    if full > 0usize {
+        if os.ghash_blocks(cpu, state, h, data[..full]) == 0usize { ret false }
+    }
+    if full < data.len {
+        var block: [16]u8 = zero
+        var i = 0usize
+        while i < data.len - full {
+            block[i] = data[full + i]
+            i += 1usize
+        }
+        if os.ghash_blocks(cpu, state, h, block[0..]) == 0usize { ret false }
+    }
+    ret true
+}
+
+// H = E(K, 0) and E(K, J0), the counter left at J0 + 1 so the data starts at 2.
+fn hw_start(cpu: usize, rk: []const u8, nonce: [12]u8, h: []u8, mask: []u8, counter: []u8) -> bool {
+    var zero_counter: [16]u8 = zero
+    if os.aes_ctr(cpu, rk, zero_counter[0..], h) == 0usize { ret false }
+    var i = 0usize
+    while i < 12usize {
+        counter[i] = nonce[i]
+        i += 1usize
+    }
+    counter[15] = 1u8
+    if os.aes_ctr(cpu, rk, counter, mask) == 0usize { ret false }
+    ret true
+}
+
+// GHASH(aad, cipher, lengths) xor E(K, J0), the tag.
+fn hw_tag(cpu: usize, h: []const u8, mask: []const u8, aad: []const u8, cipher: []const u8, tag: []u8) -> bool {
+    var state: [16]u8 = zero
+    if !hw_ghash(cpu, state[0..], h, aad) { ret false }
+    if !hw_ghash(cpu, state[0..], h, cipher) { ret false }
+    var lengths: [16]u8 = zero
+    let aad_bits = u64(aad.len) * 8u64
+    let cipher_bits = u64(cipher.len) * 8u64
+    var i = 0usize
+    while i < 8usize {
+        lengths[i] = u8((aad_bits >> u32((7usize - i) * 8usize)) & 255u64)
+        lengths[8usize + i] = u8((cipher_bits >> u32((7usize - i) * 8usize)) & 255u64)
+        i += 1usize
+    }
+    if !hw_ghash(cpu, state[0..], h, lengths[0..]) { ret false }
+    i = 0usize
+    while i < 16usize {
+        tag[i] = state[i] ^ mask[i]
+        i += 1usize
+    }
+    ret true
+}
+
+fn gcm_seal_hw(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> bool {
+    let cpu = hw_cpu()
+    if (cpu & 34079234usize) != 34079234usize { ret false }
+    var rk: [240]u8 = zero
+    let rk_len = hw_schedule(cpu, key, rk[0..])
+    var h: [16]u8 = zero
+    var mask: [16]u8 = zero
+    var counter: [16]u8 = zero
+    if !hw_start(cpu, rk[..rk_len], nonce, h[0..], mask[0..], counter[0..]) { ret false }
+    os.copy_bytes(dst[..plain.len], plain)
+    if !hw_ctr(cpu, rk[..rk_len], counter[0..], dst[..plain.len]) { ret false }
+    var tag: [16]u8 = zero
+    if !hw_tag(cpu, h[0..], mask[0..], aad, dst[..plain.len], tag[0..]) { ret false }
+    var i = 0usize
+    while i < 16usize {
+        dst[plain.len + i] = tag[i]
+        i += 1usize
+    }
+    ret true
+}
+
+// (hardware present, authenticated); the plaintext is in `dst` when both hold.
+fn gcm_open_hw(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (bool, bool) {
+    let cpu = hw_cpu()
+    if (cpu & 34079234usize) != 34079234usize { ret (false, false) }
+    let cipher_len = sealed.len - 16usize
+    var rk: [240]u8 = zero
+    let rk_len = hw_schedule(cpu, key, rk[0..])
+    var h: [16]u8 = zero
+    var mask: [16]u8 = zero
+    var counter: [16]u8 = zero
+    if !hw_start(cpu, rk[..rk_len], nonce, h[0..], mask[0..], counter[0..]) { ret (false, false) }
+    var tag: [16]u8 = zero
+    if !hw_tag(cpu, h[0..], mask[0..], aad, sealed[..cipher_len], tag[0..]) { ret (false, false) }
+    if !hash.equal_constant_time(tag[0..], sealed[cipher_len..]) { ret (true, false) }
+    os.copy_bytes(dst[..cipher_len], sealed[..cipher_len])
+    if !hw_ctr(cpu, rk[..rk_len], counter[0..], dst[..cipher_len]) { ret (false, false) }
+    ret (true, true)
+}
+
 fn gcm_seal(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err) {
+    if dst.len < plain.len + 16usize { ret (0usize, TooSmall) }
+    if gcm_seal_hw(dst, key, nonce, aad, plain) { ret (plain.len + 16usize, ok) }
+    let (written, seal_error) = gcm_seal_portable(dst, key, nonce, aad, plain)
+    ret (written, seal_error)
+}
+
+fn gcm_open(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err) {
+    if sealed.len < 16usize { ret (0usize, Authentication) }
+    if dst.len < sealed.len - 16usize { ret (0usize, TooSmall) }
+    let (present, authentic) = gcm_open_hw(dst, key, nonce, aad, sealed)
+    if present {
+        if !authentic { ret (0usize, Authentication) }
+        ret (sealed.len - 16usize, ok)
+    }
+    let (written, open_error) = gcm_open_portable(dst, key, nonce, aad, sealed)
+    ret (written, open_error)
+}
+
+// The portable path, bitsliced AES and multiplication from integer products (D1645).
+fn gcm_seal_portable(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, plain: []const u8) -> (usize, err) {
     if dst.len < plain.len + 16usize { ret (0usize, TooSmall) }
     let k = ct_key(key)
     var h: [16]u8 = zero
@@ -752,7 +936,7 @@ fn gcm_seal(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, plain: [
     ret (plain.len + 16usize, ok)
 }
 
-fn gcm_open(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err) {
+fn gcm_open_portable(dst: []u8, key: []const u8, nonce: [12]u8, aad: []const u8, sealed: []const u8) -> (usize, err) {
     if sealed.len < 16usize { ret (0usize, Authentication) }
     let cipher_len = sealed.len - 16usize
     if dst.len < cipher_len { ret (0usize, TooSmall) }

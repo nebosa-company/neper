@@ -887,6 +887,10 @@ fn intrinsic_symbol(name: str) -> (str, err) {
     if check.same(name, "touch") { ret ("neper_os_touch", ok) }
     if check.same(name, "sha256_blocks") { ret ("neper_os_sha256_blocks", ok) }
     if check.same(name, "crc32c_bytes") { ret ("neper_os_crc32c_bytes", ok) }
+    if check.same(name, "cpu_features") { ret ("neper_os_cpu_features", ok) }
+    if check.same(name, "aes_expand_key") { ret ("neper_os_aes_expand_key", ok) }
+    if check.same(name, "aes_ctr") { ret ("neper_os_aes_ctr", ok) }
+    if check.same(name, "ghash_blocks") { ret ("neper_os_ghash_blocks", ok) }
     if check.same(name, "thread_create") { ret ("neper_os_thread_create", ok) }
     if check.same(name, "thread_join") { ret ("neper_os_thread_join", ok) }
     if check.same(name, "thread_detach") { ret ("neper_os_thread_detach", ok) }

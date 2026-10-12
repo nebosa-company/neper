@@ -53,6 +53,22 @@ size_t neper_os_crc32c_bytes(size_t *crc, size_t crc_len, const unsigned char *b
     (void)crc; (void)crc_len; (void)bytes; (void)len;
     return 0;
 }
+/* C098: no CPU features, so the AES-NI and PCLMULQDQ entry points answer none and the caller keeps its portable path. */
+size_t neper_os_cpu_features(void) { return 0; }
+size_t neper_os_aes_expand_key(size_t features, const unsigned char *key, size_t key_len, unsigned char *out, size_t out_len) {
+    (void)features; (void)key; (void)key_len; (void)out; (void)out_len;
+    return 0;
+}
+size_t neper_os_aes_ctr(size_t features, const unsigned char *keys, size_t keys_len, unsigned char *counter, size_t counter_len,
+                        unsigned char *data, size_t data_len) {
+    (void)features; (void)keys; (void)keys_len; (void)counter; (void)counter_len; (void)data; (void)data_len;
+    return 0;
+}
+size_t neper_os_ghash_blocks(size_t features, unsigned char *state, size_t state_len, const unsigned char *h, size_t h_len,
+                             const unsigned char *data, size_t data_len) {
+    (void)features; (void)state; (void)state_len; (void)h; (void)h_len; (void)data; (void)data_len;
+    return 0;
+}
 static const NpStr *np_args_ptr;
 static size_t np_args_len;
 

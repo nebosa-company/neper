@@ -11614,6 +11614,10 @@ fn copy_bytes(dst: []u8, src: []const u8)
 fn touch(p: *const u8, n: usize)
 fn sha256_blocks(state: []usize, bytes: []const u8) -> usize
 fn crc32c_bytes(crc: []usize, bytes: []const u8) -> usize
+fn cpu_features() -> usize
+fn aes_expand_key(features: usize, key: []const u8, out: []u8) -> usize
+fn aes_ctr(features: usize, keys: []const u8, counter: []u8, data: []u8) -> usize
+fn ghash_blocks(features: usize, state: []u8, h: []const u8, data: []const u8) -> usize
 fn close(f: own File) -> err
 fn stdin() -> File
 fn stdout() -> File

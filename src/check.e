@@ -4791,6 +4791,30 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
     if crc_error != ok { ret crc_error }
     try add_seeded_parameter(c, crc_index, "crc", usizes)
     try add_seeded_parameter(c, crc_index, "bytes", const_bytes)
+    // C098: AES-GCM in hardware. `os.cpu_features() -> usize` asks CPUID once (leaf 1 ECX in the
+    // low half, leaf 7 EBX in the high; zero off x86-64) and the caller keeps the answer, since
+    // CPUID costs a hypervisor trap; `os.aes_expand_key(features, key, out)`, `os.aes_ctr(
+    // features, keys, counter, data)` and `os.ghash_blocks(features, state, h, data)` take it
+    // back and answer the bytes or blocks they did -- none when `features` lacks the instructions.
+    let (features_index, features_error) = add_seeded_function(c, os_module, "cpu_features", usize_type, false)
+    if features_error != ok { ret features_error }
+    let (expand_index, expand_error) = add_seeded_function(c, os_module, "aes_expand_key", usize_type, false)
+    if expand_error != ok { ret expand_error }
+    try add_seeded_parameter(c, expand_index, "features", usize_type)
+    try add_seeded_parameter(c, expand_index, "key", const_bytes)
+    try add_seeded_parameter(c, expand_index, "out", bytes)
+    let (aes_ctr_index, aes_ctr_error) = add_seeded_function(c, os_module, "aes_ctr", usize_type, false)
+    if aes_ctr_error != ok { ret aes_ctr_error }
+    try add_seeded_parameter(c, aes_ctr_index, "features", usize_type)
+    try add_seeded_parameter(c, aes_ctr_index, "keys", const_bytes)
+    try add_seeded_parameter(c, aes_ctr_index, "counter", bytes)
+    try add_seeded_parameter(c, aes_ctr_index, "data", bytes)
+    let (ghash_index, ghash_error) = add_seeded_function(c, os_module, "ghash_blocks", usize_type, false)
+    if ghash_error != ok { ret ghash_error }
+    try add_seeded_parameter(c, ghash_index, "features", usize_type)
+    try add_seeded_parameter(c, ghash_index, "state", bytes)
+    try add_seeded_parameter(c, ghash_index, "h", const_bytes)
+    try add_seeded_parameter(c, ghash_index, "data", const_bytes)
 
     // `os.touch(p: *const u8, n: usize)` (D428): the pages of a buffer a kernel call
     // will write, committed before the call.

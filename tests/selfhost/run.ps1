@@ -1157,6 +1157,12 @@ $cryptoAeadWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $cryptoAeadWritten -ne 'executable written') { throw 'crypto_aead emission failed' }
 & $cryptoAeadPath
 if ($LASTEXITCODE -ne 0) { throw "a crypto_aead check failed: exit $LASTEXITCODE" }
+# C098: the same AEAD through AES-NI and PCLMULQDQ against the portable path and the intrinsics against references.
+$cryptoAeadHwPath = Join-Path $testBuild 'crypto-aead-hw-selfhost.exe'
+$cryptoAeadHwWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_aead_hw\src\main.e') $repo 'x64' 'windows' $cryptoAeadHwPath
+if ($LASTEXITCODE -ne 0 -or $cryptoAeadHwWritten -ne 'executable written') { throw 'crypto_aead_hw emission failed' }
+& $cryptoAeadHwPath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_aead_hw check failed: exit $LASTEXITCODE" }
 # `e.crypto.kx`: X25519 against RFC 7748's exchange and 5.2 vector, the zero peer refused.
 $cryptoKxPath = Join-Path $testBuild 'crypto-kx-selfhost.exe'
 $cryptoKxWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_kx\src\main.e') $repo 'x64' 'windows' $cryptoKxPath
