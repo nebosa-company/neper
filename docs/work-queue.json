@@ -350,10 +350,10 @@
       "group": "UI",
       "order": 163,
       "title": "Complete native code editor in e.ui.code_editor (CodeMirror 6 / JustCode parity)",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Planning only: docs/code-editor-plan.md defines 18 ordered work packages and 247 undelivered capabilities in docs/widget-plan.json phase P7, including all 35 JustCode language modes and the September 2026 TIOBE top 30: 51 required modes/adapters in total. C# and Java remain required; 16 additions include PHP, Visual Basic .NET/classic, Fortran, Scratch project support, Ada, Objective-C, COBOL, Julia, Ruby, Perl, SAS, MATLAB, Caml, Prolog and GML. Reuse existing UI/text/scene services and shell owners. Not yet: document storage and atomic transactions; native input/IME/accessibility; Unicode/multicursor editing and history; virtualized layout; syntax and semantic highlighting; gutters/decorations/bookmarks/folding; complete language packs; search/replace; completion/snippets/inline suggestions; diagnostics/spelling; LSP and navigation/refactoring; themes/extensions/keymaps; diff/merge/minimap/collaboration; tab/split/file/host integration; parity, platform and performance evidence. P7 remains next-release work; its prerequisites and acceptance checks are in the plan. Score is the fraction of P7's 247 components delivered with evidence; full completion also requires every package acceptance check. D1807 records this backlog entry; D1809 adds TIOBE coverage."
+      "evidence": "PART (D3201): e.ui.code_editor model and engine only -- gap-buffer UTF-8 document with line index, atomic commit, multi-range selections, grapheme/word motion, undo/redo with coalescing, incremental tokenizer (neper, javascript, python, plain), indent/comment commands, literal search/replace; ui_code_editor fixture: 10 scenarios plus a 520-step generated script digest-checked against a flat-text oracle. Missing: widget, IME/accessibility, bidi/wrap layout, folds, regex search, completion, diagnostics, LSP, most language packs."
     },
     {
       "id": "L066",
@@ -416,10 +416,10 @@
       "group": "Algorithms",
       "order": 196,
       "title": "Equation (math typesetting) rendering in e.text",
-      "score": 0.7,
+      "score": 0.9,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1824). Office-equation parity missing: math-zone layout (fractions, scripts, roots, matrices, operators) over e.text.layout shaping into caller-owned glyph runs for scene/SVG adapters. Display layout first; interactive equation editing stays app-side. Fixtures for nesting, baseline alignment and refusal paths. Follow-on (D1891): LaTeX-math and MathML input formats ride the same layout. PART (D2842): e.text.math typesets a LaTeX-math subset (atom spacing, four styles, fractions, radicals with index, scripts, display limits, \\left\right growth, matrices and cases) to a paint-ordered list of glyph and rule items, agreeing with fontTools metrics and TeXbook formulas to 0.01 (about 50 checks). NOT DONE: drawing and any pixel check, MathML, italic math letters, MATH-table constants, extensible-glyph assembly, cramped styles, align."
+      "evidence": "Planning only (D1824). Office-equation parity missing: math-zone layout (fractions, scripts, roots, matrices, operators) over e.text.layout shaping into caller-owned glyph runs for scene/SVG adapters. Display layout first; interactive equation editing stays app-side. Fixtures for nesting, baseline alignment and refusal paths. Follow-on (D1891): LaTeX-math and MathML input formats ride the same layout. PART (D2842): e.text.math typesets a LaTeX-math subset (atom spacing, four styles, fractions, radicals with index, scripts, display limits, \\left\right growth, matrices and cases) to a paint-ordered list of glyph and rule items, agreeing with fontTools metrics and TeXbook formulas to 0.01 (about 50 checks). NOT DONE: drawing and any pixel check, MathML, italic math letters, MATH-table constants, extensible-glyph assembly, cramped styles, align. PART (D3101): OpenType MATH constants, cramped styles, MathVariants/GlyphAssembly, italic alphanumerics, align/aligned/gather, typeset_mathml (bit-identical to LaTeX for 12 documents), to_layout; text_math agrees with a Python model over a generated MATH font to 0.02 and the scene pixel check is within 3/255 mean. Missing: \\mathbf/\\mathcal, accents and braces, MathKernInfo, horizontal variants, real MathML accents."
     },
     {
       "id": "L125",
@@ -427,10 +427,10 @@
       "group": "Formats",
       "order": 223,
       "title": "SVG document rendering in e.gfx",
-      "score": 0.5,
+      "score": 0.8,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1881). resvg parity gap (verified: SVG output exists, render does not): SVG path/shape/text document rendering into the scene backend over e.gfx.geometry and text layout. Fixtures against reference rasters with tolerance bounds; filters and scripting stay out. PART (D2843): linear/radial gradients (user-space and box units, gradientTransform, stop-opacity, href stops) on fill and stroke, defs/use/symbol, clip-path over the first shape, units (px pt pc mm cm in em, %), checked against cairosvg (10 documents, mean difference 3/255). NOT DONE: text, <style> sheets, pattern/mask/marker, dashes and even-odd fills (need a scene change: FillPath/StrokePath carry neither), spread other than pad, radial focal point, preserveAspectRatio other than meet."
+      "evidence": "Planning only (D1881). resvg parity gap (verified: SVG output exists, render does not): SVG path/shape/text document rendering into the scene backend over e.gfx.geometry and text layout. Fixtures against reference rasters with tolerance bounds; filters and scripting stay out. PART (D2843): linear/radial gradients (user-space and box units, gradientTransform, stop-opacity, href stops) on fill and stroke, defs/use/symbol, clip-path over the first shape, units (px pt pc mm cm in em, %), checked against cairosvg (10 documents, mean difference 3/255). NOT DONE: text, <style> sheets, pattern/mask/marker, dashes and even-odd fills (need a scene change: FillPath/StrokePath carry neither), spread other than pad, radial focal point, preserveAspectRatio other than meet. PART (D3100): <style> sheets (simple selectors, specificity), preserveAspectRatio, spreadMethod reflect/repeat, stroke-dasharray/offset, evenodd by nesting depth, pattern fills, markers; gfx_svg_render 22 cairosvg-referenced documents pass (mean diff <= 0.75/255). Missing: text, mask, filters, radial focal point, selector combinators, pattern viewBox/href, group opacity layers."
     },
     {
       "id": "L135",
@@ -449,10 +449,10 @@
       "group": "UI",
       "order": 234,
       "title": "Terminal emulator engine in e.ui",
-      "score": 0,
+      "score": 0.55,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1889). ghostty/wezterm/kitty parity gap (verified: only false-positive matches anywhere): pty ownership, VT/ECMA-48 parser and cell grid with scrollback over e.ui.collection virtualization and text layout. Fixtures replay byte streams into grid assertions; shell integration and GPU rendering stay out."
+      "evidence": "PART (D3200): e.ui.terminal, a superset of e.text.terminal (C120) -- wide cells, DSR/DA replies, OSC titles, origin/insert/tab-stop modes, wrapped flags, DEC line drawing, 1049/47/1047 alt screen, snapshot viewport; ui_terminal fixture: 12 scenarios plus a 4 KB generated stream whose buffer hash, cursor and line count equal an independent Python model fed whole and in 7-byte pieces. Missing: PTY ownership, reflow on resize, mouse and key encoding, selection, the widget over e.ui.collection."
     },
     {
       "id": "L148",

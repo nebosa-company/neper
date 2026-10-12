@@ -2294,4 +2294,15 @@ D2455	1202	C159: HTTP cookies
 D2456	1337	C159: the Browser keeps cookies
 D2457	1062	C159: the Browser follows redirects
 D2458	1027	C159: the cookie jar survives a restart
-D2459	783	Module fences match the compiler-resolved declarations
+D2459	784	Module fences match the compiler-resolved declarations
+D2460	911	The schema admits the `x` module namespace
+D2461	995	The PNG encoder's storage is one frame per size, not both in one
+D2462	555	The theme fixture sends its home tap twice
+D2463	528	The Dynamic fixture's taps are twelve seconds apart
+D2464	613	The Clock fixture's taps are twelve seconds apart
+D2465	410	The theme fixture's taps are twelve seconds apart
+D2466	309	The two four-second fixtures move to eight
+D3200	2436	`e.ui.terminal`: a headless terminal engine in the e.ui namespace beside the C120 emulator
+D3201	2888	`e.ui.code_editor`: the editor model and engine, one `commit` path, a flat-text model as the oracle
+D3100	3252	L125: e.gfx.svg gains style sheets, aspect ratios, spread, dashes, even-odd, patterns and markers by lowering to existing scene commands
+D3101	4856	L098: e.text.math reads the MATH table, sets cramped styles, assembles delimiters, takes MathML and align, and draws
