@@ -2348,3 +2348,9 @@ D3806	1320	C150: Files has a grid view with image thumbnails
 D3807	2121	C154: the Wallet's cards are sealed under the Secure vault's key; editing a card
 D3808	738	C154: a scan belongs to its document
 D3809	1598	C152, C172: Word tables are grids between the paragraphs (`e.fmt.ooxml.tables`, `cell_flags`)
+D3900	1537	C159: the Browser reads forms, shows an SVG image and saves downloads
+D3901	1173	The test root and server certificate cover the hosts the NeperOS apps now reach
+D3902	1270	C156: Weather shows the alert in force for a place
+D3903	1276	C158: Mail keeps and saves the first attachment of a message
+D3904	1126	C160: Maps draws a vector tile from the network
+D2470	918	A large program gets the stack that is left, not a refusal
