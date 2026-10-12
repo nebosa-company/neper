@@ -698,6 +698,433 @@ impl Transport for Stub {
     }
 }
 
+// ---- WinRM (src/transport/winrm.rs): the functions copied unchanged ------------------------------------------------------
+
+#[derive(Clone, Copy)]
+pub enum Shell {
+    Posix,
+    PowerShell,
+}
+
+const WINRM_HTTPS_PORT: &str = "5986";
+const WINRM_HTTP_PORT: &str = "5985";
+const WINRM_PASSWORD_ENV: &str = "PETCOW_WINRM_PASSWORD";
+
+pub fn winrm_args(host: &ResolvedHost, command: &str, shell: Shell) -> Vec<String> {
+    vec![
+        "-NoProfile".into(),
+        "-NonInteractive".into(),
+        "-EncodedCommand".into(),
+        encode_command(&driver_script(host, command, shell)),
+    ]
+}
+
+fn driver_script(host: &ResolvedHost, command: &str, shell: Shell) -> String {
+    let allow_http = host_bool(host, "winrm_allow_http").unwrap_or(false);
+    let port = host_str(host, &["winrm_port", "ansible_port", "port"])
+        .unwrap_or_else(|| if allow_http { WINRM_HTTP_PORT } else { WINRM_HTTPS_PORT }.to_string());
+
+    let mut s = String::from("$ErrorActionPreference = 'Stop'\n");
+    let mut opts = String::new();
+
+    let mut skips: Vec<&str> = Vec::new();
+    if host_bool(host, "winrm_skip_ca_check").unwrap_or(false) {
+        skips.push("-SkipCACheck");
+    }
+    if host_bool(host, "winrm_skip_cn_check").unwrap_or(false) {
+        skips.push("-SkipCNCheck");
+    }
+    if !skips.is_empty() {
+        s.push_str(&format!(
+            "$sessionOpts = New-PSSessionOption {}\n",
+            skips.join(" ")
+        ));
+        opts.push_str(" -SessionOption $sessionOpts");
+    }
+
+    if let Some(user) = host_str(host, &["winrm_user", "ansible_user", "user"]) {
+        s.push_str(&format!(
+            "$pw = $env:{WINRM_PASSWORD_ENV}\n\
+if (-not $pw) {{ throw \"{WINRM_PASSWORD_ENV} is not set, but host var 'winrm_user' names a user to \
+authenticate as — set the variable, or remove the user to use the caller's own identity\" }}\n\
+$cred = New-Object System.Management.Automation.PSCredential(\
+'{user}', (ConvertTo-SecureString $pw -AsPlainText -Force))\n"
+        ));
+        opts.push_str(" -Credential $cred");
+    }
+
+    if let Some(auth) = host_str(host, &["winrm_auth", "winrm_authentication"]) {
+        opts.push_str(&format!(" -Authentication {auth}"));
+    }
+    if !allow_http {
+        opts.push_str(" -UseSSL");
+    }
+
+    let payload = match shell {
+        Shell::PowerShell => command.to_string(),
+        Shell::Posix => command.to_string(),
+    };
+    s.push_str(&format!(
+        "$enc = '{}'\n\
+Invoke-Command -ComputerName '{}' -Port {}{} -ScriptBlock {{\n  \
+powershell -NoProfile -NonInteractive -EncodedCommand $using:enc\n}}\n",
+        encode_command(&payload),
+        host.address,
+        port,
+        opts
+    ));
+    s
+}
+
+pub fn encode_command(script: &str) -> String {
+    use base64::Engine;
+    let utf16: Vec<u8> = script
+        .encode_utf16()
+        .flat_map(|u| u.to_le_bytes())
+        .collect();
+    base64::engine::general_purpose::STANDARD.encode(utf16)
+}
+
+fn host_str(host: &ResolvedHost, keys: &[&str]) -> Option<String> {
+    keys.iter().find_map(|k| {
+        host.vars.get(*k).and_then(|v| match v {
+            Value::String(s) if !s.trim().is_empty() => Some(s.clone()),
+            Value::Number(n) => Some(n.to_string()),
+            _ => None,
+        })
+    })
+}
+
+fn host_bool(host: &ResolvedHost, key: &str) -> Option<bool> {
+    match host.vars.get(key)? {
+        Value::Bool(b) => Some(*b),
+        Value::String(s) => match s.trim().to_ascii_lowercase().as_str() {
+            "true" | "yes" => Some(true),
+            "false" | "no" => Some(false),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+// the spawn-error texts of exec() in winrm.rs, with the OS error replaced by the case's message
+fn winrm_spawn_error(host: &str, exe: &str, not_found: bool, msg: &str) -> String {
+    if not_found {
+        PetcowError::resource(host, format!("`{exe}` is not installed (needed for the winrm transport)")).to_string()
+    } else {
+        PetcowError::resource(host, format!("winrm exec: {msg}")).to_string()
+    }
+}
+
+fn winrm_program(windows: bool) -> &'static str {
+    if windows {
+        "powershell"
+    } else {
+        "pwsh"
+    }
+}
+
+// ---- local (src/transport/local.rs) -------------------------------------------------------------------------------
+
+fn shell_name(shell: Shell) -> &'static str {
+    match shell {
+        Shell::Posix => "sh",
+        Shell::PowerShell => "powershell",
+    }
+}
+
+// the program and arguments exec() hands to Command
+fn local_argv(command: &str, shell: Shell) -> Vec<String> {
+    match shell {
+        Shell::PowerShell => ["powershell", "-NoProfile", "-NonInteractive", "-Command", command].iter().map(|s| s.to_string()).collect(),
+        Shell::Posix => ["sh", "-c", command].iter().map(|s| s.to_string()).collect(),
+    }
+}
+
+// ---- SSM (src/transport/ssm.rs): the loop with the two SDK calls scripted ----------------------------------------------
+
+#[derive(PartialEq, Clone)]
+pub enum InvStatus {
+    Pending,
+    InProgress,
+    Delayed,
+    Success,
+    Cancelled,
+    Failed,
+    TimedOut,
+    Cancelling,
+    Unknown,
+}
+
+fn status_of(s: &str) -> InvStatus {
+    match s {
+        "Pending" => InvStatus::Pending,
+        "InProgress" => InvStatus::InProgress,
+        "Delayed" => InvStatus::Delayed,
+        "Success" => InvStatus::Success,
+        "Cancelled" => InvStatus::Cancelled,
+        "Failed" => InvStatus::Failed,
+        "TimedOut" => InvStatus::TimedOut,
+        "Cancelling" => InvStatus::Cancelling,
+        _ => InvStatus::Unknown,
+    }
+}
+
+const SSM_DOCUMENT: &str = "AWS-RunShellScript";
+const SSM_DOCUMENT_PS: &str = "AWS-RunPowerShellScript";
+
+fn document_for(shell: Shell) -> &'static str {
+    match shell {
+        Shell::Posix => SSM_DOCUMENT,
+        Shell::PowerShell => SSM_DOCUMENT_PS,
+    }
+}
+
+fn instance_id(host: &ResolvedHost) -> Result<String> {
+    host.vars
+        .get("resource_id")
+        .or_else(|| host.vars.get("instance_id"))
+        .and_then(serde_yaml::Value::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| {
+            PetcowError::resource(
+                &host.name,
+                "SSM transport needs an instance id — set a `resource_id`/`instance_id` var \
+                 or use dynamic inventory (it sets one from discovery)",
+            )
+        })
+}
+
+fn is_terminal(status: &InvStatus) -> bool {
+    matches!(
+        status,
+        InvStatus::Success | InvStatus::Cancelled | InvStatus::Failed | InvStatus::TimedOut
+    )
+}
+
+#[derive(Clone)]
+enum InvError {
+    DoesNotExist,
+    Other(String),
+}
+
+#[derive(Clone)]
+struct Invocation {
+    status: Option<InvStatus>,
+    response_code: i32,
+    stdout: Option<String>,
+    stderr: Option<String>,
+}
+
+struct SsmResult {
+    exit_code: Option<i32>,
+    stdout: String,
+    stderr: String,
+    ok: bool,
+}
+
+// `sent`: what send_command answered (an error text, or an optional command id); `answers[i]`: get_command_invocation's
+// i-th answer (a call past the script reads as still pending); `calls` counts the invocations asked for
+fn ssm_send(
+    host: &ResolvedHost,
+    sent: &std::result::Result<Option<String>, String>,
+    answers: &[std::result::Result<Invocation, InvError>],
+    calls: &std::cell::Cell<usize>,
+    max_polls: u32,
+) -> Result<SsmResult> {
+    let _id = instance_id(host)?;
+
+    let sent = sent.clone().map_err(|e| {
+        PetcowError::resource(&host.name, format!("ssm send_command: {e}"))
+    })?;
+    let _command_id = sent
+        .ok_or_else(|| PetcowError::resource(&host.name, "send_command returned no command id"))?
+        .to_string();
+
+    for _ in 0..max_polls {
+        let n = calls.get();
+        calls.set(n + 1);
+        let inv = answers.get(n).cloned().unwrap_or(Ok(Invocation {
+            status: Some(InvStatus::Pending),
+            response_code: 0,
+            stdout: None,
+            stderr: None,
+        }));
+        let out = match inv {
+            Ok(o) => o,
+            Err(e) => {
+                if matches!(e, InvError::DoesNotExist) {
+                    continue;
+                }
+                let InvError::Other(m) = e else { unreachable!() };
+                return Err(PetcowError::resource(
+                    &host.name,
+                    format!("ssm get_command_invocation: {m}"),
+                ));
+            }
+        };
+        match &out.status {
+            Some(status) if is_terminal(status) => {
+                return Ok(SsmResult {
+                    exit_code: Some(out.response_code),
+                    stdout: out.stdout.clone().unwrap_or_default(),
+                    stderr: out.stderr.clone().unwrap_or_default(),
+                    ok: matches!(status, InvStatus::Success),
+                });
+            }
+            _ => continue,
+        }
+    }
+
+    Err(PetcowError::resource(
+        &host.name,
+        format!("ssm command timed out after {max_polls} polls"),
+    ))
+}
+
+// ---- Lightsail list mapping (src/provider/aws/lightsail.rs), SDK getters over the wire JSON -----------------------------
+
+fn s_of<'a>(v: &'a Json, k: &str) -> Option<&'a str> {
+    v.get(k).and_then(|x| x.as_str())
+}
+
+fn ls_type(kind: &str) -> &'static str {
+    match kind {
+        "instance" => "aws.lightsail_instance",
+        "database" => "aws.lightsail_database",
+        _ => "aws.lightsail_domain",
+    }
+}
+
+fn ls_map_instance(i: &Json) -> Option<ObservedResource> {
+    let name = s_of(i, "name")?;
+    let mut attrs = BTreeMap::new();
+    if let Some(s) = i.get("state").and_then(|s| s_of(s, "name")) {
+        attrs.insert("state".into(), Value::String(s.to_string()));
+    }
+    if let Some(b) = s_of(i, "blueprintId") {
+        attrs.insert("blueprint".into(), Value::String(b.to_string()));
+    }
+    if let Some(b) = s_of(i, "bundleId") {
+        attrs.insert("bundle".into(), Value::String(b.to_string()));
+    }
+    if let Some(az) = i.get("location").and_then(|l| s_of(l, "availabilityZone")) {
+        attrs.insert("availability_zone".into(), Value::String(az.to_string()));
+    }
+    if let Some(ip) = s_of(i, "publicIpAddress") {
+        attrs.insert("public_ip".into(), Value::String(ip.to_string()));
+    }
+    Some(ObservedResource {
+        name: name.to_string(),
+        type_: ls_type("instance").to_string(),
+        attributes: attrs,
+        real_id: s_of(i, "arn").map(str::to_string),
+    })
+}
+
+fn ls_map_database(d: &Json) -> Option<ObservedResource> {
+    let name = s_of(d, "name")?;
+    let mut attrs = BTreeMap::new();
+    if let Some(e) = s_of(d, "engine") {
+        attrs.insert("engine".into(), Value::String(e.to_string()));
+    }
+    if let Some(v) = s_of(d, "engineVersion") {
+        attrs.insert("engine_version".into(), Value::String(v.to_string()));
+    }
+    if let Some(s) = s_of(d, "state") {
+        attrs.insert("state".into(), Value::String(s.to_string()));
+    }
+    if let Some(b) = s_of(d, "relationalDatabaseBlueprintId") {
+        attrs.insert("blueprint".into(), Value::String(b.to_string()));
+    }
+    if let Some(b) = s_of(d, "relationalDatabaseBundleId") {
+        attrs.insert("bundle".into(), Value::String(b.to_string()));
+    }
+    if let Some(m) = s_of(d, "masterDatabaseName") {
+        attrs.insert("master_database_name".into(), Value::String(m.to_string()));
+    }
+    if let Some(u) = s_of(d, "masterUsername") {
+        attrs.insert("master_username".into(), Value::String(u.to_string()));
+    }
+    Some(ObservedResource {
+        name: name.to_string(),
+        type_: ls_type("database").to_string(),
+        attributes: attrs,
+        real_id: s_of(d, "arn").map(str::to_string),
+    })
+}
+
+fn ls_map_domain(dom: &Json) -> Option<ObservedResource> {
+    let name = s_of(dom, "name")?;
+    let mut attrs = BTreeMap::new();
+    let empty = Vec::new();
+    let entries = dom.get("domainEntries").and_then(|e| e.as_array()).unwrap_or(&empty);
+    attrs.insert(
+        "dns_record_count".into(),
+        Value::Number(serde_yaml::Number::from(entries.len() as u64)),
+    );
+    let records: Vec<Value> = entries
+        .iter()
+        .map(|e| {
+            let t = s_of(e, "type").unwrap_or("");
+            let n = s_of(e, "name").unwrap_or("");
+            let tgt = s_of(e, "target").unwrap_or("");
+            Value::String(format!("{t} {n} -> {tgt}"))
+        })
+        .collect();
+    attrs.insert("dns_records".into(), Value::Sequence(records));
+    Some(ObservedResource {
+        name: name.to_string(),
+        type_: ls_type("domain").to_string(),
+        attributes: attrs,
+        real_id: s_of(dom, "arn").map(str::to_string),
+    })
+}
+
+// list_instances / list_databases / list_domains with the page fetch scripted: `pages[i]` answers call i (an `error` member
+// fails it), and the token each call carried is recorded
+fn ls_list_all(kind: &str, pages: &[Json], tokens: &mut Vec<Json>) -> Result<Vec<ObservedResource>> {
+    let (call, member) = match kind {
+        "instance" => ("get_instances", "instances"),
+        "database" => ("get_relational_databases", "relationalDatabases"),
+        _ => ("get_domains", "domains"),
+    };
+    let mut out = Vec::new();
+    let mut token: Option<String> = None;
+    let mut n = 0;
+    loop {
+        tokens.push(token.clone().map(Json::from).unwrap_or(Json::Null));
+        let page = pages.get(n).cloned().unwrap_or(json!({}));
+        n += 1;
+        if let Some(e) = page.get("error").and_then(|e| e.as_str()) {
+            return Err(PetcowError::resource(ls_type(kind), format!("{call}: {e}")));
+        }
+        let empty = Vec::new();
+        for it in page.get(member).and_then(|m| m.as_array()).unwrap_or(&empty) {
+            let mapped = match kind {
+                "instance" => ls_map_instance(it),
+                "database" => ls_map_database(it),
+                _ => ls_map_domain(it),
+            };
+            if let Some(o) = mapped {
+                out.push(o);
+            }
+        }
+        if kind == "domain" {
+            break;
+        }
+        token = page.get("nextPageToken").and_then(|t| t.as_str()).map(str::to_string);
+        if token.is_none() {
+            break;
+        }
+    }
+    Ok(out)
+}
+
+fn ls_is_managed(o: &ObservedResource) -> bool {
+    o.name.starts_with(&format!("{}-", "petcow"))
+}
+
 // ---- the dispatcher ----------------------------------------------------------------------------------------------
 
 fn attrs_of(v: &Json) -> BTreeMap<String, Value> {
@@ -838,6 +1265,93 @@ fn run_case(c: &Json) -> Json {
                 }
             }
             json!({"name": t.name(), "runs": runs})
+        }
+        "winrmArgs" => {
+            let host = ResolvedHost {
+                name: "win1".into(),
+                address: c["address"].as_str().unwrap().to_string(),
+                vars: attrs_of(&c["vars"]),
+                groups: Vec::new(),
+            };
+            let shell = if c["shell"].as_str() == Some("powershell") { Shell::PowerShell } else { Shell::Posix };
+            serde_json::to_value(winrm_args(&host, c["command"].as_str().unwrap(), shell)).unwrap()
+        }
+        "encodeCommand" => Json::String(encode_command(c["s"].as_str().unwrap())),
+        "winrmProgram" => Json::String(winrm_program(c["windows"].as_bool().unwrap()).to_string()),
+        "winrmError" => Json::String(winrm_spawn_error(
+            c["host"].as_str().unwrap(),
+            c["exe"].as_str().unwrap(),
+            c["notFound"].as_bool().unwrap(),
+            c["msg"].as_str().unwrap(),
+        )),
+        "localArgv" => {
+            let shell = if c["shell"].as_str() == Some("powershell") { Shell::PowerShell } else { Shell::Posix };
+            serde_json::to_value(local_argv(c["command"].as_str().unwrap(), shell)).unwrap()
+        }
+        "localError" => {
+            let shell = if c["shell"].as_str() == Some("powershell") { Shell::PowerShell } else { Shell::Posix };
+            Json::String(PetcowError::resource(c["host"].as_str().unwrap(), format!("local exec via {}: {}", shell_name(shell), c["msg"].as_str().unwrap())).to_string())
+        }
+        "ssmDocument" => {
+            let shell = if c["shell"].as_str() == Some("powershell") { Shell::PowerShell } else { Shell::Posix };
+            Json::String(document_for(shell).to_string())
+        }
+        "ssmTerminal" => Json::Bool(is_terminal(&status_of(c["status"].as_str().unwrap()))),
+        "ssmInstanceId" => {
+            let host = ResolvedHost { name: c["name"].as_str().unwrap().to_string(), address: String::new(), vars: attrs_of(&c["vars"]), groups: Vec::new() };
+            err_json(instance_id(&host), Json::String)
+        }
+        "ssmRun" => {
+            let host = ResolvedHost { name: c["name"].as_str().unwrap().to_string(), address: String::new(), vars: attrs_of(&c["vars"]), groups: Vec::new() };
+            let shell = if c["shell"].as_str() == Some("powershell") { Shell::PowerShell } else { Shell::Posix };
+            let sent: std::result::Result<Option<String>, String> = match (c["sent"].get("error"), c["sent"].get("id")) {
+                (Some(e), _) if e.is_string() => Err(e.as_str().unwrap().to_string()),
+                (_, Some(id)) => Ok(id.as_str().map(str::to_string)),
+                _ => Ok(None),
+            };
+            let answers: Vec<std::result::Result<Invocation, InvError>> = c["answers"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|a| {
+                    if a.get("missing").is_some() {
+                        Err(InvError::DoesNotExist)
+                    } else if let Some(e) = a.get("error").and_then(|e| e.as_str()) {
+                        Err(InvError::Other(e.to_string()))
+                    } else {
+                        Ok(Invocation {
+                            status: a.get("status").and_then(|s| s.as_str()).map(status_of),
+                            response_code: a["code"].as_i64().unwrap_or(0) as i32,
+                            stdout: a.get("out").and_then(|s| s.as_str()).map(str::to_string),
+                            stderr: a.get("err").and_then(|s| s.as_str()).map(str::to_string),
+                        })
+                    }
+                })
+                .collect();
+            let calls = std::cell::Cell::new(0usize);
+            let r = ssm_send(&host, &sent, &answers, &calls, c["maxPolls"].as_u64().unwrap() as u32);
+            let mut out = err_json(r, |o| json!({"exit_code": o.exit_code, "stdout": o.stdout, "stderr": o.stderr, "ok": o.ok}));
+            out["polls"] = json!(calls.get());
+            out["document"] = json!(document_for(shell));
+            out
+        }
+        "lsList" => {
+            let kind = c["kind"].as_str().unwrap();
+            let pages: Vec<Json> = c["pages"].as_array().unwrap().clone();
+            let mut tokens = Vec::new();
+            let r = ls_list_all(kind, &pages, &mut tokens);
+            let mode = c["mode"].as_str().unwrap();
+            let mut out = err_json(r.map(|v| {
+                v.into_iter()
+                    .filter(|o| match mode {
+                        "managed" => ls_is_managed(o),
+                        "unmanaged" => !ls_is_managed(o),
+                        _ => true,
+                    })
+                    .collect::<Vec<_>>()
+            }), |v| Json::Array(v.iter().map(observed_json).collect()));
+            out["tokens"] = Json::Array(tokens);
+            out
         }
         other => panic!("unknown op {other}"),
     }

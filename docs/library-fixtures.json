@@ -516,6 +516,7 @@
     "fmt_xlsx",
     "gfx_cssvalue",
     "html_accessible",
+    "net_grpccall",
     "net_grpcretry",
     "net_grpcstub",
     "net_packet",

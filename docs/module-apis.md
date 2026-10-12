@@ -7037,6 +7037,47 @@ fn decide(p: *const Policy, t: *Throttle, attempts: u32, code: u32, committed: b
 gRPC retries and backoff (L164), the decisions of gRFC A6 as pure functions: `policy_parse` and `throttle_parse` read a service config's `retryPolicy` and `retryThrottling`, `parse_duration`, `backoff_cap_ns` and `backoff_ns` (the jitter supplied by the caller), `pushback_parse` for `grpc-retry-pushback-ms` and `decide`, which answers whether a failed attempt is retried and after how long while it updates the token bucket.
 
 
+### `e.net.grpccall`
+
+```neper
+const MODE_RETRY: u8 = 0u8
+const MODE_HEDGE: u8 = 1u8
+const ACTION_START: u8 = 1u8
+const ACTION_CANCEL: u8 = 2u8
+const ACTION_WAIT: u8 = 3u8
+const ACTION_DONE: u8 = 4u8
+const SLOT_FREE: u8 = 0u8
+const SLOT_OPENING: u8 = 1u8
+const SLOT_LIVE: u8 = 2u8
+const SLOT_CANCEL: u8 = 3u8
+const SLOT_ENDED: u8 = 4u8
+type Hedging = struct { max_attempts: u32, delay_ns: u64, nonfatal: u32 }
+type Slot = struct { state: u8, attempt: u32, stream: u32, started_ns: u64, committed: bool }
+type Action = struct { kind: u8, attempt: u32, stream: u32, at_ns: u64, code: u32 }
+type Call = struct { mode: u8, policy: retry.Policy, hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, slots: [5]Slot, started: u32, pending: bool, next_ns: u64, stop: bool, done: bool, code: u32, winner: u32 }
+fn max_hedges() -> u32
+fn empty_slot() -> Slot
+fn new_call(mode: u8, policy: retry.Policy, hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, now_ns: u64) -> Call
+fn call_retry(policy: retry.Policy, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, now_ns: u64) -> Call
+fn call_hedge(hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, now_ns: u64) -> Call
+fn slot_of_stream(c: *Call, stream: u32) -> usize
+fn outstanding(c: *const Call) -> u32
+fn cancel_others(c: *Call, keep: usize)
+fn finish(c: *Call, code: u32, winner: u32)
+fn code_in(mask: u32, code: u32) -> bool
+fn call_opened(c: *Call, attempt: u32, stream: u32, now_ns: u64)
+fn call_headers(c: *Call, stream: u32)
+fn fail_slot(c: *Call, s: usize, code: u32, pushback: str, has_pushback: bool, now_ns: u64, jitter: f64)
+fn call_status(c: *Call, stream: u32, code: u32, pushback: str, has_pushback: bool, now_ns: u64, jitter: f64)
+fn reset_status(h2_code: u32) -> u32
+fn call_event(c: *Call, ev: *const grpc.Event, now_ns: u64, jitter: f64)
+fn min_nonzero(x: u64, y: u64) -> u64
+fn call_poll(c: *Call, now_ns: u64, jitter: f64) -> Action
+```
+
+The loop that carries out gRFC A6 over `e.net.grpc` (L164): a `Call` is a set of attempts, each a stream of one connection, and `call_poll` answers what the transport does next (START a stream and report it with `call_opened`, CANCEL one, WAIT until an instant or an event, DONE with the status); `call_event` turns `e.net.grpc` events into `call_headers` and `call_status`. Retry mode asks `e.net.grpcretry.decide` after each uncommitted failure and starts the next attempt after its delay; hedging mode starts attempts at the hedging delay without waiting, lets a response with headers or `OK` win and cancels the rest, sends the next hedge at once after a non-fatal code, ends the call on a fatal one, and stops on a pushback that forbids more or while the throttle bucket is at most half full. `per_attempt_ns` cancels an attempt with no headers by then and fails it as `DEADLINE_EXCEEDED` (A6 does not define it), and `deadline_ns` ends the call `DEADLINE_EXCEEDED`. The caller owns the clock, the sockets and the jitter. Checked on a virtual clock over the real client and server connections against grpcio (60 retry runs: attempts and status) and an independent model of A6 (271 timed retry and hedging runs) (D3401).
+
+
 ### `e.net.grpctls`
 
 ```neper
@@ -21915,9 +21956,23 @@ fn int_text(a: *mem.Arena, v: i64) -> str
 fn lightsail_type_name(kind: str) -> str
 fn req_attr(a: *mem.Arena, attrs: json.Value, key: str, kind: str) -> (str, bool, str)
 fn lightsail_managed_tags(a: *mem.Arena, name: str) -> json.Value
+fn ls_text(v: json.Value, key: str) -> (str, bool)
+fn ls_nested(v: json.Value, outer: str, key: str) -> (str, bool)
+fn ls_put(o: *ir.Obj, key: str, value: str, has: bool)
+fn ls_observed(a: *mem.Arena, type_: str, name: str, attributes: json.Value, arn: str, has_arn: bool) -> json.Value
+fn ls_instance(a: *mem.Arena, item: json.Value) -> (json.Value, bool)
+fn ls_database(a: *mem.Arena, item: json.Value) -> (json.Value, bool)
+fn ls_domain(a: *mem.Arena, item: json.Value) -> (json.Value, bool)
+
+type LsPage = struct { good: bool, failure: str, items: []const json.Value, has_next: bool, next: str }
+type LsSource = struct { ctx: *void, page: fn(*void, str, bool) -> LsPage }
+
+fn ls_one(a: *mem.Arena, kind: str, item: json.Value) -> (json.Value, bool)
+fn ls_list(a: *mem.Arena, kind: str, src: *const LsSource) -> (json.Value, bool, str)
+fn ls_filter(a: *mem.Arena, observed: json.Value, managed: bool) -> json.Value
 ```
 
-The pure mapping of Petcow's native AWS providers (L048), after `provider/aws/{s3,iam,ec2,lightsail}.rs`: the S3 bucket-name rules and `bool`, `str` and `tags` attributes, the IAM inline-policy percent-decoding (a malformed byte replaced as `from_utf8_lossy` does), `assume_role_json` (a string passes through, anything else is compact JSON in member order, a missing one is an error), the managed tag lists and sorted `managed_policy_arns`, the EC2 managed tags, user tags read back, PetCow name, display name of an unmanaged resource and integer and string-list attributes, the security-group ingress rules (ports cast to 32 bits as the original does), and the Lightsail type names, required attributes and identity tags. Tags are `[key, value]` pairs. The SDK calls are host code. Checked against Petcow's own functions, extracted unchanged behind thin shims for the SDK builders, over 600 inputs on Windows (D2922).
+The pure mapping of Petcow's native AWS providers (L048), after `provider/aws/{s3,iam,ec2,lightsail}.rs`: the S3 bucket-name rules and `bool`, `str` and `tags` attributes, the IAM inline-policy percent-decoding (a malformed byte replaced as `from_utf8_lossy` does), `assume_role_json` (a string passes through, anything else is compact JSON in member order, a missing one is an error), the managed tag lists and sorted `managed_policy_arns`, the EC2 managed tags, user tags read back, PetCow name, display name of an unmanaged resource and integer and string-list attributes, the security-group ingress rules (ports cast to 32 bits as the original does), and the Lightsail type names, required attributes and identity tags. Tags are `[key, value]` pairs. The Lightsail list mapping (D3400) reads the SDK's wire JSON (`instances`, `relationalDatabases`, `domains`, `nextPageToken`): `ls_instance`, `ls_database` and `ls_domain` give the observed resource of one item (an item without a name is skipped, a missing member is not an attribute, a domain's records are `type name -> target` lines with their count), `ls_list` follows page tokens through an injected `LsSource` as `list_instances` does (a domain list is one call, a failed call is `in resource '<type>': <call>: <error>`), and `ls_filter` keeps the `petcow-` names for `discover` or the rest for `discover_unmanaged`. The SDK calls are host code. Checked against Petcow's own functions, extracted unchanged behind thin shims for the SDK builders, over 600 inputs on Windows (D2922), and the list mapping over 62 more (D3400).
 
 
 ### `x.ssh.transport`
@@ -21954,6 +22009,45 @@ fn ssh_args(a: *mem.Arena, address: str, vars: json.Value, command: str, powersh
 ```
 
 The OpenSSH command line a host's variables describe (L048), after Petcow's `transport/ssh.rs`: `ssh_args` builds key-based, never-prompting arguments (`BatchMode=yes`, a 15-second connect timeout, host-key checking on unless the host says otherwise, an optional pinned known-hosts file, identity file with `IdentitiesOnly=yes`, port, `user@address`) and the remote command, wrapped for PowerShell on a Windows target; host variables answer to PetCow's and Ansible's names. Checked against Petcow's own Rust with `x.cloud.aws` on both hosts (D2354).
+
+### `x.ssh.winrm`
+
+```neper
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn https_port() -> str
+fn http_port() -> str
+fn password_env() -> str
+fn encode_command(a: *mem.Arena, script: str) -> str
+fn driver_script(a: *mem.Arena, address: str, vars: json.Value, command: str) -> str
+fn winrm_args(a: *mem.Arena, address: str, vars: json.Value, command: str) -> []const str
+```
+
+The PowerShell command line a Windows host's variables describe (L048), after Petcow's `transport/winrm.rs`: `winrm_args` answers `-NoProfile -NonInteractive -EncodedCommand <base64>` whose program is the driver script `driver_script` writes, TLS on port 5986 unless `winrm_allow_http` asks for 5985 (an explicit `winrm_port`, `ansible_port` or `port` wins and keeps TLS), the CA and CN checks waived one at a time by `winrm_skip_ca_check` and `winrm_skip_cn_check`, the password never an argument (a named user reads `$env:PETCOW_WINRM_PASSWORD` in the session and throws when it is unset, no user passes no credential), `-Authentication` from `winrm_auth`, and the payload as UTF-16LE base64 (`encode_command`). The spawn is host code. Checked against Petcow's own functions over 79 cases on Windows (D3400).
+
+### `x.ssh.exec`
+
+```neper
+fn join(a: *mem.Arena, x: str, y: str) -> str
+fn resource_error(a: *mem.Arena, logical_id: str, message: str) -> str
+fn ssm_document(powershell: bool) -> str
+fn ssm_instance_id(a: *mem.Arena, host: str, vars: json.Value) -> (str, bool, str)
+fn object_members(v: json.Value) -> []const json.Member
+fn ssm_is_terminal(status: str) -> bool
+
+type Sent = struct { good: bool, has_id: bool, id: str, failure: str }
+type Invocation = struct { kind: i32, has_status: bool, status: str, code: i32, out: str, err_out: str, failure: str }
+type Client = struct { ctx: *void, send: fn(*void, str, str, str) -> Sent, invoke: fn(*void, str, str) -> Invocation }
+type Outcome = struct { good: bool, message: str, exit_code: i32, stdout: str, stderr: str, succeeded: bool, polls: usize }
+
+fn failed(message: str, polls: usize) -> Outcome
+fn ssm_run(a: *mem.Arena, c: *const Client, host: str, vars: json.Value, command: str, powershell: bool, max_polls: usize) -> Outcome
+fn local_argv(a: *mem.Arena, command: str, powershell: bool) -> []const str
+fn local_error(a: *mem.Arena, host: str, powershell: bool, message: str) -> str
+fn winrm_program(windows: bool) -> str
+fn winrm_error(a: *mem.Arena, host: str, program: str, not_found: bool, message: str) -> str
+```
+
+The SSM and local transports' decisions (L048), after Petcow's `transport/ssm.rs` and `transport/local.rs`. `ssm_run` is the send-then-poll loop with the two SDK calls injected through a `Client`: the instance id is the host's `resource_id` when it has that variable at all (a non-string value is "no id") else `instance_id`; the document is `AWS-RunShellScript` or `AWS-RunPowerShellScript`; an invocation that does not exist yet is waited out, any other error ends the run with `ssm get_command_invocation: <error>`, a terminal status (`Success`, `Cancelled`, `Failed`, `TimedOut`) answers with the exit code and output and `succeeded` only for `Success`, and running out of polls is an error naming the count. `local_argv` is `sh -c` or `powershell -NoProfile -NonInteractive -Command`; `winrm_program` and the error texts of a failed spawn are here too. The SDK calls, the poll interval and the spawn are host code. Checked against Petcow's own functions over 98 cases on Windows (D3400).
 
 ### `x.net.webhook`
 

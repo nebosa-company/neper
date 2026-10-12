@@ -13,7 +13,9 @@ use e.os
 use e.str
 use x.cloud.awssdk as aws
 use x.cloud.k8s as k8s
+use x.ssh.exec as sx
 use x.ssh.transport as transport
+use x.ssh.winrm as winrm
 
 fn text_of(v: json.Value, key: str) -> str {
     let (x, found) = ir.get(v, key)
@@ -168,6 +170,125 @@ fn run_transport(a: *mem.Arena, c: json.Value) -> json.Value {
     ret ir.obj_value(&out)
 }
 
+// --- the SSM client stand-in: the case scripts what send_command and each get_command_invocation answer ---------------------
+
+type SsmSim = struct { a: *mem.Arena, sent: json.Value, answers: []const json.Value, next: usize, instance: str, document: str }
+
+fn sim_send(ctx: *void, instance: str, document: str, command: str) -> sx.Sent {
+    var sim = mem.cast[*SsmSim](ctx)
+    sim.instance = instance
+    sim.document = document
+    let (e, has_error) = ir.get(sim.sent, "error")
+    if has_error {
+        let (why, is_text) = ir.string_of(e)
+        if is_text { ret sx.Sent { good: false, has_id: false, id: "", failure: why } }
+    }
+    let (id, is_text) = ir.string_of(ir.value_of(sim.sent, "id"))
+    ret sx.Sent { good: true, has_id: is_text, id: id, failure: "" }
+}
+
+fn sim_invoke(ctx: *void, command_id: str, instance: str) -> sx.Invocation {
+    var sim = mem.cast[*SsmSim](ctx)
+    let n = sim.next
+    sim.next += 1usize
+    if n >= sim.answers.len {
+        ret sx.Invocation { kind: 0i32, has_status: true, status: "Pending", code: 0i32, out: "", err_out: "", failure: "" }
+    }
+    let v = sim.answers[n]
+    let (m, is_missing) = ir.get(v, "missing")
+    if is_missing { ret sx.Invocation { kind: 1i32, has_status: false, status: "", code: 0i32, out: "", err_out: "", failure: "" } }
+    let (e, has_error) = ir.get(v, "error")
+    if has_error {
+        let (why, is_text) = ir.string_of(e)
+        ret sx.Invocation { kind: 2i32, has_status: false, status: "", code: 0i32, out: "", err_out: "", failure: why }
+    }
+    let (status, has_status) = ir.string_of(ir.value_of(v, "status"))
+    let (code, has_code) = aws.attr_i64(v, "code")
+    let (out_text, has_out) = ir.string_of(ir.value_of(v, "out"))
+    let (err_text, has_err) = ir.string_of(ir.value_of(v, "err"))
+    ret sx.Invocation { kind: 0i32, has_status: has_status, status: status, code: i32(code), out: out_text, err_out: err_text, failure: "" }
+}
+
+fn run_ssm(a: *mem.Arena, c: json.Value) -> json.Value {
+    let (answers, is_array) = ir.items_of(ir.value_of(c, "answers"))
+    var sim = SsmSim { a: a, sent: ir.value_of(c, "sent"), answers: answers, next: 0usize, instance: "", document: "" }
+    let client = sx.Client { ctx: mem.cast[*void](&sim), send: sim_send, invoke: sim_invoke }
+    let powershell = str.eq(text_of(c, "shell"), "powershell")
+    let (max_polls, found) = aws.attr_i64(c, "maxPolls")
+    let r = sx.ssm_run(a, &client, text_of(c, "name"), ir.value_of(c, "vars"), "cmd", powershell, usize(max_polls))
+    var o = obj(a)
+    put(&o, "ok", bv(r.good))
+    if r.good {
+        var v = obj(a)
+        put(&v, "exit_code", number(a, i64(r.exit_code)))
+        put(&v, "stdout", sv(r.stdout))
+        put(&v, "stderr", sv(r.stderr))
+        put(&v, "ok", bv(r.succeeded))
+        put(&o, "v", ir.obj_value(&v))
+    } else {
+        put(&o, "error", sv(r.message))
+    }
+    put(&o, "polls", number(a, i64(r.polls)))
+    put(&o, "document", sv(sx.ssm_document(powershell)))
+    ret ir.obj_value(&o)
+}
+
+// --- the Lightsail page source: `pages[i]` answers call i, and the token each call carried is recorded --------------------
+
+type PageSim = struct { a: *mem.Arena, pages: []const json.Value, next: usize, member: str, seen: []str, has: []bool }
+
+fn page_fetch(ctx: *void, token: str, has_token: bool) -> aws.LsPage {
+    var sim = mem.cast[*PageSim](ctx)
+    let n = sim.next
+    sim.next += 1usize
+    if n < sim.seen.len {
+        sim.seen[n] = token
+        sim.has[n] = has_token
+    }
+    var page = ir.empty_object()
+    if n < sim.pages.len { page = sim.pages[n] }
+    let (e, has_error) = ir.get(page, "error")
+    if has_error {
+        let (why, is_text) = ir.string_of(e)
+        ret aws.LsPage { good: false, failure: why, items: zero, has_next: false, next: "" }
+    }
+    let (xs, is_array) = ir.items_of(ir.value_of(page, sim.member))
+    let (next, has_next) = ir.string_of(ir.value_of(page, "nextPageToken"))
+    ret aws.LsPage { good: true, failure: "", items: xs, has_next: has_next, next: next }
+}
+
+fn run_list(a: *mem.Arena, c: json.Value) -> json.Value {
+    let kind = text_of(c, "kind")
+    var member = "domains"
+    if str.eq(kind, "instance") { member = "instances" }
+    if str.eq(kind, "database") { member = "relationalDatabases" }
+    let (pages, is_array) = ir.items_of(ir.value_of(c, "pages"))
+    let (seen, se) = mem.alloc[str](a, pages.len + 3usize)
+    let (has, he) = mem.alloc[bool](a, pages.len + 3usize)
+    var sim = PageSim { a: a, pages: pages, next: 0usize, member: member, seen: seen[0usize..pages.len + 3usize], has: has[0usize..pages.len + 3usize] }
+    let src = aws.LsSource { ctx: mem.cast[*void](&sim), page: page_fetch }
+    let (observed, good, why) = aws.ls_list(a, kind, &src)
+    var o = obj(a)
+    put(&o, "ok", bv(good))
+    if good {
+        let mode = text_of(c, "mode")
+        var shown = observed
+        if str.eq(mode, "managed") { shown = aws.ls_filter(a, observed, true) }
+        if str.eq(mode, "unmanaged") { shown = aws.ls_filter(a, observed, false) }
+        put(&o, "v", shown)
+    } else {
+        put(&o, "error", sv(why))
+    }
+    let (tokens, te) = mem.alloc[json.Value](a, sim.next + 1usize)
+    var t = 0usize
+    while t < sim.next && t < sim.seen.len {
+        tokens[t] = opt(sim.has[t], sim.seen[t])
+        t += 1usize
+    }
+    put(&o, "tokens", json.Value{ Array: tokens[0usize..t] })
+    ret ir.obj_value(&o)
+}
+
 fn observed_with(a: *mem.Arena, attrs: json.Value) -> json.Value { ret attrs }
 
 fn answer(a: *mem.Arena, c: json.Value) -> json.Value {
@@ -239,6 +360,41 @@ fn answer(a: *mem.Arena, c: json.Value) -> json.Value {
     }
     if str.eq(op, "lsTags") { ret aws.lightsail_managed_tags(a, text_of(c, "name")) }
     if str.eq(op, "transport") { ret run_transport(a, c) }
+    if str.eq(op, "encodeCommand") { ret sv(winrm.encode_command(a, text_of(c, "s"))) }
+    if str.eq(op, "winrmArgs") { ret strings_json(a, winrm.winrm_args(a, text_of(c, "address"), ir.value_of(c, "vars"), text_of(c, "command"))) }
+    if str.eq(op, "winrmProgram") {
+        let (windows, found) = ir.get(c, "windows")
+        var is_windows = false
+        switch windows {
+        case .Bool as b:
+            is_windows = b
+        default:
+            is_windows = false
+        }
+        ret sv(sx.winrm_program(is_windows))
+    }
+    if str.eq(op, "winrmError") {
+        var not_found = false
+        let (flag, found) = ir.get(c, "notFound")
+        switch flag {
+        case .Bool as b:
+            not_found = b
+        default:
+            not_found = false
+        }
+        let program = text_of(c, "exe")
+        ret sv(sx.winrm_error(a, text_of(c, "host"), program, not_found, text_of(c, "msg")))
+    }
+    if str.eq(op, "localArgv") { ret strings_json(a, sx.local_argv(a, text_of(c, "command"), str.eq(text_of(c, "shell"), "powershell"))) }
+    if str.eq(op, "localError") { ret sv(sx.local_error(a, text_of(c, "host"), str.eq(text_of(c, "shell"), "powershell"), text_of(c, "msg"))) }
+    if str.eq(op, "ssmDocument") { ret sv(sx.ssm_document(str.eq(text_of(c, "shell"), "powershell"))) }
+    if str.eq(op, "ssmTerminal") { ret bv(sx.ssm_is_terminal(text_of(c, "status"))) }
+    if str.eq(op, "ssmInstanceId") {
+        let (id, good, message) = sx.ssm_instance_id(a, text_of(c, "name"), ir.value_of(c, "vars"))
+        ret result(a, good, sv(id), message)
+    }
+    if str.eq(op, "ssmRun") { ret run_ssm(a, c) }
+    if str.eq(op, "lsList") { ret run_list(a, c) }
     os.exit(88i32)
     ret .Null
 }

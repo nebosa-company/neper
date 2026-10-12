@@ -202,6 +202,8 @@
     "x.cloud.k8s",
     "x.cloud.awssdk",
     "x.ssh.transport",
+    "x.ssh.winrm",
+    "x.ssh.exec",
     "x.net.webhook",
     "x.net.authscheme",
     "x.mcp.protocol",
@@ -7927,6 +7929,18 @@
    "blocked_by": []
   },
   {
+   "name": "e.net.grpccall",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.net.grpc",
+    "e.net.grpcretry"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.fmt.protomsg",
    "layer": 6,
    "surface": "source",
@@ -8107,6 +8121,37 @@
     "e.mem",
     "e.str",
     "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.ssh.winrm",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.bytes",
+    "e.fmt.json",
+    "e.mem",
+    "e.str",
+    "e.text.utf8",
+    "x.ssh.args"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "x.ssh.exec",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.formula",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },
