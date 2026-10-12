@@ -3517,6 +3517,12 @@ proc_sys_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/proc-sys-selfhost"
 proc_sys_output=$("$test_build/proc-sys-selfhost")
 [ "$proc_sys_output" = 'proc sys ok' ]
+# e.metrics.export: Prometheus and OpenMetrics text against prometheus_client, OTLP/JSON against the OTLP protobuf definitions (130 cases, D2723).
+metrics_export_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/metrics_export/src/main.e" "$repo" x64 linux "$test_build/metrics-export-selfhost" -j 2)
+[ "$metrics_export_written" = 'executable written' ]
+chmod +x "$test_build/metrics-export-selfhost"
+metrics_export_output=$("$test_build/metrics-export-selfhost")
+[ "$metrics_export_output" = 'metrics export ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

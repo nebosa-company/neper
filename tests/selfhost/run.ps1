@@ -3934,6 +3934,12 @@ $procSysWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $procSysWritten -ne 'executable written') { throw 'proc_sys emission failed' }
 $procSysOutput = & $procSysPath
 if ($LASTEXITCODE -ne 0 -or $procSysOutput -ne 'proc sys ok') { throw "proc_sys answered wrongly: exit $LASTEXITCODE" }
+# e.metrics.export: Prometheus and OpenMetrics text against prometheus_client, OTLP/JSON against the OTLP protobuf definitions (130 cases, D2723).
+$metricsExportPath = Join-Path $testBuild 'metrics-export-selfhost.exe'
+$metricsExportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\metrics_export\src\main.e') $repo 'x64' 'windows' $metricsExportPath -j 2
+if ($LASTEXITCODE -ne 0 -or $metricsExportWritten -ne 'executable written') { throw 'metrics_export emission failed' }
+$metricsExportOutput = & $metricsExportPath
+if ($LASTEXITCODE -ne 0 -or $metricsExportOutput -ne 'metrics export ok') { throw "metrics_export answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

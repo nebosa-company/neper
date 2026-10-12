@@ -11567,6 +11567,48 @@ fn histogram_snapshot(a: *mem.Arena, h: *const Histogram) -> (Snapshot, err)
 Bounds must be finite and strictly increasing. The final implicit bucket is positive
 infinity.
 
+### `e.metrics.export`
+
+```neper
+error Invalid
+type Kind = enum u8 { Counter, Gauge, Histogram }
+type Label = struct { name: str, value: str }
+type Sample = struct { name: str, help: str, kind: Kind, labels: []const Label, value: f64, bounds: []const f64, buckets: []const u64, sum: f64 }
+type Span = struct { trace_id: [16]u8, span_id: [8]u8, parent_span_id: [8]u8, name: str, kind: u8, start_ns: u64, end_ns: u64, attributes: []const Label, status_code: u8, status_message: str }
+type Scrape = struct { content_type: str, body: str }
+type Digits = struct { text: [24]u8, count: usize, exponent: i32, negative: bool }
+
+fn counter_sample(name: str, help: str, labels: []const Label, c: *metrics.Counter) -> Sample
+fn gauge_sample(name: str, help: str, labels: []const Label, g: *metrics.Gauge) -> Sample
+fn histogram_sample(a: *mem.Arena, name: str, help: str, labels: []const Label, h: *const metrics.Histogram) -> (Sample, err)
+fn digits_of(v: f64) -> (Digits, err)
+fn push_zeros(b: *str.Builder, n: i32) -> err
+fn push_exponent(b: *str.Builder, e: i32) -> err
+fn push_number(b: *str.Builder, v: f64, prometheus: bool) -> err
+fn less_bytes(x: str, y: str) -> bool
+fn push_escaped(b: *str.Builder, s: str, quotes: bool) -> err
+fn push_labels(b: *str.Builder, labels: []const Label, extra_name: str, extra_value: str) -> err
+fn ends_with_total(s: str) -> bool
+fn push_value_line(b: *str.Builder, name: str, suffix: str, labels: []const Label, le: str, v: f64) -> err
+fn render_text(a: *mem.Arena, samples: []const Sample, openmetrics: bool) -> (str, err)
+fn scrape(a: *mem.Arena, samples: []const Sample, accept: str) -> (Scrape, err)
+fn push_json_string(b: *str.Builder, s: str) -> err
+fn push_json_u64(b: *str.Builder, v: u64) -> err
+fn push_json_double(b: *str.Builder, v: f64) -> err
+fn push_attributes(b: *str.Builder, labels: []const Label, comma: bool) -> err
+fn push_scope_key(b: *str.Builder, scope: str, comma: bool) -> err
+fn payload_capacity(samples: []const Sample, extra: usize) -> usize
+fn render_otlp_metrics(a: *mem.Arena, resource: []const Label, scope: str, samples: []const Sample, start_ns: u64, time_ns: u64) -> (str, err)
+fn close_metric(b: *str.Builder, kind: Kind) -> err
+fn push_hex(b: *str.Builder, bytes: []const u8) -> err
+fn all_zero(bytes: []const u8) -> bool
+fn render_otlp_spans(a: *mem.Arena, resource: []const Label, scope: str, spans: []const Span) -> (str, err)
+fn otlp_request(a: *mem.Arena, host: str, path: str, body: str) -> (http.Request, err)
+fn post(a: *mem.Arena, endpoint: net.Endpoint, req: *const http.Request) -> (http.Response, err)
+```
+
+Exposition and export over `e.metrics` and `e.trace` values. A `Sample` is a reading (counter, gauge, or histogram with cumulative buckets); `counter_sample`, `gauge_sample` and `histogram_sample` take one from the metric types, so registries, label sets and sampling stay with the caller. `render_text` writes the Prometheus text exposition (0.0.4) or, with `openmetrics`, the OpenMetrics text with `# EOF`: samples of one name are listed together under one `HELP`/`TYPE`, labels are written in name order with `le` slotted in, and numbers follow `prometheus_client` (`3.0`, `1e-05`, `1.2345675e+06` from a million up, `+Inf`, `NaN`). `scrape` picks the format from an `Accept` header and returns the content type with the body. `render_otlp_metrics` and `render_otlp_spans` write OTLP/JSON requests (counters as monotonic cumulative sums, gauges, cumulative histograms with per-bucket counts; hex ids, quoted 64-bit integers, string attributes only). `otlp_request` builds the `POST` to `/v1/metrics` or `/v1/traces` and `post` sends it over `e.net.http` (plain TCP; TLS is `e.net.http.request_tls`). Not here: protobuf encoding, gzip, retries and batching, exemplars, summaries, native histograms, non-string attribute values, span events and links.
+
 ### `e.log`
 
 ```neper

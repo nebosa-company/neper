@@ -103,6 +103,7 @@
     "e.test.fuzz",
     "e.debug",
     "e.metrics",
+    "e.metrics.export",
     "e.log",
     "e.cli",
     "e.async",
@@ -3420,6 +3421,21 @@
     "e.atomic",
     "e.math",
     "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.metrics.export",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.metrics",
+    "e.net",
+    "e.net.http",
+    "e.str"
    ],
    "blocked_by": []
   },
