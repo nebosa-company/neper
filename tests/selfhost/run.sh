@@ -1237,6 +1237,11 @@ fmt_s2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$fmt_s2_written" = 'executable written' ]
 chmod +x "$test_build/fmt-s2-selfhost"
 "$test_build/fmt-s2-selfhost"
+# `e.ui.schedule` month view, bars, move/resize, focus and locale names against the independent model (L148).
+ui_schedule_month_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_schedule_month/src/main.e" "$repo" x64 linux "$test_build/ui-schedule-month-selfhost")
+[ "$ui_schedule_month_written" = 'executable written' ]
+chmod +x "$test_build/ui-schedule-month-selfhost"
+"$test_build/ui-schedule-month-selfhost"
 # `e.fmt.cap`: Common Alerting Protocol alerts against an ElementTree walk (C156).
 fmt_cap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_cap/src/main.e" "$repo" x64 linux "$test_build/fmt-cap-selfhost")
 [ "$fmt_cap_written" = 'executable written' ]

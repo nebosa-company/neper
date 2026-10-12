@@ -3151,6 +3151,7 @@
     "ui_ribbon",
     "ui_ripple_v2",
     "ui_schedule",
+    "ui_schedule_month",
     "ui_scroll_view",
     "ui_selection",
     "ui_selection2_v2",
@@ -3195,7 +3196,8 @@
     "time_calendar_iso",
     "time_pattern",
     "time_recur",
-    "ui_schedule"
+    "ui_schedule",
+    "ui_schedule_month"
    ]
   },
   {
@@ -3304,6 +3306,7 @@
     "ui_property",
     "ui_ribbon",
     "ui_schedule",
+    "ui_schedule_month",
     "ui_selection",
     "ui_semantics",
     "ui_sheet",

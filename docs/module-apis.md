@@ -9314,6 +9314,8 @@ resolution and mutation authorization stay with the host's filesystem services.
 
 ```neper
 type Mode = enum u8 { Day, Week, Agenda }
+type Key = enum u8 { Left, Right, Up, Down, Home, End }
+type MonthHitKind = enum u8 { None, Header, Cell, Event, More }
 type Kind = enum u8 { Timed, AllDay }
 type RowKind = enum u8 { DayHeader, Event }
 type HitKind = enum u8 { None, Event, AllDay, Slot, DayHeader, Gutter }
@@ -9329,14 +9331,22 @@ type Span = struct { day: u32, start: calendar.DateTime, minutes: u32 }
 type Occ = struct { item: u32, start: i64, minutes: i64, recurring: bool, all_day: bool }
 type Storage = struct { occ: []Occ, stamps: []calendar.DateTime, placed: []Placed, columns: []Column, rows: []Row, nodes: []Access, labels: []u8, order: []u32, lane_end: []i64 }
 type Layout = struct { cfg: Config, placed: []Placed, columns: []Column, rows: []Row, nodes: []Access, labels: []u8, placed_count: usize, column_count: usize, row_count: usize, node_count: usize, labels_len: usize, band_h: f32, grid_top: f32, height: f32, first_day: i64, days: i64, truncated: bool }
+type Names = struct { weekdays: [7]str, months: [12]str, all_day: str, to: str, repeats: str, day_schedule: str, week_schedule: str, agenda: str, month_schedule: str, no_events: str, one_event: str, events: str, more: str }
+type MonthConfig = struct { anchor: time.Date, week_start: calendar.Weekday, width: f32, header: f32, cell_h: f32, line_h: f32, lines: u32 }
+type MonthCell = struct { date: time.Date, count: i64, in_month: bool, x: f32, y: f32, w: f32, h: f32, first: u32, total: u32, shown: u32, more: u32 }
+type MonthStorage = struct { occ: []Occ, stamps: []calendar.DateTime, placed: []Placed, cells: []MonthCell, order: []u32, nodes: []Access, labels: []u8 }
+type MonthLayout = struct { cfg: MonthConfig, placed: []Placed, cells: []MonthCell, nodes: []Access, labels: []u8, placed_count: usize, cell_count: usize, node_count: usize, labels_len: usize, weeks: u32, first_day: i64, height: f32, truncated: bool }
+type MonthHit = struct { kind: MonthHitKind, cell: u32, index: usize }
+type Bar = struct { item: u32, first: u32, last: u32, lane: u32, x: f32, y: f32, w: f32, h: f32, before: bool, after: bool, recurring: bool }
 error TooLarge
 error Invalid
+fn english() -> Names
 fn abs_minutes(d: calendar.DateTime) -> i64
 fn datetime_of(abs: i64) -> calendar.DateTime
 fn max_i64(a: i64, b: i64) -> i64
 fn min_i64(a: i64, b: i64) -> i64
 fn range_of(cfg: Config) -> (i64, i64)
-type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32 }
+type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32, names: Names }
 fn push_occ(c: *Ctx, item: u32, start: i64, minutes: i64, recurring: bool, all_day: bool) -> err
 fn collect(c: *Ctx, items: []const Item) -> err
 fn occ_before(c: *const Ctx, x: u32, y: u32) -> bool
@@ -9354,10 +9364,25 @@ fn put_node(c: *Ctx, role: accessibility.Role, x: f32, y: f32, w: f32, h: f32, l
 fn build_grid(c: *Ctx, items: []const Item) -> err
 fn build_agenda(c: *Ctx, items: []const Item) -> err
 fn build(items: []const Item, cfg: Config, st: Storage) -> (Layout, err)
+fn build_named(items: []const Item, cfg: Config, st: Storage, names: Names) -> (Layout, err)
 fn label_of(l: *const Layout, node: usize) -> str
 fn slot_at(l: *const Layout, x: f32, y: f32) -> (Slot, bool)
 fn drag_range(l: *const Layout, x0: f32, y0: f32, x1: f32, y1: f32) -> (Span, bool)
 fn hit(l: *const Layout, x: f32, y: f32) -> Hit
+fn month_first(cfg: MonthConfig) -> (i64, u32)
+fn put_cell_label(c: *Ctx, count: i64, total: usize) -> err
+fn build_month(items: []const Item, cfg: MonthConfig, ms: MonthStorage) -> (MonthLayout, err)
+fn build_month_named(items: []const Item, cfg: MonthConfig, ms: MonthStorage, names: Names) -> (MonthLayout, err)
+fn month_label_of(l: *const MonthLayout, node: usize) -> str
+fn more_top(l: *const MonthLayout, cell: usize) -> f32
+fn hit_month(l: *const MonthLayout, x: f32, y: f32) -> MonthHit
+fn month_move(l: *const MonthLayout, cell: u32, key: Key) -> u32
+fn bar_before(a: Bar, b: Bar) -> bool
+fn all_day_bars(l: *const Layout, out: []Bar) -> (usize, u32, err)
+fn column_at(l: *const Layout, x: f32) -> (usize, bool)
+fn move_target(l: *const Layout, items: []const Item, index: usize, grab_x: f32, grab_y: f32, x: f32, y: f32) -> (Span, bool)
+fn resize_target(l: *const Layout, index: usize, y: f32) -> (u32, bool)
+fn focus_next(l: *const Layout, current: usize, key: Key) -> usize
 ```
 
 Scheduler control model (L148, D2882): `build(items, cfg, storage)` lays appointments out
@@ -9372,7 +9397,14 @@ each with its label and row and column position, over `e.ui.accessibility.Role`)
 `hit` answers what is under a point, `slot_at` the snapped day and minute and
 `drag_range` the snapped, window-clamped range of a drag-to-create gesture.
 `truncated` says an endless rule was cut at the occurrence scratch. Layout is data; the
-painting, pointer capture and keyboard model of a window are the host's.
+painting and pointer capture of a window are the host's.
+
+D3303 adds `build_month` (the weeks of a month as 7-column cells with one line per occurrence
+and a "+N more" line past `lines`, `hit_month`, `month_move`), `all_day_bars` (one bar per
+all-day occurrence over its columns, in lanes), `move_target` and `resize_target` (a drag of a
+placed occurrence to its new start and length), `focus_next` (arrow-key focus among
+occurrences) and `Names` (`english()`; `build_named`/`build_month_named` take another set of
+words for the labels). Not here: zones and DST (items are floating times).
 
 ### `e.ui.undo`
 

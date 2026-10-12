@@ -1342,6 +1342,12 @@ $fmt_s2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmt_s2Written -ne 'executable written') { throw 'fmt_s2 emission failed' }
 & $fmt_s2Path
 if ($LASTEXITCODE -ne 0) { throw "a fmt_s2 check failed: exit $LASTEXITCODE" }
+# `e.ui.schedule` month view, bars, move/resize, focus and locale names against the independent model (L148).
+$ui_schedule_monthPath = Join-Path $testBuild 'ui-schedule-month-selfhost.exe'
+$ui_schedule_monthWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_schedule_month\src\main.e') $repo 'x64' 'windows' $ui_schedule_monthPath
+if ($LASTEXITCODE -ne 0 -or $ui_schedule_monthWritten -ne 'executable written') { throw 'ui_schedule_month emission failed' }
+& $ui_schedule_monthPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_schedule_month check failed: exit $LASTEXITCODE" }
 # `e.fmt.cap`: Common Alerting Protocol alerts against an ElementTree walk (C156).
 $fmtCapPath = Join-Path $testBuild 'fmt-cap-selfhost.exe'
 $fmtCapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_cap\src\main.e') $repo 'x64' 'windows' $fmtCapPath
