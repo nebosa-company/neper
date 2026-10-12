@@ -14,9 +14,18 @@
 // monochrome icon takes the theme's ink). `transform` takes `matrix`, `translate`, `scale`,
 // `rotate` (with optional centre), `skewX` and `skewY`.
 //
-// Not drawn: gradients, patterns, clip paths, masks, filters, text, `use`, markers, `<style>`
-// sheets, percentages and units other than px (a `url(...)` paint draws nothing). Their elements
-// are skipped whole. Group `opacity` multiplies each shape's own alpha rather than compositing
+// Also (L125, D2843): `fill` and `stroke` as `url(#id)` of a `linearGradient` or `radialGradient`
+// (objectBoundingBox or userSpaceOnUse, `gradientTransform`, `stop-color`/`stop-opacity`, stops
+// inherited by `href`; a single stop is a solid colour; a radial gradient over a non-square box
+// takes the geometric mean of its sides as radius, and a focal point is ignored), `use` of any
+// element or `symbol` by `href`/`xlink:href` (translated by `x`/`y`, at most 8 deep) with `defs`
+// content drawn only that way, `clip-path="url(#id)"` over the first shape of a `clipPath` (in
+// the clipped element's user space), and lengths with `px pt pc mm cm in em` or `%` of the
+// viewBox's width (x-ish) or height (y-ish).
+//
+// Not drawn: patterns, masks, filters, text, markers, `<style>` sheets, dashes, spread methods
+// other than pad and even-odd fills. Their elements are skipped whole (an unresolvable `url(...)`
+// paint draws nothing). Group `opacity` multiplies each shape's own alpha rather than compositing
 // the group as a layer, and every fill is non-zero.
 //
 // ponytail: an overlapping group at partial opacity darkens where its shapes overlap; wrap in an
@@ -34,7 +43,7 @@ error TooComplex
 
 const MAX_DEPTH: usize = 16usize
 
-type Style = struct { fill: paint.Color, fill_on: bool, stroke: paint.Color, stroke_on: bool, stroke_width: f32, cap: paint.StrokeCap, join: paint.StrokeJoin, miter: f32, opacity: f32, fill_opacity: f32, stroke_opacity: f32, current: paint.Color }
+type Style = struct { fill: paint.Color, fill_on: bool, stroke: paint.Color, stroke_on: bool, stroke_width: f32, cap: paint.StrokeCap, join: paint.StrokeJoin, miter: f32, opacity: f32, fill_opacity: f32, stroke_opacity: f32, current: paint.Color, fill_ref: str, stroke_ref: str, clip_ref: str, clip_ctm: geometry.Transform }
 type Frame = struct { style: Style, ctm: geometry.Transform }
 
 fn is_space(c: u8) -> bool {
@@ -305,13 +314,17 @@ fn apply_style(tag: str, base: Style) -> Style {
     if has_fill {
         let (c, kind) = parse_paint(fill, s.current)
         s.fill = c
-        s.fill_on = kind == 1u8
+        s.fill_on = kind == 1u8 || kind == 2u8
+        s.fill_ref = ""
+        if kind == 2u8 { s.fill_ref = url_id(fill) }
     }
     let (stroke, has_stroke) = prop(tag, "stroke")
     if has_stroke {
         let (c, kind) = parse_paint(stroke, s.current)
         s.stroke = c
-        s.stroke_on = kind == 1u8
+        s.stroke_on = kind == 1u8 || kind == 2u8
+        s.stroke_ref = ""
+        if kind == 2u8 { s.stroke_ref = url_id(stroke) }
     }
     let (width, has_width) = prop(tag, "stroke-width")
     if has_width { s.stroke_width = number_of(width, s.stroke_width) }
@@ -681,35 +694,20 @@ fn color_with(c: paint.Color, alpha: f32) -> paint.Color {
     ret paint.Color { red: c.red, green: c.green, blue: c.blue, alpha: c.alpha * alpha }
 }
 
-fn emit(b: *scene.Builder, frame: Frame, path: geometry.Path) -> err {
-    let s = frame.style
-    var fill_alpha = s.opacity * s.fill_opacity
-    var stroke_alpha = s.opacity * s.stroke_opacity
-    let save: scene.Command = .Save
-    try scene.push(b, save)
-    try scene.push(b, scene.Command { Transform: frame.ctm })
-    if s.fill_on && fill_alpha > 0.0 {
-        try scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: color_with(s.fill, fill_alpha) } } })
-    }
-    if s.stroke_on && s.stroke_width > 0.0 && stroke_alpha > 0.0 {
-        try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: path, brush: paint.Brush { Solid: color_with(s.stroke, stroke_alpha) }, stroke: paint.Stroke { width: s.stroke_width, cap: s.cap, join: s.join, miter_limit: s.miter } } })
-    }
-    let restore: scene.Command = .Restore
-    try scene.push(b, restore)
-    ret ok
-}
+// The document: its text and the viewport a percentage is taken of.
+type Doc = struct { text: str, vw: f32, vh: f32 }
+// An element found by its `id`: its opening tag, its whole text and its body.
+type Found = struct { tag: str, start: usize, end: usize, body_start: usize, body_end: usize, found: bool }
 
-fn length_of(tag: str, name: str) -> f32 {
-    let (value, found) = attr(tag, name)
-    if !found { ret 0.0 }
-    ret number_of(value, 0.0)
-}
-
-fn child_of(tag: str, parent: Frame) -> Frame {
-    let (value, found) = attr(tag, "transform")
-    var ctm = parent.ctm
-    if found { ctm = geometry.transform_multiply(parent.ctm, parse_transform(value)) }
-    ret Frame { style: apply_style(tag, parent.style), ctm: ctm }
+// The id inside `url(#id)`, or "".
+fn url_id(value: str) -> str {
+    var i = 0usize
+    while i < value.len && value[i] != 35u8 { i += 1usize }
+    if i >= value.len { ret "" }
+    let start = i + 1usize
+    var end = start
+    while end < value.len && value[end] != 41u8 && value[end] != 39u8 && value[end] != 34u8 && !is_space(value[end]) { end += 1usize }
+    ret value[start..end]
 }
 
 // The tag's name: the run of characters up to a space, a slash or the end.
@@ -717,6 +715,395 @@ fn name_of(tag: str) -> str {
     var i = 0usize
     while i < tag.len && !is_space(tag[i]) && tag[i] != 47u8 { i += 1usize }
     ret tag[0usize..i]
+}
+
+// The element whose `id` is `want`: its opening tag and the span through its matching
+// closing tag (nested elements of the same name counted).
+fn find_by_id(text: str, want: str) -> Found {
+    var out: Found = zero
+    if want.len == 0usize { ret out }
+    var i = 0usize
+    while i < text.len {
+        if text[i] != 60u8 || i + 1usize >= text.len || text[i + 1usize] == 47u8 || text[i + 1usize] == 33u8 || text[i + 1usize] == 63u8 {
+            i += 1usize
+            continue
+        }
+        let end = tag_end(text, i)
+        let tag = text[i + 1usize..end]
+        let (id, has_id) = attr(tag, "id")
+        if has_id && same(id, want) {
+            out.tag = tag
+            out.start = i
+            out.found = true
+            let self_closing = tag.len > 0usize && tag[tag.len - 1usize] == 47u8
+            if self_closing {
+                out.end = end + 1usize
+                out.body_start = end + 1usize
+                out.body_end = end + 1usize
+                ret out
+            }
+            let name = name_of(tag)
+            var depth = 1usize
+            var j = end + 1usize
+            out.body_start = j
+            out.body_end = text.len
+            out.end = text.len
+            while j < text.len {
+                if text[j] != 60u8 {
+                    j += 1usize
+                    continue
+                }
+                let close = tag_end(text, j)
+                if j + 1usize < text.len && text[j + 1usize] == 47u8 {
+                    if same(name_of(text[j + 2usize..close]), name) {
+                        depth -= 1usize
+                        if depth == 0usize {
+                            out.body_end = j
+                            out.end = close + 1usize
+                            ret out
+                        }
+                    }
+                } else if j + 1usize < text.len && text[j + 1usize] != 33u8 && text[j + 1usize] != 63u8 {
+                    let inner = text[j + 1usize..close]
+                    if same(name_of(inner), name) && !(inner.len > 0usize && inner[inner.len - 1usize] == 47u8) { depth += 1usize }
+                }
+                j = close + 1usize
+            }
+            ret out
+        }
+        i = end + 1usize
+    }
+    ret out
+}
+
+// A length's unit factor at `at` in `value`: (user units per unit, is a percentage).
+fn unit_factor(value: str, at: usize) -> (f32, bool) {
+    var j = at
+    while j < value.len && is_space(value[j]) { j += 1usize }
+    let unit = trim(value[j..value.len])
+    if unit.len == 0usize || same(unit, "px") { ret (1.0, false) }
+    if same(unit, "%") { ret (0.01, true) }
+    if same(unit, "pt") { ret (1.3333334, false) }
+    if same(unit, "pc") { ret (16.0, false) }
+    if same(unit, "mm") { ret (3.7795277, false) }
+    if same(unit, "cm") { ret (37.795277, false) }
+    if same(unit, "in") { ret (96.0, false) }
+    if same(unit, "em") { ret (16.0, false) }
+    ret (1.0, false)
+}
+
+// A length in user units; a percentage is of `axis`.
+fn length_value(value: str, fallback: f32, axis: f32) -> f32 {
+    var at = 0usize
+    var out = fallback
+    if !read_number(value, &at, &out) { ret fallback }
+    let (factor, percent) = unit_factor(value, at)
+    if percent { ret out * factor * axis }
+    ret out * factor
+}
+
+fn length_of(tag: str, name: str) -> f32 {
+    let (value, found) = attr(tag, name)
+    if !found { ret 0.0 }
+    ret length_value(value, 0.0, 0.0)
+}
+
+// Lengths along x (`x`, `width`, `cx`, `rx`) and along y of the viewport.
+fn len_x(doc: Doc, tag: str, name: str) -> f32 {
+    let (value, found) = attr(tag, name)
+    if !found { ret 0.0 }
+    ret length_value(value, 0.0, doc.vw)
+}
+
+fn len_y(doc: Doc, tag: str, name: str) -> f32 {
+    let (value, found) = attr(tag, name)
+    if !found { ret 0.0 }
+    ret length_value(value, 0.0, doc.vh)
+}
+
+// The path of a shape element; false when `name` is not one.
+fn shape_path(a: *mem.Arena, doc: Doc, tag: str, name: str) -> (geometry.Path, bool, err) {
+    if same(name, "rect") {
+        var rx = len_x(doc, tag, "rx")
+        var ry = len_y(doc, tag, "ry")
+        if rx == 0.0 { rx = ry }
+        if ry == 0.0 { ry = rx }
+        let (path, path_error) = rect_path(a, len_x(doc, tag, "x"), len_y(doc, tag, "y"), len_x(doc, tag, "width"), len_y(doc, tag, "height"), rx, ry)
+        ret (path, path_error == ok, path_error)
+    }
+    if same(name, "circle") {
+        let r = len_x(doc, tag, "r")
+        let (path, path_error) = ellipse_path(a, len_x(doc, tag, "cx"), len_y(doc, tag, "cy"), r, r)
+        ret (path, path_error == ok, path_error)
+    }
+    if same(name, "ellipse") {
+        let (path, path_error) = ellipse_path(a, len_x(doc, tag, "cx"), len_y(doc, tag, "cy"), len_x(doc, tag, "rx"), len_y(doc, tag, "ry"))
+        ret (path, path_error == ok, path_error)
+    }
+    if same(name, "line") {
+        let (pb, pb_error) = new_path(a, 2usize, 2usize)
+        if pb_error != ok { ret (zero, false, pb_error) }
+        var lb = pb
+        try geometry.move_to(&lb, pt(len_x(doc, tag, "x1"), len_y(doc, tag, "y1")))
+        try geometry.line_to(&lb, pt(len_x(doc, tag, "x2"), len_y(doc, tag, "y2")))
+        ret (geometry.finish(&lb), true, ok)
+    }
+    if same(name, "polyline") || same(name, "polygon") {
+        let (list, has_list) = attr(tag, "points")
+        if !has_list { ret (zero, false, ok) }
+        let (path, path_error) = points_path(a, list, same(name, "polygon"))
+        ret (path, path_error == ok, path_error)
+    }
+    if same(name, "path") {
+        let (d, has_d) = attr(tag, "d")
+        if !has_d { ret (zero, false, ok) }
+        let (pb, pb_error) = new_path(a, d.len * 2usize + 8usize, d.len * 6usize + 24usize)
+        if pb_error != ok { ret (zero, false, pb_error) }
+        var pbv = pb
+        try build_path(&pbv, d)
+        ret (geometry.finish(&pbv), true, ok)
+    }
+    ret (zero, false, ok)
+}
+
+fn path_bounds(path: geometry.Path) -> geometry.Rect {
+    if path.points.len == 0usize { ret geometry.rect(0.0, 0.0, 0.0, 0.0) }
+    var x0 = path.points[0usize].x
+    var y0 = path.points[0usize].y
+    var x1 = x0
+    var y1 = y0
+    var i = 1usize
+    while i < path.points.len {
+        let p = path.points[i]
+        if p.x < x0 { x0 = p.x }
+        if p.y < y0 { y0 = p.y }
+        if p.x > x1 { x1 = p.x }
+        if p.y > y1 { y1 = p.y }
+        i += 1usize
+    }
+    ret geometry.rect(x0, y0, x1 - x0, y1 - y0)
+}
+
+// A coordinate of a gradient: a number or percentage; as a fraction of the bounding box
+// (objectBoundingBox) or in user units (a percentage then of `axis`).
+fn gradient_coord(tag: str, name: str, fallback: f32, boxed: bool, axis: f32) -> f32 {
+    let (value, found) = attr(tag, name)
+    if !found { ret fallback }
+    var at = 0usize
+    var out = 0.0f32
+    if !read_number(value, &at, &out) { ret fallback }
+    let (factor, percent) = unit_factor(value, at)
+    if boxed {
+        if percent { ret out * factor }
+        ret out
+    }
+    if percent { ret out * factor * axis }
+    ret out * factor
+}
+
+// The stops inside the element's body (`<stop offset= stop-color= stop-opacity=>`),
+// offsets clamped to 0..1 and made non-decreasing, alpha scaled by `alpha`.
+fn gradient_stops(a: *mem.Arena, text: str, body_start: usize, body_end: usize, alpha: f32, current: paint.Color) -> ([]paint.Stop, err) {
+    var count = 0usize
+    var i = body_start
+    while i < body_end {
+        let at = find(text, i, "<stop")
+        if at >= body_end { break }
+        count += 1usize
+        i = at + 5usize
+    }
+    if count == 0usize { ret (zero, ok) }
+    let (stops, stops_error) = mem.alloc[paint.Stop](a, count)
+    if stops_error != ok { ret (zero, stops_error) }
+    var n = 0usize
+    var last = 0.0f32
+    i = body_start
+    while i < body_end && n < count {
+        let at = find(text, i, "<stop")
+        if at >= body_end { break }
+        let end = tag_end(text, at)
+        let tag = text[at + 1usize..end]
+        var offset = last
+        let (offset_text, has_offset) = attr(tag, "offset")
+        if has_offset {
+            var p = 0usize
+            var number = 0.0f32
+            if read_number(offset_text, &p, &number) {
+                let (factor, percent) = unit_factor(offset_text, p)
+                if percent { number = number * factor }
+                offset = number
+            }
+        }
+        if offset < last { offset = last }
+        if offset > 1.0 { offset = 1.0 }
+        last = offset
+        var color = byte_color(0usize, 0usize, 0usize, 255usize)
+        let (color_text, has_color) = prop(tag, "stop-color")
+        if has_color {
+            let (c, kind) = parse_paint(color_text, current)
+            if kind == 1u8 { color = c }
+        }
+        var stop_alpha = 1.0f32
+        let (opacity_text, has_opacity) = prop(tag, "stop-opacity")
+        if has_opacity { stop_alpha = unit_value(number_of(opacity_text, 1.0)) }
+        stops[n] = paint.Stop { offset: offset, color: color_with(color, stop_alpha * alpha) }
+        n += 1usize
+        i = end + 1usize
+    }
+    ret (stops[..n], ok)
+}
+
+// The brush for `url(#id)` over a shape with bounds `bounds`; false when the id names
+// no gradient or it has no stops. A single stop is a solid colour. Spread methods other
+// than pad, a radial focal point and a radial gradient's elliptical box are not drawn.
+fn gradient_brush(a: *mem.Arena, doc: Doc, id: str, bounds: geometry.Rect, alpha: f32, current: paint.Color) -> (paint.Brush, bool, err) {
+    let found = find_by_id(doc.text, id)
+    var none: paint.Brush = zero
+    if !found.found { ret (none, false, ok) }
+    let name = name_of(found.tag)
+    let linear = same(name, "linearGradient")
+    if !linear && !same(name, "radialGradient") { ret (none, false, ok) }
+    var stops: []paint.Stop = zero
+    let (own, own_error) = gradient_stops(a, doc.text, found.body_start, found.body_end, alpha, current)
+    if own_error != ok { ret (none, false, own_error) }
+    stops = own
+    if stops.len == 0usize {
+        // Stops inherited through href="#other".
+        let (plain_href, has_plain) = attr(found.tag, "href")
+        let (xlink_href, has_xlink) = attr(found.tag, "xlink:href")
+        var href = plain_href
+        if !has_plain { href = xlink_href }
+        if has_plain || has_xlink {
+            let source = find_by_id(doc.text, url_id(href))
+            if source.found {
+                let (inherited, inherited_error) = gradient_stops(a, doc.text, source.body_start, source.body_end, alpha, current)
+                if inherited_error != ok { ret (none, false, inherited_error) }
+                stops = inherited
+            }
+        }
+    }
+    if stops.len == 0usize { ret (none, false, ok) }
+    if stops.len == 1usize { ret (paint.Brush { Solid: stops[0usize].color }, true, ok) }
+    var boxed = true
+    let (units, has_units) = attr(found.tag, "gradientUnits")
+    if has_units && same(units, "userSpaceOnUse") { boxed = false }
+    var transform = geometry.transform_identity()
+    let (transform_text, has_transform) = attr(found.tag, "gradientTransform")
+    if has_transform { transform = parse_transform(transform_text) }
+    if linear {
+        var x1 = gradient_coord(found.tag, "x1", 0.0, boxed, doc.vw)
+        var y1 = gradient_coord(found.tag, "y1", 0.0, boxed, doc.vh)
+        var x2 = gradient_coord(found.tag, "x2", 1.0, boxed, doc.vw)
+        var y2 = gradient_coord(found.tag, "y2", 0.0, boxed, doc.vh)
+        if boxed {
+            x1 = bounds.x + x1 * bounds.width
+            x2 = bounds.x + x2 * bounds.width
+            y1 = bounds.y + y1 * bounds.height
+            y2 = bounds.y + y2 * bounds.height
+        }
+        let start = geometry.transform_point(transform, pt(x1, y1))
+        let stop_point = geometry.transform_point(transform, pt(x2, y2))
+        ret (paint.Brush { Linear: paint.LinearGradient { start: start, end: stop_point, stops: stops } }, true, ok)
+    }
+    var cx = gradient_coord(found.tag, "cx", 0.5, boxed, doc.vw)
+    var cy = gradient_coord(found.tag, "cy", 0.5, boxed, doc.vh)
+    var r = gradient_coord(found.tag, "r", 0.5, boxed, doc.vw)
+    if boxed {
+        cx = bounds.x + cx * bounds.width
+        cy = bounds.y + cy * bounds.height
+        // The box is not always square; the circle takes the geometric mean of its sides.
+        r = r * math.sqrt[f32](bounds.width * bounds.height)
+    }
+    let center = geometry.transform_point(transform, pt(cx, cy))
+    let det = transform.m00 * transform.m11 - transform.m01 * transform.m10
+    var scale = det
+    if scale < 0.0 { scale = 0.0 - scale }
+    ret (paint.Brush { Radial: paint.RadialGradient { center: center, radius: r * math.sqrt[f32](scale), stops: stops } }, true, ok)
+}
+
+// The first shape inside the `clipPath` named `id`, as a path in the space of `ctm`.
+fn clip_path(a: *mem.Arena, doc: Doc, id: str, ctm: geometry.Transform) -> (geometry.Path, bool, err) {
+    let found = find_by_id(doc.text, id)
+    if !found.found || !same(name_of(found.tag), "clipPath") { ret (zero, false, ok) }
+    var i = found.body_start
+    while i < found.body_end {
+        if doc.text[i] != 60u8 || i + 1usize >= doc.text.len || doc.text[i + 1usize] == 47u8 {
+            i += 1usize
+            continue
+        }
+        let end = tag_end(doc.text, i)
+        let tag = doc.text[i + 1usize..end]
+        let (path, has_path, path_error) = shape_path(a, doc, tag, name_of(tag))
+        if path_error != ok { ret (zero, false, path_error) }
+        if has_path {
+            let (points, points_error) = mem.alloc[geometry.Point](a, path.points.len)
+            if points_error != ok { ret (zero, false, points_error) }
+            var k = 0usize
+            while k < points.len {
+                points[k] = geometry.transform_point(ctm, path.points[k])
+                k += 1usize
+            }
+            ret (geometry.Path { verbs: path.verbs, points: points }, true, ok)
+        }
+        i = end + 1usize
+    }
+    ret (zero, false, ok)
+}
+
+// Fill and stroke of `path` under the frame, clipped by its clip-path when it has one.
+// `fillable` is false for a line, whose fill is never drawn.
+fn emit(a: *mem.Arena, b: *scene.Builder, doc: Doc, frame: Frame, path: geometry.Path, fillable: bool) -> err {
+    let s = frame.style
+    let fill_alpha = s.opacity * s.fill_opacity
+    let stroke_alpha = s.opacity * s.stroke_opacity
+    let bounds = path_bounds(path)
+    let save: scene.Command = .Save
+    try scene.push(b, save)
+    if s.clip_ref.len > 0usize {
+        let (clip, has_clip, clip_error) = clip_path(a, doc, s.clip_ref, s.clip_ctm)
+        if clip_error != ok { ret clip_error }
+        if has_clip { try scene.push(b, scene.Command { Clip: scene.Clip { Path: clip } }) }
+    }
+    try scene.push(b, scene.Command { Transform: frame.ctm })
+    if fillable && s.fill_on && fill_alpha > 0.0 {
+        if s.fill_ref.len > 0usize {
+            let (brush, has_brush, brush_error) = gradient_brush(a, doc, s.fill_ref, bounds, fill_alpha, s.current)
+            if brush_error != ok { ret brush_error }
+            if has_brush { try scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: brush } }) }
+        } else {
+            try scene.push(b, scene.Command { FillPath: scene.FillPath { path: path, brush: paint.Brush { Solid: color_with(s.fill, fill_alpha) } } })
+        }
+    }
+    if s.stroke_on && s.stroke_width > 0.0 && stroke_alpha > 0.0 {
+        var brush = paint.Brush { Solid: color_with(s.stroke, stroke_alpha) }
+        var draw_stroke = true
+        if s.stroke_ref.len > 0usize {
+            let (made, has_made, made_error) = gradient_brush(a, doc, s.stroke_ref, bounds, stroke_alpha, s.current)
+            if made_error != ok { ret made_error }
+            draw_stroke = has_made
+            if has_made { brush = made }
+        }
+        if draw_stroke {
+            try scene.push(b, scene.Command { StrokePath: scene.StrokePath { path: path, brush: brush, stroke: paint.Stroke { width: s.stroke_width, cap: s.cap, join: s.join, miter_limit: s.miter } } })
+        }
+    }
+    let restore: scene.Command = .Restore
+    try scene.push(b, restore)
+    ret ok
+}
+
+fn child_of(tag: str, parent: Frame) -> Frame {
+    let (value, found) = attr(tag, "transform")
+    var ctm = parent.ctm
+    if found { ctm = geometry.transform_multiply(parent.ctm, parse_transform(value)) }
+    var style = apply_style(tag, parent.style)
+    let (clip, has_clip) = prop(tag, "clip-path")
+    if has_clip {
+        // The clip is in the user space of the element that names it.
+        style.clip_ref = url_id(clip)
+        style.clip_ctm = ctm
+    }
+    ret Frame { style: style, ctm: ctm }
 }
 
 fn skipped(name: str) -> bool {
@@ -744,16 +1131,25 @@ fn size(text: str) -> (f32, f32, bool) {
 }
 
 fn default_style(current: paint.Color) -> Style {
-    ret Style { fill: paint.rgba(0.0, 0.0, 0.0, 1.0), fill_on: true, stroke: paint.rgba(0.0, 0.0, 0.0, 1.0), stroke_on: false, stroke_width: 1.0, cap: paint.StrokeCap.Butt, join: paint.StrokeJoin.Miter, miter: 4.0, opacity: 1.0, fill_opacity: 1.0, stroke_opacity: 1.0, current: current }
+    ret Style { fill: paint.rgba(0.0, 0.0, 0.0, 1.0), fill_on: true, stroke: paint.rgba(0.0, 0.0, 0.0, 1.0), stroke_on: false, stroke_width: 1.0, cap: paint.StrokeCap.Butt, join: paint.StrokeJoin.Miter, miter: 4.0, opacity: 1.0, fill_opacity: 1.0, stroke_opacity: 1.0, current: current, fill_ref: "", stroke_ref: "", clip_ref: "", clip_ctm: geometry.transform_identity() }
 }
 
 // Draw `text` into `b`, fitted to `dest`. `current` is what `currentColor` and an unset
 // `color` mean. The commands are balanced -- one outer Save/Restore, one pair per shape.
 fn draw(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, current: paint.Color) -> err {
+    let (vw, vh, has_size) = size(text)
+    let doc = Doc { text: text, vw: vw, vh: vh }
+    let first = Frame { style: default_style(current), ctm: geometry.transform_identity() }
+    ret walk(a, b, doc, text, first, true, dest, 0usize)
+}
+
+// One pass over the elements of `text` (the document, or the part a `use` names) from
+// `first`. `root` is the document pass, which opens at `<svg>` and fits it to `dest`.
+fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, root: bool, dest: geometry.Rect, level: usize) -> err {
     var frames: [16]Frame = zero
-    frames[0usize] = Frame { style: default_style(current), ctm: geometry.transform_identity() }
+    frames[0usize] = first
     var depth = 0usize
-    var opened = false
+    var opened = !root
     var i = 0usize
     while i < text.len {
         if text[i] != 60u8 {
@@ -771,7 +1167,7 @@ fn draw(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, curren
         let end = tag_end(text, i)
         if i + 1usize < text.len && text[i + 1usize] == 47u8 {
             let closing = name_of(text[i + 2usize..end])
-            if same(closing, "g") && depth > 0usize { depth -= 1usize }
+            if (same(closing, "g") || same(closing, "a") || same(closing, "svg")) && depth > 0usize { depth -= 1usize }
             i = end + 1usize
             continue
         }
@@ -829,54 +1225,32 @@ fn draw(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, curren
             }
             continue
         }
-        let frame = child_of(tag, frames[depth])
-        if same(name, "rect") {
-            // One radius given stands for both.
-            var rx = length_of(tag, "rx")
-            var ry = length_of(tag, "ry")
-            if rx == 0.0 { rx = ry }
-            if ry == 0.0 { ry = rx }
-            let (path, path_error) = rect_path(a, length_of(tag, "x"), length_of(tag, "y"), length_of(tag, "width"), length_of(tag, "height"), rx, ry)
-            if path_error != ok { ret path_error }
-            try emit(b, frame, path)
-        } else if same(name, "circle") {
-            let r = length_of(tag, "r")
-            let (path, path_error) = ellipse_path(a, length_of(tag, "cx"), length_of(tag, "cy"), r, r)
-            if path_error != ok { ret path_error }
-            try emit(b, frame, path)
-        } else if same(name, "ellipse") {
-            let (path, path_error) = ellipse_path(a, length_of(tag, "cx"), length_of(tag, "cy"), length_of(tag, "rx"), length_of(tag, "ry"))
-            if path_error != ok { ret path_error }
-            try emit(b, frame, path)
-        } else if same(name, "line") {
-            let (pb, pb_error) = new_path(a, 2usize, 2usize)
-            if pb_error != ok { ret pb_error }
-            var lb = pb
-            try geometry.move_to(&lb, pt(length_of(tag, "x1"), length_of(tag, "y1")))
-            try geometry.line_to(&lb, pt(length_of(tag, "x2"), length_of(tag, "y2")))
-            var lined = frame
-            lined.style.fill_on = false
-            try emit(b, lined, geometry.finish(&lb))
-        } else if same(name, "polyline") || same(name, "polygon") {
-            let (list, has_list) = attr(tag, "points")
-            if has_list {
-                let (path, path_error) = points_path(a, list, same(name, "polygon"))
-                if path_error != ok { ret path_error }
-                try emit(b, frame, path)
+        var frame = child_of(tag, frames[depth])
+        if same(name, "use") {
+            // `use` draws the element its href names, translated by x and y, under the
+            // use element's own style; a symbol contributes its children.
+            let (plain, has_plain) = attr(tag, "href")
+            let (linked, has_linked) = attr(tag, "xlink:href")
+            var reference = plain
+            if !has_plain { reference = linked }
+            let used_element = find_by_id(doc.text, url_id(reference))
+            if (has_plain || has_linked) && used_element.found {
+                if level + 1usize >= 8usize { ret TooComplex }
+                frame.ctm = geometry.transform_multiply(frame.ctm, geometry.transform_translate(len_x(doc, tag, "x"), len_y(doc, tag, "y")))
+                var inner = doc.text[used_element.start..used_element.end]
+                if same(name_of(used_element.tag), "symbol") { inner = doc.text[used_element.body_start..used_element.body_end] }
+                try walk(a, b, doc, inner, frame, false, dest, level + 1usize)
             }
-        } else if same(name, "path") {
-            let (d, has_d) = attr(tag, "d")
-            if has_d {
-                let (pb, pb_error) = new_path(a, d.len * 2usize + 8usize, d.len * 6usize + 24usize)
-                if pb_error != ok { ret pb_error }
-                var pbv = pb
-                try build_path(&pbv, d)
-                try emit(b, frame, geometry.finish(&pbv))
-            }
+            continue
         }
+        let (path, has_path, path_error) = shape_path(a, doc, tag, name)
+        if path_error != ok { ret path_error }
+        if has_path { try emit(a, b, doc, frame, path, !same(name, "line")) }
     }
     if !opened { ret BadSvg }
-    let restore: scene.Command = .Restore
-    try scene.push(b, restore)
+    if root {
+        let restore: scene.Command = .Restore
+        try scene.push(b, restore)
+    }
     ret ok
 }

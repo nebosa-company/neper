@@ -2,7 +2,8 @@
 // Metropolis-Hastings, Gibbs sampling through the caller's conditional draw,
 // Hamiltonian Monte Carlo with a fixed leapfrog trajectory, and the No-U-Turn
 // sampler (Hoffman and Gelman's algorithm 3, the slice form) over a caller's
-// unnormalised log density and its gradient.
+// unnormalised log density and its gradient; and mean-field Gaussian variational
+// inference (`elbo`, `advi`, `variational_samples`) over the same two callbacks.
 //
 // Every sampler starts from the caller's `x`, writes `count` rows of `n` into
 // `samples` (the chain itself, repeats included) and leaves `x` at the last
@@ -276,4 +277,159 @@ fn nuts[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*
         i += 1usize
     }
     ret (Chain { accepted: accepted, proposed: count }, ok)
+}
+
+// --- Variational inference (L060): the mean-field Gaussian family
+// q(z) = N(mean, diag(exp(log_sd)^2)) fitted by stochastic gradient ascent on the ELBO
+// with the reparameterisation z = mean + exp(log_sd) * eps, the way Stan's ADVI does
+// in the unconstrained space. The log density is unnormalised, so `elbo` is the
+// evidence lower bound up to the density's own constant, and `log Z - elbo` is the
+// KL divergence from q to the target. The gradient callback is the same one `hmc` and
+// `nuts` take; a tape from `e.ml.nn` fits behind it.
+
+type Fit = struct { bound: f64, steps: usize }
+
+fn gaussian_entropy_constant(n: usize) -> f64 {
+    ret 0.5f64 * f64(n) * (1.0f64 + math.log[f64](6.283185307179586f64))
+}
+
+// A Monte Carlo ELBO of `draws` reparameterised samples; `scratch.len >= n`.
+fn elbo[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, r: *rand.Pcg64, mean: []const f64, log_sd: []const f64, draws: usize, scratch: []f64) -> (f64, err) {
+    let n = mean.len
+    if log_sd.len != n || draws == 0usize { ret (0.0f64, Invalid) }
+    if scratch.len < n { ret (0.0f64, TooSmall) }
+    var z = scratch[..n]
+    var total = 0.0f64
+    var d = 0usize
+    while d < draws {
+        var k = 0usize
+        while k < n {
+            z[k] = mean[k] + math.exp[f64](log_sd[k]) * dist.normal(r)
+            k += 1usize
+        }
+        total += log_density(ctx, z)
+        d += 1usize
+    }
+    var entropy = gaussian_entropy_constant(n)
+    var k = 0usize
+    while k < n {
+        entropy += log_sd[k]
+        k += 1usize
+    }
+    ret (total / f64(draws) + entropy, ok)
+}
+
+// ADVI: `steps` Adam ascents (step size `rate`) on the ELBO from the caller's
+// `mean` and `log_sd` (both `n` long, left holding the fit), each using `draws`
+// reparameterised gradients; the answer is the average of the second half of the
+// iterates, and `Fit.bound` is estimated from 100 x `draws` fresh samples.
+// `scratch.len >= 11 * n`.
+fn advi[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, mean: []f64, log_sd: []f64, steps: usize, draws: usize, rate: f64, scratch: []f64) -> (Fit, err) {
+    let n = mean.len
+    if log_sd.len != n || steps == 0usize || draws == 0usize || rate <= 0.0f64 || n == 0usize { ret (zero, Invalid) }
+    if scratch.len < 11usize * n { ret (zero, TooSmall) }
+    var eps = scratch[..n]
+    var z = scratch[n..2usize * n]
+    var gradient = scratch[2usize * n..3usize * n]
+    var g_mean = scratch[3usize * n..4usize * n]
+    var g_log = scratch[4usize * n..5usize * n]
+    var m_mean = scratch[5usize * n..6usize * n]
+    var v_mean = scratch[6usize * n..7usize * n]
+    var m_log = scratch[7usize * n..8usize * n]
+    var v_log = scratch[8usize * n..9usize * n]
+    var sum_mean = scratch[9usize * n..10usize * n]
+    var sum_log = scratch[10usize * n..11usize * n]
+    var k = 0usize
+    while k < n {
+        m_mean[k] = 0.0f64
+        v_mean[k] = 0.0f64
+        m_log[k] = 0.0f64
+        v_log[k] = 0.0f64
+        sum_mean[k] = 0.0f64
+        sum_log[k] = 0.0f64
+        k += 1usize
+    }
+    let beta1 = 0.9f64
+    let beta2 = 0.999f64
+    var beta1_power = 1.0f64
+    var beta2_power = 1.0f64
+    let tail_from = steps / 2usize
+    var tail = 0usize
+    var t = 0usize
+    while t < steps {
+        k = 0usize
+        while k < n {
+            g_mean[k] = 0.0f64
+            g_log[k] = 0.0f64
+            k += 1usize
+        }
+        var d = 0usize
+        while d < draws {
+            k = 0usize
+            while k < n {
+                eps[k] = dist.normal(r)
+                z[k] = mean[k] + math.exp[f64](log_sd[k]) * eps[k]
+                k += 1usize
+            }
+            g(ctx, z, gradient)
+            k = 0usize
+            while k < n {
+                g_mean[k] += gradient[k]
+                g_log[k] += gradient[k] * eps[k] * math.exp[f64](log_sd[k])
+                k += 1usize
+            }
+            d += 1usize
+        }
+        beta1_power *= beta1
+        beta2_power *= beta2
+        k = 0usize
+        while k < n {
+            // The entropy of q adds 1 to each log-scale's gradient.
+            let gm = g_mean[k] / f64(draws)
+            let gl = g_log[k] / f64(draws) + 1.0f64
+            m_mean[k] = beta1 * m_mean[k] + (1.0f64 - beta1) * gm
+            v_mean[k] = beta2 * v_mean[k] + (1.0f64 - beta2) * gm * gm
+            m_log[k] = beta1 * m_log[k] + (1.0f64 - beta1) * gl
+            v_log[k] = beta2 * v_log[k] + (1.0f64 - beta2) * gl * gl
+            mean[k] += rate * (m_mean[k] / (1.0f64 - beta1_power)) / (math.sqrt[f64](v_mean[k] / (1.0f64 - beta2_power)) + 0.00000001f64)
+            log_sd[k] += rate * (m_log[k] / (1.0f64 - beta1_power)) / (math.sqrt[f64](v_log[k] / (1.0f64 - beta2_power)) + 0.00000001f64)
+            k += 1usize
+        }
+        if t >= tail_from {
+            k = 0usize
+            while k < n {
+                sum_mean[k] += mean[k]
+                sum_log[k] += log_sd[k]
+                k += 1usize
+            }
+            tail += 1usize
+        }
+        t += 1usize
+    }
+    k = 0usize
+    while k < n {
+        mean[k] = sum_mean[k] / f64(tail)
+        log_sd[k] = sum_log[k] / f64(tail)
+        k += 1usize
+    }
+    let (estimate, estimate_error) = elbo[Ctx](ctx, log_density, r, mean, log_sd, 100usize * draws, z)
+    if estimate_error != ok { ret (zero, estimate_error) }
+    ret (Fit { bound: estimate, steps: steps }, ok)
+}
+
+// `count` rows of `n` draws from the fitted q into `samples`.
+fn variational_samples(r: *rand.Pcg64, mean: []const f64, log_sd: []const f64, samples: []f64, count: usize) -> err {
+    let n = mean.len
+    if log_sd.len != n { ret Invalid }
+    if samples.len < count * n { ret TooSmall }
+    var i = 0usize
+    while i < count {
+        var k = 0usize
+        while k < n {
+            samples[i * n + k] = mean[k] + math.exp[f64](log_sd[k]) * dist.normal(r)
+            k += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
 }

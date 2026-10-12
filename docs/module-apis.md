@@ -4783,6 +4783,16 @@ The calls return consumed input and written output. State uses caller storage an
 performs no allocation. This module implements raw RFC 1951 DEFLATE only; gzip and
 ZIP framing belong to `e.fmt.gzip` and `e.fmt.zip`.
 
+The encoder (L163, D2840) writes each block as the smallest of stored,
+fixed-Huffman and dynamic-Huffman, with length-limited (15-bit) trees built per
+block. `Balanced` and `Best` run zlib's lazy matcher (zlib's hash and zlib level 6 and
+9 chain, good, lazy and nice limits) over a 32 KiB window that slides across block
+boundaries; `Fast` writes stored blocks. `encoder_storage` is now about 311 KB for
+`Balanced` and `Best` (64 KiB buffer, 64 KiB staging, 128 KiB of hash tables and the
+token buffer); `Fast` still needs about 65 KB. Output is byte-for-byte what zlib level
+6 writes on most inputs and within 1 byte on the rest of the corpus checked, and every
+stream inflates through Python's zlib.
+
 ### `e.algo.graph`
 
 ```neper
@@ -7300,6 +7310,93 @@ fn put_unit(unit: u32, big_endian: bool, out: []u8, at: usize)
 fn encode_utf16(s: str, big_endian: bool, out: []u8) -> (usize, err)
 ```
 
+### `e.text.math`
+
+```neper
+type Kind = enum u8 { Glyph, Rule }
+type Item = struct { kind: Kind, x: f32, y: f32, w: f32, h: f32, size: f32, glyph: u32, scalar: u32 }
+type Equation = struct { items: []const Item, width: f32, ascent: f32, descent: f32 }
+type Options = struct { font: shape.Font, size: f32, display: bool, notdef: bool }
+error Invalid
+error MissingGlyph
+error TooSmall
+error TooDeep
+const NONE: usize = 18446744073709551615usize
+const MAX_NEST: usize = 24usize
+const CLASS_ORD: u8 = 0u8
+const CLASS_OP: u8 = 1u8
+const CLASS_BIN: u8 = 2u8
+const CLASS_REL: u8 = 3u8
+const CLASS_OPEN: u8 = 4u8
+const CLASS_CLOSE: u8 = 5u8
+const CLASS_PUNCT: u8 = 6u8
+const CLASS_INNER: u8 = 7u8
+const CLASS_SPACE: u8 = 8u8
+type Atom = struct { class: u8, first: usize, last: usize, width: f32, height: f32, depth: f32, simple: bool, limits: bool }
+type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize }
+fn maxf(x: f32, y: f32) -> f32
+fn be16(d: []const u8, at: usize) -> u32
+fn be16s(d: []const u8, at: usize) -> i32
+fn be32(d: []const u8, at: usize) -> u32
+fn find_table(d: []const u8, tag: u32) -> usize
+fn glyph_extent(c: *Ctx, id: u32) -> (f32, f32)
+fn style_scale(style: u32) -> f32
+fn script_style(style: u32) -> u32
+fn fraction_style(style: u32) -> u32
+fn push_item(c: *Ctx, item: Item)
+fn shift_range(c: *Ctx, first: usize, last: usize, dx: f32, dy: f32)
+fn byte_at(c: *Ctx, at: usize) -> u8
+fn skip_space(c: *Ctx)
+fn word_is(word: str, want: str) -> bool
+fn at_command(c: *Ctx, word: str) -> bool
+fn ends_row(c: *Ctx) -> bool
+fn fail(c: *Ctx, why: err)
+fn glyph_atom(c: *Ctx, scalar: u32, size: f32, class: u8) -> Atom
+fn text_atom(c: *Ctx, text: str, size: f32, class: u8) -> Atom
+fn char_class(scalar: u32) -> u8
+fn greek_names() -> str
+fn greek_scalar(word: str) -> u32
+fn upper_greek(word: str) -> u32
+fn symbol_of(word: str) -> (u32, u8)
+fn is_operator_name(word: str) -> bool
+fn spacing_table() -> str
+fn spacing(left: u8, right: u8, script: bool) -> f32
+fn command_word(c: *Ctx) -> str
+fn expect_byte(c: *Ctx, want: u8)
+fn as_atom(b: Atom, class: u8) -> Atom
+fn parse_row(c: *Ctx, style: u32) -> Atom
+fn parse_argument(c: *Ctx, style: u32) -> Atom
+fn parse_atom(c: *Ctx, style: u32) -> Atom
+fn delimiter(c: *Ctx, scalar: u32, span_h: f32, size: f32, class: u8) -> Atom
+fn push_rule(c: *Ctx, x: f32, top: f32, w: f32, h: f32)
+fn delimiter_scalar(c: *Ctx) -> u32
+fn fence(c: *Ctx, body: Atom, left: u32, right: u32, style: u32) -> Atom
+fn lay_fraction(c: *Ctx, style: u32) -> Atom
+fn lay_radical(c: *Ctx, style: u32) -> Atom
+fn parse_row_until_bracket(c: *Ctx, style: u32) -> Atom
+type Cell = struct { atom: Atom, row: usize, col: usize }
+fn lay_environment(c: *Ctx, style: u32) -> Atom
+fn lay_text(c: *Ctx, style: u32) -> Atom
+fn space_atom(c: *Ctx, em18: f32, style: u32) -> Atom
+fn parse_nucleus(c: *Ctx, style: u32) -> Atom
+fn font_ready(c: *Ctx) -> bool
+fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err)
+```
+
+Math typesetting (L098, D2842): `typeset` parses a LaTeX-math subset and lays it out in
+one pass into `items`, a flat paint-ordered list of positioned glyphs and rules in
+caller storage, for scene and SVG adapters. The model is TeX's: atom classes with the
+TeXbook's inter-atom space table, display, text, script and scriptscript styles,
+fractions, radicals with an index, scripts by rule 18, big operators with display
+limits, `\left` `\right` delimiters grown to the content and the `matrix`, `pmatrix`,
+`bmatrix`, `Bmatrix`, `vmatrix` and `cases` environments. Coordinates have the origin
+on the baseline at the left edge, y downward: a glyph's `y` is its baseline, a rule's
+its top. Glyph extents are read from the font's `glyf` boxes; the TeX shift constants
+are fractions of the size, since a text font has no MATH table. Only `typeset`,
+`Options`, `Item`, `Equation`, `Kind` and the four errors are the interface; the rest
+of the fence is the module's internals. Checked against fontTools metrics and the
+TeXbook's formulas (`scripts/gen_math_test.py`).
+
 ### `e.text.sig`
 
 ```neper
@@ -8938,6 +9035,46 @@ Signals over caller arrays: `signal`, `get` (recording the dependency of the run
 computation), `set`, `memo` (skipping dependents when unchanged), `effect`, batches and
 `schedule_effects` running dirty nodes once each in height order with dynamic
 dependencies; `dispose`, `run_count`.
+
+### `e.ui.ink`
+
+```neper
+type Sample = struct { x: f32, y: f32, pressure: f32, time_ms: u32 }
+type Stroke = struct { first: usize, count: usize, width: f32, color: u32 }
+type Canvas = struct { strokes: []Stroke, samples: []Sample, stroke_count: usize, sample_count: usize, open: bool, min_distance: f32 }
+error TooSmall
+error Invalid
+fn canvas(strokes: []Stroke, samples: []Sample, min_distance: f32) -> Canvas
+fn clamp_pressure(p: f32) -> f32
+fn is_number(v: f32) -> bool
+fn begin(c: *Canvas, x: f32, y: f32, pressure: f32, time_ms: u32, width: f32, color: u32) -> err
+fn extend(c: *Canvas, x: f32, y: f32, pressure: f32, time_ms: u32) -> err
+fn end(c: *Canvas, x: f32, y: f32, pressure: f32, time_ms: u32) -> err
+fn cancel(c: *Canvas)
+fn clear(c: *Canvas)
+fn erase(c: *Canvas, index: usize) -> err
+fn samples_of(c: *const Canvas, index: usize) -> []const Sample
+fn width_at(c: *const Canvas, index: usize, k: usize) -> f32
+fn bounds(c: *const Canvas, index: usize) -> geometry.Rect
+fn extent(c: *const Canvas) -> geometry.Rect
+fn length(c: *const Canvas, index: usize) -> f32
+fn math_sqrt(v: f32) -> f32
+fn duration(c: *const Canvas) -> u32
+fn replay_counts(c: *const Canvas, elapsed_ms: u32, counts: []usize) -> err
+fn path_of(a: *mem.Arena, c: *const Canvas, index: usize, count: usize) -> (geometry.Path, err)
+fn segment_distance_squared(px: f32, py: f32, ax: f32, ay: f32, bx: f32, by: f32) -> f32
+fn hit(c: *const Canvas, p: geometry.Point, radius: f32) -> (usize, bool)
+```
+
+Ink strokes (L099, D2844): a `Canvas` over two caller slices holds strokes and their
+pressure-and-time samples; `begin`, `extend` and `end` capture from a pointer or pen
+stream (a sample nearer than `min_distance` is dropped, the end point is always
+stored), `cancel` and `erase` remove a stroke, `bounds`, `extent`, `length`, `hit` and
+`width_at` (a quarter width with no pressure) query it, `replay_counts` answers how
+many samples each stroke has drawn by an elapsed time on its own clock (zero at the
+first stroke's first sample), `duration` its length, and `path_of` a stroke's prefix as
+a polyline for `StrokePath`. Capacity is `TooSmall`; state errors and non-finite
+values are `Invalid`. Pressure is the caller's (the `e.ui.input` pointer has none).
 
 ### `e.ui.undo`
 
@@ -15983,8 +16120,15 @@ fn draw(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, curren
 
 `draw` fits the document's viewBox (meet, centred) into `dest` and pushes balanced
 `Save`/`Transform`/`FillPath`/`StrokePath`/`Restore` commands; `current` is `currentColor`.
-Colours are display values (a byte over 255), written as the renderer receives them. Gradients,
-clip paths, masks, text, `use` and CSS sheets are not drawn.
+Colours are display values (a byte over 255), written as the renderer receives them.
+Since L125 (D2843) `fill` and `stroke` take `url(#id)` to a `linearGradient` or
+`radialGradient` (bounding-box or user-space units, `gradientTransform`, stops by
+`offset`, `stop-color`, `stop-opacity`, stops inherited through `href`; spread is pad),
+`use` draws a referenced element or `symbol` translated by `x` and `y` (`defs`
+contents draw only that way; a cycle is `TooComplex`), `clip-path="url(#id)"` clips by
+the first shape of a `clipPath`, and lengths take `px pt pc mm cm in em` and `%` of the
+viewBox. Masks, patterns, markers, text, spread other than pad, dashes, even-odd fill
+and CSS sheets are not drawn.
 
 ### `e.gfx.curve`
 
@@ -24119,6 +24263,7 @@ count; the control variate's coefficient is estimated from the same sample, kept
 
 ```neper
 type Chain = struct { accepted: usize, proposed: usize }
+type Fit = struct { bound: f64, steps: usize }
 error TooSmall
 error Invalid
 
@@ -24132,6 +24277,10 @@ fn tree_row(record: []f64, row: usize, n: usize) -> []f64
 fn no_u_turn(record: []f64, n: usize) -> bool
 fn build_tree[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, x: []const f64, p: []const f64, log_slice: f64, direction: f64, depth: usize, step: f64, out: []f64, regions: []f64, gradient: []f64, momentum: []f64, n: usize) -> (usize, bool)
 fn nuts[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, x: []f64, step: f64, max_depth: usize, samples: []f64, count: usize, scratch: []f64) -> (Chain, err)
+fn gaussian_entropy_constant(n: usize) -> f64
+fn elbo[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, r: *rand.Pcg64, mean: []const f64, log_sd: []const f64, draws: usize, scratch: []f64) -> (f64, err)
+fn advi[Ctx: type](ctx: *Ctx, log_density: fn(*Ctx, []const f64) -> f64, g: fn(*Ctx, []const f64, []f64), r: *rand.Pcg64, mean: []f64, log_sd: []f64, steps: usize, draws: usize, rate: f64, scratch: []f64) -> (Fit, err)
+fn variational_samples(r: *rand.Pcg64, mean: []const f64, log_sd: []const f64, samples: []f64, count: usize) -> err
 ```
 
 Every sampler starts at the caller's `x`, writes `count` rows into `samples` and leaves
@@ -24139,6 +24288,18 @@ Every sampler starts at the caller's `x`, writes `count` rows into `samples` and
 through the caller's conditional draw, `hmc` with a fixed leapfrog trajectory, and
 `nuts` (algorithm 3, slice form, trees of at most `max_depth` doublings over
 `(5 * max_depth + 14) * n` scratch). A `Chain` counts accepted and proposed moves.
+
+Variational inference (L060, D2841) fits the mean-field Gaussian `q = N(mean,
+diag(exp(log_sd)^2))` to the same unnormalised log density and gradient callbacks:
+`advi` runs `steps` Adam ascents of rate `rate` on reparameterised ELBO gradients
+(`draws` a step, entropy gradient 1 per log-scale), averages the second half of the
+iterates into `mean` and `log_sd` and reports the ELBO from `100 * draws` fresh
+samples in `Fit.bound`; `elbo` is that Monte Carlo estimate on its own and
+`variational_samples` draws rows from the fit. `advi` needs `11 * n` scratch, `elbo`
+`n`. The bound is for the density as given, so `log Z - bound` is the KL divergence.
+A gradient from an `e.ml.nn` tape fits inside the callback; this module does not
+import it. Checked against Gauss-Hermite quadrature optima (`scripts/gen_vi_test.py`):
+correlated normal, banana and log-gamma targets.
 
 ### `e.math.opt.convex`
 

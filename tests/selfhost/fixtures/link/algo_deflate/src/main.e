@@ -3,8 +3,10 @@
 // steps; the text encoded at every level, the stored size checked, each decoded back;
 // a 70000-byte pattern encoded across three blocks in 1000-byte output chunks and
 // decoded through a 32 KiB window; refusals for block type 3, a truncated stream at
-// finish, a distance past the window limit, a bad stored length and a zero window.
-// Every check has its own exit code.
+// finish, a distance past the window limit, a bad stored length and a zero window;
+// then (L163) the size bound against zlib level 6 and a dynamic first block, stepped
+// output identical to whole output, the empty stream, a window that spans blocks and
+// the stored fallback for noise. Every check has its own exit code.
 use e.os
 use e.mem
 use e.algo.deflate as deflate
@@ -41,6 +43,30 @@ fn deflate_all(storage: []u8, source: []const u8, out: []u8, level: deflate.Leve
     ret (written, ok)
 }
 
+// Encodes `source` into `out` taking `in_step` input and `out_step` output bytes a call.
+fn deflate_steps(storage: []u8, source: []const u8, out: []u8, level: deflate.Level, in_step: usize, out_step: usize) -> (usize, err) {
+    let (e0, e_error) = deflate.encoder(storage, level)
+    if e_error != ok { ret (0usize, e_error) }
+    var e = e0
+    var in_at = 0usize
+    var out_at = 0usize
+    var rounds = 0usize
+    while true {
+        rounds += 1usize
+        if rounds > 1000000usize { ret (0usize, deflate.Invalid) }
+        var in_end = in_at + in_step
+        if in_end > source.len { in_end = source.len }
+        var out_end = out_at + out_step
+        if out_end > out.len { out_end = out.len }
+        let (consumed, written, status, step_error) = deflate.encode(&e, source[in_at..in_end], out[out_at..out_end], in_end == source.len)
+        if step_error != ok { ret (0usize, step_error) }
+        in_at += consumed
+        out_at += written
+        if status == .Finished { break }
+    }
+    ret (out_at, ok)
+}
+
 // Storage the module casts to its state struct: taken as u64s so it is 8-aligned.
 fn aligned(a: *mem.Arena, bytes: usize) -> ([]u8, err) {
     let words = bytes / 8usize + 1usize
@@ -54,7 +80,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let dyn = "}W[r\xe2@\x0c\xbc\x8a\xafF\xf0P\xb8B<)\xecl\x92\xdb\xafGjI-\x99\xca\x07\x06\xcf\xe8\xd1z\x8b\xf6\xaf=\x7f\xa7\xb7\xbe\xdf\xa7k\x9f\xdb\xf1\xf8\xf8\x5c\x1em\x9b\x96}k\x8f\xdb\xb4\xed\xfd\xd9\xe6\xa9\xafS\xfbY\xf6i\xfe]/\x1f\xcb5\xc8\xee_\xb7\xdb\xc7e\x9d.\xeb|\xe2\x9d\xdb\xedq\xd9\x9b\x7f\xe3x\xbf\xb7\x22\xdd\x08\x5c\x80\xa99\xd4\x0e\xea\x93V;\x88\x0b\x86>X\xfc\x05*\xd4\xc2{\xbb\xbeo\xaeN\xce\xc2@\x17\xa6T\xb8\xb8\xf7m\xdf\xf8\xda\xbe\x87\xc5\xe2\x93\xe3\x0e\xb4fw\x85{[~\x8e\xdb\xc1\xf0\xf6\xe8\xd7\xf7jv\x93\x18|/\xeb\xdc\xbf\x9d\x19\xaf\xa2\x01\x88\x86]\x0a\x87\x5cXP[<TQ\x92\x0c\x0a\x05\x03\xee\x03\xbbq\x18\x1a\xd5\xd0\x22/T\xd4)F%\x84\x80\xa1|x\x0e\xec\xaa\x0e2\xb2m\x90\x80\xaf\x83p\xffz6\x90\xe2\xd0\xb5Y\xe8\xb2\x04\x9cJ\xf8E\xdb\xda>\xdb3\xf9N\xcdQ\x14\xdd\xfc\xe2b%mU\x88\xd8\xaa\xa93\xe3\x91\xa0\xa8 S<\xaea\xba\x03\x1f\x02\xccM\xe5\xceC-\xe1\x1c\xccC\x93p$\xf1\x0eb|\xd4\x98\xec:7G\xc4\x02:\x08_\xe8\xa7\x10\xe4\x08\x09\xb1\x85^\x09\xdc)\xb0\x11\x22\xc2\x1d\xf1 Gr\xe1\x0do\xc2\x9c\xf1\x13r\xbc\x82TsQv\x9c+|\xc3W\xaa\x92,P:R`\xa2f\xb8\xd2\xdcB<\xf2S\xb1\x1e\xc2\x1c7\xa0\xe9\x0bLQ_B\xbc\xc8c\xcc\x94\x9bj\x909OQ\x0d8v\xa2:\xc9\x0c%\xb1\xeb\xac\xc8D'f\xd4\xe0\xf89\x12\x01b\xac#\x19\xa5@\x1b\xf7\xd1_<\x7f\xc7\x0f\xc6\x84~\x105\xa2\xcfl\x98\xbd\x85o\x85\x81\xcbI\x1e\xd4\xc8\xd1\xa1\x95_Z\xa2\xa0\x8a^\xa7r8\x80\x04%\xba\x90\x80\x0e.u@n\x90\xde\x12\x0eJ.\xc3T@TF\x5c\x15\xb9mX\xb280\x82\xc4q\xe3\xd9\xc1^\xa3\xae\x99\x8an\xe0\x1f\x9f\xec[\xea1\xc6\xc5C-gX\x19\x0d\x18\xcc\xa8\x15\x8e\x867\x84\xda\xbe\x19\x18\x1b`\x179oS\x8d\xa6(\x09Ox\x93\xa3\x19\x13/\xa0\x89\x15U\x87\xe9\xb7\xfa\xab\x5c\x96\xa5\xde\xcf\xa8+\x98\x8c\xdc\x8dR\x0f\xb0\xc4\xa4\xbe\x92[\x1ao'\xa6\xc3,~\x05\x91\xe3C\x9282\xd4\xd8R\xec-\x87\x13&*\x94\xb2\x04QRt\x04+\xd2/M\x14\x08D\xb1\xd1\x5c\x8aU W\x8b\xf7\x19\x99\x8a\x82\x83\x13T\xcb\x98\xe1QW\xd0s\x98\x0a\xcd\xf8R\x02\x12Z\xa6G\xce\xf0\xa8l\x00/\xed\xee\x14\xf1<\xd8\x92k\x83v\xceK\x9b\xe7\xbe\x8d\x0eZz\x8a\xbe\xa2\xa7D\xc3\xa8Rv\xd9a\xbc\xb6\x997/\xbb\xefkvQ\xf2a\xb5\x01\xfd&\x955g\xddH\xfc<\xe23p\xca\x9b\xe2q\xba))\x9e\x05R\xb4O:\xb8\xc9\x95\x029\x0f\x93\x01\x17\x9az\xf4\x9f\xb4\xe1J\xc4\xca\xdc\xb31E\x83\xc2\xff}`=\x02\x1a\xea\xbb\xc5\xe5yW\xad+\xe9+\xad\x11=\xdf\x19\xf3\xb6\xc3\xe3\xa3\xb4\x8a\xec,\xaa\x1f[\xb2|\x10\xd7u\xd5\xebM\xe5r~\xf0\xe8\xca\xd3\x97\x03\xca\x8d\xe8\xaf\xe4\x0c\x17\x9e\xfe|\xc8)\x8a7%\xce\x8b?\x11ix\xd0v\x85\x9dQ\xb7%\xfa'\xf5W6\xbf\x1cHu@\x98\xe2\xbc\x02\x122\xeb:*\xfc?"
     let (dec_storage, s1) = aligned(a, 40000usize)
     if s1 != ok { os.exit(1) }
-    let (enc_storage, s2) = aligned(a, 150000usize)
+    let (enc_storage, s2) = aligned(a, 330000usize)
     if s2 != ok { os.exit(2) }
     let (out, s3) = mem.alloc[u8](a, 80000usize)
     if s3 != ok { os.exit(3) }
@@ -147,5 +173,51 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e15 != deflate.Invalid { os.exit(29) }
     let (small, e16) = deflate.decoder(dec_storage[..100], 32768usize)
     if e16 != deflate.TooLarge { os.exit(30) }
+    // L163. The text at Balanced is no larger than zlib level 6's 832 bytes and is
+    // one dynamic-Huffman block (BTYPE bits 10).
+    let (l6_len, e17) = deflate_all(enc_storage, text, packed, .Balanced)
+    if e17 != ok || l6_len > 832usize { os.exit(31) }
+    if ((packed[0] >> 1u32) & 3u8) != 2u8 { os.exit(32) }
+    // Pulled in 7-byte input and 5-byte output steps, the bytes are the same.
+    let (steps_len, e18) = deflate_steps(enc_storage, text, out, .Balanced, 7usize, 5usize)
+    if e18 != ok || steps_len != l6_len { os.exit(33) }
+    if !same(out[..steps_len], packed[..l6_len]) { os.exit(34) }
+    // Empty input is the two-byte final fixed block.
+    let (empty_len, e19) = deflate_all(enc_storage, text[..0], packed, .Balanced)
+    if e19 != ok || empty_len != 2usize || packed[0] != 3u8 || packed[1] != 0u8 { os.exit(35) }
+    // Twenty thousand incompressible bytes repeated five times: the window spans the
+    // 32 KiB block boundaries, so the repeats are matches (a restart would write ~100000).
+    let (period, p_error) = mem.alloc[u8](a, 100000usize)
+    if p_error != ok { os.exit(36) }
+    var seed = 12345u32
+    i = 0usize
+    while i < 20000usize {
+        seed = seed *% 1103515245u32 + 12345u32
+        period[i] = u8((seed >> 16u32) & 255u32)
+        i += 1usize
+    }
+    while i < 100000usize {
+        period[i] = period[i - 20000usize]
+        i += 1usize
+    }
+    let (rep_len, e20) = deflate_all(enc_storage, period, packed, .Balanced)
+    if e20 != ok || rep_len > 21500usize { os.exit(37) }
+    let (back, back_error) = mem.alloc[u8](a, 100000usize)
+    if back_error != ok { os.exit(42) }
+    let (n10, e21) = inflate(dec_storage, packed[..rep_len], back, 32768usize)
+    if e21 != ok || !same(back[..n10], period) { os.exit(38) }
+    // Incompressible bytes fall back to stored blocks: five bytes of header a block.
+    let (noise, n_error) = mem.alloc[u8](a, 70000usize)
+    if n_error != ok { os.exit(39) }
+    i = 0usize
+    while i < noise.len {
+        seed = seed *% 1103515245u32 + 12345u32
+        noise[i] = u8((seed >> 16u32) & 255u32)
+        i += 1usize
+    }
+    let (noise_len, e22) = deflate_all(enc_storage, noise, packed, .Best)
+    if e22 != ok || noise_len > noise.len + 40usize { os.exit(40) }
+    let (n11, e23) = inflate(dec_storage, packed[..noise_len], out, 32768usize)
+    if e23 != ok || !same(out[..n11], noise) { os.exit(41) }
     ret ok
 }

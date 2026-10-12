@@ -467,6 +467,7 @@
     "e.ui.report",
     "e.ui.state",
     "e.ui.undo",
+    "e.ui.ink",
     "e.fmt.lzma",
     "e.fmt.parquet",
     "e.net.cidr",
@@ -525,6 +526,7 @@
     "e.asset",
     "e.text.shape",
     "e.text.layout",
+    "e.text.math",
     "e.ui.style",
     "e.ui.layout",
     "e.gfx.scene",
@@ -7441,6 +7443,31 @@
     "e.store",
     "e.str",
     "e.time"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.text.math",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.text.shape",
+    "e.text.unicode"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.ui.ink",
+   "layer": 2,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.gfx.geometry"
    ],
    "blocked_by": []
   }

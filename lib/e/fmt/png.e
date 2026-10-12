@@ -38,16 +38,37 @@ fn be32(d: []const u8, at: usize) -> u32 {
     ret (u32(d[at]) << 24u32) | (u32(d[at + 1usize]) << 16u32) | (u32(d[at + 2usize]) << 8u32) | u32(d[at + 3usize])
 }
 
+// CRC-32 with a 256-entry table, built per call once the data is long enough to
+// repay it (a chunk header is a few bytes; an IDAT body is thousands).
 fn crc32_update(crc: u32, d: []const u8) -> u32 {
     var c = crc
     var i = 0usize
-    while i < d.len {
-        c = c ^ u32(d[i])
+    if d.len < 256usize {
+        while i < d.len {
+            c = c ^ u32(d[i])
+            var k = 0usize
+            while k < 8usize {
+                if (c & 1u32) != 0u32 { c = (c >> 1u32) ^ 3988292384u32 } else { c = c >> 1u32 }
+                k += 1usize
+            }
+            i += 1usize
+        }
+        ret c
+    }
+    var table: [256]u32 = zero
+    var n = 0usize
+    while n < 256usize {
+        var v = u32(n)
         var k = 0usize
         while k < 8usize {
-            if (c & 1u32) != 0u32 { c = (c >> 1u32) ^ 3988292384u32 } else { c = c >> 1u32 }
+            if (v & 1u32) != 0u32 { v = (v >> 1u32) ^ 3988292384u32 } else { v = v >> 1u32 }
             k += 1usize
         }
+        table[n] = v
+        n += 1usize
+    }
+    while i < d.len {
+        c = table[usize((c ^ u32(d[i])) & 255u32)] ^ (c >> 8u32)
         i += 1usize
     }
     ret c
@@ -62,9 +83,16 @@ fn adler32_update(state: u32, d: []const u8) -> u32 {
     var b = state >> 16u32
     var i = 0usize
     while i < d.len {
-        a = (a + u32(d[i])) % 65521u32
-        b = (b + a) % 65521u32
-        i += 1usize
+        // Reduce once per 5552 bytes, the most a u32 sum holds before it can wrap.
+        var stop = i + 5552usize
+        if stop > d.len { stop = d.len }
+        while i < stop {
+            a += u32(d[i])
+            b += a
+            i += 1usize
+        }
+        a = a % 65521u32
+        b = b % 65521u32
     }
     ret (b << 16u32) | a
 }
@@ -527,6 +555,12 @@ fn encode_row(s: *Sink, e: *deflate.Encoder, value: image.ConstImage, p: Pass, y
         var take = pw - x
         if take * channels > line.len { take = line.len / channels }
         var i = 0usize
+        if p.dx == 1usize && channels == bpp && value.format != .Bgra8 {
+            // Same layout in and out: the run of pixels is one copy.
+            let from = row + (p.x0 + x) * bpp
+            mem.copy[u8](line[0..take * bpp], value.pixels[from..from + take * bpp])
+            i = take
+        }
         while i < take {
             let at = row + (p.x0 + (x + i) * p.dx) * bpp
             let to = i * channels
@@ -566,7 +600,7 @@ fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -
     ihdr[9] = color
     if options.interlace { ihdr[12] = 1u8 }
     try write_chunk(writer, "IHDR", ihdr[0..])
-    var arena_bytes: [163840]u8 = zero
+    var arena_bytes: [327680]u8 = undef
     var arena = mem.arena_from(arena_bytes[0..])
     let storage_size = deflate.encoder_storage(options.compression)
     let (words, words_error) = mem.alloc[u64](&arena, storage_size / 8usize + 1usize)

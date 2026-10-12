@@ -2257,4 +2257,10 @@ D2763	3037	L147: e.db.docstore, an embedded document store and append-only event
 D2764	2574	L141: e.dist.actor, virtual actors with lifecycle, timers, durable reminders and persisted state over rendezvous placement and e.db.docstore
 D2765	2871	L149: e.debug.report, a Sentry-envelope crash and error report client with an offline queue, checked byte for byte against sentry-sdk
 D2440	907	C177: a comptime Field argument is keyed by its owner
-D2441	753	e.fmt.pdf reads ASCII85-filtered streams
+D2441	754	e.fmt.pdf reads ASCII85-filtered streams
+D2840	4104	L163: e.algo.deflate writes dynamic-Huffman blocks with lazy matching over a window that spans blocks; e.fmt.png uses a table CRC
+D2841	2511	L060: mean-field ADVI, ELBO and variational draws in e.math.mcmc, checked against quadrature optima
+D2842	3494	L098: e.text.math, TeX-style math typesetting into caller-owned glyph and rule lists
+D2843	3402	L125: e.gfx.svg draws gradients, use, clip paths and units, checked against cairosvg
+D2844	2995	L099: e.ui.ink, stroke capture, pressure polylines and timed replay in caller storage
+D2845	1376	L162: chart benchmarks against R graphics not run; no R and no faithful substitute on this host

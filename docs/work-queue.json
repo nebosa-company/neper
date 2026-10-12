@@ -356,17 +356,6 @@
       "evidence": "e.crypto.x509 parses and verifies only (parse/parse_pem/pool/verify_signature in lib/e/crypto/x509.e) -- the auto-CA plus forged-leaf half of the intercept-proxy story has no issuance path. Add CA generation plus leaf issuance/signing over e.crypto.sign (no new crypto primitives) with fixtures: issued chain verifies under a pinned CA, expiry/SAN/DNS-name goldens, fail-closed on wrong issuer. Plan: docs/ethical-hacking.md S5."
     },
     {
-      "id": "L060",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 158,
-      "title": "Variational inference in e.math.mcmc",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "lib/e/math/mcmc.e covers Metropolis-Hastings, Gibbs, HMC and NUTS with e.algo.rand.dist families and an autodiff tape in lib/e/ml/nn.e -- the R/Python Bayesian gap is variational inference: an ELBO helper with SVI/BBVI or an ADVI-lite over the existing autodiff. Keep caller-storage conventions; fixtures against analytic Gaussian targets and Stan/ADVI references. Plan: docs/stats-coverage.md rows L060 (D1785)."
-    },
-    {
       "id": "L065",
       "category": "library",
       "group": "UI",
@@ -438,21 +427,10 @@
       "group": "Algorithms",
       "order": 196,
       "title": "Equation (math typesetting) rendering in e.text",
-      "score": 0,
+      "score": 0.7,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1824). Office-equation parity missing: math-zone layout (fractions, scripts, roots, matrices, operators) over e.text.layout shaping into caller-owned glyph runs for scene/SVG adapters. Display layout first; interactive equation editing stays app-side. Fixtures for nesting, baseline alignment and refusal paths. Follow-on (D1891): LaTeX-math and MathML input formats ride the same layout."
-    },
-    {
-      "id": "L099",
-      "category": "library",
-      "group": "UI",
-      "order": 197,
-      "title": "Ink canvas: stroke capture and replay in e.ui.widget",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1824). Signature/draw parity missing: ink stroke capture, pressure-aware polyline storage and timed replay over the existing pointer/pen gesture stream; pen input exists but ink storage does not. Minor. Fixtures for stroke bounds, replay timing and capacity refusal."
+      "evidence": "Planning only (D1824). Office-equation parity missing: math-zone layout (fractions, scripts, roots, matrices, operators) over e.text.layout shaping into caller-owned glyph runs for scene/SVG adapters. Display layout first; interactive equation editing stays app-side. Fixtures for nesting, baseline alignment and refusal paths. Follow-on (D1891): LaTeX-math and MathML input formats ride the same layout. PART (D2842): e.text.math typesets a LaTeX-math subset (atom spacing, four styles, fractions, radicals with index, scripts, display limits, \\left\right growth, matrices and cases) to a paint-ordered list of glyph and rule items, agreeing with fontTools metrics and TeXbook formulas to 0.01 (about 50 checks). NOT DONE: drawing and any pixel check, MathML, italic math letters, MATH-table constants, extensible-glyph assembly, cramped styles, align."
     },
     {
       "id": "L125",
@@ -460,10 +438,10 @@
       "group": "Formats",
       "order": 223,
       "title": "SVG document rendering in e.gfx",
-      "score": 0,
+      "score": 0.5,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1881). resvg parity gap (verified: SVG output exists, render does not): SVG path/shape/text document rendering into the scene backend over e.gfx.geometry and text layout. Fixtures against reference rasters with tolerance bounds; filters and scripting stay out."
+      "evidence": "Planning only (D1881). resvg parity gap (verified: SVG output exists, render does not): SVG path/shape/text document rendering into the scene backend over e.gfx.geometry and text layout. Fixtures against reference rasters with tolerance bounds; filters and scripting stay out. PART (D2843): linear/radial gradients (user-space and box units, gradientTransform, stop-opacity, href stops) on fill and stroke, defs/use/symbol, clip-path over the first shape, units (px pt pc mm cm in em, %), checked against cairosvg (10 documents, mean difference 3/255). NOT DONE: text, <style> sheets, pattern/mask/marker, dashes and even-odd fills (need a scene change: FillPath/StrokePath carry neither), spread other than pad, radial focal point, preserveAspectRatio other than meet."
     },
     {
       "id": "L135",
@@ -617,7 +595,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "medium",
-      "evidence": "Backlog from L061 (D2109). benchmarks/charts measures Neper against matplotlib only; ggplot2, base R graphics and lattice need an R installation, which the benchmark host does not have and which needs the user's approval to download. Add an R script beside mpl_bench.py with the same LCG data, 360x240 output, SVG text kept as text and PNG at a comparable compression level, run nine-run medians through run.py, and add the rows to benchmarks/charts/README.md and the charts field-guide post."
+      "evidence": "Backlog from L061 (D2109). benchmarks/charts measures Neper against matplotlib only; ggplot2, base R graphics and lattice need an R installation, which the benchmark host does not have and which needs the user's approval to download. Add an R script beside mpl_bench.py with the same LCG data, 360x240 output, SVG text kept as text and PNG at a comparable compression level, run nine-run medians through run.py, and add the rows to benchmarks/charts/README.md and the charts field-guide post. ATTEMPT (D2845): no Rscript/R on this host; nothing installed (the item requires the user's approval to download R). Left at 0."
     },
     {
       "id": "L163",
@@ -625,10 +603,10 @@
       "group": "Algorithms",
       "order": 261,
       "title": "Fast, small PNG encoding: dynamic Huffman, lazy matching and table CRC",
-      "score": 0,
+      "score": 0.75,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Backlog from the chart benchmark (D2108, D2110). On the same 360x240 chart raster, e.fmt.png at .Balanced takes about 18 ms and writes 14,004 B, while zlib level 6 with the same filter-0 rows takes 1.74 ms for 11,283 B; rasterizing takes 2.0 ms, so the encoder is the whole PNG gap to matplotlib. e.algo.deflate writes fixed-Huffman blocks only (zlib restricted to fixed Huffman gives 12,903 B, so dynamic trees are worth about 1.6 KB here), has no lazy matching and restarts its 16-deep hash chain at every 32 KiB block (about 1.1 KB more), and e.fmt.png computes CRC-32 bit by bit. Done when: e.algo.deflate writes dynamic-Huffman blocks with lazy matching and a window that spans blocks, round-tripping through its own decoder and Python's zlib on a corpus; e.fmt.png uses a table-driven CRC; the chart benchmark's PNG pass is at least as fast as matplotlib's with files no larger than zlib level 6 on the same rows; both suites pass. Adaptive per-row filters are optional: Pillow's heuristic made this chart larger."
+      "evidence": "Backlog from the chart benchmark (D2108, D2110). On the same 360x240 chart raster, e.fmt.png at .Balanced takes about 18 ms and writes 14,004 B, while zlib level 6 with the same filter-0 rows takes 1.74 ms for 11,283 B; rasterizing takes 2.0 ms, so the encoder is the whole PNG gap to matplotlib. e.algo.deflate writes fixed-Huffman blocks only (zlib restricted to fixed Huffman gives 12,903 B, so dynamic trees are worth about 1.6 KB here), has no lazy matching and restarts its 16-deep hash chain at every 32 KiB block (about 1.1 KB more), and e.fmt.png computes CRC-32 bit by bit. Done when: e.algo.deflate writes dynamic-Huffman blocks with lazy matching and a window that spans blocks, round-tripping through its own decoder and Python's zlib on a corpus; e.fmt.png uses a table-driven CRC; the chart benchmark's PNG pass is at least as fast as matplotlib's with files no larger than zlib level 6 on the same rows; both suites pass. Adaptive per-row filters are optional: Pillow's heuristic made this chart larger. PART (D2840): e.algo.deflate is zlib's lazy matcher (levels 6 and 9, 64 KiB window across blocks, stored/fixed/dynamic Huffman per 16383-token block); round-trips against Python zlib on 15 inputs x 3 levels, byte-identical to zlib 6 on four inputs, benchmark chart IDAT 11,277 B vs 11,283; e.fmt.png table CRC and deferred Adler. NOT MET: encoder alone about 5x C zlib (9.6 ms vs 1.7 ms on the 345,840-byte raster); the 'at least as fast as matplotlib' criterion is met only by a same-day comparison, not the nine-run protocol; adaptive PNG row filters not built."
     },
     {
       "id": "C153",
