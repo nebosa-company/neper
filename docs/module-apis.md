@@ -6664,6 +6664,395 @@ fn merge_entities(a: *mem.Arena, from_source: []const json.Value, from_catalog: 
 What a synced table reads from its source before a scheduled pull (L037), after appdor's `src/sync/change-stream.js` and `src/sync/entity-browse.js`: the change-stream token shape check (`looks_like_stream_token`), the public URL (`stream_url`), one change out of a delivery body (`change_from_delivery`: one record, `upsert` by default), the single row change it implies through the accepted column mapping (`plan_stream_change`: insert, update, delete or noop, refusing without a mapping, a sync key or a mapped column) and its ledger counts (`stream_plan_counts`); and the entities a channel names (`static_entities`, `can_browse`), an index response read into entities (`entities_from_body`, array or keyed object, dotted `resultPath` and `namePath`, `/rpc/` and the root dropped, capped at 500) and the merged picker list (`merge_entities`, the source winning a collision). Names are sorted as `localeCompare` does for ASCII names (punctuation, digits, letters ignoring case, lower case first on a tie). The SSRF-checked request builder (`browseRequest`) belongs to the connectors and is not here. Checked against appdor's own modules over 700 single operations on Windows (D2921).
 
 
+### `e.algo.writeback`
+
+```neper
+fn rejected_key() -> str
+fn default_max_attempts() -> i64
+fn js_string(a: *mem.Arena, v: json.Value, present: bool) -> str
+fn hash_of(a: *mem.Arena, v: json.Value) -> str
+fn strings_of(a: *mem.Arena, v: json.Value) -> []const str
+fn array_of(a: *mem.Arena, l: list.List[json.Value]) -> json.Value
+fn empty_obj() -> json.Value
+fn str_member(v: json.Value, key: str) -> str
+fn member_is(v: json.Value, key: str, want: str) -> bool
+fn pushes(v: json.Value) -> bool
+fn strict_true(v: json.Value, key: str) -> bool
+fn copy_of(a: *mem.Arena, v: json.Value) -> ir.Obj
+fn create_entry(a: *mem.Arena, opts: json.Value, id: str, now_iso: str) -> json.Value
+fn record_delivery(a: *mem.Arena, entry: json.Value, result: json.Value, now_iso: str) -> json.Value
+fn plan_reversion(a: *mem.Arena, entry: json.Value) -> json.Value
+fn mark_reverted(a: *mem.Arena, entry: json.Value, reverted_fields: json.Value, now_iso: str) -> json.Value
+fn status_counter(status: str) -> str
+fn summarize_outbox(a: *mem.Arena, entries: []const json.Value) -> json.Value
+fn str_less(x: str, y: str) -> bool
+fn two_way_fields(a: *mem.Arena, mapping: json.Value) -> json.Value
+fn writeback_mapping(a: *mem.Arena, mapping: json.Value) -> json.Value
+fn entry_from_row(a: *mem.Arena, row: json.Value, id: str, now_iso: str) -> json.Value
+fn put_present(o: *ir.Obj, from: json.Value, key: str, as_key: str)
+fn entry_patch(a: *mem.Arena, entry: json.Value) -> json.Value
+fn settle_delivery(a: *mem.Arena, entry: json.Value, result: json.Value, now_iso: str) -> json.Value
+fn last_error(entry: json.Value) -> json.Value
+fn revert_patch(a: *mem.Arena, entry: json.Value, reversion: json.Value, now_iso: str) -> json.Value
+fn finish_reversion(a: *mem.Arena, entry: json.Value, patch: json.Value, now_iso: str) -> json.Value
+fn echo_hash(a: *mem.Arena, key_text: str, record: json.Value, fields: []const str) -> str
+fn has_text(l: list.List[json.Value], s: str) -> bool
+fn echo_set(a: *mem.Arena, delivered: []const json.Value, fields: []const str) -> json.Value
+fn suppress_echoes(a: *mem.Arena, plan: json.Value, echo: []const json.Value, sync_key: str, fields: []const str) -> json.Value
+fn has_text_in(values: []const json.Value, s: str) -> bool
+fn outbox_line(a: *mem.Arena, entries: []const json.Value, translate: *const syncjob.Translate) -> json.Value
+fn map_remote_to_local(a: *mem.Arena, remote: json.Value, mapping: []const json.Value) -> json.Value
+fn map_local_to_remote(a: *mem.Arena, local: json.Value, mapping: []const json.Value) -> json.Value
+type Keyed = struct { id: str, key: json.Value, has_key: bool, row: json.Value }
+fn index_rows(a: *mem.Arena, rows: []const json.Value, key: str) -> list.List[Keyed]
+fn js_identity(a: *mem.Arena, v: json.Value, present: bool) -> str
+fn find_row(l: list.List[Keyed], id: str) -> (json.Value, bool)
+fn has_id(l: list.List[Keyed], id: str) -> bool
+fn fields_changed(a: *mem.Arena, x: json.Value, base: json.Value, fields: []const str) -> bool
+type Plan = struct { pulls: list.List[json.Value], pushes: list.List[json.Value], conflicts: list.List[json.Value], echoes: list.List[json.Value], create_local: list.List[json.Value], create_remote: list.List[json.Value], delete_local: list.List[json.Value], delete_remote: list.List[json.Value], noops: i64 }
+fn move_entry(a: *mem.Arena, k: Keyed, record: json.Value, via_conflict: bool) -> json.Value
+fn add_conflict(a: *mem.Arena, p: *Plan, k: Keyed, local: json.Value, remote: json.Value, base: json.Value, policy: str)
+fn plan_two_way_sync(a: *mem.Arena, local_rows: []const json.Value, remote_rows: []const json.Value, base_rows: []const json.Value, key: str, fields: []const str, policy: str, echo: []const json.Value) -> json.Value
+fn lower_ascii(a: *mem.Arena, s: str) -> str
+fn upper_ascii(a: *mem.Arena, s: str) -> str
+fn hex_digit(n: u8) -> u8
+fn is_alnum(c: u8) -> bool
+fn encode_uri_component(a: *mem.Arena, s: str) -> str
+fn form_encode(a: *mem.Arena, s: str) -> str
+fn is_digits(s: str) -> bool
+fn small_number(s: str) -> i64
+fn private_v4(host: str) -> bool
+fn is_safe_url(a: *mem.Arena, url: str) -> (bool, str)
+fn auth_headers(a: *mem.Arena, o: *ir.Obj, auth: json.Value)
+type Param = struct { name: str, value: str }
+fn build_request(a: *mem.Arena, connection: json.Value, request: json.Value) -> json.Value
+fn build_push_request(a: *mem.Arena, connection: json.Value, entity: str, entry: json.Value, mapping: json.Value) -> json.Value
+```
+
+The push half of two-way sync (L037), after appdor's `src/sync/writeback.js` with `src/connectors/writeback-outbox.js`, `sync-engine.js` and `index.js`: the outbox entry and its lifecycle (`create_entry`, `record_delivery`, `plan_reversion`, `mark_reverted`, `summarize_outbox`), the host's judgements (`two_way_fields`, `writeback_mapping`, `entry_from_row`, `entry_patch`, `settle_delivery`, `revert_patch`, `finish_reversion`, `echo_set`, `suppress_echoes`, `outbox_line`), the engine (`map_remote_to_local`, `map_local_to_remote`, `plan_two_way_sync`) and the SSRF-checked `build_request` and `build_push_request`. The clock and the entry id are arguments; words come back through the host's translator.
+
+
+### `e.algo.sqlsource`
+
+```neper
+fn max_sql_rows() -> i64
+fn max_entities() -> i64
+fn statement_timeout_ms() -> i64
+fn connect_timeout_ms() -> i64
+fn row_cap_sentinel() -> str
+fn is_space(c: u8) -> bool
+fn is_digit(c: u8) -> bool
+fn is_letter(c: u8) -> bool
+fn is_word(c: u8) -> bool
+fn lower(a: *mem.Arena, s: str) -> str
+fn fail(a: *mem.Arena, reason: str) -> json.Value
+fn text_member(v: json.Value, key: str) -> str
+fn string_or_empty(a: *mem.Arena, v: json.Value) -> str
+fn all_digits(s: str) -> bool
+fn digits_value(s: str) -> i64
+fn valid_port(has_port: bool, port: i64) -> bool
+fn sql_dialect(a: *mem.Arena, base_url: str) -> (str, bool)
+fn is_sql_channel(a: *mem.Arena, channel: json.Value) -> bool
+fn normalize_host(a: *mem.Arena, host: str) -> str
+fn valid_host(host: str) -> bool
+fn count_colons(s: str) -> usize
+fn split_host_port(a: *mem.Arena, value: str) -> (str, i64, bool, bool)
+fn refused_entry(a: *mem.Arena, value: str, message: str) -> json.Value
+fn is_wildcard(lowered: str) -> bool
+fn parse_sql_source_hosts(a: *mem.Arena, raw: str) -> json.Value
+fn check_sql_host(a: *mem.Arena, host: str, port: json.Value, entries: []const json.Value) -> json.Value
+fn is_hex_digit(c: u8) -> bool
+fn hex_value(c: u8) -> i64
+fn unmap_ipv4(a: *mem.Arena, address: str) -> (str, bool)
+fn js_int(a: *mem.Arena, n: i64) -> str
+fn check_sql_address(a: *mem.Arena, address: str, entries: []const json.Value) -> json.Value
+fn query_param(a: *mem.Arena, query: str, name: str) -> (str, bool)
+fn form_decode(a: *mem.Arena, s: str) -> str
+fn uri_decode(a: *mem.Arena, s: str) -> (str, bool)
+fn forbidden_opaque(c: u8) -> bool
+fn ssl_mode_value(a: *mem.Arena, mode: str) -> (json.Value, bool)
+fn sql_source_from(a: *mem.Arena, base_url: json.Value, has_base: bool, auth: json.Value) -> json.Value
+fn is_valid_sql_identifier(name: str) -> bool
+fn quote_sql_identifier(a: *mem.Arena, name: str) -> (str, bool)
+fn trim_slashes(s: str) -> str
+fn parse_sql_entity(a: *mem.Arena, entity: str) -> json.Value
+fn sql_entity_name(a: *mem.Arena, schema: str, table: str) -> str
+fn clamp_limit(a: *mem.Arena, v: json.Value, fallback: i64, high: i64) -> json.Value
+fn statement(a: *mem.Arena, text: str, values: []const json.Value) -> json.Value
+fn values_of(a: *mem.Arena, first: json.Value, second: json.Value, third: json.Value, count: usize) -> []const json.Value
+fn browse_tables_statement(a: *mem.Arena, limit: json.Value) -> json.Value
+fn columns_statement(a: *mem.Arena, schema: json.Value, table: json.Value) -> json.Value
+fn select_rows_statement(a: *mem.Arena, schema: str, table: str, limit: json.Value) -> (json.Value, bool)
+fn read_only_session_statements(a: *mem.Arena, timeout_ms: json.Value) -> json.Value
+fn clamp_ms(v: json.Value) -> i64
+fn redact_urls(a: *mem.Arena, s: str) -> str
+fn lower_eq_at(a: *mem.Arena, s: str, at: usize, word: str) -> bool
+fn redact_keywords(a: *mem.Arena, s: str) -> str
+fn replace_all(a: *mem.Arena, s: str, needle: str, with: str) -> str
+fn redact_sql_text(a: *mem.Arena, text: str, secrets: []const json.Value) -> str
+fn reason_for_code(code: str) -> (str, bool)
+fn contains_fold(a: *mem.Arena, s: str, needle: str) -> bool
+fn reason_from_message(a: *mem.Arena, detail: str) -> str
+fn sql_diagnostic(a: *mem.Arena, error_value: json.Value, secrets: []const json.Value) -> json.Value
+fn normalize_sql_value(a: *mem.Arena, value: json.Value) -> json.Value
+fn hex_char(n: u8) -> u8
+fn sql_bytes_value(a: *mem.Arena, data: []const u8) -> str
+fn normalize_sql_row(a: *mem.Arena, row: json.Value) -> json.Value
+fn either(row: json.Value, first: str, second: str) -> json.Value
+fn sql_entities(a: *mem.Arena, rows: []const json.Value) -> json.Value
+fn sql_columns(a: *mem.Arena, rows: []const json.Value) -> json.Value
+```
+
+A SQL database as a sync source (L037), after appdor's `src/sync/sql-source.js`: `sql_dialect` and `is_sql_channel`, the operator's host list (`parse_sql_source_hosts`, `check_sql_host`, `check_sql_address`), the connection a URL and a credential make (`sql_source_from`), identifiers and entities (`is_valid_sql_identifier`, `quote_sql_identifier`, `parse_sql_entity`), the statements a pull sends (`browse_tables_statement`, `columns_statement`, `select_rows_statement`, `read_only_session_statements`), redaction and driver diagnostics (`redact_sql_text`, `sql_diagnostic`) and the rows an information schema answers (`normalize_sql_row`, `sql_entities`, `sql_columns`).
+
+
+### `e.algo.syncpull`
+
+```neper
+fn max_pull_pages() -> i64
+fn max_pull_records() -> i64
+fn min_interval_minutes() -> i64
+fn preview_row_limit() -> i64
+type FetchPage = struct { ctx: *void, run: fn(*void, json.Value) -> json.Value }
+fn type_map_text() -> str
+fn type_maps(a: *mem.Arena) -> json.Value
+fn has_member(v: json.Value, key: str) -> bool
+fn includes_text(values: json.Value, s: str) -> bool
+fn map_external_type(a: *mem.Arena, connector: str, native: json.Value, has_native: bool, translate: *const syncjob.Translate) -> json.Value
+fn map_lc8_to_native(a: *mem.Arena, connector: str, lc8: str) -> json.Value
+fn list_native_types(a: *mem.Arena, connector: str) -> json.Value
+fn propose_schema(a: *mem.Arena, connector: str, columns: []const json.Value, translate: *const syncjob.Translate) -> json.Value
+fn propose_mapping(a: *mem.Arena, connector: str, columns: json.Value, translate: *const syncjob.Translate) -> (json.Value, bool)
+fn synced_column_config(a: *mem.Arena, column: json.Value, source_label: json.Value, has_label: bool) -> json.Value
+fn synced_column_badge(a: *mem.Arena, config: json.Value, translate: *const syncjob.Translate) -> json.Value
+fn is_word_char(c: u8) -> bool
+fn resolve_base_url(a: *mem.Arena, channel_base_url: json.Value, config: json.Value) -> json.Value
+fn build_pull_request(a: *mem.Arena, connection: json.Value, entity: str, query: json.Value) -> json.Value
+fn pluck_path(a: *mem.Arena, body: json.Value, path: str) -> json.Value
+fn all_digits(s: str) -> bool
+fn digits_at(s: str) -> i64
+fn is_space(c: u8) -> bool
+fn next_link(link: str) -> (str, bool)
+fn cursor_value(a: *mem.Arena, style: str, value: json.Value) -> json.Value
+fn pull_cursor(a: *mem.Arena, body: json.Value, pagination: json.Value, headers: json.Value) -> json.Value
+type Url = struct { valid: bool, origin: str, path: str, query: str }
+fn bad_url() -> Url
+fn hex_upper(n: u8) -> u8
+fn path_encode_byte(c: u8) -> bool
+fn dot_segment(seg: str) -> i32
+fn parse_url(a: *mem.Arena, text: str) -> Url
+fn hex_val(c: u8) -> i64
+fn form_decode(a: *mem.Arena, s: str) -> str
+fn query_object(a: *mem.Arena, query: str) -> json.Value
+fn relative_to(a: *mem.Arena, base_url: str, absolute: str) -> json.Value
+fn js_number(v: json.Value) -> f64
+fn step_value(a: *mem.Arena, query: json.Value, param: str, fallback: f64, plus: f64) -> json.Value
+fn advance_pull(a: *mem.Arena, cursor: json.Value, pagination: json.Value, path: str, query: json.Value, base_url: str) -> json.Value
+fn is_http_url(a: *mem.Arena, s: str) -> bool
+fn segments_of(a: *mem.Arena, path: str) -> []const str
+fn path_matches(declared: []const str, entity: []const str) -> bool
+fn pull_pagination(a: *mem.Arena, channel: json.Value, entity: str) -> json.Value
+fn record_shape(a: *mem.Arena, name: str) -> json.Value
+fn unwrap_record(a: *mem.Arena, shape: json.Value, record: json.Value) -> json.Value
+fn unwrap_records(a: *mem.Arena, shape: json.Value, records: json.Value) -> []const json.Value
+fn pull_record_shape(a: *mem.Arena, channel: json.Value, connector: json.Value, stored_mapping: json.Value) -> json.Value
+fn failed_pull(a: *mem.Arena, reason: str, status: json.Value, has_status: bool) -> json.Value
+fn asked_before(asked: list.List[json.Value], url: str) -> bool
+fn pull_pages(a: *mem.Arena, connection: json.Value, entity: str, pagination: json.Value, shape: json.Value, limit: i64, has_limit: bool, fetch: *const FetchPage) -> json.Value
+```
+
+How a synced table reads its source page by page (L037), after the second half of appdor's `src/sync/synced-table.js` and `src/connectors/connector-type-map.js`: the type map (`map_external_type`, `map_lc8_to_native`, `list_native_types`, `propose_schema`, `propose_mapping`), a column's configuration and badge (`synced_column_config`, `synced_column_badge`), `resolve_base_url` and `build_pull_request`, pagination (`pull_pagination`, `pull_cursor`, `advance_pull`), record envelopes (`unwrap_record`, `unwrap_records`, `pull_record_shape`) and the page loop `pull_pages` over a host-supplied fetch. The sample-inferred half of `propose_mapping` is not here.
+
+
+### `e.algo.conflictview`
+
+```neper
+fn escape_html(a: *mem.Arena, s: str) -> str
+fn cut_units(s: str, limit: usize) -> (str, bool)
+fn units_over(s: str, limit: usize) -> bool
+fn show(a: *mem.Arena, v: json.Value, present: bool) -> str
+fn element_text(a: *mem.Arena, v: json.Value) -> str
+fn attribute(a: *mem.Arena, s: str) -> str
+fn say(a: *mem.Arena, translate: *const syncjob.Translate, key: str, variable: str) -> str
+fn rows_markup(a: *mem.Arena, item: json.Value) -> str
+fn choice_button(a: *mem.Arena, translate: *const syncjob.Translate, item_id: str, choice: str) -> str
+fn render_conflict_review(a: *mem.Arena, review: json.Value, translate: *const syncjob.Translate) -> str
+```
+
+The offline conflict review as markup (L037), after `renderConflictReview` of appdor's `src/offline/conflict-review.js`: `render_conflict_review` turns a review (`e.algo.offline.build_conflict_review`) into one section per conflict with its field table, its choice buttons, the contested fields and the reason a merge is not offered; `escape_html` is the DOM's text serialisation. Sentences come through the host's translator.
+
+
+### `e.fmt.protodesc`
+
+```neper
+error Invalid
+fn max_depth() -> u32
+fn type_name(code: i64) -> str
+fn label_name(code: i64) -> str
+fn put_number(a: *mem.Arena, o: *ir.Obj, key: str, value: i64)
+fn read_int(r: *pb.Reader) -> (i64, err)
+fn read_flag(r: *pb.Reader) -> (bool, err)
+fn read_text(a: *mem.Arena, r: *pb.Reader) -> (json.Value, err)
+fn push_array(l: *list.List[json.Value], v: json.Value)
+fn array_of(l: list.List[json.Value]) -> json.Value
+fn finished(o: *ir.Obj) -> json.Value
+fn parse_range(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_flags(a: *mem.Arena, source: []const u8, first: u32, first_name: str, second: u32, second_name: str) -> (json.Value, err)
+fn parse_oneof(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_field(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_enum_value(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_enum(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_method(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_service(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_message(a: *mem.Arena, source: []const u8, depth: u32) -> (json.Value, err)
+fn read_int_list(a: *mem.Arena, r: *pb.Reader, key: pb.Key, out: *list.List[json.Value]) -> err
+fn parse_file(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+fn parse_set(a: *mem.Arena, source: []const u8) -> (json.Value, err)
+```
+
+A protocol buffer descriptor reader (L164): `parse_set` and `parse_file` read the bytes of a `FileDescriptorSet` or `FileDescriptorProto` into JSON the way protobuf's JSON mapping writes the same message (lower-camel names, enums by name, set fields present) for files, messages (nested, oneofs, reserved and extension ranges, map entries), enums, services and methods, with the option members a code generator needs. Nesting beyond 32 messages and malformed wire data are `Invalid`.
+
+
+### `e.net.grpcstub`
+
+```neper
+error Invalid
+type Gen = struct { a: *mem.Arena, o: rt.Out, good: bool }
+fn put(g: *Gen, s: str)
+fn cat(g: *Gen, x: str, y: str) -> str
+fn num_text(g: *Gen, n: i64) -> str
+fn replace_all(g: *Gen, text: str, needle: str, with: str) -> str
+fn text_of(v: json.Value, key: str) -> str
+fn lower_text(g: *Gen, s: str) -> str
+fn upper_text(g: *Gen, s: str) -> str
+fn is_upper(c: u8) -> bool
+fn is_lower_or_digit(c: u8) -> bool
+fn snake(g: *Gen, s: str) -> str
+fn type_ident(g: *Gen, full: str) -> str
+fn is_keyword(s: str) -> bool
+fn field_ident(g: *Gen, name: str) -> str
+type Info = struct { name: str, number: u32, kind: str, repeated: bool, explicit: bool, packed: bool, element: str, supported: bool }
+fn kind_of(type_text: str) -> str
+fn neper_scalar(kind: str) -> str
+fn zero_literal(element: str) -> str
+fn packable(kind: str) -> bool
+fn info_of(g: *Gen, field: json.Value, proto3: bool) -> Info
+fn wire_text(kind: str) -> str
+fn put_statement(g: *Gen, info: Info, x: str) -> str
+fn raw_statement(g: *Gen, info: Info, x: str) -> str
+fn nonzero_condition(g: *Gen, info: Info, x: str) -> str
+fn fill(g: *Gen, t: str, info: Info, number: str) -> str
+fn write_field(g: *Gen, info: Info, always: bool) -> str
+fn read_call(g: *Gen, kind: str, reader: str) -> str
+fn convert(kind: str) -> str
+fn read_field(g: *Gen, info: Info) -> str
+fn struct_field(g: *Gen, info: Info) -> str
+fn emit_enum(g: *Gen, full: str, e: json.Value)
+fn emit_message(g: *Gen, full: str, message: json.Value, proto3: bool)
+type %TYPE% = struct { %STRUCT%}
+fn %FN%_write(o: *rt.Out, m: *const %TYPE%) -> err
+fn %FN%_encode(a: *mem.Arena, m: *const %TYPE%) -> ([]const u8, err)
+fn %FN%_read(a: *mem.Arena, source: []const u8, depth: u32) -> (%TYPE%, err)
+fn %FN%_decode(a: *mem.Arena, source: []const u8) -> (%TYPE%, err)
+fn emit_nested(g: *Gen, full: str, message: json.Value, proto3: bool)
+fn emit_service(g: *Gen, package: str, service: json.Value)
+fn %FN%_path() -> str
+fn %FN%_start(c: *grpc.Conn, dst: []u8, authority: str, timeout_nanos: u64, metadata: []const h2.Header, buf: []u8) -> (u32, usize, err)
+fn %FN%_send(a: *mem.Arena, c: *grpc.Conn, dst: []u8, id: u32, request: *const %REQ%, end_stream: bool) -> (usize, err)
+fn %FN%_reply(a: *mem.Arena, payload: []const u8) -> (%RES%, err)
+fn %SVC%_method_index(path: str) -> i32
+fn generate(a: *mem.Arena, set: json.Value) -> (str, err)
+```
+
+Typed gRPC stubs from descriptors (L164): `generate` writes the source of one module for a descriptor set (the JSON of `e.fmt.protodesc.parse_set`): a struct and `*_write`, `*_encode`, `*_read`, `*_decode` per message (nested and map entry messages included, packed and unpacked lists, explicit presence as `has_*`, nested messages as `*const T`), `i32` constants per enum value, and per service method its path function and the typed `*_start`, `*_send` and `*_reply` of the client state machine and a `*_method_index` router.
+
+
+### `e.fmt.protomsg`
+
+```neper
+error TooLarge
+error Invalid
+type Out = struct { a: *mem.Arena, data: []u8, len: usize }
+fn out_new(a: *mem.Arena) -> Out
+fn out_bytes(o: *Out) -> []const u8
+fn reserve(o: *Out, extra: usize) -> err
+fn push_byte(o: *Out, v: u8) -> err
+fn push_bytes(o: *Out, v: []const u8) -> err
+fn raw_varint(o: *Out, value: u64) -> err
+fn raw_int(o: *Out, value: i64) -> err
+fn zigzag(value: i64) -> u64
+fn raw_sint(o: *Out, value: i64) -> err
+fn raw_fixed32(o: *Out, value: u32) -> err
+fn raw_fixed64(o: *Out, value: u64) -> err
+fn bits_f32(v: u32) -> f32
+fn bits_f64(v: u64) -> f64
+fn f32_bits(v: f32) -> u32
+fn f64_bits(v: f64) -> u64
+fn trunc_i32(raw: u64) -> i32
+fn trunc_u32(raw: u64) -> u32
+fn from_zigzag(raw: u64) -> i64
+fn i32_from_bits(v: u32) -> i32
+fn i64_from_bits(v: u64) -> i64
+fn bits_from_i32(v: i32) -> u32
+fn bits_from_i64(v: i64) -> u64
+fn put_key(o: *Out, number: u32, wire: u32) -> err
+fn put_varint(o: *Out, number: u32, value: u64) -> err
+fn put_int(o: *Out, number: u32, value: i64) -> err
+fn put_sint(o: *Out, number: u32, value: i64) -> err
+fn put_bool(o: *Out, number: u32, value: bool) -> err
+fn put_fixed32(o: *Out, number: u32, value: u32) -> err
+fn put_fixed64(o: *Out, number: u32, value: u64) -> err
+fn put_bytes(o: *Out, number: u32, value: []const u8) -> err
+fn put_message(o: *Out, number: u32, child: *const Out) -> err
+fn view_of(source: []const u8, remaining: usize, length: u64) -> ([]const u8, err)
+```
+
+What generated protocol buffer message code stands on (L164): the growing output buffer `Out` that `*_write` functions append keyed fields to (`put_int`, `put_sint`, `put_varint`, `put_bool`, `put_fixed32`, `put_fixed64`, `put_bytes`, `put_message`, with `raw_*` for the packed lists), the conversions between raw bits and typed values, and `view_of` for a length-delimited view of the source.
+
+
+### `e.net.grpcretry`
+
+```neper
+error Invalid
+type Policy = struct { max_attempts: u32, initial_ns: u64, max_ns: u64, multiplier: f64, codes: u32 }
+type Throttle = struct { max_tokens: f64, ratio: f64, tokens: f64 }
+type Decision = struct { retry: bool, delay_ns: u64, reason: str }
+fn attempts_cap() -> u32
+fn code_from_name(name: str) -> i32
+fn parse_duration(text: str) -> (u64, err)
+fn number_member(v: json.Value, key: str) -> (f64, bool)
+fn policy_parse(config: json.Value) -> (Policy, err)
+fn throttle_parse(config: json.Value) -> (Throttle, err)
+fn status_retryable(p: *const Policy, code: u32) -> bool
+fn backoff_cap_ns(p: *const Policy, n: u32) -> u64
+fn backoff_ns(p: *const Policy, n: u32, jitter: f64) -> u64
+fn pushback_parse(text: str) -> (u64, err)
+fn throttle_allows(t: *const Throttle) -> bool
+fn throttle_success(t: *Throttle)
+fn throttle_failure(t: *Throttle)
+fn refuse(reason: str) -> Decision
+fn decide(p: *const Policy, t: *Throttle, attempts: u32, code: u32, committed: bool, pushback: str, has_pushback: bool, jitter: f64, now_ns: u64, deadline_ns: u64) -> Decision
+```
+
+gRPC retries and backoff (L164), the decisions of gRFC A6 as pure functions: `policy_parse` and `throttle_parse` read a service config's `retryPolicy` and `retryThrottling`, `parse_duration`, `backoff_cap_ns` and `backoff_ns` (the jitter supplied by the caller), `pushback_parse` for `grpc-retry-pushback-ms` and `decide`, which answers whether a failed attempt is retried and after how long while it updates the token bucket.
+
+
+### `e.net.grpctls`
+
+```neper
+error NoH2
+type Channel = struct { socket: net.Socket, secure: tls.Stream, open: bool }
+fn client_config(a: *mem.Arena, server_name: str, trust_roots: []const u8, entropy: []const u8, now: time.Timestamp) -> (tls.ClientConfig, err)
+fn establish(c: *Channel, a: *mem.Arena, config: tls.ClientConfig) -> err
+fn dial(c: *Channel, a: *mem.Arena, endpoint: net.Endpoint, server_name: str, trust_roots: []const u8, entropy: []const u8, now: time.Timestamp) -> err
+fn reader(c: *Channel) -> io.Reader
+fn writer(c: *Channel) -> io.Writer
+fn close(c: *Channel) -> err
+```
+
+The TLS dial helper of gRPC (L164): `dial` fills a `Channel` with a TCP connection and a TLS 1.3 handshake that offers only `h2` through ALPN and refuses a server that does not select it (`NoH2`); `reader` and `writer` are the protected stream `e.net.grpc` and `e.net.grpcserver` are driven over, `close` sends close_notify and closes the socket.
+
+
 ### `e.algo.fulltext`
 
 ```neper
@@ -14965,9 +15354,15 @@ error Unsupported
 fn supported(encoding: str) -> bool
 fn aligned(a: *mem.Arena, bytes: usize) -> ([]u8, err)
 fn inflate(a: *mem.Arena, encoding: str, payload: []const u8, limit: usize) -> ([]const u8, err)
+fn compress(a: *mem.Arena, encoding: str, payload: []const u8) -> ([]const u8, err)
+
+type Prepared = struct { body: []const u8, compressed: bool }
+
+fn compress_message(a: *mem.Arena, encoding: str, payload: []const u8, threshold: usize) -> (Prepared, err)
+fn choose_encoding(accept: str) -> str
 ```
 
-gRPC message compression (L164), the part `e.net.grpc` and `e.net.grpcserver` only report: `inflate` undoes a message flagged compressed in the call's `grpc-encoding` (`gzip` is RFC 1952, `deflate` the zlib stream every gRPC implementation means by that name, `identity` or none passes the payload on), at most `limit` bytes; `supported` names the encodings it reads. An unknown encoding is `Unsupported` and a body that does not check out is the codec's own error. Checked against Python's gzip and zlib over every level, a named gzip member, stored blocks, an empty body and 70000 bytes, and against corrupted CRC, size, magic, header and truncated inputs, on Windows (D2923).
+gRPC message compression (L164), the part `e.net.grpc` and `e.net.grpcserver` only report: `inflate` undoes a message flagged compressed in the call's `grpc-encoding` (`gzip` is RFC 1952, `deflate` the zlib stream every gRPC implementation means by that name, `identity` or none passes the payload on), at most `limit` bytes; `supported` names the encodings it reads. An unknown encoding is `Unsupported` and a body that does not check out is the codec's own error. Checked against Python's gzip and zlib over every level, a named gzip member, stored blocks, an empty body and 70000 bytes, and against corrupted CRC, size, magic, header and truncated inputs, on Windows (D2923). The send side: `compress` writes a message body in `gzip` or `deflate` (the zlib stream), `compress_message` decides what goes on the wire for one message (compressed and flagged at or above a threshold, as it is otherwise) and `choose_encoding` picks the first encoding of a peer's `grpc-accept-encoding` list that `compress` writes.
 
 
 ### `e.net.http2`
