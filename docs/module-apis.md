@@ -16555,6 +16555,44 @@ fn build_tree(a: *mem.Arena, doc: *const html.Document, root: html.NodeId) -> No
 
 The accessibility tree of an HTML document (L040), after Vaper's `a11y/accessibility_builder.dart`: each element's role (an explicit `role` from a known set first, else its native role), its accessible name in the order the standard fixes (`aria-labelledby` over `aria-label` over the native source -- `alt`, `<label>`, placeholder, caption, title -- over text content for the roles that name from content), its states, heading level, value range and link target, and the tree with `aria-hidden` subtrees dropped, a nameless stateless generic container flattened and the redundant text leaves of a name-from-content role removed (`build_tree`). Checked against Vaper's own builder over 220 random documents on both hosts (D2343).
 
+### `e.fmt.html.sanitize`
+
+```neper
+error Encoding
+error TooLarge
+error TooDeep
+
+type Policy = struct {
+    tags: str,
+    generic_attributes: str,
+    tag_attributes: str,
+    url_schemes: str,
+    remove_content: str,
+    css_properties: str,
+    link_rel: str,
+    allow_relative: bool,
+    max_depth: u16,
+}
+
+fn default_policy() -> Policy
+fn has_token(list: str, token: str) -> bool
+fn tag_attribute_allowed(policy: Policy, tag: str, name: str) -> bool
+fn is_url_attribute(name: str) -> bool
+fn lower(c: u8) -> u8
+fn url_allowed(value: str, policy: Policy) -> bool
+fn push_text(b: *str.Builder, s: str, attribute: bool) -> err
+fn is_void(name: str) -> bool
+fn style_walk(b: *str.Builder, value: str, policy: Policy, emit: bool) -> (bool, err)
+
+type Walk = struct { policy: Policy, a: *mem.Arena }
+
+fn walk(w: *Walk, doc: *const html.Document, id: html.NodeId, b: *str.Builder, depth: usize) -> err
+fn sanitize(a: *mem.Arena, source: str, policy: Policy) -> (str, err)
+```
+
+HTML sanitizer (L132), the ammonia model over the `e.fmt.html` parser: `sanitize(a, source, policy)` parses untrusted markup and writes it back from the tree, keeping only what a `Policy` names. An element off the `tags` list is dropped with its children kept; one on `remove_content` (`script`, `style` by default) goes with everything in it; an attribute survives only when the policy lists it for that tag (`tag:attribute` tokens) or for every tag (`generic_attributes`), never when its name starts with `on`, and, for the URL-carrying attributes (`href`, `src`, `cite`, `action`, `poster`, ...), only when the value's scheme, read the way a browser reads it (leading control characters and spaces trimmed, tab and newline ignored inside, entities already decoded), is on `url_schemes` or the URL is relative and `allow_relative` is set; `srcset` is always dropped; `style` is allowed only through the `css_properties` allowlist and a declaration with `url(`, `expression(`, `javascript:`, `@`, a backslash, a comment or `<` is dropped; comments and doctype are dropped; text and attribute values are re-escaped (`&`, `<`, `>`, no-break space, and `"` in attributes), so the output parses back to the tree it came from; `a` elements get `rel` from `link_rel`, replacing any `rel`. `default_policy()` is ammonia's list of tags, attributes and URL schemes. Errors: `Encoding` for input that is not UTF-8, `TooDeep` past `max_depth` (nesting is refused, not truncated), `TooLarge`. Differences from ammonia that are recorded rather than hidden: the parser has no adoption agency, foster parenting or `tbody` insertion (mis-nested formatting and a `table` with bare rows come out as the tree it builds, which is safe but not ammonia's), and `cite` is URL-checked here where ammonia passes it. Checked byte for byte against nh3 (ammonia) over a corpus and four configurations, with the property checks for the attack inputs and idempotence of every output (`scripts/gen_sanitize_test.py`).
+
+
 ### `e.fmt.hcl`
 
 ```neper

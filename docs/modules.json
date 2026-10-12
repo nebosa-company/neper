@@ -45,6 +45,7 @@
     "e.fmt.css.container",
     "e.fmt.css.match",
     "e.fmt.html.accessible",
+    "e.fmt.html.sanitize",
     "e.fmt.hcl",
     "e.fmt.mermaid",
     "e.fmt.elf",
@@ -1957,6 +1958,19 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.data.list",
+    "e.fmt.html",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.html.sanitize",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
     "e.fmt.html",
     "e.mem",
     "e.str"

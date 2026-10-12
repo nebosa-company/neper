@@ -1340,6 +1340,11 @@ fmt_html_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$fmt_html_written" = 'executable written' ]
 chmod +x "$test_build/fmt-html-selfhost"
 "$test_build/fmt-html-selfhost"
+# `e.fmt.html.sanitize`: untrusted markup cleaned and compared byte for byte with nh3 (ammonia) over a corpus and four configurations, the style allowlist, attack inputs, idempotence, nesting.
+fmt_html_sanitize_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_html_sanitize/src/main.e" "$repo" x64 linux "$test_build/fmt-html-sanitize-selfhost")
+[ "$fmt_html_sanitize_written" = 'executable written' ]
+chmod +x "$test_build/fmt-html-sanitize-selfhost"
+"$test_build/fmt-html-sanitize-selfhost"
 # `e.fmt.graph`: NetworkX-written GraphML, GEXF and GML read, nested reference files read, a typed model written byte for byte and read back, to_csr, the refusals.
 fmt_graph_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_graph/src/main.e" "$repo" x64 linux "$test_build/fmt-graph-selfhost")
 [ "$fmt_graph_written" = 'executable written' ]

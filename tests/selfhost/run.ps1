@@ -1462,6 +1462,12 @@ $fmtHtmlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtHtmlWritten -ne 'executable written') { throw 'fmt_html emission failed' }
 & $fmtHtmlPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_html check failed: exit $LASTEXITCODE" }
+# `e.fmt.html.sanitize`: untrusted markup cleaned and compared byte for byte with nh3 (ammonia) over a corpus and four configurations, the style allowlist, attack inputs, idempotence, nesting.
+$fmtHtmlSanitizePath = Join-Path $testBuild 'fmt-html-sanitize-selfhost.exe'
+$fmtHtmlSanitizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_html_sanitize\src\main.e') $repo 'x64' 'windows' $fmtHtmlSanitizePath
+if ($LASTEXITCODE -ne 0 -or $fmtHtmlSanitizeWritten -ne 'executable written') { throw 'fmt_html_sanitize emission failed' }
+& $fmtHtmlSanitizePath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_html_sanitize check failed: exit $LASTEXITCODE" }
 # `e.fmt.graph`: NetworkX-written GraphML, GEXF and GML read, nested reference files read, a typed model written byte for byte and read back, to_csr, the refusals.
 $fmtGraphPath = Join-Path $testBuild 'fmt-graph-selfhost.exe'
 $fmtGraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_graph\src\main.e') $repo 'x64' 'windows' $fmtGraphPath
