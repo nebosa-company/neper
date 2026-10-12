@@ -2350,6 +2350,12 @@ $dataMapperWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $dataMapperWritten -ne 'executable written') { throw 'data_mapper emission failed' }
 & $dataMapperPath
 if ($LASTEXITCODE -ne 0) { throw "a data_mapper check failed: exit $LASTEXITCODE" }
+# `e.task.jobs`: retry backoff vectors, six croniter fire sequences, misfire policies, lease expiry and poison quarantine, save/load through e.store with corruption refusals, keyed idempotent ticks, bounded catch-up (D2762).
+$taskJobsPath = Join-Path $testBuild 'task-jobs-selfhost.exe'
+$taskJobsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\task_jobs\src\main.e') $repo 'x64' 'windows' $taskJobsPath
+if ($LASTEXITCODE -ne 0 -or $taskJobsWritten -ne 'executable written') { throw 'task_jobs emission failed' }
+& $taskJobsPath
+if ($LASTEXITCODE -ne 0) { throw "a task_jobs check failed: exit $LASTEXITCODE" }
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 $dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
 $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath

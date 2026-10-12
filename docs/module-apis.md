@@ -15603,6 +15603,67 @@ fn project_sql[S: type, D: type](a: *mem.Arena, table: str, p: *const Profile) -
 
 An object-object mapper (L139) in the shape of AutoMapper and Mapster, over `e.meta` field reflection. `map_into[S, D]` fills a destination struct by convention: an explicit `Rename` (a dotted source path), the same name, the same name ignoring case and underscores, or a flattened path (`address_city` reads `address.city`, up to three levels), the best score winning and an incompatible member never a candidate. `ignore` skips a field, a `Default` is the null substitution (an absent source, an empty `str` when `empty_is_null`, a NaN), and `strict` makes a field with no source `Unmapped`. Integers are range-checked (`Overflow`), a `str` is copied into the arena, a nested struct maps by convention. `map_all` maps a slice and `unmapped` counts the fields nothing covers. `project_sql[S, D]` answers the SELECT list that reads only the columns the destination needs (flattened paths as `a_b`, defaults as `COALESCE`). A slice field is a `str`; enums, pointers and other slices are not mapped.
 
+### `e.task.jobs`
+
+```neper
+const STATE_ENQUEUED: u8 = 0u8
+const STATE_SCHEDULED: u8 = 1u8
+const STATE_PROCESSING: u8 = 2u8
+const STATE_RETRY: u8 = 3u8
+const STATE_SUCCEEDED: u8 = 4u8
+const STATE_DEAD: u8 = 5u8
+const MISFIRE_SKIP: u8 = 0u8
+const MISFIRE_ONE: u8 = 1u8
+const MISFIRE_ALL: u8 = 2u8
+const BACKOFF_EXPONENTIAL: u8 = 0u8
+const BACKOFF_HANGFIRE: u8 = 1u8
+const MS: i64 = 1000000i64
+const MAX_CATCH_UP: usize = 1000usize
+type Policy = struct { kind: u8, base_ms: i64, cap_ms: i64, jitter_ms: i64 }
+type Job = struct { id: u64, name: str, payload: str, key: str, state: u8, attempts: u32, max_attempts: u32, priority: i32, run_at: i64, locked_until: i64, created: i64, last_error: str, recurring: u32 }
+type Recurring = struct { id: str, expr: str, offset_minutes: i32, name: str, payload: str, max_attempts: u32, misfire: u8, grace_ms: i64, next_fire: i64, last_fire: i64, active: bool, sched: cron.Schedule }
+type Queue = struct { a: *mem.Arena, jobs: []Job, n: usize, recs: []Recurring, nrec: usize, next_id: u64, policy: Policy }
+error Full
+error NotFound
+error NotProcessing
+error Invalid
+error Corrupt
+fn init(a: *mem.Arena, max_jobs: usize, max_recurring: usize, policy: Policy) -> (Queue, err)
+fn keep(a: *mem.Arena, s: str) -> (str, err)
+fn retry_delay(p: Policy, attempt: u32, id: u64) -> i64
+fn find(q: *Queue, id: u64) -> (usize, bool)
+fn alive_with_key(q: *Queue, key: str) -> (u64, bool)
+fn enqueue(q: *Queue, name: str, payload: str, now: i64, delay_ms: i64, max_attempts: u32, priority: i32, key: str) -> (u64, err)
+fn fail_at(q: *Queue, at: usize, now: i64, message: str) -> (u8, err)
+fn better(x: Job, y: Job) -> bool
+fn fetch(q: *Queue, now: i64, lease_ms: i64) -> (Job, bool, err)
+fn complete(q: *Queue, id: u64) -> err
+fn fail(q: *Queue, id: u64, now: i64, message: str) -> (u8, err)
+fn heartbeat(q: *Queue, id: u64, now: i64, lease_ms: i64) -> err
+fn requeue(q: *Queue, id: u64, now: i64) -> err
+fn get(q: *Queue, id: u64) -> (Job, bool)
+fn count(q: *Queue, state: u8) -> usize
+fn purge(q: *Queue) -> usize
+fn find_recurring(q: *Queue, id: str) -> (usize, bool)
+fn recurring_set(q: *Queue, id: str, expr: str, offset_minutes: i32, name: str, payload: str, max_attempts: u32, misfire: u8, grace_ms: i64, now: i64) -> err
+fn recurring_remove(q: *Queue, id: str) -> err
+fn fire_key(a: *mem.Arena, id: str, nanos: i64) -> (str, err)
+fn enqueue_fire(q: *Queue, r: Recurring, ri: usize, fire: i64, due: i64) -> (bool, err)
+fn tick(q: *Queue, now: i64) -> (usize, err)
+fn put_u64(b: *str.Builder, v: u64) -> err
+fn put_i64(b: *str.Builder, v: i64) -> err
+fn put_str(b: *str.Builder, s: str) -> err
+type Reader = struct { data: str, pos: usize, bad: bool }
+fn get_u64(r: *Reader) -> u64
+fn get_i64(r: *Reader) -> i64
+fn get_str(a: *mem.Arena, r: *Reader) -> (str, err)
+fn save(q: *Queue, s: *store.Store, a: *mem.Arena, key: str) -> err
+fn get_byte(r: *Reader) -> u8
+fn load(a: *mem.Arena, s: *store.Store, key: str, max_jobs: usize, max_recurring: usize) -> (Queue, err)
+```
+
+Persistent background jobs with retries and cron triggers (L140), in the shape of Hangfire and Quartz. A `Queue` is fixed-capacity plain data over an arena; `save` and `load` write it to one blob of an `e.store` behind a magic and an FNV-1a 64 checksum (`Corrupt` on a flipped byte, a short blob or capacities too small). Delivery is at-least-once: `fetch` leases the best due job (priority, due time, id), `attempts` counts deliveries, and a lease that runs out is a failed attempt. A failed job is `Retry` after the policy backoff (exponential with a cap and a deterministic jitter, or Hangfire's curve) and `Dead` past `max_attempts`, held with its last error until `requeue`. A `key` makes `enqueue` idempotent. Recurring schedules are six-field cron expressions (`e.time.cron`) at a fixed offset; `tick(now)` enqueues the fires up to `now` under the Quartz-style misfire policy (`MISFIRE_SKIP`, `MISFIRE_ONE`, `MISFIRE_ALL`, with a grace window and a catch-up bound), each keyed so a repeated tick enqueues nothing twice. The queue is single-threaded: callers serialize access. No dashboard.
+
 ### `e.db.migrate`
 
 ```neper

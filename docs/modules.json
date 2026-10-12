@@ -500,6 +500,7 @@
     "e.math.units",
     "e.algo.rules",
     "e.data.mapper",
+    "e.task.jobs",
     "e.db.migrate",
     "e.db.orm",
     "e.test.match",
@@ -6955,6 +6956,22 @@
     "e.mem",
     "e.meta",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.task.jobs",
+   "layer": 5,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.hash",
+    "e.mem",
+    "e.store",
+    "e.str",
+    "e.time",
+    "e.time.cron"
    ],
    "blocked_by": []
   },

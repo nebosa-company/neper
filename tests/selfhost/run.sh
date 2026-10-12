@@ -2089,6 +2089,11 @@ data_mapper_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$data_mapper_written" = 'executable written' ]
 chmod +x "$test_build/data-mapper-selfhost"
 "$test_build/data-mapper-selfhost"
+# `e.task.jobs`: retry backoff vectors, six croniter fire sequences, misfire policies, lease expiry and poison quarantine, save/load through e.store with corruption refusals, keyed idempotent ticks, bounded catch-up (D2762).
+task_jobs_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/task_jobs/src/main.e" "$repo" x64 linux "$test_build/task-jobs-selfhost")
+[ "$task_jobs_written" = 'executable written' ]
+chmod +x "$test_build/task-jobs-selfhost"
+"$test_build/task-jobs-selfhost"
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 db_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_migrate/src/main.e" "$repo" x64 linux "$test_build/db-migrate-selfhost")
 [ "$db_migrate_written" = 'executable written' ]
