@@ -1270,6 +1270,12 @@ $fmtDocxWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtDocxWritten -ne 'executable written') { throw 'fmt_docx emission failed' }
 & $fmtDocxPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_docx check failed: exit $LASTEXITCODE" }
+# `e.fmt.extract`: a corpus from independent producers detected and extracted: text, title, author and parts per format, detection by content, binary refused.
+$fmtExtractPath = Join-Path $testBuild 'fmt-extract-selfhost.exe'
+$fmtExtractWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_extract\src\main.e') $repo 'x64' 'windows' $fmtExtractPath
+if ($LASTEXITCODE -ne 0 -or $fmtExtractWritten -ne 'executable written') { throw 'fmt_extract emission failed' }
+& $fmtExtractPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_extract check failed: exit $LASTEXITCODE" }
 # `e.fmt.odf`: an OpenDocument text file and presentation made with Python's zipfile read back, two refusals.
 $fmtOdfPath = Join-Path $testBuild 'fmt-odf-selfhost.exe'
 $fmtOdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_odf\src\main.e') $repo 'x64' 'windows' $fmtOdfPath

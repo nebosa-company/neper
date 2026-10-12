@@ -24291,6 +24291,78 @@ fn root_rels() -> str
 Word document generation (L146), the writing half beside the `e.fmt.ooxml` reader: `encode` writes a `.docx` from `[]Block` and a `Meta` (title, creator, created, A4 or Letter). A block is a paragraph (`Style` Normal, Title, Heading1-3; `Align`; a bullet or numbered list item with a level, numbered lists restarting per `list_id`; `Run`s with bold, italic, underline, size in half points, an RGB colour, tabs and line breaks), a table (column widths in twips, rows of cells of paragraphs, an optional header row, a ruled `TableGrid`), an inline PNG or JPEG (sized in EMU or at 96 dpi from the pixel size, with alt text) or a page break. The package carries a styles part, a numbering part and core properties, so Word, LibreOffice and python-docx see named styles and real lists. Refusals: control characters `BadText`, a colour that is not six hex digits `BadColor`, a table with no widths or more cells than columns `BadTable`, bytes that are neither PNG nor JPEG `BadImage`, bad metadata `BadMeta`, a list id past 64, a level past 8 or a size past 1638 half points `TooLarge`. Not here: tracked changes, comments, fields and a contents table, headers and footers, footnotes, hyperlinks, run fonts, merged cells, section changes, GIF and other image types, compression of the package. Checked byte for byte against an independent Python writer, opened by python-docx (styles, runs, table, images, core properties, page size) when generated, and read back through `e.fmt.ooxml.paragraphs` (`scripts/gen_docx_test.py`).
 
 
+### `e.fmt.extract`
+
+```neper
+error Unsupported
+error Corrupt
+error TooLarge
+error Encoding
+
+type Format = enum u8 { Unknown, Text, Html, Xml, Json, Markdown, Csv, Pdf, Docx, Pptx, Xlsx, Odt, Odp, Ods, Mail, VCard }
+type Document = struct { format: Format, text: str, title: str, author: str, parts: usize }
+
+const MAX_INPUT: usize = 67108864usize
+
+fn empty_document(format: Format) -> Document
+fn fold(c: u8) -> u8
+fn starts_fold(s: str, at: usize, prefix: str) -> bool
+fn ends_fold(s: str, suffix: str) -> bool
+fn is_space(c: u8) -> bool
+fn skip_space(s: str, at: usize) -> usize
+fn valid_utf8(s: str) -> bool
+fn strip_bom(s: str) -> str
+fn latin1_to_utf8(a: *mem.Arena, s: str) -> (str, err)
+fn join(a: *mem.Arena, parts: []const str, sep: str) -> (str, err)
+fn has_extension(name: str, ext: str) -> bool
+fn find_entry(archive: *zip.Archive, name: str) -> bool
+fn has_slide(archive: *zip.Archive) -> bool
+fn detect_zip(a: *mem.Arena, data: []const u8) -> Format
+fn looks_like_mail(s: str) -> bool
+fn detect(a: *mem.Arena, data: []const u8, name: str) -> Format
+fn is_alpha(c: u8) -> bool
+fn media_type(format: Format) -> str
+fn xml_first_text(a: *mem.Arena, part: []const u8, name: str) -> (str, err)
+fn package_meta(a: *mem.Arena, data: []const u8, part_name: str, title_name: str, author_name: str) -> (str, str, err)
+fn paragraph_texts(a: *mem.Arena, ps: []const ooxml.Paragraph) -> ([]str, err)
+fn slides_text(a: *mem.Arena, slides: []const ooxml.Slide) -> (str, err)
+fn read_pdf_string(a: *mem.Arena, data: []const u8, key: str) -> (str, err)
+fn html_skipped(name: str) -> bool
+fn html_block(name: str) -> bool
+
+type Flow = struct { pending: u8, wrote: bool }
+
+fn flow_word(b: *str.Builder, f: *Flow, word: str) -> err
+fn flow_text(b: *str.Builder, f: *Flow, s: str) -> err
+fn html_walk(doc: *const html.Document, id: html.NodeId, b: *str.Builder, f: *Flow) -> err
+fn html_title(a: *mem.Arena, doc: *const html.Document) -> (str, err)
+fn html_extract(a: *mem.Arena, source: str) -> (Document, err)
+fn xml_extract(a: *mem.Arena, source: []const u8) -> (Document, err)
+fn markdown_line(b: *str.Builder, line: str) -> err
+fn markdown_extract(a: *mem.Arena, source: str) -> (Document, err)
+fn csv_extract(a: *mem.Arena, source: str) -> (Document, err)
+fn vcard_extract(a: *mem.Arena, source: []const u8) -> (Document, err)
+fn split_message(s: str) -> (str, str)
+fn header_value(a: *mem.Arena, block: str, name: str) -> (str, bool, err)
+fn hex_digit(c: u8) -> u32
+fn quoted_printable(a: *mem.Arena, s: str) -> (str, err)
+fn strip_spaces(a: *mem.Arena, s: str) -> (str, err)
+fn parameter_of(value: str, name: str) -> str
+fn decode_body(a: *mem.Arena, body: str, content_type: str, encoding: str) -> (str, err)
+fn entity_text(a: *mem.Arena, entity: str, depth: usize) -> (str, bool, err)
+fn part_text(a: *mem.Arena, part: str, depth: usize) -> (str, bool, err)
+fn mail_extract(a: *mem.Arena, source: str) -> (Document, err)
+fn text_extract(source: str) -> (Document, err)
+fn extract_as(a: *mem.Arena, data: []const u8, format: Format) -> (Document, err)
+fn json_extract_value(a: *mem.Arena, v: *const json.Value, size: usize) -> (Document, err)
+fn json_line(b: *str.Builder, lines: *usize, s: str) -> err
+fn json_emit(b: *str.Builder, v: *const json.Value, lines: *usize) -> err
+fn extract(a: *mem.Arena, data: []const u8, name: str) -> (Document, err)
+```
+
+The document text-extraction facade (L153): `detect(a, data, name)` names the `Format` of a byte slice from its content (PDF header, zip entries such as `word/document.xml`, `xl/workbook.xml`, `ppt/slides/`, the OpenDocument `mimetype` entry, HTML and XML declarations, `BEGIN:VCARD`, mail headers, a JSON that parses), with the file name's extension as the tie-break among text formats and for Markdown, CSV and plain text; `extract` detects and then `extract_as` reads the document through the codec that owns the format and returns `Document { format, text, title, author, parts }`. Text per format: PDF pages joined by a blank line with the Info dictionary's Title and Author (literal or UTF-16 hex strings); DOCX and PPTX paragraphs and slides with core properties; ODT, ODP and ODS the same from `meta.xml`; XLSX each sheet's name then its rows with tab-separated cells; HTML the visible text with script, style, head and template dropped, blocks on their own lines, table cells tab separated, and the `title` element; XML the character data one node per line; JSON the keys and string values, one per line; Markdown the text with block and inline markup removed line by line (not a CommonMark parse) and the first heading as the title; CSV and TSV rows by lines; mail the `text/plain` body (the HTML part reduced to text when there is none) with quoted-printable, base64, Latin-1 and RFC 2047 handled, the Subject as title and From as author; vCard one line per card. Errors: `Unsupported` for binary or unknown data, `Corrupt` for a document its codec refuses, `Encoding` for text that is not UTF-8, `TooLarge`. Not here: OCR and handwriting, encodings other than UTF-8 and Latin-1, PDFs with ASCII85 or object streams (`e.fmt.pdf` reads FlateDecode only, so a stock reportlab file with page compression gives no text), legacy binary Office formats, archives and images, and the wiring into the L034 indexing pipeline. Checked on a corpus from independent producers (reportlab and pypdf, python-docx, python-pptx, openpyxl, hand-built OpenDocument, Python's email package, the Neper PDF writer's generator) in `scripts/gen_extract_test.py`.
+
+
 ### `e.fmt.odf`
 
 ```neper

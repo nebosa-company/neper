@@ -51,6 +51,7 @@
     "e.fmt.pe",
     "e.fmt.ooxml",
     "e.fmt.docx",
+    "e.fmt.extract",
     "e.fmt.odf",
     "e.fmt.pdf",
     "e.fmt.pdf.write",
@@ -2028,6 +2029,32 @@
    "schedule": "later",
    "direct_dependencies": [
     "e.fmt.zip.write",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.extract",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.fmt.csv",
+    "e.fmt.html",
+    "e.fmt.json",
+    "e.fmt.mail",
+    "e.fmt.odf",
+    "e.fmt.ooxml",
+    "e.fmt.pdf",
+    "e.fmt.vcard",
+    "e.fmt.xlsx",
+    "e.fmt.xlsx.book",
+    "e.fmt.xml",
+    "e.fmt.zip",
+    "e.io",
     "e.mem",
     "e.str"
    ],

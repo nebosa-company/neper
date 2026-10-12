@@ -1177,6 +1177,11 @@ fmt_docx_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$fmt_docx_written" = 'executable written' ]
 chmod +x "$test_build/fmt-docx-selfhost"
 "$test_build/fmt-docx-selfhost"
+# `e.fmt.extract`: a corpus from independent producers detected and extracted: text, title, author and parts per format, detection by content, binary refused.
+fmt_extract_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_extract/src/main.e" "$repo" x64 linux "$test_build/fmt-extract-selfhost")
+[ "$fmt_extract_written" = 'executable written' ]
+chmod +x "$test_build/fmt-extract-selfhost"
+"$test_build/fmt-extract-selfhost"
 # `e.fmt.odf`: an OpenDocument text file and presentation made with Python's zipfile read back, two refusals.
 fmt_odf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_odf/src/main.e" "$repo" x64 linux "$test_build/fmt-odf-selfhost")
 [ "$fmt_odf_written" = 'executable written' ]
