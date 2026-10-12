@@ -2921,7 +2921,8 @@
    "fixtures": [
     "text_gaps",
     "text_regex",
-    "text_regex_backtrack"
+    "text_regex_backtrack",
+    "ui_code_editor_ext"
    ]
   },
   {

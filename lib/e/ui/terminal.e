@@ -20,7 +20,7 @@ type Term = struct {
     cx: usize, cy: usize, wrap_pending: bool, top: usize, bottom: usize,
     pen_fg: u32, pen_bg: u32, pen_attr: u32, graphics: bool,
     saved_x: usize, saved_y: usize, saved_fg: u32, saved_bg: u32, saved_attr: u32, saved_pending: bool, saved_origin: bool, saved_graphics: bool,
-    autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool,
+    autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool, focus_events: bool,
     state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32,
     utf_cp: u32, utf_need: u32, last_ch: u32,
     osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize,
@@ -534,6 +534,7 @@ fn reset(t: *Term) {
     t.bracketed_paste = false
     t.mouse_mode = 0u32
     t.mouse_sgr = false
+    t.focus_events = false
     t.state = S_GROUND
     t.utf_need = 0u32
     t.saved_x = 0usize
@@ -609,7 +610,7 @@ fn set_mode(t: *Term, private: bool, mode: u32, on: bool) {
     if mode == 1u32 { t.app_cursor = on } else if mode == 6u32 {
         t.origin = on
         move_to(t, 0usize, 0usize)
-    } else if mode == 7u32 { t.autowrap = on } else if mode == 25u32 { t.cursor_visible = on } else if mode == 47u32 || mode == 1047u32 { set_alt(t, on, false) } else if mode == 1049u32 { set_alt(t, on, true) } else if mode == 2004u32 { t.bracketed_paste = on } else if mode == 1006u32 { t.mouse_sgr = on } else if mode == 9u32 || mode == 1000u32 || mode == 1002u32 || mode == 1003u32 {
+    } else if mode == 7u32 { t.autowrap = on } else if mode == 25u32 { t.cursor_visible = on } else if mode == 47u32 || mode == 1047u32 { set_alt(t, on, false) } else if mode == 1049u32 { set_alt(t, on, true) } else if mode == 2004u32 { t.bracketed_paste = on } else if mode == 1006u32 { t.mouse_sgr = on } else if mode == 1004u32 { t.focus_events = on } else if mode == 9u32 || mode == 1000u32 || mode == 1002u32 || mode == 1003u32 {
         if on { t.mouse_mode = mode } else { t.mouse_mode = 0u32 }
     }
 }
@@ -1161,4 +1162,764 @@ fn snapshot(t: *const Term, offset: usize, out: []Cell) -> usize {
         v += 1usize
     }
     ret n
+}
+
+// ---- reflow on resize (D3501) -----------------------------------------------------------------------------
+// `resize` keeps rows and clips columns. `resize_reflow` re-wraps instead: consecutive buffer lines joined by
+// LINE_WRAPPED form one logical line, which is laid out again at the new width. A logical line's trailing plain
+// blanks (blank character, default background, no attribute) are dropped; a wide character never straddles the
+// right margin (a blank pads the row, which is then wrapped); a blank that only pads a wide character moved to
+// the next row is dropped when joining. The cursor keeps its place in its logical line (a pending wrap counts as
+// one cell past the margin). The live screen is the last `rows` lines of the result, moved up only as far as
+// keeps the cursor on it (lines below are then dropped); the lines above it become scrollback, the oldest lost
+// past `scrollback`. The alternate screen has no reflow.
+
+const NO_CURSOR: usize = 18446744073709551615usize
+
+fn plain_blank(c: Cell) -> bool {
+    ret (c.ch == 32u32 || c.ch == 0u32) && c.bg == 0u32 && c.attr == 0u32
+}
+
+// Cells of row j kept when the logical line ends at row `last`: the final cell is dropped when it is a blank
+// that only pads a wide character which starts the next row.
+fn row_kept(t: *const Term, j: usize, last: usize) -> usize {
+    if j < last {
+        let tail = line_cell(t, j, t.cols - 1usize)
+        let head = line_cell(t, j + 1usize, 0usize)
+        if (tail.ch == 32u32 || tail.ch == 0u32) && tail.attr == 0u32 && (head.attr & WIDE) != 0u32 { ret t.cols - 1usize }
+    }
+    ret t.cols
+}
+
+// (cells kept, one past the last cell that is not a plain blank) over rows a..=b.
+fn seq_scan(t: *const Term, a: usize, b: usize) -> (usize, usize) {
+    var n = 0usize
+    var last_nb = 0usize
+    var j = a
+    while j <= b {
+        let kept = row_kept(t, j, b)
+        var c = 0usize
+        while c < kept {
+            n += 1usize
+            if !plain_blank(line_cell(t, j, c)) { last_nb = n }
+            c += 1usize
+        }
+        j += 1usize
+    }
+    ret (n, last_nb)
+}
+
+// Lay the logical line made of rows a..=b out at `ncols`: (rows used, row and column of cell index `cur_idx`).
+// With `write` the cells go to dst rows from row0 and every row but the last is flagged LINE_WRAPPED.
+fn layout_line(t: *const Term, a: usize, b: usize, ncols: usize, cur_idx: usize, dst: []Cell, dstf: []u32, row0: usize, write: bool) -> (usize, usize, usize) {
+    let (_, last_nb) = seq_scan(t, a, b)
+    var len_eff = last_nb
+    if cur_idx != NO_CURSOR && cur_idx + 1usize > len_eff { len_eff = cur_idx + 1usize }
+    var row = 0usize
+    var col = 0usize
+    var i = 0usize
+    var cur_row = 0usize
+    var cur_col = 0usize
+    var j = a
+    while j <= b && i < len_eff {
+        let kept = row_kept(t, j, b)
+        var c = 0usize
+        while c < kept && i < len_eff {
+            let cl = line_cell(t, j, c)
+            var w = 1usize
+            var unit = 1usize
+            if (cl.attr & WIDE) != 0u32 && c + 1usize < kept && (line_cell(t, j, c + 1usize).attr & CONT) != 0u32 {
+                w = 2usize
+                unit = 2usize
+            }
+            var placed = cl
+            if w == 2usize && ncols == 1usize {
+                placed = blank_cell(cl.bg)
+                w = 1usize
+            }
+            if col + w > ncols {
+                if col < ncols && write { dst[(row0 + row) * ncols + col] = blank_cell(cl.bg) }
+                if write { dstf[row0 + row] = LINE_WRAPPED }
+                row += 1usize
+                col = 0usize
+            }
+            if cur_idx != NO_CURSOR && (i == cur_idx || (unit == 2usize && i + 1usize == cur_idx)) {
+                cur_row = row
+                cur_col = col
+            }
+            if write {
+                let at = (row0 + row) * ncols + col
+                dst[at] = placed
+                if unit == 2usize && w == 2usize { dst[at + 1usize] = line_cell(t, j, c + 1usize) }
+            }
+            col += w
+            i += unit
+            c += unit
+        }
+        j += 1usize
+    }
+    while i < len_eff {
+        if col + 1usize > ncols {
+            if write { dstf[row0 + row] = LINE_WRAPPED }
+            row += 1usize
+            col = 0usize
+        }
+        if i == cur_idx {
+            cur_row = row
+            cur_col = col
+        }
+        col += 1usize
+        i += 1usize
+    }
+    ret (row + 1usize, cur_row, cur_col)
+}
+
+// Resize to `cols` x `rows` with reflow. `a` supplies a scratch of `max_lines` lines at the new width (restored
+// on return); lines older than the scratch holds are dropped, newest kept. Refused with no change when the
+// cursor's logical line does not fit (`mem.Exhausted`) or the size is out of range (`Invalid`). The alternate
+// screen and an unchanged width fall through to `resize`.
+fn resize_reflow(a: *mem.Arena, t: *Term, cols: usize, rows: usize, max_lines: usize) -> err {
+    if cols == 0usize || rows == 0usize || cols > t.max_cols || rows > t.max_rows { ret Invalid }
+    if t.alt || cols == t.cols { ret resize(t, cols, rows) }
+    if max_lines < rows { ret Invalid }
+    let mark = a.off
+    let (cells, e1) = mem.alloc[Cell](a, max_lines * cols)
+    if e1 != ok {
+        a.off = mark
+        ret e1
+    }
+    let (fl, e2) = mem.alloc[u32](a, max_lines)
+    if e2 != ok {
+        a.off = mark
+        ret e2
+    }
+    var z = 0usize
+    while z < cells.len {
+        cells[z] = blank_cell(0u32)
+        z += 1usize
+    }
+    z = 0usize
+    while z < fl.len {
+        fl[z] = 0u32
+        z += 1usize
+    }
+    let total = line_count(t)
+    let cursor_abs = t.sb_len + t.cy
+    var pend = 0usize
+    if t.wrap_pending { pend = 1usize }
+    var end = total
+    var filled = 0usize
+    var got_cursor = false
+    var cur_scr_row = 0usize
+    var cur_col_out = 0usize
+    var go = true
+    while go && end > 0usize {
+        var start = end - 1usize
+        while start > 0usize && line_wrapped(t, start - 1usize) { start -= 1usize }
+        var cidx = NO_CURSOR
+        if start <= cursor_abs && cursor_abs < end {
+            var before = 0usize
+            var j = start
+            while j < cursor_abs {
+                before += row_kept(t, j, end - 1usize)
+                j += 1usize
+            }
+            cidx = before + t.cx + pend
+        }
+        let (n_rows, _, _) = layout_line(t, start, end - 1usize, cols, cidx, cells, fl, 0usize, false)
+        if filled + n_rows > max_lines {
+            go = false
+        } else {
+            let row0 = max_lines - filled - n_rows
+            let (_, cr, cc) = layout_line(t, start, end - 1usize, cols, cidx, cells, fl, row0, true)
+            if cidx != NO_CURSOR {
+                got_cursor = true
+                cur_scr_row = row0 + cr
+                cur_col_out = cc
+            }
+            filled += n_rows
+            end = start
+        }
+    }
+    if !got_cursor {
+        a.off = mark
+        ret mem.Exhausted
+    }
+    let base = max_lines - filled
+    let cur_rel = cur_scr_row - base
+    var top = 0usize
+    if filled > rows { top = min_usize(filled - rows, cur_rel) }
+    var sb_n = top
+    if sb_n > t.sb_cap { sb_n = t.sb_cap }
+    t.sb_head = 0usize
+    t.sb_len = sb_n
+    var i = 0usize
+    while i < sb_n {
+        let src = base + top - sb_n + i
+        let dbase = (2usize * t.max_rows + i) * t.max_cols
+        var x = 0usize
+        while x < t.max_cols {
+            if x < cols { t.cells[dbase + x] = cells[src * cols + x] } else { t.cells[dbase + x] = blank_cell(0u32) }
+            x += 1usize
+        }
+        t.flags[2usize * t.max_rows + i] = fl[src]
+        i += 1usize
+    }
+    var avail = filled - top
+    if avail > rows { avail = rows }
+    var r = 0usize
+    while r < t.max_rows {
+        let dbase = r * t.max_cols
+        var x = 0usize
+        while x < t.max_cols {
+            if r < avail && x < cols { t.cells[dbase + x] = cells[(base + top + r) * cols + x] } else { t.cells[dbase + x] = blank_cell(0u32) }
+            x += 1usize
+        }
+        if r < avail { t.flags[r] = fl[base + top + r] } else { t.flags[r] = 0u32 }
+        r += 1usize
+    }
+    if cols < t.cols {
+        t.alt = true
+        var ar = 0usize
+        while ar < t.max_rows {
+            blank_range(t, ar, cols, t.cols)
+            ar += 1usize
+        }
+        t.alt = false
+    }
+    t.cols = cols
+    t.rows = rows
+    t.top = 0usize
+    t.bottom = rows - 1usize
+    t.cx = cur_col_out
+    t.cy = cur_rel - top
+    t.wrap_pending = false
+    t.saved_x = min_usize(t.saved_x, cols - 1usize)
+    t.saved_y = min_usize(t.saved_y, rows - 1usize)
+    reset_tabs(t)
+    a.off = mark
+    ret ok
+}
+
+// ---- key, mouse, focus and paste encoding (D3501) ---------------------------------------------------------
+// Bytes a host sends to the program for an input event, after xterm's defaults (no modifyOtherKeys, 7-bit
+// controls). `key` is a Unicode scalar or one of the KEY_ constants; `mods` is MOD_SHIFT | MOD_ALT | MOD_CTRL |
+// MOD_META. Every encoder returns the byte count, or 0 when it has nothing to send or `dst` is too small.
+
+const KEY_UP: u32 = 2097153u32
+const KEY_DOWN: u32 = 2097154u32
+const KEY_RIGHT: u32 = 2097155u32
+const KEY_LEFT: u32 = 2097156u32
+const KEY_HOME: u32 = 2097157u32
+const KEY_END: u32 = 2097158u32
+const KEY_INSERT: u32 = 2097159u32
+const KEY_DELETE: u32 = 2097160u32
+const KEY_PAGE_UP: u32 = 2097161u32
+const KEY_PAGE_DOWN: u32 = 2097162u32
+const KEY_ENTER: u32 = 2097163u32
+const KEY_TAB: u32 = 2097164u32
+const KEY_BACKSPACE: u32 = 2097165u32
+const KEY_ESCAPE: u32 = 2097166u32
+const KEY_F1: u32 = 2097167u32
+const KEY_F12: u32 = 2097178u32
+const MOD_SHIFT: u32 = 1u32
+const MOD_ALT: u32 = 2u32
+const MOD_CTRL: u32 = 4u32
+const MOD_META: u32 = 8u32
+const MOUSE_PRESS: u32 = 0u32
+const MOUSE_RELEASE: u32 = 1u32
+const MOUSE_MOVE: u32 = 2u32
+const BUTTON_LEFT: u32 = 0u32
+const BUTTON_MIDDLE: u32 = 1u32
+const BUTTON_RIGHT: u32 = 2u32
+const BUTTON_NONE: u32 = 3u32
+const WHEEL_UP: u32 = 4u32
+const WHEEL_DOWN: u32 = 5u32
+const WHEEL_LEFT: u32 = 6u32
+const WHEEL_RIGHT: u32 = 7u32
+
+// Decimal digits of v appended at buf[n]; returns the new length.
+fn put_dec(buf: []u8, n_in: usize, v: usize) -> usize {
+    var n = n_in
+    var digits: [20]u8 = zero
+    var k = 0usize
+    var x = v
+    if x == 0usize {
+        digits[0usize] = 48u8
+        k = 1usize
+    }
+    while x > 0usize {
+        digits[k] = 48u8 + u8(x % 10usize)
+        k += 1usize
+        x = x / 10usize
+    }
+    while k > 0usize {
+        k -= 1usize
+        buf[n] = digits[k]
+        n += 1usize
+    }
+    ret n
+}
+
+fn emit_bytes(tmp: []const u8, n: usize, dst: []u8) -> usize {
+    if n > dst.len { ret 0usize }
+    var i = 0usize
+    while i < n {
+        dst[i] = tmp[i]
+        i += 1usize
+    }
+    ret n
+}
+
+fn encode_key(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize {
+    var b: [40]u8 = zero
+    var n = 0usize
+    let m = 1usize + usize(mods & 15u32)
+    let alt = (mods & (MOD_ALT | MOD_META)) != 0u32
+    let ctrl = (mods & MOD_CTRL) != 0u32
+    let shift = (mods & MOD_SHIFT) != 0u32
+    if key < 1114112u32 {
+        var c = key
+        var as_control = false
+        if ctrl {
+            if c >= 97u32 && c <= 122u32 {
+                c = c - 96u32
+                as_control = true
+            } else if c >= 65u32 && c <= 90u32 {
+                c = c - 64u32
+                as_control = true
+            } else if c == 64u32 || c == 32u32 || c == 50u32 {
+                c = 0u32
+                as_control = true
+            } else if c == 91u32 || c == 51u32 {
+                c = 27u32
+                as_control = true
+            } else if c == 92u32 || c == 52u32 {
+                c = 28u32
+                as_control = true
+            } else if c == 93u32 || c == 53u32 {
+                c = 29u32
+                as_control = true
+            } else if c == 94u32 || c == 54u32 {
+                c = 30u32
+                as_control = true
+            } else if c == 95u32 || c == 47u32 || c == 55u32 {
+                c = 31u32
+                as_control = true
+            } else if c == 63u32 || c == 56u32 {
+                c = 127u32
+                as_control = true
+            }
+        }
+        if alt {
+            b[n] = 27u8
+            n += 1usize
+        }
+        if as_control || c < 128u32 {
+            b[n] = u8(c)
+            n += 1usize
+        } else {
+            n += encoding.write_utf8(c, b[..], n)
+        }
+        ret emit_bytes(b[..], n, dst)
+    }
+    if key == KEY_ENTER || key == KEY_TAB || key == KEY_BACKSPACE || key == KEY_ESCAPE {
+        if alt {
+            b[n] = 27u8
+            n += 1usize
+        }
+        if key == KEY_ENTER {
+            b[n] = 13u8
+            n += 1usize
+            if t.newline_mode {
+                b[n] = 10u8
+                n += 1usize
+            }
+        } else if key == KEY_TAB {
+            if shift {
+                b[n] = 27u8
+                b[n + 1usize] = 91u8
+                b[n + 2usize] = 90u8
+                n += 3usize
+            } else {
+                b[n] = 9u8
+                n += 1usize
+            }
+        } else if key == KEY_BACKSPACE {
+            if ctrl { b[n] = 8u8 } else { b[n] = 127u8 }
+            n += 1usize
+        } else {
+            b[n] = 27u8
+            n += 1usize
+        }
+        ret emit_bytes(b[..], n, dst)
+    }
+    if key >= KEY_UP && key <= KEY_END {
+        var letter = 65u8
+        if key == KEY_DOWN { letter = 66u8 }
+        if key == KEY_RIGHT { letter = 67u8 }
+        if key == KEY_LEFT { letter = 68u8 }
+        if key == KEY_HOME { letter = 72u8 }
+        if key == KEY_END { letter = 70u8 }
+        b[0usize] = 27u8
+        if m == 1usize {
+            if t.app_cursor { b[1usize] = 79u8 } else { b[1usize] = 91u8 }
+            b[2usize] = letter
+            n = 3usize
+        } else {
+            b[1usize] = 91u8
+            b[2usize] = 49u8
+            b[3usize] = 59u8
+            n = put_dec(b[..], 4usize, m)
+            b[n] = letter
+            n += 1usize
+        }
+        ret emit_bytes(b[..], n, dst)
+    }
+    var tilde = 0usize
+    if key == KEY_INSERT { tilde = 2usize }
+    if key == KEY_DELETE { tilde = 3usize }
+    if key == KEY_PAGE_UP { tilde = 5usize }
+    if key == KEY_PAGE_DOWN { tilde = 6usize }
+    if key >= KEY_F1 && key <= KEY_F12 {
+        let f = usize(key - KEY_F1) + 1usize
+        if f <= 4usize {
+            b[0usize] = 27u8
+            if m == 1usize {
+                b[1usize] = 79u8
+                b[2usize] = 79u8 + u8(f)
+                n = 3usize
+            } else {
+                b[1usize] = 91u8
+                b[2usize] = 49u8
+                b[3usize] = 59u8
+                n = put_dec(b[..], 4usize, m)
+                b[n] = 79u8 + u8(f)
+                n += 1usize
+            }
+            ret emit_bytes(b[..], n, dst)
+        }
+        if f == 5usize { tilde = 15usize }
+        if f == 6usize { tilde = 17usize }
+        if f == 7usize { tilde = 18usize }
+        if f == 8usize { tilde = 19usize }
+        if f == 9usize { tilde = 20usize }
+        if f == 10usize { tilde = 21usize }
+        if f == 11usize { tilde = 23usize }
+        if f == 12usize { tilde = 24usize }
+    }
+    if tilde == 0usize { ret 0usize }
+    b[0usize] = 27u8
+    b[1usize] = 91u8
+    n = put_dec(b[..], 2usize, tilde)
+    if m != 1usize {
+        b[n] = 59u8
+        n = put_dec(b[..], n + 1usize, m)
+    }
+    b[n] = 126u8
+    n += 1usize
+    ret emit_bytes(b[..], n, dst)
+}
+
+// A mouse report for the mode the program set: 9 (X10, press only, no modifiers), 1000 (press and release,
+// wheel), 1002 (plus motion with a button held, `button` naming it) and 1003 (all motion, BUTTON_NONE when no
+// button is held); SGR (1006) encoding when set, else the legacy single-byte one, which cannot name a cell past
+// column or row 222 and then sends nothing. `x` and `y` are 0-based cells; wheel events are presses.
+fn encode_mouse(t: *const Term, button: u32, action: u32, mods: u32, x: usize, y: usize, dst: []u8) -> usize {
+    let mode = t.mouse_mode
+    if mode == 0u32 || button > 7u32 || action > 2u32 { ret 0usize }
+    let wheel = button >= 4u32
+    if wheel && action != MOUSE_PRESS { ret 0usize }
+    if action == MOUSE_MOVE {
+        if wheel || mode == 9u32 || mode == 1000u32 { ret 0usize }
+        if mode == 1002u32 && button == BUTTON_NONE { ret 0usize }
+    }
+    if mode == 9u32 && (action != MOUSE_PRESS || wheel) { ret 0usize }
+    var cb = usize(button)
+    if wheel { cb = 60usize + usize(button) }
+    var release = false
+    if action == MOUSE_RELEASE { release = true }
+    if release && !t.mouse_sgr { cb = 3usize }
+    if mode != 9u32 {
+        if (mods & MOD_SHIFT) != 0u32 { cb += 4usize }
+        if (mods & (MOD_ALT | MOD_META)) != 0u32 { cb += 8usize }
+        if (mods & MOD_CTRL) != 0u32 { cb += 16usize }
+    }
+    if action == MOUSE_MOVE { cb += 32usize }
+    var b: [40]u8 = zero
+    b[0usize] = 27u8
+    b[1usize] = 91u8
+    var n = 0usize
+    if t.mouse_sgr && mode != 9u32 {
+        b[2usize] = 60u8
+        n = put_dec(b[..], 3usize, cb)
+        b[n] = 59u8
+        n = put_dec(b[..], n + 1usize, x + 1usize)
+        b[n] = 59u8
+        n = put_dec(b[..], n + 1usize, y + 1usize)
+        if release { b[n] = 109u8 } else { b[n] = 77u8 }
+        n += 1usize
+    } else {
+        if x > 222usize || y > 222usize { ret 0usize }
+        b[2usize] = 77u8
+        b[3usize] = u8(cb + 32usize)
+        b[4usize] = u8(x + 33usize)
+        b[5usize] = u8(y + 33usize)
+        n = 6usize
+    }
+    ret emit_bytes(b[..], n, dst)
+}
+
+// Focus-in / focus-out report (CSI I / CSI O) when the program asked for them (mode 1004).
+fn encode_focus(t: *const Term, focused: bool, dst: []u8) -> usize {
+    if !t.focus_events { ret 0usize }
+    var b: [3]u8 = zero
+    b[0usize] = 27u8
+    b[1usize] = 91u8
+    if focused { b[2usize] = 73u8 } else { b[2usize] = 79u8 }
+    ret emit_bytes(b[..], 3usize, dst)
+}
+
+// ESC [ 2 0 0 ~ when bracketed paste is on, else nothing.
+fn paste_begin(t: *const Term, dst: []u8) -> usize {
+    if !t.bracketed_paste { ret 0usize }
+    var b: [6]u8 = zero
+    b[0usize] = 27u8
+    b[1usize] = 91u8
+    b[2usize] = 50u8
+    b[3usize] = 48u8
+    b[4usize] = 48u8
+    b[5usize] = 126u8
+    ret emit_bytes(b[..], 6usize, dst)
+}
+
+// ESC [ 2 0 1 ~ when bracketed paste is on, else nothing.
+fn paste_end(t: *const Term, dst: []u8) -> usize {
+    if !t.bracketed_paste { ret 0usize }
+    var b: [6]u8 = zero
+    b[0usize] = 27u8
+    b[1usize] = 91u8
+    b[2usize] = 50u8
+    b[3usize] = 48u8
+    b[4usize] = 49u8
+    b[5usize] = 126u8
+    ret emit_bytes(b[..], 6usize, dst)
+}
+
+// The pasted bytes as the program should read them: bracketed, every ESC is dropped so the text cannot end its
+// own bracket; unbracketed, a line break (CR LF, LF) becomes one CR. Stops when dst is full; returns the bytes
+// written.
+fn paste_filter(t: *const Term, src: []const u8, dst: []u8) -> usize {
+    var n = 0usize
+    var i = 0usize
+    while i < src.len && n < dst.len {
+        let c = src[i]
+        if t.bracketed_paste {
+            if c != 27u8 {
+                dst[n] = c
+                n += 1usize
+            }
+        } else if c == 13u8 && i + 1usize < src.len && src[i + 1usize] == 10u8 {
+            dst[n] = 13u8
+            n += 1usize
+            i += 1usize
+        } else if c == 10u8 {
+            dst[n] = 13u8
+            n += 1usize
+        } else {
+            dst[n] = c
+            n += 1usize
+        }
+        i += 1usize
+    }
+    ret n
+}
+
+// ---- selection (D3501) ------------------------------------------------------------------------------------
+// A selection is in buffer coordinates (line = scrollback index or sb_len + row, column in cells). Character
+// mode takes both end cells; word mode widens each end to the run of same-class cells (blank, word, other) on
+// its line; line mode takes whole logical lines (rows joined by LINE_WRAPPED); block mode a rectangle. A click
+// on the second half of a wide character selects the character.
+
+const SEL_NONE: u32 = 0u32
+const SEL_CHAR: u32 = 1u32
+const SEL_WORD: u32 = 2u32
+const SEL_LINE: u32 = 3u32
+const SEL_BLOCK: u32 = 4u32
+
+type Selection = struct { mode: u32, a_line: usize, a_col: usize, h_line: usize, h_col: usize }
+
+fn selection_start(mode: u32, line: usize, col: usize) -> Selection {
+    ret Selection { mode: mode, a_line: line, a_col: col, h_line: line, h_col: col }
+}
+
+fn selection_extend(sel: *Selection, line: usize, col: usize) {
+    sel.h_line = line
+    sel.h_col = col
+}
+
+// The column of the cell a position belongs to (the head of a wide character).
+fn snap_col(t: *const Term, line: usize, col: usize) -> usize {
+    var c = min_usize(col, t.cols - 1usize)
+    if c > 0usize && (line_cell(t, line, c).attr & CONT) != 0u32 { c -= 1usize }
+    ret c
+}
+
+fn cell_class(c: Cell) -> u32 {
+    if c.ch == 32u32 || c.ch == 0u32 { ret 0u32 }
+    if (c.ch >= 48u32 && c.ch <= 57u32) || (c.ch >= 65u32 && c.ch <= 90u32) || (c.ch >= 97u32 && c.ch <= 122u32) || c.ch == 95u32 || c.ch >= 128u32 { ret 1u32 }
+    ret 2u32
+}
+
+// [first, one past last) columns of the run of same-class cells holding (line, col).
+fn word_bounds(t: *const Term, line: usize, col: usize) -> (usize, usize) {
+    let c0 = snap_col(t, line, col)
+    let cls = cell_class(line_cell(t, line, c0))
+    var s = c0
+    while s > 0usize {
+        var p = s - 1usize
+        if p > 0usize && (line_cell(t, line, p).attr & CONT) != 0u32 { p -= 1usize }
+        if cell_class(line_cell(t, line, p)) != cls { break }
+        s = p
+    }
+    var f = c0
+    while f < t.cols {
+        let cl = line_cell(t, line, f)
+        if (cl.attr & CONT) == 0u32 && cell_class(cl) != cls { break }
+        f += 1usize
+    }
+    ret (s, f)
+}
+
+fn logical_first(t: *const Term, line: usize) -> usize {
+    var l = line
+    while l > 0usize && line_wrapped(t, l - 1usize) { l -= 1usize }
+    ret l
+}
+
+fn logical_last(t: *const Term, line: usize) -> usize {
+    var l = line
+    while l + 1usize < line_count(t) && line_wrapped(t, l) { l += 1usize }
+    ret l
+}
+
+// The selected span in reading order: (first line, first column, last line, one past its last column). For block
+// mode the columns are the rectangle's (min, max + 1) on every line from first to last.
+fn selection_range(t: *const Term, sel: *const Selection) -> (usize, usize, usize, usize) {
+    if sel.mode == SEL_NONE || line_count(t) == 0usize { ret (0usize, 0usize, 0usize, 0usize) }
+    let last_line = line_count(t) - 1usize
+    let al = min_usize(sel.a_line, last_line)
+    let hl = min_usize(sel.h_line, last_line)
+    let ac = snap_col(t, al, sel.a_col)
+    let hc = snap_col(t, hl, sel.h_col)
+    var a_first = al
+    var a_col = ac
+    var h_first = hl
+    var h_col = hc
+    var swap = false
+    if hl < al || (hl == al && hc < ac) { swap = true }
+    if sel.mode == SEL_BLOCK {
+        ret (min_usize(al, hl), min_usize(ac, hc), max_usize(al, hl), max_usize(ac, hc) + 1usize)
+    }
+    if swap {
+        a_first = hl
+        a_col = hc
+        h_first = al
+        h_col = ac
+    }
+    if sel.mode == SEL_LINE {
+        ret (logical_first(t, a_first), 0usize, logical_last(t, h_first), t.cols)
+    }
+    var end_col = h_col + 1usize
+    if sel.mode == SEL_WORD {
+        let (ws, _) = word_bounds(t, a_first, a_col)
+        let (_, we) = word_bounds(t, h_first, h_col)
+        a_col = ws
+        end_col = we
+    }
+    ret (a_first, a_col, h_first, min_usize(end_col, t.cols))
+}
+
+fn selection_contains(t: *const Term, sel: *const Selection, line: usize, col: usize) -> bool {
+    if sel.mode == SEL_NONE { ret false }
+    let (sl, sc, el, ec) = selection_range(t, sel)
+    if line < sl || line > el { ret false }
+    let c = snap_col(t, line, col)
+    if sel.mode == SEL_BLOCK { ret c >= sc && c < ec }
+    if line == sl && c < sc { ret false }
+    if line == el && c >= ec { ret false }
+    ret true
+}
+
+// The selected text as UTF-8 into dst (truncated at dst.len); returns the bytes written. Rows joined by
+// LINE_WRAPPED have no break between them; any other break is one LF. A row that the selection runs to the
+// right edge of loses its trailing blanks unless it continues on the next row; block rows always do.
+fn selection_text(t: *const Term, sel: *const Selection, dst: []u8) -> usize {
+    if sel.mode == SEL_NONE { ret 0usize }
+    let (sl, sc, el, ec) = selection_range(t, sel)
+    var n = 0usize
+    var l = sl
+    while l <= el {
+        var c0 = 0usize
+        var c1 = t.cols
+        if sel.mode == SEL_BLOCK {
+            c0 = sc
+            c1 = ec
+        } else if sel.mode != SEL_LINE {
+            if l == sl { c0 = sc }
+            if l == el { c1 = ec }
+        }
+        var last = c1
+        let continues = line_wrapped(t, l) && l != el
+        var trim = false
+        if sel.mode == SEL_BLOCK { trim = true } else if c1 == t.cols && !line_wrapped(t, l) { trim = true }
+        if trim {
+            while last > c0 {
+                let cl = line_cell(t, l, last - 1usize)
+                if (cl.attr & CONT) != 0u32 || (cl.ch != 32u32 && cl.ch != 0u32) { break }
+                last -= 1usize
+            }
+        }
+        var c = c0
+        while c < last {
+            let cl = line_cell(t, l, c)
+            if (cl.attr & CONT) == 0u32 {
+                var ch = cl.ch
+                if ch == 0u32 { ch = 32u32 }
+                if n + encoding.utf8_length(ch) > dst.len { ret n }
+                n += encoding.write_utf8(ch, dst, n)
+            }
+            c += 1usize
+        }
+        if l != el && !continues {
+            if n >= dst.len { ret n }
+            dst[n] = 10u8
+            n += 1usize
+        }
+        l += 1usize
+    }
+    ret n
+}
+
+// Lines `dropped` scrolled out of the oldest end of the buffer: move the selection with them. Returns false
+// (and clears the selection) when nothing of it is left.
+fn selection_adjust(sel: *Selection, dropped: usize) -> bool {
+    if sel.mode == SEL_NONE { ret false }
+    if sel.a_line < dropped && sel.h_line < dropped {
+        sel.mode = SEL_NONE
+        ret false
+    }
+    if sel.a_line < dropped {
+        sel.a_line = 0usize
+        sel.a_col = 0usize
+    } else {
+        sel.a_line -= dropped
+    }
+    if sel.h_line < dropped {
+        sel.h_line = 0usize
+        sel.h_col = 0usize
+    } else {
+        sel.h_line -= dropped
+    }
+    ret true
 }

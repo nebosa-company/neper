@@ -10,6 +10,7 @@
 // completion, diagnostics, LSP and the remaining language packs (see docs/code-editor-plan.md).
 
 use e.mem
+use e.text.regex as rx
 
 type Range = struct { anchor: usize, head: usize, goal: usize }
 type Edit = struct { at: usize, remove: usize, text_off: usize, text_len: usize }
@@ -98,6 +99,87 @@ fn lang_python() -> Language {
         line_comment: "#", block_open: "", block_close: "", quotes: "\"'", multiline_quotes: "" }
 }
 
+// C and C++ share one pack: `//` and `/* */`, both quote kinds, the C and C++ keywords and the fixed-width types.
+fn lang_c() -> Language {
+    ret Language {
+        keywords: " auto break case catch class const constexpr continue default delete do else enum explicit extern false for friend goto if inline namespace new noexcept nullptr operator private protected public register return sizeof static struct switch template this throw true try typedef typename union using virtual volatile while ",
+        types: " bool char double float int int8_t int16_t int32_t int64_t long short signed size_t uint8_t uint16_t uint32_t uint64_t unsigned void wchar_t ",
+        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'", multiline_quotes: "" }
+}
+
+// Rust: a lone `'` is a lifetime as often as a character literal, so only `"` opens a string here.
+fn lang_rust() -> Language {
+    ret Language {
+        keywords: " as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while ",
+        types: " bool char f32 f64 i8 i16 i32 i64 i128 isize str u8 u16 u32 u64 u128 usize String Vec Option Result Box ",
+        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"", multiline_quotes: "\"" }
+}
+
+fn lang_go() -> Language {
+    ret Language {
+        keywords: " break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var true false nil ",
+        types: " bool byte complex64 complex128 error float32 float64 int int8 int16 int32 int64 rune string uint uint8 uint16 uint32 uint64 uintptr ",
+        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'`", multiline_quotes: "`" }
+}
+
+fn lang_java() -> Language {
+    ret Language {
+        keywords: " abstract assert break case catch class const continue default do else enum extends final finally for goto if implements import instanceof interface native new package private protected public return static strictfp super switch synchronized this throw throws transient try volatile while true false null ",
+        types: " boolean byte char double float int long short void String ",
+        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'", multiline_quotes: "" }
+}
+
+fn lang_typescript() -> Language {
+    ret Language {
+        keywords: " abstract as async await break case catch class const continue debugger declare default delete do else enum export extends false finally for from function if implements import in instanceof interface is keyof let namespace new null of private protected public readonly return static super switch this throw true try type typeof var void while with yield ",
+        types: " any bigint boolean never number object string symbol undefined unknown ",
+        line_comment: "//", block_open: "/*", block_close: "*/", quotes: "\"'`", multiline_quotes: "`" }
+}
+
+// JSON has no comments; its three literals are keywords so they colour apart from strings and numbers.
+fn lang_json() -> Language {
+    ret Language { keywords: " true false null ", types: "", line_comment: "", block_open: "", block_close: "", quotes: "\"", multiline_quotes: "" }
+}
+
+fn lang_shell() -> Language {
+    ret Language {
+        keywords: " if then else elif fi case esac for select while until do done in function time return exit break continue export local readonly declare unset shift source alias echo ",
+        types: "", line_comment: "#", block_open: "", block_close: "", quotes: "\"'`", multiline_quotes: "\"'" }
+}
+
+// SQL keywords are matched as written, so both the upper and lower case spellings of each are listed.
+fn lang_sql() -> Language {
+    ret Language {
+        keywords: " select SELECT from FROM where WHERE insert INSERT into INTO values VALUES update UPDATE set SET delete DELETE create CREATE table TABLE drop DROP alter ALTER index INDEX join JOIN left LEFT right RIGHT inner INNER outer OUTER on ON group GROUP by BY order ORDER having HAVING limit LIMIT union UNION and AND or OR not NOT null NULL as AS distinct DISTINCT primary PRIMARY key KEY foreign FOREIGN references REFERENCES ",
+        types: " int INT integer INTEGER text TEXT varchar VARCHAR char CHAR date DATE timestamp TIMESTAMP boolean BOOLEAN real REAL numeric NUMERIC ",
+        line_comment: "--", block_open: "/*", block_close: "*/", quotes: "\"'`", multiline_quotes: "" }
+}
+
+// CSS: block comments only; at-rules and property names are plain identifiers here (no keyword list).
+fn lang_css() -> Language {
+    ret Language { keywords: " important ", types: "", line_comment: "", block_open: "/*", block_close: "*/", quotes: "\"'", multiline_quotes: "" }
+}
+
+// HTML and XML: `<!-- -->` comments and attribute quotes; tag names stay identifiers.
+fn lang_html() -> Language {
+    ret Language { keywords: "", types: "", line_comment: "", block_open: "<!--", block_close: "-->", quotes: "\"'", multiline_quotes: "" }
+}
+
+fn lang_yaml() -> Language {
+    ret Language { keywords: " true false null yes no on off ", types: "", line_comment: "#", block_open: "", block_close: "", quotes: "\"'", multiline_quotes: "" }
+}
+
+fn lang_toml() -> Language {
+    ret Language { keywords: " true false ", types: "", line_comment: "#", block_open: "", block_close: "", quotes: "\"'", multiline_quotes: "" }
+}
+
+// `--[[ ]]` would need the block opener tested before the line comment; the scanner tests the line comment first.
+fn lang_lua() -> Language {
+    ret Language {
+        keywords: " and break do else elseif end false for function goto if in local nil not or repeat return then true until while ",
+        types: "", line_comment: "--", block_open: "", block_close: "", quotes: "\"'", multiline_quotes: "" }
+}
+
 fn same_bytes(x: []const u8, y: str) -> bool {
     if x.len != y.len { ret false }
     var i = 0usize
@@ -123,6 +205,19 @@ fn lang_for_suffix(suffix: str) -> Language {
     if same_bytes(s, "e") { ret lang_neper() }
     if same_bytes(s, "js") || same_bytes(s, "mjs") || same_bytes(s, "cjs") { ret lang_javascript() }
     if same_bytes(s, "py") || same_bytes(s, "pyw") { ret lang_python() }
+    if same_bytes(s, "c") || same_bytes(s, "h") || same_bytes(s, "cc") || same_bytes(s, "cpp") || same_bytes(s, "cxx") || same_bytes(s, "hpp") { ret lang_c() }
+    if same_bytes(s, "rs") { ret lang_rust() }
+    if same_bytes(s, "go") { ret lang_go() }
+    if same_bytes(s, "java") { ret lang_java() }
+    if same_bytes(s, "ts") || same_bytes(s, "tsx") { ret lang_typescript() }
+    if same_bytes(s, "json") { ret lang_json() }
+    if same_bytes(s, "sh") || same_bytes(s, "bash") { ret lang_shell() }
+    if same_bytes(s, "sql") { ret lang_sql() }
+    if same_bytes(s, "css") { ret lang_css() }
+    if same_bytes(s, "html") || same_bytes(s, "htm") || same_bytes(s, "xml") { ret lang_html() }
+    if same_bytes(s, "yaml") || same_bytes(s, "yml") { ret lang_yaml() }
+    if same_bytes(s, "toml") { ret lang_toml() }
+    if same_bytes(s, "lua") { ret lang_lua() }
     ret lang_plain()
 }
 
@@ -436,8 +531,10 @@ fn quote_index(set: str, c: u8) -> usize {
 }
 
 // Scan line `ln` from `state_in` (0 normal, 1 inside a block comment, 2+i inside the i-th multiline quote).
-// Tokens go to `out` while there is room; returns (tokens written, state at the end of the line).
-fn scan_line(e: *const Editor, ln: usize, state_in: u8, out: []Token) -> (usize, u8) {
+// Tokens go to `out` while there is room; returns (tokens written, state at the end of the line, whether byte
+// offset `probe` lies inside a comment or string token -- pass NO_GOAL for none).
+fn scan_probe(e: *const Editor, ln: usize, state_in: u8, out: []Token, probe: usize) -> (usize, u8, bool) {
+    var hit = false
     let end = line_end(e, ln)
     var p = line_start(e, ln)
     var nt = 0usize
@@ -457,6 +554,7 @@ fn scan_line(e: *const Editor, ln: usize, state_in: u8, out: []Token) -> (usize,
             }
             if closed { st = 0u8 }
             if nt < out.len { out[nt] = Token { start: t0, end: p, kind: TOK_COMMENT } }
+            if probe >= t0 && probe < p { hit = true }
             nt += 1usize
         } else if st >= 2u8 {
             let q = lg.multiline_quotes[usize(st) - 2usize]
@@ -474,6 +572,7 @@ fn scan_line(e: *const Editor, ln: usize, state_in: u8, out: []Token) -> (usize,
             }
             if closed { st = 0u8 }
             if nt < out.len { out[nt] = Token { start: t0, end: p, kind: TOK_STRING } }
+            if probe >= t0 && probe < p { hit = true }
             nt += 1usize
         } else {
             let c = byte_at(e, p)
@@ -482,6 +581,7 @@ fn scan_line(e: *const Editor, ln: usize, state_in: u8, out: []Token) -> (usize,
             } else if at_prefix(e, p, end, lg.line_comment) {
                 p = end
                 if nt < out.len { out[nt] = Token { start: t0, end: p, kind: TOK_COMMENT } }
+                if probe >= t0 && probe < p { hit = true }
                 nt += 1usize
             } else if at_prefix(e, p, end, lg.block_open) {
                 p += lg.block_open.len
@@ -496,6 +596,7 @@ fn scan_line(e: *const Editor, ln: usize, state_in: u8, out: []Token) -> (usize,
                 }
                 if !closed { st = 1u8 }
                 if nt < out.len { out[nt] = Token { start: t0, end: p, kind: TOK_COMMENT } }
+                if probe >= t0 && probe < p { hit = true }
                 nt += 1usize
             } else if quote_index(lg.quotes, c) != NO_GOAL {
                 p += 1usize
@@ -516,6 +617,7 @@ fn scan_line(e: *const Editor, ln: usize, state_in: u8, out: []Token) -> (usize,
                     if mi != NO_GOAL { st = u8(2usize + mi) }
                 }
                 if nt < out.len { out[nt] = Token { start: t0, end: p, kind: TOK_STRING } }
+                if probe >= t0 && probe < p { hit = true }
                 nt += 1usize
             } else if is_word_byte(c) && !(c >= 48u8 && c <= 57u8) {
                 while p < end && is_word_byte(byte_at(e, p)) { p += 1usize }
@@ -536,7 +638,13 @@ fn scan_line(e: *const Editor, ln: usize, state_in: u8, out: []Token) -> (usize,
             }
         }
     }
-    ret (nt, st)
+    ret (nt, st, hit)
+}
+
+// scan_probe without a probe: tokens and the end state only.
+fn scan_line(e: *const Editor, ln: usize, state_in: u8, out: []Token) -> (usize, u8) {
+    let (n, st, _) = scan_probe(e, ln, state_in, out, NO_GOAL)
+    ret (n, st)
 }
 
 // Bring the cached start states of lines 0..=upto up to date: process dirty lines in order and stop propagating
@@ -1540,4 +1648,624 @@ fn replace_all(e: *Editor, q: str, repl: str, o: SearchOpts) -> (usize, err) {
     let r = apply_edits_as(e, e.scratch_edits[0usize..n], repl, KIND_OTHER, -1i32)
     if r != ok { ret (0usize, r) }
     ret (n, ok)
+}
+
+// ---- regular-expression search and replace (D3500) -------------------------------------------------------
+// A compiled `e.text.regex` program is run over the document. Matches form the left-to-right sequence of
+// NON-EMPTY matches: an empty match is skipped and the search resumes one scalar past it, so `x*` never
+// replaces nothing. `^` and `\b` see the whole document, so a search resumed mid-text does not re-anchor.
+
+// The document as one contiguous string (moves the gap to the end; content is untouched).
+fn contiguous(e: *Editor) -> str {
+    move_gap(e, len(e))
+    ret e.buf[0usize..len(e)]
+}
+
+fn scalar_len(lead: u8) -> usize {
+    if lead >= 240u8 { ret 4usize }
+    if lead >= 224u8 { ret 3usize }
+    if lead >= 192u8 { ret 2usize }
+    ret 1usize
+}
+
+// The first non-empty match starting at or after `from`: (start, end, found).
+fn regex_next(prog: *const rx.Regex, text: str, from: usize) -> (usize, usize, bool) {
+    var p = from
+    while p <= text.len {
+        let (m, found) = rx.find(prog, text, p)
+        if !found { ret (0usize, 0usize, false) }
+        if m.end > m.start { ret (m.start, m.end, true) }
+        if m.start >= text.len { ret (0usize, 0usize, false) }
+        p = m.start + scalar_len(text[m.start])
+    }
+    ret (0usize, 0usize, false)
+}
+
+// Forward: the first match starting at or after `from`. Backward: the last match of the sequence starting
+// before `from`.
+fn find_regex(e: *Editor, prog: *const rx.Regex, from: usize, forward: bool) -> (usize, usize, bool) {
+    let text = contiguous(e)
+    if forward {
+        let (fs, fe, ff) = regex_next(prog, text, from)
+        ret (fs, fe, ff)
+    }
+    var best_s = 0usize
+    var best_e = 0usize
+    var got = false
+    var p = 0usize
+    var go = true
+    while go {
+        let (s, f, found) = regex_next(prog, text, p)
+        if !found || s >= from {
+            go = false
+        } else {
+            best_s = s
+            best_e = f
+            got = true
+            p = f
+        }
+    }
+    ret (best_s, best_e, got)
+}
+
+// Matches counted up to `limit` (the second result is true when capped).
+fn count_regex(e: *Editor, prog: *const rx.Regex, limit: usize) -> (usize, bool) {
+    let text = contiguous(e)
+    var n = 0usize
+    var p = 0usize
+    var go = true
+    while go {
+        let (_, f, found) = regex_next(prog, text, p)
+        if !found {
+            go = false
+        } else {
+            n += 1usize
+            if n >= limit { ret (n, true) }
+            p = f
+        }
+    }
+    ret (n, false)
+}
+
+// Expand `$0`..`$9` (the match and its groups; a group that took no part is empty) and `$$` into dst at `off`.
+// Returns the new length, or NO_GOAL when dst is full.
+fn expand_replacement(text: str, whole: rx.Match, groups: []const rx.Match, repl: str, dst: []u8, off_in: usize) -> usize {
+    var off = off_in
+    var i = 0usize
+    while i < repl.len {
+        let c = repl[i]
+        var lo = NO_GOAL
+        var hi = 0usize
+        var step = 1usize
+        if c == 36u8 && i + 1usize < repl.len {
+            let d = repl[i + 1usize]
+            if d == 36u8 {
+                if off >= dst.len { ret NO_GOAL }
+                dst[off] = 36u8
+                off += 1usize
+                step = 2usize
+            } else if d >= 48u8 && d <= 57u8 {
+                let g = usize(d - 48u8)
+                if g == 0usize {
+                    lo = whole.start
+                    hi = whole.end
+                } else if g <= groups.len && groups[g - 1usize].start != rx.NONE {
+                    lo = groups[g - 1usize].start
+                    hi = groups[g - 1usize].end
+                }
+                step = 2usize
+            } else {
+                if off >= dst.len { ret NO_GOAL }
+                dst[off] = c
+                off += 1usize
+            }
+        } else {
+            if off >= dst.len { ret NO_GOAL }
+            dst[off] = c
+            off += 1usize
+        }
+        if lo != NO_GOAL {
+            if off + (hi - lo) > dst.len { ret NO_GOAL }
+            var k = lo
+            while k < hi {
+                dst[off] = text[k]
+                off += 1usize
+                k += 1usize
+            }
+        }
+        i += step
+    }
+    ret off
+}
+
+// Replace every match in one transaction; `a` supplies the capture scratch and is restored afterwards.
+fn replace_regex_all(a: *mem.Arena, e: *Editor, prog: *const rx.Regex, repl: str) -> (usize, err) {
+    let text = contiguous(e)
+    var n = 0usize
+    var off = 0usize
+    var p = 0usize
+    var go = true
+    while go {
+        let (s, f, found) = regex_next(prog, text, p)
+        if !found {
+            go = false
+        } else {
+            if n >= e.scratch_edits.len { ret (0usize, TooLarge) }
+            let mark = a.off
+            let (caps, matched, ce) = rx.captures(a, prog, text, s)
+            if ce != ok || !matched {
+                a.off = mark
+                ret (0usize, TooLarge)
+            }
+            let start_off = off
+            off = expand_replacement(text, caps.whole, caps.groups, repl, e.scratch_text, off)
+            a.off = mark
+            if off == NO_GOAL { ret (0usize, TooLarge) }
+            e.scratch_edits[n] = Edit { at: s, remove: f - s, text_off: start_off, text_len: off - start_off }
+            n += 1usize
+            p = f
+        }
+    }
+    if n == 0usize { ret (0usize, ok) }
+    let r = apply_edits_as(e, e.scratch_edits[0usize..n], e.scratch_text[0usize..off], KIND_OTHER, -1i32)
+    if r != ok { ret (0usize, r) }
+    ret (n, ok)
+}
+
+// ---- bracket matching and folding (D3500) ----------------------------------------------------------------
+// Brackets inside a string or comment token are neither matched nor counted.
+
+type Fold = struct { from: usize, to: usize }
+
+fn bracket_partner(c: u8) -> u8 {
+    if c == 40u8 { ret 41u8 }
+    if c == 41u8 { ret 40u8 }
+    if c == 91u8 { ret 93u8 }
+    if c == 93u8 { ret 91u8 }
+    if c == 123u8 { ret 125u8 }
+    if c == 125u8 { ret 123u8 }
+    ret 0u8
+}
+
+// Whether byte offset pos lies inside a comment or string token under the current language.
+fn in_skipped(e: *Editor, pos: usize) -> bool {
+    let ln = line_of(e, pos)
+    ensure_states(e, ln)
+    var none: [1]Token = zero
+    let (_, _, hit) = scan_probe(e, ln, e.line_state[ln] & 127u8, none[..0usize], pos)
+    ret hit
+}
+
+// The partner of the bracket at byte `at` (opening or closing), counting only brackets of the same kind.
+fn match_at_bracket(e: *Editor, at: usize) -> (usize, bool) {
+    if at >= len(e) { ret (0usize, false) }
+    let c = byte_at(e, at)
+    let partner = bracket_partner(c)
+    if partner == 0u8 || in_skipped(e, at) { ret (0usize, false) }
+    var depth = 0usize
+    if is_open_bracket(c) {
+        var p = at + 1usize
+        while p < len(e) {
+            let d = byte_at(e, p)
+            if (d == c || d == partner) && !in_skipped(e, p) {
+                if d == c {
+                    depth += 1usize
+                } else if depth == 0usize {
+                    ret (p, true)
+                } else {
+                    depth -= 1usize
+                }
+            }
+            p += 1usize
+        }
+    } else {
+        var p = at
+        while p > 0usize {
+            p -= 1usize
+            let d = byte_at(e, p)
+            if (d == c || d == partner) && !in_skipped(e, p) {
+                if d == c {
+                    depth += 1usize
+                } else if depth == 0usize {
+                    ret (p, true)
+                } else {
+                    depth -= 1usize
+                }
+            }
+        }
+    }
+    ret (0usize, false)
+}
+
+// The bracket just before `pos`, else the one at `pos`, and its partner: (bracket, partner, found).
+fn match_bracket(e: *Editor, pos: usize) -> (usize, usize, bool) {
+    if pos > 0usize && pos <= len(e) && bracket_partner(byte_at(e, pos - 1usize)) != 0u8 {
+        let (m, found) = match_at_bracket(e, pos - 1usize)
+        if found { ret (pos - 1usize, m, true) }
+    }
+    if pos < len(e) && bracket_partner(byte_at(e, pos)) != 0u8 {
+        let (m2, found2) = match_at_bracket(e, pos)
+        if found2 { ret (pos, m2, true) }
+    }
+    ret (0usize, 0usize, false)
+}
+
+fn blank_line(e: *const Editor, ln: usize) -> bool {
+    let (_, nbytes) = indent_of(e, ln)
+    ret line_start(e, ln) + nbytes == line_end(e, ln)
+}
+
+// Indentation fold: the following lines indented deeper than line `ln`, blank lines inside included; the range
+// runs from the end of `ln` to the end of the last such line.
+fn fold_indent(e: *Editor, ln: usize) -> (usize, usize, bool) {
+    if ln >= e.nlines || blank_line(e, ln) { ret (0usize, 0usize, false) }
+    let (base, _) = indent_of(e, ln)
+    var last = NO_GOAL
+    var l = ln + 1usize
+    var go = true
+    while l < e.nlines && go {
+        if blank_line(e, l) {
+            l += 1usize
+        } else {
+            let (c, _) = indent_of(e, l)
+            if c > base {
+                last = l
+                l += 1usize
+            } else {
+                go = false
+            }
+        }
+    }
+    if last == NO_GOAL { ret (0usize, 0usize, false) }
+    ret (line_end(e, ln), line_end(e, last), true)
+}
+
+// The fold headed by line `ln`: when the line's last non-comment token is an opening bracket whose partner is
+// on a later line, the text between them; otherwise, in a `#`-comment language, the indentation fold. A line of
+// more than 128 tokens is not a fold header.
+fn fold_at(e: *Editor, ln: usize) -> (usize, usize, bool) {
+    if ln >= e.nlines { ret (0usize, 0usize, false) }
+    var toks: [128]Token = zero
+    let n = tokens(e, ln, toks[..])
+    if n > 0usize && n <= 128usize {
+        var k = n
+        while k > 0usize && toks[k - 1usize].kind == TOK_COMMENT { k -= 1usize }
+        if k > 0usize {
+            let t = toks[k - 1usize]
+            if t.end - t.start == 1usize && t.kind == TOK_PUNCT && is_open_bracket(byte_at(e, t.start)) {
+                let (m, found) = match_at_bracket(e, t.start)
+                if found && line_of(e, m) > ln { ret (t.start + 1usize, m, true) }
+            }
+        }
+    }
+    let lc = e.lang.line_comment
+    if lc.len == 1usize && lc[0usize] == 35u8 {
+        let (ff, ft, fok) = fold_indent(e, ln)
+        ret (ff, ft, fok)
+    }
+    ret (0usize, 0usize, false)
+}
+
+// Every fold of the document in line order; returns how many there are (out holds the first out.len).
+fn fold_all(e: *Editor, out: []Fold) -> usize {
+    var n = 0usize
+    var ln = 0usize
+    while ln < e.nlines {
+        let (f, t, found) = fold_at(e, ln)
+        if found {
+            if n < out.len { out[n] = Fold { from: f, to: t } }
+            n += 1usize
+        }
+        ln += 1usize
+    }
+    ret n
+}
+
+// ---- soft wrap (D3500) -----------------------------------------------------------------------------------
+// A visual row holds at most `width` display columns: one per caret stop (grapheme), a tab to the next
+// multiple of tab_width measured from the row start. A row breaks after the last blank it holds, else at the
+// overflowing stop (one stop is always taken). `width` 0 turns wrapping off (one row per line). Double-width
+// scalars count one column; the terminal has the width table.
+
+// Byte offset where the row that starts at `from` ends: the next row's start, or `end` when the line ends.
+fn wrap_next_row(e: *const Editor, from: usize, end: usize, width: usize) -> usize {
+    if width == 0usize { ret end }
+    var p = from
+    var col = 0usize
+    var brk = NO_GOAL
+    while p < end {
+        let c = byte_at(e, p)
+        var w = 1usize
+        if c == 9u8 { w = e.tab_width - col % e.tab_width }
+        if col + w > width && p > from {
+            if brk != NO_GOAL { ret brk }
+            ret p
+        }
+        col += w
+        p = next_boundary(e, p)
+        if c == 32u8 || c == 9u8 { brk = p }
+    }
+    ret end
+}
+
+fn wrap_rows(e: *const Editor, ln: usize, width: usize) -> usize {
+    let end = line_end(e, ln)
+    var rs = line_start(e, ln)
+    var n = 1usize
+    var go = true
+    while go {
+        let re = wrap_next_row(e, rs, end, width)
+        if re >= end {
+            go = false
+        } else {
+            rs = re
+            n += 1usize
+        }
+    }
+    ret n
+}
+
+// Start of visual row `row` of line `ln` (the last row when `row` is past it).
+fn wrap_row_start(e: *const Editor, ln: usize, width: usize, row: usize) -> usize {
+    let end = line_end(e, ln)
+    var rs = line_start(e, ln)
+    var k = 0usize
+    var go = true
+    while go && k < row {
+        let re = wrap_next_row(e, rs, end, width)
+        if re >= end {
+            go = false
+        } else {
+            rs = re
+            k += 1usize
+        }
+    }
+    ret rs
+}
+
+// (row within its line, display column within that row) of byte offset pos. A position at a row boundary
+// belongs to the later row; the end of a line belongs to its last row.
+fn wrap_locate(e: *const Editor, pos: usize, width: usize) -> (usize, usize) {
+    let ln = line_of(e, pos)
+    let end = line_end(e, ln)
+    var rs = line_start(e, ln)
+    var row = 0usize
+    var go = true
+    while go {
+        let re = wrap_next_row(e, rs, end, width)
+        if pos < re || re >= end {
+            go = false
+        } else {
+            rs = re
+            row += 1usize
+        }
+    }
+    var col = 0usize
+    var p = rs
+    while p < pos && p < end {
+        if byte_at(e, p) == 9u8 { col += e.tab_width - col % e.tab_width } else { col += 1usize }
+        p = next_boundary(e, p)
+    }
+    ret (row, col)
+}
+
+// Visual rows in the whole document.
+fn wrap_total_rows(e: *const Editor, width: usize) -> usize {
+    var n = 0usize
+    var ln = 0usize
+    while ln < e.nlines {
+        n += wrap_rows(e, ln, width)
+        ln += 1usize
+    }
+    ret n
+}
+
+// ---- multiple cursors and rectangular selection (D3500) --------------------------------------------------
+
+// Add a caret on the line above (or below) every range's head, at the sticky column. Refused whole when the
+// ranges would not fit.
+fn add_cursor_vertical(e: *Editor, up: bool) -> err {
+    let n = e.nsel
+    var added = 0usize
+    var new_primary = e.primary
+    var i = 0usize
+    while i < n {
+        let r = e.sels[i]
+        let ln = line_of(e, r.head)
+        var goal = r.goal
+        if goal == NO_GOAL { goal = column_of(e, r.head) }
+        var target_ln = ln
+        var has_line = true
+        if up {
+            if ln == 0usize { has_line = false } else { target_ln = ln - 1usize }
+        } else {
+            if ln + 1usize >= e.nlines { has_line = false } else { target_ln = ln + 1usize }
+        }
+        if has_line {
+            if n + added >= e.sels.len { ret TooManySelections }
+            let q = pos_at_column(e, target_ln, goal)
+            e.scratch_sels[added] = Range { anchor: q, head: q, goal: goal }
+            if i == e.primary { new_primary = n + added }
+            added += 1usize
+        }
+        i += 1usize
+    }
+    if added == 0usize { ret ok }
+    var k = 0usize
+    while k < added {
+        e.sels[n + k] = e.scratch_sels[k]
+        k += 1usize
+    }
+    let (m, pi) = normalize(e.sels, n + added, new_primary)
+    e.nsel = m
+    e.primary = pi
+    e.can_merge = false
+    ret ok
+}
+
+// Replace the selection with a rectangle between byte offsets `a` and `b`: one range per line spanning the
+// columns (in code points) of the two corners. A zero-width rectangle puts a caret on every line (clamped to the
+// line's end); otherwise a line shorter than the left column is left out. The primary range is the one on
+// b's line.
+fn select_rect(e: *Editor, a: usize, b: usize) -> err {
+    if a > len(e) || b > len(e) { ret Invalid }
+    let la = line_of(e, a)
+    let lb = line_of(e, b)
+    let ca = column_of(e, a)
+    let cb = column_of(e, b)
+    let lo_col = min_of(ca, cb)
+    let hi_col = max_of(ca, cb)
+    let first = min_of(la, lb)
+    let last = max_of(la, lb)
+    if last - first + 1usize > e.sels.len { ret TooManySelections }
+    var n = 0usize
+    var primary = 0usize
+    var l = first
+    while l <= last {
+        let ll = column_of(e, line_end(e, l))
+        if lo_col == hi_col || ll > lo_col {
+            let p_lo = pos_at_column(e, l, lo_col)
+            let p_hi = pos_at_column(e, l, hi_col)
+            if ca <= cb {
+                e.scratch_sels[n] = Range { anchor: p_lo, head: p_hi, goal: NO_GOAL }
+            } else {
+                e.scratch_sels[n] = Range { anchor: p_hi, head: p_lo, goal: NO_GOAL }
+            }
+            if l == lb { primary = n }
+            n += 1usize
+        }
+        l += 1usize
+    }
+    if n == 0usize {
+        e.scratch_sels[0usize] = caret(b)
+        n = 1usize
+    }
+    ret set_selection(e, e.scratch_sels[0usize..n], primary)
+}
+
+// The word (identifier run) touching byte offset pos: (start, end), equal when there is none.
+fn word_bounds(e: *const Editor, pos: usize) -> (usize, usize) {
+    var s = pos
+    while s > 0usize && is_word_char_at(e, prev_cp_start(e, s)) { s = prev_cp_start(e, s) }
+    var f = pos
+    while f < len(e) && is_word_char_at(e, f) { f = next_boundary(e, f) }
+    ret (s, f)
+}
+
+// Ctrl+D: with an empty primary range, select the word under it; otherwise add the next occurrence of the
+// primary range's text (after its end, wrapping to the start) as a new primary range, unless that occurrence
+// is already selected.
+fn select_next_occurrence(e: *Editor, o: SearchOpts) -> err {
+    let pr = e.sels[e.primary]
+    let lo = range_from(pr)
+    let hi = range_to(pr)
+    if lo == hi {
+        let (ws, we) = word_bounds(e, lo)
+        if ws == we { ret ok }
+        e.sels[e.primary] = Range { anchor: ws, head: we, goal: NO_GOAL }
+        let (m0, pi0) = normalize(e.sels, e.nsel, e.primary)
+        e.nsel = m0
+        e.primary = pi0
+        e.can_merge = false
+        ret ok
+    }
+    let n = hi - lo
+    if n > e.scratch_text.len { ret TooLarge }
+    let got = copy_text(e, lo, hi, e.scratch_text)
+    let q = e.scratch_text[0usize..got]
+    var at = 0usize
+    var found = false
+    let (p1, f1) = find(e, q, hi, true, o)
+    if f1 {
+        at = p1
+        found = true
+    } else {
+        let (p2, f2) = find(e, q, 0usize, true, o)
+        if f2 {
+            at = p2
+            found = true
+        }
+    }
+    if !found { ret ok }
+    var i = 0usize
+    while i < e.nsel {
+        if range_from(e.sels[i]) == at && range_to(e.sels[i]) == at + n { ret ok }
+        i += 1usize
+    }
+    if e.nsel >= e.sels.len { ret TooManySelections }
+    e.sels[e.nsel] = Range { anchor: at, head: at + n, goal: NO_GOAL }
+    let (m, pi) = normalize(e.sels, e.nsel + 1usize, e.nsel)
+    e.nsel = m
+    e.primary = pi
+    e.can_merge = false
+    ret ok
+}
+
+// Select every non-overlapping occurrence of the primary range's text (the word under an empty primary).
+// Refused whole when the matches exceed the selection capacity.
+fn select_all_occurrences(e: *Editor, o: SearchOpts) -> err {
+    let pr = e.sels[e.primary]
+    var lo = range_from(pr)
+    var hi = range_to(pr)
+    if lo == hi {
+        let (ws, we) = word_bounds(e, lo)
+        lo = ws
+        hi = we
+    }
+    if lo == hi { ret ok }
+    let n = hi - lo
+    if n > e.scratch_text.len { ret TooLarge }
+    let got = copy_text(e, lo, hi, e.scratch_text)
+    let q = e.scratch_text[0usize..got]
+    var count = 0usize
+    var primary = 0usize
+    var p = 0usize
+    while p + n <= len(e) {
+        if is_boundary(e, p) && match_at(e, q, p, o) {
+            if count >= e.scratch_sels.len { ret TooManySelections }
+            e.scratch_sels[count] = Range { anchor: p, head: p + n, goal: NO_GOAL }
+            if p <= lo && lo < p + n { primary = count }
+            count += 1usize
+            p += n
+        } else {
+            p += 1usize
+        }
+    }
+    if count == 0usize { ret ok }
+    ret set_selection(e, e.scratch_sels[0usize..count], primary)
+}
+
+// Split every multi-line range into one range per line (a range ending at a line start leaves a caret there).
+// Refused whole when the pieces exceed the selection capacity.
+fn split_selection_by_line(e: *Editor) -> err {
+    var n = 0usize
+    var primary = 0usize
+    var i = 0usize
+    while i < e.nsel {
+        let r = e.sels[i]
+        let lo = range_from(r)
+        let hi = range_to(r)
+        if lo == hi {
+            if n >= e.scratch_sels.len { ret TooManySelections }
+            e.scratch_sels[n] = r
+            if i == e.primary { primary = n }
+            n += 1usize
+        } else {
+            var pos = lo
+            var go = true
+            while go {
+                let ln = line_of(e, pos)
+                let a = max_of(lo, line_start(e, ln))
+                let b = min_of(hi, line_end(e, ln))
+                if n >= e.scratch_sels.len { ret TooManySelections }
+                e.scratch_sels[n] = Range { anchor: a, head: b, goal: NO_GOAL }
+                if i == e.primary { primary = n }
+                n += 1usize
+                pos = line_end(e, ln) + 1usize
+                if pos > hi { go = false }
+            }
+        }
+        i += 1usize
+    }
+    ret set_selection(e, e.scratch_sels[0usize..n], primary)
 }

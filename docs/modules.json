@@ -5225,7 +5225,8 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
-    "e.mem"
+    "e.mem",
+    "e.text.regex"
    ],
    "blocked_by": []
   },

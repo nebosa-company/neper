@@ -2854,12 +2854,24 @@ $uiTerminalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $uiTerminalWritten -ne 'executable written') { throw 'ui_terminal emission failed' }
 & $uiTerminalPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_terminal check failed: exit $LASTEXITCODE" }
+# `e.ui.terminal` additions: 1000 generated cases (reflow on resize, key / mouse / focus / paste encoding, character / word / line / block selection text, selection adjustment) equal to an independent Python model (D3501).
+$uiTerminalExtPath = Join-Path $testBuild 'ui-terminal-ext-selfhost.exe'
+$uiTerminalExtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_terminal_ext\src\main.e') $repo 'x64' 'windows' $uiTerminalExtPath
+if ($LASTEXITCODE -ne 0 -or $uiTerminalExtWritten -ne 'executable written') { throw 'ui_terminal_ext emission failed' }
+& $uiTerminalExtPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_terminal_ext check failed: exit $LASTEXITCODE" }
 # `e.ui.code_editor`: typing/undo, grapheme deletion, atomic refusals, dirty tracking, history eviction, search, tokens, sticky columns, multi-caret, indentation, then a 520-step generated script equal to an independent flat-text model with a digest after every step (D3201).
 $uiCodeEditorPath = Join-Path $testBuild 'ui-code-editor-selfhost.exe'
 $uiCodeEditorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_code_editor\src\main.e') $repo 'x64' 'windows' $uiCodeEditorPath
 if ($LASTEXITCODE -ne 0 -or $uiCodeEditorWritten -ne 'executable written') { throw 'ui_code_editor emission failed' }
 & $uiCodeEditorPath
 if ($LASTEXITCODE -ne 0) { throw "a ui_code_editor check failed: exit $LASTEXITCODE" }
+# `e.ui.code_editor` additions: 394 generated cases (language packs, brackets, folds, soft wrap, regular-expression search and replace, multiple cursors, rectangular selection) equal to an independent Python model (D3500).
+$uiCodeEditorExtPath = Join-Path $testBuild 'ui-code-editor-ext-selfhost.exe'
+$uiCodeEditorExtWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_code_editor_ext\src\main.e') $repo 'x64' 'windows' $uiCodeEditorExtPath
+if ($LASTEXITCODE -ne 0 -or $uiCodeEditorExtWritten -ne 'executable written') { throw 'ui_code_editor_ext emission failed' }
+& $uiCodeEditorExtPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_code_editor_ext check failed: exit $LASTEXITCODE" }
 # `e.fmt.lzma`: liblzma's alone, raw and .xz streams of a text and a 4 KB generated buffer decoded exactly, a flipped check byte refused (D877).
 $fmtLzmaPath = Join-Path $testBuild 'fmt-lzma-selfhost.exe'
 $fmtLzmaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_lzma\src\main.e') $repo 'x64' 'windows' $fmtLzmaPath

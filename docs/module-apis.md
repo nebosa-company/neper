@@ -9953,6 +9953,7 @@ type Stack = struct { entries: []Entry, nent: usize, batches: []Batch, nbat: usi
 type Token = struct { start: usize, end: usize, kind: u32 }
 type Language = struct { keywords: str, types: str, line_comment: str, block_open: str, block_close: str, quotes: str, multiline_quotes: str }
 type SearchOpts = struct { case_sensitive: bool, whole_word: bool }
+type Fold = struct { from: usize, to: usize }
 type Editor = struct { buf: []u8, gap_start: usize, gap_end: usize, lines: []usize, nlines: usize, line_state: []u8, first_dirty: usize, sels: []Range, nsel: usize, primary: usize, undo: Stack, redo: Stack, content_id: u64, next_id: u64, saved_id: u64, revision: u64, can_merge: bool, merge_kind: u32, lang: Language, use_tabs: bool, tab_width: usize, indent_unit: usize, scratch_edits: []Edit, scratch_text: []u8, scratch_sels: []Range }
 error Invalid
 error TooLarge
@@ -9990,6 +9991,19 @@ fn lang_plain() -> Language
 fn lang_neper() -> Language
 fn lang_javascript() -> Language
 fn lang_python() -> Language
+fn lang_c() -> Language
+fn lang_rust() -> Language
+fn lang_go() -> Language
+fn lang_java() -> Language
+fn lang_typescript() -> Language
+fn lang_json() -> Language
+fn lang_shell() -> Language
+fn lang_sql() -> Language
+fn lang_css() -> Language
+fn lang_html() -> Language
+fn lang_yaml() -> Language
+fn lang_toml() -> Language
+fn lang_lua() -> Language
 fn same_bytes(x: []const u8, y: str) -> bool
 fn lang_for_suffix(suffix: str) -> Language
 fn len(e: *const Editor) -> usize
@@ -10014,6 +10028,7 @@ fn is_word_byte(c: u8) -> bool
 fn has_word(set: str, e: *const Editor, from: usize, to: usize) -> bool
 fn at_prefix(e: *const Editor, p: usize, end: usize, s: str) -> bool
 fn quote_index(set: str, c: u8) -> usize
+fn scan_probe(e: *const Editor, ln: usize, state_in: u8, out: []Token, probe: usize) -> (usize, u8, bool)
 fn scan_line(e: *const Editor, ln: usize, state_in: u8, out: []Token) -> (usize, u8)
 fn ensure_states(e: *Editor, upto: usize)
 fn tokens(e: *Editor, ln: usize, out: []Token) -> usize
@@ -10067,15 +10082,44 @@ fn match_at(e: *const Editor, q: str, p: usize, o: SearchOpts) -> bool
 fn find(e: *const Editor, q: str, from: usize, forward: bool, o: SearchOpts) -> (usize, bool)
 fn count_matches(e: *const Editor, q: str, o: SearchOpts, limit: usize) -> (usize, bool)
 fn replace_all(e: *Editor, q: str, repl: str, o: SearchOpts) -> (usize, err)
+fn contiguous(e: *Editor) -> str
+fn scalar_len(lead: u8) -> usize
+fn regex_next(prog: *const rx.Regex, text: str, from: usize) -> (usize, usize, bool)
+fn find_regex(e: *Editor, prog: *const rx.Regex, from: usize, forward: bool) -> (usize, usize, bool)
+fn count_regex(e: *Editor, prog: *const rx.Regex, limit: usize) -> (usize, bool)
+fn expand_replacement(text: str, whole: rx.Match, groups: []const rx.Match, repl: str, dst: []u8, off_in: usize) -> usize
+fn replace_regex_all(a: *mem.Arena, e: *Editor, prog: *const rx.Regex, repl: str) -> (usize, err)
+fn bracket_partner(c: u8) -> u8
+fn in_skipped(e: *Editor, pos: usize) -> bool
+fn match_at_bracket(e: *Editor, at: usize) -> (usize, bool)
+fn match_bracket(e: *Editor, pos: usize) -> (usize, usize, bool)
+fn blank_line(e: *const Editor, ln: usize) -> bool
+fn fold_indent(e: *Editor, ln: usize) -> (usize, usize, bool)
+fn fold_at(e: *Editor, ln: usize) -> (usize, usize, bool)
+fn fold_all(e: *Editor, out: []Fold) -> usize
+fn wrap_next_row(e: *const Editor, from: usize, end: usize, width: usize) -> usize
+fn wrap_rows(e: *const Editor, ln: usize, width: usize) -> usize
+fn wrap_row_start(e: *const Editor, ln: usize, width: usize, row: usize) -> usize
+fn wrap_locate(e: *const Editor, pos: usize, width: usize) -> (usize, usize)
+fn wrap_total_rows(e: *const Editor, width: usize) -> usize
+fn add_cursor_vertical(e: *Editor, up: bool) -> err
+fn select_rect(e: *Editor, a: usize, b: usize) -> err
+fn word_bounds(e: *const Editor, pos: usize) -> (usize, usize)
+fn select_next_occurrence(e: *Editor, o: SearchOpts) -> err
+fn select_all_occurrences(e: *Editor, o: SearchOpts) -> err
+fn split_selection_by_line(e: *Editor) -> err
 ```
 
-The model and engine layer of the native code editor (L065, D3201); the widget, IME, wrapping, folding, decorations, regex search, completion, diagnostics and LSP are not here. `open` allocates one arena block; `Editor` owns a UTF-8 gap-buffer document with an incremental line index (`line_of`, `column_of`, `pos_at_column`), a normalised multi-range selection (`set_selection`, `move_selection`, sticky goal columns, grapheme/word steps), and undo/redo stacks of inverse batches. Every change goes through `commit`/`apply_edits`: sorted non-overlapping edits against one revision are validated (bounds, UTF-8 boundaries, well-formed text, capacity, line limit) and their history reserved before anything mutates, so a refusal changes nothing. `type_text`/`delete_char` coalesce into one undo entry until `break_group` or a selection change; `newline_indent`, `indent_lines`, `toggle_comment` and `replace_all` are single transactions across all selections. `tokens` yields highlight tokens per line from a `Language` (`lang_neper`, `lang_javascript`, `lang_python`, `lang_plain`, `lang_for_suffix`) with line states cached and re-propagated only as far as they change. `find`/`count_matches`/`replace_all` are literal, ASCII case folding, optional whole word. `is_dirty` follows the saved content identity across undo and redo.
+D3500 adds regular-expression `find_regex`/`count_regex`/`replace_regex_all` over a compiled `e.text.regex` program (the non-empty matches left to right; `$0`..`$9` and `$$` in replacements; one transaction), `match_bracket` (string and comment tokens neither match nor count), `fold_at`/`fold_all` (bracket folds, plus indentation folds in `#`-comment languages), soft-wrap rows (`wrap_rows`, `wrap_row_start`, `wrap_locate`, `wrap_total_rows`: a row breaks after the last blank it holds, else at the overflowing caret stop), `add_cursor_vertical`, `select_rect`, `select_next_occurrence`, `select_all_occurrences`, `split_selection_by_line`, and the language packs `lang_c`, `lang_rust`, `lang_go`, `lang_java`, `lang_typescript`, `lang_json`, `lang_shell`, `lang_sql`, `lang_css`, `lang_html`, `lang_yaml`, `lang_toml`, `lang_lua` behind `lang_for_suffix`.
+
+The model and engine layer of the native code editor (L065, D3201); the widget, IME, decorations, completion, diagnostics and LSP are not here. `open` allocates one arena block; `Editor` owns a UTF-8 gap-buffer document with an incremental line index (`line_of`, `column_of`, `pos_at_column`), a normalised multi-range selection (`set_selection`, `move_selection`, sticky goal columns, grapheme/word steps), and undo/redo stacks of inverse batches. Every change goes through `commit`/`apply_edits`: sorted non-overlapping edits against one revision are validated (bounds, UTF-8 boundaries, well-formed text, capacity, line limit) and their history reserved before anything mutates, so a refusal changes nothing. `type_text`/`delete_char` coalesce into one undo entry until `break_group` or a selection change; `newline_indent`, `indent_lines`, `toggle_comment` and `replace_all` are single transactions across all selections. `tokens` yields highlight tokens per line from a `Language` (`lang_neper`, `lang_javascript`, `lang_python`, `lang_plain`, `lang_for_suffix`) with line states cached and re-propagated only as far as they change. `find`/`count_matches`/`replace_all` are literal, ASCII case folding, optional whole word. `is_dirty` follows the saved content identity across undo and redo.
 
 ### `e.ui.terminal`
 
 ```neper
 type Cell = struct { ch: u32, fg: u32, bg: u32, attr: u32 }
-type Term = struct { cols: usize, rows: usize, max_cols: usize, max_rows: usize, sb_cap: usize, sb_head: usize, sb_len: usize, cells: []Cell, flags: []u32, tabs: []bool, alt: bool, cx: usize, cy: usize, wrap_pending: bool, top: usize, bottom: usize, pen_fg: u32, pen_bg: u32, pen_attr: u32, graphics: bool, saved_x: usize, saved_y: usize, saved_fg: u32, saved_bg: u32, saved_attr: u32, saved_pending: bool, saved_origin: bool, saved_graphics: bool, autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool, state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32, utf_cp: u32, utf_need: u32, last_ch: u32, osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize, out: [256]u8, out_len: usize, bells: u32 }
+type Selection = struct { mode: u32, a_line: usize, a_col: usize, h_line: usize, h_col: usize }
+type Term = struct { cols: usize, rows: usize, max_cols: usize, max_rows: usize, sb_cap: usize, sb_head: usize, sb_len: usize, cells: []Cell, flags: []u32, tabs: []bool, alt: bool, cx: usize, cy: usize, wrap_pending: bool, top: usize, bottom: usize, pen_fg: u32, pen_bg: u32, pen_attr: u32, graphics: bool, saved_x: usize, saved_y: usize, saved_fg: u32, saved_bg: u32, saved_attr: u32, saved_pending: bool, saved_origin: bool, saved_graphics: bool, autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool, focus_events: bool, state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32, utf_cp: u32, utf_need: u32, last_ch: u32, osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize, out: [256]u8, out_len: usize, bells: u32 }
 error Invalid
 const BOLD: u32 = 1u32
 const DIM: u32 = 2u32
@@ -10098,6 +10142,43 @@ const S_CSI_INT: u32 = 4u32
 const S_CSI_IGN: u32 = 5u32
 const S_OSC: u32 = 6u32
 const S_STR: u32 = 7u32
+const NO_CURSOR: usize = 18446744073709551615usize
+const KEY_UP: u32 = 2097153u32
+const KEY_DOWN: u32 = 2097154u32
+const KEY_RIGHT: u32 = 2097155u32
+const KEY_LEFT: u32 = 2097156u32
+const KEY_HOME: u32 = 2097157u32
+const KEY_END: u32 = 2097158u32
+const KEY_INSERT: u32 = 2097159u32
+const KEY_DELETE: u32 = 2097160u32
+const KEY_PAGE_UP: u32 = 2097161u32
+const KEY_PAGE_DOWN: u32 = 2097162u32
+const KEY_ENTER: u32 = 2097163u32
+const KEY_TAB: u32 = 2097164u32
+const KEY_BACKSPACE: u32 = 2097165u32
+const KEY_ESCAPE: u32 = 2097166u32
+const KEY_F1: u32 = 2097167u32
+const KEY_F12: u32 = 2097178u32
+const MOD_SHIFT: u32 = 1u32
+const MOD_ALT: u32 = 2u32
+const MOD_CTRL: u32 = 4u32
+const MOD_META: u32 = 8u32
+const MOUSE_PRESS: u32 = 0u32
+const MOUSE_RELEASE: u32 = 1u32
+const MOUSE_MOVE: u32 = 2u32
+const BUTTON_LEFT: u32 = 0u32
+const BUTTON_MIDDLE: u32 = 1u32
+const BUTTON_RIGHT: u32 = 2u32
+const BUTTON_NONE: u32 = 3u32
+const WHEEL_UP: u32 = 4u32
+const WHEEL_DOWN: u32 = 5u32
+const WHEEL_LEFT: u32 = 6u32
+const WHEEL_RIGHT: u32 = 7u32
+const SEL_NONE: u32 = 0u32
+const SEL_CHAR: u32 = 1u32
+const SEL_WORD: u32 = 2u32
+const SEL_LINE: u32 = 3u32
+const SEL_BLOCK: u32 = 4u32
 fn min_usize(x: usize, y: usize) -> usize
 fn max_usize(x: usize, y: usize) -> usize
 fn indexed(i: u32) -> u32
@@ -10162,9 +10243,33 @@ fn line_cell(t: *const Term, i: usize, c: usize) -> Cell
 fn line_wrapped(t: *const Term, i: usize) -> bool
 fn line_text(t: *const Term, i: usize, dst: []u8) -> usize
 fn snapshot(t: *const Term, offset: usize, out: []Cell) -> usize
+fn plain_blank(c: Cell) -> bool
+fn row_kept(t: *const Term, j: usize, last: usize) -> usize
+fn seq_scan(t: *const Term, a: usize, b: usize) -> (usize, usize)
+fn layout_line(t: *const Term, a: usize, b: usize, ncols: usize, cur_idx: usize, dst: []Cell, dstf: []u32, row0: usize, write: bool) -> (usize, usize, usize)
+fn resize_reflow(a: *mem.Arena, t: *Term, cols: usize, rows: usize, max_lines: usize) -> err
+fn put_dec(buf: []u8, n_in: usize, v: usize) -> usize
+fn emit_bytes(tmp: []const u8, n: usize, dst: []u8) -> usize
+fn encode_key(t: *const Term, key: u32, mods: u32, dst: []u8) -> usize
+fn encode_mouse(t: *const Term, button: u32, action: u32, mods: u32, x: usize, y: usize, dst: []u8) -> usize
+fn encode_focus(t: *const Term, focused: bool, dst: []u8) -> usize
+fn paste_begin(t: *const Term, dst: []u8) -> usize
+fn paste_end(t: *const Term, dst: []u8) -> usize
+fn paste_filter(t: *const Term, src: []const u8, dst: []u8) -> usize
+fn selection_start(mode: u32, line: usize, col: usize) -> Selection
+fn selection_extend(sel: *Selection, line: usize, col: usize)
+fn snap_col(t: *const Term, line: usize, col: usize) -> usize
+fn cell_class(c: Cell) -> u32
+fn word_bounds(t: *const Term, line: usize, col: usize) -> (usize, usize)
+fn logical_first(t: *const Term, line: usize) -> usize
+fn logical_last(t: *const Term, line: usize) -> usize
+fn selection_range(t: *const Term, sel: *const Selection) -> (usize, usize, usize, usize)
+fn selection_contains(t: *const Term, sel: *const Selection, line: usize, col: usize) -> bool
+fn selection_text(t: *const Term, sel: *const Selection, dst: []u8) -> usize
+fn selection_adjust(sel: *Selection, dropped: usize) -> bool
 ```
 
-A headless terminal emulator engine (L136, D3200): `new` allocates cells, line flags and a scrollback ring from an arena for a maximum size; `feed` runs the DEC ANSI state machine over output bytes (UTF-8 across calls, C0, CSI cursor/erase/insert/delete/scroll, DECSTBM, SGR with 16/256/true colour, modes 4/6/7/25/47/1047/1049/2004, DEC line drawing, OSC titles) and `take_output` drains DSR/DA replies. `line_count`/`line_cell`/`line_wrapped`/`line_text` read scrollback then live rows, `snapshot` copies the viewport scrolled back by an offset, `resolve_color`/`palette_rgb` map a cell colour to 0xRRGGBB, `resize` keeps rows and clips columns. Wide characters take WIDE+CONT cells; combining marks are dropped. No PTY, no rendering.
+A headless terminal emulator engine (L136, D3200): `new` allocates cells, line flags and a scrollback ring from an arena for a maximum size; `feed` runs the DEC ANSI state machine over output bytes (UTF-8 across calls, C0, CSI cursor/erase/insert/delete/scroll, DECSTBM, SGR with 16/256/true colour, modes 4/6/7/25/47/1047/1049/2004, DEC line drawing, OSC titles) and `take_output` drains DSR/DA replies. `line_count`/`line_cell`/`line_wrapped`/`line_text` read scrollback then live rows, `snapshot` copies the viewport scrolled back by an offset, `resolve_color`/`palette_rgb` map a cell colour to 0xRRGGBB, `resize` keeps rows and clips columns. Wide characters take WIDE+CONT cells; combining marks are dropped. No PTY, no rendering. D3501 adds `resize_reflow` (LINE_WRAPPED-joined logical lines re-wrapped at the new width through a caller-sized scratch; cursor kept; alternate screen and unchanged width fall to `resize`), `encode_key`/`encode_mouse`/`encode_focus`/`paste_begin`/`paste_filter`/`paste_end` (xterm defaults: cursor-key mode, modifier parameters, X10/1000/1002/1003 with legacy or SGR encoding, mode 1004, bracketed paste) and a `Selection` (character, word, line and block) with `selection_range`, `selection_contains`, `selection_text` and `selection_adjust`.
 
 ### `e.ui.style`
 

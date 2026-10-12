@@ -2513,11 +2513,21 @@ ui_terminal_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$ui_terminal_written" = 'executable written' ]
 chmod +x "$test_build/ui-terminal-selfhost"
 "$test_build/ui-terminal-selfhost"
+# `e.ui.terminal` additions: 1000 generated cases (reflow on resize, key / mouse / focus / paste encoding, character / word / line / block selection text, selection adjustment) equal to an independent Python model (D3501).
+ui_terminal_ext_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_terminal_ext/src/main.e" "$repo" x64 linux "$test_build/ui-terminal-ext-selfhost")
+[ "$ui_terminal_ext_written" = 'executable written' ]
+chmod +x "$test_build/ui-terminal-ext-selfhost"
+"$test_build/ui-terminal-ext-selfhost"
 # `e.ui.code_editor`: typing/undo, grapheme deletion, atomic refusals, dirty tracking, history eviction, search, tokens, sticky columns, multi-caret, indentation, then a 520-step generated script equal to an independent flat-text model with a digest after every step (D3201).
 ui_code_editor_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_code_editor/src/main.e" "$repo" x64 linux "$test_build/ui-code-editor-selfhost")
 [ "$ui_code_editor_written" = 'executable written' ]
 chmod +x "$test_build/ui-code-editor-selfhost"
 "$test_build/ui-code-editor-selfhost"
+# `e.ui.code_editor` additions: 394 generated cases (language packs, brackets, folds, soft wrap, regular-expression search and replace, multiple cursors, rectangular selection) equal to an independent Python model (D3500).
+ui_code_editor_ext_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_code_editor_ext/src/main.e" "$repo" x64 linux "$test_build/ui-code-editor-ext-selfhost")
+[ "$ui_code_editor_ext_written" = 'executable written' ]
+chmod +x "$test_build/ui-code-editor-ext-selfhost"
+"$test_build/ui-code-editor-ext-selfhost"
 # `e.fmt.lzma`: liblzma's alone, raw and .xz streams of a text and a 4 KB generated buffer decoded exactly, a flipped check byte refused (D877).
 fmt_lzma_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_lzma/src/main.e" "$repo" x64 linux "$test_build/fmt-lzma-selfhost")
 [ "$fmt_lzma_written" = 'executable written' ]
