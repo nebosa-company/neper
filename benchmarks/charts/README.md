@@ -51,6 +51,17 @@ What the numbers say:
   1.74 ms and writes 11,283 B; Neper's deflate writes fixed Huffman codes
   only, has no lazy matching and computes the PNG CRC bit by bit.
 
+### After L163 (D2840)
+
+`e.algo.deflate` now writes dynamic Huffman blocks with zlib's lazy matcher over a
+window that spans blocks, and `e.fmt.png` uses a table CRC, a deferred-modulo
+Adler-32 and a whole-row copy. Measured by hand with `chart_bench.exe` on a loaded
+host (not the nine-run `run.py` protocol): PNG 14.0 ms a chart against 20.0 ms
+above, the chart's zlib stream 11,277 B against zlib level 6's 11,283 B on the
+same rows (the file is 11,334 B), matplotlib 33.7 ms on the same host that day.
+The deflate encoder alone is 9.6 ms on the 345,840-byte raster, still about 5x C
+zlib; run `run.py` for the nine-run table.
+
 ## Caveats
 
 - One machine, wall-clock time, on a host shared with other work: single runs

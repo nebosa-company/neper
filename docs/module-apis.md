@@ -4783,6 +4783,16 @@ The calls return consumed input and written output. State uses caller storage an
 performs no allocation. This module implements raw RFC 1951 DEFLATE only; gzip and
 ZIP framing belong to `e.fmt.gzip` and `e.fmt.zip`.
 
+The encoder (L163, D2840) writes each block as the smallest of stored,
+fixed-Huffman and dynamic-Huffman, with length-limited (15-bit) trees built per
+block. `Balanced` and `Best` run zlib's lazy matcher (zlib's hash and zlib level 6 and
+9 chain, good, lazy and nice limits) over a 32 KiB window that slides across block
+boundaries; `Fast` writes stored blocks. `encoder_storage` is now about 311 KB for
+`Balanced` and `Best` (64 KiB buffer, 64 KiB staging, 128 KiB of hash tables and the
+token buffer); `Fast` still needs about 65 KB. Output is byte-for-byte what zlib level
+6 writes on most inputs and within 1 byte on the rest of the corpus checked, and every
+stream inflates through Python's zlib.
+
 ### `e.algo.graph`
 
 ```neper
