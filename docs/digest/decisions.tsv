@@ -2321,4 +2321,18 @@ D3004	2049	L164: send-side message compression (`e.net.grpccodec.compress`, `com
 D3005	2399	L164: a descriptor reader (`e.fmt.protodesc`)
 D3006	3606	L164: typed stubs from descriptors (`e.net.grpcstub` over `e.fmt.protomsg`)
 D3007	2502	L164: retries and backoff (`e.net.grpcretry`)
-D3008	1968	L164: the TLS dial helper (`e.net.grpctls`)
+D3008	1969	L164: the TLS dial helper (`e.net.grpctls`)
+D2468	734	The Dynamic fixture waits with idle taps, not a longer cadence
+D3400	3514	L048: WinRM, SSM and local transports and the Lightsail list mapping (`x.ssh.winrm`, `x.ssh.exec`, `x.cloud.awssdk`)
+D3401	3493	L164: the retry and hedging loop (`e.net.grpccall`)
+D3500	4084	`e.ui.code_editor`: regex search, brackets, folds, soft wrap, multiple cursors and thirteen more language packs, still without the widget
+D3501	3826	`e.ui.terminal`: reflow on resize, input encoding and a selection model
+D3600	3181	L150: the Chinese calendar from new-moon and solar-term astronomy (`e.time.chinese`)
+D3601	2518	L150: territory rows of the Windows zone map, and the names of 27 languages in date patterns
+D3602	3808	L148: a display zone, the month's multi-day bars and moving a recurring series
+D3603	2852	L066: the host's text measurement and content-sized table columns in the Markdown viewer
+D3604	2642	L067: language tailorings of the explorer's sibling order (`policy_language`)
+D3700	3525	L163: `e.fmt.png.encode_adaptive`: libpng's row-filter heuristic and indexed output, checked against a Python model that matches Pillow
+D3701	5262	L125: e.gfx.svg gains group and element opacity layers, selector combinators, pattern viewBox and href, a radial focal point, masks and text, by lowering to existing scene commands
+D3702	4625	L098: e.text.math gains the other math alphabets, accents, bars and braces, horizontal variants and MathKernInfo
+D3703	4556	L037: the types a synced table infers from sample rows (`e.algo.syncinfer`), V8's date parser included
