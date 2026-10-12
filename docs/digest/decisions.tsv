@@ -2305,4 +2305,20 @@ D2466	309	The two four-second fixtures move to eight
 D3200	2436	`e.ui.terminal`: a headless terminal engine in the e.ui namespace beside the C120 emulator
 D3201	2888	`e.ui.code_editor`: the editor model and engine, one `commit` path, a flat-text model as the oracle
 D3100	3252	L125: e.gfx.svg gains style sheets, aspect ratios, spread, dashes, even-odd, patterns and markers by lowering to existing scene commands
-D3101	4856	L098: e.text.math reads the MATH table, sets cramped styles, assembles delimiters, takes MathML and align, and draws
+D3101	4857	L098: e.text.math reads the MATH table, sets cramped styles, assembles delimiters, takes MathML and align, and draws
+D2467	550	The Flashlight fixture waits three taps longer for the Morse message
+D3300	1410	L150: the Persian and Umm al-Qura calendars
+D3301	1474	L135: an S2 block and stream codec beside Snappy
+D3302	1133	L135: the host's MAC address
+D3303	2168	L148: the scheduler's month view, bars, moving, focus and label words
+D3304	2126	L066: pipe tables in the Markdown viewer
+D3305	1691	L067: Unicode name order and lazily loaded folders in the explorer tree
+D3000	2402	L037: the push half of two-way sync, the merge and the request builder (`e.algo.writeback`)
+D3001	2119	L037: a SQL database as a sync source (`e.algo.sqlsource`)
+D3002	2162	L037: how a synced table pages through its source (`e.algo.syncpull`)
+D3003	1664	L037: the conflict review as markup (`e.algo.conflictview`)
+D3004	2049	L164: send-side message compression (`e.net.grpccodec.compress`, `compress_message`, `choose_encoding`)
+D3005	2399	L164: a descriptor reader (`e.fmt.protodesc`)
+D3006	3606	L164: typed stubs from descriptors (`e.net.grpcstub` over `e.fmt.protomsg`)
+D3007	2502	L164: retries and backoff (`e.net.grpcretry`)
+D3008	1968	L164: the TLS dial helper (`e.net.grpctls`)
