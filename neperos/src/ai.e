@@ -588,6 +588,15 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             send(a, s)
             ret true
         }
+        if id == 1206usize {
+            // The keyboard's Paste key (C175).
+            let before = s.draft.len
+            let did = ui.field_key(&s.draft, id, true)
+            ui.say("ai keyboard pasted ")
+            ui.say_num(s.draft.len - before)
+            ui.say(" bytes\n")
+            ret did
+        }
         ret ui.field_key(&s.draft, id, true)
     }
     ret false

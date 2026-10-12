@@ -801,10 +801,10 @@
       "group": "NeperOS",
       "order": 175,
       "title": "NeperOS clipboard remainder: Paste in every field, a lifetime setting, clear on lock",
-      "score": 0,
+      "score": 0.4,
       "model": "opus",
       "thinking": "medium",
-      "evidence": "Split from C148 (D2435): the clipboard holds text, Secure copies to it and AI pastes from it. Acceptance: (1) every ui.Field offers Paste when the clipboard holds text (a pill the keyboard draws, not a per-app one); (2) the lifetime (30 s by default) is a setting in Settings, and a fixture that checks a copy is gone after it; (3) the clipboard is cleared when its owner locks (Secure's lock) or leaves; (4) copy from Browser, Mail and Messages text."
+      "evidence": "Split from C148 (D2435): the clipboard holds text, Secure copies to it and AI pastes from it. Acceptance: (1) every ui.Field offers Paste when the clipboard holds text (a pill the keyboard draws, not a per-app one); (2) the lifetime (30 s by default) is a setting in Settings, and a fixture that checks a copy is gone after it; (3) the clipboard is cleared when its owner locks (Secure's lock) or leaves; (4) copy from Browser, Mail and Messages text. PART (D2443): a Paste key on the shared keyboard (shown beside space while the clipboard holds text, handled by ui.field_key); fixture clipboard_keyboard; secure fixture unaffected. Remaining: the lifetime as a Settings value, clear on lock, copy from Browser/Mail/Messages."
     },
     {
       "id": "C176",

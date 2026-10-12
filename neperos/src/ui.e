@@ -11,6 +11,8 @@ use e.text.layout
 use e.text.shape
 use text
 use theme
+use sysettings
+use e.time
 
 const NONE: usize = 99usize
 const MAX_HITS: usize = 96usize
@@ -395,7 +397,18 @@ fn keyboard(a: *mem.Arena, builder: *scene.Builder, hits: *Hits, faces: text.Fac
     try key_cap(a, builder, hits, faces, 1201usize, 18.0 + 52.0 + 7.0 * 38.0, 558.0 + 2.0 * 58.0, 52.0, "DEL", soft())
     try key_cap(a, builder, hits, faces, 1203usize, 18.0, 732.0, 44.0, "-", soft())
     try key_cap(a, builder, hits, faces, 1204usize, 68.0, 732.0, 44.0, "/", soft())
-    try key_cap(a, builder, hits, faces, 1200usize, 118.0, 732.0, 130.0, "space", cream())
+    // (C175) A Paste key beside space when the clipboard holds text (space gives up the width; its left edge stays).
+    var clip_bytes: [32]u8 = zero
+    var now_seconds = 0usize
+    let (wall, wall_error) = time.now()
+    if wall_error == ok && wall.nanos > 0i64 { now_seconds = usize(wall.nanos / 1000000000i64) }
+    let (clip_length, clip_owner) = sysettings.clip_get(now_seconds, clip_bytes[0usize..])
+    if clip_length > 0usize {
+        try key_cap(a, builder, hits, faces, 1200usize, 118.0, 732.0, 70.0, "space", cream())
+        try key_cap(a, builder, hits, faces, 1206usize, 192.0, 732.0, 56.0, "Paste", amber())
+    } else {
+        try key_cap(a, builder, hits, faces, 1200usize, 118.0, 732.0, 130.0, "space", cream())
+    }
     try key_cap(a, builder, hits, faces, 1202usize, 254.0, 732.0, 44.0, ".", soft())
     try key_cap(a, builder, hits, faces, 1205usize, 304.0, 732.0, 90.0, enter_label, amber())
     ret ok
@@ -413,7 +426,7 @@ fn key_byte(id: usize) -> u8 {
 }
 
 fn is_key(id: usize) -> bool {
-    ret id >= 1000usize && id <= 1205usize
+    ret id >= 1000usize && id <= 1206usize
 }
 
 // A text field being edited: up to 160 bytes.
@@ -454,6 +467,17 @@ fn field_paste(f: *Field, source: []const u8, count: usize) -> usize {
 fn field_key(f: *Field, id: usize, capital: bool) -> bool {
     if id == 1201usize {
         field_back(f)
+        ret true
+    }
+    if id == 1206usize {
+        // Paste: the clipboard's text (the keyboard only draws this key while it holds some).
+        var clip_bytes: [32]u8 = zero
+        var now_seconds = 0usize
+        let (wall, wall_error) = time.now()
+        if wall_error == ok && wall.nanos > 0i64 { now_seconds = usize(wall.nanos / 1000000000i64) }
+        let (clip_length, clip_owner) = sysettings.clip_get(now_seconds, clip_bytes[0usize..])
+        if clip_length == 0usize { ret true }
+        let pasted = field_paste(f, clip_bytes[0usize..], clip_length)
         ret true
     }
     let b = key_byte(id)

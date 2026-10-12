@@ -71,6 +71,6 @@ C171	compiler	0	987	NeperOS AI remainder: streaming, keys in Secure, conversatio
 C172	compiler	0	869	NeperOS Document remainder: PDF painting, zoom, tables, HTML view, spreadsheets	Split from C142 (D2431): Document reads the text of PDF, Word, PowerPoint and OpenDocument files and renders Markdown and highlighted code.
 C173	compiler	0	938	NeperOS Dynamic step-one remainder: the scanner, the versioned app kit, removal	Split from C143 (D2432): packages are signed, verified, revocable and installed.
 C174	compiler	0	506	NeperOS Clock remainder: a background ringer with the app closed	Split from C145 (D2433): the Clock's alarms, timer and stopwatch persist in /clock.
-C175	compiler	0	451	NeperOS clipboard remainder: Paste in every field, a lifetime setting, clear on lock	Split from C148 (D2435): the clipboard holds text, Secure copies to it and AI pastes from it.
+C175	compiler	0.4	726	NeperOS clipboard remainder: Paste in every field, a lifetime setting, clear on lock	Split from C148 (D2435): the clipboard holds text, Secure copies to it and AI pastes from it.
 C176	compiler	0	752	NeperOS settings recipients remainder: audio, fingerprint, radios, battery	Split from C149 (D2436): notification permission is enforced at the status service.
 L164	library	0.4	904	gRPC remainder: server side, deadlines and stubs from .proto descriptors	retries and backoff, gRPC over HTTP/3, a TLS dial helper, send-side compression wiring, stub generation (e.fmt.protobuf has no descriptor reader).
