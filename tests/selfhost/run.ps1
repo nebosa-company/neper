@@ -1336,6 +1336,36 @@ $time_calendars_persian_uqWritten = & $compiler emit-executable (Join-Path $PSSc
 if ($LASTEXITCODE -ne 0 -or $time_calendars_persian_uqWritten -ne 'executable written') { throw 'time_calendars_persian_uq emission failed' }
 & $time_calendars_persian_uqPath
 if ($LASTEXITCODE -ne 0) { throw "a time_calendars_persian_uq check failed: exit $LASTEXITCODE" }
+# `e.ui.tree_adapter` language tailorings against .NET's ICU collation (L067).
+$ui_tree_adapter_tailoredPath = Join-Path $testBuild 'ui-tree-adapter-tailored-selfhost.exe'
+$ui_tree_adapter_tailoredWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_tree_adapter_tailored\src\main.e') $repo 'x64' 'windows' $ui_tree_adapter_tailoredPath
+if ($LASTEXITCODE -ne 0 -or $ui_tree_adapter_tailoredWritten -ne 'executable written') { throw 'ui_tree_adapter_tailored emission failed' }
+& $ui_tree_adapter_tailoredPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_tree_adapter_tailored check failed: exit $LASTEXITCODE" }
+# `e.ui.markdown_view` measured text and content-sized columns against the oracle model (L066).
+$ui_markdown_view_fitPath = Join-Path $testBuild 'ui-markdown-view-fit-selfhost.exe'
+$ui_markdown_view_fitWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_markdown_view_fit\src\main.e') $repo 'x64' 'windows' $ui_markdown_view_fitPath
+if ($LASTEXITCODE -ne 0 -or $ui_markdown_view_fitWritten -ne 'executable written') { throw 'ui_markdown_view_fit emission failed' }
+& $ui_markdown_view_fitPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_markdown_view_fit check failed: exit $LASTEXITCODE" }
+# `e.ui.schedule` zones, month bars and series moves against zoneinfo and dateutil (L148).
+$ui_schedule_zonesPath = Join-Path $testBuild 'ui-schedule-zones-selfhost.exe'
+$ui_schedule_zonesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_schedule_zones\src\main.e') $repo 'x64' 'windows' $ui_schedule_zonesPath
+if ($LASTEXITCODE -ne 0 -or $ui_schedule_zonesWritten -ne 'executable written') { throw 'ui_schedule_zones emission failed' }
+& $ui_schedule_zonesPath
+if ($LASTEXITCODE -ne 0) { throw "a ui_schedule_zones check failed: exit $LASTEXITCODE" }
+# `e.time.pattern` locale names against Babel's CLDR formatter (L150).
+$time_pattern_localesPath = Join-Path $testBuild 'time-pattern-locales-selfhost.exe'
+$time_pattern_localesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_pattern_locales\src\main.e') $repo 'x64' 'windows' $time_pattern_localesPath
+if ($LASTEXITCODE -ne 0 -or $time_pattern_localesWritten -ne 'executable written') { throw 'time_pattern_locales emission failed' }
+& $time_pattern_localesPath
+if ($LASTEXITCODE -ne 0) { throw "a time_pattern_locales check failed: exit $LASTEXITCODE" }
+# `e.time.chinese` against lunar_python, 1900..2100 (L150).
+$time_chinesePath = Join-Path $testBuild 'time-chinese-selfhost.exe'
+$time_chineseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_chinese\src\main.e') $repo 'x64' 'windows' $time_chinesePath
+if ($LASTEXITCODE -ne 0 -or $time_chineseWritten -ne 'executable written') { throw 'time_chinese emission failed' }
+& $time_chinesePath
+if ($LASTEXITCODE -ne 0) { throw "a time_chinese check failed: exit $LASTEXITCODE" }
 # `e.fmt.s2` against klauspost/compress/s2 blocks and streams (L135).
 $fmt_s2Path = Join-Path $testBuild 'fmt-s2-selfhost.exe'
 $fmt_s2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_s2\src\main.e') $repo 'x64' 'windows' $fmt_s2Path

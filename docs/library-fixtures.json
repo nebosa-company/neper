@@ -3098,8 +3098,10 @@
     "time_calendars",
     "time_calendars_african",
     "time_calendars_persian_uq",
+    "time_chinese",
     "time_cron",
     "time_pattern",
+    "time_pattern_locales",
     "time_recur",
     "tz",
     "ui_a11y_controls",
@@ -3170,6 +3172,7 @@
     "ui_ripple_v2",
     "ui_schedule",
     "ui_schedule_month",
+    "ui_schedule_zones",
     "ui_scroll_view",
     "ui_selection",
     "ui_selection2_v2",
@@ -3213,9 +3216,11 @@
     "time_calendar",
     "time_calendar_iso",
     "time_pattern",
+    "time_pattern_locales",
     "time_recur",
     "ui_schedule",
-    "ui_schedule_month"
+    "ui_schedule_month",
+    "ui_schedule_zones"
    ]
   },
   {
@@ -3259,7 +3264,8 @@
    "delivered": 16,
    "pending": [],
    "fixtures": [
-    "tz"
+    "tz",
+    "ui_schedule_zones"
    ]
   },
   {
@@ -3325,6 +3331,7 @@
     "ui_ribbon",
     "ui_schedule",
     "ui_schedule_month",
+    "ui_schedule_zones",
     "ui_selection",
     "ui_semantics",
     "ui_sheet",

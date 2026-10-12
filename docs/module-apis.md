@@ -9662,12 +9662,16 @@ type Word = struct { start: usize, len: usize, cols: usize, style: u8, link: u32
 type Metrics = struct { width: f32, char_w: f32, line_h: f32, gap: f32, indent: f32, pad: f32, bar: f32 }
 type Storage = struct { items: []Item, nodes: []Node, links: []Link, store: []u8, scratch: []u8, blocks: []markdown.Block, inlines: []markdown.Inline, words: []Word }
 type View = struct { items: []Item, nodes: []Node, links: []Link, store: []u8, item_count: usize, node_count: usize, link_count: usize, store_len: usize, height: f32, fallback: bool, policy: LinkPolicy }
+type Measure = struct { state: *void, width: fn(*void, str, u8) -> f32 }
+type Options = struct { measure: Measure, measured: bool, fit_columns: bool }
 error TooLarge
 error TooDeep
 error Invalid
 type Entry = struct { kind: u8, level_at: usize, tight: bool, ordered: bool, number: u32, marker: bool, node: usize }
-type Ctx = struct { st: Storage, m: Metrics, policy: LinkPolicy, items: usize, nodes: usize, links: usize, store_len: usize, y: f32, any: bool, fresh: bool, stack: [32]Entry, depth: usize, levels: usize }
+type Ctx = struct { st: Storage, m: Metrics, policy: LinkPolicy, items: usize, nodes: usize, links: usize, store_len: usize, y: f32, any: bool, fresh: bool, stack: [32]Entry, depth: usize, levels: usize, opts: Options }
 fn utf8_cols(s: str) -> usize
+fn text_px(c: *Ctx, bytes: str, style: u8) -> f32
+fn space_px(c: *Ctx, style: u8) -> f32
 fn lower(c: u8) -> u8
 fn same_scheme(d: str, n: usize, want: str) -> bool
 fn dest_safe(d: str) -> bool
@@ -9699,6 +9703,7 @@ fn delimiter_row(line: str, aligns: []u32) -> usize
 fn has_pipe(line: str) -> bool
 fn line_text(src: str, b: markdown.Block) -> str
 fn cell_words(c: *Ctx, text: str, x: f32, y: f32, back_w: f32, inner: f32, header: bool, align: u32, row: u32, column: u32) -> (usize, err)
+fn column_widths(c: *Ctx, src: str, blocks: []const markdown.Block, header: usize, stop: usize, columns: usize, total: f32, out: []f32) -> err
 fn table_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, header: usize, stop: usize, columns: usize, aligns: []const u32) -> err
 fn find_table(src: str, blocks: []const markdown.Block, from: usize, stop: usize, aligns: []u32) -> (usize, usize)
 fn code_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize) -> (usize, err)
@@ -9709,6 +9714,7 @@ fn lay_out(c: *Ctx, src: str, blocks: []const markdown.Block) -> err
 fn reset(c: *Ctx)
 fn plain(c: *Ctx, src: str) -> err
 fn build(src: str, st: Storage, m: Metrics, policy: LinkPolicy) -> (View, err)
+fn build_with(src: str, st: Storage, m: Metrics, policy: LinkPolicy, opts: Options) -> (View, err)
 fn inside(it: Item, x: f32, y: f32) -> bool
 fn item_at(v: *const View, x: f32, y: f32) -> (usize, bool)
 fn link_at(v: *const View, x: f32, y: f32) -> (usize, bool)
@@ -9732,9 +9738,14 @@ with `fallback` set. A link is display-only under `DisplayOnly`; under `HostActi
 paragraph's (or a table cell's) words as `control.RichSpan`s for `control.paragraph`. GFM
 pipe tables (D3304) are read from paragraph lines into `Table`, `Row`, `Cell` and
 `HeaderCell` nodes with `CellBack` boxes, equal columns and per-column alignment.
-Layout and queries are data, checked against a markdown-it-py oracle; a window-level check would still need a
-shaped-text measure in place of the grid advance and the pointer and clipboard plumbing
-of a host.
+Layout and queries are data, checked against a markdown-it-py oracle. `build_with` (D3603)
+takes `Options`: a `Measure` (the host's width of a word, a space or a code line at scale 1 in
+the style it is drawn in, so any shaper can stand behind it; headings scale the answer) in
+place of the grid advance, and `fit_columns` for table columns as wide as their content
+(the widest cell on one line plus the padding when those fit, else shared between the
+longest word and the widest cell in proportion to the room, and the longest words when even
+those overflow). `build` is `build_with` of the zero options. A window-level check would
+still need the pointer and clipboard plumbing of a host.
 
 ### `e.ui.tree_adapter`
 
@@ -9744,7 +9755,7 @@ type NodeKind = enum u8 { File, Folder, Loading, Failed }
 type DirState = enum u8 { Ready, Loading, Failed, Unloaded }
 type Entry = struct { path: str, dir: bool, state: DirState }
 type Rename = struct { from: str, to: str }
-type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64, unicode_names: bool }
+type Policy = struct { case_sensitive_paths: bool, order: collate.Options, folders_first: bool, hash: fn(str) -> u64, unicode_names: bool, tailoring: u8 }
 type Node = struct { key: widget.Key, parent: u32, kind: NodeKind, path_start: usize, path_len: usize, name_start: usize, depth: u32, first_child: usize, child_count: usize, lazy: bool }
 type Storage = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, order: []u32, scratch: []u8 }
 type Tree = struct { nodes: []Node, kids: []u32, paths: []u8, slots: []u32, by_path: []u32, count: usize, root_first: usize, root_count: usize, case_sensitive_paths: bool }
@@ -9756,6 +9767,8 @@ error Invalid
 fn default_hash(s: str) -> u64
 fn policy(case_sensitive_paths: bool) -> Policy
 fn policy_unicode(case_sensitive_paths: bool) -> Policy
+fn tailoring_of(tag: str) -> u8
+fn policy_language(tag: str, case_sensitive_paths: bool) -> Policy
 fn fold_byte(ch: u8, sensitive: bool) -> u8
 fn id_cmp(x: str, y: str, sensitive: bool) -> i32
 type Ctx = struct { nodes: []Node, paths: []u8, policy: Policy }
@@ -9763,7 +9776,10 @@ fn node_path(c: *const Ctx, i: usize) -> str
 fn node_name(c: *const Ctx, i: usize) -> str
 fn rank_of(c: *const Ctx, n: Node) -> u32
 const KEY_CAP: usize = 512usize
-fn fold_keys(name: str, fold: bool, all: []u32, base: []u32) -> (usize, usize)
+fn fold_keys(name: str, fold: bool, tailoring: u8, all: []u32, base: []u32) -> (usize, usize)
+fn primary_key(tailoring: u8, s: u32) -> u32
+fn lone_key(tailoring: u8, s: u32) -> u32
+fn mark_key(tailoring: u8, b: u32, m: u32) -> u32
 fn is_digit_scalar(s: u32) -> bool
 fn natural_scalars(x: []const u32, nx: usize, y: []const u32, ny: usize, numeric: bool) -> i32
 fn name_order(c: *const Ctx, a: str, b: str) -> i32
@@ -9813,6 +9829,14 @@ D3305 adds `policy_unicode` (names by NFD, Unicode simple lowering, base letters
 accents) and lazy folders: `DirState.Unloaded` shows an expander with no children, `pending`
 lists the expanded `Unloaded` folders for the host to enumerate and `is_lazy` tests one.
 
+D3604 adds `policy_language(tag, case_sensitive_paths)`: `policy_unicode` with the letters a language
+sorts as letters of its own placed where its alphabet has them (Swedish and Finnish `å ä ö` after
+`z`, Danish and Norwegian `æ ø å`, Spanish `ñ` after `n`, Polish `ą ć ę ł ń ó ś ź ż`, Czech
+`č ř š ž` and the digraph `ch` after `h`, Turkish `ç ğ ö ş ü` with `ı` before `i`, German `ß`
+as `ss`), keyed by the language subtag (`tailoring_of`). Compared with CLDR collation as .NET's
+ICU gives it for nine languages; region variants, traditional orders and further languages are
+not distinguished.
+
 ### `e.ui.schedule`
 
 ```neper
@@ -9836,11 +9860,12 @@ type Storage = struct { occ: []Occ, stamps: []calendar.DateTime, placed: []Place
 type Layout = struct { cfg: Config, placed: []Placed, columns: []Column, rows: []Row, nodes: []Access, labels: []u8, placed_count: usize, column_count: usize, row_count: usize, node_count: usize, labels_len: usize, band_h: f32, grid_top: f32, height: f32, first_day: i64, days: i64, truncated: bool }
 type Names = struct { weekdays: [7]str, months: [12]str, all_day: str, to: str, repeats: str, day_schedule: str, week_schedule: str, agenda: str, month_schedule: str, no_events: str, one_event: str, events: str, more: str }
 type MonthConfig = struct { anchor: time.Date, week_start: calendar.Weekday, width: f32, header: f32, cell_h: f32, line_h: f32, lines: u32 }
-type MonthCell = struct { date: time.Date, count: i64, in_month: bool, x: f32, y: f32, w: f32, h: f32, first: u32, total: u32, shown: u32, more: u32 }
+type MonthCell = struct { date: time.Date, count: i64, in_month: bool, x: f32, y: f32, w: f32, h: f32, first: u32, total: u32, shown: u32, more: u32, reserved: u32 }
 type MonthStorage = struct { occ: []Occ, stamps: []calendar.DateTime, placed: []Placed, cells: []MonthCell, order: []u32, nodes: []Access, labels: []u8 }
 type MonthLayout = struct { cfg: MonthConfig, placed: []Placed, cells: []MonthCell, nodes: []Access, labels: []u8, placed_count: usize, cell_count: usize, node_count: usize, labels_len: usize, weeks: u32, first_day: i64, height: f32, truncated: bool }
 type MonthHit = struct { kind: MonthHitKind, cell: u32, index: usize }
-type Bar = struct { item: u32, first: u32, last: u32, lane: u32, x: f32, y: f32, w: f32, h: f32, before: bool, after: bool, recurring: bool }
+type Bar = struct { item: u32, first: u32, last: u32, lane: u32, x: f32, y: f32, w: f32, h: f32, before: bool, after: bool, recurring: bool, start: i64, end: i64 }
+type SeriesOut = struct { dst: []u8, n: usize, bad: bool }
 error TooLarge
 error Invalid
 fn english() -> Names
@@ -9849,12 +9874,15 @@ fn datetime_of(abs: i64) -> calendar.DateTime
 fn max_i64(a: i64, b: i64) -> i64
 fn min_i64(a: i64, b: i64) -> i64
 fn range_of(cfg: Config) -> (i64, i64)
-type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32, names: Names }
-fn push_occ(c: *Ctx, item: u32, start: i64, minutes: i64, recurring: bool, all_day: bool) -> err
+type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32, names: Names, zoned: bool, zone_src: tz.Zone, zone_dst: tz.Zone }
+fn zone_shift(src: tz.Zone, dst: tz.Zone, abs: i64) -> i64
+fn push_occ(c: *Ctx, item: u32, start_in: i64, minutes: i64, recurring: bool, all_day: bool) -> err
 fn collect(c: *Ctx, items: []const Item) -> err
 fn occ_before(c: *const Ctx, x: u32, y: u32) -> bool
 fn put_placed(c: *Ctx, p: Placed) -> err
 fn day_order(c: *Ctx, day0: i64) -> usize
+fn spans_days(o: Occ) -> bool
+fn day_order_if(c: *Ctx, day0: i64, singles: bool) -> usize
 fn place_day(c: *Ctx, d: usize, top: f32) -> err
 fn weekday_name(index: i64) -> str
 fn month_name(month: u8) -> str
@@ -9868,6 +9896,8 @@ fn build_grid(c: *Ctx, items: []const Item) -> err
 fn build_agenda(c: *Ctx, items: []const Item) -> err
 fn build(items: []const Item, cfg: Config, st: Storage) -> (Layout, err)
 fn build_named(items: []const Item, cfg: Config, st: Storage, names: Names) -> (Layout, err)
+fn build_zoned(items: []const Item, cfg: Config, st: Storage, source: tz.Zone, display: tz.Zone) -> (Layout, err)
+fn build_core(items: []const Item, cfg: Config, st: Storage, names: Names, zoned: bool, src_zone: tz.Zone, dst_zone: tz.Zone) -> (Layout, err)
 fn label_of(l: *const Layout, node: usize) -> str
 fn slot_at(l: *const Layout, x: f32, y: f32) -> (Slot, bool)
 fn drag_range(l: *const Layout, x0: f32, y0: f32, x1: f32, y1: f32) -> (Span, bool)
@@ -9876,16 +9906,34 @@ fn month_first(cfg: MonthConfig) -> (i64, u32)
 fn put_cell_label(c: *Ctx, count: i64, total: usize) -> err
 fn build_month(items: []const Item, cfg: MonthConfig, ms: MonthStorage) -> (MonthLayout, err)
 fn build_month_named(items: []const Item, cfg: MonthConfig, ms: MonthStorage, names: Names) -> (MonthLayout, err)
+fn build_month_zoned(items: []const Item, cfg: MonthConfig, ms: MonthStorage, source: tz.Zone, display: tz.Zone) -> (MonthLayout, err)
+fn build_month_bars(items: []const Item, cfg: MonthConfig, ms: MonthStorage, bars: []Bar) -> (MonthLayout, usize, err)
+fn build_month_zoned_bars(items: []const Item, cfg: MonthConfig, ms: MonthStorage, source: tz.Zone, display: tz.Zone, bars: []Bar) -> (MonthLayout, usize, err)
+fn month_core(items: []const Item, cfg: MonthConfig, ms: MonthStorage, names: Names, zoned: bool, src_zone: tz.Zone, dst_zone: tz.Zone, bars: []Bar, with_bars: bool) -> (MonthLayout, usize, err)
 fn month_label_of(l: *const MonthLayout, node: usize) -> str
 fn more_top(l: *const MonthLayout, cell: usize) -> f32
 fn hit_month(l: *const MonthLayout, x: f32, y: f32) -> MonthHit
 fn month_move(l: *const MonthLayout, cell: u32, key: Key) -> u32
 fn bar_before(a: Bar, b: Bar) -> bool
 fn all_day_bars(l: *const Layout, out: []Bar) -> (usize, u32, err)
+fn assign_lanes(out: []Bar, n: usize) -> u32
+fn hit_month_bar(bars: []const Bar, count: usize, x: f32, y: f32) -> (usize, bool)
+fn display_to_source(source: tz.Zone, display: tz.Zone, value: calendar.DateTime) -> calendar.DateTime
 fn column_at(l: *const Layout, x: f32) -> (usize, bool)
 fn move_target(l: *const Layout, items: []const Item, index: usize, grab_x: f32, grab_y: f32, x: f32, y: f32) -> (Span, bool)
 fn resize_target(l: *const Layout, index: usize, y: f32) -> (u32, bool)
 fn focus_next(l: *const Layout, current: usize, key: Key) -> usize
+fn weekday_code(a: u8, b: u8) -> i64
+fn weekday_letters(index: i64) -> str
+fn series_text(o: *SeriesOut, s: str)
+fn series_digits(o: *SeriesOut, v: i64, width: usize)
+fn str_of(bytes: []const u8) -> str
+fn digits_value(s: str, from: usize, count: usize) -> i64
+fn series_byday(o: *SeriesOut, value: str, days: i64) -> bool
+fn series_until(o: *SeriesOut, value: str, delta: i64) -> bool
+fn key_is(part: str, key: str) -> bool
+fn interval_is_one(rule: str) -> bool
+fn move_series(item: Item, from: calendar.DateTime, to: calendar.DateTime, dst: []u8) -> (Item, err)
 ```
 
 Scheduler control model (L148, D2882): `build(items, cfg, storage)` lays appointments out
@@ -9907,7 +9955,19 @@ and a "+N more" line past `lines`, `hit_month`, `month_move`), `all_day_bars` (o
 all-day occurrence over its columns, in lanes), `move_target` and `resize_target` (a drag of a
 placed occurrence to its new start and length), `focus_next` (arrow-key focus among
 occurrences) and `Names` (`english()`; `build_named`/`build_month_named` take another set of
-words for the labels). Not here: zones and DST (items are floating times).
+words for the labels).
+
+D3602 adds zones: `build_zoned` and `build_month_zoned` take the zone the items' wall clocks are in and the
+zone to show; each timed occurrence (a recurrence is expanded in the source zone, so an every-Monday-09:00
+series keeps its local time and moves in the display zone across a DST change) is converted by its instant,
+a time in a gap of the source zone is read with the offset before the gap, an ambiguous one is its first
+occurrence, all-day items stay floating. `display_to_source` turns a displayed wall clock (what `move_target`
+answers) back into the item's zone. `build_month_bars` (and `build_month_zoned_bars`) draw the occurrences
+that touch more than one day as bars: one per week row (`first`/`last` are cell indices), lowest free lane
+under the day number, single-day occurrences below the week's bars (`MonthCell.reserved`), bars past `lines`
+counted in `more`; `hit_month_bar` is the bar under a point. `move_series` moves a whole recurring series by
+the amount an occurrence was dragged (item start, `BYDAY` weekdays, `UNTIL`), refusing with `Invalid` a rule
+that would change which occurrences it makes.
 
 ### `e.ui.undo`
 
@@ -24046,6 +24106,85 @@ fn uq_table() -> str
 
 Non-ISO calendars over `e.time`'s day count (days from 1970-01-01): a date in any calendar is a `time.Date` read in that calendar, and every conversion goes through the one count. `Persian` is the Solar Hijri calendar by its 33-year arithmetic rule (leap when the year mod 33 is 1 5 9 13 17 22 26 30; months 1-6 have 31 days, 7-11 have 30, the 12th 29 or 30), anchored so it matches the astronomical calendar for 1278..1502 AP; `UmmAlQura` is the published table, 1343..1500 AH (1924-08-01 to 2077-11-16), and a count outside the table answers `Invalid`, its months being 28 to 31 days as published. `Julian` is proleptic with astronomical year numbering; `IslamicCivil` is the tabular civil calendar (Friday epoch, 30-year cycle); `Hebrew` is the fixed-rule calendar with civil month numbers (Tishri 1; in a leap year Adar I is 6 and Adar II is 7), `scriptural_month`/`civil_month` converting to Nisan-is-1. Hebrew and Islamic years start at 1 and earlier counts answer `Invalid`. Month arithmetic walks real months (13 in a Hebrew leap year) and clamps the day; `add_years` keeps the month number, clamped to the year's last month. Japanese eras ride the Gregorian year/month/day with the .NET table (Meiji from 1868-09-08, Taisho, Showa, Heisei, Reiwa as indexes 0..4); earlier dates are refused. Not here: the observational Islamic calendar, the Chinese calendar, and week-of-year rules per calendar.
 
+### `e.time.chinese`
+
+```neper
+error OutOfRange
+
+type Date = struct { year: i32, month: u8, leap: bool, day: u8 }
+
+const FIRST_YEAR: i32 = 1900i32
+const LAST_YEAR: i32 = 2100i32
+
+fn sin_deg(deg: f64) -> f64
+fn cos_deg(deg: f64) -> f64
+fn delta_t(y: f64) -> f64
+fn year_of(days: f64) -> f64
+fn offset_days(days: f64) -> f64
+fn new_moon_jde(k: i64) -> f64
+fn sun_longitude(jde: f64) -> f64
+fn new_moon_day(k: i64) -> i64
+fn longitude_at_start(day: i64) -> f64
+fn lunation_near(day: i64) -> i64
+fn solstice_lunation(y: i64) -> i64
+fn has_term(first: i64, next_first: i64) -> bool
+fn leap_index(k0: i64, months: i64) -> i64
+fn number_at(i: i64, leap_i: i64) -> i64
+fn year_at(y: i64, i: i64, leap_i: i64) -> i64
+fn in_range(year: i64) -> bool
+fn from_days(count: i64) -> (Date, err)
+fn to_days(date: Date) -> (i64, err)
+fn new_year(year: i32) -> (i64, err)
+fn leap_month(year: i32) -> u8
+fn month_length(year: i32, month: u8, leap: bool) -> (u8, err)
+fn stem_branch(year: i32) -> (u8, u8)
+```
+
+The Chinese lunisolar calendar over `e.time`'s day count (days from 1970-01-01), reckoned from astronomy: a month starts on the day that holds a new moon (Meeus ch. 49, full terms, in dynamical time reduced by the Espenak and Meeus delta-T polynomials; China Standard Time UTC+8 from 1929, Beijing mean time UTC+7:45:40 before); month 11 is the month that holds the winter solstice (the sun at 270 degrees, Meeus ch. 25 with the planetary and lunar terms, read in UTC+8 for every year, which is what the published 1900..1928 calendars did for their leap months); a year of 13 months has a leap month, the first month after month 11 with no major term (sun at a multiple of 30 degrees), carrying the number of the month before it. A `Date` is the Gregorian year the Chinese new year falls in, the month 1..12, whether it is the leap month of that number, and the day 1..30. `from_days` and `to_days` answer `OutOfRange` outside the years 1900..2100 (and `to_days` for a leap month or a 30th day the year does not have); `new_year`, `leap_month` (0 when none) and `month_length` (29 or 30) answer from the same months; `stem_branch` is the sexagenary stem 0..9 and branch 0..11 (1984 is 0, 0). Exact against lunar_python for 1900..2100 except 1906-04-23 and 2057-09-28, where a new moon falls eight minutes and two and a half seconds from midnight. Not here: the pre-1645 calendars, years beyond 1900..2100, the 24 solar-term dates as a surface, festivals.
+
+### `e.time.names`
+
+```neper
+fn lower(b: u8) -> u8
+fn locale_count() -> usize
+fn row(loc: usize) -> str
+fn field(r: str, n: usize) -> str
+fn item(f: str, n: usize) -> str
+fn locale_index(tag: str) -> (usize, bool)
+fn month(loc: usize, m: u8, abbr: bool) -> str
+fn weekday(loc: usize, index: i64, abbr: bool) -> str
+fn day_period(loc: usize, pm: bool) -> str
+fn row_0() -> str
+fn row_1() -> str
+fn row_2() -> str
+fn row_3() -> str
+fn row_4() -> str
+fn row_5() -> str
+fn row_6() -> str
+fn row_7() -> str
+fn row_8() -> str
+fn row_9() -> str
+fn row_10() -> str
+fn row_11() -> str
+fn row_12() -> str
+fn row_13() -> str
+fn row_14() -> str
+fn row_15() -> str
+fn row_16() -> str
+fn row_17() -> str
+fn row_18() -> str
+fn row_19() -> str
+fn row_20() -> str
+fn row_21() -> str
+fn row_22() -> str
+fn row_23() -> str
+fn row_24() -> str
+fn row_25() -> str
+fn row_26() -> str
+```
+
+Month and weekday names (wide and abbreviated, CLDR's format context) and the AM/PM marks of 27 locales (`en fr de es it pt nl sv da nb fi pl cs hu ro ru uk tr el ja zh ko id vi ar he hi`), for `e.time.pattern`'s `format_locale` and `parse_locale`. A locale is an index (0 is English); `locale_index` finds it from a BCP 47 tag by its language subtag, case-insensitively (`fr`, `fr-CA`, `FR_ca`), so regional differences (`pt-PT`, `en-GB` abbreviations) are not distinguished. `month`, `weekday` (0 Monday) and `day_period` answer the empty string for an index out of range. Generated from Babel's CLDR by `scripts/gen_time_names.py`; `time_pattern_locales` compares 868 formatted and parsed date-times with Babel's formatter.
+
 ### `e.time.pattern`
 
 ```neper
@@ -24056,6 +24195,10 @@ fn lower(b: u8) -> u8
 fn is_digit(b: u8) -> bool
 fn month_name(month: u8) -> str
 fn weekday_name(index: i64) -> str
+fn month_text(loc: usize, month: u8, abbr: bool) -> str
+fn weekday_text(loc: usize, index: i64, abbr: bool) -> str
+fn mark_text(loc: usize, pm: bool) -> str
+fn first_scalar(s: str) -> usize
 fn push(b: *Buf, c: u8)
 fn push_str(b: *Buf, s: str)
 fn push_prefix(b: *Buf, s: str, count: usize)
@@ -24064,15 +24207,18 @@ fn run_of(pattern: str, at: usize) -> usize
 fn is_specifier(c: u8) -> bool
 fn quoted_end(pattern: str, at: usize) -> (usize, bool)
 fn format(pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err)
+fn format_locale(tag: str, pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err)
+fn format_in(loc: usize, pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err)
 fn read_digits(src: str, at: usize, min: usize, max: usize) -> (i64, usize, bool)
 fn starts_with_fold(src: str, at: usize, name: str, count: usize) -> bool
-fn match_month(src: str, at: usize, abbr: bool) -> (i64, usize)
-fn match_weekday(src: str, at: usize, abbr: bool) -> (i64, usize)
-fn parse_with(pattern: str, source: str, template: calendar.DateTime) -> (calendar.DateTime, err)
+fn match_month(loc: usize, src: str, at: usize, abbr: bool) -> (i64, usize)
+fn match_weekday(loc: usize, src: str, at: usize, abbr: bool) -> (i64, usize)
+fn parse_with(loc: usize, pattern: str, source: str, template: calendar.DateTime) -> (calendar.DateTime, err)
 fn parse(pattern: str, source: str) -> (calendar.DateTime, err)
+fn parse_locale(tag: str, pattern: str, source: str) -> (calendar.DateTime, err)
 ```
 
-NodaTime-style runtime patterns over `e.time.calendar`'s `DateTime` (`calendar.format`/`parse` take a compile-time pattern; these take one as data). Specifiers: `yyyy yy MMMM MMM MM M dddd ddd dd d HH H hh h mm m ss s f..fffffffff F..FFFFFFFFF tt t`; `'...'` and `"..."` quote, `\x` escapes, `%x` forces a single-letter specifier, every other byte is literal. `format` writes into the caller's buffer and refuses an overflow rather than truncating. `parse` reads padded forms exactly and unpadded ones as one or two digits, matches names case-insensitively, refuses repeated fields, 12-hour without a marker (and a marker without `h`), a weekday that disagrees with the date, impossible dates and trailing input; `yy` pivots 00-29 to 2000s and 30-99 to 1900s; fields the pattern lacks come from the template (`parse` uses 2000-01-01T00:00:00, `parse_with` takes one). English names only; no culture data, zones or offsets (`e.time.parse` reads those, `e.tz` applies them).
+NodaTime-style runtime patterns over `e.time.calendar`'s `DateTime` (`calendar.format`/`parse` take a compile-time pattern; these take one as data). Specifiers: `yyyy yy MMMM MMM MM M dddd ddd dd d HH H hh h mm m ss s f..fffffffff F..FFFFFFFFF tt t`; `'...'` and `"..."` quote, `\x` escapes, `%x` forces a single-letter specifier, every other byte is literal. `format` writes into the caller's buffer and refuses an overflow rather than truncating. `parse` reads padded forms exactly and unpadded ones as one or two digits, matches names case-insensitively, refuses repeated fields, 12-hour without a marker (and a marker without `h`), a weekday that disagrees with the date, impossible dates and trailing input; `yy` pivots 00-29 to 2000s and 30-99 to 1900s; fields the pattern lacks come from the template (`parse` uses 2000-01-01T00:00:00, `parse_with` takes one). `format` and `parse` use English names; `format_locale` and `parse_locale` take a language tag and use that language's CLDR names from `e.time.names` (`MMM` and `ddd` are its abbreviations, `t` is the first character of the AM/PM mark and is refused on parse when both marks share it; an unknown tag is `Invalid`). No zones or offsets (`e.time.parse` reads those, `e.tz` applies them).
 
 ### `e.tz.winzones`
 
@@ -24082,6 +24228,9 @@ fn fold(b: u8) -> u8
 fn same_fold(a: str, b: str) -> bool
 fn find_row(rows: str, key: str) -> (str, bool)
 fn iana_for_windows(name: str) -> (str, err)
+fn find_territory_row(rows: str, name: str, territory: str) -> (str, bool)
+fn iana_for_windows_in(name: str, territory: str) -> (str, err)
+fn territory_row_count() -> usize
 fn windows_for_iana(name: str) -> (str, err)
 fn windows_zone_count() -> usize
 fn iana_name_count() -> usize
@@ -24094,9 +24243,12 @@ fn iana_rows_3() -> str
 fn iana_rows_4() -> str
 fn iana_rows_5() -> str
 fn iana_rows_6() -> str
+fn territory_rows_0() -> str
+fn territory_rows_1() -> str
+fn territory_rows_2() -> str
 ```
 
-The Windows time zone id to IANA zone map and back (NodaTime's `WindowsMapping`, .NET's `TryConvertWindowsIdToIanaId`): `iana_for_windows("Pacific Standard Time")` is `America/Los_Angeles`, `windows_for_iana` takes any IANA name or link. The tables are the CLDR `windowsZones` primary mapping (territory 001: one IANA zone per Windows id; 139 ids, 586 IANA names), generated by `scripts/gen_tz_winzones.py` as string chunks; matching is ASCII case-insensitive and a miss is `NotFound`. Territory-specific variants of a Windows id are not here, and the module does not load zone rules (`e.tz` does).
+The Windows time zone id to IANA zone map and back (NodaTime's `WindowsMapping`, .NET's `TryConvertWindowsIdToIanaId`): `iana_for_windows("Pacific Standard Time")` is `America/Los_Angeles`, `windows_for_iana` takes any IANA name or link. The tables are the CLDR `windowsZones` primary mapping (territory 001: one IANA zone per Windows id; 139 ids, 586 IANA names), generated by `scripts/gen_tz_winzones.py` as string chunks; matching is ASCII case-insensitive and a miss is `NotFound`. `iana_for_windows_in(name, "CA")` answers the territory's own CLDR row (227 rows that differ from the default, read from .NET's `TryConvertWindowsIdToIanaId` over every `AA..ZZ` by `scripts/tz_winzones_territories.ps1`; `Central Standard Time` in `CA` is `America/Winnipeg`, in `MX` `America/Matamoros`), and the 001 answer for an empty, `001` or unlisted territory, case-insensitively; each row's zone belongs to its territory in CLDR's `territory_zones` (checked against Babel). The first IANA id of a territory's CLDR list is the one kept, the others of a multi-zone territory are not. The module does not load zone rules (`e.tz` does).
 
 ### `e.fmt.bincode`
 

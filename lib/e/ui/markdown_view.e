@@ -37,9 +37,15 @@
 // usable with `rich_spans`); `selected_text` joins the cells of a row by a tab and rows by a
 // newline.
 //
-// ponytail: the metric is one advance per code point, so a proportional face needs the
-// host's measurement in place of `char_w`; a style change inside a word may break the line
-// there; a quote bar is drawn per leaf block, so it is broken at the gaps.
+// Measurement and content-sized columns (`build_with`, `Options`): the host's `Measure` gives
+// the width of each word, space and code line in the style it is drawn in, so a shaped,
+// proportional face lays out as it will be drawn; `fit_columns` makes a table's columns as
+// wide as their content (the widest cell on one line plus the padding) when they fit,
+// shared between the longest word and the widest cell otherwise.
+//
+// ponytail: without `Options` the metric is one advance per code point; a style change inside
+// a word may break the line there (each piece is measured on its own); a quote bar is
+// drawn per leaf block, so it is broken at the gaps.
 
 use e.fmt.markdown
 use e.ui.control
@@ -74,13 +80,19 @@ type Word = struct { start: usize, len: usize, cols: usize, style: u8, link: u32
 type Metrics = struct { width: f32, char_w: f32, line_h: f32, gap: f32, indent: f32, pad: f32, bar: f32 }
 type Storage = struct { items: []Item, nodes: []Node, links: []Link, store: []u8, scratch: []u8, blocks: []markdown.Block, inlines: []markdown.Inline, words: []Word }
 type View = struct { items: []Item, nodes: []Node, links: []Link, store: []u8, item_count: usize, node_count: usize, link_count: usize, store_len: usize, height: f32, fallback: bool, policy: LinkPolicy }
+// The host's measurement of text: the width at scale 1 of a run of bytes (a word, or one space) in the style bits it
+// will be drawn with (BOLD, ITALIC, CODE, LINK, HEADING), shaped as the host shapes it. A heading scales the answer.
+type Measure = struct { state: *void, width: fn(*void, str, u8) -> f32 }
+// `measured`: use `measure` instead of `char_w` times the code points; `fit_columns`: table columns as wide as their
+// content instead of equal shares.
+type Options = struct { measure: Measure, measured: bool, fit_columns: bool }
 
 error TooLarge
 error TooDeep
 error Invalid
 
 type Entry = struct { kind: u8, level_at: usize, tight: bool, ordered: bool, number: u32, marker: bool, node: usize }
-type Ctx = struct { st: Storage, m: Metrics, policy: LinkPolicy, items: usize, nodes: usize, links: usize, store_len: usize, y: f32, any: bool, fresh: bool, stack: [32]Entry, depth: usize, levels: usize }
+type Ctx = struct { st: Storage, m: Metrics, policy: LinkPolicy, items: usize, nodes: usize, links: usize, store_len: usize, y: f32, any: bool, fresh: bool, stack: [32]Entry, depth: usize, levels: usize, opts: Options }
 
 fn utf8_cols(s: str) -> usize {
     var n = 0usize
@@ -90,6 +102,18 @@ fn utf8_cols(s: str) -> usize {
         i += 1usize
     }
     ret n
+}
+
+// The width at scale 1 of `bytes` drawn in `style`: the host's measurement, else one advance per code point.
+fn text_px(c: *Ctx, bytes: str, style: u8) -> f32 {
+    if c.opts.measured { ret c.opts.measure.width(c.opts.measure.state, bytes, style) }
+    ret f32(utf8_cols(bytes)) * c.m.char_w
+}
+
+// The width of the space between words in `style`.
+fn space_px(c: *Ctx, style: u8) -> f32 {
+    if c.opts.measured { ret c.opts.measure.width(c.opts.measure.state, " ", style) }
+    ret c.m.char_w
 }
 
 fn lower(c: u8) -> u8 {
@@ -441,7 +465,6 @@ fn collect_words(c: *Ctx, joined: str, nodes: []const markdown.Inline) -> (Words
 
 // Places the words of a leaf; the number of lines.
 fn place_words(c: *Ctx, count: usize, scale: f32, x0: f32, avail: f32, top: f32, node: usize, extra: u8) -> (usize, err) {
-    let adv = c.m.char_w * scale
     let lh = c.m.line_h * scale
     var line = 0usize
     var col: f32 = 0.0
@@ -449,14 +472,14 @@ fn place_words(c: *Ctx, count: usize, scale: f32, x0: f32, avail: f32, top: f32,
     var i = 0usize
     while i < count {
         let w = c.st.words[i]
-        let wide = f32(w.cols) * adv
+        let wide = text_px(c, c.st.store[w.start..w.start + w.len], w.style | extra) * scale
         if w.hard && !first {
             line += 1usize
             col = 0.0
             first = true
         }
         var sep: f32 = 0.0
-        if !first && !w.glued { sep = adv }
+        if !first && !w.glued { sep = space_px(c, w.style | extra) * scale }
         if !first && col + sep + wide > avail {
             line += 1usize
             col = 0.0
@@ -684,8 +707,99 @@ fn cell_words(c: *Ctx, text: str, x: f32, y: f32, back_w: f32, inner: f32, heade
     ret (lines, ok)
 }
 
+// The widths of a table's columns (at most 16): equal shares of `total`; with `fit_columns`, each as wide as its
+// widest cell on one line plus the padding when all of those fit `total`, else shared between the least a column
+// can be (its longest word plus the padding, and when even those do not fit, exactly that) and its widest, in
+// proportion to the room each has to give. The cells are measured as they will be placed, uncommitted.
+fn column_widths(c: *Ctx, src: str, blocks: []const markdown.Block, header: usize, stop: usize, columns: usize, total: f32, out: []f32) -> err {
+    var k = 0usize
+    if !c.opts.fit_columns {
+        while k < columns {
+            out[k] = total / f32(columns)
+            k += 1usize
+        }
+        ret ok
+    }
+    var low: [16]f32 = zero
+    var high: [16]f32 = zero
+    var at = header
+    var row = 0u32
+    while at < stop {
+        if at == header + 1usize {
+            at += 1usize
+            continue
+        }
+        let line = line_text(src, blocks[at])
+        var begins: [16]usize = zero
+        var ends: [16]usize = zero
+        let found = split_row(line, begins[..], ends[..])
+        k = 0usize
+        while k < columns {
+            var cell_text = ""
+            if k < found && k < MAX_COLS { cell_text = line[begins[k]..ends[k]] }
+            var extra = 0u8
+            if row == 0u32 { extra = BOLD }
+            let links_before = c.links
+            let (count, parse_error) = markdown.parse_inlines(cell_text, c.st.inlines)
+            if parse_error != ok { ret parse_error }
+            let (w, words_error) = collect_words(c, cell_text, c.st.inlines[0usize..count])
+            if words_error != ok { ret words_error }
+            c.links = links_before
+            var longest: f32 = 0.0
+            var run: f32 = 0.0
+            var widest: f32 = 0.0
+            var first = true
+            var i = 0usize
+            while i < w.count {
+                let word = c.st.words[i]
+                let style = word.style | extra
+                let wide = text_px(c, cell_text[word.start..word.start + word.len], style)
+                if wide > longest { longest = wide }
+                if word.hard && !first {
+                    if run > widest { widest = run }
+                    run = 0.0
+                    first = true
+                }
+                var sep: f32 = 0.0
+                if !first && !word.glued { sep = space_px(c, style) }
+                run = run + sep + wide
+                first = false
+                i += 1usize
+            }
+            if run > widest { widest = run }
+            if longest + 2.0 * c.m.pad > low[k] { low[k] = longest + 2.0 * c.m.pad }
+            if widest + 2.0 * c.m.pad > high[k] { high[k] = widest + 2.0 * c.m.pad }
+            k += 1usize
+        }
+        row += 1u32
+        at += 1usize
+    }
+    var sum_low: f32 = 0.0
+    var sum_high: f32 = 0.0
+    k = 0usize
+    while k < columns {
+        if high[k] < low[k] { high[k] = low[k] }
+        sum_low += low[k]
+        sum_high += high[k]
+        k += 1usize
+    }
+    k = 0usize
+    while k < columns {
+        if sum_high <= total {
+            out[k] = high[k]
+        } else if sum_low >= total {
+            out[k] = low[k]
+        } else {
+            out[k] = low[k] + (high[k] - low[k]) * ((total - sum_low) / (sum_high - sum_low))
+        }
+        k += 1usize
+    }
+    ret ok
+}
+
 // Lays out the table whose header row is the line block `header` and delimiter row the one
-// after it, rows following to `stop`. Cells are equal columns of the available width.
+// after it, rows following to `stop`. Cells are equal columns of the available width, or
+// content-sized ones (`column_widths`).
 fn table_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, header: usize, stop: usize, columns: usize, aligns: []const u32) -> err {
     let (table, table_error) = put_node(c, .Table, u32(columns))
     if table_error != ok { ret table_error }
@@ -693,9 +807,17 @@ fn table_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, header: usize, 
     if begin_error != ok { ret begin_error }
     let x0 = f32(c.levels) * c.m.indent
     let total = avail_width(c, x0)
-    let col_w = total / f32(columns)
-    var inner = col_w - 2.0 * c.m.pad
-    if inner < c.m.char_w { inner = c.m.char_w }
+    var widths: [16]f32 = zero
+    try column_widths(c, src, blocks, header, stop, columns, total, widths[..])
+    var left: [16]f32 = zero
+    var edge = x0
+    var s = 0usize
+    while s < columns {
+        left[s] = edge
+        if !c.opts.fit_columns { left[s] = x0 + f32(s) * widths[s] }
+        edge += widths[s]
+        s += 1usize
+    }
     var y = top
     var row = 0u32
     var at = header
@@ -718,7 +840,9 @@ fn table_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, header: usize, 
             if k < found && k < MAX_COLS { cell_text = line[begins[k]..ends[k]] }
             var align = 0u32
             if k < aligns.len { align = aligns[k] }
-            let (lines, cell_error) = cell_words(c, cell_text, x0 + f32(k) * col_w, y, col_w, inner, row == 0u32, align, row, u32(k))
+            var inner = widths[k] - 2.0 * c.m.pad
+            if inner < c.m.char_w { inner = c.m.char_w }
+            let (lines, cell_error) = cell_words(c, cell_text, left[k], y, widths[k], inner, row == 0u32, align, row, u32(k))
             if cell_error != ok { ret cell_error }
             if lines > most { most = lines }
             k += 1usize
@@ -785,7 +909,7 @@ fn code_leaf(c: *Ctx, src: str, blocks: []const markdown.Block, from: usize) -> 
         let line = src[blocks[from + 1usize + k].start..blocks[from + 1usize + k].start + blocks[from + 1usize + k].len]
         let (begin, e) = put_bytes(c, line)
         if e != ok { ret (0usize, e) }
-        try put_item(c, Item { kind: .CodeLine, style: CODE, x: x0 + c.m.pad, y: top + c.m.pad + f32(k) * c.m.line_h, w: f32(utf8_cols(line)) * c.m.char_w, h: c.m.line_h, start: begin, len: line.len, link: 0u32, node: u32(node) })
+        try put_item(c, Item { kind: .CodeLine, style: CODE, x: x0 + c.m.pad, y: top + c.m.pad + f32(k) * c.m.line_h, w: text_px(c, line, CODE), h: c.m.line_h, start: begin, len: line.len, link: 0u32, node: u32(node) })
         k += 1usize
     }
     try end_leaf(c, top, height)
@@ -922,7 +1046,7 @@ fn plain(c: *Ctx, src: str) -> err {
                 let line = src[starts..stop]
                 let (begin, e) = put_bytes(c, line)
                 if e != ok { ret e }
-                try put_item(c, Item { kind: .CodeLine, style: CODE, x: c.m.pad, y: c.m.pad + f32(lines) * c.m.line_h, w: f32(utf8_cols(line)) * c.m.char_w, h: c.m.line_h, start: begin, len: line.len, link: 0u32, node: u32(node) })
+                try put_item(c, Item { kind: .CodeLine, style: CODE, x: c.m.pad, y: c.m.pad + f32(lines) * c.m.line_h, w: text_px(c, line, CODE), h: c.m.line_h, start: begin, len: line.len, link: 0u32, node: u32(node) })
                 lines += 1usize
             }
             starts = i + 1usize
@@ -938,10 +1062,20 @@ fn plain(c: *Ctx, src: str) -> err {
 // drawn whole as preformatted lines with `fallback` set; only a storage too small even
 // for that is an error.
 fn build(src: str, st: Storage, m: Metrics, policy: LinkPolicy) -> (View, err) {
+    var none: Options = zero
+    let (v, e) = build_with(src, st, m, policy, none)
+    ret (v, e)
+}
+
+// `build` with the host's text measurement and/or content-sized table columns (`Options`). A measure is called with
+// every word of every leaf, a space and every code line, in the style it is drawn in; the answer is trusted (a
+// negative or NaN width is the host's to avoid).
+fn build_with(src: str, st: Storage, m: Metrics, policy: LinkPolicy, opts: Options) -> (View, err) {
     var c: Ctx = zero
     c.st = st
     c.m = m
     c.policy = policy
+    c.opts = opts
     var done = false
     var fell_back = false
     let (n, parse_error) = markdown.parse_blocks(src, st.blocks)

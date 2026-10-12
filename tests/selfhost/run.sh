@@ -1232,6 +1232,31 @@ time_calendars_persian_uq_written=$($test_build/neper-self emit-executable "$rep
 [ "$time_calendars_persian_uq_written" = 'executable written' ]
 chmod +x "$test_build/time-calendars-persian-uq-selfhost"
 "$test_build/time-calendars-persian-uq-selfhost"
+# `e.ui.tree_adapter` language tailorings against .NET's ICU collation (L067).
+ui_tree_adapter_tailored_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_tree_adapter_tailored/src/main.e" "$repo" x64 linux "$test_build/ui-tree-adapter-tailored-selfhost")
+[ "$ui_tree_adapter_tailored_written" = 'executable written' ]
+chmod +x "$test_build/ui-tree-adapter-tailored-selfhost"
+"$test_build/ui-tree-adapter-tailored-selfhost"
+# `e.ui.markdown_view` measured text and content-sized columns against the oracle model (L066).
+ui_markdown_view_fit_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_markdown_view_fit/src/main.e" "$repo" x64 linux "$test_build/ui-markdown-view-fit-selfhost")
+[ "$ui_markdown_view_fit_written" = 'executable written' ]
+chmod +x "$test_build/ui-markdown-view-fit-selfhost"
+"$test_build/ui-markdown-view-fit-selfhost"
+# `e.ui.schedule` zones, month bars and series moves against zoneinfo and dateutil (L148).
+ui_schedule_zones_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_schedule_zones/src/main.e" "$repo" x64 linux "$test_build/ui-schedule-zones-selfhost")
+[ "$ui_schedule_zones_written" = 'executable written' ]
+chmod +x "$test_build/ui-schedule-zones-selfhost"
+"$test_build/ui-schedule-zones-selfhost"
+# `e.time.pattern` locale names against Babel's CLDR formatter (L150).
+time_pattern_locales_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_pattern_locales/src/main.e" "$repo" x64 linux "$test_build/time-pattern-locales-selfhost")
+[ "$time_pattern_locales_written" = 'executable written' ]
+chmod +x "$test_build/time-pattern-locales-selfhost"
+"$test_build/time-pattern-locales-selfhost"
+# `e.time.chinese` against lunar_python, 1900..2100 (L150).
+time_chinese_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_chinese/src/main.e" "$repo" x64 linux "$test_build/time-chinese-selfhost")
+[ "$time_chinese_written" = 'executable written' ]
+chmod +x "$test_build/time-chinese-selfhost"
+"$test_build/time-chinese-selfhost"
 # `e.fmt.s2` against klauspost/compress/s2 blocks and streams (L135).
 fmt_s2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_s2/src/main.e" "$repo" x64 linux "$test_build/fmt-s2-selfhost")
 [ "$fmt_s2_written" = 'executable written' ]

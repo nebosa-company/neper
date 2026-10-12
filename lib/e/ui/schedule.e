@@ -38,14 +38,24 @@
 // Names: the labels' words come from a `Names` (`english()` by default; `build_named` and
 // `build_month_named` take another), so a locale is a table, not code.
 //
-// ponytail: floating times, no zones (a display zone and DST would convert each
-// occurrence's instant); items' seconds are ignored; the occurrence scratch caps an endless
+// Zones: `build_zoned` and `build_month_zoned` read the items' wall clocks in a source zone and
+// show them in a display zone (each timed occurrence converted by its instant, a recurrence
+// expanded in the source zone); `display_to_source` brings a dragged wall clock back.
+//
+// Month bars: `build_month_bars` shows what touches more than one day as week-row bars in the
+// first lines of the cells, `hit_month_bar` finds one. `move_series` moves a recurring item by
+// what one of its occurrences was dragged, rewriting `BYDAY` and `UNTIL`.
+//
+// ponytail: items' seconds are ignored (a zone offset's seconds are dropped); an occurrence
+// moved to a gap time in the display zone shows at the offset before the gap; `move_series`
+// refuses rules it cannot shift faithfully rather than approximate; the occurrence scratch caps an endless
 // rule at its capacity and says so in `truncated`; sorting is an insertion sort over one
 // day's occurrences; painting and pointer capture are the control's, not this model's.
 
 use e.time
 use e.time.calendar
 use e.time.recur
+use e.tz
 use e.ui.accessibility
 
 type Mode = enum u8 { Day, Week, Agenda }
@@ -76,12 +86,14 @@ type MonthConfig = struct { anchor: time.Date, week_start: calendar.Weekday, wid
 // `count` is the cell's day count, `first` the index of its first occurrence in `placed`
 // (its `total` follow it), `shown` how many have a line and `more` how many the "+N more" line
 // stands for.
-type MonthCell = struct { date: time.Date, count: i64, in_month: bool, x: f32, y: f32, w: f32, h: f32, first: u32, total: u32, shown: u32, more: u32 }
+// `reserved` is the number of lines under the day number that the week's bars take, before the first occurrence.
+type MonthCell = struct { date: time.Date, count: i64, in_month: bool, x: f32, y: f32, w: f32, h: f32, first: u32, total: u32, shown: u32, more: u32, reserved: u32 }
 type MonthStorage = struct { occ: []Occ, stamps: []calendar.DateTime, placed: []Placed, cells: []MonthCell, order: []u32, nodes: []Access, labels: []u8 }
 type MonthLayout = struct { cfg: MonthConfig, placed: []Placed, cells: []MonthCell, nodes: []Access, labels: []u8, placed_count: usize, cell_count: usize, node_count: usize, labels_len: usize, weeks: u32, first_day: i64, height: f32, truncated: bool }
 type MonthHit = struct { kind: MonthHitKind, cell: u32, index: usize }
 // One all-day occurrence over the columns `first..=last`; `lane` is its row in the band.
-type Bar = struct { item: u32, first: u32, last: u32, lane: u32, x: f32, y: f32, w: f32, h: f32, before: bool, after: bool, recurring: bool }
+// `start` and `end` are the whole occurrence's absolute minutes (a bar cut at a week or view edge is a part of it).
+type Bar = struct { item: u32, first: u32, last: u32, lane: u32, x: f32, y: f32, w: f32, h: f32, before: bool, after: bool, recurring: bool, start: i64, end: i64 }
 
 error TooLarge
 error Invalid
@@ -155,9 +167,39 @@ fn range_of(cfg: Config) -> (i64, i64) {
     ret (anchor, i64(cfg.agenda_days))
 }
 
-type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32, names: Names }
+type Ctx = struct { st: Storage, cfg: Config, placed: usize, columns: usize, rows: usize, nodes: usize, labels: usize, occ: usize, truncated: bool, first: i64, days: i64, band: f32, height: f32, names: Names, zoned: bool, zone_src: tz.Zone, zone_dst: tz.Zone }
 
-fn push_occ(c: *Ctx, item: u32, start: i64, minutes: i64, recurring: bool, all_day: bool) -> err {
+// The wall clock `abs` (absolute minutes) of zone `src` as the wall clock of zone `dst`. A time in a gap of `src` is
+// read with the offset before the gap (so 02:30 on a spring-forward day is the instant of 03:30), an ambiguous one is
+// its first occurrence; seconds of the destination offset are dropped.
+fn zone_shift(src: tz.Zone, dst: tz.Zone, abs: i64) -> i64 {
+    let day = time.floor_div(abs, 1440i64)
+    let minute = abs - day * 1440i64
+    var t: time.Time = zero
+    t.hour = u8(minute / 60i64)
+    t.minute = u8(minute % 60i64)
+    let wall = tz.Local { date: calendar.date_of(day), time: t }
+    let (res, res_error) = tz.resolve(src, wall)
+    if res_error != ok { ret abs }
+    var instant = time.Timestamp { nanos: 0i64 }
+    switch res {
+    case .Unique as only:
+        instant = only
+    case .Ambiguous as pair:
+        instant = pair[0]
+    case .Missing as edges:
+        let before = tz.offset_at(src, edges[0])
+        instant = time.Timestamp { nanos: abs * 60000000000i64 - i64(before.seconds) * 1000000000i64 }
+    default:
+        ret abs
+    }
+    let local = tz.to_local(dst, instant)
+    ret calendar.day_count(local.date) * 1440i64 + i64(local.time.hour) * 60i64 + i64(local.time.minute)
+}
+
+fn push_occ(c: *Ctx, item: u32, start_in: i64, minutes: i64, recurring: bool, all_day: bool) -> err {
+    var start = start_in
+    if c.zoned && !all_day { start = zone_shift(c.zone_src, c.zone_dst, start_in) }
     if start >= (c.first + c.days) * 1440i64 || start + minutes <= c.first * 1440i64 { ret ok }
     if c.occ >= c.st.occ.len { ret TooLarge }
     c.st.occ[c.occ] = Occ { item: item, start: start, minutes: minutes, recurring: recurring, all_day: all_day }
@@ -182,7 +224,8 @@ fn collect(c: *Ctx, items: []const Item) -> err {
             let (rule, rule_error) = recur.parse_rule(it.rule)
             if rule_error != ok { ret Invalid }
             // Occurrences that began up to the item's length before the range still show.
-            let back = (minutes + 1439i64) / 1440i64
+            var back = (minutes + 1439i64) / 1440i64
+            if c.zoned { back += 2i64 }
             var floor_dt = datetime_of((c.first - back) * 1440i64)
             if calendar.compare(floor_dt, it.start) < 0i32 { floor_dt = it.start }
             let (n, expand_error) = recur.expand_from(rule, it.start, floor_dt, c.st.stamps)
@@ -221,10 +264,24 @@ fn put_placed(c: *Ctx, p: Placed) -> err {
 // The occurrences overlapping the day starting at absolute minute `day0`, sorted into
 // `order`; how many.
 fn day_order(c: *Ctx, day0: i64) -> usize {
+    ret day_order_if(c, day0, false)
+}
+
+// Whether an occurrence touches more than one calendar day.
+fn spans_days(o: Occ) -> bool {
+    ret time.floor_div(o.start + o.minutes - 1i64, 1440i64) > time.floor_div(o.start, 1440i64)
+}
+
+// `day_order`, leaving out the occurrences that span days when `singles` is set (the month's bars carry them).
+fn day_order_if(c: *Ctx, day0: i64, singles: bool) -> usize {
     var n = 0usize
     var i = 0usize
     while i < c.occ {
         let o = c.st.occ[i]
+        if singles && spans_days(o) {
+            i += 1usize
+            continue
+        }
         if o.start < day0 + 1440i64 && o.start + o.minutes > day0 {
             var at = n
             while at > 0usize && occ_before(c, u32(i), c.st.order[at - 1usize]) {
@@ -547,10 +604,24 @@ fn build(items: []const Item, cfg: Config, st: Storage) -> (Layout, err) {
 
 // `build` with the labels' words from `names`.
 fn build_named(items: []const Item, cfg: Config, st: Storage, names: Names) -> (Layout, err) {
+    var none: tz.Zone = zero
+    let (l, e) = build_core(items, cfg, st, names, false, none, none)
+    ret (l, e)
+}
+
+// `build` for items whose wall clocks are those of zone `source`, shown in the wall clock of zone `display`: each
+// timed occurrence (a recurrence is expanded in the source zone, so an every-Monday-09:00 series keeps its local time
+// and moves in the display zone across a DST change) is converted by its own instant. All-day items stay floating.
+fn build_zoned(items: []const Item, cfg: Config, st: Storage, source: tz.Zone, display: tz.Zone) -> (Layout, err) {
+    let (l, e) = build_core(items, cfg, st, english(), true, source, display)
+    ret (l, e)
+}
+
+fn build_core(items: []const Item, cfg: Config, st: Storage, names: Names, zoned: bool, src_zone: tz.Zone, dst_zone: tz.Zone) -> (Layout, err) {
     if cfg.day_start >= cfg.day_end || cfg.day_end > 24u32 || cfg.slot == 0u32 || cfg.width <= cfg.gutter { ret (zero, Invalid) }
     let (first, days) = range_of(cfg)
     if days < 1i64 { ret (zero, Invalid) }
-    var c = Ctx { st: st, cfg: cfg, placed: 0usize, columns: 0usize, rows: 0usize, nodes: 0usize, labels: 0usize, occ: 0usize, truncated: false, first: first, days: days, band: 0.0, height: 0.0, names: names }
+    var c = Ctx { st: st, cfg: cfg, placed: 0usize, columns: 0usize, rows: 0usize, nodes: 0usize, labels: 0usize, occ: 0usize, truncated: false, first: first, days: days, band: 0.0, height: 0.0, names: names, zoned: zoned, zone_src: src_zone, zone_dst: dst_zone }
     if st.rows.len == 0usize || st.order.len < st.occ.len { ret (zero, TooLarge) }
     try collect(&c, items)
     if cfg.mode == .Agenda {
@@ -709,36 +780,122 @@ fn build_month(items: []const Item, cfg: MonthConfig, ms: MonthStorage) -> (Mont
 // outside 1..12 or a non-positive size), `TooLarge` (a storage slice, `order` shorter than
 // `occ`, or `cells` shorter than the weeks need: 42 is always enough).
 fn build_month_named(items: []const Item, cfg: MonthConfig, ms: MonthStorage, names: Names) -> (MonthLayout, err) {
-    if cfg.width <= 0.0 || cfg.cell_h <= 0.0 || cfg.line_h <= 0.0 || cfg.anchor.month < 1u8 || cfg.anchor.month > 12u8 { ret (zero, Invalid) }
+    var none_zone: tz.Zone = zero
+    var no_bars: [1]Bar = zero
+    let (l, count, e) = month_core(items, cfg, ms, names, false, none_zone, none_zone, no_bars[0usize..0usize], false)
+    ret (l, e)
+}
+
+// `build_month` with a display zone, as `build_zoned` is to `build`.
+fn build_month_zoned(items: []const Item, cfg: MonthConfig, ms: MonthStorage, source: tz.Zone, display: tz.Zone) -> (MonthLayout, err) {
+    var no_bars: [1]Bar = zero
+    let (l, count, e) = month_core(items, cfg, ms, english(), true, source, display, no_bars[0usize..0usize], false)
+    ret (l, e)
+}
+
+// `build_month` with the occurrences that touch more than one day as bars: each is cut into one bar per week row
+// (`first`/`last` are cell indices, `before`/`after` mark a cut end), stacked in the lowest free lane under the
+// day-number line, and the single-day occurrences follow below the week's bars. A bar whose lane does not fit the
+// cell's `lines` has no area and is counted in `more` of the cells it covers. `bars` receives them; answers the
+// count. `bars` shorter than the segments need is `TooLarge`.
+fn build_month_bars(items: []const Item, cfg: MonthConfig, ms: MonthStorage, bars: []Bar) -> (MonthLayout, usize, err) {
+    var none_zone: tz.Zone = zero
+    let (l, count, e) = month_core(items, cfg, ms, english(), false, none_zone, none_zone, bars, true)
+    ret (l, count, e)
+}
+
+// `build_month_bars` for items in zone `source` shown in zone `display`.
+fn build_month_zoned_bars(items: []const Item, cfg: MonthConfig, ms: MonthStorage, source: tz.Zone, display: tz.Zone, bars: []Bar) -> (MonthLayout, usize, err) {
+    let (l, count, e) = month_core(items, cfg, ms, english(), true, source, display, bars, true)
+    ret (l, count, e)
+}
+
+fn month_core(items: []const Item, cfg: MonthConfig, ms: MonthStorage, names: Names, zoned: bool, src_zone: tz.Zone, dst_zone: tz.Zone, bars: []Bar, with_bars: bool) -> (MonthLayout, usize, err) {
+    if cfg.width <= 0.0 || cfg.cell_h <= 0.0 || cfg.line_h <= 0.0 || cfg.anchor.month < 1u8 || cfg.anchor.month > 12u8 { ret (zero, 0usize, Invalid) }
     let (first, weeks) = month_first(cfg)
     let days = i64(weeks) * 7i64
-    if ms.cells.len < usize(days) || ms.order.len < ms.occ.len { ret (zero, TooLarge) }
+    if ms.cells.len < usize(days) || ms.order.len < ms.occ.len { ret (zero, 0usize, TooLarge) }
     var no_columns: [1]Column = zero
     var no_rows: [1]Row = zero
     var no_lanes: [1]i64 = zero
     let st = Storage { occ: ms.occ, stamps: ms.stamps, placed: ms.placed, columns: no_columns[0usize..0usize], rows: no_rows[0usize..0usize], nodes: ms.nodes, labels: ms.labels, order: ms.order, lane_end: no_lanes[0usize..0usize] }
     var base: Config = zero
     base.anchor = cfg.anchor
-    var c = Ctx { st: st, cfg: base, placed: 0usize, columns: 0usize, rows: 0usize, nodes: 0usize, labels: 0usize, occ: 0usize, truncated: false, first: first, days: days, band: 0.0, height: 0.0, names: names }
+    var c = Ctx { st: st, cfg: base, placed: 0usize, columns: 0usize, rows: 0usize, nodes: 0usize, labels: 0usize, occ: 0usize, truncated: false, first: first, days: days, band: 0.0, height: 0.0, names: names, zoned: zoned, zone_src: src_zone, zone_dst: dst_zone }
     try collect(&c, items)
     let col_w = cfg.width / 7.0
     let lines = usize(cfg.lines)
+    // The bars: one segment per occurrence that touches more than one day and week row, sorted, laned, then given
+    // their rectangles; `reserved` is how many lines of each week the visible bars take.
+    var reserved: [6]u32 = zero
+    var bar_count = 0usize
+    if with_bars {
+        var oi = 0usize
+        while oi < c.occ {
+            let o = c.st.occ[oi]
+            oi += 1usize
+            if !spans_days(o) { continue }
+            let o_first = time.floor_div(o.start, 1440i64)
+            let o_last = time.floor_div(o.start + o.minutes - 1i64, 1440i64)
+            var w = 0i64
+            while w < i64(weeks) {
+                let w_first = first + w * 7i64
+                let seg_first = max_i64(o_first, w_first)
+                let seg_last = min_i64(o_last, w_first + 6i64)
+                if seg_first <= seg_last {
+                    if bar_count >= bars.len { ret (zero, 0usize, TooLarge) }
+                    let b = Bar { item: o.item, first: u32(seg_first - first), last: u32(seg_last - first), lane: 0u32, x: 0.0, y: 0.0, w: 0.0, h: 0.0, before: o_first < w_first, after: o_last > w_first + 6i64, recurring: o.recurring, start: o.start, end: o.start + o.minutes }
+                    var at = bar_count
+                    while at > 0usize && bar_before(b, bars[at - 1usize]) {
+                        bars[at] = bars[at - 1usize]
+                        at -= 1usize
+                    }
+                    bars[at] = b
+                    bar_count += 1usize
+                }
+                w += 1i64
+            }
+        }
+        let used = assign_lanes(bars, bar_count)
+        var bi = 0usize
+        while bi < bar_count {
+            let week = usize(bars[bi].first / 7u32)
+            let cy = cfg.header + f32(week) * cfg.cell_h
+            bars[bi].x = f32(bars[bi].first % 7u32) * col_w
+            bars[bi].y = cy
+            if usize(bars[bi].lane) < lines {
+                bars[bi].w = f32(bars[bi].last - bars[bi].first + 1u32) * col_w
+                bars[bi].h = cfg.line_h
+                bars[bi].y = cy + f32(bars[bi].lane + 1u32) * cfg.line_h
+                if bars[bi].lane + 1u32 > reserved[week] { reserved[week] = bars[bi].lane + 1u32 }
+            }
+            bi += 1usize
+        }
+    }
     var d = 0usize
     while i64(d) < days {
         let count = first + i64(d)
         let date = calendar.date_of(count)
         let cx = f32(d % 7usize) * col_w
         let cy = cfg.header + f32(d / 7usize) * cfg.cell_h
-        let n = day_order(&c, count * 1440i64)
+        let n = day_order_if(&c, count * 1440i64, with_bars)
+        let reserve = usize(reserved[d / 7usize])
+        var hidden_bars = 0usize
+        var bj = 0usize
+        while bj < bar_count {
+            if usize(bars[bj].first) <= d && usize(bars[bj].last) >= d && usize(bars[bj].lane) >= lines { hidden_bars += 1usize }
+            bj += 1usize
+        }
+        let avail = lines - reserve
         var shown = n
         var more = 0usize
-        if n > lines {
-            if lines == 0usize {
+        if n > avail || hidden_bars > 0usize {
+            if avail == 0usize {
                 shown = 0usize
-            } else {
-                shown = lines - 1usize
+            } else if n > avail - 1usize {
+                shown = avail - 1usize
             }
-            more = n - shown
+            more = n - shown + hidden_bars
         }
         let first_index = c.placed
         let day0 = count * 1440i64
@@ -747,7 +904,7 @@ fn build_month_named(items: []const Item, cfg: MonthConfig, ms: MonthStorage, na
             let o = c.st.occ[usize(c.st.order[k])]
             var kind: Kind = .Timed
             if o.all_day { kind = .AllDay }
-            var py = cy + f32(k + 1usize) * cfg.line_h
+            var py = cy + f32(reserve + k + 1usize) * cfg.line_h
             var pw = col_w
             var ph = cfg.line_h
             if k >= shown {
@@ -758,7 +915,7 @@ fn build_month_named(items: []const Item, cfg: MonthConfig, ms: MonthStorage, na
             try put_placed(&c, Placed { item: o.item, kind: kind, day: u32(d), start: max_i64(o.start, day0), end: min_i64(o.start + o.minutes, day0 + 1440i64), x: cx, y: py, w: pw, h: ph, lane: u32(k), lanes: u32(n), before: o.start < day0, after: o.start + o.minutes > day0 + 1440i64, recurring: o.recurring })
             k += 1usize
         }
-        ms.cells[d] = MonthCell { date: date, count: count, in_month: date.month == cfg.anchor.month && date.year == cfg.anchor.year, x: cx, y: cy, w: col_w, h: cfg.cell_h, first: u32(first_index), total: u32(n), shown: u32(shown), more: u32(more) }
+        ms.cells[d] = MonthCell { date: date, count: count, in_month: date.month == cfg.anchor.month && date.year == cfg.anchor.year, x: cx, y: cy, w: col_w, h: cfg.cell_h, first: u32(first_index), total: u32(n), shown: u32(shown), more: u32(more), reserved: u32(reserve) }
         d += 1usize
     }
     // The accessible tree: the grid, the weekday headers, then each cell and its occurrences.
@@ -794,7 +951,18 @@ fn build_month_named(items: []const Item, cfg: MonthConfig, ms: MonthStorage, na
         }
         d += 1usize
     }
-    ret (MonthLayout { cfg: cfg, placed: ms.placed, cells: ms.cells, nodes: ms.nodes, labels: ms.labels, placed_count: c.placed, cell_count: usize(days), node_count: c.nodes, labels_len: c.labels, weeks: weeks, first_day: first, height: height, truncated: c.truncated }, ok)
+    // The bars' own accessible nodes follow the cells'.
+    var bn = 0usize
+    while bn < bar_count {
+        let b = bars[bn]
+        var kind: Kind = .Timed
+        if items[usize(b.item)].all_day { kind = .AllDay }
+        start = c.labels
+        try put_event_label(&c, items, Placed { item: b.item, kind: kind, day: b.first, start: b.start, end: b.end, x: b.x, y: b.y, w: b.w, h: b.h, lane: b.lane, lanes: 1u32, before: b.before, after: b.after, recurring: b.recurring })
+        try put_node(&c, .ListItem, b.x, b.y, b.w, b.h, start, 0u32, 0u32, 0u32, 0u32, 1u8)
+        bn += 1usize
+    }
+    ret (MonthLayout { cfg: cfg, placed: ms.placed, cells: ms.cells, nodes: ms.nodes, labels: ms.labels, placed_count: c.placed, cell_count: usize(days), node_count: c.nodes, labels_len: c.labels, weeks: weeks, first_day: first, height: height, truncated: c.truncated }, bar_count, ok)
 }
 
 fn month_label_of(l: *const MonthLayout, node: usize) -> str {
@@ -805,7 +973,7 @@ fn month_label_of(l: *const MonthLayout, node: usize) -> str {
 // The top `y` of a cell's "+N more" line (one `line_h` tall), meaningful when `more > 0`.
 fn more_top(l: *const MonthLayout, cell: usize) -> f32 {
     let c = l.cells[cell]
-    ret c.y + f32(c.shown + 1u32) * l.cfg.line_h
+    ret c.y + f32(c.reserved + c.shown + 1u32) * l.cfg.line_h
 }
 
 // What is under a point of a month: a weekday header (`cell` is the column), an occurrence
@@ -890,7 +1058,7 @@ fn all_day_bars(l: *const Layout, out: []Bar) -> (usize, u32, err) {
         if last_day < i64(p.day) { last_day = i64(p.day) }
         let from = l.columns[usize(p.day)]
         let to = l.columns[usize(last_day)]
-        let bar = Bar { item: p.item, first: p.day, last: u32(last_day), lane: 0u32, x: from.x, y: l.cfg.header, w: to.x + to.w - from.x, h: l.cfg.all_day_h, before: p.before, after: p.end > (l.first_day + l.days) * 1440i64, recurring: p.recurring }
+        let bar = Bar { item: p.item, first: p.day, last: u32(last_day), lane: 0u32, x: from.x, y: l.cfg.header, w: to.x + to.w - from.x, h: l.cfg.all_day_h, before: p.before, after: p.end > (l.first_day + l.days) * 1440i64, recurring: p.recurring, start: p.start, end: p.end }
         var at = n
         while at > 0usize && bar_before(bar, out[at - 1usize]) {
             out[at] = out[at - 1usize]
@@ -899,8 +1067,19 @@ fn all_day_bars(l: *const Layout, out: []Bar) -> (usize, u32, err) {
         out[at] = bar
         n += 1usize
     }
-    var lanes = 0u32
+    let lanes = assign_lanes(out, n)
     i = 0usize
+    while i < n {
+        out[i].y = l.cfg.header + f32(out[i].lane) * l.cfg.all_day_h
+        i += 1usize
+    }
+    ret (n, lanes, ok)
+}
+
+// Gives each of the sorted `n` bars the lowest lane free over its columns; answers the lanes used.
+fn assign_lanes(out: []Bar, n: usize) -> u32 {
+    var lanes = 0u32
+    var i = 0usize
     while i < n {
         var lane = 0u32
         var settled = false
@@ -917,11 +1096,33 @@ fn all_day_bars(l: *const Layout, out: []Bar) -> (usize, u32, err) {
             }
         }
         out[i].lane = lane
-        out[i].y = l.cfg.header + f32(lane) * l.cfg.all_day_h
         if lane + 1u32 > lanes { lanes = lane + 1u32 }
         i += 1usize
     }
-    ret (n, lanes, ok)
+    ret lanes
+}
+
+// The bar under a point (index into `bars[..count]`), for the month's bars; check it before `hit_month`, whose
+// answer for the same point is the cell.
+fn hit_month_bar(bars: []const Bar, count: usize, x: f32, y: f32) -> (usize, bool) {
+    var i = 0usize
+    while i < count {
+        let b = bars[i]
+        if b.w > 0.0 && x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h { ret (i, true) }
+        i += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The source-zone wall clock of a display-zone wall clock: what to store when an occurrence shown by `build_zoned`
+// is moved (`move_target` answers display wall clocks). A time in a gap of the display zone is read with the offset
+// before the gap, as in `zone_shift`.
+fn display_to_source(source: tz.Zone, display: tz.Zone, value: calendar.DateTime) -> calendar.DateTime {
+    let shifted = zone_shift(display, source, abs_minutes(value))
+    var out = datetime_of(shifted)
+    out.time.second = value.time.second
+    out.time.nanos = value.time.nanos
+    ret out
 }
 
 // The column under `x` of a grid layout.
@@ -1069,4 +1270,213 @@ fn focus_next(l: *const Layout, current: usize, key: Key) -> usize {
         want_day += step
     }
     ret current
+}
+
+// ---- moving a recurring series ----
+
+// The index 0 (MO) .. 6 (SU) of a two-letter RFC 5545 weekday code, -1 when it is not one.
+fn weekday_code(a: u8, b: u8) -> i64 {
+    if a == 77u8 && b == 79u8 { ret 0i64 }
+    if a == 84u8 && b == 85u8 { ret 1i64 }
+    if a == 87u8 && b == 69u8 { ret 2i64 }
+    if a == 84u8 && b == 72u8 { ret 3i64 }
+    if a == 70u8 && b == 82u8 { ret 4i64 }
+    if a == 83u8 && b == 65u8 { ret 5i64 }
+    if a == 83u8 && b == 85u8 { ret 6i64 }
+    ret -1i64
+}
+
+fn weekday_letters(index: i64) -> str {
+    if index == 0i64 { ret "MO" }
+    if index == 1i64 { ret "TU" }
+    if index == 2i64 { ret "WE" }
+    if index == 3i64 { ret "TH" }
+    if index == 4i64 { ret "FR" }
+    if index == 5i64 { ret "SA" }
+    ret "SU"
+}
+
+type SeriesOut = struct { dst: []u8, n: usize, bad: bool }
+
+fn series_text(o: *SeriesOut, s: str) {
+    var i = 0usize
+    while i < s.len {
+        if o.n >= o.dst.len {
+            o.bad = true
+            ret
+        }
+        o.dst[o.n] = s[i]
+        o.n += 1usize
+        i += 1usize
+    }
+}
+
+fn series_digits(o: *SeriesOut, v: i64, width: usize) {
+    var tmp: [12]u8 = zero
+    var k = width
+    var rest = v
+    while k > 0usize {
+        k -= 1usize
+        tmp[k] = u8(48i64 + rest % 10i64)
+        rest = rest / 10i64
+    }
+    series_text(o, str_of(tmp[0usize..width]))
+}
+
+fn str_of(bytes: []const u8) -> str {
+    ret bytes
+}
+
+fn digits_value(s: str, from: usize, count: usize) -> i64 {
+    var v = 0i64
+    var i = 0usize
+    while i < count {
+        v = v * 10i64 + i64(s[from + i] - 48u8)
+        i += 1usize
+    }
+    ret v
+}
+
+// Rewrites one `BYDAY` value (`MO,WE`, `1FR`) with each weekday moved on by `days`; false when an ordinal makes that
+// not a shift of the same occurrences.
+fn series_byday(o: *SeriesOut, value: str, days: i64) -> bool {
+    var i = 0usize
+    while i < value.len {
+        var j = i
+        while j < value.len && value[j] != 44u8 { j += 1usize }
+        let token = value[i..j]
+        if token.len < 2usize { ret false }
+        let code_at = token.len - 2usize
+        let day = weekday_code(token[code_at], token[code_at + 1usize])
+        if day < 0i64 { ret false }
+        if code_at > 0usize && days != 0i64 { ret false }
+        if i > 0usize { series_text(o, ",") }
+        series_text(o, token[0usize..code_at])
+        series_text(o, weekday_letters(time.floor_mod(day + days, 7i64)))
+        i = j + 1usize
+    }
+    ret true
+}
+
+// `UNTIL` moved on by `delta` minutes: `YYYYMMDD` by whole days, `YYYYMMDDTHHMMSS[Z]` by the minutes.
+fn series_until(o: *SeriesOut, value: str, delta: i64) -> bool {
+    if value.len != 8usize && value.len != 15usize && value.len != 16usize { ret false }
+    var i = 0usize
+    while i < value.len {
+        if i == 8usize {
+            if value[i] != 84u8 { ret false }
+        } else if i == 15usize {
+            if value[i] != 90u8 { ret false }
+        } else if value[i] < 48u8 || value[i] > 57u8 { ret false }
+        i += 1usize
+    }
+    let day = calendar.day_count(time.Date { year: i32(digits_value(value, 0usize, 4usize)), month: u8(digits_value(value, 4usize, 2usize)), day: u8(digits_value(value, 6usize, 2usize)) })
+    if value.len == 8usize {
+        let moved = calendar.date_of(day + time.floor_div(delta, 1440i64))
+        series_digits(o, i64(moved.year), 4usize)
+        series_digits(o, i64(moved.month), 2usize)
+        series_digits(o, i64(moved.day), 2usize)
+        ret true
+    }
+    let seconds = digits_value(value, 13usize, 2usize)
+    let total = day * 1440i64 + digits_value(value, 9usize, 2usize) * 60i64 + digits_value(value, 11usize, 2usize) + delta
+    let new_day = time.floor_div(total, 1440i64)
+    let minute = total - new_day * 1440i64
+    let moved = calendar.date_of(new_day)
+    series_digits(o, i64(moved.year), 4usize)
+    series_digits(o, i64(moved.month), 2usize)
+    series_digits(o, i64(moved.day), 2usize)
+    series_text(o, "T")
+    series_digits(o, minute / 60i64, 2usize)
+    series_digits(o, minute % 60i64, 2usize)
+    series_digits(o, seconds, 2usize)
+    if value.len == 16usize { series_text(o, "Z") }
+    ret true
+}
+
+fn key_is(part: str, key: str) -> bool {
+    if part.len < key.len + 1usize || part[key.len] != 61u8 { ret false }
+    var i = 0usize
+    while i < key.len {
+        if part[i] != key[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// Whether the rule's `INTERVAL` is 1 or absent.
+fn interval_is_one(rule: str) -> bool {
+    var i = 0usize
+    while i < rule.len {
+        var j = i
+        while j < rule.len && rule[j] != 59u8 { j += 1usize }
+        let part = rule[i..j]
+        if key_is(part, "INTERVAL") {
+            let value = part[9usize..part.len]
+            ret value.len == 1usize && value[0usize] == 49u8
+        }
+        i = j + 1usize
+    }
+    ret true
+}
+
+// Moves a whole recurring series: the occurrence that starts at `from` is dragged to `to`, and every occurrence
+// moves by the same wall-clock amount, so the item's start moves by it and the rule keeps its meaning. `BYDAY` days
+// move on with the day, `UNTIL` by the amount; a rule that cannot be moved without changing which occurrences it
+// makes is `Invalid`: an ordinal weekday (`1MO`) or a `BYDAY` with `INTERVAL` above 1 when the day moves by other
+// than whole weeks, or `BYMONTHDAY`, `BYYEARDAY`, `BYWEEKNO`, `BYMONTH` and `BYSETPOS`
+// when the day changes, `BYHOUR`, `BYMINUTE` and `BYSECOND` when the time of day does. A `MONTHLY` or `YEARLY` rule
+// with no `BY` part follows the new start's day of the month. The rule text is written to `dst` (`TooLarge` when it
+// does not fit); an all-day item moves by whole days. A non-recurring item moves the same way with an empty rule.
+fn move_series(item: Item, from: calendar.DateTime, to: calendar.DateTime, dst: []u8) -> (Item, err) {
+    var delta = abs_minutes(to) - abs_minutes(from)
+    if item.all_day { delta = (calendar.day_count(to.date) - calendar.day_count(from.date)) * 1440i64 }
+    let old_abs = abs_minutes(item.start)
+    var new_start = datetime_of(old_abs + delta)
+    new_start.time.second = item.start.time.second
+    new_start.time.nanos = item.start.time.nanos
+    if item.all_day {
+        new_start.time.hour = 0u8
+        new_start.time.minute = 0u8
+    }
+    var out = item
+    out.start = new_start
+    if item.rule.len == 0usize { ret (out, ok) }
+    let day_delta = time.floor_div(old_abs + delta, 1440i64) - time.floor_div(old_abs, 1440i64)
+    let time_moved = time.floor_mod(old_abs + delta, 1440i64) != time.floor_mod(old_abs, 1440i64) && !item.all_day
+    var o = SeriesOut { dst: dst, n: 0usize, bad: false }
+    var i = 0usize
+    var first = true
+    while i <= item.rule.len {
+        if i == item.rule.len || item.rule[i] == 59u8 {
+            i += 1usize
+            continue
+        }
+        var j = i
+        while j < item.rule.len && item.rule[j] != 59u8 { j += 1usize }
+        let part = item.rule[i..j]
+        if !first { series_text(&o, ";") }
+        first = false
+        if key_is(part, "BYDAY") {
+            // With a longer INTERVAL only whole weeks keep the same weeks of the series.
+            if !interval_is_one(item.rule) && time.floor_mod(day_delta, 7i64) != 0i64 { ret (item, Invalid) }
+            series_text(&o, "BYDAY=")
+            if !series_byday(&o, part[6usize..part.len], day_delta) { ret (item, Invalid) }
+        } else if key_is(part, "UNTIL") {
+            series_text(&o, "UNTIL=")
+            if !series_until(&o, part[6usize..part.len], delta) { ret (item, Invalid) }
+        } else if key_is(part, "BYMONTHDAY") || key_is(part, "BYYEARDAY") || key_is(part, "BYWEEKNO") || key_is(part, "BYMONTH") || key_is(part, "BYSETPOS") {
+            if day_delta != 0i64 { ret (item, Invalid) }
+            series_text(&o, part)
+        } else if key_is(part, "BYHOUR") || key_is(part, "BYMINUTE") || key_is(part, "BYSECOND") {
+            if time_moved { ret (item, Invalid) }
+            series_text(&o, part)
+        } else {
+            series_text(&o, part)
+        }
+        i = j + 1usize
+    }
+    if o.bad { ret (item, TooLarge) }
+    out.rule = str_of(dst[0usize..o.n])
+    ret (out, ok)
 }
