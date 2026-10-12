@@ -4471,6 +4471,18 @@ $algoExprWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $algoExprWritten -ne 'executable written') { throw 'algo_expr emission failed' }
 $algoExprOutput = & $algoExprPath
 if ($LASTEXITCODE -ne 0 -or $algoExprOutput -ne 'algo expr ok') { throw "algo_expr answered wrongly: exit $LASTEXITCODE" }
+# e.net.zmtp against libzmq 4.3 byte streams, scripted libzmq peers over TCP and loopback patterns (20 streams, 4 peers, D2805).
+$netZmtpPath = Join-Path $testBuild 'net-zmtp-selfhost.exe'
+$netZmtpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_zmtp\src\main.e') $repo 'x64' 'windows' $netZmtpPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netZmtpWritten -ne 'executable written') { throw 'net_zmtp emission failed' }
+$netZmtpOutput = & $netZmtpPath
+if ($LASTEXITCODE -ne 0 -or $netZmtpOutput -ne 'net zmtp ok') { throw "net_zmtp answered wrongly: exit $LASTEXITCODE" }
+# e.net.sp against NNG 1.x byte streams, scripted peers over TCP and loopback patterns (14 streams, 5 peers, D2805).
+$netSpPath = Join-Path $testBuild 'net-sp-selfhost.exe'
+$netSpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_sp\src\main.e') $repo 'x64' 'windows' $netSpPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netSpWritten -ne 'executable written') { throw 'net_sp emission failed' }
+$netSpOutput = & $netSpPath
+if ($LASTEXITCODE -ne 0 -or $netSpOutput -ne 'net sp ok') { throw "net_sp answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

@@ -2616,9 +2616,11 @@
     "net_http_pool",
     "net_mdns",
     "net_socks",
+    "net_sp",
     "net_ssh",
     "net_tftp",
-    "net_tls"
+    "net_tls",
+    "net_zmtp"
    ]
   },
   {
@@ -2740,6 +2742,8 @@
    "fixtures": [
     "channel_semantics",
     "channel_threads",
+    "net_sp",
+    "net_zmtp",
     "os_exit_threads",
     "runtime_gaps",
     "sync_dataguard",
@@ -3039,8 +3043,10 @@
     "net_ldap",
     "net_pop3",
     "net_smtp",
+    "net_sp",
     "net_tls",
     "net_tls_roots",
+    "net_zmtp",
     "proc_output",
     "sync_flight",
     "sync_semantics",

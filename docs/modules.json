@@ -568,6 +568,8 @@
     "e.crypto.jks",
     "e.crypto.pkcs12",
     "e.algo.expr",
+    "e.net.zmtp",
+    "e.net.sp",
     "e.time.parse",
     "e.path.dirs",
     "e.fmt.dotenv",
@@ -5031,6 +5033,30 @@
    "direct_dependencies": [
     "e.mem",
     "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.zmtp",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.net"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.sp",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.net"
    ],
    "blocked_by": []
   },

@@ -22729,6 +22729,95 @@ fn run(a: *mem.Arena, prog: *const Program, scope: []const Binding, host: Host, 
 
 A small expression language in the family of JEXL, SpEL and MVEL: property navigation (`a.b`, `a?.b`, `a['b']`, `a[0]`), method calls, function calls and operators over values and caller-owned objects, evaluated by a tree walk. Values are `Null`, `Bool`, `Int` (i64), `Float`, `Str`, `List`, `Map` and `Object`, an opaque `u32` handle that only the caller's `Host` callbacks (`get`, `call`, `function`) can open: that is the sandbox, together with `Limits` (steps, nesting depth, string and collection sizes, `strict` for undefined names and properties) and the fixed whitelist of built-in methods (strings: length size isEmpty toUpperCase toLowerCase trim contains startsWith endsWith indexOf substring charAt concat; lists: size isEmpty contains get indexOf join; maps: size isEmpty containsKey get keys values) and functions (size empty str int float abs min max floor ceil round); a method not on the list is `Denied`. Operators: `?:`, elvis, `??`, `|| or`, `&& and`, `== != eq ne =~ !~ =^ =$`, `< <= > >= lt le gt ge`, `..`, `+ - * / % div mod`, unary `! not - + empty size`. Semantics are spelled out in the source header (Int `/` exact-or-Float, truncated `%`, overflow is an error, JEXL-style truthiness, string `+`). `compile` once and `run` against many scopes, or `evaluate`. Not here: assignment and scripts, lambdas, `new`/type references (SpEL `T()`), projection and selection, regex `matches`, bean-style `getX()` property inference, and compilation to bytecode.
 
+### `e.net.zmtp`
+
+```neper
+type SocketType = enum u8 { Pair, Pub, Sub, Req, Rep, Dealer, Router, Pull, Push, XPub, XSub }
+type Frame = struct { more: bool, command: bool, body: []const u8 }
+type Greeting = struct { major: u8, minor: u8, as_server: bool, identity_hint: u8 }
+type Ready = struct { socket_type: SocketType, identity: []const u8, has_identity: bool }
+type Subscriptions = struct { prefixes: []str, count: usize, everything: bool }
+type Conn = struct { sock: net.Socket, buf: []u8, filled: usize, consumed: usize, local: SocketType, remote: SocketType, local_identity: []const u8, remote_id: [256]u8, remote_id_len: usize, ready: bool }
+error Malformed
+error NeedMore
+error TooSmall
+error Incompatible
+error Unsupported
+error Closed
+error TooLarge
+fn type_name(t: SocketType) -> str
+fn same(a: []const u8, b: []const u8) -> bool
+fn type_of_name(name: []const u8) -> (SocketType, bool)
+fn type_index(t: SocketType) -> u8
+fn socket_type_at(i: u8) -> SocketType
+fn compatible(a: SocketType, b: SocketType) -> bool
+fn sends_identity(t: SocketType) -> bool { ret t == .Req || t == .Dealer || t == .Router }
+fn greeting_size() -> usize { ret 64usize }
+fn encode_greeting(dst: []u8, as_server: bool, identity_len: usize) -> (usize, err)
+fn decode_greeting(src: []const u8) -> (Greeting, err)
+fn encode_frame(dst: []u8, more: bool, command: bool, body: []const u8) -> (usize, err)
+fn decode_frame(src: []const u8) -> (Frame, usize, err)
+fn put_property(dst: []u8, at: usize, name: str, value: []const u8) -> usize
+fn encode_ready(dst: []u8, t: SocketType, identity: []const u8) -> (usize, err)
+fn decode_ready(body: []const u8) -> (Ready, err)
+fn encode_subscription(dst: []u8, subscribe: bool, prefix: []const u8) -> (usize, err)
+fn decode_subscription(body: []const u8) -> (bool, bool, []const u8)
+fn subscriptions(a: *mem.Arena, capacity: usize) -> (Subscriptions, err)
+fn add_prefix(s: *Subscriptions, prefix: []const u8) -> err
+fn remove_prefix(s: *Subscriptions, prefix: []const u8)
+fn wants(s: *const Subscriptions, topic: []const u8) -> bool
+fn conn(sock: net.Socket, buf: []u8, local: SocketType, identity: []const u8) -> Conn
+fn send_all(sock: net.Socket, data: []const u8) -> err
+fn fill(c: *Conn) -> err
+fn handshake(c: *Conn, as_server: bool) -> err
+fn send_message(c: *Conn, parts: []const []const u8) -> err
+fn send_command(c: *Conn, frame: []const u8) -> err { ret send_all(c.sock, frame) }
+fn recv_frame(c: *Conn) -> (Frame, err)
+fn recv_message(c: *Conn, out: [][]const u8, subs: *Subscriptions) -> (usize, err)
+fn recv_frame_keep(c: *Conn) -> (Frame, err)
+fn compact_if_possible(c: *Conn) -> (bool, err)
+fn req_envelope(parts: []const []const u8, out: [][]const u8) -> (usize, err)
+fn envelope_body_start(parts: []const []const u8) -> (usize, err)
+fn router_prefix(c: *const Conn, counter: u32, auto: []u8, parts: []const []const u8, out: [][]const u8) -> (usize, err)
+```
+
+ZeroMQ's wire protocol (ZMTP 3.x, NULL security) and the brokerless patterns on one connection, over `e.net` TCP sockets: the 64-byte greeting (`encode_greeting`/`decode_greeting`), the `READY` command with `Socket-Type` and `Identity` (`encode_ready`/`decode_ready`), frames with MORE, LONG and COMMAND flags (`encode_frame`/`decode_frame`), `SUBSCRIBE`/`CANCEL` commands, the socket-type compatibility table, and blocking `Conn` calls (`handshake`, `send_message`, `recv_frame`, `recv_message`). Patterns: a `Subscriptions` prefix set for the PUB side, `req_envelope`/`envelope_body_start` for REQ/REP, `router_prefix` (peer identity or an auto-assigned five-byte id) for ROUTER; PUSH/PULL and DEALER/PAIR are plain messages. No broker and no thread: the caller owns concurrency. Byte-compatible with libzmq 4.3 (checked against its streams). Not here: PLAIN and CURVE, ZMTP 2.0/1.0 peers, PING/PONG heartbeats, multi-peer socket objects with reconnect and queues, inproc/ipc.
+
+### `e.net.sp`
+
+```neper
+type Protocol = enum u8 { Pair, Pub, Sub, Req, Rep, Push, Pull, Surveyor, Respondent, Bus }
+type Conn = struct { sock: net.Socket, buf: []u8, filled: usize, consumed: usize, local: Protocol, remote: Protocol, ready: bool, next_id: u32 }
+error Malformed
+error NeedMore
+error TooSmall
+error Incompatible
+error Closed
+error TooLarge
+error NoId
+fn number_of(p: Protocol) -> u16
+fn protocol_of(number: u16) -> (Protocol, bool)
+fn peer_of(p: Protocol) -> Protocol
+fn carries_id(p: Protocol) -> bool { ret p == .Req || p == .Rep || p == .Surveyor || p == .Respondent }
+fn encode_handshake(dst: []u8, p: Protocol) -> (usize, err)
+fn decode_handshake(src: []const u8) -> (Protocol, err)
+fn encode_message(dst: []u8, has_id: bool, id: u32, payload: []const u8) -> (usize, err)
+fn decode_message(src: []const u8) -> ([]const u8, usize, err)
+fn split_id(body: []const u8) -> (u32, []const u8, err)
+fn topic_matches(prefix: []const u8, payload: []const u8) -> bool
+fn conn(sock: net.Socket, buf: []u8, local: Protocol, first_id: u32) -> Conn
+fn send_all(sock: net.Socket, data: []const u8) -> err
+fn fill(c: *Conn) -> err
+fn handshake(c: *Conn) -> err
+fn send(c: *Conn, id: u32, payload: []const u8) -> err
+fn recv(c: *Conn) -> ([]const u8, err)
+fn next_question_id(c: *Conn) -> u32
+fn recv_answer(c: *Conn, id: u32) -> ([]const u8, err)
+fn recv_question(c: *Conn) -> (u32, []const u8, err)
+```
+
+NNG / nanomsg scalability-protocols wire over TCP and the brokerless survey, request, publish and push patterns on one connection: the 8-byte handshake with the protocol number (`encode_handshake`/`decode_handshake`, `peer_of` for compatibility), length-prefixed messages (`encode_message`/`decode_message`), the 4-byte high-bit id that REQ/REP and SURVEYOR/RESPONDENT carry (`split_id`, `next_question_id`), and blocking `Conn` calls (`handshake`, `send`, `recv`, `recv_answer` which skips answers to other ids, `recv_question`); SUB filtering is `topic_matches` on receipt. Byte-compatible with NNG 1.x (checked against pynng streams). Not here: raw mode and device backtraces, TLS/websocket transports, reconnect, and timeout options.
+
 ### `e.time.parse`
 
 ```neper

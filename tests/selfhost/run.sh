@@ -4007,6 +4007,18 @@ algo_expr_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 chmod +x "$test_build/algo-expr-selfhost"
 algo_expr_output=$("$test_build/algo-expr-selfhost")
 [ "$algo_expr_output" = 'algo expr ok' ]
+# e.net.zmtp against libzmq 4.3 byte streams, scripted libzmq peers over TCP and loopback patterns (20 streams, 4 peers, D2805).
+net_zmtp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_zmtp/src/main.e" "$repo" x64 linux "$test_build/net-zmtp-selfhost" -j 2)
+[ "$net_zmtp_written" = 'executable written' ]
+chmod +x "$test_build/net-zmtp-selfhost"
+net_zmtp_output=$("$test_build/net-zmtp-selfhost")
+[ "$net_zmtp_output" = 'net zmtp ok' ]
+# e.net.sp against NNG 1.x byte streams, scripted peers over TCP and loopback patterns (14 streams, 5 peers, D2805).
+net_sp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_sp/src/main.e" "$repo" x64 linux "$test_build/net-sp-selfhost" -j 2)
+[ "$net_sp_written" = 'executable written' ]
+chmod +x "$test_build/net-sp-selfhost"
+net_sp_output=$("$test_build/net-sp-selfhost")
+[ "$net_sp_output" = 'net sp ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]
