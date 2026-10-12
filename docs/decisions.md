@@ -39701,3 +39701,6 @@ The Clock fixture's Timer tab starts a countdown and relies on the app's own tic
 
 ## D2465 — The theme fixture's taps are twelve seconds apart
 After D2462 added the second home tap, the `settings_theme` fixture still stopped in the suite at `shell theme 5361`: the shell had not returned Home when the Level tap arrived, so that tap and the next were lost (the same dropped-event cause as D2463 and D2464, under the suite's heavier load than a lone boot). Its row's delay field is now 12.
+
+## D2466 — The two four-second fixtures move to eight
+The `sci` Calculator fixture lost its `1024` taps at the four-second cadence (the last digits reached the display as `2`, `21`): the same dropped-event cause as D2463–D2465. The two rows still at four seconds now use eight like the rest of the table.
