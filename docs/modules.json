@@ -547,6 +547,9 @@
     "e.ui.app",
     "e.time.cron",
     "e.time.recur",
+    "e.time.calendars",
+    "e.time.pattern",
+    "e.tz.winzones",
     "e.time.parse",
     "e.path.dirs",
     "e.fmt.dotenv",
@@ -4757,6 +4760,40 @@
    "direct_dependencies": [
     "e.time",
     "e.time.calendar"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.time.calendars",
+   "layer": 5,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.time"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.time.pattern",
+   "layer": 5,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.time",
+    "e.time.calendar"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.tz.winzones",
+   "layer": 4,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+
    ],
    "blocked_by": []
   },

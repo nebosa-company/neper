@@ -4345,6 +4345,24 @@ $mediatorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $mediatorWritten -ne 'executable written') { throw 'mediator emission failed' }
 $mediatorOutput = & $mediatorPath
 if ($LASTEXITCODE -ne 0 -or $mediatorOutput -ne 'mediator ok') { throw "mediator answered wrongly: exit $LASTEXITCODE" }
+# e.time.calendars: Julian, Islamic civil, Hebrew and Japanese eras against convertdate (2910 vectors, D2800).
+$timeCalendarsPath = Join-Path $testBuild 'time-calendars-selfhost.exe'
+$timeCalendarsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_calendars\src\main.e') $repo 'x64' 'windows' $timeCalendarsPath -j 2
+if ($LASTEXITCODE -ne 0 -or $timeCalendarsWritten -ne 'executable written') { throw 'time_calendars emission failed' }
+$timeCalendarsOutput = & $timeCalendarsPath
+if ($LASTEXITCODE -ne 0 -or $timeCalendarsOutput -ne 'time calendars ok') { throw "time_calendars answered wrongly: exit $LASTEXITCODE" }
+# e.time.pattern: runtime NodaTime-style patterns against a stdlib-name renderer (573 vectors, D2800).
+$timePatternPath = Join-Path $testBuild 'time-pattern-selfhost.exe'
+$timePatternWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_pattern\src\main.e') $repo 'x64' 'windows' $timePatternPath -j 2
+if ($LASTEXITCODE -ne 0 -or $timePatternWritten -ne 'executable written') { throw 'time_pattern emission failed' }
+$timePatternOutput = & $timePatternPath
+if ($LASTEXITCODE -ne 0 -or $timePatternOutput -ne 'time pattern ok') { throw "time_pattern answered wrongly: exit $LASTEXITCODE" }
+# e.tz.winzones: Windows id to IANA map both ways against CLDR via tzlocal (354 vectors, D2800).
+$tzWinzonesPath = Join-Path $testBuild 'tz-winzones-selfhost.exe'
+$tzWinzonesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\tz_winzones\src\main.e') $repo 'x64' 'windows' $tzWinzonesPath -j 2
+if ($LASTEXITCODE -ne 0 -or $tzWinzonesWritten -ne 'executable written') { throw 'tz_winzones emission failed' }
+$tzWinzonesOutput = & $tzWinzonesPath
+if ($LASTEXITCODE -ne 0 -or $tzWinzonesOutput -ne 'tz windows ok') { throw "tz_winzones answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

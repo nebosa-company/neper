@@ -3881,6 +3881,24 @@ mediator_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/mediator-selfhost"
 mediator_output=$("$test_build/mediator-selfhost")
 [ "$mediator_output" = 'mediator ok' ]
+# e.time.calendars: Julian, Islamic civil, Hebrew and Japanese eras against convertdate (2910 vectors, D2800).
+time_calendars_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_calendars/src/main.e" "$repo" x64 linux "$test_build/time-calendars-selfhost" -j 2)
+[ "$time_calendars_written" = 'executable written' ]
+chmod +x "$test_build/time-calendars-selfhost"
+time_calendars_output=$("$test_build/time-calendars-selfhost")
+[ "$time_calendars_output" = 'time calendars ok' ]
+# e.time.pattern: runtime NodaTime-style patterns against a stdlib-name renderer (573 vectors, D2800).
+time_pattern_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_pattern/src/main.e" "$repo" x64 linux "$test_build/time-pattern-selfhost" -j 2)
+[ "$time_pattern_written" = 'executable written' ]
+chmod +x "$test_build/time-pattern-selfhost"
+time_pattern_output=$("$test_build/time-pattern-selfhost")
+[ "$time_pattern_output" = 'time pattern ok' ]
+# e.tz.winzones: Windows id to IANA map both ways against CLDR via tzlocal (354 vectors, D2800).
+tz_winzones_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/tz_winzones/src/main.e" "$repo" x64 linux "$test_build/tz-winzones-selfhost" -j 2)
+[ "$tz_winzones_written" = 'executable written' ]
+chmod +x "$test_build/tz-winzones-selfhost"
+tz_winzones_output=$("$test_build/tz-winzones-selfhost")
+[ "$tz_winzones_output" = 'tz windows ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

@@ -22008,6 +22008,113 @@ rule matches it. A plain and an ordinal weekday in one BYDAY list are a union (R
 5545; python-dateutil intersects them). A rule whose periods stay empty ends quietly
 after the year 9999 or 4,000,000 sub-daily steps. Zones belong to `e.tz`.
 
+### `e.time.calendars`
+
+```neper
+type Calendar = enum u8 { Julian, IslamicCivil, Hebrew }
+type JapaneseDate = struct { era: u8, year: i32, month: u8, day: u8 }
+error Invalid
+const RD_UNIX: i64 = 719163i64
+const HEBREW_EPOCH: i64 = -1373427i64
+const ISLAMIC_EPOCH: i64 = 227015i64
+const JULIAN_DAY_UNIX: i64 = 2440588i64
+const ERA_COUNT: u8 = 5u8
+fn julian_to_days(year: i64, month: i64, day: i64) -> i64
+fn julian_from_days(count: i64) -> (i64, i64, i64)
+fn islamic_leap(year: i64) -> bool { ret time.floor_mod(14i64 + 11i64 * year, 30i64) < 11i64 }
+fn islamic_fixed(year: i64, month: i64, day: i64) -> i64
+fn islamic_to_days(year: i64, month: i64, day: i64) -> i64 { ret islamic_fixed(year, month, day) - RD_UNIX }
+fn islamic_from_days(count: i64) -> (i64, i64, i64)
+fn hebrew_leap(year: i64) -> bool { ret time.floor_mod(7i64 * year + 1i64, 19i64) < 7i64 }
+fn hebrew_month_count(year: i64) -> i64
+fn hebrew_elapsed(year: i64) -> i64
+fn hebrew_new_year(year: i64) -> i64
+fn hebrew_year_length(year: i64) -> i64 { ret hebrew_new_year(year + 1i64) - hebrew_new_year(year) }
+fn hebrew_scriptural_length(year: i64, s: i64) -> i64
+fn scriptural_month(year: i32, civil: u8) -> u8
+fn civil_month(year: i32, scriptural: u8) -> u8
+fn hebrew_civil_length(year: i64, civil: i64) -> i64
+fn hebrew_to_days(year: i64, month: i64, day: i64) -> i64
+fn hebrew_from_days(count: i64) -> (i64, i64, i64)
+fn is_leap_year(cal: Calendar, year: i32) -> bool
+fn months_in_year(cal: Calendar, year: i32) -> u8
+fn year_ok(cal: Calendar, year: i32) -> bool
+fn days_in_month(cal: Calendar, year: i32, month: u8) -> (u8, err)
+fn valid(cal: Calendar, date: time.Date) -> bool
+fn to_days(cal: Calendar, date: time.Date) -> (i64, err)
+fn make_date(year: i64, month: i64, day: i64) -> time.Date
+fn from_days(cal: Calendar, count: i64) -> (time.Date, err)
+fn convert(from: Calendar, to: Calendar, date: time.Date) -> (time.Date, err)
+fn from_iso(cal: Calendar, date: time.Date) -> (time.Date, err)
+fn to_iso(cal: Calendar, date: time.Date) -> (time.Date, err)
+fn month_index(cal: Calendar, year: i64, month: i64) -> i64
+fn year_of_index(cal: Calendar, index: i64) -> i64
+fn add_months(cal: Calendar, date: time.Date, months: i64) -> (time.Date, err)
+fn add_years(cal: Calendar, date: time.Date, years: i64) -> (time.Date, err)
+fn add_days(cal: Calendar, date: time.Date, days: i64) -> (time.Date, err)
+fn day_of_year(cal: Calendar, date: time.Date) -> (u16, err)
+fn month_name_hebrew(year: i32, civil: u8) -> str
+fn era_name(era: u8) -> str
+fn era_start(era: u8) -> time.Date
+fn iso_count(date: time.Date) -> i64 { ret time.days_from_civil(i64(date.year), i64(date.month), i64(date.day)) }
+fn japanese_from_iso(date: time.Date) -> (JapaneseDate, err)
+fn japanese_to_iso(j: JapaneseDate) -> (time.Date, err)
+```
+
+Non-ISO calendars over `e.time`'s day count (days from 1970-01-01): a date in any calendar is a `time.Date` read in that calendar, and every conversion goes through the one count. `Julian` is proleptic with astronomical year numbering; `IslamicCivil` is the tabular civil calendar (Friday epoch, 30-year cycle); `Hebrew` is the fixed-rule calendar with civil month numbers (Tishri 1; in a leap year Adar I is 6 and Adar II is 7), `scriptural_month`/`civil_month` converting to Nisan-is-1. Hebrew and Islamic years start at 1 and earlier counts answer `Invalid`. Month arithmetic walks real months (13 in a Hebrew leap year) and clamps the day; `add_years` keeps the month number, clamped to the year's last month. Japanese eras ride the Gregorian year/month/day with the .NET table (Meiji from 1868-09-08, Taisho, Showa, Heisei, Reiwa as indexes 0..4); earlier dates are refused. Not here: observational and Umm al-Qura Islamic calendars, Persian, Coptic, Thai/Buddhist and Chinese calendars, and week-of-year rules per calendar.
+
+### `e.time.pattern`
+
+```neper
+type Buf = struct { dst: []u8, n: usize, bad: bool }
+type Fields = struct { year: i64, month: i64, day: i64, hour: i64, minute: i64, second: i64, nanos: i64, hour12: i64, pm: i64, weekday: i64 }
+error Invalid
+fn lower(b: u8) -> u8
+fn is_digit(b: u8) -> bool { ret b >= 48u8 && b <= 57u8 }
+fn month_name(month: u8) -> str
+fn weekday_name(index: i64) -> str
+fn push(b: *Buf, c: u8)
+fn push_str(b: *Buf, s: str)
+fn push_prefix(b: *Buf, s: str, count: usize)
+fn push_num(b: *Buf, value: i64, width: usize)
+fn run_of(pattern: str, at: usize) -> usize
+fn is_specifier(c: u8) -> bool
+fn quoted_end(pattern: str, at: usize) -> (usize, bool)
+fn format(pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err)
+fn read_digits(src: str, at: usize, min: usize, max: usize) -> (i64, usize, bool)
+fn starts_with_fold(src: str, at: usize, name: str, count: usize) -> bool
+fn match_month(src: str, at: usize, abbr: bool) -> (i64, usize)
+fn match_weekday(src: str, at: usize, abbr: bool) -> (i64, usize)
+fn parse_with(pattern: str, source: str, template: calendar.DateTime) -> (calendar.DateTime, err)
+fn parse(pattern: str, source: str) -> (calendar.DateTime, err)
+```
+
+NodaTime-style runtime patterns over `e.time.calendar`'s `DateTime` (`calendar.format`/`parse` take a compile-time pattern; these take one as data). Specifiers: `yyyy yy MMMM MMM MM M dddd ddd dd d HH H hh h mm m ss s f..fffffffff F..FFFFFFFFF tt t`; `'...'` and `"..."` quote, `\x` escapes, `%x` forces a single-letter specifier, every other byte is literal. `format` writes into the caller's buffer and refuses an overflow rather than truncating. `parse` reads padded forms exactly and unpadded ones as one or two digits, matches names case-insensitively, refuses repeated fields, 12-hour without a marker (and a marker without `h`), a weekday that disagrees with the date, impossible dates and trailing input; `yy` pivots 00-29 to 2000s and 30-99 to 1900s; fields the pattern lacks come from the template (`parse` uses 2000-01-01T00:00:00, `parse_with` takes one). English names only; no culture data, zones or offsets (`e.time.parse` reads those, `e.tz` applies them).
+
+### `e.tz.winzones`
+
+```neper
+error NotFound
+fn fold(b: u8) -> u8
+fn same_fold(a: str, b: str) -> bool
+fn find_row(rows: str, key: str) -> (str, bool)
+fn iana_for_windows(name: str) -> (str, err)
+fn windows_for_iana(name: str) -> (str, err)
+fn windows_zone_count() -> usize { ret 139usize }
+fn iana_name_count() -> usize { ret 586usize }
+fn windows_rows_0() -> str
+fn windows_rows_1() -> str
+fn iana_rows_0() -> str
+fn iana_rows_1() -> str
+fn iana_rows_2() -> str
+fn iana_rows_3() -> str
+fn iana_rows_4() -> str
+fn iana_rows_5() -> str
+fn iana_rows_6() -> str
+```
+
+The Windows time zone id to IANA zone map and back (NodaTime's `WindowsMapping`, .NET's `TryConvertWindowsIdToIanaId`): `iana_for_windows("Pacific Standard Time")` is `America/Los_Angeles`, `windows_for_iana` takes any IANA name or link. The tables are the CLDR `windowsZones` primary mapping (territory 001: one IANA zone per Windows id; 139 ids, 586 IANA names), generated by `scripts/gen_tz_winzones.py` as string chunks; matching is ASCII case-insensitive and a miss is `NotFound`. Territory-specific variants of a Windows id are not here, and the module does not load zone rules (`e.tz` does).
+
 ### `e.time.parse`
 
 ```neper
