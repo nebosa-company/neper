@@ -439,7 +439,8 @@
     "e.math.units",
     "e.data.table",
     "e.data.tableview",
-    "e.data.tablegroup"
+    "e.data.tablegroup",
+    "e.data.tablesearch"
    ]
   },
   {
@@ -1535,6 +1536,20 @@
   },
   {
    "name": "e.data.tablegroup",
+   "layer": 2,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.sort",
+    "e.data.table",
+    "e.data.tableview",
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.tablesearch",
    "layer": 2,
    "surface": "partial",
    "milestone": null,

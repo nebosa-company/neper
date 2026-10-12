@@ -957,6 +957,11 @@ data_tablegroup_written=$($test_build/neper-self emit-executable "$repo/tests/se
 [ "$data_tablegroup_written" = 'executable written' ]
 chmod +x "$test_build/data-tablegroup-selfhost"
 "$test_build/data-tablegroup-selfhost"
+# `e.data.tablesearch`: the incremental search (begins/within, folded and exact, forward and backward, wrap, over a sorted and a filtered order) enumerated against a brute-force scan, and the value list (counts, fold order, merged variants, nulls, filtered rows only) against a per-entry recount (D2366).
+data_tablesearch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_tablesearch/src/main.e" "$repo" x64 linux "$test_build/data-tablesearch-selfhost" --arena 768m)
+[ "$data_tablesearch_written" = 'executable written' ]
+chmod +x "$test_build/data-tablesearch-selfhost"
+"$test_build/data-tablesearch-selfhost"
 # `e.algo.stat` against closed-form moments and a least-squares line, and `e.data.slot_map`'s
 # generational keys: stale after removal, reused with the next generation, retired at the last.
 stat_slots_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/stat_slots/src/main.e" "$repo" x64 linux "$test_build/stat-slots-selfhost")

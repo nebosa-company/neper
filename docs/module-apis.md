@@ -1920,6 +1920,28 @@ sum, min and max (f64) per group and for the footer into storage from `store`;
 `sort_groups_by_summary` orders the groups of a level within each parent by one of them, moving
 their rows with them. `TooManyGroups` answers more groups than the capacity given to `create`.
 
+### `e.data.tablesearch`
+
+```neper
+type Mode = enum u8 { Begins, Within }
+type Value = struct { id: u32, count: u32 }
+error BadColumn
+error TooSmall
+
+fn find(v: *const view.View, rows: []const u32, column: usize, text: str, mode: Mode, fold: bool, start: usize, forward: bool, wrap: bool, scratch: *mem.Arena) -> (usize, bool, err)
+fn value_list(v: *view.View, column: usize, rows: []const u32, merge_fold: bool, out: []Value, scratch: *mem.Arena) -> (usize, usize, err)
+```
+
+The incremental search and the filter popup's value list of the grid (`docs/grid.md` §5.4, steps 5-6).
+`find` answers the first position of a display order (`rows`: the rows of a view or a grouping) from
+`start`, forward or backward and round the end when `wrap`, whose cell in a dictionary or heap string
+column begins with or contains `text` (ASCII upper-case folded unless `fold` is false; the empty text
+matches every non-null cell). A dictionary column evaluates the match once per distinct entry, so a
+search costs O(entries + distance). `value_list` gives the dictionary entries in use among `rows` with
+their row counts in fold order and the number of null cells; `merge_fold` joins entries that differ only
+in ASCII case. `BadColumn` answers a numeric column or one out of range; `TooSmall` an `out` that is
+too short (the values that fit are written).
+
 ### `e.data.slot_map`
 
 ```neper

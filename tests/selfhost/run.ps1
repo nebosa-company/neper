@@ -1008,6 +1008,12 @@ $dataTablegroupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $dataTablegroupWritten -ne 'executable written') { throw 'data_tablegroup emission failed' }
 & $dataTablegroupPath
 if ($LASTEXITCODE -ne 0) { throw "a data_tablegroup check failed: exit $LASTEXITCODE" }
+# `e.data.tablesearch`: the incremental search (begins/within, folded and exact, forward and backward, wrap, over a sorted and a filtered order) enumerated against a brute-force scan, and the value list (counts, fold order, merged variants, nulls, filtered rows only) against a per-entry recount (D2366).
+$dataTablesearchPath = Join-Path $testBuild 'data-tablesearch-selfhost.exe'
+$dataTablesearchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_tablesearch\src\main.e') $repo 'x64' 'windows' $dataTablesearchPath --arena 768m
+if ($LASTEXITCODE -ne 0 -or $dataTablesearchWritten -ne 'executable written') { throw 'data_tablesearch emission failed' }
+& $dataTablesearchPath
+if ($LASTEXITCODE -ne 0) { throw "a data_tablesearch check failed: exit $LASTEXITCODE" }
 # `e.algo.stat` against closed-form moments and a least-squares line, and `e.data.slot_map`'s
 # generational keys: stale after removal, reused with the next generation, retired at the last.
 $statSlotsPath = Join-Path $testBuild 'stat-slots-selfhost.exe'
