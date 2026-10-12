@@ -2293,4 +2293,5 @@ D2454	992	C160: Mapbox Vector Tile reader
 D2455	1202	C159: HTTP cookies
 D2456	1337	C159: the Browser keeps cookies
 D2457	1062	C159: the Browser follows redirects
-D2458	1026	C159: the cookie jar survives a restart
+D2458	1027	C159: the cookie jar survives a restart
+D2459	783	Module fences match the compiler-resolved declarations
