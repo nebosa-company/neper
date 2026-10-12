@@ -3760,6 +3760,13 @@ net_grpcretry_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/net-grpcretry-selfhost"
 net_grpcretry_output=$("$test_build/net-grpcretry-selfhost")
 [ "$net_grpcretry_output" = 'net grpcretry ok' ]
+# `e.net.grpccall`: the A6 retry and hedging loop over the real client and server connections on a virtual clock
+# # (331 runs: 60 against grpcio, the rest against an independent model, D3401).
+net_grpccall_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpccall/src/main.e" "$repo" x64 linux "$test_build/net-grpccall-selfhost" -j 2)
+[ "$net_grpccall_written" = 'executable written' ]
+chmod +x "$test_build/net-grpccall-selfhost"
+net_grpccall_output=$("$test_build/net-grpccall-selfhost")
+[ "$net_grpccall_output" = 'net grpccall ok' ]
 # `e.net.grpcstub`: typed gRPC stubs generated from descriptors, round-tripped against Python's protobuf wire bytes
 # # (242 serialised instances, fixed messages, the generator's own output, D3006).
 net_grpcstub_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_grpcstub/src/main.e" "$repo" x64 linux "$test_build/net-grpcstub-selfhost" -j 2)

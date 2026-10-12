@@ -7929,6 +7929,18 @@
    "blocked_by": []
   },
   {
+   "name": "e.net.grpccall",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.net.grpc",
+    "e.net.grpcretry"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.fmt.protomsg",
    "layer": 6,
    "surface": "source",

@@ -7037,6 +7037,47 @@ fn decide(p: *const Policy, t: *Throttle, attempts: u32, code: u32, committed: b
 gRPC retries and backoff (L164), the decisions of gRFC A6 as pure functions: `policy_parse` and `throttle_parse` read a service config's `retryPolicy` and `retryThrottling`, `parse_duration`, `backoff_cap_ns` and `backoff_ns` (the jitter supplied by the caller), `pushback_parse` for `grpc-retry-pushback-ms` and `decide`, which answers whether a failed attempt is retried and after how long while it updates the token bucket.
 
 
+### `e.net.grpccall`
+
+```neper
+const MODE_RETRY: u8 = 0u8
+const MODE_HEDGE: u8 = 1u8
+const ACTION_START: u8 = 1u8
+const ACTION_CANCEL: u8 = 2u8
+const ACTION_WAIT: u8 = 3u8
+const ACTION_DONE: u8 = 4u8
+const SLOT_FREE: u8 = 0u8
+const SLOT_OPENING: u8 = 1u8
+const SLOT_LIVE: u8 = 2u8
+const SLOT_CANCEL: u8 = 3u8
+const SLOT_ENDED: u8 = 4u8
+type Hedging = struct { max_attempts: u32, delay_ns: u64, nonfatal: u32 }
+type Slot = struct { state: u8, attempt: u32, stream: u32, started_ns: u64, committed: bool }
+type Action = struct { kind: u8, attempt: u32, stream: u32, at_ns: u64, code: u32 }
+type Call = struct { mode: u8, policy: retry.Policy, hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, slots: [5]Slot, started: u32, pending: bool, next_ns: u64, stop: bool, done: bool, code: u32, winner: u32 }
+fn max_hedges() -> u32
+fn empty_slot() -> Slot
+fn new_call(mode: u8, policy: retry.Policy, hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, now_ns: u64) -> Call
+fn call_retry(policy: retry.Policy, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, now_ns: u64) -> Call
+fn call_hedge(hedge: Hedging, throttle: *retry.Throttle, per_attempt_ns: u64, deadline_ns: u64, now_ns: u64) -> Call
+fn slot_of_stream(c: *Call, stream: u32) -> usize
+fn outstanding(c: *const Call) -> u32
+fn cancel_others(c: *Call, keep: usize)
+fn finish(c: *Call, code: u32, winner: u32)
+fn code_in(mask: u32, code: u32) -> bool
+fn call_opened(c: *Call, attempt: u32, stream: u32, now_ns: u64)
+fn call_headers(c: *Call, stream: u32)
+fn fail_slot(c: *Call, s: usize, code: u32, pushback: str, has_pushback: bool, now_ns: u64, jitter: f64)
+fn call_status(c: *Call, stream: u32, code: u32, pushback: str, has_pushback: bool, now_ns: u64, jitter: f64)
+fn reset_status(h2_code: u32) -> u32
+fn call_event(c: *Call, ev: *const grpc.Event, now_ns: u64, jitter: f64)
+fn min_nonzero(x: u64, y: u64) -> u64
+fn call_poll(c: *Call, now_ns: u64, jitter: f64) -> Action
+```
+
+The loop that carries out gRFC A6 over `e.net.grpc` (L164): a `Call` is a set of attempts, each a stream of one connection, and `call_poll` answers what the transport does next (START a stream and report it with `call_opened`, CANCEL one, WAIT until an instant or an event, DONE with the status); `call_event` turns `e.net.grpc` events into `call_headers` and `call_status`. Retry mode asks `e.net.grpcretry.decide` after each uncommitted failure and starts the next attempt after its delay; hedging mode starts attempts at the hedging delay without waiting, lets a response with headers or `OK` win and cancels the rest, sends the next hedge at once after a non-fatal code, ends the call on a fatal one, and stops on a pushback that forbids more or while the throttle bucket is at most half full. `per_attempt_ns` cancels an attempt with no headers by then and fails it as `DEADLINE_EXCEEDED` (A6 does not define it), and `deadline_ns` ends the call `DEADLINE_EXCEEDED`. The caller owns the clock, the sockets and the jitter. Checked on a virtual clock over the real client and server connections against grpcio (60 retry runs: attempts and status) and an independent model of A6 (271 timed retry and hedging runs) (D3401).
+
+
 ### `e.net.grpctls`
 
 ```neper
