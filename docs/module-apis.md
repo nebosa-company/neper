@@ -6396,6 +6396,7 @@ fn apply_changes(a: *mem.Arena, local: []const json.Value, changes: json.Value, 
 fn add_key(keys: *list.List[json.Value], key: str)
 fn add_keys_of(keys: *list.List[json.Value], v: json.Value)
 fn field_of(v: json.Value, key: str) -> json.Value
+fn same_field(a: *mem.Arena, x: json.Value, has_x: bool, y: json.Value, has_y: bool) -> bool
 fn detect_field_conflicts(a: *mem.Arena, base: json.Value, has_base: bool, mine: json.Value, theirs: json.Value) -> json.Value
 fn known_strategy(s: str) -> bool
 fn resolve_conflict(a: *mem.Arena, conflict: json.Value, strategy: str) -> json.Value
@@ -6578,6 +6579,90 @@ fn accept_drift(a: *mem.Arena, stored: []const json.Value, report: json.Value, a
 ```
 
 Scheduled external sync (L037), after appdor's `src/sync/sync-schedule.js`, `sync-refusal.js` and the pure half of `synced-table.js`: the lease a worker holds on a binding (`lease_available`), which bindings are due (`due_bindings`), the doubling retry delay and the next run (`backoff_minutes`, `schedule_after_run`, `next_run_at`), binding health, what a deletion policy and flag plans do to rows the source lost, the sync-key check, quarantine of rows with no usable key, the insert, update and delete plan of one pull (`sync_plan`, `plan_pull`), the run ledger row, and schema drift against a stored column mapping with its acceptance (`drift_report`, `accept_drift`). Words come back as appdor's catalogue fallbacks; refusals are translated by an injected hook. Checked against appdor's own modules over 700 random inputs on both hosts (D2339).
+
+### `e.algo.offline`
+
+```neper
+const FRESH_MS: i64 = 300000i64
+type Snapshot = struct { table_id: json.Value, records: []const json.Value, fetched_at: json.Value }
+type ReadCache = struct { a: *mem.Arena, fresh_ms: i64, tables: list.List[Snapshot] }
+type Connectivity = struct { a: *mem.Arena, state: str, log: list.List[json.Value] }
+
+fn js_string(v: json.Value, present: bool) -> str
+fn truthy_member(v: json.Value, key: str) -> bool
+fn object_or_empty(v: json.Value, key: str) -> json.Value
+fn same_member(a: *mem.Arena, x: json.Value, has_x: bool, y: json.Value, has_y: bool) -> bool
+fn lower_ascii(a: *mem.Arena, s: str) -> str
+fn with_member(a: *mem.Arena, o: json.Value, key: str, v: json.Value, present: bool) -> json.Value
+fn text_list(a: *mem.Arena, names: []const str) -> json.Value
+fn is_network_failure(a: *mem.Arena, failure: json.Value, has_failure: bool) -> bool
+fn queue_if_offline(a: *mem.Arena, o: *sync.Outbox, failure: json.Value, has_failure: bool, mutation: json.Value, has_mutation: bool) -> json.Value
+fn flush_queue(a: *mem.Arena, o: *sync.Outbox, remote: *const sync.Remote, at: i64, resolve: str) -> json.Value
+fn queue_status(a: *mem.Arena, o: *const sync.Outbox, has_outbox: bool) -> json.Value
+fn plural(count: json.Value) -> str
+fn describe_queue(a: *mem.Arena, status: json.Value, has_status: bool) -> json.Value
+fn new_read_cache(a: *mem.Arena, fresh_ms: i64) -> ReadCache
+fn snapshot_index(c: *const ReadCache, table_id: json.Value) -> i64
+fn cache_store(c: *ReadCache, table_id: json.Value, records: json.Value, fetched_at: json.Value)
+fn cache_read(c: *const ReadCache, table_id: json.Value, now_ms: i64, online: bool) -> json.Value
+fn id_slot(ids: []const json.Value, present: []const bool, live: []const bool, id: json.Value, has_id: bool, a: *mem.Arena) -> i64
+fn cache_overlay(c: *const ReadCache, table_id: json.Value, queued: []const json.Value) -> (json.Value, bool)
+fn cache_evict(c: *ReadCache, table_id: json.Value) -> bool
+fn cache_scopes(c: *const ReadCache) -> json.Value
+fn cache_drop_records(c: *ReadCache, table_id: json.Value, ids: []const str) -> i64
+fn new_connectivity(a: *mem.Arena) -> Connectivity
+fn transition_allowed(from: str, next: str) -> bool
+fn connect_to(c: *Connectivity, next: str, at: json.Value, has_at: bool) -> json.Value
+fn connectivity_history(c: *const Connectivity) -> []const json.Value
+fn plan_replay(a: *mem.Arena, queue: []const json.Value, versions: json.Value) -> json.Value
+fn resolve_replay_conflict(a: *mem.Arena, conflict: json.Value, choice: str, server_record: json.Value, has_server: bool, base_record: json.Value, has_base: bool) -> json.Value
+fn server_data(a: *mem.Arena, server: json.Value) -> json.Value
+fn member_names(a: *mem.Arena, mine: json.Value, theirs: json.Value) -> []const str
+fn names_include(names: json.Value, name: str) -> bool
+fn build_conflict_review(a: *mem.Arena, conflicts: []const json.Value) -> json.Value
+fn plan_offline_resolution(a: *mem.Arena, item: json.Value, has_item: bool, choice: str, server: json.Value, has_server: bool, mutation: json.Value, has_mutation: bool) -> json.Value
+fn conflict_count(review: json.Value) -> i64
+fn string_in(values: []const json.Value, s: str) -> bool
+fn plan_cache_purge(a: *mem.Arena, cached: []const json.Value, readable: json.Value, has_readable: bool, probe_ok: bool) -> json.Value
+fn apply_cache_purge(a: *mem.Arena, c: *ReadCache, plan: json.Value, has_plan: bool) -> json.Value
+fn purge_outcome(a: *mem.Arena, plan: json.Value, has_plan: bool) -> json.Value
+```
+
+The offline layer around the outbox (L037), after appdor's `src/offline/write-queue.js`, `read-cache.js`, `conflict-review.js` and `access-purge.js`: `is_network_failure`, `queue_if_offline`, `flush_queue`, `queue_status` and `describe_queue` for the write queue over an `e.algo.sync` outbox; a `ReadCache` (`cache_store`, `cache_read` with its fresh / stale / offline-only verdict, `cache_overlay` of queued writes, `cache_evict`, `cache_scopes`, `cache_drop_records`, which keeps the snapshot's age); the `Connectivity` machine (`connect_to`, `connectivity_history`); `plan_replay` and `resolve_replay_conflict` (local-wins, server-wins, field merge); `build_conflict_review`, `plan_offline_resolution` and `conflict_count` (merge is offered only when the base values were kept and refuses, naming them, when both sides changed a field); and `plan_cache_purge`, `apply_cache_purge` and `purge_outcome` (a probe that did not succeed purges nothing). A JavaScript `undefined` is an absent member. Rendering the review is the host's, since it needs an escaper and a translator. Checked against appdor's own modules over 220 operation scripts, a memory outbox with a counting clock and a scripted push, on Windows (D2921). Writing it showed `e.algo.sync`'s field-conflict detection read an absent field as a null one; it now tells them apart as `JSON.stringify` does.
+
+
+### `e.algo.syncsource`
+
+```neper
+const MAX_ENTITIES: usize = 500usize
+
+fn stream_prefix() -> str { ret "cs_" }
+fn is_word_byte(c: u8) -> bool
+fn looks_like_stream_token(token: str) -> bool
+fn stream_url(a: *mem.Arena, base_url: str, token: str) -> str
+fn lower_ascii(a: *mem.Arena, s: str) -> str
+fn js_text(a: *mem.Arena, v: json.Value) -> str
+fn change_from_delivery(a: *mem.Arena, payload: json.Value) -> json.Value
+fn refusal(a: *mem.Arena, reason: str) -> json.Value
+fn plan_stream_change(a: *mem.Arena, binding: json.Value, op: str, record: json.Value, existing: json.Value, has_existing: bool) -> json.Value
+fn stream_plan_counts(a: *mem.Arena, plan: json.Value) -> json.Value
+fn pick_list(one: list.List[json.Value], chosen: bool) -> []const json.Value
+fn char_class(c: u8) -> i32
+fn fold(c: u8) -> u8
+fn collate(x: str, y: str) -> i32
+fn name_of(v: json.Value) -> str
+fn sort_by_name(a: *mem.Arena, entities: []const json.Value) -> []const json.Value
+fn has_path(entities: []const json.Value, path: str) -> bool
+fn static_entities(a: *mem.Arena, channel: json.Value) -> []const json.Value
+fn can_browse(channel: json.Value) -> bool
+fn at_path(a: *mem.Arena, body: json.Value, path: str) -> (json.Value, bool)
+fn replace_name(a: *mem.Arena, template: str, raw: str) -> str
+fn entities_from_body(a: *mem.Arena, channel: json.Value, body: json.Value) -> []const json.Value
+fn merge_entities(a: *mem.Arena, from_source: []const json.Value, from_catalog: []const json.Value) -> []const json.Value
+```
+
+What a synced table reads from its source before a scheduled pull (L037), after appdor's `src/sync/change-stream.js` and `src/sync/entity-browse.js`: the change-stream token shape check (`looks_like_stream_token`), the public URL (`stream_url`), one change out of a delivery body (`change_from_delivery`: one record, `upsert` by default), the single row change it implies through the accepted column mapping (`plan_stream_change`: insert, update, delete or noop, refusing without a mapping, a sync key or a mapped column) and its ledger counts (`stream_plan_counts`); and the entities a channel names (`static_entities`, `can_browse`), an index response read into entities (`entities_from_body`, array or keyed object, dotted `resultPath` and `namePath`, `/rpc/` and the root dropped, capped at 500) and the merged picker list (`merge_entities`, the source winning a collision). Names are sorted as `localeCompare` does for ASCII names (punctuation, digits, letters ignoring case, lower case first on a tie). The SSRF-checked request builder (`browseRequest`) belongs to the connectors and is not here. Checked against appdor's own modules over 700 single operations on Windows (D2921).
+
 
 ### `e.algo.fulltext`
 

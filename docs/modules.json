@@ -255,6 +255,8 @@
     "e.algo.sync",
     "e.algo.realtime",
     "e.algo.syncjob",
+    "e.algo.offline",
+    "e.algo.syncsource",
     "e.algo.fulltext",
     "e.algo.search",
     "e.text.sig",
@@ -1001,6 +1003,39 @@
     "e.mem",
     "e.str",
     "e.time"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.offline",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.ir",
+    "e.algo.sync",
+    "e.data.list",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.algo.syncsource",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.ir",
+    "e.algo.sync",
+    "e.algo.syncjob",
+    "e.data.list",
+    "e.fmt.json",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },

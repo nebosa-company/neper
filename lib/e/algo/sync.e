@@ -461,6 +461,13 @@ fn field_of(v: json.Value, key: str) -> json.Value {
     ret x
 }
 
+// `JSON.stringify(x) === JSON.stringify(y)` where either side may be absent: an absent field is not a null one.
+fn same_field(a: *mem.Arena, x: json.Value, has_x: bool, y: json.Value, has_y: bool) -> bool {
+    if !has_x && !has_y { ret true }
+    if has_x != has_y { ret false }
+    ret same_json(a, x, y)
+}
+
 // Which fields each side changed against the base: `{ok, mineChanged, theirsChanged, conflicting}`, or
 // `{ok: false, reason: "no-base-version"}` without a base.
 fn detect_field_conflicts(a: *mem.Arena, base: json.Value, has_base: bool, mine: json.Value, theirs: json.Value) -> json.Value {
@@ -480,13 +487,13 @@ fn detect_field_conflicts(a: *mem.Arena, base: json.Value, has_base: bool, mine:
     var at = 0usize
     while at < keys.len {
         let key = as_text(keys.items[at])
-        let b = field_of(base, key)
-        let m = field_of(mine, key)
-        let t = field_of(theirs, key)
-        let by_me = !same_json(a, b, m)
-        let by_them = !same_json(a, b, t)
+        let (b, has_b) = get(base, key)
+        let (m, has_m) = get(mine, key)
+        let (t, has_t) = get(theirs, key)
+        let by_me = !same_field(a, b, has_b, m, has_m)
+        let by_them = !same_field(a, b, has_b, t, has_t)
         if by_me && by_them {
-            if same_json(a, m, t) {
+            if same_field(a, m, has_m, t, has_t) {
                 push_value(&mine_changed, text(key))
             } else {
                 push_value(&conflicting, text(key))
@@ -567,13 +574,15 @@ fn resolve_conflict(a: *mem.Arena, conflict: json.Value, strategy: str) -> json.
     let theirs_changed = items(ir.value_of(diff, "theirsChanged"))
     var t = 0usize
     while t < theirs_changed.len {
-        put(&merged, as_text(theirs_changed[t]), field_of(theirs, as_text(theirs_changed[t])))
+        let (tv, has_tv) = get(theirs, as_text(theirs_changed[t]))
+        if has_tv { put(&merged, as_text(theirs_changed[t]), tv) } else { unset(&merged, as_text(theirs_changed[t])) }
         t += 1usize
     }
     let mine_changed = items(ir.value_of(diff, "mineChanged"))
     var m = 0usize
     while m < mine_changed.len {
-        put(&merged, as_text(mine_changed[m]), field_of(mine, as_text(mine_changed[m])))
+        let (mv, has_mv) = get(mine, as_text(mine_changed[m]))
+        if has_mv { put(&merged, as_text(mine_changed[m]), mv) } else { unset(&merged, as_text(mine_changed[m])) }
         m += 1usize
     }
     put(&out, "resolved", flag(true))

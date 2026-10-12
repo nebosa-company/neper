@@ -3674,6 +3674,20 @@ algo_syncjob_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/algo-syncjob-selfhost"
 algo_syncjob_output=$("$test_build/algo-syncjob-selfhost")
 [ "$algo_syncjob_output" = 'algo syncjob ok' ]
+# `e.algo.syncsource`: change-stream tokens, URLs, deliveries and planned row changes, and entity browse
+# # against appdor's src/sync change-stream.js and entity-browse.js (700 inputs, D2921).
+algo_syncsource_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_syncsource/src/main.e" "$repo" x64 linux "$test_build/algo-syncsource-selfhost" -j 2)
+[ "$algo_syncsource_written" = 'executable written' ]
+chmod +x "$test_build/algo-syncsource-selfhost"
+algo_syncsource_output=$("$test_build/algo-syncsource-selfhost")
+[ "$algo_syncsource_output" = 'algo syncsource ok' ]
+# `e.algo.offline`: write queue, read cache, connectivity, replay, conflict review and access purge
+# # against appdor's src/offline (220 scripts, D2921).
+algo_offline_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_offline/src/main.e" "$repo" x64 linux "$test_build/algo-offline-selfhost" -j 2)
+[ "$algo_offline_written" = 'executable written' ]
+chmod +x "$test_build/algo-offline-selfhost"
+algo_offline_output=$("$test_build/algo-offline-selfhost")
+[ "$algo_offline_output" = 'algo offline ok' ]
 # `e.fmt.css.syntax`: the CSS Syntax 3 tokenizer and rule grammar against Vaper's own Dart code
 # # over 420 random inputs of well-formed and malformed CSS (D2340).
 text_css_syntax_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_css_syntax/src/main.e" "$repo" x64 linux "$test_build/text-css-syntax-selfhost" -j 2)

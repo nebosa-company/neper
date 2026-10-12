@@ -4146,6 +4146,20 @@ $algoSyncjobWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $algoSyncjobWritten -ne 'executable written') { throw 'algo_syncjob emission failed' }
 $algoSyncjobOutput = & $algoSyncjobPath
 if ($LASTEXITCODE -ne 0 -or $algoSyncjobOutput -ne 'algo syncjob ok') { throw "algo_syncjob answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.syncsource`: change-stream tokens, URLs, deliveries and planned row changes, and entity browse
+# # against appdor's src/sync change-stream.js and entity-browse.js (700 inputs, D2921).
+$algoSyncsourcePath = Join-Path $testBuild 'algo-syncsource-selfhost.exe'
+$algoSyncsourceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_syncsource\src\main.e') $repo 'x64' 'windows' $algoSyncsourcePath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoSyncsourceWritten -ne 'executable written') { throw 'algo_syncsource emission failed' }
+$algoSyncsourceOutput = & $algoSyncsourcePath
+if ($LASTEXITCODE -ne 0 -or $algoSyncsourceOutput -ne 'algo syncsource ok') { throw "algo_syncsource answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.offline`: write queue, read cache, connectivity, replay, conflict review and access purge
+# # against appdor's src/offline (220 scripts, D2921).
+$algoOfflinePath = Join-Path $testBuild 'algo-offline-selfhost.exe'
+$algoOfflineWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_offline\src\main.e') $repo 'x64' 'windows' $algoOfflinePath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoOfflineWritten -ne 'executable written') { throw 'algo_offline emission failed' }
+$algoOfflineOutput = & $algoOfflinePath
+if ($LASTEXITCODE -ne 0 -or $algoOfflineOutput -ne 'algo offline ok') { throw "algo_offline answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.css.syntax`: the CSS Syntax 3 tokenizer and rule grammar against Vaper's own Dart code
 # # over 420 random inputs of well-formed and malformed CSS (D2340).
 $textCssSyntaxPath = Join-Path $testBuild 'text-css-syntax-selfhost.exe'
