@@ -1969,7 +1969,7 @@ the heap (`heap_wasted`). Single writer; row compaction and a boxed value access
 type KeyMode = enum u8 { Column, KeyFn, Compare }
 type Key = struct { mode: KeyMode, column: usize, descending: bool, fold: bool, key_fn: fn(*void, usize) -> u64, compare: fn(*void, u32, u32) -> i32, ctx: *void }
 type Cache = struct { ranks: []u32, version: u64, structure: u64, fold: bool, size: usize, valid: bool }
-type View = struct { t: *table.Table, order_rows: []u32, spare: []u32, keys: []u64, caches: []Cache, total: usize }
+type View = struct { t: *table.Table, order_rows: []u32, spare: []u32, keys: []u64, caches: []Cache, total: usize, matched: []u64, next_matched: []u64, shown: []u32, shown_total: usize, filtered: bool }
 
 fn column_key(col: usize, descending: bool, fold: bool) -> Key
 fn fn_key(f: fn(*void, usize) -> u64, ctx: *void, descending: bool) -> Key
@@ -1980,7 +1980,39 @@ fn rows(v: *const View) -> []const u32
 fn len(v: *const View) -> usize
 fn row_at(v: *const View, position: usize) -> usize
 fn apply_sort(v: *View, keys: []const Key, scratch: *mem.Arena) -> err
+
+type Op = enum u8 { Eq, Ne, Lt, Le, Gt, Ge, Like, NotLike, Contains, NotContains, Begins, Ends, Between, NotBetween, In, NotIn, Null, NotNull }
+type OperandKind = enum u8 { Int, Real, Text }
+type Operand = struct { kind: OperandKind, integer: i64, real: f64, text: str }
+type Leaf = struct { column: usize, op: Op, a: Operand, b: Operand, items: []const Operand, match_case: bool }
+type NodeKind = enum u8 { Leaf, And, Or, NotAnd, NotOr }
+type Node = struct { kind: NodeKind, leaf: Leaf, first: usize, count: usize }
+error BadFilter
+
+fn int_operand(value: i64) -> Operand
+fn real_operand(value: f64) -> Operand
+fn text_operand(value: str) -> Operand
+fn leaf_node(column: usize, op: Op, a: Operand) -> Node
+fn between_node(column: usize, op: Op, low: Operand, high: Operand) -> Node
+fn list_node(column: usize, op: Op, items: []const Operand) -> Node
+fn match_case(n: Node) -> Node
+fn group_node(kind: NodeKind, first: usize, count: usize) -> Node
+fn apply_filter(v: *View, nodes: []const Node, refine: bool, scratch: *mem.Arena) -> err
+fn clear_filter(v: *View)
+fn is_filtered(v: *const View) -> bool
 ```
+
+`apply_filter` evaluates the tree rooted at `nodes[0]` (a group names its children as the run
+`first .. first + count` of the same array, always after itself) over the sorted order and keeps
+that order: the rows that pass stay in their sort positions, so a filter change never re-sorts and
+a later `apply_sort` keeps the filter. A dictionary column's operator is evaluated once per distinct
+entry, so a row costs one array read; a numeric column is a typed compare; a heap string column
+evaluates the text operator per row. Text operators fold ASCII case unless the leaf is `match_case`;
+`Like` has `*` (any run, also none) and `?` (one byte). A null cell matches only `Null` and the
+negative operators (`Ne`, `NotLike`, `NotContains`, `NotBetween`, `NotIn`, `NotNull`). With `refine`
+the new tree is taken to pass only rows the current filter passes and only those are evaluated;
+an empty `nodes` clears. `BadFilter` answers a text operator on a number, a number operand on
+text, a column out of range and a malformed group, and changes nothing.
 
 The display order of an `e.data.table`'s live rows (`docs/grid.md` §5.4); this increment is the
 sort stage. `apply_sort` is a stable LSD multi-key sort: keys are applied last to first, each a

@@ -2458,6 +2458,12 @@ $dataTableviewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $dataTableviewWritten -ne 'executable written') { throw 'data_tableview emission failed' }
 & $dataTableviewPath
 if ($LASTEXITCODE -ne 0) { throw "a data_tableview check failed: exit $LASTEXITCODE" }
+# `e.data.tableview` filter: every operator over a 150,000-row table against an independent brute-force evaluator: text folded and exact, `*`/`?` wildcards, numbers with nulls and real operands, booleans, In/NotIn, Between, Null, groups six deep, the sort order kept through a filter and a re-sort, refining, refusals and an edit (D3907).
+$dataTablefilterPath = Join-Path $testBuild 'data-tablefilter-selfhost.exe'
+$dataTablefilterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_tablefilter\src\main.e') $repo 'x64' 'windows' $dataTablefilterPath --arena 512m
+if ($LASTEXITCODE -ne 0 -or $dataTablefilterWritten -ne 'executable written') { throw 'data_tablefilter emission failed' }
+& $dataTablefilterPath
+if ($LASTEXITCODE -ne 0) { throw "a data_tablefilter check failed: exit $LASTEXITCODE" }
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 $algoRulesPath = Join-Path $testBuild 'algo-rules-selfhost.exe'
 $algoRulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rules\src\main.e') $repo 'x64' 'windows' $algoRulesPath

@@ -1,6 +1,6 @@
 // The "data controller" over an `e.data.table`: a display order of the table's live rows.
-// This increment is the sort stage (docs/grid.md 5.4, step 2); filter, group, summary and
-// search stages sit on the same `View`.
+// Sort and filter stages (docs/grid.md 5.4, steps 1-2); group, summary and search stages
+// sit on the same `View`.
 //
 // Sorting is a stable LSD multi-key sort. The keys are applied last to first, each as one
 // stable pass over the order array, so ties on every key are in row order, and a row order
@@ -54,7 +54,12 @@ type View = struct {
     spare: []u32,
     keys: []u64,
     caches: []Cache,
-    total: usize
+    total: usize,
+    matched: []u64,
+    next_matched: []u64,
+    shown: []u32,
+    shown_total: usize,
+    filtered: bool
 }
 
 const SIGN64: u64 = 9223372036854775808u64
@@ -95,6 +100,22 @@ fn create(a: *mem.Arena, t: *table.Table) -> (View, err) {
         let (keys, keys_error) = mem.alloc[u64](a, capacity_rows)
         if keys_error != ok { ret (v, keys_error) }
         v.keys = keys
+        let (shown, shown_error) = mem.alloc[u32](a, capacity_rows)
+        if shown_error != ok { ret (v, shown_error) }
+        v.shown = shown
+        let words = (capacity_rows + 63usize) >> 6usize
+        let (matched, matched_error) = mem.alloc[u64](a, words)
+        if matched_error != ok { ret (v, matched_error) }
+        v.matched = matched
+        let (next_matched, next_error) = mem.alloc[u64](a, words)
+        if next_error != ok { ret (v, next_error) }
+        v.next_matched = next_matched
+        var word = 0usize
+        while word < words {
+            v.matched[word] = 0u64
+            v.next_matched[word] = 0u64
+            word += 1usize
+        }
     }
     let columns = table.column_count(t)
     if columns != 0usize {
@@ -137,11 +158,20 @@ fn reset_order(v: *View) {
 }
 
 // Rows in display order.
-fn rows(v: *const View) -> []const u32 { ret v.order_rows[0usize..v.total] }
+fn rows(v: *const View) -> []const u32 {
+    if v.filtered { ret v.shown[0usize..v.shown_total] }
+    ret v.order_rows[0usize..v.total]
+}
 
-fn len(v: *const View) -> usize { ret v.total }
+fn len(v: *const View) -> usize {
+    if v.filtered { ret v.shown_total }
+    ret v.total
+}
 
-fn row_at(v: *const View, position: usize) -> usize { ret usize(v.order_rows[position]) }
+fn row_at(v: *const View, position: usize) -> usize {
+    if v.filtered { ret usize(v.shown[position]) }
+    ret usize(v.order_rows[position])
+}
 
 // ---- text ranks ------------------------------------------------------------------
 
@@ -396,5 +426,451 @@ fn apply_sort(v: *View, keys: []const Key, scratch: *mem.Arena) -> err {
             if derived.any_null { partition_nulls(v, key.column, !key.descending) }
         }
     }
+    if v.filtered { rebuild_shown(v) }
     ret ok
 }
+
+// ---- filter ----------------------------------------------------------------------
+//
+// A filter is a tree of nodes in one flat array: a group node names its children as a
+// contiguous run `first .. first + count`, a leaf compares one column with constants.
+// `apply_filter` evaluates it over the sorted order and keeps the order: the rows that
+// pass are the same rows in the same positions, so changing a filter never re-sorts
+// (and a sort keeps the filter, through the `matched` bitset).
+//
+// Per column kind the evaluation is specialised: a dictionary column evaluates the
+// operator once per distinct entry and a row costs one array read; a numeric column is a
+// typed compare; a heap string column evaluates the text operator per row.
+//
+// Text operators are case-insensitive unless the leaf says `match_case` (ASCII folding,
+// the order of `compare_fold`). `Like` has two wildcards: `*` any run of bytes (also
+// none) and `?` exactly one byte. A null cell matches only `Null` and the negative
+// operators (`Ne`, `NotLike`, `NotContains`, `NotBetween`, `NotIn`, `NotNull`).
+
+type Op = enum u8 { Eq, Ne, Lt, Le, Gt, Ge, Like, NotLike, Contains, NotContains, Begins, Ends, Between, NotBetween, In, NotIn, Null, NotNull }
+
+type OperandKind = enum u8 { Int, Real, Text }
+
+type Operand = struct { kind: OperandKind, integer: i64, real: f64, text: str }
+
+type Leaf = struct { column: usize, op: Op, a: Operand, b: Operand, items: []const Operand, match_case: bool }
+
+type NodeKind = enum u8 { Leaf, And, Or, NotAnd, NotOr }
+
+type Node = struct { kind: NodeKind, leaf: Leaf, first: usize, count: usize }
+
+error BadFilter
+
+// Per node: for a leaf over a dictionary column, the verdict of each dictionary entry.
+type Accept = struct { entries: []bool }
+
+type Compiled = struct { nodes: []const Node, accept: []Accept }
+
+fn int_operand(value: i64) -> Operand {
+    ret Operand { kind: OperandKind.Int, integer: value, real: 0.0f64, text: "" }
+}
+
+fn real_operand(value: f64) -> Operand {
+    ret Operand { kind: OperandKind.Real, integer: 0i64, real: value, text: "" }
+}
+
+fn text_operand(value: str) -> Operand {
+    ret Operand { kind: OperandKind.Text, integer: 0i64, real: 0.0f64, text: value }
+}
+
+// A leaf comparing `column` with one constant (or none for Null/NotNull).
+fn leaf_node(column: usize, op: Op, a: Operand) -> Node {
+    ret Node { kind: NodeKind.Leaf, leaf: Leaf { column: column, op: op, a: a, b: a, items: zero, match_case: false }, first: 0usize, count: 0usize }
+}
+
+// A leaf with two constants (Between, NotBetween).
+fn between_node(column: usize, op: Op, low: Operand, high: Operand) -> Node {
+    ret Node { kind: NodeKind.Leaf, leaf: Leaf { column: column, op: op, a: low, b: high, items: zero, match_case: false }, first: 0usize, count: 0usize }
+}
+
+// A leaf comparing `column` with a list of constants (In, NotIn).
+fn list_node(column: usize, op: Op, items: []const Operand) -> Node {
+    let none = int_operand(0i64)
+    ret Node { kind: NodeKind.Leaf, leaf: Leaf { column: column, op: op, a: none, b: none, items: items, match_case: false }, first: 0usize, count: 0usize }
+}
+
+// The same leaf, exact case.
+fn match_case(n: Node) -> Node {
+    var copy = n
+    copy.leaf.match_case = true
+    ret copy
+}
+
+// A group whose children are nodes[first .. first + count] of the same array.
+fn group_node(kind: NodeKind, first: usize, count: usize) -> Node {
+    let none = int_operand(0i64)
+    ret Node { kind: kind, leaf: Leaf { column: 0usize, op: Op.Eq, a: none, b: none, items: zero, match_case: false }, first: first, count: count }
+}
+
+// ---- text operators --------------------------------------------------------------
+
+fn fold_byte(b: u8) -> u8 {
+    if b >= 97u8 && b <= 122u8 { ret b - 32u8 }
+    ret b
+}
+
+fn bytes_equal(x: str, y: str, exact_case: bool) -> bool {
+    if x.len != y.len { ret false }
+    var at = 0usize
+    while at < x.len {
+        var xb = x[at]
+        var yb = y[at]
+        if !exact_case {
+            xb = fold_byte(xb)
+            yb = fold_byte(yb)
+        }
+        if xb != yb { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn compare_text_op(x: str, y: str, exact_case: bool) -> i32 {
+    if exact_case { ret compare_bytes(x, y) }
+    ret table.compare_fold(x, y)
+}
+
+// `needle` occurs in `hay` (anywhere, at the start or at the end).
+fn contains_text(hay: str, needle: str, exact_case: bool, at_start: bool, at_end: bool) -> bool {
+    if needle.len > hay.len { ret false }
+    if needle.len == 0usize { ret true }
+    var start = 0usize
+    var last = hay.len - needle.len
+    if at_start { last = 0usize }
+    if at_end { start = hay.len - needle.len }
+    while start <= last {
+        var same = true
+        var k = 0usize
+        while k < needle.len {
+            var hb = hay[start + k]
+            var nb = needle[k]
+            if !exact_case {
+                hb = fold_byte(hb)
+                nb = fold_byte(nb)
+            }
+            if hb != nb {
+                same = false
+                break
+            }
+            k += 1usize
+        }
+        if same { ret true }
+        start += 1usize
+    }
+    ret false
+}
+
+// `*` matches any run of bytes, `?` exactly one: the classic two-pointer match with one
+// backtrack point, linear in practice.
+fn like_text(text: str, pattern: str, exact_case: bool) -> bool {
+    var t = 0usize
+    var p = 0usize
+    var star = pattern.len
+    var mark = 0usize
+    var have_star = false
+    while t < text.len {
+        if p < pattern.len && pattern[p] == 42u8 {
+            have_star = true
+            star = p
+            mark = t
+            p += 1usize
+        } else if p < pattern.len && (pattern[p] == 63u8 || (exact_case && pattern[p] == text[t]) || (!exact_case && fold_byte(pattern[p]) == fold_byte(text[t]))) {
+            p += 1usize
+            t += 1usize
+        } else if have_star {
+            mark += 1usize
+            t = mark
+            p = star + 1usize
+        } else {
+            ret false
+        }
+    }
+    while p < pattern.len && pattern[p] == 42u8 { p += 1usize }
+    ret p == pattern.len
+}
+
+// The verdict of a text operator on a non-null string.
+fn text_verdict(l: *const Leaf, s: str) -> bool {
+    let exact_case = l.match_case
+    if l.op == Op.Eq { ret bytes_equal(s, l.a.text, exact_case) }
+    if l.op == Op.Ne { ret !bytes_equal(s, l.a.text, exact_case) }
+    if l.op == Op.Lt { ret compare_text_op(s, l.a.text, exact_case) < 0i32 }
+    if l.op == Op.Le { ret compare_text_op(s, l.a.text, exact_case) <= 0i32 }
+    if l.op == Op.Gt { ret compare_text_op(s, l.a.text, exact_case) > 0i32 }
+    if l.op == Op.Ge { ret compare_text_op(s, l.a.text, exact_case) >= 0i32 }
+    if l.op == Op.Like { ret like_text(s, l.a.text, exact_case) }
+    if l.op == Op.NotLike { ret !like_text(s, l.a.text, exact_case) }
+    if l.op == Op.Contains { ret contains_text(s, l.a.text, exact_case, false, false) }
+    if l.op == Op.NotContains { ret !contains_text(s, l.a.text, exact_case, false, false) }
+    if l.op == Op.Begins { ret contains_text(s, l.a.text, exact_case, true, false) }
+    if l.op == Op.Ends { ret contains_text(s, l.a.text, exact_case, false, true) }
+    if l.op == Op.Between || l.op == Op.NotBetween {
+        let inside = compare_text_op(s, l.a.text, exact_case) >= 0i32 && compare_text_op(s, l.b.text, exact_case) <= 0i32
+        if l.op == Op.Between { ret inside }
+        ret !inside
+    }
+    // In, NotIn
+    var found = false
+    var at = 0usize
+    while at < l.items.len && !found {
+        if bytes_equal(s, l.items[at].text, exact_case) { found = true }
+        at += 1usize
+    }
+    if l.op == Op.In { ret found }
+    ret !found
+}
+
+// ---- numeric operators -----------------------------------------------------------
+
+fn apply_comparison(op: Op, c: i32) -> bool {
+    if op == Op.Eq { ret c == 0i32 }
+    if op == Op.Ne { ret c != 0i32 }
+    if op == Op.Lt { ret c < 0i32 }
+    if op == Op.Le { ret c <= 0i32 }
+    if op == Op.Gt { ret c > 0i32 }
+    ret c >= 0i32
+}
+
+fn three_way_int(x: i64, y: i64) -> i32 {
+    if x < y { ret -1i32 }
+    if x > y { ret 1i32 }
+    ret 0i32
+}
+
+fn three_way_real(x: f64, y: f64) -> i32 {
+    if x < y { ret -1i32 }
+    if x > y { ret 1i32 }
+    ret 0i32
+}
+
+// Compares a numeric cell with one operand: as integers when both are, else as reals.
+fn compare_number(integer_cell: bool, cell_int: i64, cell_real: f64, o: Operand) -> i32 {
+    if integer_cell && o.kind == OperandKind.Int { ret three_way_int(cell_int, o.integer) }
+    var cell = cell_real
+    if integer_cell { cell = f64(cell_int) }
+    var other = o.real
+    if o.kind == OperandKind.Int { other = f64(o.integer) }
+    ret three_way_real(cell, other)
+}
+
+fn number_verdict(l: *const Leaf, integer_cell: bool, cell_int: i64, cell_real: f64) -> bool {
+    if l.op == Op.Between || l.op == Op.NotBetween {
+        let low = compare_number(integer_cell, cell_int, cell_real, l.a)
+        let high = compare_number(integer_cell, cell_int, cell_real, l.b)
+        let inside = low >= 0i32 && high <= 0i32
+        if l.op == Op.Between { ret inside }
+        ret !inside
+    }
+    if l.op == Op.In || l.op == Op.NotIn {
+        var found = false
+        var at = 0usize
+        while at < l.items.len && !found {
+            if compare_number(integer_cell, cell_int, cell_real, l.items[at]) == 0i32 { found = true }
+            at += 1usize
+        }
+        if l.op == Op.In { ret found }
+        ret !found
+    }
+    ret apply_comparison(l.op, compare_number(integer_cell, cell_int, cell_real, l.a))
+}
+
+fn negative_op(op: Op) -> bool {
+    ret op == Op.Ne || op == Op.NotLike || op == Op.NotContains || op == Op.NotBetween || op == Op.NotIn || op == Op.NotNull
+}
+
+fn text_op(op: Op) -> bool {
+    ret op == Op.Like || op == Op.NotLike || op == Op.Contains || op == Op.NotContains || op == Op.Begins || op == Op.Ends
+}
+
+// ---- compile and evaluate --------------------------------------------------------
+
+// Checks the operands against the column kind and, for a dictionary column, evaluates the
+// operator once per entry.
+fn compile_leaf(v: *const View, l: *const Leaf, out: *Accept, scratch: *mem.Arena) -> err {
+    if l.column >= table.column_count(v.t) { ret BadFilter }
+    let kind = table.column_kind(v.t, l.column)
+    let textual = kind == table.Kind.Str || kind == table.Kind.Dict
+    if l.op == Op.Null || l.op == Op.NotNull { ret ok }
+    if textual {
+        if l.op == Op.In || l.op == Op.NotIn {
+            var at = 0usize
+            while at < l.items.len {
+                if l.items[at].kind != OperandKind.Text { ret BadFilter }
+                at += 1usize
+            }
+        } else {
+            if l.a.kind != OperandKind.Text { ret BadFilter }
+            if (l.op == Op.Between || l.op == Op.NotBetween) && l.b.kind != OperandKind.Text { ret BadFilter }
+        }
+    } else {
+        if text_op(l.op) { ret BadFilter }
+        if l.op == Op.In || l.op == Op.NotIn {
+            var at = 0usize
+            while at < l.items.len {
+                if l.items[at].kind == OperandKind.Text { ret BadFilter }
+                at += 1usize
+            }
+        } else {
+            if l.a.kind == OperandKind.Text { ret BadFilter }
+            if (l.op == Op.Between || l.op == Op.NotBetween) && l.b.kind == OperandKind.Text { ret BadFilter }
+        }
+    }
+    if kind == table.Kind.Dict {
+        let n = table.dict_len(v.t, l.column)
+        if n != 0usize {
+            let (entries, entries_error) = mem.alloc[bool](scratch, n)
+            if entries_error != ok { ret entries_error }
+            var id = 0usize
+            while id < n {
+                entries[id] = text_verdict(l, table.dict_str(v.t, l.column, u32(id)))
+                id += 1usize
+            }
+            out.entries = entries
+        }
+    }
+    ret ok
+}
+
+fn compile(v: *const View, nodes: []const Node, scratch: *mem.Arena) -> (Compiled, err) {
+    var c = Compiled { nodes: nodes, accept: zero }
+    if nodes.len == 0usize { ret (c, ok) }
+    let (accept, accept_error) = mem.alloc[Accept](scratch, nodes.len)
+    if accept_error != ok { ret (c, accept_error) }
+    var at = 0usize
+    while at < nodes.len {
+        accept[at] = Accept { entries: zero }
+        at += 1usize
+    }
+    at = 0usize
+    while at < nodes.len {
+        if nodes[at].kind == NodeKind.Leaf {
+            let leaf_error = compile_leaf(v, &nodes[at].leaf, &accept[at], scratch)
+            if leaf_error != ok { ret (c, leaf_error) }
+        } else if nodes[at].first + nodes[at].count > nodes.len || nodes[at].first <= at {
+            // children come after their group: a cycle or an out-of-range run is refused
+            ret (c, BadFilter)
+        }
+        at += 1usize
+    }
+    c.accept = accept
+    ret (c, ok)
+}
+
+fn eval_leaf(v: *const View, c: *const Compiled, index: usize, row: usize) -> bool {
+    let l = &c.nodes[index].leaf
+    let cell_null = table.is_null(v.t, l.column, row)
+    if l.op == Op.Null { ret cell_null }
+    if l.op == Op.NotNull { ret !cell_null }
+    if cell_null { ret negative_op(l.op) }
+    let kind = table.column_kind(v.t, l.column)
+    if kind == table.Kind.Dict { ret c.accept[index].entries[usize(table.dict_id(v.t, l.column, row))] }
+    if kind == table.Kind.Str { ret text_verdict(l, table.get_str(v.t, l.column, row)) }
+    if kind == table.Kind.I32 { ret number_verdict(l, true, i64(table.get_i32(v.t, l.column, row)), 0.0f64) }
+    if kind == table.Kind.I64 { ret number_verdict(l, true, table.get_i64(v.t, l.column, row), 0.0f64) }
+    if kind == table.Kind.Bool {
+        var as_int = 0i64
+        if table.get_bool(v.t, l.column, row) { as_int = 1i64 }
+        ret number_verdict(l, true, as_int, 0.0f64)
+    }
+    ret number_verdict(l, false, 0i64, table.get_f64(v.t, l.column, row))
+}
+
+fn eval_node(v: *const View, c: *const Compiled, index: usize, row: usize) -> bool {
+    let node = &c.nodes[index]
+    if node.kind == NodeKind.Leaf { ret eval_leaf(v, c, index, row) }
+    var any_pass = false
+    var all_pass = true
+    var at = 0usize
+    while at < node.count {
+        let pass = eval_node(v, c, node.first + at, row)
+        if pass { any_pass = true } else { all_pass = false }
+        // short circuit: an And stops at the first false, an Or at the first true
+        if (node.kind == NodeKind.And || node.kind == NodeKind.NotAnd) && !pass { break }
+        if (node.kind == NodeKind.Or || node.kind == NodeKind.NotOr) && pass { break }
+        at += 1usize
+    }
+    if node.count == 0usize { ret true }
+    if node.kind == NodeKind.And { ret all_pass }
+    if node.kind == NodeKind.Or { ret any_pass }
+    if node.kind == NodeKind.NotAnd { ret !all_pass }
+    ret !any_pass
+}
+
+// Rebuilds the shown rows from the matched set, in the current sort order.
+fn rebuild_shown(v: *View) {
+    var count_shown = 0usize
+    var at = 0usize
+    while at < v.total {
+        let row = v.order_rows[at]
+        if bit_is_set(v.matched, usize(row)) {
+            v.shown[count_shown] = row
+            count_shown += 1usize
+        }
+        at += 1usize
+    }
+    v.shown_total = count_shown
+}
+
+fn bit_is_set(words: []const u64, index: usize) -> bool {
+    ret ((words[index >> 6usize] >> u64(index & 63usize)) & 1u64) != 0u64
+}
+
+fn bit_put(words: []u64, index: usize) {
+    words[index >> 6usize] = words[index >> 6usize] | (1u64 << u64(index & 63usize))
+}
+
+// Filters the display order by the tree rooted at nodes[0]. The rows that pass keep their
+// sort positions. With `refine` the new filter is taken to pass only rows the current one
+// passes (typing on in a filter box, AND-ing a condition): only those rows are evaluated.
+// An empty `nodes` clears the filter.
+fn apply_filter(v: *View, nodes: []const Node, refine: bool, scratch: *mem.Arena) -> err {
+    if nodes.len == 0usize {
+        clear_filter(v)
+        ret ok
+    }
+    let marker = mem.mark(scratch)
+    let (compiled, compile_error) = compile(v, nodes, scratch)
+    if compile_error != ok {
+        mem.reset(scratch, marker)
+        ret compile_error
+    }
+    let narrowing = refine && v.filtered
+    var count_shown = 0usize
+    var at = 0usize
+    // the previous matches are consulted while the new ones are written: build into `next`
+    var word = 0usize
+    while word < v.next_matched.len {
+        v.next_matched[word] = 0u64
+        word += 1usize
+    }
+    while at < v.total {
+        let row = v.order_rows[at]
+        var pass = false
+        if !narrowing || bit_is_set(v.matched, usize(row)) { pass = eval_node(v, &compiled, 0usize, usize(row)) }
+        if pass {
+            bit_put(v.next_matched, usize(row))
+            v.shown[count_shown] = row
+            count_shown += 1usize
+        }
+        at += 1usize
+    }
+    mem.reset(scratch, marker)
+    let held = v.matched
+    v.matched = v.next_matched
+    v.next_matched = held
+    v.shown_total = count_shown
+    v.filtered = true
+    ret ok
+}
+
+fn clear_filter(v: *View) {
+    v.filtered = false
+    v.shown_total = 0usize
+}
+
+fn is_filtered(v: *const View) -> bool { ret v.filtered }

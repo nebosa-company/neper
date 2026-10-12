@@ -856,10 +856,10 @@
       "group": "Library",
       "order": 264,
       "title": "filter tree compile + evaluate (dictionary fast path, narrowing, parallel)",
-      "score": 0,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: every operator in §4.2; */? wildcards; **text operators case-insensitive by default, match_case opt-in** (*creature* → 56,095 on the MTG pool); nested depth 6; ≤ budget."
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: every operator in §4.2; */? wildcards; **text operators case-insensitive by default, match_case opt-in** (*creature* → 56,095 on the MTG pool); nested depth 6; ≤ budget. PART (D3907): e.data.tableview filter stage: flat node tree (And/Or/NotAnd/NotOr groups, leaves of 18 operators), dictionary columns evaluated once per entry, typed numeric compares, heap-string per-row text operators, ASCII-folded by default with match_case opt-in, `*`/`?` wildcards, order kept through a filter and a re-sort (matched bitset), refine mode; tests/selfhost/fixtures/link/data_tablefilter: ~60 filters over 150,000 rows against an independent evaluator, mutation-checked; measured 9 ms (dictionary like) to 26 ms (heap string contains) per apply. NOT DONE: parallel evaluation, relative-date operators, custom functions, the MTG 56,095 count (needs the real pool), a Linux run."
     },
     {
       "id": "G004",

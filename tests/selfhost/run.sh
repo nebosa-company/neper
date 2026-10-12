@@ -2179,6 +2179,11 @@ data_tableview_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$data_tableview_written" = 'executable written' ]
 chmod +x "$test_build/data-tableview-selfhost"
 "$test_build/data-tableview-selfhost"
+# `e.data.tableview` filter: every operator over a 150,000-row table against an independent brute-force evaluator: text folded and exact, `*`/`?` wildcards, numbers with nulls and real operands, booleans, In/NotIn, Between, Null, groups six deep, the sort order kept through a filter and a re-sort, refining, refusals and an edit (D3907).
+data_tablefilter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_tablefilter/src/main.e" "$repo" x64 linux "$test_build/data-tablefilter-selfhost" --arena 512m)
+[ "$data_tablefilter_written" = 'executable written' ]
+chmod +x "$test_build/data-tablefilter-selfhost"
+"$test_build/data-tablefilter-selfhost"
 # `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
 algo_rules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rules/src/main.e" "$repo" x64 linux "$test_build/algo-rules-selfhost")
 [ "$algo_rules_written" = 'executable written' ]
