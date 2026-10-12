@@ -33,6 +33,12 @@ fn math_font_path() -> str {
     ret "tests/selfhost/fixtures/link/text_math/assets/mathfont.ttf"
 }
 
+// A failed check: its code, after saying which check on stdout.
+fn bad(code: i32, why: str) -> i32 {
+    let said = io.print(why)
+    ret code
+}
+
 fn is_glyph(item: math.Item, x: f32, y: f32, size: f32, scalar: u32, glyph: u32) -> bool {
     ret item.kind == .Glyph && near(item.x, x, 0.02) && near(item.y, y, 0.02) && near(item.size, size, 0.001) && item.scalar == scalar && item.glyph == glyph
 }
@@ -156,11 +162,11 @@ fn check_draw(a: *mem.Arena, font: shape.Font, items: []math.Item) -> i32 {
 fn check_model_0(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
     let (eq, eq_error) = math.typeset(a, "ax", options, items)
-    if eq_error != ok { ret 100i32 }
-    if eq.items.len != 2usize { ret 101i32 }
-    if !near(eq.width, 30.4600, 0.02) || !near(eq.ascent, 14.0000, 0.02) || !near(eq.descent, 0.0000, 0.02) { ret 102i32 }
-    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119886u32, 1u32) { ret 104i32 }
-    if !is_glyph(eq.items[1usize], 15.7200, 0.0000, 20.0000, 119909u32, 3u32) { ret 104i32 }
+    if eq_error != ok { ret bad(100i32, "check 100 (ax): typeset refused\n") }
+    if eq.items.len != 2usize { ret bad(100i32, "check 100 (ax): item count\n") }
+    if !near(eq.width, 30.4600, 0.02) || !near(eq.ascent, 14.0000, 0.02) || !near(eq.descent, 0.0000, 0.02) { ret bad(100i32, "check 100 (ax): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119886u32, 1u32) { ret bad(100i32, "check 100 (ax): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 15.7200, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(100i32, "check 100 (ax): glyph 1\n") }
     ret 0i32
 }
 
@@ -168,11 +174,11 @@ fn check_model_0(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
 fn check_model_1(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
     let (eq, eq_error) = math.typeset(a, "x^2", options, items)
-    if eq_error != ok { ret 105i32 }
-    if eq.items.len != 2usize { ret 106i32 }
-    if !near(eq.width, 25.1250, 0.02) || !near(eq.ascent, 18.7100, 0.02) || !near(eq.descent, (0.0 - 0.0000), 0.02) { ret 107i32 }
-    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119909u32, 3u32) { ret 109i32 }
-    if !is_glyph(eq.items[1usize], 15.5400, (0.0 - 8.0000), 15.0000, 50u32, 35u32) { ret 109i32 }
+    if eq_error != ok { ret bad(101i32, "check 101 (x^2): typeset refused\n") }
+    if eq.items.len != 2usize { ret bad(101i32, "check 101 (x^2): item count\n") }
+    if !near(eq.width, 23.9250, 0.02) || !near(eq.ascent, 18.7100, 0.02) || !near(eq.descent, (0.0 - 0.0000), 0.02) { ret bad(101i32, "check 101 (x^2): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(101i32, "check 101 (x^2): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 14.3400, (0.0 - 8.0000), 15.0000, 50u32, 35u32) { ret bad(101i32, "check 101 (x^2): glyph 1\n") }
     ret 0i32
 }
 
@@ -180,13 +186,13 @@ fn check_model_1(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
 fn check_model_2(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
     let (eq, eq_error) = math.typeset(a, "\\frac{1}{x^2}", options, items)
-    if eq_error != ok { ret 110i32 }
-    if eq.items.len != 4usize { ret 111i32 }
-    if !near(eq.width, 23.4940, 0.02) || !near(eq.ascent, 19.5000, 0.02) || !near(eq.descent, 8.0000, 0.02) { ret 112i32 }
-    if !is_glyph(eq.items[0usize], 8.7095, (0.0 - 9.0000), 15.0000, 49u32, 34u32) { ret 114i32 }
-    if !is_glyph(eq.items[1usize], 2.4000, 8.0000, 15.0000, 119909u32, 3u32) { ret 114i32 }
-    if !is_glyph(eq.items[2usize], 14.0550, 3.5000, 11.0000, 50u32, 35u32) { ret 114i32 }
-    if !is_rule(eq.items[3usize], 2.4000, (0.0 - 6.6000), 18.6940, 1.2000) { ret 113i32 }
+    if eq_error != ok { ret bad(102i32, "check 102 (\\frac{1}{x^2}): typeset refused\n") }
+    if eq.items.len != 4usize { ret bad(102i32, "check 102 (\\frac{1}{x^2}): item count\n") }
+    if !near(eq.width, 22.5940, 0.02) || !near(eq.ascent, 19.5000, 0.02) || !near(eq.descent, 8.0000, 0.02) { ret bad(102i32, "check 102 (\\frac{1}{x^2}): extent\n") }
+    if !is_glyph(eq.items[0usize], 8.2595, (0.0 - 9.0000), 15.0000, 49u32, 34u32) { ret bad(102i32, "check 102 (\\frac{1}{x^2}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 2.4000, 8.0000, 15.0000, 119909u32, 3u32) { ret bad(102i32, "check 102 (\\frac{1}{x^2}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 13.1550, 3.5000, 11.0000, 50u32, 35u32) { ret bad(102i32, "check 102 (\\frac{1}{x^2}): glyph 2\n") }
+    if !is_rule(eq.items[3usize], 2.4000, (0.0 - 6.6000), 17.7940, 1.2000) { ret bad(102i32, "check 102 (\\frac{1}{x^2}): rule 3\n") }
     ret 0i32
 }
 
@@ -194,13 +200,13 @@ fn check_model_2(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
 fn check_model_3(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
     let (eq, eq_error) = math.typeset(a, "\\frac{x^2}{1}", options, items)
-    if eq_error != ok { ret 115i32 }
-    if eq.items.len != 4usize { ret 116i32 }
-    if !near(eq.width, 23.4940, 0.02) || !near(eq.ascent, 22.8540, 0.02) || !near(eq.descent, 8.0000, 0.02) { ret 117i32 }
-    if !is_glyph(eq.items[0usize], 2.4000, (0.0 - 9.0000), 15.0000, 119909u32, 3u32) { ret 119i32 }
-    if !is_glyph(eq.items[1usize], 14.0550, (0.0 - 15.0000), 11.0000, 50u32, 35u32) { ret 119i32 }
-    if !is_glyph(eq.items[2usize], 8.7095, 8.0000, 15.0000, 49u32, 34u32) { ret 119i32 }
-    if !is_rule(eq.items[3usize], 2.4000, (0.0 - 6.6000), 18.6940, 1.2000) { ret 118i32 }
+    if eq_error != ok { ret bad(103i32, "check 103 (\\frac{x^2}{1}): typeset refused\n") }
+    if eq.items.len != 4usize { ret bad(103i32, "check 103 (\\frac{x^2}{1}): item count\n") }
+    if !near(eq.width, 22.5940, 0.02) || !near(eq.ascent, 22.8540, 0.02) || !near(eq.descent, 8.0000, 0.02) { ret bad(103i32, "check 103 (\\frac{x^2}{1}): extent\n") }
+    if !is_glyph(eq.items[0usize], 2.4000, (0.0 - 9.0000), 15.0000, 119909u32, 3u32) { ret bad(103i32, "check 103 (\\frac{x^2}{1}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 13.1550, (0.0 - 15.0000), 11.0000, 50u32, 35u32) { ret bad(103i32, "check 103 (\\frac{x^2}{1}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 8.2595, 8.0000, 15.0000, 49u32, 34u32) { ret bad(103i32, "check 103 (\\frac{x^2}{1}): glyph 2\n") }
+    if !is_rule(eq.items[3usize], 2.4000, (0.0 - 6.6000), 17.7940, 1.2000) { ret bad(103i32, "check 103 (\\frac{x^2}{1}): rule 3\n") }
     ret 0i32
 }
 
@@ -208,12 +214,12 @@ fn check_model_3(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
 fn check_model_4(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
     let (eq, eq_error) = math.typeset(a, "\\sqrt{x}", options, items)
-    if eq_error != ok { ret 120i32 }
-    if eq.items.len != 3usize { ret 121i32 }
-    if !near(eq.width, 31.3400, 0.02) || !near(eq.ascent, 18.1000, 0.02) || !near(eq.descent, 2.2200, 0.02) { ret 122i32 }
-    if !is_glyph(eq.items[0usize], 16.6000, 0.0000, 20.0000, 119909u32, 3u32) { ret 124i32 }
-    if !is_glyph(eq.items[1usize], 0.0000, (0.0 - 1.6600), 20.0000, 8730u32, 59u32) { ret 124i32 }
-    if !is_rule(eq.items[2usize], 16.6000, (0.0 - 16.5000), 14.7400, 1.1000) { ret 123i32 }
+    if eq_error != ok { ret bad(104i32, "check 104 (\\sqrt{x}): typeset refused\n") }
+    if eq.items.len != 3usize { ret bad(104i32, "check 104 (\\sqrt{x}): item count\n") }
+    if !near(eq.width, 31.3400, 0.02) || !near(eq.ascent, 18.1000, 0.02) || !near(eq.descent, 2.2200, 0.02) { ret bad(104i32, "check 104 (\\sqrt{x}): extent\n") }
+    if !is_glyph(eq.items[0usize], 16.6000, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(104i32, "check 104 (\\sqrt{x}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 0.0000, (0.0 - 1.6600), 20.0000, 8730u32, 62u32) { ret bad(104i32, "check 104 (\\sqrt{x}): glyph 1\n") }
+    if !is_rule(eq.items[2usize], 16.6000, (0.0 - 16.5000), 14.7400, 1.1000) { ret bad(104i32, "check 104 (\\sqrt{x}): rule 2\n") }
     ret 0i32
 }
 
@@ -221,13 +227,13 @@ fn check_model_4(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
 fn check_model_5(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
     let (eq, eq_error) = math.typeset(a, "\\sqrt{x^2}", options, items)
-    if eq_error != ok { ret 125i32 }
-    if eq.items.len != 4usize { ret 126i32 }
-    if !near(eq.width, 34.2250, 0.02) || !near(eq.ascent, 20.8100, 0.02) || !near(eq.descent, (0.0 - 0.0000), 0.02) { ret 127i32 }
-    if !is_glyph(eq.items[0usize], 9.1000, 0.0000, 20.0000, 119909u32, 3u32) { ret 129i32 }
-    if !is_glyph(eq.items[1usize], 24.6400, (0.0 - 6.0000), 15.0000, 50u32, 35u32) { ret 129i32 }
-    if !is_glyph(eq.items[2usize], 0.0000, (0.0 - 4.0900), 20.0000, 8730u32, 57u32) { ret 129i32 }
-    if !is_rule(eq.items[3usize], 9.1000, (0.0 - 19.2100), 25.1250, 1.1000) { ret 128i32 }
+    if eq_error != ok { ret bad(105i32, "check 105 (\\sqrt{x^2}): typeset refused\n") }
+    if eq.items.len != 4usize { ret bad(105i32, "check 105 (\\sqrt{x^2}): item count\n") }
+    if !near(eq.width, 33.0250, 0.02) || !near(eq.ascent, 20.8100, 0.02) || !near(eq.descent, (0.0 - 0.0000), 0.02) { ret bad(105i32, "check 105 (\\sqrt{x^2}): extent\n") }
+    if !is_glyph(eq.items[0usize], 9.1000, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(105i32, "check 105 (\\sqrt{x^2}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 23.4400, (0.0 - 6.0000), 15.0000, 50u32, 35u32) { ret bad(105i32, "check 105 (\\sqrt{x^2}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 0.0000, (0.0 - 4.0900), 20.0000, 8730u32, 60u32) { ret bad(105i32, "check 105 (\\sqrt{x^2}): glyph 2\n") }
+    if !is_rule(eq.items[3usize], 9.1000, (0.0 - 19.2100), 23.9250, 1.1000) { ret bad(105i32, "check 105 (\\sqrt{x^2}): rule 3\n") }
     ret 0i32
 }
 
@@ -235,13 +241,13 @@ fn check_model_5(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
 fn check_model_6(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
     let (eq, eq_error) = math.typeset(a, "\\sqrt[3]{x}", options, items)
-    if eq_error != ok { ret 130i32 }
-    if eq.items.len != 4usize { ret 131i32 }
-    if !near(eq.width, 31.9730, 0.02) || !near(eq.ascent, 18.1000, 0.02) || !near(eq.descent, 2.2200, 0.02) { ret 132i32 }
-    if !is_glyph(eq.items[0usize], 2.0000, (0.0 - 9.0750), 11.0000, 51u32, 36u32) { ret 134i32 }
-    if !is_glyph(eq.items[1usize], 17.2330, 0.0000, 20.0000, 119909u32, 3u32) { ret 134i32 }
-    if !is_glyph(eq.items[2usize], 0.6330, (0.0 - 1.6600), 20.0000, 8730u32, 59u32) { ret 134i32 }
-    if !is_rule(eq.items[3usize], 17.2330, (0.0 - 16.5000), 14.7400, 1.1000) { ret 133i32 }
+    if eq_error != ok { ret bad(106i32, "check 106 (\\sqrt[3]{x}): typeset refused\n") }
+    if eq.items.len != 4usize { ret bad(106i32, "check 106 (\\sqrt[3]{x}): item count\n") }
+    if !near(eq.width, 31.9730, 0.02) || !near(eq.ascent, 18.1000, 0.02) || !near(eq.descent, 2.2200, 0.02) { ret bad(106i32, "check 106 (\\sqrt[3]{x}): extent\n") }
+    if !is_glyph(eq.items[0usize], 2.0000, (0.0 - 9.0750), 11.0000, 51u32, 36u32) { ret bad(106i32, "check 106 (\\sqrt[3]{x}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 17.2330, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(106i32, "check 106 (\\sqrt[3]{x}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 0.6330, (0.0 - 1.6600), 20.0000, 8730u32, 62u32) { ret bad(106i32, "check 106 (\\sqrt[3]{x}): glyph 2\n") }
+    if !is_rule(eq.items[3usize], 17.2330, (0.0 - 16.5000), 14.7400, 1.1000) { ret bad(106i32, "check 106 (\\sqrt[3]{x}): rule 3\n") }
     ret 0i32
 }
 
@@ -249,14 +255,14 @@ fn check_model_6(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
 fn check_model_7(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
     let (eq, eq_error) = math.typeset(a, "\\sqrt{\\frac{a}{b}}", options, items)
-    if eq_error != ok { ret 135i32 }
-    if eq.items.len != 5usize { ret 136i32 }
-    if !near(eq.width, 25.6900, 0.02) || !near(eq.ascent, 23.6000, 0.02) || !near(eq.descent, 8.0000, 0.02) { ret 137i32 }
-    if !is_glyph(eq.items[0usize], 11.5000, (0.0 - 9.0000), 15.0000, 119886u32, 1u32) { ret 139i32 }
-    if !is_glyph(eq.items[1usize], 11.6275, 8.0000, 15.0000, 119887u32, 2u32) { ret 139i32 }
-    if !is_rule(eq.items[2usize], 11.5000, (0.0 - 6.6000), 11.7900, 1.2000) { ret 138i32 }
-    if !is_glyph(eq.items[3usize], 0.0000, (0.0 - 6.8800), 20.0000, 8730u32, 57u32) { ret 139i32 }
-    if !is_rule(eq.items[4usize], 9.1000, (0.0 - 22.0000), 16.5900, 1.1000) { ret 138i32 }
+    if eq_error != ok { ret bad(107i32, "check 107 (\\sqrt{\\frac{a}{b}}): typeset refused\n") }
+    if eq.items.len != 5usize { ret bad(107i32, "check 107 (\\sqrt{\\frac{a}{b}}): item count\n") }
+    if !near(eq.width, 25.6900, 0.02) || !near(eq.ascent, 23.6000, 0.02) || !near(eq.descent, 8.0000, 0.02) { ret bad(107i32, "check 107 (\\sqrt{\\frac{a}{b}}): extent\n") }
+    if !is_glyph(eq.items[0usize], 11.5000, (0.0 - 9.0000), 15.0000, 119886u32, 1u32) { ret bad(107i32, "check 107 (\\sqrt{\\frac{a}{b}}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 11.6275, 8.0000, 15.0000, 119887u32, 2u32) { ret bad(107i32, "check 107 (\\sqrt{\\frac{a}{b}}): glyph 1\n") }
+    if !is_rule(eq.items[2usize], 11.5000, (0.0 - 6.6000), 11.7900, 1.2000) { ret bad(107i32, "check 107 (\\sqrt{\\frac{a}{b}}): rule 2\n") }
+    if !is_glyph(eq.items[3usize], 0.0000, (0.0 - 6.8800), 20.0000, 8730u32, 60u32) { ret bad(107i32, "check 107 (\\sqrt{\\frac{a}{b}}): glyph 3\n") }
+    if !is_rule(eq.items[4usize], 9.1000, (0.0 - 22.0000), 16.5900, 1.1000) { ret bad(107i32, "check 107 (\\sqrt{\\frac{a}{b}}): rule 4\n") }
     ret 0i32
 }
 
@@ -264,17 +270,17 @@ fn check_model_7(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
 fn check_model_8(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
     let (eq, eq_error) = math.typeset(a, "\\left(\\frac{a}{b}\\right)", options, items)
-    if eq_error != ok { ret 140i32 }
-    if eq.items.len != 8usize { ret 141i32 }
-    if !near(eq.width, 39.2565, 0.02) || !near(eq.ascent, 19.5000, 0.02) || !near(eq.descent, 8.0000, 0.02) { ret 142i32 }
-    if !is_glyph(eq.items[0usize], 14.5800, (0.0 - 9.0000), 15.0000, 119886u32, 1u32) { ret 144i32 }
-    if !is_glyph(eq.items[1usize], 14.7075, 8.0000, 15.0000, 119887u32, 2u32) { ret 144i32 }
-    if !is_rule(eq.items[2usize], 14.5800, (0.0 - 6.6000), 11.7900, 1.2000) { ret 143i32 }
-    if !is_glyph(eq.items[3usize], 3.2600, 4.1600, 20.0000, 40u32, 45u32) { ret 144i32 }
-    if !is_glyph(eq.items[4usize], 0.0000, 3.2867, 20.0000, 40u32, 56u32) { ret 144i32 }
-    if !is_glyph(eq.items[5usize], 0.0000, (0.0 - 4.2467), 20.0000, 40u32, 56u32) { ret 144i32 }
-    if !is_glyph(eq.items[6usize], 3.2600, (0.0 - 14.9800), 20.0000, 40u32, 44u32) { ret 144i32 }
-    if !is_glyph(eq.items[7usize], 28.7700, 1.7868, 28.4188, 41u32, 48u32) { ret 144i32 }
+    if eq_error != ok { ret bad(108i32, "check 108 (\\left(\\frac{a}{b}\\right)): typeset refused\n") }
+    if eq.items.len != 8usize { ret bad(108i32, "check 108 (\\left(\\frac{a}{b}\\right)): item count\n") }
+    if !near(eq.width, 39.2565, 0.02) || !near(eq.ascent, 19.5000, 0.02) || !near(eq.descent, 8.0000, 0.02) { ret bad(108i32, "check 108 (\\left(\\frac{a}{b}\\right)): extent\n") }
+    if !is_glyph(eq.items[0usize], 14.5800, (0.0 - 9.0000), 15.0000, 119886u32, 1u32) { ret bad(108i32, "check 108 (\\left(\\frac{a}{b}\\right)): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 14.7075, 8.0000, 15.0000, 119887u32, 2u32) { ret bad(108i32, "check 108 (\\left(\\frac{a}{b}\\right)): glyph 1\n") }
+    if !is_rule(eq.items[2usize], 14.5800, (0.0 - 6.6000), 11.7900, 1.2000) { ret bad(108i32, "check 108 (\\left(\\frac{a}{b}\\right)): rule 2\n") }
+    if !is_glyph(eq.items[3usize], 3.2600, 4.1600, 20.0000, 40u32, 45u32) { ret bad(108i32, "check 108 (\\left(\\frac{a}{b}\\right)): glyph 3\n") }
+    if !is_glyph(eq.items[4usize], 0.0000, 3.2867, 20.0000, 40u32, 57u32) { ret bad(108i32, "check 108 (\\left(\\frac{a}{b}\\right)): glyph 4\n") }
+    if !is_glyph(eq.items[5usize], 0.0000, (0.0 - 4.2467), 20.0000, 40u32, 57u32) { ret bad(108i32, "check 108 (\\left(\\frac{a}{b}\\right)): glyph 5\n") }
+    if !is_glyph(eq.items[6usize], 3.2600, (0.0 - 14.9800), 20.0000, 40u32, 44u32) { ret bad(108i32, "check 108 (\\left(\\frac{a}{b}\\right)): glyph 6\n") }
+    if !is_glyph(eq.items[7usize], 28.7700, 1.7868, 28.4188, 41u32, 49u32) { ret bad(108i32, "check 108 (\\left(\\frac{a}{b}\\right)): glyph 7\n") }
     ret 0i32
 }
 
@@ -282,24 +288,24 @@ fn check_model_8(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
 fn check_model_9(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
     let (eq, eq_error) = math.typeset(a, "\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)", options, items)
-    if eq_error != ok { ret 145i32 }
-    if eq.items.len != 15usize { ret 146i32 }
-    if !near(eq.width, 45.7423, 0.02) || !near(eq.ascent, 28.0500, 0.02) || !near(eq.descent, 16.0500, 0.02) { ret 147i32 }
-    if !is_glyph(eq.items[0usize], 16.3800, (0.0 - 20.3500), 11.0000, 119886u32, 1u32) { ret 149i32 }
-    if !is_glyph(eq.items[1usize], 16.4735, (0.0 - 7.6000), 11.0000, 119887u32, 2u32) { ret 149i32 }
-    if !is_rule(eq.items[2usize], 16.3800, (0.0 - 18.5500), 8.6460, 0.9000) { ret 148i32 }
-    if !is_glyph(eq.items[3usize], 16.3800, 3.3000, 11.0000, 119886u32, 1u32) { ret 149i32 }
-    if !is_glyph(eq.items[4usize], 16.4735, 16.0500, 11.0000, 119887u32, 2u32) { ret 149i32 }
-    if !is_rule(eq.items[5usize], 16.3800, 5.1000, 8.6460, 0.9000) { ret 148i32 }
-    if !is_rule(eq.items[6usize], 14.5800, (0.0 - 6.6000), 12.2460, 1.2000) { ret 148i32 }
-    if !is_glyph(eq.items[7usize], 3.2600, 11.8075, 20.0000, 40u32, 45u32) { ret 149i32 }
-    if !is_glyph(eq.items[8usize], 0.0000, 12.1517, 20.0000, 40u32, 56u32) { ret 149i32 }
-    if !is_glyph(eq.items[9usize], 0.0000, 5.8358, 20.0000, 40u32, 56u32) { ret 149i32 }
-    if !is_glyph(eq.items[10usize], 0.0000, (0.0 - 0.4800), 20.0000, 40u32, 56u32) { ret 149i32 }
-    if !is_glyph(eq.items[11usize], 0.0000, (0.0 - 6.7958), 20.0000, 40u32, 56u32) { ret 149i32 }
-    if !is_glyph(eq.items[12usize], 0.0000, (0.0 - 13.1117), 20.0000, 40u32, 56u32) { ret 149i32 }
-    if !is_glyph(eq.items[13usize], 3.2600, (0.0 - 22.6275), 20.0000, 40u32, 44u32) { ret 149i32 }
-    if !is_glyph(eq.items[14usize], 29.2260, 6.2641, 44.7596, 41u32, 48u32) { ret 149i32 }
+    if eq_error != ok { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): typeset refused\n") }
+    if eq.items.len != 15usize { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): item count\n") }
+    if !near(eq.width, 45.7423, 0.02) || !near(eq.ascent, 28.0500, 0.02) || !near(eq.descent, 16.0500, 0.02) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): extent\n") }
+    if !is_glyph(eq.items[0usize], 16.3800, (0.0 - 20.3500), 11.0000, 119886u32, 1u32) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 16.4735, (0.0 - 7.6000), 11.0000, 119887u32, 2u32) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): glyph 1\n") }
+    if !is_rule(eq.items[2usize], 16.3800, (0.0 - 18.5500), 8.6460, 0.9000) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): rule 2\n") }
+    if !is_glyph(eq.items[3usize], 16.3800, 3.3000, 11.0000, 119886u32, 1u32) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): glyph 3\n") }
+    if !is_glyph(eq.items[4usize], 16.4735, 16.0500, 11.0000, 119887u32, 2u32) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): glyph 4\n") }
+    if !is_rule(eq.items[5usize], 16.3800, 5.1000, 8.6460, 0.9000) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): rule 5\n") }
+    if !is_rule(eq.items[6usize], 14.5800, (0.0 - 6.6000), 12.2460, 1.2000) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): rule 6\n") }
+    if !is_glyph(eq.items[7usize], 3.2600, 11.8075, 20.0000, 40u32, 45u32) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): glyph 7\n") }
+    if !is_glyph(eq.items[8usize], 0.0000, 12.1517, 20.0000, 40u32, 57u32) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): glyph 8\n") }
+    if !is_glyph(eq.items[9usize], 0.0000, 5.8358, 20.0000, 40u32, 57u32) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): glyph 9\n") }
+    if !is_glyph(eq.items[10usize], 0.0000, (0.0 - 0.4800), 20.0000, 40u32, 57u32) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): glyph 10\n") }
+    if !is_glyph(eq.items[11usize], 0.0000, (0.0 - 6.7958), 20.0000, 40u32, 57u32) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): glyph 11\n") }
+    if !is_glyph(eq.items[12usize], 0.0000, (0.0 - 13.1117), 20.0000, 40u32, 57u32) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): glyph 12\n") }
+    if !is_glyph(eq.items[13usize], 3.2600, (0.0 - 22.6275), 20.0000, 40u32, 44u32) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): glyph 13\n") }
+    if !is_glyph(eq.items[14usize], 29.2260, 6.2641, 44.7596, 41u32, 49u32) { ret bad(109i32, "check 109 (\\left(\\frac{\\frac{a}{b}}{\\frac{a}{b}}\\right)): glyph 14\n") }
     ret 0i32
 }
 
@@ -307,12 +313,12 @@ fn check_model_9(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
 fn check_model_10(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: true, notdef: false }
     let (eq, eq_error) = math.typeset(a, "\\sum_{a}^{b}", options, items)
-    if eq_error != ok { ret 150i32 }
-    if eq.items.len != 3usize { ret 151i32 }
-    if !near(eq.width, 22.7852, 0.02) || !near(eq.ascent, 33.5000, 0.02) || !near(eq.descent, 22.3000, 0.02) { ret 152i32 }
-    if !is_glyph(eq.items[0usize], 0.0000, 2.4899, 33.5570, 8721u32, 58u32) { ret 154i32 }
-    if !is_glyph(eq.items[1usize], 5.4976, 22.3000, 15.0000, 119886u32, 1u32) { ret 154i32 }
-    if !is_glyph(eq.items[2usize], 5.6251, (0.0 - 23.0000), 15.0000, 119887u32, 2u32) { ret 154i32 }
+    if eq_error != ok { ret bad(110i32, "check 110 (\\sum_{a}^{b}): typeset refused\n") }
+    if eq.items.len != 3usize { ret bad(110i32, "check 110 (\\sum_{a}^{b}): item count\n") }
+    if !near(eq.width, 22.7852, 0.02) || !near(eq.ascent, 33.5000, 0.02) || !near(eq.descent, 22.3000, 0.02) { ret bad(110i32, "check 110 (\\sum_{a}^{b}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 2.4899, 33.5570, 8721u32, 61u32) { ret bad(110i32, "check 110 (\\sum_{a}^{b}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 5.4976, 22.3000, 15.0000, 119886u32, 1u32) { ret bad(110i32, "check 110 (\\sum_{a}^{b}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 5.6251, (0.0 - 23.0000), 15.0000, 119887u32, 2u32) { ret bad(110i32, "check 110 (\\sum_{a}^{b}): glyph 2\n") }
     ret 0i32
 }
 
@@ -320,12 +326,12 @@ fn check_model_10(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
 fn check_model_11(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
     let (eq, eq_error) = math.typeset(a, "\\frac{a}{b}", options, items)
-    if eq_error != ok { ret 155i32 }
-    if eq.items.len != 3usize { ret 156i32 }
-    if !near(eq.width, 16.5900, 0.02) || !near(eq.ascent, 19.5000, 0.02) || !near(eq.descent, 8.0000, 0.02) { ret 157i32 }
-    if !is_glyph(eq.items[0usize], 2.4000, (0.0 - 9.0000), 15.0000, 119886u32, 1u32) { ret 159i32 }
-    if !is_glyph(eq.items[1usize], 2.5275, 8.0000, 15.0000, 119887u32, 2u32) { ret 159i32 }
-    if !is_rule(eq.items[2usize], 2.4000, (0.0 - 6.6000), 11.7900, 1.2000) { ret 158i32 }
+    if eq_error != ok { ret bad(111i32, "check 111 (\\frac{a}{b}): typeset refused\n") }
+    if eq.items.len != 3usize { ret bad(111i32, "check 111 (\\frac{a}{b}): item count\n") }
+    if !near(eq.width, 16.5900, 0.02) || !near(eq.ascent, 19.5000, 0.02) || !near(eq.descent, 8.0000, 0.02) { ret bad(111i32, "check 111 (\\frac{a}{b}): extent\n") }
+    if !is_glyph(eq.items[0usize], 2.4000, (0.0 - 9.0000), 15.0000, 119886u32, 1u32) { ret bad(111i32, "check 111 (\\frac{a}{b}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 2.5275, 8.0000, 15.0000, 119887u32, 2u32) { ret bad(111i32, "check 111 (\\frac{a}{b}): glyph 1\n") }
+    if !is_rule(eq.items[2usize], 2.4000, (0.0 - 6.6000), 11.7900, 1.2000) { ret bad(111i32, "check 111 (\\frac{a}{b}): rule 2\n") }
     ret 0i32
 }
 
@@ -333,12 +339,12 @@ fn check_model_11(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
 fn check_model_12(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: true, notdef: false }
     let (eq, eq_error) = math.typeset(a, "\\frac{a}{b}", options, items)
-    if eq_error != ok { ret 160i32 }
-    if eq.items.len != 3usize { ret 161i32 }
-    if !near(eq.width, 20.5200, 0.02) || !near(eq.ascent, 28.0000, 0.02) || !near(eq.descent, 14.4000, 0.02) { ret 162i32 }
-    if !is_glyph(eq.items[0usize], 2.4000, (0.0 - 14.0000), 20.0000, 119886u32, 1u32) { ret 164i32 }
-    if !is_glyph(eq.items[1usize], 2.5700, 14.4000, 20.0000, 119887u32, 2u32) { ret 164i32 }
-    if !is_rule(eq.items[2usize], 2.4000, (0.0 - 6.6000), 15.7200, 1.2000) { ret 163i32 }
+    if eq_error != ok { ret bad(112i32, "check 112 (\\frac{a}{b}): typeset refused\n") }
+    if eq.items.len != 3usize { ret bad(112i32, "check 112 (\\frac{a}{b}): item count\n") }
+    if !near(eq.width, 20.5200, 0.02) || !near(eq.ascent, 28.0000, 0.02) || !near(eq.descent, 14.4000, 0.02) { ret bad(112i32, "check 112 (\\frac{a}{b}): extent\n") }
+    if !is_glyph(eq.items[0usize], 2.4000, (0.0 - 14.0000), 20.0000, 119886u32, 1u32) { ret bad(112i32, "check 112 (\\frac{a}{b}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 2.5700, 14.4000, 20.0000, 119887u32, 2u32) { ret bad(112i32, "check 112 (\\frac{a}{b}): glyph 1\n") }
+    if !is_rule(eq.items[2usize], 2.4000, (0.0 - 6.6000), 15.7200, 1.2000) { ret bad(112i32, "check 112 (\\frac{a}{b}): rule 2\n") }
     ret 0i32
 }
 
@@ -346,29 +352,329 @@ fn check_model_12(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
 fn check_model_13(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: true, notdef: false }
     let (eq, eq_error) = math.typeset(a, "\\sqrt{x}", options, items)
-    if eq_error != ok { ret 165i32 }
-    if eq.items.len != 3usize { ret 166i32 }
-    if !near(eq.width, 31.3400, 0.02) || !near(eq.ascent, 18.9000, 0.02) || !near(eq.descent, 1.4200, 0.02) { ret 167i32 }
-    if !is_glyph(eq.items[0usize], 16.6000, 0.0000, 20.0000, 119909u32, 3u32) { ret 169i32 }
-    if !is_glyph(eq.items[1usize], 0.0000, (0.0 - 2.4600), 20.0000, 8730u32, 59u32) { ret 169i32 }
-    if !is_rule(eq.items[2usize], 16.6000, (0.0 - 17.3000), 14.7400, 1.1000) { ret 168i32 }
+    if eq_error != ok { ret bad(113i32, "check 113 (\\sqrt{x}): typeset refused\n") }
+    if eq.items.len != 3usize { ret bad(113i32, "check 113 (\\sqrt{x}): item count\n") }
+    if !near(eq.width, 31.3400, 0.02) || !near(eq.ascent, 18.9000, 0.02) || !near(eq.descent, 1.4200, 0.02) { ret bad(113i32, "check 113 (\\sqrt{x}): extent\n") }
+    if !is_glyph(eq.items[0usize], 16.6000, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(113i32, "check 113 (\\sqrt{x}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 0.0000, (0.0 - 2.4600), 20.0000, 8730u32, 62u32) { ret bad(113i32, "check 113 (\\sqrt{x}): glyph 1\n") }
+    if !is_rule(eq.items[2usize], 16.6000, (0.0 - 17.3000), 14.7400, 1.1000) { ret bad(113i32, "check 113 (\\sqrt{x}): rule 2\n") }
+    ret 0i32
+}
+
+// bold letters: \mathbf{ax}
+fn check_model_14(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\mathbf{ax}", options, items)
+    if eq_error != ok { ret bad(114i32, "check 114 (\\mathbf{ax}): typeset refused\n") }
+    if eq.items.len != 2usize { ret bad(114i32, "check 114 (\\mathbf{ax}): item count\n") }
+    if !near(eq.width, 24.9000, 0.02) || !near(eq.ascent, 11.0200, 0.02) || !near(eq.descent, 0.1800, 0.02) { ret bad(114i32, "check 114 (\\mathbf{ax}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119834u32, 7u32) { ret bad(114i32, "check 114 (\\mathbf{ax}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 12.0600, 0.0000, 20.0000, 119857u32, 9u32) { ret bad(114i32, "check 114 (\\mathbf{ax}): glyph 1\n") }
+    ret 0i32
+}
+
+// script capitals, B from Letterlike Symbols: \mathcal{AB}
+fn check_model_15(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\mathcal{AB}", options, items)
+    if eq_error != ok { ret bad(115i32, "check 115 (\\mathcal{AB}): typeset refused\n") }
+    if eq.items.len != 2usize { ret bad(115i32, "check 115 (\\mathcal{AB}): item count\n") }
+    if !near(eq.width, 19.9400, 0.02) || !near(eq.ascent, 16.0800, 0.02) || !near(eq.descent, 4.0600, 0.02) { ret bad(115i32, "check 115 (\\mathcal{AB}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119964u32, 15u32) { ret bad(115i32, "check 115 (\\mathcal{AB}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 6.4000, 0.0000, 20.0000, 8492u32, 17u32) { ret bad(115i32, "check 115 (\\mathcal{AB}): glyph 1\n") }
+    ret 0i32
+}
+
+// double-struck and fraktur holes: \mathbb{RC}\mathfrak{AC}
+fn check_model_16(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\mathbb{RC}\\mathfrak{AC}", options, items)
+    if eq_error != ok { ret bad(116i32, "check 116 (\\mathbb{RC}\\mathfrak{AC}): typeset refused\n") }
+    if eq.items.len != 4usize { ret bad(116i32, "check 116 (\\mathbb{RC}\\mathfrak{AC}): item count\n") }
+    if !near(eq.width, 49.9800, 0.02) || !near(eq.ascent, 11.0200, 0.02) || !near(eq.descent, 3.8800, 0.02) { ret bad(116i32, "check 116 (\\mathbb{RC}\\mathfrak{AC}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 8477u32, 21u32) { ret bad(116i32, "check 116 (\\mathbb{RC}\\mathfrak{AC}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 13.3200, 0.0000, 20.0000, 8450u32, 22u32) { ret bad(116i32, "check 116 (\\mathbb{RC}\\mathfrak{AC}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 27.2200, 0.0000, 20.0000, 120068u32, 23u32) { ret bad(116i32, "check 116 (\\mathbb{RC}\\mathfrak{AC}): glyph 2\n") }
+    if !is_glyph(eq.items[3usize], 41.1200, 0.0000, 20.0000, 8493u32, 24u32) { ret bad(116i32, "check 116 (\\mathbb{RC}\\mathfrak{AC}): glyph 3\n") }
+    ret 0i32
+}
+
+// sans, mono, bold italic, digits and a Greek letter: \mathsf{a}\mathtt{a}\boldsymbol{a}\mathbf{1}\mathtt{2}\mathbf{\alpha}
+fn check_model_17(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\mathsf{a}\\mathtt{a}\\boldsymbol{a}\\mathbf{1}\\mathtt{2}\\mathbf{\\alpha}", options, items)
+    if eq_error != ok { ret bad(117i32, "check 117 (\\mathsf{a}\\mathtt{a}\\boldsymbol{a}\\mathbf{1}\\mathtt{2}\\mathbf{\\alpha}): typeset refused\n") }
+    if eq.items.len != 6usize { ret bad(117i32, "check 117 (\\mathsf{a}\\mathtt{a}\\boldsymbol{a}\\mathbf{1}\\mathtt{2}\\mathbf{\\alpha}): item count\n") }
+    if !near(eq.width, 71.5000, 0.02) || !near(eq.ascent, 16.0800, 0.02) || !near(eq.descent, 0.1800, 0.02) { ret bad(117i32, "check 117 (\\mathsf{a}\\mathtt{a}\\boldsymbol{a}\\mathbf{1}\\mathtt{2}\\mathbf{\\alpha}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 120250u32, 25u32) { ret bad(117i32, "check 117 (\\mathsf{a}\\mathtt{a}\\boldsymbol{a}\\mathbf{1}\\mathtt{2}\\mathbf{\\alpha}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 10.9400, 0.0000, 20.0000, 120458u32, 26u32) { ret bad(117i32, "check 117 (\\mathsf{a}\\mathtt{a}\\boldsymbol{a}\\mathbf{1}\\mathtt{2}\\mathbf{\\alpha}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 19.8800, 0.0000, 20.0000, 119938u32, 27u32) { ret bad(117i32, "check 117 (\\mathsf{a}\\mathtt{a}\\boldsymbol{a}\\mathbf{1}\\mathtt{2}\\mathbf{\\alpha}): glyph 2\n") }
+    if !is_glyph(eq.items[3usize], 33.7200, 0.0000, 20.0000, 120783u32, 13u32) { ret bad(117i32, "check 117 (\\mathsf{a}\\mathtt{a}\\boldsymbol{a}\\mathbf{1}\\mathtt{2}\\mathbf{\\alpha}): glyph 3\n") }
+    if !is_glyph(eq.items[4usize], 39.9800, 0.0000, 20.0000, 120824u32, 29u32) { ret bad(117i32, "check 117 (\\mathsf{a}\\mathtt{a}\\boldsymbol{a}\\mathbf{1}\\mathtt{2}\\mathbf{\\alpha}): glyph 4\n") }
+    if !is_glyph(eq.items[5usize], 59.1000, 0.0000, 20.0000, 120514u32, 28u32) { ret bad(117i32, "check 117 (\\mathsf{a}\\mathtt{a}\\boldsymbol{a}\\mathbf{1}\\mathtt{2}\\mathbf{\\alpha}): glyph 5\n") }
+    ret 0i32
+}
+
+// a letter the alphabet's block lacks stays itself: \mathbf{c}
+fn check_model_18(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\mathbf{c}", options, items)
+    if eq_error != ok { ret bad(118i32, "check 118 (\\mathbf{c}): typeset refused\n") }
+    if eq.items.len != 1usize { ret bad(118i32, "check 118 (\\mathbf{c}): item count\n") }
+    if !near(eq.width, 12.0600, 0.02) || !near(eq.ascent, 11.0200, 0.02) || !near(eq.descent, 0.1800, 0.02) { ret bad(118i32, "check 118 (\\mathbf{c}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 99u32, 7u32) { ret bad(118i32, "check 118 (\\mathbf{c}): glyph 0\n") }
+    ret 0i32
+}
+
+// hat over a letter with an attachment point: \hat{x}
+fn check_model_19(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\hat{x}", options, items)
+    if eq_error != ok { ret bad(119i32, "check 119 (\\hat{x}): typeset refused\n") }
+    if eq.items.len != 2usize { ret bad(119i32, "check 119 (\\hat{x}): item count\n") }
+    if !near(eq.width, 14.7400, 0.02) || !near(eq.ascent, 15.2000, 0.02) || !near(eq.descent, 0.0000, 0.02) { ret bad(119i32, "check 119 (\\hat{x}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(119i32, "check 119 (\\hat{x}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 3.6000, (0.0 - 4.0000), 20.0000, 770u32, 59u32) { ret bad(119i32, "check 119 (\\hat{x}): glyph 1\n") }
+    ret 0i32
+}
+
+// tilde over a letter with an attachment point: \tilde{a}
+fn check_model_20(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\tilde{a}", options, items)
+    if eq_error != ok { ret bad(120i32, "check 120 (\\tilde{a}): typeset refused\n") }
+    if eq.items.len != 2usize { ret bad(120i32, "check 120 (\\tilde{a}): item count\n") }
+    if !near(eq.width, 15.7200, 0.02) || !near(eq.ascent, 14.0000, 0.02) || !near(eq.descent, 0.0000, 0.02) { ret bad(120i32, "check 120 (\\tilde{a}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119886u32, 1u32) { ret bad(120i32, "check 120 (\\tilde{a}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 0.8000, (0.0 - 4.0000), 20.0000, 771u32, 58u32) { ret bad(120i32, "check 120 (\\tilde{a}): glyph 1\n") }
+    ret 0i32
+}
+
+// bar over a letter with none, and a script after it: \bar{y}^{2}
+fn check_model_21(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\bar{y}^{2}", options, items)
+    if eq_error != ok { ret bad(121i32, "check 121 (\\bar{y}^{2}): typeset refused\n") }
+    if eq.items.len != 3usize { ret bad(121i32, "check 121 (\\bar{y}^{2}): item count\n") }
+    if !near(eq.width, 23.4450, 0.02) || !near(eq.ascent, 19.4600, 0.02) || !near(eq.descent, (0.0 - 0.0000), 0.02) { ret bad(121i32, "check 121 (\\bar{y}^{2}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119910u32, 4u32) { ret bad(121i32, "check 121 (\\bar{y}^{2}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 1.9300, (0.0 - 4.0000), 20.0000, 772u32, 47u32) { ret bad(121i32, "check 121 (\\bar{y}^{2}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 13.8600, (0.0 - 8.7500), 15.0000, 50u32, 35u32) { ret bad(121i32, "check 121 (\\bar{y}^{2}): glyph 2\n") }
+    ret 0i32
+}
+
+// dot over a row: \dot{ab}
+fn check_model_22(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\dot{ab}", options, items)
+    if eq_error != ok { ret bad(122i32, "check 122 (\\dot{ab}): typeset refused\n") }
+    if eq.items.len != 3usize { ret bad(122i32, "check 122 (\\dot{ab}): item count\n") }
+    if !near(eq.width, 31.1000, 0.02) || !near(eq.ascent, 14.0000, 0.02) || !near(eq.descent, 0.0000, 0.02) { ret bad(122i32, "check 122 (\\dot{ab}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119886u32, 1u32) { ret bad(122i32, "check 122 (\\dot{ab}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 15.7200, 0.0000, 20.0000, 119887u32, 2u32) { ret bad(122i32, "check 122 (\\dot{ab}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 12.7200, (0.0 - 4.0000), 20.0000, 775u32, 44u32) { ret bad(122i32, "check 122 (\\dot{ab}): glyph 2\n") }
+    ret 0i32
+}
+
+// vector arrow: \vec{x}
+fn check_model_23(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\vec{x}", options, items)
+    if eq_error != ok { ret bad(123i32, "check 123 (\\vec{x}): typeset refused\n") }
+    if eq.items.len != 2usize { ret bad(123i32, "check 123 (\\vec{x}): item count\n") }
+    if !near(eq.width, 14.7400, 0.02) || !near(eq.ascent, 14.0000, 0.02) || !near(eq.descent, 0.0000, 0.02) { ret bad(123i32, "check 123 (\\vec{x}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(123i32, "check 123 (\\vec{x}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 4.7200, (0.0 - 4.0000), 20.0000, 8407u32, 46u32) { ret bad(123i32, "check 123 (\\vec{x}): glyph 1\n") }
+    ret 0i32
+}
+
+// wide hat takes the widest variant: \widehat{xax}
+fn check_model_24(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\widehat{xax}", options, items)
+    if eq_error != ok { ret bad(124i32, "check 124 (\\widehat{xax}): typeset refused\n") }
+    if eq.items.len != 4usize { ret bad(124i32, "check 124 (\\widehat{xax}): item count\n") }
+    if !near(eq.width, 45.2000, 0.02) || !near(eq.ascent, 14.9800, 0.02) || !near(eq.descent, 0.0000, 0.02) { ret bad(124i32, "check 124 (\\widehat{xax}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(124i32, "check 124 (\\widehat{xax}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 14.7400, 0.0000, 20.0000, 119886u32, 1u32) { ret bad(124i32, "check 124 (\\widehat{xax}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 30.4600, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(124i32, "check 124 (\\widehat{xax}): glyph 2\n") }
+    if !is_glyph(eq.items[3usize], 16.5100, (0.0 - 4.0000), 20.0000, 770u32, 57u32) { ret bad(124i32, "check 124 (\\widehat{xax}): glyph 3\n") }
+    ret 0i32
+}
+
+// wide hat takes the first variant that reaches: \widehat{x}
+fn check_model_25(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\widehat{x}", options, items)
+    if eq_error != ok { ret bad(125i32, "check 125 (\\widehat{x}): typeset refused\n") }
+    if eq.items.len != 2usize { ret bad(125i32, "check 125 (\\widehat{x}): item count\n") }
+    if !near(eq.width, 14.7400, 0.02) || !near(eq.ascent, 14.9800, 0.02) || !near(eq.descent, 0.0000, 0.02) { ret bad(125i32, "check 125 (\\widehat{x}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(125i32, "check 125 (\\widehat{x}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 2.5100, (0.0 - 4.0000), 20.0000, 770u32, 57u32) { ret bad(125i32, "check 125 (\\widehat{x}): glyph 1\n") }
+    ret 0i32
+}
+
+// wide tilde: \widetilde{ab}
+fn check_model_26(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\widetilde{ab}", options, items)
+    if eq_error != ok { ret bad(126i32, "check 126 (\\widetilde{ab}): typeset refused\n") }
+    if eq.items.len != 3usize { ret bad(126i32, "check 126 (\\widetilde{ab}): item count\n") }
+    if !near(eq.width, 31.1000, 0.02) || !near(eq.ascent, 15.7600, 0.02) || !near(eq.descent, 0.0000, 0.02) { ret bad(126i32, "check 126 (\\widetilde{ab}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119886u32, 1u32) { ret bad(126i32, "check 126 (\\widetilde{ab}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 15.7200, 0.0000, 20.0000, 119887u32, 2u32) { ret bad(126i32, "check 126 (\\widetilde{ab}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 9.4600, (0.0 - 4.0000), 20.0000, 771u32, 55u32) { ret bad(126i32, "check 126 (\\widetilde{ab}): glyph 2\n") }
+    ret 0i32
+}
+
+// overline: \overline{x}
+fn check_model_27(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\overline{x}", options, items)
+    if eq_error != ok { ret bad(127i32, "check 127 (\\overline{x}): typeset refused\n") }
+    if eq.items.len != 2usize { ret bad(127i32, "check 127 (\\overline{x}): item count\n") }
+    if !near(eq.width, 14.7400, 0.02) || !near(eq.ascent, 17.6000, 0.02) || !near(eq.descent, 0.0000, 0.02) { ret bad(127i32, "check 127 (\\overline{x}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(127i32, "check 127 (\\overline{x}): glyph 0\n") }
+    if !is_rule(eq.items[1usize], 0.0000, (0.0 - 16.8000), 14.7400, 1.0000) { ret bad(127i32, "check 127 (\\overline{x}): rule 1\n") }
+    ret 0i32
+}
+
+// underline: \underline{ab}
+fn check_model_28(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\underline{ab}", options, items)
+    if eq_error != ok { ret bad(128i32, "check 128 (\\underline{ab}): typeset refused\n") }
+    if eq.items.len != 3usize { ret bad(128i32, "check 128 (\\underline{ab}): item count\n") }
+    if !near(eq.width, 31.1000, 0.02) || !near(eq.ascent, 14.0000, 0.02) || !near(eq.descent, 3.1000, 0.02) { ret bad(128i32, "check 128 (\\underline{ab}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119886u32, 1u32) { ret bad(128i32, "check 128 (\\underline{ab}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 15.7200, 0.0000, 20.0000, 119887u32, 2u32) { ret bad(128i32, "check 128 (\\underline{ab}): glyph 1\n") }
+    if !is_rule(eq.items[2usize], 0.0000, 1.6000, 31.1000, 0.9000) { ret bad(128i32, "check 128 (\\underline{ab}): rule 2\n") }
+    ret 0i32
+}
+
+// overbrace assembled from parts: \overbrace{xaxaxa}
+fn check_model_29(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\overbrace{xaxaxa}", options, items)
+    if eq_error != ok { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): typeset refused\n") }
+    if eq.items.len != 15usize { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): item count\n") }
+    if !near(eq.width, 91.3800, 0.02) || !near(eq.ascent, 34.9200, 0.02) || !near(eq.descent, 0.0000, 0.02) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 14.7400, 0.0000, 20.0000, 119886u32, 1u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 30.4600, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 2\n") }
+    if !is_glyph(eq.items[3usize], 45.2000, 0.0000, 20.0000, 119886u32, 1u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 3\n") }
+    if !is_glyph(eq.items[4usize], 60.9200, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 4\n") }
+    if !is_glyph(eq.items[5usize], 75.6600, 0.0000, 20.0000, 119886u32, 1u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 5\n") }
+    if !is_glyph(eq.items[6usize], 0.0000, (0.0 - 20.0800), 20.0000, 9182u32, 48u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 6\n") }
+    if !is_glyph(eq.items[7usize], 6.3000, (0.0 - 20.0800), 20.0000, 9182u32, 57u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 7\n") }
+    if !is_glyph(eq.items[8usize], 17.4000, (0.0 - 20.0800), 20.0000, 9182u32, 57u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 8\n") }
+    if !is_glyph(eq.items[9usize], 28.5000, (0.0 - 20.0800), 20.0000, 9182u32, 57u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 9\n") }
+    if !is_glyph(eq.items[10usize], 39.6000, (0.0 - 20.0800), 20.0000, 9182u32, 57u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 10\n") }
+    if !is_glyph(eq.items[11usize], 50.7000, (0.0 - 20.0800), 20.0000, 9182u32, 57u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 11\n") }
+    if !is_glyph(eq.items[12usize], 61.8000, (0.0 - 20.0800), 20.0000, 9182u32, 57u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 12\n") }
+    if !is_glyph(eq.items[13usize], 72.9000, (0.0 - 20.0800), 20.0000, 9182u32, 57u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 13\n") }
+    if !is_glyph(eq.items[14usize], 84.0000, (0.0 - 20.0800), 20.0000, 9182u32, 49u32) { ret bad(129i32, "check 129 (\\overbrace{xaxaxa}): glyph 14\n") }
+    ret 0i32
+}
+
+// overbrace with a label placed as an upper limit: \overbrace{ab}^{x}
+fn check_model_30(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\overbrace{ab}^{x}", options, items)
+    if eq_error != ok { ret bad(130i32, "check 130 (\\overbrace{ab}^{x}): typeset refused\n") }
+    if eq.items.len != 7usize { ret bad(130i32, "check 130 (\\overbrace{ab}^{x}): item count\n") }
+    if !near(eq.width, 33.1200, 0.02) || !near(eq.ascent, 47.4200, 0.02) || !near(eq.descent, 0.0000, 0.02) { ret bad(130i32, "check 130 (\\overbrace{ab}^{x}): extent\n") }
+    if !is_glyph(eq.items[0usize], 1.0100, 0.0000, 20.0000, 119886u32, 1u32) { ret bad(130i32, "check 130 (\\overbrace{ab}^{x}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 16.7300, 0.0000, 20.0000, 119887u32, 2u32) { ret bad(130i32, "check 130 (\\overbrace{ab}^{x}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 0.0000, (0.0 - 20.0800), 20.0000, 9182u32, 48u32) { ret bad(130i32, "check 130 (\\overbrace{ab}^{x}): glyph 2\n") }
+    if !is_glyph(eq.items[3usize], 5.3800, (0.0 - 20.0800), 20.0000, 9182u32, 57u32) { ret bad(130i32, "check 130 (\\overbrace{ab}^{x}): glyph 3\n") }
+    if !is_glyph(eq.items[4usize], 15.5600, (0.0 - 20.0800), 20.0000, 9182u32, 57u32) { ret bad(130i32, "check 130 (\\overbrace{ab}^{x}): glyph 4\n") }
+    if !is_glyph(eq.items[5usize], 25.7400, (0.0 - 20.0800), 20.0000, 9182u32, 49u32) { ret bad(130i32, "check 130 (\\overbrace{ab}^{x}): glyph 5\n") }
+    if !is_glyph(eq.items[6usize], 11.0325, (0.0 - 36.9200), 15.0000, 119909u32, 3u32) { ret bad(130i32, "check 130 (\\overbrace{ab}^{x}): glyph 6\n") }
+    ret 0i32
+}
+
+// underbrace with a label placed as a lower limit: \underbrace{ab}_{x}
+fn check_model_31(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "\\underbrace{ab}_{x}", options, items)
+    if eq_error != ok { ret bad(131i32, "check 131 (\\underbrace{ab}_{x}): typeset refused\n") }
+    if eq.items.len != 8usize { ret bad(131i32, "check 131 (\\underbrace{ab}_{x}): item count\n") }
+    if !near(eq.width, 31.1000, 0.02) || !near(eq.ascent, 14.0000, 0.02) || !near(eq.descent, 33.2200, 0.02) { ret bad(131i32, "check 131 (\\underbrace{ab}_{x}): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119886u32, 1u32) { ret bad(131i32, "check 131 (\\underbrace{ab}_{x}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 15.7200, 0.0000, 20.0000, 119887u32, 2u32) { ret bad(131i32, "check 131 (\\underbrace{ab}_{x}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 0.0000, 16.0400, 20.0000, 9183u32, 52u32) { ret bad(131i32, "check 131 (\\underbrace{ab}_{x}): glyph 2\n") }
+    if !is_glyph(eq.items[3usize], 5.8450, 16.0400, 20.0000, 9183u32, 46u32) { ret bad(131i32, "check 131 (\\underbrace{ab}_{x}): glyph 3\n") }
+    if !is_glyph(eq.items[4usize], 11.6700, 16.0400, 20.0000, 9183u32, 46u32) { ret bad(131i32, "check 131 (\\underbrace{ab}_{x}): glyph 4\n") }
+    if !is_glyph(eq.items[5usize], 17.4950, 16.0400, 20.0000, 9183u32, 46u32) { ret bad(131i32, "check 131 (\\underbrace{ab}_{x}): glyph 5\n") }
+    if !is_glyph(eq.items[6usize], 23.3200, 16.0400, 20.0000, 9183u32, 53u32) { ret bad(131i32, "check 131 (\\underbrace{ab}_{x}): glyph 6\n") }
+    if !is_glyph(eq.items[7usize], 10.0225, 33.2200, 15.0000, 119909u32, 3u32) { ret bad(131i32, "check 131 (\\underbrace{ab}_{x}): glyph 7\n") }
+    ret 0i32
+}
+
+// superscript kerned by the base's top right and the script's bottom left: x^y
+fn check_model_32(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "x^y", options, items)
+    if eq_error != ok { ret bad(132i32, "check 132 (x^y): typeset refused\n") }
+    if eq.items.len != 2usize { ret bad(132i32, "check 132 (x^y): item count\n") }
+    if !near(eq.width, 25.4850, 0.02) || !near(eq.ascent, 18.5000, 0.02) || !near(eq.descent, (0.0 - 0.0000), 0.02) { ret bad(132i32, "check 132 (x^y): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(132i32, "check 132 (x^y): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 14.4900, (0.0 - 8.0000), 15.0000, 119910u32, 4u32) { ret bad(132i32, "check 132 (x^y): glyph 1\n") }
+    ret 0i32
+}
+
+// superscript on a base with only a top right table: a^b
+fn check_model_33(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "a^b", options, items)
+    if eq_error != ok { ret bad(133i32, "check 133 (a^b): typeset refused\n") }
+    if eq.items.len != 2usize { ret bad(133i32, "check 133 (a^b): item count\n") }
+    if !near(eq.width, 28.3550, 0.02) || !near(eq.ascent, 18.5000, 0.02) || !near(eq.descent, (0.0 - 0.0000), 0.02) { ret bad(133i32, "check 133 (a^b): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119886u32, 1u32) { ret bad(133i32, "check 133 (a^b): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 16.2200, (0.0 - 8.0000), 15.0000, 119887u32, 2u32) { ret bad(133i32, "check 133 (a^b): glyph 1\n") }
+    ret 0i32
+}
+
+// subscript kerned by the base's bottom right and the script's top left: x_y
+fn check_model_34(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: false, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "x_y", options, items)
+    if eq_error != ok { ret bad(134i32, "check 134 (x_y): typeset refused\n") }
+    if eq.items.len != 2usize { ret bad(134i32, "check 134 (x_y): item count\n") }
+    if !near(eq.width, 24.5850, 0.02) || !near(eq.ascent, 14.0000, 0.02) || !near(eq.descent, 3.6000, 0.02) { ret bad(134i32, "check 134 (x_y): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(134i32, "check 134 (x_y): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 13.5900, 3.6000, 15.0000, 119910u32, 4u32) { ret bad(134i32, "check 134 (x_y): glyph 1\n") }
+    ret 0i32
+}
+
+// both scripts, display style: x^y_y
+fn check_model_35(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+    let options = math.Options { font: font, size: 20.0000, display: true, notdef: false }
+    let (eq, eq_error) = math.typeset(a, "x^y_y", options, items)
+    if eq_error != ok { ret bad(135i32, "check 135 (x^y_y): typeset refused\n") }
+    if eq.items.len != 3usize { ret bad(135i32, "check 135 (x^y_y): item count\n") }
+    if !near(eq.width, 25.4850, 0.02) || !near(eq.ascent, 18.5000, 0.02) || !near(eq.descent, 6.5000, 0.02) { ret bad(135i32, "check 135 (x^y_y): extent\n") }
+    if !is_glyph(eq.items[0usize], 0.0000, 0.0000, 20.0000, 119909u32, 3u32) { ret bad(135i32, "check 135 (x^y_y): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 14.4900, (0.0 - 8.0000), 15.0000, 119910u32, 4u32) { ret bad(135i32, "check 135 (x^y_y): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 13.7400, 6.5000, 15.0000, 119910u32, 4u32) { ret bad(135i32, "check 135 (x^y_y): glyph 2\n") }
     ret 0i32
 }
 
 // align, two rows: \begin{align}a&=b\\cc&=d\end{align}
-fn check_model_14(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
+fn check_model_36(a: *mem.Arena, items: []math.Item, font: shape.Font) -> i32 {
     let options = math.Options { font: font, size: 20.0000, display: true, notdef: false }
     let (eq, eq_error) = math.typeset(a, "\\begin{align}a&=b\\\\cc&=d\\end{align}", options, items)
-    if eq_error != ok { ret 170i32 }
-    if eq.items.len != 7usize { ret 171i32 }
-    if !near(eq.width, 55.8156, 0.02) || !near(eq.ascent, 29.0000, 0.02) || !near(eq.descent, 19.0000, 0.02) { ret 172i32 }
-    if !is_glyph(eq.items[0usize], 11.5600, (0.0 - 12.2000), 20.0000, 97u32, 588u32) { ret 174i32 }
-    if !is_glyph(eq.items[1usize], 24.1200, (0.0 - 12.2000), 20.0000, 61u32, 2397u32) { ret 174i32 }
-    if !is_glyph(eq.items[2usize], 41.8556, (0.0 - 12.2000), 20.0000, 98u32, 625u32) { ret 174i32 }
-    if !is_glyph(eq.items[3usize], 0.0000, 11.8000, 20.0000, 99u32, 634u32) { ret 174i32 }
-    if !is_glyph(eq.items[4usize], 12.0600, 11.8000, 20.0000, 99u32, 634u32) { ret 174i32 }
-    if !is_glyph(eq.items[5usize], 24.1200, 11.8000, 20.0000, 61u32, 2397u32) { ret 174i32 }
-    if !is_glyph(eq.items[6usize], 41.8556, 11.8000, 20.0000, 100u32, 646u32) { ret 174i32 }
+    if eq_error != ok { ret bad(136i32, "check 136 (\\begin{align}a&=b\\\\cc&=d\\end{align}): typeset refused\n") }
+    if eq.items.len != 7usize { ret bad(136i32, "check 136 (\\begin{align}a&=b\\\\cc&=d\\end{align}): item count\n") }
+    if !near(eq.width, 55.8156, 0.02) || !near(eq.ascent, 29.0000, 0.02) || !near(eq.descent, 19.0000, 0.02) { ret bad(136i32, "check 136 (\\begin{align}a&=b\\\\cc&=d\\end{align}): extent\n") }
+    if !is_glyph(eq.items[0usize], 11.5600, (0.0 - 12.2000), 20.0000, 97u32, 588u32) { ret bad(136i32, "check 136 (\\begin{align}a&=b\\\\cc&=d\\end{align}): glyph 0\n") }
+    if !is_glyph(eq.items[1usize], 24.1200, (0.0 - 12.2000), 20.0000, 61u32, 2397u32) { ret bad(136i32, "check 136 (\\begin{align}a&=b\\\\cc&=d\\end{align}): glyph 1\n") }
+    if !is_glyph(eq.items[2usize], 41.8556, (0.0 - 12.2000), 20.0000, 98u32, 625u32) { ret bad(136i32, "check 136 (\\begin{align}a&=b\\\\cc&=d\\end{align}): glyph 2\n") }
+    if !is_glyph(eq.items[3usize], 0.0000, 11.8000, 20.0000, 99u32, 634u32) { ret bad(136i32, "check 136 (\\begin{align}a&=b\\\\cc&=d\\end{align}): glyph 3\n") }
+    if !is_glyph(eq.items[4usize], 12.0600, 11.8000, 20.0000, 99u32, 634u32) { ret bad(136i32, "check 136 (\\begin{align}a&=b\\\\cc&=d\\end{align}): glyph 4\n") }
+    if !is_glyph(eq.items[5usize], 24.1200, 11.8000, 20.0000, 61u32, 2397u32) { ret bad(136i32, "check 136 (\\begin{align}a&=b\\\\cc&=d\\end{align}): glyph 5\n") }
+    if !is_glyph(eq.items[6usize], 41.8556, 11.8000, 20.0000, 100u32, 646u32) { ret bad(136i32, "check 136 (\\begin{align}a&=b\\\\cc&=d\\end{align}): glyph 6\n") }
     ret 0i32
 }
 
@@ -402,55 +708,117 @@ fn check_extra(a: *mem.Arena, items: []math.Item, plain: shape.Font, math_font: 
     if failed != 0i32 { ret failed }
     failed = check_model_13(a, items, math_font)
     if failed != 0i32 { ret failed }
-    failed = check_model_14(a, items, plain)
+    failed = check_model_14(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_15(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_16(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_17(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_18(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_19(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_20(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_21(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_22(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_23(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_24(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_25(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_26(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_27(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_28(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_29(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_30(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_31(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_32(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_33(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_34(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_35(a, items, math_font)
+    if failed != 0i32 { ret failed }
+    failed = check_model_36(a, items, plain)
     if failed != 0i32 { ret failed }
     // MathML: sum of letters.
-    failed = check_pair(a, math_font, false, "<math><mrow><mi>a</mi><mo>+</mo><mi>x</mi></mrow></math>", "a+x", 180i32)
+    failed = check_pair(a, math_font, false, "<math><mrow><mi>a</mi><mo>+</mo><mi>x</mi></mrow></math>", "a+x", 160i32)
     if failed != 0i32 { ret failed }
     // MathML: superscript.
-    failed = check_pair(a, math_font, false, "<math><msup><mi>x</mi><mn>2</mn></msup></math>", "x^2", 183i32)
+    failed = check_pair(a, math_font, false, "<math><msup><mi>x</mi><mn>2</mn></msup></math>", "x^2", 163i32)
     if failed != 0i32 { ret failed }
     // MathML: subscript and superscript.
-    failed = check_pair(a, math_font, false, "<math><msubsup><mi>x</mi><mn>1</mn><mn>2</mn></msubsup></math>", "x_1^2", 186i32)
+    failed = check_pair(a, math_font, false, "<math><msubsup><mi>x</mi><mn>1</mn><mn>2</mn></msubsup></math>", "x_1^2", 166i32)
     if failed != 0i32 { ret failed }
     // MathML: fraction.
-    failed = check_pair(a, math_font, false, "<math><mfrac><mi>a</mi><mi>b</mi></mfrac></math>", "\\frac{a}{b}", 189i32)
+    failed = check_pair(a, math_font, false, "<math><mfrac><mi>a</mi><mi>b</mi></mfrac></math>", "\\frac{a}{b}", 169i32)
     if failed != 0i32 { ret failed }
     // MathML: fraction of rows.
-    failed = check_pair(a, math_font, false, "<math><mfrac><mrow><mi>a</mi><mo>+</mo><mi>b</mi></mrow><mn>12</mn></mfrac></math>", "\\frac{a+b}{12}", 192i32)
+    failed = check_pair(a, math_font, false, "<math><mfrac><mrow><mi>a</mi><mo>+</mo><mi>b</mi></mrow><mn>12</mn></mfrac></math>", "\\frac{a+b}{12}", 172i32)
     if failed != 0i32 { ret failed }
     // MathML: square root.
-    failed = check_pair(a, math_font, false, "<math><msqrt><mi>x</mi></msqrt></math>", "\\sqrt{x}", 195i32)
+    failed = check_pair(a, math_font, false, "<math><msqrt><mi>x</mi></msqrt></math>", "\\sqrt{x}", 175i32)
     if failed != 0i32 { ret failed }
     // MathML: root with an index.
-    failed = check_pair(a, math_font, false, "<math><mroot><mi>x</mi><mn>3</mn></mroot></math>", "\\sqrt[3]{x}", 198i32)
+    failed = check_pair(a, math_font, false, "<math><mroot><mi>x</mi><mn>3</mn></mroot></math>", "\\sqrt[3]{x}", 178i32)
     if failed != 0i32 { ret failed }
     // MathML: fenced list.
-    failed = check_pair(a, math_font, false, "<math><mfenced open=\"(\" close=\")\"><mi>a</mi><mi>b</mi></mfenced></math>", "\\left(a,b\\right)", 201i32)
+    failed = check_pair(a, math_font, false, "<math><mfenced open=\"(\" close=\")\"><mi>a</mi><mi>b</mi></mfenced></math>", "\\left(a,b\\right)", 181i32)
     if failed != 0i32 { ret failed }
     // MathML: summation with limits.
-    failed = check_pair(a, math_font, true, "<math><munderover><mo>&#x2211;</mo><mi>a</mi><mi>b</mi></munderover></math>", "\\sum_{a}^{b}", 204i32)
+    failed = check_pair(a, math_font, true, "<math><munderover><mo>&#x2211;</mo><mi>a</mi><mi>b</mi></munderover></math>", "\\sum_{a}^{b}", 184i32)
     if failed != 0i32 { ret failed }
     // MathML: table.
-    failed = check_pair(a, math_font, false, "<math><mtable><mtr><mtd><mi>a</mi></mtd><mtd><mi>b</mi></mtd></mtr><mtr><mtd><mi>x</mi></mtd><mtd><mi>y</mi></mtd></mtr></mtable></math>", "\\begin{matrix}a&b\\\\x&y\\end{matrix}", 207i32)
+    failed = check_pair(a, math_font, false, "<math><mtable><mtr><mtd><mi>a</mi></mtd><mtd><mi>b</mi></mtd></mtr><mtr><mtd><mi>x</mi></mtd><mtd><mi>y</mi></mtd></mtr></mtable></math>", "\\begin{matrix}a&b\\\\x&y\\end{matrix}", 187i32)
     if failed != 0i32 { ret failed }
     // MathML: function name and entity.
-    failed = check_pair(a, math_font, false, "<math><mi>sin</mi><mo>&#x2061;</mo><mi>x</mi><mo>&#x2212;</mo><mn>1</mn></math>", "\\sin x-1", 210i32)
+    failed = check_pair(a, math_font, false, "<math><mi>sin</mi><mo>&#x2061;</mo><mi>x</mi><mo>&#x2212;</mo><mn>1</mn></math>", "\\sin x-1", 190i32)
     if failed != 0i32 { ret failed }
     // MathML: text.
-    failed = check_pair(a, math_font, false, "<math><mtext>if</mtext><mi>x</mi></math>", "\\text{if}x", 213i32)
+    failed = check_pair(a, math_font, false, "<math><mtext>if</mtext><mi>x</mi></math>", "\\text{if}x", 193i32)
+    if failed != 0i32 { ret failed }
+    // MathML: accented mover.
+    failed = check_pair(a, math_font, false, "<math><mover accent=\"true\"><mi>x</mi><mo>^</mo></mover></math>", "\\overaccent{^}{x}", 196i32)
+    if failed != 0i32 { ret failed }
+    // MathML: accent from the operator without the attribute.
+    failed = check_pair(a, math_font, false, "<math><mover><mi>x</mi><mo>&#x303;</mo></mover></math>", "\\overaccent{̃}{x}", 199i32)
+    if failed != 0i32 { ret failed }
+    // MathML: under accent.
+    failed = check_pair(a, math_font, false, "<math><munder accentunder=\"true\"><mrow><mi>a</mi><mi>b</mi></mrow><mo>~</mo></munder></math>", "\\underaccent{~}{ab}", 202i32)
+    if failed != 0i32 { ret failed }
+    // MathML: over brace.
+    failed = check_pair(a, math_font, false, "<math><mover><mrow><mi>a</mi><mi>b</mi></mrow><mo>&#x23DE;</mo></mover></math>", "\\overbrace{ab}", 205i32)
+    if failed != 0i32 { ret failed }
+    // MathML: under brace.
+    failed = check_pair(a, math_font, false, "<math><munder><mrow><mi>a</mi><mi>b</mi></mrow><mo>&#x23DF;</mo></munder></math>", "\\underbrace{ab}", 208i32)
+    if failed != 0i32 { ret failed }
+    // MathML: a letter over is a script, not an accent.
+    failed = check_pair(a, math_font, false, "<math><mover><mi>x</mi><mi>y</mi></mover></math>", "x^y", 211i32)
     if failed != 0i32 { ret failed }
     // MathML that is not well formed or not in the subset is refused.
     let (_, refused_0) = math.typeset_mathml(a, "<math><mi>a</mi>", math.Options { font: math_font, size: 20.0, display: false, notdef: false }, items)
-    if refused_0 != math.Invalid { ret 216i32 }
+    if refused_0 != math.Invalid { ret 214i32 }
     let (_, refused_1) = math.typeset_mathml(a, "<math><mfoo/></math>", math.Options { font: math_font, size: 20.0, display: false, notdef: false }, items)
-    if refused_1 != math.Invalid { ret 217i32 }
+    if refused_1 != math.Invalid { ret 215i32 }
     let (_, refused_2) = math.typeset_mathml(a, "<math><mi>a</mi></mrow>", math.Options { font: math_font, size: 20.0, display: false, notdef: false }, items)
-    if refused_2 != math.Invalid { ret 218i32 }
+    if refused_2 != math.Invalid { ret 216i32 }
     let (_, refused_3) = math.typeset_mathml(a, "<math><mo>&bogus;</mo></math>", math.Options { font: math_font, size: 20.0, display: false, notdef: false }, items)
-    if refused_3 != math.Invalid { ret 219i32 }
+    if refused_3 != math.Invalid { ret 217i32 }
     let (_, refused_4) = math.typeset_mathml(a, "<math><mi>a</mi></math>trailing", math.Options { font: math_font, size: 20.0, display: false, notdef: false }, items)
-    if refused_4 != math.Invalid { ret 220i32 }
+    if refused_4 != math.Invalid { ret 218i32 }
     // The scene draws the equation.
     failed = check_draw(a, plain, items)
     if failed != 0i32 { ret failed }

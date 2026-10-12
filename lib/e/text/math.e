@@ -40,8 +40,22 @@
 // `msub` `msubsup` `munder` `mover` `munderover` `mfrac` `msqrt` `mroot` `mfenced`
 // `mtable` `mtr` `mtd` `mstyle` `mspace`) by translating it to the LaTeX subset
 // above and laying that out, so the two inputs share every rule. `munder` and `mover`
-// are laid out as a subscript and a superscript (limits on a big operator in
-// display style), which is not MathML's accent placement.
+// are laid out as a subscript and a superscript (limits on a big operator in display
+// style) unless the second child is an `mo` of one accent or brace character (and
+// `accent`/`accentunder` is not "false"): that is `\overaccent{c}{base}`,
+// `\underaccent{c}{base}` or `\overbrace`, `\underbrace`, set as wide as the base.
+//
+// Also (L098, D3702): the alphabets `\mathbf` `\mathbfit` `\boldsymbol` `\mathcal`
+// `\mathscr` `\mathfrak` `\mathbb` `\mathsf` `\mathtt` `\mathit` (Mathematical
+// Alphanumeric Symbols, the Letterlike holes included, when the font has the glyph; a
+// letter it lacks stays as written); accents `\hat` `\check` `\tilde` `\acute` `\grave`
+// `\dot` `\ddot` `\breve` `\bar` `\vec` `\mathring` (combining forms, centred by the two
+// MathTopAccentAttachment points, else half the advance, and raised by the base's
+// height over AccentBaseHeight), `\widehat` `\widetilde` (a horizontal variant or
+// assembly as wide as the base), `\overline` `\underline` (the Overbar and Underbar
+// constants), `\overbrace` `\underbrace` (U+23DE and U+23DF stretched to the body, a
+// StretchStack gap away, an operator with limits so `^` and `_` set a label beyond);
+// and MathKernInfo cut-ins between a one-glyph base and a one-glyph script.
 //
 // `to_layout` turns the glyph items into an `e.text.layout.Layout` of one run per
 // glyph, which `e.gfx.scene` draws as a `DrawText`; the rule items are rectangles the
@@ -78,7 +92,7 @@ const STYLE_CRAMPED: u32 = 4u32
 
 // A laid-out piece: its items are `first..last` of the shared list, positioned
 // relative to its own origin on the baseline.
-type Atom = struct { class: u8, first: usize, last: usize, width: f32, height: f32, depth: f32, simple: bool, limits: bool }
+type Atom = struct { class: u8, first: usize, last: usize, width: f32, height: f32, depth: f32, simple: bool, limits: bool, stretch: bool }
 
 // Layout constants in ems of the size: TeX's cmsy and cmex values, or the font's MATH
 // table's when it has one.
@@ -118,6 +132,15 @@ type Consts = struct {
     rad_raise: f32,
     delim_min: f32,
     op_min: f32,
+    accent_base: f32,
+    over_gap: f32,
+    over_rule: f32,
+    over_extra: f32,
+    under_gap: f32,
+    under_rule: f32,
+    under_extra: f32,
+    stretch_above: f32,
+    stretch_below: f32,
 }
 
 type Ctx = struct {
@@ -144,6 +167,7 @@ type Ctx = struct {
     consts_at: usize,
     info_at: usize,
     variants_at: usize,
+    alphabet: u8,
     k: Consts,
 }
 
@@ -284,6 +308,17 @@ fn default_consts(xh: f32) -> Consts {
     k.rad_raise = 0.6
     k.delim_min = 1.2
     k.op_min = 0.0
+    // TeX's rule 9 and 12: an overline sits 3 rule thicknesses above the body under one thickness
+    // of rule and one of extra height; an accent is designed for the x-height.
+    k.accent_base = xh
+    k.over_gap = 0.12
+    k.over_rule = 0.04
+    k.over_extra = 0.04
+    k.under_gap = 0.12
+    k.under_rule = 0.04
+    k.under_extra = 0.04
+    k.stretch_above = 0.12
+    k.stretch_below = 0.12
     ret k
 }
 
@@ -318,6 +353,15 @@ fn load_math(c: *Ctx) {
     k.delim_min = f32(be16(d, c.consts_at + 4usize)) / c.upem
     k.op_min = f32(be16(d, c.consts_at + 6usize)) / c.upem
     k.axis = math_value(c, 1usize)
+    k.accent_base = math_value(c, 2usize)
+    k.stretch_above = math_value(c, 26usize)
+    k.stretch_below = math_value(c, 27usize)
+    k.over_gap = math_value(c, 39usize)
+    k.over_rule = math_value(c, 40usize)
+    k.over_extra = math_value(c, 41usize)
+    k.under_gap = math_value(c, 42usize)
+    k.under_rule = math_value(c, 43usize)
+    k.under_extra = math_value(c, 44usize)
     k.sub_only = math_value(c, 4usize)
     k.sub_both = k.sub_only
     k.sub_top_max = math_value(c, 5usize)
@@ -400,6 +444,58 @@ fn construction_of(c: *Ctx, gid: u32) -> usize {
     let offset = usize(be16(d, c.variants_at + 10usize + 2usize * index))
     if offset == 0usize { ret NONE }
     ret c.variants_at + offset
+}
+
+// The horizontal GlyphConstruction table of a glyph, or NONE.
+fn construction_h(c: *Ctx, gid: u32) -> usize {
+    if c.variants_at == NONE || gid == 0u32 { ret NONE }
+    let d = c.font.data
+    let cov = usize(be16(d, c.variants_at + 4usize))
+    if cov == 0usize { ret NONE }
+    let index = coverage_pos(d, c.variants_at + cov, gid)
+    let vertical = usize(be16(d, c.variants_at + 6usize))
+    if index == NONE || index >= usize(be16(d, c.variants_at + 8usize)) { ret NONE }
+    let offset = usize(be16(d, c.variants_at + 10usize + 2usize * vertical + 2usize * index))
+    if offset == 0usize { ret NONE }
+    ret c.variants_at + offset
+}
+
+// The top accent attachment point of a glyph in layout units (MathGlyphInfo), false when the
+// glyph has none.
+fn top_attach(c: *Ctx, gid: u32, size: f32) -> (f32, bool) {
+    if c.info_at == NONE { ret (0.0, false) }
+    let d = c.font.data
+    let table = usize(be16(d, c.info_at + 2usize))
+    if table == 0usize { ret (0.0, false) }
+    let at = c.info_at + table
+    let cov = usize(be16(d, at))
+    if cov == 0usize { ret (0.0, false) }
+    let index = coverage_pos(d, at + cov, gid)
+    if index == NONE || index >= usize(be16(d, at + 2usize)) { ret (0.0, false) }
+    ret (f32(be16s(d, at + 4usize + 4usize * index)) / c.upem * size, true)
+}
+
+// The cut-in kern of a glyph's corner (0 top right, 1 top left, 2 bottom right, 3 bottom left)
+// at `height` above its baseline, in layout units of a glyph set at `size`: MathKernInfo's step
+// function, the first record whose correction height is above `height`, else the last.
+fn kern_at(c: *Ctx, gid: u32, corner: usize, height: f32, size: f32) -> f32 {
+    if c.info_at == NONE || size <= 0.0 { ret 0.0 }
+    let d = c.font.data
+    let offset = usize(be16(d, c.info_at + 6usize))
+    if offset == 0usize { ret 0.0 }
+    let info = c.info_at + offset
+    let cov = usize(be16(d, info))
+    if cov == 0usize { ret 0.0 }
+    let index = coverage_pos(d, info + cov, gid)
+    if index == NONE || index >= usize(be16(d, info + 2usize)) { ret 0.0 }
+    let table_offset = usize(be16(d, info + 4usize + 8usize * index + 2usize * corner))
+    if table_offset == 0usize { ret 0.0 }
+    let table = info + table_offset
+    let count = usize(be16(d, table))
+    let units = height / size * c.upem
+    var i = 0usize
+    while i < count && units >= f32(be16s(d, table + 2usize + 4usize * i)) { i += 1usize }
+    ret f32(be16s(d, table + 2usize + 4usize * count + 4usize * i)) / c.upem * size
 }
 
 fn push_item(c: *Ctx, item: Item) {
@@ -595,6 +691,87 @@ fn math_italic(c: *Ctx, scalar: u32) -> u32 {
     ret want
 }
 
+// The alphabets `\mathbf` and friends select (Mathematical Alphanumeric Symbols).
+const ALPHA_ITALIC: u8 = 0u8
+const ALPHA_BOLD: u8 = 1u8
+const ALPHA_BOLD_ITALIC: u8 = 2u8
+const ALPHA_SCRIPT: u8 = 3u8
+const ALPHA_FRAKTUR: u8 = 4u8
+const ALPHA_DOUBLE: u8 = 5u8
+const ALPHA_SANS: u8 = 6u8
+const ALPHA_MONO: u8 = 7u8
+const ALPHA_UPRIGHT: u8 = 8u8
+
+// The scalar of `letter` ('A'..'Z' index 0..25, or 26..51 for 'a'..'z') in a block that starts at
+// `upper_base`, with the Letterlike Symbols block's holes patched where Unicode puts them.
+fn letter_in(alphabet: u8, index: u32) -> u32 {
+    if alphabet == ALPHA_SCRIPT {
+        // B E F H I L M R, e g o live in Letterlike Symbols.
+        if index == 1u32 { ret 8492u32 }
+        if index == 4u32 { ret 8496u32 }
+        if index == 5u32 { ret 8497u32 }
+        if index == 7u32 { ret 8459u32 }
+        if index == 8u32 { ret 8464u32 }
+        if index == 11u32 { ret 8466u32 }
+        if index == 12u32 { ret 8499u32 }
+        if index == 17u32 { ret 8475u32 }
+        if index == 30u32 { ret 8495u32 }
+        if index == 32u32 { ret 8458u32 }
+        if index == 40u32 { ret 8500u32 }
+        ret 119964u32 + index
+    }
+    if alphabet == ALPHA_FRAKTUR {
+        if index == 2u32 { ret 8493u32 }
+        if index == 7u32 { ret 8460u32 }
+        if index == 8u32 { ret 8465u32 }
+        if index == 17u32 { ret 8476u32 }
+        if index == 25u32 { ret 8488u32 }
+        ret 120068u32 + index
+    }
+    if alphabet == ALPHA_DOUBLE {
+        if index == 2u32 { ret 8450u32 }
+        if index == 7u32 { ret 8461u32 }
+        if index == 13u32 { ret 8469u32 }
+        if index == 15u32 { ret 8473u32 }
+        if index == 16u32 { ret 8474u32 }
+        if index == 17u32 { ret 8477u32 }
+        if index == 25u32 { ret 8484u32 }
+        ret 120120u32 + index
+    }
+    if alphabet == ALPHA_BOLD { ret 119808u32 + index }
+    if alphabet == ALPHA_BOLD_ITALIC { ret 119912u32 + index }
+    if alphabet == ALPHA_SANS { ret 120224u32 + index }
+    if alphabet == ALPHA_MONO { ret 120432u32 + index }
+    ret 0u32
+}
+
+// `scalar` in the alphabet `\mathbf`, `\mathcal`, `\mathbb`, `\mathfrak`, `\mathsf`, `\mathtt` or
+// `\boldsymbol` selected, when the font has a glyph for the result; otherwise the scalar itself.
+// Bold and bold italic also take the Greek letters and the sans, mono and double-struck faces the
+// digits, as Unicode has them. `\mathit` (and no command) is `math_italic`.
+fn alphabet_scalar(c: *Ctx, scalar: u32) -> u32 {
+    if c.alphabet == ALPHA_ITALIC { ret math_italic(c, scalar) }
+    if c.alphabet == ALPHA_UPRIGHT { ret scalar }
+    var want = 0u32
+    if scalar >= 65u32 && scalar <= 90u32 {
+        want = letter_in(c.alphabet, scalar - 65u32)
+    } else if scalar >= 97u32 && scalar <= 122u32 {
+        want = letter_in(c.alphabet, scalar - 97u32 + 26u32)
+    } else if scalar >= 48u32 && scalar <= 57u32 {
+        var base = 0u32
+        if c.alphabet == ALPHA_BOLD || c.alphabet == ALPHA_BOLD_ITALIC { base = 120782u32 }
+        if c.alphabet == ALPHA_DOUBLE { base = 120792u32 }
+        if c.alphabet == ALPHA_SANS { base = 120802u32 }
+        if c.alphabet == ALPHA_MONO { base = 120822u32 }
+        if base != 0u32 { want = base + (scalar - 48u32) }
+    } else if scalar >= 945u32 && scalar <= 969u32 {
+        if c.alphabet == ALPHA_BOLD { want = 120514u32 + (scalar - 945u32) }
+        if c.alphabet == ALPHA_BOLD_ITALIC { want = 120630u32 + (scalar - 945u32) }
+    }
+    if want == 0u32 || scalar_gid(c, want) == 0u32 { ret scalar }
+    ret want
+}
+
 fn greek_names() -> str {
     ret "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega"
 }
@@ -714,6 +891,7 @@ fn as_atom(b: Atom, class: u8) -> Atom {
     out.class = class
     out.simple = false
     out.limits = false
+    out.stretch = false
     ret out
 }
 
@@ -842,7 +1020,7 @@ fn parse_atom(c: *Ctx, style: u32) -> Atom {
     let ss = c.size * style_scale(c, sstyle)
     let display = c.display && style_base(style) == 0u32
     // Limits over and under a big operator in display style.
-    if nucleus.limits && display {
+    if nucleus.limits && (display || nucleus.stretch) {
         var width = nucleus.width
         if has_sup { width = maxf(width, sup.width) }
         if has_sub { width = maxf(width, sub.width) }
@@ -866,6 +1044,7 @@ fn parse_atom(c: *Ctx, style: u32) -> Atom {
         out.depth = depth
         out.simple = false
         out.limits = false
+        out.stretch = false
         ret out
     }
     var up_shift: f32 = 0.0
@@ -904,19 +1083,42 @@ fn parse_atom(c: *Ctx, style: u32) -> Atom {
         let last_item = c.items[nucleus.last - 1usize]
         if last_item.kind == .Glyph { correction = italic_correction(c, last_item.glyph) * last_item.size }
     }
+    // MathKernInfo: a single-glyph base and a single-glyph script cut into each other's corners. The
+    // base's corner is read at the height of the script's near edge above the base's baseline, the
+    // script's corner at the height of the base's near edge above the script's baseline.
+    var sup_kern: f32 = 0.0
+    var sub_kern: f32 = 0.0
+    let base_glyph = nucleus.simple && nucleus.last == nucleus.first + 1usize && c.items[nucleus.first].kind == .Glyph
+    if base_glyph {
+        let base_item = c.items[nucleus.first]
+        if has_sup {
+            sup_kern = kern_at(c, base_item.glyph, 0usize, up_shift - sup.depth, base_item.size)
+            if sup.simple && sup.last == sup.first + 1usize && c.items[sup.first].kind == .Glyph {
+                let script_item = c.items[sup.first]
+                sup_kern += kern_at(c, script_item.glyph, 3usize, nucleus.height - up_shift, script_item.size)
+            }
+        }
+        if has_sub {
+            sub_kern = kern_at(c, base_item.glyph, 2usize, sub.height - down_shift, base_item.size)
+            if sub.simple && sub.last == sub.first + 1usize && c.items[sub.first].kind == .Glyph {
+                let script_item = c.items[sub.first]
+                sub_kern += kern_at(c, script_item.glyph, 1usize, down_shift - nucleus.depth, script_item.size)
+            }
+        }
+    }
     var width = nucleus.width
     var height = nucleus.height
     var depth = nucleus.depth
     let script_space = c.k.script_space * s
     if has_sup {
-        shift_range(c, sup.first, sup.last, nucleus.width + correction, 0.0 - up_shift)
-        width = maxf(width, nucleus.width + correction + sup.width + script_space)
+        shift_range(c, sup.first, sup.last, nucleus.width + correction + sup_kern, 0.0 - up_shift)
+        width = maxf(width, nucleus.width + correction + sup_kern + sup.width + script_space)
         height = maxf(height, up_shift + sup.height)
         depth = maxf(depth, sup.depth - up_shift)
     }
     if has_sub {
-        shift_range(c, sub.first, sub.last, nucleus.width, down_shift)
-        width = maxf(width, nucleus.width + sub.width + script_space)
+        shift_range(c, sub.first, sub.last, nucleus.width + sub_kern, down_shift)
+        width = maxf(width, nucleus.width + sub_kern + sub.width + script_space)
         depth = maxf(depth, down_shift + sub.depth)
         height = maxf(height, sub.height - down_shift)
     }
@@ -927,6 +1129,7 @@ fn parse_atom(c: *Ctx, style: u32) -> Atom {
     out.depth = depth
     out.simple = false
     out.limits = false
+    out.stretch = false
     ret out
 }
 
@@ -1046,6 +1249,113 @@ fn grown(c: *Ctx, scalar: u32, need: f32, size: f32, class: u8) -> Atom {
     let k = need / ink
     c.count = probe.first
     ret glyph_atom(c, scalar, size * k, class)
+}
+
+// The glyph `scalar` at least `need` wide: itself when its advance is, else the font's first
+// horizontal variant whose declared advance reaches it, else an assembly of left-to-right parts
+// (extenders repeated until the overlapped total reaches `need`, then overlapped further as far as
+// the joined connectors allow), else the widest variant, else the glyph as it is. Every piece sits on
+// the atom's baseline; the atom's width is the advance (the assembly's total).
+fn grown_h(c: *Ctx, scalar: u32, need: f32, size: f32, class: u8) -> Atom {
+    let probe = glyph_atom(c, scalar, size, class)
+    if c.status != ok { ret probe }
+    if !(need > probe.width) { ret probe }
+    let d = c.font.data
+    let cons = construction_h(c, c.items[probe.first].glyph)
+    if cons == NONE { ret probe }
+    let variants = usize(be16(d, cons + 2usize))
+    var v = 0usize
+    while v < variants {
+        let record = cons + 4usize + 4usize * v
+        if f32(be16(d, record + 2usize)) / c.upem * size >= need {
+            c.count = probe.first
+            var picked = id_atom(c, be16(d, record), scalar, size, class)
+            picked.simple = false
+            ret picked
+        }
+        v += 1usize
+    }
+    let assembly = usize(be16(d, cons))
+    if assembly != 0usize {
+        let at = cons + assembly
+        let parts = usize(be16(d, at + 4usize))
+        let first_part = at + 6usize
+        let min_overlap = f32(be16(d, c.variants_at)) / c.upem * size
+        var fixed: f32 = 0.0
+        var repeated: f32 = 0.0
+        var extenders = 0usize
+        var p = 0usize
+        while p < parts {
+            let advance = f32(be16(d, first_part + 10usize * p + 6usize)) / c.upem * size
+            if be16(d, first_part + 10usize * p + 8usize) & 1u32 != 0u32 {
+                repeated += advance
+                extenders += 1usize
+            } else {
+                fixed += advance
+            }
+            p += 1usize
+        }
+        if parts > 0usize && (extenders > 0usize || fixed > 0.0) {
+            var reps = 1usize
+            var total = fixed + repeated - f32(parts - 1usize) * min_overlap
+            while extenders > 0usize && total < need && reps < 64usize {
+                reps += 1usize
+                total = fixed + repeated * f32(reps) - f32(parts - extenders + extenders * reps - 1usize) * min_overlap
+            }
+            let joints = parts - extenders + extenders * reps - 1usize
+            var extra: f32 = 0.0
+            if joints > 0usize && total > need { extra = (total - need) / f32(joints) }
+            c.count = probe.first
+            let out_first = c.count
+            var pen: f32 = 0.0
+            var previous_end: f32 = 0.0
+            var placed = 0usize
+            var top: f32 = 0.0
+            var bottom: f32 = 0.0
+            var q = 0usize
+            while q < parts {
+                var times = 1usize
+                if be16(d, first_part + 10usize * q + 8usize) & 1u32 != 0u32 { times = reps }
+                var t = 0usize
+                while t < times {
+                    let part_id = be16(d, first_part + 10usize * q)
+                    let advance = f32(be16(d, first_part + 10usize * q + 6usize)) / c.upem * size
+                    let start_connector = f32(be16(d, first_part + 10usize * q + 2usize)) / c.upem * size
+                    if placed > 0usize {
+                        // Overlap more than the minimum only as far as both connectors reach.
+                        let overlap = min_overlap + minf(extra, maxf(minf(previous_end, start_connector) - min_overlap, 0.0))
+                        pen = pen - overlap
+                    }
+                    let piece = id_atom(c, part_id, scalar, size, class)
+                    if c.status != ok { ret piece }
+                    c.items[piece.first].x = pen
+                    top = maxf(top, piece.height)
+                    bottom = maxf(bottom, piece.depth)
+                    pen = pen + advance
+                    previous_end = f32(be16(d, first_part + 10usize * q + 4usize)) / c.upem * size
+                    placed += 1usize
+                    t += 1usize
+                }
+                q += 1usize
+            }
+            var out: Atom = zero
+            out.class = class
+            out.first = out_first
+            out.last = c.count
+            out.width = pen
+            out.height = top
+            out.depth = bottom
+            ret out
+        }
+    }
+    if variants > 0usize {
+        let record = cons + 4usize + 4usize * (variants - 1usize)
+        c.count = probe.first
+        var biggest = id_atom(c, be16(d, record), scalar, size, class)
+        biggest.simple = false
+        ret biggest
+    }
+    ret probe
 }
 
 // The delimiter glyph `scalar` grown so its ink spans `span_h`, centred on the
@@ -1465,7 +1775,7 @@ fn parse_nucleus(c: *Ctx, style: u32) -> Atom {
         c.pos += step
         var mapped = scalar
         if scalar == 45u32 { mapped = 8722u32 }
-        ret glyph_atom(c, math_italic(c, mapped), s, char_class(mapped))
+        ret glyph_atom(c, alphabet_scalar(c, mapped), s, char_class(mapped))
     }
     c.pos += 1usize
     let word = command_word(c)
@@ -1475,6 +1785,39 @@ fn parse_nucleus(c: *Ctx, style: u32) -> Atom {
     }
     if word_is(word, "frac") { ret lay_fraction(c, style) }
     if word_is(word, "sqrt") { ret lay_radical(c, style) }
+    let alpha = alphabet_of(word)
+    if alpha != 255u8 {
+        // `\mathbf{...}` and the like: the group's letters and digits in that alphabet.
+        let saved = c.alphabet
+        c.alphabet = alpha
+        let arg = parse_argument(c, style)
+        c.alphabet = saved
+        ret as_atom(arg, CLASS_ORD)
+    }
+    let accent = accent_scalar(word)
+    if accent != 0u32 {
+        let base = parse_argument(c, style | STYLE_CRAMPED)
+        ret accent_over(c, base, accent, word_is(word, "widehat") || word_is(word, "widetilde"), false, s)
+    }
+    if word_is(word, "overline") { ret lay_bar(c, style, true) }
+    if word_is(word, "underline") { ret lay_bar(c, style, false) }
+    if word_is(word, "overbrace") { ret lay_brace(c, style, true) }
+    if word_is(word, "underbrace") { ret lay_brace(c, style, false) }
+    if word_is(word, "overaccent") || word_is(word, "underaccent") {
+        // `\overaccent{c}{base}`: the translation of MathML's accented `mover` and `munder`, the
+        // accent named by a character (a brace character is `\overbrace`), set as wide as the base.
+        expect_byte(c, 123u8)
+        let (accent_char, accent_step) = unicode.read_utf8(c.src, c.pos)
+        c.pos += accent_step
+        expect_byte(c, 125u8)
+        let under = word_is(word, "underaccent")
+        if accent_char == 9182u32 { ret lay_brace(c, style, true) }
+        if accent_char == 9183u32 { ret lay_brace(c, style, false) }
+        var arg_style = style
+        if !under { arg_style = style | STYLE_CRAMPED }
+        let base = parse_argument(c, arg_style)
+        ret accent_over(c, base, accent_form(accent_char), true, under, s)
+    }
     if word_is(word, "text") || word_is(word, "mathrm") { ret lay_text(c, style) }
     if word_is(word, "begin") { ret lay_environment(c, style) }
     if word_is(word, "left") {
@@ -1543,8 +1886,152 @@ fn parse_nucleus(c: *Ctx, style: u32) -> Atom {
         ret op
     }
     let (scalar, class) = symbol_of(word)
-    if scalar != 0u32 { ret glyph_atom(c, math_italic(c, scalar), s, class) }
+    if scalar != 0u32 { ret glyph_atom(c, alphabet_scalar(c, scalar), s, class) }
     fail(c, Invalid)
+    ret out
+}
+
+// The alphabet a font command names, or 255 for a word that is not one.
+fn alphabet_of(word: str) -> u8 {
+    if word_is(word, "mathbf") || word_is(word, "mathbfup") { ret ALPHA_BOLD }
+    if word_is(word, "boldsymbol") || word_is(word, "mathbfit") { ret ALPHA_BOLD_ITALIC }
+    if word_is(word, "mathcal") || word_is(word, "mathscr") { ret ALPHA_SCRIPT }
+    if word_is(word, "mathfrak") { ret ALPHA_FRAKTUR }
+    if word_is(word, "mathbb") { ret ALPHA_DOUBLE }
+    if word_is(word, "mathsf") { ret ALPHA_SANS }
+    if word_is(word, "mathtt") { ret ALPHA_MONO }
+    if word_is(word, "mathit") { ret ALPHA_ITALIC }
+    ret 255u8
+}
+
+// The combining accent a LaTeX accent command names, or 0.
+fn accent_scalar(word: str) -> u32 {
+    if word_is(word, "hat") || word_is(word, "widehat") { ret 770u32 }
+    if word_is(word, "tilde") || word_is(word, "widetilde") { ret 771u32 }
+    if word_is(word, "bar") { ret 772u32 }
+    if word_is(word, "breve") { ret 774u32 }
+    if word_is(word, "dot") { ret 775u32 }
+    if word_is(word, "ddot") { ret 776u32 }
+    if word_is(word, "mathring") { ret 778u32 }
+    if word_is(word, "check") { ret 780u32 }
+    if word_is(word, "acute") { ret 769u32 }
+    if word_is(word, "grave") { ret 768u32 }
+    if word_is(word, "vec") { ret 8407u32 }
+    ret 0u32
+}
+
+// An accent given as a character (as MathML names them): the combining form it stands for, or the
+// character itself.
+fn accent_form(scalar: u32) -> u32 {
+    if scalar == 94u32 || scalar == 710u32 { ret 770u32 }
+    if scalar == 126u32 || scalar == 732u32 { ret 771u32 }
+    if scalar == 175u32 || scalar == 8254u32 { ret 772u32 }
+    if scalar == 728u32 { ret 774u32 }
+    if scalar == 729u32 { ret 775u32 }
+    if scalar == 168u32 { ret 776u32 }
+    if scalar == 730u32 { ret 778u32 }
+    if scalar == 711u32 { ret 780u32 }
+    if scalar == 180u32 { ret 769u32 }
+    if scalar == 96u32 { ret 768u32 }
+    if scalar == 8594u32 { ret 8407u32 }
+    ret scalar
+}
+
+// An accent over (or under) `base`, laid out; `wide` picks a horizontal variant as wide as the base.
+// The accent is centred by the two attachment points (a glyph's MathTopAccentAttachment, else half its
+// advance) and raised by the base's height over the font's AccentBaseHeight when it has more.
+fn accent_over(c: *Ctx, base: Atom, scalar: u32, wide: bool, below: bool, size: f32) -> Atom {
+    var out = base
+    if c.status != ok { ret out }
+    var accent: Atom = zero
+    if wide { accent = grown_h(c, scalar, base.width, size, CLASS_ORD) } else { accent = glyph_atom(c, scalar, size, CLASS_ORD) }
+    if c.status != ok { ret out }
+    var base_attach = base.width / 2.0
+    if base.last == base.first + 1usize && c.items[base.first].kind == .Glyph {
+        let item = c.items[base.first]
+        let (point, has_point) = top_attach(c, item.glyph, item.size)
+        if has_point { base_attach = point }
+    }
+    var accent_attach = accent.width / 2.0
+    if accent.last == accent.first + 1usize {
+        let (point, has_point) = top_attach(c, c.items[accent.first].glyph, size)
+        if has_point { accent_attach = point }
+    }
+    var lift = 0.0f32
+    var drop = 0.0f32
+    if below {
+        drop = base.depth + c.k.under_gap * size + accent.height
+    } else {
+        lift = maxf(0.0, base.height - c.k.accent_base * size)
+    }
+    shift_range(c, accent.first, accent.last, base_attach - accent_attach, drop - lift)
+    out.last = c.count
+    out.simple = false
+    out.limits = false
+    out.class = CLASS_ORD
+    if below {
+        out.depth = maxf(base.depth, drop + accent.depth)
+    } else {
+        out.height = maxf(base.height, lift + accent.height)
+    }
+    ret out
+}
+
+// `\overline`, `\underline`: a rule across the body with the font's gap and extra extent.
+fn lay_bar(c: *Ctx, style: u32, over: bool) -> Atom {
+    var arg_style = style
+    if over { arg_style = style | STYLE_CRAMPED }
+    let body = parse_argument(c, arg_style)
+    var out = body
+    if c.status != ok { ret out }
+    let s = c.size * style_scale(c, style)
+    if over {
+        let gap = c.k.over_gap * s
+        let thick = c.k.over_rule * s
+        push_rule(c, 0.0, 0.0 - (body.height + gap + thick), body.width, thick)
+        out.height = body.height + gap + thick + c.k.over_extra * s
+    } else {
+        let gap = c.k.under_gap * s
+        let thick = c.k.under_rule * s
+        push_rule(c, 0.0, body.depth + gap, body.width, thick)
+        out.depth = body.depth + gap + thick + c.k.under_extra * s
+    }
+    out.last = c.count
+    out.simple = false
+    out.limits = false
+    out.class = CLASS_ORD
+    ret out
+}
+
+// `\overbrace`, `\underbrace`: the brace glyph stretched to the body's width, a gap from it, an
+// operator with limits so that `^` and `_` place a label beyond the brace.
+fn lay_brace(c: *Ctx, style: u32, over: bool) -> Atom {
+    let body = parse_argument(c, style)
+    var out = body
+    if c.status != ok { ret out }
+    let s = c.size * style_scale(c, style)
+    var scalar = 9183u32
+    if over { scalar = 9182u32 }
+    let brace = grown_h(c, scalar, body.width, s, CLASS_ORD)
+    if c.status != ok { ret out }
+    // The brace's ink sits `gap` clear of the body (StretchStackGapBelowMin above it, AboveMin under it).
+    let centre = (maxf(body.width, brace.width) - brace.width) / 2.0
+    if over {
+        let gap = c.k.stretch_below * s
+        shift_range(c, brace.first, brace.last, centre, 0.0 - (body.height + gap + brace.depth))
+        out.height = body.height + gap + brace.depth + brace.height
+    } else {
+        let gap = c.k.stretch_above * s
+        shift_range(c, brace.first, brace.last, centre, body.depth + gap + brace.height)
+        out.depth = body.depth + gap + brace.height + brace.depth
+    }
+    if brace.width > body.width { shift_range(c, body.first, body.last, (brace.width - body.width) / 2.0, 0.0) }
+    out.width = maxf(body.width, brace.width)
+    out.last = c.count
+    out.simple = false
+    out.limits = true
+    out.stretch = true
+    out.class = CLASS_OP
     ret out
 }
 
@@ -1991,6 +2478,60 @@ fn ml_delimiter(m: *Ml, value: str) {
     }
 }
 
+// An `mover` or `munder` whose second child is a single accent or brace character in an `mo`
+// (and whose `accent`/`accentunder` is not "false") is that accent or brace, not a script: it
+// becomes `\overaccent{c}{base}` or `\underaccent{c}{base}`, set as wide as the base. False, with the
+// cursor where it was, when it is an ordinary script.
+fn ml_accent_script(m: *Ml, attrs: str, name: str, wrap: bool) -> bool {
+    var flag_name = "accent"
+    if word_is(name, "munder") { flag_name = "accentunder" }
+    let (flag, has_flag) = ml_attr(attrs, flag_name)
+    if has_flag && word_is(flag, "false") { ret false }
+    let start = m.pos
+    ml_space(m)
+    let base_at = m.pos
+    ml_skip(m)
+    if m.status != ok {
+        m.pos = start
+        ret false
+    }
+    ml_space(m)
+    let second = ml_tag(m)
+    if m.status != ok || second.closing || second.empty || !word_is(second.name, "mo") {
+        m.pos = start
+        ret false
+    }
+    var buffer: [32]u8 = zero
+    let n = ml_token_text(m, buffer[0..])
+    if m.status != ok || n == 0usize {
+        m.pos = start
+        ret false
+    }
+    let text: str = buffer[..n]
+    let (scalar, width) = unicode.read_utf8(text, 0usize)
+    if width != n {
+        m.pos = start
+        ret false
+    }
+    let form = accent_form(scalar)
+    let known = form == 768u32 || form == 769u32 || form == 770u32 || form == 771u32 || form == 772u32 || form == 774u32 || form == 775u32 || form == 776u32 || form == 778u32 || form == 780u32 || form == 8407u32 || form == 9182u32 || form == 9183u32
+    if !known {
+        m.pos = start
+        ret false
+    }
+    let after = m.pos
+    if wrap { ml_push(m, "{") }
+    if word_is(name, "munder") { ml_push(m, "\\underaccent{") } else { ml_push(m, "\\overaccent{") }
+    ml_push(m, text)
+    ml_push(m, "}")
+    m.pos = base_at
+    ml_child(m)
+    m.pos = after
+    if wrap { ml_push(m, "}") }
+    ml_close(m, name)
+    ret true
+}
+
 fn ml_element(m: *Ml, wrap: bool) {
     if m.status != ok { ret }
     if m.depth >= MAX_NEST {
@@ -2030,6 +2571,8 @@ fn ml_element(m: *Ml, wrap: bool) {
             let inner = ml_tag(m)
             if inner.closing { depth -= 1usize } else if !inner.empty { depth += 1usize }
         }
+    } else if (word_is(name, "mover") || word_is(name, "munder")) && ml_accent_script(m, t.attrs, name, wrap) {
+        // The accent or brace form: ml_accent_script wrote it and consumed the closing tag.
     } else if word_is(name, "msup") || word_is(name, "mover") {
         if wrap { ml_push(m, "{") }
         ml_child(m)

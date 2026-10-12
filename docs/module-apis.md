@@ -7807,9 +7807,9 @@ const CLASS_PUNCT: u8 = 6u8
 const CLASS_INNER: u8 = 7u8
 const CLASS_SPACE: u8 = 8u8
 const STYLE_CRAMPED: u32 = 4u32
-type Atom = struct { class: u8, first: usize, last: usize, width: f32, height: f32, depth: f32, simple: bool, limits: bool }
-type Consts = struct { axis: f32, rule: f32, script: f32, scriptscript: f32, num_display: f32, num_text: f32, den_display: f32, den_text: f32, num_gap: f32, num_gap_display: f32, den_gap: f32, den_gap_display: f32, sup_display: f32, sup_text: f32, sup_cramped: f32, sub_only: f32, sub_both: f32, sub_top_max: f32, sup_bottom_min: f32, sup_max_with_sub: f32, sub_sup_gap: f32, sup_drop: f32, sub_drop: f32, script_space: f32, upper_gap: f32, lower_gap: f32, rad_rule: f32, rad_gap: f32, rad_gap_display: f32, rad_extra: f32, rad_before: f32, rad_after: f32, rad_raise: f32, delim_min: f32, op_min: f32 }
-type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize, hhea_at: usize, hmtx_at: usize, math_at: usize, consts_at: usize, info_at: usize, variants_at: usize, k: Consts }
+type Atom = struct { class: u8, first: usize, last: usize, width: f32, height: f32, depth: f32, simple: bool, limits: bool, stretch: bool }
+type Consts = struct { axis: f32, rule: f32, script: f32, scriptscript: f32, num_display: f32, num_text: f32, den_display: f32, den_text: f32, num_gap: f32, num_gap_display: f32, den_gap: f32, den_gap_display: f32, sup_display: f32, sup_text: f32, sup_cramped: f32, sub_only: f32, sub_both: f32, sub_top_max: f32, sup_bottom_min: f32, sup_max_with_sub: f32, sub_sup_gap: f32, sup_drop: f32, sub_drop: f32, script_space: f32, upper_gap: f32, lower_gap: f32, rad_rule: f32, rad_gap: f32, rad_gap_display: f32, rad_extra: f32, rad_before: f32, rad_after: f32, rad_raise: f32, delim_min: f32, op_min: f32, accent_base: f32, over_gap: f32, over_rule: f32, over_extra: f32, under_gap: f32, under_rule: f32, under_extra: f32, stretch_above: f32, stretch_below: f32 }
+type Ctx = struct { a: *mem.Arena, font: shape.Font, items: []Item, count: usize, src: str, pos: usize, size: f32, display: bool, notdef: bool, status: err, nest: usize, upem: f32, x_height: f32, head_at: usize, loca_at: usize, glyf_at: usize, maxp_at: usize, hhea_at: usize, hmtx_at: usize, math_at: usize, consts_at: usize, info_at: usize, variants_at: usize, alphabet: u8, k: Consts }
 fn maxf(x: f32, y: f32) -> f32
 fn minf(x: f32, y: f32) -> f32
 fn be16(d: []const u8, at: usize) -> u32
@@ -7829,6 +7829,9 @@ fn load_math(c: *Ctx)
 fn coverage_pos(d: []const u8, at: usize, gid: u32) -> usize
 fn italic_correction(c: *Ctx, gid: u32) -> f32
 fn construction_of(c: *Ctx, gid: u32) -> usize
+fn construction_h(c: *Ctx, gid: u32) -> usize
+fn top_attach(c: *Ctx, gid: u32, size: f32) -> (f32, bool)
+fn kern_at(c: *Ctx, gid: u32, corner: usize, height: f32, size: f32) -> f32
 fn push_item(c: *Ctx, item: Item)
 fn shift_range(c: *Ctx, first: usize, last: usize, dx: f32, dy: f32)
 fn byte_at(c: *Ctx, at: usize) -> u8
@@ -7843,6 +7846,17 @@ fn id_atom(c: *Ctx, id: u32, scalar: u32, size: f32, class: u8) -> Atom
 fn text_atom(c: *Ctx, text: str, size: f32, class: u8) -> Atom
 fn char_class(scalar: u32) -> u8
 fn math_italic(c: *Ctx, scalar: u32) -> u32
+const ALPHA_ITALIC: u8 = 0u8
+const ALPHA_BOLD: u8 = 1u8
+const ALPHA_BOLD_ITALIC: u8 = 2u8
+const ALPHA_SCRIPT: u8 = 3u8
+const ALPHA_FRAKTUR: u8 = 4u8
+const ALPHA_DOUBLE: u8 = 5u8
+const ALPHA_SANS: u8 = 6u8
+const ALPHA_MONO: u8 = 7u8
+const ALPHA_UPRIGHT: u8 = 8u8
+fn letter_in(alphabet: u8, index: u32) -> u32
+fn alphabet_scalar(c: *Ctx, scalar: u32) -> u32
 fn greek_names() -> str
 fn greek_scalar(word: str) -> u32
 fn upper_greek(word: str) -> u32
@@ -7857,6 +7871,7 @@ fn parse_row(c: *Ctx, style: u32) -> Atom
 fn parse_argument(c: *Ctx, style: u32) -> Atom
 fn parse_atom(c: *Ctx, style: u32) -> Atom
 fn grown(c: *Ctx, scalar: u32, need: f32, size: f32, class: u8) -> Atom
+fn grown_h(c: *Ctx, scalar: u32, need: f32, size: f32, class: u8) -> Atom
 fn delimiter(c: *Ctx, scalar: u32, span_h: f32, size: f32, class: u8) -> Atom
 fn push_rule(c: *Ctx, x: f32, top: f32, w: f32, h: f32)
 fn delimiter_scalar(c: *Ctx) -> u32
@@ -7869,6 +7884,12 @@ fn lay_environment(c: *Ctx, style: u32) -> Atom
 fn lay_text(c: *Ctx, style: u32) -> Atom
 fn space_atom(c: *Ctx, em18: f32, style: u32) -> Atom
 fn parse_nucleus(c: *Ctx, style: u32) -> Atom
+fn alphabet_of(word: str) -> u8
+fn accent_scalar(word: str) -> u32
+fn accent_form(scalar: u32) -> u32
+fn accent_over(c: *Ctx, base: Atom, scalar: u32, wide: bool, below: bool, size: f32) -> Atom
+fn lay_bar(c: *Ctx, style: u32, over: bool) -> Atom
+fn lay_brace(c: *Ctx, style: u32, over: bool) -> Atom
 fn font_ready(c: *Ctx) -> bool
 fn context(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Ctx, bool)
 fn typeset(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err)
@@ -7890,6 +7911,7 @@ fn ml_child(m: *Ml)
 fn ml_row(m: *Ml, expected: str)
 fn ml_close(m: *Ml, expected: str)
 fn ml_delimiter(m: *Ml, value: str)
+fn ml_accent_script(m: *Ml, attrs: str, name: str, wrap: bool) -> bool
 fn ml_element(m: *Ml, wrap: bool)
 fn ml_row_one(m: *Ml)
 fn typeset_mathml(a: *mem.Arena, source: str, options: Options, items: []Item) -> (Equation, err)
@@ -7910,7 +7932,15 @@ out by it: MathConstants, italic corrections, and MathVariants for delimiters, r
 signs and display operators (the first variant tall enough, else an assembly of parts with
 repeated extenders); a font without one gets TeX's cmsy values and a scaled glyph. A font
 with the Mathematical Alphanumeric block gives Latin and lower-case Greek letters their
-italic forms. Coordinates have the origin on the baseline at the left edge, y downward: a
+italic forms; since D3702 `\mathbf` `\mathbfit` `\boldsymbol` `\mathcal` `\mathscr` `\mathfrak`
+`\mathbb` `\mathsf` `\mathtt` `\mathit` select the other alphabets of that block (a letter the
+font lacks stays as written), `\hat` `\check` `\tilde` `\acute` `\grave` `\dot` `\ddot` `\breve`
+`\bar` `\vec` `\mathring` and the wide `\widehat` `\widetilde` set accents by attachment
+points over AccentBaseHeight (a horizontal variant or assembly for the wide ones),
+`\overline` `\underline` use the Overbar and Underbar constants, `\overbrace` `\underbrace`
+stretch U+23DE and U+23DF to the body and take limits, a one-glyph script is kerned by
+MathKernInfo, and an `mover`/`munder` over an accent or brace character is that accent or
+brace. Coordinates have the origin on the baseline at the left edge, y downward: a
 glyph's `y` is its baseline, a rule's its top. `to_layout` turns the glyph items into an
 `e.text.layout.Layout` (one run of one glyph each) that `e.gfx.scene` draws as a
 `DrawText`; the rule items are rectangles to fill. `typeset`, `typeset_mathml`,
