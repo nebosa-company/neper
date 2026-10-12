@@ -29,6 +29,7 @@ use appkit
 use text
 use ui
 use netclient
+use sysettings
 use netproto
 
 const NONE: usize = 99usize
@@ -573,6 +574,7 @@ fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         ui.hit(&s.hits, 540usize, 16.0, 700.0, 380.0, 48.0)
     }
     try ui.pill(a, builder, &s.hits, faces, 530usize, 16.0, 830.0, 140.0, 48.0, "Reply", ui.amber(), 17.0)
+    try ui.pill(a, builder, &s.hits, faces, 550usize, 172.0, 830.0, 140.0, 48.0, "Copy", ui.amber(), 17.0)
     ret ok
 }
 
@@ -736,6 +738,18 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         }
         if id == 530usize {
             open_compose(s, from_of(a, s, s.open), ui.join(a, "Re: ", subject_of(a, s, s.open), ""))
+            ret true
+        }
+        if id == 550usize {
+            // (C175) Copy: the start of the message (the clipboard holds 32 bytes) goes to the clipboard.
+            let (wall, wall_error) = time.now()
+            var now_s = 0usize
+            if wall_error == ok { now_s = usize(wall.nanos / 1000000000i64) }
+            let text_copied = body_of(a, s, s.open)
+            let taken = sysettings.clip_set(3usize, now_s, text_copied)
+            ui.say("mail copied ")
+            ui.say_num(text_copied.len)
+            ui.say("\n")
             ret true
         }
         ret false

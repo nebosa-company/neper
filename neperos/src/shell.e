@@ -187,6 +187,14 @@ fn status_bar(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, has_fon
         let (box, draw_error) = text.draw(a, builder, faces.jost, 16.0, clock, 16.0, 4.0, 0.0, 0u32, layout.Align.Start, bright)
         if draw_error != ok { ret draw_error }
     }
+    // (C163) The torch's quick toggle: a pill between the time and the glyphs, amber while the torch is on.
+    if has_fonts {
+        var pill = paint.Color { red: 0.25, green: 0.27, blue: 0.31, alpha: 1.0 }
+        if lock_torch { pill = paint.Color { red: 0.99, green: 0.78, blue: 0.30, alpha: 1.0 } }
+        try card(a, builder, 256.0, 5.0, 48.0, 20.0, 10.0, pill)
+        let (label_box, label_error) = text.draw(a, builder, faces.jost, 12.0, "Torch", 262.0, 8.0, 0.0, 0u32, layout.Align.Start, bright)
+        if label_error != ok { ret label_error }
+    }
     // Glyph order in icons.bar: battery 0, bell 1, cell 2, moon 3, wifi 4.
     try status_glyph(a, builder, 0usize, 380.0, (snap[0usize] & PRESENT) != 0usize, bright)
     try status_glyph(a, builder, 4usize, 358.0, (snap[1usize] & PRESENT) != 0usize, bright)
@@ -853,6 +861,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if etype == 241usize && home_shown && theme.screen_lock() != 0usize {
                 idle_ticks += 1usize
                 if idle_ticks >= timeout_ticks(timeout_step) {
+                    // Everything the home screen drew since the last reset goes first, as when an app returns.
+                    if has_last_scene {
+                        let released_home = scene.release_scene(&renderer, last_scene)
+                        has_last_scene = false
+                    }
+                    mem.reset(a, home_mark)
                     if show_lock(a, &renderer, &w, drawable, faces, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale, hour, minute, seconds) {
                         home_shown = false
                         framed = true
@@ -872,7 +886,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     say("\n")
                 }
                 if show_lock(a, &renderer, &w, drawable, faces, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale, hour, minute, seconds) { framed = true }
-            } else if tapped && !home_shown && !by_key && f32(pointer_x) * 412.0 / 32768.0 > 320.0 && f32(pointer_y) * logical_h / 32768.0 > 670.0 && f32(pointer_y) * logical_h / 32768.0 < 750.0 && sensorclient.biometric() != sensorclient.BIOMETRIC_MATCH {
+            } else if tapped && home_shown && !prompting && !by_key && f32(pointer_x) * 412.0 / 32768.0 >= 250.0 && f32(pointer_x) * 412.0 / 32768.0 < 310.0 && f32(pointer_y) * logical_h / 32768.0 < 30.0 {
+                // (C163) The torch's quick toggle on the status bar: the same switch as the lock screen's, the home
+                // screen drawn again with the pill's colour.
+                let (level, served) = sysettings.torch_toggle()
+                if served {
+                    lock_torch = level != 0usize
+                    say("shell status torch toggle ")
+                    say_num(level)
+                    say("\n")
+                }
+                if show_home(a, &renderer, &w, drawable, faces, has_fonts, clock, snap, wallpapered, wall_texture, wall_w, wall_h, logical_h, scale) { framed = true }
+            } else if tapped && !home_shown && !by_key && f32(pointer_x) * 412.0 / 32768.0 > 320.0 &&f32(pointer_y) * logical_h / 32768.0 > 670.0 && f32(pointer_y) * logical_h / 32768.0 < 750.0 && sensorclient.biometric() != sensorclient.BIOMETRIC_MATCH {
                 // (C176) The fingerprint pad did not accept: off in Settings, or not the enrolled finger. It stays locked.
                 say("shell fingerprint refused\n")
             } else if tapped && !home_shown {

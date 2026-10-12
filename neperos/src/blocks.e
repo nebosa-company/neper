@@ -537,7 +537,14 @@ fn act(s: *State, id: usize) -> bool {
     }
     if id == 108usize {
         s.manual = !s.manual
-        if s.manual { ui.say("blocks fall manual\n") } else { ui.say("blocks fall auto\n") }
+        if s.manual {
+            // Practice starts a game afresh with the fixed seed (what fell while the mode was being chosen is undone).
+            s.seed = 20261008usize
+            restart(s)
+            ui.say("blocks fall manual\n")
+        } else {
+            ui.say("blocks fall auto\n")
+        }
         ret true
     }
     if id == 105usize {
@@ -710,14 +717,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let id = ui.hit_at(&s.hits, touch.x, touch.y)
                 if id != ui.NONE && act(&s, id) {
                     // Left, Right and Down repeat while the finger stays on them.
-                    if id == 100usize || id == 102usize || id == 103usize {
-                        s.held_id = id
-                        s.repeat_at = now_ms() + REPEAT_DELAY
-                    }
+                    if id == 100usize || id == 102usize || id == 103usize { s.held_id = id }
                     if !show(a, &kit, &s) {
                         ui.say("blocks present failed\n")
                         appkit.answer(appkit.ANSWER_NONE)
                     }
+                    // The delay counts from the end of the frame (a frame outlasts it under emulation, and the
+                    // release of a quick tap is already waiting).
+                    s.repeat_at = now_ms() + REPEAT_DELAY
                 } else {
                     appkit.answer(appkit.ANSWER_NONE)
                 }

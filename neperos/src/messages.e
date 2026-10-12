@@ -19,6 +19,7 @@ use e.text.shape
 use appkit
 use text
 use lunar
+use sysettings
 
 const NONE: usize = 99usize
 const MAX_CONVS: usize = 8usize
@@ -520,6 +521,10 @@ fn draw_chat(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     hit(s, 500usize, 0.0, 20.0, 66.0, 60.0)
     try avatar(a, builder, faces, 84.0, 50.0, 20.0, name, s.convs[c].tint)
     try put(a, builder, faces.jost, 21.0, name, 116.0, 36.0, light())
+    // (C175) Copy: the newest message of the conversation goes to the clipboard.
+    try card(a, builder, 334.0, 38.0, 62.0, 32.0, 16.0, soft())
+    try centred(a, builder, faces.jost, 15.0, "Copy", 365.0, 45.0, light())
+    hit(s, 540usize, 330.0, 30.0, 82.0, 48.0)
     // The compose bar rides above the keyboard while typing.
     var compose_y: f32 = 826.0
     if s.typing { compose_y = 432.0 }
@@ -674,6 +679,19 @@ fn act(s: *State, id: usize) -> bool {
     }
     if id == 500usize {
         close_conv(s)
+        ret true
+    }
+    if id == 540usize {
+        let n = s.convs[s.open].count
+        if n == 0usize { ret false }
+        let msg = s.convs[s.open].msgs[n - 1usize]
+        let (wall, wall_error) = time.now()
+        var now_s = 0usize
+        if wall_error == ok { now_s = usize(wall.nanos / 1000000000i64) }
+        let taken = sysettings.clip_set(2usize, now_s, msg.body[0usize..msg.length])
+        say("messages copied ")
+        say_num(msg.length)
+        say("\n")
         ret true
     }
     if id == 510usize {
