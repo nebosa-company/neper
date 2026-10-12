@@ -33,8 +33,12 @@
 // Layout. Column widths follow a header resize; `save_layout` / `load_layout` keep the widths,
 // the sort indicator, the filter row, the navigator and the filter texts as small text.
 //
+// Preview row. `show_preview(spec)` turns on a disclosure at the start of each data row; opening
+// it adds, under the record, the text of one column wrapped over several lines (a card's rules
+// text). Up to 32 previews are open at once.
+//
 // ponytail: one level of header and the filter row sits above it (the table owns the header);
-// the preview row, Tab to the next editable cell and column visibility are what remains.
+// Tab to the next editable cell and column visibility are what remains.
 
 use e.mem
 use e.str
@@ -95,6 +99,10 @@ type Grid = struct {
     has_position: bool,
     position: usize,
     read_only: bool,
+    preview_on: bool,
+    preview_spec: usize,
+    preview_open: [32]u64,
+    preview_count: usize,
     editing: bool,
     edit_row: usize,
     edit_spec: usize,
@@ -492,6 +500,68 @@ fn load_layout(grid: *Grid, text: str) -> err {
         }
     }
     if first { ret BadLayout }
+    ret ok
+}
+
+// Previews: a disclosure on each data row opens, under it, the text of column `spec`.
+fn show_preview(grid: *Grid, spec: usize) {
+    grid.preview_on = spec < grid.specs.len
+    grid.preview_spec = spec
+    grid.preview_count = 0usize
+    // the disclosure leads the first cell: it needs room
+    if grid.preview_on && grid.columns.len != 0usize && grid.columns[0usize].width < 64.0 { grid.columns[0usize].width = 64.0 }
+}
+
+fn hide_preview(grid: *Grid) {
+    grid.preview_on = false
+    grid.preview_count = 0usize
+}
+
+fn preview_is_open(grid: *const Grid, key: widget.Key) -> bool {
+    var at = 0usize
+    while at < grid.preview_count {
+        if grid.preview_open[at] == key { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// The disclosure of a row: opens or closes its preview.
+fn on_expand(ctx: *void, key: widget.Key) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    var at = 0usize
+    while at < grid.preview_count {
+        if grid.preview_open[at] == key {
+            grid.preview_open[at] = grid.preview_open[grid.preview_count - 1usize]
+            grid.preview_count -= 1usize
+            ret ok
+        }
+        at += 1usize
+    }
+    if grid.preview_count < 32usize {
+        grid.preview_open[grid.preview_count] = key
+        grid.preview_count += 1usize
+    }
+    ret ok
+}
+
+// The preview of visible entry `index`: the row's text in the preview column, over several lines.
+fn on_detail(ctx: *void, a: *mem.Arena, index: usize, out: *widget.Node) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    var text = ""
+    if index < grp.visible_len(grid.g) && !grp.visible_is_group(grid.g, index) {
+        let (shown, shown_error) = cell_text(a, grid, grid.preview_spec, grp.visible_row(grid.g, index))
+        if shown_error != ok { ret shown_error }
+        text = shown
+    }
+    var options = control.text_options()
+    options.wrap = .Word
+    options.role = .BodySmall
+    let (node, node_error) = control.text(a, 0u64, text, grid.theme, options)
+    if node_error != ok { ret node_error }
+    var holder = style.defaults()
+    holder.width = style.Length { Percent: 100.0 }
+    *out = widget.padded(0u64, 48.0, 6.0, 16.0, 8.0, holder, one(a, node))
     ret ok
 }
 
@@ -909,7 +979,14 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     if grid.bands.len != 0usize { body_height = body_height - 36.0 }
     if grid.navigator_visible { body_height = body_height - 52.0 }
     var sort_shown = grid.sort_column
-    let (body, body_error) = collection.table(a, grid.key, theme, "Data grid", grid.columns, source, selected[0usize..selected_count], sort_shown, grid.descending, widget.Change[usize] { ctx: me, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: me, invoke: no_reorder }, widget.Change[collection.ColumnResize] { ctx: me, invoke: on_resize }, widget.Change[widget.Key] { ctx: me, invoke: on_pick }, grid.row_height, grid.offset, widget.Change[f32] { ctx: me, invoke: on_scroll }, body_height)
+    var table_options: collection.TableOptions = zero
+    if grid.preview_on {
+        table_options.expandable = true
+        table_options.expanded = grid.preview_open[0usize..grid.preview_count]
+        table_options.expand = widget.Change[widget.Key] { ctx: me, invoke: on_expand }
+        table_options.detail = collection.TableDetail { ctx: me, build: on_detail }
+    }
+    let (body, body_error) = collection.table_with(a, grid.key, theme, "Data grid", grid.columns, source, selected[0usize..selected_count], sort_shown, grid.descending, widget.Change[usize] { ctx: me, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: me, invoke: no_reorder }, widget.Change[collection.ColumnResize] { ctx: me, invoke: on_resize }, widget.Change[widget.Key] { ctx: me, invoke: on_pick }, grid.row_height, grid.offset, widget.Change[f32] { ctx: me, invoke: on_scroll }, body_height, table_options)
     if body_error != ok { ret (zero, body_error) }
     var part_count = 1usize
     let with_footer = grid.footer_visible && grid.g.specs.len != 0usize
