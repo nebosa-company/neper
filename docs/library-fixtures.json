@@ -423,6 +423,7 @@
     "fmt_gaps_a",
     "fmt_html",
     "html_accessible",
+    "text_css_cascade",
     "text_css_match"
    ]
   },
@@ -508,6 +509,7 @@
     "net_packet",
     "net_policy",
     "net_ssrf",
+    "text_css_cascade",
     "text_css_container",
     "text_css_match",
     "text_css_selector",

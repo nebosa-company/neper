@@ -18277,6 +18277,58 @@ fn matches_pseudo_class(m: *const Matcher, pseudo: str, el: html.NodeId) -> bool
 
 Selector matching over an HTML document (L040), after Vaper's `css/selector_matcher.dart`: a parsed selector from `e.fmt.css.selector` tested against an element of an `e.fmt.html` document by walking its combinators right to left from the key compound, with the simple selectors, the structural pseudo-classes, `:not()`, `:is()`, `:where()`, `:has()` and its relative lookahead, `:nth-*()` with An+B and `of S`, the attribute operators with the `i` flag, and the state and form pseudo-classes (`:hover`, `:focus`, `:checked`, `:disabled`, `:required`, `:in-range`, `:valid`, `:invalid`, ...) over a `State` the host installs. Checked against Vaper's own matcher over 560 random documents and selector lists on both hosts (D2343).
 
+### `e.fmt.css.cascade`
+
+```neper
+const UNSCOPED: i64 = 2147483647i64
+const INLINE_SPECIFICITY: i64 = 268435456i64
+type Declaration = struct { property: str, value: str, important: bool }
+type ContainerKind = enum u8 { None, InlineSize, Size }
+type ContainerBox = struct { kind: ContainerKind, names: []const str, has_width: bool, width: f64, has_height: bool, height: f64 }
+type ContainerQuery = struct { has_name: bool, name: str, condition: container.Condition }
+type Scope = struct { starts: []const selector.Selector, limits: []const selector.Selector }
+type Rule = struct { selector: selector.Selector, declarations: []const Declaration, source: i64, has_layer: bool, layer: i64, containers: []const ContainerQuery, scopes: []const Scope }
+type Declared = struct { declaration: Declaration, author: bool, hint: bool, specificity: i64, source: i64, has_layer: bool, layer: i64, proximity: i64 }
+type Winner = struct { property: str, value: str }
+type Bucket = enum u8 { Universal, Id, Klass, Tag }
+type Index = struct { rules: []const Rule, buckets: []Bucket, keys: []str }
+
+fn beats(x: Declared, y: Declared) -> bool
+fn find_property(best: *const list.List[Declared], property: str) -> i64
+fn rank(a: *mem.Arena, declared: []const Declared) -> []const Winner
+fn drop_outranked_longhands(best: *list.List[Declared], shorthand: str, first: str, second: str)
+fn build_index(a: *mem.Arena, rules: []const Rule) -> Index
+fn push_bucket(out: *list.List[usize], idx: *const Index, bucket: Bucket, key: str)
+fn is_blank_byte(c: u8) -> bool { ret c == 32u8 || (c >= 9u8 && c <= 13u8) }
+fn class_seen(classes: str, end: usize, name: str) -> bool
+fn candidates(m: *const match.Matcher, idx: *const Index, el: html.NodeId) -> []const usize
+fn names_contain(names: []const str, name: str) -> bool
+fn containers_match(stack: []const ContainerBox, queries: []const ContainerQuery) -> bool
+fn scoped(m: *const match.Matcher, root: html.NodeId) -> match.Matcher
+fn unscoped(m: *const match.Matcher) -> match.Matcher
+fn any_matches(m: *const match.Matcher, sels: []const selector.Selector, el: html.NodeId) -> bool
+fn inside_limits(m: *const match.Matcher, sc: Scope, root: html.NodeId, el: html.NodeId) -> bool
+fn find_scope_root(m: *const match.Matcher, sc: Scope, el: html.NodeId) -> (html.NodeId, i64, bool)
+fn scope_proximity(m: *const match.Matcher, scopes: []const Scope, sel: selector.Selector, el: html.NodeId) -> (i64, bool)
+fn hint(property: str, value: str) -> Declaration
+fn trimmed_attr(m: *const match.Matcher, el: html.NodeId, name: str) -> (str, bool)
+fn try_int(s: str) -> (i64, bool)
+fn int_text(a: *mem.Arena, v: i64) -> str
+fn join3(a: *mem.Arena, x: str, y: str, z: str) -> str
+fn length_hint(a: *mem.Arena, v: str) -> str
+fn legacy_font_size(s: str) -> (str, bool)
+fn one_of(name: str, a: str, b: str, c: str, d: str, e: str, f: str, g: str, h: str) -> bool
+fn ancestor_named(m: *const match.Matcher, el: html.NodeId, name: str) -> html.NodeId
+fn push_hint(out: *list.List[Declaration], property: str, value: str)
+fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> []const Declaration
+fn inline_declarations(a: *mem.Arena, source: str) -> []const Declaration
+fn collect(m: *const match.Matcher, out: *list.List[Declared], rules: []const Rule, author: bool, el: html.NodeId, stack: []const ContainerBox)
+fn resolve(m: *const match.Matcher, ua: []const Rule, author: []const Rule, el: html.NodeId, stack: []const ContainerBox, inline: []const Declaration) -> []const Winner
+```
+
+The cascade kernels of a style resolver (L040), after Vaper's `css/style_resolver.dart`, over the matcher, the container model and an `e.fmt.html` document: `beats` ranks one declaration over another (importance, author over user agent, a presentational hint between them, unlayered over layered and a later layer over an earlier, specificity, `@scope` proximity with an unscoped rule infinitely far, then source order with a tie going to the declaration visited later), `build_index` and `candidates` bucket rules by the id, else the first class, else the tag of the key compound and visit an element's id bucket, then its classes, then its tag, then the universal bucket, `containers_match` takes each `@container` query's nearest eligible container on the stack (named, and `size`-typed for a block-axis feature), `scope_proximity` finds the nearest scoping root with donut limits and the hops to it, `presentational_hints` maps the legacy attributes (`bgcolor`, `width`, `align`, `border`, `cellpadding`, `<font size>`, `dir`, `type`, ...) to declarations, `inline_declarations` reads a `style` attribute, and `resolve` runs the whole cascade for one element, a winning shorthand dropping the longhands it outranks. Media queries and value readers are the caller's. Checked against Vaper's own `_cascade`, `_presentationalHints` and `_RuleIndex` (with those private names made reachable and nothing else changed) over 130 documents with rule sets, container stacks and scopes, 1282 elements, tags and parents compared as well (D2920).
+
+
 ### `e.fmt.html.accessible`
 
 ```neper

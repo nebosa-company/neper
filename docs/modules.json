@@ -50,6 +50,7 @@
     "e.gfx.cssvalue",
     "e.fmt.css.container",
     "e.fmt.css.match",
+    "e.fmt.css.cascade",
     "e.fmt.html.accessible",
     "e.fmt.html.sanitize",
     "e.fmt.hcl",
@@ -2010,6 +2011,24 @@
     "e.mem",
     "e.str",
     "e.text.regex"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.fmt.css.cascade",
+   "layer": 6,
+   "surface": "source",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.data.list",
+    "e.fmt.css.container",
+    "e.fmt.css.match",
+    "e.fmt.css.selector",
+    "e.fmt.css.syntax",
+    "e.fmt.html",
+    "e.mem",
+    "e.str"
    ],
    "blocked_by": []
   },

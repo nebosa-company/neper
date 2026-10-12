@@ -3716,6 +3716,13 @@ text_css_match_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 chmod +x "$test_build/text-css-match-selfhost"
 text_css_match_output=$("$test_build/text-css-match-selfhost")
 [ "$text_css_match_output" = 'css match ok' ]
+# `e.fmt.css.cascade`: declaration ranking, the rule index, @container and @scope gating, presentational hints
+# # against Vaper's own resolver cascade (130 documents with rule sets, D2920).
+text_css_cascade_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_css_cascade/src/main.e" "$repo" x64 linux "$test_build/text-css-cascade-selfhost" -j 2)
+[ "$text_css_cascade_written" = 'executable written' ]
+chmod +x "$test_build/text-css-cascade-selfhost"
+text_css_cascade_output=$("$test_build/text-css-cascade-selfhost")
+[ "$text_css_cascade_output" = 'css cascade ok' ]
 # `e.fmt.html.accessible`: roles, accessible names, states and the accessibility tree of an HTML document
 # # against Vaper's own builder (220 documents, D2343).
 html_accessible_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/html_accessible/src/main.e" "$repo" x64 linux "$test_build/html-accessible-selfhost" -j 2)

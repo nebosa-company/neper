@@ -4188,6 +4188,13 @@ $textCssMatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $textCssMatchWritten -ne 'executable written') { throw 'text_css_match emission failed' }
 $textCssMatchOutput = & $textCssMatchPath
 if ($LASTEXITCODE -ne 0 -or $textCssMatchOutput -ne 'css match ok') { throw "text_css_match answered wrongly: exit $LASTEXITCODE" }
+# `e.fmt.css.cascade`: declaration ranking, the rule index, @container and @scope gating, presentational hints
+# # against Vaper's own resolver cascade (130 documents with rule sets, D2920).
+$textCssCascadePath = Join-Path $testBuild 'text-css-cascade-selfhost.exe'
+$textCssCascadeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_css_cascade\src\main.e') $repo 'x64' 'windows' $textCssCascadePath -j 2
+if ($LASTEXITCODE -ne 0 -or $textCssCascadeWritten -ne 'executable written') { throw 'text_css_cascade emission failed' }
+$textCssCascadeOutput = & $textCssCascadePath
+if ($LASTEXITCODE -ne 0 -or $textCssCascadeOutput -ne 'css cascade ok') { throw "text_css_cascade answered wrongly: exit $LASTEXITCODE" }
 # `e.fmt.html.accessible`: roles, accessible names, states and the accessibility tree of an HTML document
 # # against Vaper's own builder (220 documents, D2343).
 $htmlAccessiblePath = Join-Path $testBuild 'html-accessible-selfhost.exe'
