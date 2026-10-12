@@ -1,4 +1,4 @@
-// `e.ui.datagrid` (G006, first to sixth increments) over a 3,000-row `e.data.table` with its view and
+// `e.ui.datagrid` (G006 first to sixth increments, G007 editing) over a 3,000-row `e.data.table` with its view and
 // grouping, driven through the UI test harness: the virtual body builds only the visible rows,
 // a header tap reports the sort and the application re-sorts, a group row expands on a tap and
 // shows its rows, the footer carries the summaries, a tap on a data row reports the storage
@@ -9,6 +9,8 @@
 // growth, read-only) and the saved layout (round trip, unknown lines and columns tolerated).
 // Fifth: the preview row and pixel probes (band fill, selected row, a stable frame).
 // Sixth: Tab, Shift+Tab and Escape in the editor, column hide / move and the layout's order.
+// G007: a boolean flips, a small dictionary edits through a select, a locked cell refuses, old and
+// new text reach `value_changed`, a batch holds the events back.
 use e.algo.hash as hash
 use e.gpu
 use e.mem
@@ -58,6 +60,14 @@ type App = struct {
     role_calls: usize,
     role_data: usize,
     edit_calls: usize,
+    value_calls: usize,
+    value_old: [32]u8,
+    value_old_len: usize,
+    value_new: [32]u8,
+    value_new_len: usize,
+    locked_row: usize,
+    batch_total: usize,
+    batch_calls: usize,
     edited_row: usize,
     edited_spec: usize
 }
@@ -246,6 +256,38 @@ fn tap_text(h: *testing.Harness, runtime: *widget.Runtime, text: str) -> bool {
     ret testing.tap(h, b.x + b.width * 0.5, b.y + b.height * 0.5) == ok
 }
 
+// old and new text of a written cell
+fn on_value_changed(ctx: *void, row: usize, spec: usize, old: str, new: str) -> err {
+    let app = mem.cast[*App](ctx)
+    app.value_calls += 1usize
+    var at = 0usize
+    while at < old.len && at < app.value_old.len {
+        app.value_old[at] = old[at]
+        at += 1usize
+    }
+    app.value_old_len = at
+    at = 0usize
+    while at < new.len && at < app.value_new.len {
+        app.value_new[at] = new[at]
+        at += 1usize
+    }
+    app.value_new_len = at
+    ret ok
+}
+
+// a row the application keeps locked
+fn on_can_edit(ctx: *void, row: usize, spec: usize) -> bool {
+    let app = mem.cast[*App](ctx)
+    ret row != app.locked_row
+}
+
+fn on_batch_done(ctx: *void, count: usize) -> err {
+    let app = mem.cast[*App](ctx)
+    app.batch_calls += 1usize
+    app.batch_total += count
+    ret ok
+}
+
 // A cell was written: the order is stale, so the application sorts again.
 fn on_cell_edited(ctx: *void, row: usize, spec: usize) -> err {
     let app = mem.cast[*App](ctx)
@@ -325,15 +367,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if store_bytes_error != ok { os.exit(20) }
     app.store = mem.arena_from(store_bytes)
     app.sort_spec = 5usize
+    app.locked_row = ROWS
     if rebuild(app, 5usize, false) != ok { os.exit(21) }
 
     var specs: [5]dg.ColumnSpec = zero
-    specs[0usize] = dg.ColumnSpec { title: "Name", width: 220.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: true, editable: false }
-    specs[1usize] = dg.ColumnSpec { title: "Rarity", width: 120.0, column: C_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: true, editable: false }
-    specs[2usize] = dg.ColumnSpec { title: "CMC", width: 80.0, column: C_CMC, kind: dg.CellKind.Int, decimals: 0u8, summary: 0, summary_kind: grp.SummaryKind.Avg, filter: false, editable: false }
-    specs[3usize] = dg.ColumnSpec { title: "Price", width: 120.0, column: C_PRICE, kind: dg.CellKind.Currency, decimals: 2u8, summary: 1, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false }
-    specs[4usize] = dg.ColumnSpec { title: "Foil", width: 70.0, column: C_FOIL, kind: dg.CellKind.Custom, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false }
-    let events = dg.Events { ctx: mem.cast[*void](app), sort_changed: on_sort_changed, row_picked: on_row_picked, filter_changed: on_filter_changed, cell_edited: on_cell_edited, custom_cell: on_custom_cell, row_role: on_row_role }
+    specs[0usize] = dg.ColumnSpec { title: "Name", width: 220.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: true, editable: false, choice: false }
+    specs[1usize] = dg.ColumnSpec { title: "Rarity", width: 120.0, column: C_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: true, editable: false, choice: false }
+    specs[2usize] = dg.ColumnSpec { title: "CMC", width: 80.0, column: C_CMC, kind: dg.CellKind.Int, decimals: 0u8, summary: 0, summary_kind: grp.SummaryKind.Avg, filter: false, editable: false, choice: false }
+    specs[3usize] = dg.ColumnSpec { title: "Price", width: 120.0, column: C_PRICE, kind: dg.CellKind.Currency, decimals: 2u8, summary: 1, summary_kind: grp.SummaryKind.Sum, filter: false, editable: false, choice: false }
+    specs[4usize] = dg.ColumnSpec { title: "Foil", width: 70.0, column: C_FOIL, kind: dg.CellKind.Custom, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    let events = dg.Events { ctx: mem.cast[*void](app), sort_changed: on_sort_changed, row_picked: on_row_picked, filter_changed: on_filter_changed, cell_edited: on_cell_edited, value_changed: on_value_changed, can_edit: on_can_edit, batch_done: on_batch_done, custom_cell: on_custom_cell, row_role: on_row_role }
     let (made_grid, grid_error) = dg.create(a, &app.tbl, &app.grouping, specs[0..], events, GRID_KEY)
     if grid_error != ok { os.exit(22) }
     var grid = made_grid
@@ -494,10 +537,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     app.group_rarity = false
     if rebuild(app, 5usize, false) != ok { os.exit(110) }
     var specs2: [4]dg.ColumnSpec = zero
-    specs2[0usize] = dg.ColumnSpec { title: "", width: 30.0, column: C_NAME, kind: dg.CellKind.Indicator, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false }
-    specs2[1usize] = dg.ColumnSpec { title: "Name", width: 200.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false }
-    specs2[2usize] = dg.ColumnSpec { title: "Rarity", width: 120.0, column: C_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: true }
-    specs2[3usize] = dg.ColumnSpec { title: "Price", width: 120.0, column: C_PRICE, kind: dg.CellKind.Currency, decimals: 2u8, summary: 1, summary_kind: grp.SummaryKind.Sum, filter: false, editable: true }
+    specs2[0usize] = dg.ColumnSpec { title: "", width: 30.0, column: C_NAME, kind: dg.CellKind.Indicator, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    specs2[1usize] = dg.ColumnSpec { title: "Name", width: 200.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    specs2[2usize] = dg.ColumnSpec { title: "Rarity", width: 120.0, column: C_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: true, choice: false }
+    specs2[3usize] = dg.ColumnSpec { title: "Price", width: 120.0, column: C_PRICE, kind: dg.CellKind.Currency, decimals: 2u8, summary: 1, summary_kind: grp.SummaryKind.Sum, filter: false, editable: true, choice: false }
     let (made2, grid2_error) = dg.create(a, &app.tbl, &app.grouping, specs2[0..], events, 9000u64)
     if grid2_error != ok { os.exit(111) }
     var grid2 = made2
@@ -861,6 +904,94 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // a column shown again returns at its place in the order
     dg.set_hidden(&grid2, 2usize, false)
     if grid2.specs.len != 4usize { os.exit(301) }
+    // 13. editors by kind, the lock, old and new text, and batches
+    dg.set_hidden(&grid2, 2usize, false)
+    dg.show_filter_row(&grid2, false)
+    dg.resize_column(&grid2, 0usize, 30.0)
+    grid2.offset = 0.0
+    // a boolean flips with no editor
+    var flag_specs: [2]dg.ColumnSpec = zero
+    flag_specs[0usize] = dg.ColumnSpec { title: "Name", width: 200.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    flag_specs[1usize] = dg.ColumnSpec { title: "Foil", width: 120.0, column: C_FOIL, kind: dg.CellKind.Bool, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: true, choice: false }
+    let (made8, grid8_error) = dg.create(a, &app.tbl, &app.grouping, flag_specs[0..], events, 9600u64)
+    if grid8_error != ok { os.exit(310) }
+    var grid8 = made8
+    let foil_before = table.get_bool(&app.tbl, C_FOIL, 20usize)
+    let values_before = app.value_calls
+    let edits_at_flip = app.edit_calls
+    if dg.begin_edit(&grid8, 20usize, 1usize) != ok { os.exit(311) }
+    if grid8.editing || table.get_bool(&app.tbl, C_FOIL, 20usize) == foil_before { os.exit(312) }
+    if app.value_calls != values_before + 1usize || app.edit_calls != edits_at_flip + 1usize { os.exit(313) }
+    var expect_old = "no"
+    var expect_new = "yes"
+    if foil_before {
+        expect_old = "yes"
+        expect_new = "no"
+    }
+    if !str.eq(app.value_old[0usize..app.value_old_len], expect_old) || !str.eq(app.value_new[0usize..app.value_new_len], expect_new) { os.exit(314) }
+    // a locked row refuses, the others do not
+    app.locked_row = 20usize
+    if dg.begin_edit(&grid8, 20usize, 1usize) != dg.Locked { os.exit(315) }
+    if dg.begin_edit(&grid8, 21usize, 1usize) != ok { os.exit(316) }
+    app.locked_row = ROWS
+    // the text editor's old and new text: Price of row 5 to a new number
+    let values_text = app.value_calls
+    var price_text_before: [32]u8 = zero
+    if dg.begin_edit(&grid2, 5usize, 3usize) != ok { os.exit(317) }
+    let held = grid2.edit_len
+    var h = 0usize
+    while h < held {
+        price_text_before[h] = grid2.edit_text[h]
+        h += 1usize
+    }
+    grid2.edit_text[0usize] = 52u8
+    grid2.edit_len = 1usize
+    if dg.commit_edit(&grid2) != ok { os.exit(318) }
+    if app.value_calls != values_text + 1usize || app.value_new_len != 1usize || app.value_new[0usize] != 52u8 { os.exit(319) }
+    if app.value_old_len != held || !str.eq(app.value_old[0usize..held], price_text_before[0usize..held]) { os.exit(320) }
+    // a batch holds the events back and ends with one
+    let values_batch = app.value_calls
+    let edits_batch = app.edit_calls
+    dg.begin_batch(&grid2)
+    var n = 0usize
+    while n < 3usize {
+        if dg.begin_edit(&grid2, 30usize + n, 3usize) != ok { os.exit(321) }
+        grid2.edit_text[0usize] = 55u8
+        grid2.edit_len = 1usize
+        if dg.commit_edit(&grid2) != ok { os.exit(322) }
+        n += 1usize
+    }
+    if app.value_calls != values_batch || app.edit_calls != edits_batch || app.batch_calls != 0usize { os.exit(323) }
+    if dg.end_batch(&grid2) != ok || app.batch_calls != 1usize || app.batch_total != 3usize { os.exit(324) }
+    if table.get_f64(&app.tbl, C_PRICE, 31usize) != 7.0f64 { os.exit(325) }
+    // a select editor over a small dictionary: the pick writes the dictionary value and commits
+    var choice_specs: [2]dg.ColumnSpec = zero
+    choice_specs[0usize] = dg.ColumnSpec { title: "Name", width: 200.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: false, choice: false }
+    choice_specs[1usize] = dg.ColumnSpec { title: "Rarity", width: 160.0, column: C_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false, editable: true, choice: true }
+    let (made9, grid9_error) = dg.create(a, &app.tbl, &app.grouping, choice_specs[0..], events, 9700u64)
+    if grid9_error != ok { os.exit(326) }
+    var grid9 = made9
+    show_row(&grid9, &app.grouping, 40usize)
+    if dg.begin_edit(&grid9, 40usize, 1usize) != ok { os.exit(327) }
+    var select_clock = 40000000000i64
+    mem.reset(&f, 0usize)
+    let (root24, build24_error) = dg.build(&f, &grid9, &theme, 400.0)
+    if build24_error != ok { os.exit(328) }
+    if settle(&harness, root24, select_clock) != ok { os.exit(329) }
+    select_clock += 2000000000i64
+    if testing.by_key(&harness, 9700u64 + dg.EDIT_KEY).count == 0usize { os.exit(330) }
+    // open it, then pick the entry whose text is "Mythic"
+    if !tap_key(&harness, &runtime, 9700u64 + dg.EDIT_KEY) { os.exit(331) }
+    if !grid9.select_open { os.exit(332) }
+    mem.reset(&f, 0usize)
+    let (root25, build25_error) = dg.build(&f, &grid9, &theme, 400.0)
+    if build25_error != ok { os.exit(333) }
+    if settle(&harness, root25, select_clock) != ok { os.exit(334) }
+    select_clock += 2000000000i64
+    let choices_before = app.edit_calls
+    if !tap_text(&harness, &runtime, "Mythic") { os.exit(335) }
+    if grid9.editing || app.edit_calls != choices_before + 1usize { os.exit(336) }
+    if !str.eq(table.get_str(&app.tbl, C_RARITY, 40usize), "Mythic") { os.exit(337) }
     os.exit(0)
     ret ok
 }

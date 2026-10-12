@@ -37,6 +37,12 @@
 // it adds, under the record, the text of one column wrapped over several lines (a card's rules
 // text). Up to 32 previews are open at once.
 //
+// Kinds of editor. A boolean cell has no editor: a tap on the current row (or `begin_edit`) flips
+// it. A column with `choice` set and a small dictionary edits through a select of the
+// dictionary's values; the others edit as text. `can_edit` locks cells (a row, a column), and
+// `value_changed` carries the old and the new text; between `begin_batch` and `end_batch` the
+// events are held back and one `batch_done` (with the number of cells) is raised at the end.
+//
 // Tab. While a cell is edited, Tab commits and edits the next editable cell of the row (Shift+Tab
 // the previous one); past the last one it goes to the first editable cell of the next data row.
 // Escape cancels the edit.
@@ -74,7 +80,7 @@ type Nav = enum u8 { First, Prev, Next, Last }
 // One grid column: the table column it shows and how, and which applied group summary it
 // shows on group rows and in the footer (`summary` < 0: none); `filter` asks for a field in the
 // filter row.
-type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool, editable: bool }
+type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool, editable: bool, choice: bool }
 
 type Events = struct {
     ctx: *void,
@@ -82,6 +88,9 @@ type Events = struct {
     row_picked: fn(*void, usize) -> err,
     filter_changed: fn(*void, usize, str) -> err,
     cell_edited: fn(*void, usize, usize) -> err,
+    value_changed: fn(*void, usize, usize, str, str) -> err,
+    can_edit: fn(*void, usize, usize) -> bool,
+    batch_done: fn(*void, usize) -> err,
     custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err,
     row_role: fn(*void, usize) -> style.ColorRole
 }
@@ -125,6 +134,11 @@ type Grid = struct {
     edit_scratch: [160]u8,
     edit_len: usize,
     edit_invalid: bool,
+    edit_old: [64]u8,
+    edit_old_len: usize,
+    select_open: bool,
+    batch_depth: usize,
+    batch_count: usize,
     filter_text: []u8,
     filter_lens: []usize,
     theme: *const control.Theme
@@ -132,6 +146,7 @@ type Grid = struct {
 
 error TooManyColumns
 error NotEditable
+error Locked
 error BadLayout
 
 fn ignore_sort(ctx: *void, column: usize, descending: bool) -> err { ret ok }
@@ -142,13 +157,19 @@ fn ignore_filter(ctx: *void, spec: usize, text: str) -> err { ret ok }
 
 fn ignore_edit(ctx: *void, row: usize, spec: usize) -> err { ret ok }
 
+fn ignore_value(ctx: *void, row: usize, spec: usize, old: str, new: str) -> err { ret ok }
+
+fn allow_edit(ctx: *void, row: usize, spec: usize) -> bool { ret true }
+
+fn ignore_batch(ctx: *void, count: usize) -> err { ret ok }
+
 fn no_custom_cell(ctx: *void, a: *mem.Arena, t: *const control.Theme, row: usize, spec: usize, out: *widget.Node) -> err { ret ok }
 
 fn plain_role(ctx: *void, row: usize) -> style.ColorRole { ret .Text }
 
 // Events that do nothing, for a grid that only displays.
 fn no_events() -> Events {
-    ret Events { ctx: nil, sort_changed: ignore_sort, row_picked: ignore_row, filter_changed: ignore_filter, cell_edited: ignore_edit, custom_cell: no_custom_cell, row_role: plain_role }
+    ret Events { ctx: nil, sort_changed: ignore_sort, row_picked: ignore_row, filter_changed: ignore_filter, cell_edited: ignore_edit, value_changed: ignore_value, can_edit: allow_edit, batch_done: ignore_batch, custom_cell: no_custom_cell, row_role: plain_role }
 }
 
 fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, events: Events, key: widget.Key) -> (Grid, err) {
@@ -390,6 +411,7 @@ fn copy_edit(grid: *Grid, text: str) {
 fn begin_edit(grid: *Grid, row: usize, spec_index: usize) -> err {
     let (spec, shown) = display_of(grid, spec_index)
     if grid.read_only || !shown || !grid.specs[spec].editable { ret NotEditable }
+    if !grid.events.can_edit(grid.events.ctx, row, spec_index) { ret Locked }
     let s = grid.specs[spec]
     var scratch = mem.arena_from(grid.edit_scratch[0usize..160usize])
     let a = &scratch
@@ -416,12 +438,55 @@ fn begin_edit(grid: *Grid, row: usize, spec_index: usize) -> err {
             text = str.done(&sb)
         }
     }
+    if kind == table.Kind.Bool {
+        // a boolean has no editor: the tap flips it
+        let was = table.get_bool(grid.t, s.column, row) && !table.is_null(grid.t, s.column, row)
+        table.set_bool(grid.t, s.column, row, !was)
+        var old_text = "no"
+        var new_text = "yes"
+        if was {
+            old_text = "yes"
+            new_text = "no"
+        }
+        ret raise_edit(grid, row, spec, old_text, new_text)
+    }
     grid.editing = true
     grid.edit_row = row
     grid.edit_spec = spec
     grid.edit_invalid = false
+    grid.select_open = false
     copy_edit(grid, text)
+    var o = 0usize
+    while o < grid.edit_len {
+        grid.edit_old[o] = grid.edit_text[o]
+        o += 1usize
+    }
+    grid.edit_old_len = grid.edit_len
     ret ok
+}
+
+// The events of a written cell: held back inside a batch.
+fn raise_edit(grid: *Grid, row: usize, shown_spec: usize, old: str, new: str) -> err {
+    if grid.batch_depth > 0usize {
+        grid.batch_count += 1usize
+        ret ok
+    }
+    let spec = grid.origin[shown_spec]
+    try grid.events.value_changed(grid.events.ctx, row, spec, old, new)
+    ret grid.events.cell_edited(grid.events.ctx, row, spec)
+}
+
+// Events of edits between these two are held back; `end_batch` raises one `batch_done`.
+fn begin_batch(grid: *Grid) { grid.batch_depth += 1usize }
+
+fn end_batch(grid: *Grid) -> err {
+    if grid.batch_depth == 0usize { ret ok }
+    grid.batch_depth -= 1usize
+    if grid.batch_depth > 0usize { ret ok }
+    let count = grid.batch_count
+    grid.batch_count = 0usize
+    if count == 0usize { ret ok }
+    ret grid.events.batch_done(grid.events.ctx, count)
 }
 
 fn cancel_edit(grid: *Grid) {
@@ -486,7 +551,26 @@ fn commit_edit(grid: *Grid) -> err {
     }
     grid.editing = false
     grid.edit_invalid = false
-    ret grid.events.cell_edited(grid.events.ctx, row, grid.origin[spec])
+    grid.select_open = false
+    ret raise_edit(grid, row, spec, grid.edit_old[0usize..grid.edit_old_len], text)
+}
+
+// The select editor of a small dictionary: its toggle and its picks.
+type SelectPick = struct { grid: *Grid, id: usize }
+
+fn on_select_toggle(ctx: *void) -> err {
+    let grid = mem.cast[*Grid](ctx)
+    grid.select_open = !grid.select_open
+    ret ok
+}
+
+fn on_select_pick(ctx: *void) -> err {
+    let pick = mem.cast[*SelectPick](ctx)
+    let grid = pick.grid
+    let text = table.dict_str(grid.t, grid.specs[grid.edit_spec].column, u32(pick.id))
+    copy_edit(grid, text)
+    grid.select_open = false
+    ret commit_edit(grid)
 }
 
 fn on_edit_change(ctx: *void, value: str) -> err {
@@ -513,12 +597,12 @@ fn edit_move(grid: *Grid, backward: bool) -> err {
     if backward {
         while c > 0usize {
             c -= 1usize
-            if grid.specs[c].editable { ret begin_edit(grid, row, grid.origin[c]) }
+            if grid.specs[c].editable { ret quiet_begin(grid, row, grid.origin[c]) }
         }
     } else {
         c += 1usize
         while c < grid.specs.len {
-            if grid.specs[c].editable { ret begin_edit(grid, row, grid.origin[c]) }
+            if grid.specs[c].editable { ret quiet_begin(grid, row, grid.origin[c]) }
             c += 1usize
         }
     }
@@ -555,7 +639,14 @@ fn edit_move(grid: *Grid, backward: bool) -> err {
         chosen = column < grid.specs.len
     }
     if !chosen { ret ok }
-    ret begin_edit(grid, grp.visible_row(grid.g, next_at), grid.origin[column])
+    ret quiet_begin(grid, grp.visible_row(grid.g, next_at), grid.origin[column])
+}
+
+// begin_edit that treats a refusal (locked, not editable) as nothing to do.
+fn quiet_begin(grid: *Grid, row: usize, spec: usize) -> err {
+    let began = begin_edit(grid, row, spec)
+    if began == Locked || began == NotEditable { ret ok }
+    ret began
 }
 
 fn on_edit_tab(ctx: *void) -> err {
@@ -948,6 +1039,32 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     if column >= grid.specs.len { ret control.TooLarge }
     if grp.visible_is_group(grid.g, index) { ret group_cell(a, grid, grp.visible_group(grid.g, index), column, out) }
     let row = grp.visible_row(grid.g, index)
+    if grid.editing && grid.edit_row == row && grid.edit_spec == column && grid.specs[column].choice && table.column_kind(grid.t, grid.specs[column].column) == table.Kind.Dict && table.dict_len(grid.t, grid.specs[column].column) <= 24usize && table.dict_len(grid.t, grid.specs[column].column) != 0usize {
+        let dict_column = grid.specs[column].column
+        let n = table.dict_len(grid.t, dict_column)
+        let (options, options_error) = mem.alloc[str](a, n)
+        if options_error != ok { ret options_error }
+        let (picks, picks_error) = mem.alloc[SelectPick](a, n)
+        if picks_error != ok { ret picks_error }
+        let (submits, submits_error) = mem.alloc[widget.Submit](a, n)
+        if submits_error != ok { ret submits_error }
+        var current = 0usize
+        var i = 0usize
+        while i < n {
+            options[i] = table.dict_str(grid.t, dict_column, u32(i))
+            picks[i] = SelectPick { grid: grid, id: i }
+            submits[i] = widget.Submit { ctx: mem.cast[*void](&picks[i]), invoke: on_select_pick }
+            if same_text(options[i], grid.edit_text[0usize..grid.edit_len]) { current = i }
+            i += 1usize
+        }
+        let (toggle, toggle_error) = mem.alloc[widget.Submit](a, 1usize)
+        if toggle_error != ok { ret toggle_error }
+        toggle[0usize] = widget.Submit { ctx: mem.cast[*void](grid), invoke: on_select_toggle }
+        let (chooser, chooser_error) = control.select(a, grid.key + EDIT_KEY, grid.theme, grid.specs[column].title, options, current, grid.select_open, &toggle[0usize], submits)
+        if chooser_error != ok { ret chooser_error }
+        *out = chooser
+        ret ok
+    }
     if grid.editing && grid.edit_row == row && grid.edit_spec == column {
         var options = control.field_options()
         options.width = grid.columns[column].width - 12.0
@@ -1021,7 +1138,7 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
         while column < grid.specs.len && !grid.specs[column].editable { column += 1usize }
         if column < grid.specs.len {
             let began = begin_edit(grid, usize(at), grid.origin[column])
-            if began != ok { ret began }
+            if began != ok && began != Locked && began != NotEditable { ret began }
         }
     } else if grid.editing && grid.edit_row != usize(at) {
         cancel_edit(grid)

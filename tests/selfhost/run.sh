@@ -962,6 +962,11 @@ data_tablesearch_written=$($test_build/neper-self emit-executable "$repo/tests/s
 [ "$data_tablesearch_written" = 'executable written' ]
 chmod +x "$test_build/data-tablesearch-selfhost"
 "$test_build/data-tablesearch-selfhost"
+# `e.data.tableview` single-row reposition and refilter over 150,000 rows against a full apply_sort / apply_filter: nullable int, float, folded and exact dictionary, heap string, three keys, key function, comparer, a filtered view (D2373).
+data_tablerow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_tablerow/src/main.e" "$repo" x64 linux "$test_build/data-tablerow-selfhost" --arena 768m)
+[ "$data_tablerow_written" = 'executable written' ]
+chmod +x "$test_build/data-tablerow-selfhost"
+"$test_build/data-tablerow-selfhost"
 # `e.ui.datagrid`: the grid view over the table, view and grouping through the UI test harness: virtual body, header tap reporting the sort, row tap reporting the storage row, group rows expanding and collapsing, footer summaries, no-data text (D2367).
 ui_datagrid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_datagrid/src/main.e" "$repo" x64 linux "$test_build/ui-datagrid-selfhost" --arena 768m)
 [ "$ui_datagrid_written" = 'executable written' ]

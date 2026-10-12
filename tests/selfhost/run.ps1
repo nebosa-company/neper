@@ -1014,6 +1014,12 @@ $dataTablesearchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $dataTablesearchWritten -ne 'executable written') { throw 'data_tablesearch emission failed' }
 & $dataTablesearchPath
 if ($LASTEXITCODE -ne 0) { throw "a data_tablesearch check failed: exit $LASTEXITCODE" }
+# `e.data.tableview` single-row reposition and refilter over 150,000 rows against a full apply_sort / apply_filter: nullable int, float, folded and exact dictionary, heap string, three keys, key function, comparer, a filtered view (D2373).
+$dataTablerowPath = Join-Path $testBuild 'data-tablerow-selfhost.exe'
+$dataTablerowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_tablerow\src\main.e') $repo 'x64' 'windows' $dataTablerowPath --arena 768m
+if ($LASTEXITCODE -ne 0 -or $dataTablerowWritten -ne 'executable written') { throw 'data_tablerow emission failed' }
+& $dataTablerowPath
+if ($LASTEXITCODE -ne 0) { throw "a data_tablerow check failed: exit $LASTEXITCODE" }
 # `e.ui.datagrid`: the grid view over the table, view and grouping through the UI test harness: virtual body, header tap reporting the sort, row tap reporting the storage row, group rows expanding and collapsing, footer summaries, no-data text (D2367).
 $uiDatagridPath = Join-Path $testBuild 'ui-datagrid-selfhost.exe'
 $uiDatagridWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_datagrid\src\main.e') $repo 'x64' 'windows' $uiDatagridPath --arena 768m
