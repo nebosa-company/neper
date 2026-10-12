@@ -10952,6 +10952,26 @@ greeting"
             esac
         done
     done < <(grep -v '^#' "$apps_table")
+    # The sheet fixtures (C172, C150): a disk of its own with a spreadsheet, a picture and a zip (from
+    # scripts/make_office_samples.py), so the Files list and Document's device list have the few entries the taps expect.
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = sheetfixture ] || continue
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        seed_disk="$test_build/shell-$fixture.disk"
+        python3 "$repo/scripts/make_fs_image.py" "$seed_disk" 8 "/budget.xlsx=$office_dir/budget.xlsx" "/pic.png=$office_dir/pic.png" "/zbig.txt=$office_dir/zbig.txt" "/zpaint.pdf=$office_dir/zpaint.pdf" "/zrun=$office_dir/zrun" "/zzzzzzzip.zip=$office_dir/zzzzzzzip.zip" > /dev/null
+        last_marker="${markers##*;;}"
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$crater_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$seed_disk" 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) printf 'NeperOS %s fixture did not reach "%s" (%s): %s\n' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
     # The install-on-disk fixtures: the package archive on a fresh disk (the shell keeps the package in /apps), and
     # a row named <base>_again boots the plain archive on that disk (the shell finds the app there).
     while IFS='|' read -r kind fixture port delay taps markers note; do

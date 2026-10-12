@@ -44,6 +44,8 @@ const DOCX: usize = 4usize
 const PPTX: usize = 5usize
 // A spreadsheet (C172): its first sheet's cells, a row a line with tabs between the cells, drawn as a grid.
 const SHEET: usize = 6usize
+// A PDF drawn page by page from its content streams (C152), with its text lines one tap away.
+const PDFPAGE: usize = 7usize
 
 type State = struct {
     // A file handed over by Files (C125): its name and text, shown as entry FILES of the list.
@@ -67,6 +69,21 @@ type State = struct {
     // The path of an open zip archive (C150), so its entries can be extracted: empty when the file is not one.
     zip_path: [64]u8,
     zip_path_len: usize,
+    // (C152) A text file over what the viewer holds is read a window at a time from the disk: its path and size, the
+    // window shown, where each window starts (at a line) and the pages before it, and whether another follows.
+    // (C152) An open PDF: its path (to be painted from), its page count, and whether the text lines are shown instead.
+    pdf_path: [64]u8,
+    pdf_path_len: usize,
+    pdf_pages: usize,
+    pdf_text: bool,
+    pdf_said: usize,
+    big_path: [64]u8,
+    big_path_len: usize,
+    big_size: usize,
+    big_chunk: usize,
+    big_starts: [64]usize,
+    big_base: [64]usize,
+    big_more: bool,
     zoom: usize,
     screen: usize,
     open: usize,
@@ -200,6 +217,7 @@ fn zip_text(a: *mem.Arena, s: *State, raw: []const u8) -> usize {
 fn pdf_text(a: *mem.Arena, s: *State, raw: []const u8) -> usize {
     let (found, pages_error) = pdf.pages(a, raw)
     if pages_error != ok { ret 0usize }
+    s.pdf_pages = found.len
     var n = 0usize
     var i = 0usize
     while i < found.len {
@@ -227,6 +245,77 @@ fn ends_with(whole: str, suffix: str) -> bool {
         i += 1usize
     }
     ret true
+}
+
+// (C152) The window `k` of a big text file into the handed text: from where window k starts, up to 12000 bytes ending
+// after the last line that fits; where window k + 1 starts is noted. False when there is no such window.
+const BIG_WINDOW: usize = 12000usize
+
+fn load_chunk(a: *mem.Arena, s: *State, k: usize) -> bool {
+    if k >= 63usize { ret false }
+    let path = ui.text_of(a, s.big_path[0usize..], s.big_path_len)
+    let offset = s.big_starts[k]
+    if offset >= s.big_size { ret false }
+    var want = s.big_size - offset
+    if want > BIG_WINDOW { want = BIG_WINDOW }
+    let (got, read_ok) = vaultfs.read_from(path, offset, mem.address_of(&s.hand_text[0usize]), want)
+    if !read_ok || got == 0usize { ret false }
+    var cut = got
+    if offset + got < s.big_size {
+        var i = got
+        while i > 0usize && s.hand_text[i - 1usize] != 10u8 { i -= 1usize }
+        if i > 0usize { cut = i }
+    }
+    s.hand_len = cut
+    s.big_starts[k + 1usize] = offset + cut
+    s.big_more = offset + cut < s.big_size
+    s.big_chunk = k
+    if s.hand_has_hl {
+        let classified = hl.classify(s.hand_hl, ui.text_of(a, s.hand_text[0usize..], s.hand_len), s.hand_classes[0usize..])
+    }
+    ret true
+}
+
+// (C152) The file name a `#!` first line stands for, by its interpreter, so the highlighter's extension table picks
+// the language: `#!/usr/bin/env python3` and `#!/bin/python` are Python, `node`, the shells, `perl`, `ruby`, `php` and
+// `lua` likewise. Empty when the text has no such line or the interpreter is not one of those.
+fn shebang_name(content_text: str) -> str {
+    if content_text.len < 3usize || content_text[0usize] != 35u8 || content_text[1usize] != 33u8 { ret "" }
+    var end = 2usize
+    while end < content_text.len && content_text[end] != 10u8 && content_text[end] != 13u8 { end += 1usize }
+    let line = content_text[2usize..end]
+    // The words of the line.
+    var word_start = 0usize
+    var first = ""
+    var second = ""
+    var words = 0usize
+    var i = 0usize
+    while i <= line.len {
+        if i == line.len || line[i] == 32u8 || line[i] == 9u8 {
+            if i > word_start {
+                let word = line[word_start..i]
+                if words == 0usize { first = word }
+                if words == 1usize || (words == 2usize && second.len > 0usize && second[0usize] == 45u8) { second = word }
+                words += 1usize
+            }
+            word_start = i + 1usize
+        }
+        i += 1usize
+    }
+    // The interpreter: the base name of the first word, or the word after `env` (and its options).
+    var base = first
+    var j = first.len
+    while j > 0usize && first[j - 1usize] != 47u8 { j -= 1usize }
+    base = first[j..first.len]
+    if ui.same(base, "env") && second.len > 0usize { base = second }
+    if base.len >= 6usize && ui.same(base[0usize..6usize], "python") { ret "x.py" }
+    if ui.same(base, "node") || ui.same(base, "nodejs") { ret "x.js" }
+    if ui.same(base, "sh") || ui.same(base, "bash") || ui.same(base, "zsh") || ui.same(base, "dash") || ui.same(base, "ksh") { ret "x.sh" }
+    if ui.same(base, "perl") { ret "x.pl" }
+    if ui.same(base, "ruby") { ret "x.rb" }
+    if ui.same(base, "php") { ret "x.php" }
+    if ui.same(base, "lua") { ret "x.lua" }
+    ret ""
 }
 
 // A page of a handed file is this many lines.
@@ -258,6 +347,7 @@ fn hand_lines(s: *State) -> usize {
 
 // The pages of what is open: a handed file's lines in pages, or a sample's own count.
 fn pages_of(s: *State) -> usize {
+    if s.open == FILES && s.hand_kind == PDFPAGE && !s.pdf_text { ret s.pdf_pages }
     if s.open == FILES { ret (hand_lines(s) + lines_per_page(s) - 1usize) / lines_per_page(s) }
     ret page_count(s.open)
 }
@@ -570,7 +660,7 @@ fn trim_bar(line: str) -> str {
     var end = line.len
     while start < end && line[start] == 32u8 { start += 1usize }
     if start < end && line[start] == 124u8 { start += 1usize }
-    while end > start && line[end - 1usize] == 32u8 { end -= 1usize }
+    while end > start && (line[end - 1usize] == 32u8 || line[end - 1usize] == 13u8) { end -= 1usize }
     if end > start && line[end - 1usize] == 124u8 { end -= 1usize }
     ret line[start..end]
 }
@@ -583,7 +673,7 @@ fn is_rule_row(line: str) -> bool {
     while i < line.len {
         let c = line[i]
         if c == 45u8 { dash = true }
-        if c != 45u8 && c != 58u8 && c != 124u8 && c != 32u8 { ret false }
+        if c != 45u8 && c != 58u8 && c != 124u8 && c != 32u8 && c != 13u8 { ret false }
         i += 1usize
     }
     ret dash
@@ -649,7 +739,9 @@ fn draw_cells(a: *mem.Arena, builder: *scene.Builder, faces: text.Faces, row: st
 fn draw_sheet(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     try ui.card(a, builder, 12.0, 84.0, 388.0, 730.0, 18.0, ui.cream())
     let content = content_of(a, s)
-    let total = line_total(content)
+    var total = line_total(content)
+    // The text ends with a newline: the empty line after it is not a row.
+    if total > 1usize && content.len > 0usize && content[content.len - 1usize] == 10u8 { total -= 1usize }
     var columns = field_count(splitter(a, content, 0usize), 9u8)
     if columns > 8usize { columns = 8usize }
     let zf = zoom_factor(s)
@@ -808,6 +900,105 @@ fn draw_code(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     ret ok
 }
 
+fn pdf_color(red: f64, green: f64, blue: f64) -> paint.Color {
+    ret paint.Color { red: f32(red), green: f32(green), blue: f32(blue), alpha: 1.0 }
+}
+
+// (C152) A PDF page painted: e.fmt.pdf's shapes (filled rectangles, stroked segments, text at its position and size)
+// laid out on a white sheet scaled to the card. The file is read and the page parsed for each draw (a frame's arena
+// is given back at the next).
+fn draw_pdf_page(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try ui.card(a, builder, 24.0, 84.0, 364.0, 680.0, 8.0, paint.Color { red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0 })
+    let path = ui.text_of(a, s.pdf_path[0usize..], s.pdf_path_len)
+    let (size, kind, day, found) = vaultfs.stat(path)
+    if !found || size == 0usize || size > 262144usize {
+        try ui.centred(a, builder, faces.jost, 17.0, "This page cannot be painted", 206.0, 400.0, ui.muted())
+        ret ok
+    }
+    let (raw, raw_error) = mem.alloc[u8](a, size)
+    if raw_error != ok { ret raw_error }
+    let (got, read_ok) = vaultfs.read_big(path, mem.address_of(&raw[0usize]), size)
+    if !read_ok || got != size {
+        try ui.centred(a, builder, faces.jost, 17.0, "This page cannot be painted", 206.0, 400.0, ui.muted())
+        ret ok
+    }
+    let (painting, paint_error) = pdf.page_painting(a, raw[0usize..got], s.page)
+    if paint_error != ok {
+        try ui.centred(a, builder, faces.jost, 17.0, "This page cannot be painted", 206.0, 400.0, ui.muted())
+        ret ok
+    }
+    if s.pdf_said != s.page + 1usize {
+        s.pdf_said = s.page + 1usize
+        ui.say("document pdf painted ")
+        ui.say_num(painting.shapes.len)
+        ui.say(" shapes\n")
+    }
+    var scale = 364.0 / f32(painting.width)
+    let tall = 680.0 / f32(painting.height)
+    if tall < scale { scale = tall }
+    let left: f32 = 24.0 + (364.0 - f32(painting.width) * scale) / 2.0
+    let top: f32 = 84.0
+    let page_height = f32(painting.height)
+    var i = 0usize
+    while i < painting.shapes.len {
+        let piece = painting.shapes[i]
+        let color = pdf_color(piece.red, piece.green, piece.blue)
+        let x0: f32 = left + f32(piece.x0) * scale
+        let y0: f32 = top + (page_height - f32(piece.y0)) * scale
+        if piece.kind == pdf.SHAPE_FILL {
+            let x1: f32 = left + f32(piece.x1) * scale
+            let y1: f32 = top + (page_height - f32(piece.y1)) * scale
+            var rx = x0
+            var ry = y0
+            var rw = x1 - x0
+            var rh = y1 - y0
+            if rw < 0.0 {
+                rx = x1
+                rw = 0.0 - rw
+            }
+            if rh < 0.0 {
+                ry = y1
+                rh = 0.0 - rh
+            }
+            try ui.card(a, builder, rx, ry, rw, rh, 0.0, color)
+        } else if piece.kind == pdf.SHAPE_LINE {
+            let x1: f32 = left + f32(piece.x1) * scale
+            let y1: f32 = top + (page_height - f32(piece.y1)) * scale
+            var thick = f32(piece.width) * scale
+            if thick < 1.0 { thick = 1.0 }
+            var dx = x1 - x0
+            var dy = y1 - y0
+            if dx < 0.0 { dx = 0.0 - dx }
+            if dy < 0.0 { dy = 0.0 - dy }
+            if dy < 0.5 {
+                var from = x0
+                if x1 < x0 { from = x1 }
+                try ui.card(a, builder, from, y0 - thick / 2.0, dx, thick, 0.0, color)
+            } else if dx < 0.5 {
+                var from = y0
+                if y1 < y0 { from = y1 }
+                try ui.card(a, builder, x0 - thick / 2.0, from, thick, dy, 0.0, color)
+            } else {
+                // A slanted segment as a run of dots.
+                var length = dx
+                if dy > length { length = dy }
+                var t: f32 = 0.0
+                let step: f32 = 1.5 / length
+                while t <= 1.0 {
+                    try ui.disc(a, builder, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, thick / 2.0 + 0.3, color)
+                    t += step
+                }
+            }
+        } else {
+            var size_dp = f32(piece.size) * scale
+            if size_dp < 5.0 { size_dp = 5.0 }
+            try ui.put(a, builder, faces.jost, size_dp, piece.text, x0, y0 - size_dp * 0.85, color)
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
 // A page of a PDF or Word file, drawn by hand.
 fn draw_page(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     let kind = file_kind(s.open)
@@ -877,6 +1068,11 @@ fn draw_slide(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fac
 fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
     var kind = file_kind(s.open)
     if s.open == FILES { kind = s.hand_kind }
+    var painted_pdf = false
+    if kind == PDFPAGE {
+        // The painted page, or the text lines when the toggle says so.
+        if s.pdf_text { kind = TXT } else { painted_pdf = true }
+    }
     try svg.draw(a, builder, ui.back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), ui.light())
     ui.hit(&s.hits, 500usize, 0.0, 10.0, 66.0, 56.0)
     var shown = file_name(s.open)
@@ -887,18 +1083,27 @@ fn draw_view(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         try ui.pill(a, builder, &s.hits, faces, 701usize, 16.0, 50.0, 70.0, 28.0, "Find", ui.soft(), 13.0)
         try ui.pill(a, builder, &s.hits, faces, 702usize, 94.0, 50.0, 40.0, 28.0, "A-", ui.soft(), 13.0)
         try ui.pill(a, builder, &s.hits, faces, 703usize, 142.0, 50.0, 40.0, 28.0, "A+", ui.soft(), 13.0)
+        if s.pdf_path_len > 0usize {
+            var toggle = "Text"
+            if s.pdf_text { toggle = "Page" }
+            try ui.pill(a, builder, &s.hits, faces, 705usize, 196.0, 50.0, 80.0, 28.0, toggle, ui.amber(), 13.0)
+        }
         if s.zip_path_len > 0usize { try ui.pill(a, builder, &s.hits, faces, 704usize, 196.0, 50.0, 96.0, 28.0, "Extract", ui.amber(), 13.0) }
     }
     if kind == MD { try draw_md(a, builder, s, faces) }
     if kind == TXT { try draw_txt(a, builder, s, faces) }
     if kind == CODE { try draw_code(a, builder, s, faces) }
     if kind == SHEET { try draw_sheet(a, builder, s, faces) }
+    if painted_pdf { try draw_pdf_page(a, builder, s, faces) }
     if kind == PDF || kind == DOCX { try draw_page(a, builder, s, faces) }
     if kind == PPTX { try draw_slide(a, builder, s, faces) }
-    if pages_of(s) > 1usize {
+    if pages_of(s) > 1usize || s.big_more || s.big_chunk > 0usize {
         try ui.card(a, builder, 0.0, 828.0, 412.0, 68.0, 0.0, paint.Color { red: 0.11, green: 0.12, blue: 0.14, alpha: 1.0 })
         try ui.pill(a, builder, &s.hits, faces, 600usize, 40.0, 838.0, 110.0, 46.0, "Previous", ui.soft(), 15.0)
-        try ui.centred(a, builder, faces.jost, 17.0, ui.join(a, ui.number(a, s.page + 1usize), " / ", ui.number(a, pages_of(s))), 206.0, 850.0, ui.light())
+        // A big file's pages count from its first window; the total grows as the windows are read (a plus sign).
+        var more_mark = ""
+        if s.big_more { more_mark = "+" }
+        try ui.centred(a, builder, faces.jost, 17.0, ui.join(a, ui.number(a, s.big_base[s.big_chunk] + s.page + 1usize), " / ", ui.join(a, ui.number(a, s.big_base[s.big_chunk] + pages_of(s)), more_mark, "")), 206.0, 850.0, ui.light())
         try ui.pill(a, builder, &s.hits, faces, 601usize, 262.0, 838.0, 110.0, 46.0, "Next", ui.amber(), 15.0)
     }
     ret ok
@@ -1165,7 +1370,16 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
     if s.screen == VIEW_SCREEN && s.open == FILES {
         if id == 701usize {
             s.find.len = 0usize
+            // Find looks through the lines of text, so a painted PDF shows them.
+            if s.pdf_path_len > 0usize { s.pdf_text = true }
             s.screen = FIND_SCREEN
+            ret true
+        }
+        if id == 705usize && s.pdf_path_len > 0usize {
+            s.pdf_text = !s.pdf_text
+            s.page = 0usize
+            ui.say("document pdf ")
+            if s.pdf_text { ui.say("text\n") } else { ui.say("page\n") }
             ret true
         }
         if id == 704usize && s.zip_path_len > 0usize {
@@ -1188,16 +1402,31 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             ret true
         }
         if id == 600usize {
-            if s.page > 0usize { s.page -= 1usize }
+            if s.page > 0usize {
+                s.page -= 1usize
+            } else if s.big_path_len > 0usize && s.big_chunk > 0usize {
+                // (C152) Back across a window of a big file.
+                if load_chunk(a, s, s.big_chunk - 1usize) { s.page = pages_of(s) - 1usize }
+            }
             ui.say("document page ")
-            ui.say_num(s.page + 1usize)
+            ui.say_num(s.big_base[s.big_chunk] + s.page + 1usize)
             ui.say("\n")
             ret true
         }
         if id == 601usize {
-            if s.page + 1usize < pages_of(s) { s.page += 1usize }
+            if s.page + 1usize < pages_of(s) {
+                s.page += 1usize
+            } else if s.big_path_len > 0usize && s.big_more {
+                // (C152) On into the next window of a big file: the pages before it are those of the window left.
+                let following_base = s.big_base[s.big_chunk] + pages_of(s)
+                let following = s.big_chunk + 1usize
+                if load_chunk(a, s, following) {
+                    s.big_base[following] = following_base
+                    s.page = 0usize
+                }
+            }
             ui.say("document page ")
-            ui.say_num(s.page + 1usize)
+            ui.say_num(s.big_base[s.big_chunk] + s.page + 1usize)
             ui.say("\n")
             ret true
         }
@@ -1223,6 +1452,10 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
 // (C123) Read the file at `hand_path` and make it the open document: Office and PDF text through the readers, a
 // text or source file up to 16 KB, the kind and highlighter picked by its extension. True when it read.
 fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
+    s.big_path_len = 0usize
+    s.big_chunk = 0usize
+    s.big_more = false
+    s.hand_has_hl = false
     var text_len = 0usize
     var has_text = false
     if ends_with(hand_path, ".docx") || ends_with(hand_path, ".pptx") || ends_with(hand_path, ".pdf") || ends_with(hand_path, ".odt") || ends_with(hand_path, ".odp") || ends_with(hand_path, ".zip") || ends_with(hand_path, ".xlsx") {
@@ -1249,7 +1482,24 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
     } else {
         // A text or source file: up to 16 KB of it, in pieces; the rest is not shown.
         let (plain_size, plain_kind, plain_day, plain_found) = vaultfs.stat(hand_path)
-        if plain_found {
+        if plain_found && plain_size > 16000usize && hand_path.len <= 64usize {
+            // (C152) Over 16 KB: read a window at a time from the disk, not the whole.
+            var b = 0usize
+            while b < hand_path.len {
+                s.big_path[b] = hand_path[b]
+                b += 1usize
+            }
+            s.big_path_len = hand_path.len
+            s.big_size = plain_size
+            s.big_starts[0usize] = 0usize
+            s.big_base[0usize] = 0usize
+            if load_chunk(a, s, 0usize) {
+                text_len = s.hand_len
+                has_text = true
+            } else {
+                s.big_path_len = 0usize
+            }
+        } else if plain_found {
             var want = plain_size
             if want > 16000usize { want = 16000usize }
             let (plain_len, plain_ok) = vaultfs.read_big(hand_path, mem.address_of(&s.hand_text[0usize]), want)
@@ -1286,10 +1536,40 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
         let (shown_kind, shown_lang) = kind_by_name(ui.text_of(a, s.hand_name[0usize..], n))
         s.hand_kind = shown_kind
         s.hand_lang = shown_lang
-        if hand_path.len > 4usize && ends_with(hand_path, ".pdf") { s.hand_kind = TXT }
+        // (C152) A PDF is painted, one page at a time; its text lines stay behind a tap.
+        s.pdf_path_len = 0usize
+        s.pdf_text = false
+        if hand_path.len > 4usize && ends_with(hand_path, ".pdf") {
+            s.hand_kind = TXT
+            if hand_path.len <= 64usize {
+                var q = 0usize
+                while q < hand_path.len {
+                    s.pdf_path[q] = hand_path[q]
+                    q += 1usize
+                }
+                s.pdf_path_len = hand_path.len
+                s.hand_kind = PDFPAGE
+            }
+        }
         if ends_with(hand_path, ".xlsx") { s.hand_kind = SHEET }
         // The table-driven highlighter takes any extension it knows that is not a document format.
-        let (hl_index, hl_found) = hl.language_for(ui.text_of(a, s.hand_name[0usize..], n))
+        let (named_index, named_found) = hl.language_for(ui.text_of(a, s.hand_name[0usize..], n))
+        var hl_index = named_index
+        var hl_found = named_found
+        // (C152) A file with no known extension that starts `#!` is the language of its interpreter.
+        if !hl_found && s.hand_kind == TXT && s.hand_len > 2usize {
+            let guess = shebang_name(ui.text_of(a, s.hand_text[0usize..], s.hand_len))
+            if guess.len > 0usize {
+                let (guessed_index, guessed_found) = hl.language_for(guess)
+                hl_index = guessed_index
+                hl_found = guessed_found
+                if guessed_found {
+                    ui.say("document shebang ")
+                    ui.say(hl.name(guessed_index))
+                    ui.say("\n")
+                }
+            }
+        }
         if hl_found && s.hand_kind != MD && !ends_with(hand_path, ".pdf") && !ends_with(hand_path, ".docx") && !ends_with(hand_path, ".pptx") && !ends_with(hand_path, ".odt") && !ends_with(hand_path, ".odp") && !ends_with(hand_path, ".zip") && !ends_with(hand_path, ".xlsx") {
             s.hand_kind = CODE
             s.hand_hl = hl_index
@@ -1330,6 +1610,13 @@ fn open_path(a: *mem.Arena, s: *State, hand_path: str) -> bool {
         // The first line of what was read, so a fixture can check the text.
         var first = 0usize
         while first < s.hand_len && s.hand_text[first] != 10u8 { first += 1usize }
+        if s.big_path_len > 0usize {
+            ui.say("document big file ")
+            ui.say_num(s.big_size)
+            ui.say(" bytes, window 1 ")
+            ui.say_num(s.hand_len)
+            ui.say("\n")
+        }
         ui.say("document first line ")
         ui.say_text(ui.text_of(a, s.hand_text[0usize..], first))
         ui.say("\n")

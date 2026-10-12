@@ -93,6 +93,27 @@ fn read_big(path: str, addr: usize, cap: usize) -> (usize, bool) {
     ret (at, true)
 }
 
+// (C152) Up to `cap` bytes of a file from byte `offset` of it, in pieces, into [addr, addr + cap): the bytes read, and
+// whether it read. A file over what a viewer holds is read a window at a time.
+fn read_from(path: str, offset: usize, addr: usize, cap: usize) -> (usize, bool) {
+    var at = 0usize
+    while at < cap {
+        var want = cap - at
+        if want > 2048usize { want = 2048usize }
+        let sent = os.send(FS_REQ, fsproto.OP_READ_AT, fsproto.NO_SLOT)
+        if sent == REFUSED { ret (0usize, false) }
+        fsproto.send_str(FS_REQ, path)
+        let offset_sent = os.send(FS_REQ, offset + at, fsproto.NO_SLOT)
+        let want_sent = os.send(FS_REQ, want, fsproto.NO_SLOT)
+        let result = os.recv(FS_REP, fsproto.NO_SLOT)
+        let got = fsproto.recv_packed(FS_REP, addr + at, want)
+        if result != fsproto.RESULT_OK { ret (at, false) }
+        at += got
+        if got < want { ret (at, true) }
+    }
+    ret (at, true)
+}
+
 // (C125) The size and kind (1 file, 2 directory) of `path`, and whether the filesystem answered and has it.
 fn stat(path: str) -> (usize, usize, usize, bool) {
     let sent = os.send(FS_REQ, fsproto.OP_STAT, fsproto.NO_SLOT)

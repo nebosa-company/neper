@@ -11160,6 +11160,19 @@ if ($neperosQemu) {
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
         if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
     }
+    # The sheet fixtures (C172, C150): a disk of its own with a spreadsheet, a picture and a zip (from
+    # scripts/make_office_samples.py), so the Files list and Document's device list have the few entries the taps expect.
+    foreach ($row in $appsTable) {
+        $fields = $row.Split('|', 7)
+        if ($fields[0] -ne 'sheetfixture') { continue }
+        $fixture = $fields[1]
+        $seedDisk = Join-Path $testBuild "shell-$fixture.disk"
+        & python (Join-Path $repo 'scripts\make_fs_image.py') $seedDisk 8 ('/budget.xlsx=' + (Join-Path $officeDir 'budget.xlsx')) ('/pic.png=' + (Join-Path $officeDir 'pic.png')) ('/zbig.txt=' + (Join-Path $officeDir 'zbig.txt')) ('/zpaint.pdf=' + (Join-Path $officeDir 'zpaint.pdf')) ('/zrun=' + (Join-Path $officeDir 'zrun')) ('/zzzzzzzip.zip=' + (Join-Path $officeDir 'zzzzzzzip.zip')) | Out-Null
+        if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
+        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $craterArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $seedDisk 0 $fields[4] 2>&1) -join "`n"
+        $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+        if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+    }
     # The install-on-disk fixtures: the package archive on a fresh disk (the shell keeps the package in /apps), and
     # a row named <base>_again boots the plain archive on that disk (the shell finds the app there).
     foreach ($row in $appsTable) {

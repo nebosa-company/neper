@@ -180,6 +180,7 @@ type State = struct {
     thumb_tex: [48]scene.TextureId,
     thumb_w: [48]f32,
     thumb_h: [48]f32,
+    thumb_key: [48]usize,
     hits: [96]Hit,
     hit_total: usize,
 }
@@ -696,10 +697,20 @@ fn draw_tile(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
 fn load_thumbs(a: *mem.Arena, kit: *appkit.Kit, s: *State) {
     if !s.grid || !s.real { ret }
     var pos = 0usize
-    while pos < s.child_total && pos < 24usize {
+    while pos < s.child_total {
         let index = s.children[pos]
+        // A node slot reused for another file (after a delete, a rename or a move) is read again: its key is the
+        // file's name and size.
+        var key = s.nodes[index].kb * 131usize + s.nodes[index].name_len
+        var k = 0usize
+        while k < s.nodes[index].name_len {
+            key = key * 31usize + usize(s.nodes[index].name[k])
+            k += 1usize
+        }
+        if s.thumb_state[index] != 0u8 && s.thumb_key[index] != key { s.thumb_state[index] = 0u8 }
         if s.thumb_state[index] == 0u8 && !s.nodes[index].is_dir && s.nodes[index].kind == 6usize {
             s.thumb_state[index] = 2u8
+            s.thumb_key[index] = key
             let path = path_of(a, s, index)
             let (size, kind, day, found) = vaultfs.stat(path)
             if found && size > 8usize && size <= 262144usize {
@@ -775,9 +786,9 @@ fn draw_browse(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
         hit(s, 500usize, 0.0, 10.0, 66.0, 56.0)
         try clipped(a, builder, faces.jost_bold, 26.0, name_of(a, s, s.cwd), 62.0, 14.0, 220.0, light())
         try clipped(a, builder, faces.grotesk, 12.0, path_text(a, s, s.cwd), 62.0, 54.0, 250.0, light_muted())
-        if s.real { try pill(a, builder, s, faces, 156usize, 322.0, 52.0, 74.0, 28.0, grid_label(s.grid), soft(), 13.0) }
     }
     try pill(a, builder, s, faces, 700usize, 312.0, 20.0, 84.0, 34.0, sort_name(s.sort), soft(), 14.0)
+    if s.real && !s.recent && s.query_len == 0usize { try pill(a, builder, s, faces, 156usize, 322.0, 58.0, 74.0, 28.0, grid_label(s.grid), soft(), 13.0) }
     if s.query_len == 0usize && !s.recent { try pill(a, builder, s, faces, 152usize, 220.0, 20.0, 84.0, 34.0, "Search", soft(), 14.0) }
     if s.query_len == 0usize && s.moving == NONE && s.real && !s.select_mode { try pill(a, builder, s, faces, 153usize, 128.0, 20.0, 84.0, 34.0, "Select", soft(), 14.0) }
     // The rows, shifted by the scroll; only whole rows are drawn.
@@ -1259,7 +1270,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         ret false
     }
     // (C150) The grid of thumbnails and the list, in a folder.
-    if id == 156usize && s.real && s.cwd != 0usize {
+    if id == 156usize && s.real {
         s.grid = !s.grid
         s.scroll = 0.0
         say("files view ")

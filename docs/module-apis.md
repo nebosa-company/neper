@@ -29169,8 +29169,32 @@ fn mem_read(ctx: *void, dst: []u8) -> (usize, err)
 fn put_latin1(out: []u8, at: usize, c: u8) -> usize
 fn newline(out: []u8, at: usize) -> usize
 fn text_of(a: *mem.Arena, content: []const u8) -> (str, err)
+type Tree = struct { table: []Object, count: usize, page_objects: []usize, page_count: usize }
+fn page_tree(a: *mem.Arena, data: []const u8) -> (Tree, err)
 fn pages(a: *mem.Arena, data: []const u8) -> ([]str, err)
+type Shape = struct { kind: u8, x0: f64, y0: f64, x1: f64, y1: f64, width: f64, red: f64, green: f64, blue: f64, size: f64, text: str }
+type Painting = struct { width: f64, height: f64, shapes: []Shape }
+type Segment = struct { x0: f64, y0: f64, x1: f64, y1: f64 }
+const SHAPE_FILL: u8 = 0u8
+const SHAPE_LINE: u8 = 1u8
+const SHAPE_TEXT: u8 = 2u8
+const MAX_SHAPES: usize = 4000usize
+const MAX_SEGMENTS: usize = 256usize
+const STATE_DEPTH: usize = 8usize
+type Painter = struct { out: []Shape, n: usize, fill_r: f64, fill_g: f64, fill_b: f64, stroke_r: f64, stroke_g: f64, stroke_b: f64, line_width: f64, scale_x: f64, scale_y: f64, shift_x: f64, shift_y: f64, saved: [88]f64, depth: usize, segs: [256]Segment, seg_n: usize, rects: [64]Segment, rect_n: usize, cur_x: f64, cur_y: f64, start_x: f64, start_y: f64, tm_x: f64, tm_y: f64, line_x: f64, line_y: f64, leading: f64, font_size: f64, text_scale: f64 }
+fn paint_start(out: []Shape) -> Painter
+fn paint_push(p: *Painter, kind: u8, x0: f64, y0: f64, x1: f64, y1: f64, width: f64, red: f64, green: f64, blue: f64, size: f64, text: str)
+fn paint_path(p: *Painter, fill: bool, stroke: bool)
+fn paint_line_to(p: *Painter, x: f64, y: f64)
+fn paint_text(p: *Painter, text: str)
+fn paint_move_text(p: *Painter, tx: f64, ty: f64)
+fn operand_number(text: str) -> f64
+fn paint_content(a: *mem.Arena, p: *Painter, content: []const u8) -> err
+fn media_box(data: []const u8, from: usize, until: usize) -> (f64, f64, bool)
+fn page_painting(a: *mem.Arena, data: []const u8, page: usize) -> (Painting, err)
 ```
+
+A page painted (C152, C172, D3801): `page_painting` runs page N's content streams and gives the page's size (its MediaBox, or the first MediaBox of any page tree node, else 612 by 792) and the shapes in paint order: `SHAPE_FILL` (a rectangle filled by `re` then `f`, `F`, `f*`, `B`), `SHAPE_LINE` (a segment of `m`/`l`/`h`/`re` stroked by `S`, `s`, `B`, with the line width and the stroke colour) and `SHAPE_TEXT` (a `Tj`/`TJ`/`'`/`"` string at the text position, with the font size scaled by `Tm`), in user space (origin bottom left) after the `cm` scale and offset; colours from `g`, `rg`, `k` and their stroke forms, `q`/`Q` nest eight deep. Not a renderer: a `cm` rotation or shear is not followed, a curve is its chord, a filled path that is not a rectangle is not filled, clipping and images (`Do`) are ignored, and text is placed with no glyph metrics (half its size a character). Checked on a hand-written page with a red fill, a blue 3-unit line, text after `Td`, a `cm` scale and offset undone by `Q`, and a CMYK black kerned `TJ` (`reference_paint.py`).
 
 The text of a PDF held in a byte slice (C123): `pages` gives each page's text in page-tree order. The objects are found by scanning for `N G obj` (a file with its objects in object streams, or with an xref stream, is `NoPages`), the page order is the catalog's tree, a page's content streams are joined and `/FlateDecode` is undone through `e.fmt.zlib`, and the text operators `Tj`, `TJ` (a kern of -200 or more is a word space), `'`, `"`, `T*`, `Td`, `TD`, `Tm` and `ET` give the lines; literal strings keep their escapes and octal codes, hex strings are read, Latin-1 bytes are written as UTF-8. Not a renderer and not a font reader: an embedded font with its own encoding gives its codes. Checked against PDFs written by the fixture's generator.
 

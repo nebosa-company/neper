@@ -173,6 +173,8 @@ type Card = struct {
     values: [180]u8,
     value_len: [5]usize,
     seed: usize,
+    // (C154) The scan this document keeps: the number of its /DCIM/SCAN_nnnn.png (0 until one is attached).
+    scan: usize,
     used: bool,
 }
 
@@ -264,7 +266,7 @@ fn count_cards(s: *State) -> usize {
 
 // ---- (C154) Cards kept sealed under the Secure vault's key: /w/c<i> for slot i, the record named c<i>.
 
-const PACKED_CARD: usize = 248usize
+const PACKED_CARD: usize = 250usize
 
 // A card as bytes: kind, colour, document type, seed (two bytes), the title and subtitle with their lengths and the
 // five values with theirs; the length.
@@ -303,6 +305,9 @@ fn pack_card(c: Card, out: []u8) -> usize {
         i += 1usize
     }
     n += 180usize
+    out[n] = u8(c.scan & 255usize)
+    out[n + 1usize] = u8((c.scan >> 8usize) & 255usize)
+    n += 2usize
     ret n
 }
 
@@ -341,6 +346,8 @@ fn unpack_card(plain: []const u8) -> (Card, bool) {
         c.values[i] = plain[n + i]
         i += 1usize
     }
+    n += 180usize
+    c.scan = usize(plain[n]) | (usize(plain[n + 1usize]) << 8usize)
     if c.title_len > 24usize || c.sub_len > 32usize || c.kind > DOC { ret (c, false) }
     i = 0usize
     while i < 5usize {
@@ -364,7 +371,7 @@ fn save_all(a: *mem.Arena, s: *State) -> usize {
         if i >= 10usize { record_name = join(a, "c1", number_label(i - 10usize), "") }
         let path = join(a, "/w/", record_name, "")
         if s.cards[i].used {
-            var plain: [248]u8 = zero
+            var plain: [256]u8 = zero
             let n = pack_card(s.cards[i], plain[0usize..])
             var nonce: [16]u8 = zero
             if vaultfs.random(mem.address_of(&nonce[0usize]), 2usize) {
@@ -1405,6 +1412,11 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
                 say("wallet opened ")
                 say_text(title_of(a, s.cards[s.open]))
                 say("\n")
+                if s.cards[s.open].kind == PAYMENT {
+                    say("wallet expiry ")
+                    say_text(value_of(a, s.cards[s.open], 1usize))
+                    say("\n")
+                }
                 if s.cards[s.open].kind == BANK {
                     if valid.iban(value_of(a, s.cards[s.open], 2usize)) { say("wallet iban valid\n") } else { say("wallet iban invalid\n") }
                 }
@@ -1587,20 +1599,51 @@ fn load_scan(a: *mem.Arena, kit: *appkit.Kit, s: *State) {
     var names: [512]u8 = zero
     let (name_bytes, listed) = vaultfs.list("/DCIM", mem.address_of(&names[0usize]), 512usize)
     if !listed { ret }
+    // (C154) The scan this document keeps; a document with none takes the newest scan no other document has.
     var newest = ""
+    var newest_number = 0usize
+    var own = ""
+    let wanted = s.cards[s.open].scan
     var start = 0usize
     var pos = 0usize
     while pos < name_bytes {
         if names[pos] == 10u8 {
             let file_name = names[start..pos]
             if file_name.len > 5usize && file_name[0usize] == 83u8 && file_name[1usize] == 67u8 && file_name[2usize] == 65u8 && file_name[3usize] == 78u8 && file_name[4usize] == 95u8 {
-                newest = join(a, "/DCIM/", file_name, "")
+                var scan_number = 0usize
+                var d = 5usize
+                while d < file_name.len && file_name[d] >= 48u8 && file_name[d] <= 57u8 {
+                    scan_number = scan_number * 10usize + usize(file_name[d] - 48u8)
+                    d += 1usize
+                }
+                var claimed = false
+                var other = 0usize
+                while other < MAX_CARDS {
+                    if other != s.open && s.cards[other].used && s.cards[other].scan == scan_number && scan_number != 0usize { claimed = true }
+                    other += 1usize
+                }
+                if wanted != 0usize && scan_number == wanted { own = join(a, "/DCIM/", file_name, "") }
+                if !claimed {
+                    newest = join(a, "/DCIM/", file_name, "")
+                    newest_number = scan_number
+                }
             }
             start = pos + 1usize
         }
         pos += 1usize
     }
+    if own.len > 0usize {
+        newest = own
+        newest_number = wanted
+    }
     if newest.len == 0usize { ret }
+    if s.cards[s.open].scan != newest_number {
+        s.cards[s.open].scan = newest_number
+        say("wallet scan attached ")
+        say_num(newest_number)
+        say("\n")
+        let kept = save_all(a, s)
+    }
     let (size, kind, day, found) = vaultfs.stat(newest)
     if !found || size == 0usize || size > 262144usize { ret }
     let (raw, raw_error) = mem.alloc[u8](a, size)

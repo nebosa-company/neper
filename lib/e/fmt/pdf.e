@@ -474,15 +474,17 @@ fn text_of(a: *mem.Arena, content: []const u8) -> (str, err) {
     ret (out[0usize..at], ok)
 }
 
-// The text of each page of a PDF held in `data`, in page-tree order.
-fn pages(a: *mem.Arena, data: []const u8) -> ([]str, err) {
+// The objects of a PDF and its page objects in page-tree order (every page object in file order when there is no usable
+// tree): shared by `pages` and `page_painting`.
+type Tree = struct { table: []Object, count: usize, page_objects: []usize, page_count: usize }
+
+fn page_tree(a: *mem.Arena, data: []const u8) -> (Tree, err) {
     if !at_word(data, 0usize, "%PDF-") && find(data, "%PDF-", 0usize, 1024usize) >= 1024usize { ret (zero, NotPdf) }
     let (table, count, objects_error) = objects(a, data)
     if objects_error != ok { ret (zero, objects_error) }
     let (page_objects, po_error) = mem.alloc[usize](a, MAX_PAGES)
     if po_error != ok { ret (zero, po_error) }
     var page_count = 0usize
-    // The catalog's page tree.
     var i = 0usize
     while i < count && page_count == 0usize {
         if has_pair(data, table[i].start, table[i].end, "Type", "Catalog") {
@@ -495,7 +497,6 @@ fn pages(a: *mem.Arena, data: []const u8) -> ([]str, err) {
         }
         i += 1usize
     }
-    // No usable tree: every page object in file order.
     if page_count == 0usize {
         i = 0usize
         while i < count && page_count < MAX_PAGES {
@@ -507,6 +508,17 @@ fn pages(a: *mem.Arena, data: []const u8) -> ([]str, err) {
         }
     }
     if page_count == 0usize { ret (zero, NoPages) }
+    ret (Tree { table: table, count: count, page_objects: page_objects, page_count: page_count }, ok)
+}
+
+// The text of each page of a PDF held in `data`, in page-tree order.
+fn pages(a: *mem.Arena, data: []const u8) -> ([]str, err) {
+    let (tree, tree_error) = page_tree(a, data)
+    if tree_error != ok { ret (zero, tree_error) }
+    let table = tree.table
+    let count = tree.count
+    let page_objects = tree.page_objects
+    let page_count = tree.page_count
     let (out, out_error) = mem.alloc[str](a, page_count)
     if out_error != ok { ret (zero, out_error) }
     var p = 0usize
@@ -556,4 +568,468 @@ fn pages(a: *mem.Arena, data: []const u8) -> ([]str, err) {
         p += 1usize
     }
     ret (out, ok)
+}
+
+// ---- A page painted (C152, C172): what a content stream draws as shapes a viewer can lay out itself.
+//
+// `Shape.kind` is SHAPE_FILL (a filled rectangle from (x0, y0) to (x1, y1)), SHAPE_LINE (a stroked segment of
+// `width`) or SHAPE_TEXT (the string `text` with its baseline start at (x0, y0), `size` high). Coordinates are the
+// page's user space after the content's `cm` scales and offsets (origin bottom left, y up). Colours are the fill (or
+// stroke) colour in force, 0..1. Not a full renderer: only a scale and a translation of `cm` are followed, a
+// curve is drawn as its chord, a filled path that is not a rectangle is not filled, a clip does nothing, and text
+// is placed from the standard fonts' Latin-1 codes at a size with no glyph metrics (a string's advance is half its
+// size a character).
+type Shape = struct { kind: u8, x0: f64, y0: f64, x1: f64, y1: f64, width: f64, red: f64, green: f64, blue: f64, size: f64, text: str }
+type Painting = struct { width: f64, height: f64, shapes: []Shape }
+type Segment = struct { x0: f64, y0: f64, x1: f64, y1: f64 }
+
+const SHAPE_FILL: u8 = 0u8
+const SHAPE_LINE: u8 = 1u8
+const SHAPE_TEXT: u8 = 2u8
+const MAX_SHAPES: usize = 4000usize
+const MAX_SEGMENTS: usize = 256usize
+const STATE_DEPTH: usize = 8usize
+
+// The painter: the shapes so far, the graphics state, the path under construction and the text state.
+type Painter = struct { out: []Shape, n: usize, fill_r: f64, fill_g: f64, fill_b: f64, stroke_r: f64, stroke_g: f64, stroke_b: f64, line_width: f64, scale_x: f64, scale_y: f64, shift_x: f64, shift_y: f64, saved: [88]f64, depth: usize, segs: [256]Segment, seg_n: usize, rects: [64]Segment, rect_n: usize, cur_x: f64, cur_y: f64, start_x: f64, start_y: f64, tm_x: f64, tm_y: f64, line_x: f64, line_y: f64, leading: f64, font_size: f64, text_scale: f64 }
+
+fn paint_start(out: []Shape) -> Painter {
+    var p: Painter = zero
+    p.out = out
+    p.scale_x = 1.0f64
+    p.scale_y = 1.0f64
+    p.line_width = 1.0f64
+    p.text_scale = 1.0f64
+    p.font_size = 12.0f64
+    ret p
+}
+
+fn paint_push(p: *Painter, kind: u8, x0: f64, y0: f64, x1: f64, y1: f64, width: f64, red: f64, green: f64, blue: f64, size: f64, text: str) {
+    if p.n >= p.out.len { ret }
+    p.out[p.n] = Shape { kind: kind, x0: p.scale_x * x0 + p.shift_x, y0: p.scale_y * y0 + p.shift_y, x1: p.scale_x * x1 + p.shift_x, y1: p.scale_y * y1 + p.shift_y, width: width, red: red, green: green, blue: blue, size: size, text: text }
+    p.n += 1usize
+}
+
+// Paint the pending rectangles filled and/or the pending segments stroked, then forget the path.
+fn paint_path(p: *Painter, fill: bool, stroke: bool) {
+    var i = 0usize
+    if fill {
+        while i < p.rect_n {
+            paint_push(p, SHAPE_FILL, p.rects[i].x0, p.rects[i].y0, p.rects[i].x1, p.rects[i].y1, 0.0f64, p.fill_r, p.fill_g, p.fill_b, 0.0f64, "")
+            i += 1usize
+        }
+    }
+    if stroke {
+        let w = p.line_width * p.scale_x
+        i = 0usize
+        while i < p.rect_n {
+            let r = p.rects[i]
+            paint_push(p, SHAPE_LINE, r.x0, r.y0, r.x1, r.y0, w, p.stroke_r, p.stroke_g, p.stroke_b, 0.0f64, "")
+            paint_push(p, SHAPE_LINE, r.x1, r.y0, r.x1, r.y1, w, p.stroke_r, p.stroke_g, p.stroke_b, 0.0f64, "")
+            paint_push(p, SHAPE_LINE, r.x1, r.y1, r.x0, r.y1, w, p.stroke_r, p.stroke_g, p.stroke_b, 0.0f64, "")
+            paint_push(p, SHAPE_LINE, r.x0, r.y1, r.x0, r.y0, w, p.stroke_r, p.stroke_g, p.stroke_b, 0.0f64, "")
+            i += 1usize
+        }
+        i = 0usize
+        while i < p.seg_n {
+            let g = p.segs[i]
+            paint_push(p, SHAPE_LINE, g.x0, g.y0, g.x1, g.y1, w, p.stroke_r, p.stroke_g, p.stroke_b, 0.0f64, "")
+            i += 1usize
+        }
+    }
+    p.rect_n = 0usize
+    p.seg_n = 0usize
+}
+
+fn paint_line_to(p: *Painter, x: f64, y: f64) {
+    if p.seg_n < MAX_SEGMENTS {
+        p.segs[p.seg_n] = Segment { x0: p.cur_x, y0: p.cur_y, x1: x, y1: y }
+        p.seg_n += 1usize
+    }
+    p.cur_x = x
+    p.cur_y = y
+}
+
+// Draw `text` at the text position, advancing it by half the size a character.
+fn paint_text(p: *Painter, text: str) {
+    if text.len == 0usize { ret }
+    let size = p.font_size * p.text_scale
+    paint_push(p, SHAPE_TEXT, p.tm_x, p.tm_y, p.tm_x, p.tm_y, 0.0f64, p.fill_r, p.fill_g, p.fill_b, size * p.scale_y, text)
+    p.tm_x += f64(text.len) * size * 0.5f64
+}
+
+fn paint_move_text(p: *Painter, tx: f64, ty: f64) {
+    p.line_x += tx * p.text_scale
+    p.line_y += ty * p.text_scale
+    p.tm_x = p.line_x
+    p.tm_y = p.line_y
+}
+
+fn operand_number(text: str) -> f64 {
+    let (value, parse_error) = str.parse_f64(text)
+    if parse_error != ok { ret 0.0f64 }
+    ret value
+}
+
+// Run a content stream over the painter.
+fn paint_content(a: *mem.Arena, p: *Painter, content: []const u8) -> err {
+    var operands: [8]f64 = zero
+    var count = 0usize
+    let (buffer, buffer_error) = mem.alloc[u8](a, content.len * 2usize + 16usize)
+    if buffer_error != ok { ret buffer_error }
+    var used = 0usize
+    var pending_start = 0usize
+    var has_text = false
+    var in_array = false
+    var i = 0usize
+    while i < content.len {
+        let c = content[i]
+        if is_space(c) {
+            i += 1usize
+        } else if c == 37u8 {
+            while i < content.len && content[i] != 10u8 && content[i] != 13u8 { i += 1usize }
+        } else if c == 40u8 {
+            // A literal string into the buffer: appended to the pending text.
+            if !has_text {
+                pending_start = used
+                has_text = true
+            }
+            var depth = 1usize
+            i += 1usize
+            while i < content.len && depth > 0usize {
+                let d = content[i]
+                if d == 92u8 && i + 1usize < content.len {
+                    let e = content[i + 1usize]
+                    i += 2usize
+                    if e == 110u8 || e == 114u8 || e == 116u8 || e == 98u8 || e == 102u8 {
+                        used = put_latin1(buffer, used, 32u8)
+                    } else if e >= 48u8 && e <= 55u8 {
+                        var code = usize(e - 48u8)
+                        var digits = 1usize
+                        while digits < 3usize && i < content.len && content[i] >= 48u8 && content[i] <= 55u8 {
+                            code = code * 8usize + usize(content[i] - 48u8)
+                            i += 1usize
+                            digits += 1usize
+                        }
+                        used = put_latin1(buffer, used, u8(code & 255usize))
+                    } else if e != 10u8 && e != 13u8 {
+                        used = put_latin1(buffer, used, e)
+                    }
+                } else {
+                    if d == 40u8 { depth += 1usize }
+                    if d == 41u8 { depth -= 1usize }
+                    if depth > 0usize { used = put_latin1(buffer, used, d) }
+                    i += 1usize
+                }
+            }
+        } else if c == 60u8 && i + 1usize < content.len && content[i + 1usize] == 60u8 {
+            i += 2usize
+        } else if c == 62u8 && i + 1usize < content.len && content[i + 1usize] == 62u8 {
+            i += 2usize
+        } else if c == 60u8 {
+            if !has_text {
+                pending_start = used
+                has_text = true
+            }
+            i += 1usize
+            var high = 0usize
+            var have_high = false
+            while i < content.len && content[i] != 62u8 {
+                let h = content[i]
+                var v = 99usize
+                if h >= 48u8 && h <= 57u8 { v = usize(h - 48u8) }
+                if h >= 65u8 && h <= 70u8 { v = usize(h - 55u8) }
+                if h >= 97u8 && h <= 102u8 { v = usize(h - 87u8) }
+                if v != 99usize {
+                    if have_high {
+                        used = put_latin1(buffer, used, u8(high * 16usize + v))
+                        have_high = false
+                    } else {
+                        high = v
+                        have_high = true
+                    }
+                }
+                i += 1usize
+            }
+            if have_high { used = put_latin1(buffer, used, u8(high * 16usize)) }
+            i += 1usize
+        } else if c == 91u8 {
+            in_array = true
+            i += 1usize
+        } else if c == 93u8 {
+            in_array = false
+            i += 1usize
+        } else if c == 47u8 {
+            // A name: skipped.
+            i += 1usize
+            while i < content.len && !is_space(content[i]) && !is_delim(content[i]) { i += 1usize }
+        } else if is_digit(c) || c == 45u8 || c == 43u8 || c == 46u8 {
+            var j = i + 1usize
+            while j < content.len && (is_digit(content[j]) || content[j] == 46u8) { j += 1usize }
+            let value = operand_number(content[i..j])
+            if in_array {
+                // A kern inside TJ: a big pull back is a word space.
+                if value <= -200.0f64 && has_text && used > pending_start && buffer[used - 1usize] != 32u8 { used = put_latin1(buffer, used, 32u8) }
+            } else {
+                if count < 8usize {
+                    operands[count] = value
+                    count += 1usize
+                } else {
+                    // Keep the last eight.
+                    var k = 0usize
+                    while k + 1usize < 8usize {
+                        operands[k] = operands[k + 1usize]
+                        k += 1usize
+                    }
+                    operands[7usize] = value
+                }
+            }
+            i = j
+        } else if (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 39u8 || c == 34u8 || c == 42u8 {
+            var j = i
+            while j < content.len && !is_space(content[j]) && !is_delim(content[j]) { j += 1usize }
+            let op = content[i..j]
+            // The operands: the last n of what was read, in order.
+            var o0 = 0.0f64
+            var o1 = 0.0f64
+            var o2 = 0.0f64
+            var o3 = 0.0f64
+            var o4 = 0.0f64
+            var o5 = 0.0f64
+            if count >= 6usize {
+                o0 = operands[count - 6usize]
+                o1 = operands[count - 5usize]
+                o2 = operands[count - 4usize]
+                o3 = operands[count - 3usize]
+                o4 = operands[count - 2usize]
+                o5 = operands[count - 1usize]
+            } else if count == 5usize {
+                o1 = operands[0usize]
+                o2 = operands[1usize]
+                o3 = operands[2usize]
+                o4 = operands[3usize]
+                o5 = operands[4usize]
+            } else if count == 4usize {
+                o2 = operands[0usize]
+                o3 = operands[1usize]
+                o4 = operands[2usize]
+                o5 = operands[3usize]
+            } else if count == 3usize {
+                o3 = operands[0usize]
+                o4 = operands[1usize]
+                o5 = operands[2usize]
+            } else if count == 2usize {
+                o4 = operands[0usize]
+                o5 = operands[1usize]
+            } else if count == 1usize {
+                o5 = operands[0usize]
+            }
+            let pending = buffer[pending_start..used]
+            if str.eq(op, "re") {
+                if p.rect_n < 64usize {
+                    p.rects[p.rect_n] = Segment { x0: o2, y0: o3, x1: o2 + o4, y1: o3 + o5 }
+                    p.rect_n += 1usize
+                }
+            } else if str.eq(op, "m") {
+                p.cur_x = o4
+                p.cur_y = o5
+                p.start_x = o4
+                p.start_y = o5
+            } else if str.eq(op, "l") {
+                paint_line_to(p, o4, o5)
+            } else if str.eq(op, "c") {
+                paint_line_to(p, o4, o5)
+            } else if str.eq(op, "v") || str.eq(op, "y") {
+                paint_line_to(p, o4, o5)
+            } else if str.eq(op, "h") {
+                paint_line_to(p, p.start_x, p.start_y)
+            } else if str.eq(op, "f") || str.eq(op, "F") || str.eq(op, "f*") {
+                paint_path(p, true, false)
+            } else if str.eq(op, "S") || str.eq(op, "s") {
+                paint_path(p, false, true)
+            } else if str.eq(op, "B") || str.eq(op, "B*") || str.eq(op, "b") || str.eq(op, "b*") {
+                paint_path(p, true, true)
+            } else if str.eq(op, "n") {
+                paint_path(p, false, false)
+            } else if str.eq(op, "rg") {
+                p.fill_r = o3
+                p.fill_g = o4
+                p.fill_b = o5
+            } else if str.eq(op, "RG") {
+                p.stroke_r = o3
+                p.stroke_g = o4
+                p.stroke_b = o5
+            } else if str.eq(op, "g") {
+                p.fill_r = o5
+                p.fill_g = o5
+                p.fill_b = o5
+            } else if str.eq(op, "G") {
+                p.stroke_r = o5
+                p.stroke_g = o5
+                p.stroke_b = o5
+            } else if str.eq(op, "k") {
+                p.fill_r = (1.0f64 - o2) * (1.0f64 - o5)
+                p.fill_g = (1.0f64 - o3) * (1.0f64 - o5)
+                p.fill_b = (1.0f64 - o4) * (1.0f64 - o5)
+            } else if str.eq(op, "K") {
+                p.stroke_r = (1.0f64 - o2) * (1.0f64 - o5)
+                p.stroke_g = (1.0f64 - o3) * (1.0f64 - o5)
+                p.stroke_b = (1.0f64 - o4) * (1.0f64 - o5)
+            } else if str.eq(op, "w") {
+                p.line_width = o5
+            } else if str.eq(op, "q") {
+                if p.depth < STATE_DEPTH {
+                    let at = p.depth * 11usize
+                    p.saved[at] = p.fill_r
+                    p.saved[at + 1usize] = p.fill_g
+                    p.saved[at + 2usize] = p.fill_b
+                    p.saved[at + 3usize] = p.stroke_r
+                    p.saved[at + 4usize] = p.stroke_g
+                    p.saved[at + 5usize] = p.stroke_b
+                    p.saved[at + 6usize] = p.line_width
+                    p.saved[at + 7usize] = p.scale_x
+                    p.saved[at + 8usize] = p.scale_y
+                    p.saved[at + 9usize] = p.shift_x
+                    p.saved[at + 10usize] = p.shift_y
+                    p.depth += 1usize
+                }
+            } else if str.eq(op, "Q") {
+                if p.depth > 0usize {
+                    p.depth -= 1usize
+                    let at = p.depth * 11usize
+                    p.fill_r = p.saved[at]
+                    p.fill_g = p.saved[at + 1usize]
+                    p.fill_b = p.saved[at + 2usize]
+                    p.stroke_r = p.saved[at + 3usize]
+                    p.stroke_g = p.saved[at + 4usize]
+                    p.stroke_b = p.saved[at + 5usize]
+                    p.line_width = p.saved[at + 6usize]
+                    p.scale_x = p.saved[at + 7usize]
+                    p.scale_y = p.saved[at + 8usize]
+                    p.shift_x = p.saved[at + 9usize]
+                    p.shift_y = p.saved[at + 10usize]
+                }
+            } else if str.eq(op, "cm") {
+                // A scale and an offset: the new matrix applied before the one in force (b and c are not followed).
+                p.shift_x = p.shift_x + o4 * p.scale_x
+                p.shift_y = p.shift_y + o5 * p.scale_y
+                p.scale_x = p.scale_x * o0
+                p.scale_y = p.scale_y * o3
+            } else if str.eq(op, "BT") {
+                p.tm_x = 0.0f64
+                p.tm_y = 0.0f64
+                p.line_x = 0.0f64
+                p.line_y = 0.0f64
+                p.text_scale = 1.0f64
+            } else if str.eq(op, "Tf") {
+                if o5 > 0.0f64 { p.font_size = o5 }
+            } else if str.eq(op, "TL") {
+                p.leading = o5
+            } else if str.eq(op, "Td") {
+                paint_move_text(p, o4, o5)
+            } else if str.eq(op, "TD") {
+                p.leading = -o5
+                paint_move_text(p, o4, o5)
+            } else if str.eq(op, "T*") {
+                paint_move_text(p, 0.0f64, -p.leading)
+            } else if str.eq(op, "Tm") {
+                p.text_scale = o0
+                if p.text_scale <= 0.0f64 { p.text_scale = 1.0f64 }
+                p.line_x = o4
+                p.line_y = o5
+                p.tm_x = o4
+                p.tm_y = o5
+            } else if str.eq(op, "Tj") || str.eq(op, "TJ") {
+                if has_text { paint_text(p, pending) }
+            } else if str.eq(op, "'") || str.eq(op, "\"") {
+                paint_move_text(p, 0.0f64, -p.leading)
+                if has_text { paint_text(p, pending) }
+            }
+            // An operator ends its operands and its string.
+            count = 0usize
+            has_text = false
+            pending_start = used
+            i = j
+        } else {
+            i += 1usize
+        }
+    }
+    ret ok
+}
+
+// The number list after `/MediaBox [` in data[from..until]: width and height, false when the page has none.
+fn media_box(data: []const u8, from: usize, until: usize) -> (f64, f64, bool) {
+    let key = find(data, "MediaBox", from, until)
+    if key >= until { ret (0.0f64, 0.0f64, false) }
+    var at = key + 8usize
+    while at < until && data[at] != 91u8 { at += 1usize }
+    if at >= until { ret (0.0f64, 0.0f64, false) }
+    at += 1usize
+    var numbers: [4]f64 = zero
+    var k = 0usize
+    while k < 4usize && at < until {
+        while at < until && is_space(data[at]) { at += 1usize }
+        var j = at
+        while j < until && !is_space(data[j]) && data[j] != 93u8 { j += 1usize }
+        if j == at { ret (0.0f64, 0.0f64, false) }
+        numbers[k] = operand_number(data[at..j])
+        at = j
+        k += 1usize
+    }
+    if k < 4usize { ret (0.0f64, 0.0f64, false) }
+    ret (numbers[2usize] - numbers[0usize], numbers[3usize] - numbers[1usize], true)
+}
+
+// Page `page` (from 0) painted: its size (the page's, or any page tree node's, MediaBox, else 612 by 792) and its
+// shapes in paint order (up to MAX_SHAPES).
+fn page_painting(a: *mem.Arena, data: []const u8, page: usize) -> (Painting, err) {
+    let (tree, tree_error) = page_tree(a, data)
+    if tree_error != ok { ret (zero, tree_error) }
+    if page >= tree.page_count { ret (zero, NoPages) }
+    let (ps, pe, has_page) = object_span(tree.table, tree.count, tree.page_objects[page])
+    if !has_page { ret (zero, NoPages) }
+    var width = 612.0f64
+    var height = 792.0f64
+    let (own_w, own_h, has_own) = media_box(data, ps, pe)
+    if has_own {
+        width = own_w
+        height = own_h
+    } else {
+        // Inherited: the first MediaBox of any object.
+        var o = 0usize
+        var found = false
+        while o < tree.count && !found {
+            let (inherited_w, inherited_h, has_inherited) = media_box(data, tree.table[o].start, tree.table[o].end)
+            if has_inherited {
+                width = inherited_w
+                height = inherited_h
+                found = true
+            }
+            o += 1usize
+        }
+    }
+    let (shapes, shapes_error) = mem.alloc[Shape](a, MAX_SHAPES)
+    if shapes_error != ok { ret (zero, shapes_error) }
+    var painter = paint_start(shapes)
+    var streams: [64]usize = zero
+    var stream_count = refs_in_array(data, ps, pe, "Contents", streams[0usize..])
+    if stream_count == 0usize {
+        let (single, has_single) = ref_after(data, ps, pe, "Contents")
+        if has_single {
+            streams[0usize] = single
+            stream_count = 1usize
+        }
+    }
+    var k = 0usize
+    while k < stream_count {
+        let (ss, se, has_stream) = object_span(tree.table, tree.count, streams[k])
+        if has_stream {
+            let (content, stream_error) = stream_of(a, data, ss, se)
+            if stream_error != ok { ret (zero, stream_error) }
+            let run_error = paint_content(a, &painter, content)
+            if run_error != ok { ret (zero, run_error) }
+        }
+        k += 1usize
+    }
+    ret (Painting { width: width, height: height, shapes: shapes[0usize..painter.n] }, ok)
 }
