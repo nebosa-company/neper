@@ -1202,6 +1202,11 @@ net_retro_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$net_retro_written" = 'executable written' ]
 chmod +x "$test_build/net-retro-selfhost"
 "$test_build/net-retro-selfhost"
+# C177: a comptime Field argument is keyed by its owner as well as its index, so field 0 of two structs is two instances.
+generic_field_owner_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic_field_owner/src/main.e" "$repo" x64 linux "$test_build/generic-field-owner-selfhost")
+[ "$generic_field_owner_written" = 'executable written' ]
+chmod +x "$test_build/generic-field-owner-selfhost"
+"$test_build/generic-field-owner-selfhost"
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 fmt_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pdf/src/main.e" "$repo" x64 linux "$test_build/fmt-pdf-selfhost")
 [ "$fmt_pdf_written" = 'executable written' ]

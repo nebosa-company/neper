@@ -8829,6 +8829,9 @@ fn generic_arguments_equal(c: *Checker, function_index: usize, first: usize, sec
                 if !same(left.text, right.text) { ret false }
             } else {
                 if left.value != right.value { ret false }
+                // A Field or Member is an index into its owner's declaration, so the same index of two
+                // different aggregates is a different argument (C177).
+                if (left.kind == .Field || left.kind == .Member) && left.owner != right.owner { ret false }
             }
         }
         at += 1usize

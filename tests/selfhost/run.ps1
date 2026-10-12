@@ -1300,6 +1300,12 @@ $netretroWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $netretroWritten -ne 'executable written') { throw 'net_retro emission failed' }
 & $netretroPath
 if ($LASTEXITCODE -ne 0) { throw "a net_retro check failed: exit $LASTEXITCODE" }
+# C177: a comptime Field argument is keyed by its owner as well as its index, so field 0 of two structs is two instances.
+$genericFieldOwnerPath = Join-Path $testBuild 'generic-field-owner-selfhost.exe'
+$genericFieldOwnerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic_field_owner\src\main.e') $repo 'x64' 'windows' $genericFieldOwnerPath
+if ($LASTEXITCODE -ne 0 -or $genericFieldOwnerWritten -ne 'executable written') { throw 'generic_field_owner emission failed' }
+& $genericFieldOwnerPath
+if ($LASTEXITCODE -ne 0) { throw "a generic_field_owner check failed: exit $LASTEXITCODE" }
 # `e.fmt.pdf`: plain and compressed streams, a nested out-of-order page tree and a contents array read, two refusals.
 $fmtPdfPath = Join-Path $testBuild 'fmt-pdf-selfhost.exe'
 $fmtPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pdf\src\main.e') $repo 'x64' 'windows' $fmtPdfPath
