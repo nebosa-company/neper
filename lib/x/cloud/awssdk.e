@@ -11,7 +11,9 @@
 //     tags read back (identity tags and `Name` excluded, an entry without key or value skipped), the PetCow name and the
 //     display name of an unmanaged resource (its `Name` tag, else its id), integer and string-list attributes, and the
 //     security-group ingress rules (`protocol` and `cidr` required, ports 32-bit as the original casts them);
-//   * Lightsail: the three type names, required and optional string attributes, and the two identity tags.
+//   * Lightsail: the three type names, required and optional string attributes, and the two identity tags; and the list
+//     mapping over the SDK's wire JSON (`ls_instance`, `ls_database`, `ls_domain`, `ls_list` following page tokens through an
+//     injected `LsSource`, `ls_filter` for discover versus discover_unmanaged).
 //
 // Tags are `[key, value]` pairs (either may be null). The AWS calls themselves are host code.
 //
@@ -454,4 +456,189 @@ fn lightsail_managed_tags(a: *mem.Arena, name: str) -> json.Value {
     out[0] = pair(a, managed_key(), "true")
     out[1] = pair(a, name_key(), name)
     ret json.Value{ Array: out[0usize..2usize] }
+}
+
+// --- Lightsail list mapping --------------------------------------------------------------------------------------------
+
+// The text of a member of a Lightsail resource, as the SDK's `Option<&str>` getter answers it.
+fn ls_text(v: json.Value, key: str) -> (str, bool) {
+    let (x, found) = ir.get(v, key)
+    if !found { ret ("", false) }
+    let (s, is_text) = ir.string_of(x)
+    ret (s, is_text)
+}
+
+// A member of a nested object (`state.name`, `location.availabilityZone`).
+fn ls_nested(v: json.Value, outer: str, key: str) -> (str, bool) {
+    let (o, found) = ir.get(v, outer)
+    if !found { ret ("", false) }
+    let (s, has) = ls_text(o, key)
+    ret (s, has)
+}
+
+fn ls_put(o: *ir.Obj, key: str, value: str, has: bool) {
+    if has {
+        let p = ir.put(o, key, text(value))
+    }
+}
+
+fn ls_observed(a: *mem.Arena, type_: str, name: str, attributes: json.Value, arn: str, has_arn: bool) -> json.Value {
+    var out = obj(a)
+    let p1 = ir.put(&out, "name", text(name))
+    let p2 = ir.put(&out, "type", text(type_))
+    let p3 = ir.put(&out, "attributes", attributes)
+    if has_arn {
+        let p4 = ir.put(&out, "real_id", text(arn))
+    } else {
+        let p5 = ir.put(&out, "real_id", .Null)
+    }
+    ret ir.obj_value(&out)
+}
+
+// One instance of a `GetInstances` page as an observed resource; `(.., false)` when it has no name (it is skipped).
+fn ls_instance(a: *mem.Arena, item: json.Value) -> (json.Value, bool) {
+    let (name, has_name) = ls_text(item, "name")
+    if !has_name { ret (.Null, false) }
+    var attrs = obj(a)
+    let (state, has_state) = ls_nested(item, "state", "name")
+    ls_put(&attrs, "state", state, has_state)
+    let (blueprint, has_blueprint) = ls_text(item, "blueprintId")
+    ls_put(&attrs, "blueprint", blueprint, has_blueprint)
+    let (bundle, has_bundle) = ls_text(item, "bundleId")
+    ls_put(&attrs, "bundle", bundle, has_bundle)
+    let (zone, has_zone) = ls_nested(item, "location", "availabilityZone")
+    ls_put(&attrs, "availability_zone", zone, has_zone)
+    let (ip, has_ip) = ls_text(item, "publicIpAddress")
+    ls_put(&attrs, "public_ip", ip, has_ip)
+    let (arn, has_arn) = ls_text(item, "arn")
+    ret (ls_observed(a, lightsail_type_name("instance"), name, ir.obj_value(&attrs), arn, has_arn), true)
+}
+
+// One relational database of a `GetRelationalDatabases` page.
+fn ls_database(a: *mem.Arena, item: json.Value) -> (json.Value, bool) {
+    let (name, has_name) = ls_text(item, "name")
+    if !has_name { ret (.Null, false) }
+    var attrs = obj(a)
+    let (engine, has_engine) = ls_text(item, "engine")
+    ls_put(&attrs, "engine", engine, has_engine)
+    let (version, has_version) = ls_text(item, "engineVersion")
+    ls_put(&attrs, "engine_version", version, has_version)
+    let (state, has_state) = ls_text(item, "state")
+    ls_put(&attrs, "state", state, has_state)
+    let (blueprint, has_blueprint) = ls_text(item, "relationalDatabaseBlueprintId")
+    ls_put(&attrs, "blueprint", blueprint, has_blueprint)
+    let (bundle, has_bundle) = ls_text(item, "relationalDatabaseBundleId")
+    ls_put(&attrs, "bundle", bundle, has_bundle)
+    let (master, has_master) = ls_text(item, "masterDatabaseName")
+    ls_put(&attrs, "master_database_name", master, has_master)
+    let (user, has_user) = ls_text(item, "masterUsername")
+    ls_put(&attrs, "master_username", user, has_user)
+    let (arn, has_arn) = ls_text(item, "arn")
+    ret (ls_observed(a, lightsail_type_name("database"), name, ir.obj_value(&attrs), arn, has_arn), true)
+}
+
+// One domain of a `GetDomains` answer: the record count and a `type name -> target` line per entry.
+fn ls_domain(a: *mem.Arena, item: json.Value) -> (json.Value, bool) {
+    let (name, has_name) = ls_text(item, "name")
+    if !has_name { ret (.Null, false) }
+    var attrs = obj(a)
+    let (entries_value, has_entries) = ir.get(item, "domainEntries")
+    let entries = items(entries_value)
+    let (total, ce) = json.number_from_i64(a, i64(entries.len))
+    let p1 = ir.put(&attrs, "dns_record_count", json.Value{ Number: total })
+    let (lines, le) = mem.alloc[json.Value](a, entries.len + 1usize)
+    var at = 0usize
+    while at < entries.len {
+        let (entry_type, has_type) = ls_text(entries[at], "type")
+        let (entry_name, has_entry_name) = ls_text(entries[at], "name")
+        let (entry_target, has_target) = ls_text(entries[at], "target")
+        lines[at] = text(join(a, join(a, join(a, join(a, entry_type, " "), entry_name), " -> "), entry_target))
+        at += 1usize
+    }
+    let p2 = ir.put(&attrs, "dns_records", json.Value{ Array: lines[0usize..entries.len] })
+    let (arn, has_arn) = ls_text(item, "arn")
+    ret (ls_observed(a, lightsail_type_name("domain"), name, ir.obj_value(&attrs), arn, has_arn), true)
+}
+
+// One page the SDK answered: the items of the kind's list member, the next page token, or the displayed SDK error.
+type LsPage = struct { good: bool, failure: str, items: []const json.Value, has_next: bool, next: str }
+
+// Fetches a page, continuing from the token when `has_token`.
+type LsSource = struct { ctx: *void, page: fn(*void, str, bool) -> LsPage }
+
+fn ls_one(a: *mem.Arena, kind: str, item: json.Value) -> (json.Value, bool) {
+    if str.eq(kind, "instance") {
+        let (v, has) = ls_instance(a, item)
+        ret (v, has)
+    }
+    if str.eq(kind, "database") {
+        let (v, has) = ls_database(a, item)
+        ret (v, has)
+    }
+    let (v, has) = ls_domain(a, item)
+    ret (v, has)
+}
+
+// Every resource of `kind` (`instance`, `database`, `domain`) as observed resources, following page tokens as
+// `list_instances` does (a domain list is a single call). `(list, true, "")`, or the displayed error of the failing call.
+fn ls_list(a: *mem.Arena, kind: str, src: *const LsSource) -> (json.Value, bool, str) {
+    let (first, fe) = mem.alloc[json.Value](a, 8usize)
+    var out = first
+    var cap = 8usize
+    var n = 0usize
+    var token = ""
+    var has_token = false
+    var more = true
+    while more {
+        let page = src.page(src.ctx, token, has_token)
+        if !page.good {
+            var call = "get_domains"
+            if str.eq(kind, "instance") { call = "get_instances" }
+            if str.eq(kind, "database") { call = "get_relational_databases" }
+            ret (.Null, false, resource_error(a, lightsail_type_name(kind), join(a, join(a, call, ": "), page.failure)))
+        }
+        var at = 0usize
+        while at < page.items.len {
+            let (seen, has) = ls_one(a, kind, page.items[at])
+            if has {
+                if n == cap {
+                    let (bigger, ge) = mem.alloc[json.Value](a, cap * 2usize)
+                    var k = 0usize
+                    while k < n {
+                        bigger[k] = out[k]
+                        k += 1usize
+                    }
+                    out = bigger
+                    cap = cap * 2usize
+                }
+                out[n] = seen
+                n += 1usize
+            }
+            at += 1usize
+        }
+        more = false
+        if !str.eq(kind, "domain") && page.has_next {
+            token = page.next
+            has_token = true
+            more = true
+        }
+    }
+    ret (json.Value{ Array: out[0usize..n] }, true, "")
+}
+
+// `discover` (`managed` true) keeps the resources whose Lightsail name starts with `petcow-`, `discover_unmanaged` the rest.
+fn ls_filter(a: *mem.Arena, observed: json.Value, managed: bool) -> json.Value {
+    let xs = items(observed)
+    let (out, e) = mem.alloc[json.Value](a, xs.len + 1usize)
+    var n = 0usize
+    var at = 0usize
+    while at < xs.len {
+        let (name, has) = ls_text(xs[at], "name")
+        if str.starts_with(name, "petcow-") == managed {
+            out[n] = xs[at]
+            n += 1usize
+        }
+        at += 1usize
+    }
+    ret json.Value{ Array: out[0usize..n] }
 }

@@ -151,6 +151,92 @@ for (let i = 0; i < 40; i++) {
   add({ op: 'transport', default: pick(['ssm', 'ssh', 'winrm', 'bogus', '']), known: chance(0.85) ? KNOWN : ['ssh'], hosts });
 }
 
+// ---- WinRM, local, SSM, Lightsail list mapping (second part of L048) ----------------------------------------------------
+const CMDS = ['whoami', 'Get-Service | Where-Object Status -eq Running', "Write-Output 'it''s $here'; `echo x`\nStop-Service 'w3svc'", 'echo "héllo wörld"', 'dir C:\\Users\\*', '', 'a', 'ab', 'abc', 'abcd', '日本語テキスト', '😀 ok 𝄞', 'x'.repeat(100), 'tab\there\r\nline'];
+for (const s of CMDS) add({ op: 'encodeCommand', s });
+const winVars = () => {
+  const v = {};
+  if (chance(0.4)) v.winrm_allow_http = pick([true, false, 'yes', 'No', ' TRUE ', 'maybe', 5, null]);
+  if (chance(0.3)) v.winrm_port = pick(['15986', 5986, '', '  ', 7, '5985']);
+  if (chance(0.2)) v.ansible_port = pick(['2222', 22, '']);
+  if (chance(0.2)) v.port = pick(['9', 10]);
+  if (chance(0.4)) v.winrm_user = pick(['svc_deploy', 'DOMAIN\\user', "o'brien", '', '   ', 5, 'ünï']);
+  if (chance(0.2)) v.ansible_user = pick(['admin', 'Administrator']);
+  if (chance(0.15)) v.user = 'u1';
+  if (chance(0.3)) v.winrm_auth = pick(['Kerberos', 'Basic', '', 'Negotiate', 'CredSSP']);
+  if (chance(0.1)) v.winrm_authentication = 'Default';
+  if (chance(0.3)) v.winrm_skip_ca_check = pick([true, false, 'yes', 'no', 'x']);
+  if (chance(0.3)) v.winrm_skip_cn_check = pick([true, false, 'YES', 'false', 1]);
+  return v;
+};
+for (let i = 0; i < 60; i++) add({ op: 'winrmArgs', address: pick(['w.example', '10.0.0.9', 'win-1.corp.local']), vars: winVars(), command: pick(CMDS), shell: pick(['posix', 'powershell']) });
+add({ op: 'winrmArgs', address: 'w', vars: {}, command: 'x', shell: 'posix' });
+for (const windows of [true, false]) add({ op: 'winrmProgram', windows });
+for (const notFound of [true, false]) add({ op: 'winrmError', host: 'win1', exe: pick(['powershell', 'pwsh']), notFound, msg: 'Access is denied. (os error 5)' });
+for (const shell of ['posix', 'powershell']) {
+  for (const command of CMDS.slice(0, 6)) add({ op: 'localArgv', command, shell });
+  add({ op: 'localError', host: 'node-1', shell, msg: 'No such file or directory (os error 2)' });
+  add({ op: 'ssmDocument', shell });
+}
+for (const status of ['Pending', 'InProgress', 'Delayed', 'Success', 'Cancelled', 'Failed', 'TimedOut', 'Cancelling', 'success', 'Weird', '']) add({ op: 'ssmTerminal', status });
+const SSMVARS = [{ resource_id: 'i-1' }, { instance_id: 'i-2' }, { resource_id: 'i-1', instance_id: 'i-2' }, { resource_id: 5, instance_id: 'i-3' }, {}, { resource_id: '' }, { resource_id: null, instance_id: 'i-4' }, { instance_id: ['i-5'] }, { transport: 'ssm', other: 'x' }];
+for (const vars of SSMVARS) add({ op: 'ssmInstanceId', name: pick(['web-1', 'db']), vars });
+const answer = () => {
+  const r = rnd();
+  if (r < 0.25) return { missing: true };
+  if (r < 0.32) return { error: pick(['AccessDenied: not allowed', 'throttled']) };
+  return { ...(chance(0.9) ? { status: pick(['Pending', 'InProgress', 'Delayed', 'Success', 'Success', 'Failed', 'Cancelled', 'TimedOut', 'Cancelling', 'Weird']) } : {}), code: pick([0, 0, 1, 127, -1, 255, 2147483647]), ...(chance(0.8) ? { out: pick(['ok\n', '', 'héllo', 'line1\nline2']) } : {}), ...(chance(0.5) ? { err: pick(['', 'warn', 'boom']) } : {}) };
+};
+for (let i = 0; i < 60; i++) {
+  add({
+    op: 'ssmRun', name: pick(['web-1', 'db']), vars: pick(SSMVARS), shell: pick(['posix', 'powershell']),
+    sent: pick([{ id: 'cmd-1' }, { id: 'cmd-1' }, { id: 'cmd-1' }, { id: null }, { error: 'InvalidInstanceId: not in SSM' }]),
+    answers: Array.from({ length: int(7) }, answer), maxPolls: 1 + int(6),
+  });
+}
+// deterministic runs: two waits, one pending, then Success; and none answering within the polls
+add({ op: 'ssmRun', name: 'web-1', vars: { resource_id: 'i-1' }, shell: 'powershell', sent: { id: 'c' }, answers: [{ missing: true }, { missing: true }, { status: 'InProgress', code: 0 }, { status: 'Success', code: 0, out: 'done\n', err: '' }], maxPolls: 80 });
+add({ op: 'ssmRun', name: 'web-1', vars: { resource_id: 'i-1' }, shell: 'posix', sent: { id: 'c' }, answers: [], maxPolls: 80 });
+const lsItem = (kind) => {
+  const x = chance(0.92) ? { name: pick(['petcow-web', 'petcow-db', 'hand-made', 'petcow', 'Petcow-x', 'web']) + int(5) } : {};
+  if (chance(0.8)) x.arn = `arn:aws:lightsail:eu-west-1:1:${kind}/${int(1e6)}`;
+  if (kind === 'instance') {
+    if (chance(0.7)) x.state = chance(0.9) ? { name: pick(['running', 'stopped', 'pending']) } : {};
+    if (chance(0.7)) x.blueprintId = pick(['ubuntu_22_04', 'wordpress', 'nodejs']);
+    if (chance(0.7)) x.bundleId = pick(['nano_2_0', 'micro_3_0']);
+    if (chance(0.7)) x.location = chance(0.9) ? { availabilityZone: pick(['eu-west-1a', 'us-east-1b']), regionName: 'x' } : { regionName: 'x' };
+    if (chance(0.6)) x.publicIpAddress = pick(['1.2.3.4', '203.0.113.9']);
+    if (chance(0.3)) x.tags = [{ key: 'petcow:managed', value: 'true' }];
+  } else if (kind === 'database') {
+    if (chance(0.8)) x.engine = pick(['mysql', 'postgres']);
+    if (chance(0.7)) x.engineVersion = pick(['8.0.35', '15.4']);
+    if (chance(0.7)) x.state = pick(['available', 'creating']);
+    if (chance(0.6)) x.relationalDatabaseBlueprintId = pick(['mysql_8_0', 'postgres_15']);
+    if (chance(0.6)) x.relationalDatabaseBundleId = pick(['micro_2_0']);
+    if (chance(0.6)) x.masterDatabaseName = pick(['app', 'db1']);
+    if (chance(0.6)) x.masterUsername = pick(['admin', 'dbuser']);
+  } else if (chance(0.85)) {
+    x.domainEntries = Array.from({ length: int(5) }, () => ({ ...(chance(0.9) ? { type: pick(['A', 'CNAME', 'MX', 'TXT']) } : {}), ...(chance(0.9) ? { name: pick(['www.example.com', 'example.com', 'mail']) } : {}), ...(chance(0.9) ? { target: pick(['1.2.3.4', 'lb.example.com', '10 mx.example.com']) } : {}) }));
+  }
+  return x;
+};
+const lsPages = (kind) => {
+  const member = { instance: 'instances', database: 'relationalDatabases', domain: 'domains' }[kind];
+  const n = 1 + int(4);
+  return Array.from({ length: n }, (_, k) => {
+    const p = { [member]: Array.from({ length: int(5) }, () => lsItem(kind)) };
+    if (k < n - 1 || chance(0.1)) p.nextPageToken = pick(['t1', 'page-2', '', 'a/b+c=']);
+    if (chance(0.06)) return { error: pick(['AccessDeniedException: no', 'throttled']) };
+    return p;
+  });
+};
+for (let i = 0; i < 60; i++) {
+  const kind = pick(['instance', 'database', 'domain']);
+  add({ op: 'lsList', kind, pages: lsPages(kind), mode: pick(['all', 'managed', 'unmanaged']) });
+}
+add({ op: 'lsList', kind: 'instance', pages: [{ instances: [{ name: 'petcow-a', state: { name: 'running' }, arn: 'arn:1' }, { name: 'b' }, {}], nextPageToken: 'T' }, { instances: [{ name: 'petcow-c' }] }], mode: 'managed' });
+add({ op: 'lsList', kind: 'domain', pages: [{ domains: [{ name: 'example.com', domainEntries: [] }], nextPageToken: 'ignored' }], mode: 'all' });
+
 const exe = process.argv[2] || 'D:/temp/l048ref/target/debug/l048ref.exe';
 const answers = JSON.parse(execFileSync(exe, [], { input: JSON.stringify(cases), maxBuffer: 1 << 28 }).toString());
 const bs = String.fromCharCode(92);
