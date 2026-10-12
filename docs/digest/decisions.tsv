@@ -2126,4 +2126,5 @@ D2367	3113	G006: `e.ui.datagrid`, first increment: the grid view over the table,
 D2368	2789	G006: datagrid cell painters (custom cell nodes, row roles) and the filter row
 D2369	2530	G006: datagrid bands, row indicator and navigator
 D2370	3955	G006: datagrid in-place editors and layout persistence
-D2371	2425	G006: datagrid preview row and pixel probes
+D2371	2426	G006: datagrid preview row and pixel probes
+D2372	3377	G006: datagrid Tab navigation, column visibility and order

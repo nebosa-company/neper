@@ -1956,7 +1956,7 @@ type Band = struct { title: str, first: usize, count: usize }
 type Nav = enum u8 { First, Prev, Next, Last }
 type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool, editable: bool }
 type Events = struct { ctx: *void, sort_changed: fn(*void, usize, bool) -> err, row_picked: fn(*void, usize) -> err, filter_changed: fn(*void, usize, str) -> err, cell_edited: fn(*void, usize, usize) -> err, custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err, row_role: fn(*void, usize) -> style.ColorRole }
-type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, read_only: bool, preview_on: bool, preview_spec: usize, preview_open: [32]u64, preview_count: usize, editing: bool, edit_row: usize, edit_spec: usize, edit_text: [64]u8, edit_scratch: [160]u8, edit_len: usize, edit_invalid: bool, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
+type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, all: []const ColumnSpec, display: []ColumnSpec, column_store: []collection.Column, origin: []usize, order: []usize, hidden: []bool, widths: []f32, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, read_only: bool, preview_on: bool, preview_spec: usize, preview_open: [32]u64, preview_count: usize, editing: bool, edit_row: usize, edit_spec: usize, edit_text: [64]u8, edit_scratch: [160]u8, edit_len: usize, edit_invalid: bool, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
 error TooManyColumns
 error NotEditable
 error BadLayout
@@ -1965,6 +1965,12 @@ fn no_events() -> Events
 fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, events: Events, key: widget.Key) -> (Grid, err)
 fn show_sort(grid: *Grid, spec: usize, descending: bool)
 fn clear_selection(grid: *Grid)
+fn relayout(grid: *Grid)
+fn display_of(grid: *const Grid, spec: usize) -> (usize, bool)
+fn set_hidden(grid: *Grid, spec: usize, hide: bool)
+fn is_hidden(grid: *const Grid, spec: usize) -> bool
+fn move_column(grid: *Grid, spec: usize, to: usize)
+fn edit_move(grid: *Grid, backward: bool) -> err
 fn show_preview(grid: *Grid, spec: usize)
 fn hide_preview(grid: *Grid)
 fn preview_is_open(grid: *const Grid, key: widget.Key) -> bool
@@ -2015,14 +2021,19 @@ re-sort, re-filter or re-group; a text that does not parse (or a dictionary that
 editor open and `edit_invalid`; `cancel_edit` closes it, `read_only` forbids editing
 (`NotEditable`). `show_preview(spec)` gives each data row a disclosure that opens, under the record, the text of one
 column wrapped over several lines (the rules text of a card); up to 32 are open at once and
-`hide_preview` removes them. A header resize updates the column width (`column_width`, `resize_column`, not
-below 24 px). `save_layout` writes the widths, the sort indicator, the filter row and navigator
-flags and the filter texts as small text; `load_layout` applies it, skipping lines it does not know,
+`hide_preview` removes them. While a cell is edited, Tab commits and edits the next editable cell of the row (Shift+Tab the
+previous; past the last, the next data row's first editable cell) and Escape cancels. `set_hidden`
+and `move_column` (and a header drag) change which columns show and in which order; every spec
+index the application sees (events, `begin_edit`, `show_sort`, widths, filter texts, layout) is the
+index in the list given to `create`, never a display position (`display_of` answers where a spec
+shows). A header resize updates the column width (`column_width`, `resize_column`, not
+below 24 px). `save_layout` writes the widths, the column order and the hidden columns, the sort indicator, the
+filter row and navigator flags and the filter texts as small text; `load_layout` applies it, skipping lines it does not know,
 widths for columns the grid does not have and sorts out of range (`BadLayout` for text without the
 version line). A grid owns the widget keys from `key` to
 `key + KEY_BASE + row capacity + group capacity` (the table's own header cells use the keys just
-above `key`; the filter fields use `key + FILTER_KEY + spec`). Not yet: Tab to the next
-editable cell, column visibility and order; the filter row stands above the header, not below.
+above `key`; the filter fields use `key + FILTER_KEY + spec`). Not yet: a column chooser
+window; the filter row stands above the header, not below.
 
 ### `e.data.slot_map`
 
