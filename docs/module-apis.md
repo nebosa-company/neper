@@ -6806,6 +6806,113 @@ fn sql_columns(a: *mem.Arena, rows: []const json.Value) -> json.Value
 A SQL database as a sync source (L037), after appdor's `src/sync/sql-source.js`: `sql_dialect` and `is_sql_channel`, the operator's host list (`parse_sql_source_hosts`, `check_sql_host`, `check_sql_address`), the connection a URL and a credential make (`sql_source_from`), identifiers and entities (`is_valid_sql_identifier`, `quote_sql_identifier`, `parse_sql_entity`), the statements a pull sends (`browse_tables_statement`, `columns_statement`, `select_rows_statement`, `read_only_session_statements`), redaction and driver diagnostics (`redact_sql_text`, `sql_diagnostic`) and the rows an information schema answers (`normalize_sql_row`, `sql_entities`, `sql_columns`).
 
 
+### `e.algo.syncinfer`
+
+```neper
+fn cps_of(a: *mem.Arena, s: str) -> []u32
+fn is_digit(u: u32) -> bool
+fn is_word(u: u32) -> bool
+fn utf16_len(s: str) -> usize
+fn slash_parts(c: []const u32) -> (u32, u32, u32, usize, bool)
+type Order = struct { order: str, witness: str, sampled: usize }
+fn detect_date_order(a: *mem.Arena, values: []const str) -> Order
+fn rtrim_space(s: str) -> str
+type Stripped = struct { body: str, marked: bool }
+fn strip_percent(s: str) -> Stripped
+fn currency_symbol_len(s: str) -> usize
+fn lower_ascii(u: u32) -> u32
+fn currency_suffix_len(a: *mem.Arena, s: str) -> usize
+fn strip_currency(a: *mem.Arena, s: str) -> Stripped
+fn strip_units(a: *mem.Arena, s: str) -> str
+type Shape = struct { valid: bool, decimal: u8, ambiguous: bool, has_fraction: bool, lead_zero: bool, safe: bool }
+fn no_shape() -> Shape
+fn read_shape(a: *mem.Arena, raw: str) -> Shape
+fn is_number_cell(a: *mem.Arena, s: str) -> bool
+type Decimal = struct { decimal: str, witness: str, sampled: usize, conflicting: bool }
+fn convention_of(d: u8) -> str
+fn detect_decimal(a: *mem.Arena, values: []const str) -> Decimal
+const K_NONE: i32 = -1i32
+const T_END: u8 = 1u8
+const T_NUMBER: u8 = 2u8
+const T_SYMBOL: u8 = 3u8
+const T_KEYWORD: u8 = 4u8
+const T_SPACE: u8 = 5u8
+const T_UNKNOWN: u8 = 6u8
+const T_INVALID: u8 = 7u8
+const KW_INVALID: u8 = 0u8
+const KW_MONTH: u8 = 1u8
+const KW_ZONE: u8 = 2u8
+const KW_TSEP: u8 = 3u8
+const KW_AMPM: u8 = 4u8
+type Token = struct { tag: u8, value: i32, length: i32, kw: u8 }
+type Day = struct { comp: [3]i32, index: i32, named_month: i32, iso: bool }
+type Clock = struct { comp: [4]i32, index: i32, hour_offset: i32 }
+type Zone = struct { sign: i32, hour: i32, minute: i32 }
+type Scan = struct { c: []const u32, at: usize, tok: Token, first: Token, has_first: bool }
+fn is_hour(n: i32) -> bool
+fn is_minute(n: i32) -> bool
+fn is_second(n: i32) -> bool
+fn is_millisecond(n: i32) -> bool
+fn is_month(n: i32) -> bool
+fn is_day(n: i32) -> bool
+fn at_end(s: *Scan) -> bool
+fn keyword_of(w0: u32, w1: u32, w2: u32, length: usize) -> Token
+fn scan_next(s: *Scan) -> Token
+fn next_token(s: *Scan) -> Token
+fn skip_symbol(s: *Scan, sym: u32) -> bool
+fn is_sign(t: Token) -> bool
+fn is_zone_z(t: Token) -> bool
+fn fixed_number(t: Token, len: i32) -> bool
+fn read_milliseconds(t: Token) -> i32
+fn day_add(d: *Day, n: i32) -> bool
+fn clock_add(t: *Clock, n: i32) -> bool
+fn clock_final(t: *Clock, n: i32) -> bool
+fn clock_expecting(t: *Clock, n: i32) -> bool
+fn zone_set(z: *Zone, hours: i32)
+fn zone_expecting(z: *Zone, n: i32) -> bool
+fn zone_is_utc(z: *Zone) -> bool
+fn parse_es5(s: *Scan, day: *Day, time: *Clock, zone: *Zone, invalid: *bool, finished: *bool)
+fn date_ok(a: *mem.Arena, text: str) -> bool
+fn days_in_month(year: i64, month: i64) -> i64
+fn iso_date(c: []const u32) -> bool
+fn calendar_date_ok(a: *mem.Arena, s: str, order: str) -> bool
+fn date_shape(c: []const u32) -> bool
+fn datetime_shape(c: []const u32) -> bool
+fn email_shape(c: []const u32) -> bool
+fn url_shape(c: []const u32) -> bool
+fn phone_shape(a: *mem.Arena, c: []const u32) -> bool
+fn is_bytes4(l: str, b0: u8, b1: u8, b2: u8, b3: u8) -> bool
+fn bool_word(a: *mem.Arena, v: str) -> bool
+fn candidate_name(i: usize) -> str
+fn candidate_test(a: *mem.Arena, i: usize, v: str, date_order: str) -> bool
+type Inferred = struct { kind: str, options: []const str, has_options: bool, date_order: str, decimal: str }
+fn is_numeric_type(kind: str) -> bool
+fn infer_column(a: *mem.Arena, raw: []const str, pinned: str, max_select: usize) -> Inferred
+fn cell_text(a: *mem.Arena, v: json.Value, present: bool) -> str
+fn array_index(key: str) -> (u64, bool)
+fn column_names(a: *mem.Arena, rows: []const json.Value) -> []const str
+fn add_name(names: *list.List[str], key: str)
+fn is_structured(v: json.Value) -> bool
+fn propose_inferred(a: *mem.Arena, sample: json.Value, translate: *const syncjob.Translate) -> (json.Value, bool)
+fn cells_of(a: *mem.Arena, values: json.Value) -> []const str
+fn texts_json(a: *mem.Arena, xs: []const str) -> json.Value
+fn inferred_into(a: *mem.Arena, o: *ir.Obj, i: Inferred)
+fn max_select_of(opts: json.Value) -> usize
+fn pinned_of(opts: json.Value) -> str
+fn infer_column_type(a: *mem.Arena, values: json.Value, opts: json.Value) -> json.Value
+fn date_order_of(a: *mem.Arena, values: json.Value) -> json.Value
+fn decimal_separator_of(a: *mem.Arena, values: json.Value) -> json.Value
+fn infer_external_schema(a: *mem.Arena, records: json.Value) -> (json.Value, bool)
+```
+
+The column types a synced table infers from sample rows (L037, D3703), after appdor's `src/io/infer.js`,
+`inferExternalSchema` and the inferred half of `proposeMapping`: `detect_date_order` (a day over 12 first or second
+proves day-first or month-first), `detect_decimal` (a cell whose separators prove the convention; both conventions
+conflict), `infer_column` (the ladder checkbox, percent, currency, number, datetime, date, email, url, phone, then
+select, longtext and text), `infer_column_type`, `date_order_of`, `decimal_separator_of`, `infer_external_schema`
+and `propose_inferred` over JSON. The platform `new Date(text)` the ladder consults is a port of V8's date parser
+(`date_ok`). Checked against appdor's own functions under node (`scripts/syncinfer_reference.mjs`).
+
 ### `e.algo.syncpull`
 
 ```neper
@@ -6822,6 +6929,7 @@ fn map_external_type(a: *mem.Arena, connector: str, native: json.Value, has_nati
 fn map_lc8_to_native(a: *mem.Arena, connector: str, lc8: str) -> json.Value
 fn list_native_types(a: *mem.Arena, connector: str) -> json.Value
 fn propose_schema(a: *mem.Arena, connector: str, columns: []const json.Value, translate: *const syncjob.Translate) -> json.Value
+fn propose_mapping_for(a: *mem.Arena, connector: str, columns: json.Value, sample: json.Value, translate: *const syncjob.Translate) -> (json.Value, bool)
 fn propose_mapping(a: *mem.Arena, connector: str, columns: json.Value, translate: *const syncjob.Translate) -> (json.Value, bool)
 fn synced_column_config(a: *mem.Arena, column: json.Value, source_label: json.Value, has_label: bool) -> json.Value
 fn synced_column_badge(a: *mem.Arena, config: json.Value, translate: *const syncjob.Translate) -> json.Value
@@ -7925,7 +8033,8 @@ caller storage, for scene and SVG adapters; `typeset_mathml` reads presentation 
 it to that subset, so both inputs share every rule. The model is TeX's: atom classes with
 the TeXbook's inter-atom space table, display, text, script and scriptscript styles with
 cramped forms (denominators, radicands and subscripts), fractions, radicals with an index,
-scripts by rule 18, big operators with display limits, `\left` `ight` delimiters grown
+scripts by rule 18, big operators with display limits, `\left` `
+ight` delimiters grown
 to the content and the `matrix`, `pmatrix`, `bmatrix`, `Bmatrix`, `vmatrix`, `cases`,
 `align`, `aligned` and `gather` environments. A font with an OpenType MATH table is laid
 out by it: MathConstants, italic corrections, and MathVariants for delimiters, radical

@@ -12,7 +12,8 @@
 //
 // Values are JSON. The page fetch is a host callback taking the request `{url, method, headers}` and answering `{ok,
 // body, headers?, reason?, status?}`; words come back through the host's translator (key, variable). The inferred
-// half of `proposeMapping` (a column type read from sample values, `io/infer.js`) is not here.
+// half of `proposeMapping` (a column type read from sample values, `io/infer.js`) is `e.algo.syncinfer`'s, reached by
+// `propose_mapping_for`.
 //
 // ponytail: URLs are special-scheme (`http`, `https`) and ASCII; the path's dot segments and percent-encoding follow the
 // WHATWG path state for the characters a path carries.
@@ -21,6 +22,7 @@
 
 use e.algo.ir as ir
 use e.algo.sync as sync
+use e.algo.syncinfer as infer
 use e.algo.syncjob as syncjob
 use e.algo.writeback as wb
 use e.data.list as list
@@ -149,8 +151,21 @@ fn propose_schema(a: *mem.Arena, connector: str, columns: []const json.Value, tr
     ret ir.obj_value(&o)
 }
 
+// `proposeMapping({connector, columns, sample})`: the declared columns mapped through the connector's type map when there
+// are any, else the types inferred from the sample records (`e.algo.syncinfer`); `ok` is false only where appdor throws
+// (a sample record that is not an object).
+fn propose_mapping_for(a: *mem.Arena, connector: str, columns: json.Value, sample: json.Value, translate: *const syncjob.Translate) -> (json.Value, bool) {
+    let (xs, is_array) = ir.items_of(columns)
+    if is_array && xs.len > 0usize {
+        let (declared, declared_ok) = propose_mapping(a, connector, columns, translate)
+        ret (declared, declared_ok)
+    }
+    let (inferred, inferred_ok) = infer.propose_inferred(a, sample, translate)
+    ret (inferred, inferred_ok)
+}
+
 // The mapping proposed for a declared column list: `{columns, downgradeCount, inferred: false}`; `ok` is false when no
-// columns were declared (the sample-inferred half is not ported).
+// columns were declared (the inferred half is `propose_mapping_for`).
 fn propose_mapping(a: *mem.Arena, connector: str, columns: json.Value, translate: *const syncjob.Translate) -> (json.Value, bool) {
     let (xs, is_array) = ir.items_of(columns)
     if !is_array || xs.len == 0usize { ret (.Null, false) }

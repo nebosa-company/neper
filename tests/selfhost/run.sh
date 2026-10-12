@@ -3788,6 +3788,13 @@ algo_syncpull_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$test_build/algo-syncpull-selfhost"
 algo_syncpull_output=$("$test_build/algo-syncpull-selfhost")
 [ "$algo_syncpull_output" = 'algo syncpull ok' ]
+# `e.algo.syncinfer`: the date order, decimal separator and column type read from sample rows, and the mapping inferred from a sample
+# # against appdor's src/io/infer.js, src/connectors/index.js and src/sync/synced-table.js (1700 inputs, D3703).
+algo_syncinfer_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_syncinfer/src/main.e" "$repo" x64 linux "$test_build/algo-syncinfer-selfhost" -j 2)
+[ "$algo_syncinfer_written" = 'executable written' ]
+chmod +x "$test_build/algo-syncinfer-selfhost"
+algo_syncinfer_output=$("$test_build/algo-syncinfer-selfhost")
+[ "$algo_syncinfer_output" = 'algo syncinfer ok' ]
 # `e.algo.sqlsource`: a SQL database as a sync source: dialect, host allowlist, address verdicts, connection, identifiers and statements, redaction, diagnostics and rows
 # # against appdor's src/sync/sql-source.js (900 inputs, D3001).
 algo_sqlsource_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_sqlsource/src/main.e" "$repo" x64 linux "$test_build/algo-sqlsource-selfhost" -j 2)

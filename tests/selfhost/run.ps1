@@ -4273,6 +4273,13 @@ $algoSyncpullWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $algoSyncpullWritten -ne 'executable written') { throw 'algo_syncpull emission failed' }
 $algoSyncpullOutput = & $algoSyncpullPath
 if ($LASTEXITCODE -ne 0 -or $algoSyncpullOutput -ne 'algo syncpull ok') { throw "algo_syncpull answered wrongly: exit $LASTEXITCODE" }
+# `e.algo.syncinfer`: the date order, decimal separator and column type read from sample rows, and the mapping inferred from a sample
+# # against appdor's src/io/infer.js, src/connectors/index.js and src/sync/synced-table.js (1700 inputs, D3703).
+$algoSyncinferPath = Join-Path $testBuild 'algo-syncinfer-selfhost.exe'
+$algoSyncinferWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_syncinfer\src\main.e') $repo 'x64' 'windows' $algoSyncinferPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoSyncinferWritten -ne 'executable written') { throw 'algo_syncinfer emission failed' }
+$algoSyncinferOutput = & $algoSyncinferPath
+if ($LASTEXITCODE -ne 0 -or $algoSyncinferOutput -ne 'algo syncinfer ok') { throw "algo_syncinfer answered wrongly: exit $LASTEXITCODE" }
 # `e.algo.sqlsource`: a SQL database as a sync source: dialect, host allowlist, address verdicts, connection, identifiers and statements, redaction, diagnostics and rows
 # # against appdor's src/sync/sql-source.js (900 inputs, D3001).
 $algoSqlsourcePath = Join-Path $testBuild 'algo-sqlsource-selfhost.exe'

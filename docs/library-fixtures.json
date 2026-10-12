@@ -498,6 +498,7 @@
     "algo_realtime",
     "algo_sqlsource",
     "algo_sync",
+    "algo_syncinfer",
     "algo_syncjob",
     "algo_syncpull",
     "algo_syncsource",
