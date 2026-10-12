@@ -2079,6 +2079,36 @@ data_objpool_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$data_objpool_written" = 'executable written' ]
 chmod +x "$test_build/data-objpool-selfhost"
 "$test_build/data-objpool-selfhost"
+# `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
+algo_rules_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rules/src/main.e" "$repo" x64 linux "$test_build/algo-rules-selfhost")
+[ "$algo_rules_written" = 'executable written' ]
+chmod +x "$test_build/algo-rules-selfhost"
+"$test_build/algo-rules-selfhost"
+# `e.data.mapper`: convention-based struct mapping with flattening, renames, ignore, null substitution, range-checked integers, map_all and project_sql against a Python name/range model and hand-derived structs (D2761).
+data_mapper_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_mapper/src/main.e" "$repo" x64 linux "$test_build/data-mapper-selfhost")
+[ "$data_mapper_written" = 'executable written' ]
+chmod +x "$test_build/data-mapper-selfhost"
+"$test_build/data-mapper-selfhost"
+# `e.task.jobs`: retry backoff vectors, six croniter fire sequences, misfire policies, lease expiry and poison quarantine, save/load through e.store with corruption refusals, keyed idempotent ticks, bounded catch-up (D2762).
+task_jobs_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/task_jobs/src/main.e" "$repo" x64 linux "$test_build/task-jobs-selfhost")
+[ "$task_jobs_written" = 'executable written' ]
+chmod +x "$test_build/task-jobs-selfhost"
+"$test_build/task-jobs-selfhost"
+# `e.db.docstore`: byte-exact log image against an independent struct+zlib writer, concurrency refusals, recovery over every torn prefix and a flipped byte, projection catch-up and rebuild, subscription resume across a reopen, compaction, store round trip, capacity rollback (D2763).
+db_docstore_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_docstore/src/main.e" "$repo" x64 linux "$test_build/db-docstore-selfhost")
+[ "$db_docstore_written" = 'executable written' ]
+chmod +x "$test_build/db-docstore-selfhost"
+"$test_build/db-docstore-selfhost"
+# `e.dist.actor`: activation and placement against xxhash plus a rendezvous model, state through deactivation, silo failure and re-placement, reentrancy and cycle refusal, turn atomicity, timers, durable reminders across a restart, capacity refusals (D2764).
+dist_actor_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/dist_actor/src/main.e" "$repo" x64 linux "$test_build/dist-actor-selfhost")
+[ "$dist_actor_written" = 'executable written' ]
+chmod +x "$test_build/dist-actor-selfhost"
+"$test_build/dist-actor-selfhost"
+# `e.debug.report`: DSN fields, endpoint, X-Sentry-Auth, byte-exact envelopes and X-Sentry-Rate-Limits against sentry-sdk, then queue, batched flush, 5xx backoff, 429 limits, rejection, overflow, persistence and backtrace capture through a fake transport (D2765).
+debug_report_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/debug_report/src/main.e" "$repo" x64 linux "$test_build/debug-report-selfhost")
+[ "$debug_report_written" = 'executable written' ]
+chmod +x "$test_build/debug-report-selfhost"
+"$test_build/debug-report-selfhost"
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 db_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db_migrate/src/main.e" "$repo" x64 linux "$test_build/db-migrate-selfhost")
 [ "$db_migrate_written" = 'executable written' ]

@@ -15471,6 +15471,382 @@ extendible hashing, an LSM (`memtable_flush`, `sstable_find`, `lsm_compact`), a 
 CLOCK and LRU-K eviction, and transactions: 2PL with deadlock detection, MVCC with
 `vacuum`, OCC validation.
 
+### `e.algo.rules`
+
+```neper
+const NONE: u32 = 4294967295u32
+const MAX_ARGS: usize = 6usize
+const MAX_CONDS: usize = 6usize
+const MAX_ACTS: usize = 6usize
+const MAX_VARS: usize = 12usize
+const OP_ANY: u8 = 0u8
+const OP_EQ: u8 = 1u8
+const OP_NE: u8 = 2u8
+const OP_LT: u8 = 3u8
+const OP_LE: u8 = 4u8
+const OP_GT: u8 = 5u8
+const OP_GE: u8 = 6u8
+const ACT_ASSERT: u8 = 1u8
+const ACT_RETRACT: u8 = 2u8
+const ACT_HALT: u8 = 3u8
+const AT_CONST: u8 = 0u8
+const AT_VAR: u8 = 1u8
+const AT_ADD_VAR: u8 = 2u8
+const AT_ADD_CONST: u8 = 3u8
+type Term = struct { bind: i32, first: bool, op: u8, rv: i32, v: i64 }
+type Cond = struct { kind: u32, neg: bool, n: u32, alpha: u32, terms: [6]Term }
+type ATerm = struct { op: u8, a: i64, b: i64 }
+type Act = struct { op: u8, kind: u32, n: u32, cond: u32, terms: [6]ATerm }
+type Rule = struct { name: str, salience: i32, nconds: u32, nacts: u32, node0: u32, specificity: u32, nvars: u32, conds: [6]Cond, acts: [6]Act }
+type Fact = struct { kind: u32, alive: bool, f: [6]i64 }
+type Token = struct { rule: u32, level: u32, next: u32, blocked: u32, alive: bool, fired: bool, path: [7]u32, facts: [6]u32, vars: [12]i64 }
+type Alpha = struct { kind: u32, n: u32, head: u32, tests: [6]Term }
+type Entry = struct { fact: u32, next: u32 }
+type Node = struct { head: u32 }
+type Limits = struct { facts: usize, tokens: usize, rules: usize, alphas: usize, entries: usize, names: usize, log: usize }
+type Engine = struct { a: *mem.Arena, facts: []Fact, nfacts: usize, tokens: []Token, ntokens: usize, entries: []Entry, nentries: usize, alphas: []Alpha, nalphas: usize, nodes: []Node, nnodes: usize, rules: []Rule, nrules: usize, syms: []str, nsyms: usize, kinds: []str, nkinds: usize, log: []u32, nlog: usize, halted: bool }
+type Column = struct { field: u32, op: u8 }
+type Table = struct { name: str, in_kind: str, out_kind: str, in_arity: usize, out_arity: usize, cols: []const Column, rows: usize, cells: []const i64, outs: []const i64, first_hit: bool, salience: i32 }
+type Parser = struct { src: str, pos: usize, vars: [12]str, nvars: usize }
+error Full
+error TooMany
+error BadRule
+error Syntax
+error NotFound
+fn any_cell() -> i64
+fn init(a: *mem.Arena, lim: Limits) -> (Engine, err)
+fn dup(a: *mem.Arena, s: str) -> (str, err)
+fn same(x: str, y: str) -> bool
+fn intern_symbol(e: *Engine, name: str) -> (i64, err)
+fn intern_kind(e: *Engine, name: str) -> (u32, err)
+fn compare(op: u8, x: i64, y: i64) -> bool
+fn match_cond(c: Cond, f: Fact, vars: []i64) -> bool
+fn alpha_pass(al: Alpha, f: Fact) -> bool
+fn new_token(e: *Engine, rule_index: u32, parent: u32) -> (u32, err)
+fn kill_below(e: *Engine, tid: u32)
+fn propagate(e: *Engine, tid: u32) -> err
+fn same_alpha(al: Alpha, kind_id: u32, n: u32, tests: [6]Term) -> bool
+fn add_rule(e: *Engine, rule_in: Rule) -> err
+fn find_fact(e: *Engine, f: Fact) -> u32
+fn right_activate(e: *Engine, ri: usize, ci: usize, fid: u32) -> err
+fn assert_fact(e: *Engine, kind_id: u32, args: []const i64) -> (u32, bool, err)
+fn retract(e: *Engine, fid: u32) -> err
+fn count(e: *Engine, kind_id: u32) -> usize
+fn has(e: *Engine, kind_id: u32, args: []const i64) -> bool
+fn sorted_ids(t: Token, n: u32, out: []u32) -> usize
+fn better(e: *Engine, x: u32, y: u32) -> bool
+fn eval_term(at: ATerm, vars: [12]i64) -> i64
+fn run_actions(e: *Engine, tid: u32) -> err
+fn fire(e: *Engine, limit: usize) -> (usize, err)
+fn fired_rule(e: *Engine, n: usize) -> u32
+fn bind_term(var_index: usize) -> Term
+fn const_aterm(v: i64) -> ATerm
+fn var_aterm(index: usize) -> ATerm
+fn add_table(e: *Engine, t: Table) -> err
+fn is_word_char(c: u8) -> bool
+fn is_digit(c: u8) -> bool
+fn skip(p: *Parser)
+fn accept(p: *Parser, s: str) -> bool
+fn accept_kw(p: *Parser, s: str) -> bool
+fn expect(p: *Parser, s: str) -> err
+fn word(p: *Parser) -> (str, err)
+fn integer(p: *Parser) -> (i64, err)
+fn var_slot(p: *Parser, name: str) -> (i32, err)
+fn parse_op(p: *Parser) -> u8
+fn parse_const(e: *Engine, p: *Parser) -> (i64, err)
+fn parse_term(e: *Engine, p: *Parser) -> (Term, err)
+fn parse_cond(e: *Engine, p: *Parser, neg: bool) -> (Cond, err)
+fn parse_aterm(e: *Engine, p: *Parser) -> (ATerm, err)
+fn parse_rule(e: *Engine, p: *Parser) -> err
+fn load(e: *Engine, src: str) -> err
+```
+
+A forward-chaining production-rule engine (L161) in the shape of Drools and CLIPS. Facts are an interned kind and up to six `i64` fields; asserting an existing fact is a no-op. A Rete network (shared alpha memories on constant tests, a beta chain of join and negative nodes holding partial matches) is updated incrementally by `assert_fact` and `retract`. `fire` runs the best activation until the agenda is empty, a `halt` runs or the limit is reached; conflict resolution is salience, recency, specificity, rule order, with refraction. Right-hand sides are data: `assert`, `retract n`, `halt`, with `?v`, `?v+?w` and `?v+k` terms. `load` parses the rule DSL; `add_table` compiles a decision table (row rules, `first_hit` through a marker fact and a `not`, or collect). Storage is fixed at `init` (`Limits`); `Full` when a pool is spent. Not here: beta prefix sharing, `exists`/`forall`/`or`, truth maintenance, a workbench or server.
+
+### `e.data.mapper`
+
+```neper
+type Rename = struct { dest: str, src: str }
+type Default = struct { dest: str, as_int: i64, as_real: f64, as_str: str }
+type Profile = struct { renames: []const Rename, defaults: []const Default, ignore: []const str, strict: bool, empty_is_null: bool }
+type Stats = struct { mapped: usize, defaulted: usize, skipped: usize, missing: usize }
+type Resolution = struct { score: u32, depth: usize, a: str, b: str, c: str, renamed: bool }
+error Overflow
+error Incompatible
+error Unmapped
+error TooSmall
+fn lower_byte(c: u8) -> u8
+fn eat(dname: str, at: usize, seg: str) -> (usize, bool)
+fn loose_eq(dname: str, a: str, b: str, c: str) -> bool
+fn take(src: str, at: usize, seg: str) -> (usize, bool)
+fn dotted_eq(src: str, depth: usize, a: str, b: str, c: str) -> bool
+fn path_score(dname: str, want: str, renamed: bool, depth: usize, a: str, b: str, c: str) -> u32
+fn rename_of(p: *const Profile, dest: str) -> (str, bool)
+fn default_of(p: *const Profile, dest: str) -> (usize, bool)
+fn ignored(p: *const Profile, dest: str) -> bool
+fn compatible[F: type, G: type]() -> bool
+fn is_null[F: type](x: F, empty_is_null: bool) -> bool
+fn from_default[G: type](d: Default) -> G
+fn convert[G: type, F: type](a: *mem.Arena, x: F) -> (G, err)
+fn resolve[DF: meta.Field, D: type, S: type](p: *const Profile) -> Resolution
+fn put_value[DF: meta.Field, D: type, F: type](a: *mem.Arena, dst: *D, v: F, p: *const Profile, st: *Stats) -> err
+fn map_into[S: type, D: type](a: *mem.Arena, src: *const S, dst: *D, p: *const Profile) -> (Stats, err)
+fn map_all[S: type, D: type](a: *mem.Arena, src: []const S, dst: []D, p: *const Profile) -> (Stats, err)
+fn unmapped[S: type, D: type](p: *const Profile) -> usize
+fn push_column(b: *str.Builder, res: Resolution) -> err
+fn column_is(res: Resolution, name: str) -> bool
+fn push_literal_int(b: *str.Builder, v: i64) -> err
+fn push_literal_text(b: *str.Builder, s: str) -> err
+fn push_item[G: type](b: *str.Builder, name: str, has_source: bool, res: Resolution, has_default: bool, d: Default) -> err
+fn project_sql[S: type, D: type](a: *mem.Arena, table: str, p: *const Profile) -> (str, err)
+```
+
+An object-object mapper (L139) in the shape of AutoMapper and Mapster, over `e.meta` field reflection. `map_into[S, D]` fills a destination struct by convention: an explicit `Rename` (a dotted source path), the same name, the same name ignoring case and underscores, or a flattened path (`address_city` reads `address.city`, up to three levels), the best score winning and an incompatible member never a candidate. `ignore` skips a field, a `Default` is the null substitution (an absent source, an empty `str` when `empty_is_null`, a NaN), and `strict` makes a field with no source `Unmapped`. Integers are range-checked (`Overflow`), a `str` is copied into the arena, a nested struct maps by convention. `map_all` maps a slice and `unmapped` counts the fields nothing covers. `project_sql[S, D]` answers the SELECT list that reads only the columns the destination needs (flattened paths as `a_b`, defaults as `COALESCE`). A slice field is a `str`; enums, pointers and other slices are not mapped.
+
+### `e.task.jobs`
+
+```neper
+const STATE_ENQUEUED: u8 = 0u8
+const STATE_SCHEDULED: u8 = 1u8
+const STATE_PROCESSING: u8 = 2u8
+const STATE_RETRY: u8 = 3u8
+const STATE_SUCCEEDED: u8 = 4u8
+const STATE_DEAD: u8 = 5u8
+const MISFIRE_SKIP: u8 = 0u8
+const MISFIRE_ONE: u8 = 1u8
+const MISFIRE_ALL: u8 = 2u8
+const BACKOFF_EXPONENTIAL: u8 = 0u8
+const BACKOFF_HANGFIRE: u8 = 1u8
+const MS: i64 = 1000000i64
+const MAX_CATCH_UP: usize = 1000usize
+type Policy = struct { kind: u8, base_ms: i64, cap_ms: i64, jitter_ms: i64 }
+type Job = struct { id: u64, name: str, payload: str, key: str, state: u8, attempts: u32, max_attempts: u32, priority: i32, run_at: i64, locked_until: i64, created: i64, last_error: str, recurring: u32 }
+type Recurring = struct { id: str, expr: str, offset_minutes: i32, name: str, payload: str, max_attempts: u32, misfire: u8, grace_ms: i64, next_fire: i64, last_fire: i64, active: bool, sched: cron.Schedule }
+type Queue = struct { a: *mem.Arena, jobs: []Job, n: usize, recs: []Recurring, nrec: usize, next_id: u64, policy: Policy }
+error Full
+error NotFound
+error NotProcessing
+error Invalid
+error Corrupt
+fn init(a: *mem.Arena, max_jobs: usize, max_recurring: usize, policy: Policy) -> (Queue, err)
+fn keep(a: *mem.Arena, s: str) -> (str, err)
+fn retry_delay(p: Policy, attempt: u32, id: u64) -> i64
+fn find(q: *Queue, id: u64) -> (usize, bool)
+fn alive_with_key(q: *Queue, key: str) -> (u64, bool)
+fn enqueue(q: *Queue, name: str, payload: str, now: i64, delay_ms: i64, max_attempts: u32, priority: i32, key: str) -> (u64, err)
+fn fail_at(q: *Queue, at: usize, now: i64, message: str) -> (u8, err)
+fn better(x: Job, y: Job) -> bool
+fn fetch(q: *Queue, now: i64, lease_ms: i64) -> (Job, bool, err)
+fn complete(q: *Queue, id: u64) -> err
+fn fail(q: *Queue, id: u64, now: i64, message: str) -> (u8, err)
+fn heartbeat(q: *Queue, id: u64, now: i64, lease_ms: i64) -> err
+fn requeue(q: *Queue, id: u64, now: i64) -> err
+fn get(q: *Queue, id: u64) -> (Job, bool)
+fn count(q: *Queue, state: u8) -> usize
+fn purge(q: *Queue) -> usize
+fn find_recurring(q: *Queue, id: str) -> (usize, bool)
+fn recurring_set(q: *Queue, id: str, expr: str, offset_minutes: i32, name: str, payload: str, max_attempts: u32, misfire: u8, grace_ms: i64, now: i64) -> err
+fn recurring_remove(q: *Queue, id: str) -> err
+fn fire_key(a: *mem.Arena, id: str, nanos: i64) -> (str, err)
+fn enqueue_fire(q: *Queue, r: Recurring, ri: usize, fire: i64, due: i64) -> (bool, err)
+fn tick(q: *Queue, now: i64) -> (usize, err)
+fn put_u64(b: *str.Builder, v: u64) -> err
+fn put_i64(b: *str.Builder, v: i64) -> err
+fn put_str(b: *str.Builder, s: str) -> err
+type Reader = struct { data: str, pos: usize, bad: bool }
+fn get_u64(r: *Reader) -> u64
+fn get_i64(r: *Reader) -> i64
+fn get_str(a: *mem.Arena, r: *Reader) -> (str, err)
+fn save(q: *Queue, s: *store.Store, a: *mem.Arena, key: str) -> err
+fn get_byte(r: *Reader) -> u8
+fn load(a: *mem.Arena, s: *store.Store, key: str, max_jobs: usize, max_recurring: usize) -> (Queue, err)
+```
+
+Persistent background jobs with retries and cron triggers (L140), in the shape of Hangfire and Quartz. A `Queue` is fixed-capacity plain data over an arena; `save` and `load` write it to one blob of an `e.store` behind a magic and an FNV-1a 64 checksum (`Corrupt` on a flipped byte, a short blob or capacities too small). Delivery is at-least-once: `fetch` leases the best due job (priority, due time, id), `attempts` counts deliveries, and a lease that runs out is a failed attempt. A failed job is `Retry` after the policy backoff (exponential with a cap and a deterministic jitter, or Hangfire's curve) and `Dead` past `max_attempts`, held with its last error until `requeue`. A `key` makes `enqueue` idempotent. Recurring schedules are six-field cron expressions (`e.time.cron`) at a fixed offset; `tick(now)` enqueues the fires up to `now` under the Quartz-style misfire policy (`MISFIRE_SKIP`, `MISFIRE_ONE`, `MISFIRE_ALL`, with a grace window and a catch-up bound), each keyed so a repeated tick enqueues nothing twice. The queue is single-threaded: callers serialize access. No dashboard.
+
+### `e.db.docstore`
+
+```neper
+const ANY_VERSION: i64 = -1i64
+const NS_PROJECTION: u8 = 0u8
+const NS_SUBSCRIPTION: u8 = 1u8
+const KIND_PUT: u8 = 1u8
+const KIND_DELETE: u8 = 2u8
+const KIND_EVENT: u8 = 3u8
+const KIND_MARK: u8 = 4u8
+type DocRec = struct { coll: str, id: str, data: str, alive: bool }
+type Event = struct { seq: u64, stream: str, version: u32, kind: str, data: str, at: i64 }
+type Mark = struct { ns: u8, name: str, seq: u64 }
+type Stream = struct { name: str, version: u32 }
+type Db = struct { log: []u8, used: usize, docs: []DocRec, ndocs: usize, events: []Event, nevents: usize, marks: []Mark, nmarks: usize, streams: []Stream, nstreams: usize, a: *mem.Arena }
+type Limits = struct { log: usize, docs: usize, events: usize, marks: usize, streams: usize }
+type Projection = struct { name: str, ctx: *void, apply: fn(*void, *Db, Event) -> err }
+type Reader = struct { pos: usize, bad: bool }
+error Full
+error Concurrency
+error Invalid
+error Corrupt
+fn magic() -> str
+fn create(a: *mem.Arena, lim: Limits) -> (Db, err)
+fn rd_u32(data: str, r: *Reader) -> u32
+fn rd_u64(data: str, r: *Reader) -> u64
+fn rd_byte(data: str, r: *Reader) -> u8
+fn rd_span(data: str, r: *Reader) -> (usize, usize)
+fn find_doc(db: *Db, coll: str, id: str) -> (usize, bool)
+fn find_stream(db: *Db, name: str) -> (usize, bool)
+fn find_mark(db: *Db, ns: u8, name: str) -> (usize, bool)
+fn apply(db: *Db, payload: str) -> err
+fn restore(a: *mem.Arena, image: str, lim: Limits) -> (Db, usize, err)
+fn bytes(db: *Db) -> str
+fn w_byte(db: *Db, v: u8) -> bool
+fn w_u32(db: *Db, v: u32) -> bool
+fn w_u64(db: *Db, v: u64) -> bool
+fn w_str(db: *Db, s: str) -> bool
+fn begin(db: *Db) -> (usize, bool)
+fn seal(db: *Db, start: usize) -> err
+fn abandon(db: *Db, start: usize) -> err
+fn put(db: *Db, coll: str, id: str, data: str) -> err
+fn get(db: *Db, coll: str, id: str) -> (str, bool)
+fn delete(db: *Db, coll: str, id: str) -> (bool, err)
+fn count(db: *Db, coll: str) -> usize
+fn doc_at(db: *Db, coll: str, n: usize) -> (str, str, bool)
+fn stream_version(db: *Db, stream: str) -> u32
+fn write_event(db: *Db, stream: str, version: u32, kind: str, data: str, at: i64) -> err
+fn append(db: *Db, stream: str, kind: str, data: str, at: i64, expected: i64) -> (u64, err)
+fn event_count(db: *Db) -> usize
+fn read_stream(db: *Db, stream: str, from_version: u32, out: []Event) -> usize
+fn read_all(db: *Db, after_seq: u64, out: []Event) -> usize
+fn mark_of(db: *Db, ns: u8, name: str) -> u64
+fn set_mark(db: *Db, ns: u8, name: str, seq: u64) -> err
+fn project(db: *Db, p: Projection, limit: usize) -> (usize, err)
+fn rebuild(db: *Db, p: Projection, coll: str) -> (usize, err)
+fn position(db: *Db, name: str) -> u64
+fn poll(db: *Db, name: str, out: []Event) -> usize
+fn ack(db: *Db, name: str, seq: u64) -> err
+fn compact(db: *Db, a: *mem.Arena, lim: Limits) -> (Db, err)
+fn save(db: *Db, s: *store.Store, key: str) -> err
+fn open(a: *mem.Arena, s: *store.Store, key: str, lim: Limits) -> (Db, usize, err)
+```
+
+An embedded document and event store in one append-only file (L147), in the shape of LiteDB and Marten. The file is `NDS1` and CRC32-framed records (a document put, a document delete, an event, a mark); every operation appends its frame and applies that same frame to the in-memory tables, exactly as `restore` does, so a reopened database equals the one that wrote it. Documents are named collections of id to text. The journal is global-sequenced and per-stream-versioned; `append` takes the version the caller expects (`ANY_VERSION` for none) and a mismatch is `Concurrency` with nothing written. `project` folds events after the projection's persisted mark through its idempotent `apply`, `rebuild` clears the collection and folds again, `poll`/`ack` give a subscription a persisted position. `restore` replays sound frames and reports the bytes of a torn or damaged tail it dropped; `compact` rebuilds from live documents, every event and the marks; `save`/`open` use an `e.store` key. Lookups are linear; the store is single-threaded; clustering stays with `e.dist`.
+
+### `e.dist.actor`
+
+```neper
+const MAX_FIRE: usize = 64usize
+const KEY_SEP: u8 = 31u8
+type Silo = struct { name: str, id: u64, alive: bool }
+type Activation = struct { grain: str, silo: u32, state: str, version: u32, busy: bool, live: bool, last_used: i64 }
+type Timer = struct { grain: str, name: str, due: i64, period: i64, live: bool }
+type Behavior = struct { ctx: *void, activate: fn(*void, *Turn) -> err, handle: fn(*void, *Turn) -> err, deactivate: fn(*void, *Turn) -> err }
+type Turn = struct { sys: *System, act: usize, grain: str, kind: str, payload: str, now: i64, state: str, state_changed: bool, reply: str, silo: u32 }
+type System = struct { a: *mem.Arena, db: *ds.Db, behavior: Behavior, silos: []Silo, nsilos: usize, acts: []Activation, nacts: usize, timers: []Timer, ntimers: usize, turns: u64 }
+error NoSilo
+error Reentrancy
+error Full
+error Invalid
+error NotFound
+fn state_collection() -> str
+fn reminder_collection() -> str
+fn create(a: *mem.Arena, db: *ds.Db, behavior: Behavior, max_silos: usize, max_activations: usize, max_timers: usize) -> (System, err)
+fn keep(a: *mem.Arena, s: str) -> (str, err)
+fn add_silo(sys: *System, name: str) -> (usize, err)
+fn live_silos(sys: *System) -> usize
+fn place(sys: *System, grain: str) -> (usize, bool)
+fn find_activation(sys: *System, grain: str) -> (usize, bool)
+fn is_active(sys: *System, grain: str) -> bool
+fn silo_of(sys: *System, grain: str) -> (usize, bool)
+fn active_count(sys: *System) -> usize
+fn stored_state(sys: *System, grain: str) -> (str, bool)
+fn new_turn(sys: *System, at: usize, kind: str, payload: str, now: i64) -> Turn
+fn activate(sys: *System, grain: str, now: i64) -> (usize, err)
+fn commit(sys: *System, at: usize, turn: *Turn) -> err
+fn deliver(sys: *System, at: usize, kind: str, payload: str, now: i64) -> (str, err)
+fn call(sys: *System, grain: str, kind: str, payload: str, now: i64) -> (str, err)
+fn call_from(t: *Turn, grain: str, kind: str, payload: str) -> (str, err)
+fn set_state(t: *Turn, s: str)
+fn set_reply(t: *Turn, s: str)
+fn deactivate_at(sys: *System, at: usize, now: i64) -> err
+fn drop_timers(sys: *System, grain: str)
+fn deactivate(sys: *System, grain: str, now: i64) -> err
+fn collect(sys: *System, now: i64, idle_ms: i64) -> (usize, err)
+fn fail_silo(sys: *System, silo: usize) -> usize
+fn timer_start(t: *Turn, name: str, due: i64, period: i64) -> err
+fn timer_stop(t: *Turn, name: str) -> bool
+fn timer_count(sys: *System) -> usize
+fn reminder_key(a: *mem.Arena, grain: str, name: str) -> (str, err)
+fn reminder_value(a: *mem.Arena, due: i64, period: i64) -> (str, err)
+fn parse_pair(s: str) -> (i64, i64, bool)
+fn reminder_set(sys: *System, grain: str, name: str, due: i64, period: i64) -> err
+fn reminder_cancel(sys: *System, grain: str, name: str) -> (bool, err)
+fn reminder_count(sys: *System) -> usize
+fn next_due(due: i64, period: i64, now: i64) -> i64
+type Pending = struct { key: str, due: i64, period: i64 }
+fn tick(sys: *System, now: i64) -> (usize, err)
+fn timer_kind(a: *mem.Arena, prefix: str, name: str) -> str
+```
+
+A virtual-actor framework (L141) in the shape of Orleans grains, over `e.algo.consistent_hash` placement and `e.db.docstore` storage. A grain is an id that always exists: the first `call` places it on a live silo by rendezvous hashing of its id, loads its persisted state, runs `activate` and delivers messages one turn at a time through the behavior's `handle`; `collect` deactivates idle grains and the next call activates them again. A turn's state change and reply take effect only when the handler returns `ok`, and the state is written through to the store first. A turn is not reentrant: a call to a grain that is in a turn (its own, or a cycle) is `Reentrancy`, refused rather than deadlocked. Timers are in memory and die with the activation; reminders are durable documents that fire whether or not the grain is active and survive a restart of the same file; a periodic schedule's next firing is its due time plus the smallest period multiple after `now`, so a gap is one firing. `fail_silo` drops a silo's activations with no hook and no write; the next call re-places and reloads. There is no transport: a silo is a placement target and failure domain in one process.
+
+### `e.debug.report`
+
+```neper
+const MAX_HEADERS: usize = 4usize
+const SECOND_NS: i64 = 1000000000i64
+const MAX_BACKOFF_S: i64 = 60i64
+type Dsn = struct { scheme: str, public_key: str, secret_key: str, host: str, port: u16, path: str, project_id: str }
+type Tag = struct { key: str, value: str }
+type Event = struct { id: str, timestamp: i64, level: str, message: str, err_type: str, err_value: str, frames: []const debug.Frame, release: str, environment: str, tags: []const Tag }
+type Item = struct { kind: str, content_type: str, filename: str, payload: str }
+type Limit = struct { category: str, until: i64 }
+type Transport = struct { ctx: *void, send: fn(*void, *mem.Arena, *const http.Request) -> (http.Response, err) }
+type NetTransport = struct { endpoint: net.Endpoint, limits: http.Limits }
+type TlsTransport = struct { endpoint: net.Endpoint, config: tls.ClientConfig, limits: http.Limits }
+type Client = struct { dsn: Dsn, a: *mem.Arena, transport: Transport, name: str, queue: []str, count: usize, bytes: usize, max_items: usize, max_bytes: usize, dropped: usize, rejected: usize, sent: usize, failures: u32, retry_at: i64, limited_until: i64 }
+error Invalid
+error TooLarge
+error Corrupt
+fn find_byte(s: str, from: usize, c: u8) -> usize
+fn parse_port(s: str) -> (u16, bool)
+fn parse_dsn(text: str) -> (Dsn, err)
+fn envelope_target(a: *mem.Arena, d: *const Dsn) -> (str, err)
+fn auth_header(a: *mem.Arena, d: *const Dsn, sdk: str) -> (str, err)
+fn push_hex2(b: *str.Builder, v: u8) -> err
+fn push_json_string(b: *str.Builder, s: str) -> err
+fn push_key(b: *str.Builder, first: bool, name: str) -> err
+fn push_timestamp(b: *str.Builder, nanos: i64) -> err
+fn push_frame(b: *str.Builder, f: debug.Frame) -> err
+fn event_json(a: *mem.Arena, ev: *const Event) -> (str, err)
+fn write_event(b: *str.Builder, ev: *const Event) -> err
+fn event_item(a: *mem.Arena, ev: *const Event) -> (Item, err)
+fn push_item(b: *str.Builder, it: Item) -> err
+fn envelope(a: *mem.Arena, event_id: str, sent_at: i64, items: []const Item) -> (str, err)
+fn trim_space(s: str) -> str
+fn parse_seconds(s: str, fallback: i64) -> i64
+fn parse_rate_limits(header: str, now: i64, out: []Limit) -> usize
+fn net_send(ctx: *void, a: *mem.Arena, req: *const http.Request) -> (http.Response, err)
+fn net_transport(t: *NetTransport) -> Transport
+fn tls_send(ctx: *void, a: *mem.Arena, req: *const http.Request) -> (http.Response, err)
+fn tls_transport(t: *TlsTransport) -> Transport
+fn client(a: *mem.Arena, dsn_text: str, transport: Transport, sdk_name: str, max_items: usize, max_bytes: usize) -> (Client, err)
+fn keep(a: *mem.Arena, s: str) -> (str, err)
+fn pop_front(c: *Client)
+fn enqueue(c: *Client, bytes_in: str) -> err
+fn capture(c: *Client, ev: *const Event, attachments: []const Item, now: i64) -> err
+fn is_error_category(l: Limit) -> bool
+fn header_value(h: []const http.Header, name: str) -> (str, bool)
+fn lower_eq(x: str, y: str) -> bool
+fn flush(c: *Client, now: i64, max_send: usize) -> (usize, err)
+fn pending(c: *Client) -> usize
+fn put_u32(b: *str.Builder, v: u32) -> err
+fn save_queue(c: *Client, s: *store.Store, key: str) -> err
+fn get_u32(data: str, at: usize) -> u32
+fn load_queue(c: *Client, s: *store.Store, key: str) -> err
+fn capture_here(c: *Client, level: str, err_type: str, err_value: str, id: str, release: str, now: i64, frames: []debug.Frame) -> err
+```
+
+A crash and error report upload client (L149) speaking the Sentry envelope protocol over `e.net.http`. `parse_dsn` reads `scheme://key[:secret]@host[:port]/[path/]project` (default ports 80/443), `envelope_target` and `auth_header` give the `/api/<project>/envelope/` path and the `X-Sentry-Auth` value, `event_json` and `envelope` write the event and the length-framed envelope (an event item, optional attachments) byte for byte as sentry-sdk does for ASCII text, and `parse_rate_limits` reads `X-Sentry-Rate-Limits`. A `Client` queues serialized envelopes in a bounded offline queue (oldest dropped to fit, counted) and `flush` sends them through a caller `Transport` (`net_transport` over `http.request`, `tls_transport` over `http.request_tls`): 2xx removes, a rate limit on `error` pauses until its deadline, another 4xx drops the envelope, 5xx or a transport failure keeps it and backs off 1 s doubling to 60 s. `save_queue`/`load_queue` persist the queue through an `e.store` key; `capture_here` builds an event from the live `e.debug.backtrace`. Time is the caller's clock. No hub, sessions, transactions or symbolication.
+
 ### `e.db.migrate`
 
 ```neper

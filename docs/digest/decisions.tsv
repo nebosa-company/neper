@@ -2249,4 +2249,10 @@ D2644	1829	L114 (MongoDB): x.mongodb.wire, OP_MSG and SCRAM-SHA-256, checked aga
 D2645	1854	L114 (Elasticsearch): x.elastic.rest request encoders and response readers, checked against elasticsearch-py
 D2646	2310	L101: HTTP/2 + HPACK and the gRPC client protocol, checked against grpcio transcripts
 D2647	1635	L151: x.modbus.wire, Modbus TCP/RTU/ASCII codec and slave model, checked against pymodbus
-D2648	2078	L126: e.dbus, the D-Bus message codec, authentication and call bookkeeping, checked against dbus-next
+D2648	2079	L126: e.dbus, the D-Bus message codec, authentication and call bookkeeping, checked against dbus-next
+D2760	2241	L161: e.algo.rules, a Rete production-rule engine with a rule DSL and decision tables, checked against a brute-force model
+D2761	2425	L139: e.data.mapper, a convention-based object-object mapper with flattening, null substitution and queryable projections over e.meta
+D2762	2753	L140: e.task.jobs, persistent background jobs with at-least-once retries, cron triggers and poison quarantine, checked against croniter
+D2763	3037	L147: e.db.docstore, an embedded document store and append-only event journal in one CRC-framed file, checked against an independent writer and replay model
+D2764	2574	L141: e.dist.actor, virtual actors with lifecycle, timers, durable reminders and persisted state over rendezvous placement and e.db.docstore
+D2765	2870	L149: e.debug.report, a Sentry-envelope crash and error report client with an offline queue, checked byte for byte against sentry-sdk

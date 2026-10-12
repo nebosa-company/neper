@@ -488,50 +488,6 @@
       "evidence": "Planning only (D1889). ghostty/wezterm/kitty parity gap (verified: only false-positive matches anywhere): pty ownership, VT/ECMA-48 parser and cell grid with scrollback over e.ui.collection virtualization and text layout. Fixtures replay byte streams into grid assertions; shell integration and GPU rendering stay out."
     },
     {
-      "id": "L139",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 237,
-      "title": "Object-object mapper with conventions and projections",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1890). AutoMapper/Mapster parity missing: convention-based member mapping with flattening, null substitution and queryable projections over e.meta field reflection. Runtime mapper first; comptime specialization follows. Fixtures against mapping matrices incl. nested flattening. Follow-on (D1891): MapStruct-style compile-time generation rides the comptime-follow."
-    },
-    {
-      "id": "L140",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 238,
-      "title": "Persistent background jobs with retries and cron triggers",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1890). Hangfire/Quartz parity missing: durable job queues with at-least-once retries, cron triggers over e.time.cron and recurring schedules over e.db storage. Dashboards stay app-side per D1785. Fixtures for retry backoff, trigger firing and poison-message quarantine. Follow-on (D1891): Spring Batch-style chunk processing and Quartz enterprise triggers ride the same queues."
-    },
-    {
-      "id": "L141",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 239,
-      "title": "Virtual-actor framework over e.dist",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1890). Orleans/Akka parity missing: virtual actors with lifecycle, timers, reminders and persisted state over e.dist placement plus e.db storage. e.task covers tasks, not grains. Fixtures for activation, timer firing, reminder durability and reentrancy refusal."
-    },
-    {
-      "id": "L147",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 245,
-      "title": "Embedded document and event store",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1890). LiteDB/Marten parity missing: single-file document collections plus an append-only event journal with projections and subscriptions over e.db.storage. Fixtures for journal replay, projection rebuild and subscription catch-up; clustering stays with e.dist."
-    },
-    {
       "id": "L148",
       "category": "library",
       "group": "UI",
@@ -541,17 +497,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1890). DevExpress-style scheduler parity missing (pickers exist, no appointment surface): day/week/agenda views with drag-create and recurrence display over e.time.calendar plus L103 rules. Fixtures for layout, overlap columns and accessibility roles."
-    },
-    {
-      "id": "L149",
-      "category": "library",
-      "group": "Drivers",
-      "order": 247,
-      "title": "Crash and error report upload client",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1890). Sentry-envelope parity missing: crash/error capture with envelope upload over e.net.http, batching and offline queue. Vendor APM SDKs stay hand-built; server-side stores are app-side. Fixtures against envelope schema with fixture DSNs."
     },
     {
       "id": "L150",
@@ -607,17 +552,6 @@
       "model": "sonnet",
       "thinking": "high",
       "evidence": "Planning only (D1891). Fourth small-completions item: robots.txt and sitemap parsing, Awaitility-style async test-condition polling, FileHelpers-style fixed-width record mapping and PKCS#12/JKS keystores. Each lands with table fixtures; split out any that grows, mirroring L135."
-    },
-    {
-      "id": "L161",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 259,
-      "title": "Rules engine: Rete plus decision tables",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1891). Drools parity missing (L025 is a predicate subset): Rete network with decision tables and a rule DSL over e.algo.logic. Fixtures on classic rulesets with conflict-resolution order; server and workbench UIs stay out."
     },
     {
       "id": "T036",
@@ -970,6 +904,17 @@
           "model": "opus",
           "thinking": "high",
           "evidence": "Split from L101 (D2646): e.net.http2 and the e.net.grpc client protocol exist and are checked against hpack/h2 and recorded grpcio transcripts. Acceptance: (1) a server side over e.net.http2 (unary, then streaming); (2) deadlines, retries and message compression; (3) the gRPC-over-HTTP/3 binding on e.net.http3 frames; (4) a TLS dial helper; (5) stub generation from .proto descriptors (e.fmt.protobuf needs a descriptor reader first) with typed request and response messages."
+    },
+    {
+          "id": "C177",
+          "category": "compiler",
+          "group": "NeperOS",
+          "order": 177,
+          "title": "Compiler: comptime Field/Member generic arguments compare by index only",
+          "score": 0,
+          "model": "opus",
+          "thinking": "medium",
+          "evidence": "Found by lane I of the L-queue (D2761): generic_arguments_equal in src/check.e (near line 8817) compares a comptime Field argument by its index (left.value) and ignores its owner, so two functions instantiated with Fields of the same index from different structs share one instance and bind the wrong field. e.data.mapper works around it by passing the destination type as an extra generic argument. Acceptance: compare owner for .Field and .Member; a fixture with two structs whose same-index fields go through one generic function and keep their own types and names; the bootstrap and neper-self agree."
     }
   ]
 }

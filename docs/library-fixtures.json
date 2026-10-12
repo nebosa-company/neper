@@ -2625,6 +2625,7 @@
    "delivered": 121,
    "pending": [],
    "fixtures": [
+    "debug_report",
     "metrics_export",
     "misc_gaps",
     "net_http",

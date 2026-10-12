@@ -2338,6 +2338,42 @@ $dataObjpoolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $dataObjpoolWritten -ne 'executable written') { throw 'data_objpool emission failed' }
 & $dataObjpoolPath
 if ($LASTEXITCODE -ne 0) { throw "a data_objpool check failed: exit $LASTEXITCODE" }
+# `e.algo.rules`: Rete engine and DSL against a brute-force model: forward chaining, closure order, salience/recency/specificity, arithmetic RHS, negation both ways, halt and limit, decision tables first-hit and collect, refusals (D2760).
+$algoRulesPath = Join-Path $testBuild 'algo-rules-selfhost.exe'
+$algoRulesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rules\src\main.e') $repo 'x64' 'windows' $algoRulesPath
+if ($LASTEXITCODE -ne 0 -or $algoRulesWritten -ne 'executable written') { throw 'algo_rules emission failed' }
+& $algoRulesPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_rules check failed: exit $LASTEXITCODE" }
+# `e.data.mapper`: convention-based struct mapping with flattening, renames, ignore, null substitution, range-checked integers, map_all and project_sql against a Python name/range model and hand-derived structs (D2761).
+$dataMapperPath = Join-Path $testBuild 'data-mapper-selfhost.exe'
+$dataMapperWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_mapper\src\main.e') $repo 'x64' 'windows' $dataMapperPath
+if ($LASTEXITCODE -ne 0 -or $dataMapperWritten -ne 'executable written') { throw 'data_mapper emission failed' }
+& $dataMapperPath
+if ($LASTEXITCODE -ne 0) { throw "a data_mapper check failed: exit $LASTEXITCODE" }
+# `e.task.jobs`: retry backoff vectors, six croniter fire sequences, misfire policies, lease expiry and poison quarantine, save/load through e.store with corruption refusals, keyed idempotent ticks, bounded catch-up (D2762).
+$taskJobsPath = Join-Path $testBuild 'task-jobs-selfhost.exe'
+$taskJobsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\task_jobs\src\main.e') $repo 'x64' 'windows' $taskJobsPath
+if ($LASTEXITCODE -ne 0 -or $taskJobsWritten -ne 'executable written') { throw 'task_jobs emission failed' }
+& $taskJobsPath
+if ($LASTEXITCODE -ne 0) { throw "a task_jobs check failed: exit $LASTEXITCODE" }
+# `e.db.docstore`: byte-exact log image against an independent struct+zlib writer, concurrency refusals, recovery over every torn prefix and a flipped byte, projection catch-up and rebuild, subscription resume across a reopen, compaction, store round trip, capacity rollback (D2763).
+$dbDocstorePath = Join-Path $testBuild 'db-docstore-selfhost.exe'
+$dbDocstoreWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_docstore\src\main.e') $repo 'x64' 'windows' $dbDocstorePath
+if ($LASTEXITCODE -ne 0 -or $dbDocstoreWritten -ne 'executable written') { throw 'db_docstore emission failed' }
+& $dbDocstorePath
+if ($LASTEXITCODE -ne 0) { throw "a db_docstore check failed: exit $LASTEXITCODE" }
+# `e.dist.actor`: activation and placement against xxhash plus a rendezvous model, state through deactivation, silo failure and re-placement, reentrancy and cycle refusal, turn atomicity, timers, durable reminders across a restart, capacity refusals (D2764).
+$distActorPath = Join-Path $testBuild 'dist-actor-selfhost.exe'
+$distActorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\dist_actor\src\main.e') $repo 'x64' 'windows' $distActorPath
+if ($LASTEXITCODE -ne 0 -or $distActorWritten -ne 'executable written') { throw 'dist_actor emission failed' }
+& $distActorPath
+if ($LASTEXITCODE -ne 0) { throw "a dist_actor check failed: exit $LASTEXITCODE" }
+# `e.debug.report`: DSN fields, endpoint, X-Sentry-Auth, byte-exact envelopes and X-Sentry-Rate-Limits against sentry-sdk, then queue, batched flush, 5xx backoff, 429 limits, rejection, overflow, persistence and backtrace capture through a fake transport (D2765).
+$debugReportPath = Join-Path $testBuild 'debug-report-selfhost.exe'
+$debugReportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\debug_report\src\main.e') $repo 'x64' 'windows' $debugReportPath
+if ($LASTEXITCODE -ne 0 -or $debugReportWritten -ne 'executable written') { throw 'debug_report emission failed' }
+& $debugReportPath
+if ($LASTEXITCODE -ne 0) { throw "a debug_report check failed: exit $LASTEXITCODE" }
 # `e.db.migrate`: FNV-1a checksum vectors, up/down/idempotent runs on sqlite, partial up, changed-text/missing/out-of-order refusals, a failed migration locking the journal until unlock, an atomic rollback and an irreversible down (D2680).
 $dbMigratePath = Join-Path $testBuild 'db-migrate-selfhost.exe'
 $dbMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db_migrate\src\main.e') $repo 'x64' 'windows' $dbMigratePath
