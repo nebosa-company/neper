@@ -449,10 +449,10 @@
       "group": "Algorithms",
       "order": 233,
       "title": "Micro-slivers: s2, bincode-style codec, magic sniff, shell words, host lookups, signals, byte-unit, rational",
-      "score": 0,
+      "score": 0.8,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1881). One small-completions item for individually tiny gaps: s2 block codec beside snappy, a bincode-style compact binary codec, magic-number sniff DB over mime sniffing, shell word-splitting, tilde expansion, hostname/users/locale/tz lookups, SIGINT/SIGTERM hooks, byte-unit parse/format and an exact rational type. Each lands with table fixtures; split out any that grows."
+      "evidence": "Planning only (D1881). One small-completions item for individually tiny gaps: s2 block codec beside snappy, a bincode-style compact binary codec, magic-number sniff DB over mime sniffing, shell word-splitting, tilde expansion, hostname/users/locale/tz lookups, SIGINT/SIGTERM hooks, byte-unit parse/format and an exact rational type. Each lands with table fixtures; split out any that grows. PART (D2801): e.fmt.bincode, e.text.shlex, e.path.tilde, e.text.bytesize, e.fmt.magic and e.os.ident built, each against an independent model or library. NOT DONE: the S2 codec (no reference), MAC addresses and wider host lookups (hostname, user, locale and zone only); signals and exact rationals already exist in e.os and e.algo.bignum."
     },
     {
       "id": "L136",
@@ -482,54 +482,10 @@
       "group": "Algorithms",
       "order": 248,
       "title": "NodaTime-style dates: non-ISO calendars, patterns, maps",
-      "score": 0,
+      "score": 0.85,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Planning only (D1890). NodaTime parity gap (verified: TZif parsing present, non-ISO calendars absent): Japanese/Islamic/Hebrew calendar arithmetic over e.time.calendar, pattern-based text parsing/formatting and a Windows to IANA zone map. Fixtures against reference conversions."
-    },
-    {
-      "id": "L152",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 250,
-      "title": "Micro-slivers III: CMS signing, json5, TFTP, singleflight, host lookups, log rotation",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1890). Third small-completions item: CMS/PKCS#7 signing for S/MIME, json5 codec, TFTP client, singleflight call-dedup, MAC/hostname lookups and file-sink log rotation. Each lands with table or loopback fixtures; split out any that grows, mirroring L135."
-    },
-    {
-      "id": "L156",
-      "category": "library",
-      "group": "Drivers",
-      "order": 254,
-      "title": "Brokerless messaging patterns: ZeroMQ and NNG",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1891). ZeroMQ/NNG parity missing (verified: no matches): pub/sub, push/pull, router/dealer and survey patterns over TCP via e.net, with ZMTP-style framing. No broker; brokered transports stay with L115. Loopback fixtures against scripted peers."
-    },
-    {
-      "id": "L157",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 255,
-      "title": "Expression languages: JEXL, SpEL and MVEL parity",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1891). JEXL/SpEL/MVEL parity missing: property navigation, method calls and operators over caller objects with sandboxed evaluation. L026 covers cell formulas, a different shape. Fixtures against reference evaluations; compilation to bytecode stays out."
-    },
-    {
-      "id": "L160",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 258,
-      "title": "Micro-slivers IV: robots, sitemap, test polling, fixed-width, keystores",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Planning only (D1891). Fourth small-completions item: robots.txt and sitemap parsing, Awaitility-style async test-condition polling, FileHelpers-style fixed-width record mapping and PKCS#12/JKS keystores. Each lands with table fixtures; split out any that grows, mirroring L135."
+      "evidence": "Planning only (D1890). NodaTime parity gap (verified: TZif parsing present, non-ISO calendars absent): Japanese/Islamic/Hebrew calendar arithmetic over e.time.calendar, pattern-based text parsing/formatting and a Windows to IANA zone map. Fixtures against reference conversions. PART (D2800): e.time.calendars (Julian, Islamic civil, Hebrew vs convertdate; Japanese eras), e.time.pattern (runtime date patterns, 573 checks) and e.tz.winzones (Windows to IANA zone ids). NOT DONE: Persian, Coptic, Thai/Buddhist, Chinese and Umm al-Qura calendars; windows zone mapping beyond territory 001; non-English pattern names."
     },
     {
       "id": "T036",

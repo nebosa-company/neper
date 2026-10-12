@@ -22528,6 +22528,816 @@ rule matches it. A plain and an ordinal weekday in one BYDAY list are a union (R
 5545; python-dateutil intersects them). A rule whose periods stay empty ends quietly
 after the year 9999 or 4,000,000 sub-daily steps. Zones belong to `e.tz`.
 
+### `e.time.calendars`
+
+```neper
+type Calendar = enum u8 { Julian, IslamicCivil, Hebrew }
+type JapaneseDate = struct { era: u8, year: i32, month: u8, day: u8 }
+error Invalid
+const RD_UNIX: i64 = 719163i64
+const HEBREW_EPOCH: i64 = -1373427i64
+const ISLAMIC_EPOCH: i64 = 227015i64
+const JULIAN_DAY_UNIX: i64 = 2440588i64
+const ERA_COUNT: u8 = 5u8
+fn julian_to_days(year: i64, month: i64, day: i64) -> i64
+fn julian_from_days(count: i64) -> (i64, i64, i64)
+fn islamic_leap(year: i64) -> bool { ret time.floor_mod(14i64 + 11i64 * year, 30i64) < 11i64 }
+fn islamic_fixed(year: i64, month: i64, day: i64) -> i64
+fn islamic_to_days(year: i64, month: i64, day: i64) -> i64 { ret islamic_fixed(year, month, day) - RD_UNIX }
+fn islamic_from_days(count: i64) -> (i64, i64, i64)
+fn hebrew_leap(year: i64) -> bool { ret time.floor_mod(7i64 * year + 1i64, 19i64) < 7i64 }
+fn hebrew_month_count(year: i64) -> i64
+fn hebrew_elapsed(year: i64) -> i64
+fn hebrew_new_year(year: i64) -> i64
+fn hebrew_year_length(year: i64) -> i64 { ret hebrew_new_year(year + 1i64) - hebrew_new_year(year) }
+fn hebrew_scriptural_length(year: i64, s: i64) -> i64
+fn scriptural_month(year: i32, civil: u8) -> u8
+fn civil_month(year: i32, scriptural: u8) -> u8
+fn hebrew_civil_length(year: i64, civil: i64) -> i64
+fn hebrew_to_days(year: i64, month: i64, day: i64) -> i64
+fn hebrew_from_days(count: i64) -> (i64, i64, i64)
+fn is_leap_year(cal: Calendar, year: i32) -> bool
+fn months_in_year(cal: Calendar, year: i32) -> u8
+fn year_ok(cal: Calendar, year: i32) -> bool
+fn days_in_month(cal: Calendar, year: i32, month: u8) -> (u8, err)
+fn valid(cal: Calendar, date: time.Date) -> bool
+fn to_days(cal: Calendar, date: time.Date) -> (i64, err)
+fn make_date(year: i64, month: i64, day: i64) -> time.Date
+fn from_days(cal: Calendar, count: i64) -> (time.Date, err)
+fn convert(from: Calendar, to: Calendar, date: time.Date) -> (time.Date, err)
+fn from_iso(cal: Calendar, date: time.Date) -> (time.Date, err)
+fn to_iso(cal: Calendar, date: time.Date) -> (time.Date, err)
+fn month_index(cal: Calendar, year: i64, month: i64) -> i64
+fn year_of_index(cal: Calendar, index: i64) -> i64
+fn add_months(cal: Calendar, date: time.Date, months: i64) -> (time.Date, err)
+fn add_years(cal: Calendar, date: time.Date, years: i64) -> (time.Date, err)
+fn add_days(cal: Calendar, date: time.Date, days: i64) -> (time.Date, err)
+fn day_of_year(cal: Calendar, date: time.Date) -> (u16, err)
+fn month_name_hebrew(year: i32, civil: u8) -> str
+fn era_name(era: u8) -> str
+fn era_start(era: u8) -> time.Date
+fn iso_count(date: time.Date) -> i64 { ret time.days_from_civil(i64(date.year), i64(date.month), i64(date.day)) }
+fn japanese_from_iso(date: time.Date) -> (JapaneseDate, err)
+fn japanese_to_iso(j: JapaneseDate) -> (time.Date, err)
+```
+
+Non-ISO calendars over `e.time`'s day count (days from 1970-01-01): a date in any calendar is a `time.Date` read in that calendar, and every conversion goes through the one count. `Julian` is proleptic with astronomical year numbering; `IslamicCivil` is the tabular civil calendar (Friday epoch, 30-year cycle); `Hebrew` is the fixed-rule calendar with civil month numbers (Tishri 1; in a leap year Adar I is 6 and Adar II is 7), `scriptural_month`/`civil_month` converting to Nisan-is-1. Hebrew and Islamic years start at 1 and earlier counts answer `Invalid`. Month arithmetic walks real months (13 in a Hebrew leap year) and clamps the day; `add_years` keeps the month number, clamped to the year's last month. Japanese eras ride the Gregorian year/month/day with the .NET table (Meiji from 1868-09-08, Taisho, Showa, Heisei, Reiwa as indexes 0..4); earlier dates are refused. Not here: observational and Umm al-Qura Islamic calendars, Persian, Coptic, Thai/Buddhist and Chinese calendars, and week-of-year rules per calendar.
+
+### `e.time.pattern`
+
+```neper
+type Buf = struct { dst: []u8, n: usize, bad: bool }
+type Fields = struct { year: i64, month: i64, day: i64, hour: i64, minute: i64, second: i64, nanos: i64, hour12: i64, pm: i64, weekday: i64 }
+error Invalid
+fn lower(b: u8) -> u8
+fn is_digit(b: u8) -> bool { ret b >= 48u8 && b <= 57u8 }
+fn month_name(month: u8) -> str
+fn weekday_name(index: i64) -> str
+fn push(b: *Buf, c: u8)
+fn push_str(b: *Buf, s: str)
+fn push_prefix(b: *Buf, s: str, count: usize)
+fn push_num(b: *Buf, value: i64, width: usize)
+fn run_of(pattern: str, at: usize) -> usize
+fn is_specifier(c: u8) -> bool
+fn quoted_end(pattern: str, at: usize) -> (usize, bool)
+fn format(pattern: str, value: calendar.DateTime, dst: []u8) -> (str, err)
+fn read_digits(src: str, at: usize, min: usize, max: usize) -> (i64, usize, bool)
+fn starts_with_fold(src: str, at: usize, name: str, count: usize) -> bool
+fn match_month(src: str, at: usize, abbr: bool) -> (i64, usize)
+fn match_weekday(src: str, at: usize, abbr: bool) -> (i64, usize)
+fn parse_with(pattern: str, source: str, template: calendar.DateTime) -> (calendar.DateTime, err)
+fn parse(pattern: str, source: str) -> (calendar.DateTime, err)
+```
+
+NodaTime-style runtime patterns over `e.time.calendar`'s `DateTime` (`calendar.format`/`parse` take a compile-time pattern; these take one as data). Specifiers: `yyyy yy MMMM MMM MM M dddd ddd dd d HH H hh h mm m ss s f..fffffffff F..FFFFFFFFF tt t`; `'...'` and `"..."` quote, `\x` escapes, `%x` forces a single-letter specifier, every other byte is literal. `format` writes into the caller's buffer and refuses an overflow rather than truncating. `parse` reads padded forms exactly and unpadded ones as one or two digits, matches names case-insensitively, refuses repeated fields, 12-hour without a marker (and a marker without `h`), a weekday that disagrees with the date, impossible dates and trailing input; `yy` pivots 00-29 to 2000s and 30-99 to 1900s; fields the pattern lacks come from the template (`parse` uses 2000-01-01T00:00:00, `parse_with` takes one). English names only; no culture data, zones or offsets (`e.time.parse` reads those, `e.tz` applies them).
+
+### `e.tz.winzones`
+
+```neper
+error NotFound
+fn fold(b: u8) -> u8
+fn same_fold(a: str, b: str) -> bool
+fn find_row(rows: str, key: str) -> (str, bool)
+fn iana_for_windows(name: str) -> (str, err)
+fn windows_for_iana(name: str) -> (str, err)
+fn windows_zone_count() -> usize { ret 139usize }
+fn iana_name_count() -> usize { ret 586usize }
+fn windows_rows_0() -> str
+fn windows_rows_1() -> str
+fn iana_rows_0() -> str
+fn iana_rows_1() -> str
+fn iana_rows_2() -> str
+fn iana_rows_3() -> str
+fn iana_rows_4() -> str
+fn iana_rows_5() -> str
+fn iana_rows_6() -> str
+```
+
+The Windows time zone id to IANA zone map and back (NodaTime's `WindowsMapping`, .NET's `TryConvertWindowsIdToIanaId`): `iana_for_windows("Pacific Standard Time")` is `America/Los_Angeles`, `windows_for_iana` takes any IANA name or link. The tables are the CLDR `windowsZones` primary mapping (territory 001: one IANA zone per Windows id; 139 ids, 586 IANA names), generated by `scripts/gen_tz_winzones.py` as string chunks; matching is ASCII case-insensitive and a miss is `NotFound`. Territory-specific variants of a Windows id are not here, and the module does not load zone rules (`e.tz` does).
+
+### `e.fmt.bincode`
+
+```neper
+type Config = struct { varint: bool, big: bool }
+type Writer = struct { dst: []u8, n: usize, cfg: Config, bad: bool }
+type Reader = struct { src: []const u8, at: usize, cfg: Config, bad: bool }
+error Short
+error Invalid
+fn legacy() -> Config
+fn standard() -> Config
+fn writer(dst: []u8, cfg: Config) -> Writer
+fn reader(src: []const u8, cfg: Config) -> Reader
+fn written(w: *const Writer) -> []const u8 { ret w.dst[..w.n] }
+fn failed(w: *const Writer) -> err
+fn read_failed(r: *const Reader) -> err
+fn put_byte(w: *Writer, b: u8)
+fn put_raw(w: *Writer, v: u64, width: usize)
+fn put_uvar(w: *Writer, v: u64)
+fn zigzag(v: i64) -> u64
+fn unzigzag(u: u64) -> i64
+fn put_u8(w: *Writer, v: u8) { put_byte(w, v) }
+fn put_bool(w: *Writer, v: bool)
+fn put_i8(w: *Writer, v: i8)
+fn put_u16(w: *Writer, v: u16)
+fn put_u32(w: *Writer, v: u32)
+fn put_u64(w: *Writer, v: u64)
+fn put_signed(w: *Writer, v: i64, width: usize)
+fn put_i16(w: *Writer, v: i16) { put_signed(w, i64(v), 2usize) }
+fn put_i32(w: *Writer, v: i32) { put_signed(w, i64(v), 4usize) }
+fn put_i64(w: *Writer, v: i64) { put_signed(w, v, 8usize) }
+fn put_f32(w: *Writer, v: f32) { put_raw(w, u64(mem.bitcast[u32](v)), 4usize) }
+fn put_f64(w: *Writer, v: f64) { put_raw(w, mem.bitcast[u64](v), 8usize) }
+fn put_len(w: *Writer, n: usize) { put_u64(w, u64(n)) }
+fn put_bytes(w: *Writer, b: []const u8)
+fn put_str(w: *Writer, s: str)
+fn put_option(w: *Writer, some: bool) { put_bool(w, some) }
+fn put_variant(w: *Writer, index: u32) { put_u32(w, index) }
+fn get_byte(r: *Reader) -> u8
+fn get_raw(r: *Reader, width: usize) -> u64
+fn get_uvar(r: *Reader) -> u64
+fn get_u8(r: *Reader) -> u8 { ret get_byte(r) }
+fn get_bool(r: *Reader) -> bool
+fn get_i8(r: *Reader) -> i8
+fn get_u16(r: *Reader) -> u16
+fn get_u32(r: *Reader) -> u32
+fn get_u64(r: *Reader) -> u64
+fn get_signed(r: *Reader, width: usize) -> i64
+fn get_i16(r: *Reader) -> i16
+fn get_i32(r: *Reader) -> i32
+fn get_i64(r: *Reader) -> i64 { ret get_signed(r, 8usize) }
+fn get_f32(r: *Reader) -> f32 { ret mem.bitcast[f32](u32(get_raw(r, 4usize))) }
+fn get_f64(r: *Reader) -> f64 { ret mem.bitcast[f64](get_raw(r, 8usize)) }
+fn get_len(r: *Reader) -> usize
+fn get_bytes(r: *Reader) -> []const u8
+fn get_str(r: *Reader) -> str
+fn get_option(r: *Reader) -> bool { ret get_bool(r) }
+fn get_variant(r: *Reader) -> u32 { ret get_u32(r) }
+fn at_end(r: *const Reader) -> bool { ret r.at == r.src.len }
+```
+
+A bincode-style compact binary codec with no field names or tags: the schema lives in the code that writes and reads. `legacy()` is bincode 1's default (fixed-width little-endian integers, u64 lengths, u32 variant indexes); `standard()` is bincode 2's `config::standard()` (variable-length integers: under 251 one byte, else a marker 251/252/253 and a u16/u32/u64 payload, signed values zigzagged; `u8`/`i8`, bool and floats fixed); `big` flips byte order in both. A string or byte run is its length then the bytes, an option a 0/1 byte, an enum its variant index then the fields. A `Writer` into a too-small buffer or a `Reader` past its end or on a bad tag/length sets `bad` and every later call is a no-op returning zero, so a whole record is written or read and checked once with `failed`/`read_failed`; `get_str`/`get_bytes` borrow from the input. Decoding accepts overlong variable-length forms, as bincode does. Not here: 128-bit integers, `usize`/`char` helpers beyond u64/u32, serde derive, or the bincode 2 `legacy` limit and sequence-length caps.
+
+### `e.text.shlex`
+
+```neper
+error Unterminated
+error TooSmall
+fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 }
+fn split(input: str, buf: []u8, words: []str) -> (usize, err)
+fn is_safe(c: u8) -> bool
+fn quote(word: str, dst: []u8) -> (str, err)
+fn join(words: []const str, dst: []u8) -> (str, err)
+```
+
+POSIX shell word splitting and quoting with Python `shlex` semantics (posix mode, no comment character): words separated by space, tab, CR or LF; `'...'` literal; inside `"..."` a backslash escapes only `"` and `\`; outside quotes a backslash escapes the next byte; adjacent pieces join and `''` is an empty word. `split` writes the words back to back into the caller's buffer and fills `words` with slices of it (`Unterminated` for an open quote or trailing backslash, `TooSmall` when either is full); `quote` is `shlex.quote` (safe set `[A-Za-z0-9_@%+=:,./-]`, otherwise single quotes with `'"'"'`), `join` quotes each word and joins with one space. No variable, tilde, glob or command substitution.
+
+### `e.path.tilde`
+
+```neper
+error TooSmall
+type UserHome = struct { name: str, home: str }
+fn is_sep(c: u8) -> bool { ret c == 47u8 || c == 92u8 }
+fn same(a: str, b: str) -> bool
+fn put(dst: []u8, n: usize, s: str) -> (usize, bool)
+fn expand(path: str, home: str, users: []const UserHome, dst: []u8) -> (str, err)
+fn collapse(path: str, home: str, dst: []u8) -> (str, err)
+fn passwd_home(passwd: str, name: str) -> (str, bool)
+```
+
+Tilde expansion for paths with `os.path.expanduser` semantics: a leading `~`, `~/rest` or `~name/rest` resolves against the caller's `home` and a table of `UserHome` pairs; a tilde elsewhere is literal and an unknown `~name` is returned as written. Trailing slashes of the home are dropped before joining and an empty result is `/`. `collapse` is the display inverse (`/home/ann/src` is `~/src`); `passwd_home` reads a user's home field out of `/etc/passwd` text. Nothing reads the environment or user database itself: pass `os.env("HOME")` and the passwd text.
+
+### `e.text.bytesize`
+
+```neper
+error Invalid
+error Overflow
+error TooSmall
+fn fold(c: u8) -> u8
+fn is_digit(c: u8) -> bool { ret c >= 48u8 && c <= 57u8 }
+fn power(base: u64, e: u32) -> u64
+fn unit_scale(name: str) -> u64
+fn mul_wide(a: u64, b: u64) -> (u64, u64)
+fn div_wide(high: u64, low: u64, d: u64) -> u64
+fn parse(s: str) -> (u64, err)
+fn put_number(dst: []u8, n: usize, v: u64) -> (usize, bool)
+fn put_text(dst: []u8, n: usize, s: str) -> (usize, bool)
+fn unit_name(index: u32, iec: bool) -> str
+fn format(size: u64, iec: bool, dst: []u8) -> (str, err)
+```
+
+Byte-size text with go-humanize conventions in exact integer arithmetic. `parse` reads `1.5 GiB`, `10MB`, `512k`, `42`: optional spaces, a decimal, an optional case-insensitive unit (`b`; decimal `k kb m mb g gb t tb p pb e eb`; binary `ki kib mi mib ...`); the scaled fraction is truncated, more than 18 fractional digits are ignored, `Overflow` past u64, `Invalid` for unknown units, signs or empty text. `format` writes `N B` under 10 and otherwise the largest unit not above the count with the value rounded half up to one decimal (shown when under 10, `%.0f` half-to-even otherwise), SI (`kB`, `MB`) or IEC (`KiB`, `MiB`). Not here: locale digit grouping, bit units, negative sizes.
+
+### `e.fmt.magic`
+
+```neper
+type Match = struct { mime: str, extension: str, description: str, offset: u32 }
+fn hex_nibble(c: u8) -> i32
+fn scan(rows: str, data: []const u8) -> (Match, bool)
+fn sniff(data: []const u8) -> (Match, bool)
+fn row_count() -> usize { ret 74usize }
+fn magic_rows_0() -> str
+fn magic_rows_1() -> str
+```
+
+A magic-number signature database: `sniff` names a byte prefix's format by the leading or fixed-offset bytes the format's specification requires (file(1)-style), answering a MIME type, conventional extension, description and the matched offset. 74 ordered rows (first match wins; specific members of a shared-prefix family such as RIFF and ISO `ftyp` come first; `??` is a wildcard byte) covering images, archives and compressors, documents, executables, audio, video, fonts and capture files; 262 bytes decide every row. Rows are generated from `scripts/magic_table.py`. Not here: text heuristics (HTML, JSON, CSV), container internals (OOXML and ODF inside ZIP, WebM inside Matroska), or any signature needing more than a prefix.
+
+### `e.os.ident`
+
+```neper
+fn hostname(a: *mem.Arena) -> (str, err)
+fn user_name(a: *mem.Arena) -> (str, err)
+fn locale_name(a: *mem.Arena) -> (str, err)
+fn time_zone_id(a: *mem.Arena) -> (str, err)
+```
+
+Who and where this process is: `hostname`, `user_name`, `locale_name` (a BCP 47 tag) and `time_zone_id`, per-target variants only (`ident.windows.e`, `ident.linux.e`). Windows reads kernel32/advapi32 (`GetComputerNameExW` DNS host name, `GetUserNameW`, `GetUserDefaultLocaleName`, `GetDynamicTimeZoneInformation`'s `TimeZoneKeyName`, a Windows id that `e.tz.winzones` maps to IANA); Linux reads `/proc/sys/kernel/hostname` and the environment (`USER`/`LOGNAME`; `LC_ALL`/`LC_MESSAGES`/`LANG` rewritten `de_DE.UTF-8` to `de-DE`, `C`/`POSIX` unset; `TZ` then `/etc/timezone`), so the user, locale and zone may answer `NotFound` there. Results are arena-owned. Not here: MAC addresses, the user database (`getpwuid`), or the full locale-variable cascade.
+
+### `e.fmt.json5`
+
+```neper
+type Out = struct { buf: []u8, n: usize, bad: bool }
+error Invalid
+error NonFinite
+fn put(o: *Out, c: u8)
+fn put_text(o: *Out, s: str)
+fn hex_value(c: u8) -> i32
+fn is_digit(c: u8) -> bool { ret c >= 48u8 && c <= 57u8 }
+fn is_id_start(c: u8) -> bool
+fn is_id_part(c: u8) -> bool { ret is_id_start(c) || is_digit(c) }
+fn wide_space(src: str, at: usize) -> usize
+fn id_part_at(src: str, at: usize) -> bool { ret is_id_part(src[at]) && wide_space(src, at) == 0usize }
+fn skip(src: str, at: usize) -> (usize, bool)
+fn put_u_escape(o: *Out, unit: u32)
+fn put_utf8(o: *Out, cp: u32)
+fn read_u4(src: str, at: usize) -> (u32, usize, bool)
+fn string_token(o: *Out, src: str, at: usize) -> (usize, bool)
+fn identifier_token(o: *Out, src: str, at: usize) -> (usize, bool)
+fn word_at(src: str, at: usize, word: str) -> bool
+fn number_token(o: *Out, src: str, at: usize, nonfinite: *bool) -> (usize, bool)
+fn transcode(source: str, buf: []u8) -> (usize, err)
+fn parse(a: *mem.Arena, source: str, options: json.Options) -> (json.Value, err)
+fn is_identifier(key: str) -> bool
+fn write_indent(w: *io.Writer, spaces: usize) -> err
+fn write_value(w: *io.Writer, value: *const json.Value, indent: u8, depth: usize) -> err
+fn write(w: *io.Writer, value: *const json.Value) -> err { ret write_value(w, value, 0u8, 0usize) }
+fn write_pretty(w: *io.Writer, value: *const json.Value, indent: u8) -> err { ret write_value(w, value, indent, 0usize) }
+```
+
+JSON5 over `e.fmt.json`: `parse` transcodes JSON5 to strict JSON text in the arena and hands it to the JSON parser, so the value tree, lexeme-preserving numbers, duplicate-key and depth options are the JSON module's; `write`/`write_pretty` emit a tree as JSON5 with identifier keys unquoted. Accepted beyond JSON: `//` and `/* */` comments, trailing commas, single-quoted strings with `\xHH`, `\v`, `\0`, line continuations and other escapes standing for themselves, unquoted IdentifierName keys (ASCII, `$`, `_`, raw non-ASCII, `\uXXXX`), numbers with `+`, bare leading or trailing `.` and hexadecimal integers up to 64 digits (read as their decimal value), and the extra whitespace characters (NBSP, BOM, U+2028/2029, the Zs spaces). `Infinity` and `NaN` are `NonFinite` (the JSON value type has no non-finite number); everything else outside the grammar is `Invalid`. Not here: preserving comments or the source spelling of numbers across a round trip.
+
+### `e.sync.flight`
+
+```neper
+type Call = struct { key: str, used: bool, done: bool, forgotten: bool, waiters: u32, value: str, failure: err }
+type Group = struct { lock: sync.Mutex, finished: sync.Condition, calls: []Call }
+error Full
+fn group(calls: []Call) -> Group
+fn same(a: str, b: str) -> bool
+fn find(g: *Group, key: str) -> usize
+fn free_slot(g: *Group) -> usize
+fn do(g: *Group, key: str, ctx: *void, f: fn(*void) -> (str, err)) -> (str, bool, err)
+fn forget(g: *Group, key: str)
+fn waiting(g: *Group, key: str) -> u32
+```
+
+Call de-duplication in the manner of Go's `singleflight`: concurrent `do` calls for the same key share one execution of `f`; the first caller (the leader) runs it, later callers wait and receive its value and error, a caller after completion starts a new execution. The group is a fixed table of `Call` slots supplied by the caller (`Full` when every slot holds a distinct in-flight key); `forget` stops new callers joining the in-flight key; `waiting` counts the queued callers. Keys and the returned value are borrowed (the key must outlive the call; the value must stay valid for the waiters). A `Group` must not be moved once in use. Not here: result caching after completion, per-key timeouts, or cancellation of waiters.
+
+### `e.log.rotate`
+
+```neper
+type Rotator = struct { arena: *mem.Arena, path: str, max_bytes: u64, keep: u32, file: os.File, size: u64, is_open: bool }
+error Closed
+fn backup_name(a: *mem.Arena, path: str, index: u32) -> (str, err)
+fn open_current(r: *Rotator, truncate: bool) -> err
+fn open(a: *mem.Arena, path: str, max_bytes: u64, keep: u32) -> (Rotator, err)
+fn close(r: *Rotator) -> err
+fn remove_if_present(a: *mem.Arena, name: str) -> err
+fn rotate(r: *Rotator) -> err
+fn write(r: *Rotator, record: []const u8) -> err
+fn writer_write(ctx: *void, src: []const u8) -> (usize, err)
+fn writer_flush(ctx: *void) -> err { ret ok }
+fn writer(r: *Rotator) -> io.Writer
+```
+
+A size-rotated file sink with Python `RotatingFileHandler` policy: records are appended to `path`, and when `size + len >= max_bytes` the file is rotated first (`path.N-1` to `path.N` down to 2, `path` to `path.1`, a fresh `path`; the oldest backup is dropped). `max_bytes == 0` never rotates; `keep == 0` truncates (an extension: Python never rotates then); a record at or over the limit is written whole to a freshly rotated file. `writer` adapts a `Rotator` to an `io.Writer` for `log.jsonl_sink`. Existing files are appended to and counted from disk. Not here: time-based rotation, compression of backups, or inter-process locking.
+
+### `e.net.tftp`
+
+```neper
+type Packet = struct { opcode: u16, block: u16, error_code: u16, text: str, mode: str, data: []const u8, options: []const u8 }
+type Transfer = struct { writing: bool, block: u16, blksize: u16, tsize: u64, started: bool, done: bool, error_code: u16, data: []const u8, out: []u8, written: usize, last_len: usize }
+type Step = struct { reply_len: usize, finished: bool }
+error Malformed
+error TooSmall
+error Remote
+error Protocol
+error TooLong
+fn op_rrq() -> u16 { ret 1u16 }
+fn op_wrq() -> u16 { ret 2u16 }
+fn op_data() -> u16 { ret 3u16 }
+fn op_ack() -> u16 { ret 4u16 }
+fn op_error() -> u16 { ret 5u16 }
+fn op_oack() -> u16 { ret 6u16 }
+fn default_blksize() -> u16 { ret 512u16 }
+fn put_u16(dst: []u8, at: usize, v: u16)
+fn get_u16(src: []const u8, at: usize) -> u16 { ret u16(u32(src[at]) * 256u32 + u32(src[at + 1usize])) }
+fn put_cstr(dst: []u8, at: usize, s: str) -> (usize, bool)
+fn put_options(dst: []u8, at: usize, names: []const str, values: []const str) -> (usize, bool)
+fn encode_request(writing: bool, filename: str, mode: str, names: []const str, values: []const str, dst: []u8) -> (usize, err)
+fn encode_data(block: u16, payload: []const u8, dst: []u8) -> (usize, err)
+fn encode_ack(block: u16, dst: []u8) -> (usize, err)
+fn encode_error(code: u16, message: str, dst: []u8) -> (usize, err)
+fn encode_oack(names: []const str, values: []const str, dst: []u8) -> (usize, err)
+fn read_cstr(src: []const u8, at: usize) -> (str, usize, bool)
+fn option_next(run: []const u8, at: usize) -> (str, str, usize, bool)
+fn decode(src: []const u8) -> (Packet, err)
+fn number_text(v: u64, dst: []u8) -> str
+fn parse_number(s: str) -> (u64, bool)
+fn same_fold(a: str, b: str) -> bool
+fn read_start(t: *Transfer, filename: str, mode: str, blksize: u16, out: []u8, request: []u8) -> (usize, err)
+fn read_step(t: *Transfer, incoming: []const u8, reply: []u8) -> (Step, err)
+fn write_start(t: *Transfer, filename: str, mode: str, blksize: u16, data: []const u8, request: []u8) -> (usize, err)
+fn write_step(t: *Transfer, incoming: []const u8, reply: []u8) -> (Step, err)
+```
+
+TFTP (RFC 1350) with option negotiation (RFC 2347 OACK, 2348 `blksize`, 2349 `tsize`) as caller-buffer codecs (`encode_request`, `encode_data`, `encode_ack`, `encode_error`, `encode_oack`, `decode`, `option_next`) and a sans-IO client `Transfer`: `read_start`/`read_step` download into a caller buffer and `write_start`/`write_step` upload a slice, each step taking one incoming datagram and writing the next datagram to send, with duplicate DATA re-acknowledged, out-of-order packets ignored, an exact multiple of the block size closed by an empty block, and `Remote`/`Protocol`/`TooLong` errors. The caller owns the UDP socket, the TID rule (requests to port 69, everything after to the first reply's source port) and the retransmission timer. Not here: a server, `timeout` option handling, netascii translation, or transfers past 65535 blocks.
+
+### `e.crypto.cms`
+
+```neper
+type Signer = struct { version: u8, issuer: []const u8, serial: []const u8, digest_oid: []const u8, has_attributes: bool, attributes: []const u8, signature_oid: []const u8, signature: []const u8 }
+type SignedData = struct { content_type: []const u8, has_content: bool, content: []const u8, certificates: []const x509.Certificate, signers: []const Signer }
+error Invalid
+error Unsupported
+error BadDigest
+error BadSignature
+error NoCertificate
+error TooSmall
+const DEPTH: u16 = 16u16
+fn oid_signed_data() -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 7u8, 2u8 } }
+fn oid_data() -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 7u8, 1u8 } }
+fn oid_content_type() -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 9u8, 3u8 } }
+fn oid_message_digest() -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 9u8, 4u8 } }
+fn oid_signing_time() -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 9u8, 5u8 } }
+fn oid_sha256() -> [9]u8 { ret [9]u8{ 96u8, 134u8, 72u8, 1u8, 101u8, 3u8, 4u8, 2u8, 1u8 } }
+fn oid_sha384() -> [9]u8 { ret [9]u8{ 96u8, 134u8, 72u8, 1u8, 101u8, 3u8, 4u8, 2u8, 2u8 } }
+fn oid_sha512() -> [9]u8 { ret [9]u8{ 96u8, 134u8, 72u8, 1u8, 101u8, 3u8, 4u8, 2u8, 3u8 } }
+fn oid_ed25519() -> [3]u8 { ret [3]u8{ 43u8, 101u8, 112u8 } }
+fn oid_rsa_encryption() -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 1u8, 1u8 } }
+fn oid_ecdsa_sha256() -> [8]u8 { ret [8]u8{ 42u8, 134u8, 72u8, 206u8, 61u8, 4u8, 3u8, 2u8 } }
+fn oid_ecdsa_sha384() -> [8]u8 { ret [8]u8{ 42u8, 134u8, 72u8, 206u8, 61u8, 4u8, 3u8, 3u8 } }
+fn oid_ecdsa_sha512() -> [8]u8 { ret [8]u8{ 42u8, 134u8, 72u8, 206u8, 61u8, 4u8, 3u8, 4u8 } }
+fn same(a: []const u8, b: []const u8) -> bool
+fn rsa_with_hash(oid: []const u8) -> u16
+fn hash_bits(oid: []const u8) -> u16
+fn next(r: *asn1.Reader) -> (asn1.Value, err)
+fn universal(r: *asn1.Reader, number: u32, constructed: bool) -> (asn1.Value, err)
+fn children(v: asn1.Value) -> (asn1.Reader, err)
+fn oid_of(r: *asn1.Reader) -> ([]const u8, err)
+fn algorithm_oid(r: *asn1.Reader) -> ([]const u8, err)
+fn issuer_and_serial(der: []const u8) -> ([]const u8, []const u8, err)
+fn parse_signer(v: asn1.Value) -> (Signer, err)
+fn parse(a: *mem.Arena, der: []const u8) -> (SignedData, err)
+fn find_certificate(sd: *const SignedData, index: usize) -> (x509.Certificate, bool)
+fn signer_certificate(sd: *const SignedData, index: usize) -> (x509.Certificate, bool)
+fn digest(bits: u16, content: []const u8, out: []u8) -> usize
+fn attribute_value(encoded: []const u8, want: []const u8) -> ([]const u8, bool)
+fn verify_signer(a: *mem.Arena, sd: *const SignedData, index: usize, detached: []const u8) -> err
+fn verify(a: *mem.Arena, sd: *const SignedData, detached: []const u8) -> err
+fn begin(dst: []u8, at: usize, tag: u8, total: usize) -> (usize, err)
+fn append(dst: []u8, at: usize, bytes: []const u8) -> usize
+fn tlv1(dst: []u8, at: usize, tag: u8, p0: []const u8) -> (usize, err)
+fn tlv2(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8) -> (usize, err)
+fn tlv3(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8) -> (usize, err)
+fn tlv5(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8, p3: []const u8, p4: []const u8) -> (usize, err)
+fn tlv6(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8, p3: []const u8, p4: []const u8, p5: []const u8) -> (usize, err)
+fn utc_time(seconds: i64, dst: []u8) -> str
+fn sign_ed25519(a: *mem.Arena, content: []const u8, cert_der: []const u8, secret: sign.Ed25519SecretKey, attached: bool, signing_time: i64, out: []u8) -> (usize, err)
+```
+
+CMS / PKCS #7 SignedData (RFC 5652) for S/MIME. `parse` reads a DER ContentInfo (attached or detached content, embedded certificates, SignerInfos by IssuerAndSerialNumber); `verify_signer`/`verify` check the content digest against the signed `messageDigest` attribute (SHA-256/384/512), the `contentType` attribute, and the signature over the signed attributes re-tagged as a SET (or over the content when there are none) with the signer's embedded certificate: ECDSA P-256/P-384, RSA PKCS#1 v1.5 or Ed25519; `signer_certificate` returns the certificate for `e.crypto.x509.verify`, since trust is the caller's. `sign_ed25519` writes a SignedData (RFC 8419: SHA-512, signed attributes with content type, signing time and message digest, the signer certificate embedded, detached or attached) that OpenSSL verifies. RSA and ECDSA signing are not here (`e.crypto.sign` has no PKCS#1 v1.5 signer and its P-256 signer is `Unsupported`); BER indefinite lengths, SubjectKeyIdentifier signers, CRLs, countersignatures and EnvelopedData are not interpreted.
+
+### `e.net.robots`
+
+```neper
+type Group = struct { first_agent: usize, agent_count: usize, first_rule: usize, rule_count: usize, has_delay: bool, delay_millis: u32 }
+type Rule = struct { allow: bool, pattern: str }
+type Robots = struct { groups: []Group, agents: []str, rules: []Rule, sitemaps: []str, group_count: usize, agent_count: usize, rule_count: usize, sitemap_count: usize }
+error Invalid
+fn lower(c: u8) -> u8
+fn same_fold(a: str, b: str) -> bool
+fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 13u8 }
+fn trim(s: str) -> str
+fn field_kind(name: str) -> u8
+fn parse_millis(s: str) -> (u32, bool)
+fn split_line(line: str) -> (u8, str, bool)
+fn parse(a: *mem.Arena, text: str) -> (Robots, err)
+fn hex_upper(c: u8) -> u8
+fn is_hex(c: u8) -> bool { ret (c >= 48u8 && c <= 57u8) || (c >= 65u8 && c <= 70u8) || (c >= 97u8 && c <= 102u8) }
+fn norm_at(s: str, i: usize) -> u8
+fn part_at(pattern: str, from: usize, to: usize, path: str, at: usize) -> bool
+fn find_part(pattern: str, from: usize, to: usize, path: str, start: usize) -> (usize, bool)
+fn matches(pattern: str, path: str) -> bool
+fn group_names(r: *const Robots, g: usize, agent: str) -> bool
+fn knows(r: *const Robots, agent: str) -> bool
+fn applicable(r: *const Robots, agent: str) -> (str, bool)
+fn allowed(r: *const Robots, agent: str, path: str) -> bool
+fn crawl_delay(r: *const Robots, agent: str) -> (u32, bool)
+```
+
+robots.txt (RFC 9309): `parse` once, then `allowed(robots, agent, path)` and `crawl_delay` per crawler product token. Fields are case-insensitive, `#` comments, a colon or a space separates; consecutive `User-agent` lines share a group, groups naming the same agent merge, rules before any agent are ignored, `Sitemap` is site-wide (`robots.sitemaps`). The group is the crawler's own name (exact, case-insensitive) else `*`; the longest matching pattern wins and `Allow` wins ties; `*` matches any run and a trailing `$` anchors the end; `/robots.txt` is always allowed; `Crawl-delay` seconds are answered in milliseconds. Matching is against the path-and-query as given with `%XX` hex digits upper-cased; no URL parsing or further percent-decoding, and `index.html` is not treated as `/`. Everything is a slice of the text, which must outlive the `Robots`.
+
+### `e.fmt.sitemap`
+
+```neper
+type Entry = struct { loc: str, lastmod: str, changefreq: str, priority: str }
+type Sitemap = struct { entries: []Entry, index: bool }
+error Invalid
+error TooMany
+const MAX_ENTRIES: usize = 50000usize
+const MAX_LOC: usize = 2048usize
+fn local(name: str) -> str
+fn same(a: str, b: str) -> bool
+fn is_space(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8 }
+fn trim(s: str) -> str
+fn valid_changefreq(s: str) -> bool
+fn valid_priority(s: str) -> bool
+fn check_entry(e: Entry) -> err
+fn element_text(a: *mem.Arena, doc: *const xml.Document, id: u32) -> (str, err)
+fn parse(a: *mem.Arena, source: []const u8) -> (Sitemap, err)
+fn parse_text(a: *mem.Arena, source: []const u8) -> (Sitemap, err)
+fn leaf(w: *xml.Writer, name: str, value: str) -> err
+fn write_document(sink: io.Writer, entries: []const Entry, index: bool) -> err
+fn write_urlset(sink: io.Writer, entries: []const Entry) -> err { ret write_document(sink, entries, false) }
+fn write_index(sink: io.Writer, entries: []const Entry) -> err { ret write_document(sink, entries, true) }
+```
+
+Sitemaps (sitemaps.org 0.9): `parse` reads a `urlset` or `sitemapindex` XML document (matching by local name, so any namespace prefix works; extension elements and unknown children are skipped; CDATA and entities decoded) into `Entry` values (`loc`, `lastmod`, `changefreq`, `priority` as written), refusing a missing or oversized `loc`, an unknown `changefreq` or a `priority` outside 0.0..1.0 as `Invalid` and more than 50000 entries as `TooMany`; `parse_text` reads the one-URL-per-line form; `write_urlset`/`write_index` emit the XML declaration and namespace with the same checks. Not here: gzip handling, the 50 MB size limit, or interpreting the image/video/news extensions.
+
+### `e.test.poll`
+
+```neper
+type Clock = struct { ctx: *void, now: fn(*void) -> i64, sleep: fn(*void, i64) }
+type RealClock = struct { nap: sync.Semaphore }
+type Options = struct { timeout_ns: i64, interval_ns: i64, initial_delay_ns: i64, backoff_percent: u32, max_interval_ns: i64, ignore_errors: bool }
+type Outcome = struct { attempts: u32, elapsed_ns: i64, last_error: err }
+error Timeout
+error Failed
+error Invalid
+fn real_now(ctx: *void) -> i64
+fn real_sleep(ctx: *void, nanos: i64)
+fn real_clock(c: *RealClock) -> Clock
+fn next_interval(current: i64, o: Options) -> i64
+fn until(clock: Clock, ctx: *void, cond: fn(*void) -> (bool, err), o: Options) -> (Outcome, err)
+fn during(clock: Clock, ctx: *void, cond: fn(*void) -> (bool, err), o: Options) -> (Outcome, err)
+```
+
+Awaitility-style condition polling: `until` waits for a `fn(*void) -> (bool, err)` condition to hold and `during` checks that it keeps holding, polling at `interval_ns` with an optional `initial_delay_ns`, `backoff_percent` growth capped by `max_interval_ns`, and `ignore_errors` (the last condition error is kept in the `Outcome`). Time comes from a `Clock {ctx, now, sleep}` so waiting code can be tested on a fake clock; `real_clock` is the monotonic clock with sleeping. `until` makes one last evaluation at the deadline and answers `Timeout`; `during` answers `Failed` on the first false. Not here: hamcrest-style matchers, thread-pool-based async conditions, or poll-delay presets by name.
+
+### `e.fmt.fixedwidth`
+
+```neper
+type Align = enum u8 { Left, Right }
+type Trim = enum u8 { None, Both, Left, Right }
+type Mode = enum u8 { Exact, AllowMore, AllowLess, AllowVariable }
+type Field = struct { name: str, width: u32, align: Align, pad: u8, trim: Trim, optional: bool }
+error Short
+error Long
+error Overflow
+error TooSmall
+error Mismatch
+fn record_width(fields: []const Field) -> usize
+fn trimmed(f: Field, cut: str) -> str
+fn read(fields: []const Field, mode: Mode, line: str, out: []str) -> err
+fn write(fields: []const Field, values: []const str, dst: []u8) -> (str, err)
+```
+
+FileHelpers-style fixed-width records: a layout is a slice of `Field {name, width, align, pad, trim, optional}`; `read` cuts a line into trimmed values (slices of the line) under `Mode` `Exact`, `AllowMore`, `AllowLess` or `AllowVariable` (`Short`/`Long` otherwise), `write` pads and aligns values into a line and refuses an over-long value as `Overflow`. Widths are bytes. Not here: typed conversion of field text (dates, numbers, decimals), field converters, record hierarchies, or multi-line records.
+
+### `e.crypto.jks`
+
+```neper
+type Entry = struct { alias: str, is_key: bool, timestamp_ms: u64, protected: []const u8, chain: []const []const u8 }
+type Keystore = struct { entries: []Entry }
+error Invalid
+error BadPassword
+error Unsupported
+error TooSmall
+const DEPTH: u16 = 8u16
+fn password_bytes(password: str, dst: []u8) -> (usize, err)
+fn be16(d: []const u8, at: usize) -> usize { ret usize(d[at]) * 256usize + usize(d[at + 1usize]) }
+fn be32(d: []const u8, at: usize) -> usize
+fn be64(d: []const u8, at: usize) -> u64
+fn same(a: []const u8, b: []const u8) -> bool
+fn integrity_digest(a: *mem.Arena, password: str, body: []const u8) -> ([20]u8, err)
+fn parse(a: *mem.Arena, data: []const u8, password: str) -> (Keystore, err)
+fn keystream_block(pw: []const u8, previous: []const u8) -> [20]u8
+fn sun_oid() -> [10]u8 { ret [10]u8{ 43u8, 6u8, 1u8, 4u8, 1u8, 42u8, 2u8, 17u8, 1u8, 1u8 } }
+fn decrypt_key(a: *mem.Arena, protected: []const u8, password: str, out: []u8) -> (usize, err)
+fn next(r: *asn1.Reader) -> (asn1.Value, err)
+fn put_be16(dst: []u8, at: usize, v: usize)
+fn put_be32(dst: []u8, at: usize, v: usize)
+fn put_be64(dst: []u8, at: usize, v: u64)
+fn header(dst: []u8, at: usize, tag: u8, len: usize) -> usize { ret asn1.put_header(dst, at, tag, len) }
+fn protect_key(pkcs8: []const u8, password: str, salt: []const u8, out: []u8) -> (usize, err)
+fn put_utf(dst: []u8, at: usize, s: str) -> usize
+fn encode(a: *mem.Arena, entries: []const Entry, password: str, out: []u8) -> (usize, err)
+```
+
+Java KeyStore (JKS v2) files: `parse` verifies the keystore's SHA-1 integrity digest (`BadPassword` when the password is wrong) and lists the entries (private-key entries with their encrypted key and certificate chain, trusted certificates, aliases, creation times); `decrypt_key` unwraps Sun's key-protection scheme (algorithm 1.3.6.1.4.1.42.2.17.1.1, a SHA-1 keystream with a check) to PKCS #8; `protect_key` and `encode` write one. The scheme is weak and legacy; use it to interoperate, not to protect new keys. Passwords are UTF-8 text re-encoded as UTF-16BE like the JDK's `char[]`. Not here: JCEKS (Triple-DES sealed keys) or BKS stores, and PKCS #12 (`e.crypto.pkcs12`).
+
+### `e.crypto.pkcs12`
+
+```neper
+type KeyBag = struct { friendly_name: str, local_key_id: []const u8, pkcs8: []const u8 }
+type CertBag = struct { friendly_name: str, local_key_id: []const u8, der: []const u8 }
+type Store = struct { keys: []KeyBag, certs: []CertBag, had_mac: bool }
+type Params = struct { key_salt: [16]u8, key_iv: [16]u8, cert_salt: [16]u8, cert_iv: [16]u8, mac_salt: [16]u8, iterations: u32 }
+error Invalid
+error BadPassword
+error Unsupported
+error TooSmall
+const DEPTH: u16 = 16u16
+fn same(a: []const u8, b: []const u8) -> bool
+fn oid_bag(n: u8) -> [11]u8 { ret [11]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 12u8, 10u8, 1u8, n } }
+fn oid_pkcs7(n: u8) -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 7u8, n } }
+fn oid_attr(n: u8) -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 9u8, n } }
+fn oid_pbe(n: u8) -> [9]u8 { ret [9]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 5u8, n } }
+fn oid_prf(n: u8) -> [8]u8 { ret [8]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 2u8, n } }
+fn oid_aes(n: u8) -> [9]u8 { ret [9]u8{ 96u8, 134u8, 72u8, 1u8, 101u8, 3u8, 4u8, 1u8, n } }
+fn oid_sha(n: u8) -> [9]u8 { ret [9]u8{ 96u8, 134u8, 72u8, 1u8, 101u8, 3u8, 4u8, 2u8, n } }
+fn oid_x509_cert() -> [10]u8 { ret [10]u8{ 42u8, 134u8, 72u8, 134u8, 247u8, 13u8, 1u8, 9u8, 22u8, 1u8 } }
+fn next(r: *asn1.Reader) -> (asn1.Value, err)
+fn children(v: asn1.Value) -> (asn1.Reader, err)
+fn seq_of(r: *asn1.Reader) -> (asn1.Reader, err)
+fn int_of(v: asn1.Value) -> (u32, err)
+fn bmp_to_utf8(a: *mem.Arena, bmp: []const u8) -> (str, err)
+fn bmp_password(a: *mem.Arena, password: str) -> ([]u8, err)
+fn digest_of(bits: u16, data: []const u8, out: []u8)
+fn pkcs12_kdf(a: *mem.Arena, bits: u16, id: u8, password_bmp: []const u8, salt: []const u8, iterations: u32, out: []u8) -> err
+fn pbes2_decrypt(a: *mem.Arena, params: asn1.Value, data: []const u8, password: str) -> ([]u8, err)
+type Collector = struct { keys: []KeyBag, certs: []CertBag, key_count: usize, cert_count: usize }
+fn read_attributes(a: *mem.Arena, set: asn1.Value) -> (str, []const u8, err)
+fn read_safe_contents(a: *mem.Arena, contents: []const u8, password: str, c: *Collector) -> err
+fn parse(a: *mem.Arena, der: []const u8, password: str) -> (Store, err)
+fn begin(dst: []u8, at: usize, tag: u8, total: usize) -> (usize, err)
+fn append(dst: []u8, at: usize, bytes: []const u8) -> usize
+fn tlv1(dst: []u8, at: usize, tag: u8, p0: []const u8) -> (usize, err)
+fn tlv2(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8) -> (usize, err)
+fn tlv3(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8) -> (usize, err)
+fn tlv4(dst: []u8, at: usize, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8, p3: []const u8) -> (usize, err)
+type Build = struct { buf: []u8, at: usize, failed: bool }
+fn piece1(b: *Build, tag: u8, p0: []const u8) -> []const u8
+fn piece2(b: *Build, tag: u8, p0: []const u8, p1: []const u8) -> []const u8
+fn piece3(b: *Build, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8) -> []const u8
+fn piece4(b: *Build, tag: u8, p0: []const u8, p1: []const u8, p2: []const u8, p3: []const u8) -> []const u8
+fn integer_piece(b: *Build, value: u32) -> []const u8
+fn oid_piece(b: *Build, oid: []const u8) -> []const u8 { ret piece1(b, 6u8, oid) }
+fn utf16_bmp(a: *mem.Arena, s: str) -> ([]u8, err)
+fn pbes2_encrypt(a: *mem.Arena, b: *Build, plain: []const u8, password: str, salt: []const u8, iv: []const u8, iterations: u32) -> ([]const u8, []const u8, err)
+fn attributes_piece(b: *Build, a: *mem.Arena, friendly: str, key_id: []const u8) -> ([]const u8, err)
+fn encode(a: *mem.Arena, pkcs8: []const u8, chain: []const []const u8, friendly: str, password: str, p: Params, out: []u8) -> (usize, err)
+```
+
+PKCS #12 (.p12/.pfx, RFC 7292): `parse` verifies the MAC and returns key bags (PKCS #8, decrypted when shrouded) and certificate bags with friendly names and local key ids; `encode` writes one private key and its chain (PBES2 AES-256-CBC / PBKDF2-HMAC-SHA256, HMAC-SHA-256 MAC, salts and IVs supplied by the caller). Read profile: PBES2 with HMAC-SHA-256/512 PRFs and AES-128/192/256-CBC, MACs HMAC-SHA-256/512; a store that uses PBE-SHA1-3DES, PBE-SHA1-RC2-40 or a SHA-1 MAC (pre-3.0 OpenSSL, old Java) is `Unsupported`. A wrong password shows as `BadPassword`. Not here: legacy ciphers, secret bags, CRL bags, or several keys per file on write.
+
+### `e.algo.expr`
+
+```neper
+type Pair = struct { key: str, value: Value }
+type Value = union enum u8 { Null, Bool: bool, Int: i64, Float: f64, Str: str, List: []const Value, Map: []const Pair, Object: u32 }
+type Binding = struct { name: str, value: Value }
+type Host = struct {
+type Limits = struct { max_steps: u32, max_depth: u32, max_string: usize, max_collection: usize, strict: bool }
+type Token = struct { kind: u8, start: usize, end: usize, int_value: i64, float_value: f64, text: str }
+type Node = struct { kind: u8, op: u8, a: u32, b: u32, c: u32, text: str, value: Value }
+type Program = struct { nodes: []Node, kids: []u32, root: u32 }
+type Interp = struct { arena: *mem.Arena, host: Host, scope: []const Binding, program: *const Program, limits: Limits, steps: u32, depth: u32 }
+error Syntax
+error Type
+error DivideByZero
+error Index
+error Undefined
+error Limit
+error Denied
+error Overflow
+const T_END: u8 = 0u8
+const T_INT: u8 = 1u8
+const T_FLOAT: u8 = 2u8
+const T_STR: u8 = 3u8
+const T_NAME: u8 = 4u8
+const T_PUNCT: u8 = 5u8
+const N_LIT: u8 = 0u8
+const N_VAR: u8 = 1u8
+const N_LIST: u8 = 2u8
+const N_MAP: u8 = 3u8
+const N_UNARY: u8 = 4u8
+const N_BINARY: u8 = 5u8
+const N_AND: u8 = 6u8
+const N_OR: u8 = 7u8
+const N_TERNARY: u8 = 8u8
+const N_ELVIS: u8 = 9u8
+const N_COALESCE: u8 = 10u8
+const N_PROP: u8 = 11u8
+const N_INDEX: u8 = 12u8
+const N_CALL: u8 = 13u8
+const N_METHOD: u8 = 14u8
+const N_RANGE: u8 = 15u8
+fn no_value() -> Value
+fn default_limits() -> Limits
+fn is_digit(c: u8) -> bool { ret c >= 48u8 && c <= 57u8 }
+fn is_name_start(c: u8) -> bool { ret (c >= 97u8 && c <= 122u8) || (c >= 65u8 && c <= 90u8) || c == 95u8 || c == 36u8 }
+fn is_name(c: u8) -> bool { ret is_name_start(c) || is_digit(c) }
+fn hex_of(c: u8) -> i32
+fn same(a: str, b: str) -> bool
+fn put_utf8(buf: []u8, n: usize, cp: u32) -> usize
+fn lex_string(a: *mem.Arena, src: str, at: usize, max: usize) -> (str, usize, err)
+fn lex(a: *mem.Arena, src: str, limits: Limits, out: []Token) -> (usize, err)
+type Parser = struct { tokens: []const Token, at: usize, nodes: []Node, node_count: usize, kids: []u32, kid_count: usize, depth: u32, max_depth: u32 }
+fn add_node(p: *Parser, n: Node) -> (u32, err)
+fn peek_is(p: *const Parser, text: str) -> bool
+fn punct_is(p: *const Parser, text: str) -> bool
+fn word_is(p: *const Parser, text: str) -> bool
+fn expect_punct(p: *Parser, text: str) -> err
+fn push_kid(p: *Parser, id: u32) -> err
+fn binary(p: *Parser, op: u8, left: u32, right: u32) -> (u32, err)
+const OP_ADD: u8 = 1u8
+const OP_SUB: u8 = 2u8
+const OP_MUL: u8 = 3u8
+const OP_DIV: u8 = 4u8
+const OP_MOD: u8 = 5u8
+const OP_EQ: u8 = 6u8
+const OP_NE: u8 = 7u8
+const OP_LT: u8 = 8u8
+const OP_LE: u8 = 9u8
+const OP_GT: u8 = 10u8
+const OP_GE: u8 = 11u8
+const OP_IN: u8 = 12u8
+const OP_NIN: u8 = 13u8
+const OP_STARTS: u8 = 14u8
+const OP_ENDS: u8 = 15u8
+const OP_NOT: u8 = 20u8
+const OP_NEG: u8 = 21u8
+const OP_POS: u8 = 22u8
+const OP_EMPTY: u8 = 23u8
+const OP_SIZE: u8 = 24u8
+fn parse_expr(p: *Parser) -> (u32, err)
+fn parse_ternary(p: *Parser) -> (u32, err)
+fn parse_or(p: *Parser) -> (u32, err)
+fn parse_and(p: *Parser) -> (u32, err)
+fn equality_op(p: *const Parser) -> u8
+fn parse_equality(p: *Parser) -> (u32, err)
+fn relational_op(p: *const Parser) -> u8
+fn parse_relational(p: *Parser) -> (u32, err)
+fn parse_range(p: *Parser) -> (u32, err)
+fn parse_additive(p: *Parser) -> (u32, err)
+fn multiplicative_op(p: *const Parser) -> u8
+fn parse_multiplicative(p: *Parser) -> (u32, err)
+fn parse_unary(p: *Parser) -> (u32, err)
+fn parse_args(p: *Parser, first_kid: *usize, count: *u32) -> err
+fn parse_postfix(p: *Parser) -> (u32, err)
+fn parse_primary(p: *Parser) -> (u32, err)
+fn compile(a: *mem.Arena, source: str, limits: Limits) -> (Program, err)
+fn truthy(v: Value) -> bool
+fn is_number(v: Value) -> bool
+fn as_float(v: Value) -> f64
+fn map_get(m: []const Pair, key: str) -> (Value, bool)
+fn equals(x: Value, y: Value) -> bool
+fn push_value(b: *str.Builder, v: Value, depth: u32) -> err
+fn text_of(a: *mem.Arena, v: Value, max: usize) -> (str, err)
+fn tick(it: *Interp) -> err
+fn lookup(it: *const Interp, name: str) -> (Value, bool)
+fn make_list(it: *Interp, items: []const Value) -> (Value, err)
+fn arith(it: *Interp, op: u8, x: Value, y: Value) -> (Value, err)
+fn compare(x: Value, y: Value) -> (i32, err)
+fn contains(container: Value, item: Value) -> (bool, err)
+fn size_of(v: Value) -> (i64, err)
+fn eval(it: *Interp, id: u32) -> (Value, err)
+fn eval_args(it: *Interp, first: u32, count: u32, out: []Value) -> err
+fn eval_node(it: *Interp, id: u32) -> (Value, err)
+fn int_arg(args: []const Value, i: usize) -> (i64, bool)
+fn str_arg(args: []const Value, i: usize) -> (str, bool)
+fn lower_of(c: u8) -> u8
+fn upper_of(c: u8) -> u8
+fn new_string(it: *Interp, len: usize) -> ([]u8, err)
+fn find_text(s: str, needle: str, from: usize) -> i64
+fn builtin_method(it: *Interp, base: Value, name: str, args: []const Value) -> (Value, err)
+fn call_function(it: *Interp, name: str, args: []const Value) -> (Value, err)
+fn evaluate(a: *mem.Arena, source: str, scope: []const Binding, host: Host, limits: Limits) -> (Value, err)
+fn run(a: *mem.Arena, prog: *const Program, scope: []const Binding, host: Host, limits: Limits) -> (Value, err)
+```
+
+A small expression language in the family of JEXL, SpEL and MVEL: property navigation (`a.b`, `a?.b`, `a['b']`, `a[0]`), method calls, function calls and operators over values and caller-owned objects, evaluated by a tree walk. Values are `Null`, `Bool`, `Int` (i64), `Float`, `Str`, `List`, `Map` and `Object`, an opaque `u32` handle that only the caller's `Host` callbacks (`get`, `call`, `function`) can open: that is the sandbox, together with `Limits` (steps, nesting depth, string and collection sizes, `strict` for undefined names and properties) and the fixed whitelist of built-in methods (strings: length size isEmpty toUpperCase toLowerCase trim contains startsWith endsWith indexOf substring charAt concat; lists: size isEmpty contains get indexOf join; maps: size isEmpty containsKey get keys values) and functions (size empty str int float abs min max floor ceil round); a method not on the list is `Denied`. Operators: `?:`, elvis, `??`, `|| or`, `&& and`, `== != eq ne =~ !~ =^ =$`, `< <= > >= lt le gt ge`, `..`, `+ - * / % div mod`, unary `! not - + empty size`. Semantics are spelled out in the source header (Int `/` exact-or-Float, truncated `%`, overflow is an error, JEXL-style truthiness, string `+`). `compile` once and `run` against many scopes, or `evaluate`. Not here: assignment and scripts, lambdas, `new`/type references (SpEL `T()`), projection and selection, regex `matches`, bean-style `getX()` property inference, and compilation to bytecode.
+
+### `e.net.zmtp`
+
+```neper
+type SocketType = enum u8 { Pair, Pub, Sub, Req, Rep, Dealer, Router, Pull, Push, XPub, XSub }
+type Frame = struct { more: bool, command: bool, body: []const u8 }
+type Greeting = struct { major: u8, minor: u8, as_server: bool, identity_hint: u8 }
+type Ready = struct { socket_type: SocketType, identity: []const u8, has_identity: bool }
+type Subscriptions = struct { prefixes: []str, count: usize, everything: bool }
+type Conn = struct { sock: net.Socket, buf: []u8, filled: usize, consumed: usize, local: SocketType, remote: SocketType, local_identity: []const u8, remote_id: [256]u8, remote_id_len: usize, ready: bool }
+error Malformed
+error NeedMore
+error TooSmall
+error Incompatible
+error Unsupported
+error Closed
+error TooLarge
+fn type_name(t: SocketType) -> str
+fn same(a: []const u8, b: []const u8) -> bool
+fn type_of_name(name: []const u8) -> (SocketType, bool)
+fn type_index(t: SocketType) -> u8
+fn socket_type_at(i: u8) -> SocketType
+fn compatible(a: SocketType, b: SocketType) -> bool
+fn sends_identity(t: SocketType) -> bool { ret t == .Req || t == .Dealer || t == .Router }
+fn greeting_size() -> usize { ret 64usize }
+fn encode_greeting(dst: []u8, as_server: bool, identity_len: usize) -> (usize, err)
+fn decode_greeting(src: []const u8) -> (Greeting, err)
+fn encode_frame(dst: []u8, more: bool, command: bool, body: []const u8) -> (usize, err)
+fn decode_frame(src: []const u8) -> (Frame, usize, err)
+fn put_property(dst: []u8, at: usize, name: str, value: []const u8) -> usize
+fn encode_ready(dst: []u8, t: SocketType, identity: []const u8) -> (usize, err)
+fn decode_ready(body: []const u8) -> (Ready, err)
+fn encode_subscription(dst: []u8, subscribe: bool, prefix: []const u8) -> (usize, err)
+fn decode_subscription(body: []const u8) -> (bool, bool, []const u8)
+fn subscriptions(a: *mem.Arena, capacity: usize) -> (Subscriptions, err)
+fn add_prefix(s: *Subscriptions, prefix: []const u8) -> err
+fn remove_prefix(s: *Subscriptions, prefix: []const u8)
+fn wants(s: *const Subscriptions, topic: []const u8) -> bool
+fn conn(sock: net.Socket, buf: []u8, local: SocketType, identity: []const u8) -> Conn
+fn send_all(sock: net.Socket, data: []const u8) -> err
+fn fill(c: *Conn) -> err
+fn handshake(c: *Conn, as_server: bool) -> err
+fn send_message(c: *Conn, parts: []const []const u8) -> err
+fn send_command(c: *Conn, frame: []const u8) -> err { ret send_all(c.sock, frame) }
+fn recv_frame(c: *Conn) -> (Frame, err)
+fn recv_message(c: *Conn, out: [][]const u8, subs: *Subscriptions) -> (usize, err)
+fn recv_frame_keep(c: *Conn) -> (Frame, err)
+fn compact_if_possible(c: *Conn) -> (bool, err)
+fn req_envelope(parts: []const []const u8, out: [][]const u8) -> (usize, err)
+fn envelope_body_start(parts: []const []const u8) -> (usize, err)
+fn router_prefix(c: *const Conn, counter: u32, auto: []u8, parts: []const []const u8, out: [][]const u8) -> (usize, err)
+```
+
+ZeroMQ's wire protocol (ZMTP 3.x, NULL security) and the brokerless patterns on one connection, over `e.net` TCP sockets: the 64-byte greeting (`encode_greeting`/`decode_greeting`), the `READY` command with `Socket-Type` and `Identity` (`encode_ready`/`decode_ready`), frames with MORE, LONG and COMMAND flags (`encode_frame`/`decode_frame`), `SUBSCRIBE`/`CANCEL` commands, the socket-type compatibility table, and blocking `Conn` calls (`handshake`, `send_message`, `recv_frame`, `recv_message`). Patterns: a `Subscriptions` prefix set for the PUB side, `req_envelope`/`envelope_body_start` for REQ/REP, `router_prefix` (peer identity or an auto-assigned five-byte id) for ROUTER; PUSH/PULL and DEALER/PAIR are plain messages. No broker and no thread: the caller owns concurrency. Byte-compatible with libzmq 4.3 (checked against its streams). Not here: PLAIN and CURVE, ZMTP 2.0/1.0 peers, PING/PONG heartbeats, multi-peer socket objects with reconnect and queues, inproc/ipc.
+
+### `e.net.sp`
+
+```neper
+type Protocol = enum u8 { Pair, Pub, Sub, Req, Rep, Push, Pull, Surveyor, Respondent, Bus }
+type Conn = struct { sock: net.Socket, buf: []u8, filled: usize, consumed: usize, local: Protocol, remote: Protocol, ready: bool, next_id: u32 }
+error Malformed
+error NeedMore
+error TooSmall
+error Incompatible
+error Closed
+error TooLarge
+error NoId
+fn number_of(p: Protocol) -> u16
+fn protocol_of(number: u16) -> (Protocol, bool)
+fn peer_of(p: Protocol) -> Protocol
+fn carries_id(p: Protocol) -> bool { ret p == .Req || p == .Rep || p == .Surveyor || p == .Respondent }
+fn encode_handshake(dst: []u8, p: Protocol) -> (usize, err)
+fn decode_handshake(src: []const u8) -> (Protocol, err)
+fn encode_message(dst: []u8, has_id: bool, id: u32, payload: []const u8) -> (usize, err)
+fn decode_message(src: []const u8) -> ([]const u8, usize, err)
+fn split_id(body: []const u8) -> (u32, []const u8, err)
+fn topic_matches(prefix: []const u8, payload: []const u8) -> bool
+fn conn(sock: net.Socket, buf: []u8, local: Protocol, first_id: u32) -> Conn
+fn send_all(sock: net.Socket, data: []const u8) -> err
+fn fill(c: *Conn) -> err
+fn handshake(c: *Conn) -> err
+fn send(c: *Conn, id: u32, payload: []const u8) -> err
+fn recv(c: *Conn) -> ([]const u8, err)
+fn next_question_id(c: *Conn) -> u32
+fn recv_answer(c: *Conn, id: u32) -> ([]const u8, err)
+fn recv_question(c: *Conn) -> (u32, []const u8, err)
+```
+
+NNG / nanomsg scalability-protocols wire over TCP and the brokerless survey, request, publish and push patterns on one connection: the 8-byte handshake with the protocol number (`encode_handshake`/`decode_handshake`, `peer_of` for compatibility), length-prefixed messages (`encode_message`/`decode_message`), the 4-byte high-bit id that REQ/REP and SURVEYOR/RESPONDENT carry (`split_id`, `next_question_id`), and blocking `Conn` calls (`handshake`, `send`, `recv`, `recv_answer` which skips answers to other ids, `recv_question`); SUB filtering is `topic_matches` on receipt. Byte-compatible with NNG 1.x (checked against pynng streams). Not here: raw mode and device backtraces, TLS/websocket transports, reconnect, and timeout options.
+
 ### `e.time.parse`
 
 ```neper

@@ -3938,6 +3938,144 @@ mediator_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/mediator-selfhost"
 mediator_output=$("$test_build/mediator-selfhost")
 [ "$mediator_output" = 'mediator ok' ]
+# e.time.calendars: Julian, Islamic civil, Hebrew and Japanese eras against convertdate (2910 vectors, D2800).
+time_calendars_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_calendars/src/main.e" "$repo" x64 linux "$test_build/time-calendars-selfhost" -j 2)
+[ "$time_calendars_written" = 'executable written' ]
+chmod +x "$test_build/time-calendars-selfhost"
+time_calendars_output=$("$test_build/time-calendars-selfhost")
+[ "$time_calendars_output" = 'time calendars ok' ]
+# e.time.pattern: runtime NodaTime-style patterns against a stdlib-name renderer (573 vectors, D2800).
+time_pattern_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_pattern/src/main.e" "$repo" x64 linux "$test_build/time-pattern-selfhost" -j 2)
+[ "$time_pattern_written" = 'executable written' ]
+chmod +x "$test_build/time-pattern-selfhost"
+time_pattern_output=$("$test_build/time-pattern-selfhost")
+[ "$time_pattern_output" = 'time pattern ok' ]
+# e.tz.winzones: Windows id to IANA map both ways against CLDR via tzlocal (354 vectors, D2800).
+tz_winzones_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/tz_winzones/src/main.e" "$repo" x64 linux "$test_build/tz-winzones-selfhost" -j 2)
+[ "$tz_winzones_written" = 'executable written' ]
+chmod +x "$test_build/tz-winzones-selfhost"
+tz_winzones_output=$("$test_build/tz-winzones-selfhost")
+[ "$tz_winzones_output" = 'tz windows ok' ]
+# e.fmt.bincode: bincode 1 and 2 wire formats against an independent Python model (365 vectors, D2801).
+fmt_bincode_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_bincode/src/main.e" "$repo" x64 linux "$test_build/fmt-bincode-selfhost" -j 2)
+[ "$fmt_bincode_written" = 'executable written' ]
+chmod +x "$test_build/fmt-bincode-selfhost"
+fmt_bincode_output=$("$test_build/fmt-bincode-selfhost")
+[ "$fmt_bincode_output" = 'fmt bincode ok' ]
+# e.text.shlex: split, quote and join against Python shlex (402 vectors, D2801).
+text_shlex_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_shlex/src/main.e" "$repo" x64 linux "$test_build/text-shlex-selfhost" -j 2)
+[ "$text_shlex_written" = 'executable written' ]
+chmod +x "$test_build/text-shlex-selfhost"
+text_shlex_output=$("$test_build/text-shlex-selfhost")
+[ "$text_shlex_output" = 'text shlex ok' ]
+# e.path.tilde: expansion and collapse against posixpath.expanduser and a model (188 vectors, D2801).
+path_tilde_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/path_tilde/src/main.e" "$repo" x64 linux "$test_build/path-tilde-selfhost" -j 2)
+[ "$path_tilde_written" = 'executable written' ]
+chmod +x "$test_build/path-tilde-selfhost"
+path_tilde_output=$("$test_build/path-tilde-selfhost")
+[ "$path_tilde_output" = 'path tilde ok' ]
+# e.text.bytesize: parse and format against go-humanize rules in exact arithmetic (608 vectors, D2801).
+text_bytesize_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_bytesize/src/main.e" "$repo" x64 linux "$test_build/text-bytesize-selfhost" -j 2)
+[ "$text_bytesize_written" = 'executable written' ]
+chmod +x "$test_build/text-bytesize-selfhost"
+text_bytesize_output=$("$test_build/text-bytesize-selfhost")
+[ "$text_bytesize_output" = 'text bytesize ok' ]
+# e.fmt.magic: 74 signature rows sampled against an independent first-match scan, cross-checked with filetype (282 vectors, D2801).
+fmt_magic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_magic/src/main.e" "$repo" x64 linux "$test_build/fmt-magic-selfhost" -j 2)
+[ "$fmt_magic_written" = 'executable written' ]
+chmod +x "$test_build/fmt-magic-selfhost"
+fmt_magic_output=$("$test_build/fmt-magic-selfhost")
+[ "$fmt_magic_output" = 'fmt magic ok' ]
+# e.os.ident: host, user, locale and zone lookups answer well-formed values (D2801).
+os_ident_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_ident/src/main.e" "$repo" x64 linux "$test_build/os-ident-selfhost" -j 2)
+[ "$os_ident_written" = 'executable written' ]
+chmod +x "$test_build/os-ident-selfhost"
+os_ident_output=$("$test_build/os-ident-selfhost")
+[ "$os_ident_output" = 'os ident ok' ]
+# e.fmt.json5: JSON5 accept/reject and values against the json5 package (346 vectors, D2802).
+fmt_json5_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_json5/src/main.e" "$repo" x64 linux "$test_build/fmt-json5-selfhost" -j 2)
+[ "$fmt_json5_written" = 'executable written' ]
+chmod +x "$test_build/fmt-json5-selfhost"
+fmt_json5_output=$("$test_build/fmt-json5-selfhost")
+[ "$fmt_json5_output" = 'fmt json5 ok' ]
+# e.sync.flight: concurrent callers share one execution, errors fan out, forget and Full (D2802).
+sync_flight_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/sync_flight/src/main.e" "$repo" x64 linux "$test_build/sync-flight-selfhost" -j 2)
+[ "$sync_flight_written" = 'executable written' ]
+chmod +x "$test_build/sync-flight-selfhost"
+sync_flight_output=$("$test_build/sync-flight-selfhost")
+[ "$sync_flight_output" = 'sync flight ok' ]
+# e.log.rotate: rotation byte for byte against RotatingFileHandler (21 scenarios, D2802).
+log_rotate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/log_rotate/src/main.e" "$repo" x64 linux "$test_build/log-rotate-selfhost" -j 2)
+[ "$log_rotate_written" = 'executable written' ]
+chmod +x "$test_build/log-rotate-selfhost"
+log_rotate_output=$("$test_build/log-rotate-selfhost")
+[ "$log_rotate_output" = 'log rotate ok' ]
+# e.net.tftp: codec against tftpy (92 vectors) and loopback UDP transfers against a scripted server (D2802).
+net_tftp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_tftp/src/main.e" "$repo" x64 linux "$test_build/net-tftp-selfhost" -j 2)
+[ "$net_tftp_written" = 'executable written' ]
+chmod +x "$test_build/net-tftp-selfhost"
+net_tftp_output=$("$test_build/net-tftp-selfhost")
+[ "$net_tftp_output" = 'net tftp ok' ]
+# e.crypto.cms: OpenSSL SignedData verify, tamper refusals and the Ed25519 signer reproduced (33 vectors, D2802).
+crypto_cms_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_cms/src/main.e" "$repo" x64 linux "$test_build/crypto-cms-selfhost" -j 2)
+[ "$crypto_cms_written" = 'executable written' ]
+chmod +x "$test_build/crypto-cms-selfhost"
+crypto_cms_output=$("$test_build/crypto-cms-selfhost")
+[ "$crypto_cms_output" = 'crypto cms ok' ]
+# e.net.robots: RFC 9309 matching against protego over random documents and the RFC example (1357 vectors, D2803).
+net_robots_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_robots/src/main.e" "$repo" x64 linux "$test_build/net-robots-selfhost" -j 2)
+[ "$net_robots_written" = 'executable written' ]
+chmod +x "$test_build/net-robots-selfhost"
+net_robots_output=$("$test_build/net-robots-selfhost")
+[ "$net_robots_output" = 'net robots ok' ]
+# e.fmt.sitemap: urlset, index and text sitemaps against ElementTree, plus writer round trips (120 vectors, D2803).
+fmt_sitemap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_sitemap/src/main.e" "$repo" x64 linux "$test_build/fmt-sitemap-selfhost" -j 2)
+[ "$fmt_sitemap_written" = 'executable written' ]
+chmod +x "$test_build/fmt-sitemap-selfhost"
+fmt_sitemap_output=$("$test_build/fmt-sitemap-selfhost")
+[ "$fmt_sitemap_output" = 'fmt sitemap ok' ]
+# e.test.poll: until and during on a fake clock against an independent model, plus real-clock runs (280 vectors, D2803).
+test_poll_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_poll/src/main.e" "$repo" x64 linux "$test_build/test-poll-selfhost" -j 2)
+[ "$test_poll_written" = 'executable written' ]
+chmod +x "$test_build/test-poll-selfhost"
+test_poll_output=$("$test_build/test-poll-selfhost")
+[ "$test_poll_output" = 'test poll ok' ]
+# e.fmt.fixedwidth: FileHelpers-style layouts and length modes against a Python slicing model (500 vectors, D2803).
+fmt_fixedwidth_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_fixedwidth/src/main.e" "$repo" x64 linux "$test_build/fmt-fixedwidth-selfhost" -j 2)
+[ "$fmt_fixedwidth_written" = 'executable written' ]
+chmod +x "$test_build/fmt-fixedwidth-selfhost"
+fmt_fixedwidth_output=$("$test_build/fmt-fixedwidth-selfhost")
+[ "$fmt_fixedwidth_output" = 'fmt fixedwidth ok' ]
+# e.crypto.jks: pyjks keystores parsed, decrypted and re-encoded byte for byte (4 stores, D2803).
+crypto_jks_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_jks/src/main.e" "$repo" x64 linux "$test_build/crypto-jks-selfhost" -j 2)
+[ "$crypto_jks_written" = 'executable written' ]
+chmod +x "$test_build/crypto-jks-selfhost"
+crypto_jks_output=$("$test_build/crypto-jks-selfhost")
+[ "$crypto_jks_output" = 'crypto jks ok' ]
+# e.crypto.pkcs12: cryptography/OpenSSL 3 stores read and the writer reproduced byte for byte (D2803).
+crypto_pkcs12_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_pkcs12/src/main.e" "$repo" x64 linux "$test_build/crypto-pkcs12-selfhost" -j 2)
+[ "$crypto_pkcs12_written" = 'executable written' ]
+chmod +x "$test_build/crypto-pkcs12-selfhost"
+crypto_pkcs12_output=$("$test_build/crypto-pkcs12-selfhost")
+[ "$crypto_pkcs12_output" = 'crypto pkcs12 ok' ]
+# e.algo.expr against an independent Python implementation of the documented language: hand cases, limits and 700 random trees (1121 vectors, D2804).
+algo_expr_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_expr/src/main.e" "$repo" x64 linux "$test_build/algo-expr-selfhost" -j 2)
+[ "$algo_expr_written" = 'executable written' ]
+chmod +x "$test_build/algo-expr-selfhost"
+algo_expr_output=$("$test_build/algo-expr-selfhost")
+[ "$algo_expr_output" = 'algo expr ok' ]
+# e.net.zmtp against libzmq 4.3 byte streams, scripted libzmq peers over TCP and loopback patterns (20 streams, 4 peers, D2805).
+net_zmtp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_zmtp/src/main.e" "$repo" x64 linux "$test_build/net-zmtp-selfhost" -j 2)
+[ "$net_zmtp_written" = 'executable written' ]
+chmod +x "$test_build/net-zmtp-selfhost"
+net_zmtp_output=$("$test_build/net-zmtp-selfhost")
+[ "$net_zmtp_output" = 'net zmtp ok' ]
+# e.net.sp against NNG 1.x byte streams, scripted peers over TCP and loopback patterns (14 streams, 5 peers, D2805).
+net_sp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/net_sp/src/main.e" "$repo" x64 linux "$test_build/net-sp-selfhost" -j 2)
+[ "$net_sp_written" = 'executable written' ]
+chmod +x "$test_build/net-sp-selfhost"
+net_sp_output=$("$test_build/net-sp-selfhost")
+[ "$net_sp_output" = 'net sp ok' ]
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 x_migrate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_migrate/src/main.e" "$repo" x64 linux "$test_build/x-migrate-selfhost" -j 2)
 [ "$x_migrate_written" = 'executable written' ]

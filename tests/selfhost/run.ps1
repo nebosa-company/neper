@@ -4411,6 +4411,144 @@ $mediatorWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $mediatorWritten -ne 'executable written') { throw 'mediator emission failed' }
 $mediatorOutput = & $mediatorPath
 if ($LASTEXITCODE -ne 0 -or $mediatorOutput -ne 'mediator ok') { throw "mediator answered wrongly: exit $LASTEXITCODE" }
+# e.time.calendars: Julian, Islamic civil, Hebrew and Japanese eras against convertdate (2910 vectors, D2800).
+$timeCalendarsPath = Join-Path $testBuild 'time-calendars-selfhost.exe'
+$timeCalendarsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_calendars\src\main.e') $repo 'x64' 'windows' $timeCalendarsPath -j 2
+if ($LASTEXITCODE -ne 0 -or $timeCalendarsWritten -ne 'executable written') { throw 'time_calendars emission failed' }
+$timeCalendarsOutput = & $timeCalendarsPath
+if ($LASTEXITCODE -ne 0 -or $timeCalendarsOutput -ne 'time calendars ok') { throw "time_calendars answered wrongly: exit $LASTEXITCODE" }
+# e.time.pattern: runtime NodaTime-style patterns against a stdlib-name renderer (573 vectors, D2800).
+$timePatternPath = Join-Path $testBuild 'time-pattern-selfhost.exe'
+$timePatternWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_pattern\src\main.e') $repo 'x64' 'windows' $timePatternPath -j 2
+if ($LASTEXITCODE -ne 0 -or $timePatternWritten -ne 'executable written') { throw 'time_pattern emission failed' }
+$timePatternOutput = & $timePatternPath
+if ($LASTEXITCODE -ne 0 -or $timePatternOutput -ne 'time pattern ok') { throw "time_pattern answered wrongly: exit $LASTEXITCODE" }
+# e.tz.winzones: Windows id to IANA map both ways against CLDR via tzlocal (354 vectors, D2800).
+$tzWinzonesPath = Join-Path $testBuild 'tz-winzones-selfhost.exe'
+$tzWinzonesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\tz_winzones\src\main.e') $repo 'x64' 'windows' $tzWinzonesPath -j 2
+if ($LASTEXITCODE -ne 0 -or $tzWinzonesWritten -ne 'executable written') { throw 'tz_winzones emission failed' }
+$tzWinzonesOutput = & $tzWinzonesPath
+if ($LASTEXITCODE -ne 0 -or $tzWinzonesOutput -ne 'tz windows ok') { throw "tz_winzones answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.bincode: bincode 1 and 2 wire formats against an independent Python model (365 vectors, D2801).
+$fmtBincodePath = Join-Path $testBuild 'fmt-bincode-selfhost.exe'
+$fmtBincodeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_bincode\src\main.e') $repo 'x64' 'windows' $fmtBincodePath -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtBincodeWritten -ne 'executable written') { throw 'fmt_bincode emission failed' }
+$fmtBincodeOutput = & $fmtBincodePath
+if ($LASTEXITCODE -ne 0 -or $fmtBincodeOutput -ne 'fmt bincode ok') { throw "fmt_bincode answered wrongly: exit $LASTEXITCODE" }
+# e.text.shlex: split, quote and join against Python shlex (402 vectors, D2801).
+$textShlexPath = Join-Path $testBuild 'text-shlex-selfhost.exe'
+$textShlexWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_shlex\src\main.e') $repo 'x64' 'windows' $textShlexPath -j 2
+if ($LASTEXITCODE -ne 0 -or $textShlexWritten -ne 'executable written') { throw 'text_shlex emission failed' }
+$textShlexOutput = & $textShlexPath
+if ($LASTEXITCODE -ne 0 -or $textShlexOutput -ne 'text shlex ok') { throw "text_shlex answered wrongly: exit $LASTEXITCODE" }
+# e.path.tilde: expansion and collapse against posixpath.expanduser and a model (188 vectors, D2801).
+$pathTildePath = Join-Path $testBuild 'path-tilde-selfhost.exe'
+$pathTildeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\path_tilde\src\main.e') $repo 'x64' 'windows' $pathTildePath -j 2
+if ($LASTEXITCODE -ne 0 -or $pathTildeWritten -ne 'executable written') { throw 'path_tilde emission failed' }
+$pathTildeOutput = & $pathTildePath
+if ($LASTEXITCODE -ne 0 -or $pathTildeOutput -ne 'path tilde ok') { throw "path_tilde answered wrongly: exit $LASTEXITCODE" }
+# e.text.bytesize: parse and format against go-humanize rules in exact arithmetic (608 vectors, D2801).
+$textBytesizePath = Join-Path $testBuild 'text-bytesize-selfhost.exe'
+$textBytesizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_bytesize\src\main.e') $repo 'x64' 'windows' $textBytesizePath -j 2
+if ($LASTEXITCODE -ne 0 -or $textBytesizeWritten -ne 'executable written') { throw 'text_bytesize emission failed' }
+$textBytesizeOutput = & $textBytesizePath
+if ($LASTEXITCODE -ne 0 -or $textBytesizeOutput -ne 'text bytesize ok') { throw "text_bytesize answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.magic: 74 signature rows sampled against an independent first-match scan, cross-checked with filetype (282 vectors, D2801).
+$fmtMagicPath = Join-Path $testBuild 'fmt-magic-selfhost.exe'
+$fmtMagicWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_magic\src\main.e') $repo 'x64' 'windows' $fmtMagicPath -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtMagicWritten -ne 'executable written') { throw 'fmt_magic emission failed' }
+$fmtMagicOutput = & $fmtMagicPath
+if ($LASTEXITCODE -ne 0 -or $fmtMagicOutput -ne 'fmt magic ok') { throw "fmt_magic answered wrongly: exit $LASTEXITCODE" }
+# e.os.ident: host, user, locale and zone lookups answer well-formed values (D2801).
+$osIdentPath = Join-Path $testBuild 'os-ident-selfhost.exe'
+$osIdentWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_ident\src\main.e') $repo 'x64' 'windows' $osIdentPath -j 2
+if ($LASTEXITCODE -ne 0 -or $osIdentWritten -ne 'executable written') { throw 'os_ident emission failed' }
+$osIdentOutput = & $osIdentPath
+if ($LASTEXITCODE -ne 0 -or $osIdentOutput -ne 'os ident ok') { throw "os_ident answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.json5: JSON5 accept/reject and values against the json5 package (346 vectors, D2802).
+$fmtJson5Path = Join-Path $testBuild 'fmt-json5-selfhost.exe'
+$fmtJson5Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_json5\src\main.e') $repo 'x64' 'windows' $fmtJson5Path -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtJson5Written -ne 'executable written') { throw 'fmt_json5 emission failed' }
+$fmtJson5Output = & $fmtJson5Path
+if ($LASTEXITCODE -ne 0 -or $fmtJson5Output -ne 'fmt json5 ok') { throw "fmt_json5 answered wrongly: exit $LASTEXITCODE" }
+# e.sync.flight: concurrent callers share one execution, errors fan out, forget and Full (D2802).
+$syncFlightPath = Join-Path $testBuild 'sync-flight-selfhost.exe'
+$syncFlightWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\sync_flight\src\main.e') $repo 'x64' 'windows' $syncFlightPath -j 2
+if ($LASTEXITCODE -ne 0 -or $syncFlightWritten -ne 'executable written') { throw 'sync_flight emission failed' }
+$syncFlightOutput = & $syncFlightPath
+if ($LASTEXITCODE -ne 0 -or $syncFlightOutput -ne 'sync flight ok') { throw "sync_flight answered wrongly: exit $LASTEXITCODE" }
+# e.log.rotate: rotation byte for byte against RotatingFileHandler (21 scenarios, D2802).
+$logRotatePath = Join-Path $testBuild 'log-rotate-selfhost.exe'
+$logRotateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\log_rotate\src\main.e') $repo 'x64' 'windows' $logRotatePath -j 2
+if ($LASTEXITCODE -ne 0 -or $logRotateWritten -ne 'executable written') { throw 'log_rotate emission failed' }
+$logRotateOutput = & $logRotatePath
+if ($LASTEXITCODE -ne 0 -or $logRotateOutput -ne 'log rotate ok') { throw "log_rotate answered wrongly: exit $LASTEXITCODE" }
+# e.net.tftp: codec against tftpy (92 vectors) and loopback UDP transfers against a scripted server (D2802).
+$netTftpPath = Join-Path $testBuild 'net-tftp-selfhost.exe'
+$netTftpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_tftp\src\main.e') $repo 'x64' 'windows' $netTftpPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netTftpWritten -ne 'executable written') { throw 'net_tftp emission failed' }
+$netTftpOutput = & $netTftpPath
+if ($LASTEXITCODE -ne 0 -or $netTftpOutput -ne 'net tftp ok') { throw "net_tftp answered wrongly: exit $LASTEXITCODE" }
+# e.crypto.cms: OpenSSL SignedData verify, tamper refusals and the Ed25519 signer reproduced (33 vectors, D2802).
+$cryptoCmsPath = Join-Path $testBuild 'crypto-cms-selfhost.exe'
+$cryptoCmsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_cms\src\main.e') $repo 'x64' 'windows' $cryptoCmsPath -j 2
+if ($LASTEXITCODE -ne 0 -or $cryptoCmsWritten -ne 'executable written') { throw 'crypto_cms emission failed' }
+$cryptoCmsOutput = & $cryptoCmsPath
+if ($LASTEXITCODE -ne 0 -or $cryptoCmsOutput -ne 'crypto cms ok') { throw "crypto_cms answered wrongly: exit $LASTEXITCODE" }
+# e.net.robots: RFC 9309 matching against protego over random documents and the RFC example (1357 vectors, D2803).
+$netRobotsPath = Join-Path $testBuild 'net-robots-selfhost.exe'
+$netRobotsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_robots\src\main.e') $repo 'x64' 'windows' $netRobotsPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netRobotsWritten -ne 'executable written') { throw 'net_robots emission failed' }
+$netRobotsOutput = & $netRobotsPath
+if ($LASTEXITCODE -ne 0 -or $netRobotsOutput -ne 'net robots ok') { throw "net_robots answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.sitemap: urlset, index and text sitemaps against ElementTree, plus writer round trips (120 vectors, D2803).
+$fmtSitemapPath = Join-Path $testBuild 'fmt-sitemap-selfhost.exe'
+$fmtSitemapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_sitemap\src\main.e') $repo 'x64' 'windows' $fmtSitemapPath -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtSitemapWritten -ne 'executable written') { throw 'fmt_sitemap emission failed' }
+$fmtSitemapOutput = & $fmtSitemapPath
+if ($LASTEXITCODE -ne 0 -or $fmtSitemapOutput -ne 'fmt sitemap ok') { throw "fmt_sitemap answered wrongly: exit $LASTEXITCODE" }
+# e.test.poll: until and during on a fake clock against an independent model, plus real-clock runs (280 vectors, D2803).
+$testPollPath = Join-Path $testBuild 'test-poll-selfhost.exe'
+$testPollWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_poll\src\main.e') $repo 'x64' 'windows' $testPollPath -j 2
+if ($LASTEXITCODE -ne 0 -or $testPollWritten -ne 'executable written') { throw 'test_poll emission failed' }
+$testPollOutput = & $testPollPath
+if ($LASTEXITCODE -ne 0 -or $testPollOutput -ne 'test poll ok') { throw "test_poll answered wrongly: exit $LASTEXITCODE" }
+# e.fmt.fixedwidth: FileHelpers-style layouts and length modes against a Python slicing model (500 vectors, D2803).
+$fmtFixedwidthPath = Join-Path $testBuild 'fmt-fixedwidth-selfhost.exe'
+$fmtFixedwidthWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_fixedwidth\src\main.e') $repo 'x64' 'windows' $fmtFixedwidthPath -j 2
+if ($LASTEXITCODE -ne 0 -or $fmtFixedwidthWritten -ne 'executable written') { throw 'fmt_fixedwidth emission failed' }
+$fmtFixedwidthOutput = & $fmtFixedwidthPath
+if ($LASTEXITCODE -ne 0 -or $fmtFixedwidthOutput -ne 'fmt fixedwidth ok') { throw "fmt_fixedwidth answered wrongly: exit $LASTEXITCODE" }
+# e.crypto.jks: pyjks keystores parsed, decrypted and re-encoded byte for byte (4 stores, D2803).
+$cryptoJksPath = Join-Path $testBuild 'crypto-jks-selfhost.exe'
+$cryptoJksWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_jks\src\main.e') $repo 'x64' 'windows' $cryptoJksPath -j 2
+if ($LASTEXITCODE -ne 0 -or $cryptoJksWritten -ne 'executable written') { throw 'crypto_jks emission failed' }
+$cryptoJksOutput = & $cryptoJksPath
+if ($LASTEXITCODE -ne 0 -or $cryptoJksOutput -ne 'crypto jks ok') { throw "crypto_jks answered wrongly: exit $LASTEXITCODE" }
+# e.crypto.pkcs12: cryptography/OpenSSL 3 stores read and the writer reproduced byte for byte (D2803).
+$cryptoPkcs12Path = Join-Path $testBuild 'crypto-pkcs12-selfhost.exe'
+$cryptoPkcs12Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_pkcs12\src\main.e') $repo 'x64' 'windows' $cryptoPkcs12Path -j 2
+if ($LASTEXITCODE -ne 0 -or $cryptoPkcs12Written -ne 'executable written') { throw 'crypto_pkcs12 emission failed' }
+$cryptoPkcs12Output = & $cryptoPkcs12Path
+if ($LASTEXITCODE -ne 0 -or $cryptoPkcs12Output -ne 'crypto pkcs12 ok') { throw "crypto_pkcs12 answered wrongly: exit $LASTEXITCODE" }
+# e.algo.expr against an independent Python implementation of the documented language: hand cases, limits and 700 random trees (1121 vectors, D2804).
+$algoExprPath = Join-Path $testBuild 'algo-expr-selfhost.exe'
+$algoExprWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_expr\src\main.e') $repo 'x64' 'windows' $algoExprPath -j 2
+if ($LASTEXITCODE -ne 0 -or $algoExprWritten -ne 'executable written') { throw 'algo_expr emission failed' }
+$algoExprOutput = & $algoExprPath
+if ($LASTEXITCODE -ne 0 -or $algoExprOutput -ne 'algo expr ok') { throw "algo_expr answered wrongly: exit $LASTEXITCODE" }
+# e.net.zmtp against libzmq 4.3 byte streams, scripted libzmq peers over TCP and loopback patterns (20 streams, 4 peers, D2805).
+$netZmtpPath = Join-Path $testBuild 'net-zmtp-selfhost.exe'
+$netZmtpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_zmtp\src\main.e') $repo 'x64' 'windows' $netZmtpPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netZmtpWritten -ne 'executable written') { throw 'net_zmtp emission failed' }
+$netZmtpOutput = & $netZmtpPath
+if ($LASTEXITCODE -ne 0 -or $netZmtpOutput -ne 'net zmtp ok') { throw "net_zmtp answered wrongly: exit $LASTEXITCODE" }
+# e.net.sp against NNG 1.x byte streams, scripted peers over TCP and loopback patterns (14 streams, 5 peers, D2805).
+$netSpPath = Join-Path $testBuild 'net-sp-selfhost.exe'
+$netSpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\net_sp\src\main.e') $repo 'x64' 'windows' $netSpPath -j 2
+if ($LASTEXITCODE -ne 0 -or $netSpWritten -ne 'executable written') { throw 'net_sp emission failed' }
+$netSpOutput = & $netSpPath
+if ($LASTEXITCODE -ne 0 -or $netSpOutput -ne 'net sp ok') { throw "net_sp answered wrongly: exit $LASTEXITCODE" }
 # `x.migrate.migrate`: Ansible, Salt, Puppet and Chef importers against petcow's own migrate.rs (372 cases, D2318).
 $xMigratePath = Join-Path $testBuild 'x-migrate-selfhost.exe'
 $xMigrateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_migrate\src\main.e') $repo 'x64' 'windows' $xMigratePath -j 2

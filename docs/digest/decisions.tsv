@@ -2263,4 +2263,10 @@ D2841	2511	L060: mean-field ADVI, ELBO and variational draws in e.math.mcmc, che
 D2842	3494	L098: e.text.math, TeX-style math typesetting into caller-owned glyph and rule lists
 D2843	3402	L125: e.gfx.svg draws gradients, use, clip paths and units, checked against cairosvg
 D2844	2995	L099: e.ui.ink, stroke capture, pressure polylines and timed replay in caller storage
-D2845	1376	L162: chart benchmarks against R graphics not run; no R and no faithful substitute on this host
+D2845	1377	L162: chart benchmarks against R graphics not run; no R and no faithful substitute on this host
+D2800	2049	L150: Julian, Islamic civil, Hebrew and Japanese-era calendars, runtime date patterns and the Windows to IANA zone map
+D2801	2747	L135: bincode, shell words, tilde expansion, byte sizes, a magic-number database and host identity lookups
+D2802	2875	L152: CMS signing, json5, TFTP, singleflight and a rotating file sink
+D2803	2975	L160: robots.txt, sitemaps, test polling, fixed-width records, JKS and PKCS #12 keystores
+D2804	2940	L157: a sandboxed expression language with JEXL, SpEL and MVEL shapes (`e.algo.expr`)
+D2805	2970	L156: brokerless messaging, ZMTP (ZeroMQ) and SP (NNG) patterns over e.net
