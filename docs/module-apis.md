@@ -2109,10 +2109,12 @@ const KEY_BASE: u64 = 4096u64
 const FILTER_TEXT: usize = 40usize
 const FILTER_KEY: u64 = 2048u64
 
-type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom }
+type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom, Indicator }
+type Band = struct { title: str, first: usize, count: usize }
+type Nav = enum u8 { First, Prev, Next, Last }
 type ColumnSpec = struct { title: str, width: f32, column: usize, kind: CellKind, decimals: u8, summary: i32, summary_kind: grp.SummaryKind, filter: bool }
 type Events = struct { ctx: *void, sort_changed: fn(*void, usize, bool) -> err, row_picked: fn(*void, usize) -> err, filter_changed: fn(*void, usize, str) -> err, custom_cell: fn(*void, *mem.Arena, *const control.Theme, usize, usize, *widget.Node) -> err, row_role: fn(*void, usize) -> style.ColorRole }
-type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
+type Grid = struct { t: *table.Table, g: *grp.Grouping, specs: []const ColumnSpec, columns: []collection.Column, events: Events, key: widget.Key, empty_text: str, sort_column: usize, descending: bool, has_selection: bool, selected_row: usize, offset: f32, row_height: f32, footer_visible: bool, filter_visible: bool, bands: []const Band, navigator_visible: bool, has_position: bool, position: usize, filter_text: []u8, filter_lens: []usize, theme: *const control.Theme }
 error TooManyColumns
 
 fn no_events() -> Events
@@ -2120,10 +2122,18 @@ fn create(a: *mem.Arena, t: *table.Table, g: *grp.Grouping, specs: []const Colum
 fn show_sort(grid: *Grid, spec: usize, descending: bool)
 fn clear_selection(grid: *Grid)
 fn show_filter_row(grid: *Grid, on: bool)
+fn set_bands(grid: *Grid, bands: []const Band)
+fn show_navigator(grid: *Grid, on: bool)
+fn current_position(grid: *const Grid) -> (usize, bool)
+fn data_counts(grid: *const Grid, at: usize) -> (usize, usize)
+fn go_to(grid: *Grid, at: usize) -> err
+fn navigate(grid: *Grid, kind: Nav) -> err
 fn filter_value(grid: *const Grid, spec: usize) -> str
 fn row_key(grid: *const Grid, row: usize) -> widget.Key
 fn group_key(grid: *const Grid, group: usize) -> widget.Key
 fn footer_key(grid: *const Grid) -> widget.Key
+fn band_key(grid: *const Grid) -> widget.Key
+fn navigator_key(grid: *const Grid) -> widget.Key
 fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -> (widget.Node, err)
 ```
 
@@ -2139,10 +2149,14 @@ application sorts or groups through `e.data.tableview` / `e.data.tablegroup` and
 node (a mana-cost badge row, a legality mark: composed by the application), `row_role` colours the
 text of a data row (colour by rarity), and the filter row, shown by `show_filter_row`, is a text
 field above the header under each column with `filter` set; a change is `filter_changed` (spec,
-text) and `filter_value` reads what is typed. A grid owns the widget keys from `key` to
+text) and `filter_value` reads what is typed. `set_bands` puts a row of titled spans over runs of columns above the filter row (non-interactive); a
+column of kind `Indicator` shows `>` at the current row; `show_navigator` adds First / Prev / Next /
+Last buttons and "Row n of m" under the footer, moving the current data row (groups are skipped,
+the row is scrolled into view and `row_picked` is reported; a move with nowhere to go reports
+nothing). A grid owns the widget keys from `key` to
 `key + KEY_BASE + row capacity + group capacity` (the table's own header cells use the keys just
-above `key`; the filter fields use `key + FILTER_KEY + spec`). Not yet: bands, navigator, row
-indicator, preview row, editors, persistence; the filter row stands above the header, not below.
+above `key`; the filter fields use `key + FILTER_KEY + spec`). Not yet: preview row, editors,
+persistence; the filter row stands above the header, not below.
 
 ### `e.data.slot_map`
 

@@ -19,8 +19,14 @@
 // column that asks for one, above the header; each change is the `filter_changed` event (the
 // application builds and applies the filter, as for a sort).
 //
+// Bands. `set_bands` puts a row of titled spans above the filter row and the header, each over a
+// run of columns (non-interactive). Row indicator: a column of kind `Indicator` shows `>` at the
+// grid's current row. Navigator: `show_navigator` adds First / Prev / Next / Last buttons and
+// "Row n of m" under the footer; they move the current data row (groups are skipped) and scroll
+// it into view; `navigate` is the same from code.
+//
 // ponytail: one level of header and the filter row sits above it (the table owns the header);
-// bands, navigator, indicator and preview are the next increments of G006.
+// the preview row is the next increment of G006.
 
 use e.mem
 use e.str
@@ -28,6 +34,7 @@ use e.data.table as table
 use e.data.tablegroup as grp
 use e.ui.collection
 use e.ui.control
+use e.gfx.paint
 use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
@@ -35,7 +42,12 @@ use e.ui.widget
 const FILTER_TEXT: usize = 40usize
 const FILTER_KEY: u64 = 2048u64
 
-type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom }
+type CellKind = enum u8 { Text, Int, Real, Currency, Bool, Custom, Indicator }
+
+// A titled span over `count` columns from spec `first`.
+type Band = struct { title: str, first: usize, count: usize }
+
+type Nav = enum u8 { First, Prev, Next, Last }
 
 // One grid column: the table column it shows and how, and which applied group summary it
 // shows on group rows and in the footer (`summary` < 0: none); `filter` asks for a field in the
@@ -67,6 +79,10 @@ type Grid = struct {
     row_height: f32,
     footer_visible: bool,
     filter_visible: bool,
+    bands: []const Band,
+    navigator_visible: bool,
+    has_position: bool,
+    position: usize,
     filter_text: []u8,
     filter_lens: []usize,
     theme: *const control.Theme
@@ -132,6 +148,86 @@ fn show_sort(grid: *Grid, spec: usize, descending: bool) {
 
 fn clear_selection(grid: *Grid) { grid.has_selection = false }
 
+// Puts a row of band titles above the header (an empty slice removes it).
+fn set_bands(grid: *Grid, bands: []const Band) { grid.bands = bands }
+
+fn show_navigator(grid: *Grid, on: bool) { grid.navigator_visible = on }
+
+// The visible position of the current data row, if there is one.
+fn current_position(grid: *const Grid) -> (usize, bool) {
+    if !grid.has_position || grid.position >= grp.visible_len(grid.g) { ret (0usize, false) }
+    ret (grid.position, true)
+}
+
+// Data rows (not group rows) before position `at`, and the total.
+fn data_counts(grid: *const Grid, at: usize) -> (usize, usize) {
+    var before = 0usize
+    var total = 0usize
+    var i = 0usize
+    let n = grp.visible_len(grid.g)
+    while i < n {
+        if !grp.visible_is_group(grid.g, i) {
+            if i < at { before += 1usize }
+            total += 1usize
+        }
+        i += 1usize
+    }
+    ret (before, total)
+}
+
+// Makes the data row at visible position `at` current: selected, scrolled into view, reported.
+fn go_to(grid: *Grid, at: usize) -> err {
+    grid.has_position = true
+    grid.position = at
+    let row = grp.visible_row(grid.g, at)
+    grid.has_selection = true
+    grid.selected_row = row
+    var top = f32(at) * grid.row_height - 2.0 * grid.row_height
+    if top < 0.0 { top = 0.0 }
+    grid.offset = top
+    ret grid.events.row_picked(grid.events.ctx, row)
+}
+
+// Moves the current data row; a move with nowhere to go does nothing (and reports nothing).
+fn navigate(grid: *Grid, kind: Nav) -> err {
+    let n = grp.visible_len(grid.g)
+    if n == 0usize { ret ok }
+    var i = 0usize
+    if kind == Nav.First {
+        while i < n {
+            if !grp.visible_is_group(grid.g, i) { ret go_to(grid, i) }
+            i += 1usize
+        }
+        ret ok
+    }
+    if kind == Nav.Last {
+        i = n
+        while i > 0usize {
+            i -= 1usize
+            if !grp.visible_is_group(grid.g, i) { ret go_to(grid, i) }
+        }
+        ret ok
+    }
+    let (at, has) = current_position(grid)
+    if kind == Nav.Next {
+        i = 0usize
+        if has { i = at + 1usize }
+        while i < n {
+            if !grp.visible_is_group(grid.g, i) { ret go_to(grid, i) }
+            i += 1usize
+        }
+        ret ok
+    }
+    // Prev
+    if !has { ret ok }
+    i = at
+    while i > 0usize {
+        i -= 1usize
+        if !grp.visible_is_group(grid.g, i) { ret go_to(grid, i) }
+    }
+    ret ok
+}
+
 // Shows or hides the filter row.
 fn show_filter_row(grid: *Grid, on: bool) { grid.filter_visible = on }
 
@@ -145,6 +241,10 @@ fn row_key(grid: *const Grid, row: usize) -> widget.Key { ret grid.key + KEY_BAS
 fn group_key(grid: *const Grid, group: usize) -> widget.Key { ret grid.key + KEY_BASE + u64(table.capacity(grid.t)) + u64(group) }
 
 fn footer_key(grid: *const Grid) -> widget.Key { ret grid.key + KEY_BASE + u64(table.capacity(grid.t)) + u64(grid.g.groups.len) }
+
+fn band_key(grid: *const Grid) -> widget.Key { ret footer_key(grid) + 1u64 }
+
+fn navigator_key(grid: *const Grid) -> widget.Key { ret footer_key(grid) + 2u64 }
 
 // ---- formatting ------------------------------------------------------------------
 
@@ -266,6 +366,11 @@ fn source_cell(ctx: *void, a: *mem.Arena, index: usize, column: usize, out: *wid
     if column >= grid.specs.len { ret control.TooLarge }
     if grp.visible_is_group(grid.g, index) { ret group_cell(a, grid, grp.visible_group(grid.g, index), column, out) }
     let row = grp.visible_row(grid.g, index)
+    if grid.specs[column].kind == CellKind.Indicator {
+        var mark = ""
+        if grid.has_selection && grid.selected_row == row { mark = ">" }
+        ret text_node(a, grid, mark, true, .Text, out)
+    }
     if grid.specs[column].kind == CellKind.Custom { ret grid.events.custom_cell(grid.events.ctx, a, grid.theme, row, column, out) }
     let role = grid.events.row_role(grid.events.ctx, row)
     let (text, text_error) = cell_text(a, grid, column, row)
@@ -300,6 +405,13 @@ fn on_pick(ctx: *void, value: widget.Key) -> err {
     }
     grid.has_selection = true
     grid.selected_row = usize(at)
+    var found = 0usize
+    let visible = grp.visible_len(grid.g)
+    while found < visible && (grp.visible_is_group(grid.g, found) || grp.visible_row(grid.g, found) != usize(at)) { found += 1usize }
+    if found < visible {
+        grid.has_position = true
+        grid.position = found
+    }
     ret grid.events.row_picked(grid.events.ctx, usize(at))
 }
 
@@ -329,6 +441,96 @@ fn one(a: *mem.Arena, node: widget.Node) -> []widget.Node {
     if nodes_error != ok { ret zero }
     nodes[0usize] = node
     ret nodes[0usize..1usize]
+}
+
+// The band row: each band's title over the columns it spans.
+fn band_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let (cells, cells_error) = mem.alloc[widget.Node](a, grid.specs.len + 1usize)
+    if cells_error != ok { ret (zero, cells_error) }
+    var count = 0usize
+    var at = 0usize
+    while at < grid.specs.len {
+        // the band that starts here, or a plain gap up to the next band
+        var span = 1usize
+        var title = ""
+        var found = false
+        var b = 0usize
+        while b < grid.bands.len {
+            if grid.bands[b].first == at && grid.bands[b].count > 0usize {
+                span = grid.bands[b].count
+                title = grid.bands[b].title
+                found = true
+            }
+            b += 1usize
+        }
+        var width: f32 = 0.0
+        var k = 0usize
+        while k < span && at + k < grid.specs.len {
+            width += grid.specs[at + k].width
+            k += 1usize
+        }
+        var cell_style = style.defaults()
+        cell_style.width = style.Length { Px: width }
+        if found {
+            cell_style.background = paint.Brush { Solid: style.color(grid.theme.tokens, .SurfaceVariant) }
+        }
+        var inner: widget.Node = zero
+        let node_error = text_node(a, grid, title, true, .Text, &inner)
+        if node_error != ok { ret (zero, node_error) }
+        cells[count] = widget.padded(0u64, 12.0, 4.0, 0.0, 4.0, cell_style, one(a, inner))
+        count += 1usize
+        at += k
+    }
+    ret (widget.flex(band_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 0.0 }, style.defaults(), cells[0usize..count]), ok)
+}
+
+type NavPick = struct { grid: *Grid, kind: Nav }
+
+fn on_navigate(ctx: *void) -> err {
+    let pick = mem.cast[*NavPick](ctx)
+    ret navigate(pick.grid, pick.kind)
+}
+
+// First / Prev / Next / Last buttons and "Row n of m".
+fn navigator_row(a: *mem.Arena, grid: *Grid) -> (widget.Node, err) {
+    let labels: [4]str = [4]str{ "First", "Prev", "Next", "Last" }
+    let (picks, picks_error) = mem.alloc[NavPick](a, 4usize)
+    if picks_error != ok { ret (zero, picks_error) }
+    let (submits, submits_error) = mem.alloc[widget.Submit](a, 4usize)
+    if submits_error != ok { ret (zero, submits_error) }
+    let (cells, cells_error) = mem.alloc[widget.Node](a, 5usize)
+    if cells_error != ok { ret (zero, cells_error) }
+    var at = 0usize
+    while at < 4usize {
+        var kind = Nav.First
+        if at == 1usize { kind = Nav.Prev }
+        if at == 2usize { kind = Nav.Next }
+        if at == 3usize { kind = Nav.Last }
+        picks[at] = NavPick { grid: grid, kind: kind }
+        submits[at] = widget.Submit { ctx: mem.cast[*void](&picks[at]), invoke: on_navigate }
+        var options = control.button_options()
+        options.variant = .Outlined
+        let (button, button_error) = control.button(a, navigator_key(grid) + 1u64 + u64(at), grid.theme, labels[at], &submits[at], options)
+        if button_error != ok { ret (zero, button_error) }
+        cells[at] = button
+        at += 1usize
+    }
+    let (b, b_error) = str.builder(a, 48usize)
+    if b_error != ok { ret (zero, b_error) }
+    var sb = b
+    let (position, has) = current_position(grid)
+    let (before, total) = data_counts(grid, position)
+    if str.push(&sb, "Row ") != ok { ret (zero, control.TooLarge) }
+    if has {
+        if str.push_usize(&sb, before + 1usize) != ok { ret (zero, control.TooLarge) }
+    } else {
+        if str.push(&sb, "-") != ok { ret (zero, control.TooLarge) }
+    }
+    if str.push(&sb, " of ") != ok || str.push_usize(&sb, total) != ok { ret (zero, control.TooLarge) }
+    let (info, info_error) = control.text(a, 0u64, str.done(&sb), grid.theme, control.text_options())
+    if info_error != ok { ret (zero, info_error) }
+    cells[4usize] = info
+    ret (widget.flex(navigator_key(grid), ui_layout.Flex { axis: .Horizontal, main: .Start, cross: .Center, gap: 8.0 }, style.defaults(), cells[0usize..5usize]), ok)
 }
 
 // The filter row: a small text field under each column that asks for one.
@@ -409,17 +611,28 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
     var body_height = height
     if grid.footer_visible && grid.g.specs.len != 0usize { body_height = body_height - grid.row_height - 8.0 }
     if grid.filter_visible { body_height = body_height - 44.0 }
+    if grid.bands.len != 0usize { body_height = body_height - 36.0 }
+    if grid.navigator_visible { body_height = body_height - 52.0 }
     var sort_shown = grid.sort_column
     let (body, body_error) = collection.table(a, grid.key, theme, "Data grid", grid.columns, source, selected[0usize..selected_count], sort_shown, grid.descending, widget.Change[usize] { ctx: me, invoke: on_sort }, widget.Change[collection.Reorder] { ctx: me, invoke: no_reorder }, widget.Change[collection.ColumnResize] { ctx: me, invoke: no_resize }, widget.Change[widget.Key] { ctx: me, invoke: on_pick }, grid.row_height, grid.offset, widget.Change[f32] { ctx: me, invoke: on_scroll }, body_height)
     if body_error != ok { ret (zero, body_error) }
     var part_count = 1usize
-    var with_footer = grid.footer_visible && grid.g.specs.len != 0usize
+    let with_footer = grid.footer_visible && grid.g.specs.len != 0usize
+    let with_bands = grid.bands.len != 0usize
     if with_footer { part_count += 1usize }
     if grid.filter_visible { part_count += 1usize }
+    if with_bands { part_count += 1usize }
+    if grid.navigator_visible { part_count += 1usize }
     if part_count == 1usize { ret (body, ok) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, part_count)
     if parts_error != ok { ret (zero, parts_error) }
     var at = 0usize
+    if with_bands {
+        let (bands_node, bands_error) = band_row(a, grid)
+        if bands_error != ok { ret (zero, bands_error) }
+        parts[at] = bands_node
+        at += 1usize
+    }
     if grid.filter_visible {
         let (filter, filter_error) = filter_row(a, grid)
         if filter_error != ok { ret (zero, filter_error) }
@@ -432,6 +645,12 @@ fn build(a: *mem.Arena, grid: *Grid, theme: *const control.Theme, height: f32) -
         let (footer, footer_error) = footer_row(a, grid)
         if footer_error != ok { ret (zero, footer_error) }
         parts[at] = footer
+        at += 1usize
+    }
+    if grid.navigator_visible {
+        let (navigator, navigator_error) = navigator_row(a, grid)
+        if navigator_error != ok { ret (zero, navigator_error) }
+        parts[at] = navigator
         at += 1usize
     }
     ret (widget.flex(0u64, ui_layout.Flex { axis: .Vertical, main: .Start, cross: .Start, gap: 4.0 }, style.defaults(), parts[0usize..part_count]), ok)

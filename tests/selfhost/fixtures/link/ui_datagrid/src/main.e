@@ -1,10 +1,11 @@
-// `e.ui.datagrid` (G006, first and second increments) over a 3,000-row `e.data.table` with its view and
+// `e.ui.datagrid` (G006, first to third increments) over a 3,000-row `e.data.table` with its view and
 // grouping, driven through the UI test harness: the virtual body builds only the visible rows,
 // a header tap reports the sort and the application re-sorts, a group row expands on a tap and
 // shows its rows, the footer carries the summaries, a tap on a data row reports the storage
 // row, and a filter that matches nothing shows the no-data text; a custom cell column asks the
 // application for its node, a row role colours a row's text, and the filter row's field reports
-// what is typed. Every check has its own exit code.
+// what is typed; and a second grid with bands, the row indicator and the navigator. Every check
+// has its own exit code.
 use e.gpu
 use e.mem
 use e.os
@@ -200,6 +201,12 @@ fn on_row_role(ctx: *void, row: usize) -> style.ColorRole {
         ret .Data1
     }
     ret .Text
+}
+
+fn tap_text(h: *testing.Harness, runtime: *widget.Runtime, text: str) -> bool {
+    let (b, found) = widget.bounds_of(runtime, testing.by_text(h, text).element)
+    if !found { ret false }
+    ret testing.tap(h, b.x + b.width * 0.5, b.y + b.height * 0.5) == ok
 }
 
 fn bounds(h: *testing.Harness, runtime: *widget.Runtime, key: widget.Key) -> (geometry.Rect, bool) {
@@ -436,6 +443,56 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if settle(&harness, root6, 6000000000i64) != ok { os.exit(83) }
     if testing.by_text(&harness, "No data to display").count == 0usize { os.exit(84) }
     if testing.by_key(&harness, dg.footer_key(&grid)).count != 0usize { os.exit(85) }
+    // 6. a second grid: bands over the columns, the row indicator and the navigator
+    view.clear_filter(&app.rows_view)
+    app.group_rarity = false
+    if rebuild(app, 5usize, false) != ok { os.exit(110) }
+    var specs2: [4]dg.ColumnSpec = zero
+    specs2[0usize] = dg.ColumnSpec { title: "", width: 30.0, column: C_NAME, kind: dg.CellKind.Indicator, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false }
+    specs2[1usize] = dg.ColumnSpec { title: "Name", width: 200.0, column: C_NAME, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false }
+    specs2[2usize] = dg.ColumnSpec { title: "Rarity", width: 120.0, column: C_RARITY, kind: dg.CellKind.Text, decimals: 0u8, summary: -1, summary_kind: grp.SummaryKind.Rows, filter: false }
+    specs2[3usize] = dg.ColumnSpec { title: "Price", width: 120.0, column: C_PRICE, kind: dg.CellKind.Currency, decimals: 2u8, summary: 1, summary_kind: grp.SummaryKind.Sum, filter: false }
+    let (made2, grid2_error) = dg.create(a, &app.tbl, &app.grouping, specs2[0..], events, 9000u64)
+    if grid2_error != ok { os.exit(111) }
+    var grid2 = made2
+    var bands: [2]dg.Band = zero
+    bands[0usize] = dg.Band { title: "Card", first: 1usize, count: 2usize }
+    bands[1usize] = dg.Band { title: "Money", first: 3usize, count: 1usize }
+    dg.set_bands(&grid2, bands[0..])
+    dg.show_navigator(&grid2, true)
+    mem.reset(&f, 0usize)
+    let (root9, build9_error) = dg.build(&f, &grid2, &theme, 400.0)
+    if build9_error != ok { os.exit(112) }
+    if settle(&harness, root9, 9000000000i64) != ok { os.exit(113) }
+    if testing.by_key(&harness, dg.band_key(&grid2)).count == 0usize { os.exit(114) }
+    if testing.by_text(&harness, "Card").count == 0usize || testing.by_text(&harness, "Money").count == 0usize { os.exit(115) }
+    if testing.by_text(&harness, "Row - of 3000").count == 0usize { os.exit(116) }
+    if testing.by_key(&harness, dg.navigator_key(&grid2)).count == 0usize { os.exit(117) }
+    // Next from nothing goes to the first data row
+    let calls_before = app.pick_calls
+    if !tap_text(&harness, &runtime, "Next") { os.exit(118) }
+    if app.pick_calls != calls_before + 1usize || app.picked != grp.visible_row(&app.grouping, 0usize) { os.exit(119) }
+    mem.reset(&f, 0usize)
+    let (root10, build10_error) = dg.build(&f, &grid2, &theme, 400.0)
+    if build10_error != ok { os.exit(120) }
+    if settle(&harness, root10, 10000000000i64) != ok { os.exit(121) }
+    if testing.by_text(&harness, "Row 1 of 3000").count == 0usize { os.exit(122) }
+    if testing.by_text(&harness, ">").count == 0usize { os.exit(123) }
+    if !tap_text(&harness, &runtime, "Next") { os.exit(124) }
+    if app.picked != grp.visible_row(&app.grouping, 1usize) { os.exit(125) }
+    if !tap_text(&harness, &runtime, "Last") { os.exit(126) }
+    if app.picked != grp.visible_row(&app.grouping, ROWS - 1usize) || grid2.position != ROWS - 1usize { os.exit(127) }
+    if !tap_text(&harness, &runtime, "Prev") { os.exit(128) }
+    if app.picked != grp.visible_row(&app.grouping, ROWS - 2usize) { os.exit(129) }
+    if !tap_text(&harness, &runtime, "First") { os.exit(130) }
+    if app.picked != grp.visible_row(&app.grouping, 0usize) { os.exit(131) }
+    // Prev from the first row has nowhere to go: nothing is reported
+    let calls_at_first = app.pick_calls
+    if !tap_text(&harness, &runtime, "Prev") { os.exit(132) }
+    if app.pick_calls != calls_at_first { os.exit(133) }
+    // the scroll offset follows the current row (row 2999 is far below the first window)
+    if dg.navigate(&grid2, dg.Nav.Last) != ok { os.exit(134) }
+    if grid2.offset < f32(ROWS - 10usize) * grid2.row_height { os.exit(135) }
     os.exit(0)
     ret ok
 }
