@@ -1737,6 +1737,71 @@ edges; it reserves both first and leaves the builder unchanged on error. Nodes a
 dense `0..node_count`; node counts that do not fit `u32` return `TooLarge`.
 Graphs own no resources beyond their caller arena.
 
+### `e.data.table`
+
+```neper
+type Kind = enum u8 { I32, I64, F64, Bool, Str, Dict }
+type Spec = struct { name: str, kind: Kind, heap_bytes: usize, dict_cap: usize }
+type Column = struct { name: str, kind: Kind, nulls: []u64, i32s: []i32, i64s: []i64, f64s: []f64, bits: []u64, starts: []u32, lens: []u32, ids: []u32, heap: []u8, heap_len: usize, heap_wasted: usize, entry_starts: []u32, entry_lens: []u32, entry_count: usize, hashes: []u32, rank_of_entry: []u32, ranks_valid: bool, version: u64 }
+type Table = struct { columns: []Column, capacity_rows: usize, row_total: usize, live: []u64, deleted: usize, version: u64, structure: u64, loading: bool, bytes: usize }
+error Full
+error BadKind
+
+fn create(a: *mem.Arena, specs: []const Spec, row_capacity: usize) -> (Table, err)
+fn column_count(t: *const Table) -> usize
+fn row_count(t: *const Table) -> usize
+fn live_count(t: *const Table) -> usize
+fn capacity(t: *const Table) -> usize
+fn memory_bytes(t: *const Table) -> usize
+fn column_name(t: *const Table, col: usize) -> str
+fn column_kind(t: *const Table, col: usize) -> Kind
+fn find_column(t: *const Table, name: str) -> (usize, bool)
+fn version(t: *const Table) -> u64
+fn column_version(t: *const Table, col: usize) -> u64
+fn structure_version(t: *const Table) -> u64
+fn changed_since(t: *const Table, col: usize, since: u64) -> bool
+fn clear(t: *Table)
+fn begin_load(t: *Table)
+fn end_load(t: *Table)
+fn append_row(t: *Table) -> (usize, err)
+fn is_live(t: *const Table, row: usize) -> bool
+fn delete_row(t: *Table, row: usize) -> bool
+fn is_null(t: *const Table, col: usize, row: usize) -> bool
+fn set_null(t: *Table, col: usize, row: usize)
+fn get_i32(t: *const Table, col: usize, row: usize) -> i32
+fn get_i64(t: *const Table, col: usize, row: usize) -> i64
+fn get_f64(t: *const Table, col: usize, row: usize) -> f64
+fn get_bool(t: *const Table, col: usize, row: usize) -> bool
+fn get_str(t: *const Table, col: usize, row: usize) -> str
+fn set_i32(t: *Table, col: usize, row: usize, value: i32)
+fn set_i64(t: *Table, col: usize, row: usize, value: i64)
+fn set_f64(t: *Table, col: usize, row: usize, value: f64)
+fn set_bool(t: *Table, col: usize, row: usize, value: bool)
+fn set_str(t: *Table, col: usize, row: usize, s: str) -> err
+fn fill_i32(t: *Table, col: usize, values: []const i32)
+fn fill_i64(t: *Table, col: usize, values: []const i64)
+fn fill_f64(t: *Table, col: usize, values: []const f64)
+fn dict_len(t: *const Table, col: usize) -> usize
+fn dict_str(t: *const Table, col: usize, id: u32) -> str
+fn dict_id(t: *const Table, col: usize, row: usize) -> u32
+fn dict_find(t: *const Table, col: usize, s: str) -> (u32, bool)
+fn heap_used(t: *const Table, col: usize) -> usize
+fn heap_wasted(t: *const Table, col: usize) -> usize
+fn compare_fold(x: str, y: str) -> i32
+fn ranks(t: *Table, col: usize, scratch: *mem.Arena) -> ([]const u32, err)
+fn rank_of(t: *const Table, col: usize, row: usize) -> u32
+```
+
+A columnar record store for the data grid (`docs/grid.md` §5.3): typed contiguous columns over a
+caller arena, a null bitmap per column, strings as a heap (`Str`) or a dictionary with one `u32`
+id per row (`Dict`), tombstoned rows, a bulk load, and a change version per column so a view
+learns which stage a write reaches. Capacity (rows, string heap bytes, dictionary entries) is
+declared at `create`; `Full` answers an `append_row` or `set_str` past it. Writing a cell clears
+its null bit. `ranks` gives every dictionary entry its dense position in ASCII upper-case-folded
+byte order (the order of `CompareStr(UpperCase(a), UpperCase(b))`); entries have the same rank
+exactly when they are equal ignoring ASCII case. Replacing a `Str` cell leaves its old bytes in
+the heap (`heap_wasted`). Single writer; row compaction and a boxed value accessor are not here.
+
 ### `e.data.slot_map`
 
 ```neper

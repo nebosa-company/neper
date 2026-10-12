@@ -984,6 +984,12 @@ $dataAdaptersWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $dataAdaptersWritten -ne 'executable written') { throw 'data_adapters emission failed' }
 & $dataAdaptersPath
 if ($LASTEXITCODE -ne 0) { throw "a data adapter check failed: exit $LASTEXITCODE" }
+# `e.data.table`: a 150,000-row by 24-column columnar store (typed columns, null bitmaps, dictionary and heap strings) bulk loaded, read back cell by cell, ranked in ASCII-fold order, edited, versioned, tombstoned and bounded (D2362).
+$dataTablePath = Join-Path $testBuild 'data-table-selfhost.exe'
+$dataTableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_table\src\main.e') $repo 'x64' 'windows' $dataTablePath --arena 128m
+if ($LASTEXITCODE -ne 0 -or $dataTableWritten -ne 'executable written') { throw 'data_table emission failed' }
+& $dataTablePath
+if ($LASTEXITCODE -ne 0) { throw "a data_table check failed: exit $LASTEXITCODE" }
 # `e.algo.stat` against closed-form moments and a least-squares line, and `e.data.slot_map`'s
 # generational keys: stale after removal, reused with the next generation, retired at the last.
 $statSlotsPath = Join-Path $testBuild 'stat-slots-selfhost.exe'

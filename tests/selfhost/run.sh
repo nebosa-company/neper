@@ -937,6 +937,11 @@ data_adapters_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$data_adapters_written" = 'executable written' ]
 chmod +x "$test_build/data-adapters-selfhost"
 "$test_build/data-adapters-selfhost"
+# `e.data.table`: a 150,000-row by 24-column columnar store (typed columns, null bitmaps, dictionary and heap strings) bulk loaded, read back cell by cell, ranked in ASCII-fold order, edited, versioned, tombstoned and bounded (D2362).
+data_table_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_table/src/main.e" "$repo" x64 linux "$test_build/data-table-selfhost" --arena 128m)
+[ "$data_table_written" = 'executable written' ]
+chmod +x "$test_build/data-table-selfhost"
+"$test_build/data-table-selfhost"
 # `e.algo.stat` against closed-form moments and a least-squares line, and `e.data.slot_map`'s
 # generational keys: stale after removal, reused with the next generation, retired at the last.
 stat_slots_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/stat_slots/src/main.e" "$repo" x64 linux "$test_build/stat-slots-selfhost")

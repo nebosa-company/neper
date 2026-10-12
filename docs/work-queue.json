@@ -1571,10 +1571,10 @@
       "group": "Library",
       "order": 262,
       "title": "e.data.table: typed columns, null bitmaps, string dictionary + heap, bulk load, journal",
-      "score": 0,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: 150k × 24 load fixture; typed get/set round-trip; dictionary rank/fold correct; memory ≤ budget."
+      "evidence": "Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity; measured Delphi baselines in section 6.1). Design: grid.md section 5, mapping and acceptance rows: section 7. Acceptance: 150k × 24 load fixture; typed get/set round-trip; dictionary rank/fold correct; memory ≤ budget. PART (D2362): lib/e/data/table.e: typed I32/I64/F64/Bool columns, null bitmaps, Str heap and Dict (deduplicated, fold-order ranks via e.algo.sort), bulk load, tombstones, per-column version journal; tests/selfhost/fixtures/link/data_table: 150,000 x 24 loaded, every cell read back, ranks vs compare_fold, versions, capacity errors, 41 MiB (bound 45). NOT DONE: row compaction, a boxed Value accessor, u16 dictionary ids, the e.db cursor adapter, a Linux run, and the load/rank timings against the design targets (load <= 250 ms)."
     },
     {
       "id": "G002",

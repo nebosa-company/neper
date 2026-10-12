@@ -141,7 +141,7 @@ T041	tooling	0.15	1403	T2.2 edit and test evidence: plans, contracts, structured
 T042	tooling	0.6	3058	T2.3+T2.4 trusted host: policy, verified receipts, durable tasks	the transport that serves handles, retention/reclamation, the host that runs obligations and observes effects, OS sandbox mediation, replay description. SUITE (run 19, seeded Windows, static gate and 
 L162	library	0	492	Chart benchmarks against ggplot2, base R graphics and lattice	Backlog from L061 (D2109).
 L163	library	0	1019	Fast, small PNG encoding: dynamic Huffman, lazy matching and table CRC	Backlog from the chart benchmark (D2108, D2110).
-G001	library	0	328	e.data.table: typed columns, null bitmaps, string dictionary + heap, bulk load, journal	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
+G001	library	0.7	859	e.data.table: typed columns, null bitmaps, string dictionary + heap, bulk load, journal	row compaction, a boxed Value accessor, u16 dictionary ids, the e.db cursor adapter, a Linux run, and the load/rank timings against the design targets (load <= 250 ms).
 G002	library	0	323	e.data.tableview sort: key derivation, stable radix, multi-key, comparer slow path	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
 G003	library	0	403	filter tree compile + evaluate (dictionary fast path, narrowing, parallel)	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;
 G004	library	0	293	group + summary engine, expansion keyed by path, group summaries/footers	Proposed by docs/grid.md section 9 (MTG Studio v3 migration grid, 150k records, DevExpress TcxGrid parity;

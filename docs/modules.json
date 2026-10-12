@@ -436,7 +436,8 @@
     "e.net.auth",
     "e.debug.dump.host",
     "e.math.pkpd",
-    "e.math.units"
+    "e.math.units",
+    "e.data.table"
    ]
   },
   {
@@ -1501,6 +1502,18 @@
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.data.table",
+   "layer": 2,
+   "surface": "partial",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.algo.sort",
     "e.mem"
    ],
    "blocked_by": []
