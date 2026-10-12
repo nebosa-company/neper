@@ -20,6 +20,7 @@ MESSAGES = [
     (b"Alex Rivera <alex@neper.test>", b"Build is green", b"Thu, 08 Oct 2026 17:30:00 +0000",
      b"The nightly build passed all tests."),
 ]
+MENU = b"Friday menu: soup 4, pasta 9, tea 2\n"
 SENT = []
 SEEN = set()
 DELETED = set()
@@ -36,6 +37,19 @@ def render(sender, subject, date, body):
                 b"\r\nMessage-ID: <html@neper.test>\r\nMIME-Version: 1.0\r\n"
                 b"Content-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n" +
                 html.replace(b"=", b"=3D") + b"\r\n")
+    if subject == b"Lunch on Friday?":
+        # (C158) A multipart/mixed: the text and an attachment (menu.txt, base64 over two lines).
+        import base64
+        boundary = b"=_neper_mixed"
+        menu = base64.b64encode(MENU)
+        return (b"From: " + sender + b"\r\nTo: neper@neper.test\r\nSubject: " + subject + b"\r\nDate: " + date +
+                b"\r\nMessage-ID: <mixed@neper.test>\r\nMIME-Version: 1.0\r\n"
+                b"Content-Type: multipart/mixed; boundary=\"" + boundary + b"\"\r\n\r\n"
+                b"--" + boundary + b"\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n" + body + b"\r\n"
+                b"--" + boundary + b"\r\nContent-Type: text/plain; name=\"menu.txt\"\r\n"
+                b"Content-Disposition: attachment; filename=\"menu.txt\"\r\nContent-Transfer-Encoding: base64\r\n\r\n" +
+                menu[:32] + b"\r\n" + menu[32:] + b"\r\n"
+                b"--" + boundary + b"--\r\n")
     if subject == b"Build is green":
         # A multipart/alternative: the plain part first, an HTML part after.
         boundary = b"=_neper_alt"

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+  <identifier>2.49.0.1.578.0.261012.1500.001</identifier>
+  <sender>post@met.no</sender>
+  <sent>2026-10-12T12:00:00+00:00</sent>
+  <status>Actual</status>
+  <msgType>Alert</msgType>
+  <scope>Public</scope>
+  <info>
+    <language>en-GB</language>
+    <category>Met</category>
+    <event>Gale warning</event>
+    <urgency>Expected</urgency>
+    <severity>Moderate</severity>
+    <certainty>Likely</certainty>
+    <effective>2026-10-12T15:00:00+00:00</effective>
+    <onset>2026-10-12T15:00:00+00:00</onset>
+    <expires>2026-10-13T06:00:00+00:00</expires>
+    <senderName>MET Norway</senderName>
+    <headline>Gale warning, yellow level, Oslo</headline>
+    <description>Westerly gale, 20 m/s in gusts, from Monday afternoon.</description>
+    <instruction>Secure loose objects outdoors.</instruction>
+    <web>https://www.met.no/</web>
+    <area>
+      <areaDesc>Oslo</areaDesc>
+    </area>
+  </info>
+</alert>
