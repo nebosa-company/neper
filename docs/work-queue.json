@@ -959,6 +959,17 @@
           "model": "opus",
           "thinking": "high",
           "evidence": "Split from C149 (D2436): notification permission is enforced at the status service. Acceptance: (1) an audio server (virtio-sound or a software mixer behind e.audio) that takes the media, ring and alarm volumes and Vibrate from the settings server, with a fixture on QEMU; (2) a fingerprint or biometric unlock path on the lock screen, or a recorded sensor in the test boots, honouring the Fingerprint switch; (3) Bluetooth and Hotspot recipients in the network stack (a link layer that can be switched), gated like Airplane mode; (4) a real battery provider posting to the status service, and per-app permissions (camera, location, storage) as values per app; (5) apps hold a notification capability so they can post as themselves through OP_POST_APP."
+    },
+    {
+          "id": "L164",
+          "category": "library",
+          "group": "Library",
+          "order": 164,
+          "title": "gRPC remainder: server side, deadlines and stubs from .proto descriptors",
+          "score": 0,
+          "model": "opus",
+          "thinking": "high",
+          "evidence": "Split from L101 (D2646): e.net.http2 and the e.net.grpc client protocol exist and are checked against hpack/h2 and recorded grpcio transcripts. Acceptance: (1) a server side over e.net.http2 (unary, then streaming); (2) deadlines, retries and message compression; (3) the gRPC-over-HTTP/3 binding on e.net.http3 frames; (4) a TLS dial helper; (5) stub generation from .proto descriptors (e.fmt.protobuf needs a descriptor reader first) with typed request and response messages."
     }
   ]
 }

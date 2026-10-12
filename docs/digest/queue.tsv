@@ -86,3 +86,4 @@ C173	compiler	0	938	NeperOS Dynamic step-one remainder: the scanner, the version
 C174	compiler	0	506	NeperOS Clock remainder: a background ringer with the app closed	Split from C145 (D2433): the Clock's alarms, timer and stopwatch persist in /clock.
 C175	compiler	0	451	NeperOS clipboard remainder: Paste in every field, a lifetime setting, clear on lock	Split from C148 (D2435): the clipboard holds text, Secure copies to it and AI pastes from it.
 C176	compiler	0	752	NeperOS settings recipients remainder: audio, fingerprint, radios, battery	Split from C149 (D2436): notification permission is enforced at the status service.
+L164	library	0	477	gRPC remainder: server side, deadlines and stubs from .proto descriptors	Split from L101 (D2646): e.net.http2 and the e.net.grpc client protocol exist and are checked against hpack/h2 and recorded grpcio transcripts.
