@@ -29403,7 +29403,10 @@ const BUFFER: usize = 65536usize
 const DATA: usize = 32768usize
 const METHOD_PASSWORD: u32 = 0u32
 const METHOD_KEY: u32 = 1u32
-type Session = struct { status: u32, failure: u32, inbuf: []u8, in_len: usize, outbuf: []u8, out_len: usize, chan_in: []u8, chan_len: usize, seq_in: u32, seq_out: u32, encrypted_in: bool, encrypted_out: bool, key_in_main: [32]u8, key_in_len: [32]u8, key_out_main: [32]u8, key_out_len: [32]u8, rng: [64]u8, server_version: [256]u8, server_version_len: usize, client_kexinit: [512]u8, client_kexinit_len: usize, server_kexinit: [2048]u8, server_kexinit_len: usize, ephemeral: [32]u8, ephemeral_public: [32]u8, server_public: [32]u8, kex_k: [32]u8, host_key: [32]u8, host_blob: [64]u8, host_blob_len: usize, host_sig: [64]u8, host_sig_ok: bool, exchange_hash: [32]u8, session_id: [32]u8, have_session_id: bool, user: [64]u8, user_len: usize, password: [128]u8, password_len: usize, key_seed: [32]u8, method: u32, term: [32]u8, term_len: usize, cols: u32, rows: u32, command: [128]u8, command_len: usize, channel_remote: u32, channel_open: bool, window_out: u32, window_in: u32, max_packet: u32, pty_done: bool, eof_seen: bool, exit_status: u32, has_exit_status: bool, banner: [256]u8, banner_len: usize, sent_newkeys: bool, got_newkeys: bool }
+const CIPHER_CHACHA: u32 = 0u32
+const CIPHER_AES256_GCM: u32 = 1u32
+const CIPHER_AES128_GCM: u32 = 2u32
+type Session = struct { status: u32, failure: u32, inbuf: []u8, in_len: usize, outbuf: []u8, out_len: usize, chan_in: []u8, chan_len: usize, seq_in: u32, seq_out: u32, encrypted_in: bool, encrypted_out: bool, key_in_main: [32]u8, key_in_len: [32]u8, key_out_main: [32]u8, key_out_len: [32]u8, rng: [64]u8, server_version: [256]u8, server_version_len: usize, client_kexinit: [512]u8, client_kexinit_len: usize, server_kexinit: [2048]u8, server_kexinit_len: usize, ephemeral: [32]u8, ephemeral_public: [32]u8, server_public: [32]u8, kex_k: [32]u8, host_key: [32]u8, host_blob: [64]u8, host_blob_len: usize, host_sig: [64]u8, host_sig_ok: bool, exchange_hash: [32]u8, session_id: [32]u8, have_session_id: bool, user: [64]u8, user_len: usize, password: [128]u8, password_len: usize, key_seed: [32]u8, method: u32, term: [32]u8, term_len: usize, cols: u32, rows: u32, command: [128]u8, command_len: usize, channel_remote: u32, channel_open: bool, window_out: u32, window_in: u32, max_packet: u32, pty_done: bool, eof_seen: bool, exit_status: u32, has_exit_status: bool, banner: [256]u8, banner_len: usize, sent_newkeys: bool, got_newkeys: bool, cipher_next: u32, cipher_out: u32, cipher_in: u32, gcm_out_key: [32]u8, gcm_in_key: [32]u8, gcm_out_iv: [12]u8, gcm_in_iv: [12]u8, next_in_main: [32]u8, next_in_len: [32]u8, next_gcm_key: [32]u8, next_gcm_iv: [12]u8, scratch: []u8, rekeying: bool, rekeys: u32, deferred_window: u32 }
 fn put_u32(buf: []u8, at: usize, value: u32)
 fn get_u32(buf: []const u8, at: usize) -> u32
 type Writer = struct { buf: []u8, len: usize, over: bool }
@@ -29429,6 +29432,7 @@ fn send_kexinit(s: *Session)
 fn compute_exchange_hash(s: *Session)
 fn derive_key(s: *Session, letter: u8, out: []u8)
 fn install_keys(s: *Session)
+fn apply_in_keys(s: *Session)
 fn handle_kexinit(s: *Session, payload: []const u8)
 fn handle_kex_reply(s: *Session, payload: []const u8)
 fn trust(s: *Session)

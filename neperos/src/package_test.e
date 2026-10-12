@@ -16,6 +16,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let rev_upto0: [17]u8 = [17]u8{ 84, 105, 112, 32, 99, 97, 108, 99, 117, 108, 97, 116, 111, 114, 61, 48, 10 }
     let rev_prefix: [30]u8 = [30]u8{ 84, 105, 112, 32, 99, 97, 108, 99, 117, 108, 10, 84, 105, 112, 32, 99, 97, 108, 99, 117, 108, 97, 116, 111, 114, 50, 10, 61, 49, 10 }
     let rev_other: [20]u8 = [20]u8{ 79, 116, 104, 101, 114, 61, 57, 10, 65, 110, 111, 116, 104, 101, 114, 32, 97, 112, 112, 10 }
+    let signed_list: [94]u8 = [94]u8{ 78, 82, 69, 86, 1, 23, 0, 84, 105, 112, 32, 99, 97, 108, 99, 117, 108, 97, 116, 111, 114, 61, 50, 10, 79, 116, 104, 101, 114, 10, 48, 233, 69, 144, 42, 139, 98, 146, 156, 244, 137, 255, 11, 27, 19, 110, 76, 169, 96, 116, 86, 217, 67, 198, 193, 5, 140, 69, 202, 92, 144, 56, 74, 62, 100, 26, 83, 48, 234, 219, 197, 239, 63, 18, 72, 109, 113, 44, 127, 105, 194, 136, 209, 23, 32, 225, 64, 58, 137, 132, 237, 74, 39, 14 }
+    let signed_list_other: [94]u8 = [94]u8{ 78, 82, 69, 86, 1, 23, 0, 84, 105, 112, 32, 99, 97, 108, 99, 117, 108, 97, 116, 111, 114, 61, 50, 10, 79, 116, 104, 101, 114, 10, 143, 0, 236, 188, 128, 36, 18, 141, 115, 74, 62, 59, 193, 17, 255, 73, 68, 147, 101, 96, 54, 211, 2, 30, 20, 39, 36, 48, 145, 168, 36, 98, 123, 80, 235, 181, 106, 196, 28, 243, 50, 235, 35, 50, 185, 183, 248, 18, 225, 233, 152, 226, 13, 151, 25, 231, 242, 83, 24, 237, 22, 147, 13, 7 }
+    let signed_list_damaged: [94]u8 = [94]u8{ 78, 82, 69, 86, 1, 23, 0, 84, 105, 113, 32, 99, 97, 108, 99, 117, 108, 97, 116, 111, 114, 61, 50, 10, 79, 116, 104, 101, 114, 10, 48, 233, 69, 144, 42, 139, 98, 146, 156, 244, 137, 255, 11, 27, 19, 110, 76, 169, 96, 116, 86, 217, 67, 198, 193, 5, 140, 69, 202, 92, 144, 56, 74, 62, 100, 26, 83, 48, 234, 219, 197, 239, 63, 18, 72, 109, 113, 44, 127, 105, 194, 136, 209, 23, 32, 225, 64, 58, 137, 132, 237, 74, 39, 14 }
+    let list_text: [23]u8 = [23]u8{ 84, 105, 112, 32, 99, 97, 108, 99, 117, 108, 97, 116, 111, 114, 61, 50, 10, 79, 116, 104, 101, 114, 10 }
     let key = sign.Ed25519PublicKey { bytes: public_bytes }
     let wrong = sign.Ed25519PublicKey { bytes: other_bytes }
     let (p, parse_error) = package.parse(good[0..])
@@ -61,5 +65,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ok_error != ok { os.exit(24) }
     let (bad_p, bad_error) = package.check_revocable(damaged[0..], key, rev_other[0..])
     if bad_error != package.BadPackage { os.exit(25) }
+    // (C173) A revocation list the server signs: its text when the signature is the server's, nothing when another
+    // key signed it, a byte changed or it is cut short; and the text works as the revocation list.
+    let (listed, list_error) = package.check_list(signed_list[0..], key)
+    if list_error != ok || listed.len != list_text.len { os.exit(26) }
+    var same = true
+    var li = 0usize
+    while li < list_text.len {
+        if listed[li] != list_text[li] { same = false }
+        li += 1usize
+    }
+    if !same { os.exit(27) }
+    let (other_list, other_error) = package.check_list(signed_list_other[0..], key)
+    if other_error != package.BadPackage { os.exit(28) }
+    let (damaged_list, damaged_error) = package.check_list(signed_list_damaged[0..], key)
+    if damaged_error != package.BadPackage { os.exit(29) }
+    let (cut_list, cut_error) = package.check_list(signed_list[0..40], key)
+    if cut_error != package.BadPackage { os.exit(30) }
+    let (not_list, not_error) = package.check_list(good[0..], key)
+    if not_error != package.BadPackage { os.exit(31) }
+    if !package.revoked(p, listed) { os.exit(32) }
     ret ok
 }

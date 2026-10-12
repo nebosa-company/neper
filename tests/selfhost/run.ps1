@@ -11221,6 +11221,20 @@ if ($neperosQemu) {
             $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
             if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
         }
+        # The live fixtures on a seeded disk (C170, C155): the disk starts with the files scripts/make_fixture_seed.py
+        # names for the fixture (the host the breach check asks, a host key the SSH app trusts).
+        foreach ($row in $appsTable) {
+            $fields = $row.Split('|', 7)
+            if ($fields[0] -ne 'liveseedfixture') { continue }
+            $fixture = $fields[1]
+            $seedArgs = @(& python (Join-Path $repo 'scripts\make_fixture_seed.py') $fixture (Join-Path $testBuild ("seed-" + $fixture)))
+            $liveDisk = Join-Path $testBuild ("live-" + $fixture + ".disk")
+            & python (Join-Path $repo 'scripts\make_fs_image.py') $liveDisk 8 @seedArgs | Out-Null
+            if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
+            $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $liveArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified nettest' 'shell app code' $liveDisk 0 $fields[4] 2>&1) -join "`n"
+            $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
+            if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
+        }
     } finally {
         if (-not $liveHosts.HasExited) { $liveHosts.Kill() }
         Remove-Item Env:NEPEROS_NET -ErrorAction SilentlyContinue

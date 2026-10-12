@@ -7,8 +7,13 @@
 // ponytail: the rooms are SAMPLE data in this process (four channels and two direct messages, made-up
 // people), and nobody else is on the other end: a message you send stays on this device. A real chat
 // service (accounts, a server, presence, threads, files, calls) is queued as C134.
+// (C134) The server is real: a WebSocket to the test chat server. (C164) It is reached over TLS (wss: the network
+// server's poll now reads a TLS stream), the server says who is online and who is typing, a message you send is
+// marked delivered when the server echoes it, and every room's messages are kept in /chat on the disk and come
+// back at the next start. Left: accounts, threads, files, notifications and encryption.
 use e.mem
 use e.os
+use vaultfs
 use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
@@ -29,7 +34,7 @@ const MAX_POSTS: usize = 12usize
 const LIST_SCREEN: usize = 0usize
 const ROOM_SCREEN: usize = 1usize
 
-type Post = struct { who: usize, body: [100]u8, body_len: usize, minute: usize, thumbs: usize, mine_thumbs: bool, used: bool }
+type Post = struct { who: usize, body: [100]u8, body_len: usize, minute: usize, thumbs: usize, mine_thumbs: bool, used: bool, delivered: bool }
 
 type Room = struct { name: [20]u8, name_len: usize, direct: bool, posts: [12]Post, post_total: usize, unread: usize }
 
@@ -40,6 +45,12 @@ type State = struct {
     nb: netio.NetBuf,
     other_name: [12]u8,
     other_len: usize,
+    // (C164) Whether the link is TLS, who the server says is online (a bit per person: Maya 1, Alex 2, Priya 4) and
+    // who is typing in which room (typer 0 when no one).
+    tls: bool,
+    online: usize,
+    typer: usize,
+    typer_room: usize,
     rooms: [6]Room,
     room_total: usize,
     screen: usize,
@@ -100,6 +111,82 @@ fn add_post(s: *State, room: usize, who: usize, body: str, minute: usize, thumbs
     r.post_total += 1usize
 }
 
+// ----------------------------------------------------------------------------------------------
+// (C164) A room's messages on the disk, /chat/r<index>: the count, then each post as who, the minute (two bytes), the
+// thumbs, the flags (1 mine-thumbs, 2 delivered), the length and the bytes. Only a room that has changed is written.
+
+fn room_path(a: *mem.Arena, i: usize) -> str {
+    ret ui.join(a, "/chat/r", ui.number(a, i), "")
+}
+
+fn save_room(a: *mem.Arena, s: *State, i: usize) {
+    var buf: [1300]u8 = zero
+    var n = 1usize
+    buf[0] = u8(s.rooms[i].post_total)
+    var k = 0usize
+    while k < s.rooms[i].post_total {
+        let p = s.rooms[i].posts[k]
+        buf[n] = u8(p.who)
+        buf[n + 1usize] = u8(p.minute & 255usize)
+        buf[n + 2usize] = u8(p.minute >> 8usize)
+        buf[n + 3usize] = u8(p.thumbs)
+        var flags = 0u8
+        if p.mine_thumbs { flags = flags | 1u8 }
+        if p.delivered { flags = flags | 2u8 }
+        buf[n + 4usize] = flags
+        buf[n + 5usize] = u8(p.body_len)
+        n += 6usize
+        var b = 0usize
+        while b < p.body_len {
+            buf[n] = p.body[b]
+            n += 1usize
+            b += 1usize
+        }
+        k += 1usize
+    }
+    let made = vaultfs.mkdir("/chat")
+    if vaultfs.write_big(room_path(a, i), mem.address_of(&buf[0usize]), n) {
+        ui.say("chat kept ")
+        ui.say_num(i)
+        ui.say("\n")
+    }
+}
+
+// The posts of room `i` from the disk, replacing the room's sample ones; how many came back (0 when none were kept).
+fn load_room(a: *mem.Arena, s: *State, i: usize) -> usize {
+    var buf: [1300]u8 = zero
+    let (n, found) = vaultfs.read_big(room_path(a, i), mem.address_of(&buf[0usize]), 1300usize)
+    if !found || n < 1usize { ret 0usize }
+    let count = usize(buf[0])
+    if count == 0usize || count > MAX_POSTS { ret 0usize }
+    s.rooms[i].post_total = 0usize
+    var at = 1usize
+    var k = 0usize
+    while k < count && at + 6usize <= n {
+        var p: Post = zero
+        p.who = usize(buf[at])
+        p.minute = usize(buf[at + 1usize]) | (usize(buf[at + 2usize]) << 8usize)
+        p.thumbs = usize(buf[at + 3usize])
+        p.mine_thumbs = (buf[at + 4usize] & 1u8) != 0u8
+        p.delivered = (buf[at + 4usize] & 2u8) != 0u8
+        let length = usize(buf[at + 5usize])
+        at += 6usize
+        if length > 100usize || at + length > n { ret s.rooms[i].post_total }
+        var b = 0usize
+        while b < length {
+            p.body[b] = buf[at + b]
+            b += 1usize
+        }
+        p.body_len = length
+        p.used = true
+        at += length
+        s.rooms[i].posts[s.rooms[i].post_total] = p
+        s.rooms[i].post_total += 1usize
+        k += 1usize
+    }
+    ret s.rooms[i].post_total
+}
+
 fn room_name(a: *mem.Arena, s: *State, i: usize) -> str {
     ret ui.text_of(a, s.rooms[i].name[0usize..], s.rooms[i].name_len)
 }
@@ -133,6 +220,11 @@ fn draw_list(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
         try ui.card(a, builder, 16.0, y + 2.0, 380.0, 68.0, 18.0, ui.cream())
         if r.direct {
             try avatar(a, builder, faces, 48.0, y + 36.0, 20.0, room_name(a, s, i), i)
+            // (C164) A green dot on the avatar of a person the server says is online.
+            var bit = 0usize
+            if r.name_len == 4usize && r.name[0usize] == 77u8 { bit = 1usize }
+            if r.name_len == 4usize && r.name[0usize] == 65u8 { bit = 2usize }
+            if (s.online & bit) != 0usize && bit != 0usize { try ui.disc(a, builder, 63.0, y + 51.0, 6.0, paint.Color { red: 0.30, green: 0.78, blue: 0.46, alpha: 1.0 }) }
         } else {
             try ui.card(a, builder, 28.0, y + 16.0, 40.0, 40.0, 12.0, ui.tint(i))
             try ui.centred(a, builder, faces.jost_bold, 22.0, "#", 48.0, y + 22.0, ui.ink())
@@ -163,6 +255,9 @@ fn draw_room(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     try ui.put(a, builder, faces.jost_bold, 22.0, hash_name(a, s, s.open), 62.0, 16.0, ui.light())
     var members = "4 members"
     if r.direct { members = "Direct message" }
+    // (C164) Who is typing here, when the server said so.
+    if s.typer != 0usize && s.typer == 1usize && s.typer_room == s.open { members = "Maya is typing..." }
+    if s.typer != 0usize && s.typer != 1usize && s.typer_room == s.open { members = ui.join(a, person_name(s.typer), " is typing...", "") }
     try ui.put(a, builder, faces.grotesk, 12.0, members, 62.0, 48.0, ui.light_muted())
     // The posts, newest at the bottom, as many as fit above the message box.
     var bottom: f32 = 770.0
@@ -198,6 +293,7 @@ fn draw_room(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
                 if p.mine_thumbs { tone = ui.ink() }
                 try ui.put(a, builder, faces.jost, 12.0, ui.join(a, "+1  ", ui.number(a, p.thumbs), ""), 70.0, chip_y + 3.0, tone)
             }
+            if p.who == 0usize && p.delivered { try ui.put(a, builder, faces.grotesk, 10.0, "Delivered", 300.0, y + 28.0 + h, ui.light_muted()) }
             ui.hit(&s.hits, 300usize + k, 340.0, y, 60.0, total)
             shown += 1usize
         }
@@ -288,18 +384,66 @@ fn live_message(a: *mem.Arena, s: *State, payload: []const u8) -> bool {
         }
         i += 1usize
     }
+    // (C164) PRESENCE|who|online (or offline) and TYPING|room|who.
+    if n >= 2usize && text_is(payload[0usize..bars[0usize]], "PRESENCE") {
+        let who_bytes = payload[bars[0usize] + 1usize..bars[1usize]]
+        let state_bytes = payload[bars[1usize] + 1usize..payload.len]
+        var bit = 0usize
+        if text_is(who_bytes, "Maya") { bit = 1usize }
+        if text_is(who_bytes, "Alex") { bit = 2usize }
+        if text_is(who_bytes, "Priya") { bit = 4usize }
+        if text_is(state_bytes, "online") { s.online = s.online | bit } else { s.online = s.online & (7usize - bit) }
+        ui.say("chat presence ")
+        ui.say_text(ui.text_of(a, who_bytes, who_bytes.len))
+        ui.say(" ")
+        ui.say_text(ui.text_of(a, state_bytes, state_bytes.len))
+        ui.say("\n")
+        ret true
+    }
+    if n >= 2usize && text_is(payload[0usize..bars[0usize]], "TYPING") {
+        let room_bytes = payload[bars[0usize] + 1usize..bars[1usize]]
+        let who_bytes = payload[bars[1usize] + 1usize..payload.len]
+        var typer = 4usize
+        if text_is(who_bytes, "Maya") { typer = 1usize }
+        if text_is(who_bytes, "Alex") { typer = 2usize }
+        if text_is(who_bytes, "Priya") { typer = 3usize }
+        s.typer = typer
+        s.typer_room = find_room(s, room_bytes)
+        ui.say("chat typing ")
+        ui.say_text(ui.text_of(a, who_bytes, who_bytes.len))
+        ui.say("\n")
+        ret true
+    }
     if n < 3usize || !text_is(payload[0usize..bars[0usize]], "MSG") { ret false }
     let room_name_bytes = payload[bars[0usize] + 1usize..bars[1usize]]
     let who_bytes = payload[bars[1usize] + 1usize..bars[2usize]]
     let body_bytes = payload[bars[2usize] + 1usize..payload.len]
-    if text_is(who_bytes, "neper") { ret false }
     let room = find_room(s, room_name_bytes)
     if room == NONE { ret false }
+    if text_is(who_bytes, "neper") {
+        // (C164) The server's echo of our own message: the newest one not yet marked is delivered.
+        var k = s.rooms[room].post_total
+        var marked = false
+        while k > 0usize && !marked {
+            k -= 1usize
+            if s.rooms[room].posts[k].who == 0usize && !s.rooms[room].posts[k].delivered {
+                s.rooms[room].posts[k].delivered = true
+                marked = true
+            }
+        }
+        if marked {
+            save_room(a, s, room)
+            ui.say("chat delivered\n")
+        }
+        ret marked
+    }
     var who = 4usize
     if text_is(who_bytes, "Maya") { who = 1usize }
     if text_is(who_bytes, "Alex") { who = 2usize }
     if text_is(who_bytes, "Priya") { who = 3usize }
+    if s.typer == who { s.typer = 0usize }
     add_post(s, room, who, ui.text_of(a, body_bytes, body_bytes.len), s.now_minute, 0usize)
+    save_room(a, s, room)
     if !(s.screen == ROOM_SCREEN && s.open == room) { s.rooms[room].unread += 1usize }
     ui.say("chat received ")
     ui.say_text(ui.text_of(a, who_bytes, who_bytes.len))
@@ -340,7 +484,11 @@ fn live_poll(a: *mem.Arena, s: *State) -> bool {
 // Connect to the chat server and join as `neper`. Plain text only: the network server polls plain connections for
 // what has arrived, and a TLS stream it can only read by waiting (a poll over TLS is a later step).
 fn live_open(s: *State) -> bool {
-    let link = netclient.connect("neper.test", 8090u16, false)
+    // (C164) TLS first (wss, the test server's 8453, which the poll over TLS makes usable); the plain port is the
+    // way back when the secure link cannot be made.
+    var link = netclient.connect("neper.test", 8453u16, true)
+    s.tls = link == netproto.R_OK
+    if link != netproto.R_OK { link = netclient.connect("neper.test", 8090u16, false) }
     if link != netproto.R_OK { ret false }
     s.nb.pos = 0usize
     s.nb.len = 0usize
@@ -351,7 +499,7 @@ fn live_open(s: *State) -> bool {
     }
     s.live = true
     live_say(s, "JOIN|neper")
-    ui.say("chat live ws\n")
+    if s.tls { ui.say("chat live wss\n") } else { ui.say("chat live ws\n") }
     ret s.live
 }
 
@@ -359,6 +507,7 @@ fn send(a: *mem.Arena, s: *State) {
     if s.draft.len == 0usize { ret }
     let body = ui.field_text(a, &s.draft)
     add_post(s, s.open, 0usize, body, s.now_minute, 0usize)
+    save_room(a, s, s.open)
     // A room the server knows (not a direct message) is said there too.
     if s.live && !s.rooms[s.open].direct {
         live_say(s, ui.join(a, ui.join(a, "SAY|", room_name(a, s, s.open), ""), "|", body))
@@ -452,6 +601,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let alex = add_room(&s, "Alex", true, 0usize)
     add_post(&s, alex, 0usize, "Thanks for the review!", 9usize * 60usize + 2usize, 0usize)
     add_post(&s, alex, 2usize, "Anytime.", 9usize * 60usize + 3usize, 0usize)
+    // (C164) What was kept on the disk replaces the sample messages of each room.
+    var restored = 0usize
+    var room_at = 0usize
+    while room_at < s.room_total {
+        restored += load_room(a, &s, room_at)
+        room_at += 1usize
+    }
+    if restored > 0usize {
+        ui.say("chat history restored ")
+        ui.say_num(restored)
+        ui.say("\n")
+    }
     let joined = live_open(&s)
     if !show(a, &kit, &s) {
         ui.say("chat present failed\n")

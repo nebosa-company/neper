@@ -40,5 +40,46 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let two = "use e.os\nfn f() {\n    os.store8(1usize, 2u8)\n    os.mrs(3usize)\n}\n"
     let (n9, l9, m9) = scan.scan(two, 0usize)
     if n9 != 2usize || l9 != 3usize { os.exit(10) }
+
+    // (C173) The strict scan: the same three rules with every finding listed, a loop that never ends and a module
+    // outside the app kit.
+    var found: [8]scan.Finding = zero
+    let good = "use appkit\nuse ui\nuse e.mem\nuse e.fmt.json\n\nfn main(a: *mem.Arena, args: []str) -> err {\n    var running = true\n    while running {\n        running = false\n    }\n    while true {\n        if !running { break }\n    }\n    ret ok\n}\n"
+    if scan.strict(good, 0usize, found[0usize..8usize]) != 0usize { os.exit(11) }
+
+    let hang = "use appkit\n\nfn main(a: *mem.Arena, args: []str) -> err {\n    while true {\n        let x = 1usize\n    }\n    ret ok\n}\n"
+    let hang_count = scan.strict(hang, 0usize, found[0usize..8usize])
+    if hang_count != 1usize || found[0usize].line != 4usize || found[0usize].kind != scan.KIND_LOOP { os.exit(12) }
+
+    // A string with a brace and a comment with `ret` in it do not decide the loop.
+    let tricky = "fn f() {\n    while true {\n        let s = \"}\"\n        // ret\n    }\n}\n"
+    if scan.strict(tricky, 0usize, found[0usize..8usize]) != 1usize { os.exit(13) }
+
+    let system = "use e.os\nuse e.thread\nuse totally_made_up\nuse ui\n"
+    let system_count = scan.strict(system, 0usize, found[0usize..8usize])
+    if system_count != 3usize || found[0usize].kind != scan.KIND_MODULE || found[2usize].line != 3usize { os.exit(14) }
+
+    // The capability modules follow the manifest here too, with their submodules.
+    let capability = "use e.net.http\nuse e.fs.path\nuse httpc\n"
+    if scan.strict(capability, 0usize, found[0usize..8usize]) != 3usize { os.exit(15) }
+    if scan.strict(capability, scan.NETWORK, found[0usize..8usize]) != 1usize || found[0usize].kind != scan.KIND_STORAGE { os.exit(16) }
+    if scan.strict(capability, scan.NETWORK | scan.STORAGE, found[0usize..8usize]) != 0usize { os.exit(17) }
+
+    // More findings than room: the count is the whole, the list is the first ones.
+    let many = "use e.os\nuse e.os\nuse e.os\nuse e.os\nuse e.os\n"
+    if scan.strict(many, 0usize, found[0usize..2usize]) != 5usize { os.exit(18) }
+
+    // The report is text a person or a model reads: line, name, what is wrong.
+    let peek = "fn peek(addr: usize) -> u8 {\n    ret os.load8(addr)\n}\n"
+    let one_found = scan.strict(peek, 0usize, found[0usize..8usize])
+    var text_out: [160]u8 = zero
+    let written = scan.report(found[0usize..8usize], one_found, text_out[0usize..160usize])
+    let expected = "line 2: os.load8 reaches the machine directly, which only the app kit may do\n"
+    if one_found != 1usize || written != expected.len { os.exit(19) }
+    var i = 0usize
+    while i < expected.len {
+        if text_out[i] != expected[i] { os.exit(20) }
+        i += 1usize
+    }
     ret ok
 }

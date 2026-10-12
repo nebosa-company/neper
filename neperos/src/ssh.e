@@ -247,6 +247,125 @@ fn count_hosts(s: *State) -> usize {
     ret n
 }
 
+// ----------------------------------------------------------------------------------------------
+// (C155) The saved hosts and the host keys trusted before live on the disk when there is one: /ssh/hosts holds the
+// eight slots (used, alias, address, user, port, flags), /ssh/known the trusted flags and the 32-byte Ed25519 keys by
+// slot. A host whose address or port is edited loses its trusted key; a key that differs from the one trusted is
+// refused (live_settle).
+
+fn put_field(out: []u8, at: usize, bytes: []const u8, length: usize, cap: usize) -> usize {
+    out[at] = u8(length)
+    var i = 0usize
+    while i < cap {
+        out[at + 1usize + i] = 0u8
+        if i < length { out[at + 1usize + i] = bytes[i] }
+        i += 1usize
+    }
+    ret at + 1usize + cap
+}
+
+fn save_hosts(s: *State) {
+    var buf: [480]u8 = zero
+    var at = 0usize
+    var i = 0usize
+    while i < MAX_HOSTS {
+        let h = s.hosts[i]
+        if h.used { buf[at] = 1u8 } else { buf[at] = 0u8 }
+        at += 1usize
+        at = put_field(buf[0usize..], at, h.alias[0usize..], h.alias_len, 16usize)
+        at = put_field(buf[0usize..], at, h.addr[0usize..], h.addr_len, 24usize)
+        at = put_field(buf[0usize..], at, h.user[0usize..], h.user_len, 12usize)
+        buf[at] = u8(h.port & 255usize)
+        buf[at + 1usize] = u8(h.port >> 8usize)
+        var flags = 0u8
+        if h.key_auth { flags = flags | 1u8 }
+        if h.seen { flags = flags | 2u8 }
+        buf[at + 2usize] = flags
+        at += 3usize
+        i += 1usize
+    }
+    let made = vaultfs.mkdir("/ssh")
+    if vaultfs.write("/ssh/hosts", mem.address_of(&buf[0usize]), at) { say("ssh hosts kept\n") }
+}
+
+// Read /ssh/hosts into the slots; false when there is no such file (the sample hosts stay).
+fn load_hosts(s: *State) -> bool {
+    var buf: [480]u8 = zero
+    let (n, found) = vaultfs.read("/ssh/hosts", mem.address_of(&buf[0usize]), 480usize)
+    if !found || n < 59usize * MAX_HOSTS { ret false }
+    var at = 0usize
+    var i = 0usize
+    while i < MAX_HOSTS {
+        var h: Host = zero
+        h.used = buf[at] == 1u8
+        at += 1usize
+        h.alias_len = usize(buf[at])
+        if h.alias_len > 16usize { h.alias_len = 16usize }
+        var k = 0usize
+        while k < 16usize {
+            h.alias[k] = buf[at + 1usize + k]
+            k += 1usize
+        }
+        at += 17usize
+        h.addr_len = usize(buf[at])
+        if h.addr_len > 24usize { h.addr_len = 24usize }
+        k = 0usize
+        while k < 24usize {
+            h.addr[k] = buf[at + 1usize + k]
+            k += 1usize
+        }
+        at += 25usize
+        h.user_len = usize(buf[at])
+        if h.user_len > 12usize { h.user_len = 12usize }
+        k = 0usize
+        while k < 12usize {
+            h.user[k] = buf[at + 1usize + k]
+            k += 1usize
+        }
+        at += 13usize
+        h.port = usize(buf[at]) | (usize(buf[at + 1usize]) << 8usize)
+        h.key_auth = (buf[at + 2usize] & 1u8) != 0u8
+        h.seen = (buf[at + 2usize] & 2u8) != 0u8
+        at += 3usize
+        s.hosts[i] = h
+        i += 1usize
+    }
+    ret true
+}
+
+fn save_known(s: *State) {
+    var buf: [264]u8 = zero
+    var i = 0usize
+    while i < MAX_HOSTS {
+        if s.known[i] { buf[i] = 1u8 }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 256usize {
+        buf[8usize + i] = s.known_keys[i]
+        i += 1usize
+    }
+    let made = vaultfs.mkdir("/ssh")
+    if vaultfs.write("/ssh/known", mem.address_of(&buf[0usize]), 264usize) { say("ssh known hosts kept\n") }
+}
+
+fn load_known(s: *State) -> bool {
+    var buf: [264]u8 = zero
+    let (n, found) = vaultfs.read("/ssh/known", mem.address_of(&buf[0usize]), 264usize)
+    if !found || n < 264usize { ret false }
+    var i = 0usize
+    while i < MAX_HOSTS {
+        s.known[i] = buf[i] == 1u8
+        i += 1usize
+    }
+    i = 0usize
+    while i < 256usize {
+        s.known_keys[i] = buf[8usize + i]
+        i += 1usize
+    }
+    ret true
+}
+
 fn alias_of(a: *mem.Arena, h: Host) -> str {
     ret text_of(a, h.alias[0usize..], h.alias_len)
 }
@@ -410,6 +529,7 @@ fn live_settle(a: *mem.Arena, s: *State) {
             if same {
                 sshc.trust(&s.session)
                 s.phase = PHASE_RUNNING
+                say("ssh live known host\n")
             } else {
                 live_end(s, "HOST KEY CHANGED: connection refused")
                 say("ssh live host key changed\n")
@@ -1067,9 +1187,22 @@ fn save_draft(s: *State) -> bool {
     if s.editing == NONE {
         if !add_host(s, s.draft) { ret false }
     } else {
+        // A key trusted for an address is not trusted for another.
+        let before = s.hosts[s.editing]
+        var moved = before.port != s.draft.port || before.addr_len != s.draft.addr_len
+        var k = 0usize
+        while k < before.addr_len && k < s.draft.addr_len {
+            if before.addr[k] != s.draft.addr[k] { moved = true }
+            k += 1usize
+        }
+        if moved && s.known[s.editing] {
+            s.known[s.editing] = false
+            save_known(s)
+        }
         s.hosts[s.editing] = s.draft
     }
     say("ssh saved\n")
+    save_hosts(s)
     ret true
 }
 
@@ -1182,6 +1315,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
                     i += 1usize
                 }
                 s.known[s.current] = true
+                save_known(s)
                 sshc.trust(&s.session)
                 s.phase = PHASE_RUNNING
                 s.cmd_len = 0usize
@@ -1307,7 +1441,14 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         ret true
     }
     if id == 1301usize {
-        if s.editing != NONE { s.hosts[s.editing].used = false }
+        if s.editing != NONE {
+            s.hosts[s.editing].used = false
+            if s.known[s.editing] {
+                s.known[s.editing] = false
+                save_known(s)
+            }
+            save_hosts(s)
+        }
         s.screen = HOSTS_SCREEN
         say("ssh deleted\n")
         ret true
@@ -1377,6 +1518,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let h5 = add_host(&s, make_host("backup-nas", "nas.local", "admin", 22usize, false, false))
     // (C120) The test boot's own SSH server, at the host the guest's DNS answers for neper.test.
     let h6 = add_host(&s, make_host("neper-test", "neper.test", "neper", 8022usize, false, false))
+    // (C155) With a disk the hosts saved before replace the sample ones, and the keys trusted come back with them.
+    if load_hosts(&s) { say("ssh hosts loaded\n") }
+    if load_known(&s) { say("ssh known hosts loaded\n") }
     if !show(a, &kit, &s) {
         say("ssh present failed\n")
         ret ok

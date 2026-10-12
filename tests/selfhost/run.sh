@@ -11048,6 +11048,26 @@ greeting"
             esac
         done
     done < <(grep -v '^#' "$apps_table")
+    # (C170, C155) The live fixtures on a seeded disk: scripts/make_fixture_seed.py names the files it starts with.
+    while IFS='|' read -r kind fixture port delay taps markers note; do
+        [ "$kind" = liveseedfixture ] || continue
+        live_disk="$test_build/live-$fixture.disk"
+        mapfile -t seed_args < <(python3 "$repo/scripts/make_fixture_seed.py" "$fixture" "$test_build/seed-$fixture")
+        python3 "$repo/scripts/make_fs_image.py" "$live_disk" 8 "${seed_args[@]}" > /dev/null
+        if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$live_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified nettest" 'shell app code' "$live_disk" 0 "$taps" 2>&1 < /dev/null)
+        remaining="$boot"
+        pending="$markers"
+        while [ -n "$pending" ]; do
+            marker="${pending%%;;*}"
+            if [ "$marker" = "$pending" ]; then pending=''; else pending="${pending#*;;}"; fi
+            case "$remaining" in
+                *"$marker"*) remaining="${remaining#*"$marker"}" ;;
+                *) kill "$live_hosts" 2> /dev/null || true; printf 'NeperOS %s fixture did not reach "%s" (%s): %s
+' "$fixture" "$marker" "$note" "$boot" >&2; exit 1 ;;
+            esac
+        done
+    done < <(grep -v '^#' "$apps_table")
     kill "$live_hosts" 2> /dev/null || true
     wait "$live_hosts" 2> /dev/null || true
     unset NEPEROS_NET

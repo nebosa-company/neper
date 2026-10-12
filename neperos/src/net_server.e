@@ -35,6 +35,12 @@ type Session = struct {
     dns_port: u16,
     trust: str,
     test: bool,
+    // (C171) Plaintext the secure stream gave up that the app has not taken yet: a poll reads a whole TLS record into
+    // `hold` (the stream cannot say how much it still has buffered, so every read takes all of a record) and hands it
+    // out in pieces of the size asked for.
+    hold: [16384]u8,
+    hold_at: usize,
+    hold_len: usize,
 }
 
 fn say(text: str) {
@@ -115,6 +121,8 @@ fn teardown(s: *Session, a: *mem.Arena) {
     }
     s.connected = false
     s.secure = false
+    s.hold_at = 0usize
+    s.hold_len = 0usize
 }
 
 fn connect(s: *Session, a: *mem.Arena, host: str, port: u16, secure: bool) -> usize {
@@ -328,7 +336,45 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         if !s.connected {
                             reply(netproto.R_NOT_CONNECTED)
                         } else if s.secure {
-                            reply(netproto.R_BAD)
+                            // (C171) A poll of a TLS stream: what the last record left, else wait a moment for the
+                            // transport and read one whole record; nothing yet is R_EMPTY, the peer's close is an
+                            // empty answer, like a recv's.
+                            var failed = false
+                            var closed = false
+                            if s.hold_at == s.hold_len {
+                                s.hold_at = 0usize
+                                s.hold_len = 0usize
+                                var spins = 0usize
+                                while s.conn.count == 0usize && !s.conn.peer_fin && !s.conn.reset && spins < 20000usize {
+                                    tcp.pump(&s.conn)
+                                    spins += 1usize
+                                }
+                                if s.conn.count > 0usize || s.conn.peer_fin || s.conn.reset {
+                                    var source = tls.reader(&s.stream)
+                                    let (n, read_error) = io.read(&source, s.hold[0usize..16384usize])
+                                    if read_error == ok {
+                                        s.hold_len = n
+                                    } else if read_error == io.End {
+                                        closed = true
+                                    } else {
+                                        failed = true
+                                    }
+                                }
+                            }
+                            if failed {
+                                reply(netproto.R_IO)
+                            } else if s.hold_at < s.hold_len {
+                                var n = s.hold_len - s.hold_at
+                                if n > want { n = want }
+                                reply(netproto.R_OK)
+                                netproto.send_bytes(REP, mem.address_of(&s.hold[s.hold_at]), n)
+                                s.hold_at += n
+                            } else if closed {
+                                reply(netproto.R_OK)
+                                netproto.send_bytes(REP, chunk_addr, 0usize)
+                            } else {
+                                reply(netproto.R_EMPTY)
+                            }
                         } else {
                             let (n, read_error) = tcp.read_for(&s.conn, chunk_addr, want, 20000usize)
                             if read_error == ok {
@@ -349,7 +395,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
                             } else {
                                 var got = 0usize
                                 var failed = false
-                                if s.secure {
+                                if s.secure && s.hold_at < s.hold_len {
+                                    // (C171) What a poll read and the app has not taken.
+                                    got = s.hold_len - s.hold_at
+                                    if got > want { got = want }
+                                    var k = 0usize
+                                    while k < got {
+                                        chunk[k] = s.hold[s.hold_at + k]
+                                        k += 1usize
+                                    }
+                                    s.hold_at += got
+                                } else if s.secure {
                                     var source = tls.reader(&s.stream)
                                     let (n, read_error) = io.read(&source, chunk[0usize..want])
                                     if read_error == ok { got = n } else { if read_error != io.End { failed = true } }

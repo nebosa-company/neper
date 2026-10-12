@@ -16,6 +16,9 @@ use e.os
 use e.time
 use e.crypto.mac as mac
 use e.crypto.otp as otp
+use e.crypto.hash as hash
+use e.barcode
+use httpc
 use vault
 use vaultfs
 use sysettings
@@ -38,6 +41,9 @@ const DETAIL_SCREEN: usize = 2usize
 const ADD_SCREEN: usize = 3usize
 const SEARCH_SCREEN: usize = 4usize
 const CODE_SCREEN: usize = 5usize
+const QR_SCREEN: usize = 6usize
+// (C170) The vault locks itself after this many seconds without a tap.
+const AUTO_LOCK_SECONDS: usize = 60usize
 // Where the vault lives: nowhere (the sample vault, nothing saved), a vault still to be created, or one on disk.
 const STORAGE_NONE: usize = 0usize
 const STORAGE_NEW: usize = 1usize
@@ -85,6 +91,13 @@ type State = struct {
     edit: usize,
     message: [48]u8,
     message_len: usize,
+    // (C170) The wall-clock second of the last tap (auto-lock), the generator's length (0 means 16) and whether it
+    // may use symbols, and the result line of the last breach check or export.
+    last_active: usize,
+    gen_len: usize,
+    gen_symbols: bool,
+    note: [48]u8,
+    note_len: usize,
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -380,18 +393,42 @@ fn strength(pass: str) -> usize {
     ret 1usize
 }
 
-// A new random-looking password of 16 characters from a small LCG (a stand-in for a proper random source).
+fn generator_length(s: *State) -> usize {
+    if s.gen_len == 0usize { ret 16usize }
+    ret s.gen_len
+}
+
+// (C170) A new password of the chosen length (12, 16 or 24) from the letters and digits that cannot be mistaken for
+// each other, plus symbols when asked. The bytes come from the random server, taken only when they fall below the
+// largest multiple of the alphabet's size (no modulo bias); a machine without the server falls back on a small LCG.
 fn generate(a: *mem.Arena, s: *State) -> str {
-    let alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789-_"
-    let (buffer, buffer_error) = mem.alloc[u8](a, 16usize)
+    var alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    if s.gen_symbols { alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789-_!@#$%&*?" }
+    let length = generator_length(s)
+    let (buffer, buffer_error) = mem.alloc[u8](a, 24usize)
     if buffer_error != ok { ret "" }
+    var random: [64]u8 = zero
+    let drawn = vaultfs.random(mem.address_of(&random[0usize]), 8usize)
+    let limit = (256usize / alphabet.len) * alphabet.len
     var i = 0usize
-    while i < 16usize {
-        s.seed = (s.seed * 1103515245usize + 12345usize) & 2147483647usize
-        buffer[i] = alphabet[(s.seed >> 8usize) % alphabet.len]
+    var at = 0usize
+    while i < length {
+        var picked = false
+        while drawn && !picked && at < 64usize {
+            let v = usize(random[at])
+            at += 1usize
+            if v < limit {
+                buffer[i] = alphabet[v % alphabet.len]
+                picked = true
+            }
+        }
+        if !picked {
+            s.seed = (s.seed * 1103515245usize + 12345usize) & 2147483647usize
+            buffer[i] = alphabet[(s.seed >> 8usize) % alphabet.len]
+        }
         i += 1usize
     }
-    ret buffer[0usize..16usize]
+    ret buffer[0usize..length]
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -619,6 +656,330 @@ fn unlock_vault(a: *mem.Arena, s: *State) -> usize {
 }
 
 // ----------------------------------------------------------------------------------------------
+// (C170) Export, the QR symbol of an entry, the breach check and locking.
+
+fn set_note(s: *State, line: str) {
+    var n = 0usize
+    while n < line.len && n < 48usize {
+        s.note[n] = line[n]
+        n += 1usize
+    }
+    s.note_len = n
+}
+
+fn hex_upper(v: usize) -> u8 {
+    if v < 10usize { ret u8(48usize + v) }
+    ret u8(55usize + v)
+}
+
+// `piece` as a part of an otpauth label or parameter: letters, digits and - _ . ~ stay, every other byte is %XX.
+fn put_encoded(out: []u8, at: usize, piece: str) -> usize {
+    var n = at
+    var i = 0usize
+    while i < piece.len && n + 3usize <= out.len {
+        let c = piece[i]
+        let plain = (c >= 48u8 && c <= 57u8) || (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 45u8 || c == 95u8 || c == 46u8 || c == 126u8
+        if plain {
+            out[n] = c
+            n += 1usize
+        } else {
+            out[n] = 37u8
+            out[n + 1usize] = hex_upper(usize(c) >> 4usize)
+            out[n + 2usize] = hex_upper(usize(c) & 15usize)
+            n += 3usize
+        }
+        i += 1usize
+    }
+    ret n
+}
+
+// The Key URI Format of the entry `i`: otpauth://totp/Issuer:account?secret=...&issuer=...&algorithm=...&digits=...
+// &period=... (a counter-based one is hotp with &counter=...), what an authenticator reads from a QR symbol.
+fn uri_of(a: *mem.Arena, s: *State, i: usize) -> str {
+    let (buffer, buffer_error) = mem.alloc[u8](a, 360usize)
+    if buffer_error != ok { ret "" }
+    let issuer = issuer_of(a, s, i)
+    var n = 0usize
+    if s.codes[i].hotp { n = httpc.put(buffer, n, "otpauth://hotp/") } else { n = httpc.put(buffer, n, "otpauth://totp/") }
+    if issuer.len > 0usize {
+        n = put_encoded(buffer, n, issuer)
+        n = httpc.put(buffer, n, ":")
+    }
+    n = put_encoded(buffer, n, account_of(a, s, i))
+    n = httpc.put(buffer, n, "?secret=")
+    n = httpc.put(buffer, n, secret_of(a, s, i))
+    if issuer.len > 0usize {
+        n = httpc.put(buffer, n, "&issuer=")
+        n = put_encoded(buffer, n, issuer)
+    }
+    var algorithm = "SHA1"
+    if s.codes[i].algo == 1usize { algorithm = "SHA256" }
+    if s.codes[i].algo == 2usize { algorithm = "SHA512" }
+    n = httpc.put(buffer, n, "&algorithm=")
+    n = httpc.put(buffer, n, algorithm)
+    n = httpc.put(buffer, n, "&digits=")
+    n = httpc.put_number(buffer, n, entry_digits(s, i))
+    if s.codes[i].hotp {
+        n = httpc.put(buffer, n, "&counter=")
+        n = httpc.put_number(buffer, n, s.codes[i].counter)
+    } else {
+        n = httpc.put(buffer, n, "&period=")
+        n = httpc.put_number(buffer, n, entry_period(s, i))
+    }
+    ret buffer[0usize..n]
+}
+
+// Every code as one otpauth URI per line (what Aegis, 2FAS and Google Authenticator's transfer read): the text, in
+// the arena. Empty when there is nothing to export.
+fn export_text(a: *mem.Arena, s: *State) -> str {
+    let (buffer, buffer_error) = mem.alloc[u8](a, 2048usize)
+    if buffer_error != ok { ret "" }
+    var n = 0usize
+    var i = 0usize
+    while i < MAX_CODES {
+        if s.codes[i].used {
+            n = httpc.put(buffer, n, uri_of(a, s, i))
+            n = httpc.put(buffer, n, "\n")
+        }
+        i += 1usize
+    }
+    ret buffer[0usize..n]
+}
+
+// (C170) Export the codes. The file /export.sealed is the list sealed under the vault key (the way each record is,
+// named "export"); with `plain` the list is also written as /otpauth-export.txt, readable by any authenticator and
+// by anyone who finds the disk, so it is asked for on its own. Each URI is parsed back and its secret compared
+// before anything is said to have worked.
+fn export_codes(a: *mem.Arena, s: *State, plain: bool) -> bool {
+    let body = export_text(a, s)
+    if body.len == 0usize {
+        set_note(s, "No codes to export")
+        ret false
+    }
+    var lines = 0usize
+    var start = 0usize
+    var checked = 0usize
+    while start < body.len {
+        var end = start
+        while end < body.len && body[end] != 10u8 { end += 1usize }
+        let (p, parse_error) = otp.parse_uri(ui.text_of(a, body[start..], end - start))
+        if parse_error == ok {
+            var found = false
+            var k = 0usize
+            while k < MAX_CODES {
+                if s.codes[k].used && ui.same(p.secret, secret_of(a, s, k)) { found = true }
+                k += 1usize
+            }
+            if found { checked += 1usize }
+        }
+        lines += 1usize
+        start = end + 1usize
+    }
+    if checked != lines {
+        set_note(s, "Export check failed")
+        ui.say("secure export check failed\n")
+        ret false
+    }
+    if plain {
+        if !vaultfs.write_big("/otpauth-export.txt", mem.address_of(&body[0usize]), body.len) {
+            set_note(s, "The disk would not take the file")
+            ret false
+        }
+        ui.say("secure exported plain ")
+        ui.say_num(lines)
+        ui.say(" ")
+        ui.say_num(body.len)
+        ui.say("\n")
+        set_note(s, ui.join(a, ui.join(a, "Wrote ", ui.number(a, lines), " codes, readable by anyone"), "", ""))
+        ret true
+    }
+    if s.storage != STORAGE_DISK || !s.keyed {
+        set_note(s, "Nothing is stored on this machine")
+        ret false
+    }
+    var nonce: [16]u8 = zero
+    if !vaultfs.random(mem.address_of(&nonce[0usize]), 2usize) {
+        set_note(s, "No random source on this machine")
+        ret false
+    }
+    let (sealed, sealed_error) = mem.alloc[u8](a, body.len + 64usize)
+    if sealed_error != ok { ret false }
+    let (length, seal_error) = vault.seal(s.key, nonce[0usize..], "export", body, sealed)
+    if seal_error != ok {
+        set_note(s, "Could not seal the export")
+        ret false
+    }
+    if !vaultfs.write_big("/export.sealed", mem.address_of(&sealed[0usize]), length) {
+        set_note(s, "The disk would not take the file")
+        ret false
+    }
+    // Read it back and open it: the file is only a backup if it opens.
+    let (back, back_error) = mem.alloc[u8](a, length + 16usize)
+    if back_error != ok { ret false }
+    let (got, found) = vaultfs.read_big("/export.sealed", mem.address_of(&back[0usize]), length + 16usize)
+    let (opened, open_error) = mem.alloc[u8](a, body.len + 16usize)
+    if open_error != ok { ret false }
+    let (plain_len, unseal_error) = vault.open(s.key, "export", back[0usize..got], opened)
+    if !found || unseal_error != ok || plain_len != body.len {
+        set_note(s, "Export check failed")
+        ui.say("secure export check failed\n")
+        ret false
+    }
+    ui.say("secure exported sealed ")
+    ui.say_num(lines)
+    ui.say(" ")
+    ui.say_num(length)
+    ui.say("\n")
+    var shown = 0usize
+    start = 0usize
+    while start < body.len && shown < 2usize {
+        var end = start
+        while end < body.len && body[end] != 10u8 { end += 1usize }
+        // `say_text` writes at most 40 bytes (and copies them where the console can read them): the line goes out in
+        // pieces of 32.
+        ui.say("secure uri ")
+        var piece_at = start
+        while piece_at < end {
+            var piece_end = piece_at + 32usize
+            if piece_end > end { piece_end = end }
+            ui.say_text(ui.text_of(a, body[piece_at..], piece_end - piece_at))
+            piece_at = piece_end
+        }
+        ui.say("\n")
+        shown += 1usize
+        start = end + 1usize
+    }
+    set_note(s, ui.join(a, ui.join(a, "Sealed ", ui.number(a, lines), " codes in /export.sealed"), "", ""))
+    ret true
+}
+
+// A QR symbol of `payload` (error correction M) as an svg, one square per dark module; empty when it does not fit.
+// The symbol is decoded again and compared before it is returned, so what is drawn is what a scanner reads.
+fn qr_svg(a: *mem.Arena, payload: str) -> str {
+    let (symbol, symbol_error) = barcode.qr_encode(a, payload, 1usize)
+    if symbol_error != ok { ret "" }
+    let (back, back_error) = barcode.qr_decode(a, symbol)
+    if back_error != ok || !ui.same(back, payload) { ret "" }
+    ui.say("secure qr ok ")
+    ui.say_num(symbol.size)
+    ui.say("\n")
+    let (buffer, buffer_error) = mem.alloc[u8](a, symbol.size * symbol.size * 16usize + 96usize)
+    if buffer_error != ok { ret "" }
+    var n = 0usize
+    n = httpc.put(buffer, n, "<svg viewBox='0 0 ")
+    n = httpc.put_number(buffer, n, symbol.size)
+    n = httpc.put(buffer, n, " ")
+    n = httpc.put_number(buffer, n, symbol.size)
+    n = httpc.put(buffer, n, "'><path d='")
+    var y = 0usize
+    while y < symbol.size {
+        var x = 0usize
+        while x < symbol.size {
+            if symbol.modules[y * symbol.size + x] == 1u8 {
+                n = httpc.put(buffer, n, "M")
+                n = httpc.put_number(buffer, n, x)
+                n = httpc.put(buffer, n, " ")
+                n = httpc.put_number(buffer, n, y)
+                n = httpc.put(buffer, n, "h1v1h-1z")
+            }
+            x += 1usize
+        }
+        y += 1usize
+    }
+    n = httpc.put(buffer, n, "' fill='currentColor'/></svg>")
+    ret buffer[0usize..n]
+}
+
+// The host of the breach service: /breachhost on the disk when there is one (a machine that runs its own mirror, or
+// the test boot), else Have I Been Pwned's range API.
+fn breach_host(a: *mem.Arena) -> str {
+    var buf: [64]u8 = zero
+    let (n, found) = vaultfs.read("/breachhost", mem.address_of(&buf[0usize]), 64usize)
+    if !found || n == 0usize { ret "api.pwnedpasswords.com" }
+    var end = n
+    while end > 0usize && (buf[end - 1usize] == 10u8 || buf[end - 1usize] == 13u8 || buf[end - 1usize] == 32u8) { end -= 1usize }
+    if end == 0usize { ret "api.pwnedpasswords.com" }
+    ret ui.text_of(a, buf[0usize..], end)
+}
+
+// How many breaches `password` has been seen in, by hash prefix (k-anonymity): only the first five hex digits of its
+// SHA-1 leave the device, the service answers every suffix under them with a count, and the match is made here.
+// The outcome: 0 answered, 1 no network, 2 the service failed.
+fn breach_check(a: *mem.Arena, password: str) -> (usize, usize) {
+    let digest = hash.legacy_sha1(password)
+    var hex: [40]u8 = zero
+    var i = 0usize
+    while i < 20usize {
+        hex[i * 2usize] = hex_upper(usize(digest[i]) >> 4usize)
+        hex[i * 2usize + 1usize] = hex_upper(usize(digest[i]) & 15usize)
+        i += 1usize
+    }
+    let path = ui.join(a, "/range/", ui.text_of(a, hex[0usize..], 5usize), "")
+    let (reply, request_error) = httpc.get(a, breach_host(a), path, "")
+    if request_error == httpc.NoNetwork { ret (0usize, 1usize) }
+    if request_error != ok || reply.status != 200usize { ret (0usize, 2usize) }
+    var start = 0usize
+    while start < reply.body.len {
+        var end = start
+        while end < reply.body.len && reply.body[end] != 10u8 { end += 1usize }
+        // SUFFIX:COUNT, the suffix 35 hex digits.
+        if end - start > 36usize && reply.body[start + 35usize] == 58u8 {
+            var same = true
+            var k = 0usize
+            while k < 35usize {
+                var c = reply.body[start + k]
+                if c >= 97u8 && c <= 102u8 { c -= 32u8 }
+                if c != hex[5usize + k] { same = false }
+                k += 1usize
+            }
+            if same {
+                var count = 0usize
+                var d = start + 36usize
+                while d < end && reply.body[d] >= 48u8 && reply.body[d] <= 57u8 {
+                    count = count * 10usize + usize(reply.body[d] - 48u8)
+                    d += 1usize
+                }
+                ret (count, 0usize)
+            }
+        }
+        start = end + 1usize
+    }
+    ret (0usize, 0usize)
+}
+
+// Forget what is on the screen and in memory: with a vault on disk the entries and the key are wiped and come back
+// only by unlocking (the records are read again); the sample vault only returns to its lock screen.
+fn lock_now(s: *State) {
+    if s.storage == STORAGE_DISK {
+        var no_login: Login = zero
+        var no_code: Code = zero
+        var no_key: [32]u8 = zero
+        var k = 0usize
+        while k < MAX_LOGINS {
+            s.logins[k] = no_login
+            k += 1usize
+        }
+        k = 0usize
+        while k < MAX_CODES {
+            s.codes[k] = no_code
+            k += 1usize
+        }
+        s.key = no_key
+        s.keyed = false
+    }
+    s.screen = LOCK_SCREEN
+    s.master.len = 0usize
+    s.message_len = 0usize
+    s.note_len = 0usize
+    s.reveal = false
+    s.open = NONE
+    s.edit = NONE
+    s.f0.len = 0usize
+    s.f1.len = 0usize
+    s.f2.len = 0usize
+}
+
+// ----------------------------------------------------------------------------------------------
 // Drawing.
 
 fn lock_icon() -> str {
@@ -743,7 +1104,12 @@ fn draw_list(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     try ui.card(a, builder, 274.0 - 1.5, 848.0 - 9.0, 3.0, 18.0, 1.5, ui.ink())
     try ui.put(a, builder, faces.jost, 17.0, "Add", 300.0, 837.0, ui.ink())
     ui.hit(&s.hits, 400usize, 252.0, 820.0, 144.0, 56.0)
-    if s.tab == 1usize { try ui.pill(a, builder, &s.hits, faces, 410usize, 16.0, 820.0, 120.0, 56.0, "Import", ui.soft(), 16.0) }
+    if s.tab == 1usize {
+        try ui.pill(a, builder, &s.hits, faces, 410usize, 16.0, 820.0, 76.0, 56.0, "Import", ui.soft(), 14.0)
+        try ui.pill(a, builder, &s.hits, faces, 411usize, 96.0, 820.0, 76.0, 56.0, "Export", ui.soft(), 14.0)
+        try ui.pill(a, builder, &s.hits, faces, 412usize, 176.0, 820.0, 70.0, 56.0, "Plain", ui.soft(), 14.0)
+    }
+    if s.note_len > 0usize { try ui.put(a, builder, faces.grotesk, 12.0, s.note[0usize..s.note_len], 20.0, 796.0, ui.light_muted()) }
     ret ok
 }
 
@@ -780,6 +1146,13 @@ fn draw_detail(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     try ui.pill(a, builder, &s.hits, faces, 521usize, 146.0, 340.0, 120.0, 46.0, "Generate", ui.soft(), 16.0)
     try ui.pill(a, builder, &s.hits, faces, 522usize, 276.0, 340.0, 120.0, 46.0, "Delete", ui.soft(), 16.0)
     try ui.pill(a, builder, &s.hits, faces, 523usize, 16.0, 396.0, 120.0, 46.0, "Edit", ui.soft(), 16.0)
+    // (C170) The breach check, and the generator's options: its length and whether it uses symbols.
+    try ui.pill(a, builder, &s.hits, faces, 528usize, 146.0, 396.0, 120.0, 46.0, "Breach", ui.soft(), 16.0)
+    try ui.pill(a, builder, &s.hits, faces, 529usize, 276.0, 396.0, 120.0, 46.0, ui.join(a, "Length ", ui.number(a, generator_length(s)), ""), ui.soft(), 14.0)
+    var symbols = "No symbols"
+    if s.gen_symbols { symbols = "Symbols" }
+    try ui.pill(a, builder, &s.hits, faces, 530usize, 16.0, 452.0, 160.0, 46.0, symbols, ui.soft(), 14.0)
+    if s.note_len > 0usize { try ui.put(a, builder, faces.jost, 15.0, s.note[0usize..s.note_len], 20.0, 516.0, ui.light()) }
     ret ok
 }
 
@@ -804,6 +1177,23 @@ fn draw_code(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     try ui.pill(a, builder, &s.hits, faces, 524usize, 16.0, 300.0, 120.0, 46.0, "Edit", ui.soft(), 16.0)
     try ui.pill(a, builder, &s.hits, faces, 522usize, 146.0, 300.0, 120.0, 46.0, "Delete", ui.soft(), 16.0)
     try ui.pill(a, builder, &s.hits, faces, 525usize, 276.0, 300.0, 120.0, 46.0, "Copy", ui.amber(), 16.0)
+    try ui.pill(a, builder, &s.hits, faces, 527usize, 16.0, 356.0, 120.0, 46.0, "QR", ui.soft(), 16.0)
+    ret ok
+}
+
+// (C170) The entry as a QR symbol another authenticator can scan, with what it says on it.
+fn draw_qr(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Faces) -> err {
+    try svg.draw(a, builder, ui.back_icon(), geometry.rect(18.0, 24.0, 28.0, 28.0), ui.light())
+    ui.hit(&s.hits, 500usize, 0.0, 10.0, 66.0, 56.0)
+    try ui.put(a, builder, faces.jost_bold, 24.0, issuer_of(a, s, s.open), 62.0, 20.0, ui.light())
+    try ui.card(a, builder, 16.0, 84.0, 380.0, 380.0, 20.0, ui.cream())
+    let picture = qr_svg(a, uri_of(a, s, s.open))
+    if picture.len > 0usize {
+        try svg.draw(a, builder, picture, geometry.rect(46.0, 114.0, 320.0, 320.0), ui.ink())
+    } else {
+        try ui.centred(a, builder, faces.jost, 16.0, "This code does not fit a QR symbol", 206.0, 260.0, ui.ink())
+    }
+    try ui.put(a, builder, faces.grotesk, 12.0, "Scan it with another authenticator. Anyone who sees it can make your codes.", 20.0, 480.0, ui.light_muted())
     ret ok
 }
 
@@ -913,6 +1303,7 @@ fn draw(a: *mem.Arena, builder: *scene.Builder, kit: *appkit.Kit, s: *State) -> 
     if s.screen == ADD_SCREEN { try draw_add(a, builder, s, faces) }
     if s.screen == SEARCH_SCREEN { try draw_search(a, builder, s, faces) }
     if s.screen == CODE_SCREEN { try draw_code(a, builder, s, faces) }
+    if s.screen == QR_SCREEN { try draw_qr(a, builder, s, faces) }
     try ui.handle(a, builder)
     ret ok
 }
@@ -1111,9 +1502,21 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         }
         ret false
     }
+    if s.screen == QR_SCREEN {
+        if id == 500usize {
+            s.screen = CODE_SCREEN
+            ret true
+        }
+        ret false
+    }
     if s.screen == CODE_SCREEN {
         if id == 500usize {
             s.screen = LIST_SCREEN
+            ret true
+        }
+        if id == 527usize {
+            s.screen = QR_SCREEN
+            ui.say("secure qr shown\n")
             ret true
         }
         if id == 526usize && s.codes[s.open].hotp {
@@ -1155,6 +1558,41 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if id == 500usize {
             s.screen = LIST_SCREEN
             s.reveal = false
+            s.note_len = 0usize
+            ret true
+        }
+        if id == 528usize {
+            // (C170) The breach check: only the SHA-1 prefix leaves the device.
+            let (seen, outcome) = breach_check(a, pass_of(a, s, s.open))
+            if outcome == 1usize {
+                set_note(s, "No network: could not check")
+                ui.say("secure breach no network\n")
+            } else if outcome == 2usize {
+                set_note(s, "The breach service did not answer")
+                ui.say("secure breach failed\n")
+            } else if seen == 0usize {
+                set_note(s, "Not found in known breaches")
+                ui.say("secure breach none\n")
+            } else {
+                set_note(s, ui.join(a, ui.join(a, "Seen in ", ui.number(a, seen), " breaches"), "", ""))
+                ui.say("secure breach seen ")
+                ui.say_num(seen)
+                ui.say("\n")
+            }
+            ret true
+        }
+        if id == 529usize {
+            var next = 16usize
+            if generator_length(s) == 16usize { next = 24usize }
+            if generator_length(s) == 24usize { next = 12usize }
+            s.gen_len = next
+            ui.say("secure generator length ")
+            ui.say_num(next)
+            ui.say("\n")
+            ret true
+        }
+        if id == 530usize {
+            s.gen_symbols = !s.gen_symbols
             ret true
         }
         if id == 510usize {
@@ -1197,10 +1635,13 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         ret false
     }
     if id == 150usize {
-        s.screen = LOCK_SCREEN
-        s.master.len = 0usize
-        s.message_len = 0usize
+        lock_now(s)
         ui.say("secure locked\n")
+        ret true
+    }
+    if id == 411usize || id == 412usize {
+        // (C170) Export: sealed under the vault key, or (Plain) as otpauth URIs any authenticator reads.
+        let wrote = export_codes(a, s, id == 412usize)
         ret true
     }
     if id == 160usize {
@@ -1358,6 +1799,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var s: State = zero
     s.seed = 9137usize
     s.now = clock_now()
+    s.last_active = s.now
     s.edit = NONE
     // The one-time password maths against RFC 6238: the SHA-1 secret "12345678901234567890" at time 59 gives
     // 94287082 with eight digits ("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" in base32).
@@ -1396,6 +1838,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else if tap.tick {
             if s.job != JOB_NONE {
                 run_job(a, &s)
+                s.last_active = clock_now()
+                if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }
+            } else if s.screen != LOCK_SCREEN && clock_now() >= s.last_active + AUTO_LOCK_SECONDS {
+                // (C170) Auto-lock: a minute without a tap and the vault is wiped from memory and locked.
+                lock_now(&s)
+                ui.say("secure auto-locked\n")
                 if !show(a, &kit, &s) { appkit.answer(appkit.ANSWER_NONE) }
             } else if (s.screen == LIST_SCREEN && s.tab == 1usize) || s.screen == CODE_SCREEN {
                 // On the codes the clock and the countdown follow the ticks, once a second.
@@ -1409,11 +1857,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 appkit.answer(appkit.ANSWER_NONE)
             }
         } else if tap.y >= 896.0 {
+            s.last_active = clock_now()
             ui.say("secure home\n")
             appkit.leave()
             running = false
         } else {
             let id = ui.hit_at(&s.hits, tap.x, tap.y)
+            s.last_active = clock_now()
             if id != ui.NONE && act(a, &s, id) {
                 if !show(a, &kit, &s) {
                     ui.say("secure present failed\n")

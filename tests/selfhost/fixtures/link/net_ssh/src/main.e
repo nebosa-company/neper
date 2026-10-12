@@ -155,6 +155,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
         rounds += 1usize
     }
     if !answered { os.exit(10i32) }
+    // (C155) The cipher the server left us with.
+    if str.eq(mode, "gcm256") && (s.cipher_out != ssh.CIPHER_AES256_GCM || s.cipher_in != ssh.CIPHER_AES256_GCM) { os.exit(14i32) }
+    if str.eq(mode, "gcm128") && (s.cipher_out != ssh.CIPHER_AES128_GCM || s.cipher_in != ssh.CIPHER_AES128_GCM) { os.exit(15i32) }
+    if str.eq(mode, "password") && (s.cipher_out != ssh.CIPHER_CHACHA || s.cipher_in != ssh.CIPHER_CHACHA) { os.exit(16i32) }
+    if str.eq(mode, "rekey") {
+        // Enough traffic that the server asks for new keys (its limit is set low): forty lines, each echoed in
+        // capitals, written whenever a key exchange is not holding the session.
+        let line = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghij\r"
+        var written = 0usize
+        var echoed = 0usize
+        var spins = 0usize
+        while echoed < 40usize && spins < 800usize {
+            if written < 40usize {
+                let taken_line = ssh.write(&s, line)
+                if taken_line == line.len { written += 1usize }
+            }
+            var bunch: [256]u8 = zero
+            let m = ssh.read(&s, bunch[0usize..256usize])
+            var k = 0usize
+            while k < m {
+                if bunch[k] == 10u8 { echoed += 1usize }
+                k += 1usize
+            }
+            if echoed < 40usize || written < 40usize {
+                if !pump(sock, &s) { break }
+            }
+            spins += 1usize
+        }
+        if written != 40usize || echoed < 40usize { os.exit(12i32) }
+        if s.rekeys < 1u32 { os.exit(13i32) }
+        if s.cipher_out != ssh.CIPHER_AES256_GCM { os.exit(17i32) }
+    }
     ssh.resize(&s, 100u32, 30u32)
     let taken_exit = ssh.write(&s, "exit\r")
     rounds = 0usize

@@ -1,8 +1,11 @@
 // An SSH-2 client (C120), sans-IO: the caller moves bytes between a socket and the session. What it speaks:
 // the version exchange, curve25519-sha256 key exchange with an ssh-ed25519 host key, the
-// chacha20-poly1305@openssh.com cipher, password and ssh-ed25519 public-key authentication, one "session"
-// channel with a pty and a shell (or an exec command), flow-control windows, exit status. What it does not:
-// other algorithms, rekeying (the server's request is ignored), port forwarding, SFTP, compression.
+// chacha20-poly1305@openssh.com cipher or, when the server has not that one, aes256-gcm@openssh.com or
+// aes128-gcm@openssh.com (C155), password and ssh-ed25519 public-key authentication, one "session"
+// channel with a pty and a shell (or an exec command), flow-control windows, exit status, and the server's
+// request to exchange keys again in the middle of a session (a rekey: the host key must be the same, the session
+// id stays, the keys and the cipher's counters are new; what the app writes waits until it is done).
+// What it does not: other algorithms, a rekey of its own asking, port forwarding, SFTP, compression.
 //
 // Driving it: `open`, then loop: send `outgoing` bytes and call `sent`, `feed` what the socket received, read
 // `status`. When the status is `HOST_KEY_PENDING` read `host_key` and `host_fingerprint`, then `trust` (or
@@ -16,6 +19,7 @@ use e.crypto.sign
 use e.crypto.hash
 use e.crypto.cipher
 use e.crypto.mac
+use e.crypto.aead
 
 error Protocol
 error HostKey
@@ -51,6 +55,16 @@ const DATA: usize = 32768usize
 const METHOD_PASSWORD: u32 = 0u32
 const METHOD_KEY: u32 = 1u32
 
+// The packet ciphers (`cipher` of the session once the keys are in use).
+const CIPHER_CHACHA: u32 = 0u32
+const CIPHER_AES256_GCM: u32 = 1u32
+const CIPHER_AES128_GCM: u32 = 2u32
+
+// The fields after `got_newkeys` (C155): the cipher chosen by the key exchange in progress and the one in use for each
+// direction; AES-GCM's keys and nonces (a fixed part and an invocation counter that each packet moves on); the keys of
+// the exchange in progress for what the server sends, held until its NEWKEYS arrives; `scratch` for sealing and
+// opening; and `rekeying` (a key exchange the server began after the session was up), `rekeys` (how many have
+// finished) and the window credit given back while an exchange held packets.
 type Session = struct {
     status: u32,
     failure: u32,
@@ -112,6 +126,21 @@ type Session = struct {
     banner_len: usize,
     sent_newkeys: bool,
     got_newkeys: bool,
+    cipher_next: u32,
+    cipher_out: u32,
+    cipher_in: u32,
+    gcm_out_key: [32]u8,
+    gcm_in_key: [32]u8,
+    gcm_out_iv: [12]u8,
+    gcm_in_iv: [12]u8,
+    next_in_main: [32]u8,
+    next_in_len: [32]u8,
+    next_gcm_key: [32]u8,
+    next_gcm_iv: [12]u8,
+    scratch: []u8,
+    rekeying: bool,
+    rekeys: u32,
+    deferred_window: u32,
 }
 
 // ---- byte helpers ---------------------------------------------------------------------------------
@@ -260,7 +289,9 @@ fn open(a: *mem.Arena, random: []const u8, user: str, password: str, cols: u32, 
     if out_error != ok { ret (none, out_error) }
     let (chan_in, chan_error) = mem.alloc[u8](a, DATA)
     if chan_error != ok { ret (none, chan_error) }
-    var s = Session { status: VERSION, failure: FAIL_NONE, inbuf: inbuf, in_len: 0usize, outbuf: outbuf, out_len: 0usize, chan_in: chan_in, chan_len: 0usize, seq_in: 0u32, seq_out: 0u32, encrypted_in: false, encrypted_out: false, key_in_main: zero, key_in_len: zero, key_out_main: zero, key_out_len: zero, rng: zero, server_version: zero, server_version_len: 0usize, client_kexinit: zero, client_kexinit_len: 0usize, server_kexinit: zero, server_kexinit_len: 0usize, ephemeral: zero, ephemeral_public: zero, server_public: zero, kex_k: zero, host_key: zero, host_blob: zero, host_blob_len: 0usize, host_sig: zero, host_sig_ok: false, exchange_hash: zero, session_id: zero, have_session_id: false, user: zero, user_len: user.len, password: zero, password_len: password.len, key_seed: zero, method: METHOD_PASSWORD, term: zero, term_len: 0usize, cols: cols, rows: rows, command: zero, command_len: 0usize, channel_remote: 0u32, channel_open: false, window_out: 0u32, window_in: 2097152u32, max_packet: 0u32, pty_done: false, eof_seen: false, exit_status: 0u32, has_exit_status: false, banner: zero, banner_len: 0usize, sent_newkeys: false, got_newkeys: false }
+    let (scratch, scratch_error) = mem.alloc[u8](a, 35200usize)
+    if scratch_error != ok { ret (none, scratch_error) }
+    var s = Session { status: VERSION, failure: FAIL_NONE, inbuf: inbuf, in_len: 0usize, outbuf: outbuf, out_len: 0usize, chan_in: chan_in, chan_len: 0usize, seq_in: 0u32, seq_out: 0u32, encrypted_in: false, encrypted_out: false, key_in_main: zero, key_in_len: zero, key_out_main: zero, key_out_len: zero, rng: zero, server_version: zero, server_version_len: 0usize, client_kexinit: zero, client_kexinit_len: 0usize, server_kexinit: zero, server_kexinit_len: 0usize, ephemeral: zero, ephemeral_public: zero, server_public: zero, kex_k: zero, host_key: zero, host_blob: zero, host_blob_len: 0usize, host_sig: zero, host_sig_ok: false, exchange_hash: zero, session_id: zero, have_session_id: false, user: zero, user_len: user.len, password: zero, password_len: password.len, key_seed: zero, method: METHOD_PASSWORD, term: zero, term_len: 0usize, cols: cols, rows: rows, command: zero, command_len: 0usize, channel_remote: 0u32, channel_open: false, window_out: 0u32, window_in: 2097152u32, max_packet: 0u32, pty_done: false, eof_seen: false, exit_status: 0u32, has_exit_status: false, banner: zero, banner_len: 0usize, sent_newkeys: false, got_newkeys: false, cipher_next: CIPHER_CHACHA, cipher_out: CIPHER_CHACHA, cipher_in: CIPHER_CHACHA, gcm_out_key: zero, gcm_in_key: zero, gcm_out_iv: zero, gcm_in_iv: zero, next_in_main: zero, next_in_len: zero, next_gcm_key: zero, next_gcm_iv: zero, scratch: scratch, rekeying: false, rekeys: 0u32, deferred_window: 0u32 }
     var i = 0usize
     while i < 64usize {
         s.rng[i] = random[i]
@@ -332,7 +363,13 @@ fn chacha_nonce(seq: u32) -> [12]u8 {
 fn send_packet(s: *Session, payload: []const u8) {
     var pad = 8usize - ((payload.len + 1usize) % 8usize)
     if !s.encrypted_out { pad = 8usize - ((payload.len + 5usize) % 8usize) }
-    if pad < 4usize { pad += 8usize }
+    var pad_block = 8usize
+    // AES-GCM's blocks are 16 bytes and the length stays out of the padding, as chacha's does.
+    if s.encrypted_out && s.cipher_out != CIPHER_CHACHA {
+        pad = 16usize - ((payload.len + 1usize) % 16usize)
+        pad_block = 16usize
+    }
+    if pad < 4usize { pad += pad_block }
     let body = 1usize + payload.len + pad
     let total = 4usize + body + 16usize
     if s.out_len + total > s.outbuf.len {
@@ -353,7 +390,52 @@ fn send_packet(s: *Session, payload: []const u8) {
         s.outbuf[at + 5usize + payload.len + i] = s.rng[(i + usize(s.seq_out)) % 64usize] ^ u8((i * 37usize) % 256usize)
         i += 1usize
     }
-    if s.encrypted_out {
+    if s.encrypted_out && s.cipher_out != CIPHER_CHACHA {
+        // AES-GCM (RFC 5647): the length in the clear is the additional data, the rest is sealed, the nonce is the
+        // fixed four bytes and an invocation counter of eight that moves on with every packet.
+        var nonce_out: [12]u8 = zero
+        i = 0usize
+        while i < 12usize {
+            nonce_out[i] = s.gcm_out_iv[i]
+            i += 1usize
+        }
+        var sealed_len = 0usize
+        var seal_error: err = ok
+        if s.cipher_out == CIPHER_AES256_GCM {
+            let (n_sealed, e_sealed) = aead.aes256_gcm_seal(s.scratch[0usize..body + 16usize], s.gcm_out_key, nonce_out, s.outbuf[at..at + 4usize], s.outbuf[at + 4usize..at + 4usize + body])
+            sealed_len = n_sealed
+            seal_error = e_sealed
+        } else {
+            var key16: [16]u8 = zero
+            i = 0usize
+            while i < 16usize {
+                key16[i] = s.gcm_out_key[i]
+                i += 1usize
+            }
+            let (n_sealed, e_sealed) = aead.aes128_gcm_seal(s.scratch[0usize..body + 16usize], key16, nonce_out, s.outbuf[at..at + 4usize], s.outbuf[at + 4usize..at + 4usize + body])
+            sealed_len = n_sealed
+            seal_error = e_sealed
+        }
+        if seal_error != ok || sealed_len != body + 16usize {
+            fail(s, FAIL_PROTOCOL)
+            ret
+        }
+        i = 0usize
+        while i < body + 16usize {
+            s.outbuf[at + 4usize + i] = s.scratch[i]
+            i += 1usize
+        }
+        // The invocation counter, big endian, bytes 4..12.
+        var carry = true
+        var c = 11usize
+        while carry && c >= 4usize {
+            s.gcm_out_iv[c] = s.gcm_out_iv[c] + 1u8
+            carry = s.gcm_out_iv[c] == 0u8
+            if c == 4usize { carry = false }
+            c -= 1usize
+        }
+        s.out_len = at + total
+    } else if s.encrypted_out {
         let nonce = chacha_nonce(s.seq_out)
         // The payload under the main key from block 1, the length under the length key from block 0, the tag
         // over both with the main key's block 0.
@@ -397,8 +479,8 @@ fn send_kexinit(s: *Session) {
     }
     name_list(&w, "curve25519-sha256,curve25519-sha256@libssh.org")
     name_list(&w, "ssh-ed25519")
-    name_list(&w, "chacha20-poly1305@openssh.com")
-    name_list(&w, "chacha20-poly1305@openssh.com")
+    name_list(&w, "chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com")
+    name_list(&w, "chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com")
     name_list(&w, "hmac-sha2-256")
     name_list(&w, "hmac-sha2-256")
     name_list(&w, "none")
@@ -474,20 +556,68 @@ fn derive_key(s: *Session, letter: u8, out: []u8) {
     }
 }
 
+// The keys of the exchange just made: for what we send, in use at once (this is called right after our NEWKEYS went
+// out under the old ones); for what the server sends, held until its NEWKEYS says it has changed (`apply_in_keys`).
 fn install_keys(s: *Session) {
     var c2s: [64]u8 = zero
     var s2c: [64]u8 = zero
     derive_key(s, 67u8, c2s[0usize..64usize])
     derive_key(s, 68u8, s2c[0usize..64usize])
-    // The first 32 bytes are the main key (K_2), the last 32 the length key (K_1).
+    var i = 0usize
+    if s.cipher_next == CIPHER_CHACHA {
+        // The first 32 bytes are the main key (K_2), the last 32 the length key (K_1).
+        while i < 32usize {
+            s.key_out_main[i] = c2s[i]
+            s.key_out_len[i] = c2s[32usize + i]
+            s.next_in_main[i] = s2c[i]
+            s.next_in_len[i] = s2c[32usize + i]
+            i += 1usize
+        }
+    } else {
+        // AES-GCM: the key (32 or 16 bytes) from letters C and D, the fixed part of the nonce (12 bytes, the counter
+        // continues from its last eight) from A and B.
+        var iv_c2s: [64]u8 = zero
+        var iv_s2c: [64]u8 = zero
+        derive_key(s, 65u8, iv_c2s[0usize..64usize])
+        derive_key(s, 66u8, iv_s2c[0usize..64usize])
+        var width = 32usize
+        if s.cipher_next == CIPHER_AES128_GCM { width = 16usize }
+        i = 0usize
+        while i < 32usize {
+            s.gcm_out_key[i] = 0u8
+            s.next_gcm_key[i] = 0u8
+            if i < width {
+                s.gcm_out_key[i] = c2s[i]
+                s.next_gcm_key[i] = s2c[i]
+            }
+            i += 1usize
+        }
+        i = 0usize
+        while i < 12usize {
+            s.gcm_out_iv[i] = iv_c2s[i]
+            s.next_gcm_iv[i] = iv_s2c[i]
+            i += 1usize
+        }
+    }
+    s.cipher_out = s.cipher_next
+}
+
+// The server's NEWKEYS arrived: what it sends from here on is under the keys held for it.
+fn apply_in_keys(s: *Session) {
     var i = 0usize
     while i < 32usize {
-        s.key_out_main[i] = c2s[i]
-        s.key_out_len[i] = c2s[32usize + i]
-        s.key_in_main[i] = s2c[i]
-        s.key_in_len[i] = s2c[32usize + i]
+        s.key_in_main[i] = s.next_in_main[i]
+        s.key_in_len[i] = s.next_in_len[i]
+        s.gcm_in_key[i] = s.next_gcm_key[i]
         i += 1usize
     }
+    i = 0usize
+    while i < 12usize {
+        s.gcm_in_iv[i] = s.next_gcm_iv[i]
+        i += 1usize
+    }
+    s.cipher_in = s.cipher_next
+    s.encrypted_in = true
 }
 
 fn handle_kexinit(s: *Session, payload: []const u8) {
@@ -514,15 +644,47 @@ fn handle_kexinit(s: *Session, payload: []const u8) {
         fail(s, FAIL_UNSUPPORTED)
         ret
     }
-    if !in_list(host_list, "ssh-ed25519") || !in_list(enc_c2s, "chacha20-poly1305@openssh.com") || !in_list(enc_s2c, "chacha20-poly1305@openssh.com") {
+    if !in_list(host_list, "ssh-ed25519") {
         fail(s, FAIL_UNSUPPORTED)
         ret
     }
-    // Our ephemeral key.
-    i = 0usize
-    while i < 32usize {
-        s.ephemeral[i] = s.rng[i]
-        i += 1usize
+    // The first of our ciphers, in our order, that the server has in both directions.
+    var chosen = 99u32
+    if in_list(enc_c2s, "chacha20-poly1305@openssh.com") && in_list(enc_s2c, "chacha20-poly1305@openssh.com") {
+        chosen = CIPHER_CHACHA
+    } else if in_list(enc_c2s, "aes256-gcm@openssh.com") && in_list(enc_s2c, "aes256-gcm@openssh.com") {
+        chosen = CIPHER_AES256_GCM
+    } else if in_list(enc_c2s, "aes128-gcm@openssh.com") && in_list(enc_s2c, "aes128-gcm@openssh.com") {
+        chosen = CIPHER_AES128_GCM
+    }
+    if chosen == 99u32 {
+        fail(s, FAIL_UNSUPPORTED)
+        ret
+    }
+    s.cipher_next = chosen
+    // Our ephemeral key: the caller's random bytes; a key exchange begun later in the session takes a new one made
+    // from the old secret and the last exchange hash, so it is never the same twice.
+    if s.rekeying {
+        var seed_input: [68]u8 = zero
+        i = 0usize
+        while i < 32usize {
+            seed_input[i] = s.ephemeral[i]
+            seed_input[32usize + i] = s.exchange_hash[i]
+            i += 1usize
+        }
+        put_u32(seed_input[0usize..68usize], 64usize, s.rekeys + 1u32)
+        let fresh = hash.sha256(seed_input[0usize..68usize])
+        i = 0usize
+        while i < 32usize {
+            s.ephemeral[i] = fresh[i]
+            i += 1usize
+        }
+    } else {
+        i = 0usize
+        while i < 32usize {
+            s.ephemeral[i] = s.rng[i]
+            i += 1usize
+        }
     }
     let public = kx.x25519_public_from_secret(kx.X25519SecretKey { bytes: s.ephemeral })
     s.ephemeral_public = public.bytes
@@ -534,6 +696,8 @@ fn handle_kexinit(s: *Session, payload: []const u8) {
 }
 
 fn handle_kex_reply(s: *Session, payload: []const u8) {
+    // A key exchange begun mid-session must show the host key already trusted.
+    let old_host_key = s.host_key
     var r = Reader { buf: payload, pos: 1usize, bad: false }
     let blob = r_string(&r)
     let q_s = r_string(&r)
@@ -597,6 +761,25 @@ fn handle_kex_reply(s: *Session, payload: []const u8) {
     if !s.have_session_id {
         s.session_id = s.exchange_hash
         s.have_session_id = true
+    }
+    if s.rekeying {
+        // Same key as before, or the session ends; then our NEWKEYS goes out and the keys of this exchange take over
+        // for what we send.
+        var changed = false
+        i = 0usize
+        while i < 32usize {
+            if old_host_key[i] != s.host_key[i] { changed = true }
+            i += 1usize
+        }
+        if changed {
+            fail(s, FAIL_HOST_KEY)
+            ret
+        }
+        var nk: [1]u8 = zero
+        nk[0usize] = 21u8
+        send_packet(s, nk[0usize..1usize])
+        install_keys(s)
+        ret
     }
     // The caller is asked about the key before anything secret is sent.
     s.status = HOST_KEY_PENDING
@@ -773,7 +956,8 @@ fn resize(s: *Session, cols: u32, rows: u32) {
 
 // Send keystrokes to the remote program (as much as the server's window and packet size allow; the count taken).
 fn write(s: *Session, data: []const u8) -> usize {
-    if s.status != READY || data.len == 0usize { ret 0usize }
+    // While keys are being exchanged nothing but the exchange may be sent: the caller tries again.
+    if s.status != READY || s.rekeying || data.len == 0usize { ret 0usize }
     var n = data.len
     if n > usize(s.window_out) { n = usize(s.window_out) }
     if n > 4096usize { n = 4096usize }
@@ -805,13 +989,18 @@ fn read(s: *Session, out: []u8) -> usize {
     s.chan_len -= n
     if n > 0usize && s.status == READY {
         s.window_in += u32(n)
-        // Give back what was consumed once it adds up to something worth a packet.
-        var msg: [16]u8 = zero
-        var w = Writer { buf: msg[0usize..16usize], len: 0usize, over: false }
-        w_byte(&w, 93u8)
-        w_u32(&w, s.channel_remote)
-        w_u32(&w, u32(n))
-        send_packet(s, msg[0usize..w.len])
+        if s.rekeying {
+            // Held with the rest until the exchange is done (dispatch's NEWKEYS gives it back).
+            s.deferred_window += u32(n)
+        } else {
+            // Give back what was consumed once it adds up to something worth a packet.
+            var msg: [16]u8 = zero
+            var w = Writer { buf: msg[0usize..16usize], len: 0usize, over: false }
+            w_byte(&w, 93u8)
+            w_u32(&w, s.channel_remote)
+            w_u32(&w, u32(n))
+            send_packet(s, msg[0usize..w.len])
+        }
     }
     ret n
 }
@@ -855,6 +1044,16 @@ fn dispatch(s: *Session, payload: []const u8) {
         ret
     }
     if kind == 20u8 {
+        // After the session is up this is the server asking to exchange keys again: our KEXINIT goes out, and the
+        // exchange runs as the first did, except that the host key is not asked about again.
+        if s.have_session_id && s.status != KEX && s.status != VERSION && s.status != HOST_KEY_PENDING {
+            if s.rekeying {
+                fail(s, FAIL_PROTOCOL)
+                ret
+            }
+            s.rekeying = true
+            send_kexinit(s)
+        }
         handle_kexinit(s, payload)
         ret
     }
@@ -863,9 +1062,23 @@ fn dispatch(s: *Session, payload: []const u8) {
         ret
     }
     if kind == 21u8 {
-        s.encrypted_in = true
+        apply_in_keys(s)
+        if s.rekeying {
+            // The exchange is done: what was held goes out.
+            s.rekeying = false
+            s.rekeys += 1u32
+            if s.deferred_window > 0u32 {
+                var msg: [16]u8 = zero
+                var w = Writer { buf: msg[0usize..16usize], len: 0usize, over: false }
+                w_byte(&w, 93u8)
+                w_u32(&w, s.channel_remote)
+                w_u32(&w, s.deferred_window)
+                send_packet(s, msg[0usize..w.len])
+                s.deferred_window = 0u32
+            }
+            ret
+        }
         s.got_newkeys = true
-        s.seq_in = s.seq_in
         if s.sent_newkeys { start_auth(s) }
         ret
     }
@@ -1077,7 +1290,8 @@ fn take_packet(s: *Session) -> bool {
             plain_len[i] = s.inbuf[i]
             i += 1usize
         }
-        cipher.chacha20(s.key_in_len, 0u32, chacha_nonce(s.seq_in), plain_len[0usize..4usize])
+        // AES-GCM sends the length in the clear (it is the additional data); chacha has its own key for it.
+        if s.cipher_in == CIPHER_CHACHA { cipher.chacha20(s.key_in_len, 0u32, chacha_nonce(s.seq_in), plain_len[0usize..4usize]) }
         length = get_u32(plain_len[0usize..4usize], 0usize)
         if length > 35000u32 || length < 5u32 {
             fail(s, FAIL_PROTOCOL)
@@ -1098,7 +1312,48 @@ fn take_packet(s: *Session) -> bool {
     }
     if s.in_len < total { ret false }
     let body = usize(length)
-    if s.encrypted_in {
+    if s.encrypted_in && s.cipher_in != CIPHER_CHACHA {
+        var nonce_in: [12]u8 = zero
+        var g = 0usize
+        while g < 12usize {
+            nonce_in[g] = s.gcm_in_iv[g]
+            g += 1usize
+        }
+        var opened_len = 0usize
+        var open_error: err = ok
+        if s.cipher_in == CIPHER_AES256_GCM {
+            let (n_opened, e_opened) = aead.aes256_gcm_open(s.scratch[0usize..body], s.gcm_in_key, nonce_in, s.inbuf[0usize..4usize], s.inbuf[4usize..4usize + body + 16usize])
+            opened_len = n_opened
+            open_error = e_opened
+        } else {
+            var key16: [16]u8 = zero
+            g = 0usize
+            while g < 16usize {
+                key16[g] = s.gcm_in_key[g]
+                g += 1usize
+            }
+            let (n_opened, e_opened) = aead.aes128_gcm_open(s.scratch[0usize..body], key16, nonce_in, s.inbuf[0usize..4usize], s.inbuf[4usize..4usize + body + 16usize])
+            opened_len = n_opened
+            open_error = e_opened
+        }
+        if open_error != ok || opened_len != body {
+            fail(s, FAIL_MAC)
+            ret false
+        }
+        g = 0usize
+        while g < body {
+            s.inbuf[4usize + g] = s.scratch[g]
+            g += 1usize
+        }
+        var carry_in = true
+        var c_in = 11usize
+        while carry_in && c_in >= 4usize {
+            s.gcm_in_iv[c_in] = s.gcm_in_iv[c_in] + 1u8
+            carry_in = s.gcm_in_iv[c_in] == 0u8
+            if c_in == 4usize { carry_in = false }
+            c_in -= 1usize
+        }
+    } else if s.encrypted_in {
         let nonce = chacha_nonce(s.seq_in)
         var poly_key: [32]u8 = zero
         var block: [64]u8 = zero

@@ -86,6 +86,8 @@ class Chat(socketserver.StreamRequestHandler):
                 name = parts[1]
                 for room in ("general", "design", "builds"):
                     self.send("ROOM|" + room)
+                # (C164) Who is online.
+                self.send("PRESENCE|Maya|online")
                 with LOCK:
                     LOG.append(("join", name))
             elif parts[0] == "SAY" and len(parts) == 3:
@@ -94,6 +96,8 @@ class Chat(socketserver.StreamRequestHandler):
                     LOG.append(("say", name, room, body))
                 self.send("MSG|%s|%s|%s" % (room, name, body))
                 if room == "general":
+                    # (C164) She types before she answers.
+                    self.send("TYPING|general|Maya")
                     self.send("MSG|general|Maya|%s to you too" % body.split(" ")[0])
 
 

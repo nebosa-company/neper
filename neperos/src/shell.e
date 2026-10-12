@@ -269,6 +269,10 @@ var installed_pages: usize = 0usize
 var installed_caps: usize = 0usize
 // Whether the user allowed the installed app's capabilities this boot (the first run asks).
 var installed_allowed: bool = false
+// (C151) Room reserved for a package that arrives later (written to /apps by Dynamic): its page-aligned base and
+// size in pages, or 0 when the shell has a package already (the single slot) or no disk.
+var late_base: usize = 0usize
+var late_pages: usize = 0usize
 
 fn visible_count() -> usize {
     var count = 0usize
@@ -526,9 +530,22 @@ fn adopt(a: *mem.Arena, data: str, persist: bool) -> bool {
         n += 1usize
     }
     let pages = (pkg.image.len + 4095usize) / 4096usize
-    let (image_buf, image_error) = mem.alloc[u8](a, pages * 4096usize + 4096usize)
-    if image_error != ok { ret false }
-    let base = (mem.address_of(&image_buf[0usize]) + 4095usize) & ~4095usize
+    // (C151) A package that arrives while the shell runs (Dynamic wrote it to /apps) goes into the room reserved at
+    // start, which survives the arena going back to the home screen's mark after each app.
+    var base = 0usize
+    if late_base != 0usize {
+        // Once the room is reserved every adoption is a late one, and an image that does not fit it must not go
+        // anywhere the arena takes back.
+        if pages > late_pages {
+            say("shell package too large for a late install\n")
+            ret false
+        }
+        base = late_base
+    } else {
+        let (image_buf, image_error) = mem.alloc[u8](a, pages * 4096usize + 4096usize)
+        if image_error != ok { ret false }
+        base = (mem.address_of(&image_buf[0usize]) + 4095usize) & ~4095usize
+    }
     var b = 0usize
     while b < pkg.image.len {
         os.store8(base + b, pkg.image[b])
@@ -697,6 +714,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var adopted = false
     if args.len >= 8usize { adopted = adopt(a, args[7usize], true) }
     if !adopted { adopted = adopt_from_disk(a) }
+    // (C151) With no package yet and a filesystem that answers, room for one that arrives while the shell runs:
+    // 512 KB of image, page-aligned (the shell's arena is not large; the images Dynamic's server makes are about
+    // 430 KB, and a bigger one is refused rather than put where the arena takes it back).
+    if !adopted {
+        var root_names: [16]u8 = zero
+        let (root_count, root_listed) = fsproto.list(FS_REQ, FS_REP, "/", mem.address_of(&root_names[0usize]), 16usize)
+        if root_listed {
+            let (late_buf, late_error) = mem.alloc[u8](a, 129usize * 4096usize)
+            if late_error == ok {
+                late_base = (mem.address_of(&late_buf[0usize]) + 4095usize) & ~4095usize
+                late_pages = 128usize
+            }
+        }
+    }
     hidden_mask = sysettings.hidden()
     if hidden_mask != 0usize {
         say("shell hidden ")
@@ -994,6 +1025,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
                             say("shell app code ")
                             say_num(code_next)
                             say("\n")
+                        }
+                        // (C151) A package Dynamic wrote to /apps while that app ran is adopted now: its icon is
+                        // on the home screen drawn next.
+                        if installed_len == 0usize && late_base != 0usize {
+                            if adopt_from_disk(a) { say("shell adopted late\n") }
                         }
                         // The last scene is released first, so nothing refers to the memory that is given back.
                         if has_last_scene {
