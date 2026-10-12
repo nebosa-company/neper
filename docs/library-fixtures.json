@@ -1142,6 +1142,7 @@
     "gfx_scene",
     "gfx_scene_damage",
     "gfx_svg",
+    "gfx_svg_render",
     "text_layout",
     "ui_a11y_controls",
     "ui_accessibility",
@@ -1990,6 +1991,7 @@
     "gfx_scene",
     "gfx_scene_damage",
     "gfx_svg",
+    "gfx_svg_render",
     "ui_accessibility",
     "ui_actions_v2",
     "ui_app",
@@ -2217,6 +2219,7 @@
     "gfx_scene_damage",
     "gfx_scene_plan",
     "gfx_svg",
+    "gfx_svg_render",
     "ui_a11y_controls",
     "ui_accessibility",
     "ui_actions",
@@ -2321,7 +2324,8 @@
    "pending": [],
    "fixtures": [
     "gfx_scene_damage",
-    "gfx_svg"
+    "gfx_svg",
+    "gfx_svg_render"
    ]
   },
   {
@@ -2340,6 +2344,7 @@
     "gfx_scene",
     "gfx_scene_damage",
     "gfx_svg",
+    "gfx_svg_render",
     "gpu_barrier",
     "gpu_barrier_chain",
     "gpu_barrier_helper",

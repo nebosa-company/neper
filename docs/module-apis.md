@@ -15704,8 +15704,15 @@ fn draw(a: *mem.Arena, b: *scene.Builder, text: str, dest: geometry.Rect, curren
 
 `draw` fits the document's viewBox (meet, centred) into `dest` and pushes balanced
 `Save`/`Transform`/`FillPath`/`StrokePath`/`Restore` commands; `current` is `currentColor`.
-Colours are display values (a byte over 255), written as the renderer receives them. Gradients,
-clip paths, masks, text, `use` and CSS sheets are not drawn.
+Colours are display values (a byte over 255), written as the renderer receives them.
+Since L125 (D2843) `fill` and `stroke` take `url(#id)` to a `linearGradient` or
+`radialGradient` (bounding-box or user-space units, `gradientTransform`, stops by
+`offset`, `stop-color`, `stop-opacity`, stops inherited through `href`; spread is pad),
+`use` draws a referenced element or `symbol` translated by `x` and `y` (`defs`
+contents draw only that way; a cycle is `TooComplex`), `clip-path="url(#id)"` clips by
+the first shape of a `clipPath`, and lengths take `px pt pc mm cm in em` and `%` of the
+viewBox. Masks, patterns, markers, text, spread other than pad, dashes, even-odd fill
+and CSS sheets are not drawn.
 
 ### `e.gfx.curve`
 

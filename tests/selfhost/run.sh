@@ -3791,6 +3791,11 @@ text_sig_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/text-sig-selfhost"
 text_sig_output=$("$test_build/text-sig-selfhost")
 [ "$text_sig_output" = 'text sig ok' ]
+# e.gfx.svg against cairosvg: gradients, defs and use, units, clip path and plain shapes rendered through the CPU backend and held to a 16x16 cell tolerance (D2843).
+gfx_svg_render_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/gfx_svg_render/src/main.e" "$repo" x64 linux "$test_build/gfx-svg-render-selfhost" -j 2)
+[ "$gfx_svg_render_written" = 'executable written' ]
+chmod +x "$test_build/gfx-svg-render-selfhost"
+"$test_build/gfx-svg-render-selfhost"
 # e.text.math: TeX-style math typesetting (scripts, fractions, radicals, matrices, delimiters, display limits) against fontTools metrics and the TeXbook's formulas, plus refusals (D2842).
 text_math_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_math/src/main.e" "$repo" x64 linux "$test_build/text-math-selfhost" -j 2)
 [ "$text_math_written" = 'executable written' ]
