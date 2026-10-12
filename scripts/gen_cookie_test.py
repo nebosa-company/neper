@@ -145,7 +145,8 @@ def main():
            "use e.os\nuse e.mem\nuse e.str\nuse e.net.cookie as cookie\n\n",
            "fn main(a: *mem.Arena, args: []str) -> err {\n",
            "    var storage: [16]cookie.Cookie = zero\n",
-           "    var jar = cookie.jar_new(storage[0..])\n"]
+           "    var text: [1024]u8 = zero\n",
+           "    var jar = cookie.jar_new(storage[0..], text[0..])\n"]
     n = 0
     for ev in EVENTS:
         if ev[0] == "set":
@@ -160,6 +161,15 @@ def main():
             n += 1
             out.append("    let (h%d, he%d) = cookie.header(a, &jar, %s, %s, %s, %di64)\n" % (n, n, e_string(host), e_string(path), "true" if secure else "false", now))
             out.append("    if he%d != ok || !str.eq(h%d, %s) { os.exit(%d) }\n" % (n, n, e_string(want), n))
+    # A small text area: replacing one cookie many times must compact and keep working.
+    lines = ["k=v%02d" % i for i in range(30)]
+    out.append("    var small_storage: [4]cookie.Cookie = zero\n    var small_text: [40]u8 = zero\n")
+    out.append("    var small = cookie.jar_new(small_storage[0..], small_text[0..])\n")
+    for i, line in enumerate(lines):
+        out.append("    let (cc%d, ce%d) = cookie.parse(a, %s, \"h.test\", \"/\", false, 100i64)\n" % (i, i, e_string(line)))
+        out.append("    if ce%d != ok || cookie.store(&small, cc%d, 100i64) != ok { os.exit(%d) }\n" % (i, i, 100 + i))
+    out.append("    let (sh, she) = cookie.header(a, &small, \"h.test\", \"/\", false, 100i64)\n")
+    out.append("    if she != ok || !str.eq(sh, %s) { os.exit(250) }\n" % e_string(lines[-1]))
     out.append("    ret ok\n}\n")
     target = Path(__file__).resolve().parent.parent / "tests/selfhost/fixtures/link/net_cookie/src/main.e"
     target.parent.mkdir(parents=True, exist_ok=True)

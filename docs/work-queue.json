@@ -625,10 +625,10 @@
       "group": "NeperOS",
       "order": 159,
       "title": "NeperOS Browser remainder: CSS layout, images, forms, cookies, storage and downloads",
-      "score": 0.1,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Split from C129 (D2415): the Browser fetches an address over HTTPS and shows its HTML as lines of text with links. Acceptance: (1) HTTP/1.1 redirects, cookies, a cache, HTTP/2 and plain HTTP, the system proxy settings; (2) a CSS layout engine over e.fmt.css and e.fmt.html (block, inline, flex, grid, the common properties) painting through e.gfx.scene with shaped text, images (PNG, JPEG, SVG) and fonts; (3) forms and their submission, history, bookmarks, tabs that survive a restart (C125 storage), incognito, search suggestions and a chosen search engine; (4) downloads into Files and opening files in their apps; (5) permissions per site tied to Settings (C126); (6) a fixture against a local web server with a page that has an image and a form and a redirect. PART (D2455): e.net.cookie, an RFC 6265 cookie jar (net_cookie, 28 events vs an independent model). Remaining: the Browser using it (persisted store, request/response hooks), redirects and cache, CSS layout, forms, tabs, downloads."
+      "evidence": "Split from C129 (D2415): the Browser fetches an address over HTTPS and shows its HTML as lines of text with links. Acceptance: (1) HTTP/1.1 redirects, cookies, a cache, HTTP/2 and plain HTTP, the system proxy settings; (2) a CSS layout engine over e.fmt.css and e.fmt.html (block, inline, flex, grid, the common properties) painting through e.gfx.scene with shaped text, images (PNG, JPEG, SVG) and fonts; (3) forms and their submission, history, bookmarks, tabs that survive a restart (C125 storage), incognito, search suggestions and a chosen search engine; (4) downloads into Files and opening files in their apps; (5) permissions per site tied to Settings (C126); (6) a fixture against a local web server with a page that has an image and a form and a redirect. PART (D2455): e.net.cookie, an RFC 6265 cookie jar (net_cookie, 28 events vs an independent model). Remaining: the Browser using it (persisted store, request/response hooks), redirects and cache, CSS layout, forms, tabs, downloads. PART (D2456): the Browser keeps cookies in a jar that owns its strings and sends them (fixture browser_cookie, live); httpc.Reply carries the header block. Remaining: persisting the jar, redirects, cache, CSS layout, forms, tabs, downloads."
     },
     {
       "id": "C160",

@@ -17,7 +17,8 @@ error TooLarge
 
 const REPLY_MAX: usize = 98304usize
 
-type Reply = struct { status: usize, body: str }
+// `head` is the response header block (the status line and the header lines, CRLF separated, without the blank line).
+type Reply = struct { status: usize, body: str, head: str }
 
 fn lower(c: u8) -> u8 {
     if c >= 65u8 && c <= 90u8 { ret c + 32u8 }
@@ -162,11 +163,18 @@ fn request(a: *mem.Arena, method: str, host: str, path: str, extra: str, body: s
     let chunked = find_text(raw, "transfer-encoding: chunked", 0usize, head_end) != head_end
     var body_len = total - body_start
     if chunked {
+        // The header block is copied out first: the joined body is written at the front of the buffer.
+        let (head_copy, head_error) = mem.alloc[u8](a, head_end + 1usize)
+        if head_error != ok { ret (empty, TooLarge) }
+        var h = 0usize
+        while h < head_end {
+            head_copy[h] = raw[h]
+            h += 1usize
+        }
         let joined = dechunk(raw, body_start, total)
         if joined > total - body_start { ret (empty, Malformed) }
-        // The joined body is at the front of the buffer, ahead of the headers' old place.
         body_len = joined
-        ret (Reply { status: status, body: raw[0usize..joined] }, ok)
+        ret (Reply { status: status, body: raw[0usize..joined], head: head_copy[0usize..head_end] }, ok)
     }
     // A Content-Length says how much body to expect: a reply that has all of it is whole even when the
     // peer closed the stream without a close_notify; one without the header can only be trusted if the
@@ -184,11 +192,11 @@ fn request(a: *mem.Arena, method: str, host: str, path: str, extra: str, body: s
         }
         if seen > 0usize {
             if body_len < declared { ret (empty, Io) }
-            ret (Reply { status: status, body: raw[body_start..body_start + declared] }, ok)
+            ret (Reply { status: status, body: raw[body_start..body_start + declared], head: raw[0usize..head_end] }, ok)
         }
     }
     if failed { ret (empty, Io) }
-    ret (Reply { status: status, body: raw[body_start..body_start + body_len] }, ok)
+    ret (Reply { status: status, body: raw[body_start..body_start + body_len], head: raw[0usize..head_end] }, ok)
 }
 
 fn put_number(buffer: []u8, at: usize, value: usize) -> usize {

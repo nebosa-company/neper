@@ -21,6 +21,8 @@ use text
 use ui
 use scenes
 use httpc
+use e.time
+use e.net.cookie as cookie
 
 const NONE: usize = 99usize
 const MAX_TABS: usize = 4usize
@@ -80,6 +82,10 @@ type State = struct {
     current: usize,
     screen: usize,
     typed: ui.Field,
+    // (C159) The cookie jar: its entries and their strings are kept here, so they outlive each frame's arena.
+    cookie_store: [16]cookie.Cookie,
+    cookie_text: [2048]u8,
+    jar: cookie.Jar,
     hits: ui.Hits,
 }
 
@@ -251,6 +257,50 @@ fn find_title(a: *mem.Arena, s: *State, doc: *const html.Document) {
     }
 }
 
+// The wall clock's second.
+fn wall_seconds() -> i64 {
+    let (wall, wall_error) = time.now()
+    if wall_error != ok || wall.nanos < 0i64 { ret 0i64 }
+    ret wall.nanos / 1000000000i64
+}
+
+fn fold_byte(c: u8) -> u8 {
+    if c >= 65u8 && c <= 90u8 { ret c + 32u8 }
+    ret c
+}
+
+// Whether `line` starts with the header name `name` (compared without regard to case).
+fn header_is(line: str, name: str) -> bool {
+    if line.len < name.len { ret false }
+    var i = 0usize
+    while i < name.len {
+        if fold_byte(line[i]) != name[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// Every Set-Cookie of a response's header block goes into the jar.
+fn absorb_cookies(a: *mem.Arena, s: *State, head: str, host: str, path: str, now: i64) -> usize {
+    var stored = 0usize
+    var at = 0usize
+    while at < head.len {
+        var end = at
+        while end < head.len && head[end] != 10u8 { end += 1usize }
+        var line_end = end
+        if line_end > at && head[line_end - 1usize] == 13u8 { line_end -= 1usize }
+        let line = head[at..line_end]
+        if header_is(line, "set-cookie:") {
+            let (parsed, parse_error) = cookie.parse(a, line[11usize..line.len], host, path, true, now)
+            if parse_error == ok {
+                if cookie.store(&s.jar, parsed, now) == ok { stored += 1usize }
+            }
+        }
+        at = end + 1usize
+    }
+    ret stored
+}
+
 // Fetch and lay out the page of address slot `slot`: false (with `load_error` set) when it could not be had.
 fn load_live(a: *mem.Arena, s: *State, slot: usize) -> bool {
     let u = s.urls[slot]
@@ -262,7 +312,25 @@ fn load_live(a: *mem.Arena, s: *State, slot: usize) -> bool {
     s.scroll = 0usize
     s.title_len = 0usize
     s.loaded = NONE
-    let (reply, get_error) = httpc.get(a, host, path, "")
+    // (C159) The cookies the jar holds for this address go with the request, and what the response sets is kept.
+    let now = wall_seconds()
+    var extra = ""
+    let (sent, sent_error) = cookie.header(a, &s.jar, host, path, true, now)
+    if sent_error == ok && sent.len > 0usize {
+        extra = ui.join(a, "Cookie: ", sent, "\r\n")
+        ui.say("browser cookie sent ")
+        ui.say_num(sent.len)
+        ui.say(" bytes\n")
+    }
+    let (reply, get_error) = httpc.get(a, host, path, extra)
+    if get_error == ok {
+        let kept = absorb_cookies(a, s, reply.head, host, path, now)
+        if kept > 0usize {
+            ui.say("browser cookies ")
+            ui.say_num(s.jar.count)
+            ui.say("\n")
+        }
+    }
     if get_error != ok {
         s.load_error = 1usize
         ret false
@@ -955,6 +1023,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var s: State = zero
+    s.jar = cookie.jar_new(s.cookie_store[0usize..16usize], s.cookie_text[0usize..2048usize])
     let first = new_tab(&s)
     if !show(a, &kit, &s) {
         ui.say("browser present failed\n")

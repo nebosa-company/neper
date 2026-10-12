@@ -72,7 +72,11 @@ PAGE_INDEX = (b'<!doctype html><html><head><title>Neper test page</title><style>
               b'</body></html>')
 PAGE_ABOUT = (b'<!doctype html><html><head><title>About</title></head><body>'
               b'<h1>About</h1><p>Neper is a language and an operating system.</p>'
-              b'<p><a href="/pages/index.html">Back to the index</a></p></body></html>')
+              b'<p><a href="/pages/index.html">Back to the index</a></p>'
+              b'<p><a href="/pages/login.html">Sign in</a></p></body></html>')
+# (C159) A page that sets a session cookie and one that says what cookie it was sent.
+PAGE_LOGIN = (b'<!doctype html><html><head><title>Signed in</title></head><body>'
+              b'<h1>Signed in</h1><p><a href="/pages/me.html">Account</a></p></body></html>')
 
 
 def recorded(name):
@@ -80,8 +84,10 @@ def recorded(name):
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    def reply(self, status, body, kind='text/plain'):
+    def reply(self, status, body, kind='text/plain', headers=()):
         self.send_response(status)
+        for name, value in headers:
+            self.send_header(name, value)
         self.send_header('Content-Type', kind)
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
@@ -160,6 +166,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         if host == 'neper.test' and url.path == '/pages/about.html':
             self.reply(200, PAGE_ABOUT, 'text/html')
+            return
+        if host == 'neper.test' and url.path == '/pages/login.html':
+            self.reply(200, PAGE_LOGIN, 'text/html',
+                       (('Set-Cookie', 'sid=abc123; Path=/; Max-Age=3600; HttpOnly; Secure'),
+                        ('Set-Cookie', 'theme=dark; Path=/pages')))
+            return
+        if host == 'neper.test' and url.path == '/pages/me.html':
+            cookie = self.headers.get('Cookie') or ''
+            page = ('<!doctype html><html><head><title>Account</title></head><body><h1>Account</h1>'
+                    '<p>Cookie: %s</p></body></html>' % cookie).encode('utf-8')
+            self.reply(200, page, 'text/html')
             return
         self.reply(200, BODY)
 

@@ -7,7 +7,8 @@
 // suffix list); a Domain attribute that does not cover the host is refused, as is a `__Host-` or `__Secure-` prefix
 // breaking its rules. Expires dates are read as `e.fmt.mail`'s dates are (IMF-fixdate and its common variants).
 //
-// Memory: strings of a parsed cookie live in the arena passed in; a jar holds its cookies in a slice the caller gives.
+// Memory: strings of a parsed cookie live in the arena passed in; a jar holds its cookies and a copy of their strings in
+// slices the caller gives, so it outlives the arena.
 use e.mem
 use e.str
 use e.fmt.mail as mail
@@ -30,7 +31,7 @@ type Cookie = struct {
     same_site: SameSite,
     created: i64,
 }
-type Jar = struct { cookies: []Cookie, count: usize, clock: i64 }
+type Jar = struct { cookies: []Cookie, count: usize, text: []u8, used: usize }
 
 fn fold(c: u8) -> u8 {
     if c >= 65u8 && c <= 90u8 { ret c + 32u8 }
@@ -250,12 +251,94 @@ fn expired(c: Cookie, now: i64) -> bool {
     ret c.has_expires && c.expires <= now
 }
 
-fn jar_new(storage: []Cookie) -> Jar {
-    ret Jar { cookies: storage, count: 0usize, clock: 0i64 }
+// A jar over caller storage: `cookies` for the entries and `text` for the strings they point at, so a stored cookie
+// outlives the arena it was parsed in (an app that resets its arena every frame keeps both in its state).
+fn jar_new(cookies: []Cookie, text: []u8) -> Jar {
+    ret Jar { cookies: cookies, count: 0usize, text: text, used: 0usize }
 }
 
-// Put `c` in the jar: it replaces a cookie of the same name, domain and path (keeping the old creation time); a cookie
-// already expired removes it and is not stored. JarFull when the jar has no room, after dropping the expired ones.
+// Copy `s` into the jar's text; the copy, and whether it fitted.
+fn keep(jar: *Jar, s: str) -> (str, bool) {
+    if jar.used + s.len > jar.text.len { ret ("", false) }
+    var i = 0usize
+    while i < s.len {
+        jar.text[jar.used + i] = s[i]
+        i += 1usize
+    }
+    let out = jar.text[jar.used..jar.used + s.len]
+    jar.used += s.len
+    ret (out, true)
+}
+
+// Put every live cookie's strings at the front of the jar's text again, dropping what replaced or removed entries left.
+fn compact(jar: *Jar, scratch: []u8) -> bool {
+    // The strings are copied through `scratch` (as big as the text) so overlapping moves are safe.
+    if scratch.len < jar.used { ret false }
+    var i = 0usize
+    var at = 0usize
+    while i < jar.count {
+        let c = jar.cookies[i]
+        let total = c.name.len + c.value.len + c.domain.len + c.path.len
+        if at + total > scratch.len { ret false }
+        var parts: [4]str = [4]str{ c.name, c.value, c.domain, c.path }
+        var p = 0usize
+        while p < 4usize {
+            var j = 0usize
+            while j < parts[p].len {
+                scratch[at + j] = parts[p][j]
+                j += 1usize
+            }
+            at += parts[p].len
+            p += 1usize
+        }
+        i += 1usize
+    }
+    var k = 0usize
+    while k < at {
+        jar.text[k] = scratch[k]
+        k += 1usize
+    }
+    jar.used = at
+    var cursor = 0usize
+    i = 0usize
+    while i < jar.count {
+        var c = jar.cookies[i]
+        let name_len = c.name.len
+        let value_len = c.value.len
+        let domain_len = c.domain.len
+        let path_len = c.path.len
+        c.name = jar.text[cursor..cursor + name_len]
+        cursor += name_len
+        c.value = jar.text[cursor..cursor + value_len]
+        cursor += value_len
+        c.domain = jar.text[cursor..cursor + domain_len]
+        cursor += domain_len
+        c.path = jar.text[cursor..cursor + path_len]
+        cursor += path_len
+        jar.cookies[i] = c
+        i += 1usize
+    }
+    ret true
+}
+
+// Copy the cookie's strings into the jar's text: the cookie pointing at the copies, and whether they fitted.
+fn own(jar: *Jar, c: Cookie) -> (Cookie, bool) {
+    var out = c
+    let (name, name_ok) = keep(jar, c.name)
+    let (value, value_ok) = keep(jar, c.value)
+    let (domain, domain_ok) = keep(jar, c.domain)
+    let (path, path_ok) = keep(jar, c.path)
+    if !name_ok || !value_ok || !domain_ok || !path_ok { ret (c, false) }
+    out.name = name
+    out.value = value
+    out.domain = domain
+    out.path = path
+    ret (out, true)
+}
+
+// Put `c` in the jar (its strings are copied into the jar's text): it replaces a cookie of the same name, domain and
+// path (keeping the old creation time); a cookie already expired removes it and is not stored. JarFull when the
+// jar has no room, after dropping the expired ones and compacting the text.
 fn store(jar: *Jar, c: Cookie, now: i64) -> err {
     var i = 0usize
     while i < jar.count {
@@ -269,7 +352,18 @@ fn store(jar: *Jar, c: Cookie, now: i64) -> err {
             }
             var replacement = c
             replacement.created = o.created
-            jar.cookies[i] = replacement
+            var (owned, fitted) = own(jar, replacement)
+            if !fitted {
+                var scratch: [4096]u8 = zero
+                if jar.text.len <= 4096usize && compact(jar, scratch[0..]) {
+                    let (again, again_fitted) = own(jar, replacement)
+                    owned = again
+                    fitted = again_fitted
+                }
+            }
+            if !fitted { ret JarFull }
+            // `own` ran after compaction may have moved `o`: the entry is by index, so it is written there.
+            jar.cookies[i] = owned
             ret ok
         }
         i += 1usize
@@ -289,7 +383,17 @@ fn store(jar: *Jar, c: Cookie, now: i64) -> err {
         jar.count = kept
     }
     if jar.count >= jar.cookies.len { ret JarFull }
-    jar.cookies[jar.count] = c
+    var (owned, fitted) = own(jar, c)
+    if !fitted {
+        var scratch: [4096]u8 = zero
+        if jar.text.len <= 4096usize && compact(jar, scratch[0..]) {
+            let (again, again_fitted) = own(jar, c)
+            owned = again
+            fitted = again_fitted
+        }
+    }
+    if !fitted { ret JarFull }
+    jar.cookies[jar.count] = owned
     jar.count += 1usize
     ret ok
 }

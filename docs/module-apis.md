@@ -27833,7 +27833,7 @@ error JarFull
 
 type SameSite = enum u8 { Unset, Lax, Strict, None }
 type Cookie = struct { name: str, value: str, domain: str, host_only: bool, path: str, expires: i64, has_expires: bool, secure: bool, http_only: bool, same_site: SameSite, created: i64 }
-type Jar = struct { cookies: []Cookie, count: usize, clock: i64 }
+type Jar = struct { cookies: []Cookie, count: usize, text: []u8, used: usize }
 
 fn fold(c: u8) -> u8
 fn eq_fold(a: str, b: str) -> bool
@@ -27845,7 +27845,10 @@ fn path_match(request_path: str, cookie_path: str) -> bool
 fn trim(s: str) -> str
 fn parse(a: *mem.Arena, line: str, host: str, request_path: str, secure_request: bool, now: i64) -> (Cookie, err)
 fn expired(c: Cookie, now: i64) -> bool
-fn jar_new(storage: []Cookie) -> Jar
+fn jar_new(cookies: []Cookie, text: []u8) -> Jar
+fn keep(jar: *Jar, s: str) -> (str, bool)
+fn compact(jar: *Jar, scratch: []u8) -> bool
+fn own(jar: *Jar, c: Cookie) -> (Cookie, bool)
 fn store(jar: *Jar, c: Cookie, now: i64) -> err
 fn header(a: *mem.Arena, jar: *Jar, host: str, path: str, secure: bool, now: i64) -> (str, err)
 ```
