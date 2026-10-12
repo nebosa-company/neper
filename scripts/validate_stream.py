@@ -4,7 +4,8 @@
 Usage:  python scripts/validate_stream.py [PATH ...]
 
 With no argument every committed golden is checked: the `.jsonl` streams under
-tests/conformance (one record per line) and docs/modules.json (a whole document).
+tests/conformance (one record per line), docs/modules.json and the package-manifest fixtures
+under tests/conformance/package (each a whole document).
 Each value is validated against the schema's top-level `oneOf`, so a stream
 record, a source map, a build manifest, a module plan and a package manifest are
 all accepted where they are what was emitted.  Exit 0 when every value validates,
@@ -41,6 +42,20 @@ def self_check():
     if best_match(VALIDATOR.iter_errors(bad)) is None:
         print("invalid  self-check: the schema accepted a header with an unregistered command")
         sys.exit(1)
+    # The package manifest has no emitter yet (M6 pacman P0), so its branch is exercised by the
+    # fixture below and held to its shape here: each of these must be refused (T012).
+    good = json.loads((ROOT / "tests/conformance/package/p0.package.json").read_text(encoding="utf-8"))
+    broken = {
+        "a missing source_sha256": {k: v for k, v in good.items() if k != "source_sha256"},
+        "a digest that is not sha-256": dict(good, source_sha256="abc"),
+        "an unknown field": dict(good, owner="somebody"),
+        "a dependency without its digest": dict(good, dependencies=[{"name": "d", "package_version": "1", "source": "s"}]),
+        "a wrong schema tag": dict(good, schema="neper-packages"),
+    }
+    for what, value in broken.items():
+        if best_match(VALIDATOR.iter_errors(value)) is None:
+            print("invalid  self-check: the schema accepted a package manifest with %s" % what)
+            sys.exit(1)
 
 
 def check(value, where, failures):
@@ -54,7 +69,8 @@ def main(argv):
     self_check()
     targets = [pathlib.Path(a) for a in argv[1:]]
     if not targets:
-        targets = sorted((ROOT / "tests/conformance").rglob("*.jsonl")) + [ROOT / "docs/modules.json"]
+        targets = sorted((ROOT / "tests/conformance").rglob("*.jsonl")) + [ROOT / "docs/modules.json"] \
+            + sorted((ROOT / "tests/conformance/package").glob("*.package.json"))
     failures, values = [], 0
     for target in targets:
         text = target.read_text(encoding="utf-8")

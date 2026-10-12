@@ -40073,3 +40073,14 @@ The view's order is the live rows of an `e.data.table`, sorted by keys applied l
 **Evidence.** For `tests/conformance/tools/run_args.e` built `x64 windows` and `x64 linux`: plain compare names six differences (target, both variant inputs, `dependency e.os`, both executables); `--cross-host` says `manifests agree`; an input hash altered in the Linux manifest is named as `input run_args.e` and exits 1, and an altered architecture as `target.arch: x64 / aarch64`. Both suites run the three cases (`run.ps1` and `run.sh`, a cross emit needs no Linux execution). Stage 2 equals stage 3. The `E-CLI` surface of `info` is untouched.
 
 **Not here.** Comparing the executables themselves across hosts (they cannot agree), and a cross-host check inside one build -- the manifest records one target, so two manifests are still two builds. The queue's other T022 line, the dependency and library hashes the manifest does not carry, was delivered by D1685 and D1696 already; this item is complete at its stated scope.
+
+
+## D4305 — The package manifest's schema branch has a fixture and a negative self-check (T012)
+
+**Why.** `packageManifest` is the one shape in `docs/schemas/neper-v1.schema.json` nothing emits yet (it becomes producible with M6 pacman P0), so the schema's fourth `oneOf` branch was never exercised: a typo in it, or a branch that accepted anything, would pass every committed golden. T012's own note named the honest increment.
+
+**Decision.** `tests/conformance/package/p0.package.json` is a hand-written, schema-shaped document (name, version, licence, source and its SHA-256, one dependency with the same four fields) that `scripts/validate_stream.py` now validates with the goldens; and `self_check` refuses five mutations of it before the corpus runs -- a missing `source_sha256`, a digest that is not 64 hex digits, an unknown field, a dependency without its digest, and a wrong schema tag -- the way it already refuses an unregistered command. The fixture documents the shape, it does not claim an emitter: it is named `*.package.json`, and `docs/pacman.md` stays the design.
+
+**Evidence.** `python scripts/validate_stream.py`: 3,368 records in 365 files, 0 invalid; temporarily accepting an unknown field in the schema makes the self-check exit 1 with the case named.
+
+**Not here.** The producer (`neper package`, M6 P0), which is why T012 stays at its stated score for the emitted-record half; a Windows/Linux difference does not exist for a hand-written document, so both suites' existing `validate_stream.py` call covers it.
